@@ -13,7 +13,7 @@ interface RoundProgressProps {
  * Displays compact round progress for a content item.
  *
  * Active round shows the phase badge:
- * - Blind phase: Full reward weight (100%) — votes encrypted, direction hidden
+ * - Blind phase: Full reward weight (100%) — predictions encrypted
  * - Open phase: Reduced reward weight (25%) — blind phase results now visible
  *
  * Terminal states: Resolved / Cancelled / Tied / Reveal failed
@@ -94,7 +94,7 @@ export function RoundProgress({ snapshot }: RoundProgressProps) {
               clipRule="evenodd"
             />
           </svg>
-          Reveal failed — only revealed votes refund
+          Reveal failed — only revealed predictions refund
         </span>
       </div>
     );
@@ -153,7 +153,7 @@ export function RoundProgress({ snapshot }: RoundProgressProps) {
           <span className="flex items-center gap-1">
             Ready to resolve
             <InfoTooltip
-              text="Enough votes are revealed. Settlement is available once past-epoch reveal checks are satisfied."
+              text="Enough predictions are revealed. Settlement is available once past-epoch reveal checks are satisfied."
               position="bottom"
             />
           </span>
@@ -163,7 +163,7 @@ export function RoundProgress({ snapshot }: RoundProgressProps) {
           <span className="flex items-center gap-1">
             Waiting for reveals
             <InfoTooltip
-              text="Enough votes are committed. Settlement follows once enough votes are revealed and past-epoch checks clear."
+              text="Enough predictions are committed. Settlement follows once enough predictions are revealed and past-epoch checks clear."
               position="bottom"
             />
           </span>

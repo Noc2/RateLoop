@@ -46,7 +46,7 @@ function getInitialPredictionRating(currentRating: number | undefined, isUp: boo
 }
 
 /**
- * Bottom-sheet modal to select stake amount before committing a vote.
+ * Bottom-sheet modal to select stake amount before committing a predicted rating.
  */
 export function StakeSelector({
   isOpen,
@@ -189,9 +189,9 @@ export function StakeSelector({
               Predict the final rating
               <span
                 className="tooltip tooltip-bottom ml-1.5 inline-block cursor-help align-middle"
-                data-tip="You can only vote once per content per round. Choose your stake carefully!"
+                data-tip="You can only submit one prediction per content per round. Choose your stake carefully!"
                 role="img"
-                aria-label="You can only vote once per content per round. Choose your stake carefully!"
+                aria-label="You can only submit one prediction per content per round. Choose your stake carefully!"
               >
                 <svg
                   width="16"
@@ -353,7 +353,7 @@ export function StakeSelector({
                 ) : (
                   <>
                     <div className="flex items-center justify-between gap-3">
-                      <span>Est. return if right</span>
+                      <span>Est. return if accurate</span>
                       <span className="font-semibold tabular-nums">
                         {openPhaseGrossReturnMicro !== null
                           ? `${formatHrepAmount(openPhaseGrossReturnMicro)} ${symbol}`
@@ -361,7 +361,7 @@ export function StakeSelector({
                       </span>
                     </div>
                     <div className="flex items-center justify-between gap-3">
-                      <span>If wrong but revealed</span>
+                      <span>If missed but revealed</span>
                       <span className="font-semibold tabular-nums">
                         {openPhaseRevealedRefundMicro !== null
                           ? `${formatHrepAmount(openPhaseRevealedRefundMicro)} ${symbol}`
@@ -371,7 +371,7 @@ export function StakeSelector({
                     <div className="flex items-center justify-between gap-3">
                       <span>Live pools</span>
                       <span className="font-semibold tabular-nums">
-                        up {formatHrepAmount(upPool, 0)} · down {formatHrepAmount(downPool, 0)}
+                        higher {formatHrepAmount(upPool, 0)} · lower {formatHrepAmount(downPool, 0)}
                       </span>
                     </div>
                   </>

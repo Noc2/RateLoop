@@ -100,14 +100,14 @@ export const protocolDocFacts = {
   treasuryShortLabel: `${formatPercent(percentFromBps(REWARD_SPLIT_BPS.treasury))} of remaining`,
   voterPoolEffectiveRawPercentLabel: formatPercent(effectiveRawSharePercent(REWARD_SPLIT_BPS.voter)),
   voterPoolEffectiveRawFactorLabel: formatFactor(effectiveRawSharePercent(REWARD_SPLIT_BPS.voter) / 100),
-  rewardSplitSummaryLabel: `${formatPercent(percentFromBps(REWARD_SPLIT_BPS.voter))} voters / ${formatPercent(percentFromBps(REWARD_SPLIT_BPS.consensus))} consensus / ${formatPercent(percentFromBps(PLATFORM_REWARD_SPLIT_BPS.frontend))} frontend / ${formatPercent(percentFromBps(REWARD_SPLIT_BPS.treasury))} treasury`,
+  rewardSplitSummaryLabel: `${formatPercent(percentFromBps(REWARD_SPLIT_BPS.voter))} raters / ${formatPercent(percentFromBps(REWARD_SPLIT_BPS.consensus))} consensus / ${formatPercent(percentFromBps(PLATFORM_REWARD_SPLIT_BPS.frontend))} frontend / ${formatPercent(percentFromBps(REWARD_SPLIT_BPS.treasury))} treasury`,
   blindPhaseWeightLabel: formatPercent(percentFromBps(EPOCH_WEIGHT_BPS.blind)),
   openPhaseWeightLabel: formatPercent(percentFromBps(EPOCH_WEIGHT_BPS.informed)),
   earlyVoterAdvantageLabel: `${EPOCH_WEIGHT_BPS.blind / EPOCH_WEIGHT_BPS.informed}:1`,
 } as const;
 
 const rewardSplitTableRows: [string, string][] = [
-  ["Revealed losing voters", protocolDocFacts.revealedLoserRefundLabel],
+  ["Revealed missed predictions", protocolDocFacts.revealedLoserRefundLabel],
   ["Content-specific rater pool", protocolDocFacts.voterPoolShareLabel],
   ["Consensus subsidy reserve", protocolDocFacts.consensusShareLabel],
   ["Frontend operators", protocolDocFacts.frontendShareLabel],

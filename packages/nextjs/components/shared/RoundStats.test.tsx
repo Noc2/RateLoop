@@ -9,7 +9,7 @@ const { renderToStaticMarkup } = require("react-dom/server") as {
   renderToStaticMarkup: (element: React.ReactElement) => string;
 };
 
-test("RoundRevealedBreakdown renders Up before Down to match the vote button order", () => {
+test("RoundRevealedBreakdown renders Up before Down to match the rating button order", () => {
   const html = renderToStaticMarkup(
     <RoundRevealedBreakdown
       snapshot={
@@ -27,7 +27,7 @@ test("RoundRevealedBreakdown renders Up before Down to match the vote button ord
     />,
   ).replace(/\s+/g, " ");
 
-  assert.match(html, /Up<\/span>\s*<span[^>]*>0 HREP<\/span>\s*<span[^>]*>0 votes<\/span>/);
-  assert.match(html, /Down<\/span>\s*<span[^>]*>5 HREP<\/span>\s*<span[^>]*>1 vote<\/span>/);
+  assert.match(html, /Up<\/span>\s*<span[^>]*>0 MREP<\/span>\s*<span[^>]*>0 predictions<\/span>/);
+  assert.match(html, /Down<\/span>\s*<span[^>]*>5 MREP<\/span>\s*<span[^>]*>1 prediction<\/span>/);
   assert.ok(html.indexOf(">Up<") < html.indexOf(">Down<"));
 });

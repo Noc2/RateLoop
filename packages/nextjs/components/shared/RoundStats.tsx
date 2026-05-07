@@ -33,16 +33,16 @@ export function RoundRevealedBreakdown({ snapshot, stacked = false }: RoundRevea
       <div className="flex w-full max-w-full flex-col gap-1.5 text-base-content/60">
         <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-left">
           <span>Up</span>
-          <span className="font-semibold tabular-nums">{upPoolFormatted.toFixed(0)} HREP</span>
+          <span className="font-semibold tabular-nums">{upPoolFormatted.toFixed(0)} MREP</span>
           <span className="text-sm text-base-content/60">
-            {upCount} vote{upCount === 1 ? "" : "s"}
+            {upCount} prediction{upCount === 1 ? "" : "s"}
           </span>
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-left">
           <span>Down</span>
-          <span className="font-semibold tabular-nums">{downPoolFormatted.toFixed(0)} HREP</span>
+          <span className="font-semibold tabular-nums">{downPoolFormatted.toFixed(0)} MREP</span>
           <span className="text-sm text-base-content/60">
-            {downCount} vote{downCount === 1 ? "" : "s"}
+            {downCount} prediction{downCount === 1 ? "" : "s"}
           </span>
         </div>
       </div>
@@ -53,17 +53,17 @@ export function RoundRevealedBreakdown({ snapshot, stacked = false }: RoundRevea
     <div className="flex w-full max-w-full items-center gap-3">
       <div className="inline-flex min-w-0 flex-1 items-center justify-start gap-2 whitespace-nowrap text-left text-base-content/60">
         <span className="font-semibold">Up</span>
-        <span className="font-semibold tabular-nums">{upPoolFormatted.toFixed(0)} HREP</span>
+        <span className="font-semibold tabular-nums">{upPoolFormatted.toFixed(0)} MREP</span>
         <span className="text-xs text-base-content/60">
-          {upCount} vote{upCount === 1 ? "" : "s"}
+          {upCount} prediction{upCount === 1 ? "" : "s"}
         </span>
       </div>
       <div className="h-4 w-px shrink-0 bg-base-content/10" />
       <div className="inline-flex min-w-0 flex-1 items-center justify-end gap-2 whitespace-nowrap text-right text-base-content/60">
         <span className="font-semibold">Down</span>
-        <span className="font-semibold tabular-nums">{downPoolFormatted.toFixed(0)} HREP</span>
+        <span className="font-semibold tabular-nums">{downPoolFormatted.toFixed(0)} MREP</span>
         <span className="text-xs text-base-content/60">
-          {downCount} vote{downCount === 1 ? "" : "s"}
+          {downCount} prediction{downCount === 1 ? "" : "s"}
         </span>
       </div>
     </div>
@@ -71,11 +71,11 @@ export function RoundRevealedBreakdown({ snapshot, stacked = false }: RoundRevea
 }
 
 /**
- * Displays stake and vote statistics for the current round on a specific content.
+ * Displays stake and prediction statistics for the current round on a specific content.
  *
- * Blind voting model:
- * - During blind phase: votes are encrypted and hidden. Only totalStake and voteCount are shown.
- * - After blind phase: the system reveals votes. Revealed UP/DOWN pool breakdown is shown.
+ * Blind prediction model:
+ * - During blind phase: predictions are encrypted and hidden. Only totalStake and voteCount are shown.
+ * - After blind phase: the system reveals predictions. Revealed pool breakdown is shown.
  */
 export function RoundStats({ categoryId, snapshot }: RoundStatsProps) {
   const contentLabel = useContentLabel(categoryId);
@@ -98,7 +98,7 @@ export function RoundStats({ categoryId, snapshot }: RoundStatsProps) {
   const revealedVotesNeeded = snapshot.votersNeeded;
   const settlementHint =
     phase === "voting" && revealedVotesNeeded > 0
-      ? `${revealedVotesNeeded} more revealed vote${revealedVotesNeeded === 1 ? "" : "s"} to settle`
+      ? `${revealedVotesNeeded} more revealed prediction${revealedVotesNeeded === 1 ? "" : "s"} to settle`
       : null;
 
   return (
@@ -107,16 +107,16 @@ export function RoundStats({ categoryId, snapshot }: RoundStatsProps) {
         <div className="flex items-center gap-2">
           <span className="flex items-center gap-1">
             Staked
-            <InfoTooltip text="Total HREP committed in the current round." position="bottom" />
+            <InfoTooltip text="Total MREP committed in the current round." position="bottom" />
           </span>
           <span className="font-semibold tabular-nums">{totalStakeFormatted.toFixed(0)}</span>
         </div>
         <div className="h-4 w-px bg-base-content/10" />
         <div className="flex items-center gap-2">
           <span className="flex items-center gap-1">
-            Voters
+            Raters
             <InfoTooltip
-              text={`Number of votes committed on this ${contentLabel} in the current round.`}
+              text={`Number of predictions committed on this ${contentLabel} in the current round.`}
               position="bottom"
             />
           </span>
@@ -133,9 +133,9 @@ export function RoundStats({ categoryId, snapshot }: RoundStatsProps) {
       {phase === "voting" && isRoundFull && (
         <div className="flex items-center gap-2">
           <span className="flex items-center gap-1 text-warning/80">
-            Round full ({voteCount} / {maxVoters} voters)
+            Round full ({voteCount} / {maxVoters} raters)
             <InfoTooltip
-              text="This round has reached the maximum voter limit. New votes cannot be added until a new round starts."
+              text="This round has reached the maximum rater limit. New predictions cannot be added until a new round starts."
               position="bottom"
             />
           </span>
@@ -146,7 +146,7 @@ export function RoundStats({ categoryId, snapshot }: RoundStatsProps) {
         <div className="flex items-center gap-1 text-success">
           <span>Rewards distributed</span>
           <InfoTooltip
-            text="Rewards are proportional to phase-weighted stake. Blind votes earned the 4× early-voter advantage."
+            text="Rewards are proportional to phase-weighted stake. Blind predictions earned the 4x early-rater advantage."
             position="bottom"
           />
         </div>
@@ -156,7 +156,7 @@ export function RoundStats({ categoryId, snapshot }: RoundStatsProps) {
         <div className="flex items-center gap-1 text-warning/80">
           <span>Round expired — full refund available</span>
           <InfoTooltip
-            text="The round expired before enough votes were cast. All stakes are refunded."
+            text="The round expired before enough predictions were committed. All stakes are refunded."
             position="bottom"
           />
         </div>
@@ -165,15 +165,15 @@ export function RoundStats({ categoryId, snapshot }: RoundStatsProps) {
       {phase === "tied" && (
         <div className="flex items-center gap-1 text-base-content/60">
           <span>Tied — all stakes returned</span>
-          <InfoTooltip text="The round ended in a tie. All stakes are returned to voters." position="bottom" />
+          <InfoTooltip text="The round ended in a tie. All stakes are returned to raters." position="bottom" />
         </div>
       )}
 
       {phase === "revealFailed" && (
         <div className="flex items-center gap-1 text-warning/80">
-          <span>Reveal failed — only revealed votes can refund</span>
+          <span>Reveal failed — only revealed predictions can refund</span>
           <InfoTooltip
-            text="Commit quorum was reached, but not enough votes were revealed before the final reveal grace deadline. Revealed voters can claim refunds; unrevealed votes forfeit."
+            text="Commit quorum was reached, but not enough predictions were revealed before the final reveal grace deadline. Revealed raters can claim refunds; unrevealed predictions forfeit."
             position="bottom"
           />
         </div>

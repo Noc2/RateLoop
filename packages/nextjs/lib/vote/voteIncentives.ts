@@ -71,10 +71,10 @@ export function describeOpenRoundActivity(
 ) {
   const revealsNeeded = Math.max(0, snapshot.minVoters - snapshot.revealedCount);
   if (revealsNeeded > 0) {
-    return `${formatHrepAmount(snapshot.totalStake, 0)} HREP active · ${revealsNeeded} more revealed vote${revealsNeeded === 1 ? "" : "s"} to settle.`;
+    return `${formatHrepAmount(snapshot.totalStake, 0)} MREP active · ${revealsNeeded} more revealed prediction${revealsNeeded === 1 ? "" : "s"} to settle.`;
   }
 
-  return `${formatHrepAmount(snapshot.totalStake, 0)} HREP active · Settlement threshold is in reach.`;
+  return `${formatHrepAmount(snapshot.totalStake, 0)} MREP active · Settlement threshold is in reach.`;
 }
 
 function getBlindParticipationLabel(ratePercent?: number): string | null {
@@ -93,7 +93,7 @@ export function getRoundProgressMessaging(
   if (snapshot.isEpoch1) {
     const bonusLabel = getBlindParticipationLabel(ratePercent);
     const urgencyLabel =
-      snapshot.epoch1Remaining > 0 ? `${formatPreciseDuration(snapshot.epoch1Remaining)} left` : "Vote early";
+      snapshot.epoch1Remaining > 0 ? `${formatPreciseDuration(snapshot.epoch1Remaining)} left` : "Predict early";
 
     return {
       badgeLabel: "Blind",
@@ -101,7 +101,7 @@ export function getRoundProgressMessaging(
       detailLabel: bonusLabel ? `${bonusLabel} · ${urgencyLabel}` : urgencyLabel,
       detailTone: snapshot.epoch1Remaining <= 15 * 60 ? "warning" : "primary",
       tooltip:
-        "Blind votes stay hidden and earn full reward weight. Open-phase votes use 25% informed weight, so early voters keep the 4x advantage.",
+        "Blind predictions stay hidden and earn full reward weight. Open-phase predictions use 25% informed weight, so early raters keep the 4x advantage.",
     };
   }
 
@@ -114,7 +114,7 @@ export function getRoundProgressMessaging(
       detailLabel: "Near settlement",
       detailTone: "success",
       tooltip:
-        "Open votes can see live pools and revealed signal. Informed votes use 25% weight, but they help push rounds to settlement faster.",
+        "Open predictions can see live pools and revealed signal. Informed predictions use 25% weight, but they help push rounds to settlement faster.",
     };
   }
 
@@ -122,10 +122,10 @@ export function getRoundProgressMessaging(
     return {
       badgeLabel: "Open",
       badgeTone: "warning",
-      detailLabel: `${revealsNeeded} more revealed vote${revealsNeeded === 1 ? "" : "s"} to settle`,
+      detailLabel: `${revealsNeeded} more revealed prediction${revealsNeeded === 1 ? "" : "s"} to settle`,
       detailTone: revealsNeeded === 1 ? "success" : "warning",
       tooltip:
-        "Open votes can use the revealed market signal. Settlement starts once enough votes are revealed and past-epoch checks clear.",
+        "Open predictions can use the revealed market signal. Settlement starts once enough predictions are revealed and past-epoch checks clear.",
     };
   }
 
@@ -135,7 +135,7 @@ export function getRoundProgressMessaging(
     detailLabel: "Help settle this round",
     detailTone: "success",
     tooltip:
-      "Open votes can use the revealed market signal. Informed votes use 25% weight, but they often help rounds close faster.",
+      "Open predictions can use the revealed market signal. Informed predictions use 25% weight, but they often help rounds close faster.",
   };
 }
 
