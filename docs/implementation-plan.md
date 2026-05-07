@@ -4,22 +4,69 @@ Planning date: 2026-05-07
 
 ## Goal
 
-RateMesh should be a fresh deployment, not a legacy-compatible Curyo migration.
+RateMesh should be a fresh deployment, not a legacy-compatible Curyo migration,
+but it should recognize previous Curyo HREP holders as the genesis community
+that helped develop the protocol.
 The product direction is:
 
 - Open rating network for humans, AI agents, teams, and hybrid workflows.
 - No Self.xyz integration and no proof-of-personhood dependency.
-- No migration from existing HREP holders.
-- No transferable reputation market.
+- Day-one decentralized governance using a genesis distribution to previous
+  Curyo HREP holders.
+- Transferable capped RateMesh reputation token for governance, conviction
+  locks, and long-term protocol ownership.
 - Users submit a predicted final rating instead of a binary up/down vote.
 - One sealed private round per bounty, followed by reveal and settlement.
 - Reputation gates influence, governance, and USDC bounty eligibility.
 - USDC payouts reward useful independent signal, not raw wallet count.
+- Frontend operators keep the old 3% default earning share on bounty and
+  feedback payouts, with governance able to tune it up to a 5% cap.
 
 The implementation should reuse Curyo code and design where the code already
 solves the same problem, but it should not preserve Curyo mechanics for their
-own sake. The biggest architectural change is replacing token staking as the
-core vote primitive with reputation locks and scored predictions.
+own sake. The biggest architectural change is replacing binary token staking as
+the core vote primitive with predicted ratings, transferable capped reputation
+locks, account-level calibration, and cluster-aware payout controls.
+
+## Research Notes For The Updated Governance Direction
+
+This is protocol design context, not legal advice. RateMesh should still get
+jurisdiction-specific legal review before launching a transferable token.
+
+The recommended governance architecture should follow established on-chain
+patterns:
+
+- OpenZeppelin Governor supports modular token-voting governance, including
+  `GovernorVotes`, quorum modules, settings modules, and timelock execution.
+- OpenZeppelin's timelock guidance says self-governed timelocks should make the
+  timelock itself the long-term admin after setup, so future maintenance goes
+  through governance.
+- OpenZeppelin `ERC20Votes` keeps historical vote checkpoints and supports
+  delegation, which is the right primitive for transferable governance
+  reputation.
+- Compound shows a mature pattern of tokenholder governance with delegation,
+  Governor Bravo, and Timelock-controlled protocol changes.
+- ENS is a relevant launch-distribution precedent: the ENS DAO distributed
+  governance tokens to prior users and uses that token for major DAO decisions.
+- MiCA's recital on fully decentralized services is a reminder that legal
+  decentralization is broader than token distribution. The protocol should
+  minimize ongoing company discretion over upgrades, scoring, treasury, and
+  payout eligibility from day one.
+
+Sources:
+
+- OpenZeppelin Governor documentation:
+  https://docs.openzeppelin.com/contracts/4.x/api/governance
+- OpenZeppelin governance setup guide:
+  https://docs.openzeppelin.com/contracts/4.x/governance
+- OpenZeppelin ERC20Votes documentation:
+  https://docs.openzeppelin.com/contracts/5.x/api/token/erc20
+- Compound governance documentation:
+  https://docs.compound.finance/v2/governance/
+- ENS token documentation:
+  https://docs.ens.domains/dao/token/
+- MiCA Regulation recital 22:
+  https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A32023R1114
 
 ## Recommended Starting Point
 
@@ -65,8 +112,8 @@ over first, then regenerate artifacts from the new contracts.
 ### Reuse With Heavy Refactor
 
 - `HumanReputation.sol` becomes `RateMeshReputation.sol`.
-  Keep ERC20Votes-style checkpointing if useful for governance, but make
-  reputation non-transferable and mint/burn/lock only through protocol roles.
+  Keep ERC20Votes-style checkpointing, keep transfers enabled, and add a hard
+  `MAX_SUPPLY`. Protocol earning can mint only from a capped emissions reserve.
 - `RoundVotingEngine.sol` becomes `PredictionVotingEngine.sol`.
   Keep the commit-reveal/tlock state machine, per-content round isolation,
   config snapshots, keeper-friendly settlement hooks, and failure/cancel states.
@@ -80,8 +127,8 @@ over first, then regenerate artifacts from the new contracts.
   still needed, and forfeiture/refund logic. Replace voter-ID eligibility with
   reputation and cluster eligibility.
 - `CuryoGovernor.sol` becomes `RateMeshGovernor.sol`.
-  Defer launch governance until reputation has matured. Keep timelock and
-  checkpoints, but bootstrap with admin/multisig controls first.
+  Launch it from day one with Timelock-owned protocol roles and genesis
+  governance distribution.
 - `VoterIdNFT.sol` should not remain an identity proof. If a profile badge is
   useful, create a new optional `RaterProfileBadge` or `RaterRegistry` without
   Self nullifiers.
@@ -98,17 +145,16 @@ over first, then regenerate artifacts from the new contracts.
 - `HumanFaucet.sol` and any faucet/referral/migration allocations.
 - `HumanSignInButton`, `SelfVerifyButton`, `useVoterIdNFT`, and the gating copy
   that says identity verification is required to vote.
-- Transferable HREP staking, loser/winner pool economics, consensus reserve,
-  and faucet-based bootstrapping.
+- Legacy HREP staking as a binary-vote transport, loser/winner pool economics,
+  consensus reserve, and faucet-based bootstrapping.
 - Binary `up/down` vote model.
-- Existing HREP holder migration.
 - MACI/privacy as part of the initial implementation plan.
 
 ## Source File Reuse Map
 
 | Curyo source | RateMesh action |
 | --- | --- |
-| `packages/foundry/contracts/HumanReputation.sol` | Rename and refactor into `RateMeshReputation.sol`; keep governance checkpoints, remove transfer/stake/faucet assumptions. |
+| `packages/foundry/contracts/HumanReputation.sol` | Rename and refactor into `RateMeshReputation.sol`; keep transferability and governance checkpoints, add hard supply cap, remove faucet assumptions, and replace binary-vote staking with prediction locks. |
 | `packages/foundry/contracts/RoundVotingEngine.sol` | Rename and refactor into `PredictionVotingEngine.sol`; keep commit/reveal/tlock machinery, replace binary vote settlement. |
 | `packages/foundry/contracts/RoundRewardDistributor.sol` | Reuse claim/dust discipline for `PredictionRewardDistributor.sol`; remove HREP winner/loser payouts. |
 | `packages/foundry/contracts/QuestionRewardPoolEscrow.sol` | Keep as USDC bounty escrow foundation; remove Voter ID fields and add cluster/reputation eligibility. |
@@ -116,7 +162,7 @@ over first, then regenerate artifacts from the new contracts.
 | `packages/foundry/contracts/ProtocolConfig.sol` | Keep central config/address book; rename and add prediction, reputation, calibration, and cluster parameters. |
 | `packages/foundry/contracts/VoterIdNFT.sol` | Do not keep as identity. Mine delegation/profile lessons for a new `RaterRegistry` only. |
 | `packages/foundry/contracts/HumanFaucet.sol` | Delete. |
-| `packages/foundry/script/DeployCuryo.s.sol` | Rewrite as `DeployRateMesh.s.sol`; remove faucet, Self hub, migration tiers, and old token allocations. |
+| `packages/foundry/script/DeployCuryo.s.sol` | Rewrite as `DeployRateMesh.s.sol`; remove faucet, Self hub, and migration tiers; add genesis HREP-holder Merkle distribution, capped emissions reserve, Governor, and Timelock ownership from launch. |
 | `packages/ponder/ponder.schema.ts` | Keep content/profile/feed tables; replace vote/voter/reward tables with prediction/reputation/payout tables. |
 | `packages/ponder/src/RoundVotingEngine.ts` | Refactor event handlers for prediction events and weighted final ratings. |
 | `packages/ponder/src/HumanFaucet.ts` and `packages/ponder/src/VoterIdNFT.ts` | Delete or replace with `RaterRegistry.ts`. |
@@ -199,16 +245,17 @@ The initial effective voting power formula should be conservative:
 
 ```text
 effectiveVotingPower =
-  sqrt(credibility) * independenceMultiplier * convictionMultiplier
+  sqrt(lockedReputation) * calibrationMultiplier * independenceMultiplier
 ```
 
 Where:
 
-- `credibility` is earned from settled, revealed, calibrated participation.
+- `lockedReputation` is transferable RateMesh reputation locked for this
+  prediction.
+- `calibrationMultiplier` is earned from settled, revealed, calibrated
+  participation and is account/category-specific.
 - `independenceMultiplier` ranges from strongly discounted to 1.0 and should
   rarely boost an account above its earned baseline.
-- `convictionMultiplier` reflects how much reputation the account locks, capped
-  and sublinear.
 
 The first version can compute the final weighted rating on-chain from revealed
 votes if the formula stays simple. More advanced cluster scoring can be emitted
@@ -217,18 +264,34 @@ later version.
 
 ### Reputation
 
-Reputation is non-transferable protocol accounting. It can still be represented
-as a token for governance/checkpoint compatibility, but transfers should revert
-except mint/burn/protocol-internal accounting.
+RateMesh reputation should be a transferable, capped ERC20Votes-style token.
+The legal/decentralization motivation is that protocol governance should not
+remain company-controlled at launch. The practical product motivation is that
+previous Curyo HREP holders helped build the protocol and should receive the
+initial governance and ownership base.
 
-Recommended components:
+The token should not be the only signal for rating or USDC payouts. Transferable
+reputation can be bought, so RateMesh should pair it with account-level
+calibration and cluster discounts.
 
-- Global credibility.
-- Category-specific credibility.
+Recommended token properties:
+
+- Transferable ERC20 with ERC20Votes checkpoints and delegation.
+- 6 decimals to preserve compatibility with the old HREP mental model.
+- Hard `MAX_SUPPLY`; no uncapped inflation.
+- Genesis distribution to previous HREP holders.
+- Capped future emissions for calibrated RateMesh participation.
+- Governance/timelock controls minting from the remaining emissions reserve.
+- Rating influence uses locked token balance through a square-root curve.
+
+Recommended non-token scoring components:
+
+- Calibration rounds completed.
+- Global prediction calibration.
+- Category-specific calibration.
 - Reveal reliability.
-- Calibration/warmup status.
 - Cluster discount status.
-- Governance-eligible reputation, which should lag raw reputation.
+- Payout eligibility status.
 
 Users should complete `x` calibration rounds before earning USDC. A reasonable
 launch default is:
@@ -241,10 +304,46 @@ MIN_REPUTATION_FOR_USDC = protocol parameter
 The exact value should be tunable. The important rule is that new wallets cannot
 immediately farm bounties.
 
+### Genesis HREP Holder Distribution
+
+RateMesh should distribute genesis reputation to previous Curyo HREP holders.
+This is not a legacy contract migration; it is a one-time genesis allocation for
+governance decentralization and recognition of prior contribution.
+
+Recommended approach:
+
+- Snapshot Curyo HREP balances at a fixed block.
+- Publish the snapshot block, excluded addresses, script, and Merkle root.
+- Exclude protocol-owned contracts and reserves: faucet, treasury, participation
+  pool, consensus reserve, content registry, voting engine, distributors,
+  deployer-only setup wallets, and known operational contracts.
+- Include circulating HREP holders.
+- Add a participation bonus for users who actually voted, revealed, submitted,
+  funded, built frontends, or otherwise used the old protocol.
+- Use a capped or square-root transform so a single large holder cannot dominate
+  launch governance.
+- Allow claims through a Merkle distributor for a fixed claim window.
+- Send unclaimed genesis allocation to the DAO treasury or long-term emissions
+  reserve after the claim window.
+
+Example allocation shape:
+
+```text
+MAX_SUPPLY = 100,000,000 RREP
+
+50% genesis HREP holder/community claim
+25% future participation emissions
+15% DAO treasury
+10% ecosystem/frontends/grants/security
+```
+
+The exact percentages should be approved before deployment, but the cap should
+be hard-coded and auditable.
+
 ### Reputation Locks
 
-Users should be able to lock reputation on a prediction, but it should not work
-like current transferable-token staking.
+Users should lock transferable reputation on a prediction, but it should not
+work like the old binary HREP winner/loser pool.
 
 Recommended launch behavior:
 
@@ -309,23 +408,31 @@ Implementation implications:
 
 Purpose:
 
-- Non-transferable reputation accounting.
-- Checkpoints for governance and historical scoring.
-- Role-gated mint, burn, lock, unlock, and slash.
+- Transferable capped reputation token.
+- ERC20Votes checkpoints and delegation for day-one governance.
+- Protocol-native lock, unlock, burn/slash, and capped mint hooks.
+- Merkle-claimable genesis allocation for prior HREP holders.
+- Capped future emissions for RateMesh participation.
 
 Reuse:
 
 - Start from `packages/foundry/contracts/HumanReputation.sol`.
-- Keep decimals and ERC20Votes patterns if governance compatibility is useful.
+- Keep 6 decimals, ERC20Votes, ERC20Permit, and self-delegation-on-receipt if
+  the UX still benefits from it.
+- Keep the existing `MAX_SUPPLY` concept, likely at `100,000,000 * 1e6` unless
+  final tokenomics changes it before deploy.
 - Remove ERC1363 as a staking transport unless another protocol flow needs it.
-- Remove transferability and faucet mint assumptions.
+- Remove faucet mint assumptions.
 
 Key changes:
 
-- Override transfers so normal `from != 0 && to != 0` transfers revert.
+- Keep normal transfers enabled.
+- Enforce hard max supply on all mint paths.
 - Add protocol lock ledger.
-- Add category/global reputation events.
-- Add delayed governance eligibility or separate governance checkpoints.
+- Add `GENESIS_DISTRIBUTOR_ROLE`, `EMISSIONS_CONTROLLER_ROLE`, and protocol
+  lock/slash roles controlled by governance/timelock.
+- Add events for genesis claims, emissions, locks, unlocks, burns, and slashes.
+- Preserve vote checkpoints for historical governance snapshots.
 
 ### `RaterRegistry`
 
@@ -469,21 +576,75 @@ Key changes:
 - Add a bounty kind such as `Initial`, `Challenge`, or `Rerate`.
 - For challenge/re-rate bounties, store the challenged `roundId` and optional
   reason/spec hash.
+- Preserve the old frontend earning model: default `frontendFeeBps = 300`
+  (3%), governance-tunable up to `MAX_FRONTEND_FEE_BPS = 500` (5%).
 - Allocate by eligible prediction payout weights.
+
+### `FrontendRegistry`
+
+Purpose:
+
+- Give independent frontends a clear economic reason to integrate RateMesh.
+- Attribute prediction commits, bounty claims, and feedback awards to a
+  registered frontend/operator.
+- Let frontend operators claim their share through a pull-based flow.
+
+Reuse:
+
+- Keep the current frontend-code attribution model.
+- Keep eligibility/stake concepts if they are still useful for spam and
+  operator accountability, but denominate any required stake in RateMesh
+  reputation.
+- Keep keeper/frontend-fee sweep support for hosted frontends.
+
+Launch rule:
+
+- Default frontend share: 3% of eligible bounty and feedback payouts.
+- Max frontend share: 5%, adjustable only by governance.
+- If frontend fee transfer or registry credit fails, fallback should pay the
+  rater rather than trapping user funds.
+- Slashed or underbonded frontends should lose future fee eligibility and may
+  have historical unclaimed fees routed to the protocol, matching the current
+  design intent.
 
 ### `RateMeshGovernor`
 
 Purpose:
 
-- Long-term protocol governance using reputation.
+- Day-one decentralized protocol governance using transferable capped
+  reputation.
 
-Launch recommendation:
+Launch requirements:
 
-- Do not give raw fresh reputation immediate full governance control.
-- Start with timelock + admin/multisig.
-- Enable reputation governance only after enough live rounds.
-- Use caps, quorum floors, proposal thresholds, emergency pause, and slower
-  eligibility than display reputation.
+- Deploy `RateMeshGovernor`, `TimelockController`, `RateMeshReputation`, and
+  core protocol contracts together.
+- Timelock owns ProxyAdmins, treasury roles, config roles, emission roles, and
+  protocol upgrade authority from launch.
+- Governor is the timelock proposer/canceller.
+- Executor should be open to `address(0)` after setup so anyone can execute
+  queued successful proposals.
+- Deployer receives only temporary setup roles and must renounce them after
+  deployment verification.
+- Protocol contracts should not depend on company-administered off-chain scoring
+  for v1 settlement.
+- Emergency authority, if any, should be a narrow pause-only security council
+  with a public sunset or governance-ratified membership.
+
+Recommended initial parameters:
+
+- Voting delay: long enough for delegates to inspect proposals, for example
+  1-2 days.
+- Voting period: 5-7 days.
+- Timelock delay: at least 2 days.
+- Proposal threshold: high enough to prevent spam but not so high that genesis
+  governance is symbolic.
+- Quorum: percentage of delegated circulating supply, using
+  `GovernorVotesQuorumFraction`.
+- Late-quorum extension: use a prevent-late-quorum style extension if included.
+
+Governance can still use separate risk controls for rating/payout eligibility,
+but protocol ownership should be live and tokenholder-controlled from the first
+deployment.
 
 ## Indexer And API Plan
 
@@ -499,6 +660,8 @@ tables.
 - `profile`
 - `category`
 - `frontend`
+- `token_holder`
+- `token_transfer`
 - `rating_change`
 - `daily_vote_activity`
 
@@ -507,7 +670,6 @@ tables.
 - `voter_id` -> remove.
 - `human_faucet_claim` -> remove.
 - `human_faucet_referral_reward` -> remove.
-- `token_transfer` -> either remove or rename to reputation accounting events.
 - `voter_stats` -> `rater_reputation_stats`.
 - `voter_category_stats` -> `rater_category_reputation_stats`.
 - `reward_claim` -> split into `reputation_event` and `usdc_payout_claim`.
@@ -533,6 +695,10 @@ tables.
 - `rating_bounty`
   - bountyId, contentId, roundId, bounty kind, challengedRoundId, reason hash,
     funder, asset, amount, status, refund/forfeit state.
+- `genesis_claim`
+  - account, amount, claim index, claimedAt, transaction hash.
+- `governance_delegate`
+  - delegator, delegate, votes, updatedAt.
 
 ### API Changes
 
@@ -561,8 +727,11 @@ Keep:
 - Rating orb visual language.
 - Category, search, watched, followed, and history views.
 - Existing feedback panel and feedback bonus UI.
+- Frontend registration, frontend-code attribution, claimable frontend fees,
+  and the 3% default frontend operator share.
 
-Rename product surfaces from Curyo/HREP/human/voter to RateMesh/reputation/rater.
+Rename product surfaces from Curyo/HREP/human/voter to
+RateMesh/RREP/reputation/rater.
 
 ### Voting UX
 
@@ -698,25 +867,31 @@ Exit criteria:
 ### Phase 2: Contract MVP
 
 1. Implement `RateMeshReputation`.
-2. Implement `RaterRegistry`.
-3. Implement `PredictionVotingEngine`.
-4. Implement the first version of `PredictionRewardDistributor`.
-5. Refactor `QuestionRewardPoolEscrow` for one-round bounties,
+2. Implement a genesis HREP-holder Merkle distributor.
+3. Implement `RateMeshGovernor` and `TimelockController` ownership wiring.
+4. Implement `RaterRegistry`.
+5. Implement `PredictionVotingEngine`.
+6. Implement the first version of `PredictionRewardDistributor`.
+7. Refactor `QuestionRewardPoolEscrow` for one-round bounties,
    challenge/re-rate metadata, and reputation/cluster eligibility.
-6. Rewrite deployment script as `DeployRateMesh.s.sol`.
-7. Regenerate ABIs and deployment package exports.
+8. Preserve `FrontendRegistry` and the 3% default frontend share.
+9. Rewrite deployment script as `DeployRateMesh.s.sol`.
+10. Regenerate ABIs and deployment package exports.
 
 Exit criteria:
 
-- Foundry tests cover commit, reveal, settle, cancel, missed reveal, reputation
-  lock/unlock/burn, calibration gating, one-round bounty payout, challenge
-  bounty creation, and USDC claim gating.
+- Foundry tests cover capped supply, transfers, delegation, genesis claims,
+  timelock-owned roles, commit, reveal, settle, cancel, missed reveal,
+  reputation lock/unlock/burn, calibration gating, one-round bounty payout,
+  frontend fee reservation/claim, challenge bounty creation, and USDC claim
+  gating.
 - No old HREP transfer staking path remains.
 
 ### Phase 3: Ponder And API
 
 1. Rename schema tables and handlers.
-2. Add prediction, reputation, calibration, cluster, and payout tables.
+2. Add prediction, reputation, genesis-claim, governance, calibration, cluster,
+   and payout tables.
 3. Replace binary round aggregation with predicted-rating aggregation.
 4. Update read API routes for feed, history, leaderboard, rating bounties, and
    claims.
@@ -724,7 +899,8 @@ Exit criteria:
 
 Exit criteria:
 
-- Ponder indexes local deployment events.
+- Ponder indexes local deployment, genesis claim, governance delegation,
+  frontend-fee, and prediction events.
 - Feed API can render content, open rounds, revealed predictions, final rating,
   challenge/re-rate history, and claimable USDC.
 
@@ -734,14 +910,17 @@ Exit criteria:
 2. Remove Self and faucet screens.
 3. Replace up/down vote controls with prediction composer.
 4. Add funding UI for explicit challenge/re-rate bounties.
-5. Show calibration and reputation state in profile/feed surfaces.
-6. Update reward/claim UI for USDC payout eligibility.
-7. Keep feedback UI unchanged except copy/branding.
+5. Add genesis reputation claim and delegation UI.
+6. Show calibration and reputation state in profile/feed surfaces.
+7. Update reward/claim UI for USDC payout eligibility and frontend fee
+   claimability.
+8. Keep feedback UI unchanged except copy/branding.
 
 Exit criteria:
 
 - Wallet-sensitive flow works: connect, submit content, fund initial bounty,
-  predict, reveal/settle, fund re-rate, view reputation, claim USDC.
+  claim/delegate genesis reputation, predict, reveal/settle, fund re-rate,
+  view reputation, claim USDC, claim frontend fees.
 - Desktop and mobile dense voting surfaces remain usable.
 
 ### Phase 5: Keeper, SDK, And Agents
@@ -758,45 +937,57 @@ Exit criteria:
 
 ### Phase 6: Testnet Launch Hardening
 
-1. Deploy to testnet with fresh contracts.
+1. Deploy to testnet with fresh contracts and governance/timelock active.
 2. Run a capped calibration-only period.
 3. Enable small USDC bounties after telemetry confirms reveal reliability.
 4. Add monitoring for clusters, correlated reveals, missed reveals, payout
    concentration, and final-rating dispersion.
-5. Audit contracts before meaningful bounty amounts.
+5. Add monitoring for token delegation concentration and governance proposal
+   risk.
+6. Audit contracts before meaningful bounty amounts.
 
 Exit criteria:
 
 - Testnet users can complete calibration and claim capped USDC.
-- Admin can pause risky flows.
+- Governance can tune parameters through timelock, and any pause-only emergency
+  council is narrow and publicly scoped.
 - All payout math is publicly explainable from indexed events.
 
-### Phase 7: Governance
+### Phase 7: Mainnet Launch
 
-1. Enable reputation-based governance only after enough live reputation history.
-2. Use delayed governance eligibility, quorum floors, proposal thresholds, and
-   emergency controls.
-3. Keep treasury movement guarded by timelock and conservative roles.
+1. Publish the HREP snapshot, excluded-address list, Merkle root, and review
+   scripts.
+2. Deploy `RateMeshReputation`, Merkle distributor, Governor, Timelock, and core
+   protocol contracts.
+3. Transfer all protocol roles and ProxyAdmin ownership to the timelock.
+4. Renounce deployer setup roles after verification.
+5. Open genesis claims and delegation.
+6. Launch with one-round bounties, frontend fee incentives, and capped USDC
+   payouts.
 
 Exit criteria:
 
-- Governance cannot be captured by freshly farmed reputation.
-- Proposal and voting power are auditable from checkpoints.
+- RateMesh is tokenholder-governed from the first public deployment.
+- Proposal, delegation, token supply, genesis claims, and voting power are
+  auditable from checkpoints and indexed events.
 
 ## Concrete PR Plan
 
 1. `repo-bootstrap`: import Curyo code, rename package scopes, keep app running.
 2. `remove-self-faucet`: delete Self/faucet packages, UI, routes, and deploy
    wiring.
-3. `reputation-contract`: add non-transferable reputation with locks and tests.
-4. `rater-registry`: add open rater profiles, metadata, delegation, and cluster
-   flags.
+3. `reputation-governance`: add capped transferable reputation, genesis Merkle
+   distributor, Governor, Timelock, delegation, and launch role wiring.
+4. `rater-registry`: add open rater profiles, metadata, operational delegation,
+   and cluster flags.
 5. `prediction-engine`: replace binary votes with predicted final rating commit
    reveal.
 6. `usdc-bounty-refactor`: refactor reward escrow/distributor around one-round
-   bounties, challenge/re-rate metadata, calibrated raters, and cluster caps.
+   bounties, challenge/re-rate metadata, calibrated raters, frontend fees, and
+   cluster caps.
 7. `ponder-predictions`: update schema, handlers, and APIs.
-8. `frontend-prediction-ui`: replace vote controls and onboarding.
+8. `frontend-prediction-ui`: replace vote controls, add genesis claim/delegate,
+   frontend fee, and onboarding surfaces.
 9. `keeper-sdk-agents`: update commit builders, keeper reveal, and agent client.
 10. `local-e2e`: add full local lifecycle tests and docs.
 11. `testnet-deploy`: fresh deployment config, monitoring, and launch checklist.
@@ -806,9 +997,15 @@ Exit criteria:
 These are launch defaults, not permanent constants:
 
 - Rating scale: `1000-9900` BPS, displayed as `1.0-9.9 / 10`.
+- Reputation token: transferable ERC20Votes, 6 decimals.
+- Reputation max supply: start from `100,000,000 RREP`, matching the old HREP
+  cap unless final tokenomics changes before deployment.
+- Genesis allocation: one-time Merkle claim for prior circulating HREP holders,
+  plus participation/front-end contribution bonuses.
 - Bounty scope: one sealed commit window plus reveal window, exactly one
   settlement attempt per bounty.
 - Challenge/re-rate: explicit new bounty referencing a prior round/result.
+- Frontend share: default 3%, max 5%, applies to bounty and feedback payouts.
 - Minimum raw reveals: 3.
 - Minimum independent participants for USDC: 3.
 - Calibration rounds before USDC: 10.
@@ -847,16 +1044,36 @@ Mitigations:
 
 ### Account Transfer Or Rental
 
-Risk: non-transferable reputation can still be sold through account transfer or
-managed voting.
+Risk: transferable reputation makes secondary markets explicit, and accounts can
+still be rented or managed to farm calibration/payout status.
 
 Mitigations:
 
 - No linear cash payout by reputation.
+- Token balance alone is not enough for USDC eligibility; calibration and reveal
+  reliability remain account-specific.
 - Behavior-based clustering.
 - Reveal reliability and category history matter more than raw balance.
 - Optional cooling periods after wallet/delegation/metadata changes.
-- Delayed governance eligibility.
+- Governance uses token checkpoints and timelock delays so last-minute token
+  movement cannot rewrite an active vote.
+
+### Governance Capture
+
+Risk: because reputation is transferable and governs the protocol from launch,
+a whale or coordinated buyer can attempt to control parameters, treasury, or
+upgrades.
+
+Mitigations:
+
+- Capped supply and published genesis allocation.
+- Broad HREP-holder/community genesis distribution instead of team-only launch.
+- Timelock delay on all high-impact actions.
+- Proposal threshold, quorum, and late-quorum protection.
+- Public delegation UI and monitoring for delegation concentration.
+- Conservative treasury roles and pause-only emergency path.
+- Keep v1 scoring simple enough that governance cannot hide discretionary
+  off-chain payout changes.
 
 ### AI Correlation
 
@@ -905,12 +1122,16 @@ The MVP is done when:
 - Users can submit a predicted final rating through commit reveal.
 - Each bounty funds exactly one private prediction round.
 - Users can fund an explicit challenge/re-rate bounty against a prior result.
-- Reputation is non-transferable and earned from revealed settled predictions.
+- RateMesh reputation is transferable, capped, checkpointed, and claimable by
+  previous HREP holders through a published genesis distribution.
+- RateMesh governance and timelock own protocol roles from launch.
 - Users complete calibration before USDC eligibility.
 - USDC bounty payout is cluster-capped and not linear by wallet count or raw
   reputation.
+- Frontend operators can earn the default 3% share on bounty and feedback
+  payouts.
 - The frontend preserves Curyo's usable feed/rating design while clearly
   presenting RateMesh prediction mechanics.
-- Ponder exposes enough data for public auditability of rating, reputation, and
-  payout decisions.
+- Ponder exposes enough data for public auditability of rating, reputation,
+  genesis claims, governance, frontend fees, and payout decisions.
 - Local end-to-end tests cover the full lifecycle.
