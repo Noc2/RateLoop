@@ -409,6 +409,9 @@ type PublicFeedbackListResponse = {
   [key: string]: unknown;
 };
 
+const PREDICTED_RATING_SYSTEM = "ratemesh.predicted_final_rating.v1";
+const FEATURE_ACCEPTANCE_RESULT_SPEC_HASH = "0x383236243362c424465503c886244a54c7b038d76e7aa5e06b0e4c70c61d246b";
+
 const DEFAULT_AGENT_RESULT_TEMPLATE = {
   id: "generic_rating",
   interpretation: {
@@ -417,7 +420,7 @@ const DEFAULT_AGENT_RESULT_TEMPLATE = {
     proceedRatingBps: 6500,
     reviseRatingBps: 4000,
   },
-  ratingSystem: "curyo.binary_staked_rating.v1",
+  ratingSystem: PREDICTED_RATING_SYSTEM,
   version: 1,
 } as const;
 
@@ -429,8 +432,8 @@ const FEATURE_ACCEPTANCE_RESULT_TEMPLATE = {
     proceedRatingBps: 7500,
     reviseRatingBps: 5000,
   },
-  ratingSystem: "curyo.binary_staked_rating.v1",
-  resultSpecHash: "0x2245ce23320cf4fafe1fe8d340b04dacf0a769aff01929dd7676b331087514f5",
+  ratingSystem: PREDICTED_RATING_SYSTEM,
+  resultSpecHash: FEATURE_ACCEPTANCE_RESULT_SPEC_HASH,
   version: 1,
 } as const;
 

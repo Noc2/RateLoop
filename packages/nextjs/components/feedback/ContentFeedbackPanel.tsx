@@ -24,7 +24,7 @@ interface ContentFeedbackPanelProps {
   onRequestConnect?: () => void;
 }
 
-const FEATURE_ACCEPTANCE_RESULT_SPEC_HASH = "0x2245ce23320cf4fafe1fe8d340b04dacf0a769aff01929dd7676b331087514f5";
+const FEATURE_ACCEPTANCE_RESULT_SPEC_HASH = "0x383236243362c424465503c886244a54c7b038d76e7aa5e06b0e4c70c61d246b";
 const FEATURE_ACCEPTANCE_PLACEHOLDER = "Actual result:\nExpected result:\nSteps to reproduce:\nEnvironment:";
 
 function shortenAddress(address: string) {

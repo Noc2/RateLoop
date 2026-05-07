@@ -2,6 +2,7 @@ import { type Hex, keccak256, stringToHex } from "viem";
 
 export const DEFAULT_AGENT_TEMPLATE_ID = "generic_rating";
 export const DEFAULT_AGENT_TEMPLATE_VERSION = 1;
+export const PREDICTED_RATING_SYSTEM = "ratemesh.predicted_final_rating.v1";
 
 type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 
@@ -100,20 +101,27 @@ export function buildDefaultResultSpec(
   templateId = DEFAULT_AGENT_TEMPLATE_ID,
   templateVersion = DEFAULT_AGENT_TEMPLATE_VERSION,
   voteSemantics: AgentQuestionSpecInput["voteSemantics"] = {
-    down: "negative signal for the submitted question",
-    up: "positive signal for the submitted question",
+    down: "lower final rating for the submitted question",
+    up: "higher final rating for the submitted question",
   },
 ): JsonValue {
   return {
     confidenceInputs: [
       "revealedCount",
       "totalStake",
+      "predictedRatingDistribution",
       "ratingBps",
       "conservativeRatingBps",
       "confidenceMass",
       "effectiveEvidence",
     ],
-    ratingSystem: "curyo.binary_staked_rating.v1",
+    predictionScale: {
+      display: "0.0-10.0",
+      maxBps: 10000,
+      minBps: 0,
+      unit: "predicted final rating",
+    },
+    ratingSystem: PREDICTED_RATING_SYSTEM,
     schemaVersion: "curyo.result_spec.v1",
     templateId,
     templateVersion,

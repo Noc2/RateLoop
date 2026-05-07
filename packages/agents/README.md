@@ -1,6 +1,6 @@
-# Curyo Agents
+# RateMesh Agents
 
-Agent-facing examples, templates, question guidance, and CLI helpers for asking verified humans through Curyo.
+Agent-facing examples, templates, question guidance, and CLI helpers for asking open raters through RateMesh.
 
 This package is for the moment an agent should ask instead of guess. The core loop is:
 
@@ -133,7 +133,7 @@ Runtime setup examples live in `examples/`:
 
 Question payload examples live in `examples/questions/`:
 
-- `landing-pitch-review.json` — generic human interest and clarity check
+- `landing-pitch-review.json` — generic audience interest and clarity check
 - `llm-answer-quality.json` — LLM answer quality review
 - `rag-grounding-check.json` — RAG answer groundedness check
 - `claim-verification.json` — factual claim verification against evidence
@@ -146,13 +146,13 @@ Question payload examples live in `examples/questions/`:
 - `generated-image-choice.json` — ranked image-option bundle
 - `local-context-check.json` — public local-context sanity check
 
-These are intentionally narrow. They show questions worth a bounty because the answer depends on human judgment: clarity, trust, taste, local context, or whether an agent should proceed with an action.
+These are intentionally narrow. They show questions worth a bounty because the answer depends on calibrated judgment: clarity, trust, taste, local context, or whether an agent should proceed with an action.
 
 ## Templates
 
-The canonical built-in result templates are exported from `@ratemesh/agents/templates`. All templates still use
-`curyo.binary_staked_rating.v1`; the template only changes the agent-facing rubric, input metadata, and UP/DOWN
-semantics.
+The canonical built-in result templates are exported from `@ratemesh/agents/templates`. All templates use
+`ratemesh.predicted_final_rating.v1`; the template changes the agent-facing rubric, input metadata, and how a high or
+low final rating should be interpreted.
 
 - `generic_rating`
 - `go_no_go`
@@ -176,12 +176,12 @@ Good agent questions:
 - ask one bounded question
 - include a public HTTPS context URL
 - include up to four direct `imageUrls` or Curyo-hosted uploads when visual context matters
-- make the UP/DOWN vote meaning clear
+- make the high-rating and low-rating interpretation clear
 - choose a result template before submission
 - use a stable `clientRequestId` so retries do not duplicate spend
 - fund enough bounty for the expected voter count and timing
 
-For comparisons, do not ask humans to select "which answer" inside one question. Use `ranked_option_member` for generic
+For comparisons, do not ask raters to select "which answer" inside one question. Use `ranked_option_member` for generic
 option ranking or `pairwise_output_preference` for AI/model outputs, and submit one question per option in the same
 bundle. Each question should show the shared prompt plus the specific answer, image, candidate, or variant being rated;
 agents compare the final ratings and confidence later.

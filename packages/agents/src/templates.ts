@@ -1,4 +1,4 @@
-import { buildDefaultResultSpec, hashCanonicalJson } from "./questionSpecs";
+import { PREDICTED_RATING_SYSTEM, buildDefaultResultSpec, hashCanonicalJson } from "./questionSpecs";
 
 type JsonValue =
   | string
@@ -24,7 +24,7 @@ export type AgentResultTemplate = {
   version: number;
   title: string;
   description: string;
-  ratingSystem: "curyo.binary_staked_rating.v1";
+  ratingSystem: typeof PREDICTED_RATING_SYSTEM;
   voteSemantics: {
     up: string;
     down: string;
@@ -49,7 +49,7 @@ const TEMPLATE_DEFINITIONS = [
     id: "generic_rating",
     title: "Generic Rating",
     description:
-      "General human support signal for a submitted question, link, image, or proposal.",
+      "General calibrated support signal for a submitted question, link, image, or proposal.",
     voteSemantics: {
       up: "positive signal for the submitted question",
       down: "negative signal for the submitted question",
@@ -78,7 +78,7 @@ const TEMPLATE_DEFINITIONS = [
     },
     templateInputsExample: {
       audience: "new visitors",
-      goal: "quick human interest check",
+      goal: "quick audience interest check",
       successSignal: "Would this make you want to learn more?",
     },
   },
@@ -346,7 +346,7 @@ const TEMPLATE_DEFINITIONS = [
     id: "feature_acceptance_test",
     title: "Feature Acceptance Test",
     description:
-      "Ask verified humans to test whether a public preview feature works as specified and report actionable failures.",
+      "Ask raters to test whether a public preview feature works as specified and report actionable failures.",
     voteSemantics: {
       up: "the feature works as described and is ready enough for the stated audience or environment",
       down: "the feature fails, is confusing, incomplete, or should not ship without changes",
@@ -527,7 +527,7 @@ const TEMPLATE_DEFINITIONS = [
 export const AGENT_RESULT_TEMPLATES: AgentResultTemplate[] =
   TEMPLATE_DEFINITIONS.map((template) => ({
     ...template,
-    ratingSystem: "curyo.binary_staked_rating.v1",
+    ratingSystem: PREDICTED_RATING_SYSTEM,
     recommendedUse: [...template.recommendedUse],
     resultSpecHash: hashCanonicalJson(
       buildDefaultResultSpec(

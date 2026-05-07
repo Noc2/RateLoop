@@ -576,7 +576,7 @@ test("getResult can build a tokenless public result when contentId is known", as
 });
 
 test("getResult summarizes tokenless feature acceptance feedback", async () => {
-  const featureSpecHash = "0x2245ce23320cf4fafe1fe8d340b04dacf0a769aff01929dd7676b331087514f5";
+  const featureSpecHash = "0x383236243362c424465503c886244a54c7b038d76e7aa5e06b0e4c70c61d246b";
   const agent = createCuryoAgentClient({
     apiBaseUrl: API_BASE_URL,
     fetchImpl: async (input: URL | RequestInfo) => {

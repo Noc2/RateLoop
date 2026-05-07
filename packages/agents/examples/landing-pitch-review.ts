@@ -38,12 +38,12 @@ export async function main() {
     templateId: "generic_rating",
     templateInputs: {
       audience: "first-time visitors",
-      goal: "quick human interest check for a landing-page pitch",
+      goal: "quick audience interest check for a landing-page pitch",
       successSignal: "Would this make you want to learn more?",
     },
     title: "Would this pitch make you want to learn more?",
     description:
-      "Review the linked landing-page pitch. Vote up only if it is clear, credible, and interesting enough to keep reading.",
+      "Review the linked landing-page pitch. Predict a high final rating only if it is clear, credible, and interesting enough to keep reading.",
     contextUrl: pitchUrl,
     categoryId: "1",
     tags: ["agent", "landing-page", "pitch"],

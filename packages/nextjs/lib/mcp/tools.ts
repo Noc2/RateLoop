@@ -708,7 +708,7 @@ async function buildQuestionResultForRecord(
       limitations: ["The question has not reached a public Curyo result page yet."],
       majorObjections: [],
       methodology: {
-        ratingSystem: "curyo.binary_staked_rating.v1",
+        ratingSystem: "ratemesh.predicted_final_rating.v1",
         sources: ["curyo.agent_question_submission"],
         templateId: "generic_rating",
         templateVersion: 1,

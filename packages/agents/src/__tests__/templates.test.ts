@@ -18,7 +18,7 @@ describe("agent templates", () => {
       submissionPattern: "single_question",
       templateInputsExample: {
         audience: "new visitors",
-        goal: "quick human interest check",
+        goal: "quick audience interest check",
         successSignal: "Would this make you want to learn more?",
       },
     });
@@ -42,12 +42,12 @@ describe("agent templates", () => {
     ]);
     expect(templates).toHaveLength(12);
     for (const template of templates) {
-      expect(template.ratingSystem).toBe("curyo.binary_staked_rating.v1");
+      expect(template.ratingSystem).toBe("ratemesh.predicted_final_rating.v1");
       expect(template.resultSpecHash).toMatch(/^0x[a-f0-9]{64}$/);
     }
   });
 
-  it("keeps AI evaluation templates on the existing binary rating flow", () => {
+  it("keeps AI evaluation templates on the predicted rating flow", () => {
     const templates = listAgentResultTemplates();
     const aiEvaluationTemplates = templates.filter((template) =>
       [
@@ -66,7 +66,7 @@ describe("agent templates", () => {
     expect(aiEvaluationTemplates).toHaveLength(9);
     expect(
       aiEvaluationTemplates.every(
-        (template) => template.ratingSystem === "curyo.binary_staked_rating.v1",
+        (template) => template.ratingSystem === "ratemesh.predicted_final_rating.v1",
       ),
     ).toBe(true);
     expect(
