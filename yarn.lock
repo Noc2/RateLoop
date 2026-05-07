@@ -380,160 +380,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@ratemesh/agents@workspace:*, @ratemesh/agents@workspace:packages/agents":
-  version: 0.0.0-use.local
-  resolution: "@ratemesh/agents@workspace:packages/agents"
-  dependencies:
-    "@ratemesh/sdk": "workspace:*"
-    "@types/node": ^20.10.7
-    dotenv: ^16.4.5
-    tsx: ^4.19.0
-    typescript: ~5.8.2
-    viem: 2.39.0
-    vitest: ^4.0.18
-  languageName: unknown
-  linkType: soft
-
-"@ratemesh/contracts@workspace:*, @ratemesh/contracts@workspace:packages/contracts":
-  version: 0.0.0-use.local
-  resolution: "@ratemesh/contracts@workspace:packages/contracts"
-  dependencies:
-    "@types/node": ^20.10.7
-    tlock-js: ^0.9.0
-    tsx: ^4.21.0
-    typescript: ~5.8.2
-    viem: 2.39.0
-  languageName: unknown
-  linkType: soft
-
-"@ratemesh/foundry@workspace:packages/foundry":
-  version: 0.0.0-use.local
-  resolution: "@ratemesh/foundry@workspace:packages/foundry"
-  dependencies:
-    dotenv: ~16.3.1
-    prettier: ~2.8.8
-    qrcode: ~1.5.3
-    shx: ^0.3.4
-    tlock-js: ^0.9.0
-    toml: ~3.0.0
-    viem: 2.39.0
-  languageName: unknown
-  linkType: soft
-
-"@ratemesh/keeper@workspace:packages/keeper":
-  version: 0.0.0-use.local
-  resolution: "@ratemesh/keeper@workspace:packages/keeper"
-  dependencies:
-    "@ratemesh/contracts": "workspace:*"
-    "@ratemesh/node-utils": "workspace:*"
-    "@types/node": ^20.10.7
-    dotenv: ^16.4.5
-    tlock-js: ^0.9.0
-    tsx: ^4.19.0
-    typescript: ~5.8.2
-    viem: 2.39.0
-    vitest: ^4.0.18
-  languageName: unknown
-  linkType: soft
-
-"@ratemesh/nextjs@workspace:packages/nextjs":
-  version: 0.0.0-use.local
-  resolution: "@ratemesh/nextjs@workspace:packages/nextjs"
-  dependencies:
-    "@axe-core/playwright": ^4.11.1
-    "@ratemesh/agents": "workspace:*"
-    "@ratemesh/contracts": "workspace:*"
-    "@ratemesh/node-utils": "workspace:*"
-    "@ratemesh/sdk": "workspace:*"
-    "@heroicons/react": ~2.1.5
-    "@next/bundle-analyzer": ^16.1.6
-    "@playwright/test": ^1.58.2
-    "@react-pdf/renderer": ^4.3.2
-    "@scaffold-ui/components": 0.1.9
-    "@scaffold-ui/hooks": 0.1.7
-    "@selfxyz/qrcode": 1.0.22
-    "@tailwindcss/postcss": 4.0.15
-    "@tanstack/react-query": ~5.59.15
-    "@thirdweb-dev/wagmi-adapter": 0.2.208
-    "@trivago/prettier-plugin-sort-imports": ~4.3.0
-    "@types/node": ^20.10.7
-    "@types/pg": ^8.15.6
-    "@types/react": ~19.0.7
-    "@vercel/blob": 2.3.0
-    "@wagmi/core": 2.22.1
-    "@xmldom/xmldom": ^0.9.10
-    abitype: 1.0.6
-    daisyui: 5.0.9
-    drizzle-kit: ^0.31.10
-    drizzle-orm: ~0.45.2
-    eslint: ~9.38.0
-    eslint-config-next: ~15.5.12
-    eslint-config-prettier: ~10.1.1
-    eslint-plugin-prettier: ~5.2.4
-    framer-motion: ^12.29.2
-    mathjax-full: ^3.2.2
-    next: ~15.5.15
-    next-nprogress-bar: ~2.3.13
-    pg: ^8.20.0
-    pg-mem: ^3.0.14
-    playwright-core: 1.58.2
-    postcss: ~8.5.14
-    prettier: ~3.5.3
-    react: ~19.2.3
-    react-dom: ~19.2.3
-    react-hot-toast: ~2.4.0
-    react-lite-youtube-embed: ^3.3.3
-    server-only: 0.0.1
-    sharp: ^0.34.3
-    tailwindcss: 4.1.3
-    thirdweb: 5.119.1
-    tsx: ^4.21.0
-    type-fest: ~4.26.1
-    typescript: ~5.8.2
-    usehooks-ts: ~3.1.0
-    vercel: ~50.38.1
-    viem: 2.39.0
-    wagmi: 2.19.5
-    zustand: ~5.0.0
-  languageName: unknown
-  linkType: soft
-
-"@ratemesh/node-utils@workspace:*, @ratemesh/node-utils@workspace:packages/node-utils":
-  version: 0.0.0-use.local
-  resolution: "@ratemesh/node-utils@workspace:packages/node-utils"
-  dependencies:
-    "@types/node": ^20.10.7
-    typescript: ~5.8.2
-    viem: 2.39.0
-  languageName: unknown
-  linkType: soft
-
-"@ratemesh/ponder@workspace:packages/ponder":
-  version: 0.0.0-use.local
-  resolution: "@ratemesh/ponder@workspace:packages/ponder"
-  dependencies:
-    "@ratemesh/contracts": "workspace:*"
-    "@ratemesh/node-utils": "workspace:*"
-    hono: ~4.12.17
-    ponder: ^1.0.0
-    typescript: ~5.8.2
-    viem: 2.39.0
-    vitest: ^4.0.18
-  languageName: unknown
-  linkType: soft
-
-"@ratemesh/sdk@workspace:*, @ratemesh/sdk@workspace:packages/sdk":
-  version: 0.0.0-use.local
-  resolution: "@ratemesh/sdk@workspace:packages/sdk"
-  dependencies:
-    "@ratemesh/contracts": "workspace:*"
-    "@types/node": ^20.10.7
-    tsx: ^4.21.0
-    typescript: ~5.8.2
-    viem: 2.39.0
-  languageName: unknown
-  linkType: soft
-
 "@discoveryjs/json-ext@npm:0.5.7":
   version: 0.5.7
   resolution: "@discoveryjs/json-ext@npm:0.5.7"
@@ -2208,6 +2054,16 @@ __metadata:
     "@repeaterjs/repeater": ^3.0.4
     tslib: ^2.8.1
   checksum: aad7e49d02ddad91a4489cc55bee4b4a7193c867c85af2c72842da531407405b949fb47622155d0267ca6eac5990fcb1f4b115088f4f05bf5f2b4443afeafb7b
+  languageName: node
+  linkType: hard
+
+"@gsap/react@npm:^2.1.2":
+  version: 2.1.2
+  resolution: "@gsap/react@npm:2.1.2"
+  peerDependencies:
+    gsap: ^3.12.5
+    react: ">=17"
+  checksum: 237288d9923a5c0f243a7986e655cb09ab600db7cc117d6329334f1e895e31567635ca53587aabf65924e0cc02887b054aeda5f0b04c7d2091c95e75f7d8162d
   languageName: node
   linkType: hard
 
@@ -4051,6 +3907,162 @@ __metadata:
   checksum: c1c111edeab70b14a735bca43601de6468c792482864b766ac8940b43321492e5c0ae62f92b156cecdc9265ec3c680c32b3fa0c8a90b5e796923a9af13c5dc20
   languageName: node
   linkType: hard
+
+"@ratemesh/agents@workspace:*, @ratemesh/agents@workspace:packages/agents":
+  version: 0.0.0-use.local
+  resolution: "@ratemesh/agents@workspace:packages/agents"
+  dependencies:
+    "@ratemesh/sdk": "workspace:*"
+    "@types/node": ^20.10.7
+    dotenv: ^16.4.5
+    tsx: ^4.19.0
+    typescript: ~5.8.2
+    viem: 2.39.0
+    vitest: ^4.0.18
+  languageName: unknown
+  linkType: soft
+
+"@ratemesh/contracts@workspace:*, @ratemesh/contracts@workspace:packages/contracts":
+  version: 0.0.0-use.local
+  resolution: "@ratemesh/contracts@workspace:packages/contracts"
+  dependencies:
+    "@types/node": ^20.10.7
+    tlock-js: ^0.9.0
+    tsx: ^4.21.0
+    typescript: ~5.8.2
+    viem: 2.39.0
+  languageName: unknown
+  linkType: soft
+
+"@ratemesh/foundry@workspace:packages/foundry":
+  version: 0.0.0-use.local
+  resolution: "@ratemesh/foundry@workspace:packages/foundry"
+  dependencies:
+    dotenv: ~16.3.1
+    prettier: ~2.8.8
+    qrcode: ~1.5.3
+    shx: ^0.3.4
+    tlock-js: ^0.9.0
+    toml: ~3.0.0
+    viem: 2.39.0
+  languageName: unknown
+  linkType: soft
+
+"@ratemesh/keeper@workspace:packages/keeper":
+  version: 0.0.0-use.local
+  resolution: "@ratemesh/keeper@workspace:packages/keeper"
+  dependencies:
+    "@ratemesh/contracts": "workspace:*"
+    "@ratemesh/node-utils": "workspace:*"
+    "@types/node": ^20.10.7
+    dotenv: ^16.4.5
+    tlock-js: ^0.9.0
+    tsx: ^4.19.0
+    typescript: ~5.8.2
+    viem: 2.39.0
+    vitest: ^4.0.18
+  languageName: unknown
+  linkType: soft
+
+"@ratemesh/nextjs@workspace:packages/nextjs":
+  version: 0.0.0-use.local
+  resolution: "@ratemesh/nextjs@workspace:packages/nextjs"
+  dependencies:
+    "@axe-core/playwright": ^4.11.1
+    "@gsap/react": ^2.1.2
+    "@heroicons/react": ~2.1.5
+    "@next/bundle-analyzer": ^16.1.6
+    "@playwright/test": ^1.58.2
+    "@ratemesh/agents": "workspace:*"
+    "@ratemesh/contracts": "workspace:*"
+    "@ratemesh/node-utils": "workspace:*"
+    "@ratemesh/sdk": "workspace:*"
+    "@react-pdf/renderer": ^4.3.2
+    "@scaffold-ui/components": 0.1.9
+    "@scaffold-ui/hooks": 0.1.7
+    "@selfxyz/qrcode": 1.0.22
+    "@tailwindcss/postcss": 4.0.15
+    "@tanstack/react-query": ~5.59.15
+    "@thirdweb-dev/wagmi-adapter": 0.2.208
+    "@trivago/prettier-plugin-sort-imports": ~4.3.0
+    "@types/node": ^20.10.7
+    "@types/pg": ^8.15.6
+    "@types/react": ~19.0.7
+    "@vercel/blob": 2.3.0
+    "@wagmi/core": 2.22.1
+    "@xmldom/xmldom": ^0.9.10
+    abitype: 1.0.6
+    daisyui: 5.0.9
+    drizzle-kit: ^0.31.10
+    drizzle-orm: ~0.45.2
+    eslint: ~9.38.0
+    eslint-config-next: ~15.5.12
+    eslint-config-prettier: ~10.1.1
+    eslint-plugin-prettier: ~5.2.4
+    framer-motion: ^12.29.2
+    gsap: ^3.14.2
+    mathjax-full: ^3.2.2
+    next: ~15.5.15
+    next-nprogress-bar: ~2.3.13
+    pg: ^8.20.0
+    pg-mem: ^3.0.14
+    playwright-core: 1.58.2
+    postcss: ~8.5.14
+    prettier: ~3.5.3
+    react: ~19.2.3
+    react-dom: ~19.2.3
+    react-hot-toast: ~2.4.0
+    react-lite-youtube-embed: ^3.3.3
+    server-only: 0.0.1
+    sharp: ^0.34.3
+    tailwindcss: 4.1.3
+    thirdweb: 5.119.1
+    tsx: ^4.21.0
+    type-fest: ~4.26.1
+    typescript: ~5.8.2
+    usehooks-ts: ~3.1.0
+    vercel: ~50.38.1
+    viem: 2.39.0
+    wagmi: 2.19.5
+    zustand: ~5.0.0
+  languageName: unknown
+  linkType: soft
+
+"@ratemesh/node-utils@workspace:*, @ratemesh/node-utils@workspace:packages/node-utils":
+  version: 0.0.0-use.local
+  resolution: "@ratemesh/node-utils@workspace:packages/node-utils"
+  dependencies:
+    "@types/node": ^20.10.7
+    typescript: ~5.8.2
+    viem: 2.39.0
+  languageName: unknown
+  linkType: soft
+
+"@ratemesh/ponder@workspace:packages/ponder":
+  version: 0.0.0-use.local
+  resolution: "@ratemesh/ponder@workspace:packages/ponder"
+  dependencies:
+    "@ratemesh/contracts": "workspace:*"
+    "@ratemesh/node-utils": "workspace:*"
+    hono: ~4.12.17
+    ponder: ^1.0.0
+    typescript: ~5.8.2
+    viem: 2.39.0
+    vitest: ^4.0.18
+  languageName: unknown
+  linkType: soft
+
+"@ratemesh/sdk@workspace:*, @ratemesh/sdk@workspace:packages/sdk":
+  version: 0.0.0-use.local
+  resolution: "@ratemesh/sdk@workspace:packages/sdk"
+  dependencies:
+    "@ratemesh/contracts": "workspace:*"
+    "@types/node": ^20.10.7
+    tsx: ^4.21.0
+    typescript: ~5.8.2
+    viem: 2.39.0
+  languageName: unknown
+  linkType: soft
 
 "@react-pdf/fns@npm:3.1.2":
   version: 3.1.2
@@ -9397,16 +9409,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"curyo@workspace:.":
-  version: 0.0.0-use.local
-  resolution: "curyo@workspace:."
-  dependencies:
-    husky: ~9.1.6
-    knip: ^6.0.5
-    lint-staged: ~13.2.2
-  languageName: unknown
-  linkType: soft
-
 "daisyui@npm:5.0.9":
   version: 5.0.9
   resolution: "daisyui@npm:5.0.9"
@@ -12017,6 +12019,13 @@ __metadata:
   version: 16.12.0
   resolution: "graphql@npm:16.12.0"
   checksum: c0d2435425270c575091861c9fd82d7cebc1fb1bd5461e05c36521a988f69c5074461e27b89ab70851fabc72ec9d988235f288ba7bbeff67d08a973e8b9d6d3d
+  languageName: node
+  linkType: hard
+
+"gsap@npm:^3.14.2":
+  version: 3.15.0
+  resolution: "gsap@npm:3.15.0"
+  checksum: 168f849ef6eee7e0a3f315490edbd3a9e1cd7add03a768bb65953452dc12e6edbe7b24c9a0572e5ea9c911b5294582ad878ac2e4247848678de81854c5c53a27
   languageName: node
   linkType: hard
 
@@ -15939,6 +15948,16 @@ __metadata:
   languageName: node
   linkType: hard
 
+"ratemesh@workspace:.":
+  version: 0.0.0-use.local
+  resolution: "ratemesh@workspace:."
+  dependencies:
+    husky: ~9.1.6
+    knip: ^6.0.5
+    lint-staged: ~13.2.2
+  languageName: unknown
+  linkType: soft
+
 "raw-body@npm:2.4.1":
   version: 2.4.1
   resolution: "raw-body@npm:2.4.1"
@@ -16036,9 +16055,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-spinners@patch:react-spinners@npm%3A0.14.1#./.yarn/patches/react-spinners-npm-0.14.1-545ddaba3f.patch::locator=curyo%40workspace%3A.":
+"react-spinners@patch:react-spinners@npm%3A0.14.1#./.yarn/patches/react-spinners-npm-0.14.1-545ddaba3f.patch::locator=ratemesh%40workspace%3A.":
   version: 0.14.1
-  resolution: "react-spinners@patch:react-spinners@npm%3A0.14.1#./.yarn/patches/react-spinners-npm-0.14.1-545ddaba3f.patch::version=0.14.1&hash=9a6209&locator=curyo%40workspace%3A."
+  resolution: "react-spinners@patch:react-spinners@npm%3A0.14.1#./.yarn/patches/react-spinners-npm-0.14.1-545ddaba3f.patch::version=0.14.1&hash=9a6209&locator=ratemesh%40workspace%3A."
   peerDependencies:
     react: ^16.0.0 || ^17.0.0 || ^18.0.0
     react-dom: ^16.0.0 || ^17.0.0 || ^18.0.0
