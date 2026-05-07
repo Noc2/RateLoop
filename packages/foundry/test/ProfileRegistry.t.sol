@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import { Test, console } from "forge-std/Test.sol";
-import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import { ProfileRegistry } from "../contracts/ProfileRegistry.sol";
-import { IProfileRegistry } from "../contracts/interfaces/IProfileRegistry.sol";
-import { MockVoterIdNFT } from "./mocks/MockVoterIdNFT.sol";
+import {Test, console} from "forge-std/Test.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {ProfileRegistry} from "../contracts/ProfileRegistry.sol";
+import {IProfileRegistry} from "../contracts/interfaces/IProfileRegistry.sol";
+import {MockVoterIdNFT} from "./mocks/MockVoterIdNFT.sol";
 
 /// @title ProfileRegistry Test Suite
 contract ProfileRegistryTest is Test {
@@ -281,22 +281,28 @@ contract ProfileRegistryTest is Test {
         assertTrue(registry.hasProfile(user1));
     }
 
-    function test_SetProfileRequiresHolderWhenVoterIdConfigured() public {
+    function test_SetProfileUsesWalletProfileForDelegateWhenVoterIdConfigured() public {
         vm.prank(user1);
         voterIdNFT.setDelegate(delegate);
 
         vm.prank(delegate);
-        vm.expectRevert("Profile owner must hold Voter ID");
-        registry.setProfile("alice", "");
+        registry.setProfile("agent", "");
+
+        assertTrue(registry.hasProfile(delegate));
+        assertFalse(registry.hasProfile(user1));
+        assertEq(registry.getAddressByName("agent"), delegate);
     }
 
-    function test_SetAvatarAccentRequiresHolderWhenVoterIdConfigured() public {
+    function test_SetAvatarAccentUsesWalletProfileForDelegateWhenVoterIdConfigured() public {
         vm.prank(user1);
         voterIdNFT.setDelegate(delegate);
 
         vm.prank(delegate);
-        vm.expectRevert("Profile owner must hold Voter ID");
         registry.setAvatarAccent(0xF26426);
+
+        (bool enabled, uint24 rgb) = registry.getAvatarAccent(delegate);
+        assertTrue(enabled);
+        assertEq(rgb, 0xF26426);
     }
 
     function test_RemintedVoterIdCanReclaimProfileNameAndAvatar() public {
@@ -345,7 +351,7 @@ contract ProfileRegistryTest is Test {
         registry.setProfile("alice", "");
     }
 
-    function test_SetProfileRevertsWhenVoterIdNFTUnset() public {
+    function test_SetProfileAllowsUnsetVoterIdNFT() public {
         vm.startPrank(admin);
         ProfileRegistry impl = new ProfileRegistry();
         ProfileRegistry unsetRegistry = ProfileRegistry(
@@ -354,8 +360,23 @@ contract ProfileRegistryTest is Test {
         vm.stopPrank();
 
         vm.prank(user1);
-        vm.expectRevert("VoterIdNFT not set");
         unsetRegistry.setProfile("alice", "");
+
+        assertTrue(unsetRegistry.hasProfile(user1));
+        assertEq(unsetRegistry.getAddressByName("alice"), user1);
+    }
+
+    function test_AdminCanClearVoterIdNFT() public {
+        vm.prank(admin);
+        registry.setVoterIdNFT(address(0));
+
+        assertEq(address(registry.voterIdNFT()), address(0));
+
+        vm.prank(user1);
+        registry.setProfile("alice", "");
+
+        assertTrue(registry.hasProfile(user1));
+        assertEq(registry.getAddressByName("alice"), user1);
     }
 
     function test_GetAddressByName() public {
@@ -517,23 +538,25 @@ contract ProfileRegistryTest is Test {
         assertEq(registry.getAddressByName("alice"), user2);
     }
 
-    function test_AdminCanReleaseNameAfterVoterIdRevocation() public {
+    function test_ProfileOwnerCanUpdateAfterCredentialRevocationAndAdminCanReleaseName() public {
         vm.prank(user1);
         registry.setProfile("alice", "{\"v\":1,\"expertise\":[\"science\"]}");
 
         voterIdNFT.removeHolder(user1);
 
         vm.prank(user1);
-        vm.expectRevert("Voter ID required");
         registry.setProfile("alice2", "{\"v\":1,\"expertise\":[\"science\"]}");
+
+        assertFalse(registry.isNameTaken("alice"));
+        assertTrue(registry.isNameTaken("alice2"));
 
         vm.prank(admin);
         vm.expectEmit(true, false, false, true);
-        emit ProfileRegistry.ProfileNameReleased(user1, "alice");
+        emit ProfileRegistry.ProfileNameReleased(user1, "alice2");
         registry.releaseName(user1);
 
-        assertFalse(registry.isNameTaken("alice"));
-        assertEq(registry.getAddressByName("alice"), address(0));
+        assertFalse(registry.isNameTaken("alice2"));
+        assertEq(registry.getAddressByName("alice2"), address(0));
 
         IProfileRegistry.Profile memory releasedProfile = registry.getProfile(user1);
         assertEq(releasedProfile.name, "");
@@ -541,9 +564,9 @@ contract ProfileRegistryTest is Test {
         assertTrue(registry.hasProfile(user1));
 
         vm.prank(user2);
-        registry.setProfile("alice", "");
+        registry.setProfile("alice2", "");
 
-        assertEq(registry.getAddressByName("alice"), user2);
+        assertEq(registry.getAddressByName("alice2"), user2);
     }
 
     function test_RevertReleaseNameNonAdmin() public {

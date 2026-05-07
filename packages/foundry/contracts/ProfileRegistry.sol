@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import { IProfileRegistry } from "./interfaces/IProfileRegistry.sol";
-import { IVoterIdNFT } from "./interfaces/IVoterIdNFT.sol";
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import {IProfileRegistry} from "./interfaces/IProfileRegistry.sol";
+import {IVoterIdNFT} from "./interfaces/IVoterIdNFT.sol";
 
 /// @title ProfileRegistry
 /// @notice Manages on-chain user profiles with unique names and public self-reported context
@@ -71,10 +71,9 @@ contract ProfileRegistry is IProfileRegistry, Initializable, AccessControlUpgrad
 
     // --- Admin Functions ---
 
-    /// @notice Set the Voter ID NFT contract for sybil resistance
-    /// @param _voterIdNFT The Voter ID NFT contract address
+    /// @notice Set or clear the optional Voter ID NFT contract used as a profile continuity signal.
+    /// @param _voterIdNFT The Voter ID NFT contract address, or zero to disable credential lookups.
     function setVoterIdNFT(address _voterIdNFT) external onlyRole(ADMIN_ROLE) {
-        require(_voterIdNFT != address(0), "Invalid address");
         voterIdNFT = IVoterIdNFT(_voterIdNFT);
         emit VoterIdNFTUpdated(_voterIdNFT);
     }
@@ -104,9 +103,10 @@ contract ProfileRegistry is IProfileRegistry, Initializable, AccessControlUpgrad
 
     /// @inheritdoc IProfileRegistry
     function setProfile(string calldata name, string calldata selfReport) external override {
-        uint256 voterId = _requireEligibleVoterIdHolder(msg.sender);
-        uint256 nullifier = voterIdNFT.getNullifier(voterId);
-        _migrateProfileForNullifier(msg.sender, nullifier);
+        uint256 nullifier = _optionalDirectVoterIdNullifier(msg.sender);
+        if (nullifier != 0) {
+            _migrateProfileForNullifier(msg.sender, nullifier);
+        }
 
         require(bytes(name).length >= MIN_NAME_LENGTH, "Name too short");
         require(bytes(name).length <= MAX_NAME_LENGTH, "Name too long");
@@ -145,22 +145,27 @@ contract ProfileRegistry is IProfileRegistry, Initializable, AccessControlUpgrad
 
         // Register name ownership
         _nameToAddress[nameHash] = msg.sender;
+        uint256 previousNullifier = _profileNullifiers[msg.sender];
+        if (previousNullifier != 0 && previousNullifier != nullifier) {
+            if (_profileOwnerByNullifier[previousNullifier] == msg.sender) {
+                delete _profileOwnerByNullifier[previousNullifier];
+            }
+        }
+
         _profileNullifiers[msg.sender] = nullifier;
-        _profileOwnerByNullifier[nullifier] = msg.sender;
+        if (nullifier != 0) {
+            _profileOwnerByNullifier[nullifier] = msg.sender;
+        }
     }
 
     /// @inheritdoc IProfileRegistry
     function setAvatarAccent(uint24 rgb) external override {
-        _requireEligibleVoterIdHolder(msg.sender);
-
         _avatarAccents[msg.sender] = uint32(rgb) + 1;
         emit AvatarAccentUpdated(msg.sender, rgb);
     }
 
     /// @inheritdoc IProfileRegistry
     function clearAvatarAccent() external override {
-        _requireEligibleVoterIdHolder(msg.sender);
-
         delete _avatarAccents[msg.sender];
         emit AvatarAccentCleared(msg.sender);
     }
@@ -233,11 +238,18 @@ contract ProfileRegistry is IProfileRegistry, Initializable, AccessControlUpgrad
 
     // --- Internal Functions ---
 
-    function _requireEligibleVoterIdHolder(address user) internal view returns (uint256 tokenId) {
-        require(address(voterIdNFT) != address(0), "VoterIdNFT not set");
-        require(voterIdNFT.hasVoterId(user), "Voter ID required");
-        require(voterIdNFT.resolveHolder(user) == user, "Profile owner must hold Voter ID");
-        tokenId = voterIdNFT.getTokenId(user);
+    function _optionalDirectVoterIdNullifier(address user) internal view returns (uint256 nullifier) {
+        IVoterIdNFT idNFT = voterIdNFT;
+        if (address(idNFT) == address(0) || !idNFT.hasVoterId(user) || idNFT.resolveHolder(user) != user) {
+            return 0;
+        }
+
+        uint256 tokenId = idNFT.getTokenId(user);
+        if (tokenId == 0) {
+            return 0;
+        }
+
+        return idNFT.getNullifier(tokenId);
     }
 
     function _migrateProfileForNullifier(address user, uint256 nullifier) internal {
