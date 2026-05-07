@@ -12,7 +12,7 @@ The product direction is:
 - No migration from existing HREP holders.
 - No transferable reputation market.
 - Users submit a predicted final rating instead of a binary up/down vote.
-- One sealed private round by default, followed by reveal and settlement.
+- One sealed private round per bounty, followed by reveal and settlement.
 - Reputation gates influence, governance, and USDC bounty eligibility.
 - USDC payouts reward useful independent signal, not raw wallet count.
 
@@ -147,15 +147,51 @@ salt
 ```
 
 The reveal shows the predicted final rating. The final rating is computed from
-revealed predictions using effective weights. The default workflow is:
+revealed predictions using effective weights. The default bounty workflow is:
 
 ```text
-commit window -> reveal window -> settle -> public result
+bounty funded -> commit window -> reveal window -> settle -> public result
 ```
 
-Use one round by default. Additional rounds should be exceptional: too little
-independent participation, high dispersion, suspected manipulation, high-value
-bounty, or a formal challenge.
+RateMesh v1 should use exactly one sealed round per bounty. Do not keep Curyo's
+multi-round bounty model where one bounty waits for several settled rounds.
+After a round reveals, later votes are no longer independent predictions of the
+same hidden result; they are reactions to an already-public rating.
+
+### Challenge And Re-rate Flow
+
+Keep `roundId` per content, but define each round as a separate funded
+evaluation. A challenge or re-rate is a new bounty, not a continuation of the
+old bounty.
+
+Recommended flow:
+
+```text
+public result -> fund challenge/re-rate -> new sealed round -> new public result
+```
+
+Use cases:
+
+- The original round had insufficient independent signal.
+- The rating is stale because the content, model, or context changed.
+- A funder suspects manipulation or correlated voting.
+- A high-value decision wants a second independent read.
+- A community member simply wants to pay for an updated rating.
+
+Implementation rules:
+
+- A bounty funds one and only one prediction round.
+- USDC payout applies only to that bounty's round.
+- Challenge/re-rate bounties reference the prior `roundId` or rating they are
+  challenging.
+- Challenge/re-rate rounds should show their reason, funder, and relationship
+  to the prior result in the UI and indexer.
+- A new result appends to rating history and may become the current rating; it
+  should not automatically slash or invalidate the prior round.
+- Add cooldowns or minimum bounty thresholds to prevent cheap re-rate spam.
+- If a round ends as `InsufficientSignal` or `RevealFailed`, the bounty should
+  follow explicit refund/forfeit rules and should not silently roll into a
+  second round.
 
 ### Weighting
 
@@ -336,6 +372,9 @@ Key changes:
 - Replace up/down pools with weighted prediction aggregates:
   `weightedPredictionSum`, `totalEffectiveWeight`, prediction count,
   dispersion, and final rating.
+- Treat each funded bounty as one sealed prediction round.
+- Allow later `roundId`s for challenge/re-rate bounties, but do not continue the
+  old bounty across multiple rounds.
 - Remove `VoterIdRequired`.
 - Remove loser/winner pool settlement.
 - Add `minIndependentWeight` or `minEffectiveParticipants` alongside raw
@@ -372,6 +411,15 @@ event PredictionRoundSettled(
   uint16 revealedCount,
   uint16 independentParticipantCount
 );
+
+event PredictionRoundLinkedToBounty(
+  uint256 indexed contentId,
+  uint256 indexed roundId,
+  uint256 indexed bountyId,
+  uint8 bountyKind,
+  uint256 challengedRoundId,
+  bytes32 reasonHash
+);
 ```
 
 ### `PredictionRewardDistributor`
@@ -400,8 +448,8 @@ Key changes:
 
 Purpose:
 
-- Fund USDC bounties on questions or bundles.
-- Allocate bounties after settled prediction rounds.
+- Fund USDC bounties on initial ratings, challenges, or re-rates.
+- Allocate each bounty after its single settled prediction round.
 - Expose claimable amounts and frontend fees.
 
 Reuse:
@@ -409,13 +457,18 @@ Reuse:
 - Keep the escrow architecture and API concepts.
 - Keep USDC asset support.
 - Keep refund/forfeit windows.
-- Keep bundle support only if current product still needs it.
+- Keep bundle support only if current product still needs it, but do not let one
+  bounty depend on multiple follow-up rounds for the same content.
 
 Key changes:
 
 - Remove `funderVoterId`, `submitterVoterId`, and VoterId eligibility.
 - Replace `requiredVoters` with `requiredIndependentParticipants` or
   `requiredEffectiveWeight`.
+- Remove `requiredSettledRounds` from the normal bounty model.
+- Add a bounty kind such as `Initial`, `Challenge`, or `Rerate`.
+- For challenge/re-rate bounties, store the challenged `roundId` and optional
+  reason/spec hash.
 - Allocate by eligible prediction payout weights.
 
 ### `RateMeshGovernor`
@@ -477,15 +530,21 @@ tables.
   - pool, round, rater, gross amount, cluster cap, frontend fee, claimedAt.
 - `calibration_status`
   - rater, completed rounds, eligibleSince, categories.
+- `rating_bounty`
+  - bountyId, contentId, roundId, bounty kind, challengedRoundId, reason hash,
+    funder, asset, amount, status, refund/forfeit state.
 
 ### API Changes
 
 - Feed APIs should return predicted-rating state, not up/down pools.
+- Feed APIs should distinguish initial ratings from challenge/re-rate rounds.
 - Leaderboard should rank calibrated reputation, category reputation, reveal
   reliability, and useful-feedback contribution.
 - Vote history should show predicted rating, final rating, score delta, and
   payout eligibility.
 - Claim routes should separate reputation changes from USDC claims.
+- Content routes should expose rating history so users can see when a current
+  score came from an initial bounty versus a later re-rate.
 - Profile routes should show rater type and calibration status without implying
   identity proof.
 
@@ -523,6 +582,8 @@ User-friendly details:
 - Show rating as `x.x / 10`.
 - Let the slider snap to tenths while storing BPS.
 - Show current rating/reference rating.
+- For challenge/re-rate rounds, show the prior rating being challenged and the
+  challenge reason.
 - Show the user's predicted rating after reveal, not before.
 - Explain eligibility through UI state, not long instructional text.
 - Keep feedback separate: users can still leave written feedback through the
@@ -547,6 +608,8 @@ Avoid language that says one wallet equals one person.
 - `VotingQuestionCard.tsx`: keep layout and rating display, replace arrow
   controls with prediction controls.
 - `StakeSelector.tsx`: rename/refactor to `PredictionComposer.tsx`.
+- Add a `FundRerateModal` or extend the bounty funding modal so a user can fund
+  a challenge/re-rate against a prior result.
 - `useRoundVote.ts`: rename/refactor to `usePredictionVote.ts`.
 - `useVoterAccuracy*`: rename/refactor to reputation/calibration hooks.
 - `ClaimRewardsButton.tsx`: split USDC bounty claim from reputation display.
@@ -638,14 +701,16 @@ Exit criteria:
 2. Implement `RaterRegistry`.
 3. Implement `PredictionVotingEngine`.
 4. Implement the first version of `PredictionRewardDistributor`.
-5. Refactor `QuestionRewardPoolEscrow` for reputation/cluster eligibility.
+5. Refactor `QuestionRewardPoolEscrow` for one-round bounties,
+   challenge/re-rate metadata, and reputation/cluster eligibility.
 6. Rewrite deployment script as `DeployRateMesh.s.sol`.
 7. Regenerate ABIs and deployment package exports.
 
 Exit criteria:
 
 - Foundry tests cover commit, reveal, settle, cancel, missed reveal, reputation
-  lock/unlock/burn, calibration gating, and USDC claim gating.
+  lock/unlock/burn, calibration gating, one-round bounty payout, challenge
+  bounty creation, and USDC claim gating.
 - No old HREP transfer staking path remains.
 
 ### Phase 3: Ponder And API
@@ -653,28 +718,30 @@ Exit criteria:
 1. Rename schema tables and handlers.
 2. Add prediction, reputation, calibration, cluster, and payout tables.
 3. Replace binary round aggregation with predicted-rating aggregation.
-4. Update read API routes for feed, history, leaderboard, and claims.
+4. Update read API routes for feed, history, leaderboard, rating bounties, and
+   claims.
 5. Add route validation tests for prediction and payout shapes.
 
 Exit criteria:
 
 - Ponder indexes local deployment events.
 - Feed API can render content, open rounds, revealed predictions, final rating,
-  and claimable USDC.
+  challenge/re-rate history, and claimable USDC.
 
 ### Phase 4: Frontend MVP
 
 1. Rename app branding to RateMesh.
 2. Remove Self and faucet screens.
 3. Replace up/down vote controls with prediction composer.
-4. Show calibration and reputation state in profile/feed surfaces.
-5. Update reward/claim UI for USDC payout eligibility.
-6. Keep feedback UI unchanged except copy/branding.
+4. Add funding UI for explicit challenge/re-rate bounties.
+5. Show calibration and reputation state in profile/feed surfaces.
+6. Update reward/claim UI for USDC payout eligibility.
+7. Keep feedback UI unchanged except copy/branding.
 
 Exit criteria:
 
-- Wallet-sensitive flow works: connect, submit content, predict, reveal/settle,
-  view reputation, claim USDC.
+- Wallet-sensitive flow works: connect, submit content, fund initial bounty,
+  predict, reveal/settle, fund re-rate, view reputation, claim USDC.
 - Desktop and mobile dense voting surfaces remain usable.
 
 ### Phase 5: Keeper, SDK, And Agents
@@ -726,8 +793,8 @@ Exit criteria:
    flags.
 5. `prediction-engine`: replace binary votes with predicted final rating commit
    reveal.
-6. `usdc-bounty-refactor`: refactor reward escrow/distributor around calibrated
-   raters and cluster caps.
+6. `usdc-bounty-refactor`: refactor reward escrow/distributor around one-round
+   bounties, challenge/re-rate metadata, calibrated raters, and cluster caps.
 7. `ponder-predictions`: update schema, handlers, and APIs.
 8. `frontend-prediction-ui`: replace vote controls and onboarding.
 9. `keeper-sdk-agents`: update commit builders, keeper reveal, and agent client.
@@ -739,7 +806,9 @@ Exit criteria:
 These are launch defaults, not permanent constants:
 
 - Rating scale: `1000-9900` BPS, displayed as `1.0-9.9 / 10`.
-- Default round: one sealed commit window plus reveal window.
+- Bounty scope: one sealed commit window plus reveal window, exactly one
+  settlement attempt per bounty.
+- Challenge/re-rate: explicit new bounty referencing a prior round/result.
 - Minimum raw reveals: 3.
 - Minimum independent participants for USDC: 3.
 - Calibration rounds before USDC: 10.
@@ -813,6 +882,20 @@ Mitigations for v1:
 - Avoid showing aggregates before commit/reveal.
 - Do not include MACI/privacy in the initial implementation plan.
 
+### Follow-up Round Complexity
+
+Risk: automatic multi-round bounties make later predictions less independent,
+increase payout complexity, and reward strategic waiting.
+
+Mitigations:
+
+- One bounty funds one sealed round.
+- Re-rates and challenges are explicit new bounties with separate funding.
+- UI should show challenge context instead of pretending the second round is the
+  same independent judgment as the first.
+- Contract state should never carry unspent bounty allocation into an implicit
+  second round unless a funder deliberately creates a new bounty.
+
 ## Definition Of Done For The First RateMesh MVP
 
 The MVP is done when:
@@ -820,7 +903,8 @@ The MVP is done when:
 - There is no Self.xyz dependency.
 - Users can connect a wallet without proof-of-personhood.
 - Users can submit a predicted final rating through commit reveal.
-- Rounds settle to a final rating after one private round by default.
+- Each bounty funds exactly one private prediction round.
+- Users can fund an explicit challenge/re-rate bounty against a prior result.
 - Reputation is non-transferable and earned from revealed settled predictions.
 - Users complete calibration before USDC eligibility.
 - USDC bounty payout is cluster-capped and not linear by wallet count or raw
@@ -830,4 +914,3 @@ The MVP is done when:
 - Ponder exposes enough data for public auditability of rating, reputation, and
   payout decisions.
 - Local end-to-end tests cover the full lifecycle.
-
