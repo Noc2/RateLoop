@@ -14,7 +14,7 @@ test("listAgentResultTemplates exposes machine-readable metadata for agent clien
   assert.equal(generic?.bundleStrategy, "independent");
   assert.deepEqual(generic?.templateInputsExample, {
     audience: "new visitors",
-    goal: "quick human interest check",
+    goal: "quick audience interest check",
     successSignal: "Would this make you want to learn more?",
   });
 

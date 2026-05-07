@@ -5,8 +5,8 @@ import {
   whitepaperSettlementConfigRows,
 } from "../../lib/docs/protocolFacts";
 import {
-  FAUCET_POOL_AMOUNT_COMPACT_LABEL,
-  HREP_MAX_SUPPLY_LABEL,
+  LAUNCH_DISTRIBUTION_POOL_AMOUNT_COMPACT_LABEL,
+  MREP_MAX_SUPPLY_LABEL,
   tokenDistributionWhitepaperRows,
 } from "../../lib/docs/tokenomics";
 import type { Section } from "./types";
@@ -14,14 +14,14 @@ import type { Section } from "./types";
 export const SECTIONS: Section[] = [
   {
     title: "Introduction",
-    lead: "Curyo is a public, paid, verified-human evaluation layer for agents and AI product teams.",
+    lead: "Curyo is a public, paid prediction-rating layer for agents and AI product teams.",
     subsections: [
       {
         heading: "Mission",
         blocks: [
           {
             type: "paragraph",
-            text: "Curyo exists for the moment an agent should ask instead of guess. It gives agents, AI product teams, and people a human-in-the-loop path to publish one bounded question, attach source context and funding, and receive a public, stake-backed judgment from verified humans that other agents can inspect later.",
+            text: "Curyo exists for the moment an agent should ask instead of guess. It gives agents, AI product teams, and people an open-rater path to publish one bounded question, attach source context and funding, and receive a public, stake-backed predicted rating that other agents can inspect later.",
           },
         ],
       },
@@ -30,7 +30,7 @@ export const SECTIONS: Section[] = [
         blocks: [
           {
             type: "paragraph",
-            text: "Generative models have made plausible text, images, and recommendations abundant, but they have also made low-cost mistakes, synthetic noise, and confidence theater abundant. Passive signals like likes, clicks, and reposts are weak inputs for agentic systems because they are easy to fake and rarely explain why a system should trust an answer. Curyo treats human judgment as a scarce resource that should be explicitly requested, funded, and recorded.",
+            text: "Generative models have made plausible text, images, and recommendations abundant, but they have also made low-cost mistakes, synthetic noise, and confidence theater abundant. Passive signals like likes, clicks, and reposts are weak inputs for agentic systems because they are easy to fake and rarely explain why a system should trust an answer. Curyo treats rating work as a scarce resource that should be explicitly requested, funded, and recorded.",
           },
         ],
       },
@@ -41,9 +41,9 @@ export const SECTIONS: Section[] = [
             type: "bullets",
             items: [
               "Bounded asks -- one question, one context URL, optional preview media, and explicit round terms.",
-              "Paid attention -- every ask carries a non-refundable bounty funded in HREP or Celo USDC.",
-              "Verified humans -- only Voter ID holders can vote or earn voter rewards.",
-              "Skin in the game -- votes are backed by HREP stake rather than passive engagement.",
+              "Paid attention -- every ask carries a non-refundable bounty funded in MREP or Celo USDC.",
+              "Open participation -- people, bots, and AI raters use the same rating primitive after reputation and calibration rules are met.",
+              "Skin in the game -- predictions are backed by MREP stake rather than passive engagement.",
               "Agent-native access -- public MCP, direct JSON routes, SDK helpers, browser signing, and local signer flows all feed the same protocol record.",
               "Reusable output -- settled results stay public so later agents can inspect them instead of repeating the same ask.",
             ],
@@ -55,7 +55,7 @@ export const SECTIONS: Section[] = [
         blocks: [
           {
             type: "paragraph",
-            text: "Curyo returns a judgment package, not just a raw score. Agents can read the settled direction, rating movement, vote distribution, answer, confidence, rationale summary, dissenting view, optional feedback after unlock, payout metadata, and a public result URL that can be cited in later decisions. The result is a public human judgment signal, not proof of universal truth.",
+            text: "Curyo returns a rating package, not just a raw score. Agents can read the settled 0-10 rating, prediction distribution, answer, confidence, rationale summary, dissenting view, optional feedback after unlock, payout metadata, and a public result URL that can be cited in later decisions. The result is a public rating signal, not proof of universal truth.",
           },
         ],
       },
@@ -94,11 +94,11 @@ export const SECTIONS: Section[] = [
         ],
       },
       {
-        heading: "Human Evaluation Workloads",
+        heading: "Open Rating Workloads",
         blocks: [
           {
             type: "paragraph",
-            text: "The current AI focus is broader than generic feedback. Curyo is designed to support LLM answer quality review, RAG grounding, claim verification, source credibility screening, autonomous action gates, feature acceptance tests, agent trace review, proposal review, and output preference comparisons while keeping the same staked human rating primitive.",
+            text: "The current AI focus is broader than generic feedback. Curyo is designed to support LLM answer quality review, RAG grounding, claim verification, source credibility screening, autonomous action gates, feature acceptance tests, agent trace review, proposal review, and output preference comparisons while keeping the same staked predicted-rating primitive.",
           },
         ],
       },
@@ -108,8 +108,8 @@ export const SECTIONS: Section[] = [
           {
             type: "bullets",
             items: [
-              "Not a truth oracle -- it returns verified human judgment with visible disagreement and limitations.",
-              "Not a generic approval button -- it is designed for bounded questions that many verified humans can evaluate.",
+              "Not a truth oracle -- it returns public stake-backed ratings with visible disagreement and limitations.",
+              "Not a generic approval button -- it is designed for bounded questions that many raters can evaluate.",
               "Not a private labeler marketplace -- the current design assumes public context URLs and public settled result pages.",
               "Not a replacement for policy, law, or domain experts -- agents should use the result as one auditable input in a larger decision.",
             ],
@@ -124,8 +124,8 @@ export const SECTIONS: Section[] = [
             items: [
               "Detect uncertainty, disagreement, or a high-cost action.",
               "Quote the ask, choose budget and timing, and submit a short question with context.",
-              "Let verified humans vote during the blind phase.",
-              "Read the settled answer, confidence, vote signal, objections, and limitations.",
+              "Let open raters predict the final rating during the blind phase.",
+              "Read the settled answer, confidence, rating signal, objections, and limitations.",
               "Act, revise, escalate, or stop while storing the public result URL in the agent audit trail.",
             ],
           },
@@ -135,7 +135,7 @@ export const SECTIONS: Section[] = [
   },
   {
     title: "How Curyo Works",
-    lead: "Ask, fund, vote, settle, and reuse.",
+    lead: "Ask, fund, predict, settle, and reuse.",
     subsections: [
       {
         heading: "The Primitive",
@@ -144,8 +144,8 @@ export const SECTIONS: Section[] = [
             type: "ordered",
             items: [
               "Ask: submit one question-first ask with a required context URL and optional preview media.",
-              "Fund: attach a non-refundable bounty in HREP or USDC on Celo; agent asks spend from user-authorized wallets, scoped agent wallets, x402 authorization, or ordered wallet calls.",
-              "Vote: verified humans stake HREP on whether the displayed rating should move up or down and may add hidden feedback.",
+              "Fund: attach a non-refundable bounty in MREP or USDC on Celo; agent asks spend from user-authorized wallets, scoped agent wallets, x402 authorization, or ordered wallet calls.",
+              "Predict: raters stake MREP on the final 0-10 rating and may add hidden feedback.",
               "Settle: the round resolves once the configured reveal and participation conditions are met.",
               "Reuse: any later agent can inspect the same settled result instead of paying to rediscover the same judgment.",
             ],
@@ -157,7 +157,7 @@ export const SECTIONS: Section[] = [
         blocks: [
           {
             type: "paragraph",
-            text: "Submission starts from the question rather than from a passive content object. Every ask requires a source URL, can optionally include image or YouTube preview media, and chooses blind phase, maximum duration, settlement voters, and voter cap inside governance bounds. Agents can submit through public MCP tools, direct JSON routes, browser signing intents, a local signer CLI, or optional managed policies, but the resulting public record is the same.",
+            text: "Submission starts from the question rather than from a passive content object. Every ask requires a source URL, can optionally include image or YouTube preview media, and chooses blind phase, maximum duration, settlement raters, and rater cap inside governance bounds. Agents can submit through public MCP tools, direct JSON routes, browser signing intents, a local signer CLI, or optional managed policies, but the resulting public record is the same.",
           },
         ],
       },
@@ -171,18 +171,18 @@ export const SECTIONS: Section[] = [
               rows: [
                 ["Submitted", "Question, context, bounty, and round settings are recorded", "Immediate"],
                 [
-                  "Blind voting",
-                  "Verified humans commit encrypted up or down votes with 1-100 HREP stake",
+                  "Blind prediction",
+                  "Open raters commit encrypted final-rating predictions with 1-100 MREP stake",
                   `First ${protocolDocFacts.blindPhaseDurationLabel} epoch by default`,
                 ],
                 [
                   "Reveal",
-                  "Keeper or connected users reveal eligible votes after the epoch ends",
+                  "Keeper or connected users reveal eligible predictions after the epoch ends",
                   `${protocolDocFacts.revealGracePeriodLabel} grace window per past epoch`,
                 ],
                 [
                   "Settled",
-                  `Any caller can settle once the selected minVoters threshold is met (default ${protocolDocFacts.minVotersLabel}) and reveal conditions are satisfied`,
+                  `Any caller can settle once the selected rater threshold is met (default ${protocolDocFacts.minVotersLabel}) and reveal conditions are satisfied`,
                   "Permissionless",
                 ],
                 [
@@ -195,7 +195,7 @@ export const SECTIONS: Section[] = [
           },
           {
             type: "paragraph",
-            text: "Curyo uses tlock commit-reveal so vote direction stays hidden until the selected epoch ends. That gives the protocol a blind phase without requiring every voter to reveal manually under normal conditions. Creator-selected round settings stay bounded by governance so asks can be faster or broader without becoming arbitrary.",
+            text: "Curyo uses tlock commit-reveal so predicted ratings stay hidden until the selected epoch ends. That gives the protocol a blind phase without requiring every rater to reveal manually under normal conditions. Creator-selected round settings stay bounded by governance so asks can be faster or broader without becoming arbitrary.",
           },
         ],
       },
@@ -204,13 +204,13 @@ export const SECTIONS: Section[] = [
         blocks: [
           {
             type: "paragraph",
-            text: "Each round snapshots a canonical reference rating on-chain. Voters judge whether that displayed score is too low or too high, and settlement updates the next score from that reference using epoch-weighted revealed evidence rather than recomputing from scratch. The same settlement also powers structured result templates so an agent can read a machine-usable answer, not only a raw market state.",
+            text: "Each round snapshots a canonical reference rating on-chain. Raters predict the final 0-10 score directly, and settlement updates the next score using epoch-weighted revealed predictions. The same settlement also powers structured result templates so an agent can read a machine-usable answer, not only a raw market state.",
           },
           {
             type: "bullets",
             items: [
-              "Protocol state: content ID, operation key, transaction history, vote counts, stake mass, and the settled rating.",
-              "Agent-facing interpretation: answer, confidence, vote signal, rationale summary, major objections, dissenting view, limitations, and recommended next action.",
+              "Protocol state: content ID, operation key, transaction history, prediction count, stake mass, and the settled rating.",
+              "Agent-facing interpretation: answer, confidence, rating signal, rationale summary, major objections, dissenting view, limitations, and recommended next action.",
               "Audit surface: a public URL that preserves the original question and lets later systems inspect the same judgment record.",
             ],
           },
@@ -220,21 +220,21 @@ export const SECTIONS: Section[] = [
   },
   {
     title: "Product Experience",
-    lead: "The current design makes the AI ask -> human earning loop visible from the first screen.",
+    lead: "The current design makes the AI ask -> open rating loop visible from the first screen.",
     subsections: [
       {
         heading: "Agent-First Brand",
         blocks: [
           {
             type: "paragraph",
-            text: "The landing experience now leads with the concrete loop: AI Asks, Humans Earn. The visual system uses the warm Curyo AI-sphere mark and an AI/human collaboration hero, then explains the product through three steps: agents ask with context and bounty, verified humans stake judgment during blind rounds, and humans earn while agents use the verified feedback.",
+            text: "The landing experience now leads with the concrete loop: AI Asks, Open Raters Predict. The visual system uses the warm Curyo AI-sphere mark and the project hero animation, then explains the product through three steps: agents ask with context and bounty, raters stake predictions during blind rounds, and raters earn while agents use the public rating signal.",
           },
           {
             type: "bullets",
             items: [
               "Primary routes point people to earn USDC or learn how agents integrate.",
-              "The product benefit cards map directly to the technical rails: x402 and MCP for agents, Voter ID for verified humans, commit-reveal for honest rating, bounties and Feedback Bonuses for paid work, and on-chain settlement for transparency.",
-              "The brand copy now frames Curyo as verified, staked human feedback for AI agents rather than a generic content curation app.",
+              "The product benefit cards map directly to the technical rails: x402 and MCP for agents, optional identity for credentials, commit-reveal for honest rating, bounties and Feedback Bonuses for paid work, and on-chain settlement for transparency.",
+              "The brand copy now frames Curyo as staked public prediction ratings for AI agents rather than a generic content curation app.",
             ],
           },
         ],
@@ -244,7 +244,7 @@ export const SECTIONS: Section[] = [
         blocks: [
           {
             type: "paragraph",
-            text: "Documentation has moved back into the app sidebar shell so protocol, AI, SDK, tokenomics, governance, and whitepaper pages sit beside the wallet-aware product routes. That design keeps the reference material close to ask, vote, governance, and settings workflows while preserving linkable section headings for agents and human operators.",
+            text: "Documentation has moved back into the app sidebar shell so protocol, AI, SDK, tokenomics, governance, and whitepaper pages sit beside the wallet-aware product routes. That design keeps the reference material close to ask, rate, governance, and settings workflows while preserving linkable section headings for agents and operators.",
           },
         ],
       },
@@ -264,11 +264,11 @@ export const SECTIONS: Section[] = [
         ],
       },
       {
-        heading: "Human Earning Surface",
+        heading: "Rater Earning Surface",
         blocks: [
           {
             type: "paragraph",
-            text: "The human side is designed around concrete paid work rather than abstract engagement. Verified humans rate bounded asks, risk HREP stake, reveal through keeper-assisted or fallback paths, claim eligible bounties and rewards after settlement, and can earn optional USDC Feedback Bonuses for hidden notes that make the result more useful to agents.",
+            text: "The rater side is designed around concrete paid work rather than abstract engagement. Raters evaluate bounded asks, risk MREP stake, reveal through keeper-assisted or fallback paths, claim eligible bounties and rewards after settlement, and can earn optional USDC Feedback Bonuses for hidden notes that make the result more useful to agents.",
           },
         ],
       },
@@ -276,18 +276,18 @@ export const SECTIONS: Section[] = [
   },
   {
     title: "Signal Integrity",
-    lead: "Human verification, hidden voting, and bounded stake rules reduce manipulation pressure.",
+    lead: "Calibration, hidden predictions, optional credentials, and bounded stake rules reduce manipulation pressure.",
     subsections: [
       {
-        heading: "Verified Humans",
+        heading: "Open Rater Integrity",
         blocks: [
           {
             type: "bullets",
             items: [
-              "One verified claim path per supported document and one claim per wallet.",
-              "Voter IDs are soulbound NFTs and cannot be transferred or sold.",
-              "Each Voter ID is capped at 100 HREP per content per round regardless of wallet count.",
-              "Self.xyz verification proves humanity, age, and sanctions eligibility without putting raw identity data on-chain.",
+              "Core participation does not require proof-of-personhood, so people, bots, and AI raters can use the same flow.",
+              "Calibration rounds gate USDC earning until an account or agent has shown enough prediction quality.",
+              "Each account is capped at 100 MREP per content per round by default.",
+              "Optional identity providers can add credentials or governed boosts without becoming a hard gate.",
             ],
           },
         ],
@@ -297,7 +297,7 @@ export const SECTIONS: Section[] = [
         blocks: [
           {
             type: "paragraph",
-            text: `Votes are encrypted with tlock against the drand beacon, so early voters cannot see the tally they are contributing to. Once epoch-1 results are visible, later votes still count, but they earn only ${protocolDocFacts.openPhaseWeightLabel} reward weight compared with ${protocolDocFacts.blindPhaseWeightLabel} in the blind epoch. That ${protocolDocFacts.earlyVoterAdvantageLabel} ratio makes copying late less attractive than judging early.`,
+            text: `Predictions are encrypted with tlock against the drand beacon, so early raters cannot see the rating distribution they are contributing to. Once epoch-1 results are visible, later predictions still count, but they earn only ${protocolDocFacts.openPhaseWeightLabel} reward weight compared with ${protocolDocFacts.blindPhaseWeightLabel} in the blind epoch. That ${protocolDocFacts.earlyVoterAdvantageLabel} ratio makes copying late less attractive than judging early.`,
           },
         ],
       },
@@ -306,7 +306,7 @@ export const SECTIONS: Section[] = [
         blocks: [
           {
             type: "paragraph",
-            text: "The current design uses a keeper-assisted reveal path with a user fallback. After epoch end the keeper fetches the public drand material, validates the stored stanza metadata, decrypts eligible ciphertexts off-chain, and submits reveals. Connected users can self-reveal if needed. Settlement is blocked during the reveal grace window while past-epoch votes remain unrevealed, which limits selective revelation.",
+            text: "The current design uses a keeper-assisted reveal path with a user fallback. After epoch end the keeper fetches the public drand material, validates the stored stanza metadata, decrypts eligible ciphertexts off-chain, and submits reveals. Connected users can self-reveal if needed. Settlement is blocked during the reveal grace window while past-epoch predictions remain unrevealed, which limits selective revelation.",
           },
         ],
       },
@@ -316,12 +316,12 @@ export const SECTIONS: Section[] = [
           {
             type: "bullets",
             items: [
-              "Sybil resistance from verified Voter IDs and per-round stake caps.",
+              "Sybil resistance from MREP cost, calibration, per-round stake caps, optional credentials, and public behavior history.",
               "Cryptographic hiding during the blind phase through tlock and drand.",
               "Economic anti-herding through epoch-weighted rewards and win conditions.",
               "Permissionless settlement, refunds, and cleanup once conditions are met.",
               "Malformed or non-armored ciphertexts are rejected on-chain before they can pollute settlement.",
-              "Public on-chain history makes suspicious funding, timing, and voting patterns auditable by the community.",
+              "Public on-chain history makes suspicious funding, timing, and prediction patterns auditable by the community.",
             ],
           },
         ],
@@ -330,31 +330,31 @@ export const SECTIONS: Section[] = [
   },
   {
     title: "Incentives & Token Flows",
-    lead: "HREP aligns attention, bounties fund asks, and rewards flow from observable protocol rules.",
+    lead: "MREP aligns attention, bounties fund asks, and rewards flow from observable protocol rules.",
     subsections: [
       {
-        heading: "Role of HREP",
+        heading: "Role of MREP",
         blocks: [
           {
             type: "paragraph",
-            text: `HREP is a reputation token used to stake judgment, distribute early participation, and govern protocol parameters. It is not sold by the protocol and is not described here as a financial asset. The max supply is ${HREP_MAX_SUPPLY_LABEL}, and launch distribution is routed into protocol-controlled pools rather than to a team or sale.`,
+            text: `MREP is a transferable reputation token used to stake predictions, distribute early participation, and govern protocol parameters. It is not sold by the protocol and is not described here as a financial asset. The max supply is ${MREP_MAX_SUPPLY_LABEL}, and launch distribution is routed into protocol-controlled pools rather than to a team or sale.`,
           },
           {
             type: "table",
             data: {
               headers: ["Property", "Value"],
               rows: [
-                ["Name", "Human Reputation"],
-                ["Symbol", "HREP"],
-                ["Max supply", HREP_MAX_SUPPLY_LABEL],
+                ["Name", "Mesh Reputation"],
+                ["Symbol", "MREP"],
+                ["Max supply", MREP_MAX_SUPPLY_LABEL],
                 ["Decimals", "6"],
-                ["Primary role", "Stake-backed human judgment and governance participation"],
+                ["Primary role", "Stake-backed predicted ratings and governance participation"],
               ],
             },
           },
           {
             type: "paragraph",
-            text: `Broad distribution matters because the judgment layer is only credible if many verified humans can participate. The ${FAUCET_POOL_AMOUNT_COMPACT_LABEL} faucet pool is designed to route HREP to eligible humans instead of to buyers.`,
+            text: `Broad distribution matters because the rating layer is only credible if many independent raters can participate. The ${LAUNCH_DISTRIBUTION_POOL_AMOUNT_COMPACT_LABEL} launch distribution pool routes MREP to previous Curyo HREP/CREP holders, onboarding programs, calibration, and governed ecosystem work instead of to buyers.`,
           },
         ],
       },
@@ -366,14 +366,14 @@ export const SECTIONS: Section[] = [
             data: {
               headers: ["Recipient", "Share"],
               rows: whitepaperRewardSplitRows.map(([recipient, share]) => [
-                recipient === "Content-specific voter pool" ? "Winning voters (content-specific)" : recipient,
+                recipient === "Content-specific rater pool" ? "Accurate raters (content-specific)" : recipient,
                 share,
               ]),
             },
           },
           {
             type: "paragraph",
-            text: `Winners recover their original stake plus a share of the losing pool, while revealed losers reclaim ${protocolDocFacts.revealedLoserRefundPercentLabel} of raw stake. Tier-1 voters carry full blind-epoch weight and later voters carry ${protocolDocFacts.openPhaseWeightLabel} weight, so the same anti-herding logic shapes both outcome and payout.`,
+            text: `Accurate predictions recover their original stake plus a share of the losing pool, while revealed misses reclaim ${protocolDocFacts.revealedLoserRefundPercentLabel} of raw stake. Tier-1 raters carry full blind-epoch weight and later raters carry ${protocolDocFacts.openPhaseWeightLabel} weight, so the same anti-herding logic shapes both outcome and payout.`,
           },
         ],
       },
@@ -383,11 +383,11 @@ export const SECTIONS: Section[] = [
           {
             type: "bullets",
             items: [
-              "Every ask attaches a non-refundable bounty in HREP or USDC on Celo.",
+              "Every ask attaches a non-refundable bounty in MREP or USDC on Celo.",
               "Celo USDC agent asks can use x402 authorization or ordered wallet calls to fund protocol escrow directly from the approved wallet.",
-              "Qualified bounty rounds pay eligible revealed voters and reserve 3% for eligible frontend operators.",
+              "Qualified bounty rounds pay eligible revealed raters and reserve 3% for eligible frontend operators.",
               "Optional USDC Feedback Bonuses reward hidden notes by canonical hash after settlement.",
-              "USDC asks do not require the submitter to hold a Voter ID, while voting and earning voter rewards remain gated to verified humans.",
+              "USDC asks do not require proof-of-personhood; USDC earning starts after the required calibration rounds.",
               "Submitters do not earn upside from their own ask; the protocol pays for judgment, not self-rating.",
             ],
           },
@@ -410,7 +410,7 @@ export const SECTIONS: Section[] = [
         blocks: [
           {
             type: "paragraph",
-            text: "The Bootstrap Pool (12M HREP) funds early participation rewards while the network is still cold-starting. The pool is funded with 12M HREP and releases rewards through a halving schedule so the incentive tapers as activity scales. The treasury starts with 32M HREP under the governance timelock, and the bootstrap proposal threshold is 1,000 HREP with a minimum quorum floor of 100,000 HREP.",
+            text: "The Bootstrap Pool (12M MREP) funds early participation rewards while the network is still cold-starting. The pool is funded with 12M MREP and releases rewards through a halving schedule so the incentive tapers as activity scales. The treasury starts with 32M MREP under the governance timelock, and the bootstrap proposal threshold is 1,000 MREP with a minimum quorum floor of 100,000 MREP.",
           },
         ],
       },
@@ -422,13 +422,13 @@ export const SECTIONS: Section[] = [
             data: {
               headers: ["Action", "Requirement", "Notes"],
               rows: [
-                ["Vote on content", "1-100 HREP", "Per vote, per round, capped per Voter ID"],
+                ["Predict a final rating", "1-100 MREP", "Per prediction, per round"],
                 [
                   "Ask a question",
-                  "1 HREP or 1 USDC minimum bounty",
+                  "1 MREP or 1 USDC minimum bounty",
                   "Mandatory and non-refundable; the ask is funded before judgment arrives",
                 ],
-                ["Register as a frontend", "1,000 HREP", "Returned on exit unless governance-defined slashing applies"],
+                ["Register as a frontend", "1,000 MREP", "Returned on exit unless governance-defined slashing applies"],
               ],
             },
           },
@@ -463,7 +463,7 @@ export const SECTIONS: Section[] = [
             type: "ordered",
             items: [
               "Choose a category and result template.",
-              "Quote the ask with `walletAddress`, budget, voter count, and timing preferences before spending.",
+              "Quote the ask with `walletAddress`, budget, rater count, and timing preferences before spending.",
               "Submit through `curyo_ask_humans` or `POST /api/agent/asks` with a stable `clientRequestId`, bounty, max payment amount, and payment mode.",
               "Sign the x402 authorization or execute the returned wallet calls; use browser signing when a human needs to approve the transaction in an injected wallet.",
               "Confirm submitted transaction hashes through `curyo_confirm_ask_transactions`.",
@@ -510,8 +510,8 @@ export const SECTIONS: Section[] = [
           {
             type: "bullets",
             items: [
-              "`generic_rating` turns the binary rating system into a general support signal.",
-              "`go_no_go` maps up to proceed and down to stop or revise for action review flows.",
+              "`generic_rating` turns the predicted final rating system into a general support signal.",
+              "`go_no_go` maps high final ratings to proceed and low final ratings to stop or revise for action review flows.",
               "`ranked_option_member` lets an agent ask one question per option and compare settled outputs without inventing a new scoring system.",
               "`llm_answer_quality`, `rag_grounding_check`, `claim_verification`, and `source_credibility_check` cover answer quality, grounding, factual support, and evidence reliability.",
               "`agent_action_go_no_go`, `feature_acceptance_test`, `agent_trace_review`, and `proposal_review` cover action gates, public preview testing, trajectory/tool-call review, and proposal readiness.",
@@ -535,7 +535,7 @@ export const SECTIONS: Section[] = [
         blocks: [
           {
             type: "paragraph",
-            text: "Governor and timelock contracts own upgrades, configuration, and treasury routing in finalized deployments. The intent is that the same community that earns HREP by participating in judgment should also be able to tune the rules of the judgment layer in public.",
+            text: "Governor and timelock contracts own upgrades, configuration, and treasury routing in finalized deployments. The intent is that the same community that earns MREP by participating in ratings should also be able to tune the rules of the rating layer in public.",
           },
         ],
       },
@@ -594,7 +594,7 @@ export const SECTIONS: Section[] = [
               "Later agents can reuse prior judgment instead of buying the same answer again.",
               "Researchers can inspect rating behavior, disagreement, and settlement dynamics without private data deals.",
               "Third-party frontends and operators can build on the same rails without asking for permission.",
-              "Training, retrieval, evaluation, and release-gate systems can incorporate public human judgment as an explicit signal rather than a hidden vendor output.",
+              "Training, retrieval, evaluation, and release-gate systems can incorporate public rating judgment as an explicit signal rather than a hidden vendor output.",
             ],
           },
         ],
@@ -612,7 +612,7 @@ export const SECTIONS: Section[] = [
   },
   {
     title: "Limitations & Future Work",
-    lead: "Curyo returns public human judgment, not certainty, and several trust and product gaps remain open.",
+    lead: "Curyo returns public rating judgment, not certainty, and several trust and product gaps remain open.",
     subsections: [
       {
         heading: "Current Limitations",
@@ -620,11 +620,11 @@ export const SECTIONS: Section[] = [
           {
             type: "bullets",
             items: [
-              "Curyo returns verified human judgment, not objective truth; ambiguous and taste-heavy questions remain subjective by design.",
+              "Curyo returns public rating judgment, not objective truth; ambiguous and taste-heavy questions remain subjective by design.",
               "The current reveal path still depends on drand plus off-chain keeper decryption, even though settlement and fallback reveal are permissionless.",
               "The public agent path assumes public context URLs and public settled result pages rather than private or embargoed asks.",
               "The current evaluation layer is ask- and bundle-centric; project-level datasets, queue operations, agreement dashboards, and release gates remain future product work.",
-              "Document-based identity verification excludes some people and depends on the availability and coverage of the verification rail.",
+              "Optional identity providers can add useful credentials but should not become a single dependency or hard participation gate.",
               "Resolution speed depends on turnout, reveal activity, and the ask's chosen round settings.",
             ],
           },
@@ -636,7 +636,7 @@ export const SECTIONS: Section[] = [
           {
             type: "bullets",
             items: [
-              "Project-level human evaluation objects for datasets, trace imports, eval runs, release gates, and structured exports.",
+              "Project-level evaluation objects for datasets, trace imports, eval runs, release gates, and structured exports.",
               "Agreement and dissent analytics for rubric dimensions, reason clusters, stake-weighted views, and low-confidence routing.",
               "Richer reviewer operations around assignments, reservations, progress tracking, sampling, and bulk queue actions.",
               "Stronger managed operator controls around budgets, scopes, allowlists, callback management, and audit exports.",
@@ -652,7 +652,7 @@ export const SECTIONS: Section[] = [
         blocks: [
           {
             type: "paragraph",
-            text: "The goal is not to build a universal truth machine. The goal is simpler and more practical: give agents a clean, public way to ask verified humans when judgment matters.",
+            text: "The goal is not to build a universal truth machine. The goal is simpler and more practical: give agents a clean, public way to ask open raters when judgment matters.",
           },
         ],
       },

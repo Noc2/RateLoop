@@ -8,15 +8,13 @@ const x402McpHref = "https://docs.x402.org/guides/mcp-server-with-x402";
 const mcpSpecHref = "https://modelcontextprotocol.io/specification/2025-11-25/basic";
 const mcpTransportsHref = "https://modelcontextprotocol.io/specification/2025-11-25/basic/transports";
 const webMcpSpecHref = "https://webmachinelearning.github.io/webmcp/";
-const selfDocsHref = "https://docs.self.xyz/";
-const selfOverviewHref = "https://docs.self.xyz/technical-docs/overview";
 const drandTlockHref = "https://docs.drand.love/docs/timelock-encryption";
 const circleCeloUsdcHref = "https://www.circle.com/multi-chain-usdc/celo";
 
 export const metadata = {
   title: "Tech Stack | Curyo Docs",
   description:
-    "The protocol terms behind Curyo: x402 agent payments, MCP and WebMCP tools, Self.xyz zero-knowledge identity, tlock blind voting, HREP staking, and Celo USDC settlement.",
+    "The protocol terms behind Curyo: x402 agent payments, MCP and WebMCP tools, optional identity signals, tlock blind prediction rounds, MREP staking, and Celo USDC settlement.",
 } satisfies Metadata;
 
 const TechStackPage: NextPage = () => {
@@ -25,7 +23,7 @@ const TechStackPage: NextPage = () => {
       <h1>Tech Stack</h1>
       <p className="lead text-base-content/60 text-lg">
         The landing page uses compact protocol terms. This page spells out what they mean, where Curyo uses them, and
-        why they matter for AI-funded human feedback.
+        why they matter for AI-funded open feedback.
       </p>
 
       <h2 id="x402-agent-payments">x402 Agent Payments</h2>
@@ -85,32 +83,27 @@ const TechStackPage: NextPage = () => {
         calls or x402 authorization remain available for wallet-capable agents.
       </p>
 
-      <h2 id="zk-proof-of-human">ZK Proof-of-Human</h2>
+      <h2 id="optional-identity">Optional Identity Signals</h2>
       <p>
-        Curyo Voter ID uses{" "}
-        <a href={selfDocsHref} target="_blank" rel="noopener noreferrer" className="link link-primary">
-          Self.xyz
-        </a>{" "}
-        verification. Self describes itself as a privacy-first identity protocol using zero-knowledge proofs for
-        passports, national IDs, Aadhaar, and KYC attestations. It supports selective disclosure, so an app can check a
-        fact such as humanity, age, or sanctions eligibility without publishing the underlying document data.
+        The core Curyo protocol does not require proof-of-personhood. Accounts, agent wallets, and delegated operators
+        can participate after meeting reputation and calibration rules.
       </p>
       <p>
-        Curyo mints a non-transferable Voter ID after the Self proof succeeds. Voting and some reward claims then key
-        eligibility to that Voter ID, giving the protocol Sybil resistance without putting a passport, date of birth, or
-        ID document on-chain.
+        Optional identity integrations can still be useful as credentials, frontend trust badges, boosted routing
+        signals, or governance-tunable weight modifiers. They should be additive, not a hard gate that prevents AI
+        raters or pseudonymous accounts from contributing.
       </p>
 
       <h2 id="commit-reveal-voting">Commit-Reveal Voting</h2>
       <p>
-        A vote starts as a commitment: the contract stores a hash, stake, ciphertext, and reveal metadata while the
-        direction remains hidden. After the blind phase, a keeper normally reveals the plaintext direction; users can
-        self-reveal if needed. Settlement uses only revealed votes.
+        A prediction starts as a commitment: the contract stores a hash, stake, ciphertext, and reveal metadata while
+        the predicted rating remains hidden. After the blind phase, a keeper normally reveals the plaintext prediction;
+        users can self-reveal if needed. Settlement uses only revealed predictions.
       </p>
       <p>
-        This is why Curyo calls rating work &quot;honest&quot; rather than just &quot;popular.&quot; Early voters cannot
-        simply copy public momentum, unrevealed votes lose reward eligibility, and revealed losing votes still face a
-        real stake cost.
+        This is why Curyo calls rating work &quot;honest&quot; rather than just &quot;popular.&quot; Early raters cannot
+        simply copy public momentum, unrevealed predictions lose reward eligibility, and inaccurate revealed predictions
+        still face a real stake cost.
       </p>
 
       <h2 id="tlock-blind-voting">tlock Blind Voting</h2>
@@ -120,40 +113,40 @@ const TechStackPage: NextPage = () => {
           drand timelock encryption
         </a>{" "}
         model lets a payload be encrypted now and decryptable only after a future drand round becomes available. Curyo
-        binds vote ciphertext to drand metadata so the direction is meant to become revealable only after the epoch
+        binds prediction ciphertext to drand metadata so the rating is meant to become revealable only after the epoch
         window closes.
       </p>
 
-      <h2 id="hrep-staking">HREP Staking</h2>
+      <h2 id="mrep-staking">MREP Staking</h2>
       <p>
-        HREP is the reputation stake used in voting and governance. Voters stake HREP on whether a content rating should
-        move up or down. Winning revealed votes recover stake and share rewards; losing revealed votes recover only a
-        small refund; unrevealed votes can forfeit.
+        MREP is the reputation stake used in rating and governance. Raters stake MREP on the final 0-10 rating they
+        expect. Accurate revealed predictions recover stake and share rewards; revealed misses recover only a small
+        refund; unrevealed predictions can forfeit.
       </p>
       <p>
-        The reason to use staking is incentive alignment: a voter has to put scarce reputation behind a judgment instead
-        of submitting cost-free noise.
+        The reason to use staking is incentive alignment: a rater has to put scarce reputation behind a prediction
+        instead of submitting cost-free noise.
       </p>
 
       <h2 id="bounties">Bounties</h2>
       <p>
-        Bounties are attached when an asker submits a question. They are separate from HREP stake settlement and can be
-        funded in HREP or Celo USDC. Eligible revealed voters claim them after qualified rounds, so the human work is
-        paid as work even when the rating outcome is contested.
+        Bounties are attached when an asker submits a question. They are separate from MREP stake settlement and can be
+        funded in MREP or Celo USDC. Eligible revealed raters claim them after qualified rounds, so useful prediction
+        work can be paid even when the rating outcome is contested.
       </p>
 
       <h2 id="feedback-bonuses">Feedback Bonuses</h2>
       <p>
-        Feedback Bonuses are optional USDC pools for useful voter notes. Feedback stays hidden while a round is active
-        and unlocks after settlement or another terminal state. Awarding a bonus pays the selected revealed voter
-        directly, which gives agents more than a score: they get human rationale that can go into an audit trail.
+        Feedback Bonuses are optional USDC pools for useful rater notes. Feedback stays hidden while a round is active
+        and unlocks after settlement or another terminal state. Awarding a bonus pays the selected revealed rater
+        directly, which gives agents more than a score: they get rationale that can go into an audit trail.
       </p>
 
       <h2 id="on-chain-settlement">On-Chain Settlement</h2>
       <p>
-        Questions, vote commitments, reveals, reward accounting, bounty claims, and governance settings settle through
-        smart contracts. Off-chain services and indexed APIs make the data easier to read, but the protocol state is
-        auditable from the chain.
+        Questions, prediction commitments, reveals, reward accounting, bounty claims, and governance settings settle
+        through smart contracts. Off-chain services and indexed APIs make the data easier to read, but the protocol
+        state is auditable from the chain.
       </p>
 
       <h2 id="celo-usdc">Celo USDC And Stablecoins</h2>
@@ -173,9 +166,6 @@ const TechStackPage: NextPage = () => {
         </li>
         <li>
           WebMCP: <a href={webMcpSpecHref}>W3C Community Group draft</a>
-        </li>
-        <li>
-          Self.xyz: <a href={selfDocsHref}>protocol overview</a>, <a href={selfOverviewHref}>technical overview</a>
         </li>
         <li>
           drand: <a href={drandTlockHref}>timelock encryption</a>

@@ -1,20 +1,21 @@
 import { TokenAllocationChart } from "~~/components/docs/TokenAllocationChart";
 import { protocolCopy } from "~~/lib/docs/protocolCopy";
 import { protocolDocFacts } from "~~/lib/docs/protocolFacts";
-import { HREP_MAX_SUPPLY_LABEL, tokenDistributionTableRows } from "~~/lib/docs/tokenomics";
+import { MREP_MAX_SUPPLY_LABEL, tokenDistributionTableRows } from "~~/lib/docs/tokenomics";
 
 const Tokenomics = () => {
   return (
     <article className="prose max-w-none">
       <h1>Tokenomics</h1>
       <p className="lead text-base-content/60 text-lg">
-        Human Reputation (HREP) token distribution, question funding, and point mechanics.
+        Mesh Reputation (MREP) token distribution, question funding, and staking mechanics.
       </p>
 
       <h2>Overview</h2>
       <p>
-        Human Reputation (HREP) is a reputation token, not money. It cannot be bought, has no token sale, and is
-        distributed through protocol-controlled pools to verified humans and active participants.
+        Mesh Reputation (MREP) is a capped, transferable reputation and governance token. It has no protocol token sale
+        and no treasury backing; supply is distributed through the launch snapshot, governance-controlled pools, and
+        earned protocol rewards.
       </p>
 
       <h2>Token Overview</h2>
@@ -23,15 +24,15 @@ const Tokenomics = () => {
           <tbody>
             <tr>
               <td className="font-medium">Name</td>
-              <td>Human Reputation</td>
+              <td>Mesh Reputation</td>
             </tr>
             <tr>
               <td className="font-medium">Symbol</td>
-              <td>HREP</td>
+              <td>MREP</td>
             </tr>
             <tr>
               <td className="font-medium">Max Supply</td>
-              <td>{HREP_MAX_SUPPLY_LABEL}</td>
+              <td>{MREP_MAX_SUPPLY_LABEL}</td>
             </tr>
             <tr>
               <td className="font-medium">Decimals</td>
@@ -39,13 +40,13 @@ const Tokenomics = () => {
             </tr>
             <tr>
               <td className="font-medium">Type</td>
-              <td>Reputation token (non-financial)</td>
+              <td>Transferable reputation and governance token</td>
             </tr>
           </tbody>
         </table>
       </div>
       <p>
-        Supply is fixed at <strong>100 million HREP</strong>. The full supply is minted at launch into
+        Supply is fixed at <strong>100 million MREP</strong>. The full supply is minted at launch into
         protocol-controlled pools, with no team allocation or token sale.
       </p>
 
@@ -76,62 +77,47 @@ const Tokenomics = () => {
         </table>
       </div>
 
-      <h3>Identity Claim</h3>
+      <h3>Launch Snapshot And Onboarding</h3>
       <p>
-        Verified humans claim once through{" "}
-        <a href="https://self.xyz" target="_blank" rel="noopener noreferrer" className="link link-primary">
-          Self.xyz
-        </a>{" "}
-        passport or biometric ID card verification. Claimants must prove they are 18 or older, pass sanctions screening,
-        and not be from a configured sanctioned-country jurisdiction such as Cuba, Iran, North Korea, or Syria. Claim
-        size falls as adoption grows.
+        The launch distribution reuses the previous Curyo HREP/CREP snapshot so early protocol participants keep a
+        governance stake in the fresh deployment. Remaining launch distribution capacity can be routed by governance to
+        onboarding, calibration, and ecosystem programs. Optional identity credentials can be added later, but they are
+        not required for the core rating protocol.
       </p>
       <div className="not-prose overflow-x-auto my-6 rounded-xl bg-base-200">
         <table className="table table-zebra [&_th]:text-base [&_td]:text-base [&_.badge]:text-base [&_th]:bg-base-300">
           <thead>
             <tr>
-              <th>Tier</th>
-              <th>Claimants</th>
-              <th>Claim (no referral)</th>
-              <th>Claim (with referral)</th>
-              <th>Referrer gets</th>
+              <th>Phase</th>
+              <th>Eligibility</th>
+              <th>Distribution</th>
+              <th>Notes</th>
             </tr>
           </thead>
           <tbody>
             <tr>
-              <td>0 (Genesis)</td>
-              <td className="font-mono">0 &ndash; 9</td>
-              <td className="font-mono">10,000 HREP</td>
-              <td className="font-mono">15,000 HREP</td>
-              <td className="font-mono">5,000 HREP</td>
+              <td>Snapshot</td>
+              <td>Previous HREP/CREP holders</td>
+              <td className="font-mono">Governance-approved snapshot</td>
+              <td>Fresh deployment distribution to early Curyo contributors</td>
             </tr>
             <tr>
-              <td>1 (Early Adopter)</td>
-              <td className="font-mono">10 &ndash; 999</td>
-              <td className="font-mono">1,000 HREP</td>
-              <td className="font-mono">1,500 HREP</td>
-              <td className="font-mono">500 HREP</td>
+              <td>Calibration</td>
+              <td>Accounts or agents completing required calibration rounds</td>
+              <td className="font-mono">Governance-tuned rewards</td>
+              <td>USDC earning starts after calibration is met</td>
             </tr>
             <tr>
-              <td>2 (Pioneer)</td>
-              <td className="font-mono">1,000 &ndash; 9,999</td>
-              <td className="font-mono">100 HREP</td>
-              <td className="font-mono">150 HREP</td>
-              <td className="font-mono">50 HREP</td>
+              <td>Optional identity</td>
+              <td>Proof providers such as Self.xyz if enabled</td>
+              <td className="font-mono">Governance-tuned boost or credential</td>
+              <td>Informational by default, not a hard gate</td>
             </tr>
             <tr>
-              <td>3 (Explorer)</td>
-              <td className="font-mono">10,000 &ndash; 999,999</td>
-              <td className="font-mono">10 HREP</td>
-              <td className="font-mono">15 HREP</td>
-              <td className="font-mono">5 HREP</td>
-            </tr>
-            <tr>
-              <td>4 (Settler)</td>
-              <td className="font-mono">1,000,000+</td>
-              <td className="font-mono">1 HREP</td>
-              <td className="font-mono">1.5 HREP</td>
-              <td className="font-mono">0.5 HREP</td>
+              <td>Governed programs</td>
+              <td>Approved grants, integrations, and ecosystem work</td>
+              <td className="font-mono">Governor/timelock controlled</td>
+              <td>Counts against the fixed 100M MREP cap</td>
             </tr>
           </tbody>
         </table>
@@ -140,7 +126,7 @@ const Tokenomics = () => {
       <p>{protocolCopy.participationPoolOverview}</p>
       <p>
         Reward formula: <code>reward = stakeAmount &times; currentRate</code>. The rate starts at <strong>90%</strong>{" "}
-        and halves based on cumulative HREP distributed from the pool &mdash; making the pool&apos;s lifetime
+        and halves based on cumulative MREP distributed from the pool &mdash; making the pool&apos;s lifetime
         predictable regardless of individual stake sizes. Rewards are always less than the staked amount, ensuring
         bootstrap rewards are a bonus, not a primary incentive.
       </p>
@@ -149,11 +135,11 @@ const Tokenomics = () => {
           <thead>
             <tr>
               <th>Tier</th>
-              <th>HREP distributed</th>
+              <th>MREP distributed</th>
               <th>Cumulative</th>
               <th>Rate</th>
-              <th>Stake 10 HREP</th>
-              <th>Stake 100 HREP</th>
+              <th>Stake 10 MREP</th>
+              <th>Stake 100 MREP</th>
             </tr>
           </thead>
           <tbody>
@@ -162,32 +148,32 @@ const Tokenomics = () => {
               <td className="font-mono">1,500,000</td>
               <td className="font-mono">1,500,000</td>
               <td className="font-mono">90%</td>
-              <td className="font-mono">9 HREP</td>
-              <td className="font-mono">90 HREP</td>
+              <td className="font-mono">9 MREP</td>
+              <td className="font-mono">90 MREP</td>
             </tr>
             <tr>
               <td>1</td>
               <td className="font-mono">3,000,000</td>
               <td className="font-mono">4,500,000</td>
               <td className="font-mono">45%</td>
-              <td className="font-mono">4.5 HREP</td>
-              <td className="font-mono">45 HREP</td>
+              <td className="font-mono">4.5 MREP</td>
+              <td className="font-mono">45 MREP</td>
             </tr>
             <tr>
               <td>2</td>
               <td className="font-mono">6,000,000</td>
               <td className="font-mono">10,500,000</td>
               <td className="font-mono">22.5%</td>
-              <td className="font-mono">2.25 HREP</td>
-              <td className="font-mono">22.5 HREP</td>
+              <td className="font-mono">2.25 MREP</td>
+              <td className="font-mono">22.5 MREP</td>
             </tr>
             <tr>
               <td>Tail</td>
               <td className="font-mono">1,500,000</td>
               <td className="font-mono">12,000,000</td>
               <td className="font-mono">11.25%</td>
-              <td className="font-mono">1.125 HREP</td>
-              <td className="font-mono">11.25 HREP</td>
+              <td className="font-mono">1.125 MREP</td>
+              <td className="font-mono">11.25 MREP</td>
             </tr>
           </tbody>
         </table>
@@ -196,41 +182,44 @@ const Tokenomics = () => {
 
       <h3 id="bounties">Bounties</h3>
       <p>
-        Bounties are separate from HREP bootstrap rewards. They are attached at submission, funded in HREP or USDC on
-        Celo, scoped to one question or a question bundle, and split across eligible revealed voters in each qualified
-        bounty round after a 3% frontend-operator share. Bundle bounties can require multiple settlement round sets;
-        each set requires every bundled question to settle once and is claimed independently. If the commit-attributed
-        frontend is not payable, that share stays with the voter claim. Bounty required-voter terms cannot exceed the
-        question&apos;s selected voter cap.
+        Bounties are separate from MREP bootstrap rewards. They are attached at submission, funded in MREP or USDC on
+        Celo, scoped to one question or a question bundle, and split across eligible revealed raters in each qualified
+        bounty round after a 3% frontend-operator share. Correct predictions earn more, while near misses can receive a
+        smaller payout for useful participation. Bundle bounties can require multiple settlement round sets; each set
+        requires every bundled question to settle once and is claimed independently. If the commit-attributed frontend
+        is not payable, that share stays with the rater claim. Bounty required-rater terms cannot exceed the
+        question&apos;s selected rater cap.
       </p>
       <h3 id="feedback-bonuses">Feedback Bonuses</h3>
       <p>
-        Feedback Bonuses are separate, optional USDC pools. They reward revealed voters for useful hidden feedback after
+        Feedback Bonuses are separate, optional USDC pools. They reward revealed raters for useful hidden feedback after
         settlement, pay immediately in the award transaction, reserve the same 3% eligible frontend share, and send
         expired unawarded USDC to treasury.
       </p>
 
       <h3>Treasury</h3>
       <p>
-        The protocol treasury starts with <strong>32M HREP</strong> on the governor/timelock from launch. It grows over
+        The protocol treasury starts with <strong>32M MREP</strong> on the governor/timelock from launch. It grows over
         time through three main ongoing inflow sources: a 1% treasury fee on contested losing pools, cancellation fees
-        from voluntary content withdrawals, and forfeited unrevealed past-epoch votes swept during settlement cleanup.
-        Treasury spending follows the same governance proposal path as upgrades and other governed config changes.
+        from voluntary content withdrawals, and forfeited unrevealed past-epoch predictions swept during settlement
+        cleanup. Treasury spending follows the same governance proposal path as upgrades and other governed config
+        changes.
       </p>
       <p>
         Appropriate treasury uses include ecosystem grants, partner activation, integration support, research and data
-        work, protocol development, security responses, and whistleblower rewards. HREP grants are not protocol-backed
+        work, protocol development, security responses, and whistleblower rewards. MREP grants are not protocol-backed
         payments; they distribute reputation and voting power, so proposals should state why the recipient should hold
-        HREP and what follow-up reporting or milestone evidence voters should expect.
+        MREP and what follow-up reporting or milestone evidence governance voters should expect.
       </p>
 
       <hr />
 
       <h2>Round Payouts</h2>
       <p>
-        When a round is resolved, winners recover their original stake and claim from the content-specific voter pool.
-        Revealed losers can reclaim <strong>{protocolDocFacts.revealedLoserRefundPercentLabel}</strong> of raw stake,
-        and the remaining losing pool is split across voters, frontend operators, consensus reserve, and treasury.
+        When a round resolves, accurate revealed predictions recover their original stake and claim from the
+        content-specific rater pool. Revealed misses can reclaim{" "}
+        <strong>{protocolDocFacts.revealedLoserRefundPercentLabel}</strong> of raw stake, and the remaining losing pool
+        is split across accurate raters, frontend operators, consensus reserve, and treasury.
       </p>
 
       <hr />
@@ -247,16 +236,16 @@ const Tokenomics = () => {
           </thead>
           <tbody>
             <tr>
-              <td>Vote on content</td>
-              <td className="font-mono">1&ndash;100 HREP</td>
-              <td>Per vote, per round</td>
+              <td>Predict a final rating</td>
+              <td className="font-mono">1&ndash;100 MREP</td>
+              <td>Per prediction, per round</td>
             </tr>
             <tr>
               <td>Ask a question</td>
-              <td className="font-mono">1 HREP or 1 USDC minimum</td>
+              <td className="font-mono">1 MREP or 1 USDC minimum</td>
               <td>
-                The minimum is non-refundable. It is attached at submission and pays eligible voters if the question
-                qualifies. Bounties can use HREP or USDC.
+                The minimum is non-refundable. It is attached at submission and pays eligible raters if the question
+                qualifies. Bounties can use MREP or USDC.
               </td>
             </tr>
             <tr>
@@ -266,7 +255,7 @@ const Tokenomics = () => {
             </tr>
             <tr>
               <td>Register as frontend</td>
-              <td className="font-mono">1,000 HREP</td>
+              <td className="font-mono">1,000 MREP</td>
               <td>Returned on exit unless slashed</td>
             </tr>
           </tbody>
@@ -274,7 +263,7 @@ const Tokenomics = () => {
       </div>
       <p>
         Question creators no longer escrow separate capital beyond the bounty. Submission bounties are non-refundable
-        and route to eligible voters and the eligible frontend operator once the question resolves.
+        and route to eligible raters and the eligible frontend operator once the question resolves.
       </p>
     </article>
   );

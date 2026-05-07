@@ -10,9 +10,9 @@ import { protocolDocFacts } from "~~/lib/docs/protocolFacts";
 
 const STEPS = [
   {
-    label: "Vote",
-    duration: "1–100 HREP",
-    description: "Choose up or down, stake is locked, direction is encrypted",
+    label: "Predict",
+    duration: "1-100 MREP",
+    description: "Choose a final 0-10 rating, stake is locked, prediction is encrypted",
     Icon: LockClosedIcon,
   },
   {
@@ -24,13 +24,13 @@ const STEPS = [
   {
     label: "Resolve",
     duration: "",
-    description: `Majority wins after the selected voter threshold is revealed`,
+    description: "Nearest revealed predictions win after the selected threshold is met",
     Icon: ScaleIcon,
   },
   {
     label: "Claim",
     duration: "",
-    description: "Winners withdraw stake + rewards",
+    description: "Accurate raters withdraw stake + rewards",
     Icon: BanknotesIcon,
   },
 ];

@@ -5,17 +5,17 @@ const DocsIntro: NextPage = () => {
   return (
     <article className="prose max-w-none">
       <h1>Introduction</h1>
-      <p className="lead text-base-content/60 text-lg">AI Asks, Humans Earn</p>
+      <p className="lead text-base-content/60 text-lg">AI Asks, Open Raters Predict</p>
 
       <h2>What Curyo Does</h2>
       <p>
-        Curyo is a human-in-the-loop judgment layer for agents, bots, and people. An asker submits a focused question,
-        attaches context, funds a bounty, and gets back a public signal from verified humans who stake HREP on their
-        judgment.
+        Curyo is an open rating layer for agents, bots, and people. An asker submits a focused question, attaches
+        context, funds a bounty, and gets back a public signal from raters who stake MREP on their predicted final
+        rating.
       </p>
       <p>
-        The result is not a private poll or a comment thread. It is a question, a round, revealed votes, optional
-        voter-only feedback, rewards, and a rating history that other agents and frontends can inspect later.
+        The result is not a private poll or a comment thread. It is a question, a round, revealed predictions, optional
+        rater-only feedback, rewards, and a rating history that other agents and frontends can inspect later.
       </p>
 
       <h2>Fast Path</h2>
@@ -25,26 +25,27 @@ const DocsIntro: NextPage = () => {
           preview.
         </li>
         <li>
-          <strong>Fund:</strong> attach a non-refundable bounty in HREP or Celo USDC.
+          <strong>Fund:</strong> attach a non-refundable bounty in MREP or Celo USDC.
         </li>
         <li>
-          <strong>Vote:</strong> verified humans stake HREP on whether the visible rating should move up or down.
+          <strong>Predict:</strong> raters stake MREP on the final 0-10 rating they expect after the private round.
         </li>
         <li>
-          <strong>Use:</strong> read the settled score, revealed votes, feedback, and any awarded feedback bonuses.
+          <strong>Use:</strong> read the settled score, revealed predictions, feedback, and any awarded feedback
+          bonuses.
         </li>
       </ol>
 
       <h2>Why It Exists</h2>
       <p>
         Models are useful, but they still hit questions where local context, taste, evidence quality, or social judgment
-        matters. Curyo gives agents a narrow human-in-the-loop fallback: ask humans, pay for the work, and keep the
-        answer visible.
+        matters. Curyo gives agents a narrow public fallback: ask open raters, pay for the work, and keep the answer
+        visible.
       </p>
 
       <div className="not-prose my-6 grid gap-4 sm:grid-cols-2">
         <FeatureCard title="For Agents" description="Turn uncertainty into a paid question with a structured result." />
-        <FeatureCard title="For Humans" description="Stake judgment, add feedback, and earn from useful answers." />
+        <FeatureCard title="For Raters" description="Stake predictions, add feedback, and earn from useful answers." />
         <FeatureCard
           title="For Builders"
           description="Use the SDK, bot, API, or indexed data without a closed data silo."

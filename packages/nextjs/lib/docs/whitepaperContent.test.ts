@@ -41,8 +41,8 @@ function collectWhitepaperText(): string {
 }
 
 test("whitepaper metadata reflects the agent-first brand deck", () => {
-  assert.equal(META.subtitle, "Public Human Evaluation for AI Agents");
-  assert.equal(META.deck, "AI Asks, Humans Earn");
+  assert.equal(META.subtitle, "Public Prediction Ratings for AI Agents");
+  assert.equal(META.deck, "AI Asks, Open Raters Predict");
 });
 
 test("whitepaper metadata reflects the May 2026 product and AI revision", () => {
@@ -53,24 +53,21 @@ test("whitepaper metadata reflects the May 2026 product and AI revision", () => 
 test("whitepaper reflects current launch allocations and governance threshold", () => {
   const whitepaperText = collectWhitepaperText();
 
-  assert.match(whitepaperText, /Bootstrap Pool \(12M HREP\)/i);
-  assert.match(whitepaperText, /pool is funded with 12M HREP/i);
-  assert.match(whitepaperText, /treasury starts with 32M HREP/i);
-  assert.match(whitepaperText, /bootstrap proposal threshold is 1,000 HREP/i);
+  assert.match(whitepaperText, /Bootstrap Pool \(12M MREP\)/i);
+  assert.match(whitepaperText, /pool is funded with 12M MREP/i);
+  assert.match(whitepaperText, /treasury starts with 32M MREP/i);
+  assert.match(whitepaperText, /bootstrap proposal threshold is 1,000 MREP/i);
 
-  assert.doesNotMatch(whitepaperText, /Bootstrap Pool \(24M HREP\)/i);
-  assert.doesNotMatch(whitepaperText, /pool is funded with 24M HREP/i);
-  assert.doesNotMatch(whitepaperText, /treasury starts with 20M HREP/i);
-  assert.doesNotMatch(whitepaperText, /10,000 HREP proposal threshold/i);
-  assert.doesNotMatch(whitepaperText, /bootstrap proposal threshold is 10,000 HREP/i);
+  assert.doesNotMatch(whitepaperText, /Bootstrap Pool \(24M MREP\)/i);
+  assert.doesNotMatch(whitepaperText, /pool is funded with 24M MREP/i);
+  assert.doesNotMatch(whitepaperText, /treasury starts with 20M MREP/i);
+  assert.doesNotMatch(whitepaperText, /10,000 MREP proposal threshold/i);
+  assert.doesNotMatch(whitepaperText, /bootstrap proposal threshold is 10,000 MREP/i);
 });
 
 test("whitepaper introduction surfaces the updated lead copy", () => {
   assert.equal(SECTIONS[0]?.title, "Introduction");
-  assert.equal(
-    SECTIONS[0]?.lead,
-    "Curyo is a public, paid, verified-human evaluation layer for agents and AI product teams.",
-  );
+  assert.equal(SECTIONS[0]?.lead, "Curyo is a public, paid prediction-rating layer for agents and AI product teams.");
 });
 
 test("whitepaper contents include the current nine sections", () => {
@@ -94,8 +91,8 @@ test("whitepaper contents include the current nine sections", () => {
 test("whitepaper executive summary centers the agent-first thesis", () => {
   const whitepaperText = collectWhitepaperText();
 
-  assert.match(whitepaperText, /public, paid, verified-human evaluation layer/i);
-  assert.match(whitepaperText, /AI Asks, Humans Earn/i);
+  assert.match(whitepaperText, /public, paid prediction-rating layer/i);
+  assert.match(whitepaperText, /AI Asks, Open Raters Predict/i);
   assert.match(whitepaperText, /structured result templates/i);
 });
 
@@ -135,7 +132,7 @@ test("whitepaper reflects the current AI template catalog", () => {
 test("whitepaper reflects the current product design surface", () => {
   const whitepaperText = collectWhitepaperText();
 
-  assert.match(whitepaperText, /AI ask -> human earning loop/i);
+  assert.match(whitepaperText, /AI ask -> open rating loop/i);
   assert.match(whitepaperText, /app sidebar shell/i);
   assert.match(whitepaperText, /\/ask\?tab=agent/i);
   assert.match(whitepaperText, /\/agent\/sign\/\{intentId\}/i);

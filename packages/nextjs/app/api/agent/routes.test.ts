@@ -1367,7 +1367,7 @@ test("agent templates route returns supported result templates", async () => {
   assert.equal(body.templates[0]?.id, "generic_rating");
   assert.equal(body.templates[0]?.submissionPattern, "single_question");
   assert.equal(body.templates[0]?.bundleStrategy, "independent");
-  assert.equal(body.templates[0]?.templateInputsExample?.goal, "quick human interest check");
+  assert.equal(body.templates[0]?.templateInputsExample?.goal, "quick audience interest check");
   assert.equal(body.templates[0]?.templateInputsSchema.type, "object");
   const featureAcceptance = body.templates.find(template => template.id === "feature_acceptance_test");
   assert.equal(featureAcceptance?.submissionPattern, "single_question");

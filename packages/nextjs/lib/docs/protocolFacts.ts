@@ -55,9 +55,9 @@ function effectiveRawSharePercent(bucketBps: number): number {
 }
 
 export const protocolDocFacts = {
-  governanceProposalThresholdLabel: "1,000 HREP",
-  governanceQuorumLabel: "4% of circulating supply (min 100,000 HREP)",
-  governanceMinimumQuorumLabel: "100,000 HREP",
+  governanceProposalThresholdLabel: "1,000 MREP",
+  governanceQuorumLabel: "4% of circulating supply (min 100,000 MREP)",
+  governanceMinimumQuorumLabel: "100,000 MREP",
   governanceTimelockDelayLabel: "2 days",
   blindPhaseDurationLabel: formatDurationLabel(DEFAULT_ROUND_CONFIG.epochDurationSeconds),
   revealGracePeriodLabel: formatDurationLabel(DEFAULT_REVEAL_GRACE_PERIOD_SECONDS),
@@ -78,7 +78,7 @@ export const protocolDocFacts = {
     ROUND_CONFIG_BOUNDS.minRoundDurationSeconds,
   )}-${formatDurationLabel(ROUND_CONFIG_BOUNDS.maxRoundDurationSeconds)} max duration, ${
     ROUND_CONFIG_BOUNDS.minSettlementVoters
-  }-${ROUND_CONFIG_BOUNDS.maxSettlementVoters} settlement voters, ${ROUND_CONFIG_BOUNDS.minVoterCap}-${ROUND_CONFIG_BOUNDS.maxVoterCap.toLocaleString()} voter cap`,
+  }-${ROUND_CONFIG_BOUNDS.maxSettlementVoters} settlement raters, ${ROUND_CONFIG_BOUNDS.minVoterCap}-${ROUND_CONFIG_BOUNDS.maxVoterCap.toLocaleString()} rater cap`,
   revealedLoserRefundPercentLabel: formatPercent(percentFromBps(REWARD_SPLIT_BPS.revealedLoserRefund)),
   revealedLoserRefundLabel: `${formatPercent(percentFromBps(REWARD_SPLIT_BPS.revealedLoserRefund))} of raw losing stake`,
   revealedLoserRefundShortLabel: `${formatPercent(percentFromBps(REWARD_SPLIT_BPS.revealedLoserRefund))} of raw`,
@@ -108,7 +108,7 @@ export const protocolDocFacts = {
 
 const rewardSplitTableRows: [string, string][] = [
   ["Revealed losing voters", protocolDocFacts.revealedLoserRefundLabel],
-  ["Content-specific voter pool", protocolDocFacts.voterPoolShareLabel],
+  ["Content-specific rater pool", protocolDocFacts.voterPoolShareLabel],
   ["Consensus subsidy reserve", protocolDocFacts.consensusShareLabel],
   ["Frontend operators", protocolDocFacts.frontendShareLabel],
   ["Treasury", protocolDocFacts.treasuryShareLabel],
@@ -161,7 +161,7 @@ export const whitepaperSettlementConfigRows: string[][] = [
   [
     "minVoters",
     `${protocolDocFacts.minVotersLabel} default`,
-    "Creator-selected minimum revealed votes required for settlement",
+    "Creator-selected minimum revealed predictions required for settlement",
   ],
   [
     "maxDuration",
@@ -171,7 +171,7 @@ export const whitepaperSettlementConfigRows: string[][] = [
   [
     "maxVoters",
     `${protocolDocFacts.maxVotersLabel} default`,
-    "Creator-selected cap on voters for the question and upper bound for bounty required-voter terms",
+    "Creator-selected cap on raters for the question and upper bound for bounty required-rater terms",
   ],
   [
     "revealGracePeriod",
@@ -183,6 +183,6 @@ export const whitepaperSettlementConfigRows: string[][] = [
 export const whitepaperRoundConfigBoundsRows: string[][] = [
   ["blind phase", `${protocolDocFacts.minBlindPhaseDurationLabel} to ${protocolDocFacts.maxBlindPhaseDurationLabel}`],
   ["max duration", `${protocolDocFacts.minRoundDurationLabel} to ${protocolDocFacts.maxAllowedRoundDurationLabel}`],
-  ["settlement voters", `${protocolDocFacts.minSettlementVotersLabel} to ${protocolDocFacts.maxSettlementVotersLabel}`],
-  ["voter cap", `${protocolDocFacts.minVoterCapLabel} to ${protocolDocFacts.maxVoterCapLabel}`],
+  ["settlement raters", `${protocolDocFacts.minSettlementVotersLabel} to ${protocolDocFacts.maxSettlementVotersLabel}`],
+  ["rater cap", `${protocolDocFacts.minVoterCapLabel} to ${protocolDocFacts.maxVoterCapLabel}`],
 ];

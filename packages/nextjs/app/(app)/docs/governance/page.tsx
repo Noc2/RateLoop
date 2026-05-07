@@ -6,19 +6,19 @@ const GovernanceDocs: NextPage = () => {
     <article className="prose max-w-none">
       <h1>Governance</h1>
       <p className="lead text-base-content/60 text-lg">
-        HREP governance controls protocol settings, upgrades, treasury routing, and Voter ID enforcement.
+        MREP governance controls protocol settings, upgrades, treasury routing, and optional identity policy.
       </p>
 
       <h2>What Governance Does</h2>
       <p>
-        HREP is a reputation token with no token sale and no treasury backing. Governance power comes from earned HREP,
-        and proposals execute through the governor and timelock.
+        MREP is a capped reputation token with no protocol token sale and no treasury backing. Governance power comes
+        from held and delegated MREP, and proposals execute through the governor and timelock.
       </p>
       <ul>
         <li>Upgrade or configure protocol contracts.</li>
         <li>Set round defaults and creator bounds.</li>
         <li>Route treasury spending, including ecosystem and partner activation grants.</li>
-        <li>Revoke Voter IDs when there is hard evidence of abuse.</li>
+        <li>Configure optional identity credentials, calibration, and anti-abuse rules.</li>
       </ul>
 
       <h2>Proposal Lifecycle</h2>
@@ -86,7 +86,7 @@ const GovernanceDocs: NextPage = () => {
       <h2 id="round-settings-bounds">Round Settings Bounds</h2>
       <p>
         Question creators can choose round settings, but only inside governance-approved ranges. That lets urgent asks
-        settle faster while broader questions can wait for more voters.
+        settle faster while broader questions can wait for more raters.
       </p>
       <div className="not-prose my-6 overflow-x-auto rounded-lg bg-base-200">
         <table className="table table-zebra [&_th]:bg-base-300 [&_th]:text-base [&_td]:text-base">
@@ -113,7 +113,7 @@ const GovernanceDocs: NextPage = () => {
               </td>
             </tr>
             <tr>
-              <td>Settlement voters</td>
+              <td>Settlement raters</td>
               <td>{protocolDocFacts.minVotersLabel}</td>
               <td>
                 {protocolDocFacts.minSettlementVotersLabel} to {protocolDocFacts.maxSettlementVotersLabel}
@@ -132,26 +132,27 @@ const GovernanceDocs: NextPage = () => {
 
       <h2>Treasury</h2>
       <p>
-        The treasury starts with 32M HREP under governor/timelock control. Ongoing inflows include the treasury share of
-        contested losing pools, withdrawal fees, and forfeited unrevealed votes. Spending follows the same proposal and
-        timelock path as upgrades.
+        The treasury starts with 32M MREP under governor/timelock control. Ongoing inflows include the treasury share of
+        contested losing pools, withdrawal fees, and forfeited unrevealed predictions. Spending follows the same
+        proposal and timelock path as upgrades.
       </p>
       <p>
         Treasury grants can support work that grows the Curyo feedback network: partner activation, integrations,
         research and data projects, community growth, protocol development, and security or whistleblower rewards.
-        Because HREP also carries governance power, grant proposals should explain the recipient, purpose, amount,
+        Because MREP also carries governance power, grant proposals should explain the recipient, purpose, amount,
         expected impact, and any milestone or reporting expectations.
       </p>
 
       <h2>Safety Powers</h2>
       <p>
         Governance can use public on-chain evidence to respond to collusion, repeated unrevealed commitments, or other
-        behavior that damages the feedback signal. The main enforcement tool is Voter ID revocation through a normal
-        proposal.
+        behavior that damages the feedback signal. The main enforcement tools are parameter changes, frontend stake
+        slashing, calibration changes, optional credential policies, and treasury or pool routing through normal
+        proposals.
       </p>
       <p>
         These controls are implementation safeguards. The product goal stays narrower: make it easy for agents and apps
-        to buy verified human feedback and read the result.
+        to buy public open feedback and read the result.
       </p>
 
       <h2>Protocol Evolution</h2>
