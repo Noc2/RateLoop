@@ -14,10 +14,12 @@ The product direction is:
 
 - Open rating network for independent raters, AI agents, teams, and hybrid
   workflows.
-- No Self.xyz integration and no proof-of-personhood dependency.
+- No mandatory Self.xyz or proof-of-personhood dependency in the rating,
+  payout, or governance path. Self.xyz may return later as an optional identity
+  signal or badge.
 - Day-one decentralized governance using a genesis distribution to previous
   legacy CREP/HREP snapshot participants.
-- Deploy on Base mainnet, with Base Sepolia as the testnet path.
+- Continue on Celo for now, with Celo Sepolia as the testnet path.
 - Transferable capped Mesh Reputation token (`MREP`) for governance,
   prediction locks, frontend staking, and long-term protocol ownership.
 - Use `MREP` as the working implementation label unless governance changes
@@ -47,7 +49,7 @@ RateMesh brand anchor, while retaining useful Curyo app surfaces where they are
 still ergonomic. The biggest architectural change is replacing binary token
 staking as the core vote primitive with predicted ratings, transferable capped
 reputation locks, account-level calibration, cluster-aware payout controls, and
-a Base-native deployment.
+a Celo-native deployment.
 
 ## Research Notes For The Updated Architecture
 
@@ -73,19 +75,19 @@ on-chain patterns:
   decentralization is broader than token distribution. The protocol should
   minimize ongoing company discretion over upgrades, scoring, treasury, and
   payout eligibility from day one.
-- Base mainnet is a good deployment target for this design because it is an
-  EVM L2 with ETH as gas, broad wallet support, and native USDC. The official
-  Base docs list mainnet chain ID `8453` and Base Sepolia chain ID `84532`.
-- Base configuration docs describe L2 blocks as being produced at 1 or 2 second
-  intervals, so the new RateMesh deployment should preserve the old governance
-  durations as timestamp durations instead of copying Celo-calibrated block
-  counts blindly.
+- Celo remains a practical launch target because the existing Curyo codebase,
+  deployment scripts, sponsored transaction work, and USDC bounty paths already
+  support it. The official Celo network docs list Celo mainnet chain ID `42220`
+  and Celo Sepolia chain ID `11142220`.
+- Celo Sepolia is the current developer testnet path and replaces the older
+  Alfajores-centric workflow. Existing Curyo assumptions around Celo Sepolia
+  should be kept, while old Alfajores references should be removed.
 - OpenZeppelin's governance guide recommends timestamp-based governance on L2s
   where block timing can be inconsistent; the Governor automatically follows the
   token's ERC-6372 clock.
-- Circle lists native USDC on Base mainnet at
-  `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` and Base Sepolia USDC at
-  `0x036CbD53842c5426634e7929541eC2318f3dCF7e`.
+- Circle lists native USDC on Celo mainnet at
+  `0xcebA9300f2b948710d2653dD7B07f33A8B32118C` and Celo Sepolia USDC at
+  `0x01C5C0122039549AD1493B8220cABEdD739BC44E`.
 - A winner/loser MREP lock model is economically closer to a parimutuel
   prediction mechanism than an inflationary reputation model: accurate
   predictions earn from inaccurate locks, while the protocol's total supply cap
@@ -113,10 +115,12 @@ Sources:
   https://docs.ens.domains/dao/token/
 - MiCA Regulation recital 22:
   https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A32023R1114
-- Base network information:
-  https://docs.base.org/base-chain/quickstart/connecting-to-base
-- Base configurability reference:
-  https://docs.base.org/base-chain/specs/reference/configurability
+- Celo network information:
+  https://docs.celo.org/network
+- Celo Sepolia testnet:
+  https://docs.celo.org/network/celo-sepolia
+- USDC on Celo:
+  https://www.circle.com/multi-chain-usdc/celo
 - Circle USDC contract addresses:
   https://developers.circle.com/stablecoins/usdc-contract-addresses
 - Strictly Proper Scoring Mechanisms Without Expected Arbitrage:
@@ -146,36 +150,40 @@ The intended package scope is `@ratemesh/*`. It is acceptable to keep old
 bootstrap phase should rename live package metadata and imports before the app
 is treated as a RateMesh baseline.
 
-Do not copy the Self-related packages, generated ABIs, deployment addresses, or
-legacy generated artifacts as canonical artifacts for the new deployment. Bring
-the structure over first, then regenerate artifacts from the new contracts.
+Do not treat the existing Self-related packages, generated ABIs, deployment
+addresses, or legacy generated artifacts as canonical artifacts for the new
+deployment. The required protocol path must work without identity proofs. If
+Self.xyz returns, it should be isolated as an optional attestation module and
+regenerated from the new contracts/config.
 
-## Base Deployment And Assets
+## Celo Deployment And Assets
 
-RateMesh should target Base instead of Celo.
+RateMesh should stay on Celo for now.
 
 Launch network defaults:
 
-- Mainnet: Base, chain ID `8453`, ETH gas.
-- Testnet: Base Sepolia, chain ID `84532`, ETH gas.
-- Mainnet USDC: `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`.
-- Base Sepolia USDC: `0x036CbD53842c5426634e7929541eC2318f3dCF7e`.
-- Production RPC should use a paid/provider endpoint or self-hosted node. Base's
-  public RPC endpoints are useful for defaults and tests, not production
+- Mainnet: Celo, chain ID `42220`, CELO gas.
+- Testnet: Celo Sepolia, chain ID `11142220`, CELO gas.
+- Mainnet USDC: `0xcebA9300f2b948710d2653dD7B07f33A8B32118C`.
+- Celo Sepolia USDC: `0x01C5C0122039549AD1493B8220cABEdD739BC44E`.
+- Production RPC should use a paid/provider endpoint or self-hosted node. Celo's
+  public Forno RPC endpoints are useful for defaults and tests, not production
   throughput.
 
 Implementation implications:
 
-- Replace Celo and Celo Sepolia chain constants across Foundry deployment
-  scripts, Wagmi/thirdweb config, Ponder config, keeper config, SDK runtime
-  helpers, docs, and environment examples.
-- Rename environment variables toward Base, for example `BASE_RPC_URL`,
-  `BASE_SEPOLIA_RPC_URL`, `BASESCAN_API_KEY`, and `NEXT_PUBLIC_CHAIN_ID`.
+- Keep Celo and Celo Sepolia chain constants across Foundry deployment scripts,
+  Wagmi/thirdweb config, Ponder config, keeper config, SDK runtime helpers,
+  docs, and environment examples.
+- Keep the existing Celo environment variables unless there is a narrow reason
+  to rename them. Prefer stable compatibility over churn while the protocol
+  contracts are being rewritten.
 - Keep all USDC accounting at 6 decimals and use Circle native USDC, not bridged
   USDC variants.
-- Update block explorer links to BaseScan or Base Blockscout consistently.
-- Audit every old `CELO`, `Celo`, `celo`, `chainId`, and USDC-address constant
-  before deployment.
+- Keep block explorer links on CeloScan, Celo Explorer, or Celo Blockscout
+  consistently.
+- Audit every chain ID and USDC-address constant before deployment to remove
+  stale Alfajores values and ensure Celo Sepolia is the only testnet path.
 
 ## Resolved Pre-Implementation Decisions
 
@@ -196,8 +204,31 @@ Implementation implications:
   predictions.
 - AI metadata: require model/operator/prompt-version metadata, store hashes
   on-chain, and keep full metadata off-chain.
-- Contract implementation should not reintroduce Self.xyz or proof-of-personhood
-  gates.
+- Contract implementation must not require Self.xyz or proof-of-personhood gates
+  for rating, earning, or governance. Optional Self attestations may be added as
+  non-required profile/trust metadata after the core prediction path works.
+
+## Optional Identity Signals
+
+The core RateMesh protocol should be identity-agnostic: accounts register, build
+calibration history, lock MREP, reveal predictions, and become USDC-eligible by
+performance and independence. That keeps AI raters and human raters on the same
+basic rail and avoids making one identity vendor a protocol dependency.
+
+Self.xyz can still be useful as an optional feature:
+
+- A rater may attach a Self-backed profile badge or metadata proof.
+- Frontends can display the badge as informational context.
+- Governance may later decide whether optional identity signals affect risk
+  limits, sybil-cluster heuristics, sponsorship quotas, or high-value bounty
+  eligibility.
+- Optional identity must not be enough by itself to bypass calibration,
+  reputation locks, reveal reliability, cluster caps, or USDC payout limits.
+- Optional identity should not be required for governance voting power because
+  MREP already represents the launch ownership and protocol-control primitive.
+
+Implementation rule: keep identity adapters behind feature flags or separate
+modules, and keep all core tests passing with identity disabled.
 
 ## What To Reuse
 
@@ -243,22 +274,26 @@ Implementation implications:
 - Keep `RateMeshGovernor.sol` as the governor contract name.
   Launch it from day one with Timelock-owned protocol roles and genesis
   governance distribution.
-- `VoterIdNFT.sol` should not remain an identity proof. If a profile badge is
-  useful, create a new optional `RaterProfileBadge` or `RaterRegistry` without
-  Self nullifiers.
+- `VoterIdNFT.sol` should not remain a required mint gate. If profile badges are
+  useful, create an optional `RaterProfileBadge`, `RaterRegistry`, or
+  `IdentityAttestationRegistry` that can store Self-backed metadata without
+  gating core protocol participation.
 - Ponder `voterStats` and `voterCategoryStats` become prediction/reputation
   calibration tables instead of win/loss tables.
 - `StakeSelector` becomes `PredictionComposer`: rating slider, bounded MREP
   lock selector, preview of eligibility, and clear reveal state.
 
-### Remove
+### Remove From The Required Path
 
 - Self.xyz contracts, imports, remappings, deployment hub addresses, config IDs,
-  OFAC/age attestation policy, proof routes, telemetry, UI, and tests.
+  OFAC/age attestation policy, proof routes, telemetry, UI, and tests should be
+  removed from required rating, earning, and governance flows. Keep or re-add
+  them only inside an optional identity module.
 - `HumanFaucet.sol` and any faucet/referral/migration allocations. The old
   52M faucet-sized pool becomes the existing HREP/legacy CREP snapshot claim pool.
 - `HumanSignInButton`, `SelfVerifyButton`, `useVoterIdNFT`, and the gating copy
-  that says identity verification is required to vote.
+  that says identity verification is required to vote. If Self returns, use new
+  optional identity copy and hooks instead of required verification language.
 - Legacy HREP staking as a binary-vote transport and faucet-based
   bootstrapping. Keep the useful capped winner/loser and reserve math, but
   adapt it to predicted-rating error.
@@ -272,11 +307,11 @@ Implementation implications:
 | `packages/foundry/contracts/RoundVotingEngine.sol` | Rename and refactor into `PredictionVotingEngine.sol`; keep commit/reveal/tlock machinery, replace binary vote settlement. |
 | `packages/foundry/contracts/RoundRewardDistributor.sol` | Reuse claim/dust discipline and old reward-split math for `PredictionRewardDistributor.sol`; replace binary HREP winner/loser payouts with prediction-error MREP redistribution plus USDC bounty claims. |
 | `packages/foundry/contracts/QuestionRewardPoolEscrow.sol` | Keep as USDC bounty escrow foundation; remove Voter ID fields and add cluster/reputation eligibility. |
-| `packages/foundry/contracts/ContentRegistry.sol` | Keep content lifecycle, categories, duplicate protection, and rating state; remove Self/nullifier submission identity snapshots. |
+| `packages/foundry/contracts/ContentRegistry.sol` | Keep content lifecycle, categories, duplicate protection, and rating state; remove required Self/nullifier submission identity snapshots. |
 | `packages/foundry/contracts/ProtocolConfig.sol` | Keep central config/address book; rename and add prediction, reputation, calibration, and cluster parameters. |
-| `packages/foundry/contracts/VoterIdNFT.sol` | Do not keep as identity. Mine delegation/profile lessons for a new `RaterRegistry` only. |
+| `packages/foundry/contracts/VoterIdNFT.sol` | Do not keep as a required voter credential. Mine delegation/profile lessons for `RaterRegistry` and optional identity attestations. |
 | `packages/foundry/contracts/HumanFaucet.sol` | Delete; replace the old 52M faucet allocation with the existing HREP/legacy CREP snapshot claim pool. |
-| `packages/foundry/script/DeployRateMesh.s.sol` | Refactor in place; remove faucet, Self hub, and migration tiers; add the existing HREP/legacy CREP snapshot Merkle distribution, HREP-style MREP launch pools, Governor, Timelock, Base constants, and Timelock ownership from launch. |
+| `packages/foundry/script/DeployRateMesh.s.sol` | Refactor in place; remove faucet and migration tiers from the core deployment; add the existing HREP/legacy CREP snapshot Merkle distribution, HREP-style MREP launch pools, Governor, Timelock, Celo constants, Timelock ownership from launch, and optionally deploy identity adapters only when enabled. |
 | `packages/ponder/ponder.schema.ts` | Keep content/profile/feed tables; replace vote/voter/reward tables with prediction/reputation/payout tables. |
 | `packages/ponder/src/RoundVotingEngine.ts` | Refactor event handlers for prediction events and weighted final ratings. |
 | `packages/ponder/src/HumanFaucet.ts` and `packages/ponder/src/VoterIdNFT.ts` | Delete or replace with `RaterRegistry.ts`. |
@@ -457,7 +492,7 @@ Snapshot rule:
   or another governance-controlled reserve by the published claim rules.
 - If the snapshot total exceeds `52,000,000 MREP`, deployment must stop; do not
   silently scale claims down.
-- Recommended claim window: 12 months from Base mainnet deployment. This is
+- Recommended claim window: 12 months from Celo mainnet deployment. This is
   long enough for prior holders to notice, but still gives governance a clear
   date when unclaimed MREP can be swept.
 - The claim UI should show the snapshot source and Merkle proof; it should not
@@ -677,7 +712,8 @@ Purpose:
 - Transferable capped reputation token.
 - ERC20Votes checkpoints and delegation for day-one governance.
 - Protocol-native lock, unlock, slash, and redistribution hooks.
-- Timestamp-based ERC-6372 clock for governance on Base.
+- Governance clock compatible with the previous Curyo launch parameters on
+  Celo.
 - Seven-day governance locks for proposal and voting power, reused from RateMesh.
 - Merkle-claimable genesis allocation from the existing HREP/legacy CREP snapshot.
 - Fixed HREP-style launch pools for snapshot claims, bootstrap rewards,
@@ -688,8 +724,10 @@ Reuse:
 - Start from `packages/foundry/contracts/HumanReputation.sol`.
 - Keep 6 decimals, ERC20Votes, ERC20Permit, and self-delegation-on-receipt if
   the UX still benefits from it.
-- Replace RateMesh's block-number governance clock with a timestamp-based clock so
-  the old governance durations remain one day, seven days, and two days on Base.
+- Reuse the old Curyo governance durations. If the implementation keeps the old
+  block-number clock, preserve the previously used Celo-calibrated values. If
+  it moves to an ERC-6372 timestamp clock, preserve the same human durations in
+  seconds.
 - Keep the existing `MAX_SUPPLY` concept at `100,000,000 * 1e6`.
 - Remove ERC1363 as a staking transport unless another protocol flow needs it.
 - Remove faucet mint assumptions.
@@ -725,7 +763,8 @@ Purpose:
 Reuse:
 
 - Use lessons from `VoterIdNFT.sol` delegation handling.
-- Do not reuse Self nullifiers, mint gates, max supply, or identity claims.
+- Do not reuse Self nullifiers, mint gates, max supply, or identity claims in
+  the required rater registration path.
 
 Possible events:
 
@@ -964,10 +1003,9 @@ Recommended initial parameters:
   `7 days`, preserving the old anti-flash-governance design.
 - Keep the old excluded-holder replacement mechanism so governance can migrate
   protocol pools without breaking historical quorum snapshots.
-- Implement the above with a timestamp-based ERC-6372 clock on `MeshReputation`
-  so the numeric governance values mean seconds on Base. If the implementation
-  keeps a block-number clock, convert the durations to Base block estimates
-  explicitly instead of reusing Celo's raw block counts.
+- Implement the above with the previous Curyo launch parameters on Celo. If the
+  implementation changes the governance clock type, keep the same intended
+  one-day, seven-day, and two-day durations.
 
 Governance can still use separate risk controls for rating/payout eligibility,
 but protocol ownership should be live and tokenholder-controlled from the first
@@ -1117,7 +1155,7 @@ User-friendly details:
 
 ### Onboarding
 
-Remove identity verification onboarding. Replace with:
+Remove mandatory identity verification onboarding. Replace with:
 
 - Connect wallet.
 - Make calibration predictions.
@@ -1125,7 +1163,9 @@ Remove identity verification onboarding. Replace with:
 - Earn reputation.
 - Become USDC eligible after calibration.
 
-Avoid language that says one wallet equals one person.
+Avoid language that says one wallet equals one person. Optional Self badges can
+be surfaced later as trust context, but they should not block the default rater
+journey.
 
 ### Sponsored Transaction UX
 
@@ -1157,7 +1197,9 @@ Launch sponsorship policy:
 - `useRoundVote.ts`: rename/refactor to `usePredictionVote.ts`.
 - `useVoterAccuracy*`: rename/refactor to reputation/calibration hooks.
 - `ClaimRewardsButton.tsx`: split USDC bounty claim from reputation display.
-- `FaucetSection`, `SelfVerifyButton`, `HumanSignInButton`: delete.
+- `FaucetSection`, `SelfVerifyButton`, `HumanSignInButton`: remove from the
+  required onboarding path. Optional identity UI should be rebuilt separately if
+  Self.xyz is reintroduced.
 
 ## SDK Plan
 
@@ -1222,8 +1264,7 @@ Keep `packages/agents`, but make it a first-class RateMesh package:
 6. Delete legacy deployment artifacts from the canonical branch.
 7. Import the existing HREP/legacy CREP snapshot artifact and document its
    provenance.
-8. Switch chain defaults and environment examples from Celo to Base/Base
-   Sepolia.
+8. Keep chain defaults and environment examples on Celo/Celo Sepolia.
 9. Keep old Curyo commit history if practical, but do not keep old deployment
    state as live deployment state.
 
@@ -1231,27 +1272,29 @@ Exit criteria:
 
 - `yarn install` works.
 - `yarn test:ts` can at least start after package rename work.
-- No Self packages are required by the dependency graph.
-- The imported snapshot file, Merkle-generation script, and Base chain constants
+- No Self packages are required for core rating, earning, or governance flows.
+- The imported snapshot file, Merkle-generation script, and Celo chain constants
   are present.
 - The Hawig-derived RateMesh logo and hero animation are present in the
   frontend without pulling in unrelated Hawig app content.
 
-### Phase 1: Strip Self, Faucet, And Legacy Token Flows
+### Phase 1: Make Identity Optional, Remove Faucet, And Replace Legacy Token Flows
 
 1. Delete `HumanFaucet.sol`.
-2. Delete Self imports/remappings and mock identity hub contracts.
-3. Delete Self UI/API/telemetry routes.
+2. Remove Self imports/remappings and mock identity hub contracts from required
+   deployment/build paths.
+3. Move any retained Self UI/API/telemetry code behind an optional identity
+   feature boundary, or delete it if it cannot be cleanly isolated.
 4. Remove `VoterIdNFT` requirements from content submission, voting, rewards,
    profiles, and frontend registry.
 5. Remove faucet/referral/migration allocations from deployment scripts.
-6. Remove Celo deployment constants from live RateMesh config.
+6. Keep Celo deployment constants in live RateMesh config.
 7. Update docs and app copy to use rater/reputation language.
 
 Exit criteria:
 
-- `rg "Self|self.xyz|HumanFaucet|verifySelfProof|VoterIdRequired"` has no live
-  production references.
+- No live production path requires `Self`, `self.xyz`, `verifySelfProof`, or
+  `VoterIdRequired` to rate, earn, govern, or claim.
 - Foundry build passes for the reduced contract set.
 
 ### Phase 2: Contract MVP
@@ -1270,7 +1313,7 @@ Exit criteria:
    the 3% default frontend share.
 10. Add AI rater metadata requirements to registry, commit/reveal, or payout
     eligibility.
-11. Refactor `DeployRateMesh.s.sol` in place with HREP-style MREP pools and Base
+11. Refactor `DeployRateMesh.s.sol` in place with HREP-style MREP pools and Celo
     USDC constants.
 12. Regenerate ABIs and deployment package exports.
 
@@ -1305,14 +1348,15 @@ Exit criteria:
 
 1. Apply RateMesh branding with the Hawig-derived logo, hero animation, color
    palette, and display typography.
-2. Remove Self and faucet screens.
+2. Remove faucet screens and required Self verification screens; keep optional
+   identity UI only if it is clearly non-blocking.
 3. Replace up/down vote controls with prediction composer.
 4. Add funding UI for explicit challenge/re-rate bounties.
 5. Add genesis reputation claim and delegation UI.
 6. Show calibration and reputation state in profile/feed surfaces.
 7. Update reward/claim UI for USDC payout eligibility and frontend fee
    claimability.
-8. Preserve sponsored transaction UX with Base-compatible thirdweb/paymaster
+8. Preserve sponsored transaction UX with Celo-compatible thirdweb/paymaster
    configuration and self-funded fallback.
 9. Keep feedback UI unchanged except copy that needs to be less human-focused.
 
@@ -1338,7 +1382,7 @@ Exit criteria:
 
 ### Phase 6: Testnet Launch Hardening
 
-1. Deploy to Base Sepolia with fresh contracts and governance/timelock active.
+1. Deploy to Celo Sepolia with fresh contracts and governance/timelock active.
 2. Run a capped calibration-only period.
 3. Enable small USDC bounties after telemetry confirms reveal reliability.
 4. Add monitoring for clusters, correlated reveals, missed reveals, payout
@@ -1359,7 +1403,7 @@ Exit criteria:
 1. Publish the imported legacy CREP/HREP snapshot, Merkle root, provenance, and review
    scripts.
 2. Deploy `MeshReputation`, Merkle distributor, Governor, Timelock, and core
-   protocol contracts to Base mainnet.
+   protocol contracts to Celo mainnet.
 3. Transfer all protocol roles and ProxyAdmin ownership to the timelock.
 4. Renounce deployer setup roles after verification.
 5. Open genesis claims and delegation.
@@ -1376,10 +1420,10 @@ Exit criteria:
 
 1. `repo-bootstrap`: point the repo at `https://github.com/Noc2/RateMesh`,
    import old Curyo code, copy the Hawig hero/logo assets, import the existing
-   HREP/legacy CREP snapshot, set Base defaults, rename live package metadata
+   HREP/legacy CREP snapshot, keep Celo defaults, rename live package metadata
    toward `@ratemesh/*`, and keep the app running.
-2. `remove-self-faucet`: delete Self/faucet packages, UI, routes, and deploy
-   wiring.
+2. `optional-identity-remove-faucet`: remove faucet paths and make Self optional
+   rather than required in packages, UI, routes, and deploy wiring.
 3. `reputation-governance`: add capped transferable reputation, HREP-style MREP
    launch pools, genesis Merkle distributor, Governor, Timelock, delegation,
    and launch role wiring.
@@ -1401,9 +1445,10 @@ Exit criteria:
 
 These are launch defaults, not permanent constants:
 
-- Chain: Base mainnet (`8453`), Base Sepolia (`84532`) for testnet.
-- USDC: Circle native USDC on Base, `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`
-  mainnet and `0x036CbD53842c5426634e7929541eC2318f3dCF7e` testnet.
+- Chain: Celo mainnet (`42220`), Celo Sepolia (`11142220`) for testnet.
+- USDC: Circle native USDC on Celo,
+  `0xcebA9300f2b948710d2653dD7B07f33A8B32118C` mainnet and
+  `0x01C5C0122039549AD1493B8220cABEdD739BC44E` testnet.
 - Rating scale: `0-10000` BPS, displayed as `0.0-10.0 / 10`.
 - Token name/symbol: Mesh Reputation (`MREP`).
 - Reputation token: transferable ERC20Votes, 6 decimals.
@@ -1566,7 +1611,7 @@ Mitigations:
 
 The MVP is done when:
 
-- There is no Self.xyz dependency.
+- There is no mandatory Self.xyz dependency.
 - Users can connect a wallet without proof-of-personhood.
 - Users can submit a predicted `0.0-10.0` final rating through commit reveal.
 - Each bounty funds exactly one private prediction round.
@@ -1579,7 +1624,7 @@ The MVP is done when:
   raters, eligible frontends, treasury, and reserve without increasing supply.
 - RateMesh governance and timelock own protocol roles from launch.
 - Governance uses the previous Curyo launch durations, thresholds, quorum, and
-  governance-lock rules, adapted to Base with timestamp-based voting.
+  governance-lock rules on Celo.
 - Users complete calibration before USDC eligibility.
 - AI raters can earn USDC at launch after the same calibration requirement and
   required metadata.
@@ -1588,7 +1633,7 @@ The MVP is done when:
 - Frontend operators can earn the default 3% share on bounty and feedback
   payouts only after staking MREP.
 - The app preserves sponsored transaction support with a self-funded fallback.
-- Contracts, app, indexer, SDK, and keeper are configured for Base/Base Sepolia.
+- Contracts, app, indexer, SDK, and keeper are configured for Celo/Celo Sepolia.
 - The frontend uses the Hawig-derived RateMesh hero/logo system while preserving
   old Curyo's usable feed/rating surfaces where they fit the new prediction
   mechanics.
