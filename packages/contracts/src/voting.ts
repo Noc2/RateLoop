@@ -5,6 +5,7 @@ export type VoteSalt = `0x${string}`;
 export type VoteCiphertext = `0x${string}`;
 export type VoteCommitHash = `0x${string}`;
 export type VoteDrandChainHash = `0x${string}`;
+export type PredictionCommitHash = VoteCommitHash;
 export interface VoteCommitMetadata {
   targetRound: bigint;
   drandChainHash: VoteDrandChainHash;
@@ -46,6 +47,9 @@ export interface VoteTransferPayload {
   drandChainHash: VoteDrandChainHash;
   frontend: Address;
 }
+export interface PredictionTransferPayload extends VoteTransferPayload {
+  commitHash: PredictionCommitHash;
+}
 export type VoteTlockRuntime = {
   client?: TlockClient;
   now?: () => number;
@@ -76,6 +80,33 @@ const AGE_MAC_LENGTH = 32;
 const MIN_TLOCK_STANZA_BODY_LENGTH = 80;
 const MIN_ENCRYPTED_BODY_LENGTH = 65;
 const ROUND_REFERENCE_RATING_MASK = 0xffffn;
+export const MIN_PREDICTED_RATING_BPS = 0;
+export const MAX_PREDICTED_RATING_BPS = 10_000;
+export const RATING_SCALE_MAX = 10;
+
+export function normalizePredictedRatingBps(predictedRatingBps: number): number {
+  if (
+    !Number.isInteger(predictedRatingBps) ||
+    predictedRatingBps < MIN_PREDICTED_RATING_BPS ||
+    predictedRatingBps > MAX_PREDICTED_RATING_BPS
+  ) {
+    throw new Error("predictedRatingBps must be an integer from 0 to 10000");
+  }
+
+  return predictedRatingBps;
+}
+
+export function ratingToBps(rating: number): number {
+  if (!Number.isFinite(rating) || rating < 0 || rating > RATING_SCALE_MAX) {
+    throw new Error("rating must be from 0 to 10");
+  }
+
+  return normalizePredictedRatingBps(Math.round(rating * 1_000));
+}
+
+export function bpsToRating(predictedRatingBps: number): number {
+  return normalizePredictedRatingBps(predictedRatingBps) / 1_000;
+}
 
 export function packVoteRoundContext(roundId: bigint, roundReferenceRatingBps: number): bigint {
   if (roundId <= 0n) {
@@ -161,6 +192,30 @@ export function decodeVotePlaintext(plaintext: Uint8Array): { isUp: boolean; sal
   };
 }
 
+export function encodePredictionPlaintext(predictedRatingBps: number, salt: VoteSalt): Uint8Array {
+  const normalizedRating = normalizePredictedRatingBps(predictedRatingBps);
+  const plaintext = new Uint8Array(34);
+  plaintext[0] = normalizedRating >> 8;
+  plaintext[1] = normalizedRating & 0xff;
+  plaintext.set(saltToBytes(salt), 2);
+  return plaintext;
+}
+
+export function decodePredictionPlaintext(
+  plaintext: Uint8Array,
+): { predictedRatingBps: number; rating: number; salt: VoteSalt } | null {
+  if (plaintext.length !== 34) return null;
+
+  const predictedRatingBps = (plaintext[0] << 8) | plaintext[1];
+  if (predictedRatingBps > MAX_PREDICTED_RATING_BPS) return null;
+
+  return {
+    predictedRatingBps,
+    rating: bpsToRating(predictedRatingBps),
+    salt: bytesToHex(plaintext.slice(2, 34)),
+  };
+}
+
 export function buildCommitHash(
   isUp: boolean,
   salt: VoteSalt,
@@ -176,6 +231,35 @@ export function buildCommitHash(
     encodePacked(
       ["bool", "bytes32", "address", "uint256", "uint256", "uint16", "uint64", "bytes32", "bytes32"],
       [isUp, salt, voter, contentId, roundId, roundReferenceRatingBps, targetRound, drandChainHash, keccak256(ciphertext)],
+    ),
+  );
+}
+
+export function buildPredictionCommitHash(
+  predictedRatingBps: number,
+  salt: VoteSalt,
+  voter: Address,
+  contentId: bigint,
+  roundId: bigint,
+  roundReferenceRatingBps: number,
+  targetRound: bigint,
+  drandChainHash: VoteDrandChainHash,
+  ciphertext: VoteCiphertext,
+): PredictionCommitHash {
+  return keccak256(
+    encodePacked(
+      ["uint16", "bytes32", "address", "uint256", "uint256", "uint16", "uint64", "bytes32", "bytes32"],
+      [
+        normalizePredictedRatingBps(predictedRatingBps),
+        salt,
+        voter,
+        contentId,
+        roundId,
+        roundReferenceRatingBps,
+        targetRound,
+        drandChainHash,
+        keccak256(ciphertext),
+      ],
     ),
   );
 }
@@ -377,6 +461,29 @@ async function createTlockVoteArtifacts(
   };
 }
 
+async function createTlockPredictionArtifacts(
+  predictedRatingBps: number,
+  salt: VoteSalt,
+  epochDurationSeconds: number,
+  runtime: VoteTlockRuntime = {},
+): Promise<{ ciphertext: VoteCiphertext; targetRound: bigint; drandChainHash: VoteDrandChainHash }> {
+  const { mainnetClient, timelockEncrypt } = await loadTlockModule();
+  const client = runtime.client ?? mainnetClient();
+  const now = runtime.now ?? Date.now;
+  const encryptFn = runtime.encryptFn ?? timelockEncrypt;
+  const chainInfo = await client.chain().info();
+  const targetRound =
+    runtime.targetRound != null
+      ? normalizeTlockTargetRound(runtime.targetRound)
+      : roundAtOrAfter(now() + epochDurationSeconds * 1000, chainInfo);
+  const armored = await encryptFn(targetRound, Buffer.from(encodePredictionPlaintext(predictedRatingBps, salt)), client);
+  return {
+    ciphertext: stringToHex(armored) as VoteCiphertext,
+    targetRound: BigInt(targetRound),
+    drandChainHash: `0x${chainInfo.hash}` as VoteDrandChainHash,
+  };
+}
+
 function roundAtOrAfter(targetTimeMs: number, chainInfo: TlockChainInfo): number {
   if (!Number.isFinite(targetTimeMs)) {
     throw new Error("Cannot use Infinity or NaN as a beacon time");
@@ -431,6 +538,18 @@ export async function decryptTlockCiphertext(
   return decodeVotePlaintext(plaintext);
 }
 
+export async function decryptTlockPredictionCiphertext(
+  ciphertext: VoteCiphertext,
+  runtime: VoteTlockRuntime = {},
+): Promise<{ predictedRatingBps: number; rating: number; salt: VoteSalt } | null> {
+  const { mainnetClient, timelockDecrypt } = await loadTlockModule();
+  const client = runtime.client ?? mainnetClient();
+  const decryptFn = runtime.decryptFn ?? timelockDecrypt;
+  const armored = hexToString(ciphertext);
+  const plaintext = await decryptFn(armored, client);
+  return decodePredictionPlaintext(plaintext);
+}
+
 export async function createTlockVoteCommit(params: {
   voter: Address;
   isUp: boolean;
@@ -471,6 +590,53 @@ export async function createTlockVoteCommit(params: {
     targetRound,
     drandChainHash,
     roundReferenceRatingBps: params.roundReferenceRatingBps,
+    commitKey: buildCommitKey(params.voter, commitHash),
+  };
+}
+
+export async function createTlockPredictionCommit(params: {
+  voter: Address;
+  predictedRatingBps: number;
+  salt: VoteSalt;
+  contentId: bigint;
+  roundId: bigint;
+  roundReferenceRatingBps: number;
+  epochDurationSeconds: number;
+}, runtime: VoteTlockRuntime = {}): Promise<{
+  ciphertext: VoteCiphertext;
+  commitHash: PredictionCommitHash;
+  targetRound: bigint;
+  drandChainHash: VoteDrandChainHash;
+  roundReferenceRatingBps: number;
+  predictedRatingBps: number;
+  commitKey: `0x${string}`;
+}> {
+  const predictedRatingBps = normalizePredictedRatingBps(params.predictedRatingBps);
+  const { ciphertext, targetRound, drandChainHash } = await createTlockPredictionArtifacts(
+    predictedRatingBps,
+    params.salt,
+    params.epochDurationSeconds,
+    runtime,
+  );
+  const commitHash = buildPredictionCommitHash(
+    predictedRatingBps,
+    params.salt,
+    params.voter,
+    params.contentId,
+    params.roundId,
+    params.roundReferenceRatingBps,
+    targetRound,
+    drandChainHash,
+    ciphertext,
+  );
+
+  return {
+    ciphertext,
+    commitHash,
+    targetRound,
+    drandChainHash,
+    roundReferenceRatingBps: params.roundReferenceRatingBps,
+    predictedRatingBps,
     commitKey: buildCommitKey(params.voter, commitHash),
   };
 }

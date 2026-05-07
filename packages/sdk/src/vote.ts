@@ -1,7 +1,10 @@
 import {
   HumanReputationAbi,
+  bpsToRating,
+  createTlockPredictionCommit,
   createTlockVoteCommit,
   encodeVoteTransferPayload,
+  ratingToBps,
   type VoteCiphertext,
   type VoteDrandChainHash,
   type VoteCommitHash,
@@ -20,6 +23,11 @@ export interface CommitVoteParams {
   salt: `0x${string}`;
   stakeWei: bigint;
   frontend: `0x${string}`;
+}
+export interface CommitPredictionParams extends Omit<CommitVoteParams, "salt"> {
+  predictedRatingBps: number;
+  rating: number;
+  salt: `0x${string}`;
 }
 
 export function buildStakeAmountWei(stakeAmount: number): bigint {
@@ -86,6 +94,52 @@ export async function buildCommitVoteParams(params: {
     salt,
     stakeWei,
     frontend,
+  };
+}
+
+export async function buildCommitPredictionParams(params: {
+  voter: Address;
+  contentId: bigint;
+  predictedRating: number;
+  stakeAmount: number;
+  epochDuration: number;
+  roundId: bigint;
+  roundReferenceRatingBps: number;
+  frontendCode?: `0x${string}`;
+  defaultFrontendCode?: `0x${string}`;
+  salt?: `0x${string}`;
+  runtime?: VoteTlockRuntime;
+}): Promise<CommitPredictionParams> {
+  const stakeWei = buildStakeAmountWei(params.stakeAmount);
+  const frontend = resolveFrontendCode(params.frontendCode, params.defaultFrontendCode);
+  const salt = params.salt ?? generateVoteSalt();
+  const predictedRatingBps = ratingToBps(params.predictedRating);
+  const { ciphertext, commitHash, roundReferenceRatingBps, targetRound, drandChainHash } =
+    await createTlockPredictionCommit(
+      {
+        voter: params.voter,
+        predictedRatingBps,
+        salt,
+        contentId: params.contentId,
+        roundId: params.roundId,
+        roundReferenceRatingBps: params.roundReferenceRatingBps,
+        epochDurationSeconds: params.epochDuration,
+      },
+      params.runtime,
+    );
+
+  return {
+    commitHash,
+    ciphertext,
+    roundId: params.roundId,
+    roundReferenceRatingBps,
+    targetRound,
+    drandChainHash,
+    salt,
+    stakeWei,
+    frontend,
+    predictedRatingBps,
+    rating: bpsToRating(predictedRatingBps),
   };
 }
 

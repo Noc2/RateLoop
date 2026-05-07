@@ -4,6 +4,7 @@ import test from "node:test";
 import { decodeFunctionData } from "viem";
 import {
   buildStakeAmountWei,
+  buildCommitPredictionParams,
   buildCommitVoteParams,
   buildVoteTransferAndCallData,
   buildVoteTransferPayload,
@@ -76,6 +77,40 @@ test("buildCommitVoteParams returns the tlock metadata needed for commitVote", a
     runtime,
   });
 
+  assert.equal(result.targetRound > 0n, true);
+  assert.equal(result.roundId, 1n);
+  assert.equal(result.drandChainHash, `0x${"ab".repeat(32)}`);
+  assert.equal(result.frontend, "0x0000000000000000000000000000000000000000");
+});
+
+test("buildCommitPredictionParams returns predicted rating commit metadata", async () => {
+  const runtime = {
+    client: {
+      chain: () => ({
+        info: async () => ({
+          period: 3,
+          genesis_time: 1677685200,
+          hash: "ab".repeat(32),
+        }),
+      }),
+    } as any,
+    now: () => 1677685200 * 1000,
+    encryptFn: async () => "FAKE-PREDICTION-ARMORED-AGE-STRING",
+  };
+
+  const result = await buildCommitPredictionParams({
+    voter: "0x1111111111111111111111111111111111111111",
+    contentId: 42n,
+    predictedRating: 7.25,
+    stakeAmount: 2.5,
+    epochDuration: 1200,
+    roundId: 1n,
+    roundReferenceRatingBps: 5_000,
+    runtime,
+  });
+
+  assert.equal(result.predictedRatingBps, 7_250);
+  assert.equal(result.rating, 7.25);
   assert.equal(result.targetRound > 0n, true);
   assert.equal(result.roundId, 1n);
   assert.equal(result.drandChainHash, `0x${"ab".repeat(32)}`);

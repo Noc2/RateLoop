@@ -2,12 +2,18 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildCommitHash,
+  buildPredictionCommitHash,
+  bpsToRating,
   createTlockVoteCommit,
+  createTlockPredictionCommit,
   deriveVoteTlockRevealAvailableAtSeconds,
+  decodePredictionPlaintext,
   decodeVoteTransferPayload,
+  encodePredictionPlaintext,
   encodeVoteTransferPayload,
   getVoteTlockChainInfo,
   parseTlockCiphertextMetadata,
+  ratingToBps,
 } from "./voting";
 
 const fakeClient = {
@@ -196,6 +202,56 @@ test("buildCommitHash includes the tlock round metadata", () => {
   );
 });
 
+test("rating helpers normalize the 0-10 prediction scale", () => {
+  assert.equal(ratingToBps(0), 0);
+  assert.equal(ratingToBps(7.25), 7_250);
+  assert.equal(ratingToBps(10), 10_000);
+  assert.equal(bpsToRating(8_875), 8.875);
+  assert.throws(() => ratingToBps(-0.1), /rating must be from 0 to 10/);
+  assert.throws(() => ratingToBps(10.1), /rating must be from 0 to 10/);
+});
+
+test("prediction plaintext stores the predicted final rating and salt", () => {
+  const salt = ("0x" + "55".repeat(32)) as `0x${string}`;
+  const plaintext = encodePredictionPlaintext(7_250, salt);
+
+  assert.deepEqual(decodePredictionPlaintext(plaintext), {
+    predictedRatingBps: 7_250,
+    rating: 7.25,
+    salt,
+  });
+  assert.equal(decodePredictionPlaintext(new Uint8Array([0x27, 0x11, ...new Uint8Array(32)])), null);
+});
+
+test("buildPredictionCommitHash includes the predicted rating and tlock metadata", () => {
+  const salt = ("0x" + "22".repeat(32)) as `0x${string}`;
+  const ciphertext = "0x1234" as `0x${string}`;
+  const drandChainHash = ("0x" + "33".repeat(32)) as `0x${string}`;
+  const roundReferenceRatingBps = 5_000;
+  const voter = "0x2222222222222222222222222222222222222222";
+
+  const commitHash = buildPredictionCommitHash(
+    7_250,
+    salt,
+    voter,
+    42n,
+    4n,
+    roundReferenceRatingBps,
+    123n,
+    drandChainHash,
+    ciphertext,
+  );
+
+  assert.equal(
+    commitHash,
+    buildPredictionCommitHash(7_250, salt, voter, 42n, 4n, roundReferenceRatingBps, 123n, drandChainHash, ciphertext),
+  );
+  assert.notEqual(
+    commitHash,
+    buildPredictionCommitHash(7_251, salt, voter, 42n, 4n, roundReferenceRatingBps, 123n, drandChainHash, ciphertext),
+  );
+});
+
 test("encodeVoteTransferPayload round-trips the redeployed vote shape", () => {
   const payload = encodeVoteTransferPayload({
     contentId: 42n,
@@ -218,6 +274,56 @@ test("encodeVoteTransferPayload round-trips the redeployed vote shape", () => {
     drandChainHash: "0x" + "22".repeat(32),
     frontend: "0x3333333333333333333333333333333333333333",
   });
+});
+
+test("createTlockPredictionCommit returns the rating metadata used in the commit hash", async () => {
+  const voter = "0x2222222222222222222222222222222222222222";
+  const commit = await createTlockPredictionCommit(
+    {
+      voter,
+      predictedRatingBps: 7_250,
+      salt: ("0x" + "66".repeat(32)) as `0x${string}`,
+      contentId: 7n,
+      roundId: 3n,
+      roundReferenceRatingBps: 5_000,
+      epochDurationSeconds: 1200,
+    },
+    {
+      client: fakeClient,
+      now: fakeNow,
+      encryptFn: async (targetRound, payload) => {
+        const decoded = decodePredictionPlaintext(payload);
+        assert.deepEqual(decoded, {
+          predictedRatingBps: 7_250,
+          rating: 7.25,
+          salt: ("0x" + "66".repeat(32)) as `0x${string}`,
+        });
+        return Buffer.from(makeFakeArmoredTlockCiphertext({
+          targetRound: BigInt(targetRound),
+          drandChainHash: "0x52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971",
+          plaintextMarker: `p:${decoded?.predictedRatingBps}:${decoded?.salt.slice(2)}`,
+        }).slice(2), "hex").toString("utf8");
+      },
+    },
+  );
+
+  assert.equal(commit.predictedRatingBps, 7_250);
+  assert.equal(commit.targetRound > 0n, true);
+  assert.equal(commit.drandChainHash, "0x52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971");
+  assert.equal(
+    commit.commitHash,
+    buildPredictionCommitHash(
+      7_250,
+      ("0x" + "66".repeat(32)) as `0x${string}`,
+      voter,
+      7n,
+      3n,
+      5_000,
+      commit.targetRound,
+      commit.drandChainHash,
+      commit.ciphertext,
+    ),
+  );
 });
 
 test("createTlockVoteCommit returns the tlock metadata used in the commit hash", async () => {
