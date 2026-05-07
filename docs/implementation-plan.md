@@ -67,6 +67,12 @@ on-chain patterns:
 - Base mainnet is a good deployment target for this design because it is an
   EVM L2 with ETH as gas, broad wallet support, and native USDC. The official
   Base docs list mainnet chain ID `8453` and Base Sepolia chain ID `84532`.
+- Base configuration docs describe L2 blocks as being produced at 1 or 2 second
+  intervals, so RateMesh should preserve Curyo's governance durations as
+  timestamp durations instead of copying Celo-calibrated block counts blindly.
+- OpenZeppelin's governance guide recommends timestamp-based governance on L2s
+  where block timing can be inconsistent; the Governor automatically follows the
+  token's ERC-6372 clock.
 - Circle lists native USDC on Base mainnet at
   `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` and Base Sepolia USDC at
   `0x036CbD53842c5426634e7929541eC2318f3dCF7e`.
@@ -87,6 +93,8 @@ Sources:
   https://docs.openzeppelin.com/contracts/4.x/api/governance
 - OpenZeppelin governance setup guide:
   https://docs.openzeppelin.com/contracts/4.x/governance
+- OpenZeppelin timestamp-based governance guide:
+  https://docs.openzeppelin.com/contracts/4.x/governance#timestamp_based_governance
 - OpenZeppelin ERC20Votes documentation:
   https://docs.openzeppelin.com/contracts/5.x/api/token/erc20
 - Compound governance documentation:
@@ -97,6 +105,8 @@ Sources:
   https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A32023R1114
 - Base network information:
   https://docs.base.org/base-chain/quickstart/connecting-to-base
+- Base configurability reference:
+  https://docs.base.org/base-chain/specs/reference/configurability
 - Circle USDC contract addresses:
   https://developers.circle.com/stablecoins/usdc-contract-addresses
 - Strictly Proper Scoring Mechanisms Without Expected Arbitrage:
@@ -149,6 +159,25 @@ Implementation implications:
 - Update block explorer links to BaseScan or Base Blockscout consistently.
 - Audit every old `CELO`, `Celo`, `celo`, `chainId`, and USDC-address constant
   before deployment.
+
+## Resolved Pre-Implementation Decisions
+
+- Token name/symbol: Mesh Reputation (`MREP`).
+- Token contract name: `MeshReputation`.
+- Genesis snapshot: reuse the existing CREP/HREP snapshot artifact unchanged as
+  the MREP claim source.
+- Rating scale: `0.0-10.0`, stored as `0-10000` BPS.
+- Governance launch parameters: reuse the previous Curyo durations, threshold,
+  dynamic quorum, proposal cooldown, and 7-day governance locks.
+- Frontend stake: `1,000 MREP`.
+- Transaction UX: keep sponsored transactions with self-funded fallback.
+- USDC payout: pay a small work stipend to eligible revealed raters, including
+  wrong/near-miss raters, and pay the larger accuracy pool to better
+  predictions.
+- AI metadata: require model/operator/prompt-version metadata, store hashes
+  on-chain, and keep full metadata off-chain.
+- Contract implementation should not reintroduce Self.xyz or proof-of-personhood
+  gates.
 
 ## What To Reuse
 
@@ -252,7 +281,7 @@ Each vote commits to:
 contentId
 roundId
 voter
-predictedRatingBps  // 1000-9900, representing 1.0-9.9 out of 10
+predictedRatingBps  // 0-10000, representing 0.0-10.0 out of 10
 reputationLock      // bounded MREP lock escrowed until reveal/settlement
 salt
 ```
@@ -300,9 +329,9 @@ Implementation rules:
 - A new result appends to rating history and may become the current rating; it
   should not automatically slash or invalidate the prior round.
 - Add cooldowns or minimum bounty thresholds to prevent cheap re-rate spam.
-- If a round ends as `InsufficientSignal` or `RevealFailed`, the bounty should
-  follow explicit refund/forfeit rules and should not silently roll into a
-  second round.
+- If a round ends as `InsufficientSignal` or `RevealFailed`, the bounty follows
+  the insufficient-signal rules below and should not silently roll into a second
+  round.
 
 ### Weighting
 
@@ -408,6 +437,9 @@ Snapshot rule:
   or another governance-controlled reserve by the published claim rules.
 - If the snapshot total exceeds `52,000,000 MREP`, deployment must stop; do not
   silently scale claims down.
+- Recommended claim window: 12 months from Base mainnet deployment. This is
+  long enough for prior holders to notice, but still gives governance a clear
+  date when unclaimed MREP can be swept.
 - The claim UI should show the snapshot source and Merkle proof; it should not
   imply a Self.xyz or proof-of-personhood requirement.
 
@@ -510,12 +542,21 @@ Design notes:
 USDC should not be paid one-full-share per wallet. That creates a direct
 incentive to split into many medium-reputation accounts.
 
-Use an effective independent participant model:
+Use a two-pool payout model so useful work gets a small reward, while accurate
+predictions still earn clearly more:
 
 ```text
-eligiblePayoutWeight =
-  baseEligibleShare
-  * predictionQualityMultiplier
+raterUsdcPool = bountyAfterFrontendFee
+workStipendPool = 25% of raterUsdcPool
+accuracyPool = 75% of raterUsdcPool
+
+workStipendWeight =
+  flatEligibleRevealWeight
+  * calibrationQualityMultiplier
+  * clusterCapMultiplier
+
+accuracyWeight =
+  usdcQualityScore
   * smallReputationMultiplier
   * calibrationQualityMultiplier
   * clusterCapMultiplier
@@ -523,21 +564,58 @@ eligiblePayoutWeight =
 
 Launch recommendation:
 
-- Mostly flat payout among eligible, revealed, calibrated raters.
-- No USDC for missed reveals or materially losing predictions at or beyond the
-  MREP `LOSS_CUTOFF`.
-- Small bounded prediction-quality multiplier for better calibrated forecasts,
-  for example `0.75x-1.5x` inside the winning/near-winning band.
+- Pay a small work stipend to every eligible, revealed, calibrated rater,
+  including raters who were wrong, because they still spent effort or
+  computation and helped form the distribution.
+- Pay the larger accuracy pool by prediction quality, so correct raters earn
+  materially more.
+- `usdcQualityScore = 1.0` inside the full-win band.
+- Between the full-win band and the MREP `LOSS_CUTOFF`, quality decays
+  linearly but stays meaningful.
+- Between the MREP `LOSS_CUTOFF` and a wider `USDC_NEAR_MISS_CUTOFF`, quality
+  decays to zero. These raters still receive only the work stipend.
+- Far-wrong raters receive only the work stipend, not the accuracy pool.
 - Small bounded multiplier for higher reputation, for example `1.0x-1.25x`.
 - No linear payout by reputation.
 - No payout for unrevealed votes.
 - No payout before calibration rounds are complete.
 - Cluster-capped allocation: if many accounts look controlled by one operator,
-  they share a capped allocation instead of each receiving a full share.
+  they share both one work-stipend cap and one accuracy cap instead of each
+  receiving a full share.
 - Leave-one-out or leave-one-cluster-out scoring for payout-sensitive rounds.
 
 This keeps reputation valuable without making account splitting the dominant
 strategy.
+
+Recommended USDC constants:
+
+```text
+USDC_WORK_STIPEND_BPS = 2500
+USDC_ACCURACY_POOL_BPS = 7500
+USDC_FULL_SCORE_BAND = 0.25 rating points
+USDC_NEAR_MISS_CUTOFF = 1.50 rating points
+MAX_REPUTATION_USDC_MULTIPLIER = 1.25x
+```
+
+### Insufficient Signal
+
+A round is `InsufficientSignal` when it fails minimum raw reveals, minimum
+independent participants, or minimum effective weight. It should not update the
+public current rating.
+
+Recommended settlement:
+
+- Revealed predictions get their MREP locks returned, except for any explicit
+  missed-reveal or fraud penalty that applies independently.
+- Unrevealed predictions forfeit their MREP lock after the reveal grace period.
+- No normal accuracy pool is paid because there is no reliable final signal.
+- A small attempt stipend may be paid from the USDC bounty to eligible revealed
+  calibrated raters, capped at `ATTEMPT_STIPEND_BPS = 1000` and cluster-capped.
+- The remaining USDC bounty becomes refundable to the funder after the claim
+  window, or the funder can deliberately create a new challenge/re-rate bounty.
+
+This gives honest raters some compensation for failed rounds without making
+low-quorum farming more attractive than producing a usable result.
 
 ### AI Raters
 
@@ -555,6 +633,15 @@ Implementation implications:
   - `operator`
   - `promptVersionHash` or `promptHash`
   - optional `modelConfigHash`, `agentClientVersion`, and `evaluationPolicyHash`
+- Store only hashes and compact identifiers on-chain. Keep full metadata in
+  signed JSON, IPFS, HTTPS, or another content-addressed location.
+- Recommended metadata JSON fields:
+  `schemaVersion`, `raterType`, `operator`, `model`, `modelProvider`,
+  `modelVersion`, `promptVersionHash`, `modelConfigHash`,
+  `agentClientVersion`, `evaluationPolicyHash`, `createdAt`, and `signer`.
+- Metadata changes should have a short payout cooling period, for example 24
+  hours, so an operator cannot rapidly rotate model/prompt identity around a
+  suspicious round.
 - Version AI agent reputation by model/provider/prompt template.
 - Discount highly correlated agents by operator, funding source, model family,
   prompt fingerprint, and voting behavior.
@@ -570,6 +657,8 @@ Purpose:
 - Transferable capped reputation token.
 - ERC20Votes checkpoints and delegation for day-one governance.
 - Protocol-native lock, unlock, slash, and redistribution hooks.
+- Timestamp-based ERC-6372 clock for governance on Base.
+- Seven-day governance locks for proposal and voting power, reused from Curyo.
 - Merkle-claimable genesis allocation from the existing CREP/HREP snapshot.
 - Fixed HREP-style launch pools for snapshot claims, bootstrap rewards,
   treasury, and consensus reserve.
@@ -579,6 +668,8 @@ Reuse:
 - Start from `packages/foundry/contracts/HumanReputation.sol`.
 - Keep 6 decimals, ERC20Votes, ERC20Permit, and self-delegation-on-receipt if
   the UX still benefits from it.
+- Replace Curyo's block-number governance clock with a timestamp-based clock so
+  the old governance durations remain one day, seven days, and two days on Base.
 - Keep the existing `MAX_SUPPLY` concept at `100,000,000 * 1e6`.
 - Remove ERC1363 as a staking transport unless another protocol flow needs it.
 - Remove faucet mint assumptions.
@@ -597,6 +688,8 @@ Key changes:
 - Add events for genesis claims, bootstrap distributions, locks, unlocks,
   redistributions, and slashes.
 - Preserve vote checkpoints for historical governance snapshots.
+- Keep governance transfer restrictions for active proposal/vote locks, but
+  allow normal token transfers outside locked balances.
 
 ### `RaterRegistry`
 
@@ -604,6 +697,8 @@ Purpose:
 
 - Register a rater profile without proof-of-personhood.
 - Store optional rater type and metadata hash.
+- Store required AI rater metadata hashes for model, operator, and
+  prompt/version when the rater self-identifies as an AI agent.
 - Track delegated operational wallets if needed.
 - Expose cluster/risk flags assigned by governance or a scorer.
 
@@ -739,6 +834,8 @@ Key changes:
   to consensus reserve.
 - Pay USDC from bounty pools.
 - Keep USDC payout accounting separate from MREP lock redistribution.
+- Implement USDC work-stipend and accuracy-pool accounting with cluster caps.
+- Implement insufficient-signal attempt stipend and refund accounting.
 - Key claims by rater/round/cluster eligibility instead of voter ID.
 - Add calibration and reputation threshold checks.
 - Add cluster cap accounting.
@@ -770,7 +867,9 @@ Key changes:
   reason/spec hash.
 - Preserve the old frontend earning model: default `frontendFeeBps = 300`
   (3%), governance-tunable up to `MAX_FRONTEND_FEE_BPS = 500` (5%).
-- Allocate by eligible prediction payout weights.
+- Allocate USDC by the two-pool model: smaller work stipend plus larger
+  accuracy-weighted payout.
+- Support insufficient-signal attempt stipends capped at 10% of the bounty.
 - Pay AI raters through the same USDC path as other raters once they satisfy
   calibration and required metadata.
 
@@ -828,15 +927,27 @@ Launch requirements:
 
 Recommended initial parameters:
 
-- Voting delay: long enough for delegates to inspect proposals, for example
-  1-2 days.
-- Voting period: 5-7 days.
-- Timelock delay: at least 2 days.
-- Proposal threshold: high enough to prevent spam but not so high that genesis
-  governance is symbolic.
-- Quorum: percentage of delegated circulating supply, using
-  `GovernorVotesQuorumFraction`.
-- Late-quorum extension: use a prevent-late-quorum style extension if included.
+- Reuse the previous Curyo governance launch parameters as durations and token
+  amounts.
+- Voting delay: `1 day`.
+- Voting period: `7 days`.
+- Timelock delay: `2 days`.
+- Proposal threshold: `1,000 MREP`.
+- Quorum: `max(4% of circulating MREP, 100,000 MREP)`.
+- Circulating supply for quorum excludes protocol-controlled holders, including
+  the genesis distributor, bootstrap pool, consensus reserve, DAO treasury,
+  voting engine, content registry, frontend registry, and protocol-owned
+  distributor/escrow contracts.
+- Max proposal threshold: `100,000 MREP`.
+- Proposal cooldown: `1 day` between proposals per proposer.
+- Governance lock: lock used voting power and the proposal-threshold amount for
+  `7 days`, preserving the old anti-flash-governance design.
+- Keep the old excluded-holder replacement mechanism so governance can migrate
+  protocol pools without breaking historical quorum snapshots.
+- Implement the above with a timestamp-based ERC-6372 clock on `MeshReputation`
+  so the numeric governance values mean seconds on Base. If the implementation
+  keeps a block-number clock, convert the durations to Base block estimates
+  explicitly instead of reusing Celo's raw block counts.
 
 Governance can still use separate risk controls for rating/payout eligibility,
 but protocol ownership should be live and tokenholder-controlled from the first
@@ -888,7 +999,8 @@ tables.
 - `rater_cluster`
   - clusterId, label, discount, capped payout amount, updatedAt.
 - `usdc_payout_claim`
-  - pool, round, rater, gross amount, cluster cap, frontend fee, claimedAt.
+  - pool, round, rater, payout kind, gross amount, work stipend amount,
+    accuracy amount, cluster cap, frontend fee, claimedAt.
 - `ai_rater_metadata`
   - rater, operator, model, promptVersionHash, metadataHash, updatedAt.
 - `calibration_status`
@@ -950,7 +1062,7 @@ Predict final rating -> confirm private prediction -> reveal/settlement status
 User-friendly details:
 
 - Show rating as `x.x / 10`.
-- Let the slider snap to tenths while storing BPS.
+- Use a `0.0-10.0` scale and let the slider snap to tenths while storing BPS.
 - Show current rating/reference rating.
 - For challenge/re-rate rounds, show the prior rating being challenged and the
   challenge reason.
@@ -970,6 +1082,24 @@ Remove identity verification onboarding. Replace with:
 - Become USDC eligible after calibration.
 
 Avoid language that says one wallet equals one person.
+
+### Sponsored Transaction UX
+
+Keep Curyo's sponsored transaction model. RateMesh should preserve the
+thirdweb/EIP-5792 sponsored path with a self-funded fallback.
+
+Launch sponsorship policy:
+
+- Sponsor low-cost product-critical actions: genesis claim, delegation,
+  calibration commits, reveals, standard predictions, USDC claims, and frontend
+  fee claims.
+- Do not depend on sponsorship for funding bounties, staking frontend MREP, or
+  governance actions; those should work self-funded first, with sponsorship only
+  if governance later approves a quota.
+- Keep per-address, per-session, and per-chain sponsorship quotas so bots cannot
+  turn gas sponsorship into a separate faucet.
+- Keep wallet-sensitive tests around injected wallets, thirdweb wallets,
+  sponsored 7702 flows, and self-funded fallbacks.
 
 ### Pages/Components To Refactor
 
@@ -995,7 +1125,7 @@ Refactor `packages/sdk/src/vote.ts`:
 - Keep salt generation, tlock runtime resolution, frontend code resolution, and
   tests.
 - Add helpers for rating scale conversion:
-  - score out of 10 -> BPS.
+  - `0.0-10.0` score -> `0-10000` BPS.
   - BPS -> display score.
   - slider step validation.
 
@@ -1032,7 +1162,7 @@ Keep `packages/agents`, but make it a first-class RateMesh package:
 - Let AI raters earn USDC at launch through the same calibration path as other
   raters.
 - Add tests that ensure agents cannot bypass calibration, required metadata, or
-  payout thresholds.
+  metadata-change cooling periods.
 
 ## Implementation Sequence
 
@@ -1100,8 +1230,8 @@ Exit criteria:
   timelock-owned roles, commit, reveal, settle, cancel, missed reveal,
   reputation lock/unlock/redistribution, calibration gating, one-round bounty
   payout, MREP loser/winner redistribution, frontend stake and fee
-  reservation/claim, challenge bounty creation, AI metadata gating, and USDC
-  claim gating.
+  reservation/claim, challenge bounty creation, AI metadata gating, 0-10 rating
+  bounds, Curyo-derived governance parameters, and USDC claim gating.
 - No old HREP transfer staking path remains.
 
 ### Phase 3: Ponder And API
@@ -1131,13 +1261,16 @@ Exit criteria:
 6. Show calibration and reputation state in profile/feed surfaces.
 7. Update reward/claim UI for USDC payout eligibility and frontend fee
    claimability.
-8. Keep feedback UI unchanged except copy/branding.
+8. Preserve sponsored transaction UX with Base-compatible thirdweb/paymaster
+   configuration and self-funded fallback.
+9. Keep feedback UI unchanged except copy/branding.
 
 Exit criteria:
 
 - Wallet-sensitive flow works: connect, submit content, fund initial bounty,
   claim/delegate genesis reputation, predict, reveal/settle, fund re-rate,
-  view reputation, claim USDC, claim frontend fees.
+  view reputation, claim USDC, claim frontend fees, and recover to self-funded
+  gas when sponsorship is unavailable.
 - Desktop and mobile dense voting surfaces remain usable.
 
 ### Phase 5: Keeper, SDK, And Agents
@@ -1206,7 +1339,7 @@ Exit criteria:
    frontend staking/fees, MREP winner/loser redistribution, and cluster caps.
 7. `ponder-predictions`: update schema, handlers, and APIs.
 8. `frontend-prediction-ui`: replace vote controls, add genesis claim/delegate,
-   frontend fee, and onboarding surfaces.
+   frontend fee, sponsored transaction, and onboarding surfaces.
 9. `keeper-sdk-agents`: update commit builders, keeper reveal, and agent client.
 10. `local-e2e`: add full local lifecycle tests and docs.
 11. `testnet-deploy`: fresh deployment config, monitoring, and launch checklist.
@@ -1218,7 +1351,7 @@ These are launch defaults, not permanent constants:
 - Chain: Base mainnet (`8453`), Base Sepolia (`84532`) for testnet.
 - USDC: Circle native USDC on Base, `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`
   mainnet and `0x036CbD53842c5426634e7929541eC2318f3dCF7e` testnet.
-- Rating scale: `1000-9900` BPS, displayed as `1.0-9.9 / 10`.
+- Rating scale: `0-10000` BPS, displayed as `0.0-10.0 / 10`.
 - Token name/symbol: Mesh Reputation (`MREP`).
 - Reputation token: transferable ERC20Votes, 6 decimals.
 - Reputation max supply: `100,000,000 MREP`, matching the old HREP cap.
@@ -1226,11 +1359,14 @@ These are launch defaults, not permanent constants:
   treasury, `4M` consensus reserve.
 - Genesis allocation: one-time Merkle claim using the existing CREP/HREP
   snapshot artifact.
+- Genesis claim window: 12 months, with unclaimed MREP swept by governance rule.
 - Bounty scope: one sealed commit window plus reveal window, exactly one
   settlement attempt per bounty.
 - Challenge/re-rate: explicit new bounty referencing a prior round/result.
 - Frontend share: default 3%, max 5%, applies to bounty and feedback payouts.
 - Frontend stake: `1,000 MREP` required for fee eligibility.
+- Sponsorship: keep Curyo's sponsored transaction path with self-funded
+  fallback and quotas.
 - Minimum raw reveals: 3.
 - Minimum independent participants for USDC: 3.
 - Calibration rounds before USDC: 10.
@@ -1241,11 +1377,19 @@ These are launch defaults, not permanent constants:
   `1.00` rating point, revealed loser refund `5%`.
 - MREP losing-pool split after refund: 90% accurate raters, 4% frontends, 1%
   DAO treasury, 5% consensus reserve.
+- USDC payout split: 25% work stipend, 75% accuracy pool.
+- USDC near-miss cutoff: `1.50` rating points.
+- Insufficient-signal attempt stipend: capped at 10% of bounty and
+  cluster-capped.
 - Reputation payout multiplier: capped small range, for example `1.0x-1.25x`.
 - Voting power: square-root reputation curve.
 - Cluster discount: can reduce to near-zero, should not boost over 1.0.
 - Missed reveal penalty: reputation lock forfeit/redistribution, tunable and
   capped.
+- Governance launch parameters: 1-day voting delay, 7-day voting period, 2-day
+  timelock, 1,000 MREP proposal threshold, dynamic quorum of `max(4% of
+  circulating MREP, 100,000 MREP)`, 1-day proposal cooldown, 7-day governance
+  lock.
 
 ## Main Risks And Mitigations
 
@@ -1256,11 +1400,13 @@ Risk: attackers mature many medium-reputation accounts to farm flat payouts.
 Mitigations:
 
 - Calibration before USDC eligibility.
-- Cluster-capped payout allocation.
+- Cluster-capped payout allocation, including the work-stipend pool.
 - Small bounded reputation payout multiplier.
 - Rate limits by account, category, cluster, and epoch.
 - Leave-one-cluster-out scoring for payout-sensitive rounds.
 - Public cluster/payout explanations in Ponder.
+- Keep the work stipend smaller than the accuracy pool so splitting accounts to
+  collect base pay is less attractive than producing accurate signal.
 
 ### Majority Capture
 
@@ -1321,6 +1467,7 @@ Mitigations:
   source, and behavior.
 - Same calibration requirement as human/team accounts at launch, but no USDC
   eligibility when required metadata is missing or stale.
+- Apply a short payout cooling period after material AI metadata changes.
 
 ### MREP Lock Harshness
 
@@ -1367,7 +1514,7 @@ The MVP is done when:
 
 - There is no Self.xyz dependency.
 - Users can connect a wallet without proof-of-personhood.
-- Users can submit a predicted final rating through commit reveal.
+- Users can submit a predicted `0.0-10.0` final rating through commit reveal.
 - Each bounty funds exactly one private prediction round.
 - Users can fund an explicit challenge/re-rate bounty against a prior result.
 - Mesh Reputation is transferable, capped, checkpointed, and claimable by
@@ -1377,13 +1524,16 @@ The MVP is done when:
 - MREP prediction locks redistribute inaccurate and unrevealed locks to accurate
   raters, eligible frontends, treasury, and reserve without increasing supply.
 - RateMesh governance and timelock own protocol roles from launch.
+- Governance uses the previous Curyo launch durations, thresholds, quorum, and
+  governance-lock rules, adapted to Base with timestamp-based voting.
 - Users complete calibration before USDC eligibility.
 - AI raters can earn USDC at launch after the same calibration requirement and
   required metadata.
 - USDC bounty payout is cluster-capped and not linear by wallet count or raw
-  reputation.
+  reputation, with a small work stipend and a larger accuracy pool.
 - Frontend operators can earn the default 3% share on bounty and feedback
   payouts only after staking MREP.
+- The app preserves sponsored transaction support with a self-funded fallback.
 - Contracts, app, indexer, SDK, and keeper are configured for Base/Base Sepolia.
 - The frontend preserves Curyo's usable feed/rating design while clearly
   presenting RateMesh prediction mechanics.
