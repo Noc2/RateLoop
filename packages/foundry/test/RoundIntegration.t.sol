@@ -1354,6 +1354,26 @@ contract RoundIntegrationTest is VotingTestBase {
         assertEq(hrepToken.balanceOf(voter2) - bal2Before, STAKE, "Voter2 should get refund from tie");
     }
 
+    function test_ConfiguredVoterIdNft_AllowsOpenRaterWithoutCredential() public {
+        uint256 contentId = _submitContent();
+
+        MockVoterIdNFT voterIdNFT = new MockVoterIdNFT();
+        ProtocolConfig cfg = ProtocolConfig(address(votingEngine.protocolConfig()));
+        vm.prank(owner);
+        cfg.setVoterIdNFT(address(voterIdNFT));
+
+        bytes32 salt = keccak256("open-rater-with-optional-identity");
+        (bytes32 commitHash, bytes32 commitKey) = _commitWithSalt(voter1, contentId, true, STAKE, salt);
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(votingEngine, contentId);
+
+        assertEq(voterIdNFT.getTokenId(voter1), 0);
+        assertEq(votingEngine.voterCommitHash(contentId, roundId, voter1), commitHash);
+        assertEq(votingEngine.commitVoterId(contentId, roundId, commitKey), 0);
+        (address committedVoter,,,,,,) = votingEngine.commitCore(contentId, roundId, commitKey);
+        assertEq(committedVoter, voter1);
+        assertEq(commitKey, _commitKey(voter1, commitHash));
+    }
+
     function test_TiedRound_DelegatedLockedStakeRefundsStakePayer() public {
         uint256 contentId = _submitContent();
 
@@ -1526,15 +1546,13 @@ contract RoundIntegrationTest is VotingTestBase {
         rewardDistributor.claimReward(contentId, roundId);
 
         Vm.Log[] memory logs = vm.getRecordedLogs();
-        bytes32 expectedTopic =
-            keccak256("RewardClaimed(uint256,uint256,address,address,uint256,uint256)");
+        bytes32 expectedTopic = keccak256("RewardClaimed(uint256,uint256,address,address,uint256,uint256)");
         bool found;
         for (uint256 i = 0; i < logs.length; i++) {
             if (
                 logs[i].emitter == address(rewardDistributor) && logs[i].topics.length == 4
-                    && logs[i].topics[0] == expectedTopic
-                    && uint256(logs[i].topics[1]) == contentId && uint256(logs[i].topics[2]) == roundId
-                    && address(uint160(uint256(logs[i].topics[3]))) == voter1
+                    && logs[i].topics[0] == expectedTopic && uint256(logs[i].topics[1]) == contentId
+                    && uint256(logs[i].topics[2]) == roundId && address(uint160(uint256(logs[i].topics[3]))) == voter1
             ) {
                 (address stakePayer, uint256 stakeReturned, uint256 reward) =
                     abi.decode(logs[i].data, (address, uint256, uint256));
@@ -2988,9 +3006,7 @@ contract RoundIntegrationTest is VotingTestBase {
         vm.expectRevert(RoundRewardDistributor.FrontendFeeNotClaimable.selector);
         _claimFrontendFeeAsOperator(contentId, roundId, frontendOp);
 
-        assertEq(
-            frontendReg.getAccumulatedFees(frontendOp), 0, "Re-registered frontend cannot revive historical fee"
-        );
+        assertEq(frontendReg.getAccumulatedFees(frontendOp), 0, "Re-registered frontend cannot revive historical fee");
 
         // Governance can confiscate the now-Protocol-disposition fee.
         vm.prank(owner);

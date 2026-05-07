@@ -36,29 +36,28 @@ library VotePreflightLib {
         returns (uint256 voterId, bool useTokenIdentity)
     {
         bool hasVoterIdNft = address(voterIdNft) != address(0);
+        address effectiveVoter = voter;
 
         if (hasVoterIdNft) {
-            if (!voterIdNft.hasVoterId(voter)) revert VoterIdRequired();
             voterId = voterIdNft.getTokenId(voter);
-            uint256 submitterNullifier = registry.contentSubmitterNullifier(contentId);
-            if (submitterNullifier != 0 && voterIdNft.getNullifier(voterId) == submitterNullifier) {
-                revert SelfVote();
+            if (voterId != 0) {
+                uint256 submitterNullifier = registry.contentSubmitterNullifier(contentId);
+                if (submitterNullifier != 0 && voterIdNft.getNullifier(voterId) == submitterNullifier) {
+                    revert SelfVote();
+                }
+
+                address resolved = voterIdNft.resolveHolder(voter);
+                if (resolved != address(0)) effectiveVoter = resolved;
             }
         }
 
         (,, address rawSubmitter,,,,,,,) = registry.contents(contentId);
         if (voter == rawSubmitter) revert SelfVote();
 
-        address effectiveVoter = voter;
-        if (hasVoterIdNft) {
-            address resolved = voterIdNft.resolveHolder(voter);
-            if (resolved != address(0)) effectiveVoter = resolved;
-        }
-
         if (effectiveVoter == registry.getSubmitterIdentity(contentId)) revert SelfVote();
         if (!registry.isContentActive(contentId)) revert ContentNotActive();
 
-        useTokenIdentity = hasVoterIdNft && voterId != 0;
+        useTokenIdentity = voterId != 0;
     }
 
     function isFrontendEligible(IFrontendRegistry frontendRegistry, address frontend)
