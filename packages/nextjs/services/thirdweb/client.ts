@@ -13,8 +13,7 @@ const THIRDWEB_CONNECT_CHAIN_IDS = new Set([31337, 42220, 11142220]);
 const THIRDWEB_EXECUTION_CHAIN_IDS = new Set([42220, 11142220]);
 const THIRDWEB_ACTIVE_CHAIN_KEY = "thirdweb:active-chain";
 const THIRDWEB_SPONSORSHIP_MODE_KEY = "thirdweb:sponsorship-mode";
-const CURYO_THIRDWEB_ICON = "/favicon.png";
-const CURYO_THIRDWEB_WALLET_IMAGE = "/launch/curyo-human-loop-orange-orbits-neutral-ai.png";
+const RATEMESH_THIRDWEB_ICON = "/ratemesh-logo.svg";
 
 type ThirdwebWalletExecutionMode =
   | {
@@ -168,12 +167,12 @@ export function createThirdwebInAppWallet(chainId: number, options?: CreateThird
     executionMode: getThirdwebWalletExecutionMode(chainId, options),
     metadata: {
       image: {
-        alt: "Curyo human-loop network illustration",
-        height: 180,
-        src: CURYO_THIRDWEB_WALLET_IMAGE,
-        width: 320,
+        alt: "RateMesh orbit logo",
+        height: 128,
+        src: RATEMESH_THIRDWEB_ICON,
+        width: 128,
       },
-      name: "Curyo Wallet",
+      name: "RateMesh Wallet",
     },
   });
 }
@@ -213,8 +212,8 @@ export function getThirdwebConnectOptions(chainId?: number): UseConnectModalOpti
 
   return {
     appMetadata: {
-      name: "Curyo",
-      logoUrl: CURYO_THIRDWEB_ICON,
+      name: "RateMesh",
+      logoUrl: RATEMESH_THIRDWEB_ICON,
     },
     chain,
     chains: thirdwebSupportedChains,
@@ -222,8 +221,8 @@ export function getThirdwebConnectOptions(chainId?: number): UseConnectModalOpti
     locale: "en_US",
     showThirdwebBranding: false,
     theme: "dark",
-    title: "Curyo",
-    titleIcon: CURYO_THIRDWEB_ICON,
+    title: "RateMesh",
+    titleIcon: RATEMESH_THIRDWEB_ICON,
     ...(publicEnv.walletConnectProjectId
       ? {
           walletConnect: {
@@ -245,8 +244,8 @@ export function getThirdwebAutoConnectOptions(): AutoConnectProps | null {
 
   return {
     appMetadata: {
-      name: "Curyo",
-      logoUrl: CURYO_THIRDWEB_ICON,
+      name: "RateMesh",
+      logoUrl: RATEMESH_THIRDWEB_ICON,
     },
     chain,
     client: thirdwebClient,
