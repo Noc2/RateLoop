@@ -1,0 +1,43 @@
+{
+  "name": "@curyo/foundry",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "account": "make account",
+    "account:generate": "node scripts-js/generateKeystore.js",
+    "account:import": "node scripts-js/importAccount.js",
+    "account:reveal-pk": "node scripts-js/revealPK.js",
+    "chain": "make chain",
+    "clean": "forge clean",
+    "compile": "make compile",
+    "compile:all": "make compile-all",
+    "deploy": "node scripts-js/parseArgs.js",
+    "flatten": "make flatten",
+    "fork": "make fork FORK_URL=${1:-mainnet}",
+    "format": "make format",
+    "postinstall": "shx cp -n .env.example .env",
+    "lint": "make lint",
+    "test": "forge test --offline",
+    "check:sizes": "FOUNDRY_PROFILE=deploy forge build --skip script --skip test && bash scripts/check-contract-sizes.sh",
+    "verify": "make verify RPC_URL=${1:-localhost}",
+    "slither": "make slither",
+    "aderyn": "make aderyn",
+    "coverage": "make coverage"
+  },
+  "dependencies": {
+    "dotenv": "~16.3.1",
+    "prettier": "~2.8.8",
+    "qrcode": "~1.5.3",
+    "tlock-js": "^0.9.0",
+    "toml": "~3.0.0",
+    "viem": "2.39.0"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "shx": "^0.3.4"
+  },
+  "engines": {
+    "node": ">=24 <25"
+  }
+}

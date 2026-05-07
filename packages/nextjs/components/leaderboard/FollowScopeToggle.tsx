@@ -1,0 +1,33 @@
+"use client";
+
+interface FollowScopeToggleProps {
+  value: "all" | "following";
+  onChange: (value: "all" | "following") => void;
+}
+
+export function FollowScopeToggle({ value, onChange }: FollowScopeToggleProps) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      <button
+        type="button"
+        onClick={() => onChange("all")}
+        aria-pressed={value === "all"}
+        className={`tab-control px-3 py-1.5 text-base font-medium transition-colors ${
+          value === "all" ? "pill-category" : "pill-inactive"
+        }`}
+      >
+        All
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange("following")}
+        aria-pressed={value === "following"}
+        className={`tab-control px-3 py-1.5 text-base font-medium transition-colors ${
+          value === "following" ? "pill-category" : "pill-inactive"
+        }`}
+      >
+        Following Only
+      </button>
+    </div>
+  );
+}

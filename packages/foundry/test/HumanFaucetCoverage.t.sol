@@ -1,0 +1,880 @@
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.28;
+
+import { Test } from "forge-std/Test.sol";
+import { HumanFaucet } from "../contracts/HumanFaucet.sol";
+import { MockIdentityVerificationHub } from "../contracts/mocks/MockIdentityVerificationHub.sol";
+import { HumanReputation } from "../contracts/HumanReputation.sol";
+import { VoterIdNFT } from "../contracts/VoterIdNFT.sol";
+import { ISelfVerificationRoot } from "@selfxyz/contracts/contracts/interfaces/ISelfVerificationRoot.sol";
+import { MockVoterIdNFT } from "./mocks/MockVoterIdNFT.sol";
+import { IERC721Errors } from "@openzeppelin/contracts/interfaces/draft-IERC6093.sol";
+
+contract NonERC721Receiver { }
+
+contract HumanFaucetCoverageHarness is HumanFaucet {
+    constructor(address hrepToken_, address identityVerificationHub_, address governance_)
+        HumanFaucet(hrepToken_, identityVerificationHub_, governance_)
+    {}
+
+    function forceUnpauseForTest() external {
+        _unpause();
+    }
+}
+
+// =========================================================================
+// TEST CONTRACT: HumanFaucet Coverage Gaps
+// =========================================================================
+
+/// @title HumanFaucetCoverageTest
+/// @notice Tests for coverage gaps in HumanFaucet: setVoterIdNFT, transferOwnership, tier boundary
+///         edge cases, getRemainingBalance/Claims, getScope, InsufficientFaucetBalance, VoterIdMinted event.
+contract HumanFaucetCoverageTest is Test {
+    HumanFaucet public faucet;
+    MockIdentityVerificationHub public mockHub;
+    HumanReputation public hrepToken;
+    MockVoterIdNFT public mockVoterIdNFT;
+
+    address public admin = address(1);
+    address public user1 = address(2);
+    address public user2 = address(3);
+    address public nonOwner = address(99);
+
+    uint256 public constant TIER_0_AMOUNT = 10_000e6;
+    uint256 public constant TIER_1_AMOUNT = 1_000e6;
+    uint256 public constant TIER_2_AMOUNT = 100e6;
+    uint256 public constant TIER_3_AMOUNT = 10e6;
+    uint256 public constant TIER_4_AMOUNT = 1e6;
+
+    function setUp() public {
+        vm.startPrank(admin);
+
+        hrepToken = new HumanReputation(admin, admin);
+        mockHub = new MockIdentityVerificationHub();
+        mockVoterIdNFT = new MockVoterIdNFT();
+
+        HumanFaucetCoverageHarness faucetHarness =
+            new HumanFaucetCoverageHarness(address(hrepToken), address(mockHub), admin);
+        faucet = HumanFaucet(address(faucetHarness));
+
+        uint256 faucetBalance = 52_000_000 * 1e6;
+        hrepToken.grantRole(hrepToken.MINTER_ROLE(), admin);
+        hrepToken.mint(address(faucet), faucetBalance);
+        hrepToken.revokeRole(hrepToken.MINTER_ROLE(), admin);
+
+        bytes32 mockConfigId = mockHub.MOCK_CONFIG_ID();
+        faucet.setConfigId(mockConfigId);
+        faucetHarness.forceUnpauseForTest();
+
+        vm.stopPrank();
+    }
+
+    // =========================================================================
+    // 1. setVoterIdNFT
+    // =========================================================================
+
+    function test_SetVoterIdNFT_Success() public {
+        vm.prank(admin);
+        vm.expectEmit(true, false, false, false);
+        emit HumanFaucet.VoterIdNFTSet(address(mockVoterIdNFT));
+        faucet.setVoterIdNFT(address(mockVoterIdNFT));
+
+        assertEq(address(faucet.voterIdNFT()), address(mockVoterIdNFT));
+    }
+
+    function test_SetVoterIdNFT_ZeroAddress_Reverts() public {
+        vm.prank(admin);
+        vm.expectRevert("Invalid address");
+        faucet.setVoterIdNFT(address(0));
+    }
+
+    function test_SetVoterIdNFT_RejectsReplacement() public {
+        vm.prank(admin);
+        faucet.setVoterIdNFT(address(mockVoterIdNFT));
+
+        MockVoterIdNFT replacement = new MockVoterIdNFT();
+        vm.prank(admin);
+        vm.expectRevert("VoterIdNFT already set");
+        faucet.setVoterIdNFT(address(replacement));
+
+        assertEq(address(faucet.voterIdNFT()), address(mockVoterIdNFT));
+    }
+
+    function test_SetVoterIdNFT_AllowsIdempotentSet() public {
+        vm.startPrank(admin);
+        faucet.setVoterIdNFT(address(mockVoterIdNFT));
+        faucet.setVoterIdNFT(address(mockVoterIdNFT));
+        vm.stopPrank();
+
+        assertEq(address(faucet.voterIdNFT()), address(mockVoterIdNFT));
+    }
+
+    function test_SetVoterIdNFT_NonOwner_Reverts() public {
+        vm.prank(nonOwner);
+        vm.expectRevert();
+        faucet.setVoterIdNFT(address(mockVoterIdNFT));
+    }
+
+    // =========================================================================
+    // 2. VoterIdNFT MINTING ON CLAIM
+    // =========================================================================
+
+    function test_Claim_MintsVoterIdNFT_WhenSet() public {
+        vm.prank(admin);
+        faucet.setVoterIdNFT(address(mockVoterIdNFT));
+
+        mockHub.setVerified(user1);
+        mockHub.simulateVerification(address(faucet), user1);
+
+        // VoterIdNFT should have been minted
+        assertTrue(mockVoterIdNFT.hasVoterId(user1));
+        assertEq(hrepToken.balanceOf(user1), TIER_0_AMOUNT);
+    }
+
+    function test_Claim_DoesNotMintVoterIdNFT_WhenNotSet() public {
+        // voterIdNFT is address(0) — no minting should happen
+        mockHub.setVerified(user1);
+        mockHub.simulateVerification(address(faucet), user1);
+
+        assertEq(hrepToken.balanceOf(user1), TIER_0_AMOUNT);
+        // No revert, no minting
+    }
+
+    function test_Claim_RevertsAtomicallyWhenVoterIdMintFails() public {
+        VoterIdNFT realVoterIdNFT = _deployRealVoterIdNFT();
+        NonERC721Receiver nonReceiver = new NonERC721Receiver();
+        address user = address(nonReceiver);
+        uint256 nullifier = 123456;
+
+        vm.prank(admin);
+        faucet.setVoterIdNFT(address(realVoterIdNFT));
+
+        mockHub.setVerifiedWithNullifier(user, nullifier);
+
+        vm.expectRevert(abi.encodeWithSelector(IERC721Errors.ERC721InvalidReceiver.selector, user));
+        mockHub.simulateVerification(address(faucet), user);
+
+        assertEq(hrepToken.balanceOf(user), 0);
+        assertFalse(faucet.hasClaimed(user));
+        assertFalse(faucet.isNullifierUsed(nullifier));
+        assertEq(faucet.totalClaimants(), 0);
+        assertEq(faucet.totalClaimed(), 0);
+    }
+
+    function test_Claim_RejectsActiveDelegate_WhenUsingRealVoterIdNFT() public {
+        VoterIdNFT realVoterIdNFT = _deployRealVoterIdNFT();
+
+        vm.prank(admin);
+        realVoterIdNFT.mint(user1, 111111);
+
+        vm.prank(user1);
+        realVoterIdNFT.setDelegate(user2);
+        vm.prank(user2);
+        realVoterIdNFT.acceptDelegate();
+
+        assertEq(realVoterIdNFT.resolveHolder(user2), user1);
+
+        vm.prank(admin);
+        faucet.setVoterIdNFT(address(realVoterIdNFT));
+
+        // user2 is currently user1's Voter ID delegate. Faucet claim must refuse to mint a
+        // direct Voter ID into user2's wallet, which would silently sever the inbound
+        // delegation (VoterIdNFT.mint clears delegateOf/delegateTo). user2 must call
+        // realVoterIdNFT.removeDelegate() first.
+        mockHub.setVerified(user2);
+        vm.expectRevert(HumanFaucet.AddressAlreadyClaimed.selector);
+        mockHub.simulateVerification(address(faucet), user2);
+
+        // Delegation remains intact after the rejected claim.
+        assertEq(realVoterIdNFT.resolveHolder(user2), user1);
+        assertEq(realVoterIdNFT.delegateOf(user2), user1);
+        assertEq(realVoterIdNFT.delegateTo(user1), user2);
+    }
+
+    function test_RetryVoterIdMint_RevertsForDelegatedClaimer() public {
+        mockHub.setVerified(user2);
+        mockHub.simulateVerification(address(faucet), user2);
+        assertTrue(faucet.hasClaimed(user2));
+
+        VoterIdNFT realVoterIdNFT = _deployRealVoterIdNFT();
+
+        vm.prank(admin);
+        realVoterIdNFT.mint(user1, 222222);
+
+        vm.prank(user1);
+        realVoterIdNFT.setDelegate(user2);
+        vm.prank(user2);
+        realVoterIdNFT.acceptDelegate();
+
+        assertEq(realVoterIdNFT.resolveHolder(user2), user1);
+
+        vm.prank(admin);
+        faucet.setVoterIdNFT(address(realVoterIdNFT));
+
+        vm.prank(admin);
+        vm.expectRevert(HumanFaucet.AddressAlreadyClaimed.selector);
+        faucet.retryVoterIdMint(user2);
+    }
+
+    function test_ResetNullifier_RemintsVoterIdWithoutSecondReward() public {
+        VoterIdNFT realVoterIdNFT = _deployRealVoterIdNFT();
+        uint256 nullifier = 333333;
+
+        vm.prank(admin);
+        faucet.setVoterIdNFT(address(realVoterIdNFT));
+
+        mockHub.setVerifiedWithNullifier(user1, nullifier);
+        mockHub.simulateVerification(address(faucet), user1);
+
+        uint256 faucetBalanceBefore = hrepToken.balanceOf(address(faucet));
+        uint256 totalClaimedBefore = faucet.totalClaimed();
+        uint256 totalClaimantsBefore = faucet.totalClaimants();
+
+        vm.prank(admin);
+        realVoterIdNFT.revokeVoterId(user1);
+        vm.prank(admin);
+        realVoterIdNFT.resetNullifier(nullifier);
+
+        mockHub.setVerifiedWithNullifier(user2, nullifier);
+        bytes memory remintUserData = abi.encodePacked(bytes4("HFVR"));
+
+        vm.expectRevert(HumanFaucet.NullifierAlreadyUsed.selector);
+        mockHub.simulateVerification(address(faucet), user2);
+
+        mockHub.simulateVerificationWithUserData(address(faucet), user2, remintUserData);
+
+        assertFalse(realVoterIdNFT.hasVoterId(user1));
+        assertTrue(realVoterIdNFT.hasVoterId(user2));
+        assertEq(hrepToken.balanceOf(user2), 0, "remint does not pay HREP");
+        assertEq(hrepToken.balanceOf(address(faucet)), faucetBalanceBefore, "faucet balance unchanged");
+        assertEq(faucet.totalClaimed(), totalClaimedBefore, "claim accounting unchanged");
+        assertEq(faucet.totalClaimants(), totalClaimantsBefore, "claimant count unchanged");
+        assertTrue(faucet.hasClaimed(user2), "replacement wallet cannot claim a second reward");
+        assertEq(faucet.claimNullifier(user2), nullifier);
+    }
+
+    function test_ResetNullifier_RemintRequiresVoterIdReset() public {
+        VoterIdNFT realVoterIdNFT = _deployRealVoterIdNFT();
+        uint256 nullifier = 444444;
+
+        vm.prank(admin);
+        faucet.setVoterIdNFT(address(realVoterIdNFT));
+
+        mockHub.setVerifiedWithNullifier(user1, nullifier);
+        mockHub.simulateVerification(address(faucet), user1);
+
+        vm.prank(admin);
+        realVoterIdNFT.revokeVoterId(user1);
+
+        mockHub.setVerifiedWithNullifier(user2, nullifier);
+        vm.expectRevert(HumanFaucet.NullifierAlreadyUsed.selector);
+        mockHub.simulateVerificationWithUserData(address(faucet), user2, abi.encodePacked(bytes4("HFVR")));
+    }
+
+    function test_Claim_RevertsWhenAddressAlreadyClaimedEvenWithFreshNullifier() public {
+        mockHub.setVerified(user1);
+        mockHub.simulateVerification(address(faucet), user1);
+
+        mockHub.setVerified(user1);
+        vm.expectRevert(HumanFaucet.AddressAlreadyClaimed.selector);
+        mockHub.simulateVerification(address(faucet), user1);
+    }
+
+    function test_BootstrapMigratedClaims_ReplaysClaimAndVoterIdState() public {
+        VoterIdNFT realVoterIdNFT = _deployRealVoterIdNFT();
+
+        vm.prank(admin);
+        faucet.setVoterIdNFT(address(realVoterIdNFT));
+
+        _bootstrapSingleClaim(user1, 111111, TIER_0_AMOUNT);
+
+        assertEq(hrepToken.balanceOf(user1), TIER_0_AMOUNT);
+        assertTrue(faucet.hasClaimed(user1));
+        assertTrue(faucet.isNullifierUsed(111111));
+        assertEq(faucet.claimNullifier(user1), 111111);
+        assertEq(faucet.totalClaimants(), 1);
+        assertEq(faucet.totalClaimed(), TIER_0_AMOUNT);
+        assertEq(realVoterIdNFT.getTokenId(user1), 1);
+        assertTrue(realVoterIdNFT.hasVoterId(user1));
+
+        mockHub.setVerifiedWithNullifier(user2, 111111);
+        vm.expectRevert(HumanFaucet.NullifierAlreadyUsed.selector);
+        mockHub.simulateVerification(address(faucet), user2);
+
+        mockHub.setVerified(user1);
+        vm.expectRevert(HumanFaucet.AddressAlreadyClaimed.selector);
+        mockHub.simulateVerification(address(faucet), user1);
+    }
+
+    function test_BootstrapMigratedClaims_ReplaysReferralState() public {
+        VoterIdNFT realVoterIdNFT = _deployRealVoterIdNFT();
+
+        vm.prank(admin);
+        faucet.setVoterIdNFT(address(realVoterIdNFT));
+
+        _bootstrapSingleClaim(user1, 111111, TIER_0_AMOUNT);
+
+        address[] memory users = new address[](1);
+        users[0] = user2;
+        uint256[] memory nullifiers = new uint256[](1);
+        nullifiers[0] = 222222;
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = TIER_0_AMOUNT + 5_000e6;
+        address[] memory referrers = new address[](1);
+        referrers[0] = user1;
+        uint256[] memory claimantBonuses = new uint256[](1);
+        claimantBonuses[0] = 5_000e6;
+        uint256[] memory referrerRewards = new uint256[](1);
+        referrerRewards[0] = 5_000e6;
+
+        vm.prank(admin);
+        faucet.bootstrapMigratedClaims(users, nullifiers, amounts, referrers, claimantBonuses, referrerRewards);
+
+        assertEq(hrepToken.balanceOf(user1), TIER_0_AMOUNT + 5_000e6);
+        assertEq(hrepToken.balanceOf(user2), TIER_0_AMOUNT + 5_000e6);
+        assertEq(faucet.referredBy(user2), user1);
+        assertEq(faucet.referralCount(user1), 1);
+        assertEq(faucet.referralEarnings(user1), 5_000e6);
+        assertEq(faucet.totalReferralRewards(), 10_000e6);
+        assertEq(faucet.totalClaimed(), TIER_0_AMOUNT + (TIER_0_AMOUNT + 5_000e6) + 5_000e6);
+        assertEq(faucet.totalClaimants(), 2);
+        assertTrue(realVoterIdNFT.hasVoterId(user2));
+    }
+
+    function test_BootstrapMigratedClaims_CloseBlocksFurtherBootstrap() public {
+        VoterIdNFT realVoterIdNFT = _deployRealVoterIdNFT();
+
+        vm.startPrank(admin);
+        faucet.setVoterIdNFT(address(realVoterIdNFT));
+        faucet.closeMigrationBootstrap();
+        vm.expectRevert(HumanFaucet.MigrationBootstrapAlreadyClosed.selector);
+        faucet.bootstrapMigratedClaims(
+            _singleAddressArray(user1),
+            _singleUintArray(111111),
+            _singleUintArray(TIER_0_AMOUNT),
+            _singleAddressArray(address(0)),
+            _singleUintArray(0),
+            _singleUintArray(0)
+        );
+        vm.stopPrank();
+    }
+
+    function test_BootstrapMigratedClaims_RevertsInvalidReferrer() public {
+        VoterIdNFT realVoterIdNFT = _deployRealVoterIdNFT();
+
+        vm.prank(admin);
+        faucet.setVoterIdNFT(address(realVoterIdNFT));
+
+        vm.prank(admin);
+        vm.expectRevert(HumanFaucet.InvalidMigrationReferrer.selector);
+        faucet.bootstrapMigratedClaims(
+            _singleAddressArray(user2),
+            _singleUintArray(222222),
+            _singleUintArray(TIER_0_AMOUNT + 5_000e6),
+            _singleAddressArray(user1),
+            _singleUintArray(5_000e6),
+            _singleUintArray(5_000e6)
+        );
+    }
+
+    // =========================================================================
+    // 3. transferOwnership — governance restriction
+    // =========================================================================
+
+    function test_SetGovernance_AllowsMigration() public {
+        address newGovernance = address(77);
+
+        vm.prank(admin);
+        vm.expectEmit(true, false, false, false);
+        emit HumanFaucet.GovernanceUpdated(newGovernance);
+        faucet.setGovernance(newGovernance);
+
+        assertEq(faucet.governance(), newGovernance);
+
+        vm.prank(admin);
+        faucet.transferOwnership(newGovernance);
+
+        assertEq(faucet.owner(), newGovernance);
+    }
+
+    function test_TransferOwnership_ToGovernance_Succeeds() public {
+        // governance == admin in our setUp
+        vm.prank(admin);
+        faucet.transferOwnership(admin);
+
+        assertEq(faucet.owner(), admin);
+    }
+
+    function test_TransferOwnership_ToNonGovernance_Reverts() public {
+        vm.prank(admin);
+        vm.expectRevert("Can only transfer to governance");
+        faucet.transferOwnership(nonOwner);
+    }
+
+    function test_TransferOwnership_NonOwner_Reverts() public {
+        vm.prank(nonOwner);
+        vm.expectRevert();
+        faucet.transferOwnership(admin);
+    }
+
+    // =========================================================================
+    // 4. getScope
+    // =========================================================================
+
+    function test_GetScope_ReturnsValue() public view {
+        // Scope is derived from SelfVerificationRoot constructor — just verify it's callable
+        faucet.getScope();
+    }
+
+    // =========================================================================
+    // 5. getRemainingBalance & getRemainingClaims
+    // =========================================================================
+
+    function test_GetRemainingBalance_ReturnsCorrectBalance() public view {
+        uint256 expected = 52_000_000e6;
+        assertEq(faucet.getRemainingBalance(), expected);
+    }
+
+    function test_GetRemainingBalance_DecreasesAfterClaim() public {
+        mockHub.setVerified(user1);
+        mockHub.simulateVerification(address(faucet), user1);
+
+        assertEq(faucet.getRemainingBalance(), 52_000_000e6 - TIER_0_AMOUNT);
+    }
+
+    function test_GetRemainingClaims_Tier0() public view {
+        // 52M / 10,000 = 5,200 claims at tier 0
+        assertEq(faucet.getRemainingClaims(), 52_000_000e6 / TIER_0_AMOUNT);
+    }
+
+    function test_GetRemainingClaims_DecreasesAfterClaim() public {
+        mockHub.setVerified(user1);
+        mockHub.simulateVerification(address(faucet), user1);
+
+        uint256 remaining = faucet.getRemainingClaims();
+        assertEq(remaining, (52_000_000e6 - TIER_0_AMOUNT) / TIER_0_AMOUNT);
+    }
+
+    function test_GetRemainingClaims_ZeroBalance_ReturnsZero() public {
+        _drainFaucet(hrepToken.balanceOf(address(faucet)));
+
+        assertEq(faucet.getRemainingClaims(), 0);
+    }
+
+    // =========================================================================
+    // 6. InsufficientFaucetBalance
+    // =========================================================================
+
+    function test_Claim_InsufficientBalance_Reverts() public {
+        _drainFaucet(52_000_000e6 - 1e6);
+
+        mockHub.setVerified(user1);
+        vm.expectRevert(HumanFaucet.InsufficientFaucetBalance.selector);
+        mockHub.simulateVerification(address(faucet), user1);
+    }
+
+    function test_Claim_InsufficientBalance_WithReferral_Reverts() public {
+        // First claim to create a valid referrer
+        mockHub.setVerified(user1);
+        mockHub.simulateVerification(address(faucet), user1);
+
+        // Withdraw most tokens — leave enough for base claim but not base+referral
+        uint256 balance = hrepToken.balanceOf(address(faucet));
+        // Leave TIER_0_AMOUNT (10,000) which is less than needed with referral (10,000+5,000+5,000=20,000)
+        _drainFaucet(balance - TIER_0_AMOUNT);
+
+        // Claim with referral should fail — needs 15,000 for claimant + 5,000 for referrer
+        mockHub.setVerified(user2);
+        bytes memory userData = abi.encodePacked(user1);
+        vm.expectRevert(HumanFaucet.InsufficientFaucetBalance.selector);
+        mockHub.simulateVerificationWithUserData(address(faucet), user2, userData);
+    }
+
+    // =========================================================================
+    // 7. TIER BOUNDARY EDGE CASES (precise boundaries)
+    // =========================================================================
+
+    function test_TierInfo_Tier1_Boundary() public {
+        _setTotalClaimants(10);
+
+        (uint256 tier,,,, uint256 inTier, uint256 untilNext) = faucet.getTierInfo();
+        assertEq(tier, 1);
+        assertEq(inTier, 0); // 10 - 10 = 0
+        assertEq(untilNext, 990); // 1000 - 10
+    }
+
+    function test_TierInfo_Tier2_Boundary() public {
+        _setTotalClaimants(1000);
+
+        (uint256 tier,,,, uint256 inTier, uint256 untilNext) = faucet.getTierInfo();
+        assertEq(tier, 2);
+        assertEq(inTier, 0); // 1000 - 1000 = 0
+        assertEq(untilNext, 9000); // 10000 - 1000
+    }
+
+    function test_TierInfo_Tier3_Boundary() public {
+        _setTotalClaimants(10000);
+
+        (uint256 tier,,,, uint256 inTier, uint256 untilNext) = faucet.getTierInfo();
+        assertEq(tier, 3);
+        assertEq(inTier, 0); // 10000 - 10000 = 0
+        assertEq(untilNext, 990000); // 1000000 - 10000
+    }
+
+    function test_TierInfo_Tier4() public {
+        _setTotalClaimants(1_000_000);
+
+        (uint256 tier,,,, uint256 inTier, uint256 untilNext) = faucet.getTierInfo();
+        assertEq(tier, 4);
+        assertEq(inTier, 0); // 1000000 - 1000000 = 0
+        assertEq(untilNext, 0); // Final tier
+    }
+
+    function test_TierInfo_Tier4_WithClaimants() public {
+        _setTotalClaimants(2_000_000);
+
+        (uint256 tier,,,, uint256 inTier, uint256 untilNext) = faucet.getTierInfo();
+        assertEq(tier, 4);
+        assertEq(inTier, 1_000_000); // 2M - 1M = 1M
+        assertEq(untilNext, 0); // Final tier, no next
+    }
+
+    // =========================================================================
+    // 8. REFERRAL WITH VOTER ID NFT CHECK
+    // =========================================================================
+
+    function test_IsValidReferrer_RequiresVoterIdWhenSet() public {
+        // Claim without VoterIdNFT set
+        mockHub.setVerified(user1);
+        mockHub.simulateVerification(address(faucet), user1);
+        assertTrue(faucet.isValidReferrer(user1));
+
+        // Now set VoterIdNFT — user1 doesn't have one
+        vm.prank(admin);
+        faucet.setVoterIdNFT(address(mockVoterIdNFT));
+
+        assertFalse(faucet.isValidReferrer(user1));
+
+        // Give user1 a VoterId
+        mockVoterIdNFT.setHolder(user1);
+        assertTrue(faucet.isValidReferrer(user1));
+    }
+
+    function test_IsValidReferrer_NotClaimed_ReturnsFalse() public view {
+        assertFalse(faucet.isValidReferrer(user1));
+    }
+
+    // =========================================================================
+    // 9. WITHDRAW EDGE CASES
+    // =========================================================================
+
+    function test_WithdrawRemaining_AmountExceedsBalance_CapsToBalance() public {
+        uint256 amount = hrepToken.balanceOf(address(faucet)) + 1_000_000e6;
+
+        vm.prank(admin);
+        faucet.pause();
+
+        vm.prank(admin);
+        faucet.withdrawRemaining(admin, amount);
+
+        assertEq(hrepToken.balanceOf(address(faucet)), 0);
+    }
+
+    function test_WithdrawRemaining_BeforeGovernanceOwnership_Reverts() public {
+        address splitGovernance = address(77);
+
+        vm.startPrank(admin);
+        HumanFaucet splitFaucet = new HumanFaucet(address(hrepToken), address(mockHub), splitGovernance);
+        hrepToken.grantRole(hrepToken.MINTER_ROLE(), admin);
+        hrepToken.mint(address(splitFaucet), 1_000e6);
+        hrepToken.revokeRole(hrepToken.MINTER_ROLE(), admin);
+
+        vm.expectRevert("Governance ownership required");
+        splitFaucet.withdrawRemaining(admin, 1e6);
+
+        splitFaucet.transferOwnership(splitGovernance);
+        vm.stopPrank();
+
+        vm.prank(splitGovernance);
+        splitFaucet.withdrawRemaining(splitGovernance, 1e6);
+
+        assertEq(hrepToken.balanceOf(splitGovernance), 1e6);
+    }
+
+    function test_WithdrawRemaining_ZeroBalance_Reverts() public {
+        _drainFaucet(hrepToken.balanceOf(address(faucet)));
+
+        vm.prank(admin);
+        faucet.pause();
+
+        vm.prank(admin);
+        vm.expectRevert("Nothing to withdraw");
+        faucet.withdrawRemaining(admin, 1e6);
+    }
+
+    // =========================================================================
+    // 10. getConfigId
+    // =========================================================================
+
+    function test_GetConfigId_ReturnsSetValue() public view {
+        bytes32 configId = faucet.getConfigId(bytes32(0), bytes32(0), "");
+        assertEq(configId, mockHub.MOCK_CONFIG_ID());
+    }
+
+    function test_SetConfigId_RejectsZeroConfig() public {
+        vm.prank(admin);
+        vm.expectRevert("Invalid config");
+        faucet.setConfigId(bytes32(0));
+    }
+
+    function test_SetConfigId_RejectsUnknownConfig() public {
+        vm.prank(admin);
+        vm.expectRevert("Unknown config");
+        faucet.setConfigId(keccak256("missing-config"));
+    }
+
+    function test_SetConfigId_AcceptsHubConfig() public {
+        bytes32 configId = mockHub.MOCK_CONFIG_ID();
+
+        vm.prank(admin);
+        faucet.setConfigId(configId);
+
+        assertEq(faucet.verificationConfigId(), configId);
+    }
+
+    // =========================================================================
+    // 11. REFERRAL ACROSS TIER BOUNDARY
+    // =========================================================================
+
+    function test_ReferralAcrossTier0To1Boundary() public {
+        // Fill tier 0 to 9 claimants
+        _claimForNUsers(9);
+        assertEq(faucet.getCurrentTier(), 0);
+
+        // Claimant #10 claims at tier 0 WITH referral
+        address referrer = address(uint160(10000)); // One of the first 9 claimants
+        assertTrue(faucet.hasClaimed(referrer));
+
+        address boundaryUser = address(uint160(90000));
+        mockHub.setVerified(boundaryUser);
+        bytes memory userData = abi.encodePacked(referrer);
+        mockHub.simulateVerificationWithUserData(address(faucet), boundaryUser, userData);
+
+        // Claimant gets tier 0 rate + referral bonus
+        assertEq(hrepToken.balanceOf(boundaryUser), TIER_0_AMOUNT + 5_000e6);
+
+        // Tier should now be 1
+        assertEq(faucet.getCurrentTier(), 1);
+    }
+
+    function test_ReferralAcrossTier1To2Boundary_UsesTier1AmountsAndEmitsTier2() public {
+        mockHub.setVerified(user1);
+        mockHub.simulateVerification(address(faucet), user1);
+
+        _setTotalClaimants(999);
+
+        address boundaryUser = address(uint160(90001));
+        mockHub.setVerified(boundaryUser);
+        bytes memory userData = abi.encodePacked(user1);
+
+        vm.expectEmit(false, false, false, true);
+        emit HumanFaucet.TierChanged(2, TIER_2_AMOUNT, 1000);
+
+        mockHub.simulateVerificationWithUserData(address(faucet), boundaryUser, userData);
+
+        assertEq(hrepToken.balanceOf(boundaryUser), TIER_1_AMOUNT + 500e6);
+        assertEq(faucet.referralEarnings(user1), 500e6);
+        assertEq(faucet.getCurrentTier(), 2);
+    }
+
+    function test_ReferralAcrossTier2To3Boundary_UsesTier2AmountsAndEmitsTier3() public {
+        mockHub.setVerified(user1);
+        mockHub.simulateVerification(address(faucet), user1);
+
+        _setTotalClaimants(9_999);
+
+        address boundaryUser = address(uint160(90002));
+        mockHub.setVerified(boundaryUser);
+        bytes memory userData = abi.encodePacked(user1);
+
+        vm.expectEmit(false, false, false, true);
+        emit HumanFaucet.TierChanged(3, TIER_3_AMOUNT, 10_000);
+
+        mockHub.simulateVerificationWithUserData(address(faucet), boundaryUser, userData);
+
+        assertEq(hrepToken.balanceOf(boundaryUser), TIER_2_AMOUNT + 50e6);
+        assertEq(faucet.referralEarnings(user1), 50e6);
+        assertEq(faucet.getCurrentTier(), 3);
+    }
+
+    function test_ClaimAcrossTier3To4Boundary_UsesTier3RateAndEmitsTier4() public {
+        _setTotalClaimants(999_999);
+
+        address boundaryUser = address(uint160(90003));
+        mockHub.setVerified(boundaryUser);
+
+        vm.expectEmit(false, false, false, true);
+        emit HumanFaucet.TierChanged(4, TIER_4_AMOUNT, 1_000_000);
+
+        mockHub.simulateVerification(address(faucet), boundaryUser);
+
+        assertEq(hrepToken.balanceOf(boundaryUser), TIER_3_AMOUNT);
+        assertEq(faucet.getCurrentTier(), 4);
+    }
+
+    // =========================================================================
+    // 12. CONSTRUCTOR VALIDATION
+    // =========================================================================
+
+    function test_Constructor_ZeroGovernance_Reverts() public {
+        vm.prank(admin);
+        vm.expectRevert("Invalid governance");
+        new HumanFaucet(address(hrepToken), address(mockHub), address(0));
+    }
+
+    // =========================================================================
+    // 13. CLAIM AMOUNT AT EACH TIER (with actual claims via storage manipulation)
+    // =========================================================================
+
+    function test_ClaimAmount_AtTier1() public {
+        _setTotalClaimants(10);
+        assertEq(faucet.getCurrentClaimAmount(), TIER_1_AMOUNT);
+    }
+
+    function test_ClaimAmount_AtTier2() public {
+        _setTotalClaimants(1000);
+        assertEq(faucet.getCurrentClaimAmount(), TIER_2_AMOUNT);
+    }
+
+    function test_ClaimAmount_AtTier3() public {
+        _setTotalClaimants(10000);
+        assertEq(faucet.getCurrentClaimAmount(), TIER_3_AMOUNT);
+    }
+
+    function test_ClaimAmount_AtTier4() public {
+        _setTotalClaimants(1_000_000);
+        assertEq(faucet.getCurrentClaimAmount(), TIER_4_AMOUNT);
+    }
+
+    function test_ClaimAmount_AtTier4_VeryLargeClaimants() public {
+        _setTotalClaimants(100_000_000);
+        assertEq(faucet.getCurrentClaimAmount(), TIER_4_AMOUNT);
+    }
+
+    // =========================================================================
+    // 14. REFERRAL DATA DECODE — 32-byte format
+    // =========================================================================
+
+    function test_Referral_32ByteUserData() public {
+        mockHub.setVerified(user1);
+        mockHub.simulateVerification(address(faucet), user1);
+
+        mockHub.setVerified(user2);
+        // 32-byte encoded address
+        bytes memory userData = abi.encode(user1);
+        assertEq(userData.length, 32);
+
+        mockHub.simulateVerificationWithUserData(address(faucet), user2, userData);
+
+        // Referral should work with 32-byte format
+        assertEq(faucet.referredBy(user2), user1);
+    }
+
+    // =========================================================================
+    // 15. REFERRAL WITH ZERO-ADDRESS REFERRER (20 bytes of zeros)
+    // =========================================================================
+
+    function test_Referral_ZeroAddressReferrer_NoBonus() public {
+        mockHub.setVerified(user1);
+        bytes memory userData = abi.encodePacked(address(0));
+        mockHub.simulateVerificationWithUserData(address(faucet), user1, userData);
+
+        assertEq(hrepToken.balanceOf(user1), TIER_0_AMOUNT);
+        assertEq(faucet.referredBy(user1), address(0));
+    }
+
+    // =========================================================================
+    // 16. M-11: REFERRER WITH REVOKED VOTER ID GETS NO BONUS
+    // =========================================================================
+
+    function test_Referral_RevokedVoterIdReferrer_NoBonus() public {
+        // Set VoterID NFT on faucet
+        vm.prank(admin);
+        faucet.setVoterIdNFT(address(mockVoterIdNFT));
+
+        // user1 claims (gets VoterID minted via mock)
+        mockHub.setVerified(user1);
+        mockHub.simulateVerification(address(faucet), user1);
+        assertTrue(faucet.hasClaimed(user1));
+        assertTrue(mockVoterIdNFT.hasVoterId(user1));
+
+        // Revoke user1's VoterID
+        mockVoterIdNFT.removeHolder(user1);
+        assertFalse(mockVoterIdNFT.hasVoterId(user1));
+
+        // user2 claims with user1 as referrer — should get NO referral bonus
+        mockHub.setVerified(user2);
+        bytes memory userData = abi.encodePacked(user1);
+        mockHub.simulateVerificationWithUserData(address(faucet), user2, userData);
+
+        // user2 should get base tier amount only (no referral bonus)
+        assertEq(hrepToken.balanceOf(user2), TIER_0_AMOUNT);
+        // user1 should NOT get referrer reward
+        assertEq(faucet.referralCount(user1), 0);
+        // referredBy should not be set
+        assertEq(faucet.referredBy(user2), address(0));
+    }
+
+    // =========================================================================
+    // HELPERS
+    // =========================================================================
+
+    function _claimForNUsers(uint256 n) internal {
+        uint256 startId = faucet.totalClaimants();
+        for (uint256 i = 0; i < n; i++) {
+            address newUser = address(uint160(10000 + startId + i));
+            mockHub.setVerified(newUser);
+            mockHub.simulateVerification(address(faucet), newUser);
+        }
+    }
+
+    /// @dev Storage slot 8 for totalClaimants (from `forge inspect HumanFaucet storage`)
+    function _setTotalClaimants(uint256 value) internal {
+        vm.store(address(faucet), bytes32(uint256(8)), bytes32(value));
+    }
+
+    function _drainFaucet(uint256 amount) internal {
+        vm.prank(address(faucet));
+        hrepToken.transfer(admin, amount);
+    }
+
+    function _deployRealVoterIdNFT() internal returns (VoterIdNFT realVoterIdNFT) {
+        vm.startPrank(admin);
+        realVoterIdNFT = new VoterIdNFT(admin, admin);
+        realVoterIdNFT.addMinter(admin);
+        realVoterIdNFT.addMinter(address(faucet));
+        vm.stopPrank();
+    }
+
+    function _bootstrapSingleClaim(address user, uint256 nullifier, uint256 amount) internal {
+        vm.prank(admin);
+        faucet.bootstrapMigratedClaims(
+            _singleAddressArray(user),
+            _singleUintArray(nullifier),
+            _singleUintArray(amount),
+            _singleAddressArray(address(0)),
+            _singleUintArray(0),
+            _singleUintArray(0)
+        );
+    }
+
+    function _singleAddressArray(address value) internal pure returns (address[] memory values) {
+        values = new address[](1);
+        values[0] = value;
+    }
+
+    function _singleUintArray(uint256 value) internal pure returns (uint256[] memory values) {
+        values = new uint256[](1);
+        values[0] = value;
+    }
+}

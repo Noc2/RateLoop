@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Curyo">
+  <path
+    d="M 412.3 104.6 C 328.8 29.2 199.9 36 124.6 119.7 C 49.2 203.2 56 332.1 139.7 407.4 C 217.2 477.3 334.8 477.3 412.3 407.4"
+    fill="none"
+    stroke="#ffffff"
+    stroke-width="36.4"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <circle cx="276" cy="256" r="124" fill="#CC490F" />
+</svg>

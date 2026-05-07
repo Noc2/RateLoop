@@ -1,0 +1,134 @@
+name: Static Analysis
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  actions: read
+  contents: read
+  security-events: write
+
+jobs:
+  slither:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          submodules: true
+      - uses: ./.github/actions/setup-foundry
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            packages/foundry/cache
+            packages/foundry/out
+          key: forge-${{ hashFiles('packages/foundry/foundry.toml', 'packages/foundry/**/*.sol') }}
+      - name: Build contracts
+        working-directory: packages/foundry
+        run: |
+          forge clean
+          forge build --skip script --skip test
+      - uses: crytic/slither-action@b52cc1cbfee9ca3e8722dd5224299d16c9a6b80f # v0.4.2
+        id: slither
+        continue-on-error: true
+        with:
+          target: packages/foundry
+          sarif: results.sarif
+          fail-on: high
+          slither-config: packages/foundry/slither.config.json
+          ignore-compile: true
+      - uses: github/codeql-action/upload-sarif@0d579ffd059c29b07949a3cce3983f0780820c98 # v4
+        if: ${{ hashFiles('results.sarif') != '' }}
+        with:
+          sarif_file: results.sarif
+          category: slither
+      - name: Fail on Slither high-severity findings
+        if: steps.slither.outcome == 'failure'
+        run: exit 1
+
+  aderyn:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          submodules: true
+      - uses: ./.github/actions/setup-foundry
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            packages/foundry/cache
+            packages/foundry/out
+          key: forge-${{ hashFiles('packages/foundry/foundry.toml', 'packages/foundry/**/*.sol') }}
+      - name: Install Aderyn v0.6.8
+        env:
+          ADERYN_VERSION: 0.6.8
+          ADERYN_ARCHIVE: aderyn-x86_64-unknown-linux-gnu.tar.xz
+          ADERYN_SHA256: ffd6ca658962e211a3ac821c646f69c8e14bf1b1001cbfe091bcd4535a691e46
+        run: |
+          ARCHIVE_URL="https://github.com/cyfrin/aderyn/releases/download/aderyn-v${ADERYN_VERSION}/${ADERYN_ARCHIVE}"
+          ARCHIVE_PATH="$RUNNER_TEMP/${ADERYN_ARCHIVE}"
+          INSTALL_DIR="$RUNNER_TEMP/aderyn"
+
+          curl --proto '=https' --tlsv1.2 -LsSf "$ARCHIVE_URL" -o "$ARCHIVE_PATH"
+          echo "${ADERYN_SHA256}  ${ARCHIVE_PATH}" | sha256sum -c -
+
+          mkdir -p "$INSTALL_DIR" "$HOME/.cargo/bin"
+          tar -xJf "$ARCHIVE_PATH" --strip-components 1 -C "$INSTALL_DIR"
+          install -m 0755 "$INSTALL_DIR/aderyn" "$HOME/.cargo/bin/aderyn"
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+      - name: Verify Aderyn version
+        run: aderyn --version
+      - name: Build contracts for Aderyn
+        working-directory: packages/foundry
+        run: forge build
+      - name: Patch OZ submodule configs (aderyn doesn't support evm_version osaka yet)
+        run: |
+          if grep -q "evm_version = 'osaka'" packages/foundry/lib/openzeppelin-contracts/foundry.toml; then
+            sed -i "s/evm_version = 'osaka'/evm_version = 'cancun'/" packages/foundry/lib/openzeppelin-contracts/foundry.toml packages/foundry/lib/openzeppelin-contracts-upgradeable/foundry.toml
+          else
+            echo "OZ foundry.toml no longer uses osaka — patch can be removed"
+          fi
+      - name: Run Aderyn (JSON report)
+        working-directory: packages/foundry
+        run: aderyn . -o report.json
+      - name: Check for high-severity findings
+        working-directory: packages/foundry
+        run: |
+          HIGH_COUNT=$(jq '.high_issues.issues | length' report.json)
+          echo "High-severity findings: $HIGH_COUNT"
+          if [ "$HIGH_COUNT" -gt 0 ]; then
+            echo "::error::Aderyn found $HIGH_COUNT high-severity issue(s)"
+            exit 1
+          fi
+      - name: Generate Aderyn SARIF
+        working-directory: packages/foundry
+        run: aderyn . -o report.sarif
+      - uses: github/codeql-action/upload-sarif@0d579ffd059c29b07949a3cce3983f0780820c98 # v4
+        if: ${{ hashFiles('packages/foundry/report.sarif') != '' }}
+        with:
+          sarif_file: packages/foundry/report.sarif
+          category: aderyn
+
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          submodules: true
+      - uses: ./.github/actions/setup-foundry
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            packages/foundry/cache
+            packages/foundry/out
+          key: forge-${{ hashFiles('packages/foundry/foundry.toml', 'packages/foundry/**/*.sol') }}
+      - name: Force a fresh build before offline coverage
+        working-directory: packages/foundry
+        run: |
+          forge clean
+          forge build
+      - name: Run forge coverage
+        working-directory: packages/foundry
+        run: forge coverage --offline --ir-minimum --skip script --skip GasBudget.t.sol --skip GasEstimatesReport.t.sol --skip RoundIntegration.t.sol --skip AdversarialTests.t.sol

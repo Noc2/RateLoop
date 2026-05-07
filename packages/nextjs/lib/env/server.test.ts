@@ -1,0 +1,104 @@
+import {
+  getDatabaseConfig,
+  getServerRpcOverrides,
+  resolveAppUrl,
+  resolveServerPonderUrl,
+  resolveServerTargetNetworks,
+} from "./server";
+import assert from "node:assert/strict";
+import { afterEach, test } from "node:test";
+
+const env = process.env as Record<string, string | undefined>;
+const originalDatabaseUrl = env.DATABASE_URL;
+const originalPublicRpcUrl11142220 = env.NEXT_PUBLIC_RPC_URL_11142220;
+
+afterEach(() => {
+  if (originalDatabaseUrl === undefined) {
+    delete env.DATABASE_URL;
+  } else {
+    env.DATABASE_URL = originalDatabaseUrl;
+  }
+
+  if (originalPublicRpcUrl11142220 === undefined) {
+    delete env.NEXT_PUBLIC_RPC_URL_11142220;
+  } else {
+    env.NEXT_PUBLIC_RPC_URL_11142220 = originalPublicRpcUrl11142220;
+  }
+});
+
+test("resolveAppUrl keeps the local default outside production", () => {
+  assert.equal(resolveAppUrl(undefined, false), "http://localhost:3000");
+});
+
+test("resolveAppUrl rejects localhost in production", () => {
+  assert.equal(resolveAppUrl("http://localhost:3000", true), null);
+});
+
+test("resolveAppUrl normalizes valid public app URLs", () => {
+  assert.equal(resolveAppUrl("https://curyo.xyz/", true), "https://curyo.xyz");
+});
+
+test("resolveServerPonderUrl keeps the local default outside production", () => {
+  assert.equal(resolveServerPonderUrl(undefined, false), "http://localhost:42069");
+});
+
+test("resolveServerPonderUrl treats localhost production URLs as unavailable", () => {
+  assert.equal(resolveServerPonderUrl("http://localhost:42069", true), null);
+});
+
+test("resolveServerPonderUrl allows localhost production URLs for explicit e2e builds", () => {
+  assert.equal(resolveServerPonderUrl("http://localhost:42069", true, true), "http://localhost:42069");
+});
+
+test("resolveServerTargetNetworks rejects Foundry in production by default", () => {
+  const networks = resolveServerTargetNetworks("31337,11142220", true);
+  assert.equal(networks, null);
+});
+
+test("resolveServerTargetNetworks tolerates local-chain builds in explicit e2e production mode", () => {
+  const networks = resolveServerTargetNetworks("31337,11142220", true, {
+    allowFoundryInProduction: true,
+  });
+  assert.deepEqual(
+    networks?.map(network => network.id),
+    [31337, 11142220],
+  );
+});
+
+test("resolveServerTargetNetworks returns null for invalid production values", () => {
+  assert.equal(resolveServerTargetNetworks("not-a-chain", true), null);
+});
+
+test("getServerRpcOverrides includes public per-chain RPC overrides", () => {
+  env.NEXT_PUBLIC_RPC_URL_11142220 = "https://11142220.rpc.thirdweb.com/client-id/";
+
+  assert.deepEqual(getServerRpcOverrides(), {
+    11142220: "https://11142220.rpc.thirdweb.com/client-id",
+  });
+});
+
+test("getDatabaseConfig preserves explicit in-memory urls", () => {
+  env.DATABASE_URL = "memory:";
+  assert.deepEqual(getDatabaseConfig(), { url: "memory:" });
+});
+
+test("getDatabaseConfig preserves explicit postgres urls", () => {
+  env.DATABASE_URL = "postgresql://alice:secret@127.0.0.1:5432/curyo_app";
+  assert.deepEqual(getDatabaseConfig(), {
+    url: "postgresql://alice:secret@127.0.0.1:5432/curyo_app",
+  });
+});
+
+test("getDatabaseConfig upgrades legacy sslmode values to verify-full", () => {
+  env.DATABASE_URL = "postgresql://alice:secret@db.example.com:5432/curyo_app?sslmode=require&pool_max=1";
+  assert.deepEqual(getDatabaseConfig(), {
+    url: "postgresql://alice:secret@db.example.com:5432/curyo_app?sslmode=verify-full&pool_max=1",
+  });
+});
+
+test("getDatabaseConfig preserves libpq-compatible sslmode urls", () => {
+  env.DATABASE_URL = "postgresql://alice:secret@db.example.com:5432/curyo_app?uselibpqcompat=true&sslmode=require";
+  assert.deepEqual(getDatabaseConfig(), {
+    url: "postgresql://alice:secret@db.example.com:5432/curyo_app?uselibpqcompat=true&sslmode=require",
+  });
+});

@@ -1,0 +1,96 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { AnimatePresence, motion } from "framer-motion";
+import { useAccount } from "wagmi";
+import { XMarkIcon } from "@heroicons/react/24/outline";
+import { HumanSignInButton } from "~~/components/shared/HumanSignInButton";
+import { useOnboarding } from "~~/hooks/useOnboarding";
+import { useVoterIdNFT } from "~~/hooks/useVoterIdNFT";
+import { HUMAN_SIGN_IN_FAUCET_ROUTE, HUMAN_SIGN_IN_LABEL } from "~~/lib/home/humanSignInRoute";
+
+const STEPS = [
+  {
+    label: HUMAN_SIGN_IN_LABEL,
+    desc: "get your Voter ID to vote, stake, and earn rewards",
+  },
+  { label: "Vote", desc: "place your prediction while direction stays hidden" },
+  { label: "Stake", desc: "back your prediction with HREP tokens" },
+  {
+    label: "Reveal & Resolve",
+    desc: "after the selected blind phase, votes are revealed and rounds settle automatically",
+  },
+  { label: "Claim", desc: "collect your rewards if your prediction was correct" },
+];
+
+/**
+ * Right-side popup explaining the 5-step voting flow.
+ * Shows once before the first vote until dismissed.
+ */
+export function VotingGuide() {
+  const { shouldShowGuide, dismissGuide } = useOnboarding();
+  const { address } = useAccount();
+  const { hasVoterId } = useVoterIdNFT(address);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => setMounted(true), []);
+
+  if (!mounted || !shouldShowGuide) return null;
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        initial={{ opacity: 0, x: 80 }}
+        animate={{ opacity: 1, x: 0 }}
+        exit={{ opacity: 0, x: 80 }}
+        transition={{ type: "spring", damping: 25, stiffness: 300 }}
+        className="fixed right-4 top-24 z-50 w-80 rounded-2xl bg-base-200 shadow-[0_24px_54px_rgba(9,10,12,0.42)]"
+      >
+        {/* Header */}
+        <div className="relative rounded-t-2xl border-b border-base-content/5 px-5 pt-5 pb-4">
+          <button
+            onClick={dismissGuide}
+            className="absolute top-3 right-3 btn btn-ghost btn-xs btn-circle"
+            aria-label="Dismiss guide"
+          >
+            <XMarkIcon className="w-4 h-4" />
+          </button>
+          <h3 className="font-bold text-lg leading-snug pr-6">How it works</h3>
+        </div>
+
+        {/* Steps */}
+        <div className="space-y-3 px-5 py-4">
+          {STEPS.map((step, i) => (
+            <div key={step.label} className="flex items-start gap-3">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-base-300 text-xs font-bold text-base-content/75">
+                {i + 1}
+              </span>
+              <p className="text-sm leading-snug text-base-content/70">
+                <span className="font-semibold text-base-content">{step.label}</span>
+                <span> — {step.desc}</span>
+              </p>
+            </div>
+          ))}
+        </div>
+
+        {/* Footer */}
+        <div className="px-5 pb-4">
+          {!address ? (
+            <HumanSignInButton className="btn btn-sm btn-primary w-full border-none" style={{ fontSize: "16px" }}>
+              {HUMAN_SIGN_IN_LABEL}
+            </HumanSignInButton>
+          ) : !hasVoterId ? (
+            <Link href={HUMAN_SIGN_IN_FAUCET_ROUTE} className="btn btn-primary btn-sm w-full">
+              Get Voter ID
+            </Link>
+          ) : (
+            <button type="button" onClick={dismissGuide} className="btn btn-primary btn-sm w-full">
+              Start voting
+            </button>
+          )}
+        </div>
+      </motion.div>
+    </AnimatePresence>
+  );
+}
