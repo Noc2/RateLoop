@@ -94,7 +94,7 @@ contract RewardMathTest is Test {
         (uint256 voterShare, uint256 platformShare, uint256 treasuryShare, uint256 consensusShare) =
             harness.splitPool(losingPool);
 
-        assertEq(platformShare, (losingPool * 400) / 10000, "Platform share must be 4%");
+        assertEq(platformShare, (losingPool * 300) / 10000, "Platform share must be 3%");
         assertEq(treasuryShare, (losingPool * 100) / 10000, "Treasury share must be 1%");
         assertEq(consensusShare, (losingPool * 500) / 10000, "Consensus share must be 5%");
         assertEq(

@@ -669,7 +669,7 @@ const SmartContracts: NextPage = () => {
       <ul>
         <li>
           <code>splitPoolAfterLoserRefund(losingPool)</code> &mdash; Reserve a 5% rebate for revealed losers, then split
-          the remaining pool into 90% voters / 5% consensus subsidy / 4% frontend / 1% treasury.
+          the remaining pool into 91% voters / 5% consensus subsidy / 3% frontend / 1% treasury.
         </li>
         <li>
           <code>calculateVoterReward(shares, totalWinningShares, voterPool)</code> &mdash; Share-proportional reward

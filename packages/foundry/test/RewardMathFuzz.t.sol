@@ -82,9 +82,9 @@ contract RewardMathFuzz is Test {
 
         (uint256 voter,,,) = RewardMath.splitPool(losingPool);
 
-        // Voter share should be >= 90% because it receives the unallocated rounding remainder.
-        uint256 minVoter = (losingPool * 9000) / 10000;
-        assertGe(voter, minVoter, "voter share below 90% floor");
+        // Voter share should be >= 91% because it receives the unallocated rounding remainder.
+        uint256 minVoter = (losingPool * 9100) / 10000;
+        assertGe(voter, minVoter, "voter share below 91% floor");
     }
 
     // =========================================================================
@@ -126,5 +126,4 @@ contract RewardMathFuzz is Test {
         // Never exceeds reserve
         assertLe(subsidy, reserveBalance, "subsidy exceeds reserve");
     }
-
 }

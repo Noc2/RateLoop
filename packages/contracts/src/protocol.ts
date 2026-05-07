@@ -33,12 +33,12 @@ export const EPOCH_WEIGHT_BPS = {
 } as const;
 
 export const PLATFORM_REWARD_SPLIT_BPS = {
-  frontend: 400,
+  frontend: 300,
 } as const;
 
 export const REWARD_SPLIT_BPS = {
   revealedLoserRefund: 500,
-  voter: 9_000,
+  voter: 9_100,
   submitter: 0,
   platform: PLATFORM_REWARD_SPLIT_BPS.frontend,
   treasury: 100,

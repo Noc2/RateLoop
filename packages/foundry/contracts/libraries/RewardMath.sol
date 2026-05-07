@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 /// @title RewardMath
 /// @notice Pure functions for parimutuel reward calculations with epoch-weighted stake.
-/// @dev Pool split: 90% voters, 4% frontend, 1% treasury, 5% consensus subsidy.
+/// @dev Pool split: 91% voters, 3% frontend, 1% treasury, 5% consensus subsidy.
 ///      Voter rewards are distributed proportional to epoch-weighted effective stake.
 ///      Epoch 1 (blind) = 100% weight; Epoch 2+ (saw results) = 25% weight.
 ///      This creates a 4:1 reward ratio for early blind voters vs late informed voters.
@@ -11,7 +11,7 @@ library RewardMath {
     uint256 internal constant PRECISION = 1e18;
 
     // Pool split percentages
-    uint256 internal constant PLATFORM_BPS = 400; // 4% frontend fee share
+    uint256 internal constant PLATFORM_BPS = 300; // 3% frontend fee share
     uint256 internal constant TREASURY_BPS = 100; // 1% treasury
     uint256 internal constant CONSENSUS_BPS = 500; // 5% consensus subsidy reserve
     uint256 internal constant REVEALED_LOSER_REFUND_BPS = 500; // 5% rebate for revealed losing votes
@@ -76,8 +76,8 @@ library RewardMath {
 
     /// @notice Split the losing pool into voter and protocol buckets.
     /// @param losingPool Total tokens from losing side.
-    /// @return voterShare 90% for winning voters (100% content-specific).
-    /// @return platformShare 4% for frontend fees.
+    /// @return voterShare 91% for winning voters (100% content-specific).
+    /// @return platformShare 3% for frontend fees.
     /// @return treasuryShare 1% for governance treasury.
     /// @return consensusShare 5% for consensus subsidy reserve.
     function splitPool(uint256 losingPool)
@@ -88,7 +88,7 @@ library RewardMath {
         platformShare = (losingPool * PLATFORM_BPS) / BPS_TOTAL;
         treasuryShare = (losingPool * TREASURY_BPS) / BPS_TOTAL;
         consensusShare = (losingPool * CONSENSUS_BPS) / BPS_TOTAL;
-        voterShare = losingPool - platformShare - treasuryShare - consensusShare; // remainder = 90%
+        voterShare = losingPool - platformShare - treasuryShare - consensusShare; // remainder = 91%
     }
 
     /// @notice Calculate the consensus subsidy for a unanimous round.
