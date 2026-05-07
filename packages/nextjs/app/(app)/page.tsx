@@ -2,9 +2,9 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { BanknotesIcon, CheckBadgeIcon, CpuChipIcon } from "@heroicons/react/24/outline";
 import { AnimateInView } from "~~/components/home/AnimateInView";
-import { CuryoAnimation } from "~~/components/home/CuryoAnimation";
 import { LandingFaq } from "~~/components/home/LandingFaq";
 import { LandingPageActions } from "~~/components/home/LandingPageActions";
+import { RateMeshOrbAnimation } from "~~/components/home/RateMeshOrbAnimation";
 import { SupportedAgentsSection } from "~~/components/home/SupportedAgentsSection";
 import { HumanSignInButton } from "~~/components/shared/HumanSignInButton";
 import { DOCS_AI_ROUTE } from "~~/constants/routes";
@@ -16,18 +16,18 @@ const LANDING_STATS_REVALIDATE_SECONDS = 300;
 const ASK_STEPS = [
   {
     icon: CpuChipIcon,
-    title: "1. AI Asks",
-    description: "Agent asks a question with context, bounty, duration, and voter count.",
+    title: "1. Open a Rating",
+    description: "An app, creator, or agent posts content with context, bounty terms, and a target rating question.",
   },
   {
     icon: CheckBadgeIcon,
-    title: "2. Humans Stake",
-    description: "Verified humans rate it with staked reputation during blind rounds.",
+    title: "2. Predict the Result",
+    description: "People and AI raters privately predict the final 0-10 rating before the reveal window opens.",
   },
   {
     icon: BanknotesIcon,
-    title: "3. Earn + Use",
-    description: "Humans earn USDC and Reputation. Agents get verified feedback.",
+    title: "3. Settle Signal",
+    description: "Accurate raters earn USDC and reputation while misses recycle stake back to stronger signal.",
   },
 ];
 
@@ -44,7 +44,7 @@ const FEATURE_BENEFITS: {
   {
     title: "Optimized for AI",
     achievedBy:
-      "Agents can start from WebMCP-guided docs, fund Celo USDC questions with x402 authorization or ordered wallet calls, then use MCP-ready tools for status and results.",
+      "Agents can fund Base USDC rating bounties, submit structured context, and read settled signals through MCP-ready tools and JSON APIs.",
     links: [
       { label: "WebMCP", href: "/docs/tech-stack#webmcp" },
       { label: "x402", href: "/docs/tech-stack#x402-agent-payments" },
@@ -52,35 +52,37 @@ const FEATURE_BENEFITS: {
     ],
   },
   {
-    title: "Verified Humans",
+    title: "Open Rater Set",
     achievedBy:
-      "Voter IDs use zero-knowledge passport or biometric ID proofs without exposing personal documents on-chain.",
-    links: [{ label: "ZK proof-of-human", href: "/docs/tech-stack#zk-proof-of-human" }],
+      "The protocol does not require identity proofs. People, teams, and AI raters earn real weight by passing calibration and staying accurate.",
+    links: [{ label: "Calibration", href: "/docs/tech-stack#calibration" }],
   },
   {
-    title: "Honest Rating",
-    achievedBy: "Commit-reveal voting and reputation staking make dishonest or losing votes economically costly.",
+    title: "Predictive Ratings",
+    achievedBy:
+      "One private prediction round makes the task explicit: estimate the final rating, reveal the encrypted vote, and settle against the crowd.",
     links: [
-      { label: "Commit-reveal", href: "/docs/tech-stack#commit-reveal-voting" },
+      { label: "Prediction", href: "/docs/tech-stack#prediction-rounds" },
       { label: "tlock", href: "/docs/tech-stack#tlock-blind-voting" },
-      { label: "Staking", href: "/docs/tech-stack#hrep-staking" },
+      { label: "MREP", href: "/docs/tech-stack#mrep-staking" },
     ],
   },
   {
     title: "Paid Rating Work",
     achievedBy:
-      "Bounties pay eligible humans for revealed rating votes, while Feedback Bonuses reward useful notes that agents can learn from after settlement.",
+      "Bounties pay calibrated raters for useful work. Close misses still receive smaller rewards, while correct predictions earn more.",
     links: [
       { label: "Bounties", href: "/docs/tech-stack#bounties" },
-      { label: "Feedback Bonuses", href: "/docs/tech-stack#feedback-bonuses" },
+      { label: "Rewards", href: "/docs/tech-stack#reward-settlement" },
     ],
   },
   {
     title: "Trustless and Transparent",
-    achievedBy: "On-chain settlement and stablecoin bounties keep questions, votes, rewards, and payouts auditable.",
+    achievedBy:
+      "On-chain settlement and capped reputation keep questions, predictions, rewards, and governance auditable.",
     links: [
       { label: "On-chain", href: "/docs/tech-stack#on-chain-settlement" },
-      { label: "Stablecoins", href: "/docs/tech-stack#celo-usdc" },
+      { label: "Base USDC", href: "/docs/tech-stack#base-usdc" },
     ],
   },
 ];
@@ -290,8 +292,8 @@ async function getLandingPageSocialProofItems() {
     BigInt(FALLBACK_SOCIAL_PROOF_STATS.totalQuestionRewardsPaid) +
     BigInt(FALLBACK_SOCIAL_PROOF_STATS.totalFeedbackBonusesPaid);
   const fallbackItems = [
-    { value: FALLBACK_SOCIAL_PROOF_STATS.totalVoterIds.toLocaleString("en-US"), label: "Verified Humans" },
-    { value: FALLBACK_SOCIAL_PROOF_STATS.totalVotes.toLocaleString("en-US"), label: "Votes" },
+    { value: FALLBACK_SOCIAL_PROOF_STATS.totalVoterIds.toLocaleString("en-US"), label: "Calibrated Raters" },
+    { value: FALLBACK_SOCIAL_PROOF_STATS.totalVotes.toLocaleString("en-US"), label: "Predictions" },
     { value: formatUsdcPaidOut(fallbackPaidOut), label: "USDC Paid" },
   ];
 
@@ -319,8 +321,8 @@ async function getLandingPageSocialProofItems() {
       BigInt(String(stats.totalQuestionRewardsPaid ?? 0)) + BigInt(String(stats.totalFeedbackBonusesPaid ?? 0));
 
     return [
-      { value: Math.max(0, Number(stats.totalVoterIds ?? 0)).toLocaleString("en-US"), label: "Verified Humans" },
-      { value: Math.max(0, Number(stats.totalVotes ?? 0)).toLocaleString("en-US"), label: "Votes" },
+      { value: Math.max(0, Number(stats.totalVoterIds ?? 0)).toLocaleString("en-US"), label: "Calibrated Raters" },
+      { value: Math.max(0, Number(stats.totalVotes ?? 0)).toLocaleString("en-US"), label: "Predictions" },
       {
         value: formatUsdcPaidOut(paidOut),
         label: "USDC Paid",
@@ -341,18 +343,17 @@ export default async function LandingPage() {
         <div className="relative z-0 flex w-full flex-col lg:min-h-[34rem] lg:items-center lg:justify-center xl:min-h-[38rem]">
           {/* Animation: regular stack on mobile, oversized background layer on large screens */}
           <div className="relative z-0 lg:pointer-events-none lg:absolute lg:bottom-[-2.5rem] lg:left-[25rem] lg:right-0 lg:top-[-2.5rem] lg:translate-y-7 xl:bottom-[-3.5rem] xl:left-[23rem] xl:right-0 xl:top-[-3.5rem] xl:translate-y-10">
-            <CuryoAnimation />
+            <RateMeshOrbAnimation />
           </div>
 
           {/* Title (left on large screens) */}
           <div className="relative z-10 flex flex-col items-center lg:mr-auto lg:max-w-[32rem] lg:items-start lg:pt-24 lg:pb-6 xl:pt-28 xl:pb-8">
             <h1 className="hero-headline max-w-[14ch] text-center text-[2.35rem] text-base-content sm:max-w-[11ch] sm:text-[3.05rem] lg:max-w-none lg:text-left lg:text-[3.2rem] xl:text-[3.55rem]">
-              <span className="block">AI Asks,</span>
-              <span className="block">Humans Earn</span>
+              <span className="block">RateMesh</span>
+              <span className="ratemesh-text-gradient block">Open Ratings</span>
             </h1>
-            <p className="mt-4 max-w-none text-center text-[1.05rem] text-base-content/80 sm:text-[1.25rem] lg:text-left lg:text-[1.35rem]">
-              <span className="block whitespace-nowrap">Verified, Staked Human</span>
-              <span className="block whitespace-nowrap">Feedback for AI Agents</span>
+            <p className="mt-4 max-w-[34rem] text-center text-[1.05rem] leading-8 text-base-content/80 sm:text-[1.25rem] lg:text-left lg:text-[1.35rem]">
+              Private prediction rounds for people, AI raters, and apps to converge on useful public signals.
             </p>
             <Suspense fallback={<LandingPageActionsFallback />}>
               <LandingPageActions />

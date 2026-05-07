@@ -73,11 +73,11 @@ function AgentIcon({ name }: { name: string }) {
   }
 }
 
-const CURYO_AGENT_PROMPT =
-  "Can you research Curyo.xyz and explain how I can use it with AI agents to get verified human feedback? Start with https://www.curyo.xyz/llms.txt, https://www.curyo.xyz/docs/ai.md, and https://www.curyo.xyz/docs/ai/user-testing. Please summarize the main use cases, public MCP/API setup, pricing or wallet requirements, and one concrete workflow I can try.";
+const RATEMESH_AGENT_PROMPT =
+  "Can you research RateMesh and explain how I can use it with AI agents to get open rating signals? Start with the project docs and summarize the prediction-round flow, reputation requirements, USDC bounty funding, public MCP/API setup, and one concrete workflow I can try.";
 
 const LOVABLE_AGENT_PROMPT =
-  "Build a concise interactive page that explains how Curyo.xyz helps AI agents get verified human feedback. Use https://www.curyo.xyz/llms.txt, https://www.curyo.xyz/docs/ai.md, and https://www.curyo.xyz/docs/ai/user-testing as source links. Include sections for use cases, public MCP/API setup, pricing or wallet requirements, and one concrete workflow.";
+  "Build a concise interactive page that explains how RateMesh helps AI agents get open rating signals. Include sections for prediction-round use cases, reputation requirements, USDC bounty funding, public MCP/API setup, and one concrete workflow.";
 
 type AgentLaunch = {
   name: string;
@@ -89,32 +89,32 @@ type AgentLaunch = {
 const AGENTS: AgentLaunch[] = [
   {
     name: "Claude Code",
-    message: CURYO_AGENT_PROMPT,
-    ariaLabel: "Copy a Curyo message for Claude Code",
+    message: RATEMESH_AGENT_PROMPT,
+    ariaLabel: "Copy a RateMesh message for Claude Code",
     successMessage: "Copied message for Claude Code. Paste it into Claude Code.",
   },
   {
     name: "GitHub Copilot",
-    message: CURYO_AGENT_PROMPT,
-    ariaLabel: "Copy a Curyo message for GitHub Copilot",
+    message: RATEMESH_AGENT_PROMPT,
+    ariaLabel: "Copy a RateMesh message for GitHub Copilot",
     successMessage: "Copied message for GitHub Copilot. Paste it into the chat window.",
   },
   {
     name: "Cursor",
-    message: CURYO_AGENT_PROMPT,
-    ariaLabel: "Copy a Curyo message for Cursor",
+    message: RATEMESH_AGENT_PROMPT,
+    ariaLabel: "Copy a RateMesh message for Cursor",
     successMessage: "Copied message for Cursor. Paste it into the chat window.",
   },
   {
     name: "OpenAI Codex",
-    message: CURYO_AGENT_PROMPT,
-    ariaLabel: "Copy a Curyo message for OpenAI Codex",
+    message: RATEMESH_AGENT_PROMPT,
+    ariaLabel: "Copy a RateMesh message for OpenAI Codex",
     successMessage: "Copied message for OpenAI Codex. Paste it into Codex.",
   },
   {
     name: "Gemini CLI",
-    message: CURYO_AGENT_PROMPT,
-    ariaLabel: "Copy a Curyo message for Gemini CLI",
+    message: RATEMESH_AGENT_PROMPT,
+    ariaLabel: "Copy a RateMesh message for Gemini CLI",
     successMessage: "Copied message for Gemini CLI. Paste it into your terminal.",
   },
   {
@@ -155,25 +155,23 @@ export function SupportedAgentsSection() {
 
     const copied = await copyTextToClipboard(agent.message);
     if (!copied) {
-      console.error("Failed to copy Curyo agent message.");
+      console.error("Failed to copy RateMesh agent message.");
       notification.error(`Could not copy the message for ${agent.name}.`, {
-        id: "curyo-agent-prompt-launch",
+        id: "ratemesh-agent-prompt-launch",
       });
       return;
     }
 
     notification.success(agent.successMessage, {
       duration: 2400,
-      id: "curyo-agent-prompt-launch",
+      id: "ratemesh-agent-prompt-launch",
     });
   };
 
   return (
     <section className="relative z-10 mt-2 w-full sm:mt-3 lg:mt-4">
       <div className="mb-4 text-center sm:mb-5">
-        <p className="text-base leading-7 text-base-content/70 sm:text-lg">
-          Ask your favorite AI agent about Curyo.xyz
-        </p>
+        <p className="text-base leading-7 text-base-content/70 sm:text-lg">Ask your favorite AI agent about RateMesh</p>
       </div>
 
       <div className="mx-auto flex max-w-full flex-nowrap items-center justify-start gap-2 overflow-x-auto px-4 pb-1 sm:justify-center sm:gap-2.5 sm:px-0 lg:gap-3">
@@ -204,7 +202,7 @@ export function SupportedAgentsSection() {
         })}
       </div>
       <span aria-live="polite" className="sr-only">
-        {activeAgentName ? `Copied Curyo message for ${activeAgentName}` : ""}
+        {activeAgentName ? `Copied RateMesh message for ${activeAgentName}` : ""}
       </span>
     </section>
   );

@@ -108,6 +108,10 @@
   --curyo-shell-border: rgb(245 240 235 / 0.12);
   --curyo-shell-border-strong: rgb(245 240 235 / 0.2);
   --curyo-panel-shadow: 0 24px 56px rgb(0 0 0 / 0.56);
+  --ratemesh-pink: #ef476f;
+  --ratemesh-blue: #359eee;
+  --ratemesh-green: #03cea4;
+  --ratemesh-yellow: #ffc43d;
 }
 
 body {
@@ -144,6 +148,34 @@ body {
   font-weight: 800;
   line-height: 0.88;
   letter-spacing: 0;
+}
+
+.ratemesh-text-gradient {
+  background: linear-gradient(
+    90deg,
+    var(--ratemesh-blue),
+    var(--ratemesh-green),
+    var(--ratemesh-yellow),
+    var(--ratemesh-pink)
+  );
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.ratemesh-orb-animation-shell {
+  max-width: 62rem;
+  filter: drop-shadow(0 28px 72px rgb(53 158 238 / 0.2));
+}
+
+.ratemesh-orb-animation-shell svg {
+  overflow: visible;
+}
+
+.ratemesh-orb-ellipse {
+  stroke-width: 1;
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
 }
 
 .btn {

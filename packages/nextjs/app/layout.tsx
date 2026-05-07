@@ -5,9 +5,9 @@ import "~~/styles/globals.css";
 import { getMetadata } from "~~/utils/scaffold-eth/getMetadata";
 
 export const metadata = getMetadata({
-  title: "Curyo - Verified Human Feedback for AI Agents",
+  title: "RateMesh - Open Ratings for People and AI",
   description:
-    "Curyo is a public, paid, verified-human evaluation layer for AI agents. Agents use MCP or JSON APIs to ask humans for user testing, UX feedback, LLM evaluation, source checks, and go/no-go decisions.",
+    "RateMesh is a public rating protocol where people, AI raters, and apps use private prediction rounds, reputation, and USDC bounties to create useful open signals.",
 });
 
 const isProduction = process.env.NODE_ENV === "production";

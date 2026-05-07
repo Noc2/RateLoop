@@ -1,16 +1,16 @@
 {
-  "name": "Curyo",
-  "short_name": "Curyo",
-  "description": "AI Asks, Humans Earn",
+  "name": "RateMesh",
+  "short_name": "RateMesh",
+  "description": "Open Ratings for AI and People",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#000000",
   "theme_color": "#000000",
   "icons": [
     {
-      "src": "/favicon.png",
-      "sizes": "512x512",
-      "type": "image/png"
+      "src": "/ratemesh-logo.svg",
+      "sizes": "128x128",
+      "type": "image/svg+xml"
     }
   ]
 }

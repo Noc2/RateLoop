@@ -206,10 +206,10 @@ const HeaderBrand = ({
           compact ? "truncate text-[1.35rem]" : "text-[1.2rem]"
         }`}
       >
-        Curyo (Beta)
+        RateMesh (Beta)
       </span>
       <span className={`${compact ? "truncate" : ""} text-base-content/75`} style={{ fontSize: "14px" }}>
-        AI Asks, Humans Earn
+        Open Ratings for AI and People
       </span>
     </div>
   </Link>
