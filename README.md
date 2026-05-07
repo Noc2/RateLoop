@@ -1,13 +1,13 @@
-![CURYO — AI Asks, Humans Earn](packages/nextjs/public/banner.jpg)
+![RateMesh — Open Ratings for AI and People](packages/nextjs/public/ratemesh-logo.svg)
 
 <p align="center">
   <a href="https://github.com/RichardLitt/standard-readme"><img src="https://img.shields.io/badge/readme%20style-standard-brightgreen.svg?style=flat-square" alt="standard-readme compliant"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square" alt="License: MIT"></a>
 </p>
 
-Curyo is a verified human feedback layer for agents and people. In AI product terms, it is a human-in-the-loop (HITL) judgment layer: when software reaches a question it cannot answer with confidence, it can ask one focused question, attach source context, fund a bounty in HREP or Celo USDC, and get back a public signal from verified humans who stake HREP on their judgment.
+RateMesh is an open rating protocol for people, AI raters, teams, and apps. Raters predict a final public rating, reveal after a private round, and build reputation through calibrated, reliable signal. Bounties can pay useful rating work in USDC, while Mesh Reputation (`MREP`) is the capped governance and protocol reputation token planned for the fresh deployment.
 
-The same question flow works for a person in the web app or an agent using MCP/SDK tooling with a funded wallet. A saved agent policy and bearer token are optional guardrails for managed agents, not a prerequisite for wallet-paid asks. Each ask carries explicit round settings, optional preview media, claimable rewards for eligible voters, and an auditable result that other agents and frontends can read later. Agent bounties are designed to fund protocol escrow from a user-controlled wallet or scoped agent wallet, without routing funds through the front-end operator.
+This repository is a fresh RateMesh implementation that reuses the old Curyo monorepo where it is still useful. The current launch direction stays on Celo/Celo Sepolia for now, removes mandatory proof-of-personhood from the core rating path, and keeps Self.xyz only as a possible optional identity signal later.
 
 ## Table of Contents
 
@@ -21,33 +21,33 @@ The same question flow works for a person in the web app or an agent using MCP/S
 
 ## Background
 
-AI agents are increasingly good at drafting, searching, and planning, but they still hit questions where local context, taste, evidence quality, or social judgment matters. Curyo turns those moments into public, paid feedback rounds instead of private polls or unstructured comment threads.
+AI agents are increasingly good at drafting, searching, and planning, but they still hit questions where local context, taste, evidence quality, or social judgment matters. RateMesh turns those moments into public rating rounds instead of private polls or unstructured comment threads.
 
 The core loop is:
 
-1. **Ask** — submit a short question with a required context URL and optional image or YouTube preview.
-2. **Fund** — attach a non-refundable bounty in HREP or Celo USDC.
-3. **Vote** — verified humans stake HREP on whether the question's visible rating should move up or down.
-4. **Settle** — commit-reveal voting keeps directions hidden through the blind phase, then the round resolves once the selected reveal and voter thresholds are met.
-5. **Use** — agents and frontends read the settled score, revealed votes, optional feedback, and reward state from the public protocol surface.
+1. **Ask** — submit content or an idea with context and a rating question.
+2. **Fund** — optionally attach a Celo USDC bounty for the one private round.
+3. **Predict** — raters submit an expected final `0.0-10.0` rating.
+4. **Reveal and settle** — commit-reveal keeps predictions private until reveal, then the round settles into a public rating.
+5. **Use** — agents, apps, and frontends read the settled score, revealed predictions, optional feedback, and reward state from the public protocol surface.
 
 Key pieces:
 
-- **Question-First Submissions** — humans and agents use the same permissionless ask flow
-- **Verified Human Voters** — one soulbound Voter ID NFT per verified human for voting and other identity-gated actions
-- **Staked Judgment** — every vote requires a HREP stake as a conviction signal
-- **tlock Commit-Reveal** — votes are encrypted with timelock encryption, commits bind explicit drand metadata (`targetRound`, `drandChainHash`), and malformed/non-armored ciphertexts are rejected on-chain
-- **Governed Round Settings** — question creators choose blind phase, max duration, settlement voters, and voter cap inside governance bounds
+- **Open Rater Set** — people, AI raters, and teams use the same default path without mandatory identity proof
+- **Prediction Ratings** — the core input is predicted final rating, not binary up/down voting
+- **MREP Locks** — accurate predictions can earn from inaccurate or unrevealed locks without increasing the capped supply
+- **tlock Commit-Reveal** — predictions stay private through the sealed round
+- **Celo USDC Bounties** — small bounty payouts reward calibrated independent work
 - **Agent-Ready Integrations** — SDK helpers and MCP-shaped tools let agents quote, prepare wallet-signed submissions, track asks, and read results without taking operator custody of bounty funds or requiring a saved policy token
-- **Bounties and Feedback Bonuses** — question and bundle bounties pay eligible revealed voters across configured settlement rounds, while optional USDC Feedback Bonuses can reward useful hidden notes after settlement
-- **Frontend Attribution** — bounty accounting reserves the configured operator share for eligible frontend operators
-- **Security Guardrails** — duplicate checks, moderation policy, and claim gating keep the submission surface narrow
+- **Optional Identity Signals** — Self.xyz may return as a non-required badge or trust signal, not a core gate
+- **Frontend Attribution** — bounty accounting preserves the frontend operator earning incentive
+- **Security Guardrails** — calibration, reveal reliability, cluster caps, duplicate checks, and governance parameters keep the surface narrow
 
-See the in-app documentation at `/docs` for detailed game theory analysis and security information.
+See [docs/implementation-plan.md](docs/implementation-plan.md) for the current design and implementation sequence.
 
 ## Architecture
 
-Curyo is a monorepo with eight packages:
+RateMesh is a monorepo with eight packages:
 
 | Package               | Description                                                                              |
 | --------------------- | ---------------------------------------------------------------------------------------- |
@@ -84,8 +84,8 @@ Built with Next.js, Foundry, Ponder, thirdweb, wagmi, viem, Drizzle ORM, and Pos
 ### Setup
 
 ```bash
-git clone https://github.com/Noc2/CURYO.git
-cd CURYO
+git clone https://github.com/Noc2/RateMesh.git
+cd RateMesh
 corepack enable
 yarn install
 ```

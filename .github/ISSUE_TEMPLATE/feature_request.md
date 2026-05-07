@@ -1,6 +1,6 @@
 ---
 name: Feature Request
-about: Suggest an idea for Curyo
+about: Suggest an idea for RateMesh
 title: ""
 labels: enhancement
 assignees: ""

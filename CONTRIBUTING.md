@@ -1,14 +1,14 @@
-# Contributing to Curyo
+# Contributing to RateMesh
 
-Thank you for your interest in contributing to Curyo — the first human reputation game to reclaim the web.
+Thank you for your interest in contributing to RateMesh, an open rating protocol for people, AI raters, teams, and apps.
 
 ## Getting Started
 
 1. Fork the repository
 2. Clone your fork and install dependencies:
    ```bash
-   git clone https://github.com/YOUR_USERNAME/curyo.git
-   cd curyo
+   git clone https://github.com/YOUR_USERNAME/RateMesh.git
+   cd RateMesh
    corepack enable
    yarn install
    ```

@@ -2,7 +2,7 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in the Curyo protocol (smart contracts, API routes, or infrastructure), please report it responsibly.
+If you discover a security vulnerability in the RateMesh protocol (smart contracts, API routes, or infrastructure), please report it responsibly.
 
 **Email:** hawigxyz@proton.me
 
@@ -31,7 +31,7 @@ The following are in scope:
 Out of scope:
 
 - Third-party dependencies (report upstream)
-- Vendored upstream code under `packages/foundry/lib/*` unless the issue is caused by a Curyo-specific modification or integration bug
+- Vendored upstream code under `packages/foundry/lib/*` unless the issue is caused by a RateMesh-specific modification or integration bug
 - Social engineering attacks
 - Denial of service attacks
 
