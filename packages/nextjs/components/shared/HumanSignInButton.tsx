@@ -4,7 +4,6 @@ import { type ButtonHTMLAttributes, type ReactNode, useCallback, useEffect, useS
 import { useRouter } from "next/navigation";
 import { useAccount } from "wagmi";
 import { useCuryoConnectModal } from "~~/hooks/useCuryoConnectModal";
-import { useVoterIdNFT } from "~~/hooks/useVoterIdNFT";
 import { HUMAN_SIGN_IN_LABEL, getHumanSignInRoute } from "~~/lib/home/humanSignInRoute";
 
 type HumanSignInButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children" | "onClick" | "type"> & {
@@ -15,34 +14,28 @@ export function HumanSignInButton({ children, className, disabled, ...props }: H
   const router = useRouter();
   const { address } = useAccount();
   const { openConnectModal, isConnecting, thirdwebEnabled } = useCuryoConnectModal();
-  const { hasVoterId, isResolved: voterIdResolved } = useVoterIdNFT(address);
   const [shouldRouteAfterSignIn, setShouldRouteAfterSignIn] = useState(false);
 
-  const routeSignedInHuman = useCallback(() => {
+  const routeSignedInRater = useCallback(() => {
     if (!address) {
       return false;
     }
 
-    if (!voterIdResolved) {
-      setShouldRouteAfterSignIn(true);
-      return true;
-    }
-
     setShouldRouteAfterSignIn(false);
-    router.push(getHumanSignInRoute(hasVoterId));
+    router.push(getHumanSignInRoute());
     return true;
-  }, [address, hasVoterId, router, voterIdResolved]);
+  }, [address, router]);
 
   useEffect(() => {
     if (!shouldRouteAfterSignIn) {
       return;
     }
 
-    routeSignedInHuman();
-  }, [routeSignedInHuman, shouldRouteAfterSignIn]);
+    routeSignedInRater();
+  }, [routeSignedInRater, shouldRouteAfterSignIn]);
 
   const handleClick = useCallback(async () => {
-    if (routeSignedInHuman()) {
+    if (routeSignedInRater()) {
       return;
     }
 
@@ -51,7 +44,7 @@ export function HumanSignInButton({ children, className, disabled, ...props }: H
     if (!wallet) {
       setShouldRouteAfterSignIn(false);
     }
-  }, [openConnectModal, routeSignedInHuman]);
+  }, [openConnectModal, routeSignedInRater]);
 
   return (
     <button
