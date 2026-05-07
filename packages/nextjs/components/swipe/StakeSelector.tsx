@@ -20,16 +20,30 @@ interface StakeSelectorProps {
   isUp: boolean;
   contentId: bigint;
   categoryId?: bigint;
+  currentRating?: number;
   openRound?: OpenRoundFallbackData | null;
   roundConfig?: VotingConfig | null;
   cooldownSecondsRemaining?: number;
   isConfirming?: boolean;
   confirmError?: string | null;
-  onConfirm: (stakeAmount: number) => void;
+  onConfirm: (stakeAmount: number, predictedRating: number) => void;
   onCancel: () => void;
 }
 
 const PRESET_AMOUNTS = [1, 5, 25, 50, 100];
+const MIN_RATING = 0;
+const MAX_RATING = 10;
+
+function clampRating(value: number) {
+  if (!Number.isFinite(value)) return 5;
+  return Math.min(MAX_RATING, Math.max(MIN_RATING, value));
+}
+
+function getInitialPredictionRating(currentRating: number | undefined, isUp: boolean) {
+  const baseRating = clampRating(currentRating ?? 5);
+  const shifted = baseRating + (isUp ? 0.5 : -0.5);
+  return Math.round(clampRating(shifted) * 10) / 10;
+}
 
 /**
  * Bottom-sheet modal to select stake amount before committing a vote.
@@ -39,6 +53,7 @@ export function StakeSelector({
   isUp,
   contentId,
   categoryId,
+  currentRating,
   openRound,
   roundConfig,
   cooldownSecondsRemaining = 0,
@@ -48,11 +63,12 @@ export function StakeSelector({
   onCancel,
 }: StakeSelectorProps) {
   const stakeAmountInputId = useId();
+  const predictionRatingInputId = useId();
   const contentLabel = useContentLabel(categoryId);
   const [amount, setAmount] = useState(5);
+  const [predictedRating, setPredictedRating] = useState(() => getInitialPredictionRating(currentRating, isUp));
   const { address } = useAccount();
   const voterIdData = useVoterIdNFT(address);
-  const hasVoterId = voterIdData.hasVoterId;
   const tokenId = voterIdData.tokenId as bigint;
 
   const roundSnapshot = useRoundSnapshot(contentId, openRound ?? undefined, roundConfig ?? undefined);
@@ -82,17 +98,28 @@ export function StakeSelector({
 
   useEffect(() => {
     if (!isOpen) return;
+    setPredictedRating(getInitialPredictionRating(currentRating, isUp));
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape" && !isConfirming) onCancel();
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [isConfirming, isOpen, onCancel]);
+  }, [currentRating, isConfirming, isOpen, isUp, onCancel]);
 
-  const symbol = tokenSymbol ?? "HREP";
+  const symbol = tokenSymbol ?? "MREP";
   const { calculateBonus } = useParticipationRate();
   const voteBonus = calculateBonus(amount);
   const voteEstimate = estimateVoteReturn(estimateSnapshot, isUp, amount);
+  const normalizedCurrentRating = clampRating(currentRating ?? 5);
+  const predictionDelta = predictedRating - normalizedCurrentRating;
+  const predictionTone =
+    Math.abs(predictionDelta) < 0.05
+      ? "Same final rating"
+      : predictionDelta > 0
+        ? "Higher final rating"
+        : "Lower final rating";
+  const predictionToneClassName =
+    Math.abs(predictionDelta) < 0.05 ? "text-base-content/70" : predictionDelta > 0 ? "text-success" : "text-error";
 
   const balanceFormatted = hrepBalance ? Number(hrepBalance) / 1e6 : 0;
   const capacityFormatted = remainingCapacity != null ? Number(remainingCapacity) / 1e6 : 100;
@@ -102,8 +129,7 @@ export function StakeSelector({
   const sliderMax = Math.max(1, maxStake);
   const isCapacityLimited = maxByCapacity < maxByBalance;
   const cooldownActive = cooldownSecondsRemaining > 0;
-  const confirmDisabled =
-    isConfirming || !hasVoterId || cooldownActive || amount < 1 || amount > maxStake || maxStake < 1;
+  const confirmDisabled = isConfirming || cooldownActive || amount < 1 || amount > maxStake || maxStake < 1;
   const phaseHeadline = effectiveIsBlind ? "Blind phase" : "Open phase";
   const phaseToneClassName = isUp ? (effectiveIsBlind ? "bg-primary/10" : "bg-warning/10") : "bg-error/10";
   const phaseHeadlineClassName = isUp ? (effectiveIsBlind ? "text-primary" : "text-warning") : "text-error";
@@ -129,7 +155,7 @@ export function StakeSelector({
         <motion.div
           role="dialog"
           aria-modal="true"
-          aria-label="Select stake amount"
+          aria-label="Select reputation lock and predicted final rating"
           aria-busy={isConfirming}
           className="fixed inset-0 z-50 flex items-end justify-center sm:items-center"
           initial={{ opacity: 0 }}
@@ -155,12 +181,12 @@ export function StakeSelector({
                 }`}
               >
                 <VoteDirectionIcon direction={isUp ? "up" : "down"} className="h-4 w-4 stroke-[2.5]" />
-                {isUp ? "Rating goes up" : "Rating goes down"}
+                {isUp ? "Starts above current rating" : "Starts below current rating"}
               </div>
             </div>
 
             <h3 className="mb-3 text-center text-lg font-semibold">
-              How much to stake?
+              Predict the final rating
               <span
                 className="tooltip tooltip-bottom ml-1.5 inline-block cursor-help align-middle"
                 data-tip="You can only vote once per content per round. Choose your stake carefully!"
@@ -185,6 +211,49 @@ export function StakeSelector({
                 </svg>
               </span>
             </h3>
+
+            <div className="mb-5 rounded-2xl bg-base-100/70 px-4 py-4 ring-1 ring-base-content/10">
+              <div className="flex items-end justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-base-content/55">
+                    Your prediction
+                  </p>
+                  <p className="mt-1 text-4xl font-bold tabular-nums text-base-content">
+                    {predictedRating.toFixed(1)}
+                    <span className="ml-1 text-base font-semibold text-base-content/55">/ 10</span>
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-base-content/55">Current</p>
+                  <p className="mt-1 text-lg font-semibold tabular-nums text-base-content/75">
+                    {normalizedCurrentRating.toFixed(1)}
+                  </p>
+                  <p className={`mt-0.5 text-xs font-semibold ${predictionToneClassName}`}>{predictionTone}</p>
+                </div>
+              </div>
+              <label htmlFor={predictionRatingInputId} className="sr-only">
+                Predicted final rating
+              </label>
+              <input
+                id={predictionRatingInputId}
+                name="predicted-rating"
+                type="range"
+                min={MIN_RATING}
+                max={MAX_RATING}
+                step={0.1}
+                value={predictedRating}
+                onChange={e => setPredictedRating(Number(e.target.value))}
+                className="range range-primary range-sm mt-4 w-full"
+                style={sliderStyle}
+                disabled={isConfirming}
+                aria-label="Predicted final rating"
+                aria-valuetext={`${predictedRating.toFixed(1)} out of 10`}
+              />
+              <div className="mt-1 flex justify-between text-xs text-base-content/55">
+                <span>0</span>
+                <span>10</span>
+              </div>
+            </div>
 
             <div className="mb-5 space-y-1 text-center text-base text-base-content/60">
               <p>
@@ -319,7 +388,7 @@ export function StakeSelector({
                 Cancel
               </button>
               <button
-                onClick={() => onConfirm(amount)}
+                onClick={() => onConfirm(amount, predictedRating)}
                 className="btn flex-1 action-orange-control"
                 disabled={confirmDisabled}
               >
@@ -336,15 +405,7 @@ export function StakeSelector({
 
             {confirmError && !isConfirming && <p className="mt-3 text-center text-base text-error">{confirmError}</p>}
 
-            {!hasVoterId && (
-              <p className="mt-3 text-center text-base text-warning">
-                Voter ID required.{" "}
-                <Link href="/governance" className="link link-primary">
-                  Verify your identity to vote.
-                </Link>
-              </p>
-            )}
-            {hasVoterId && maxStake < 1 && maxByBalance < 1 && (
+            {maxStake < 1 && maxByBalance < 1 && (
               <p className="mt-3 text-center text-base text-error">
                 Insufficient {symbol} balance.{" "}
                 <Link href="/governance" className="link link-primary">
@@ -352,7 +413,7 @@ export function StakeSelector({
                 </Link>
               </p>
             )}
-            {hasVoterId && maxStake < 1 && maxByBalance >= 1 && maxByCapacity < 1 && (
+            {maxStake < 1 && maxByBalance >= 1 && maxByCapacity < 1 && (
               <p className="mt-3 text-center text-base text-warning">
                 You have reached the 100 {symbol} stake limit for this {contentLabel} this round.
               </p>

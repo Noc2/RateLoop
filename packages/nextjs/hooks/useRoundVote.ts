@@ -3,7 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 import { HumanReputationAbi, encodeVoteTransferPayload } from "@ratemesh/contracts";
 import { ContentRegistryAbi } from "@ratemesh/contracts/abis";
-import { buildCommitVoteParams } from "@ratemesh/sdk/vote";
+import { buildCommitPredictionParams, buildCommitVoteParams } from "@ratemesh/sdk/vote";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAccount, usePublicClient, useWriteContract } from "wagmi";
 import { useOptimisticVote } from "~~/contexts/OptimisticVoteContext";
@@ -32,7 +32,8 @@ import { getParsedErrorWithAllAbis } from "~~/utils/scaffold-eth/contract";
 
 interface RoundVoteParams {
   contentId: bigint;
-  isUp: boolean;
+  isUp?: boolean;
+  predictedRating?: number;
   stakeAmount: number; // In whole tokens (e.g., 5 = 5 HREP)
   frontendCode?: `0x${string}`; // Optional frontend operator address for fee distribution
   isOwnContent?: boolean;
@@ -41,12 +42,12 @@ interface RoundVoteParams {
 }
 
 /**
- * Hook for tlock commit-reveal round voting using HREP transferAndCall.
+ * Hook for tlock commit-reveal rating commits using reputation transferAndCall.
  * Handles: atomic token transfer + vote commit in a single transaction.
  *
- * Vote direction is tlock-encrypted to the current epoch's drand round,
- * ensuring vote secrecy until the epoch ends. The keeper decrypts and
- * reveals votes after each epoch.
+ * Predicted final ratings are tlock-encrypted to the current epoch's drand round,
+ * keeping the rating private until reveal. The binary isUp path remains as a
+ * legacy bridge until the new prediction engine is fully deployed.
  */
 export function useRoundVote() {
   const { address } = useAccount();
@@ -83,6 +84,7 @@ export function useRoundVote() {
   const commitVote = async ({
     contentId,
     isUp,
+    predictedRating,
     stakeAmount,
     frontendCode,
     isOwnContent,
@@ -99,11 +101,6 @@ export function useRoundVote() {
 
     if (isOwnContent || (submitter && address && submitter.toLowerCase() === address.toLowerCase())) {
       setError(normalizeRoundVoteError("SelfVote"));
-      return false;
-    }
-
-    if (!hasVoterId) {
-      setError("Voter ID required. Please verify your identity to vote.");
       return false;
     }
 
@@ -129,6 +126,11 @@ export function useRoundVote() {
 
     if (isMissingGasBalance) {
       setError(getGasBalanceErrorMessage(nativeTokenSymbol, { canSponsorTransactions }));
+      return false;
+    }
+
+    if (predictedRating === undefined && isUp === undefined) {
+      setError("Choose a predicted final rating before submitting.");
       return false;
     }
 
@@ -184,19 +186,34 @@ export function useRoundVote() {
         return false;
       }
 
+      const commitParams =
+        predictedRating !== undefined
+          ? await buildCommitPredictionParams({
+              voter: address as `0x${string}`,
+              contentId,
+              predictedRating,
+              stakeAmount,
+              epochDuration: runtime.epochDuration,
+              roundId: runtime.roundId,
+              roundReferenceRatingBps: runtime.roundReferenceRatingBps,
+              frontendCode,
+              defaultFrontendCode: scaffoldConfig.frontendCode,
+              runtime,
+            })
+          : await buildCommitVoteParams({
+              voter: address as `0x${string}`,
+              contentId,
+              isUp: isUp ?? true,
+              stakeAmount,
+              epochDuration: runtime.epochDuration,
+              roundId: runtime.roundId,
+              roundReferenceRatingBps: runtime.roundReferenceRatingBps,
+              frontendCode,
+              defaultFrontendCode: scaffoldConfig.frontendCode,
+              runtime,
+            });
       const { ciphertext, commitHash, roundReferenceRatingBps, targetRound, drandChainHash, frontend, stakeWei } =
-        await buildCommitVoteParams({
-          voter: address as `0x${string}`,
-          contentId,
-          isUp,
-          stakeAmount,
-          epochDuration: runtime.epochDuration,
-          roundId: runtime.roundId,
-          roundReferenceRatingBps: runtime.roundReferenceRatingBps,
-          frontendCode,
-          defaultFrontendCode: scaffoldConfig.frontendCode,
-          runtime,
-        });
+        commitParams;
 
       const payload = encodeVoteTransferPayload({
         contentId,

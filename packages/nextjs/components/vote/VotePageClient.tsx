@@ -664,9 +664,18 @@ const HomeInner = () => {
     isUp: boolean;
     contentId: bigint;
     categoryId: bigint;
+    currentRating: number;
     roundConfig?: ContentItem["roundConfig"] | null;
     openRound?: ContentItem["openRound"] | null;
-  }>({ isOpen: false, isUp: false, contentId: 0n, categoryId: 0n, roundConfig: null, openRound: null });
+  }>({
+    isOpen: false,
+    isUp: false,
+    contentId: 0n,
+    categoryId: 0n,
+    currentRating: 5,
+    roundConfig: null,
+    openRound: null,
+  });
   const { commitVote, isCommitting, error: voteError, clearError: clearVoteError } = useRoundVote();
   // Apply search, category filter, and the selected view before sorting
   const filteredFeed = useMemo(() => {
@@ -1123,6 +1132,7 @@ const HomeInner = () => {
         isUp,
         contentId: item.id,
         categoryId: item.categoryId,
+        currentRating: item.rating,
         roundConfig: item.roundConfig,
         openRound: item.openRound,
       });
@@ -1232,7 +1242,7 @@ const HomeInner = () => {
   }, []);
 
   const handleConfirmStake = useCallback(
-    async (stakeAmount: number) => {
+    async (stakeAmount: number, predictedRating: number) => {
       const cooldownSeconds = stakeModalCooldownSeconds;
       if (cooldownSeconds > 0) {
         notification.info(getVoteCooldownMessage(cooldownSeconds), { duration: 6000 });
@@ -1267,6 +1277,7 @@ const HomeInner = () => {
       const success = await commitVote({
         contentId: stakeModal.contentId,
         isUp: stakeModal.isUp,
+        predictedRating,
         isOwnContent: item?.isOwnContent,
         roundConfig: item?.roundConfig ?? stakeModal.roundConfig,
         stakeAmount,
@@ -1286,10 +1297,12 @@ const HomeInner = () => {
       setLocalVoteCooldownVersion(version => version + 1);
       if (item) {
         markPrimaryInteraction(item.id, { isVote: true });
-        recordRecommendationSignal(item, "vote_commit", { isUp: stakeModal.isUp });
+        recordRecommendationSignal(item, "vote_commit", { isUp: stakeModal.isUp, predictedRating });
       }
 
-      notification.success(`Vote submitted! Stake: ${stakeAmount} HREP`);
+      notification.success(
+        `Prediction submitted: ${predictedRating.toFixed(1)}/10 with ${stakeAmount} reputation locked.`,
+      );
 
       if (isFirstVote) {
         markVoteCompleted();
@@ -1922,6 +1935,7 @@ const HomeInner = () => {
           isUp={stakeModal.isUp}
           contentId={stakeModal.contentId}
           categoryId={stakeModal.categoryId}
+          currentRating={stakeModal.currentRating}
           openRound={stakeModal.openRound}
           roundConfig={stakeModal.roundConfig}
           cooldownSecondsRemaining={stakeModalCooldownSeconds}
