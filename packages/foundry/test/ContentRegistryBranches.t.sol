@@ -1349,7 +1349,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         );
     }
 
-    function test_SubmitContent_VoterIdConfigured_RevertsWithoutId() public {
+    function test_SubmitContent_VoterIdConfigured_AllowsUnverifiedSubmitter() public {
         address noIdSubmitter = address(0xDEAD);
         vm.prank(owner);
         hrepToken.mint(noIdSubmitter, 10_000e6);
@@ -1361,9 +1361,11 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         bytes32 salt = _contentSubmissionSalt(question.url, noIdSubmitter);
         _reserveNoMediaQuestionSubmission(registry, question, 1, salt, noIdSubmitter);
         vm.warp(block.timestamp + 1);
-        vm.expectRevert("Voter ID required");
-        _submitNoMediaQuestion(registry, question, 1, salt);
+        uint256 id = _submitNoMediaQuestion(registry, question, 1, salt);
         vm.stopPrank();
+
+        assertEq(registry.getSubmitterIdentity(id), noIdSubmitter);
+        assertEq(registry.contentSubmitterNullifier(id), 0);
     }
 
     function test_SubmitContent_VoterIdConfigured_SucceedsWithId() public {
@@ -1433,7 +1435,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.stopPrank();
     }
 
-    function test_SubmitContent_VoterIdNotConfigured_Reverts() public {
+    function test_SubmitContent_VoterIdNotConfigured_Succeeds() public {
         vm.startPrank(owner);
         ContentRegistry registryImpl2 = new ContentRegistry();
         ContentRegistry reg2 = ContentRegistry(
@@ -1474,9 +1476,11 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         hrepToken.approve(address(mockQuestionRewardPoolEscrow), DEFAULT_SUBMISSION_REWARD_POOL);
         reg2.reserveSubmission(revealCommitment);
         vm.warp(block.timestamp + 1);
-        vm.expectRevert("VoterIdNFT not set");
-        _submitNoMediaQuestion(reg2, question, 1, salt);
+        uint256 id = _submitNoMediaQuestion(reg2, question, 1, salt);
         vm.stopPrank();
+
+        assertEq(reg2.getSubmitterIdentity(id), submitter);
+        assertEq(reg2.contentSubmitterNullifier(id), 0);
     }
 
     function test_SubmitContent_NonHttpsUrl_Reverts() public {
@@ -2035,14 +2039,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         uint16 referenceRatingBps = _currentRatingReferenceBps(1);
         bytes memory ciphertext = _testCiphertext(true, salt, 1);
         bytes32 commitHash = _commitHash(
-            true,
-            salt,
-            voter2,
-            1,
-            referenceRatingBps,
-            _tlockCommitTargetRound(),
-            _tlockDrandChainHash(),
-            ciphertext
+            true, salt, voter2, 1, referenceRatingBps, _tlockCommitTargetRound(), _tlockDrandChainHash(), ciphertext
         );
 
         vm.startPrank(voter2);

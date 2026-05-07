@@ -162,7 +162,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     uint256 internal nextQuestionBundleId;
     mapping(uint256 => Content) public contents;
     mapping(bytes32 => bool) public submissionKeyUsed; // Canonical submission keys prevent duplicate content variants
-    IVoterIdNFT public voterIdNFT; // Voter ID NFT for sybil resistance
+    IVoterIdNFT public voterIdNFT; // Optional identity credential signal.
 
     /// @notice Escrow that holds mandatory bounties.
     address public questionRewardPoolEscrow;
@@ -350,13 +350,12 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         protocolConfig = ProtocolConfig(_protocolConfig);
     }
 
-    /// @notice Set the Voter ID NFT contract for sybil resistance
-    /// @param _voterIdNFT The Voter ID NFT contract address
+    /// @notice Set or clear the optional identity credential contract.
+    /// @param _voterIdNFT The optional identity NFT contract address, or zero to disable the signal.
     function setVoterIdNFT(address _voterIdNFT) external onlyRole(CONFIG_ROLE) {
-        require(_voterIdNFT != address(0), "Invalid address");
         require(
-            address(protocolConfig) == address(0) || protocolConfig.voterIdNFT() == address(0)
-                || protocolConfig.voterIdNFT() == _voterIdNFT,
+            _voterIdNFT == address(0) || address(protocolConfig) == address(0)
+                || protocolConfig.voterIdNFT() == address(0) || protocolConfig.voterIdNFT() == _voterIdNFT,
             "Voter ID mismatch"
         );
         voterIdNFT = IVoterIdNFT(_voterIdNFT);
@@ -915,14 +914,8 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         QuestionSpecCommitment memory spec
     ) internal returns (uint256 contentId) {
         bytes32 contentHash = _questionContentHash(metadata, imageUrls, videoUrl, resolvedCategoryId, spec);
-        contentId = _storeSubmittedContent(
-            submissionKey,
-            submitter,
-            contentHash,
-            resolvedCategoryId,
-            roundConfig,
-            bundleId
-        );
+        contentId =
+            _storeSubmittedContent(submissionKey, submitter, contentHash, resolvedCategoryId, roundConfig, bundleId);
         require(questionRewardPoolEscrow != address(0), "Bounty escrow not set");
         uint256 rewardPoolId = IQuestionRewardPoolEscrow(questionRewardPoolEscrow)
             .createSubmissionRewardPoolFromRegistry(
@@ -985,11 +978,6 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     /// @dev Resets the activity timer. Max MAX_REVIVALS revivals per content.
     ///      Revival stake is sent to treasury (non-refundable).
     function reviveContent(uint256 contentId) external nonReentrant whenNotPaused {
-        // Revivals still require the canonical submitter identity while preserving the original submission key.
-        if (address(voterIdNFT) != address(0)) {
-            require(voterIdNFT.hasVoterId(msg.sender), "Voter ID required");
-        }
-
         Content storage c = contents[contentId];
         require(c.status == ContentStatus.Dormant, "Not dormant");
         require(c.dormantCount < MAX_REVIVALS, "Max revivals reached");
@@ -1037,11 +1025,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     ///      a registered engine. Returns the caller's generation and whether it is stale relative
     ///      to the most recent engine that settled `contentId` (in which case the caller should
     ///      silent-no-op so a rotated engine does not corrupt newer-generation state).
-    function _authorizeEngineCallback(uint256 contentId)
-        private
-        view
-        returns (uint256 callerGeneration, bool stale)
-    {
+    function _authorizeEngineCallback(uint256 contentId) private view returns (uint256 callerGeneration, bool stale) {
         callerGeneration = votingEngineCallbackGeneration[msg.sender];
         if (callerGeneration == 0) revert OnlyVotingEngine();
         stale = callerGeneration < contentSettlementEngineGeneration[contentId];
@@ -1054,7 +1038,8 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         if (stale) return;
 
         address trackedEngine = contentRoundTrackingEngine[contentId];
-        if (trackedEngine != address(0) && trackedEngine != msg.sender && _engineHasOpenRound(trackedEngine, contentId)) {
+        if (trackedEngine != address(0) && trackedEngine != msg.sender && _engineHasOpenRound(trackedEngine, contentId))
+        {
             revert ActiveRoundOnPreviousEngine();
         }
         contentRoundTrackingEngine[contentId] = msg.sender;
@@ -1291,10 +1276,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             return cfg;
         }
         cfg = RoundLib.RoundConfig({
-            epochDuration: uint32(20 minutes),
-            maxDuration: uint32(7 days),
-            minVoters: uint16(3),
-            maxVoters: uint16(200)
+            epochDuration: uint32(20 minutes), maxDuration: uint32(7 days), minVoters: uint16(3), maxVoters: uint16(200)
         });
     }
 
@@ -1311,13 +1293,16 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
 
     function _resolveSubmitterIdentity(address submitter) internal view returns (address) {
         if (submitter == address(0)) return address(0);
-        require(address(voterIdNFT) != address(0), "VoterIdNFT not set");
+        if (address(voterIdNFT) == address(0)) return submitter;
         address resolved = voterIdNFT.resolveHolder(submitter);
-        require(resolved != address(0), "Voter ID required");
-        return resolved;
+        return resolved == address(0) ? submitter : resolved;
     }
 
     function _isSubmitterIdentity(uint256 contentId, address account) private view returns (bool) {
+        if (contentSubmitterNullifier[contentId] == 0) {
+            return getSubmitterIdentity[contentId] == account;
+        }
+        if (address(voterIdNFT) == address(0)) return false;
         uint256 voterId = voterIdNFT.getTokenId(account);
         return voterId != 0 && voterIdNFT.getNullifier(voterId) == contentSubmitterNullifier[contentId];
     }
@@ -1329,7 +1314,9 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     {
         if (submitter == address(0)) return (address(0), 0);
         submitterIdentity = _resolveSubmitterIdentity(submitter);
+        if (address(voterIdNFT) == address(0)) return (submitterIdentity, 0);
         uint256 voterId = voterIdNFT.getTokenId(submitterIdentity);
+        if (voterId == 0) return (submitterIdentity, 0);
         submitterNullifier = voterIdNFT.getNullifier(voterId);
     }
 
@@ -1344,8 +1331,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         uint256 activeRoundId = IRoundVotingEngine(engine).currentRoundId(contentId);
         if (activeRoundId == 0) return false;
 
-        (, RoundLib.RoundState roundState,,,,,,,,,,,,) =
-            IRoundVotingEngine(engine).rounds(contentId, activeRoundId);
+        (, RoundLib.RoundState roundState,,,,,,,,,,,,) = IRoundVotingEngine(engine).rounds(contentId, activeRoundId);
         return roundState == RoundLib.RoundState.Open;
     }
 
