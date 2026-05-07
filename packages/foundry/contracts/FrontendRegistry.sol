@@ -13,8 +13,8 @@ import { IRoundRewardDistributor } from "./interfaces/IRoundRewardDistributor.so
 import { IVoterIdNFT } from "./interfaces/IVoterIdNFT.sol";
 
 /// @title FrontendRegistry
-/// @notice Manages frontend operator registration (fixed 1,000 HREP stake) and fee distribution.
-/// @dev Frontend operators stake HREP, can be slashed by governance, and earn HREP fees from votes using their code.
+/// @notice Manages frontend operator registration (fixed 1,000 MREP stake) and fee distribution.
+/// @dev Frontend operators stake MREP, can be slashed by governance, and earn MREP fees from predictions using their code.
 contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgradeable, ReentrancyGuardTransient {
     using SafeERC20 for IERC20;
     using SafeCast for uint256;
@@ -24,13 +24,13 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     bytes32 public constant GOVERNANCE_ROLE = keccak256("GOVERNANCE_ROLE");
     bytes32 public constant FEE_CREDITOR_ROLE = keccak256("FEE_CREDITOR_ROLE");
 
-    /// @notice Maximum HREP that can be credited in a single creditFees() call (50,000 HREP with 6 decimals)
-    /// @dev Launch round caps allow at most about 38,000 HREP of frontend fees in one round.
+    /// @notice Maximum MREP that can be credited in a single creditFees() call (50,000 MREP with 6 decimals)
+    /// @dev Launch round caps allow at most about 38,000 MREP of frontend fees in one round.
     uint256 public constant MAX_FEE_CREDIT = 50_000e6;
     /// @notice Maximum bytes allowed in a slashing reason.
     uint256 public constant MAX_SLASH_REASON_LENGTH = 280;
 
-    /// @notice Fixed HREP stake required for frontend registration (1,000 HREP with 6 decimals)
+    /// @notice Fixed MREP stake required for frontend registration (1,000 MREP with 6 decimals)
     uint256 public constant STAKE_AMOUNT = 1000e6;
 
     /// @notice Slashable cooldown before a frontend can complete a voluntary exit.
@@ -52,7 +52,7 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     mapping(address => Frontend) public frontends;
     address[] public registeredFrontends;
     mapping(address => uint256) private registeredFrontendIndexPlusOne;
-    IVoterIdNFT public voterIdNFT; // Voter ID NFT for sybil resistance
+    IVoterIdNFT public voterIdNFT; // Optional identity credential signal.
     mapping(address => uint256) public frontendExitAvailableAt;
     bool public initialFeeCreditorConfigured;
     address public feeCreditor;
@@ -83,7 +83,7 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     /// @notice Initialize the frontend registry contract.
     /// @param _admin Address with temporary admin role for initial wiring.
     /// @param _governance Address with permanent governance roles (timelock).
-    /// @param _hrepToken HREP token address for staking and fee distribution.
+    /// @param _hrepToken MREP token address for staking and fee distribution.
     function initialize(address _admin, address _governance, address _hrepToken) public initializer {
         __AccessControl_init();
 
@@ -127,19 +127,14 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     function canReceiveHistoricalFees(address frontend) public view override returns (bool) {
         Frontend storage f = frontends[frontend];
         return f.operator != address(0) && !f.slashed && uint256(f.stakedAmount) >= STAKE_AMOUNT
-            && frontendExitAvailableAt[frontend] == 0 && _hasActiveOperatorVoterId(frontend);
+            && frontendExitAvailableAt[frontend] == 0;
     }
 
     /// @inheritdoc IFrontendRegistry
     /// @dev Registration timestamp gate: a frontend that re-registers at or after a round settled
     ///      cannot claim that round's fees. Without this, deregister + re-register would
     ///      revive fees that should have routed to Protocol (admin-confiscatable).
-    function canClaimFeesForRound(address frontend, uint48 roundSettledAt)
-        external
-        view
-        override
-        returns (bool)
-    {
+    function canClaimFeesForRound(address frontend, uint48 roundSettledAt) external view override returns (bool) {
         if (!canReceiveHistoricalFees(frontend)) return false;
         return frontends[frontend].registeredAt < roundSettledAt;
     }
@@ -182,13 +177,9 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
 
     // --- Registration Functions ---
 
-    /// @notice Register as a frontend operator by staking 1,000 HREP
+    /// @notice Register as a frontend operator by staking 1,000 MREP
     /// @dev Fully bonded, unslashed frontends can earn fees immediately after registration.
     function register() external nonReentrant {
-        require(address(voterIdNFT) != address(0), "VoterIdNFT not set");
-        require(voterIdNFT.hasVoterId(msg.sender), "Voter ID required");
-        require(voterIdNFT.resolveHolder(msg.sender) == msg.sender, "Frontend operator must hold Voter ID");
-
         require(frontends[msg.sender].operator == address(0), "Already registered");
 
         hrepToken.safeTransferFrom(msg.sender, address(this), STAKE_AMOUNT);
@@ -229,29 +220,24 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
         delete frontendExitAvailableAt[msg.sender];
         _removeRegisteredFrontend(msg.sender);
 
-        bool activeOperatorVoterId = _hasActiveOperatorVoterId(msg.sender);
-        uint256 payoutFees = activeOperatorVoterId ? pendingFees : 0;
-        uint256 total = refund + payoutFees;
+        uint256 total = refund + pendingFees;
         if (total > 0) {
             hrepToken.safeTransfer(msg.sender, total);
         }
 
-        if (payoutFees > 0) {
-            emit FeesClaimed(msg.sender, payoutFees);
-        } else if (pendingFees > 0) {
-            _routeFeesToConsensusReserve(msg.sender, pendingFees);
+        if (pendingFees > 0) {
+            emit FeesClaimed(msg.sender, pendingFees);
         }
         emit FrontendDeregistered(msg.sender);
     }
 
-    /// @notice Claim accumulated HREP fees
+    /// @notice Claim accumulated MREP fees
     function claimFees() external nonReentrant {
         Frontend storage f = frontends[msg.sender];
         require(f.operator != address(0), "Not registered");
         require(!f.slashed, "Frontend is slashed");
         if (frontendExitAvailableAt[msg.sender] != 0) revert FrontendExitPending();
         require(uint256(f.stakedAmount) >= STAKE_AMOUNT, "Frontend is underbonded");
-        require(_hasActiveOperatorVoterId(msg.sender), "Voter ID required");
 
         uint256 hrepAmount = uint256(f.hrepFees);
 
@@ -277,7 +263,6 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
         require(!f.slashed, "Frontend is slashed");
         require(uint256(f.stakedAmount) >= STAKE_AMOUNT, "Frontend is underbonded");
         if (frontendExitAvailableAt[frontend] != 0) revert FrontendExitPending();
-        require(_hasActiveOperatorVoterId(frontend), "Voter ID required");
         f.hrepFees = (uint256(f.hrepFees) + hrepAmount).toUint128();
         emit FeesCredited(frontend, hrepAmount);
     }
@@ -360,10 +345,9 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
         emit VotingEngineUpdated(_votingEngine);
     }
 
-    /// @notice Set the Voter ID NFT contract for sybil resistance
-    /// @param _voterIdNFT The Voter ID NFT contract address
+    /// @notice Set or clear the optional identity credential contract.
+    /// @param _voterIdNFT The optional identity NFT contract address, or zero to disable the signal.
     function setVoterIdNFT(address _voterIdNFT) external onlyRole(ADMIN_ROLE) {
-        require(_voterIdNFT != address(0), "Invalid address");
         voterIdNFT = IVoterIdNFT(_voterIdNFT);
         emit VoterIdNFTUpdated(_voterIdNFT);
     }
@@ -439,12 +423,7 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
 
     function _isEligible(address frontend, Frontend storage f) internal view returns (bool) {
         return f.operator != address(0) && !f.slashed && uint256(f.stakedAmount) >= STAKE_AMOUNT
-            && frontendExitAvailableAt[frontend] == 0 && _hasActiveOperatorVoterId(frontend);
-    }
-
-    function _hasActiveOperatorVoterId(address frontend) internal view returns (bool) {
-        if (address(voterIdNFT) == address(0)) return false;
-        return voterIdNFT.hasVoterId(frontend) && voterIdNFT.resolveHolder(frontend) == frontend;
+            && frontendExitAvailableAt[frontend] == 0;
     }
 
     function _requireFeeCreditorForEngine(address creditor, address engine) internal view {
@@ -455,12 +434,5 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
         } catch {
             revert("Invalid fee creditor");
         }
-    }
-
-    function _routeFeesToConsensusReserve(address frontend, uint256 amount) internal {
-        require(address(votingEngine) != address(0), "VotingEngine not set");
-        hrepToken.forceApprove(address(votingEngine), amount);
-        votingEngine.addToConsensusReserve(amount);
-        emit FeesConfiscated(frontend, amount);
     }
 }

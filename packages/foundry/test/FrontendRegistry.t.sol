@@ -411,7 +411,7 @@ contract FrontendRegistryTest is Test {
         assertFalse(registry.isEligible(frontend1));
     }
 
-    function test_RevokedVoterIdFrontendIsNotEligible() public {
+    function test_RevokedVoterIdFrontendRemainsEligible() public {
         vm.startPrank(frontend1);
         hrepToken.approve(address(registry), STAKE);
         registry.register();
@@ -419,9 +419,9 @@ contract FrontendRegistryTest is Test {
 
         mockVoterIdNFT.removeHolder(frontend1);
 
-        assertFalse(registry.isEligible(frontend1));
+        assertTrue(registry.isEligible(frontend1));
         (,, bool eligible,) = registry.getFrontendInfo(frontend1);
-        assertFalse(eligible);
+        assertTrue(eligible);
     }
 
     function test_UnderbondedFrontendIsNotEligibleAfterUnslash() public {
@@ -558,7 +558,7 @@ contract FrontendRegistryTest is Test {
         registry.creditFees(frontend1, 100e6);
     }
 
-    function test_CreditFeesRevertsAfterVoterIdRevocation() public {
+    function test_CreditFeesAfterVoterIdRevocation() public {
         vm.startPrank(frontend1);
         hrepToken.approve(address(registry), STAKE);
         registry.register();
@@ -567,8 +567,9 @@ contract FrontendRegistryTest is Test {
         mockVoterIdNFT.removeHolder(frontend1);
 
         vm.prank(feeCreditor);
-        vm.expectRevert("Voter ID required");
         registry.creditFees(frontend1, 100e6);
+
+        assertEq(registry.getAccumulatedFees(frontend1), 100e6);
     }
 
     function test_RevertCreditFeesNonCreditor() public {
@@ -652,7 +653,7 @@ contract FrontendRegistryTest is Test {
         vm.stopPrank();
     }
 
-    function test_ClaimFeesRevertsAfterVoterIdRevocation() public {
+    function test_ClaimFeesAfterVoterIdRevocation() public {
         vm.startPrank(frontend1);
         hrepToken.approve(address(registry), STAKE);
         registry.register();
@@ -663,12 +664,15 @@ contract FrontendRegistryTest is Test {
 
         mockVoterIdNFT.removeHolder(frontend1);
 
+        uint256 hrepBefore = hrepToken.balanceOf(frontend1);
+
         vm.prank(frontend1);
-        vm.expectRevert("Voter ID required");
         registry.claimFees();
+
+        assertEq(hrepToken.balanceOf(frontend1) - hrepBefore, 100e6);
     }
 
-    function test_DeregisterAfterVoterIdRevocationConfiscatesPendingFees() public {
+    function test_DeregisterAfterVoterIdRevocationPaysPendingFees() public {
         vm.startPrank(frontend1);
         hrepToken.approve(address(registry), STAKE);
         registry.register();
@@ -683,12 +687,10 @@ contract FrontendRegistryTest is Test {
         registry.requestDeregister();
 
         uint256 balanceBefore = hrepToken.balanceOf(frontend1);
-        uint256 reserveBefore = votingEngine.totalAddedToReserve();
         _completeDeregister(frontend1);
 
-        assertEq(hrepToken.balanceOf(frontend1) - balanceBefore, STAKE);
+        assertEq(hrepToken.balanceOf(frontend1) - balanceBefore, STAKE + 200e6);
         assertEq(registry.getAccumulatedFees(frontend1), 0);
-        assertEq(votingEngine.totalAddedToReserve(), reserveBefore + 200e6);
     }
 
     // --- Eligibility Tests ---
