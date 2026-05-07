@@ -23,9 +23,8 @@ import {
 } from "~~/lib/transactionErrors";
 import scaffoldConfig from "~~/scaffold.config";
 import { notification } from "~~/utils/scaffold-eth";
-import { ZERO_ADDRESS } from "~~/utils/scaffold-eth/common";
 
-const STAKE_AMOUNT = 1000; // Fixed 1,000 HREP stake
+const STAKE_AMOUNT = 1000; // Fixed 1,000 MREP stake
 
 function truncateAddress(address: string) {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
@@ -115,26 +114,7 @@ export function FrontendRegistration() {
     args: [address],
   });
 
-  const { data: frontendVoterIdAddress } = useScaffoldReadContract({
-    contractName: "FrontendRegistry",
-    functionName: "voterIdNFT",
-  });
-
-  const requiresVoterId = !!frontendVoterIdAddress && frontendVoterIdAddress !== ZERO_ADDRESS;
-  const { data: hasVoterId } = useScaffoldReadContract({
-    contractName: "VoterIdNFT",
-    functionName: "hasVoterId",
-    args: [address],
-    query: { enabled: !!address && requiresVoterId },
-  });
-  const { data: resolvedVoterIdHolder } = useScaffoldReadContract({
-    contractName: "VoterIdNFT",
-    functionName: "resolveHolder",
-    args: [address],
-    query: { enabled: !!address && requiresVoterId },
-  });
-
-  // Read HREP balance
+  // Read MREP balance
   const { data: hrepBalance, refetch: refetchCuryo } = useScaffoldReadContract({
     contractName: "HumanReputation",
     functionName: "balanceOf",
@@ -160,15 +140,11 @@ export function FrontendRegistration() {
   const isExitPending = exitAvailableAt > 0;
   const canCompleteDeregister = isExitPending && nowMs >= exitAvailableAt * 1000;
   const exitAvailableAtLabel = isExitPending ? new Date(exitAvailableAt * 1000).toLocaleString() : "";
-  const canRegisterWithCurrentAddress =
-    !requiresVoterId ||
-    (hasVoterId === true && !!address && resolvedVoterIdHolder?.toLowerCase() === address.toLowerCase());
-
-  // Parse fees (HREP only)
+  // Parse fees (MREP only)
   const hrepFees = accumulatedFees ? Number(accumulatedFees) / 1e6 : 0;
   const hasFees = hrepFees > 0;
 
-  // HREP balance
+  // MREP balance
   const hrepFormatted = hrepBalance ? Number(hrepBalance) / 1e6 : 0;
   const {
     items: claimableRoundFees,
@@ -225,13 +201,8 @@ export function FrontendRegistration() {
     if (!address || !frontendRegistryInfo || !frontendRegistryAddress) return;
     if (!ensureGasBalance()) return;
 
-    if (!canRegisterWithCurrentAddress) {
-      notification.error("This wallet must hold a Voter ID directly before it can register as a frontend.");
-      return;
-    }
-
     if (hrepFormatted < STAKE_AMOUNT) {
-      notification.error("Insufficient HREP balance");
+      notification.error("Insufficient MREP balance");
       return;
     }
 
@@ -369,7 +340,7 @@ export function FrontendRegistration() {
         });
       }
 
-      notification.success(`Claimed ${hrepFees.toFixed(2)} HREP!`);
+      notification.success(`Claimed ${hrepFees.toFixed(2)} MREP!`);
       refetchFees();
     } catch (e: any) {
       console.error("Claim failed:", e);
@@ -402,7 +373,7 @@ export function FrontendRegistration() {
         });
       }
 
-      notification.success(`Credited ${(Number(BigInt(claimableFee)) / 1e6).toFixed(2)} HREP from round ${roundId}.`);
+      notification.success(`Credited ${(Number(BigInt(claimableFee)) / 1e6).toFixed(2)} MREP from round ${roundId}.`);
       await Promise.all([refetchClaimableRoundFees(), refetchFees()]);
     } catch (e: any) {
       console.error("Frontend round fee claim failed:", e);
@@ -483,11 +454,11 @@ export function FrontendRegistration() {
     <div className="surface-card rounded-2xl p-6 space-y-5">
       <div className="flex items-center gap-2">
         <h2 className={surfaceSectionHeadingClassName}>Frontend Registration</h2>
-        <InfoTooltip text="Stake 1,000 HREP to earn frontend fees from votes through your interface." />
+        <InfoTooltip text="Stake 1,000 MREP to earn frontend fees from predictions submitted through your interface." />
       </div>
 
       <p className="text-base text-base-content/60">
-        Stake 1,000 HREP and earn frontend fees.{" "}
+        Stake 1,000 MREP and earn frontend fees.{" "}
         <Link href="/docs/frontend-codes" className="link link-primary">
           Learn about frontend integrations →
         </Link>
@@ -508,8 +479,8 @@ export function FrontendRegistration() {
           <FrontendOperatorAddressRow address={configuredFrontendCode} />
         ) : (
           <p className="text-sm text-base-content/70">
-            Set <code>NEXT_PUBLIC_FRONTEND_CODE</code> to the frontend operator address before launch. Otherwise votes
-            from this deployment will not accrue frontend fees.
+            Set <code>NEXT_PUBLIC_FRONTEND_CODE</code> to the frontend operator address before launch. Otherwise
+            predictions from this deployment will not accrue frontend fees.
           </p>
         )}
         {deploymentIsConfigured && !deploymentMatchesConnectedAddress && (
@@ -530,23 +501,17 @@ export function FrontendRegistration() {
           {/* Address being registered */}
           <FrontendOperatorAddressRow label="Registering address:" address={address} />
 
-          {requiresVoterId && !canRegisterWithCurrentAddress && (
-            <p className="text-sm text-warning">
-              Frontend registration requires this wallet to hold a Voter ID directly.
-            </p>
-          )}
-
           {/* Stake info */}
           <div className="surface-card-nested rounded-2xl p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="flex items-center gap-1.5 text-base font-medium text-base-content">
                   Frontend Stake
-                  <InfoTooltip text="Returned when you withdraw, forfeited if you act maliciously. Receive 1% of the losing stakes from votes via your interface" />
+                  <InfoTooltip text="Returned when you withdraw, forfeited if you act maliciously. Receive the governed frontend share from predictions submitted via your interface." />
                 </p>
               </div>
               <div className="text-right">
-                <span className="text-xl font-bold text-base-content">{STAKE_AMOUNT.toLocaleString()} HREP</span>
+                <span className="text-xl font-bold text-base-content">{STAKE_AMOUNT.toLocaleString()} MREP</span>
               </div>
             </div>
           </div>
@@ -555,11 +520,7 @@ export function FrontendRegistration() {
             className="btn btn-submit w-full"
             onClick={handleRegister}
             disabled={
-              isRegistering ||
-              isAwaitingSponsoredSubmitCalls ||
-              isMissingGasBalance ||
-              hrepFormatted < STAKE_AMOUNT ||
-              !canRegisterWithCurrentAddress
+              isRegistering || isAwaitingSponsoredSubmitCalls || isMissingGasBalance || hrepFormatted < STAKE_AMOUNT
             }
           >
             {isRegistering ? (
@@ -586,7 +547,7 @@ export function FrontendRegistration() {
             </div>
             <div className="text-right">
               <p className="text-base text-base-content/60">Staked</p>
-              <p className="text-lg font-bold">{stakedAmount.toLocaleString()} HREP</p>
+              <p className="text-lg font-bold">{stakedAmount.toLocaleString()} MREP</p>
             </div>
           </div>
 
@@ -600,7 +561,7 @@ export function FrontendRegistration() {
               </div>
               <div className="text-right">
                 <p className="text-base text-base-content/60">Claimable</p>
-                <p className="text-lg font-bold text-secondary">{totalClaimableRoundFeesFormatted.toFixed(2)} HREP</p>
+                <p className="text-lg font-bold text-secondary">{totalClaimableRoundFeesFormatted.toFixed(2)} MREP</p>
               </div>
             </div>
 
@@ -655,12 +616,12 @@ export function FrontendRegistration() {
                           </div>
                           <div className="text-right shrink-0">
                             <p className="text-sm text-base-content/60">Claimable</p>
-                            <p className="font-semibold">{(Number(BigInt(item.claimableFee)) / 1e6).toFixed(2)} HREP</p>
+                            <p className="font-semibold">{(Number(BigInt(item.claimableFee)) / 1e6).toFixed(2)} MREP</p>
                           </div>
                         </div>
                         <div className="mt-3 flex items-center justify-between gap-3">
                           <p className="text-xs text-base-content/50 truncate">
-                            Pool {(Number(BigInt(item.totalFrontendPool)) / 1e6).toFixed(2)} HREP
+                            Pool {(Number(BigInt(item.totalFrontendPool)) / 1e6).toFixed(2)} MREP
                           </p>
                           <button
                             className="btn btn-outline btn-primary btn-sm"
@@ -706,7 +667,7 @@ export function FrontendRegistration() {
             <p className="font-medium mb-3">Accumulated Fees</p>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-base text-base-content/60">HREP</p>
+                <p className="text-base text-base-content/60">MREP</p>
                 <p className="text-lg font-bold text-primary">{hrepFees.toFixed(2)}</p>
               </div>
               <button
@@ -747,7 +708,7 @@ export function FrontendRegistration() {
                   </button>
                   <p className="text-sm text-base-content/50 mt-1">
                     Exit requested. Complete it after the unbonding period to withdraw your{" "}
-                    {stakedAmount.toLocaleString()} HREP stake and any pending fees.
+                    {stakedAmount.toLocaleString()} MREP stake and any pending fees.
                     {exitAvailableAtLabel ? ` Available after ${exitAvailableAtLabel}.` : ""}
                   </p>
                 </>
@@ -762,7 +723,7 @@ export function FrontendRegistration() {
                   </button>
                   <p className="text-sm text-base-content/50 mt-1">
                     Starts a 14-day unbonding period. After that, you can complete deregistration to withdraw your{" "}
-                    {stakedAmount.toLocaleString()} HREP stake and any pending fees.
+                    {stakedAmount.toLocaleString()} MREP stake and any pending fees.
                   </p>
                 </>
               )}

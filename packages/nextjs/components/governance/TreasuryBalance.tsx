@@ -36,7 +36,7 @@ function PoolStat({ title, description, tooltip, value, isLoading, Icon }: PoolS
       {isLoading ? (
         <div className="h-8 w-32 bg-base-content/10 rounded animate-pulse mt-4" />
       ) : (
-        <p className="text-2xl font-bold tabular-nums mt-4">{formatBalance(value)} HREP</p>
+        <p className="text-2xl font-bold tabular-nums mt-4">{formatBalance(value)} MREP</p>
       )}
     </div>
   );
@@ -49,7 +49,7 @@ export const TreasuryBalance = () => {
     functionName: "treasury",
   });
 
-  // Read HREP balance of treasury
+  // Read MREP balance of treasury
   const { data: treasuryBalanceRaw, isLoading: balanceLoading } = useScaffoldReadContract({
     contractName: "HumanReputation",
     functionName: "balanceOf",
@@ -81,7 +81,7 @@ export const TreasuryBalance = () => {
       <div className="flex items-center gap-2">
         <h2 className={surfaceSectionHeadingClassName}>Protocol Pools</h2>
         <InfoTooltip
-          text="Live HREP balances across the treasury and protocol-controlled pools."
+          text="Live MREP balances across the treasury and protocol-controlled pools."
           className="[&>svg]:opacity-60"
         />
       </div>
@@ -109,8 +109,8 @@ export const TreasuryBalance = () => {
           Icon={UserGroupIcon}
         />
         <PoolStat
-          title="Human Faucet"
-          tooltip="Remaining faucet balance available for future claims."
+          title="Launch Distribution"
+          tooltip="Remaining launch distribution capacity for snapshot claims, calibration, onboarding, and governed ecosystem programs."
           value={faucetBalance}
           isLoading={faucetBalanceLoading}
           Icon={GiftIcon}

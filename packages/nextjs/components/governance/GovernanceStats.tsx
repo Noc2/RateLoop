@@ -8,7 +8,7 @@ import { useGovernanceStats } from "~~/hooks/useGovernance";
 
 function formatHrep(amount: bigint | undefined) {
   if (amount === undefined) return "—";
-  return `${(Number(amount) / 1e6).toLocaleString(undefined, { maximumFractionDigits: 2 })} HREP`;
+  return `${(Number(amount) / 1e6).toLocaleString(undefined, { maximumFractionDigits: 2 })} MREP`;
 }
 
 function formatBlocks(blocks: bigint | undefined) {

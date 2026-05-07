@@ -73,7 +73,7 @@ function buildTreasuryGrantDescription(values: Record<string, string>) {
   const milestones = cleanDescriptionValue(values.milestones, "Unspecified");
 
   return [
-    `Treasury grant: ${amount} HREP to ${recipient}`,
+    `Treasury grant: ${amount} MREP to ${recipient}`,
     "",
     `Track: ${track}`,
     `Recipient type: ${recipientType}`,
@@ -81,7 +81,7 @@ function buildTreasuryGrantDescription(values: Record<string, string>) {
     `Expected impact: ${impact}`,
     `Milestones/reporting: ${milestones}`,
     "",
-    "This proposal transfers HREP from the governance timelock treasury to the recipient. HREP carries voting power and is intended for protocol-aligned ecosystem participation, not as a protocol-backed payment.",
+    "This proposal transfers MREP from the governance timelock treasury to the recipient. MREP carries voting power and is intended for protocol-aligned ecosystem participation, not as a protocol-backed payment.",
   ].join("\n");
 }
 
@@ -105,7 +105,7 @@ function formatHrepAmount(value: bigint | undefined) {
   const wholePart = Number(whole).toLocaleString();
   const trimmedFraction = fraction.replace(/0+$/, "").slice(0, 2);
 
-  return trimmedFraction ? `${wholePart}.${trimmedFraction} HREP` : `${wholePart} HREP`;
+  return trimmedFraction ? `${wholePart}.${trimmedFraction} MREP` : `${wholePart} MREP`;
 }
 
 function formatPercentOf(value: bigint | undefined, total: bigint | undefined) {
@@ -148,14 +148,14 @@ const actionTemplates: readonly GovernanceActionTemplate[] = [
     mode: "proposal",
     contractName: "CuryoGovernor",
     functionName: "setProposalThreshold",
-    description: "Create a proposal to update the HREP required to create new proposals.",
-    fields: [{ key: "threshold", label: "Proposal threshold (HREP)", type: "hrep", required: true }],
+    description: "Create a proposal to update the MREP required to create new proposals.",
+    fields: [{ key: "threshold", label: "Proposal threshold (MREP)", type: "hrep", required: true }],
     buildArgs: (_, parser) => {
       const threshold = parser.hrep("threshold", "Proposal threshold");
       if (threshold === 0n) throw new Error("Proposal threshold must be greater than zero.");
       return [threshold];
     },
-    buildDescription: values => `Set proposal threshold to ${values.threshold || "0"} HREP`,
+    buildDescription: values => `Set proposal threshold to ${values.threshold || "0"} MREP`,
   },
   {
     id: "governor-update-quorum",
@@ -176,7 +176,7 @@ const actionTemplates: readonly GovernanceActionTemplate[] = [
     mode: "proposal",
     contractName: "HumanReputation",
     functionName: "transfer",
-    description: "Create a proposal to send HREP from the governance timelock treasury to a recipient.",
+    description: "Create a proposal to send MREP from the governance timelock treasury to a recipient.",
     allowCustomDescription: false,
     fields: [
       {
@@ -188,7 +188,7 @@ const actionTemplates: readonly GovernanceActionTemplate[] = [
       },
       {
         key: "amount",
-        label: "Grant amount (HREP)",
+        label: "Grant amount (MREP)",
         type: "hrep",
         required: true,
         helperText: "Use a narrow amount that matches the requested ecosystem role.",
@@ -212,7 +212,7 @@ const actionTemplates: readonly GovernanceActionTemplate[] = [
         label: "Purpose",
         type: "textarea",
         required: true,
-        helperText: "Explain why this recipient should hold HREP.",
+        helperText: "Explain why this recipient should hold MREP.",
       },
       {
         key: "impact",
@@ -226,12 +226,12 @@ const actionTemplates: readonly GovernanceActionTemplate[] = [
         label: "Milestones / reporting expectations",
         type: "textarea",
         required: true,
-        helperText: "State any deliverables, reporting cadence, or follow-up evidence voters should expect.",
+        helperText: "State any deliverables, reporting cadence, or follow-up evidence governance voters should expect.",
       },
     ],
     buildArgs: (_, parser) => {
       const amount = parser.hrep("amount", "Grant amount");
-      if (amount <= 0n) throw new Error("Grant amount must be greater than 0 HREP.");
+      if (amount <= 0n) throw new Error("Grant amount must be greater than 0 MREP.");
       return [parser.address("recipient", "Recipient address"), amount];
     },
     buildDescription: buildTreasuryGrantDescription,
@@ -246,7 +246,7 @@ const actionTemplates: readonly GovernanceActionTemplate[] = [
     description: "Create a proposal to slash a frontend's stake and disable it.",
     fields: [
       { key: "frontend", label: "Frontend address", type: "address", required: true },
-      { key: "amount", label: "Slash amount (HREP)", type: "hrep", required: true },
+      { key: "amount", label: "Slash amount (MREP)", type: "hrep", required: true },
       { key: "reason", label: "Reason", type: "textarea", required: true },
     ],
     buildArgs: (_, parser) => [
@@ -254,7 +254,7 @@ const actionTemplates: readonly GovernanceActionTemplate[] = [
       parser.hrep("amount", "Slash amount"),
       parser.string("reason", "Reason"),
     ],
-    buildDescription: values => `Slash frontend ${values.frontend || "address"} by ${values.amount || "0"} HREP`,
+    buildDescription: values => `Slash frontend ${values.frontend || "address"} by ${values.amount || "0"} MREP`,
   },
   {
     id: "frontend-unslash",
@@ -271,11 +271,11 @@ const actionTemplates: readonly GovernanceActionTemplate[] = [
   {
     id: "frontend-set-voter-id",
     group: "Frontend Registry",
-    label: "Set frontend Voter ID contract",
+    label: "Set frontend optional identity contract",
     mode: "proposal",
     contractName: "FrontendRegistry",
     functionName: "setVoterIdNFT",
-    description: "Create a proposal to update the VoterIdNFT used by FrontendRegistry.",
+    description: "Create a proposal to update the optional identity contract used by FrontendRegistry.",
     advanced: true,
     fields: [{ key: "voterId", label: "VoterIdNFT address", type: "address", required: true }],
     buildArgs: (_, parser) => [parser.address("voterId", "VoterIdNFT address")],
@@ -371,7 +371,7 @@ const actionTemplates: readonly GovernanceActionTemplate[] = [
   {
     id: "content-set-voter-id",
     group: "Content Registry",
-    label: "Set content Voter ID contract",
+    label: "Set content optional identity contract",
     mode: "proposal",
     contractName: "ContentRegistry",
     functionName: "setVoterIdNFT",
@@ -526,7 +526,7 @@ export function GovernanceActionComposer() {
       try {
         return parseUnits(value, 6);
       } catch {
-        throw new Error(`${label} must be a valid HREP amount.`);
+        throw new Error(`${label} must be a valid MREP amount.`);
       }
     },
     bytes32: (key, label) => {
@@ -794,14 +794,14 @@ export function GovernanceActionComposer() {
                   </p>
                   {treasuryAddressMismatch && (
                     <p className="text-base text-warning">
-                      The ContentRegistry treasury address is not the governor timelock. This proposal spends HREP held
+                      The ContentRegistry treasury address is not the governor timelock. This proposal spends MREP held
                       by the timelock treasury.
                     </p>
                   )}
                   {grantExceedsTreasury && (
                     <p className="text-base text-warning">
-                      The grant amount exceeds the current timelock HREP balance, so execution would fail unless the
-                      treasury receives more HREP before execution.
+                      The grant amount exceeds the current timelock MREP balance, so execution would fail unless the
+                      treasury receives more MREP before execution.
                     </p>
                   )}
                 </div>
