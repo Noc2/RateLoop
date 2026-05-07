@@ -1,27 +1,25 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import { useAccount } from "wagmi";
 import { XMarkIcon } from "@heroicons/react/24/outline";
 import { HumanSignInButton } from "~~/components/shared/HumanSignInButton";
 import { useOnboarding } from "~~/hooks/useOnboarding";
-import { useVoterIdNFT } from "~~/hooks/useVoterIdNFT";
-import { HUMAN_SIGN_IN_FAUCET_ROUTE, HUMAN_SIGN_IN_LABEL } from "~~/lib/home/humanSignInRoute";
+import { HUMAN_SIGN_IN_LABEL } from "~~/lib/home/humanSignInRoute";
 
 const STEPS = [
   {
     label: HUMAN_SIGN_IN_LABEL,
-    desc: "get your Voter ID to vote, stake, and earn rewards",
+    desc: "connect a wallet and start building calibration history",
   },
-  { label: "Vote", desc: "place your prediction while direction stays hidden" },
-  { label: "Stake", desc: "back your prediction with HREP tokens" },
+  { label: "Predict", desc: "submit your expected final rating while the round stays private" },
+  { label: "Lock", desc: "back your prediction with reputation once you are eligible" },
   {
     label: "Reveal & Resolve",
-    desc: "after the selected blind phase, votes are revealed and rounds settle automatically",
+    desc: "after the private phase, predictions are revealed and the round settles",
   },
-  { label: "Claim", desc: "collect your rewards if your prediction was correct" },
+  { label: "Claim", desc: "collect eligible rewards after settlement" },
 ];
 
 /**
@@ -31,7 +29,6 @@ const STEPS = [
 export function VotingGuide() {
   const { shouldShowGuide, dismissGuide } = useOnboarding();
   const { address } = useAccount();
-  const { hasVoterId } = useVoterIdNFT(address);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => setMounted(true), []);
@@ -80,13 +77,9 @@ export function VotingGuide() {
             <HumanSignInButton className="btn btn-sm btn-primary w-full border-none" style={{ fontSize: "16px" }}>
               {HUMAN_SIGN_IN_LABEL}
             </HumanSignInButton>
-          ) : !hasVoterId ? (
-            <Link href={HUMAN_SIGN_IN_FAUCET_ROUTE} className="btn btn-primary btn-sm w-full">
-              Get Voter ID
-            </Link>
           ) : (
             <button type="button" onClick={dismissGuide} className="btn btn-primary btn-sm w-full">
-              Start voting
+              Start rating
             </button>
           )}
         </div>
