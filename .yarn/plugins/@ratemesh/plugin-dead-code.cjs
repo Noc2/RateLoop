@@ -1,7 +1,7 @@
 "use strict";
 
 module.exports = {
-  name: "@curyo/plugin-dead-code",
+  name: "@ratemesh/plugin-dead-code",
   factory: require => {
     const { BaseCommand } = require("@yarnpkg/cli");
     const { Command, Option } = require("clipanion");

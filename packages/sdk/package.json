@@ -3,15 +3,15 @@
   "version": "0.0.1",
   "private": true,
   "type": "module",
-  "description": "Framework-agnostic frontend SDK foundations for Curyo integrations",
-  "homepage": "https://github.com/Noc2/CURYO/tree/main/packages/sdk",
+  "description": "Framework-agnostic frontend SDK foundations for RateMesh integrations",
+  "homepage": "https://github.com/Noc2/RateMesh/tree/main/packages/sdk",
   "repository": {
     "type": "git",
-    "url": "git@github.com:Noc2/CURYO.git",
+    "url": "git@github.com:Noc2/RateMesh.git",
     "directory": "packages/sdk"
   },
   "bugs": {
-    "url": "https://github.com/Noc2/CURYO/issues"
+    "url": "https://github.com/Noc2/RateMesh/issues"
   },
   "keywords": [
     "ratemesh",
