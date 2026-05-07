@@ -984,9 +984,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         uint256 firstRoundId = _revealRoundWith(_fourVoters(), contentIds[0], _directions(true, true, false, true));
         uint256 secondRoundId = _revealRoundWith(_fourVoters(), contentIds[1], _directions(true, true, false, true));
         assertLe(RoundEngineReadHelpers.round(votingEngine, contentIds[0], firstRoundId).thresholdReachedAt, closesAt);
-        assertLe(
-            RoundEngineReadHelpers.round(votingEngine, contentIds[1], secondRoundId).thresholdReachedAt, closesAt
-        );
+        assertLe(RoundEngineReadHelpers.round(votingEngine, contentIds[1], secondRoundId).thresholdReachedAt, closesAt);
 
         vm.warp(closesAt + 1);
         votingEngine.settleRound(contentIds[0], firstRoundId);
@@ -1980,8 +1978,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         RoundLib.RoundConfig memory roundConfig = RoundLib.RoundConfig({
             epochDuration: uint32(EPOCH_DURATION), maxDuration: uint32(7 days), minVoters: 3, maxVoters: 4
         });
-        uint256 contentId =
-            _submitQuestionWithRoundConfig("https://example.com/min-quorum-late-extra.jpg", roundConfig);
+        uint256 contentId = _submitQuestionWithRoundConfig("https://example.com/min-quorum-late-extra.jpg", roundConfig);
         uint256 expiresAt = block.timestamp + EPOCH_DURATION + 10;
         uint256 rewardPoolId = _createRewardPoolWithExpiry(contentId, REWARD_POOL_AMOUNT, 3, 1, expiresAt);
 
@@ -2299,17 +2296,18 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.stopPrank();
     }
 
-    function testStandaloneUsdcRewardPoolRejectsFunderWithoutVoterId() public {
+    function testStandaloneUsdcRewardPoolAllowsFunderWithoutVoterId() public {
         uint256 contentId = _submitQuestion("");
         address unverifiedFunder = address(0xB0B);
         usdc.mint(unverifiedFunder, REWARD_POOL_AMOUNT);
 
         vm.startPrank(unverifiedFunder);
         usdc.approve(address(rewardPoolEscrow), REWARD_POOL_AMOUNT);
-        vm.expectRevert("Voter ID required");
-        rewardPoolEscrow.createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1, block.timestamp + 30 days, 0);
+        uint256 rewardPoolId =
+            rewardPoolEscrow.createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1, block.timestamp + 30 days, 0);
         vm.stopPrank();
-        assertEq(usdc.balanceOf(address(rewardPoolEscrow)), 0);
+        assertGt(rewardPoolId, 0);
+        assertEq(usdc.balanceOf(address(rewardPoolEscrow)), REWARD_POOL_AMOUNT);
     }
 
     function testAgentWalletQuestionSubmissionFundsEscrowFromSigningWallet() public {
@@ -2385,18 +2383,20 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertEq(usdc.balanceOf(agentWallet), agentBalanceBefore - rewardTerms.amount);
     }
 
-    function testUndelegatedAgentQuestionSubmissionWithUsdcRewardRequiresVoterId() public {
+    function testUndelegatedAgentQuestionSubmissionWithUsdcRewardAllowsOpenSubmitter() public {
         address agentWallet = address(0xA11CE);
         uint256 nextContentIdBefore = registry.nextContentId();
         uint256 escrowBalanceBefore = usdc.balanceOf(address(rewardPoolEscrow));
 
-        _submitAgentQuestionWithUsdcReward(agentWallet, "agent-undelegated-no-voter-id", true);
+        (uint256 contentId,) = _submitAgentQuestionWithUsdcReward(agentWallet, "agent-undelegated-no-voter-id", false);
 
-        assertEq(registry.nextContentId(), nextContentIdBefore);
-        assertEq(usdc.balanceOf(address(rewardPoolEscrow)), escrowBalanceBefore);
+        assertEq(contentId, nextContentIdBefore);
+        assertEq(registry.getSubmitterIdentity(contentId), agentWallet);
+        assertEq(registry.contentSubmitterNullifier(contentId), 0);
+        assertEq(usdc.balanceOf(address(rewardPoolEscrow)), escrowBalanceBefore + REWARD_POOL_AMOUNT);
     }
 
-    function testX402QuestionSubmissionRequiresVoterId() public {
+    function testX402QuestionSubmissionAllowsOpenSubmitter() public {
         address agentWallet = address(0xA11CE);
         X402TestQuestion memory question = _x402TestQuestion();
         Eip3009Authorization memory authorization = _x402Authorization(agentWallet, question);
@@ -2409,8 +2409,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         _reserveX402Question(agentWallet, question);
         vm.warp(block.timestamp + 1);
 
-        vm.expectRevert("Voter ID required");
-        x402QuestionSubmitter.submitQuestionWithX402Payment(
+        uint256 contentId = x402QuestionSubmitter.submitQuestionWithX402Payment(
             question.contextUrl,
             question.imageUrls,
             "",
@@ -2425,10 +2424,13 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             authorization
         );
 
-        assertFalse(usdc.authorizationState(agentWallet, authorization.nonce));
-        assertEq(registry.nextContentId(), nextContentIdBefore);
-        assertEq(usdc.balanceOf(address(rewardPoolEscrow)), escrowBalanceBefore);
-        assertEq(usdc.balanceOf(agentWallet), agentBalanceBefore);
+        assertTrue(usdc.authorizationState(agentWallet, authorization.nonce));
+        assertEq(contentId, nextContentIdBefore);
+        assertEq(registry.getSubmitterIdentity(contentId), agentWallet);
+        assertEq(registry.contentSubmitterNullifier(contentId), 0);
+        assertEq(registry.nextContentId(), nextContentIdBefore + 1);
+        assertEq(usdc.balanceOf(address(rewardPoolEscrow)), escrowBalanceBefore + question.rewardTerms.amount);
+        assertEq(usdc.balanceOf(agentWallet), agentBalanceBefore - question.rewardTerms.amount);
     }
 
     function testX402QuestionSubmissionRequiresReservationBeforeUsdcAuthorization() public {

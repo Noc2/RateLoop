@@ -254,7 +254,6 @@ contract QuestionRewardPoolEscrow is
         require(usdcToken_ != address(0), "Invalid token");
         require(registry_ != address(0), "Invalid registry");
         require(votingEngine_ != address(0), "Invalid engine");
-        require(voterIdNFT_ != address(0), "Invalid Voter ID");
 
         __AccessControl_init();
         __Pausable_init();
@@ -280,7 +279,6 @@ contract QuestionRewardPoolEscrow is
         uint256 bountyClosesAt,
         uint256 feedbackClosesAt
     ) external nonReentrant whenNotPaused returns (uint256 rewardPoolId) {
-        require(voterIdNFT.getTokenId(msg.sender) != 0, "Voter ID required");
         _requireCurrentRegistryEscrow();
         rewardPoolId = _createRewardPool(
             contentId,
@@ -562,12 +560,9 @@ contract QuestionRewardPoolEscrow is
         require(votingEngine.roundUnrevealedCleanupRemaining(rewardPool.contentId, roundId) == 0, "Cleanup pending");
         _qualifyRoundIfNeeded(rewardPoolId, rewardPool, roundId);
 
-        IVoterIdNFT roundVoterIdNft = _roundVoterIdNft(rewardPool.contentId, roundId);
-        uint256 voterId = _requireVoterId(roundVoterIdNft, msg.sender);
-        address rewardRecipient = roundVoterIdNft.getHolder(voterId);
-        require(!_isExcludedVoter(rewardPool, roundId, voterId), "Excluded voter");
-
-        bytes32 commitKey = _commitKeyForVoter(rewardPool.contentId, roundId, roundVoterIdNft, voterId);
+        (uint256 voterId, bytes32 commitKey, address rewardRecipient) =
+            _resolveQuestionRewardClaim(rewardPool, roundId, msg.sender);
+        require(!_isExcludedClaimant(rewardPool, roundId, voterId, msg.sender), "Excluded voter");
         require(commitKey != bytes32(0), "No commit");
         require(!rewardClaimed[rewardPoolId][roundId][commitKey], "Already claimed");
 
@@ -710,7 +705,6 @@ contract QuestionRewardPoolEscrow is
         // Indexers can detect round-set completion by counting QuestionBundleRoundRecorded
         // events for a given (bundleId, roundSetIndex) and matching against bundleQuestions.length.
     }
-
 
     function claimQuestionBundleReward(uint256 bundleId, uint256 roundSetIndex)
         external
@@ -908,14 +902,11 @@ contract QuestionRewardPoolEscrow is
         if (rewardPool.id == 0) return 0;
         if (rewardPool.refunded) return 0;
 
-        IVoterIdNFT roundVoterIdNft = _roundVoterIdNft(rewardPool.contentId, roundId);
-        uint256 voterId = roundVoterIdNft.getTokenId(account);
-        if (voterId == 0 || _isExcludedVoter(rewardPool, roundId, voterId)) {
+        (uint256 voterId, bytes32 commitKey,) = _resolveQuestionRewardClaim(rewardPool, roundId, account);
+        if (commitKey == bytes32(0) || _isExcludedClaimant(rewardPool, roundId, voterId, account)) {
             return 0;
         }
 
-        bytes32 commitKey = _commitKeyForVoter(rewardPool.contentId, roundId, roundVoterIdNft, voterId);
-        if (commitKey == bytes32(0)) return 0;
         if (rewardClaimed[rewardPoolId][roundId][commitKey]) return 0;
         (bool revealed, address frontend) =
             _timelyRevealedCommitFrontend(rewardPool.contentId, roundId, commitKey, rewardPool.bountyClosesAt);
@@ -979,14 +970,16 @@ contract QuestionRewardPoolEscrow is
         _unpause();
     }
 
-    function _resolveFunderIdentity(address funder, uint8 asset)
+    function _resolveFunderIdentity(address funder, uint8)
         internal
         view
         returns (uint256 funderVoterId, address funderIdentity, uint256 funderNullifier)
     {
+        if (address(voterIdNFT) == address(0)) {
+            return (0, funder, 0);
+        }
         funderVoterId = voterIdNFT.getTokenId(funder);
         if (funderVoterId == 0) {
-            require(asset == REWARD_ASSET_USDC, "Voter ID required");
             return (0, funder, 0);
         }
 
@@ -1460,9 +1453,8 @@ contract QuestionRewardPoolEscrow is
         // blows out memory expansion at bounds-limit maxVoters.
         (address voter,, address commitFrontend, uint48 commitRevealedAt, bool commitRevealed,,) =
             votingEngine.commitCore(contentId, roundId, commitKey);
-        return (
-            voter != address(0) && commitRevealed && (closesAt == 0 || commitRevealedAt <= closesAt), commitFrontend
-        );
+        return
+            (voter != address(0) && commitRevealed && (closesAt == 0 || commitRevealedAt <= closesAt), commitFrontend);
     }
 
     function _isExcludedVoter(RewardPool storage rewardPool, uint256 roundId, uint256 voterId)
@@ -1483,9 +1475,41 @@ contract QuestionRewardPoolEscrow is
         );
     }
 
+    function _isExcludedClaimant(RewardPool storage rewardPool, uint256 roundId, uint256 voterId, address account)
+        internal
+        view
+        returns (bool)
+    {
+        if (voterId != 0) return _isExcludedVoter(rewardPool, roundId, voterId);
+        return account == rewardPool.funder || account == rewardPoolPayerIdentity[rewardPool.id]
+            || account == rewardPool.submitterIdentity;
+    }
+
     function _requireVoterId(IVoterIdNFT voterIdNft_, address account) internal view returns (uint256 voterId) {
         voterId = voterIdNft_.getTokenId(account);
         require(voterId != 0, "Voter ID required");
+    }
+
+    function _resolveQuestionRewardClaim(RewardPool storage rewardPool, uint256 roundId, address account)
+        internal
+        view
+        returns (uint256 voterId, bytes32 commitKey, address rewardRecipient)
+    {
+        rewardRecipient = account;
+        address voterIdNftAddress = _roundVoterIdNftAddress(rewardPool.contentId, roundId);
+        if (voterIdNftAddress != address(0)) {
+            IVoterIdNFT roundVoterIdNft = IVoterIdNFT(voterIdNftAddress);
+            voterId = roundVoterIdNft.getTokenId(account);
+            if (voterId != 0) {
+                rewardRecipient = roundVoterIdNft.getHolder(voterId);
+                commitKey = _commitKeyForVoter(rewardPool.contentId, roundId, roundVoterIdNft, voterId);
+                if (commitKey != bytes32(0)) return (voterId, commitKey, rewardRecipient);
+            }
+        }
+
+        commitKey = votingEngine.voterCommitHash(rewardPool.contentId, roundId, account);
+        voterId = 0;
+        rewardRecipient = account;
     }
 
     function _commitKeyForVoter(uint256 contentId, uint256 roundId, IVoterIdNFT voterIdNft_, uint256 voterId)
@@ -1503,7 +1527,9 @@ contract QuestionRewardPoolEscrow is
     }
 
     function _voterIdForRound(uint256 contentId, uint256 roundId, address account) internal view returns (uint256) {
-        return _roundVoterIdNft(contentId, roundId).getTokenId(account);
+        address voterIdNftAddress = _roundVoterIdNftAddress(contentId, roundId);
+        if (voterIdNftAddress == address(0)) return 0;
+        return IVoterIdNFT(voterIdNftAddress).getTokenId(account);
     }
 
     function _roundVoterIdNft(uint256 contentId, uint256 roundId) internal view returns (IVoterIdNFT) {
