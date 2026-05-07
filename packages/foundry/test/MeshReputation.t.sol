@@ -39,9 +39,11 @@ contract MeshReputationTest is Test {
         assertEq(token.balanceOf(rater), 1_000e6);
         assertEq(token.delegates(rater), rater);
 
-        vm.prank(admin);
+        uint256 maxSupply = token.MAX_SUPPLY();
+
         vm.expectRevert("Exceeds max supply");
-        token.mint(rater, token.MAX_SUPPLY());
+        vm.prank(admin);
+        token.mint(rater, maxSupply);
     }
 
     function test_GovernanceCanMintWhenItIsAlsoAdmin() public {
