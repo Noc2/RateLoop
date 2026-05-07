@@ -37,8 +37,8 @@ const SdkPage: NextPage = () => {
 
       <h2>Install</h2>
       <p>
-        The SDK currently lives in the monorepo as <code>packages/sdk</code> and is exposed as <code>@ratemesh/sdk</code>.
-        Browse the{" "}
+        The SDK currently lives in the monorepo as <code>packages/sdk</code> and is exposed as{" "}
+        <code>@ratemesh/sdk</code>. Browse the{" "}
         <a href={sdkSourceHref} target="_blank" rel="noopener noreferrer" className="link link-primary">
           SDK source on GitHub
         </a>{" "}
