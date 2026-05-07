@@ -25,16 +25,16 @@ Run these from the monorepo root unless noted otherwise:
 | `yarn next:build`                               | Production build                                                                           |
 | `yarn next:lint`                                | Run ESLint                                                                                 |
 | `yarn next:check-types`                         | TypeScript type checking                                                                   |
-| `yarn workspace @curyo/nextjs format`           | Format frontend code with Prettier                                                         |
-| `yarn workspace @curyo/nextjs db:generate`      | Generate Drizzle migrations                                                                |
-| `yarn workspace @curyo/nextjs db:push`          | Apply migrations to the configured database                                                |
-| `yarn workspace @curyo/nextjs db:studio`        | Open the Drizzle studio UI                                                                 |
-| `yarn workspace @curyo/nextjs whitepaper`       | Generate the whitepaper PDF                                                                |
-| `yarn workspace @curyo/nextjs demo:record`      | Record the short Playwright product demo video                                             |
+| `yarn workspace @ratemesh/nextjs format`           | Format frontend code with Prettier                                                         |
+| `yarn workspace @ratemesh/nextjs db:generate`      | Generate Drizzle migrations                                                                |
+| `yarn workspace @ratemesh/nextjs db:push`          | Apply migrations to the configured database                                                |
+| `yarn workspace @ratemesh/nextjs db:studio`        | Open the Drizzle studio UI                                                                 |
+| `yarn workspace @ratemesh/nextjs whitepaper`       | Generate the whitepaper PDF                                                                |
+| `yarn workspace @ratemesh/nextjs demo:record`      | Record the short Playwright product demo video                                             |
 | `yarn e2e`                                      | Run the Playwright smoke suite (Chromium)                                                  |
-| `yarn workspace @curyo/nextjs e2e:ci:lifecycle` | Run lifecycle suites for settlement, cancellation, and dormancy                            |
-| `yarn workspace @curyo/nextjs e2e:ci:keeper`    | Run keeper-backed settlement coverage                                                      |
-| `yarn workspace @curyo/nextjs e2e:full`         | Run the full local Playwright suite, including keeper coverage                             |
+| `yarn workspace @ratemesh/nextjs e2e:ci:lifecycle` | Run lifecycle suites for settlement, cancellation, and dormancy                            |
+| `yarn workspace @ratemesh/nextjs e2e:ci:keeper`    | Run keeper-backed settlement coverage                                                      |
+| `yarn workspace @ratemesh/nextjs e2e:full`         | Run the full local Playwright suite, including keeper coverage                             |
 | `yarn e2e:ui`                                   | Run E2E tests with interactive Playwright UI                                               |
 
 CI runs the smoke, lifecycle, and keeper-backed suites separately, so `yarn e2e` is only the smallest browser pass.
@@ -52,7 +52,7 @@ yarn dev:stack
 Then record the demo:
 
 ```bash
-yarn workspace @curyo/nextjs demo:record
+yarn workspace @ratemesh/nextjs demo:record
 ```
 
 The recorder saves a `.webm` file under `packages/nextjs/e2e/artifacts/demo/`. Set `CURYO_DEMO_HEADLESS=false` if you want to watch the browser while it records, or `CURYO_DEMO_VIDEO_PATH=/absolute/path/demo.webm` to override the output file location.
@@ -78,7 +78,7 @@ Key environment variables (see `.env.example` for the full list):
 | `NEXT_PUBLIC_PONDER_URL`                          | Public Ponder indexer URL (required in production)                                                                                       |
 | `THIRDWEB_SERVER_VERIFIER_SECRET`                 | Shared secret used by the thirdweb server verifier webhook                                                                               |
 | `CURYO_X402_USDC_ADDRESS`                         | Optional Celo USDC override for direct agent bounty planning; Celo and Celo Sepolia default automatically                    |
-| `NEXT_PUBLIC_QUESTION_REWARD_POOL_ESCROW_ADDRESS` | Optional question reward escrow override while generated deployment metadata catches up; supported chains default from `@curyo/contracts` |
+| `NEXT_PUBLIC_QUESTION_REWARD_POOL_ESCROW_ADDRESS` | Optional question reward escrow override while generated deployment metadata catches up; supported chains default from `@ratemesh/contracts` |
 | `NEXT_PUBLIC_CELO_USDC_ADDRESS`                   | Optional browser-side Celo USDC override for USDC Bounties                                                                               |
 | `CURYO_MCP_AGENTS`                                | Optional JSON array of managed MCP agents, bearer token hashes, scopes, daily budgets, per-ask caps, wallet addresses, and optional category allowlists |
 | `CURYO_MCP_ALLOWED_ORIGINS`                       | Comma-separated browser origins allowed to call `/api/mcp` and `/api/mcp/public`; non-browser agent calls may omit `Origin`              |
@@ -105,10 +105,10 @@ Notes:
 - Agent clients should follow the AI docs flow: list templates, quote with `walletAddress`, ask with a stable client request ID, execute and confirm wallet calls, wait for a status read or signed managed callback, then fetch the structured result. Operator token lifecycle, scopes, budgets, category allowlists, callback recovery, and audit history belong in `/settings?tab=agents` for managed agents; static `CURYO_MCP_AGENTS` remains supported for server-configured policies.
 - The Ask page can host JPG, PNG, and WEBP image context through private Vercel Blob uploads. Uploaded images are validated, metadata-stripped into WEBP, moderated with OpenAI, and served through `/api/attachments/images/{attachmentId}.webp` only after approval. Agents should recommend this route when users have local mockups, screenshots, or generated images instead of asking them to find a third-party image host.
 - Private artifacts, embargoed asks, restricted voter-only context, and delayed result disclosure are deferred. Current agent flows should assume public context URLs, public submitted questions, and public settled result pages.
-- No core contract address env vars are needed for supported chains. The frontend reads core deployment metadata from `@curyo/contracts` and fails fast if `NEXT_PUBLIC_TARGET_NETWORKS` includes a chain without those definitions; rollout contracts such as question reward pools can use their documented env fallbacks until generated metadata catches up.
+- No core contract address env vars are needed for supported chains. The frontend reads core deployment metadata from `@ratemesh/contracts` and fails fast if `NEXT_PUBLIC_TARGET_NETWORKS` includes a chain without those definitions; rollout contracts such as question reward pools can use their documented env fallbacks until generated metadata catches up.
 - In production, the intended setup is one Railway Postgres service with separate logical databases for Ponder and Next.js.
 - If your Postgres provider terminates TLS with a private or self-signed chain, append `uselibpqcompat=true&sslmode=require` to `DATABASE_URL` to opt out of the app's default `verify-full` normalization.
-- For local development, `yarn dev:db` and `yarn dev:stack` manage a Docker Postgres container when `DATABASE_URL` points to localhost. `yarn dev:stack` only runs `db:push` automatically for local databases; non-local databases require a manual `yarn workspace @curyo/nextjs db:push` or the explicit `CURYO_DEV_STACK_ALLOW_REMOTE_DB_PUSH=1` opt-in.
+- For local development, `yarn dev:db` and `yarn dev:stack` manage a Docker Postgres container when `DATABASE_URL` points to localhost. `yarn dev:stack` only runs `db:push` automatically for local databases; non-local databases require a manual `yarn workspace @ratemesh/nextjs db:push` or the explicit `CURYO_DEV_STACK_ALLOW_REMOTE_DB_PUSH=1` opt-in.
 - On Next.js 15, `NextRequest.ip` is not reliably populated. On non-Vercel production hosts you must configure `RATE_LIMIT_TRUSTED_IP_HEADERS` to the header(s) your hosting proxy overwrites. Vercel auto-trusts `x-real-ip`, and localhost shortcuts are only enabled for development or explicit local production-style E2E builds. Protected API routes fail closed when no trusted client IP can be derived or when the rate-limit store is unavailable.
 - The free transaction quota is enforced by the thirdweb server verifier route at `/api/thirdweb/verify-transaction`. Configure the same secret in thirdweb’s dashboard and in `THIRDWEB_SERVER_VERIFIER_SECRET`.
 - The old x402 question route has been removed. Paid agent asks use ordered wallet calls or native x402-style USDC authorizations that fund protocol escrow directly; no Curyo executor, custody path, saved policy token, or separate service fee is part of the default ask flow. USDC-funded asks do not require a Voter ID, while voting and identity-gated claim flows still do.
@@ -154,6 +154,6 @@ The frontend reads on-chain data in two ways:
 1. **Wagmi/Scaffold-ETH hooks** — direct contract reads and writes via the user's wallet
 2. **Ponder API** — indexed historical data fetched through `services/ponder/client.ts`
 
-Shared contract ABIs and deployment metadata come from the `@curyo/contracts` workspace package.
+Shared contract ABIs and deployment metadata come from the `@ratemesh/contracts` workspace package.
 
 Uses the `~~/*` path alias for imports from the project root. All client components require the `"use client"` directive.

@@ -45,9 +45,9 @@ yarn agents:quote --file packages/agents/examples/questions/landing-pitch-review
 yarn agents:ask --file packages/agents/examples/questions/landing-pitch-review.json
 
 # Local signer path for Codex-like agents that can hold an encrypted keystore.
-yarn workspace @curyo/agents wallet --generate --keystore ~/.curyo/local-signer.json
-yarn workspace @curyo/agents wallet
-yarn workspace @curyo/agents local-ask --file packages/agents/examples/questions/landing-pitch-review.json
+yarn workspace @ratemesh/agents wallet --generate --keystore ~/.curyo/local-signer.json
+yarn workspace @ratemesh/agents wallet
+yarn workspace @ratemesh/agents local-ask --file packages/agents/examples/questions/landing-pitch-review.json
 
 # Recover later without resubmitting.
 yarn agents:status --operation-key 0x...
@@ -93,9 +93,9 @@ export CURYO_LOCAL_SIGNER_KEYSTORE_PASSWORD="$(security find-generic-password -a
 export CURYO_RPC_URL="https://forno.celo.org"
 export CURYO_CHAIN_ID=42220
 
-yarn workspace @curyo/agents wallet --generate
-yarn workspace @curyo/agents wallet
-yarn workspace @curyo/agents local-ask --file packages/agents/examples/questions/landing-pitch-review.json
+yarn workspace @ratemesh/agents wallet --generate
+yarn workspace @ratemesh/agents wallet
+yarn workspace @ratemesh/agents local-ask --file packages/agents/examples/questions/landing-pitch-review.json
 ```
 
 The local signer never prints the private key. `CURYO_LOCAL_SIGNER_PRIVATE_KEY` exists only for short-lived CI or
@@ -150,7 +150,7 @@ These are intentionally narrow. They show questions worth a bounty because the a
 
 ## Templates
 
-The canonical built-in result templates are exported from `@curyo/agents/templates`. All templates still use
+The canonical built-in result templates are exported from `@ratemesh/agents/templates`. All templates still use
 `curyo.binary_staked_rating.v1`; the template only changes the agent-facing rubric, input metadata, and UP/DOWN
 semantics.
 

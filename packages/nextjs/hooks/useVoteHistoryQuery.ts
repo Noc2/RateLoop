@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { ROUND_STATE } from "@curyo/contracts/protocol";
+import { ROUND_STATE } from "@ratemesh/contracts/protocol";
 import { useScaffoldEventHistory } from "~~/hooks/scaffold-eth";
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import { usePageVisibility } from "~~/hooks/usePageVisibility";

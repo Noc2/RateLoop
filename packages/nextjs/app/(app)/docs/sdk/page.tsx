@@ -17,7 +17,7 @@ const SdkPage: NextPage = () => {
 
       <h2>What It Covers</h2>
       <p>
-        The core SDK in <code>@curyo/sdk</code> is intentionally framework-agnostic. It gives integrators a clean
+        The core SDK in <code>@ratemesh/sdk</code> is intentionally framework-agnostic. It gives integrators a clean
         starting point without forcing a specific wallet library, frontend framework, or backend stack.
       </p>
       <ul>
@@ -37,7 +37,7 @@ const SdkPage: NextPage = () => {
 
       <h2>Install</h2>
       <p>
-        The SDK currently lives in the monorepo as <code>packages/sdk</code> and is exposed as <code>@curyo/sdk</code>.
+        The SDK currently lives in the monorepo as <code>packages/sdk</code> and is exposed as <code>@ratemesh/sdk</code>.
         Browse the{" "}
         <a href={sdkSourceHref} target="_blank" rel="noopener noreferrer" className="link link-primary">
           SDK source on GitHub
@@ -45,12 +45,12 @@ const SdkPage: NextPage = () => {
         if you want to inspect the current implementation or track new helpers as they land.
       </p>
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
-        <code>{`import { createCuryoClient } from "@curyo/sdk";
+        <code>{`import { createCuryoClient } from "@ratemesh/sdk";
 import {
   buildCommitVoteParams,
   buildVoteTransferAndCallData,
   buildVoteTransferPayload,
-} from "@curyo/sdk/vote";`}</code>
+} from "@ratemesh/sdk/vote";`}</code>
       </pre>
 
       <h2>Quickstart</h2>

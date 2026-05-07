@@ -17,7 +17,7 @@ import "./fetch-shim";
 import { PONDER_URL } from "./ponder-url";
 import { E2E_RPC_URL } from "./service-urls";
 import { deriveAcceptedTlockTargetRound, deriveDrandRoundRevealableAtSeconds } from "./tlockRuntime";
-import { createTlockVoteCommit, encodeVoteTransferPayload, packVoteRoundContext } from "@curyo/contracts/voting";
+import { createTlockVoteCommit, encodeVoteTransferPayload, packVoteRoundContext } from "@ratemesh/contracts/voting";
 
 const ANVIL_RPC = E2E_RPC_URL;
 // Contract gas costs shift as local protocol code evolves, so E2E helpers estimate

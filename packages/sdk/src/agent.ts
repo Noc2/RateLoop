@@ -1,4 +1,4 @@
-import { ROUND_STATE, ROUND_STATE_LABEL } from "@curyo/contracts/protocol";
+import { ROUND_STATE, ROUND_STATE_LABEL } from "@ratemesh/contracts/protocol";
 import { CuryoApiError, CuryoSdkError } from "./errors";
 import {
   createCuryoReadClient,

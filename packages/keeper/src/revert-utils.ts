@@ -1,5 +1,5 @@
 import { BaseError, ContractFunctionRevertedError, decodeErrorResult } from "viem";
-import { RoundVotingEngineAbi } from "@curyo/contracts/abis";
+import { RoundVotingEngineAbi } from "@ratemesh/contracts/abis";
 
 /** Extract the human-readable revert reason from a viem error. */
 export function getRevertReason(err: unknown): string {

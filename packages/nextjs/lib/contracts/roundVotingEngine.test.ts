@@ -9,8 +9,8 @@ import {
   parseRound,
   resolveFrontendCode,
 } from "./roundVotingEngine";
-import { ROUND_STATE } from "@curyo/contracts/protocol";
-import { decodeVoteTransferPayload, encodeVoteTransferPayload } from "@curyo/contracts/voting";
+import { ROUND_STATE } from "@ratemesh/contracts/protocol";
+import { decodeVoteTransferPayload, encodeVoteTransferPayload } from "@ratemesh/contracts/voting";
 import assert from "node:assert/strict";
 import test from "node:test";
 

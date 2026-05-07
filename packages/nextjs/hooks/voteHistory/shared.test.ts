@@ -1,5 +1,5 @@
 import { getVoteClaimType, mapVoteHistoryItem, mergeVoteHistoryItems } from "./shared";
-import { ROUND_STATE } from "@curyo/contracts/protocol";
+import { ROUND_STATE } from "@ratemesh/contracts/protocol";
 import assert from "node:assert/strict";
 import test from "node:test";
 

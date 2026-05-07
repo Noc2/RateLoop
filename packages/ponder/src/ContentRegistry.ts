@@ -1,5 +1,5 @@
-import { ContentRegistryAbi } from "@curyo/contracts/abis";
-import { ROUND_STATE } from "@curyo/contracts/protocol";
+import { ContentRegistryAbi } from "@ratemesh/contracts/abis";
+import { ROUND_STATE } from "@ratemesh/contracts/protocol";
 import { ponder } from "ponder:registry";
 import {
   category,

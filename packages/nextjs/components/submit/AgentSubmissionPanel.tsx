@@ -533,8 +533,8 @@ export function AgentSubmissionPanel() {
     "export CURYO_RPC_URL=https://forno.celo.org",
     "export CURYO_CHAIN_ID=42220",
     "export CURYO_LOCAL_SIGNER_KEYSTORE_PATH=$HOME/.curyo/local-signer.json",
-    "yarn workspace @curyo/agents wallet --generate",
-    "yarn workspace @curyo/agents local-ask --file ./ask.json",
+    "yarn workspace @ratemesh/agents wallet --generate",
+    "yarn workspace @ratemesh/agents local-ask --file ./ask.json",
   ].join("\n");
   const browserSigningPayload = JSON.stringify(
     {

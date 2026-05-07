@@ -10,7 +10,7 @@ These examples keep one loop stable across runtimes:
 
 ## Files
 
-- `landing-pitch-review.ts`: canonical backend-worker loop using `@curyo/sdk/agent`
+- `landing-pitch-review.ts`: canonical backend-worker loop using `@ratemesh/sdk/agent`
 - `questions/landing-pitch-review.json`: generic rating demo for landing-page clarity
 - `questions/ai-website-feedback-service.json`: canonical AI website generation plus human feedback market-interest ask
 - `questions/llm-answer-quality.json`: LLM answer quality review

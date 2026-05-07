@@ -1,6 +1,6 @@
 "use client";
 
-import { ContentRegistryAbi, QuestionRewardPoolEscrowAbi } from "@curyo/contracts/abis";
+import { ContentRegistryAbi, QuestionRewardPoolEscrowAbi } from "@ratemesh/contracts/abis";
 import { isAddress, parseUnits } from "viem";
 import { contracts } from "~~/utils/scaffold-eth/contract";
 

@@ -1,4 +1,4 @@
-import deployedContracts from "@curyo/contracts/deployedContracts";
+import deployedContracts from "@ratemesh/contracts/deployedContracts";
 import assert from "node:assert/strict";
 import { after, before, beforeEach, test } from "node:test";
 import { type Abi, encodeAbiParameters, encodeEventTopics, encodeFunctionData, parseAbiItem } from "viem";

@@ -1,7 +1,7 @@
 import { enqueueAgentCallbackEvent } from "./events";
 import { buildAgentCallbackPayload, callbackEventId } from "./payload";
 import type { AgentCallbackEventType } from "./types";
-import { ROUND_STATE } from "@curyo/contracts/protocol";
+import { ROUND_STATE } from "@ratemesh/contracts/protocol";
 import { buildAgentLiveAskGuidance } from "~~/lib/agent/liveAskGuidance";
 import { dbClient } from "~~/lib/db";
 import { buildContentFeedbackRoundContext, listContentFeedback } from "~~/lib/feedback/contentFeedback";

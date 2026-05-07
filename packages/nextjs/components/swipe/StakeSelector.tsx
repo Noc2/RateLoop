@@ -2,7 +2,7 @@
 
 import { type CSSProperties, useEffect, useId, useMemo, useState } from "react";
 import Link from "next/link";
-import { EPOCH_WEIGHT_BPS } from "@curyo/contracts/protocol";
+import { EPOCH_WEIGHT_BPS } from "@ratemesh/contracts/protocol";
 import { AnimatePresence, motion } from "framer-motion";
 import { useAccount } from "wagmi";
 import { VoteDirectionIcon } from "~~/components/shared/CuryoVoteButton";

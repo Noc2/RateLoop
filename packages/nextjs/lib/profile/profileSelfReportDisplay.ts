@@ -7,7 +7,7 @@ import {
   type ProfileRole,
   type ProfileSelfReport,
   ROLE_OPTIONS,
-} from "@curyo/node-utils/profileSelfReport";
+} from "@ratemesh/node-utils/profileSelfReport";
 
 const PROFILE_LANGUAGE_LABELS: Record<LanguageCode, string> = {
   ar: "Arabic",

@@ -1,5 +1,5 @@
 import type { Account, Chain, PublicClient, WalletClient } from "viem";
-import { ContentRegistryAbi, FrontendRegistryAbi, RoundRewardDistributorAbi } from "@curyo/contracts/abis";
+import { ContentRegistryAbi, FrontendRegistryAbi, RoundRewardDistributorAbi } from "@ratemesh/contracts/abis";
 import { config } from "./config.js";
 import { readCurrentRoundIds, readRound, RoundState } from "./contract-reads.js";
 import { writeContractAndConfirm } from "./keeper.js";

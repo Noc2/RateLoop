@@ -4,5 +4,5 @@ export {
   getAgentResultTemplate,
   getAgentResultTemplateBySpecHash,
   listAgentResultTemplates,
-} from "@curyo/agents/templates";
-export type { AgentDecisionAnswer, AgentResultTemplate } from "@curyo/agents/templates";
+} from "@ratemesh/agents/templates";
+export type { AgentDecisionAnswer, AgentResultTemplate } from "@ratemesh/agents/templates";

@@ -1,4 +1,4 @@
-import { ROUND_STATE } from "@curyo/contracts/protocol";
+import { ROUND_STATE } from "@ratemesh/contracts/protocol";
 import { and, asc, desc, eq, gte, lt, notInArray, sql } from "ponder";
 import { db } from "ponder:api";
 import { content, profile, round, tokenHolder, vote, voterCategoryStats, voterStats } from "ponder:schema";

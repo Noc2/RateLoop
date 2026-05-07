@@ -13,7 +13,7 @@ import { createLogger } from "./logger.js";
 import { publicClient, getWalletClient, getAccount, chain, validateKeeperConnectivity } from "./client.js";
 import { resolveRounds, validateKeeperContracts } from "./keeper.js";
 import { claimConfiguredFrontendFees } from "./frontend-fees.js";
-import { RoundVotingEngineAbi } from "@curyo/contracts/abis";
+import { RoundVotingEngineAbi } from "@ratemesh/contracts/abis";
 import {
   startMetricsServer,
   setHealthThreshold,

@@ -1,7 +1,7 @@
 import { getParsedError } from "./getParsedError";
 import { AllowedChainIds } from "./networks";
 import { notification } from "./notification";
-import deployedContractsData from "@curyo/contracts/deployedContracts";
+import deployedContractsData from "@ratemesh/contracts/deployedContracts";
 import { MutateOptions } from "@tanstack/react-query";
 import {
   Abi,

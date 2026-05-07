@@ -1,5 +1,5 @@
 {
-  "name": "@curyo/ponder",
+  "name": "@ratemesh/ponder",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -14,8 +14,8 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@curyo/contracts": "workspace:*",
-    "@curyo/node-utils": "workspace:*",
+    "@ratemesh/contracts": "workspace:*",
+    "@ratemesh/node-utils": "workspace:*",
     "hono": "~4.12.17",
     "ponder": "^1.0.0",
     "viem": "2.39.0"

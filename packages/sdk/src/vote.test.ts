@@ -1,4 +1,4 @@
-import { HumanReputationAbi, decodeVoteTransferPayload } from "@curyo/contracts";
+import { HumanReputationAbi, decodeVoteTransferPayload } from "@ratemesh/contracts";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { decodeFunctionData } from "viem";

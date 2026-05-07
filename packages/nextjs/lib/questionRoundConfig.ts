@@ -1,4 +1,4 @@
-import { DEFAULT_ROUND_CONFIG } from "@curyo/contracts/protocol";
+import { DEFAULT_ROUND_CONFIG } from "@ratemesh/contracts/protocol";
 
 export type QuestionRoundConfig = {
   epochDuration: bigint;

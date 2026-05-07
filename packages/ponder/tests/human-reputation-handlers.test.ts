@@ -1,4 +1,4 @@
-import { getSharedDeploymentAddress } from "@curyo/contracts/deployments";
+import { getSharedDeploymentAddress } from "@ratemesh/contracts/deployments";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 type RegisteredHandler = (args: {

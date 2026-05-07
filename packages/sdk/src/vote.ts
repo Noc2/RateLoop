@@ -7,7 +7,7 @@ import {
   type VoteCommitHash,
   type VoteTlockRuntime,
   type VoteTransferPayload,
-} from "@curyo/contracts";
+} from "@ratemesh/contracts";
 import { encodeFunctionData, type Address, type Hex } from "viem";
 
 export interface CommitVoteParams {

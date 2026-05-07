@@ -1,5 +1,5 @@
-import { ContentRegistryAbi, ProtocolConfigAbi } from "@curyo/contracts/abis";
-import { getSharedDeploymentAddress } from "@curyo/contracts/deployments";
+import { ContentRegistryAbi, ProtocolConfigAbi } from "@ratemesh/contracts/abis";
+import { getSharedDeploymentAddress } from "@ratemesh/contracts/deployments";
 import { createHash } from "crypto";
 import "server-only";
 import {

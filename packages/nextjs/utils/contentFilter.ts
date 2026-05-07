@@ -1,4 +1,4 @@
-import { contentModerationPolicy } from "@curyo/node-utils/contentModeration";
+import { contentModerationPolicy } from "@ratemesh/node-utils/contentModeration";
 
 /**
  * Client-side content moderation filter.

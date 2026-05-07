@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import deployedContracts from "@curyo/contracts/deployedContracts";
+import deployedContracts from "@ratemesh/contracts/deployedContracts";
 import { Address, AddressInput, Balance, EtherInput } from "@scaffold-ui/components";
 import { useQueryClient } from "@tanstack/react-query";
 import { Address as AddressType, createPublicClient, createWalletClient, http, parseUnits } from "viem";

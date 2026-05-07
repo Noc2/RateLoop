@@ -1,6 +1,6 @@
 import type { PublicClient } from "viem";
 import { getAddress } from "viem";
-import { ContentRegistryAbi, ProtocolConfigAbi, RoundVotingEngineAbi } from "@curyo/contracts/abis";
+import { ContentRegistryAbi, ProtocolConfigAbi, RoundVotingEngineAbi } from "@ratemesh/contracts/abis";
 import { getRevertReason } from "./revert-utils.js";
 
 export const RoundState = {

@@ -1,5 +1,5 @@
-import deployedContracts from "@curyo/contracts/deployedContracts";
-import { ROUND_STATE } from "@curyo/contracts/protocol";
+import deployedContracts from "@ratemesh/contracts/deployedContracts";
+import { ROUND_STATE } from "@ratemesh/contracts/protocol";
 import { type Abi, type Address, createPublicClient, http, isAddress } from "viem";
 import { getPrimaryServerTargetNetwork, getServerRpcOverrides, getServerTargetNetworkById } from "~~/lib/env/server";
 import { type PonderFrontend, type PonderRoundItem, isPonderAvailable, ponderApi } from "~~/services/ponder/client";

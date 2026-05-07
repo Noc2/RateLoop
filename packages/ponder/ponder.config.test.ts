@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import deployedContracts from "@curyo/contracts/deployedContracts";
+import deployedContracts from "@ratemesh/contracts/deployedContracts";
 
 type DeploymentChain = Record<string, { address: `0x${string}`; deployedOnBlock?: number }>;
 

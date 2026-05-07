@@ -37,7 +37,7 @@ vi.mock("ponder:schema", () => ({
   voterStreak: "voterStreak",
 }));
 
-vi.mock("@curyo/contracts/protocol", () => ({
+vi.mock("@ratemesh/contracts/protocol", () => ({
   DEFAULT_ROUND_CONFIG: {
     epochDurationSeconds: 1200,
     maxDurationSeconds: 604800,

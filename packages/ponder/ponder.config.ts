@@ -15,11 +15,11 @@ import {
   RoundRewardDistributorAbi,
   RoundVotingEngineAbi,
   VoterIdNFTAbi,
-} from "@curyo/contracts/abis";
+} from "@ratemesh/contracts/abis";
 import {
   getSharedDeploymentAddress as getSharedArtifactAddress,
   getSharedDeploymentStartBlock as getSharedArtifactStartBlock,
-} from "@curyo/contracts/deployments";
+} from "@ratemesh/contracts/deployments";
 
 type PonderNetworkName = "celoSepolia" | "hardhat" | "celo";
 

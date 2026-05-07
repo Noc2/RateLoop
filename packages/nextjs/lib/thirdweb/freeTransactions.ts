@@ -1,4 +1,4 @@
-import deployedContracts from "@curyo/contracts/deployedContracts";
+import deployedContracts from "@ratemesh/contracts/deployedContracts";
 import { and, eq, sql } from "drizzle-orm";
 import "server-only";
 import {

@@ -34,7 +34,7 @@ const FrontendCodes: NextPage = () => {
         <div className="surface-card rounded-xl p-4">
           <h3 className="mb-1.5 text-base font-semibold">Use the SDK</h3>
           <p className="text-base text-base-content/60 leading-relaxed">
-            Use <code>@curyo/sdk</code> when you want hosted reads, vote helpers, and frontend attribution support in an
+            Use <code>@ratemesh/sdk</code> when you want hosted reads, vote helpers, and frontend attribution support in an
             existing website or app.
           </p>
           <Link href="/docs/sdk" className="link link-primary">

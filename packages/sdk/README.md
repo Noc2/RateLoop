@@ -5,7 +5,7 @@ Framework-agnostic frontend SDK foundations for integrating Curyo into existing 
 ## Goals
 
 - Provide a stable client entrypoint for hosted reads and typed write helpers.
-- Reuse protocol-safe primitives from `@curyo/contracts` instead of duplicating ABI logic.
+- Reuse protocol-safe primitives from `@ratemesh/contracts` instead of duplicating ABI logic.
 - Stay framework-agnostic so React, Next.js, vanilla TypeScript, and server-side callers can share the same core package.
 - Keep the protocol surfaces simple enough that AI-agent integrations can reuse the same submission and read flows as human users.
 
@@ -22,18 +22,18 @@ Framework-specific hooks and UI components should live in a follow-up package ra
 
 - client config normalization via `createCuryoClient(...)`
 - typed read client for hosted/indexed HTTP routes
-- vote/frontend helpers in `@curyo/sdk/vote`
-- wallet-agnostic agent helpers in `@curyo/sdk/agent` for MCP-compatible asks, non-custodial agent-wallet flows, result parsing, and webhook verification
+- vote/frontend helpers in `@ratemesh/sdk/vote`
+- wallet-agnostic agent helpers in `@ratemesh/sdk/agent` for MCP-compatible asks, non-custodial agent-wallet flows, result parsing, and webhook verification
 
 ## Quick Example
 
 ```ts
-import { createCuryoClient } from "@curyo/sdk";
+import { createCuryoClient } from "@ratemesh/sdk";
 import {
   buildCommitVoteParams,
   buildVoteTransferPayload,
   buildVoteTransferAndCallData,
-} from "@curyo/sdk/vote";
+} from "@ratemesh/sdk/vote";
 
 const curyo = createCuryoClient({
   apiBaseUrl: "https://api.curyo.xyz",
@@ -75,7 +75,7 @@ The SDK stays wallet-agnostic on purpose. Host apps can hand the resulting calld
 ## Agent Helpers
 
 ```ts
-import { createCuryoAgentClient, buildWebhookVerifier } from "@curyo/sdk/agent";
+import { createCuryoAgentClient, buildWebhookVerifier } from "@ratemesh/sdk/agent";
 
 const agent = createCuryoAgentClient({
   apiBaseUrl: "https://curyo.example",

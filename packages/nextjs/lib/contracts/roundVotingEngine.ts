@@ -1,7 +1,7 @@
-import { DEFAULT_ROUND_CONFIG, ROUND_STATE } from "@curyo/contracts/protocol";
+import { DEFAULT_ROUND_CONFIG, ROUND_STATE } from "@ratemesh/contracts/protocol";
 import { RoundData } from "~~/types/votingTypes";
 
-export { buildStakeAmountWei, resolveFrontendCode } from "@curyo/sdk/vote";
+export { buildStakeAmountWei, resolveFrontendCode } from "@ratemesh/sdk/vote";
 
 export type RoundPhase = "voting" | "settled" | "cancelled" | "tied" | "revealFailed" | "none";
 

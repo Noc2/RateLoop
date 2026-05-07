@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ROUND_STATE } from "@curyo/contracts/protocol";
+import { ROUND_STATE } from "@ratemesh/contracts/protocol";
 import {
   type ExpertiseArea,
   type LanguageCode,
@@ -13,7 +13,7 @@ import {
   parseProfileSelfReport,
   profileSelfReportHasValues,
   serializeProfileSelfReport,
-} from "@curyo/node-utils/profileSelfReport";
+} from "@ratemesh/node-utils/profileSelfReport";
 import { useAccount } from "wagmi";
 import {
   ArrowLeftIcon,

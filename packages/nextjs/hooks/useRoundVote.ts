@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { HumanReputationAbi, encodeVoteTransferPayload } from "@curyo/contracts";
-import { ContentRegistryAbi } from "@curyo/contracts/abis";
-import { buildCommitVoteParams } from "@curyo/sdk/vote";
+import { HumanReputationAbi, encodeVoteTransferPayload } from "@ratemesh/contracts";
+import { ContentRegistryAbi } from "@ratemesh/contracts/abis";
+import { buildCommitVoteParams } from "@ratemesh/sdk/vote";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAccount, usePublicClient, useWriteContract } from "wagmi";
 import { useOptimisticVote } from "~~/contexts/OptimisticVoteContext";

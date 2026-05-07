@@ -1,4 +1,4 @@
-import { getSharedDeploymentAddress } from "@curyo/contracts/deployments";
+import { getSharedDeploymentAddress } from "@ratemesh/contracts/deployments";
 import { ponder } from "ponder:registry";
 import { tokenHolder, tokenTransfer } from "ponder:schema";
 import { isAddress } from "viem";

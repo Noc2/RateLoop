@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { usePonderQuery } from "./usePonderQuery";
-import { ROUND_STATE } from "@curyo/contracts/protocol";
+import { ROUND_STATE } from "@ratemesh/contracts/protocol";
 import { QueryClient } from "@tanstack/react-query";
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import { usePageVisibility } from "~~/hooks/usePageVisibility";

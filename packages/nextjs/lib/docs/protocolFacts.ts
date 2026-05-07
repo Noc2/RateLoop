@@ -5,7 +5,7 @@ import {
   EPOCH_WEIGHT_BPS,
   PLATFORM_REWARD_SPLIT_BPS,
   REWARD_SPLIT_BPS,
-} from "@curyo/contracts/protocol";
+} from "@ratemesh/contracts/protocol";
 
 function formatPercent(value: number): string {
   return `${value.toFixed(2).replace(/\.?0+$/, "")}%`;

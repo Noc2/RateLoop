@@ -5,5 +5,5 @@ export {
   buildQuestionMetadata,
   buildQuestionSpecHashes,
   hashCanonicalJson,
-} from "@curyo/agents/question-specs";
-export type { AgentQuestionSpecInput } from "@curyo/agents/question-specs";
+} from "@ratemesh/agents/question-specs";
+export type { AgentQuestionSpecInput } from "@ratemesh/agents/question-specs";

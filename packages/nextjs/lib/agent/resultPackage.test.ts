@@ -1,6 +1,6 @@
 import { buildAgentResultPackage } from "./resultPackage";
 import { listAgentResultTemplates } from "./templates";
-import { ROUND_STATE } from "@curyo/contracts/protocol";
+import { ROUND_STATE } from "@ratemesh/contracts/protocol";
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { ContentFeedbackItem } from "~~/lib/feedback/types";

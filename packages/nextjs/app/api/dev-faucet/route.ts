@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
       { hardhat },
       { getKeystoreAccount },
     ] = await Promise.all([
-      import("@curyo/contracts/deployedContracts"),
+      import("@ratemesh/contracts/deployedContracts"),
       import("viem"),
       import("viem/accounts"),
       import("viem/chains"),

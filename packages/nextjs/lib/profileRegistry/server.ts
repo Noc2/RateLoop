@@ -1,4 +1,4 @@
-import deployedContracts from "@curyo/contracts/deployedContracts";
+import deployedContracts from "@ratemesh/contracts/deployedContracts";
 import { type Abi, type Address, createPublicClient, http, isAddress } from "viem";
 import { avatarAccentRgbToHex } from "~~/lib/avatar/avatarAccent";
 import { getPrimaryServerTargetNetwork, getServerRpcOverrides, getServerTargetNetworkById } from "~~/lib/env/server";

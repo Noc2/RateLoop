@@ -1,5 +1,5 @@
 {
-  "name": "@curyo/nextjs",
+  "name": "@ratemesh/nextjs",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -39,10 +39,10 @@
     "e2e:reset": "bash e2e/scripts/reset-chain.sh"
   },
   "dependencies": {
-    "@curyo/agents": "workspace:*",
-    "@curyo/contracts": "workspace:*",
-    "@curyo/node-utils": "workspace:*",
-    "@curyo/sdk": "workspace:*",
+    "@ratemesh/agents": "workspace:*",
+    "@ratemesh/contracts": "workspace:*",
+    "@ratemesh/node-utils": "workspace:*",
+    "@ratemesh/sdk": "workspace:*",
     "@heroicons/react": "~2.1.5",
     "@scaffold-ui/components": "0.1.9",
     "@scaffold-ui/hooks": "0.1.7",

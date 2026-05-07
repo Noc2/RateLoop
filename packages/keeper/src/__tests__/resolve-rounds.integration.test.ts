@@ -9,9 +9,9 @@ import {
   stringToHex,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { ContentRegistryAbi, HumanReputationAbi, ProtocolConfigAbi, RoundVotingEngineAbi } from "@curyo/contracts/abis";
-import deployedContracts from "@curyo/contracts/deployedContracts";
-import { buildCommitHash } from "@curyo/contracts/voting";
+import { ContentRegistryAbi, HumanReputationAbi, ProtocolConfigAbi, RoundVotingEngineAbi } from "@ratemesh/contracts/abis";
+import deployedContracts from "@ratemesh/contracts/deployedContracts";
+import { buildCommitHash } from "@ratemesh/contracts/voting";
 
 const roundCommitPreviewAbi = [
   {

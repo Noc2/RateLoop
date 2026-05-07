@@ -1,4 +1,4 @@
-import { ROUND_STATE } from "@curyo/contracts/protocol";
+import { ROUND_STATE } from "@ratemesh/contracts/protocol";
 import { createHash } from "crypto";
 import { type Address, type Hex, isAddress } from "viem";
 import {

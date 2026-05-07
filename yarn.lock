@@ -380,11 +380,11 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@curyo/agents@workspace:*, @curyo/agents@workspace:packages/agents":
+"@ratemesh/agents@workspace:*, @ratemesh/agents@workspace:packages/agents":
   version: 0.0.0-use.local
-  resolution: "@curyo/agents@workspace:packages/agents"
+  resolution: "@ratemesh/agents@workspace:packages/agents"
   dependencies:
-    "@curyo/sdk": "workspace:*"
+    "@ratemesh/sdk": "workspace:*"
     "@types/node": ^20.10.7
     dotenv: ^16.4.5
     tsx: ^4.19.0
@@ -394,9 +394,9 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@curyo/contracts@workspace:*, @curyo/contracts@workspace:packages/contracts":
+"@ratemesh/contracts@workspace:*, @ratemesh/contracts@workspace:packages/contracts":
   version: 0.0.0-use.local
-  resolution: "@curyo/contracts@workspace:packages/contracts"
+  resolution: "@ratemesh/contracts@workspace:packages/contracts"
   dependencies:
     "@types/node": ^20.10.7
     tlock-js: ^0.9.0
@@ -406,9 +406,9 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@curyo/foundry@workspace:packages/foundry":
+"@ratemesh/foundry@workspace:packages/foundry":
   version: 0.0.0-use.local
-  resolution: "@curyo/foundry@workspace:packages/foundry"
+  resolution: "@ratemesh/foundry@workspace:packages/foundry"
   dependencies:
     dotenv: ~16.3.1
     prettier: ~2.8.8
@@ -420,12 +420,12 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@curyo/keeper@workspace:packages/keeper":
+"@ratemesh/keeper@workspace:packages/keeper":
   version: 0.0.0-use.local
-  resolution: "@curyo/keeper@workspace:packages/keeper"
+  resolution: "@ratemesh/keeper@workspace:packages/keeper"
   dependencies:
-    "@curyo/contracts": "workspace:*"
-    "@curyo/node-utils": "workspace:*"
+    "@ratemesh/contracts": "workspace:*"
+    "@ratemesh/node-utils": "workspace:*"
     "@types/node": ^20.10.7
     dotenv: ^16.4.5
     tlock-js: ^0.9.0
@@ -436,15 +436,15 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@curyo/nextjs@workspace:packages/nextjs":
+"@ratemesh/nextjs@workspace:packages/nextjs":
   version: 0.0.0-use.local
-  resolution: "@curyo/nextjs@workspace:packages/nextjs"
+  resolution: "@ratemesh/nextjs@workspace:packages/nextjs"
   dependencies:
     "@axe-core/playwright": ^4.11.1
-    "@curyo/agents": "workspace:*"
-    "@curyo/contracts": "workspace:*"
-    "@curyo/node-utils": "workspace:*"
-    "@curyo/sdk": "workspace:*"
+    "@ratemesh/agents": "workspace:*"
+    "@ratemesh/contracts": "workspace:*"
+    "@ratemesh/node-utils": "workspace:*"
+    "@ratemesh/sdk": "workspace:*"
     "@heroicons/react": ~2.1.5
     "@next/bundle-analyzer": ^16.1.6
     "@playwright/test": ^1.58.2
@@ -498,9 +498,9 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@curyo/node-utils@workspace:*, @curyo/node-utils@workspace:packages/node-utils":
+"@ratemesh/node-utils@workspace:*, @ratemesh/node-utils@workspace:packages/node-utils":
   version: 0.0.0-use.local
-  resolution: "@curyo/node-utils@workspace:packages/node-utils"
+  resolution: "@ratemesh/node-utils@workspace:packages/node-utils"
   dependencies:
     "@types/node": ^20.10.7
     typescript: ~5.8.2
@@ -508,12 +508,12 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@curyo/ponder@workspace:packages/ponder":
+"@ratemesh/ponder@workspace:packages/ponder":
   version: 0.0.0-use.local
-  resolution: "@curyo/ponder@workspace:packages/ponder"
+  resolution: "@ratemesh/ponder@workspace:packages/ponder"
   dependencies:
-    "@curyo/contracts": "workspace:*"
-    "@curyo/node-utils": "workspace:*"
+    "@ratemesh/contracts": "workspace:*"
+    "@ratemesh/node-utils": "workspace:*"
     hono: ~4.12.17
     ponder: ^1.0.0
     typescript: ~5.8.2
@@ -522,11 +522,11 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@curyo/sdk@workspace:*, @curyo/sdk@workspace:packages/sdk":
+"@ratemesh/sdk@workspace:*, @ratemesh/sdk@workspace:packages/sdk":
   version: 0.0.0-use.local
-  resolution: "@curyo/sdk@workspace:packages/sdk"
+  resolution: "@ratemesh/sdk@workspace:packages/sdk"
   dependencies:
-    "@curyo/contracts": "workspace:*"
+    "@ratemesh/contracts": "workspace:*"
     "@types/node": ^20.10.7
     tsx: ^4.21.0
     typescript: ~5.8.2

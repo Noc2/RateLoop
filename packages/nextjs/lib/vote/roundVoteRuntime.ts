@@ -1,6 +1,6 @@
 import { parseRound, parseVotingConfig } from "../contracts/roundVotingEngine";
 import { deriveCommitVoteRuntimeNowMs } from "./tlockCommitTiming";
-import { RoundVotingEngineAbi } from "@curyo/contracts/abis";
+import { RoundVotingEngineAbi } from "@ratemesh/contracts/abis";
 import { type PublicClient } from "viem";
 
 const roundCommitPreviewAbi = [

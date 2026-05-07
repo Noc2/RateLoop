@@ -1,4 +1,4 @@
-import { BPS_SCALE, EPOCH_WEIGHT_BPS, REWARD_SPLIT_BPS } from "@curyo/contracts/protocol";
+import { BPS_SCALE, EPOCH_WEIGHT_BPS, REWARD_SPLIT_BPS } from "@ratemesh/contracts/protocol";
 import type { RoundSnapshot } from "~~/lib/contracts/roundVotingEngine";
 
 const REMAINING_LOSING_POOL_BPS = BPS_SCALE - REWARD_SPLIT_BPS.revealedLoserRefund;
