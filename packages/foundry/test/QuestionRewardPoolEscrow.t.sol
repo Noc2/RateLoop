@@ -1,22 +1,22 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import { VotingTestBase } from "./helpers/VotingTestHelpers.sol";
-import { ContentRegistry } from "../contracts/ContentRegistry.sol";
-import { HumanReputation } from "../contracts/HumanReputation.sol";
-import { FrontendRegistry } from "../contracts/FrontendRegistry.sol";
-import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
-import { MockERC20 } from "../contracts/mocks/MockERC20.sol";
-import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
-import { QuestionRewardPoolEscrow } from "../contracts/QuestionRewardPoolEscrow.sol";
-import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
-import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
-import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
-import { RoundLib } from "../contracts/libraries/RoundLib.sol";
-import { Eip3009Authorization, X402QuestionSubmitter } from "../contracts/X402QuestionSubmitter.sol";
-import { MockQuestionRewardPoolEscrow } from "./mocks/MockQuestionRewardPoolEscrow.sol";
-import { MockVoterIdNFT } from "./mocks/MockVoterIdNFT.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {VotingTestBase} from "./helpers/VotingTestHelpers.sol";
+import {ContentRegistry} from "../contracts/ContentRegistry.sol";
+import {HumanReputation} from "../contracts/HumanReputation.sol";
+import {FrontendRegistry} from "../contracts/FrontendRegistry.sol";
+import {MockCategoryRegistry} from "../contracts/mocks/MockCategoryRegistry.sol";
+import {MockERC20} from "../contracts/mocks/MockERC20.sol";
+import {ProtocolConfig} from "../contracts/ProtocolConfig.sol";
+import {QuestionRewardPoolEscrow} from "../contracts/QuestionRewardPoolEscrow.sol";
+import {RoundRewardDistributor} from "../contracts/RoundRewardDistributor.sol";
+import {RoundVotingEngine} from "../contracts/RoundVotingEngine.sol";
+import {RoundEngineReadHelpers} from "./helpers/RoundEngineReadHelpers.sol";
+import {RoundLib} from "../contracts/libraries/RoundLib.sol";
+import {Eip3009Authorization, X402QuestionSubmitter} from "../contracts/X402QuestionSubmitter.sol";
+import {MockQuestionRewardPoolEscrow} from "./mocks/MockQuestionRewardPoolEscrow.sol";
+import {MockVoterIdNFT} from "./mocks/MockVoterIdNFT.sol";
 
 contract QuestionRewardPoolEscrowTest is VotingTestBase {
     HumanReputation public hrepToken;
@@ -234,6 +234,34 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertEq(reward1 + reward2 + reward3, REWARD_POOL_AMOUNT);
         assertEq(usdc.balanceOf(voter1), 1_000e6 + reward1);
         assertEq(usdc.balanceOf(address(rewardPoolEscrow)), 0);
+    }
+
+    function testOpenWalletCanClaimQuestionRewardWithoutVoterId() public {
+        address openVoter1 = address(201);
+        address openVoter2 = address(202);
+        address openVoter3 = address(203);
+        vm.startPrank(owner);
+        hrepToken.mint(openVoter1, 10_000e6);
+        hrepToken.mint(openVoter2, 10_000e6);
+        hrepToken.mint(openVoter3, 10_000e6);
+        vm.stopPrank();
+
+        uint256 contentId = _submitQuestion("https://example.com/open-wallet-single.jpg");
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+
+        address[] memory voters = new address[](3);
+        voters[0] = openVoter1;
+        voters[1] = openVoter2;
+        voters[2] = openVoter3;
+        uint256 roundId = _settleRoundWith(voters, contentId, _directions(true, true, false));
+
+        assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, openVoter1), REWARD_POOL_AMOUNT / 3);
+
+        vm.prank(openVoter1);
+        uint256 reward = rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
+
+        assertEq(reward, REWARD_POOL_AMOUNT / 3);
+        assertEq(usdc.balanceOf(openVoter1), reward);
     }
 
     function testCreateRewardPoolRejectsStaleRegistryEscrow() public {
@@ -512,7 +540,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
     function testRefundableRewardPoolAmountUsesQuestionSelectedVoterCap() public {
         RoundLib.RoundConfig memory roundConfig =
-            RoundLib.RoundConfig({ epochDuration: 10 minutes, maxDuration: 1 hours, minVoters: 3, maxVoters: 4 });
+            RoundLib.RoundConfig({epochDuration: 10 minutes, maxDuration: 1 hours, minVoters: 3, maxVoters: 4});
         uint256 contentId = _submitQuestionWithRoundConfig("https://example.com/small-cap.jpg", roundConfig);
 
         uint256 rewardPoolId = _createRewardPool(contentId, 4, 3, 1);
@@ -523,7 +551,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
     function testRewardPoolRejectsRequiredVotersAboveQuestionCap() public {
         RoundLib.RoundConfig memory roundConfig =
-            RoundLib.RoundConfig({ epochDuration: 10 minutes, maxDuration: 1 hours, minVoters: 3, maxVoters: 4 });
+            RoundLib.RoundConfig({epochDuration: 10 minutes, maxDuration: 1 hours, minVoters: 3, maxVoters: 4});
         uint256 contentId = _submitQuestionWithRoundConfig("https://example.com/impossible-cap.jpg", roundConfig);
 
         vm.startPrank(funder);
@@ -539,7 +567,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             address(registry),
             abi.encodeWithSelector(ContentRegistry.getContentRoundConfig.selector, contentId),
             abi.encode(
-                RoundLib.RoundConfig({ epochDuration: 10 minutes, maxDuration: 1 hours, minVoters: 3, maxVoters: 201 })
+                RoundLib.RoundConfig({epochDuration: 10 minutes, maxDuration: 1 hours, minVoters: 3, maxVoters: 201})
             )
         );
 
@@ -964,6 +992,38 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
         assertEq(totalClaimed, REWARD_POOL_AMOUNT);
         assertEq(usdc.balanceOf(address(rewardPoolEscrow)), 0);
+    }
+
+    function testBundleRewardSupportsOpenWalletCompletersWithoutVoterId() public {
+        address openVoter1 = address(211);
+        address openVoter2 = address(212);
+        address openVoter3 = address(213);
+        vm.startPrank(owner);
+        hrepToken.mint(openVoter1, 10_000e6);
+        hrepToken.mint(openVoter2, 10_000e6);
+        hrepToken.mint(openVoter3, 10_000e6);
+        vm.stopPrank();
+
+        uint256[] memory contentIds = _submitBundleQuestions();
+        uint256 bundleId = _createSubmissionBundle(contentIds, funder, REWARD_ASSET_USDC, REWARD_POOL_AMOUNT, 3);
+
+        address[] memory voters = new address[](3);
+        voters[0] = openVoter1;
+        voters[1] = openVoter2;
+        voters[2] = openVoter3;
+        bool[] memory directions = _directions(true, true, false);
+
+        _settleRoundWith(voters, contentIds[0], directions);
+        _settleRoundWith(voters, contentIds[1], directions);
+
+        assertEq(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, openVoter1), REWARD_POOL_AMOUNT / 3);
+
+        vm.prank(openVoter1);
+        uint256 reward = rewardPoolEscrow.claimQuestionBundleReward(bundleId, 0);
+
+        assertEq(reward, REWARD_POOL_AMOUNT / 3);
+        assertEq(usdc.balanceOf(openVoter1), reward);
+        assertEq(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, openVoter1), 0);
     }
 
     function testBundleAboveQuorumQualifiesWhenRequiredCompletersRevealBeforeClose() public {
@@ -2388,7 +2448,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         uint256 nextContentIdBefore = registry.nextContentId();
         uint256 escrowBalanceBefore = usdc.balanceOf(address(rewardPoolEscrow));
 
-        (uint256 contentId,) = _submitAgentQuestionWithUsdcReward(agentWallet, "agent-undelegated-no-voter-id", false);
+        (uint256 contentId,) = _submitAgentQuestionWithUsdcReward(agentWallet, "agent-undelegated-no-voter-id");
 
         assertEq(contentId, nextContentIdBefore);
         assertEq(registry.getSubmitterIdentity(contentId), agentWallet);
@@ -2611,7 +2671,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         voterIdNFT.setDelegate(agentWallet);
 
         (uint256 contentId, uint256 rewardPoolId) =
-            _submitAgentQuestionWithUsdcReward(agentWallet, "agent-delegated-claim", false);
+            _submitAgentQuestionWithUsdcReward(agentWallet, "agent-delegated-claim");
         uint256 roundId = 1;
         uint256 submitterVoterId = voterIdNFT.getTokenId(submitter);
 
@@ -2958,7 +3018,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         });
     }
 
-    function _submitAgentQuestionWithUsdcReward(address agentWallet, string memory path, bool expectVoterIdRevert)
+    function _submitAgentQuestionWithUsdcReward(address agentWallet, string memory path)
         internal
         returns (uint256 contentId, uint256 rewardPoolId)
     {
@@ -2999,9 +3059,6 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         usdc.approve(address(rewardPoolEscrow), rewardTerms.amount);
         registry.reserveSubmission(revealCommitment);
         vm.warp(block.timestamp + 1);
-        if (expectVoterIdRevert) {
-            vm.expectRevert("Voter ID required");
-        }
         contentId = registry.submitQuestionWithRewardAndRoundConfig(
             contextUrl,
             imageUrls,
