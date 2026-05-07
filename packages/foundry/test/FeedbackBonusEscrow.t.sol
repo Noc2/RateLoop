@@ -501,16 +501,20 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         assertEq(usdc.balanceOf(newDelegate), delegateBalanceBefore);
     }
 
-    function testCreateFeedbackBonusPoolRequiresFunderVoterId() public {
+    function testCreateFeedbackBonusPoolAllowsFunderWithoutVoterId() public {
         uint256 contentId = _submitQuestion("");
         address unverifiedFunder = address(0xB0B);
         usdc.mint(unverifiedFunder, BONUS_AMOUNT);
 
         vm.startPrank(unverifiedFunder);
         usdc.approve(address(feedbackBonusEscrow), BONUS_AMOUNT);
-        vm.expectRevert("Voter ID required");
-        feedbackBonusEscrow.createFeedbackBonusPool(contentId, 1, BONUS_AMOUNT, block.timestamp + 7 days, funder);
+        uint256 poolId =
+            feedbackBonusEscrow.createFeedbackBonusPool(contentId, 1, BONUS_AMOUNT, block.timestamp + 7 days, funder);
         vm.stopPrank();
+
+        assertGt(poolId, 0);
+        (,,,,, address funderIdentity,,,,,,,,,) = feedbackBonusEscrow.feedbackBonusPools(poolId);
+        assertEq(funderIdentity, unverifiedFunder);
     }
 
     function testCannotAwardSameVoterOrFeedbackHashTwice() public {
@@ -739,5 +743,4 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         directions[2] = c;
         directions[3] = d;
     }
-
 }

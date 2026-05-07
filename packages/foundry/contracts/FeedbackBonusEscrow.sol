@@ -113,7 +113,6 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
         require(usdcToken_ != address(0), "Invalid token");
         require(registry_ != address(0), "Invalid registry");
         require(votingEngine_ != address(0), "Invalid engine");
-        require(voterIdNFT_ != address(0), "Invalid Voter ID");
 
         __AccessControl_init();
         __Pausable_init();
@@ -146,16 +145,9 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
         _requireTargetRound(contentId, roundId);
 
         uint256 receivedAmount = _pullUsdc(msg.sender, amount);
-        uint256 funderVoterId = voterIdNFT.getTokenId(msg.sender);
-        require(funderVoterId != 0, "Voter ID required");
-        uint256 funderNullifier = voterIdNFT.getNullifier(funderVoterId);
-        address funderIdentity = voterIdNFT.getHolder(funderVoterId);
-        if (funderIdentity == address(0)) {
-            funderIdentity = msg.sender;
-        }
+        (uint256 funderVoterId, address funderIdentity, uint256 funderNullifier) = _resolveIdentity(msg.sender);
         address submitterIdentity = registry.getSubmitterIdentity(contentId);
-        uint256 submitterVoterId = submitterIdentity == address(0) ? 0 : voterIdNFT.getTokenId(submitterIdentity);
-        uint256 submitterNullifier = submitterVoterId == 0 ? 0 : voterIdNFT.getNullifier(submitterVoterId);
+        (uint256 submitterVoterId,, uint256 submitterNullifier) = _resolveIdentity(submitterIdentity);
 
         poolId = nextFeedbackBonusPoolId++;
         feedbackBonusPools[poolId] = FeedbackBonusPool({
@@ -238,7 +230,12 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
         );
     }
 
-    function forfeitExpiredFeedbackBonus(uint256 poolId) external nonReentrant whenNotPaused returns (uint256 forfeitedAmount) {
+    function forfeitExpiredFeedbackBonus(uint256 poolId)
+        external
+        nonReentrant
+        whenNotPaused
+        returns (uint256 forfeitedAmount)
+    {
         FeedbackBonusPool storage pool = _getExistingPool(poolId);
         require(!pool.forfeited, "Already forfeited");
         require(block.timestamp > pool.feedbackClosesAt, "Not expired");
@@ -255,10 +252,11 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
     }
 
     function setVoterIdNFT(address voterIdNFT_) external onlyRole(CONFIG_ROLE) {
-        require(voterIdNFT_ != address(0), "Invalid Voter ID");
         require(
-            voterIdNFT_ == address(registry.voterIdNFT())
-                && voterIdNFT_ == votingEngine.protocolConfig().voterIdNFT(),
+            voterIdNFT_ == address(0)
+                || ((address(registry.voterIdNFT()) == address(0) || voterIdNFT_ == address(registry.voterIdNFT()))
+                    && (votingEngine.protocolConfig().voterIdNFT() == address(0)
+                        || voterIdNFT_ == votingEngine.protocolConfig().voterIdNFT())),
             "Voter ID mismatch"
         );
         voterIdNFT = IVoterIdNFT(voterIdNFT_);
@@ -320,13 +318,8 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
             "Round not settled"
         );
 
-        IVoterIdNFT roundVoterIdNft = _roundVoterIdNft(pool.contentId, pool.roundId);
-        voterId = roundVoterIdNft.getTokenId(recipient);
-        require(voterId != 0, "Voter ID required");
-        rewardRecipient = roundVoterIdNft.getHolder(voterId);
-        require(!_isExcludedVoter(pool, voterId), "Excluded voter");
-
-        commitKey = _commitKeyForVoter(pool.contentId, pool.roundId, roundVoterIdNft, voterId);
+        (voterId, rewardRecipient, commitKey) = _resolveRecipientCommit(pool, recipient);
+        require(!_isExcludedClaimant(pool, voterId, recipient), "Excluded voter");
         require(commitKey != bytes32(0), "No commit");
 
         (address voter,, address commitFrontend,, bool revealed,,) =
@@ -435,6 +428,55 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
         }
     }
 
+    function _isExcludedClaimant(FeedbackBonusPool storage pool, uint256 voterId, address recipient)
+        internal
+        view
+        returns (bool)
+    {
+        if (voterId != 0) return _isExcludedVoter(pool, voterId);
+        return recipient == pool.funder || recipient == pool.funderIdentity || recipient == pool.submitterIdentity;
+    }
+
+    function _resolveRecipientCommit(FeedbackBonusPool storage pool, address recipient)
+        internal
+        view
+        returns (uint256 voterId, address rewardRecipient, bytes32 commitKey)
+    {
+        rewardRecipient = recipient;
+        address voterIdNftAddress = _roundVoterIdNftAddress(pool.contentId, pool.roundId);
+        if (voterIdNftAddress != address(0)) {
+            IVoterIdNFT roundVoterIdNft = IVoterIdNFT(voterIdNftAddress);
+            voterId = roundVoterIdNft.getTokenId(recipient);
+            if (voterId != 0) {
+                rewardRecipient = roundVoterIdNft.getHolder(voterId);
+                commitKey = _commitKeyForVoter(pool.contentId, pool.roundId, roundVoterIdNft, voterId);
+                return (voterId, rewardRecipient, commitKey);
+            }
+        }
+
+        commitKey = votingEngine.voterCommitHash(pool.contentId, pool.roundId, recipient);
+        voterId = 0;
+        rewardRecipient = recipient;
+    }
+
+    function _resolveIdentity(address account)
+        internal
+        view
+        returns (uint256 voterId, address identity, uint256 nullifier)
+    {
+        if (account == address(0)) return (0, address(0), 0);
+        if (address(voterIdNFT) == address(0)) return (0, account, 0);
+
+        voterId = voterIdNFT.getTokenId(account);
+        if (voterId == 0) return (0, account, 0);
+
+        identity = voterIdNFT.getHolder(voterId);
+        if (identity == address(0)) {
+            identity = account;
+        }
+        nullifier = voterIdNFT.getNullifier(voterId);
+    }
+
     function _routeFrontendFee(IERC20 token, address frontendRecipient, uint256 amount)
         internal
         returns (uint256 paidAmount)
@@ -444,13 +486,19 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
     }
 
     function _roundVoterIdNft(uint256 contentId, uint256 roundId) internal view returns (IVoterIdNFT) {
+        return IVoterIdNFT(_roundVoterIdNftAddress(contentId, roundId));
+    }
+
+    function _roundVoterIdNftAddress(uint256 contentId, uint256 roundId) internal view returns (address) {
         address snapshot = votingEngine.roundVoterIdNFTSnapshot(contentId, roundId);
-        return IVoterIdNFT(snapshot == address(0) ? address(voterIdNFT) : snapshot);
+        return snapshot == address(0) ? address(voterIdNFT) : snapshot;
     }
 
     function _voterIdForRound(uint256 contentId, uint256 roundId, address account) internal view returns (uint256) {
         if (account == address(0)) return 0;
-        return _roundVoterIdNft(contentId, roundId).getTokenId(account);
+        address voterIdNftAddress = _roundVoterIdNftAddress(contentId, roundId);
+        if (voterIdNftAddress == address(0)) return 0;
+        return IVoterIdNFT(voterIdNftAddress).getTokenId(account);
     }
 
     function _commitKeyForVoter(uint256 contentId, uint256 roundId, IVoterIdNFT voterIdNft_, uint256 voterId)

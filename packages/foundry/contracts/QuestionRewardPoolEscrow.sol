@@ -1503,7 +1503,7 @@ contract QuestionRewardPoolEscrow is
             if (voterId != 0) {
                 rewardRecipient = roundVoterIdNft.getHolder(voterId);
                 commitKey = _commitKeyForVoter(rewardPool.contentId, roundId, roundVoterIdNft, voterId);
-                if (commitKey != bytes32(0)) return (voterId, commitKey, rewardRecipient);
+                return (voterId, commitKey, rewardRecipient);
             }
         }
 
