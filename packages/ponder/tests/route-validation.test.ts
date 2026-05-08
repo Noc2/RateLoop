@@ -197,6 +197,10 @@ function mockPonderModules<T>(result: T) {
       allocation: "questionRewardPoolRound.allocation",
       rewardPoolId: "questionRewardPoolRound.rewardPoolId",
       eligibleVoters: "questionRewardPoolRound.eligibleVoters",
+      rawEligibleVoters: "questionRewardPoolRound.rawEligibleVoters",
+      effectiveParticipantUnits:
+        "questionRewardPoolRound.effectiveParticipantUnits",
+      totalClaimWeight: "questionRewardPoolRound.totalClaimWeight",
       roundId: "questionRewardPoolRound.roundId",
     },
     ratingChange: {

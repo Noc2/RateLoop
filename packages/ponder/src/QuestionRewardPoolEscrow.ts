@@ -158,6 +158,9 @@ ponder.on(
         allocation,
         frontendFeeAllocation,
         eligibleVoters: Number(eligibleVoters),
+        rawEligibleVoters: Number(eligibleVoters),
+        effectiveParticipantUnits: Number(eligibleVoters),
+        totalClaimWeight: eligibleVoters,
         claimedAmount: 0n,
         voterClaimedAmount: 0n,
         frontendClaimedAmount: 0n,
@@ -185,6 +188,27 @@ ponder.on(
 );
 
 ponder.on(
+  "QuestionRewardPoolEscrow:RewardPoolRoundEffectiveUnits",
+  async ({ event, context }) => {
+    const {
+      rewardPoolId,
+      roundId,
+      rawEligibleVoters,
+      effectiveParticipantUnits,
+      totalClaimWeight,
+    } = event.args;
+
+    await context.db
+      .update(questionRewardPoolRound, { id: `${rewardPoolId}-${roundId}` })
+      .set({
+        rawEligibleVoters: Number(rawEligibleVoters),
+        effectiveParticipantUnits: Number(effectiveParticipantUnits),
+        totalClaimWeight,
+      });
+  },
+);
+
+ponder.on(
   "QuestionRewardPoolEscrow:QuestionRewardClaimed",
   async ({ event, context }) => {
     const {
@@ -203,7 +227,7 @@ ponder.on(
     await context.db
       .insert(questionRewardPoolClaim)
       .values({
-        id: `${rewardPoolId}-${roundId}-${voterId}`,
+        id: `${rewardPoolId}-${roundId}-${claimant.toLowerCase()}-${voterId}`,
         rewardPoolId,
         contentId,
         roundId,

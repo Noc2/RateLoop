@@ -574,6 +574,9 @@ export function registerDataRoutes(app: ApiApp) {
         title: content.title,
         allocation: questionRewardPoolRound.allocation,
         eligibleVoters: questionRewardPoolRound.eligibleVoters,
+        rawEligibleVoters: questionRewardPoolRound.rawEligibleVoters,
+        effectiveParticipantUnits: questionRewardPoolRound.effectiveParticipantUnits,
+        totalClaimWeight: questionRewardPoolRound.totalClaimWeight,
         qualified: sql<boolean>`${questionRewardPoolRound.rewardPoolId} is not null`,
       })
       .from(vote)

@@ -215,6 +215,23 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
     });
 
     await registeredHandlers.get(
+      "QuestionRewardPoolEscrow:RewardPoolRoundEffectiveUnits",
+    )!({
+      event: {
+        args: {
+          rewardPoolId: 7n,
+          contentId: 1n,
+          roundId: 3n,
+          rawEligibleVoters: 6n,
+          effectiveParticipantUnits: 4n,
+          totalClaimWeight: 32_000n,
+        },
+        block: { number: 11n, timestamp: 1_800n },
+      },
+      context: { db },
+    });
+
+    await registeredHandlers.get(
       "QuestionRewardPoolEscrow:QuestionRewardClaimed",
     )!({
       event: {
@@ -258,12 +275,15 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
             allocation: 50_000_000n,
             frontendFeeAllocation: 1_500_000n,
             eligibleVoters: 5,
+            rawEligibleVoters: 5,
+            effectiveParticipantUnits: 5,
+            totalClaimWeight: 5n,
           }),
         }),
         expect.objectContaining({
           table: "questionRewardPoolClaim",
           values: expect.objectContaining({
-            id: "7-3-12",
+            id: "7-3-0x0000000000000000000000000000000000000002-12",
             amount: 9_700_000n,
             grossAmount: 10_000_000n,
             frontendFee: 300_000n,
@@ -278,6 +298,15 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
           values: expect.objectContaining({
             allocatedAmount: 50_000_000n,
             qualifiedRounds: 1,
+          }),
+        }),
+        expect.objectContaining({
+          table: "questionRewardPoolRound",
+          key: { id: "7-3" },
+          values: expect.objectContaining({
+            rawEligibleVoters: 6,
+            effectiveParticipantUnits: 4,
+            totalClaimWeight: 32_000n,
           }),
         }),
         expect.objectContaining({

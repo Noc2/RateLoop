@@ -5,6 +5,7 @@ import { IVoterIdNFT } from "../interfaces/IVoterIdNFT.sol";
 import { ContentRegistry } from "../ContentRegistry.sol";
 import { RoundVotingEngine } from "../RoundVotingEngine.sol";
 import { RoundLib } from "./RoundLib.sol";
+import { RewardPool, RoundSnapshot } from "./QuestionRewardPoolEscrowTypes.sol";
 
 library QuestionRewardPoolEscrowQualificationLib {
     error RewardPoolCursorNeedsAdvance();
@@ -24,18 +25,26 @@ library QuestionRewardPoolEscrowQualificationLib {
     }
 
     function previewRoundQualification(QualificationContext memory ctx)
-        external
+        public
         view
-        returns (bool roundSettled, bool canQualify, uint256 eligibleVoters, uint48 settledAt)
+        returns (
+            bool roundSettled,
+            bool canQualify,
+            uint256 rawEligibleVoters,
+            uint256 effectiveParticipantUnits,
+            uint256 totalClaimWeight,
+            uint48 settledAt
+        )
     {
         (, RoundLib.RoundState state,,,,,,,,, uint48 roundSettledAt,,,) =
             ctx.votingEngine.rounds(ctx.contentId, ctx.roundId);
-        if (state != RoundLib.RoundState.Settled || roundSettledAt == 0) return (false, false, 0, 0);
+        if (state != RoundLib.RoundState.Settled || roundSettledAt == 0) return (false, false, 0, 0, 0, 0);
         settledAt = roundSettledAt;
 
         roundSettled = true;
-        eligibleVoters = _countEligibleRevealedVoters(ctx);
-        canQualify = eligibleVoters >= ctx.requiredVoters;
+        (rawEligibleVoters, effectiveParticipantUnits, totalClaimWeight) = _countEligibleRevealedVoters(ctx);
+        canQualify = rawEligibleVoters >= ctx.requiredVoters && effectiveParticipantUnits >= ctx.requiredVoters
+            && totalClaimWeight > 0;
     }
 
     function requireNoPendingFinishedRound(
@@ -49,6 +58,90 @@ library QuestionRewardPoolEscrowQualificationLib {
             if (startedAt == 0 || (bountyClosesAt != 0 && startedAt > bountyClosesAt)) return;
         }
         revert RewardPoolCursorNeedsAdvance();
+    }
+
+    function qualifyRound(
+        mapping(uint256 => mapping(uint256 => RoundSnapshot)) storage roundSnapshots,
+        mapping(uint256 => address) storage rewardPoolPayerIdentity,
+        mapping(uint256 => uint256) storage rewardPoolPayerNullifier,
+        mapping(uint256 => uint256) storage rewardPoolSubmitterNullifier,
+        RoundVotingEngine votingEngine,
+        IVoterIdNFT defaultVoterIdNFT,
+        RewardPool storage rewardPool,
+        uint256 rewardPoolId,
+        uint256 roundId,
+        uint256 bpsScale
+    )
+        external
+        returns (
+            uint256 allocation,
+            uint256 effectiveParticipantUnits,
+            uint256 frontendFeeAllocation,
+            uint256 rawEligibleVoters,
+            uint256 totalClaimWeight
+        )
+    {
+        require(roundId >= rewardPool.startRoundId, "Round too early");
+        require(!roundSnapshots[rewardPoolId][roundId].qualified, "Round qualified");
+        require(roundId == rewardPool.nextRoundToEvaluate, "Round out of order");
+
+        (
+            bool roundSettled,
+            bool canQualify,
+            uint256 rawEligible,
+            uint256 effectiveUnits,
+            uint256 totalWeight,
+            uint48 settledAt
+        ) = previewRoundQualification(
+            QualificationContext({
+                votingEngine: votingEngine,
+                voterIdNft: _roundVoterIdNft(votingEngine, defaultVoterIdNFT, rewardPool.contentId, roundId),
+                contentId: rewardPool.contentId,
+                roundId: roundId,
+                bountyClosesAt: rewardPool.bountyClosesAt,
+                requiredVoters: rewardPool.requiredVoters,
+                funder: rewardPool.funder,
+                funderIdentity: rewardPoolPayerIdentity[rewardPool.id],
+                funderNullifier: rewardPoolPayerNullifier[rewardPool.id],
+                submitterIdentity: rewardPool.submitterIdentity,
+                submitterNullifier: rewardPoolSubmitterNullifier[rewardPool.id]
+            })
+        );
+        require(roundSettled, "Round not settled");
+        require(canQualify, "Too few eligible voters");
+        require(votingEngine.roundUnrevealedCleanupRemaining(rewardPool.contentId, roundId) == 0, "Cleanup pending");
+
+        allocation = _previewRoundAllocation(rewardPool);
+        require(allocation > 0 && allocation <= rewardPool.unallocatedAmount, "No allocation");
+        require(allocation >= effectiveUnits, "Small allocation");
+        frontendFeeAllocation = (allocation * rewardPool.frontendFeeBps) / bpsScale;
+
+        unchecked {
+            rewardPool.qualifiedRounds++;
+        }
+        uint256 claimDeadline = block.timestamp > settledAt ? block.timestamp : settledAt;
+        if (claimDeadline > rewardPool.claimDeadline) {
+            rewardPool.claimDeadline = uint64(claimDeadline);
+        }
+        rewardPool.nextRoundToEvaluate = uint64(roundId + 1);
+        rewardPool.unallocatedAmount -= allocation;
+
+        roundSnapshots[rewardPoolId][roundId] = RoundSnapshot({
+            qualified: true,
+            eligibleVoters: uint32(effectiveUnits),
+            rawEligibleVoters: uint32(rawEligible),
+            allocation: allocation,
+            claimedCount: 0,
+            frontendFeeAllocation: frontendFeeAllocation,
+            totalClaimWeight: totalWeight,
+            claimedWeight: 0,
+            claimedAmount: 0,
+            frontendFeeClaimedAmount: 0
+        });
+
+        effectiveParticipantUnits = effectiveUnits;
+        rawEligibleVoters = rawEligible;
+        totalClaimWeight = totalWeight;
     }
 
     function isExcludedVoter(
@@ -96,7 +189,7 @@ library QuestionRewardPoolEscrowQualificationLib {
     function _countEligibleRevealedVoters(QualificationContext memory ctx)
         private
         view
-        returns (uint256 eligibleVoters)
+        returns (uint256 rawEligibleVoters, uint256 effectiveParticipantUnits, uint256 totalClaimWeight)
     {
         uint256 commitCount = ctx.votingEngine.getRoundCommitCount(ctx.contentId, ctx.roundId);
         for (uint256 i = 0; i < commitCount;) {
@@ -114,8 +207,13 @@ library QuestionRewardPoolEscrowQualificationLib {
                         ctx.submitterIdentity,
                         ctx.submitterNullifier
                     )) {
-                    unchecked {
-                        ++eligibleVoters;
+                    rawEligibleVoters++;
+                    uint256 claimWeight = _claimWeight(ctx.votingEngine, ctx.contentId, ctx.roundId, commitKey);
+                    if (claimWeight > 0) {
+                        totalClaimWeight += claimWeight;
+                        unchecked {
+                            ++effectiveParticipantUnits;
+                        }
                     }
                 }
             }
@@ -123,6 +221,34 @@ library QuestionRewardPoolEscrowQualificationLib {
                 ++i;
             }
         }
+    }
+
+    function _claimWeight(RoundVotingEngine votingEngine, uint256 contentId, uint256 roundId, bytes32 commitKey)
+        private
+        view
+        returns (uint256)
+    {
+        if (votingEngine.roundFinalPredictionRatingBps(contentId, roundId) == 0) return 1;
+        return votingEngine.commitPredictionRewardWeight(contentId, roundId, commitKey);
+    }
+
+    function _previewRoundAllocation(RewardPool storage rewardPool) private view returns (uint256 allocation) {
+        if (rewardPool.qualifiedRounds >= rewardPool.requiredSettledRounds) return 0;
+        uint256 remainingRounds = uint256(rewardPool.requiredSettledRounds) - rewardPool.qualifiedRounds;
+        allocation = remainingRounds == 1
+            ? rewardPool.unallocatedAmount
+            : rewardPool.fundedAmount / rewardPool.requiredSettledRounds;
+        if (allocation > rewardPool.unallocatedAmount) return 0;
+    }
+
+    function _roundVoterIdNft(
+        RoundVotingEngine votingEngine,
+        IVoterIdNFT defaultVoterIdNFT,
+        uint256 contentId,
+        uint256 roundId
+    ) private view returns (IVoterIdNFT) {
+        address snapshot = votingEngine.roundVoterIdNFTSnapshot(contentId, roundId);
+        return IVoterIdNFT(snapshot == address(0) ? address(defaultVoterIdNFT) : snapshot);
     }
 
     function _revealedByBountyClose(uint64 bountyClosesAt, uint48 revealedAt) private pure returns (bool) {

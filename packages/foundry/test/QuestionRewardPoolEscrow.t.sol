@@ -14,6 +14,7 @@ import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol"
 import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
 import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
 import { RoundLib } from "../contracts/libraries/RoundLib.sol";
+import { TlockVoteLib } from "../contracts/libraries/TlockVoteLib.sol";
 import { Eip3009Authorization, X402QuestionSubmitter } from "../contracts/X402QuestionSubmitter.sol";
 import { MockQuestionRewardPoolEscrow } from "./mocks/MockQuestionRewardPoolEscrow.sol";
 import { MockVoterIdNFT } from "./mocks/MockVoterIdNFT.sol";
@@ -236,6 +237,37 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertEq(reward2, REWARD_POOL_AMOUNT / 3);
         assertEq(reward1 + reward2 + reward3, REWARD_POOL_AMOUNT);
         assertEq(usdc.balanceOf(voter1), 1_000e6 + reward1);
+        assertEq(usdc.balanceOf(address(rewardPoolEscrow)), 0);
+    }
+
+    function testQuestionRewardsUsePredictionEffectiveWeights() public {
+        uint256 contentId = _submitQuestion("");
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+
+        address[] memory voters = _threeVoters();
+        uint16[] memory predictions = new uint16[](3);
+        predictions[0] = 8_000;
+        predictions[1] = 5_000;
+        predictions[2] = 6_500;
+        uint256 roundId = _settlePredictionRoundWith(voters, contentId, predictions);
+
+        uint256 claimable1 = rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter1);
+        uint256 claimable2 = rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter2);
+        uint256 claimable3 = rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter3);
+
+        assertEq(claimable1, claimable2);
+        assertGt(claimable3, claimable1);
+
+        vm.prank(voter1);
+        uint256 reward1 = rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
+        vm.prank(voter2);
+        uint256 reward2 = rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
+        vm.prank(voter3);
+        uint256 reward3 = rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
+
+        assertEq(reward1, claimable1);
+        assertEq(reward1, reward2);
+        assertEq(reward1 + reward2 + reward3, REWARD_POOL_AMOUNT);
         assertEq(usdc.balanceOf(address(rewardPoolEscrow)), 0);
     }
 
@@ -3172,6 +3204,69 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         returns (uint256 roundId)
     {
         return _settleRoundWithFrontend(voters, contentId, directions, address(0));
+    }
+
+    function _settlePredictionRoundWith(address[] memory voters, uint256 contentId, uint16[] memory predictions)
+        internal
+        returns (uint256 roundId)
+    {
+        bytes32[] memory salts = new bytes32[](voters.length);
+        bytes32[] memory commitKeys = new bytes32[](voters.length);
+        for (uint256 i = 0; i < voters.length; i++) {
+            salts[i] = keccak256(abi.encodePacked(voters[i], contentId, predictions[i], i));
+            commitKeys[i] = _commitPrediction(voters[i], contentId, predictions[i], STAKE, salts[i]);
+        }
+
+        roundId = RoundEngineReadHelpers.activeRoundId(votingEngine, contentId);
+        _warpPastTlockRevealTime(block.timestamp + EPOCH_DURATION);
+
+        for (uint256 i = 0; i < voters.length; i++) {
+            votingEngine.revealPredictionByCommitKey(contentId, roundId, commitKeys[i], predictions[i], salts[i]);
+        }
+
+        votingEngine.settleRound(contentId, roundId);
+    }
+
+    function _commitPrediction(address voter, uint256 contentId, uint16 predictedRatingBps, uint256 stake, bytes32 salt)
+        internal
+        returns (bytes32 commitKey)
+    {
+        uint256 roundId = votingEngine.currentRoundId(contentId);
+        if (roundId == 0) {
+            roundId = _defaultTestCommitRoundId(contentId);
+        }
+        uint16 referenceRatingBps = _currentRatingReferenceBps(contentId);
+        uint64 targetRound = _tlockCommitTargetRound();
+        bytes32 drandChainHash = _tlockDrandChainHash();
+        bytes memory ciphertext =
+            _testCiphertext(predictedRatingBps >= referenceRatingBps, salt, contentId, targetRound, drandChainHash);
+        bytes32 commitHash = TlockVoteLib.buildExpectedPredictionCommitHash(
+            predictedRatingBps,
+            salt,
+            voter,
+            contentId,
+            roundId,
+            referenceRatingBps,
+            targetRound,
+            drandChainHash,
+            ciphertext
+        );
+
+        vm.startPrank(voter);
+        hrepToken.approve(address(votingEngine), stake);
+        votingEngine.commitVote(
+            contentId,
+            _roundContext(roundId, referenceRatingBps),
+            targetRound,
+            drandChainHash,
+            commitHash,
+            ciphertext,
+            stake,
+            address(0)
+        );
+        vm.stopPrank();
+
+        return keccak256(abi.encodePacked(voter, commitHash));
     }
 
     /// @dev Settle without triggering bundle qualification on the test's `rewardPoolEscrow`.
