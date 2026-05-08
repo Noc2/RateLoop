@@ -19,8 +19,11 @@ export interface CommitPredictionParams {
   salt: `0x${string}`;
   stakeWei: bigint;
   frontend: `0x${string}`;
+  opinionRatingBps: number;
+  predictedCrowdRatingBps: number;
   predictedRatingBps: number;
   rating: number;
+  crowdRating: number;
 }
 
 export function buildStakeAmountWei(stakeAmount: number): bigint {
@@ -50,7 +53,9 @@ export function generateVoteSalt(randomValues?: (bytes: Uint8Array) => Uint8Arra
 export async function buildCommitPredictionParams(params: {
   voter: Address;
   contentId: bigint;
-  predictedRating: number;
+  opinionRating?: number;
+  predictedCrowdRating?: number;
+  predictedRating?: number;
   stakeAmount: number;
   epochDuration: number;
   roundId: bigint;
@@ -63,12 +68,19 @@ export async function buildCommitPredictionParams(params: {
   const stakeWei = buildStakeAmountWei(params.stakeAmount);
   const frontend = resolveFrontendCode(params.frontendCode, params.defaultFrontendCode);
   const salt = params.salt ?? generateVoteSalt();
-  const predictedRatingBps = ratingToBps(params.predictedRating);
+  const opinionRating = params.opinionRating ?? params.predictedRating;
+  const predictedCrowdRating = params.predictedCrowdRating ?? params.predictedRating;
+  if (opinionRating === undefined || predictedCrowdRating === undefined) {
+    throw new Error("opinionRating and predictedCrowdRating are required");
+  }
+  const opinionRatingBps = ratingToBps(opinionRating);
+  const predictedCrowdRatingBps = ratingToBps(predictedCrowdRating);
   const { ciphertext, commitHash, roundReferenceRatingBps, targetRound, drandChainHash } =
     await createTlockPredictionCommit(
       {
         voter: params.voter,
-        predictedRatingBps,
+        opinionRatingBps,
+        predictedCrowdRatingBps,
         salt,
         contentId: params.contentId,
         roundId: params.roundId,
@@ -88,7 +100,10 @@ export async function buildCommitPredictionParams(params: {
     salt,
     stakeWei,
     frontend,
-    predictedRatingBps,
-    rating: bpsToRating(predictedRatingBps),
+    opinionRatingBps,
+    predictedCrowdRatingBps,
+    predictedRatingBps: predictedCrowdRatingBps,
+    rating: bpsToRating(opinionRatingBps),
+    crowdRating: bpsToRating(predictedCrowdRatingBps),
   };
 }

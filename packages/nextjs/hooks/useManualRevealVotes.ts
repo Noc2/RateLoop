@@ -372,7 +372,14 @@ export function useManualRevealVotes(voter?: Address) {
           address: engineInfo.address,
           abi: RoundVotingEngineAbi,
           functionName: "revealPredictionByCommitKey",
-          args: [vote.contentId, vote.roundId, vote.commitKey, decrypted.predictedRatingBps, decrypted.salt],
+          args: [
+            vote.contentId,
+            vote.roundId,
+            vote.commitKey,
+            decrypted.opinionRatingBps,
+            decrypted.predictedCrowdRatingBps,
+            decrypted.salt,
+          ],
           account: address,
           chain: targetNetwork,
         } as any);

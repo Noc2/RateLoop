@@ -3265,7 +3265,9 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         _warpPastTlockRevealTime(block.timestamp + EPOCH_DURATION);
 
         for (uint256 i = 0; i < voters.length; i++) {
-            votingEngine.revealPredictionByCommitKey(contentId, roundId, commitKeys[i], predictions[i], salts[i]);
+            votingEngine.revealPredictionByCommitKey(
+                contentId, roundId, commitKeys[i], predictions[i], predictions[i], salts[i]
+            );
         }
 
         votingEngine.settleRound(contentId, roundId);
@@ -3285,6 +3287,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         bytes memory ciphertext =
             _testCiphertext(predictedRatingBps >= referenceRatingBps, salt, contentId, targetRound, drandChainHash);
         bytes32 commitHash = TlockVoteLib.buildExpectedPredictionCommitHash(
+            predictedRatingBps,
             predictedRatingBps,
             salt,
             voter,

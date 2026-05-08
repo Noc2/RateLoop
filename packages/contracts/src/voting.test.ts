@@ -211,19 +211,22 @@ test("rating helpers normalize the bounded prediction scale", () => {
   assert.throws(() => ratingToBps(10), /rating must be from 1 to 9.9/);
 });
 
-test("prediction plaintext stores the predicted final rating and salt", () => {
+test("prediction plaintext stores the opinion rating, crowd prediction, and salt", () => {
   const salt = ("0x" + "55".repeat(32)) as `0x${string}`;
-  const plaintext = encodePredictionPlaintext(7_250, salt);
+  const plaintext = encodePredictionPlaintext(7_250, 6_900, salt);
 
   assert.deepEqual(decodePredictionPlaintext(plaintext), {
-    predictedRatingBps: 7_250,
+    opinionRatingBps: 7_250,
+    predictedCrowdRatingBps: 6_900,
+    predictedRatingBps: 6_900,
     rating: 7.25,
+    crowdRating: 6.9,
     salt,
   });
-  assert.equal(decodePredictionPlaintext(new Uint8Array([0x27, 0x11, ...new Uint8Array(32)])), null);
+  assert.equal(decodePredictionPlaintext(new Uint8Array([1, 0x27, 0x11, 0x1a, 0xf4, ...new Uint8Array(32)])), null);
 });
 
-test("buildPredictionCommitHash includes the predicted rating and tlock metadata", () => {
+test("buildPredictionCommitHash includes the opinion, crowd prediction, and tlock metadata", () => {
   const salt = ("0x" + "22".repeat(32)) as `0x${string}`;
   const ciphertext = "0x1234" as `0x${string}`;
   const drandChainHash = ("0x" + "33".repeat(32)) as `0x${string}`;
@@ -232,6 +235,7 @@ test("buildPredictionCommitHash includes the predicted rating and tlock metadata
 
   const commitHash = buildPredictionCommitHash(
     7_250,
+    6_900,
     salt,
     voter,
     42n,
@@ -244,11 +248,48 @@ test("buildPredictionCommitHash includes the predicted rating and tlock metadata
 
   assert.equal(
     commitHash,
-    buildPredictionCommitHash(7_250, salt, voter, 42n, 4n, roundReferenceRatingBps, 123n, drandChainHash, ciphertext),
+    buildPredictionCommitHash(
+      7_250,
+      6_900,
+      salt,
+      voter,
+      42n,
+      4n,
+      roundReferenceRatingBps,
+      123n,
+      drandChainHash,
+      ciphertext,
+    ),
   );
   assert.notEqual(
     commitHash,
-    buildPredictionCommitHash(7_251, salt, voter, 42n, 4n, roundReferenceRatingBps, 123n, drandChainHash, ciphertext),
+    buildPredictionCommitHash(
+      7_251,
+      6_900,
+      salt,
+      voter,
+      42n,
+      4n,
+      roundReferenceRatingBps,
+      123n,
+      drandChainHash,
+      ciphertext,
+    ),
+  );
+  assert.notEqual(
+    commitHash,
+    buildPredictionCommitHash(
+      7_250,
+      6_901,
+      salt,
+      voter,
+      42n,
+      4n,
+      roundReferenceRatingBps,
+      123n,
+      drandChainHash,
+      ciphertext,
+    ),
   );
 });
 
@@ -281,7 +322,8 @@ test("createTlockPredictionCommit returns the rating metadata used in the commit
   const commit = await createTlockPredictionCommit(
     {
       voter,
-      predictedRatingBps: 7_250,
+      opinionRatingBps: 7_250,
+      predictedCrowdRatingBps: 6_900,
       salt: ("0x" + "66".repeat(32)) as `0x${string}`,
       contentId: 7n,
       roundId: 3n,
@@ -294,26 +336,32 @@ test("createTlockPredictionCommit returns the rating metadata used in the commit
       encryptFn: async (targetRound, payload) => {
         const decoded = decodePredictionPlaintext(payload);
         assert.deepEqual(decoded, {
-          predictedRatingBps: 7_250,
+          opinionRatingBps: 7_250,
+          predictedCrowdRatingBps: 6_900,
+          predictedRatingBps: 6_900,
           rating: 7.25,
+          crowdRating: 6.9,
           salt: ("0x" + "66".repeat(32)) as `0x${string}`,
         });
         return Buffer.from(makeFakeArmoredTlockCiphertext({
           targetRound: BigInt(targetRound),
           drandChainHash: "0x52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971",
-          plaintextMarker: `p:${decoded?.predictedRatingBps}:${decoded?.salt.slice(2)}`,
+          plaintextMarker: `p:${decoded?.opinionRatingBps}:${decoded?.predictedCrowdRatingBps}:${decoded?.salt.slice(2)}`,
         }).slice(2), "hex").toString("utf8");
       },
     },
   );
 
-  assert.equal(commit.predictedRatingBps, 7_250);
+  assert.equal(commit.opinionRatingBps, 7_250);
+  assert.equal(commit.predictedCrowdRatingBps, 6_900);
+  assert.equal(commit.predictedRatingBps, 6_900);
   assert.equal(commit.targetRound > 0n, true);
   assert.equal(commit.drandChainHash, "0x52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971");
   assert.equal(
     commit.commitHash,
     buildPredictionCommitHash(
       7_250,
+      6_900,
       ("0x" + "66".repeat(32)) as `0x${string}`,
       voter,
       7n,

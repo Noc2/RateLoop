@@ -195,6 +195,35 @@ export const RoundVotingEngineAbi = [
   },
   {
     "type": "function",
+    "name": "commitOpinionRatingBps",
+    "inputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint16",
+        "internalType": "uint16"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "commitPredictedRatingBps",
     "inputs": [
       {
@@ -926,7 +955,12 @@ export const RoundVotingEngineAbi = [
         "internalType": "bytes32"
       },
       {
-        "name": "predictedRatingBps",
+        "name": "opinionRatingBps",
+        "type": "uint16",
+        "internalType": "uint16"
+      },
+      {
+        "name": "predictedCrowdRatingBps",
         "type": "uint16",
         "internalType": "uint16"
       },
@@ -1895,7 +1929,13 @@ export const RoundVotingEngineAbi = [
         "internalType": "address"
       },
       {
-        "name": "predictedRatingBps",
+        "name": "opinionRatingBps",
+        "type": "uint16",
+        "indexed": false,
+        "internalType": "uint16"
+      },
+      {
+        "name": "predictedCrowdRatingBps",
         "type": "uint16",
         "indexed": false,
         "internalType": "uint16"

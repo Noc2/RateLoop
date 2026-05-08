@@ -21,7 +21,7 @@ test("generateVoteSalt accepts an injected random source", () => {
   assert.equal(salt, `0x${"ab".repeat(32)}`);
 });
 
-test("buildCommitPredictionParams returns predicted rating commit metadata", async () => {
+test("buildCommitPredictionParams returns opinion and crowd prediction commit metadata", async () => {
   const runtime = {
     client: {
       chain: () => ({
@@ -39,7 +39,8 @@ test("buildCommitPredictionParams returns predicted rating commit metadata", asy
   const result = await buildCommitPredictionParams({
     voter: "0x1111111111111111111111111111111111111111",
     contentId: 42n,
-    predictedRating: 7.25,
+    opinionRating: 7.25,
+    predictedCrowdRating: 6.9,
     stakeAmount: 2.5,
     epochDuration: 1200,
     roundId: 1n,
@@ -47,8 +48,11 @@ test("buildCommitPredictionParams returns predicted rating commit metadata", asy
     runtime,
   });
 
-  assert.equal(result.predictedRatingBps, 7_250);
+  assert.equal(result.opinionRatingBps, 7_250);
+  assert.equal(result.predictedCrowdRatingBps, 6_900);
+  assert.equal(result.predictedRatingBps, 6_900);
   assert.equal(result.rating, 7.25);
+  assert.equal(result.crowdRating, 6.9);
   assert.equal(result.targetRound > 0n, true);
   assert.equal(result.roundId, 1n);
   assert.equal(result.drandChainHash, `0x${"ab".repeat(32)}`);

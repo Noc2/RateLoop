@@ -157,8 +157,10 @@ RoundVotingEngine.commitVote(
         <li>
           <strong>Revealing predictions:</strong> After each 20-minute epoch ends, the service decrypts tlock
           ciphertexts using the drand randomness beacon and calls{" "}
-          <code>revealPredictionByCommitKey(contentId, roundId, commitKey, predictedRatingBps, salt)</code> for each
-          unrevealed commit. Predictions stay hidden until this step runs.
+          <code>
+            revealPredictionByCommitKey(contentId, roundId, commitKey, opinionRatingBps, predictedCrowdRatingBps, salt)
+          </code>{" "}
+          for each unrevealed commit. Predictions stay hidden until this step runs.
         </li>
         <li>
           <strong>Settling rounds:</strong> Once at least 3 votes are revealed and all past-epoch votes have been

@@ -217,15 +217,27 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         internal
         returns (bytes32 commitKey, bytes32 salt)
     {
-        salt = keccak256(abi.encodePacked(voter, predictedRatingBps, block.timestamp));
+        return _commitPrediction(voter, contentId, predictedRatingBps, predictedRatingBps, stake);
+    }
+
+    function _commitPrediction(
+        address voter,
+        uint256 contentId,
+        uint16 opinionRatingBps,
+        uint16 predictedCrowdRatingBps,
+        uint256 stake
+    ) internal returns (bytes32 commitKey, bytes32 salt)
+    {
+        salt = keccak256(abi.encodePacked(voter, opinionRatingBps, predictedCrowdRatingBps, block.timestamp));
         uint256 roundId = engine.previewCommitRoundId(contentId);
         uint16 referenceRatingBps = engine.previewCommitReferenceRatingBps(contentId);
         uint64 targetRound = _tlockCommitTargetRound();
         bytes32 drandChainHash = _tlockDrandChainHash();
         bytes memory ciphertext =
-            _testCiphertext(predictedRatingBps >= referenceRatingBps, salt, contentId, targetRound, drandChainHash);
+            _testCiphertext(opinionRatingBps >= referenceRatingBps, salt, contentId, targetRound, drandChainHash);
         bytes32 commitHash = _predictionCommitHash(
-            predictedRatingBps,
+            opinionRatingBps,
+            predictedCrowdRatingBps,
             salt,
             voter,
             contentId,
@@ -254,7 +266,8 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     }
 
     function _predictionCommitHash(
-        uint16 predictedRatingBps,
+        uint16 opinionRatingBps,
+        uint16 predictedCrowdRatingBps,
         bytes32 salt,
         address voter,
         uint256 contentId,
@@ -266,7 +279,8 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     ) internal pure returns (bytes32) {
         return keccak256(
             abi.encodePacked(
-                predictedRatingBps,
+                opinionRatingBps,
+                predictedCrowdRatingBps,
                 salt,
                 voter,
                 contentId,
@@ -408,13 +422,16 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         RoundLib.Round memory r0 = RoundEngineReadHelpers.round(engine, contentId, roundId);
         _warpPastTlockRevealTime(uint256(r0.startTime) + EPOCH);
 
-        engine.revealPredictionByCommitKey(contentId, roundId, ck1, 8_000, s1);
-        engine.revealPredictionByCommitKey(contentId, roundId, ck2, 5_000, s2);
-        engine.revealPredictionByCommitKey(contentId, roundId, ck3, 6_500, s3);
+        engine.revealPredictionByCommitKey(contentId, roundId, ck1, 8_000, 8_000, s1);
+        engine.revealPredictionByCommitKey(contentId, roundId, ck2, 5_000, 5_000, s2);
+        engine.revealPredictionByCommitKey(contentId, roundId, ck3, 6_500, 6_500, s3);
 
-        assertEq(engine.commitPredictedRatingBps(contentId, roundId, ck1), 8_000, "ck1 prediction");
-        assertEq(engine.commitPredictedRatingBps(contentId, roundId, ck2), 5_000, "ck2 prediction");
-        assertEq(engine.commitPredictedRatingBps(contentId, roundId, ck3), 6_500, "ck3 prediction");
+        assertEq(engine.commitOpinionRatingBps(contentId, roundId, ck1), 8_000, "ck1 opinion");
+        assertEq(engine.commitOpinionRatingBps(contentId, roundId, ck2), 5_000, "ck2 opinion");
+        assertEq(engine.commitOpinionRatingBps(contentId, roundId, ck3), 6_500, "ck3 opinion");
+        assertEq(engine.commitPredictedRatingBps(contentId, roundId, ck1), 8_000, "ck1 crowd prediction");
+        assertEq(engine.commitPredictedRatingBps(contentId, roundId, ck2), 5_000, "ck2 crowd prediction");
+        assertEq(engine.commitPredictedRatingBps(contentId, roundId, ck3), 6_500, "ck3 crowd prediction");
         assertEq(engine.commitPredictionWeight(contentId, roundId, ck1), 30e6, "ck1 weight");
         assertEq(engine.commitPredictionWeight(contentId, roundId, ck2), 10e6, "ck2 weight");
         assertEq(engine.commitPredictionWeight(contentId, roundId, ck3), 10e6, "ck3 weight");
@@ -442,8 +459,8 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         RoundLib.Round memory r0 = RoundEngineReadHelpers.round(engine, contentId, roundId);
         _warpPastTlockRevealTime(uint256(r0.startTime) + EPOCH);
 
-        engine.revealPredictionByCommitKey(contentId, roundId, ck1, 8_000, s1);
-        engine.revealPredictionByCommitKey(contentId, roundId, ck2, 5_000, s2);
+        engine.revealPredictionByCommitKey(contentId, roundId, ck1, 8_000, 8_000, s1);
+        engine.revealPredictionByCommitKey(contentId, roundId, ck2, 5_000, 5_000, s2);
 
         engine.settleRound(contentId, roundId);
 
@@ -455,6 +472,30 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertEq(engine.commitPredictionRewardWeight(contentId, roundId, ck2), 0, "ck2 no LOO score");
     }
 
+    function test_PredictionRewardsScoreCrowdPredictionAgainstPeerOpinions() public {
+        uint256 contentId = _submitContent();
+
+        (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, 8_000, 5_750, STAKE);
+        (bytes32 ck2, bytes32 s2) = _commitPrediction(voter2, contentId, 5_000, 7_250, STAKE);
+        (bytes32 ck3, bytes32 s3) = _commitPrediction(voter3, contentId, 6_500, 6_500, STAKE);
+
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        RoundLib.Round memory r0 = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        _warpPastTlockRevealTime(uint256(r0.startTime) + EPOCH);
+
+        engine.revealPredictionByCommitKey(contentId, roundId, ck1, 8_000, 5_750, s1);
+        engine.revealPredictionByCommitKey(contentId, roundId, ck2, 5_000, 7_250, s2);
+        engine.revealPredictionByCommitKey(contentId, roundId, ck3, 6_500, 6_500, s3);
+        engine.settleRound(contentId, roundId);
+
+        assertEq(registry.getRating(contentId), 6_500, "opinion median is the public rating");
+        assertEq(engine.commitOpinionRatingBps(contentId, roundId, ck1), 8_000, "ck1 opinion stored");
+        assertEq(engine.commitPredictedRatingBps(contentId, roundId, ck1), 5_750, "ck1 crowd prediction stored");
+        assertEq(engine.commitPredictionScoreBps(contentId, roundId, ck1), 10_000, "ck1 score");
+        assertEq(engine.commitPredictionScoreBps(contentId, roundId, ck2), 10_000, "ck2 score");
+        assertEq(engine.commitPredictionScoreBps(contentId, roundId, ck3), 10_000, "ck3 score");
+    }
+
     function test_PredictionRevealRejectsWrongRating() public {
         uint256 contentId = _submitContent();
         (bytes32 commitKey, bytes32 salt) = _commitPrediction(voter1, contentId, 7_000, STAKE);
@@ -463,7 +504,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         _warpPastTlockRevealTime(uint256(r0.startTime) + EPOCH);
 
         vm.expectRevert();
-        engine.revealPredictionByCommitKey(contentId, roundId, commitKey, 7_001, salt);
+        engine.revealPredictionByCommitKey(contentId, roundId, commitKey, 7_001, 7_000, salt);
     }
 
     function test_BasicLifecycle_ThreeVoters_DownWins() public {

@@ -109,7 +109,8 @@ library RoundRevealLib {
         uint256 contentId,
         uint256 roundId,
         bytes32 commitKey,
-        uint16 predictedRatingBps,
+        uint16 opinionRatingBps,
+        uint16 predictedCrowdRatingBps,
         bytes32 salt,
         uint16 roundReferenceRatingBps,
         uint16 minVoters,
@@ -127,7 +128,8 @@ library RoundRevealLib {
         if (round.state != RoundLib.RoundState.Open) revert RoundNotOpen();
         if (commit.voter == address(0)) revert NoCommit();
         if (commit.revealed) revert AlreadyRevealed();
-        PredictionRatingMath.requireValidRating(predictedRatingBps);
+        PredictionRatingMath.requireValidRating(opinionRatingBps);
+        PredictionRatingMath.requireValidRating(predictedCrowdRatingBps);
 
         uint256 revealNotBefore = commit.revealableAfter;
         if (targetRoundRevealableAt > revealNotBefore) {
@@ -136,7 +138,8 @@ library RoundRevealLib {
         if (block.timestamp < revealNotBefore) revert EpochNotEnded();
 
         bytes32 expectedHash = TlockVoteLib.buildExpectedPredictionCommitHash(
-            predictedRatingBps,
+            opinionRatingBps,
+            predictedCrowdRatingBps,
             salt,
             commit.voter,
             contentId,
@@ -148,7 +151,7 @@ library RoundRevealLib {
         );
         if (commitKey != keccak256(abi.encodePacked(commit.voter, expectedHash))) revert HashMismatch();
 
-        isUp = predictedRatingBps >= roundReferenceRatingBps;
+        isUp = opinionRatingBps >= roundReferenceRatingBps;
         commit.revealed = true;
         commit.isUp = isUp;
 
