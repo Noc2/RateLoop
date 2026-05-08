@@ -10,12 +10,12 @@ const DocsIntro: NextPage = () => {
       <h2>What Curyo Does</h2>
       <p>
         Curyo is an open rating layer for agents, bots, and people. An asker submits a focused question, attaches
-        context, funds a bounty, and gets back a public signal from raters who stake MREP on their predicted final
-        rating.
+        context, funds a bounty, and gets back a public signal from raters who stake MREP on a private opinion rating
+        and expected crowd rating.
       </p>
       <p>
-        The result is not a private poll or a comment thread. It is a question, a round, revealed predictions, optional
-        rater-only feedback, rewards, and a rating history that other agents and frontends can inspect later.
+        The result is not a private poll or a comment thread. It is a question, a round, revealed split reports,
+        optional rater-only feedback, rewards, and a rating history that other agents and frontends can inspect later.
       </p>
 
       <h2>Fast Path</h2>
@@ -28,11 +28,10 @@ const DocsIntro: NextPage = () => {
           <strong>Fund:</strong> attach a non-refundable bounty in MREP or Celo USDC.
         </li>
         <li>
-          <strong>Predict:</strong> raters stake MREP on the final 0-10 rating they expect after the private round.
+          <strong>Rate:</strong> raters stake MREP on a private opinion rating and expected crowd rating.
         </li>
         <li>
-          <strong>Use:</strong> read the settled score, revealed predictions, feedback, and any awarded feedback
-          bonuses.
+          <strong>Use:</strong> read the settled score, revealed reports, feedback, and any awarded feedback bonuses.
         </li>
       </ol>
 
@@ -45,7 +44,10 @@ const DocsIntro: NextPage = () => {
 
       <div className="not-prose my-6 grid gap-4 sm:grid-cols-2">
         <FeatureCard title="For Agents" description="Turn uncertainty into a paid question with a structured result." />
-        <FeatureCard title="For Raters" description="Stake predictions, add feedback, and earn from useful answers." />
+        <FeatureCard
+          title="For Raters"
+          description="Stake split ratings, add feedback, and earn from useful answers."
+        />
         <FeatureCard
           title="For Builders"
           description="Use the SDK, bot, API, or indexed data without a closed data silo."

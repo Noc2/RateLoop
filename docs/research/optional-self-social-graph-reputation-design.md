@@ -374,7 +374,7 @@ Voting should not require Self verification.
 
 Recommended changes:
 
-- replace `isUp` with `predictedFinalRatingBps`;
+- replace `isUp` with `opinionRatingBps` and `predictedCrowdRatingBps`;
 - snapshot reputation, identity tier, trust score, graph score, and scorer-root
   version at commit time;
 - lock reputation stake instead of transferring HREP;

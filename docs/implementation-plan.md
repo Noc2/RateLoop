@@ -26,7 +26,8 @@ The product direction is:
   naming before deployment.
 - Reuse HREP tokenomics for MREP: `100,000,000` max supply split into the
   existing `52M / 12M / 32M / 4M` launch pools.
-- Users submit a predicted final rating instead of a binary up/down vote.
+- Users submit a split rating report instead of a binary up/down vote: their
+  own opinion rating plus their expected crowd rating.
 - One sealed private round per bounty, followed by reveal and settlement.
 - MREP locks use a winner/loser redistribution model adapted from old Curyo, so
   accurate raters earn from less accurate raters without increasing total
@@ -47,9 +48,9 @@ solves the same problem, but it should not preserve Curyo mechanics for their
 own sake. The frontend should reuse the Hawig hero animation/logo as the new
 RateMesh brand anchor, while retaining useful Curyo app surfaces where they are
 still ergonomic. The biggest architectural change is replacing binary token
-staking as the core vote primitive with predicted ratings, transferable capped
-reputation locks, account-level calibration, cluster-aware payout controls, and
-a Celo-native deployment.
+staking as the core vote primitive with split rating reports, transferable
+capped reputation locks, account-level calibration, cluster-aware payout
+controls, and a Celo-native deployment.
 
 ## Research Notes For The Updated Architecture
 
@@ -279,8 +280,8 @@ modules, and keep all core tests passing with identity disabled.
 - `RoundVotingEngine.sol` becomes `PredictionVotingEngine.sol`.
   Keep the commit-reveal/tlock state machine, per-content round isolation,
   config snapshots, keeper-friendly settlement hooks, and failure/cancel states.
-  Replace `isUp` and `stakeAmount` with `predictedRatingBps` and a reputation
-  lock amount.
+  Replace `isUp` and `stakeAmount` with `opinionRatingBps`,
+  `predictedCrowdRatingBps`, and a reputation lock amount.
 - `RoundRewardDistributor.sol` becomes `PredictionRewardDistributor.sol`.
   Keep the pull-claim discipline and adapt the old winner/loser economics from
   binary pools to continuous prediction-error pools. It should also claim USDC
@@ -333,14 +334,14 @@ modules, and keep all core tests passing with identity disabled.
 | `packages/ponder/ponder.schema.ts` | Keep content/profile/feed tables; replace vote/voter/reward tables with prediction/reputation/payout tables. |
 | `packages/ponder/src/RoundVotingEngine.ts` | Refactor event handlers for prediction events and weighted final ratings. |
 | `packages/ponder/src/HumanFaucet.ts` and `packages/ponder/src/VoterIdNFT.ts` | Delete or replace with `RaterRegistry.ts`. |
-| `packages/nextjs/components/vote/VotePageClient.tsx` | Keep feed state, sorting, filtering, and modal patterns; replace up/down vote intent with predicted rating intent. |
+| `packages/nextjs/components/vote/VotePageClient.tsx` | Keep feed state, sorting, filtering, and modal patterns; replace up/down vote intent with split rating intent. |
 | `packages/nextjs/components/shared/VotingQuestionCard.tsx` | Keep card/rating layout; replace arrows with prediction controls. |
 | `packages/nextjs/components/swipe/StakeSelector.tsx` | Rename/refactor into `PredictionComposer.tsx`. |
 | `packages/nextjs/components/shared/RatingOrb.tsx` | Reuse. |
 | `packages/nextjs/components/feedback/*` | Reuse; feedback stays separate from prediction. |
 | `packages/nextjs/hooks/useRoundVote.ts` | Rename/refactor into `usePredictionVote.ts`. |
 | `packages/nextjs/hooks/useVoterIdNFT.ts` | Delete; replace with rater/calibration hooks. |
-| `packages/sdk/src/vote.ts` | Keep salt/tlock/frontend helpers; replace `isUp` payload with `predictedRatingBps`. |
+| `packages/sdk/src/vote.ts` | Keep salt/tlock/frontend helpers; replace `isUp` payload with `opinionRatingBps` and `predictedCrowdRatingBps`. |
 | `packages/keeper/src/*` | Keep service structure and reliability patterns; update reveal/settlement decoding and scoring inputs. |
 | `packages/agents/src/*` | Keep as basis for AI rater clients and evaluation workflows. |
 
@@ -354,13 +355,17 @@ Each vote commits to:
 contentId
 roundId
 voter
-predictedRatingBps  // 0-10000, representing 0.0-10.0 out of 10
+opinionRatingBps          // 0-10000, representing the rater's own 0.0-10.0 opinion
+predictedCrowdRatingBps   // 0-10000, representing the expected revealed crowd rating
 reputationLock      // bounded MREP lock escrowed until reveal/settlement
 salt
 ```
 
-The reveal shows the predicted final rating. The final rating is computed from
-revealed predictions using effective weights. The default bounty workflow is:
+The reveal shows both values. The final rating is computed from revealed
+opinion ratings using effective weights. MREP and USDC reward scoring uses the
+expected crowd rating against the leave-one-out or cluster-excluded peer result,
+so the user's own opinion is not rewarded for matching the end result. The
+default bounty workflow is:
 
 ```text
 bounty funded -> commit window -> reveal window -> settle -> public result
@@ -543,9 +548,9 @@ Consensus reserve:
 
 ### Reputation Locks
 
-Users should lock transferable MREP on each prediction. The lock should keep the
+Users should lock transferable MREP on each split report. The lock should keep the
 old Curyo intuition that accurate raters earn from inaccurate raters, but adapt
-it to continuous predicted ratings instead of binary up/down pools.
+it to continuous expected-crowd ratings instead of binary up/down pools.
 
 Recommended launch defaults:
 
@@ -562,20 +567,20 @@ REVEALED_LOSER_REFUND = 5%
 
 Settlement model:
 
-1. Compute the final rating from revealed predictions using effective voting
+1. Compute the final rating from revealed opinion ratings using effective voting
    power.
 2. For each rater, compute scoring against a leave-one-out final rating when
    enough independent participants remain after removing that rater. This
    prevents a high-lock account from scoring itself against a result it heavily
    moved.
-3. Compute `error = abs(predictedRating - scoringReferenceRating)`.
+3. Compute `error = abs(predictedCrowdRating - scoringReferenceRating)`.
 4. If `error <= FULL_WIN_BAND`, the rater keeps the full lock and receives a
    full winner score.
 5. If `FULL_WIN_BAND < error < LOSS_CUTOFF`, the rater loses a linear portion
    of the lock and receives a linearly reduced winner score.
-6. If `error >= LOSS_CUTOFF`, the rater is a losing prediction for MREP
+6. If `error >= LOSS_CUTOFF`, the rater is a losing crowd prediction for MREP
    settlement and loses the at-risk lock, except for the revealed-loser refund.
-7. Missed reveals forfeit the prediction lock after the reveal grace period and
+7. Missed reveals forfeit the rating-report lock after the reveal grace period and
    receive no loser refund.
 
 Redistribution model:
@@ -684,9 +689,9 @@ public current rating.
 
 Recommended settlement:
 
-- Revealed predictions get their MREP locks returned, except for any explicit
+- Revealed reports get their MREP locks returned, except for any explicit
   missed-reveal or fraud penalty that applies independently.
-- Unrevealed predictions forfeit their MREP lock after the reveal grace period.
+- Unrevealed reports forfeit their MREP lock after the reveal grace period.
 - No normal accuracy pool is paid because there is no reliable final signal.
 - A small attempt stipend may be paid from the USDC bounty to eligible revealed
   calibrated raters, capped at `ATTEMPT_STIPEND_BPS = 1000` and cluster-capped.
@@ -840,7 +845,7 @@ Purpose:
 
 - One sealed prediction round per content by default.
 - Commit, reveal, settle, cancel, and reveal-failed states.
-- Compute final predicted rating and emit settlement inputs.
+- Compute final opinion rating and emit settlement inputs.
 
 Reuse:
 
@@ -851,7 +856,8 @@ Reuse:
 
 Key changes:
 
-- Replace `bool isUp` with `uint16 predictedRatingBps`.
+- Replace `bool isUp` with `uint16 opinionRatingBps` and
+  `uint16 predictedCrowdRatingBps`.
 - Replace transferred HREP stake with `reputationLock`.
 - Replace up/down pools with weighted prediction aggregates:
   `weightedPredictionSum`, `totalEffectiveWeight`, prediction count,
@@ -887,7 +893,8 @@ event PredictionRevealed(
   uint256 indexed contentId,
   uint256 indexed roundId,
   address indexed rater,
-  uint16 predictedRatingBps,
+  uint16 opinionRatingBps,
+  uint16 predictedCrowdRatingBps,
   uint256 effectiveWeight
 );
 
@@ -925,9 +932,10 @@ event PredictionRoundLinkedToBounty(
 
 Purpose:
 
-- Redistribute MREP lock losses from inaccurate or unrevealed predictions to
-  accurate revealed raters, eligible frontends, treasury, and consensus reserve.
-- Claim USDC bounty shares for eligible predictions.
+- Redistribute MREP lock losses from inaccurate or unrevealed crowd predictions
+  to accurate revealed raters, eligible frontends, treasury, and consensus
+  reserve.
+- Claim USDC bounty shares for eligible split reports.
 - Emit reputation-score outcomes or consume score roots.
 - Keep claims pull-based.
 
@@ -1098,8 +1106,9 @@ tables.
 - `rater`
   - account, rater type, metadata hash, createdAt, clusterId, riskLevel.
 - `prediction`
-  - contentId, roundId, rater, commitHash, predictedRatingBps, lock amount,
-    effective weight, revealed state, timestamps.
+  - contentId, roundId, rater, commitHash, opinionRatingBps,
+    predictedCrowdRatingBps, lock amount, effective weight, revealed state,
+    timestamps.
 - `prediction_round_score`
   - final rating, dispersion, total effective weight, independent count,
     insufficient-signal flag.
@@ -1127,12 +1136,12 @@ tables.
 
 ### API Changes
 
-- Feed APIs should return predicted-rating state, not up/down pools.
+- Feed APIs should return split-report state, not up/down pools.
 - Feed APIs should distinguish initial ratings from challenge/re-rate rounds.
 - Leaderboard should rank calibrated reputation, category reputation, reveal
   reliability, and useful-feedback contribution.
-- Vote history should show predicted rating, final rating, score delta, and
-  payout eligibility.
+- Vote history should show opinion rating, expected crowd rating, final rating,
+  score delta, and payout eligibility.
 - Claim routes should separate reputation changes from USDC claims.
 - Content routes should expose rating history so users can see when a current
   score came from an initial bounty versus a later re-rate.
@@ -1187,12 +1196,13 @@ Copy direction:
 Replace the current binary voting dock:
 
 - Current: rating orb + up/down buttons + stake modal.
-- Target: rating orb + prediction slider/input + bounded MREP lock selector.
+- Target: rating orb + opinion slider/input + expected-crowd slider/input +
+  bounded MREP lock selector.
 
 The primary action should be:
 
 ```text
-Predict final rating -> confirm private prediction -> reveal/settlement status
+Submit split rating -> confirm private report -> reveal/settlement status
 ```
 
 User-friendly details:
@@ -1202,7 +1212,7 @@ User-friendly details:
 - Show current rating/reference rating.
 - For challenge/re-rate rounds, show the prior rating being challenged and the
   challenge reason.
-- Show the user's predicted rating after reveal, not before.
+- Show the user's split rating report after reveal, not before.
 - Explain eligibility through UI state, not long instructional text.
 - Keep feedback separate: users can still leave written feedback through the
   existing feedback surface.
@@ -1242,7 +1252,7 @@ Launch sponsorship policy:
 ### Pages/Components To Refactor
 
 - `VotePageClient.tsx`: keep feed logic, replace `isUp` flow with
-  `predictedRatingBps`.
+  `opinionRatingBps` and `predictedCrowdRatingBps`.
 - `VotingQuestionCard.tsx`: keep layout and rating display, replace arrow
   controls with prediction controls.
 - `StakeSelector.tsx`: rename/refactor to `PredictionComposer.tsx`.
@@ -1260,7 +1270,7 @@ Launch sponsorship policy:
 Refactor `packages/sdk/src/vote.ts`:
 
 - `buildCommitVoteParams` -> `buildPredictionCommitParams`.
-- Input `isUp` -> `predictedRatingBps`.
+- Input `isUp` -> `opinionRatingBps` and `predictedCrowdRatingBps`.
 - `buildStakeAmountWei` -> `buildReputationLockAmount`.
 - Keep salt generation, tlock runtime resolution, frontend code resolution, and
   tests.
@@ -1285,8 +1295,8 @@ Reuse the keeper package for:
 
 Changes:
 
-- Decode prediction ciphertexts instead of binary vote ciphertexts.
-- Submit `predictedRatingBps` reveals.
+- Decode split rating ciphertexts instead of binary vote ciphertexts.
+- Submit `opinionRatingBps` and `predictedCrowdRatingBps` reveals.
 - Watch for rounds with insufficient independent weight.
 - Trigger settlement after reveal grace or quorum rules.
 - Optionally submit score roots if advanced off-chain scoring is introduced.
@@ -1403,7 +1413,7 @@ Exit criteria:
 
 - Ponder indexes local deployment, genesis claim, governance delegation,
   frontend-fee, and prediction events.
-- Feed API can render content, open rounds, revealed predictions, final rating,
+- Feed API can render content, open rounds, revealed split reports, final rating,
   challenge/re-rate history, and claimable USDC.
 
 ### Phase 4: Frontend MVP
@@ -1491,8 +1501,8 @@ Exit criteria:
    self-delegated voting power, and launch role wiring.
 4. `rater-registry`: add open rater profiles, metadata, operational delegation,
    and cluster flags.
-5. `prediction-engine`: replace binary votes with predicted final rating commit
-   reveal and MREP lock accounting.
+5. `prediction-engine`: replace binary votes with split rating commit-reveal
+   and MREP lock accounting.
 6. `usdc-bounty-refactor`: refactor reward escrow/distributor around one-round
    bounties, challenge/re-rate metadata, calibrated raters, AI metadata,
    frontend staking/fees, MREP winner/loser redistribution, and cluster caps.
@@ -1684,15 +1694,17 @@ The MVP is done when:
 
 - There is no mandatory Self.xyz dependency.
 - Users can connect a wallet without proof-of-personhood.
-- Users can submit a predicted `0.0-10.0` final rating through commit reveal.
+- Users can submit a private `0.0-10.0` opinion rating and expected crowd rating
+  through commit reveal.
 - Each bounty funds exactly one private prediction round.
 - Users can fund an explicit challenge/re-rate bounty against a prior result.
 - Mesh Reputation is transferable, capped, checkpointed, and claimable by
   previous legacy CREP/HREP snapshot participants through a published genesis
   distribution.
 - MREP tokenomics reuse the old HREP `52M / 12M / 32M / 4M` pool structure.
-- MREP prediction locks redistribute inaccurate and unrevealed locks to accurate
-  raters, eligible frontends, treasury, and reserve without increasing supply.
+- MREP rating-report locks redistribute inaccurate crowd predictions and
+  unrevealed locks to accurate raters, eligible frontends, treasury, and reserve
+  without increasing supply.
 - RateMesh governance and timelock own protocol roles from launch.
 - Governance uses the previous Curyo launch durations, thresholds, quorum, and
   governance-lock rules on Celo.

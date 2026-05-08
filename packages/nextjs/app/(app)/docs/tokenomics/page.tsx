@@ -190,10 +190,10 @@ const Tokenomics = () => {
       <p>
         Bounties are separate from MREP bootstrap rewards. They are attached at submission, funded in MREP or USDC on
         Celo, scoped to one question or a question bundle, and split across eligible revealed raters in each qualified
-        bounty round after a 3% frontend-operator share. Correct predictions earn more, while near misses can receive a
-        smaller payout for useful participation. Bundle bounties can require multiple settlement round sets; each set
-        requires every bundled question to settle once and is claimed independently. If the commit-attributed frontend
-        is not payable, that share stays with the rater claim. Bounty required-rater terms cannot exceed the
+        bounty round after a 3% frontend-operator share. Accurate crowd predictions earn more, while near misses can
+        receive a smaller payout for useful participation. Bundle bounties can require multiple settlement round sets;
+        each set requires every bundled question to settle once and is claimed independently. If the commit-attributed
+        frontend is not payable, that share stays with the rater claim. Bounty required-rater terms cannot exceed the
         question&apos;s selected rater cap.
       </p>
       <h3 id="feedback-bonuses">Feedback Bonuses</h3>
@@ -207,9 +207,8 @@ const Tokenomics = () => {
       <p>
         The protocol treasury starts with <strong>32M MREP</strong> on the governor/timelock from launch. It grows over
         time through three main ongoing inflow sources: a 1% treasury fee on contested losing pools, cancellation fees
-        from voluntary content withdrawals, and forfeited unrevealed past-epoch predictions swept during settlement
-        cleanup. Treasury spending follows the same governance proposal path as upgrades and other governed config
-        changes.
+        from voluntary content withdrawals, and forfeited unrevealed past-epoch reports swept during settlement cleanup.
+        Treasury spending follows the same governance proposal path as upgrades and other governed config changes.
       </p>
       <p>
         Appropriate treasury uses include ecosystem grants, partner activation, integration support, research and data
@@ -222,7 +221,7 @@ const Tokenomics = () => {
 
       <h2>Round Payouts</h2>
       <p>
-        When a round resolves, accurate revealed predictions recover their original stake and claim from the
+        When a round resolves, accurate revealed crowd predictions recover their original stake and claim from the
         content-specific rater pool. Revealed misses can reclaim{" "}
         <strong>{protocolDocFacts.revealedLoserRefundPercentLabel}</strong> of raw stake, and the remaining losing pool
         is split across accurate raters, frontend operators, consensus reserve, and treasury.

@@ -158,8 +158,8 @@ const SmartContracts: NextPage = () => {
           <strong>Supply cap:</strong> Distribution and reward recycling stay bounded by <code>MAX_SUPPLY</code>.
         </li>
         <li>
-          <strong>Prediction staking:</strong> The production UI approves MREP stake and submits a private predicted
-          final rating through <code>commitVote()</code>.
+          <strong>Prediction staking:</strong> The production UI approves MREP stake and submits a private opinion
+          rating plus expected crowd rating through <code>commitVote()</code>.
         </li>
       </ul>
       <h3>Key Functions</h3>
@@ -395,10 +395,10 @@ const SmartContracts: NextPage = () => {
             RoundVotingEngine.commitVote(contentId, roundContext, targetRound, drandChainHash, commitHash, ciphertext,
             stakeAmount, frontend)
           </code>{" "}
-          &mdash; Default prediction flow. Locks MREP and records the tlock-encrypted predicted final rating. The
-          prediction is hidden until the epoch ends. The redeployed contract rejects malformed or non-armored
-          ciphertexts, binds the canonical round reference score into the round context, and binds the reveal-target
-          metadata on-chain.
+          &mdash; Default split-rating flow. Locks MREP and records the tlock-encrypted opinion rating plus expected
+          crowd rating. The report is hidden until the epoch ends. The redeployed contract rejects malformed or
+          non-armored ciphertexts, binds the canonical round reference score into the round context, and binds the
+          reveal-target metadata on-chain.
         </li>
         <li>
           <code>commitVote(...)</code> &mdash; Lower-level integration path for bots, tests, and direct contract callers
@@ -406,16 +406,16 @@ const SmartContracts: NextPage = () => {
         </li>
         <li>
           <strong>VoteCommitted event:</strong> emits the commit hash, <code>targetRound</code>, and{" "}
-          <code>drandChainHash</code> so indexers can observe the exact reveal metadata attached to each prediction. The
+          <code>drandChainHash</code> so indexers can observe the exact reveal metadata attached to each report. The
           redeployed engine also snapshots <code>roundReferenceRatingBps</code> and emits{" "}
           <code>RoundConfigSnapshotted</code> per round so every frontend can recover the exact score anchor and round
-          settings users predicted against.
+          settings users rated against.
         </li>
         <li>
           <code>
             revealPredictionByCommitKey(contentId, roundId, commitKey, opinionRatingBps, predictedCrowdRatingBps, salt)
           </code>{" "}
-          &mdash; Reveal a previously committed prediction after the epoch ends. This remains the
+          &mdash; Reveal a previously committed split report after the epoch ends. This remains the
           keeper-assisted/self-reveal path: the keeper normally performs off-chain drand/tlock decryption after
           validating the stored stanza metadata and submits the reveal, but any caller that knows the plaintext{" "}
           <code>(opinionRatingBps, predictedCrowdRatingBps, salt)</code> can submit it. The production UI keeps this

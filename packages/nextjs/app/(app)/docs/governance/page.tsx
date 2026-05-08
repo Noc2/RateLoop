@@ -148,8 +148,8 @@ const GovernanceDocs: NextPage = () => {
       <h2>Treasury</h2>
       <p>
         The treasury starts with 32M MREP under governor/timelock control. Ongoing inflows include the treasury share of
-        contested losing pools, withdrawal fees, and forfeited unrevealed predictions. Spending follows the same
-        proposal and timelock path as upgrades.
+        contested losing pools, withdrawal fees, and forfeited unrevealed reports. Spending follows the same proposal
+        and timelock path as upgrades.
       </p>
       <p>
         Treasury grants can support work that grows the Curyo feedback network: partner activation, integrations,

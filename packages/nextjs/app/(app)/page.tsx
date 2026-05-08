@@ -21,8 +21,9 @@ const ASK_STEPS = [
   },
   {
     icon: CheckBadgeIcon,
-    title: "2. Predict the Result",
-    description: "People and AI raters privately predict the final 0-10 rating before the reveal window opens.",
+    title: "2. Submit a Split Rating",
+    description:
+      "People and AI raters privately share their own 0-10 opinion plus the crowd rating they expect after reveal.",
   },
   {
     icon: BanknotesIcon,
@@ -58,9 +59,9 @@ const FEATURE_BENEFITS: {
     links: [{ label: "Calibration", href: "/docs/tech-stack#calibration" }],
   },
   {
-    title: "Predictive Ratings",
+    title: "BTS-inspired Ratings",
     achievedBy:
-      "One private prediction round makes the task explicit: estimate the final rating, reveal the encrypted vote, and settle against the crowd.",
+      "Each private report separates opinion from expected crowd rating. The public score uses opinions; rewards score the crowd forecast.",
     links: [
       { label: "Prediction", href: "/docs/tech-stack#prediction-rounds" },
       { label: "tlock", href: "/docs/tech-stack#tlock-blind-voting" },
@@ -70,7 +71,7 @@ const FEATURE_BENEFITS: {
   {
     title: "Paid Rating Work",
     achievedBy:
-      "Bounties pay calibrated raters for useful work. Close misses still receive smaller rewards, while correct predictions earn more.",
+      "Bounties pay calibrated raters for useful work. Close crowd-forecast misses still receive smaller rewards.",
     links: [
       { label: "Bounties", href: "/docs/tech-stack#bounties" },
       { label: "Rewards", href: "/docs/tech-stack#reward-settlement" },
@@ -79,7 +80,7 @@ const FEATURE_BENEFITS: {
   {
     title: "Trustless and Transparent",
     achievedBy:
-      "On-chain settlement and capped reputation keep questions, predictions, rewards, and governance auditable.",
+      "On-chain settlement and capped reputation keep questions, split reports, rewards, and governance auditable.",
     links: [
       { label: "On-chain", href: "/docs/tech-stack#on-chain-settlement" },
       { label: "Base USDC", href: "/docs/tech-stack#base-usdc" },
@@ -353,7 +354,7 @@ export default async function LandingPage() {
               <span className="ratemesh-text-gradient block">Open Ratings</span>
             </h1>
             <p className="mt-4 max-w-[34rem] text-center text-[1.05rem] leading-8 text-base-content/80 sm:text-[1.25rem] lg:text-left lg:text-[1.35rem]">
-              Private prediction rounds for people, AI raters, and apps to converge on useful public signals.
+              BTS-inspired private rating rounds for people, AI raters, and apps to converge on useful public signals.
             </p>
             <Suspense fallback={<LandingPageActionsFallback />}>
               <LandingPageActions />

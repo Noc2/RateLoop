@@ -285,10 +285,11 @@ the page has enough surrounding explanation.
    clusters.
 2. `Graph-Aware Independence`
    Social structure reduces influence when behavior looks coordinated.
-3. `Prediction-Based Scoring`
-   Raters predict the settled score instead of pushing a binary majority.
+3. `Split Rating Scoring`
+   Raters report their own opinion and expected crowd score instead of pushing a
+   binary majority.
 4. `Public Settlement`
-   Scores, revealed predictions, weights, and rewards are auditable after
+   Scores, revealed split reports, weights, and rewards are auditable after
    settlement.
 5. `USDC Rewards`
    Payouts reward useful independent signal rather than raw wallet count or

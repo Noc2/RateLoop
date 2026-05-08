@@ -96,14 +96,15 @@ const TechStackPage: NextPage = () => {
 
       <h2 id="commit-reveal-voting">Commit-Reveal Voting</h2>
       <p>
-        A prediction starts as a commitment: the contract stores a hash, stake, ciphertext, and reveal metadata while
-        the predicted rating remains hidden. After the blind phase, a keeper normally reveals the plaintext prediction;
-        users can self-reveal if needed. Settlement uses only revealed predictions.
+        A rating report starts as a commitment: the contract stores a hash, stake, ciphertext, and reveal metadata while
+        the opinion rating and expected crowd rating remain hidden. After the blind phase, a keeper normally reveals the
+        plaintext report; users can self-reveal if needed. Settlement uses only revealed reports.
       </p>
       <p>
         This is why Curyo calls rating work &quot;honest&quot; rather than just &quot;popular.&quot; Early raters cannot
-        simply copy public momentum, unrevealed predictions lose reward eligibility, and inaccurate revealed predictions
-        still face a real stake cost.
+        simply copy public momentum, unrevealed reports lose reward eligibility, and inaccurate revealed crowd
+        predictions still face a real stake cost. The mechanism is BTS-inspired, but intentionally simpler than full
+        Bayesian Truth Serum: opinions drive the public score, while expected-crowd predictions drive rewards.
       </p>
 
       <h2 id="tlock-blind-voting">tlock Blind Voting</h2>
@@ -113,15 +114,15 @@ const TechStackPage: NextPage = () => {
           drand timelock encryption
         </a>{" "}
         model lets a payload be encrypted now and decryptable only after a future drand round becomes available. Curyo
-        binds prediction ciphertext to drand metadata so the rating is meant to become revealable only after the epoch
+        binds report ciphertext to drand metadata so the split rating is meant to become revealable only after the epoch
         window closes.
       </p>
 
       <h2 id="mrep-staking">MREP Staking</h2>
       <p>
-        MREP is the reputation stake used in rating and governance. Raters stake MREP on the final 0-10 rating they
-        expect. Accurate revealed predictions recover stake and share rewards; revealed misses recover only a small
-        refund; unrevealed predictions can forfeit.
+        MREP is the reputation stake used in rating and governance. Raters stake MREP on a split report: their own 0-10
+        opinion and the 0-10 crowd rating they expect. Accurate revealed crowd predictions recover stake and share
+        rewards; revealed misses recover only a small refund; unrevealed reports can forfeit.
       </p>
       <p>
         The reason to use staking is incentive alignment: a rater has to put scarce reputation behind a prediction

@@ -12,7 +12,8 @@ const HowItWorks: NextPage = () => {
     <article className="prose max-w-none">
       <h1>How It Works</h1>
       <p className="lead text-base-content/60 text-lg">
-        Ask a focused question, fund the round, let open raters predict the final rating, then read the settled signal.
+        Ask a focused question, fund the round, let open raters submit private split ratings, then read the settled
+        signal.
       </p>
 
       <h2>1. Ask</h2>
@@ -43,15 +44,17 @@ const HowItWorks: NextPage = () => {
 
       <h2 id="commit-reveal-voting">2. Predict</h2>
       <p>
-        Raters stake 1&ndash;100 MREP on the final 0-10 rating they expect the round to settle to. The prediction is
-        encrypted during the blind phase so early raters cannot simply copy visible momentum.
+        Raters stake 1&ndash;100 MREP and submit a BTS-inspired split report: their own 0-10 opinion rating and the 0-10
+        crowd rating they expect after reveal. Both values are encrypted during the blind phase so early raters cannot
+        simply copy visible momentum.
       </p>
       <div className="not-prose">
         <VotingFlowDiagram />
       </div>
       <ol>
         <li>
-          <strong>Commit:</strong> choose a predicted final rating and stake. The app submits an encrypted prediction.
+          <strong>Commit:</strong> choose an opinion rating, expected crowd rating, and stake. The app submits one
+          encrypted rating report.
         </li>
         <li>
           <strong>Reveal:</strong> after the blind phase, the keeper normally reveals eligible predictions. Users can
@@ -65,12 +68,12 @@ const HowItWorks: NextPage = () => {
       <h3 id="blind-voting">Blind Voting</h3>
       <p>
         The default blind phase is <strong>{protocolDocFacts.blindPhaseDurationLabel}</strong>. Votes made in the first
-        epoch earn full reward weight. Later predictions can see revealed information and receive{" "}
+        epoch earn full reward weight. Later reports can see revealed information and receive{" "}
         <strong>{protocolDocFacts.openPhaseWeightLabel}</strong> reward weight.
       </p>
       <p>
-        Predicted ratings are hidden with tlock-style timelock encryption tied to drand metadata. After the epoch ends,
-        the keeper normally derives the reveal data; users can self-reveal if the automatic path is delayed.
+        Split rating reports are hidden with tlock-style timelock encryption tied to drand metadata. After the epoch
+        ends, the keeper normally derives the reveal data; users can self-reveal if the automatic path is delayed.
       </p>
 
       <h3>Voting Rules</h3>
@@ -83,9 +86,10 @@ const HowItWorks: NextPage = () => {
       <h2 id="on-chain-settlement">3. Settle Rewards</h2>
       <h3 id="mrep-stake-settlement">MREP stake settlement</h3>
       <p>
-        The most accurate revealed predictions recover stake and share the MREP rater pool. Revealed misses can reclaim{" "}
-        <strong>{protocolDocFacts.revealedLoserRefundPercentLabel}</strong> of raw stake. The remaining losing pool
-        splits <strong>{protocolDocFacts.rewardSplitSummaryLabel}</strong>.
+        The most accurate revealed crowd predictions recover stake and share the MREP rater pool. The rater&apos;s own
+        opinion helps form the public rating, but it is not rewarded for matching the end result. Revealed misses can
+        reclaim <strong>{protocolDocFacts.revealedLoserRefundPercentLabel}</strong> of raw stake. The remaining losing
+        pool splits <strong>{protocolDocFacts.rewardSplitSummaryLabel}</strong>.
       </p>
       <div className="not-prose my-6">
         <RewardSplitChart />
@@ -93,9 +97,9 @@ const HowItWorks: NextPage = () => {
       <h3 id="stablecoin-bounties">Stablecoin bounties</h3>
       <p>
         Bounties are separate from MREP stake settlement. They are scoped to the question or bundle, paid in the funding
-        asset, and can reward eligible revealed raters. Correct predictions earn more, while near misses can still earn
-        a smaller payout for doing the work. A bundle payout is claimed per round set, so a rater must reveal on every
-        bundled question in that set.
+        asset, and can reward eligible revealed raters. Accurate crowd predictions earn more, while near misses can
+        still earn a smaller payout for doing the work. A bundle payout is claimed per round set, so a rater must reveal
+        on every bundled question in that set.
       </p>
       <h3>Feedback bonuses</h3>
       <p>
@@ -111,8 +115,8 @@ const HowItWorks: NextPage = () => {
       <h2 id="content-rating">4. Read the Result</h2>
       <p>
         Content starts at 5.0 on the 0-10 scale. When a round opens, it snapshots the current score as the reference.
-        Raters predict the final score directly. Settlement updates the rating from revealed, epoch-weighted predictions
-        rather than asking for a separate up/down signal.
+        Settlement updates the rating from revealed, epoch-weighted opinion ratings rather than asking for a separate
+        up/down signal. Crowd predictions are kept separate and used for calibration and reward scoring.
       </p>
       <p>
         Optional feedback stays hidden while the round is active and unlocks after settlement or another terminal round

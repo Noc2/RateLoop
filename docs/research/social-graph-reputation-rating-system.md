@@ -18,9 +18,9 @@ future capture easier.
 The better design is:
 
 - Use one sealed commit-reveal prediction round as the base signal.
-- Replace binary up/down votes with a predicted final rating, because the
-  incentive is already to predict Curyo consensus rather than to report an
-  objective truth.
+- Replace binary up/down votes with a BTS-inspired split rating report: one
+  field for the rater's own opinion and one field for the crowd rating they
+  expect.
 - Treat human and AI raters as first-class accounts. AI rating AI can be useful
   signal when it is calibrated, diverse, and cluster-discounted.
 - Make reputation non-transferable and earned from revealed, settled
@@ -60,7 +60,8 @@ rather than each receiving a full independent payout.
 The primary vote payload should be simple:
 
 ```text
-predictedFinalRatingBps: 1000-9900
+opinionRatingBps: 0-10000
+predictedCrowdRatingBps: 0-10000
 stakeAmount: capped reputation at risk
 ```
 
@@ -95,11 +96,12 @@ auditability.
 
 ### Consensus Is Useful But Dangerous
 
-Curyo's incentive is already "predict the Curyo crowd." Switching from binary
-`up/down` to a predicted final rating makes that honest. The danger is that it
-also makes the beauty-contest dynamic clearer: users can learn to predict the
-majority rather than evaluate content, and a coalition with enough weight can
-move the final rating, score itself as calibrated, and compound influence.
+Curyo's incentive is already partly "predict the Curyo crowd." Switching from
+binary `up/down` to a split opinion/crowd report makes that explicit without
+turning the rater's own opinion into a rewarded beauty-contest target. The
+danger is still real: users can learn to predict the majority rather than
+evaluate content, and a coalition with enough weight can move the final rating,
+score itself as calibrated, and compound influence.
 
 Research on proper scoring rules is a useful contrast. If Curyo were asking
 about an objective future event, a capped Brier or log score would be the clean
@@ -108,12 +110,13 @@ and endogenous, so a pure proper-scoring-rule design does not apply directly.
 Peer prediction and Bayesian Truth Serum are closer conceptually because they
 handle subjective questions, but they come with equilibrium and collusion risks.
 
-Product lesson: use predicted final ratings, but never reward raw majority
-matching. Score against leave-one-out and, for payout-sensitive rounds,
-leave-one-cluster-out results. Hide aggregate predictions until after a user
-commits, and present the result as calibrated public judgment rather than
-objective truth. A single sealed round is preferable to visible iterative
-rounds by default, because the point is to collect independent predictions
+Product lesson: use split rating reports, but never reward raw majority
+matching. Public ratings should aggregate opinion fields. Calibration and
+payouts should score expected-crowd fields against leave-one-out and, for
+payout-sensitive rounds, leave-one-cluster-out results. Hide aggregate reports
+until after a user commits, and present the result as calibrated public judgment
+rather than objective truth. A single sealed round is preferable to visible
+iterative rounds by default, because the point is to collect independent reports
 before social influence can collapse diversity.
 
 Sources:
@@ -264,13 +267,15 @@ The default rating primitive should be one private prediction round:
 
 ```text
 commit phase:
-  raters privately commit to predictedFinalRatingBps and stakeAmount
+  raters privately commit to opinionRatingBps, predictedCrowdRatingBps,
+  and stakeAmount
 
 reveal phase:
-  raters reveal the prediction and salt
+  raters reveal the split report and salt
 
 settlement:
-  aggregate revealed eligible predictions
+  aggregate revealed eligible opinion ratings
+  score crowd predictions against leave-one-out peer opinion
   publish final rating, confidence, dispersion, effective participants
   compute reputation deltas and USDC eligibility
 ```
@@ -292,10 +297,11 @@ Recommended reopen/challenge triggers:
 
 ### Rating Input
 
-Replace binary voting with one compact prediction payload:
+Replace binary voting with one compact split report payload:
 
 ```text
-predictedFinalRatingBps: uint16  // 1000-9900, representing 1.0-9.9
+opinionRatingBps: uint16         // 0-10000, representing own 0.0-10.0 opinion
+predictedCrowdRatingBps: uint16  // 0-10000, representing expected crowd rating
 stakeAmount: uint96              // reputation locked as conviction
 salt: bytes32
 ```
@@ -308,16 +314,17 @@ roundVotingEngine
 contentId
 roundId
 voter
-predictedFinalRatingBps
+opinionRatingBps
+predictedCrowdRatingBps
 stakeAmount
 scorerEpochRoot
 tlock metadata
 salt
 ```
 
-Aggregate predictions should remain hidden until a user commits or the reveal
-phase begins. The current separate feedback field stays separate; the vote
-payload should not grow a second reasoning channel.
+Aggregate reports should remain hidden until a user commits or the reveal phase
+begins. The current separate feedback field stays separate; the vote payload
+should not grow a second reasoning channel.
 
 Rater identity should be account-based, not human-based. Optional profile
 metadata can disclose whether the account is human-operated, AI-operated,
@@ -370,14 +377,14 @@ Score a voter against the result they could not directly control:
 
 ```text
 predictionErrorBps =
-  abs(predictedFinalRatingBps - finalRatingBpsExcludingVoter)
+  abs(predictedCrowdRatingBps - finalRatingBpsExcludingVoter)
 ```
 
 For USDC rounds, high-value rounds, or rounds with suspicious correlation, use:
 
 ```text
 predictionErrorBps =
-  abs(predictedFinalRatingBps - finalRatingBpsExcludingCluster)
+  abs(predictedCrowdRatingBps - finalRatingBpsExcludingCluster)
 ```
 
 Reputation changes should be small, capped, category-specific, and epoch-limited:
@@ -879,8 +886,8 @@ Current:
 
 Recommended:
 
-- replace `isUp` with `predictedFinalRatingBps` in the committed payload and
-  reveal hash;
+- replace `isUp` with `opinionRatingBps` and `predictedCrowdRatingBps` in the
+  committed payload and reveal hash;
 - snapshot `baseReputation`, `availableReputation`, `graphScore`, and
   `categoryWeight` at commit;
 - lock chosen stake in the reputation token;
@@ -1031,11 +1038,11 @@ This keeps voting thoughtful without punishing useful dissent.
    Reputation must be non-transferable. Transferability makes reputation buyable
    and weakens the core premise.
 
-4. Use predicted final ratings.
+4. Use split rating reports.
 
-   The first redeploy should use predicted final rating as the primary vote
-   input, with stake as the conviction signal and the existing feedback field as
-   the reasoning layer.
+   The first redeploy should use opinion rating as the public-score input and
+   expected crowd rating as the reward-scoring input, with stake as the
+   conviction signal and the existing feedback field as the reasoning layer.
 
 5. Use one private round by default.
 
@@ -1106,9 +1113,9 @@ Implement fresh contracts with no legacy compatibility requirement:
   Self remappings, and Self verification tests;
 - replace `VoterIdNFT.sol` with `ReputationIdentity`, or simplify identity into
   the reputation token plus a delegation registry;
-- rewrite `RoundVotingEngine.sol` around `predictedFinalRatingBps`,
-  reputation locks, fixed-bin weighted median aggregation, and revealed-only
-  settlement;
+- rewrite `RoundVotingEngine.sol` around `opinionRatingBps`,
+  `predictedCrowdRatingBps`, reputation locks, weighted opinion aggregation,
+  and revealed-only settlement;
 - rewrite `RoundRewardDistributor.sol` around reputation deltas and stake
   unlock/burn logic instead of winner/loser HREP transfers;
 - keep `QuestionRewardPoolEscrow.sol` for USDC, but make eligibility depend on
@@ -1205,7 +1212,7 @@ The best Curyo-native design is:
 - no migration from current HREP balances;
 - fresh deployment with no legacy-compatibility requirement;
 - non-transferable reputation;
-- one sealed commit-reveal round with predicted final rating instead of binary
+- one sealed commit-reveal round with split rating reports instead of binary
   up/down;
 - stake as capped conviction and burn risk;
 - graph and rater provenance as independence discounts;

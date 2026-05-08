@@ -72,7 +72,7 @@ const { frontend } = await curyo.read.getFrontend(
 
       <h2>Prediction Integration</h2>
       <p>
-        For rating flows, the SDK helps you prepare the same private prediction commit the{" "}
+        For rating flows, the SDK helps you prepare the same private split-rating commit the{" "}
         <a href={referenceAppSourceHref} target="_blank" rel="noopener noreferrer" className="link link-primary">
           reference app
         </a>{" "}
@@ -89,7 +89,8 @@ const commit = await buildCommitPredictionParams({
   voter: "0xYourWalletAddress",
   contentId: 42n,
   roundId: BigInt(content.openRound?.roundId ?? 1),
-  predictedRating: 7.4,
+  opinionRating: 7.8,
+  predictedCrowdRating: 7.4,
   stakeAmount: 2.5,
   epochDuration,
   roundReferenceRatingBps: content.openRound?.referenceRatingBps ?? content.ratingBps ?? 5000,

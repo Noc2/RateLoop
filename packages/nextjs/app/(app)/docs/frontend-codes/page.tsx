@@ -160,7 +160,7 @@ RoundVotingEngine.commitVote(
           <code>
             revealPredictionByCommitKey(contentId, roundId, commitKey, opinionRatingBps, predictedCrowdRatingBps, salt)
           </code>{" "}
-          for each unrevealed commit. Predictions stay hidden until this step runs.
+          for each unrevealed commit. Split rating reports stay hidden until this step runs.
         </li>
         <li>
           <strong>Settling rounds:</strong> Once at least 3 votes are revealed and all past-epoch votes have been
