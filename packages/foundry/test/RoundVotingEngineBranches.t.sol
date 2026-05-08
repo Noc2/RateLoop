@@ -440,11 +440,11 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
             engine.roundPredictionStats(contentId, roundId);
         assertEq(weightedRatingSum, 355_000e6, "weighted rating sum");
         assertEq(totalPredictionWeight, 50e6, "prediction weight");
-        assertEq(finalRatingBps, 8_000, "prediction median before settle");
+        assertEq(finalRatingBps, 7_100, "prediction average before settle");
 
         engine.settleRound(contentId, roundId);
 
-        assertEq(registry.getRating(contentId), 8_000, "registry rating");
+        assertEq(registry.getRating(contentId), 7_100, "registry rating");
     }
 
     function test_PredictionScoringSuppressedBelowLooFloor() public {
@@ -488,7 +488,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         engine.revealPredictionByCommitKey(contentId, roundId, ck3, 6_500, 6_500, s3);
         engine.settleRound(contentId, roundId);
 
-        assertEq(registry.getRating(contentId), 6_500, "opinion median is the public rating");
+        assertEq(registry.getRating(contentId), 6_500, "opinion average is the public rating");
         assertEq(engine.commitOpinionRatingBps(contentId, roundId, ck1), 8_000, "ck1 opinion stored");
         assertEq(engine.commitPredictedRatingBps(contentId, roundId, ck1), 5_750, "ck1 crowd prediction stored");
         assertEq(engine.commitPredictionScoreBps(contentId, roundId, ck1), 10_000, "ck1 score");

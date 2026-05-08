@@ -796,7 +796,7 @@ contract RoundVotingEngine is
             && roundPredictionCount[contentId][roundId] == round.revealedCount
             && round.revealedCount >= MIN_LOO_VALID_PARTICIPANTS;
         uint16 finalPredictionRatingBps = hasPredictionSettlement
-            ? _roundWeightedMedianPrediction(contentId, roundId, predictionWeight)
+            ? _roundWeightedAveragePrediction(contentId, roundId, predictionWeight)
             : 0;
 
         uint256 weightedWinningStake;
@@ -1198,33 +1198,12 @@ contract RoundVotingEngine is
         }
     }
 
-    function _roundWeightedMedianPrediction(uint256 contentId, uint256 roundId, uint256 totalWeight)
+    function _roundWeightedAveragePrediction(uint256 contentId, uint256 roundId, uint256 totalWeight)
         internal
         view
         returns (uint16)
     {
-        bytes32[] storage commitKeys = roundCommitHashes[contentId][roundId];
-        uint256 predictionCount = roundPredictionCount[contentId][roundId];
-        uint16[] memory ratings = new uint16[](predictionCount);
-        uint256[] memory weights = new uint256[](predictionCount);
-        uint256 cursor;
-
-        for (uint256 i = 0; i < commitKeys.length;) {
-            bytes32 commitKey = commitKeys[i];
-            uint256 weight = commitPredictionWeight[contentId][roundId][commitKey];
-            if (weight > 0) {
-                ratings[cursor] = commitOpinionRatingBps[contentId][roundId][commitKey];
-                weights[cursor] = weight;
-                unchecked {
-                    ++cursor;
-                }
-            }
-            unchecked {
-                ++i;
-            }
-        }
-
-        return PredictionRatingMath.weightedMedianRating(ratings, weights, totalWeight);
+        return PredictionRatingMath.weightedAverageRating(roundWeightedRatingSum[contentId][roundId], totalWeight);
     }
 
     function _scorePredictionRewards(uint256 contentId, uint256 roundId, uint256 totalWeight)
@@ -1385,7 +1364,7 @@ contract RoundVotingEngine is
         totalPredictionWeight = roundPredictionWeight[contentId][roundId];
         finalRatingBps = roundFinalPredictionRatingBps[contentId][roundId];
         if (finalRatingBps == 0 && totalPredictionWeight > 0) {
-            finalRatingBps = _roundWeightedMedianPrediction(contentId, roundId, totalPredictionWeight);
+            finalRatingBps = _roundWeightedAveragePrediction(contentId, roundId, totalPredictionWeight);
         }
     }
 

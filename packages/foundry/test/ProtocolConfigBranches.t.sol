@@ -431,7 +431,7 @@ contract ProtocolConfigBranchesTest is Test {
         assertEq(bounds.minSettlementVoters, 2);
         assertEq(bounds.maxSettlementVoters, 100);
         assertEq(bounds.minVoterCap, 2);
-        assertEq(bounds.maxVoterCap, 10_000);
+        assertEq(bounds.maxVoterCap, 1_000);
     }
 
     function test_ValidateRoundConfig_AcceptsGovernedCreatorChoice() public {
@@ -465,9 +465,9 @@ contract ProtocolConfigBranchesTest is Test {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
 
         vm.expectEmit(true, true, true, true);
-        emit RoundConfigBoundsUpdated(10 minutes, 2 hours, 2 hours, 14 days, 3, 50, 3, 2_000);
+        emit RoundConfigBoundsUpdated(10 minutes, 2 hours, 2 hours, 14 days, 3, 50, 3, 500);
 
-        config.setRoundConfigBounds(10 minutes, 2 hours, 2 hours, 14 days, 3, 50, 3, 2_000);
+        config.setRoundConfigBounds(10 minutes, 2 hours, 2 hours, 14 days, 3, 50, 3, 500);
 
         ProtocolConfig.RoundConfigBounds memory bounds = config.getRoundConfigBounds();
         assertEq(bounds.minEpochDuration, 10 minutes);
@@ -480,24 +480,24 @@ contract ProtocolConfigBranchesTest is Test {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
         vm.warp(100);
 
-        config.setRoundConfigBounds(10 minutes, 60 minutes, 1 hours, 30 days, 2, 100, 2, 10_000);
+        config.setRoundConfigBounds(10 minutes, 60 minutes, 1 hours, 30 days, 2, 100, 2, 1_000);
         config.setDrandConfig(QUICKNET_CHAIN_HASH, 1, uint64(10 minutes));
 
         vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
-        config.setRoundConfigBounds(5 minutes, 60 minutes, 1 hours, 30 days, 2, 100, 2, 10_000);
+        config.setRoundConfigBounds(5 minutes, 60 minutes, 1 hours, 30 days, 2, 100, 2, 1_000);
     }
 
     function test_SetRoundConfigBounds_RejectsBoundsThatExcludeCurrentDefault() public {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
 
         vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
-        config.setRoundConfigBounds(5 minutes, 60 minutes, 1 hours, 1 days, 2, 100, 2, 10_000);
+        config.setRoundConfigBounds(5 minutes, 60 minutes, 1 hours, 1 days, 2, 100, 2, 1_000);
     }
 
     function test_SetRoundConfigBounds_RejectsAbsoluteMaxRoundDuration() public {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
 
         vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
-        config.setRoundConfigBounds(5 minutes, 60 minutes, 1 hours, 30 days + 1, 2, 100, 2, 10_000);
+        config.setRoundConfigBounds(5 minutes, 60 minutes, 1 hours, 30 days + 1, 2, 100, 2, 1_000);
     }
 }
