@@ -1,0 +1,42 @@
+.cta {
+  height: 2.75rem;
+  min-height: 2.75rem;
+  padding-block: 0;
+  padding-inline: 1.1rem;
+  border-radius: 9999px;
+  gap: 0.55rem;
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    transform 0.2s ease,
+    color 0.2s ease;
+}
+
+.cta:hover .arrow {
+  transform: translateX(2px);
+}
+
+.primary {
+  box-shadow: none;
+}
+
+.secondary {
+  color: var(--color-base-content);
+  background: var(--curyo-control-idle);
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.secondary:hover {
+  color: var(--color-base-content);
+  background: var(--curyo-control-idle-hover);
+  border-color: transparent;
+  box-shadow: none;
+}

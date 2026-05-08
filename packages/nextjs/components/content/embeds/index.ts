@@ -1,0 +1,1 @@
+export { GenericLinkCard } from "./GenericLinkCard";

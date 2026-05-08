@@ -1,0 +1,586 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+import {Test, console} from "forge-std/Test.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {ProfileRegistry} from "../contracts/ProfileRegistry.sol";
+import {IProfileRegistry} from "../contracts/interfaces/IProfileRegistry.sol";
+import {MockVoterIdNFT} from "./mocks/MockVoterIdNFT.sol";
+
+/// @title ProfileRegistry Test Suite
+contract ProfileRegistryTest is Test {
+    ProfileRegistry public registry;
+    MockVoterIdNFT public voterIdNFT;
+
+    address public admin = address(1);
+    address public user1 = address(2);
+    address public user2 = address(3);
+    address public delegate = address(4);
+
+    function setUp() public {
+        vm.startPrank(admin);
+
+        // Deploy registry behind an ERC1967 proxy for upgradeable storage behavior
+        ProfileRegistry impl = new ProfileRegistry();
+        registry = ProfileRegistry(
+            address(new ERC1967Proxy(address(impl), abi.encodeCall(ProfileRegistry.initialize, (admin, admin))))
+        );
+        voterIdNFT = new MockVoterIdNFT();
+        registry.setVoterIdNFT(address(voterIdNFT));
+        voterIdNFT.setHolder(user1);
+        voterIdNFT.setHolder(user2);
+        voterIdNFT.setHolder(address(6));
+        voterIdNFT.setHolder(address(7));
+        voterIdNFT.setHolder(address(8));
+
+        vm.stopPrank();
+    }
+
+    // --- Initialization Tests ---
+
+    function test_Initialization() public view {
+        assertEq(registry.MIN_NAME_LENGTH(), 3);
+        assertEq(registry.MAX_NAME_LENGTH(), 20);
+        assertEq(registry.MAX_SELF_REPORT_LENGTH(), 1600);
+        (, uint256 total) = registry.getRegisteredAddressesPaginated(0, 10);
+        assertEq(total, 0);
+    }
+
+    // --- Set Profile Tests ---
+
+    function test_SetProfileCreate() public {
+        vm.prank(user1);
+        registry.setProfile("alice", "");
+
+        IProfileRegistry.Profile memory profile = registry.getProfile(user1);
+        assertEq(profile.name, "alice");
+        assertEq(profile.selfReport, "");
+        assertTrue(profile.createdAt > 0);
+        assertTrue(profile.updatedAt > 0);
+
+        assertTrue(registry.hasProfile(user1));
+        (, uint256 total) = registry.getRegisteredAddressesPaginated(0, 10);
+        assertEq(total, 1);
+    }
+
+    function test_SetProfileUpdate() public {
+        vm.startPrank(user1);
+        registry.setProfile("alice", "");
+
+        vm.warp(block.timestamp + 1 days);
+
+        registry.setProfile("alice", "");
+        vm.stopPrank();
+
+        IProfileRegistry.Profile memory profile = registry.getProfile(user1);
+        assertEq(profile.selfReport, "");
+        assertTrue(profile.updatedAt > profile.createdAt);
+    }
+
+    function test_SetProfileStoresSelfReport() public {
+        vm.prank(user1);
+        registry.setProfile("alice", "{\"v\":1,\"ageGroup\":\"25-34\",\"residenceCountry\":\"DE\"}");
+
+        IProfileRegistry.Profile memory profile = registry.getProfile(user1);
+        assertEq(profile.name, "alice");
+        assertEq(profile.selfReport, "{\"v\":1,\"ageGroup\":\"25-34\",\"residenceCountry\":\"DE\"}");
+    }
+
+    function test_SetProfileUpdateSelfReport() public {
+        vm.startPrank(user1);
+        registry.setProfile("alice", "{\"v\":1,\"ageGroup\":\"25-34\"}");
+
+        vm.warp(block.timestamp + 1 days);
+
+        registry.setProfile("alice", "{\"v\":1,\"ageGroup\":\"35-44\",\"languages\":[\"en\"]}");
+        vm.stopPrank();
+
+        IProfileRegistry.Profile memory profile = registry.getProfile(user1);
+        assertEq(profile.selfReport, "{\"v\":1,\"ageGroup\":\"35-44\",\"languages\":[\"en\"]}");
+        assertTrue(profile.updatedAt > profile.createdAt);
+    }
+
+    function test_SetProfileChangeName() public {
+        vm.startPrank(user1);
+        registry.setProfile("alice", "");
+
+        // Old name should be released when changing
+        registry.setProfile("alice2", "");
+        vm.stopPrank();
+
+        // Old name should be available
+        assertFalse(registry.isNameTaken("alice"));
+        assertTrue(registry.isNameTaken("alice2"));
+    }
+
+    function test_SetProfileSameNameUpdate() public {
+        vm.startPrank(user1);
+        registry.setProfile("alice", "");
+
+        // Should not revert when updating with same name
+        registry.setProfile("alice", "{\"v\":1,\"roles\":[\"researcher\"]}");
+        vm.stopPrank();
+
+        IProfileRegistry.Profile memory profile = registry.getProfile(user1);
+        assertEq(profile.name, "alice");
+        assertEq(profile.selfReport, "{\"v\":1,\"roles\":[\"researcher\"]}");
+    }
+
+    function test_RevertSetProfileNameTooShort() public {
+        vm.prank(user1);
+        vm.expectRevert("Name too short");
+        registry.setProfile("ab", "");
+    }
+
+    function test_RevertSetProfileNameTooLong() public {
+        vm.prank(user1);
+        vm.expectRevert("Name too long");
+        registry.setProfile("abcdefghijklmnopqrstuvwxyz", ""); // 26 chars, max is 20
+    }
+
+    function test_RevertSetProfileInvalidName() public {
+        vm.startPrank(user1);
+
+        vm.expectRevert("Invalid name format");
+        registry.setProfile("alice!", ""); // Contains !
+
+        vm.expectRevert("Invalid name format");
+        registry.setProfile("alice bob", ""); // Contains space
+
+        vm.expectRevert("Invalid name format");
+        registry.setProfile("alice@bob", ""); // Contains @
+
+        vm.stopPrank();
+    }
+
+    function test_SetProfileValidNameCharacters() public {
+        vm.startPrank(user1);
+
+        // Alphanumeric and underscore should be valid
+        registry.setProfile("alice_123", "");
+
+        IProfileRegistry.Profile memory profile = registry.getProfile(user1);
+        assertEq(profile.name, "alice_123");
+
+        vm.stopPrank();
+    }
+
+    function test_RevertSetProfileNameTaken() public {
+        vm.prank(user1);
+        registry.setProfile("alice", "");
+
+        vm.prank(user2);
+        vm.expectRevert("Name already taken");
+        registry.setProfile("alice", "");
+    }
+
+    function test_RevertSetProfileSelfReportTooLong() public {
+        bytes memory longSelfReport = new bytes(1601);
+        for (uint256 i = 0; i < 1601; i++) {
+            longSelfReport[i] = "a";
+        }
+
+        vm.prank(user1);
+        vm.expectRevert("Self-report too long");
+        registry.setProfile("alice", string(longSelfReport));
+    }
+
+    // --- Name Uniqueness Tests (Case Insensitive) ---
+
+    function test_NameTakenCaseInsensitive() public {
+        vm.prank(user1);
+        registry.setProfile("Alice", "");
+
+        assertTrue(registry.isNameTaken("alice"));
+        assertTrue(registry.isNameTaken("ALICE"));
+        assertTrue(registry.isNameTaken("AlIcE"));
+    }
+
+    function test_RevertSetProfileNameTakenCaseInsensitive() public {
+        vm.prank(user1);
+        registry.setProfile("Alice", "");
+
+        vm.prank(user2);
+        vm.expectRevert("Name already taken");
+        registry.setProfile("ALICE", "");
+    }
+
+    // --- View Functions Tests ---
+
+    function test_GetProfile() public {
+        vm.prank(user1);
+        registry.setProfile("alice", "");
+
+        IProfileRegistry.Profile memory profile = registry.getProfile(user1);
+        assertEq(profile.name, "alice");
+        assertEq(profile.selfReport, "");
+    }
+
+    function test_GetAvatarAccentDefault() public view {
+        (bool enabled, uint24 rgb) = registry.getAvatarAccent(user1);
+        assertFalse(enabled);
+        assertEq(rgb, 0);
+    }
+
+    function test_SetAvatarAccentStoresOverride() public {
+        vm.prank(user1);
+        registry.setAvatarAccent(0xF26426);
+
+        (bool enabled, uint24 rgb) = registry.getAvatarAccent(user1);
+        assertTrue(enabled);
+        assertEq(rgb, 0xF26426);
+    }
+
+    function test_SetAvatarAccentSupportsBlack() public {
+        vm.prank(user1);
+        registry.setAvatarAccent(0x000000);
+
+        (bool enabled, uint24 rgb) = registry.getAvatarAccent(user1);
+        assertTrue(enabled);
+        assertEq(rgb, 0x000000);
+    }
+
+    function test_ClearAvatarAccentRemovesOverride() public {
+        vm.startPrank(user1);
+        registry.setAvatarAccent(0xF26426);
+        registry.clearAvatarAccent();
+        vm.stopPrank();
+
+        (bool enabled, uint24 rgb) = registry.getAvatarAccent(user1);
+        assertFalse(enabled);
+        assertEq(rgb, 0);
+    }
+
+    function test_GetProfileNonExistent() public view {
+        IProfileRegistry.Profile memory profile = registry.getProfile(user1);
+        assertEq(profile.name, "");
+        assertEq(profile.selfReport, "");
+        assertEq(profile.createdAt, 0);
+    }
+
+    function test_IsNameTaken() public {
+        assertFalse(registry.isNameTaken("alice"));
+
+        vm.prank(user1);
+        registry.setProfile("alice", "");
+
+        assertTrue(registry.isNameTaken("alice"));
+    }
+
+    function test_IsNameTakenTooShort() public view {
+        // Names shorter than MIN_NAME_LENGTH return false
+        assertFalse(registry.isNameTaken("ab"));
+    }
+
+    function test_HasProfile() public {
+        assertFalse(registry.hasProfile(user1));
+
+        vm.prank(user1);
+        registry.setProfile("alice", "");
+
+        assertTrue(registry.hasProfile(user1));
+    }
+
+    function test_SetProfileUsesWalletProfileForDelegateWhenVoterIdConfigured() public {
+        vm.prank(user1);
+        voterIdNFT.setDelegate(delegate);
+
+        vm.prank(delegate);
+        registry.setProfile("agent", "");
+
+        assertTrue(registry.hasProfile(delegate));
+        assertFalse(registry.hasProfile(user1));
+        assertEq(registry.getAddressByName("agent"), delegate);
+    }
+
+    function test_SetAvatarAccentUsesWalletProfileForDelegateWhenVoterIdConfigured() public {
+        vm.prank(user1);
+        voterIdNFT.setDelegate(delegate);
+
+        vm.prank(delegate);
+        registry.setAvatarAccent(0xF26426);
+
+        (bool enabled, uint24 rgb) = registry.getAvatarAccent(delegate);
+        assertTrue(enabled);
+        assertEq(rgb, 0xF26426);
+    }
+
+    function test_RemintedVoterIdCanReclaimProfileNameAndAvatar() public {
+        vm.startPrank(user1);
+        registry.setProfile("alice", "{\"v\":1,\"expertise\":[\"science\"]}");
+        registry.setAvatarAccent(0xF26426);
+        vm.stopPrank();
+
+        uint256 nullifier = voterIdNFT.getNullifier(voterIdNFT.getTokenId(user1));
+        address remintedUser = address(9);
+        voterIdNFT.revokeVoterId(user1);
+        voterIdNFT.resetNullifier(nullifier);
+        voterIdNFT.mint(remintedUser, nullifier);
+
+        vm.prank(remintedUser);
+        registry.setProfile("alice", "{\"v\":2,\"expertise\":[\"science\"]}");
+
+        assertFalse(registry.hasProfile(user1));
+        assertTrue(registry.hasProfile(remintedUser));
+        assertEq(registry.getAddressByName("alice"), remintedUser);
+
+        IProfileRegistry.Profile memory oldProfile = registry.getProfile(user1);
+        assertEq(oldProfile.createdAt, 0);
+
+        IProfileRegistry.Profile memory profile = registry.getProfile(remintedUser);
+        assertEq(profile.name, "alice");
+        assertEq(profile.selfReport, "{\"v\":2,\"expertise\":[\"science\"]}");
+
+        (bool oldAccentEnabled,) = registry.getAvatarAccent(user1);
+        (bool accentEnabled, uint24 rgb) = registry.getAvatarAccent(remintedUser);
+        assertFalse(oldAccentEnabled);
+        assertTrue(accentEnabled);
+        assertEq(rgb, 0xF26426);
+    }
+
+    function test_DifferentNullifierCannotReclaimProfileName() public {
+        vm.prank(user1);
+        registry.setProfile("alice", "");
+
+        uint256 nullifier = voterIdNFT.getNullifier(voterIdNFT.getTokenId(user1));
+        voterIdNFT.revokeVoterId(user1);
+        voterIdNFT.resetNullifier(nullifier);
+
+        vm.prank(user2);
+        vm.expectRevert("Name already taken");
+        registry.setProfile("alice", "");
+    }
+
+    function test_SetProfileAllowsUnsetVoterIdNFT() public {
+        vm.startPrank(admin);
+        ProfileRegistry impl = new ProfileRegistry();
+        ProfileRegistry unsetRegistry = ProfileRegistry(
+            address(new ERC1967Proxy(address(impl), abi.encodeCall(ProfileRegistry.initialize, (admin, admin))))
+        );
+        vm.stopPrank();
+
+        vm.prank(user1);
+        unsetRegistry.setProfile("alice", "");
+
+        assertTrue(unsetRegistry.hasProfile(user1));
+        assertEq(unsetRegistry.getAddressByName("alice"), user1);
+    }
+
+    function test_AdminCanClearVoterIdNFT() public {
+        vm.prank(admin);
+        registry.setVoterIdNFT(address(0));
+
+        assertEq(address(registry.voterIdNFT()), address(0));
+
+        vm.prank(user1);
+        registry.setProfile("alice", "");
+
+        assertTrue(registry.hasProfile(user1));
+        assertEq(registry.getAddressByName("alice"), user1);
+    }
+
+    function test_GetAddressByName() public {
+        assertEq(registry.getAddressByName("alice"), address(0));
+
+        vm.prank(user1);
+        registry.setProfile("alice", "");
+
+        assertEq(registry.getAddressByName("alice"), user1);
+        assertEq(registry.getAddressByName("ALICE"), user1); // Case insensitive
+    }
+
+    function test_GetRegisteredAddressesPaginatedTotal() public {
+        (, uint256 total) = registry.getRegisteredAddressesPaginated(0, 10);
+        assertEq(total, 0);
+
+        vm.prank(user1);
+        registry.setProfile("alice", "");
+
+        (, total) = registry.getRegisteredAddressesPaginated(0, 10);
+        assertEq(total, 1);
+
+        vm.prank(user2);
+        registry.setProfile("bob", "");
+
+        (, total) = registry.getRegisteredAddressesPaginated(0, 10);
+        assertEq(total, 2);
+    }
+
+    function test_GetRegisteredAddressesPaginatedWholeList() public {
+        vm.prank(user1);
+        registry.setProfile("alice", "");
+
+        vm.prank(user2);
+        registry.setProfile("bob", "");
+
+        (address[] memory addresses, uint256 total) = registry.getRegisteredAddressesPaginated(0, 10);
+        assertEq(total, 2);
+        assertEq(addresses.length, 2);
+        assertEq(addresses[0], user1);
+        assertEq(addresses[1], user2);
+    }
+
+    // --- Fuzz Tests ---
+
+    function testFuzz_SetProfileValidName(string memory name) public {
+        // Bound the name to valid length
+        vm.assume(bytes(name).length >= 3);
+        vm.assume(bytes(name).length <= 20);
+
+        // Check all characters are valid
+        bytes memory nameBytes = bytes(name);
+        for (uint256 i = 0; i < nameBytes.length; i++) {
+            bytes1 char = nameBytes[i];
+            bool isLowercase = (char >= 0x61 && char <= 0x7A);
+            bool isUppercase = (char >= 0x41 && char <= 0x5A);
+            bool isDigit = (char >= 0x30 && char <= 0x39);
+            bool isUnderscore = (char == 0x5F);
+            vm.assume(isLowercase || isUppercase || isDigit || isUnderscore);
+        }
+
+        vm.prank(user1);
+        registry.setProfile(name, "");
+
+        assertTrue(registry.hasProfile(user1));
+    }
+
+    // --- Multiple Users Tests ---
+
+    function test_MultipleUsersUniqueNames() public {
+        vm.prank(user1);
+        registry.setProfile("alice", "");
+
+        vm.prank(user2);
+        registry.setProfile("bob", "");
+
+        assertEq(registry.getAddressByName("alice"), user1);
+        assertEq(registry.getAddressByName("bob"), user2);
+        (, uint256 total) = registry.getRegisteredAddressesPaginated(0, 10);
+        assertEq(total, 2);
+    }
+
+    // --- Pagination Tests ---
+
+    function test_GetRegisteredAddressesPaginated() public {
+        // Register 5 users
+        address user3 = address(6);
+        address user4 = address(7);
+        address user5 = address(8);
+
+        vm.prank(user1);
+        registry.setProfile("alice", "");
+        vm.prank(user2);
+        registry.setProfile("bob", "");
+        vm.prank(user3);
+        registry.setProfile("carol", "");
+        vm.prank(user4);
+        registry.setProfile("dave", "");
+        vm.prank(user5);
+        registry.setProfile("eve", "");
+
+        // Page 1: offset=0, limit=2
+        (address[] memory page1, uint256 total1) = registry.getRegisteredAddressesPaginated(0, 2);
+        assertEq(total1, 5);
+        assertEq(page1.length, 2);
+        assertEq(page1[0], user1);
+        assertEq(page1[1], user2);
+
+        // Page 2: offset=2, limit=2
+        (address[] memory page2, uint256 total2) = registry.getRegisteredAddressesPaginated(2, 2);
+        assertEq(total2, 5);
+        assertEq(page2.length, 2);
+        assertEq(page2[0], user3);
+        assertEq(page2[1], user4);
+
+        // Page 3: offset=4, limit=10 (exceeds remaining)
+        (address[] memory page3, uint256 total3) = registry.getRegisteredAddressesPaginated(4, 10);
+        assertEq(total3, 5);
+        assertEq(page3.length, 1);
+        assertEq(page3[0], user5);
+    }
+
+    function test_GetRegisteredAddressesPaginated_OffsetBeyondLength() public {
+        vm.prank(user1);
+        registry.setProfile("alice", "");
+
+        (address[] memory result, uint256 total) = registry.getRegisteredAddressesPaginated(5, 2);
+        assertEq(total, 1);
+        assertEq(result.length, 0);
+    }
+
+    function test_GetRegisteredAddressesPaginated_ZeroLimit() public {
+        vm.prank(user1);
+        registry.setProfile("alice", "");
+
+        (address[] memory result, uint256 total) = registry.getRegisteredAddressesPaginated(0, 0);
+        assertEq(total, 1);
+        assertEq(result.length, 0);
+    }
+
+    // --- Name Release on Update Tests ---
+
+    function test_NameReleasedOnChange() public {
+        vm.prank(user1);
+        registry.setProfile("alice", "");
+
+        assertTrue(registry.isNameTaken("alice"));
+
+        vm.prank(user1);
+        registry.setProfile("alice_new", "");
+
+        assertFalse(registry.isNameTaken("alice"));
+        assertTrue(registry.isNameTaken("alice_new"));
+
+        // Now user2 can take "alice"
+        vm.prank(user2);
+        registry.setProfile("alice", "");
+
+        assertEq(registry.getAddressByName("alice"), user2);
+    }
+
+    function test_ProfileOwnerCanUpdateAfterCredentialRevocationAndAdminCanReleaseName() public {
+        vm.prank(user1);
+        registry.setProfile("alice", "{\"v\":1,\"expertise\":[\"science\"]}");
+
+        voterIdNFT.removeHolder(user1);
+
+        vm.prank(user1);
+        registry.setProfile("alice2", "{\"v\":1,\"expertise\":[\"science\"]}");
+
+        assertFalse(registry.isNameTaken("alice"));
+        assertTrue(registry.isNameTaken("alice2"));
+
+        vm.prank(admin);
+        vm.expectEmit(true, false, false, true);
+        emit ProfileRegistry.ProfileNameReleased(user1, "alice2");
+        registry.releaseName(user1);
+
+        assertFalse(registry.isNameTaken("alice2"));
+        assertEq(registry.getAddressByName("alice2"), address(0));
+
+        IProfileRegistry.Profile memory releasedProfile = registry.getProfile(user1);
+        assertEq(releasedProfile.name, "");
+        assertEq(releasedProfile.selfReport, "{\"v\":1,\"expertise\":[\"science\"]}");
+        assertTrue(registry.hasProfile(user1));
+
+        vm.prank(user2);
+        registry.setProfile("alice2", "");
+
+        assertEq(registry.getAddressByName("alice2"), user2);
+    }
+
+    function test_RevertReleaseNameNonAdmin() public {
+        vm.prank(user1);
+        registry.setProfile("alice", "");
+
+        vm.prank(user2);
+        vm.expectRevert();
+        registry.releaseName(user1);
+    }
+
+    function test_RevertReleaseNameWhenNoName() public {
+        vm.prank(admin);
+        vm.expectRevert("No name to release");
+        registry.releaseName(user1);
+    }
+}

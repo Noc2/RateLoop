@@ -1,0 +1,67 @@
+import {
+  ArrowLongDownIcon,
+  ArrowLongRightIcon,
+  BanknotesIcon,
+  LockClosedIcon,
+  LockOpenIcon,
+  ScaleIcon,
+} from "@heroicons/react/24/outline";
+import { protocolDocFacts } from "~~/lib/docs/protocolFacts";
+
+const STEPS = [
+  {
+    label: "Predict",
+    duration: "1-100 MREP",
+    description: "Choose a final 0-10 rating, stake is locked, prediction is encrypted",
+    Icon: LockClosedIcon,
+  },
+  {
+    label: "Reveal",
+    duration: `${protocolDocFacts.blindPhaseDurationLabel} default`,
+    description: "Votes revealed after the selected blind phase ends",
+    Icon: LockOpenIcon,
+  },
+  {
+    label: "Resolve",
+    duration: "",
+    description: "Nearest revealed predictions win after the selected threshold is met",
+    Icon: ScaleIcon,
+  },
+  {
+    label: "Claim",
+    duration: "",
+    description: "Accurate raters withdraw stake + rewards",
+    Icon: BanknotesIcon,
+  },
+];
+
+export function VotingFlowDiagram() {
+  return (
+    <div className="my-6 flex flex-col sm:flex-row items-stretch gap-0 text-base">
+      {STEPS.map((step, i) => (
+        <div key={step.label} className="flex items-center flex-1 min-w-0">
+          <div className="flex flex-col items-center text-center flex-1 min-w-0 px-2">
+            <span className="mb-2 inline-flex min-h-8 items-center rounded-full border border-primary/20 bg-primary/15 px-4 text-sm font-medium text-primary">
+              {step.label}
+            </span>
+            <span className="mb-2 inline-flex h-14 w-14 items-center justify-center rounded-full border border-primary/15 bg-primary/10">
+              <step.Icon className="h-7 w-7 text-primary/90" aria-hidden="true" />
+            </span>
+            <span className="text-base text-base-content/60 leading-tight">{step.description}</span>
+            {step.duration && <span className="mt-1 text-sm font-mono text-primary/90">{step.duration}</span>}
+          </div>
+          {i < STEPS.length - 1 && (
+            <div className="hidden shrink-0 px-1 text-primary/90 sm:block" aria-hidden="true">
+              <ArrowLongRightIcon className="h-6 w-8" strokeWidth={2.4} />
+            </div>
+          )}
+          {i < STEPS.length - 1 && (
+            <div className="shrink-0 self-center py-1 text-primary/90 sm:hidden" aria-hidden="true">
+              <ArrowLongDownIcon className="h-8 w-6" strokeWidth={2.4} />
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}

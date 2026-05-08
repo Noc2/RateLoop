@@ -1,0 +1,31 @@
+{
+  "name": "@ratemesh/ponder",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node ./scripts/devWithRecovery.mjs",
+    "dev:raw": "ponder dev --disable-ui",
+    "dev:ui": "ponder dev",
+    "start": "ponder start",
+    "codegen": "ponder codegen",
+    "serve": "ponder serve",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@ratemesh/contracts": "workspace:*",
+    "@ratemesh/node-utils": "workspace:*",
+    "hono": "~4.12.17",
+    "ponder": "^1.0.0",
+    "viem": "2.39.0"
+  },
+  "devDependencies": {
+    "typescript": "~5.8.2",
+    "vitest": "^4.0.18"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=24 <25"
+  }
+}

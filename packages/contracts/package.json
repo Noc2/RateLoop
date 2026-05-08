@@ -1,0 +1,32 @@
+{
+  "name": "@ratemesh/contracts",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./abis": "./src/abis/index.ts",
+    "./deployments": "./src/deployments.ts",
+    "./deployedContracts": "./src/deployedContracts.ts",
+    "./protocol": "./src/protocol.ts",
+    "./types": "./src/types.ts",
+    "./voting": "./src/voting.ts"
+  },
+  "scripts": {
+    "test": "node ../../scripts/run-node-tests.mjs src",
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "tlock-js": "^0.9.0",
+    "viem": "2.39.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.7",
+    "tsx": "^4.21.0",
+    "typescript": "~5.8.2"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=24 <25"
+  }
+}

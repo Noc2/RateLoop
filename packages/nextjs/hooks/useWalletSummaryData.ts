@@ -1,0 +1,71 @@
+"use client";
+
+import { Address } from "viem";
+import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
+import { useActiveVotesWithDeadlines } from "~~/hooks/useActiveVotesWithDeadlines";
+import { usePageVisibility } from "~~/hooks/usePageVisibility";
+import { useSubmissionStakes } from "~~/hooks/useSubmissionStakes";
+import { useVotingStakes } from "~~/hooks/useVotingStakes";
+import { getWalletDisplayLiquidMicro, useWalletDisplaySummary } from "~~/hooks/useWalletDisplaySummary";
+import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
+
+function toMicroUnits(value: number) {
+  return BigInt(Math.round(value * 1e6));
+}
+
+export function useWalletSummaryData(address?: Address) {
+  const isPageVisible = usePageVisibility();
+  const { totalSubmissionStake } = useSubmissionStakes(address);
+  const { activeStaked: votingStaked } = useVotingStakes(address);
+  const { votes: activeVotes, earliestReveal, hasPendingReveals } = useActiveVotesWithDeadlines(address);
+
+  const { data: hrepBalance } = useScaffoldReadContract({
+    contractName: REPUTATION_CONTRACT_NAME,
+    functionName: "balanceOf",
+    args: [address],
+    watch: false,
+    query: {
+      enabled: !!address,
+      staleTime: 60_000,
+      refetchInterval: isPageVisible ? 60_000 : false,
+    },
+  });
+
+  const { data: frontendInfo } = useScaffoldReadContract({
+    contractName: "FrontendRegistry",
+    functionName: "getFrontendInfo",
+    args: [address],
+    watch: false,
+    query: {
+      enabled: !!address,
+      staleTime: 60_000,
+      refetchInterval: isPageVisible ? 60_000 : false,
+    },
+  });
+
+  const fallbackVotingStakedMicro = activeVotes.reduce((sum, vote) => sum + BigInt(vote.stake), 0n);
+  const indexedVotingStakedMicro = toMicroUnits(votingStaked);
+  const votingStakedMicro =
+    indexedVotingStakedMicro > fallbackVotingStakedMicro ? indexedVotingStakedMicro : fallbackVotingStakedMicro;
+
+  const summary = useWalletDisplaySummary(
+    address,
+    !address || hrepBalance === undefined
+      ? null
+      : {
+          liquidMicro: hrepBalance,
+          votingStakedMicro,
+          submissionStakedMicro: toMicroUnits(totalSubmissionStake),
+          frontendStakedMicro: frontendInfo?.[1] ?? 0n,
+        },
+  );
+
+  return {
+    activeVotes,
+    hrepBalance,
+    earliestReveal,
+    hasPendingReveals,
+    liquidBalance: getWalletDisplayLiquidMicro(summary, hrepBalance),
+    summary,
+  };
+}
