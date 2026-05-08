@@ -6,9 +6,9 @@ import { clampContentRating, formatCommunityRatingAriaLabel, formatRatingScoreOu
 const START_ANGLE = 0;
 const MIN_ANIMATION_MS = 500;
 const MAX_ANIMATION_MS = 1200;
-const PROGRESS_STROKE = "#ffffff";
-const INNER_ORANGE = "var(--curyo-ember)";
-const INNER_ORANGE_EDGE = "var(--curyo-ember-deep)";
+const PROGRESS_STROKE = "var(--curyo-warm-white)";
+const INNER_SURFACE = "var(--curyo-surface-nested)";
+const INNER_SURFACE_EDGE = "var(--curyo-surface-elevated-hover)";
 
 function easeOutCubic(progress: number) {
   return 1 - Math.pow(1 - progress, 3);
@@ -118,9 +118,9 @@ export function RatingOrb({ rating, size = 196, className = "" }: RatingOrbProps
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="absolute inset-0 overflow-visible">
         <defs>
           <radialGradient id={`${orbId}-inner-fill`} cx="46%" cy="38%" r="72%">
-            <stop offset="0%" stopColor={INNER_ORANGE} stopOpacity="0.98" />
-            <stop offset="68%" stopColor={INNER_ORANGE} stopOpacity="0.92" />
-            <stop offset="100%" stopColor={INNER_ORANGE_EDGE} stopOpacity="0.95" />
+            <stop offset="0%" stopColor={INNER_SURFACE_EDGE} stopOpacity="0.98" />
+            <stop offset="68%" stopColor={INNER_SURFACE} stopOpacity="0.95" />
+            <stop offset="100%" stopColor={INNER_SURFACE_EDGE} stopOpacity="0.9" />
           </radialGradient>
         </defs>
 
@@ -180,7 +180,7 @@ export function RatingOrb({ rating, size = 196, className = "" }: RatingOrbProps
           cy={center}
           r={innerCircleRadius}
           fill={`url(#${orbId}-inner-fill)`}
-          stroke="rgba(245,240,235,0.1)"
+          stroke="rgba(245,245,245,0.14)"
           strokeWidth={Math.max(1, trackWidth * 0.12)}
         />
       </svg>
@@ -188,7 +188,7 @@ export function RatingOrb({ rating, size = 196, className = "" }: RatingOrbProps
       <div className="relative z-10 flex flex-col items-center justify-center text-center">
         <span
           className="display-metric inline-flex items-end justify-center tabular-nums"
-          style={{ color: "var(--curyo-action-content)", maxWidth: scoreMaxWidth }}
+          style={{ color: "var(--curyo-warm-white)", maxWidth: scoreMaxWidth }}
         >
           <span className="font-semibold tracking-normal" style={{ fontSize: ratingFontSize }}>
             {displayedScore}

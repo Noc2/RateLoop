@@ -1,4 +1,4 @@
-import { Manrope, Source_Sans_3 } from "next/font/google";
+import { Inter, Space_Grotesk } from "next/font/google";
 import Script from "next/script";
 import "@scaffold-ui/components/styles.css";
 import "~~/styles/globals.css";
@@ -12,25 +12,24 @@ export const metadata = getMetadata({
 
 const isProduction = process.env.NODE_ENV === "production";
 
-const manrope = Manrope({
+const spaceGrotesk = Space_Grotesk({
   display: "swap",
   subsets: ["latin"],
-  variable: "--font-manrope",
-  weight: ["600", "700", "800"],
+  variable: "--font-hawig-heading",
+  weight: ["400", "500", "600", "700"],
 });
 
-const sourceSans = Source_Sans_3({
+const inter = Inter({
   display: "swap",
   subsets: ["latin"],
-  variable: "--font-source-sans",
-  weight: ["400", "500", "600", "700"],
+  variable: "--font-hawig-body",
 });
 
 const RootLayout = ({ children }: { children: React.ReactNode }) => {
   return (
     <html
       lang="en"
-      className={`${manrope.variable} ${sourceSans.variable}`}
+      className={`${spaceGrotesk.variable} ${inter.variable}`}
       data-theme="dark"
       style={{ colorScheme: "dark" }}
     >

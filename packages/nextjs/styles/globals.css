@@ -3,9 +3,9 @@
 @theme {
   --shadow-center: 0 0 12px -2px rgb(9 10 12 / 0.05);
   --animate-pulse-fast: pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-  --font-sans: var(--font-source-sans), ui-sans-serif, system-ui, sans-serif;
-  --font-heading: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
-  --font-display: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-hawig-body), ui-sans-serif, system-ui, sans-serif;
+  --font-heading: var(--font-hawig-heading), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-hawig-heading), ui-sans-serif, system-ui, sans-serif;
 }
 
 @plugin "daisyui" {
@@ -15,24 +15,24 @@
 @plugin "daisyui/theme" {
   name: "dark";
 
-  --color-primary: #cc490f;
-  --color-primary-content: #ffffff;
-  --color-secondary: #8b858e;
-  --color-secondary-content: #f8f2ed;
-  --color-accent: #a83a0f;
-  --color-accent-content: #ffffff;
-  --color-neutral: #1d181e;
-  --color-neutral-content: #f5f0eb;
+  --color-primary: #f5f5f5;
+  --color-primary-content: #050505;
+  --color-secondary: #a3a3a3;
+  --color-secondary-content: #050505;
+  --color-accent: #d4d4d4;
+  --color-accent-content: #050505;
+  --color-neutral: #18181b;
+  --color-neutral-content: #f5f5f5;
   --color-base-100: #000000;
-  --color-base-200: #151217;
-  --color-base-300: #0d0a0f;
-  --color-base-content: #f5f0eb;
-  --color-info: #8b858e;
-  --color-success: #cc490f;
-  --color-success-content: #ffffff;
-  --color-warning: #ffc071;
+  --color-base-200: #101010;
+  --color-base-300: #171717;
+  --color-base-content: #f5f5f5;
+  --color-info: #a3a3a3;
+  --color-success: #03cea4;
+  --color-success-content: #050505;
+  --color-warning: #ffc43d;
   --color-warning-content: #000000;
-  --color-error: #a83a0f;
+  --color-error: #ef476f;
   --color-error-content: #ffffff;
 
   --radius-selector: 0.5rem;
@@ -76,37 +76,37 @@
 
 :root {
   background: #000000;
-  --curyo-ember: #cc490f;
-  --curyo-ember-hover: #c2410c;
-  --curyo-ember-deep: #a83a0f;
-  --curyo-action-orange: #cc490f;
-  --curyo-action-orange-hover: #c2410c;
-  --curyo-action-content: #ffffff;
-  --curyo-warm-white: #f5f0eb;
-  --curyo-steel: #8b858e;
+  --curyo-ember: #f5f5f5;
+  --curyo-ember-hover: #d4d4d4;
+  --curyo-ember-deep: #737373;
+  --curyo-action-orange: #f5f5f5;
+  --curyo-action-orange-hover: #d4d4d4;
+  --curyo-action-content: #050505;
+  --curyo-warm-white: #f5f5f5;
+  --curyo-steel: #a3a3a3;
   --curyo-surface: #000000;
-  --curyo-surface-elevated: #151217;
-  --curyo-surface-elevated-hover: #1c181e;
-  --curyo-surface-mobile-vote: #221d24;
-  --curyo-surface-nested: #0d0a0f;
-  --curyo-control-idle: rgb(245 240 235 / 0.16);
-  --curyo-control-idle-hover: rgb(245 240 235 / 0.23);
-  --curyo-control-idle-muted: rgb(245 240 235 / 0.11);
-  --curyo-control-idle-muted-hover: rgb(245 240 235 / 0.17);
-  --curyo-ember-rgb: 204 73 15;
-  --curyo-ember-hover-rgb: 194 65 12;
-  --curyo-ember-deep-rgb: 168 58 15;
-  --curyo-warm-white-rgb: 245 240 235;
-  --curyo-steel-rgb: 139 133 142;
+  --curyo-surface-elevated: #101010;
+  --curyo-surface-elevated-hover: #171717;
+  --curyo-surface-mobile-vote: #151515;
+  --curyo-surface-nested: #0a0a0a;
+  --curyo-control-idle: rgb(245 245 245 / 0.11);
+  --curyo-control-idle-hover: rgb(245 245 245 / 0.18);
+  --curyo-control-idle-muted: rgb(245 245 245 / 0.075);
+  --curyo-control-idle-muted-hover: rgb(245 245 245 / 0.13);
+  --curyo-ember-rgb: 245 245 245;
+  --curyo-ember-hover-rgb: 212 212 212;
+  --curyo-ember-deep-rgb: 115 115 115;
+  --curyo-warm-white-rgb: 245 245 245;
+  --curyo-steel-rgb: 163 163 163;
   --curyo-surface-rgb: 0 0 0;
-  --curyo-surface-elevated-rgb: 21 18 23;
-  --curyo-surface-nested-rgb: 13 10 15;
+  --curyo-surface-elevated-rgb: 16 16 16;
+  --curyo-surface-nested-rgb: 10 10 10;
   --curyo-radius-card: 0.5rem;
   --curyo-radius-control: var(--curyo-radius-card);
   --curyo-radius-pill: 9999px;
   --curyo-card-radius: var(--curyo-radius-card);
-  --curyo-shell-border: rgb(245 240 235 / 0.12);
-  --curyo-shell-border-strong: rgb(245 240 235 / 0.2);
+  --curyo-shell-border: rgb(245 245 245 / 0.1);
+  --curyo-shell-border-strong: rgb(245 245 245 / 0.14);
   --curyo-panel-shadow: 0 24px 56px rgb(0 0 0 / 0.56);
   --ratemesh-pink: #ef476f;
   --ratemesh-blue: #359eee;
@@ -123,12 +123,12 @@ body {
 
 .font-display {
   font-family: var(--font-display);
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .hero-headline {
   font-family: var(--font-display);
-  font-weight: 800;
+  font-weight: 700;
   line-height: 1;
   letter-spacing: 0;
   text-transform: none;
@@ -137,7 +137,7 @@ body {
 
 .display-section {
   font-family: var(--font-display);
-  font-weight: 800;
+  font-weight: 700;
   line-height: 1.05;
   letter-spacing: 0;
   text-transform: none;
@@ -145,7 +145,7 @@ body {
 
 .display-metric {
   font-family: var(--font-display);
-  font-weight: 800;
+  font-weight: 700;
   line-height: 0.88;
   letter-spacing: 0;
 }
@@ -243,8 +243,8 @@ body {
   border-color: transparent !important;
   background: rgb(var(--curyo-surface-nested-rgb) / 0.96);
   box-shadow:
-    inset 0 1px 0 rgb(245 240 235 / 0.03),
-    0 0 0 1px rgb(245 240 235 / 0.42);
+    inset 0 1px 0 rgb(245 245 245 / 0.03),
+    0 0 0 1px rgb(245 245 245 / 0.42);
 }
 
 .input:hover,
@@ -252,8 +252,8 @@ body {
 .textarea:hover {
   border-color: transparent !important;
   box-shadow:
-    inset 0 1px 0 rgb(245 240 235 / 0.04),
-    0 0 0 1px rgb(245 240 235 / 0.52);
+    inset 0 1px 0 rgb(245 245 245 / 0.04),
+    0 0 0 1px rgb(245 245 245 / 0.52);
 }
 
 .input:focus,
@@ -265,32 +265,32 @@ body {
   outline: none;
   border-color: transparent !important;
   box-shadow:
-    inset 0 1px 0 rgb(245 240 235 / 0.04),
+    inset 0 1px 0 rgb(245 245 245 / 0.04),
     0 0 0 2px rgb(var(--curyo-ember-rgb) / 0.9);
 }
 
 .header-search-input {
   box-shadow:
-    inset 0 1px 0 rgb(245 240 235 / 0.03),
-    0 0 0 1px rgb(245 240 235 / 0.42),
+    inset 0 1px 0 rgb(245 245 245 / 0.03),
+    0 0 0 1px rgb(245 245 245 / 0.42),
     0 10px 24px rgb(0 0 0 / 0.18);
 }
 
 .header-search-input::placeholder {
-  color: rgb(245 240 235 / 0.68);
+  color: rgb(245 245 245 / 0.68);
 }
 
 .header-search-input:hover {
   box-shadow:
-    inset 0 1px 0 rgb(245 240 235 / 0.04),
-    0 0 0 1px rgb(245 240 235 / 0.52),
+    inset 0 1px 0 rgb(245 245 245 / 0.04),
+    0 0 0 1px rgb(245 245 245 / 0.52),
     0 12px 26px rgb(0 0 0 / 0.2);
 }
 
 .header-search-input:focus,
 .header-search-input:focus-within {
   box-shadow:
-    inset 0 1px 0 rgb(245 240 235 / 0.04),
+    inset 0 1px 0 rgb(245 245 245 / 0.04),
     0 0 0 2px rgb(var(--curyo-ember-rgb) / 0.9),
     0 14px 28px rgb(0 0 0 / 0.22);
 }
@@ -303,7 +303,7 @@ body {
 .textarea-error {
   border-color: transparent !important;
   box-shadow:
-    inset 0 1px 0 rgb(245 240 235 / 0.03),
+    inset 0 1px 0 rgb(245 245 245 / 0.03),
     0 0 0 2px rgb(var(--curyo-ember-deep-rgb) / 0.9);
 }
 
@@ -361,7 +361,7 @@ body {
 }
 
 .btn.btn-ghost:hover {
-  background: rgb(245 240 235 / 0.04);
+  background: rgb(245 245 245 / 0.04);
 }
 
 .btn.btn-outline {
@@ -380,7 +380,7 @@ body {
 
 .btn.btn-outline:disabled,
 .btn.btn-outline.btn-disabled {
-  color: rgb(245 240 235 / 0.36);
+  color: rgb(245 245 245 / 0.36);
   background: var(--curyo-control-idle-muted);
   border-color: transparent;
   box-shadow: none;
@@ -392,15 +392,15 @@ body {
   }
 
   .text-white\/60 {
-    color: rgb(245 240 235 / 0.6) !important;
+    color: rgb(245 245 245 / 0.6) !important;
   }
 
   .text-white\/65 {
-    color: rgb(245 240 235 / 0.65) !important;
+    color: rgb(245 245 245 / 0.65) !important;
   }
 
   .text-white\/90 {
-    color: rgb(245 240 235 / 0.9) !important;
+    color: rgb(245 245 245 / 0.9) !important;
   }
 
   .text-black {
@@ -436,23 +436,23 @@ body {
   }
 
   .bg-white\/5 {
-    background-color: rgb(245 240 235 / 0.05) !important;
+    background-color: rgb(245 245 245 / 0.05) !important;
   }
 
   .bg-white\/60 {
-    background-color: rgb(245 240 235 / 0.6) !important;
+    background-color: rgb(245 245 245 / 0.6) !important;
   }
 
   .border-white\/10 {
-    border-color: rgb(245 240 235 / 0.1) !important;
+    border-color: rgb(245 245 245 / 0.1) !important;
   }
 
   .ring-white\/10 {
-    --tw-ring-color: rgb(245 240 235 / 0.1) !important;
+    --tw-ring-color: rgb(245 245 245 / 0.1) !important;
   }
 
   .hover\:bg-gray-200:hover {
-    background-color: rgb(245 240 235 / 0.82) !important;
+    background-color: rgb(245 245 245 / 0.82) !important;
   }
 
   .hover\:text-white:hover {
@@ -486,9 +486,9 @@ body {
   position: relative;
   overflow: hidden;
   border-radius: var(--curyo-card-radius);
-  background: rgb(var(--curyo-surface-elevated-rgb) / 0.96);
-  border: none;
-  box-shadow: var(--curyo-panel-shadow);
+  background: rgb(var(--curyo-surface-elevated-rgb) / 0.82);
+  border: 1px solid rgb(245 245 245 / 0.1);
+  box-shadow: none;
 }
 
 .surface-card::before {
@@ -497,15 +497,15 @@ body {
 
 .surface-card-nested {
   border-radius: var(--curyo-card-radius);
-  background: rgb(var(--curyo-surface-nested-rgb) / 0.98);
-  border: none;
-  box-shadow: 0 16px 32px rgb(var(--curyo-surface-rgb) / 0.26);
+  background: rgb(var(--curyo-surface-nested-rgb) / 0.96);
+  border: 1px solid rgb(245 245 245 / 0.08);
+  box-shadow: none;
 }
 
 .surface-card .surface-card {
   border-radius: var(--curyo-card-radius);
   background: rgb(var(--curyo-surface-nested-rgb) / 0.98);
-  box-shadow: 0 16px 32px rgb(var(--curyo-surface-rgb) / 0.26);
+  box-shadow: none;
 }
 
 .embed-surface {
@@ -520,7 +520,7 @@ body {
 .modal-box.bg-base-200 {
   border-radius: var(--curyo-card-radius) !important;
   background: rgb(var(--curyo-surface-elevated-rgb) / 0.98) !important;
-  border: none !important;
+  border: 1px solid rgb(245 245 245 / 0.1) !important;
 }
 
 /* Compact vote buttons with tooltip labels */
@@ -553,7 +553,7 @@ body {
 }
 
 .vote-btn.vote-btn-sm .vote-bg {
-  border: 1px solid rgb(245 240 235 / 0.1);
+  border: 1px solid rgb(245 245 245 / 0.1);
 }
 
 .vote-btn.vote-yes .vote-bg {
@@ -590,7 +590,7 @@ body {
 }
 
 .vote-btn.vote-light:disabled .vote-bg {
-  background: rgb(245 240 235 / 0.22);
+  background: rgb(245 245 245 / 0.22);
 }
 
 .vote-btn .vote-symbol {
@@ -650,7 +650,7 @@ body {
   }
 
   60% {
-    box-shadow: 0 0 0 2px rgb(245 240 235 / 0.9);
+    box-shadow: 0 0 0 2px rgb(245 245 245 / 0.9);
   }
 }
 
@@ -698,7 +698,7 @@ body {
 }
 
 .vote-btn:focus-visible .vote-bg {
-  box-shadow: 0 0 0 2px rgb(245 240 235 / 0.92);
+  box-shadow: 0 0 0 2px rgb(245 245 245 / 0.92);
 }
 
 .vote-btn:disabled {
@@ -838,7 +838,7 @@ body {
 
 .legal-prose {
   max-width: none;
-  color: rgb(245 240 235 / 0.86);
+  color: rgb(245 245 245 / 0.86);
   font-size: clamp(1.0625rem, 1.01rem + 0.2vw, 1.125rem);
   line-height: 1.78;
 }
@@ -870,18 +870,18 @@ body {
 .prose p {
   margin-top: 0.95rem;
   margin-bottom: 0.95rem;
-  color: rgb(245 240 235 / 0.84);
+  color: rgb(245 245 245 / 0.84);
 }
 
 .prose .lead {
   margin-bottom: 1.65rem;
-  color: rgb(245 240 235 / 0.76);
+  color: rgb(245 245 245 / 0.76);
   font-size: clamp(1.125rem, 1.06rem + 0.28vw, 1.22rem);
   line-height: 1.68;
 }
 
 .readability-meta {
-  color: rgb(245 240 235 / 0.72);
+  color: rgb(245 245 245 / 0.72);
 }
 
 .prose ul,
@@ -902,7 +902,7 @@ body {
 .prose li {
   margin-top: 0.4rem;
   margin-bottom: 0.4rem;
-  color: rgb(245 240 235 / 0.82);
+  color: rgb(245 245 245 / 0.82);
 }
 
 .prose code {
@@ -993,7 +993,7 @@ body {
 .pill-inactive-muted {
   border-radius: var(--curyo-radius-control);
   background: var(--curyo-control-idle-muted);
-  color: rgb(245 240 235 / 0.72);
+  color: rgb(245 245 245 / 0.72);
   border: 1px solid transparent;
   box-shadow: none;
 }
@@ -1001,7 +1001,7 @@ body {
 .pill-inactive-muted:hover {
   background: var(--curyo-control-idle-muted-hover);
   border-color: transparent;
-  color: rgb(245 240 235 / 0.86);
+  color: rgb(245 245 245 / 0.86);
 }
 
 .choice-row-active {
@@ -1014,7 +1014,7 @@ body {
 .choice-row-inactive,
 .step-control-inactive {
   background: var(--curyo-control-idle-muted);
-  color: rgb(245 240 235 / 0.78);
+  color: rgb(245 245 245 / 0.78);
   border: 1px solid transparent;
   box-shadow: none;
 }
@@ -1023,7 +1023,7 @@ body {
 .step-control-inactive:hover {
   background: var(--curyo-control-idle-muted-hover);
   border-color: transparent;
-  color: rgb(245 240 235 / 0.9);
+  color: rgb(245 245 245 / 0.9);
 }
 
 .tab-control {

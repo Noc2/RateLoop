@@ -9,6 +9,9 @@ interface SignalDiscAvatarCore {
   radius: number;
   color: string;
   edgeColor: string;
+  gradientId: string;
+  gradientAngleDegrees: number;
+  gradientStops: SignalDiscAvatarGradientStop[];
 }
 
 interface SignalDiscAvatarProgress {
@@ -23,6 +26,11 @@ interface SignalDiscAvatarModel {
   badgeRadius: number;
   core: SignalDiscAvatarCore;
   progress: SignalDiscAvatarProgress | null;
+}
+
+interface SignalDiscAvatarGradientStop {
+  offset: string;
+  color: string;
 }
 
 const VIEWBOX_SIZE = 512;
@@ -154,10 +162,34 @@ function getAvatarPalette(payload: ReputationAvatarPayload) {
   const baseHue = seedHsl.saturation < 0.18 ? seedValue % 360 : seedHsl.hue;
   const saturation = clamp(Math.max(seedHsl.saturation * 100, 58), 58, 100);
   const lightness = clamp(seedHsl.lightness * 100, 45, 62);
+  const secondaryHue = (baseHue + 70 + (seedValue % 31)) % 360;
+  const tertiaryHue = (baseHue + 154 + ((seedValue >> 8) % 43)) % 360;
+  const highlightHue = (baseHue + 28 + ((seedValue >> 16) % 23)) % 360;
+  const coreColor = hslToHex(baseHue, saturation, lightness);
 
   return {
-    coreColor: hslToHex(baseHue, saturation, lightness),
+    coreColor,
     coreEdgeColor: hslToHex(baseHue, Math.max(42, saturation - 18), Math.max(30, lightness - 14)),
+    coreGradientAngleDegrees: seedValue % 360,
+    coreGradientId: `signal-disc-avatar-core-gradient-${seedHex}`,
+    coreGradientStops: [
+      {
+        offset: "0%",
+        color: hslToHex(highlightHue, Math.max(54, saturation - 12), clamp(lightness + 12, 54, 74)),
+      },
+      {
+        offset: "38%",
+        color: coreColor,
+      },
+      {
+        offset: "70%",
+        color: hslToHex(secondaryHue, Math.max(56, saturation - 6), clamp(lightness + 4, 48, 68)),
+      },
+      {
+        offset: "100%",
+        color: hslToHex(tertiaryHue, Math.max(48, saturation - 18), clamp(lightness - 12, 28, 52)),
+      },
+    ],
   };
 }
 
@@ -195,9 +227,32 @@ export function buildSignalDiscAvatarModel(
       radius: CORE_RADIUS,
       color: palette.coreColor,
       edgeColor: palette.coreEdgeColor,
+      gradientId: palette.coreGradientId,
+      gradientAngleDegrees: palette.coreGradientAngleDegrees,
+      gradientStops: palette.coreGradientStops,
     },
     progress: buildProgress(payload),
   };
+}
+
+function getGradientVector(angleDegrees: number) {
+  const angleRadians = (angleDegrees * Math.PI) / 180;
+  const x = Math.cos(angleRadians) * 50;
+  const y = Math.sin(angleRadians) * 50;
+
+  return {
+    x1: `${(50 - x).toFixed(2)}%`,
+    y1: `${(50 - y).toFixed(2)}%`,
+    x2: `${(50 + x).toFixed(2)}%`,
+    y2: `${(50 + y).toFixed(2)}%`,
+  };
+}
+
+function renderCoreGradient(core: SignalDiscAvatarCore) {
+  const gradientVector = getGradientVector(core.gradientAngleDegrees);
+  const stops = core.gradientStops.map(stop => `<stop offset="${stop.offset}" stop-color="${stop.color}"/>`).join("");
+
+  return `<defs><linearGradient id="${core.gradientId}" x1="${gradientVector.x1}" y1="${gradientVector.y1}" x2="${gradientVector.x2}" y2="${gradientVector.y2}">${stops}</linearGradient></defs>`;
 }
 
 function renderProgress(progress: SignalDiscAvatarProgress) {
@@ -219,8 +274,9 @@ export function renderSignalDiscAvatarSvg(
   const model = buildSignalDiscAvatarModel(payload, { nowSeconds: options?.nowSeconds });
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${VIEWBOX_SIZE} ${VIEWBOX_SIZE}" fill="none">
+  ${renderCoreGradient(model.core)}
   ${model.progress ? renderProgress(model.progress) : ""}
-  <circle class="signal-disc-avatar-core" cx="${CENTER}" cy="${CENTER}" r="${model.core.radius.toFixed(2)}" fill="${model.core.color}"/>
+  <circle class="signal-disc-avatar-core" cx="${CENTER}" cy="${CENTER}" r="${model.core.radius.toFixed(2)}" fill="url(#${model.core.gradientId})"/>
   <circle class="signal-disc-avatar-core-edge" cx="${CENTER}" cy="${CENTER}" r="${model.core.radius.toFixed(2)}" fill="none" stroke="${model.core.edgeColor}" stroke-width="7" stroke-opacity="0.32"/>
 </svg>`;
 }

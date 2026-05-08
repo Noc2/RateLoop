@@ -122,10 +122,7 @@ export function useAllClaimableRewards() {
     return { rewardVotes: rewards, refundVotes: refunds };
   }, [unclaimedVotes]);
 
-  const settledPredictionVotes = useMemo(
-    () => rewardVotes.filter(v => isPredictionRewardRound(v)),
-    [rewardVotes],
-  );
+  const settledPredictionVotes = useMemo(() => rewardVotes.filter(v => isPredictionRewardRound(v)), [rewardVotes]);
   const settledBinaryWinners = useMemo(
     () => rewardVotes.filter(v => !isPredictionRewardRound(v) && isBinaryWinningVote(v)),
     [rewardVotes],

@@ -185,13 +185,13 @@ export function SupportedAgentsSection() {
               aria-label={agent.ariaLabel}
               className={`
                 flex shrink-0 cursor-pointer items-center gap-2 rounded-xl border px-3 py-2.5 transition-colors
-                hover:border-primary/30 hover:bg-primary/10 hover:text-primary
-                focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary
+                hover:border-base-content/25 hover:bg-base-content/[0.08] hover:text-base-content
+                focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-base-content
                 sm:px-3.5 lg:px-4
                 ${
                   isHighlighted
-                    ? "border-primary/30 bg-primary/10 text-primary"
-                    : "border-base-content/10 bg-[var(--curyo-surface-elevated)] text-base-content/80"
+                    ? "border-base-content bg-base-content text-base-100"
+                    : "border-base-content/10 bg-base-content/[0.055] text-base-content/76"
                 }
               `}
             >

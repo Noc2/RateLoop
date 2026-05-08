@@ -79,7 +79,9 @@ function withCurrentAbiOverrides<TContracts extends GenericContractsDeclaration>
   return normalized as TContracts;
 }
 
-const contractsData = withCurrentAbiOverrides(withReputationAlias(deployedContractsData as GenericContractsDeclaration));
+const contractsData = withCurrentAbiOverrides(
+  withReputationAlias(deployedContractsData as GenericContractsDeclaration),
+);
 
 export const contracts = contractsData as GenericContractsDeclaration | null;
 

@@ -1,6 +1,5 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { BanknotesIcon, CheckBadgeIcon, CpuChipIcon } from "@heroicons/react/24/outline";
 import { AnimateInView } from "~~/components/home/AnimateInView";
 import { LandingFaq } from "~~/components/home/LandingFaq";
 import { LandingPageActions } from "~~/components/home/LandingPageActions";
@@ -15,20 +14,23 @@ const LANDING_STATS_REVALIDATE_SECONDS = 300;
 
 const ASK_STEPS = [
   {
-    icon: CpuChipIcon,
-    title: "1. Open a Rating",
+    number: "01",
+    title: "Open a Rating",
     description: "An app, creator, or agent posts content with context, bounty terms, and a target rating question.",
+    color: "#359EEE",
   },
   {
-    icon: CheckBadgeIcon,
-    title: "2. Submit a Split Rating",
+    number: "02",
+    title: "Submit a Split Rating",
     description:
       "People and AI raters privately share their own 0-10 opinion plus the crowd rating they expect after reveal.",
+    color: "#03CEA4",
   },
   {
-    icon: BanknotesIcon,
-    title: "3. Settle Signal",
+    number: "03",
+    title: "Settle Signal",
     description: "Accurate raters earn USDC and reputation while misses recycle stake back to stronger signal.",
+    color: "#EF476F",
   },
 ];
 
@@ -95,24 +97,13 @@ const FALLBACK_SOCIAL_PROOF_STATS = {
   totalFeedbackBonusesPaid: "0",
 };
 
-function WorkflowHeading({
-  title,
-  subtitle,
-  icon: Icon,
-}: {
-  title: string;
-  subtitle?: string;
-  icon?: typeof CpuChipIcon;
-}) {
+function SectionHeading({ number, title, gradientText }: { number: string; title: string; gradientText: string }) {
   return (
-    <div className="mb-8 text-center sm:mb-10">
-      {Icon ? (
-        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-base-300 shadow-[0_14px_28px_rgba(9,10,12,0.24)]">
-          <Icon className="h-8 w-8 text-primary" />
-        </div>
-      ) : null}
-      <h2 className="display-section text-[2.15rem] text-base-content sm:text-[2.85rem]">{title}</h2>
-      {subtitle ? <p className="mt-2 text-lg font-semibold text-primary/90">{subtitle}</p> : null}
+    <div className="mb-12 sm:mb-16">
+      <span className="mb-6 block font-mono text-sm tracking-widest text-base-content/40">{number}</span>
+      <h2 className="display-section text-[2.85rem] text-base-content sm:text-[4.3rem] lg:text-[5.4rem]">
+        {title} <span className="ratemesh-text-gradient">{gradientText}</span>
+      </h2>
     </div>
   );
 }
@@ -120,66 +111,33 @@ function WorkflowHeading({
 type LandingOrbitDividerVariant = "how-to-why" | "why-to-faq";
 
 function LandingOrbitDivider({ variant }: { variant: LandingOrbitDividerVariant }) {
-  const variantClassName =
-    variant === "how-to-why" ? "-translate-x-1/2 scale-x-[-1]" : "-translate-x-[52%] rotate-[1deg]";
+  void variant;
 
   return (
-    <div
-      aria-hidden="true"
-      className="pointer-events-none relative z-0 mt-8 h-24 w-full overflow-hidden sm:mt-10 sm:h-28 lg:mt-12 lg:h-32"
-    >
-      <svg
-        viewBox="0 0 1180 150"
-        fill="none"
-        className={`absolute left-1/2 top-0 h-full w-full max-w-6xl ${variantClassName}`}
-      >
-        <path
-          d="M66 122C214 22 372 18 540 76C704 132 842 124 1056 30"
-          stroke="#CC490F"
-          strokeWidth="4.5"
-          strokeLinecap="round"
-        />
-        <path
-          d="M182 34C338 102 480 126 652 82C802 44 918 56 1098 116"
-          stroke="#FF8A3D"
-          strokeWidth="4"
-          strokeLinecap="round"
-          strokeDasharray="1 15"
-        />
-        <path
-          d="M322 112C476 20 642 8 800 66C926 112 1012 102 1134 54"
-          stroke="#E3A234"
-          strokeWidth="3.5"
-          strokeLinecap="round"
-          opacity="0.86"
-        />
-        <circle cx="292" cy="93" r="13" fill="#CC490F" />
-        <circle cx="784" cy="60" r="10" fill="#FF8A3D" />
-        <circle cx="1034" cy="40" r="14" fill="#E3A234" />
-      </svg>
+    <div aria-hidden="true" className="pointer-events-none relative z-0 my-16 w-full sm:my-20 lg:my-24">
+      <div className="mx-auto h-px max-w-5xl bg-base-content/10" />
     </div>
   );
 }
 
 function AskFlowPanel({
-  icon: Icon,
+  number,
   title,
   description,
+  color,
 }: {
-  icon: typeof CpuChipIcon;
+  number: string;
   title: string;
   description: string;
+  color: string;
 }) {
   return (
-    <div
-      className="surface-card flex h-full min-h-[17.5rem] flex-col items-center justify-center rounded-[1.25rem] px-6 py-8 text-center"
-      style={{ background: "var(--curyo-surface-elevated)" }}
-    >
-      <div className="mb-6 flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl bg-base-300 shadow-[0_14px_28px_rgba(9,10,12,0.24)]">
-        <Icon className="h-10 w-10 text-primary" />
-      </div>
-      <h3 className="display-section text-2xl text-base-content">{title}</h3>
-      <p className="mt-4 max-w-[24rem] text-lg leading-8 text-base-content/76">{description}</p>
+    <div className="h-full border-l-2 py-2 pl-6" style={{ borderColor: color }}>
+      <span className="font-mono text-sm" style={{ color }}>
+        {number}
+      </span>
+      <h3 className="mt-3 text-[1.55rem] font-bold leading-tight text-base-content sm:text-[1.75rem]">{title}</h3>
+      <p className="mt-4 max-w-[32rem] text-[1.05rem] leading-8 text-base-content/60">{description}</p>
     </div>
   );
 }
@@ -188,9 +146,9 @@ function AskWorkflowSection() {
   const [agentStep, mcpStep, resultStep] = ASK_STEPS;
 
   return (
-    <section className="relative z-10 mt-4 w-full sm:mt-6 lg:mt-8">
-      <WorkflowHeading title="How It Works" />
-      <div className="grid grid-cols-1 items-stretch gap-5 lg:grid-cols-3 lg:gap-6">
+    <section className="relative z-10 mt-12 w-full sm:mt-16 lg:mt-20">
+      <SectionHeading number="01" title="How It" gradientText="Works" />
+      <div className="grid grid-cols-1 items-stretch gap-x-12 gap-y-14 md:grid-cols-3">
         <AnimateInView className="h-full">
           <AskFlowPanel {...agentStep} />
         </AnimateInView>
@@ -207,7 +165,7 @@ function AskWorkflowSection() {
 
 function getFeatureBenefitCardClassName(index: number) {
   const spanClass = index < 3 ? "lg:col-span-2" : "lg:col-span-3";
-  return `group flex min-h-[13.25rem] flex-col rounded-lg border border-base-content/10 bg-[var(--curyo-surface-elevated)] p-5 text-left shadow-[0_18px_36px_rgba(9,10,12,0.2)] transition duration-200 hover:-translate-y-0.5 hover:border-primary/25 hover:bg-[var(--curyo-surface-elevated-hover)] ${spanClass}`;
+  return `group flex min-h-[13.25rem] flex-col border-l-2 border-base-content/20 py-2 pl-6 text-left ${spanClass}`;
 }
 
 function FeatureBenefitCard({
@@ -221,18 +179,23 @@ function FeatureBenefitCard({
   links: TechLink[];
   index: number;
 }) {
+  const accentColors = ["#359EEE", "#03CEA4", "#EF476F", "#FFC43D", "#359EEE"];
+  const accentColor = accentColors[index % accentColors.length];
+
   return (
-    <article className={getFeatureBenefitCardClassName(index)}>
-      <div className="mb-5 h-1 w-12 rounded-full bg-primary/85 transition group-hover:w-16 group-hover:bg-accent" />
-      <h3 className="display-section text-[1.7rem] leading-tight text-base-content sm:text-[1.9rem]">{title}</h3>
-      <p className="mt-4 text-base leading-7 text-base-content/78">{achievedBy}</p>
+    <article className={getFeatureBenefitCardClassName(index)} style={{ borderColor: accentColor }}>
+      <span className="font-mono text-sm" style={{ color: accentColor }}>
+        {(index + 1).toString().padStart(2, "0")}
+      </span>
+      <h3 className="mt-3 text-[1.45rem] font-bold leading-tight text-base-content sm:text-[1.65rem]">{title}</h3>
+      <p className="mt-4 text-base leading-7 text-base-content/60">{achievedBy}</p>
       <div className="mt-auto flex flex-wrap gap-2 pt-5">
         {links.map(link => (
           <Link
             key={`${title}-${link.href}`}
             href={link.href}
             prefetch={false}
-            className="rounded-md border border-primary bg-primary px-3 py-1.5 text-xs font-semibold text-primary-content transition hover:bg-primary/90 hover:text-primary-content focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+            className="rounded-md border border-base-content/10 bg-base-content/[0.06] px-3 py-1.5 text-xs font-semibold text-base-content/72 transition hover:border-base-content/20 hover:bg-base-content/[0.1] hover:text-base-content focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-base-content"
           >
             {link.label}
           </Link>
@@ -244,9 +207,9 @@ function FeatureBenefitCard({
 
 function FeaturesBenefitsSection() {
   return (
-    <section className="relative z-10 mt-8 w-full sm:mt-10">
-      <WorkflowHeading title="Why It Works" />
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-6">
+    <section className="relative z-10 w-full">
+      <SectionHeading number="02" title="Why It" gradientText="Works" />
+      <div className="grid grid-cols-1 gap-x-12 gap-y-14 md:grid-cols-2 lg:grid-cols-6">
         {FEATURE_BENEFITS.map((feature, index) => (
           <FeatureBenefitCard key={feature.title} {...feature} index={index} />
         ))}
@@ -357,7 +320,8 @@ export default async function LandingPage() {
               <span className="block">for People and AI</span>
             </h1>
             <p className="mt-4 max-w-[34rem] text-center text-[1.05rem] leading-8 text-base-content/80 sm:text-[1.25rem] lg:text-left lg:text-[1.35rem]">
-              People and AI agents join private rating rounds, reveal together, and can earn USDC for useful public signal.
+              People and AI agents join private rating rounds, reveal together, and can earn USDC when their ratings
+              create useful public signals.
             </p>
             <Suspense fallback={<LandingPageActionsFallback />}>
               <LandingPageActions />

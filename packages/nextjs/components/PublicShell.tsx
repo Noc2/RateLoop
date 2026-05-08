@@ -15,7 +15,7 @@ const publicNavLinks = [
 
 function PublicHeader() {
   return (
-    <header className="sticky top-0 z-20 border-b border-[color:var(--curyo-shell-border-strong)] bg-[#000]/95 px-4 py-3 backdrop-blur-xl sm:px-6">
+    <header className="sticky top-0 z-20 border-b border-white/10 bg-black/95 px-4 py-3 backdrop-blur-xl sm:px-6">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
         <Link href="/?landing=1" className="flex min-w-0 items-center gap-2">
           <CuryoLogo className="h-9 w-9 shrink-0" idPrefix="ratemesh-public-header-logo" />
@@ -23,7 +23,7 @@ function PublicHeader() {
             <span className="font-display whitespace-nowrap text-[1.2rem] leading-none tracking-normal text-base-content">
               RateMesh (Beta)
             </span>
-            <span className="hidden text-sm text-base-content/75 sm:block">Open Ratings for AI and People</span>
+            <span className="hidden text-sm text-base-content/75 sm:block">Open Ratings for People and AI</span>
           </div>
         </Link>
 
@@ -33,7 +33,7 @@ function PublicHeader() {
               key={link.href}
               href={link.href}
               prefetch={link.heavy ? false : undefined}
-              className="rounded-lg px-3 py-2 text-sm font-medium text-base-content/75 transition-colors hover:bg-base-content/[0.04] hover:text-base-content"
+              className="rounded-lg px-3 py-2 text-sm font-medium text-base-content/60 transition-colors hover:bg-base-content/[0.06] hover:text-base-content"
             >
               {link.label}
             </Link>
@@ -55,8 +55,13 @@ export function PublicShell({ children }: { children: React.ReactNode }) {
       <main id="main-content" className="relative flex min-h-0 flex-1 flex-col overflow-x-hidden">
         {children}
       </main>
-      <footer className="shrink-0 px-4 py-6">
-        <FooterLinks className="w-full" listClassName="w-full justify-center text-sm lg:text-base" />
+      <footer className="shrink-0 border-t border-white/10 px-4 py-10">
+        <FooterLinks
+          className="w-full"
+          listClassName="w-full justify-center text-sm lg:text-base"
+          linkClassName="text-base-content/45 transition-colors hover:text-base-content/75"
+          separatorClassName="text-base-content/25"
+        />
       </footer>
       <Suspense fallback={null}>
         <ReferralAttributionCapture />

@@ -60,11 +60,13 @@ test("signal-disc avatars vary the center color by address", () => {
   });
 
   assert.notEqual(modelA.core.color, modelB.core.color);
+  assert.notDeepEqual(modelA.core.gradientStops, modelB.core.gradientStops);
+  assert.notEqual(modelA.core.gradientAngleDegrees, modelB.core.gradientAngleDegrees);
   assert.equal(modelA.progress?.startDegrees, -48);
   assert.equal(modelB.progress?.startDegrees, -48);
 });
 
-test("avatar accent override changes the center color", () => {
+test("avatar accent override changes the center gradient", () => {
   const base = buildSignalDiscAvatarModel(buildPayload(), {
     nowSeconds: NOW_SECONDS,
   });
@@ -78,10 +80,12 @@ test("avatar accent override changes the center color", () => {
   );
 
   assert.notEqual(base.core.color, custom.core.color);
+  assert.notDeepEqual(base.core.gradientStops, custom.core.gradientStops);
   assert.equal(custom.core.color, "#00ccff");
+  assert.equal(custom.core.gradientStops[1]?.color, "#00ccff");
 });
 
-test("same avatar accent keeps the same center color across addresses", () => {
+test("same avatar accent keeps the same center gradient across addresses", () => {
   const modelA = buildSignalDiscAvatarModel(
     buildPayload({
       address: "0x0000000000000000000000000000000000111111",
@@ -102,6 +106,8 @@ test("same avatar accent keeps the same center color across addresses", () => {
   );
 
   assert.equal(modelA.core.color, modelB.core.color);
+  assert.deepEqual(modelA.core.gradientStops, modelB.core.gradientStops);
+  assert.equal(modelA.core.gradientAngleDegrees, modelB.core.gradientAngleDegrees);
 });
 
 test("signal-disc geometry stays fixed across HREP balances", () => {
@@ -258,6 +264,11 @@ test("renderer draws partial accuracy as a smooth white path", () => {
     nowSeconds: NOW_SECONDS,
   });
 
+  assert.match(svg, /<linearGradient id="signal-disc-avatar-core-gradient-[0-9a-f]{6}"/);
+  assert.match(
+    svg,
+    /<circle class="signal-disc-avatar-core"[^>]+fill="url\(#signal-disc-avatar-core-gradient-[0-9a-f]{6}\)"/,
+  );
   assert.match(svg, /<path class="signal-disc-avatar-progress" d="M [^"]+A [^"]+"/);
   assert.match(svg, /stroke="#FFFFFF"/);
   assert.doesNotMatch(svg, /orbital-avatar/);

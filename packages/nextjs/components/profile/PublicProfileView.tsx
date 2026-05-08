@@ -72,7 +72,7 @@ interface PublicProfileViewProps {
 }
 
 const NAME_REGEX = /^[a-zA-Z0-9_]{3,20}$/;
-const DEFAULT_AVATAR_ACCENT_HEX = "#cc490f";
+const DEFAULT_AVATAR_ACCENT_HEX = "#359eee";
 
 function truncateAddress(address: string) {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
@@ -1356,7 +1356,9 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <h2 className="text-2xl font-semibold">Edit avatar color</h2>
-                  <p className="mt-1 text-base text-base-content/60">Choose one accent color for your public avatar.</p>
+                  <p className="mt-1 text-base text-base-content/60">
+                    Choose the color seed for your public avatar gradient.
+                  </p>
                 </div>
                 <button
                   type="button"
