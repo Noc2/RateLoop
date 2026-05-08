@@ -25,7 +25,7 @@ interface StakeSelectorProps {
   cooldownSecondsRemaining?: number;
   isConfirming?: boolean;
   confirmError?: string | null;
-  onConfirm: (stakeAmount: number, predictedRating: number) => void;
+  onConfirm: (stakeAmount: number, opinionRating: number, predictedCrowdRating: number) => void;
   onCancel: () => void;
 }
 
@@ -44,7 +44,7 @@ function getInitialPredictionRating(currentRating: number | undefined) {
 }
 
 /**
- * Bottom-sheet modal to select stake amount before committing a predicted rating.
+ * Bottom-sheet modal to select stake amount before committing a private rating report.
  */
 export function StakeSelector({
   isOpen,
@@ -60,10 +60,12 @@ export function StakeSelector({
   onCancel,
 }: StakeSelectorProps) {
   const stakeAmountInputId = useId();
-  const predictionRatingInputId = useId();
+  const opinionRatingInputId = useId();
+  const crowdPredictionInputId = useId();
   const contentLabel = useContentLabel(categoryId);
   const [amount, setAmount] = useState(5);
-  const [predictedRating, setPredictedRating] = useState(() => getInitialPredictionRating(currentRating));
+  const [opinionRating, setOpinionRating] = useState(() => getInitialPredictionRating(currentRating));
+  const [predictedCrowdRating, setPredictedCrowdRating] = useState(() => getInitialPredictionRating(currentRating));
   const { address } = useAccount();
   const voterIdData = useVoterIdNFT(address);
   const tokenId = voterIdData.tokenId as bigint;
@@ -95,7 +97,9 @@ export function StakeSelector({
 
   useEffect(() => {
     if (!isOpen) return;
-    setPredictedRating(getInitialPredictionRating(currentRating));
+    const initialRating = getInitialPredictionRating(currentRating);
+    setOpinionRating(initialRating);
+    setPredictedCrowdRating(initialRating);
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape" && !isConfirming) onCancel();
     };
@@ -107,7 +111,7 @@ export function StakeSelector({
   const { calculateBonus } = useParticipationRate();
   const voteBonus = calculateBonus(amount);
   const normalizedCurrentRating = clampRating(currentRating ?? 5);
-  const predictionDelta = predictedRating - normalizedCurrentRating;
+  const predictionDelta = opinionRating - normalizedCurrentRating;
   const predictionDirectionIsHigher = predictionDelta >= 0;
   const voteEstimate = estimateVoteReturn(estimateSnapshot, predictionDirectionIsHigher, amount);
   const predictionTone =
@@ -153,7 +157,7 @@ export function StakeSelector({
         <motion.div
           role="dialog"
           aria-modal="true"
-          aria-label="Select reputation lock and predicted final rating"
+          aria-label="Select reputation lock and private rating report"
           aria-busy={isConfirming}
           className="fixed inset-0 z-50 flex items-end justify-center sm:items-center"
           initial={{ opacity: 0 }}
@@ -176,9 +180,9 @@ export function StakeSelector({
               Predict the final rating
               <span
                 className="tooltip tooltip-bottom ml-1.5 inline-block cursor-help align-middle"
-                data-tip="You can only submit one prediction per content per round. Choose your stake carefully!"
+                data-tip="You can only submit one private report per content per round. Choose your stake carefully!"
                 role="img"
-                aria-label="You can only submit one prediction per content per round. Choose your stake carefully!"
+                aria-label="You can only submit one private report per content per round. Choose your stake carefully!"
               >
                 <svg
                   width="16"
@@ -202,11 +206,9 @@ export function StakeSelector({
             <div className="mb-5 rounded-2xl bg-base-100/70 px-4 py-4 ring-1 ring-base-content/10">
               <div className="flex items-end justify-between gap-3">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-base-content/55">
-                    Your prediction
-                  </p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-base-content/55">Your rating</p>
                   <p className="mt-1 text-4xl font-bold tabular-nums text-base-content">
-                    {predictedRating.toFixed(1)}
+                    {opinionRating.toFixed(1)}
                     <span className="ml-1 text-base font-semibold text-base-content/55">/ 10</span>
                   </p>
                 </div>
@@ -218,27 +220,63 @@ export function StakeSelector({
                   <p className={`mt-0.5 text-xs font-semibold ${predictionToneClassName}`}>{predictionTone}</p>
                 </div>
               </div>
-              <label htmlFor={predictionRatingInputId} className="sr-only">
-                Predicted final rating
+              <label htmlFor={opinionRatingInputId} className="sr-only">
+                Your rating
               </label>
               <input
-                id={predictionRatingInputId}
-                name="predicted-rating"
+                id={opinionRatingInputId}
+                name="opinion-rating"
                 type="range"
                 min={MIN_RATING}
                 max={MAX_RATING}
                 step={0.1}
-                value={predictedRating}
-                onChange={e => setPredictedRating(Number(e.target.value))}
+                value={opinionRating}
+                onChange={e => setOpinionRating(Number(e.target.value))}
                 className="range range-primary range-sm mt-4 w-full"
                 style={sliderStyle}
                 disabled={isConfirming}
-                aria-label="Predicted final rating"
-                aria-valuetext={`${predictedRating.toFixed(1)} out of 9.9`}
+                aria-label="Your rating"
+                aria-valuetext={`${opinionRating.toFixed(1)} out of 9.9`}
               />
               <div className="mt-1 flex justify-between text-xs text-base-content/55">
                 <span>1</span>
                 <span>9.9</span>
+              </div>
+              <div className="mt-5 border-t border-base-content/10 pt-4">
+                <div className="flex items-end justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-base-content/55">
+                      Expected crowd
+                    </p>
+                    <p className="mt-1 text-2xl font-bold tabular-nums text-base-content">
+                      {predictedCrowdRating.toFixed(1)}
+                      <span className="ml-1 text-sm font-semibold text-base-content/55">/ 10</span>
+                    </p>
+                  </div>
+                  <InfoTooltip text="Rewards score this crowd prediction against the peer rating, excluding your own rating." />
+                </div>
+                <label htmlFor={crowdPredictionInputId} className="sr-only">
+                  Expected crowd rating
+                </label>
+                <input
+                  id={crowdPredictionInputId}
+                  name="predicted-crowd-rating"
+                  type="range"
+                  min={MIN_RATING}
+                  max={MAX_RATING}
+                  step={0.1}
+                  value={predictedCrowdRating}
+                  onChange={e => setPredictedCrowdRating(Number(e.target.value))}
+                  className="range range-primary range-sm mt-4 w-full"
+                  style={sliderStyle}
+                  disabled={isConfirming}
+                  aria-label="Expected crowd rating"
+                  aria-valuetext={`${predictedCrowdRating.toFixed(1)} out of 9.9`}
+                />
+                <div className="mt-1 flex justify-between text-xs text-base-content/55">
+                  <span>1</span>
+                  <span>9.9</span>
+                </div>
               </div>
             </div>
 
@@ -375,7 +413,7 @@ export function StakeSelector({
                 Cancel
               </button>
               <button
-                onClick={() => onConfirm(amount, predictedRating)}
+                onClick={() => onConfirm(amount, opinionRating, predictedCrowdRating)}
                 className="btn flex-1 action-orange-control"
                 disabled={confirmDisabled}
               >

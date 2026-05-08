@@ -33,7 +33,8 @@ import { getParsedErrorWithAllAbis } from "~~/utils/scaffold-eth/contract";
 
 interface RoundVoteParams {
   contentId: bigint;
-  predictedRating: number;
+  opinionRating: number;
+  predictedCrowdRating: number;
   stakeAmount: number; // In whole tokens (e.g., 5 = 5 MREP)
   frontendCode?: `0x${string}`; // Optional frontend operator address for fee distribution
   isOwnContent?: boolean;
@@ -45,8 +46,8 @@ interface RoundVoteParams {
  * Hook for tlock commit-reveal rating commits using reputation approval + commit.
  * Handles: optional allowance approval followed by a vote commit.
  *
- * Predicted final ratings are tlock-encrypted to the current epoch's drand round,
- * keeping the rating private until reveal.
+ * Opinion ratings and crowd predictions are tlock-encrypted to the current epoch's drand round,
+ * keeping the report private until reveal.
  */
 export function useRoundVote() {
   const { address } = useAccount();
@@ -84,7 +85,8 @@ export function useRoundVote() {
 
   const commitVote = async ({
     contentId,
-    predictedRating,
+    opinionRating,
+    predictedCrowdRating,
     stakeAmount,
     frontendCode,
     isOwnContent,
@@ -129,8 +131,8 @@ export function useRoundVote() {
       return false;
     }
 
-    if (predictedRating === undefined) {
-      setError("Choose a predicted final rating before submitting.");
+    if (opinionRating === undefined || predictedCrowdRating === undefined) {
+      setError("Choose your rating and expected crowd rating before submitting.");
       return false;
     }
 
@@ -189,7 +191,8 @@ export function useRoundVote() {
       const commitParams = await buildCommitPredictionParams({
         voter: address as `0x${string}`,
         contentId,
-        predictedRating,
+        opinionRating,
+        predictedCrowdRating,
         stakeAmount,
         epochDuration: runtime.epochDuration,
         roundId: runtime.roundId,

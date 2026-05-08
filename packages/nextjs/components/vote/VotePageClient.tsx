@@ -1239,7 +1239,7 @@ const HomeInner = () => {
   }, []);
 
   const handleConfirmStake = useCallback(
-    async (stakeAmount: number, predictedRating: number) => {
+    async (stakeAmount: number, opinionRating: number, predictedCrowdRating: number) => {
       const cooldownSeconds = stakeModalCooldownSeconds;
       if (cooldownSeconds > 0) {
         notification.info(getVoteCooldownMessage(cooldownSeconds), { duration: 6000 });
@@ -1273,7 +1273,8 @@ const HomeInner = () => {
 
       const success = await commitVote({
         contentId: stakeModal.contentId,
-        predictedRating,
+        opinionRating,
+        predictedCrowdRating,
         isOwnContent: item?.isOwnContent,
         roundConfig: item?.roundConfig ?? stakeModal.roundConfig,
         stakeAmount,
@@ -1293,11 +1294,13 @@ const HomeInner = () => {
       setLocalVoteCooldownVersion(version => version + 1);
       if (item) {
         markPrimaryInteraction(item.id, { isVote: true });
-        recordRecommendationSignal(item, "vote_commit", { predictedRating });
+        recordRecommendationSignal(item, "vote_commit", { predictedRating: predictedCrowdRating });
       }
 
       notification.success(
-        `Prediction submitted: ${predictedRating.toFixed(1)}/10 with ${stakeAmount} reputation locked.`,
+        `Report submitted: ${opinionRating.toFixed(1)}/10 rating, ${predictedCrowdRating.toFixed(
+          1,
+        )}/10 crowd prediction, ${stakeAmount} reputation locked.`,
       );
 
       if (isFirstVote) {
