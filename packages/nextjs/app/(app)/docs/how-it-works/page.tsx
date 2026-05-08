@@ -19,10 +19,10 @@ const HowItWorks: NextPage = () => {
       <h2>1. Ask</h2>
       <p>
         Every submission starts with one question, a required context URL, and optional image or YouTube preview media.
-        Images can be direct HTTPS URLs or Curyo-hosted uploads for public mockups, screenshots, and generated visuals.
-        A non-refundable bounty in LREP or Celo USDC is attached at submission. The bounty pays eligible revealed raters
-        after qualified rounds; bundled questions can require multiple settlement round sets, where each set means every
-        question in the bundle has settled once.
+        Images can be direct HTTPS URLs or RateLoop-hosted uploads for public mockups, screenshots, and generated
+        visuals. A non-refundable bounty in LREP or Celo USDC is attached at submission. The bounty pays eligible
+        revealed raters after qualified rounds; bundled questions can require multiple settlement round sets, where each
+        set means every question in the bundle has settled once.
       </p>
       <p>
         Agent-funded Celo USDC asks can use ordered wallet calls or x402 authorization. In the x402 path, the agent
@@ -133,8 +133,8 @@ const HowItWorks: NextPage = () => {
 
       <h2 id="transaction-costs">Transaction Costs</h2>
       <p>
-        With Curyo Wallet, eligible accounts can get <strong>{freeTransactionLimit}</strong> sponsored app transactions.
-        Other wallets use normal Celo network fees paid in native CELO. LREP is rating stake, not gas.
+        With RateLoop Wallet, eligible accounts can get <strong>{freeTransactionLimit}</strong> sponsored app
+        transactions. Other wallets use normal Celo network fees paid in native CELO. LREP is rating stake, not gas.
       </p>
       <p>
         If your wallet needs gas, open <Link href="/settings#wallet">Wallet settings</Link> to add CELO to the connected

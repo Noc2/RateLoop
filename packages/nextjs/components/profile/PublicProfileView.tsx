@@ -593,7 +593,7 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
   const avatarAccentBusy = avatarAccentPending || clearAvatarAccentPending;
   const hasAvatarAccentChanges = normalizedAvatarAccentInput !== committedAvatarAccentHex;
   const referralCountLabel = Number(referralCount).toLocaleString();
-  const referralTweetText = `Join Curyo, claim HREP, and get verified. Use my referral link so we both receive a HREP bonus: ${referralLink}`;
+  const referralTweetText = `Join RateLoop, build LREP, and help calibrate public ratings. Use my referral link so we both receive a LREP bonus: ${referralLink}`;
   const winRateLabel = stats && stats.totalSettledVotes > 0 ? `${(stats.winRate * 100).toFixed(1)}%` : "—";
   const dailyStreakLabel = (dailyStreak?.currentDailyStreak ?? 0).toLocaleString();
   const resolvedVotesLabel = (stats?.totalSettledVotes ?? 0).toLocaleString();
@@ -644,7 +644,7 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
 
   const handleSaveProfile = useCallback(async () => {
     if (!hasVoterId) {
-      notification.info("Get a Voter ID before creating a profile.");
+      notification.info("Set up a rater credential before creating a profile.");
       return;
     }
 
@@ -701,7 +701,7 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
 
   const openAvatarEditor = useCallback(() => {
     if (!hasVoterId) {
-      notification.info("Get a Voter ID before editing your avatar.");
+      notification.info("Set up a rater credential before editing your avatar.");
       return;
     }
 
@@ -718,7 +718,7 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
 
   const openReferralModal = useCallback(() => {
     if (!hasVoterId) {
-      notification.info("Get a Voter ID before using referrals.");
+      notification.info("Set up a rater credential before using referrals.");
       return;
     }
 
@@ -875,10 +875,10 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
             {ownProfile ? (
               !hasVoterId ? (
                 <Link
-                  href="/governance#faucet"
+                  href="/governance"
                   className="inline-flex items-center justify-center rounded-full bg-base-200 px-4 py-2 text-base font-medium text-white transition-colors hover:bg-base-300"
                 >
-                  Get Voter ID
+                  Set Up Rater
                 </Link>
               ) : isEditing ? (
                 <div className="flex flex-wrap gap-2">
@@ -946,10 +946,10 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
                 <span className="text-base-content/60">&bull;</span>
                 <span>
                   {voterIdLoading
-                    ? "Loading Voter ID..."
+                    ? "Loading credential..."
                     : hasVoterId
-                      ? `Voter ID #${tokenId.toString()}`
-                      : "No Voter ID"}
+                      ? `Credential #${tokenId.toString()}`
+                      : "No credential"}
                 </span>
               </div>
               <div className="font-medium text-base-content/65 lg:ml-auto">
@@ -1144,10 +1144,10 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
               <AudienceContextHeading />
               {!hasVoterId ? (
                 <Link
-                  href="/governance#faucet"
+                  href="/governance"
                   className="mt-4 inline-flex items-center justify-center rounded-full bg-base-content/[0.06] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-base-content/[0.1]"
                 >
-                  Get Voter ID
+                  Set Up Rater
                 </Link>
               ) : null}
             </div>
@@ -1195,13 +1195,13 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
                     <div className="rounded-2xl bg-base-content/[0.05] px-4 py-3">
                       <div className="text-base text-base-content/60">Stake won</div>
                       <div className="mt-1 text-xl font-semibold text-success">
-                        {formatHrepString(stats.totalStakeWon)} HREP
+                        {formatHrepString(stats.totalStakeWon)} LREP
                       </div>
                     </div>
                     <div className="rounded-2xl bg-base-content/[0.05] px-4 py-3">
                       <div className="text-base text-base-content/60">Stake lost</div>
                       <div className="mt-1 text-xl font-semibold text-error">
-                        {formatHrepString(stats.totalStakeLost)} HREP
+                        {formatHrepString(stats.totalStakeLost)} LREP
                       </div>
                     </div>
                   </div>
@@ -1330,7 +1330,7 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
                         <td>
                           <span className={`font-medium ${outcome.className}`}>{outcome.label}</span>
                         </td>
-                        <td className="text-right font-mono">{formatHrepString(vote.stake)} HREP</td>
+                        <td className="text-right font-mono">{formatHrepString(vote.stake)} LREP</td>
                         <td className="text-right text-base-content/55">{formatTimestamp(vote.committedAt)}</td>
                       </tr>
                     );
@@ -1477,7 +1477,7 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
                 <div className="rounded-2xl bg-base-content/[0.04] px-5 py-4">
                   <div className="text-base text-base-content/60">Total received</div>
                   <div className="mt-1 text-3xl font-semibold tabular-nums text-primary">
-                    {formatReferralAmount(totalEarned)} HREP
+                    {formatReferralAmount(totalEarned)} LREP
                   </div>
                 </div>
               </div>
@@ -1486,12 +1486,12 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
                 <div className="text-lg font-semibold">Referral tokens</div>
                 <div className="mt-2 text-base text-base-content/70">
                   You get{" "}
-                  <span className="font-semibold text-primary">{formatReferralAmount(referralReward)} HREP</span> per
+                  <span className="font-semibold text-primary">{formatReferralAmount(referralReward)} LREP</span> per
                   referral
                 </div>
                 <div className="text-base text-base-content/70">
                   Friend gets{" "}
-                  <span className="font-semibold text-primary">{formatReferralAmount(claimantBonus)} HREP</span> bonus
+                  <span className="font-semibold text-primary">{formatReferralAmount(claimantBonus)} LREP</span> bonus
                 </div>
               </div>
 

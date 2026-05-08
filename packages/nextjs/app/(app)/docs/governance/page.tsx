@@ -152,7 +152,7 @@ const GovernanceDocs: NextPage = () => {
         and timelock path as upgrades.
       </p>
       <p>
-        Treasury grants can support work that grows the Curyo feedback network: partner activation, integrations,
+        Treasury grants can support work that grows the RateLoop feedback network: partner activation, integrations,
         research and data projects, community growth, protocol development, and security or whistleblower rewards.
         Because LREP also carries governance power, grant proposals should explain the recipient, purpose, amount,
         expected impact, and any milestone or reporting expectations.
@@ -172,7 +172,7 @@ const GovernanceDocs: NextPage = () => {
 
       <h2>Protocol Evolution</h2>
       <p>
-        Curyo is expected to evolve over time. The protocol operates in a fast-changing environment, especially as AI
+        RateLoop is expected to evolve over time. The protocol operates in a fast-changing environment, especially as AI
         systems become more capable and as new smart-contract, wallet, identity, and coordination vulnerabilities are
         discovered. Governance was integrated from the start so the community can adapt protocol parameters, contracts,
         treasury routing, and safety rules without treating the first deployment as the final design forever.

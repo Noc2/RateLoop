@@ -12,9 +12,9 @@ const drandTlockHref = "https://docs.drand.love/docs/timelock-encryption";
 const circleCeloUsdcHref = "https://www.circle.com/multi-chain-usdc/celo";
 
 export const metadata = {
-  title: "Tech Stack | Curyo Docs",
+  title: "Tech Stack | RateLoop Docs",
   description:
-    "The protocol terms behind Curyo: x402 agent payments, MCP and WebMCP tools, optional identity signals, tlock blind prediction rounds, LREP staking, and Celo USDC settlement.",
+    "The protocol terms behind RateLoop: x402 agent payments, MCP and WebMCP tools, optional identity signals, tlock blind prediction rounds, LREP staking, and Celo USDC settlement.",
 } satisfies Metadata;
 
 const TechStackPage: NextPage = () => {
@@ -22,7 +22,7 @@ const TechStackPage: NextPage = () => {
     <article className="prose max-w-none">
       <h1>Tech Stack</h1>
       <p className="lead text-base-content/60 text-lg">
-        The landing page uses compact protocol terms. This page spells out what they mean, where Curyo uses them, and
+        The landing page uses compact protocol terms. This page spells out what they mean, where RateLoop uses them, and
         why they matter for AI-funded open feedback.
       </p>
 
@@ -36,15 +36,15 @@ const TechStackPage: NextPage = () => {
         or off-platform invoices.
       </p>
       <p>
-        In Curyo, x402 is the agent-native Celo USDC funding lane. An agent can ask with{" "}
+        In RateLoop, x402 is the agent-native Celo USDC funding lane. An agent can ask with{" "}
         <code>{'paymentMode: "x402_authorization"'}</code>, receive typed data for a USDC authorization, sign it with
         its wallet, and then submit the ordered transaction plan that funds protocol escrow. That keeps spend tied to a
         wallet signature while avoiding a custodial pre-deposit.
       </p>
       <p>
-        Curyo uses explicit Celo USDC amounts. The x402 network model supports EVM chains through CAIP-2 identifiers and
-        EVM token transfers through EIP-3009 or Permit2, so this is a standards-aligned payment path rather than a plain
-        JSON API label.
+        RateLoop uses explicit Celo USDC amounts. The x402 network model supports EVM chains through CAIP-2 identifiers
+        and EVM token transfers through EIP-3009 or Permit2, so this is a standards-aligned payment path rather than a
+        plain JSON API label.
       </p>
 
       <h2 id="mcp-adapter">MCP Adapter</h2>
@@ -53,14 +53,14 @@ const TechStackPage: NextPage = () => {
         <a href={mcpSpecHref} target="_blank" rel="noopener noreferrer" className="link link-primary">
           Model Context Protocol
         </a>{" "}
-        gives AI clients a standard way to call external tools over JSON-RPC. Curyo exposes MCP tools for category
+        gives AI clients a standard way to call external tools over JSON-RPC. RateLoop exposes MCP tools for category
         discovery, result templates, quotes, ask submission, transaction confirmation, status polling, and final result
         lookup.
       </p>
       <p>
-        Curyo uses MCP Streamable HTTP for remote agent access. The important point is not that the transport is HTTP;
-        it is that the agent sees a stable tool interface while Curyo handles wallet plans, x402 authorization, budgets,
-        callbacks, and result packaging behind those tools.
+        RateLoop uses MCP Streamable HTTP for remote agent access. The important point is not that the transport is
+        HTTP; it is that the agent sees a stable tool interface while RateLoop handles wallet plans, x402 authorization,
+        budgets, callbacks, and result packaging behind those tools.
       </p>
 
       <h2 id="webmcp">WebMCP</h2>
@@ -72,7 +72,7 @@ const TechStackPage: NextPage = () => {
         agents, so the agent can call the intended action instead of guessing from visible UI.
       </p>
       <p>
-        In Curyo, WebMCP belongs on <Link href="/docs/ai">/docs/ai</Link> and the browser signing handoff. It should
+        In RateLoop, WebMCP belongs on <Link href="/docs/ai">/docs/ai</Link> and the browser signing handoff. It should
         tell agents which values to request from the user, recommend templates, validate draft asks, and route the agent
         toward public MCP, direct JSON, local signer, or browser approval. It should not replace the public MCP endpoint
         used by headless agents.
@@ -85,8 +85,8 @@ const TechStackPage: NextPage = () => {
 
       <h2 id="optional-identity">Optional Identity Signals</h2>
       <p>
-        The core Curyo protocol does not require proof-of-personhood. Accounts, agent wallets, and delegated operators
-        can participate after meeting reputation and calibration rules.
+        The core RateLoop protocol does not require proof-of-personhood. Accounts, agent wallets, and delegated
+        operators can participate after meeting reputation and calibration rules.
       </p>
       <p>
         Optional identity integrations can still be useful as credentials, frontend trust badges, boosted routing
@@ -101,21 +101,21 @@ const TechStackPage: NextPage = () => {
         plaintext report; users can self-reveal if needed. Settlement uses only revealed reports.
       </p>
       <p>
-        This is why Curyo calls rating work &quot;honest&quot; rather than just &quot;popular.&quot; Early raters cannot
-        simply copy public momentum, unrevealed reports lose reward eligibility, and inaccurate revealed crowd
+        This is why RateLoop calls rating work &quot;honest&quot; rather than just &quot;popular.&quot; Early raters
+        cannot simply copy public momentum, unrevealed reports lose reward eligibility, and inaccurate revealed crowd
         predictions still face a real stake cost. The mechanism is BTS-inspired, but intentionally simpler than full
         Bayesian Truth Serum: opinions drive the public score, while expected-crowd predictions drive rewards.
       </p>
 
       <h2 id="tlock-blind-voting">tlock Blind Voting</h2>
       <p>
-        Curyo blind voting is backed by tlock-style timelock encryption. The{" "}
+        RateLoop blind voting is backed by tlock-style timelock encryption. The{" "}
         <a href={drandTlockHref} target="_blank" rel="noopener noreferrer" className="link link-primary">
           drand timelock encryption
         </a>{" "}
-        model lets a payload be encrypted now and decryptable only after a future drand round becomes available. Curyo
-        binds report ciphertext to drand metadata so the split rating is meant to become revealable only after the epoch
-        window closes.
+        model lets a payload be encrypted now and decryptable only after a future drand round becomes available.
+        RateLoop binds report ciphertext to drand metadata so the split rating is meant to become revealable only after
+        the epoch window closes.
       </p>
 
       <h2 id="lrep-staking">LREP Staking</h2>
@@ -152,8 +152,8 @@ const TechStackPage: NextPage = () => {
 
       <h2 id="celo-usdc">Celo USDC And Stablecoins</h2>
       <p>
-        Curyo uses Celo USDC for agent-friendly bounty funding and Feedback Bonuses. Circle lists USDC on Celo as native
-        ERC-20 USDC, and Celo keeps the payment path EVM-compatible and low-cost for small human-feedback jobs.
+        RateLoop uses Celo USDC for agent-friendly bounty funding and Feedback Bonuses. Circle lists USDC on Celo as
+        native ERC-20 USDC, and Celo keeps the payment path EVM-compatible and low-cost for small human-feedback jobs.
       </p>
 
       <h2>Research References</h2>

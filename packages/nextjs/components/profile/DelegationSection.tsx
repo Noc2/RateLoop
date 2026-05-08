@@ -16,7 +16,7 @@ import { formatHrepAmount } from "~~/lib/vote/voteIncentives";
 import { notification } from "~~/utils/scaffold-eth";
 import { ZERO_ADDRESS } from "~~/utils/scaffold-eth/common";
 
-const HREP_DECIMALS = 6;
+const LREP_DECIMALS = 6;
 
 function parseHrepAmount(value: string): bigint | null {
   const trimmedValue = value.trim();
@@ -25,7 +25,7 @@ function parseHrepAmount(value: string): bigint | null {
   }
 
   try {
-    return parseUnits(trimmedValue, HREP_DECIMALS);
+    return parseUnits(trimmedValue, LREP_DECIMALS);
   } catch {
     return null;
   }
@@ -108,7 +108,7 @@ export function DelegationSection() {
       console.error("Set delegate failed:", e);
       const msg = e?.shortMessage || e?.message || "Failed to set delegate";
       if (msg.includes("DelegateIsHolder")) {
-        setDelegationError("That address already has its own Voter ID");
+        setDelegationError("That address already has its own rater credential");
       } else if (msg.includes("DelegateAlreadyAssigned")) {
         setDelegationError("That address is already delegated");
       } else {
@@ -160,13 +160,13 @@ export function DelegationSection() {
         functionName: "transfer",
         args: [normalizedTransferAddress as `0x${string}`, parsedTransferAmount],
       });
-      notification.success(`Sent ${formatHrepAmount(parsedTransferAmount, 6)} HREP`);
+      notification.success(`Sent ${formatHrepAmount(parsedTransferAmount, 6)} LREP`);
       setTransferAmountInput("");
       await refetchHrepBalance();
       void queryClient.invalidateQueries();
     } catch (e: any) {
-      console.error("Transfer HREP failed:", e);
-      setTransferError(e?.shortMessage || e?.message || "Failed to transfer HREP");
+      console.error("Transfer LREP failed:", e);
+      setTransferError(e?.shortMessage || e?.message || "Failed to transfer LREP");
     }
   };
 
@@ -186,14 +186,14 @@ export function DelegationSection() {
       <div className="surface-card rounded-2xl p-6 space-y-4">
         <h2 className="text-xl font-semibold flex items-center gap-2">
           <ShieldCheckIcon className="w-6 h-6" />
-          Voter ID required for delegation
+          Rater credential required for delegation
         </h2>
         <p className="text-base leading-7 text-base-content/70">
-          Delegation is only available from the wallet that holds a Voter ID. Claim a Voter ID first, then return here
-          to authorize a delegate wallet or move HREP.
+          Delegation is only available from the wallet that holds a rater credential. Set up the credential first, then
+          return here to authorize a delegate wallet or move LREP.
         </p>
-        <Link href={`${GOVERNANCE_ROUTE}#faucet`} className="btn btn-primary w-full rounded-lg sm:w-auto">
-          Open HREP faucet
+        <Link href={GOVERNANCE_ROUTE} className="btn btn-primary w-full rounded-lg sm:w-auto">
+          Open rater setup
         </Link>
       </div>
     );
@@ -204,13 +204,13 @@ export function DelegationSection() {
       <h2 className="text-xl font-semibold flex items-center gap-2">
         <ShieldCheckIcon className="w-6 h-6" />
         Delegated Vote ID
-        <InfoTooltip text="Authorize a delegate address (hot wallet) to vote on behalf of your Voter ID. Your main key stays safely offline." />
+        <InfoTooltip text="Authorize a delegate address (hot wallet) to vote on behalf of your rater credential. Your main key stays safely offline." />
       </h2>
 
       <div className="rounded-xl border border-base-300 bg-base-200/40 p-4 text-base text-base-content/75 space-y-2">
-        <p>Keep your Voter ID on a cold wallet and use a separate hot wallet for daily actions.</p>
+        <p>Keep your rater credential on a cold wallet and use a separate hot wallet for daily actions.</p>
         <p>
-          Your delegate can vote and use profile or frontend actions, but only the Voter ID holder can set or remove
+          Your delegate can vote and use profile or frontend actions, but only the credential holder can set or remove
           delegation. Submissions themselves do not need delegation.
         </p>
         <p>
@@ -252,7 +252,7 @@ export function DelegationSection() {
         <div className="space-y-3">
           <label className="flex items-center gap-1.5 text-base font-medium">
             Delegate Address
-            <InfoTooltip text="Enter the address of your secondary wallet. This address will be able to vote using your Voter ID." />
+            <InfoTooltip text="Enter the address of your secondary wallet. This address will be able to vote using your rater credential." />
           </label>
           <input
             type="text"
@@ -301,12 +301,12 @@ export function DelegationSection() {
       <div className="border-t border-base-300 pt-5 space-y-4">
         <h3 className="text-lg font-semibold flex items-center gap-2">
           <ArrowsRightLeftIcon className="w-5 h-5" />
-          Transfer HREP
-          <InfoTooltip text="Send HREP to your delegate or any other address." />
+          Transfer LREP
+          <InfoTooltip text="Send LREP to your delegate or any other address." />
         </h3>
 
         <div className="space-y-1 text-base text-base-content/60">
-          <p>Balance {formattedBalance} HREP</p>
+          <p>Balance {formattedBalance} LREP</p>
           {address ? <p className="font-mono text-sm break-all">Connected wallet {address}</p> : null}
         </div>
 
@@ -360,7 +360,7 @@ export function DelegationSection() {
               type="button"
               className="btn btn-ghost btn-xs"
               onClick={() => {
-                setTransferAmountInput(formatUnits(hrepBalanceMicro, HREP_DECIMALS));
+                setTransferAmountInput(formatUnits(hrepBalanceMicro, LREP_DECIMALS));
                 if (transferError) {
                   setTransferError(null);
                 }
@@ -404,7 +404,7 @@ export function DelegationSection() {
                 Sending...
               </span>
             ) : (
-              "Send HREP"
+              "Send LREP"
             )}
           </button>
         </div>

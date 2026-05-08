@@ -85,7 +85,7 @@ const Tokenomics = () => {
 
       <h3>Launch Snapshot And Onboarding</h3>
       <p>
-        The launch distribution reuses the previous Curyo HREP/CREP snapshot so early protocol participants keep a
+        The launch distribution reuses the previous RateLoop LREP/CREP snapshot so early protocol participants keep a
         governance stake in the fresh deployment. Remaining launch distribution capacity can be routed by governance to
         onboarding, calibration, and ecosystem programs. Optional identity credentials can be added later, but they are
         not required for the core rating protocol.
@@ -103,9 +103,9 @@ const Tokenomics = () => {
           <tbody>
             <tr>
               <td>Snapshot</td>
-              <td>Previous HREP/CREP holders</td>
+              <td>Previous LREP/CREP holders</td>
               <td className="font-mono">Governance-approved snapshot</td>
-              <td>Fresh deployment distribution to early Curyo contributors</td>
+              <td>Fresh deployment distribution to early RateLoop contributors</td>
             </tr>
             <tr>
               <td>Calibration</td>

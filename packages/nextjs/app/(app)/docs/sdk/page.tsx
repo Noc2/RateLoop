@@ -55,7 +55,7 @@ import { buildCommitPredictionParams } from "@rateloop/sdk/vote";`}</code>
       <p>Create a client once, then use its hosted read surface wherever your app needs indexed protocol data.</p>
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
         <code>{`const curyo = createCuryoClient({
-  apiBaseUrl: "https://api.curyo.xyz",
+  apiBaseUrl: "https://api.rateloop.xyz",
   frontendCode: "0x1234567890123456789012345678901234567890",
 });
 

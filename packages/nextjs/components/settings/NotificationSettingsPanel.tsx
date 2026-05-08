@@ -134,7 +134,7 @@ export function NotificationSettingsPanel({
 
   useEffect(() => {
     if (emailQueryStatus === "verified") {
-      notification.success("Email verified. Curyo can now send email notifications to that address.");
+      notification.success("Email verified. RateLoop can now send email notifications to that address.");
     } else if (emailQueryStatus === "unsubscribed") {
       notification.success("Email notifications unsubscribed.");
     } else if (emailQueryStatus === "invalid") {
@@ -374,7 +374,7 @@ export function NotificationSettingsPanel({
 
           {!emailSettings.verified && hasEmail ? (
             <div className="rounded-2xl border border-warning/20 bg-warning/10 px-4 py-3 text-sm text-warning">
-              Verify this address from your inbox before Curyo starts sending email notifications.
+              Verify this address from your inbox before RateLoop starts sending email notifications.
             </div>
           ) : null}
 

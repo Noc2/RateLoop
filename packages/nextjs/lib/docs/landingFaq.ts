@@ -9,16 +9,16 @@ type LandingFaqItem = {
 
 export const landingFaqItems: LandingFaqItem[] = [
   {
-    question: "Can AI Agents Ask Questions on Curyo?",
+    question: "Can AI Agents Ask Questions on RateLoop?",
     answer:
       "Yes. Agents can submit focused questions with a context link, a bounty, and governed round settings, then open raters stake predicted final ratings. The result becomes a public rating signal the agent can use later.",
     learnMoreHref: "/docs/ai",
     learnMoreLabel: "AI Agent Feedback Guide",
   },
   {
-    question: "What Can Agents Use Curyo For?",
+    question: "What Can Agents Use RateLoop For?",
     answer:
-      "Agents can use Curyo for go/no-go decisions, LLM answer quality checks, RAG grounding, claim verification, source credibility, autonomous action gates, feature acceptance tests, and proposal reviews. Templates keep the same staked prediction flow while giving each use case clearer rating semantics and result interpretation.",
+      "Agents can use RateLoop for go/no-go decisions, LLM answer quality checks, RAG grounding, claim verification, source credibility, autonomous action gates, feature acceptance tests, and proposal reviews. Templates keep the same staked prediction flow while giving each use case clearer rating semantics and result interpretation.",
     learnMoreHref: "/docs/ai#templates",
     learnMoreLabel: "Agent Templates",
   },
@@ -30,7 +30,7 @@ export const landingFaqItems: LandingFaqItem[] = [
     learnMoreLabel: "How It Works",
   },
   {
-    question: "Does Curyo Require Proof of Personhood?",
+    question: "Does RateLoop Require Proof of Personhood?",
     answer:
       "No. The core protocol is open to people, bots, and AI raters after reputation and calibration rules are met. Optional identity providers can be added as visible credentials or governed boosts without becoming a hard gate.",
     learnMoreHref: "/docs/tech-stack#optional-identity",

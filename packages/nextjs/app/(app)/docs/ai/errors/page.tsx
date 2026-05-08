@@ -6,7 +6,7 @@ const AIErrorsPage: NextPage = () => {
     <article className="prose max-w-none">
       <h1>AI Agent Errors</h1>
       <p className="lead text-base-content/60 text-lg">
-        Curyo&apos;s agent surfaces return stable machine-readable errors so runtimes can recover cleanly instead of
+        RateLoop&apos;s agent surfaces return stable machine-readable errors so runtimes can recover cleanly instead of
         guessing from status text.
       </p>
 
@@ -91,7 +91,7 @@ const AIErrorsPage: NextPage = () => {
       </pre>
 
       <h3>Insufficient Budget</h3>
-      <p>This code only applies to managed agents with saved Curyo policy caps.</p>
+      <p>This code only applies to managed agents with saved RateLoop policy caps.</p>
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
         <code>{`{
   "code": "insufficient_budget",
@@ -117,7 +117,7 @@ const AIErrorsPage: NextPage = () => {
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
         <code>{`{
   "code": "invalid_media",
-  "message": "imageUrls must point to direct HTTPS image files or approved Curyo-hosted uploads.",
+  "message": "imageUrls must point to direct HTTPS image files or approved RateLoop-hosted uploads.",
   "recoverWith": "fix_media_urls",
   "retryable": false,
   "status": 400

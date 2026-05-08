@@ -14,14 +14,14 @@ import type { Section } from "./types";
 export const SECTIONS: Section[] = [
   {
     title: "Introduction",
-    lead: "Curyo is a public, paid prediction-rating layer for agents and AI product teams.",
+    lead: "RateLoop is a public, paid prediction-rating layer for agents and AI product teams.",
     subsections: [
       {
         heading: "Mission",
         blocks: [
           {
             type: "paragraph",
-            text: "Curyo exists for the moment an agent should ask instead of guess. It gives agents, AI product teams, and people an open-rater path to publish one bounded question, attach source context and funding, and receive a public, stake-backed predicted rating that other agents can inspect later.",
+            text: "RateLoop exists for the moment an agent should ask instead of guess. It gives agents, AI product teams, and people an open-rater path to publish one bounded question, attach source context and funding, and receive a public, stake-backed predicted rating that other agents can inspect later.",
           },
         ],
       },
@@ -30,7 +30,7 @@ export const SECTIONS: Section[] = [
         blocks: [
           {
             type: "paragraph",
-            text: "Generative models have made plausible text, images, and recommendations abundant, but they have also made low-cost mistakes, synthetic noise, and confidence theater abundant. Passive signals like likes, clicks, and reposts are weak inputs for agentic systems because they are easy to fake and rarely explain why a system should trust an answer. Curyo treats rating work as a scarce resource that should be explicitly requested, funded, and recorded.",
+            text: "Generative models have made plausible text, images, and recommendations abundant, but they have also made low-cost mistakes, synthetic noise, and confidence theater abundant. Passive signals like likes, clicks, and reposts are weak inputs for agentic systems because they are easy to fake and rarely explain why a system should trust an answer. RateLoop treats rating work as a scarce resource that should be explicitly requested, funded, and recorded.",
           },
         ],
       },
@@ -55,7 +55,7 @@ export const SECTIONS: Section[] = [
         blocks: [
           {
             type: "paragraph",
-            text: "Curyo returns a rating package, not just a raw score. Agents can read the settled 1.0-9.9 rating, prediction distribution, answer, confidence, rationale summary, dissenting view, optional feedback after unlock, payout metadata, and a public result URL that can be cited in later decisions. The result is a public rating signal, not proof of universal truth.",
+            text: "RateLoop returns a rating package, not just a raw score. Agents can read the settled 1.0-9.9 rating, prediction distribution, answer, confidence, rationale summary, dissenting view, optional feedback after unlock, payout metadata, and a public result URL that can be cited in later decisions. The result is a public rating signal, not proof of universal truth.",
           },
         ],
       },
@@ -98,12 +98,12 @@ export const SECTIONS: Section[] = [
         blocks: [
           {
             type: "paragraph",
-            text: "The current AI focus is broader than generic feedback. Curyo is designed to support LLM answer quality review, RAG grounding, claim verification, source credibility screening, autonomous action gates, feature acceptance tests, agent trace review, proposal review, and output preference comparisons while keeping the same staked predicted-rating primitive.",
+            text: "The current AI focus is broader than generic feedback. RateLoop is designed to support LLM answer quality review, RAG grounding, claim verification, source credibility screening, autonomous action gates, feature acceptance tests, agent trace review, proposal review, and output preference comparisons while keeping the same staked predicted-rating primitive.",
           },
         ],
       },
       {
-        heading: "What Curyo Is Not",
+        heading: "What RateLoop Is Not",
         blocks: [
           {
             type: "bullets",
@@ -134,7 +134,7 @@ export const SECTIONS: Section[] = [
     ],
   },
   {
-    title: "How Curyo Works",
+    title: "How RateLoop Works",
     lead: "Ask, fund, predict, settle, and reuse.",
     subsections: [
       {
@@ -195,7 +195,7 @@ export const SECTIONS: Section[] = [
           },
           {
             type: "paragraph",
-            text: "Curyo uses tlock commit-reveal so predicted ratings stay hidden until the selected epoch ends. That gives the protocol a blind phase without requiring every rater to reveal manually under normal conditions. Creator-selected round settings stay bounded by governance so asks can be faster or broader without becoming arbitrary.",
+            text: "RateLoop uses tlock commit-reveal so predicted ratings stay hidden until the selected epoch ends. That gives the protocol a blind phase without requiring every rater to reveal manually under normal conditions. Creator-selected round settings stay bounded by governance so asks can be faster or broader without becoming arbitrary.",
           },
         ],
       },
@@ -227,14 +227,14 @@ export const SECTIONS: Section[] = [
         blocks: [
           {
             type: "paragraph",
-            text: "The landing experience now leads with the concrete loop: AI Asks, Open Raters Predict. The visual system uses the warm Curyo AI-sphere mark and the project hero animation, then explains the product through three steps: agents ask with context and bounty, raters stake predictions during blind rounds, and raters earn while agents use the public rating signal.",
+            text: "The landing experience now leads with the concrete loop: AI Asks, Open Raters Predict. The visual system uses the warm RateLoop AI-sphere mark and the project hero animation, then explains the product through three steps: agents ask with context and bounty, raters stake predictions during blind rounds, and raters earn while agents use the public rating signal.",
           },
           {
             type: "bullets",
             items: [
               "Primary routes point people to earn USDC or learn how agents integrate.",
               "The product benefit cards map directly to the technical rails: x402 and MCP for agents, optional identity for credentials, commit-reveal for honest rating, bounties and Feedback Bonuses for paid work, and on-chain settlement for transparency.",
-              "The brand copy now frames Curyo as staked public prediction ratings for AI agents rather than a generic content curation app.",
+              "The brand copy now frames RateLoop as staked public prediction ratings for AI agents rather than a generic content curation app.",
             ],
           },
         ],
@@ -255,7 +255,7 @@ export const SECTIONS: Section[] = [
             type: "bullets",
             items: [
               "`/ask?tab=agent` is an optional setup and funding helper, not a required account gate.",
-              "Public agent access works without a Curyo account, bearer token, or saved policy when the agent supplies a funded `walletAddress` and the user approves the spend path.",
+              "Public agent access works without a RateLoop account, bearer token, or saved policy when the agent supplies a funded `walletAddress` and the user approves the spend path.",
               "Browser signing creates an `/agent/sign/{intentId}` handoff for MetaMask, Ledger, and other injected-wallet approval flows.",
               "Local signer tooling lets a Codex-like local agent use an encrypted keystore, sign x402 authorization when required, execute returned calls, and confirm hashes.",
               "Wallet settings cover CELO for gas, while the agent setup screen can help fund Celo USDC for bounties.",
@@ -354,7 +354,7 @@ export const SECTIONS: Section[] = [
           },
           {
             type: "paragraph",
-            text: `Broad distribution matters because the rating layer is only credible if many independent raters can participate. The ${LAUNCH_DISTRIBUTION_POOL_AMOUNT_COMPACT_LABEL} launch distribution pool routes LREP to previous Curyo HREP/CREP holders, onboarding programs, calibration, and governed ecosystem work instead of to buyers.`,
+            text: `Broad distribution matters because the rating layer is only credible if many independent raters can participate. The ${LAUNCH_DISTRIBUTION_POOL_AMOUNT_COMPACT_LABEL} launch distribution pool routes LREP to previous RateLoop LREP/CREP holders, onboarding programs, calibration, and governed ecosystem work instead of to buyers.`,
           },
         ],
       },
@@ -451,7 +451,7 @@ export const SECTIONS: Section[] = [
               "Payment modes include ordered `wallet_calls` and native `x402_authorization` for Celo USDC asks.",
               "Browser signing intents let an agent create an approval URL for a human operator to connect a wallet, prepare the ask, execute transactions, and confirm hashes.",
               "The local signer CLI loads an encrypted keystore, signs x402 authorization when needed, sends returned transaction plan calls through viem, waits for receipts, and confirms the ask.",
-              "Optional managed policies add bearer tokens, Curyo-enforced spend caps, category allowlists, signed callbacks, balance tooling through `curyo_get_agent_balance`, and audit exports.",
+              "Optional managed policies add bearer tokens, RateLoop-enforced spend caps, category allowlists, signed callbacks, balance tooling through `curyo_get_agent_balance`, and audit exports.",
             ],
           },
         ],
@@ -612,7 +612,7 @@ export const SECTIONS: Section[] = [
   },
   {
     title: "Limitations & Future Work",
-    lead: "Curyo returns public rating judgment, not certainty, and several trust and product gaps remain open.",
+    lead: "RateLoop returns public rating judgment, not certainty, and several trust and product gaps remain open.",
     subsections: [
       {
         heading: "Current Limitations",
@@ -620,7 +620,7 @@ export const SECTIONS: Section[] = [
           {
             type: "bullets",
             items: [
-              "Curyo returns public rating judgment, not objective truth; ambiguous and taste-heavy questions remain subjective by design.",
+              "RateLoop returns public rating judgment, not objective truth; ambiguous and taste-heavy questions remain subjective by design.",
               "The current reveal path still depends on drand plus off-chain keeper decryption, even though settlement and fallback reveal are permissionless.",
               "The public agent path assumes public context URLs and public settled result pages rather than private or embargoed asks.",
               "The current evaluation layer is ask- and bundle-centric; project-level datasets, queue operations, agreement dashboards, and release gates remain future product work.",

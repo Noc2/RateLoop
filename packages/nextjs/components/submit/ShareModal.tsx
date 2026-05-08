@@ -63,8 +63,8 @@ export function ShareModal({
   const shareUrl = shareDetails.url;
   const truncatedTitle = truncateContentTitle(title);
   const tweetText = shareDetails.ratingLabel
-    ? `I just submitted "${truncatedTitle}" on Curyo. Current rating: ${shareDetails.ratingLabel}/10. Rate and build your reputation: ${shareUrl}`
-    : `I just submitted "${truncatedTitle}" on Curyo! Rate and build your reputation: ${shareUrl}`;
+    ? `I just submitted "${truncatedTitle}" on RateLoop. Current rating: ${shareDetails.ratingLabel}/10. Rate and build your reputation: ${shareUrl}`
+    : `I just submitted "${truncatedTitle}" on RateLoop! Rate and build your reputation: ${shareUrl}`;
 
   const handleCopyLink = async () => {
     await copyToClipboard(shareUrl);

@@ -16,8 +16,8 @@ const TermsPage: NextPage = () => {
         <p>
           This Interface is operated by Hawig Ventures UG (haftungsbeschr&auml;nkt), Herzogin-Juliana-Stra&szlig;e 7,
           55469 Simmern, Germany (&quot;the Interface Operator&quot;, &quot;we&quot;, &quot;us&quot;). By accessing or
-          using this interface to interact with the Curyo Protocol (&quot;the Service&quot;), you agree to be bound by
-          these Terms of Service and the{" "}
+          using this interface to interact with the RateLoop Protocol (&quot;the Service&quot;), you agree to be bound
+          by these Terms of Service and the{" "}
           <Link href="/legal/privacy" className="link link-primary">
             Privacy Notice
           </Link>
@@ -26,9 +26,9 @@ const TermsPage: NextPage = () => {
 
         <h2>2. Protocol vs Interface Distinction</h2>
         <p>
-          <strong>Curyo Protocol</strong> refers to a set of smart contracts deployed on blockchain networks. Depending
-          on the specific contract and deployment, the Protocol may include governance, administrative, pause, or
-          upgrade mechanisms defined on-chain. The Protocol generally:
+          <strong>RateLoop Protocol</strong> refers to a set of smart contracts deployed on blockchain networks.
+          Depending on the specific contract and deployment, the Protocol may include governance, administrative, pause,
+          or upgrade mechanisms defined on-chain. The Protocol generally:
         </p>
         <ul>
           <li>Can be accessed without this Interface</li>
@@ -40,7 +40,7 @@ const TermsPage: NextPage = () => {
         </ul>
         <p>
           <strong>This Interface</strong> (the website at this domain) is merely one way to access and interact with the
-          Curyo Protocol. The Interface operator:
+          RateLoop Protocol. The Interface operator:
         </p>
         <ul>
           <li>Does not have custody of your tokens at any time</li>
@@ -51,7 +51,7 @@ const TermsPage: NextPage = () => {
           <li>Is not responsible for the Protocol&apos;s operation or outcomes</li>
         </ul>
         <p>
-          You may interact with the Curyo Protocol through other interfaces, directly via blockchain explorers, or
+          You may interact with the RateLoop Protocol through other interfaces, directly via blockchain explorers, or
           through smart contract calls. The existence of this Interface does not create any special relationship between
           you and the Interface operator.
         </p>
@@ -76,8 +76,8 @@ const TermsPage: NextPage = () => {
           <strong>You acknowledge and agree that:</strong>
         </p>
         <ul>
-          <li>HREP tokens are reputation tokens used for content curation and governance within the Protocol</li>
-          <li>HREP tokens have no monetary value and are not intended as an investment</li>
+          <li>LREP tokens are reputation tokens used for content curation and governance within the Protocol</li>
+          <li>LREP tokens have no monetary value and are not intended as an investment</li>
           <li>You may lose tokens through normal Protocol operation (e.g., incorrect curation predictions)</li>
           <li>There is no guarantee of any particular outcomes from your participation</li>
           <li>Historical outcomes do not indicate or guarantee future results</li>
@@ -87,13 +87,13 @@ const TermsPage: NextPage = () => {
         <h2>5. Risk Disclosures</h2>
         <div className="alert alert-info my-4">
           <span className="font-bold">
-            IMPORTANT: Using the Curyo Protocol involves significant risks. Please read this section carefully.
+            IMPORTANT: Using the RateLoop Protocol involves significant risks. Please read this section carefully.
           </span>
         </div>
 
         <h3>5.1 Smart Contract Risks</h3>
         <p>
-          The Curyo Protocol operates through smart contracts deployed on blockchain networks. Smart contracts carry
+          The RateLoop Protocol operates through smart contracts deployed on blockchain networks. Smart contracts carry
           inherent and significant risks:
         </p>
         <ul>
@@ -141,7 +141,7 @@ const TermsPage: NextPage = () => {
           </li>
           <li>
             <strong>Phishing and Scams:</strong> You may encounter phishing websites, malicious contracts, or scams
-            impersonating the Curyo Protocol
+            impersonating the RateLoop Protocol
           </li>
         </ul>
 
@@ -159,12 +159,9 @@ const TermsPage: NextPage = () => {
             continue to operate independently
           </li>
           <li>
-            <strong>Identity Verification:</strong> The faucet uses Self.xyz for zero-knowledge identity verification
-            using supported documents such as passports or biometric ID cards. Faucet eligibility also requires proof
-            that you are 18 or older, sanctions clearance, and configured sanctioned-country checks; sanctioned-country
-            jurisdictions such as Cuba, Iran, North Korea, and Syria cannot claim. While no personal data is shared with
-            this Interface, the on-chain nullifier permanently links one verification per supported document. If
-            Self.xyz&apos;s service becomes unavailable, alternative faucet mechanisms may not be available
+            <strong>Optional Identity Signals:</strong> The core rating path does not require proof-of-personhood.
+            Future or legacy identity integrations may use third-party credentials for abuse prevention, eligibility, or
+            interface badges. Those providers have their own availability, privacy, and compliance risks.
           </li>
           <li>
             <strong>Agent Automation:</strong> If you authorize an automated agent, smart-wallet session key, or scoped
@@ -175,18 +172,15 @@ const TermsPage: NextPage = () => {
 
         <h2>6. Description of Service</h2>
         <p>
-          Curyo is a decentralized content curation protocol that allows users to stake reputation tokens to vote on
+          RateLoop is a decentralized content curation protocol that allows users to stake reputation tokens to vote on
           content quality. The Protocol enables:
         </p>
         <ul>
           <li>Submission of content URLs for community curation</li>
-          <li>Staking HREP tokens to vote on content quality (upvote/downvote)</li>
+          <li>Staking LREP tokens to vote on content quality (upvote/downvote)</li>
           <li>Distribution of token rewards based on curation outcomes</li>
           <li>Governance participation through token holding</li>
-          <li>
-            Identity verification through third-party services (e.g., Self.xyz) for age-gated, sanctions-screened,
-            Sybil-resistant token distribution
-          </li>
+          <li>Optional identity credentials that an interface may display or use for additional trust context</li>
         </ul>
         <p>
           <strong>The Service is NOT:</strong>
@@ -197,7 +191,7 @@ const TermsPage: NextPage = () => {
         </ul>
         <p>
           Submission and bounty features are question-first: a submission may be text-only or include one image or one
-          YouTube link, and the submission must attach a non-refundable bounty funded in HREP or USDC on Celo. A default
+          YouTube link, and the submission must attach a non-refundable bounty funded in LREP or USDC on Celo. A default
           frontend-operator share may be reserved from qualified claims when the vote was attributed to an eligible
           frontend. Bounty funds are sent from your connected wallet, smart wallet, or user-authorized agent wallet
           directly to protocol smart contracts; the Interface operator does not custody those bounty funds. The
@@ -257,7 +251,7 @@ const TermsPage: NextPage = () => {
         <h2>10. Intellectual Property</h2>
         <p>
           The Interface&apos;s code, design, and branding are the property of the Interface operator or its licensors.
-          The Curyo Protocol smart contracts may be open source under their respective licenses.
+          The RateLoop Protocol smart contracts may be open source under their respective licenses.
         </p>
         <p>
           User-provided content remains the property of the original creators. By asking questions with content URLs or
@@ -272,7 +266,7 @@ const TermsPage: NextPage = () => {
 
         <h2>11. Third-Party Content</h2>
         <p>
-          The Curyo Protocol indexes and displays links to third-party content. We do not endorse, verify, or take
+          The RateLoop Protocol indexes and displays links to third-party content. We do not endorse, verify, or take
           responsibility for the accuracy, legality, quality, or safety of any external content. Accessing external
           links is entirely at your own risk.
         </p>
@@ -350,11 +344,11 @@ const TermsPage: NextPage = () => {
         </p>
 
         <h2>16. Acknowledgment of Risks</h2>
-        <p>By using the Curyo Protocol through this Interface, you explicitly acknowledge and accept:</p>
+        <p>By using the RateLoop Protocol through this Interface, you explicitly acknowledge and accept:</p>
         <ul>
           <li>You have read and understood all risks described in these Terms</li>
           <li>You are using the Protocol and this Interface entirely at your own risk</li>
-          <li>You may lose HREP tokens through normal Protocol operation</li>
+          <li>You may lose LREP tokens through normal Protocol operation</li>
           <li>You are legally permitted to use the Service in your jurisdiction</li>
           <li>You have the legal capacity and authority to accept these terms</li>
           <li>You are solely responsible for your own due diligence and decisions</li>

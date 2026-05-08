@@ -64,8 +64,8 @@ export function WalletSettingsPanel({ address }: { address?: string }) {
             </div>
             <h2 className="mt-3 text-3xl font-semibold text-base-content sm:text-4xl">Gas and wallet funding</h2>
             <p className="mt-3 max-w-2xl text-base leading-relaxed text-base-content/65">
-              Curyo uses Celo. External wallets need a small native CELO balance for transaction fees, while bounties
-              and agent asks still use HREP or Celo USDC.
+              RateLoop uses Celo. External wallets need a small native CELO balance for transaction fees, while bounties
+              and agent asks still use LREP or Celo USDC.
             </p>
           </div>
 
@@ -85,7 +85,7 @@ export function WalletSettingsPanel({ address }: { address?: string }) {
           <h3 className="mt-3 text-2xl font-semibold text-base-content">Top up network fees</h3>
           <p className="mt-3 text-base leading-relaxed text-base-content/65">
             Buy native CELO directly to the connected wallet. CELO covers Celo network gas for normal wallet
-            transactions after sponsored Curyo Wallet transactions are used or unavailable.
+            transactions after sponsored RateLoop Wallet transactions are used or unavailable.
           </p>
 
           {targetIsCelo && !connectedToCelo ? (

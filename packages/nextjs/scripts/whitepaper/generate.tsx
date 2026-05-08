@@ -200,7 +200,7 @@ function RenderBlock({ block, color }: { block: ContentBlock; color: string }) {
 function Footer() {
   return (
     <View style={s.footer} fixed>
-      <Text>Curyo Whitepaper</Text>
+      <Text>RateLoop Whitepaper</Text>
       <Text render={({ pageNumber }) => `${pageNumber}`} />
     </View>
   );
@@ -209,7 +209,7 @@ function Footer() {
 // ── Main document ──
 function WhitepaperDocument({ tocPageNumbers }: { tocPageNumbers?: Record<number, number> }) {
   return (
-    <Document title="Curyo Whitepaper" author={META.author} subject={`${META.subtitle} — ${META.deck}`}>
+    <Document title="RateLoop Whitepaper" author={META.author} subject={`${META.subtitle} — ${META.deck}`}>
       {/* Cover page */}
       <Page size="A4" style={[s.page, { paddingTop: 0, paddingBottom: 0 }]}>
         <View style={s.cover}>

@@ -51,7 +51,7 @@ const AGENT_WALLET_HELP_TEXT =
 const AGENT_FUND_HELP_TEXT =
   "Add USDC to the agent wallet. Agent clients automatically use the compatible payment path when submitting asks.";
 const AGENT_POLICY_HELP_TEXT =
-  "Leave limits blank to allow all usage, or set only the restrictions Curyo should enforce for this agent.";
+  "Leave limits blank to allow all usage, or set only the restrictions RateLoop should enforce for this agent.";
 const AGENT_MCP_HELP_TEXT = "Use public MCP without a token, or create a managed token after saving optional controls.";
 
 type AgentSetupStep = (typeof MANAGED_SETUP_STEP_ORDER)[number];
@@ -649,9 +649,9 @@ export function AgentSubmissionPanel() {
           onChange={event => handlePolicyControlsChange(event.target.checked)}
         />
         <span>
-          <span className="block text-base font-semibold">Curyo-managed controls</span>
+          <span className="block text-base font-semibold">RateLoop-managed controls</span>
           <span className="mt-1 block text-sm leading-relaxed text-base-content/65">
-            Optional. Leave this off for tokenless wallet calls, or turn it on to let Curyo remember restrictions,
+            Optional. Leave this off for tokenless wallet calls, or turn it on to let RateLoop remember restrictions,
             create an access token, deliver callbacks, and keep an agent audit trail.
           </span>
         </span>
@@ -1051,8 +1051,8 @@ export function AgentSubmissionPanel() {
             <div className="rounded-lg border border-base-300 bg-base-100/50 p-4">
               <h4 className="text-sm font-semibold">User signs in browser</h4>
               <p className="mt-2 text-sm leading-relaxed text-base-content/60">
-                The agent creates a signing link. The user opens Curyo, connects the wallet, and approves the exact ask
-                calls in the browser.
+                The agent creates a signing link. The user opens RateLoop, connects the wallet, and approves the exact
+                ask calls in the browser.
               </p>
               <button type="button" className="btn btn-outline btn-xs mt-3" onClick={() => setActiveSetupStep("mcp")}>
                 View handoff API
@@ -1390,7 +1390,7 @@ export function AgentSubmissionPanel() {
                     <KeyIcon className="h-4 w-4" />
                     <span>Auth</span>
                   </div>
-                  <p className="mt-2 text-sm text-base-content/70">No bearer token or Curyo account required</p>
+                  <p className="mt-2 text-sm text-base-content/70">No bearer token or RateLoop account required</p>
                 </div>
               </div>
 
@@ -1445,7 +1445,7 @@ export function AgentSubmissionPanel() {
                     </button>
                   </div>
                   <p className="mt-2 text-sm leading-relaxed text-base-content/60">
-                    Use this path when a local agent owns an encrypted signer and can execute Curyo wallet calls.
+                    Use this path when a local agent owns an encrypted signer and can execute RateLoop wallet calls.
                   </p>
                   <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded bg-black p-3 text-xs text-white">
                     {localSignerSnippet}
@@ -1487,7 +1487,7 @@ export function AgentSubmissionPanel() {
               <div className="mt-5 rounded-lg border border-base-300 bg-base-100/50 p-4">
                 <h4 className="font-semibold">Access token</h4>
                 <p className="mt-1 text-sm leading-relaxed text-base-content/60">
-                  Use this token and config in the agent client that will call Curyo tools.
+                  Use this token and config in the agent client that will call RateLoop tools.
                 </p>
                 {tokenAccessPanel}
               </div>
