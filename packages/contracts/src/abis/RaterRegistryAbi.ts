@@ -43,6 +43,19 @@ export const RaterRegistryAbi = [
   },
   {
     "type": "function",
+    "name": "CLUSTER_CHALLENGE_RESOLVER_ROLE",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "DEFAULT_ADMIN_ROLE",
     "inputs": [],
     "outputs": [
@@ -172,6 +185,40 @@ export const RaterRegistryAbi = [
   },
   {
     "type": "function",
+    "name": "clusterScoreKey",
+    "inputs": [
+      {
+        "name": "rater",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "scorerEpoch",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "algorithmHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "modelVersionHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "pure"
+  },
+  {
+    "type": "function",
     "name": "credentialMultiplierBps",
     "inputs": [
       {
@@ -224,6 +271,239 @@ export const RaterRegistryAbi = [
             "name": "updatedAt",
             "type": "uint64",
             "internalType": "uint64"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getClusterScoreAt",
+    "inputs": [
+      {
+        "name": "rater",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "scorerEpoch",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "algorithmHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "modelVersionHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple",
+        "internalType": "struct RaterRegistry.VersionedClusterScore",
+        "components": [
+          {
+            "name": "clusterId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "discountBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "scorerEpoch",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "updatedAt",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "algorithmHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "modelVersionHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "scoreRoot",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "evidenceHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "challengeWindowEndsAt",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "scoreKey",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getClusterScoreByKey",
+    "inputs": [
+      {
+        "name": "scoreKey",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple",
+        "internalType": "struct RaterRegistry.VersionedClusterScore",
+        "components": [
+          {
+            "name": "clusterId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "discountBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "scorerEpoch",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "updatedAt",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "algorithmHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "modelVersionHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "scoreRoot",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "evidenceHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "challengeWindowEndsAt",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "scoreKey",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getClusterScoreChallenge",
+    "inputs": [
+      {
+        "name": "challengeId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple",
+        "internalType": "struct RaterRegistry.ClusterScoreChallenge",
+        "components": [
+          {
+            "name": "challenger",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "rater",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "scorerEpoch",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "algorithmHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "modelVersionHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "scoreKey",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "evidenceHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "resolutionHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "openedAt",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "resolvedAt",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "status",
+            "type": "uint8",
+            "internalType": "enum RaterRegistry.ClusterScoreChallengeStatus"
           }
         ]
       }
@@ -465,6 +745,77 @@ export const RaterRegistryAbi = [
   },
   {
     "type": "function",
+    "name": "getVersionedClusterScore",
+    "inputs": [
+      {
+        "name": "rater",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple",
+        "internalType": "struct RaterRegistry.VersionedClusterScore",
+        "components": [
+          {
+            "name": "clusterId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "discountBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "scorerEpoch",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "updatedAt",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "algorithmHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "modelVersionHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "scoreRoot",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "evidenceHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "challengeWindowEndsAt",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "scoreKey",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "grantRole",
     "inputs": [
       {
@@ -545,6 +896,124 @@ export const RaterRegistryAbi = [
   },
   {
     "type": "function",
+    "name": "nextClusterScoreChallengeId",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "openClusterScoreChallenge",
+    "inputs": [
+      {
+        "name": "rater",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "scorerEpoch",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "algorithmHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "modelVersionHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "evidenceHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "challengeId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "publishClusterScore",
+    "inputs": [
+      {
+        "name": "rater",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "clusterId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "discountBps",
+        "type": "uint16",
+        "internalType": "uint16"
+      },
+      {
+        "name": "scorerEpoch",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "metadata",
+        "type": "tuple",
+        "internalType": "struct RaterRegistry.ClusterScoreMetadata",
+        "components": [
+          {
+            "name": "algorithmHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "modelVersionHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "scoreRoot",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "evidenceHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "challengeWindowEndsAt",
+            "type": "uint64",
+            "internalType": "uint64"
+          }
+        ]
+      }
+    ],
+    "outputs": [
+      {
+        "name": "scoreKey",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "renounceRole",
     "inputs": [
       {
@@ -556,6 +1025,29 @@ export const RaterRegistryAbi = [
         "name": "callerConfirmation",
         "type": "address",
         "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "resolveClusterScoreChallenge",
+    "inputs": [
+      {
+        "name": "challengeId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "sustained",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "resolutionHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
       }
     ],
     "outputs": [],
@@ -845,6 +1337,98 @@ export const RaterRegistryAbi = [
       }
     ],
     "stateMutability": "pure"
+  },
+  {
+    "type": "event",
+    "name": "ClusterScoreChallengeOpened",
+    "inputs": [
+      {
+        "name": "challengeId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "challenger",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "scoreKey",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "rater",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+      },
+      {
+        "name": "scorerEpoch",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
+      },
+      {
+        "name": "algorithmHash",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "modelVersionHash",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "evidenceHash",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "openedAt",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ClusterScoreChallengeResolved",
+    "inputs": [
+      {
+        "name": "challengeId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "status",
+        "type": "uint8",
+        "indexed": false,
+        "internalType": "enum RaterRegistry.ClusterScoreChallengeStatus"
+      },
+      {
+        "name": "resolutionHash",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "resolvedAt",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
+      }
+    ],
+    "anonymous": false
   },
   {
     "type": "event",
@@ -1194,6 +1778,79 @@ export const RaterRegistryAbi = [
     "anonymous": false
   },
   {
+    "type": "event",
+    "name": "VersionedClusterScorePublished",
+    "inputs": [
+      {
+        "name": "rater",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "scorerEpoch",
+        "type": "uint64",
+        "indexed": true,
+        "internalType": "uint64"
+      },
+      {
+        "name": "modelVersionHash",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "clusterId",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "discountBps",
+        "type": "uint16",
+        "indexed": false,
+        "internalType": "uint16"
+      },
+      {
+        "name": "algorithmHash",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "scoreRoot",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "evidenceHash",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "challengeWindowEndsAt",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
+      },
+      {
+        "name": "updatedAt",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
+      },
+      {
+        "name": "scoreKey",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      }
+    ],
+    "anonymous": false
+  },
+  {
     "type": "error",
     "name": "AccessControlBadConfirmation",
     "inputs": []
@@ -1217,6 +1874,16 @@ export const RaterRegistryAbi = [
   {
     "type": "error",
     "name": "InvalidAddress",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidChallenge",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidClusterScore",
     "inputs": []
   },
   {

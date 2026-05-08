@@ -165,7 +165,9 @@ export const vote = onchainTable(
     targetRound: t.bigint().notNull(),
     drandChainHash: t.hex().notNull(),
     isUp: t.boolean(), // null until revealed; derived from prediction >= round reference for compatibility
-    predictedRatingBps: t.integer(), // null until prediction reveal
+    opinionRatingBps: t.integer(), // null until prediction reveal
+    predictedCrowdRatingBps: t.integer(), // null until prediction reveal
+    predictedRatingBps: t.integer(), // deprecated alias for predictedCrowdRatingBps
     predictionWeight: t.bigint(), // null until prediction reveal
     stake: t.bigint().notNull(),
     epochIndex: t.integer().notNull(), // 0=epoch-1 (100% weight), 1=epoch-2+ (25% weight)
@@ -601,12 +603,69 @@ export const raterClusterScore = onchainTable(
     clusterId: t.hex().notNull(),
     discountBps: t.integer().notNull(),
     scorerEpoch: t.bigint().notNull(),
+    algorithmHash: t.hex().notNull(),
+    modelVersionHash: t.hex().notNull(),
+    scoreRoot: t.hex().notNull(),
+    evidenceHash: t.hex().notNull(),
+    challengeWindowEndsAt: t.bigint().notNull(),
+    scoreKey: t.hex().notNull(),
     updatedAt: t.bigint().notNull(),
   }),
   (table) => ({
     clusterIdx: index().on(table.clusterId),
     scorerEpochIdx: index().on(table.scorerEpoch),
+    modelVersionIdx: index().on(table.modelVersionHash),
+    scoreKeyIdx: index().on(table.scoreKey),
     discountIdx: index().on(table.discountBps),
+  }),
+);
+
+export const raterClusterScoreHistory = onchainTable(
+  "rater_cluster_score_history",
+  (t) => ({
+    id: t.hex().primaryKey(),
+    rater: t.hex().notNull(),
+    clusterId: t.hex().notNull(),
+    discountBps: t.integer().notNull(),
+    scorerEpoch: t.bigint().notNull(),
+    algorithmHash: t.hex().notNull(),
+    modelVersionHash: t.hex().notNull(),
+    scoreRoot: t.hex().notNull(),
+    evidenceHash: t.hex().notNull(),
+    challengeWindowEndsAt: t.bigint().notNull(),
+    updatedAt: t.bigint().notNull(),
+  }),
+  (table) => ({
+    raterIdx: index().on(table.rater),
+    clusterIdx: index().on(table.clusterId),
+    scorerEpochIdx: index().on(table.rater, table.scorerEpoch),
+    modelVersionIdx: index().on(table.rater, table.modelVersionHash),
+    discountIdx: index().on(table.discountBps),
+  }),
+);
+
+export const raterClusterScoreChallenge = onchainTable(
+  "rater_cluster_score_challenge",
+  (t) => ({
+    challengeId: t.bigint().primaryKey(),
+    challenger: t.hex().notNull(),
+    rater: t.hex().notNull(),
+    scorerEpoch: t.bigint().notNull(),
+    algorithmHash: t.hex().notNull(),
+    modelVersionHash: t.hex().notNull(),
+    scoreKey: t.hex().notNull(),
+    evidenceHash: t.hex().notNull(),
+    resolutionHash: t.hex(),
+    status: t.integer().notNull(),
+    openedAt: t.bigint().notNull(),
+    resolvedAt: t.bigint(),
+  }),
+  (table) => ({
+    challengerIdx: index().on(table.challenger),
+    raterIdx: index().on(table.rater),
+    scoreKeyIdx: index().on(table.scoreKey),
+    statusIdx: index().on(table.status),
+    scorerEpochIdx: index().on(table.rater, table.scorerEpoch),
   }),
 );
 

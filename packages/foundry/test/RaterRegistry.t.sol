@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import { Test } from "forge-std/Test.sol";
-import { RaterRegistry } from "../contracts/RaterRegistry.sol";
+import {Test} from "forge-std/Test.sol";
+import {RaterRegistry} from "../contracts/RaterRegistry.sol";
 
 contract RaterRegistryTest is Test {
     RaterRegistry internal registry;
@@ -17,6 +17,10 @@ contract RaterRegistryTest is Test {
     bytes32 internal constant NULLIFIER_HASH = keccak256("self-nullifier");
     bytes32 internal constant SELF_SCOPE = keccak256("curyo-human-v1");
     bytes32 internal constant EVIDENCE_HASH = keccak256("evidence");
+    bytes32 internal constant ALGORITHM_HASH = keccak256("cluster-algorithm-v1");
+    bytes32 internal constant MODEL_VERSION_HASH = keccak256("cluster-model-v1.0.0");
+    bytes32 internal constant SCORE_ROOT = keccak256("cluster-score-root");
+    bytes32 internal constant RESOLUTION_HASH = keccak256("cluster-challenge-resolution");
     bytes32 internal constant SEED_ROOT = keccak256("legacy-seed-root");
 
     function setUp() public {
@@ -29,12 +33,14 @@ contract RaterRegistryTest is Test {
         assertTrue(registry.hasRole(registry.SELF_ATTESTOR_ROLE(), governance));
         assertTrue(registry.hasRole(registry.SEEDER_ROLE(), governance));
         assertTrue(registry.hasRole(registry.SCORER_ROLE(), governance));
+        assertTrue(registry.hasRole(registry.CLUSTER_CHALLENGE_RESOLVER_ROLE(), governance));
 
         assertFalse(registry.hasRole(registry.DEFAULT_ADMIN_ROLE(), admin));
         assertTrue(registry.hasRole(registry.ADMIN_ROLE(), admin));
         assertTrue(registry.hasRole(registry.SELF_ATTESTOR_ROLE(), admin));
         assertTrue(registry.hasRole(registry.SEEDER_ROLE(), admin));
         assertTrue(registry.hasRole(registry.SCORER_ROLE(), admin));
+        assertTrue(registry.hasRole(registry.CLUSTER_CHALLENGE_RESOLVER_ROLE(), admin));
     }
 
     function test_SetProfileStoresSelfReportedRaterType() public {
@@ -139,6 +145,125 @@ contract RaterRegistryTest is Test {
         assertEq(cluster.discountBps, 7_500);
         assertEq(cluster.scorerEpoch, 42);
         assertEq(cluster.updatedAt, uint64(block.timestamp));
+    }
+
+    function test_PublishClusterScoreStoresVersionedCurrentAndHistory() public {
+        bytes32 clusterId = keccak256("cluster-a");
+        uint64 challengeWindowEndsAt = uint64(block.timestamp + 2 days);
+        RaterRegistry.ClusterScoreMetadata memory metadata = RaterRegistry.ClusterScoreMetadata({
+            algorithmHash: ALGORITHM_HASH,
+            modelVersionHash: MODEL_VERSION_HASH,
+            scoreRoot: SCORE_ROOT,
+            evidenceHash: bytes32(0),
+            challengeWindowEndsAt: challengeWindowEndsAt
+        });
+
+        vm.prank(admin);
+        bytes32 scoreKey = registry.publishClusterScore(rater, clusterId, 7_500, 42, metadata);
+
+        assertEq(scoreKey, registry.clusterScoreKey(rater, 42, ALGORITHM_HASH, MODEL_VERSION_HASH));
+
+        RaterRegistry.ClusterScore memory legacyCluster = registry.getClusterScore(rater);
+        assertEq(legacyCluster.clusterId, clusterId);
+        assertEq(legacyCluster.discountBps, 7_500);
+        assertEq(legacyCluster.scorerEpoch, 42);
+
+        RaterRegistry.VersionedClusterScore memory current = registry.getVersionedClusterScore(rater);
+        assertEq(current.clusterId, clusterId);
+        assertEq(current.discountBps, 7_500);
+        assertEq(current.scorerEpoch, 42);
+        assertEq(current.updatedAt, uint64(block.timestamp));
+        assertEq(current.algorithmHash, ALGORITHM_HASH);
+        assertEq(current.modelVersionHash, MODEL_VERSION_HASH);
+        assertEq(current.scoreRoot, SCORE_ROOT);
+        assertEq(current.evidenceHash, bytes32(0));
+        assertEq(current.challengeWindowEndsAt, challengeWindowEndsAt);
+        assertEq(current.scoreKey, scoreKey);
+
+        RaterRegistry.VersionedClusterScore memory historical =
+            registry.getClusterScoreAt(rater, 42, ALGORITHM_HASH, MODEL_VERSION_HASH);
+        assertEq(historical.scoreKey, scoreKey);
+        assertEq(historical.discountBps, 7_500);
+    }
+
+    function test_PublishClusterScoreRejectsIncompleteMetadata() public {
+        bytes32 clusterId = keccak256("cluster-a");
+        RaterRegistry.ClusterScoreMetadata memory metadata = RaterRegistry.ClusterScoreMetadata({
+            algorithmHash: ALGORITHM_HASH,
+            modelVersionHash: MODEL_VERSION_HASH,
+            scoreRoot: bytes32(0),
+            evidenceHash: bytes32(0),
+            challengeWindowEndsAt: uint64(block.timestamp + 2 days)
+        });
+
+        vm.prank(admin);
+        vm.expectRevert(RaterRegistry.InvalidClusterScore.selector);
+        registry.publishClusterScore(rater, clusterId, 7_500, 42, metadata);
+
+        metadata.scoreRoot = SCORE_ROOT;
+        metadata.challengeWindowEndsAt = uint64(block.timestamp);
+
+        vm.prank(admin);
+        vm.expectRevert(RaterRegistry.InvalidClusterScore.selector);
+        registry.publishClusterScore(rater, clusterId, 7_500, 42, metadata);
+    }
+
+    function test_ClusterScoreChallengeIsBondlessAndResolvable() public {
+        bytes32 clusterId = keccak256("cluster-a");
+        RaterRegistry.ClusterScoreMetadata memory metadata = RaterRegistry.ClusterScoreMetadata({
+            algorithmHash: ALGORITHM_HASH,
+            modelVersionHash: MODEL_VERSION_HASH,
+            scoreRoot: SCORE_ROOT,
+            evidenceHash: bytes32(0),
+            challengeWindowEndsAt: uint64(block.timestamp + 2 days)
+        });
+
+        vm.prank(admin);
+        bytes32 scoreKey = registry.publishClusterScore(rater, clusterId, 7_500, 42, metadata);
+
+        vm.prank(otherRater);
+        uint256 challengeId =
+            registry.openClusterScoreChallenge(rater, 42, ALGORITHM_HASH, MODEL_VERSION_HASH, EVIDENCE_HASH);
+
+        assertEq(challengeId, 1);
+        RaterRegistry.ClusterScoreChallenge memory challenge = registry.getClusterScoreChallenge(challengeId);
+        assertEq(challenge.challenger, otherRater);
+        assertEq(challenge.rater, rater);
+        assertEq(challenge.scorerEpoch, 42);
+        assertEq(challenge.algorithmHash, ALGORITHM_HASH);
+        assertEq(challenge.modelVersionHash, MODEL_VERSION_HASH);
+        assertEq(challenge.scoreKey, scoreKey);
+        assertEq(challenge.evidenceHash, EVIDENCE_HASH);
+        assertEq(challenge.openedAt, uint64(block.timestamp));
+        assertEq(uint256(challenge.status), uint256(RaterRegistry.ClusterScoreChallengeStatus.Open));
+
+        vm.prank(admin);
+        registry.resolveClusterScoreChallenge(challengeId, true, RESOLUTION_HASH);
+
+        challenge = registry.getClusterScoreChallenge(challengeId);
+        assertEq(uint256(challenge.status), uint256(RaterRegistry.ClusterScoreChallengeStatus.Sustained));
+        assertEq(challenge.resolutionHash, RESOLUTION_HASH);
+        assertEq(challenge.resolvedAt, uint64(block.timestamp));
+    }
+
+    function test_ClusterScoreChallengeRequiresOpenWindow() public {
+        bytes32 clusterId = keccak256("cluster-a");
+        RaterRegistry.ClusterScoreMetadata memory metadata = RaterRegistry.ClusterScoreMetadata({
+            algorithmHash: ALGORITHM_HASH,
+            modelVersionHash: MODEL_VERSION_HASH,
+            scoreRoot: SCORE_ROOT,
+            evidenceHash: bytes32(0),
+            challengeWindowEndsAt: uint64(block.timestamp + 1)
+        });
+
+        vm.prank(admin);
+        registry.publishClusterScore(rater, clusterId, 7_500, 42, metadata);
+
+        vm.warp(block.timestamp + 2);
+
+        vm.prank(otherRater);
+        vm.expectRevert(RaterRegistry.InvalidChallenge.selector);
+        registry.openClusterScoreChallenge(rater, 42, ALGORITHM_HASH, MODEL_VERSION_HASH, EVIDENCE_HASH);
     }
 
     function test_TrustAttestationIsBoundedAndRevocable() public {
