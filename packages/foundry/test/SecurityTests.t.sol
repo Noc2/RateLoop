@@ -357,45 +357,6 @@ contract SecurityTransferAndCallTest is SecurityHarnessBase {
         ciphertext = artifacts.ciphertext;
     }
 
-    function test_TransferAndCall_RejectsDirectExternalCallback() public {
-        uint256 contentId = _submitContent();
-        (bytes memory payload,,) = _votePayload(contentId);
-
-        vm.prank(voter);
-        vm.expectRevert(RoundVotingEngine.Unauthorized.selector);
-        votingEngine.onTransferReceived(voter, voter, STAKE, payload);
-    }
-
-    function test_TransferAndCall_RejectsApprovedSpenderForcedVote() public {
-        uint256 contentId = _submitContent();
-        (bytes memory payload,,) = _votePayload(contentId);
-        uint256 voterBalanceBefore = hrepToken.balanceOf(voter);
-
-        vm.prank(voter);
-        hrepToken.approve(spender, STAKE);
-
-        vm.prank(spender);
-        vm.expectRevert(RoundVotingEngine.Unauthorized.selector);
-        hrepToken.transferFromAndCall(voter, address(votingEngine), STAKE, payload);
-
-        assertEq(RoundEngineReadHelpers.activeRoundId(votingEngine, contentId), 0, "no round created");
-        assertEq(hrepToken.balanceOf(voter), voterBalanceBefore, "voter balance unchanged");
-        assertEq(hrepToken.balanceOf(address(votingEngine)), 1_000_000e6, "engine only holds reserve");
-    }
-
-    function test_TransferAndCall_RejectsMalformedPayload() public {
-        uint256 contentId = _submitContent();
-        uint256 voterBalanceBefore = hrepToken.balanceOf(voter);
-
-        vm.prank(voter);
-        vm.expectRevert();
-        hrepToken.transferAndCall(address(votingEngine), STAKE, hex"1234");
-
-        assertEq(RoundEngineReadHelpers.activeRoundId(votingEngine, contentId), 0, "no round created");
-        assertEq(hrepToken.balanceOf(voter), voterBalanceBefore, "voter balance unchanged");
-        assertEq(hrepToken.balanceOf(address(votingEngine)), 1_000_000e6, "engine only holds reserve");
-    }
-
     function test_TransferAndCall_PlainTransferDoesNotCreateVote() public {
         uint256 contentId = _submitContent();
 
@@ -421,7 +382,9 @@ contract SecurityTransferAndCallTest is SecurityHarnessBase {
 
         assertEq(hrepToken.balanceOf(treasury), treasuryBalanceBefore, "treasury unchanged");
         assertEq(hrepToken.balanceOf(owner), ownerBalanceBefore + STAKE, "admin receives surplus");
-        assertEq(hrepToken.balanceOf(address(votingEngine)), votingEngine.accountedHrepBalance(), "engine remains balanced");
+        assertEq(
+            hrepToken.balanceOf(address(votingEngine)), votingEngine.accountedHrepBalance(), "engine remains balanced"
+        );
 
         vm.prank(owner);
         votingEngine.recoverSurplusHrep();

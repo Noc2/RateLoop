@@ -124,39 +124,6 @@ contract UserTransactionGasEstimatesTest is RoundIntegrationTest {
         console2.log("submit_content_total_gas", reserveGasUsed + revealGasUsed);
     }
 
-    function testGasEstimate_voteTransferAndCall_logs() public {
-        vm.pauseGasMetering();
-        uint256 contentId = _submitContent();
-
-        bytes32 salt = keccak256(abi.encodePacked(voter1, contentId, true, uint256(999)));
-        TestCommitArtifacts memory artifacts = _buildTestCommitArtifacts(voter1, true, salt, contentId);
-        bytes memory payload = _voteTransferPayload(contentId, artifacts, address(0));
-
-        uint256 gasUsed = _measureCallAs(
-            voter1,
-            address(hrepToken),
-            abi.encodeWithSignature("transferAndCall(address,uint256,bytes)", address(votingEngine), STAKE, payload)
-        );
-        console2.log("vote_transferAndCall_gas", gasUsed);
-    }
-
-    function testGasEstimate_voteTransferAndCallWithEligibleFrontend_logs() public {
-        vm.pauseGasMetering();
-        (, address frontendOp) = _setupFrontendRegistry();
-        uint256 contentId = _submitContent();
-
-        bytes32 salt = keccak256(abi.encodePacked(voter1, contentId, true, uint256(1002)));
-        TestCommitArtifacts memory artifacts = _buildTestCommitArtifacts(voter1, true, salt, contentId);
-        bytes memory payload = _voteTransferPayload(contentId, artifacts, frontendOp);
-
-        uint256 gasUsed = _measureCallAs(
-            voter1,
-            address(hrepToken),
-            abi.encodeWithSignature("transferAndCall(address,uint256,bytes)", address(votingEngine), STAKE, payload)
-        );
-        console2.log("vote_transferAndCall_with_eligible_frontend_gas", gasUsed);
-    }
-
     function testGasEstimate_voteApprovePlusCommit_logs() public {
         vm.pauseGasMetering();
         uint256 contentId = _submitContent();
@@ -191,8 +158,8 @@ contract UserTransactionGasEstimatesTest is RoundIntegrationTest {
         vm.pauseGasMetering();
         uint256 contentId = _submitContent();
         bytes32 salt = keccak256(abi.encodePacked(voter1, contentId, true, uint256(1001)));
-        bytes32 commitKey = _transferAndCallTestVote(
-            TransferAndCallTestCommitRequest({
+        bytes32 commitKey = _commitTestVote(
+            DirectTestCommitRequest({
                 engine: votingEngine,
                 hrepToken: hrepToken,
                 voter: voter1,

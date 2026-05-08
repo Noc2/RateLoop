@@ -188,26 +188,6 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         );
     }
 
-    /// @dev Commit via ERC-1363 transferAndCall and return (commitKey, salt).
-    function _commitWithTransferAndCall(address voter, uint256 contentId, bool isUp, uint256 stake, address frontend)
-        internal
-        returns (bytes32 commitKey, bytes32 salt)
-    {
-        salt = keccak256(abi.encodePacked(voter, block.timestamp));
-        commitKey = _transferAndCallTestVote(
-            TransferAndCallTestCommitRequest({
-                engine: engine,
-                hrepToken: hrepToken,
-                voter: voter,
-                contentId: contentId,
-                isUp: isUp,
-                stake: stake,
-                frontend: frontend,
-                salt: salt
-            })
-        );
-    }
-
     /// @dev Commit with a specific frontend address.
     function _commitWithFrontend(address voter, uint256 contentId, bool isUp, uint256 stake, address frontend)
         internal
@@ -231,6 +211,72 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     /// @dev Reveal a vote by commit key. Permissionless — no prank needed.
     function _reveal(uint256 contentId, uint256 roundId, bytes32 commitKey, bool isUp, bytes32 salt) internal {
         engine.revealVoteByCommitKey(contentId, roundId, commitKey, isUp, salt);
+    }
+
+    function _commitPrediction(address voter, uint256 contentId, uint16 predictedRatingBps, uint256 stake)
+        internal
+        returns (bytes32 commitKey, bytes32 salt)
+    {
+        salt = keccak256(abi.encodePacked(voter, predictedRatingBps, block.timestamp));
+        uint256 roundId = engine.previewCommitRoundId(contentId);
+        uint16 referenceRatingBps = engine.previewCommitReferenceRatingBps(contentId);
+        uint64 targetRound = _tlockCommitTargetRound();
+        bytes32 drandChainHash = _tlockDrandChainHash();
+        bytes memory ciphertext =
+            _testCiphertext(predictedRatingBps >= referenceRatingBps, salt, contentId, targetRound, drandChainHash);
+        bytes32 commitHash = _predictionCommitHash(
+            predictedRatingBps,
+            salt,
+            voter,
+            contentId,
+            roundId,
+            referenceRatingBps,
+            targetRound,
+            drandChainHash,
+            ciphertext
+        );
+
+        commitKey = _commitKey(voter, commitHash);
+
+        vm.startPrank(voter);
+        hrepToken.approve(address(engine), stake);
+        engine.commitVote(
+            contentId,
+            _roundContext(roundId, referenceRatingBps),
+            targetRound,
+            drandChainHash,
+            commitHash,
+            ciphertext,
+            stake,
+            address(0)
+        );
+        vm.stopPrank();
+    }
+
+    function _predictionCommitHash(
+        uint16 predictedRatingBps,
+        bytes32 salt,
+        address voter,
+        uint256 contentId,
+        uint256 roundId,
+        uint16 referenceRatingBps,
+        uint64 targetRound,
+        bytes32 drandChainHash,
+        bytes memory ciphertext
+    ) internal pure returns (bytes32) {
+        return keccak256(
+            abi.encodePacked(
+                predictedRatingBps,
+                salt,
+                voter,
+                contentId,
+                roundId,
+                referenceRatingBps,
+                targetRound,
+                drandChainHash,
+                keccak256(ciphertext)
+            )
+        );
     }
 
     function _maxAgeCiphertext() internal view returns (bytes memory ciphertext) {
@@ -351,25 +397,35 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertGt(round.settledAt, 0);
     }
 
-    function test_CommitVote_TransferAndCall_Succeeds() public {
+    function test_PredictionLifecycle_SettlesWeightedFinalRating() public {
         uint256 contentId = _submitContent();
-        uint256 engineBalanceBefore = hrepToken.balanceOf(address(engine));
 
-        (bytes32 commitKey, bytes32 salt) = _commitWithTransferAndCall(voter1, contentId, true, STAKE, address(0));
+        (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, 8_000, 30e6);
+        (bytes32 ck2, bytes32 s2) = _commitPrediction(voter2, contentId, 5_000, 10e6);
+        (bytes32 ck3, bytes32 s3) = _commitPrediction(voter3, contentId, 6_500, 10e6);
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
-        RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
-        RoundLib.Commit memory commit = RoundEngineReadHelpers.commit(engine, contentId, roundId, commitKey);
+        RoundLib.Round memory r0 = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        _warpPastTlockRevealTime(uint256(r0.startTime) + EPOCH);
 
-        assertEq(round.voteCount, 1, "vote count");
-        assertEq(round.totalStake, STAKE, "total stake");
-        assertEq(commit.voter, voter1, "commit voter");
-        assertEq(commit.stakeAmount, STAKE, "commit stake");
-        assertEq(commit.frontend, address(0), "frontend");
-        assertEq(commit.targetRound, _tlockCommitTargetRound(), "target round");
-        assertEq(commit.drandChainHash, _tlockDrandChainHash(), "chain hash");
-        assertEq(keccak256(commit.ciphertext), keccak256(_testCiphertext(true, salt, contentId)), "stored ciphertext");
-        assertEq(hrepToken.balanceOf(address(engine)), engineBalanceBefore + STAKE, "engine balance");
+        engine.revealPredictionByCommitKey(contentId, roundId, ck1, 8_000, s1);
+        engine.revealPredictionByCommitKey(contentId, roundId, ck2, 5_000, s2);
+        engine.revealPredictionByCommitKey(contentId, roundId, ck3, 6_500, s3);
+
+        engine.settleRound(contentId, roundId);
+
+        assertEq(registry.getRating(contentId), 7_100, "registry rating");
+    }
+
+    function test_PredictionRevealRejectsWrongRating() public {
+        uint256 contentId = _submitContent();
+        (bytes32 commitKey, bytes32 salt) = _commitPrediction(voter1, contentId, 7_000, STAKE);
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        RoundLib.Round memory r0 = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        _warpPastTlockRevealTime(uint256(r0.startTime) + EPOCH);
+
+        vm.expectRevert();
+        engine.revealPredictionByCommitKey(contentId, roundId, commitKey, 7_001, salt);
     }
 
     function test_BasicLifecycle_ThreeVoters_DownWins() public {
@@ -2267,36 +2323,6 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
             address(0)
         );
         vm.stopPrank();
-    }
-
-    function test_TransferAndCall_RevertsAfterRevealThresholdReached() public {
-        uint256 contentId = _submitContent();
-
-        (bytes32 ck1, bytes32 s1) = _commit(voter1, contentId, true, STAKE);
-        (bytes32 ck2, bytes32 s2) = _commit(voter2, contentId, true, STAKE);
-        (bytes32 ck3, bytes32 s3) = _commit(voter3, contentId, false, STAKE);
-        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
-
-        _warpPastTlockRevealTime(block.timestamp + EPOCH);
-        _reveal(contentId, roundId, ck1, true, s1);
-        _reveal(contentId, roundId, ck2, true, s2);
-        _reveal(contentId, roundId, ck3, false, s3);
-
-        bytes32 salt4 = keccak256(abi.encodePacked(voter4, block.timestamp, "late-transfer"));
-        TestCommitArtifacts memory lateCommit = _buildTestCommitArtifacts(voter4, true, salt4, contentId);
-        bytes memory payload = abi.encode(
-            contentId,
-            _roundContext(lateCommit.roundId, lateCommit.roundReferenceRatingBps),
-            lateCommit.commitHash,
-            lateCommit.ciphertext,
-            address(0),
-            lateCommit.targetRound,
-            lateCommit.drandChainHash
-        );
-
-        vm.prank(voter4);
-        vm.expectRevert(RoundVotingEngine.ThresholdReached.selector);
-        hrepToken.transferAndCall(address(engine), STAKE, payload);
     }
 
     function test_EpochWeighting_Epoch2Voters_ReducedWeight() public {

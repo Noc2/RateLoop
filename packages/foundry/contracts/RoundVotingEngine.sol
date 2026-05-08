@@ -8,7 +8,6 @@ import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/Reentran
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
-import { IERC1363Receiver } from "@openzeppelin/contracts/interfaces/IERC1363Receiver.sol";
 
 import { ContentRegistry } from "./ContentRegistry.sol";
 import { ProtocolConfig } from "./ProtocolConfig.sol";
@@ -18,7 +17,6 @@ import { RoundSettlementSideEffectsLib } from "./libraries/RoundSettlementSideEf
 import { RoundSettlementDistributionLib } from "./libraries/RoundSettlementDistributionLib.sol";
 import { RoundCleanupLib } from "./libraries/RoundCleanupLib.sol";
 import { RoundRevealLib } from "./libraries/RoundRevealLib.sol";
-import { TlockVoteLib } from "./libraries/TlockVoteLib.sol";
 import { VotePreflightLib } from "./libraries/VotePreflightLib.sol";
 import { IFrontendRegistry } from "./interfaces/IFrontendRegistry.sol";
 import { ICategoryRegistry } from "./interfaces/ICategoryRegistry.sol";
@@ -47,7 +45,6 @@ interface IQuestionBundleRoundObserver {
 ///      Win condition uses weighted pools, not raw stake, preventing late-voter herding.
 contract RoundVotingEngine is
     IRoundVotingEngine,
-    IERC1363Receiver,
     Initializable,
     AccessControlUpgradeable,
     PausableUpgradeable,
@@ -126,6 +123,10 @@ contract RoundVotingEngine is
     mapping(uint256 => mapping(uint256 => uint256)) public roundVoterPool; // contentId => roundId => voter pool
     mapping(uint256 => mapping(uint256 => uint256)) public roundWinningStake; // contentId => roundId => epoch-weighted winning stake
 
+    // Prediction accounting per round. Kept outside RoundLib structs so legacy tuple getters stay stable.
+    mapping(uint256 => mapping(uint256 => uint256)) internal roundPredictionWeight; // contentId => roundId => effective MREP weight
+    mapping(uint256 => mapping(uint256 => uint256)) internal roundWeightedRatingSum; // contentId => roundId => ratingBps * weight
+
     // Cancelled/tied round refund claims: contentId => roundId => voter => claimed
     mapping(uint256 => mapping(uint256 => mapping(address => bool))) public cancelledRoundRefundClaimed;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) internal cancelledRoundRefundCommitClaimed;
@@ -181,6 +182,9 @@ contract RoundVotingEngine is
         uint16 maxVoters
     );
     event VoteRevealed(uint256 indexed contentId, uint256 indexed roundId, address indexed voter, bool isUp);
+    event PredictionRevealed(
+        uint256 indexed contentId, uint256 indexed roundId, address indexed voter, uint16 predictedRatingBps
+    );
     event RoundSettled(uint256 indexed contentId, uint256 indexed roundId, bool upWins, uint256 losingPool);
     event RoundCancelled(uint256 indexed contentId, uint256 indexed roundId);
     event RoundTied(uint256 indexed contentId, uint256 indexed roundId);
@@ -199,6 +203,7 @@ contract RoundVotingEngine is
     event TreasuryFeeDistributed(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
     event ConsensusReserveFunded(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
     event ConsensusSubsidyDistributed(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
+
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
@@ -308,31 +313,6 @@ contract RoundVotingEngine is
             frontend,
             false
         );
-    }
-
-    function onTransferReceived(address operator, address from, uint256 value, bytes calldata data)
-        external
-        nonReentrant
-        whenNotPaused
-        returns (bytes4)
-    {
-        if (msg.sender != address(hrepToken)) revert Unauthorized();
-        if (operator != from) revert Unauthorized();
-
-        (
-            uint256 contentId,
-            uint256 roundContext,
-            bytes32 commitHash,
-            bytes memory ciphertext,
-            uint64 targetRound,
-            bytes32 drandChainHash,
-            address frontend
-        ) = TlockVoteLib.decodeCommitPayload(data);
-
-        _commitVote(
-            from, contentId, roundContext, targetRound, drandChainHash, commitHash, ciphertext, value, frontend, true
-        );
-        return IERC1363Receiver.onTransferReceived.selector;
     }
 
     function _commitVote(
@@ -733,6 +713,18 @@ contract RoundVotingEngine is
         _revealVoteInternal(contentId, roundId, commitKey, isUp, salt);
     }
 
+    /// @notice Reveal a predicted final rating for a specific commit by commit key.
+    /// @dev `predictedRatingBps` uses the 0-10 rating scale encoded as 0-10000 bps.
+    function revealPredictionByCommitKey(
+        uint256 contentId,
+        uint256 roundId,
+        bytes32 commitKey,
+        uint16 predictedRatingBps,
+        bytes32 salt
+    ) external nonReentrant {
+        _revealPredictionInternal(contentId, roundId, commitKey, predictedRatingBps, salt);
+    }
+
     // =========================================================================
     // SETTLEMENT
     // =========================================================================
@@ -782,6 +774,9 @@ contract RoundVotingEngine is
         round.settledAt = block.timestamp.toUint48();
         _notifyBundleRoundTerminal(contentId, roundId, true);
 
+        uint256 predictionWeight = roundPredictionWeight[contentId][roundId];
+        bool hasPredictionSettlement = predictionWeight > 0;
+
         // Epoch-weighted winning stake — used for proportional reward distribution
         uint256 weightedWinningStake = upWins ? round.weightedUpPool : round.weightedDownPool;
 
@@ -821,7 +816,10 @@ contract RoundVotingEngine is
             _getRoundReferenceRatingBps(contentId, roundId),
             weightedWinningStake,
             round.upPool,
-            round.downPool
+            round.downPool,
+            hasPredictionSettlement,
+            roundWeightedRatingSum[contentId][roundId],
+            predictionWeight
         );
         emit RoundSettled(contentId, roundId, upWins, losingPool);
     }
@@ -1162,6 +1160,41 @@ contract RoundVotingEngine is
         emit VoteRevealed(contentId, roundId, voter, isUp);
     }
 
+    function _revealPredictionInternal(
+        uint256 contentId,
+        uint256 roundId,
+        bytes32 commitKey,
+        uint16 predictedRatingBps,
+        bytes32 salt
+    ) internal {
+        RoundLib.Round storage round = rounds[contentId][roundId];
+        RoundLib.Commit storage commit = commits[contentId][roundId][commitKey];
+        RoundLib.RoundConfig memory roundCfg = _getRoundConfig(contentId, roundId);
+        uint256 targetRoundRevealableAt = _targetRoundRevealableAt(contentId, roundId, commit.targetRound);
+        (uint256 eligibleFrontendStake, uint256 eligibleFrontendCount, address voter,, uint64 effectiveStake) = RoundRevealLib.revealPrediction(
+            round,
+            commit,
+            epochUnrevealedCount[contentId][roundId],
+            frontendEligibleAtCommit[contentId][roundId],
+            roundPerFrontendStake[contentId][roundId],
+            roundStakeWithEligibleFrontend[contentId][roundId],
+            roundEligibleFrontendCount[contentId][roundId],
+            contentId,
+            roundId,
+            commitKey,
+            predictedRatingBps,
+            salt,
+            _getRoundReferenceRatingBps(contentId, roundId),
+            roundCfg.minVoters,
+            targetRoundRevealableAt
+        );
+        roundStakeWithEligibleFrontend[contentId][roundId] = eligibleFrontendStake;
+        roundEligibleFrontendCount[contentId][roundId] = eligibleFrontendCount;
+        roundPredictionWeight[contentId][roundId] += effectiveStake;
+        roundWeightedRatingSum[contentId][roundId] += uint256(predictedRatingBps) * uint256(effectiveStake);
+
+        emit PredictionRevealed(contentId, roundId, voter, predictedRatingBps);
+    }
 
     // =========================================================================
     // VIEW FUNCTIONS

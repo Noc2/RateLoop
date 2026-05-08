@@ -92,6 +92,33 @@ library TlockVoteLib {
         );
     }
 
+    function buildExpectedPredictionCommitHash(
+        uint16 predictedRatingBps,
+        bytes32 salt,
+        address voter,
+        uint256 contentId,
+        uint256 roundId,
+        uint16 roundReferenceRatingBps,
+        uint64 targetRound,
+        bytes32 drandChainHash,
+        bytes memory ciphertext
+    ) external pure returns (bytes32) {
+        bytes32 ciphertextHash = keccak256(ciphertext);
+        return keccak256(
+            abi.encodePacked(
+                predictedRatingBps,
+                salt,
+                voter,
+                contentId,
+                roundId,
+                roundReferenceRatingBps,
+                targetRound,
+                drandChainHash,
+                ciphertextHash
+            )
+        );
+    }
+
     function _validateCiphertext(bytes memory ciphertext) private pure {
         if (ciphertext.length == 0) revert InvalidCiphertext();
         if (ciphertext.length > MAX_CIPHERTEXT_SIZE) revert CiphertextTooLarge();
