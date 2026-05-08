@@ -142,6 +142,8 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
         fundedAmount: 100_000_000n,
         unallocatedAmount: 100_000_000n,
         frontendFeeBps: 300,
+        bountyKind: 0,
+        challengedRoundId: 0n,
         requiredVoters: 5,
         requiredSettledRounds: 2,
         startRoundId: 3n,
@@ -150,6 +152,42 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
     expect(updates).toContainEqual(
       expect.objectContaining({ table: "content" }),
     );
+  });
+
+  it("indexes challenge and rerate bounty purpose metadata", async () => {
+    const { db, updates } = createDb();
+    const registeredHandlers = await loadHandlers();
+    const handler = registeredHandlers.get(
+      "QuestionRewardPoolEscrow:RewardPoolPurposeSet",
+    );
+
+    expect(handler).toBeDefined();
+
+    const reasonHash =
+      "0x1234000000000000000000000000000000000000000000000000000000000000";
+    await handler!({
+      event: {
+        args: {
+          rewardPoolId: 7n,
+          bountyKind: 1n,
+          challengedRoundId: 3n,
+          reasonHash,
+        },
+        block: { number: 11n, timestamp: 1_800n },
+      },
+      context: { db },
+    });
+
+    expect(updates).toContainEqual({
+      table: "questionRewardPool",
+      key: { id: 7n },
+      values: {
+        bountyKind: 1,
+        challengedRoundId: 3n,
+        reasonHash,
+        updatedAt: 1_800n,
+      },
+    });
   });
 
   it("updates bounty and round accounting for qualifications, claims, and refunds", async () => {

@@ -23,6 +23,9 @@ function bundleRoundSetRowId(bundleId: bigint, roundSetIndex: bigint | number) {
   return `${bundleId}-${roundSetIndex}`;
 }
 
+const ZERO_HASH =
+  "0x0000000000000000000000000000000000000000000000000000000000000000" as const;
+
 ponder.on(
   "QuestionRewardPoolEscrow:RewardPoolCreated",
   async ({ event, context }) => {
@@ -52,6 +55,9 @@ ponder.on(
         funderVoterId,
         asset: Number(asset),
         nonRefundable,
+        bountyKind: 0,
+        challengedRoundId: 0n,
+        reasonHash: ZERO_HASH,
         fundedAmount: amount,
         unallocatedAmount: amount,
         allocatedAmount: 0n,
@@ -80,6 +86,21 @@ ponder.on(
         lastActivityAt: event.block.timestamp,
       });
     }
+  },
+);
+
+ponder.on(
+  "QuestionRewardPoolEscrow:RewardPoolPurposeSet",
+  async ({ event, context }) => {
+    const { rewardPoolId, bountyKind, challengedRoundId, reasonHash } =
+      event.args;
+
+    await context.db.update(questionRewardPool, { id: rewardPoolId }).set({
+      bountyKind: Number(bountyKind),
+      challengedRoundId,
+      reasonHash,
+      updatedAt: event.block.timestamp,
+    });
   },
 );
 

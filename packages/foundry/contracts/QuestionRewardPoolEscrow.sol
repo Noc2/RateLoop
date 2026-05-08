@@ -1,22 +1,22 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
-import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
+import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
-import {ContentRegistry} from "./ContentRegistry.sol";
-import {RoundVotingEngine} from "./RoundVotingEngine.sol";
-import {ProtocolConfig} from "./ProtocolConfig.sol";
-import {IVoterIdNFT} from "./interfaces/IVoterIdNFT.sol";
-import {RoundLib} from "./libraries/RoundLib.sol";
-import {QuestionRewardPoolEscrowClaimLib} from "./libraries/QuestionRewardPoolEscrowClaimLib.sol";
-import {QuestionRewardPoolEscrowQualificationLib} from "./libraries/QuestionRewardPoolEscrowQualificationLib.sol";
-import {TokenTransferLib} from "./libraries/TokenTransferLib.sol";
+import { ContentRegistry } from "./ContentRegistry.sol";
+import { RoundVotingEngine } from "./RoundVotingEngine.sol";
+import { ProtocolConfig } from "./ProtocolConfig.sol";
+import { IVoterIdNFT } from "./interfaces/IVoterIdNFT.sol";
+import { RoundLib } from "./libraries/RoundLib.sol";
+import { QuestionRewardPoolEscrowClaimLib } from "./libraries/QuestionRewardPoolEscrowClaimLib.sol";
+import { QuestionRewardPoolEscrowQualificationLib } from "./libraries/QuestionRewardPoolEscrowQualificationLib.sol";
+import { TokenTransferLib } from "./libraries/TokenTransferLib.sol";
 
 /// @title QuestionRewardPoolEscrow
 /// @notice Holds per-question USDC bounties and pays equal per-round rewards to revealed voters.
@@ -56,6 +56,7 @@ contract QuestionRewardPoolEscrow is
         uint64 contentId;
         uint64 startRoundId;
         uint64 nextRoundToEvaluate;
+        uint64 challengedRoundId;
         uint64 bountyOpensAt;
         uint64 bountyClosesAt;
         uint64 claimDeadline;
@@ -75,7 +76,9 @@ contract QuestionRewardPoolEscrow is
         bool refunded;
         bool unallocatedRefunded;
         uint16 frontendFeeBps;
+        uint8 bountyKind;
         bool nonRefundable;
+        bytes32 reasonHash;
     }
 
     struct RoundSnapshot {
@@ -196,6 +199,9 @@ contract QuestionRewardPoolEscrow is
     event RewardPoolRefunded(uint256 indexed rewardPoolId, address indexed funder, uint256 amount);
     event RewardPoolForfeited(uint256 indexed rewardPoolId, address indexed treasury, uint256 amount);
     event DefaultFrontendFeeBpsUpdated(uint256 previousFrontendFeeBps, uint256 newFrontendFeeBps);
+    event RewardPoolPurposeSet(
+        uint256 indexed rewardPoolId, uint8 indexed bountyKind, uint256 indexed challengedRoundId, bytes32 reasonHash
+    );
     event QuestionBundleRewardCreated(
         uint256 indexed bundleId,
         address indexed funder,
@@ -294,6 +300,56 @@ contract QuestionRewardPoolEscrow is
         );
     }
 
+    function createChallengeRewardPool(
+        uint256 contentId,
+        uint256 amount,
+        uint256 requiredVoters,
+        uint256 challengedRoundId,
+        bytes32 reasonHash,
+        uint256 bountyClosesAt,
+        uint256 feedbackClosesAt
+    ) external nonReentrant whenNotPaused returns (uint256 rewardPoolId) {
+        _requireCurrentRegistryEscrow();
+        rewardPoolId = _createRewardPool(
+            contentId,
+            msg.sender,
+            address(0),
+            REWARD_ASSET_USDC,
+            amount,
+            requiredVoters,
+            MIN_REQUIRED_SETTLED_ROUNDS,
+            bountyClosesAt,
+            feedbackClosesAt,
+            false
+        );
+        _setRewardPoolPurpose(rewardPoolId, 1, challengedRoundId, reasonHash);
+    }
+
+    function createRerateRewardPool(
+        uint256 contentId,
+        uint256 amount,
+        uint256 requiredVoters,
+        uint256 previousRoundId,
+        bytes32 reasonHash,
+        uint256 bountyClosesAt,
+        uint256 feedbackClosesAt
+    ) external nonReentrant whenNotPaused returns (uint256 rewardPoolId) {
+        _requireCurrentRegistryEscrow();
+        rewardPoolId = _createRewardPool(
+            contentId,
+            msg.sender,
+            address(0),
+            REWARD_ASSET_USDC,
+            amount,
+            requiredVoters,
+            MIN_REQUIRED_SETTLED_ROUNDS,
+            bountyClosesAt,
+            feedbackClosesAt,
+            false
+        );
+        _setRewardPoolPurpose(rewardPoolId, 2, previousRoundId, reasonHash);
+    }
+
     function createSubmissionRewardPoolFromRegistry(
         uint256 contentId,
         address funder,
@@ -384,7 +440,7 @@ contract QuestionRewardPoolEscrow is
             uint256 submitterNullifier =
                 QuestionRewardPoolEscrowQualificationLib.resolveSubmitterNullifier(registry, voterIdNFT, contentId);
             bundleQuestions[bundleId].push(
-                BundleQuestion({contentId: contentId, submitterNullifier: submitterNullifier})
+                BundleQuestion({ contentId: contentId, submitterNullifier: submitterNullifier })
             );
             unchecked {
                 ++i;
@@ -483,6 +539,7 @@ contract QuestionRewardPoolEscrow is
             contentId: contentId.toUint64(),
             startRoundId: startRoundId.toUint64(),
             nextRoundToEvaluate: startRoundId.toUint64(),
+            challengedRoundId: 0,
             bountyOpensAt: block.timestamp.toUint64(),
             bountyClosesAt: bountyClosesAt.toUint64(),
             claimDeadline: bountyClosesAt.toUint64(),
@@ -501,7 +558,9 @@ contract QuestionRewardPoolEscrow is
             refunded: false,
             unallocatedRefunded: false,
             frontendFeeBps: defaultFrontendFeeBps,
-            nonRefundable: nonRefundable
+            bountyKind: 0,
+            nonRefundable: nonRefundable,
+            reasonHash: bytes32(0)
         });
         rewardPoolSubmitterNullifier[rewardPoolId] = submitterNullifier;
         rewardPoolPayerIdentity[rewardPoolId] = payerIdentity;
@@ -523,6 +582,32 @@ contract QuestionRewardPoolEscrow is
             asset,
             nonRefundable
         );
+    }
+
+    function _setRewardPoolPurpose(
+        uint256 rewardPoolId,
+        uint8 bountyKind,
+        uint256 challengedRoundId,
+        bytes32 reasonHash
+    ) internal {
+        require(bountyKind == 1 || bountyKind == 2, "Invalid bounty kind");
+        require(challengedRoundId != 0, "Invalid round");
+
+        RewardPool storage rewardPool = _getExistingRewardPool(rewardPoolId);
+        rewardPool.bountyKind = bountyKind;
+        rewardPool.challengedRoundId = challengedRoundId.toUint64();
+        rewardPool.reasonHash = reasonHash;
+
+        emit RewardPoolPurposeSet(rewardPoolId, bountyKind, challengedRoundId, reasonHash);
+    }
+
+    function rewardPoolPurpose(uint256 rewardPoolId)
+        external
+        view
+        returns (uint8 bountyKind, uint256 challengedRoundId, bytes32 reasonHash)
+    {
+        RewardPool storage rewardPool = _getExistingRewardPool(rewardPoolId);
+        return (rewardPool.bountyKind, rewardPool.challengedRoundId, rewardPool.reasonHash);
     }
 
     function qualifyRound(uint256 rewardPoolId, uint256 roundId) external {
