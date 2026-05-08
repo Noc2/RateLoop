@@ -44,7 +44,7 @@ function createDb() {
 
 async function loadHandlers() {
   handlers.clear();
-  await import("../src/HumanFaucet.js");
+  await import("../legacy/HumanFaucet.js");
   return handlers;
 }
 

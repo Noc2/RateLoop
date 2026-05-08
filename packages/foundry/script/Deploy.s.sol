@@ -259,7 +259,7 @@ contract DeployRateMesh is ScaffoldETHDeploy {
         deployments.push(Deployment("X402QuestionSubmitter", address(x402QuestionSubmitter)));
         deployments.push(Deployment("FeedbackBonusEscrow", address(feedbackBonusEscrowProxy)));
         deployments.push(Deployment("CategoryRegistry", address(categoryRegistry)));
-        deployments.push(Deployment("OptionalIdentityNFT", address(optionalIdentity)));
+        deployments.push(Deployment("VoterIdNFT", address(optionalIdentity)));
         deployments.push(Deployment("ParticipationPool", address(participationPool)));
         if (isLocalDev) deployments.push(Deployment("MockERC20", usdcTokenAddress));
 
@@ -294,7 +294,7 @@ contract DeployRateMesh is ScaffoldETHDeploy {
         console.log("FeedbackBonusEscrow:", address(feedbackBonusEscrow));
         console.log("USDC token:", usdcTokenAddress);
         console.log("CategoryRegistry:", address(categoryRegistry));
-        console.log("OptionalIdentityNFT:", address(optionalIdentity));
+        console.log("Optional identity NFT:", address(optionalIdentity));
         console.log("ParticipationPool:", address(participationPool));
         console.log("Governance:", governance);
     }

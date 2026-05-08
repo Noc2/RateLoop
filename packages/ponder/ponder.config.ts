@@ -5,10 +5,9 @@ import { http } from "viem";
 import {
   CategoryRegistryAbi,
   ContentRegistryAbi,
-  HumanReputationAbi,
+  MeshReputationAbi,
   FeedbackBonusEscrowAbi,
   FrontendRegistryAbi,
-  HumanFaucetAbi,
   ParticipationPoolAbi,
   ProfileRegistryAbi,
   QuestionRewardPoolEscrowAbi,
@@ -213,8 +212,7 @@ const addresses = {
   profileRegistry: resolveAddress("PONDER_PROFILE_REGISTRY_ADDRESS", "ProfileRegistry"),
   frontendRegistry: resolveAddress("PONDER_FRONTEND_REGISTRY_ADDRESS", "FrontendRegistry"),
   voterIdNFT: resolveAddress("PONDER_VOTER_ID_NFT_ADDRESS", "VoterIdNFT"),
-  humanReputation: resolveAddress("PONDER_HREP_ADDRESS", "HumanReputation"),
-  humanFaucet: resolveAddress("PONDER_HUMAN_FAUCET_ADDRESS", "HumanFaucet"),
+  meshReputation: resolveAddress("PONDER_MREP_ADDRESS", "MeshReputation"),
   participationPool: resolveAddress("PONDER_PARTICIPATION_POOL_ADDRESS", "ParticipationPool"),
   questionRewardPoolEscrow: resolveAddress("PONDER_QUESTION_REWARD_POOL_ESCROW_ADDRESS", "QuestionRewardPoolEscrow"),
   feedbackBonusEscrow: resolveAddress("PONDER_FEEDBACK_BONUS_ESCROW_ADDRESS", "FeedbackBonusEscrow"),
@@ -228,8 +226,7 @@ const startBlocks = {
   profileRegistry: resolveStartBlock("PONDER_PROFILE_REGISTRY_START_BLOCK", "ProfileRegistry"),
   frontendRegistry: resolveStartBlock("PONDER_FRONTEND_REGISTRY_START_BLOCK", "FrontendRegistry"),
   voterIdNFT: resolveStartBlock("PONDER_VOTER_ID_NFT_START_BLOCK", "VoterIdNFT"),
-  humanReputation: resolveStartBlock("PONDER_HREP_START_BLOCK", "HumanReputation"),
-  humanFaucet: resolveStartBlock("PONDER_HUMAN_FAUCET_START_BLOCK", "HumanFaucet"),
+  meshReputation: resolveStartBlock("PONDER_MREP_START_BLOCK", "MeshReputation"),
   participationPool: resolveStartBlock("PONDER_PARTICIPATION_POOL_START_BLOCK", "ParticipationPool"),
   questionRewardPoolEscrow: resolveStartBlock("PONDER_QUESTION_REWARD_POOL_ESCROW_START_BLOCK", "QuestionRewardPoolEscrow"),
   feedbackBonusEscrow: resolveStartBlock("PONDER_FEEDBACK_BONUS_ESCROW_START_BLOCK", "FeedbackBonusEscrow"),
@@ -282,13 +279,9 @@ export default createConfig({
       abi: VoterIdNFTAbi,
       network: contractOnActiveNetwork(addresses.voterIdNFT, startBlocks.voterIdNFT),
     },
-    HumanReputation: {
-      abi: HumanReputationAbi,
-      network: contractOnActiveNetwork(addresses.humanReputation, startBlocks.humanReputation),
-    },
-    HumanFaucet: {
-      abi: HumanFaucetAbi,
-      network: contractOnActiveNetwork(addresses.humanFaucet, startBlocks.humanFaucet),
+    MeshReputation: {
+      abi: MeshReputationAbi,
+      network: contractOnActiveNetwork(addresses.meshReputation, startBlocks.meshReputation),
     },
     ParticipationPool: {
       abi: ParticipationPoolAbi,

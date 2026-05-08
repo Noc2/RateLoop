@@ -53,13 +53,13 @@ async function loadHandlers(overrides: Record<string, string | undefined> = {}) 
     ...overrides,
   };
 
-  await import("../src/HumanReputation.js");
+  await import("../src/MeshReputation.js");
   return handlers;
 }
 
 async function runTransfer(to: `0x${string}`) {
   const { db, insertCalls } = createDb();
-  const handler = handlers.get("HumanReputation:Transfer");
+  const handler = handlers.get("MeshReputation:Transfer");
 
   expect(handler).toBeDefined();
 
@@ -94,9 +94,9 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe("HumanReputation ponder handlers", () => {
+describe("MeshReputation ponder handlers", () => {
   it("excludes shared deployment artifact addresses instead of stale PONDER address env values", async () => {
-    const artifactAddress = getSharedDeploymentAddress(31337, "HumanReputation");
+    const artifactAddress = getSharedDeploymentAddress(31337, "ContentRegistry");
     const staleEnvAddress = "0x1111111111111111111111111111111111111111";
     const deployerAddress = "0x2222222222222222222222222222222222222222";
 
@@ -104,7 +104,7 @@ describe("HumanReputation ponder handlers", () => {
 
     await loadHandlers({
       PONDER_NETWORK: "hardhat",
-      PONDER_HREP_ADDRESS: staleEnvAddress,
+      PONDER_MREP_ADDRESS: staleEnvAddress,
       PONDER_DEPLOYER_ADDRESS: deployerAddress,
     });
 

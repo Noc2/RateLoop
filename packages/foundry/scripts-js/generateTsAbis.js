@@ -26,7 +26,7 @@ const RAW_DEPLOYMENT_CONTRACTS_TO_SKIP = new Set([
 const REQUIRED_NON_LOCAL_DEPLOYMENT_EXPORT_CONTRACTS = [
   "TimelockController",
   "CuryoGovernor",
-  "HumanReputation",
+  "MeshReputation",
   "FrontendRegistry",
   "ProfileRegistry",
   "ContentRegistry",
@@ -39,7 +39,6 @@ const REQUIRED_NON_LOCAL_DEPLOYMENT_EXPORT_CONTRACTS = [
   "CategoryRegistry",
   "VoterIdNFT",
   "ParticipationPool",
-  "HumanFaucet",
 ];
 
 function getDirectories(path) {
@@ -671,8 +670,7 @@ const PONDER_CONTRACT_ENV_KEYS = {
   ProfileRegistry: "PONDER_PROFILE_REGISTRY_ADDRESS",
   FrontendRegistry: "PONDER_FRONTEND_REGISTRY_ADDRESS",
   VoterIdNFT: "PONDER_VOTER_ID_NFT_ADDRESS",
-  HumanReputation: "PONDER_HREP_ADDRESS",
-  HumanFaucet: "PONDER_HUMAN_FAUCET_ADDRESS",
+  MeshReputation: "PONDER_MREP_ADDRESS",
   ParticipationPool: "PONDER_PARTICIPATION_POOL_ADDRESS",
   TimelockController: "PONDER_TIMELOCK_ADDRESS",
 };
@@ -687,8 +685,7 @@ const PONDER_START_BLOCK_ENV_KEYS = {
   ProfileRegistry: "PONDER_PROFILE_REGISTRY_START_BLOCK",
   FrontendRegistry: "PONDER_FRONTEND_REGISTRY_START_BLOCK",
   VoterIdNFT: "PONDER_VOTER_ID_NFT_START_BLOCK",
-  HumanReputation: "PONDER_HREP_START_BLOCK",
-  HumanFaucet: "PONDER_HUMAN_FAUCET_START_BLOCK",
+  MeshReputation: "PONDER_MREP_START_BLOCK",
   ParticipationPool: "PONDER_PARTICIPATION_POOL_START_BLOCK",
   TimelockController: "PONDER_TIMELOCK_START_BLOCK",
 };
@@ -821,6 +818,7 @@ const ABI_TARGETS = [
     targets: ["contracts/src/abis"],
   },
   { contract: "CategoryRegistry", targets: ["contracts/src/abis"] },
+  { contract: "MeshReputation", targets: ["contracts/src/abis"] },
   { contract: "HumanReputation", targets: ["contracts/src/abis"] },
   { contract: "VoterIdNFT", targets: ["contracts/src/abis"] },
   { contract: "FrontendRegistry", targets: ["contracts/src/abis"] },

@@ -18,8 +18,7 @@ const INDEXED_CONTRACT_NAMES = [
   "ProfileRegistry",
   "FrontendRegistry",
   "VoterIdNFT",
-  "HumanReputation",
-  "HumanFaucet",
+  "MeshReputation",
   "ParticipationPool",
   "QuestionRewardPoolEscrow",
   "FeedbackBonusEscrow",
@@ -49,7 +48,7 @@ function buildExcludedAddresses() {
 
 const excludedAddresses = buildExcludedAddresses();
 
-ponder.on("HumanReputation:Transfer", async ({ event, context }) => {
+ponder.on("MeshReputation:Transfer", async ({ event, context }) => {
   const { from, to, value } = event.args;
 
   // Record every transfer for balance history
