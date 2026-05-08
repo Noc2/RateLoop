@@ -44,6 +44,14 @@ function derivePredictionDirection(opinionRatingBps: number, referenceRatingBps:
   return opinionRatingBps >= referenceRatingBps;
 }
 
+function roundReferenceFields(referenceRatingBps: number) {
+  return {
+    referenceRatingBps,
+    ratingBps: referenceRatingBps,
+    conservativeRatingBps: referenceRatingBps,
+  };
+}
+
 function clampRatingBps(ratingBps: number) {
   if (!Number.isFinite(ratingBps)) return 0;
   return Math.min(MAX_RATING_BPS, Math.max(MIN_RATING_BPS, Math.trunc(ratingBps)));
@@ -181,22 +189,57 @@ ponder.on("RoundVotingEngine:RoundConfigSnapshotted", async ({ event, context })
   });
 });
 
+ponder.on("RoundVotingEngine:RoundReferenceSnapshotted", async ({ event, context }) => {
+  const { contentId, roundId, roundReferenceRatingBps } = event.args as {
+    contentId: bigint;
+    roundId: bigint;
+    roundReferenceRatingBps: number;
+  };
+  const roundKey = `${contentId}-${roundId}`;
+  const referenceRatingBps = Number(roundReferenceRatingBps);
+  const existingRound = await context.db.find(round, { id: roundKey });
+  if (existingRound) {
+    await context.db.update(round, { id: roundKey }).set(roundReferenceFields(referenceRatingBps));
+    return;
+  }
+
+  await context.db.insert(round).values({
+    id: roundKey,
+    contentId,
+    roundId,
+    state: ROUND_STATE.Open,
+    voteCount: 0,
+    revealedCount: 0,
+    totalStake: 0n,
+    upPool: 0n,
+    downPool: 0n,
+    upCount: 0,
+    downCount: 0,
+    ...roundReferenceFields(referenceRatingBps),
+    confidenceMass: 0n,
+    effectiveEvidence: 0n,
+    settledRounds: 0,
+    lowSince: 0n,
+    startTime: event.block.timestamp,
+    ...defaultRoundConfigFields(),
+  });
+});
+
 ponder.on("RoundVotingEngine:VoteCommitted", async ({ event, context }) => {
-  const { contentId, roundId, voter, commitHash, targetRound, drandChainHash, stake } = event.args as {
+  const { contentId, roundId, voter, commitHash, roundReferenceRatingBps, targetRound, drandChainHash, stake } =
+    event.args as {
     contentId: bigint;
     roundId: bigint;
     voter: `0x${string}`;
     commitHash: `0x${string}`;
+    roundReferenceRatingBps: number;
     targetRound: bigint;
     drandChainHash: `0x${string}`;
     stake: bigint;
   };
   const roundKey = `${contentId}-${roundId}`;
   const voteKey = `${contentId}-${roundId}-${voter}`;
-  const contentRecord = await context.db.find(content, { id: contentId });
-  const referenceRatingBps = contentRecord
-    ? (contentRecord.ratingBps > 0 ? contentRecord.ratingBps : contentRecord.rating * 100)
-    : 5000;
+  const referenceRatingBps = Number(roundReferenceRatingBps);
 
   // Upsert round record — VoteCommitted is the first event for a new round
   const existingRound = await context.db.find(round, { id: roundKey });
@@ -221,9 +264,7 @@ ponder.on("RoundVotingEngine:VoteCommitted", async ({ event, context }) => {
       downPool: 0n,
       upCount: 0,
       downCount: 0,
-      referenceRatingBps,
-      ratingBps: referenceRatingBps,
-      conservativeRatingBps: referenceRatingBps,
+      ...roundReferenceFields(referenceRatingBps),
       confidenceMass: 0n,
       effectiveEvidence: 0n,
       settledRounds: 0,
@@ -235,9 +276,7 @@ ponder.on("RoundVotingEngine:VoteCommitted", async ({ event, context }) => {
     await context.db.update(round, { id: roundKey }).set((row) => ({
       voteCount: row.voteCount + 1,
       totalStake: row.totalStake + stake,
-      referenceRatingBps: row.referenceRatingBps > 0 ? row.referenceRatingBps : referenceRatingBps,
-      ratingBps: row.ratingBps > 0 ? row.ratingBps : referenceRatingBps,
-      conservativeRatingBps: row.conservativeRatingBps > 0 ? row.conservativeRatingBps : referenceRatingBps,
+      ...roundReferenceFields(referenceRatingBps),
     }));
   }
 

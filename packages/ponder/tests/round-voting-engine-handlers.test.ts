@@ -230,6 +230,46 @@ describe("RoundVotingEngine ponder handlers", () => {
     ]);
   });
 
+  it("indexes canonical round reference snapshots", async () => {
+    const { db, updateCalls } = createDb({
+      existingRound: {
+        id: "7-2",
+        referenceRatingBps: 6400,
+        ratingBps: 6400,
+        conservativeRatingBps: 6400,
+      },
+    });
+    const registeredHandlers = await loadHandlers();
+    const handler = registeredHandlers.get("RoundVotingEngine:RoundReferenceSnapshotted");
+
+    expect(handler).toBeDefined();
+
+    await handler!({
+      event: {
+        args: {
+          contentId: 7n,
+          roundId: 2n,
+          roundReferenceRatingBps: 7200,
+        },
+        block: {
+          number: 42n,
+          timestamp: 999n,
+        },
+      },
+      context: { db },
+    });
+
+    expect(updateCalls).toContainEqual({
+      table: "round",
+      key: { id: "7-2" },
+      values: {
+        referenceRatingBps: 7200,
+        ratingBps: 7200,
+        conservativeRatingBps: 7200,
+      },
+    });
+  });
+
   it("stores a late commit in the reduced reward epoch", async () => {
     const voter = "0x0000000000000000000000000000000000000001";
     const { db, insertCalls } = createDb({
@@ -253,6 +293,7 @@ describe("RoundVotingEngine ponder handlers", () => {
           roundId: 2n,
           voter,
           commitHash: `0x${"11".repeat(32)}`,
+          roundReferenceRatingBps: 7200,
           targetRound: 123n,
           drandChainHash: `0x${"22".repeat(32)}`,
           stake: 10n,
