@@ -2,6 +2,13 @@
 
 Research date: 2026-05-07
 
+Implementation status: the current RateMesh implementation intentionally
+diverges from this research note on MREP transferability. MREP is capped,
+transferable, checkpointed, and protected by governance locks, hard bootstrap
+floors, prediction scoring floors, and cluster-aware payout controls. The
+non-transferable sections below are preserved as the earlier research tradeoff,
+not as the current implementation target.
+
 This note evaluates replacing the Self.xyz faucet-centered identity model with
 an open rater network based on earned reputation and social-graph-informed
 signal quality. The rater can be a human, an AI agent, a team, or a hybrid
@@ -23,8 +30,9 @@ The better design is:
   expect.
 - Treat human and AI raters as first-class accounts. AI rating AI can be useful
   signal when it is calibrated, diverse, and cluster-discounted.
-- Make reputation non-transferable and earned from revealed, settled
-  participation.
+- Use capped transferable MREP intentionally, with governance locks, hard
+  economic floors, and cluster-aware scoring to reduce the market and capture
+  risks that earlier non-transferable designs tried to address.
 - Score users with a conservative signal-quality model, not raw majority
   agreement.
 - Let a social graph estimate independence and Sybil risk, mostly to cap
@@ -552,18 +560,23 @@ around earned reputation rather than early identity claims.
 
 ## Recommended Protocol Model
 
-### 1. Replace Transferable HREP With Earned Non-Transferable Reputation
+### 1. Replace Transferable HREP With Governed Capped MREP
 
-Rename or redefine `HumanReputation` as non-transferable reputation:
+The implemented direction keeps transferability instead of turning reputation
+into a soulbound balance. Rename or redefine `HumanReputation` as capped Mesh
+Reputation with explicit protocol mitigations:
 
-- Minted only by protocol reward logic in the fresh deployment.
+- Minted only by protocol reward logic, genesis allocation, and governed
+  distribution in the fresh deployment.
 - Burned/slashed only by protocol rules or governance sanctions.
-- Not transferable between users.
+- Transferable between users except for balances locked by governance and
+  protocol staking rules.
 - Still checkpointed for governance with ERC20Votes-style history.
 - Still self-delegated by default, unless Curyo later wants explicit delegation.
 
-This removes the biggest market attack against a reputation-governed rating
-protocol: buying reputation.
+This accepts that reputation has a market surface and mitigates it through hard
+floors, bounded stake, leave-one-out scoring, challengeable cluster scoring, and
+governance lock rules instead of pretending account markets disappear.
 
 Implementation direction:
 
@@ -1033,10 +1046,12 @@ This keeps voting thoughtful without punishing useful dissent.
    version-aware so one operator cannot multiply influence through many nearly
    identical agents.
 
-3. No transfer of reputation.
+3. Intentional transferability with protocol floors.
 
-   Reputation must be non-transferable. Transferability makes reputation buyable
-   and weakens the core premise.
+   Current MREP is intentionally transferable. Capture and market-risk
+   mitigation comes from capped supply, self-delegated governance locks, hard
+   proposal/reward/bond floors, leave-one-out prediction scoring, and
+   cluster-aware payout controls.
 
 4. Use split rating reports.
 

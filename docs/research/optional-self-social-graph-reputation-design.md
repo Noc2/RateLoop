@@ -2,6 +2,12 @@
 
 Research date: 2026-05-07
 
+Implementation status: this is an optional-design research note. The current
+RateMesh implementation intentionally uses capped transferable MREP, with
+governance locks, hard economic floors, and cluster-aware controls. Any
+non-transferable reputation recommendations below describe an alternative design
+path rather than the current implementation target.
+
 This note describes an alternative to the no-proof reputation design: keep
 Self.xyz as an optional identity credential while still allowing users to
 participate without proving their identity. The goal is to preserve low-friction
@@ -21,11 +27,13 @@ The best hybrid design is:
 - Let Self-verified and high-reputation users make bounded trust attestations to
   other accounts, but do not let those attestations directly transfer unlimited
   voting power.
-- Keep reputation non-transferable for protocol scoring, USDC eligibility, and
-  governance.
-- Allow controlled reputation recovery or wallet rebinding, especially for
-  Self-verified users, but do not create a liquid on-chain market for
-  reputation.
+- The optional Self design originally favored non-transferable reputation for
+  protocol scoring, USDC eligibility, and governance; the active implementation
+  instead uses transferable MREP with hard floors and cluster-aware payout
+  limits.
+- Allow controlled account recovery or wallet rebinding, especially for
+  Self-verified users, without weakening the active MREP lock and governance
+  rules.
 
 The key product framing:
 

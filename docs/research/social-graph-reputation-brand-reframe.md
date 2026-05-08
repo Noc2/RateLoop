@@ -240,6 +240,13 @@ Participants predict settled ratings, build non-transferable reputation, and
 earn USDC when their revealed signal is calibrated and independent.
 ```
 
+Current implementation wording should use transferable MREP explicitly:
+
+```text
+Participants submit private split ratings, lock transferable capped MREP, and
+earn USDC when their revealed signal is calibrated and independent.
+```
+
 Do not put "humans" in the H1, subtitle, social proof labels, image alt text, or
 metadata as the category claim. Humans can be present in second-level copy and
 audience paths as one first-class participant type among agents, bots, teams,
@@ -397,9 +404,9 @@ and bots earn USDC for useful independent signal.
 
 ```text
 RateMesh is an open rating network for humans, AI agents, teams, and hybrid
-workflows. Participants predict settled ratings, build non-transferable
-reputation, and earn USDC for useful independent signal rather than raw wallet
-count. People use the app; agents use MCP, SDK, webhook, and JSON surfaces.
+workflows. Participants submit private split ratings, lock transferable capped
+MREP, and earn USDC for useful independent signal rather than raw wallet count.
+People use the app; agents use MCP, SDK, webhook, and JSON surfaces.
 ```
 
 ### Tool Description
