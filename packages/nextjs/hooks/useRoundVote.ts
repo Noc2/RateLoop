@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { HumanReputationAbi, encodeVoteTransferPayload } from "@ratemesh/contracts";
-import { ContentRegistryAbi } from "@ratemesh/contracts/abis";
+import { HumanReputationAbi, packVoteRoundContext } from "@ratemesh/contracts";
+import { ContentRegistryAbi, RoundVotingEngineAbi } from "@ratemesh/contracts/abis";
 import { buildCommitPredictionParams, buildCommitVoteParams } from "@ratemesh/sdk/vote";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAccount, usePublicClient, useWriteContract } from "wagmi";
@@ -34,7 +34,7 @@ interface RoundVoteParams {
   contentId: bigint;
   isUp?: boolean;
   predictedRating?: number;
-  stakeAmount: number; // In whole tokens (e.g., 5 = 5 HREP)
+  stakeAmount: number; // In whole tokens (e.g., 5 = 5 MREP)
   frontendCode?: `0x${string}`; // Optional frontend operator address for fee distribution
   isOwnContent?: boolean;
   roundConfig?: VotingConfig | null;
@@ -42,8 +42,8 @@ interface RoundVoteParams {
 }
 
 /**
- * Hook for tlock commit-reveal rating commits using reputation transferAndCall.
- * Handles: atomic token transfer + vote commit in a single transaction.
+ * Hook for tlock commit-reveal rating commits using reputation approval + commit.
+ * Handles: optional allowance approval followed by a vote commit.
  *
  * Predicted final ratings are tlock-encrypted to the current epoch's drand round,
  * keeping the rating private until reveal. The binary isUp path remains as a
@@ -181,7 +181,7 @@ export function useRoundVote() {
         }
       }
 
-      if (!runtime) {
+      if (!runtime || !publicClient) {
         setError("Preparing vote. Try again in a moment.");
         return false;
       }
@@ -215,54 +215,86 @@ export function useRoundVote() {
       const { ciphertext, commitHash, roundReferenceRatingBps, targetRound, drandChainHash, frontend, stakeWei } =
         commitParams;
 
-      const payload = encodeVoteTransferPayload({
+      const roundContext = packVoteRoundContext(runtime.roundId, roundReferenceRatingBps);
+      const commitVoteArgs = [
         contentId,
-        roundId: runtime.roundId,
-        roundReferenceRatingBps,
-        commitHash,
-        ciphertext,
+        roundContext,
         targetRound,
         drandChainHash,
+        commitHash,
+        ciphertext,
+        stakeWei,
         frontend,
-      });
-      const transferAndCallArgs = [votingEngineInfo.address, stakeWei, payload] as const;
-      const transferAndCallRequest: any = {
+      ] as const;
+      const approveRequest: any = {
         abi: HumanReputationAbi,
         address: hrepInfo.address,
-        functionName: "transferAndCall",
-        args: transferAndCallArgs,
+        functionName: "approve",
+        args: [votingEngineInfo.address, stakeWei] as const,
       };
+      const commitVoteRequest: any = {
+        abi: RoundVotingEngineAbi,
+        address: votingEngineInfo.address,
+        functionName: "commitVote",
+        args: commitVoteArgs,
+      };
+      const currentAllowance = (await publicClient.readContract({
+        address: hrepInfo.address as `0x${string}`,
+        abi: HumanReputationAbi,
+        functionName: "allowance",
+        args: [address as `0x${string}`, votingEngineInfo.address as `0x${string}`],
+      })) as bigint;
+      const needsApproval = currentAllowance < stakeWei;
 
       if (canUseSponsoredSubmitCalls) {
         await executeSponsoredCalls(
           [
+            ...(needsApproval
+              ? [
+                  {
+                    abi: HumanReputationAbi,
+                    address: hrepInfo.address as `0x${string}`,
+                    args: [votingEngineInfo.address, stakeWei] as const,
+                    functionName: "approve",
+                  },
+                ]
+              : []),
             {
-              abi: HumanReputationAbi,
-              address: hrepInfo.address as `0x${string}`,
-              args: transferAndCallArgs,
-              functionName: "transferAndCall",
+              abi: RoundVotingEngineAbi,
+              address: votingEngineInfo.address as `0x${string}`,
+              args: commitVoteArgs,
+              functionName: "commitVote",
             },
           ],
-          { action: "vote" },
+          { action: "vote", atomicRequired: true },
         );
       }
 
-      // Direct writes are self-funded here; only the sponsored helper can
-      // safely confirm free-transaction reservations with the backend.
-      if (!canUseSponsoredSubmitCalls && publicClient) {
+      if (!canUseSponsoredSubmitCalls) {
+        if (needsApproval) {
+          wagmiTokenWrite.reset();
+          const approvalHash = await writeTx(() => wagmiTokenWrite.writeContractAsync(approveRequest), {
+            action: "approve",
+            suppressSuccessToast: true,
+          });
+          if (!approvalHash) {
+            return false;
+          }
+        }
+
+        // Direct writes are self-funded here; only the sponsored helper can
+        // safely confirm free-transaction reservations with the backend.
         const estimatedGas = await publicClient.estimateContractGas({
-          address: hrepInfo.address,
-          abi: HumanReputationAbi,
-          functionName: "transferAndCall",
-          args: transferAndCallArgs,
+          address: votingEngineInfo.address,
+          abi: RoundVotingEngineAbi,
+          functionName: "commitVote",
+          args: commitVoteArgs,
           account: address,
         });
-        transferAndCallRequest.gas = (estimatedGas * 120n) / 100n;
-      }
+        commitVoteRequest.gas = (estimatedGas * 120n) / 100n;
 
-      if (!canUseSponsoredSubmitCalls) {
         wagmiTokenWrite.reset();
-        const transactionHash = await writeTx(() => wagmiTokenWrite.writeContractAsync(transferAndCallRequest), {
+        const transactionHash = await writeTx(() => wagmiTokenWrite.writeContractAsync(commitVoteRequest), {
           action: "vote",
           suppressSuccessToast: true,
         });
