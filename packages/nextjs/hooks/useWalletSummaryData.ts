@@ -7,6 +7,7 @@ import { usePageVisibility } from "~~/hooks/usePageVisibility";
 import { useSubmissionStakes } from "~~/hooks/useSubmissionStakes";
 import { useVotingStakes } from "~~/hooks/useVotingStakes";
 import { getWalletDisplayLiquidMicro, useWalletDisplaySummary } from "~~/hooks/useWalletDisplaySummary";
+import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
 
 function toMicroUnits(value: number) {
   return BigInt(Math.round(value * 1e6));
@@ -19,7 +20,7 @@ export function useWalletSummaryData(address?: Address) {
   const { votes: activeVotes, earliestReveal, hasPendingReveals } = useActiveVotesWithDeadlines(address);
 
   const { data: hrepBalance } = useScaffoldReadContract({
-    contractName: "HumanReputation",
+    contractName: REPUTATION_CONTRACT_NAME,
     functionName: "balanceOf",
     args: [address],
     watch: false,

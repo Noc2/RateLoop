@@ -4,6 +4,7 @@ import { BuildingLibraryIcon, CircleStackIcon, ShieldCheckIcon, UserGroupIcon } 
 import { surfaceSectionHeadingClassName } from "~~/components/shared/sectionHeading";
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
+import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
 
 function formatBalance(balance: bigint | undefined) {
   if (balance === undefined) return "—";
@@ -51,7 +52,7 @@ export const TreasuryBalance = () => {
 
   // Read MREP balance of treasury
   const { data: treasuryBalanceRaw, isLoading: balanceLoading } = useScaffoldReadContract({
-    contractName: "HumanReputation",
+    contractName: REPUTATION_CONTRACT_NAME,
     functionName: "balanceOf",
     args: [treasuryAddress],
     query: {
@@ -70,7 +71,7 @@ export const TreasuryBalance = () => {
   });
 
   const { data: maxSupply, isLoading: maxSupplyLoading } = useScaffoldReadContract({
-    contractName: "HumanReputation",
+    contractName: REPUTATION_CONTRACT_NAME,
     functionName: "MAX_SUPPLY",
   });
 

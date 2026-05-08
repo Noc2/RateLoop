@@ -12,6 +12,7 @@ import {
   useTransactor,
 } from "~~/hooks/scaffold-eth";
 import { usePageVisibility } from "~~/hooks/usePageVisibility";
+import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
 import { notification } from "~~/utils/scaffold-eth";
 import { ZERO_ADDRESS } from "~~/utils/scaffold-eth/common";
 import { TransactorFuncOptions } from "~~/utils/scaffold-eth/contract";
@@ -48,7 +49,7 @@ const timelockAbi = parseAbi(["function getMinDelay() view returns (uint256)"]);
 
 type GovernanceManagedContractName =
   | "CuryoGovernor"
-  | "HumanReputation"
+  | "MeshReputation"
   | "FrontendRegistry"
   | "ContentRegistry"
   | "ProtocolConfig";
@@ -130,7 +131,7 @@ export function getProposalDescriptionHash(description: string): Hex {
 export function useGovernanceContracts() {
   const { targetNetwork } = useTargetNetwork();
   const publicClient = usePublicClient({ chainId: targetNetwork.id });
-  const token = useDeployedContractInfo({ contractName: "HumanReputation" });
+  const token = useDeployedContractInfo({ contractName: REPUTATION_CONTRACT_NAME });
   const frontendRegistry = useDeployedContractInfo({ contractName: "FrontendRegistry" });
   const contentRegistry = useDeployedContractInfo({ contractName: "ContentRegistry" });
   const protocolConfig = useDeployedContractInfo({ contractName: "ProtocolConfig" });
@@ -142,7 +143,7 @@ export function useGovernanceContracts() {
     isFetched: governorReadFetched,
     isError: governorReadError,
   } = useScaffoldReadContract({
-    contractName: "HumanReputation",
+    contractName: REPUTATION_CONTRACT_NAME,
     functionName: "governor" as any,
   });
 
@@ -193,7 +194,7 @@ export function useGovernanceContracts() {
     }
     if (token.data) {
       items.push({
-        name: "HumanReputation",
+        name: "MeshReputation",
         address: token.data.address,
         abi: token.data.abi as Abi,
       });

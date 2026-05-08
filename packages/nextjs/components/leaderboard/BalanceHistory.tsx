@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useAccount } from "wagmi";
 import { surfaceSectionHeadingClassName } from "~~/components/shared/sectionHeading";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
+import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
 import { PonderTokenTransfer, ponderApi } from "~~/services/ponder/client";
 
 const CHART_W = 640;
@@ -23,7 +24,7 @@ export function BalanceHistory({ address: addressProp }: { address?: `0x${string
   const [isLoading, setIsLoading] = useState(false);
   const [fetchError, setFetchError] = useState(false);
   const { data: currentBalanceRaw } = useScaffoldReadContract({
-    contractName: "HumanReputation",
+    contractName: REPUTATION_CONTRACT_NAME,
     functionName: "balanceOf",
     args: [address],
     query: { enabled: !!address },

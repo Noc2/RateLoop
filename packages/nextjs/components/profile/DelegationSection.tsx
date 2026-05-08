@@ -11,6 +11,7 @@ import { GOVERNANCE_ROUTE } from "~~/constants/routes";
 import { useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
 import { useDelegation } from "~~/hooks/useDelegation";
 import { useVoterIdNFT } from "~~/hooks/useVoterIdNFT";
+import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
 import { formatHrepAmount } from "~~/lib/vote/voteIncentives";
 import { notification } from "~~/utils/scaffold-eth";
 import { ZERO_ADDRESS } from "~~/utils/scaffold-eth/common";
@@ -45,13 +46,13 @@ export function DelegationSection() {
     refetch,
   } = useDelegation(address);
   const { data: hrepBalance, refetch: refetchHrepBalance } = useScaffoldReadContract({
-    contractName: "HumanReputation",
+    contractName: REPUTATION_CONTRACT_NAME,
     functionName: "balanceOf",
     args: [address],
     query: { enabled: !!address },
   });
   const { writeContractAsync: writeHrepContractAsync, isPending: isTransferPending } = useScaffoldWriteContract({
-    contractName: "HumanReputation",
+    contractName: REPUTATION_CONTRACT_NAME,
   });
 
   const [delegateInput, setDelegateInput] = useState("");

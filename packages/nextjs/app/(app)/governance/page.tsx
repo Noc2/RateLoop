@@ -6,6 +6,7 @@ import { useAccount } from "wagmi";
 import { AppPageShell } from "~~/components/shared/AppPageShell";
 import { ConnectWalletCard } from "~~/components/shared/ConnectWalletCard";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
+import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
 import { replaceUrlPreservingHistoryState } from "~~/lib/ui/browserHistory";
 
 type GovernanceTab = "profile" | "leaderboard" | "governance";
@@ -96,7 +97,7 @@ function GovernancePageInner() {
 
   // Check MREP balance
   const { data: hrepBalance, isLoading: hrepBalanceLoading } = useScaffoldReadContract({
-    contractName: "HumanReputation",
+    contractName: REPUTATION_CONTRACT_NAME,
     functionName: "balanceOf",
     args: [address],
     query: { enabled: !!address },

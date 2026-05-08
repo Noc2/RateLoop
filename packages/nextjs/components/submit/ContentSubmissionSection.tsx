@@ -46,6 +46,7 @@ import {
   normalizeSubmissionMediaUrl,
 } from "~~/lib/contentMedia";
 import { MAX_QUESTION_LENGTH } from "~~/lib/contentTitle";
+import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
 import {
   findBlockedContentTags,
   getContentDescriptionValidationError,
@@ -710,7 +711,9 @@ export function ContentSubmissionSection() {
   const { data: registryInfo, isLoading: isRegistryLoading } = useDeployedContractInfo({
     contractName: "ContentRegistry",
   });
-  const { data: hrepInfo, isLoading: isHrepLoading } = useDeployedContractInfo({ contractName: "HumanReputation" });
+  const { data: hrepInfo, isLoading: isHrepLoading } = useDeployedContractInfo({
+    contractName: REPUTATION_CONTRACT_NAME,
+  });
   const { data: rewardEscrowInfo, isLoading: isRewardEscrowLoading } = useDeployedContractInfo({
     contractName: "QuestionRewardPoolEscrow",
   });

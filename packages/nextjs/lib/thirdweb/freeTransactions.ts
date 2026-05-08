@@ -267,7 +267,14 @@ let freeTransactionTestOverrides: {
 } | null = null;
 
 function getContractsForChain(chainId: number) {
-  return (deployedContracts as unknown as Partial<DeployedContractsMap>)[chainId];
+  const contracts = (deployedContracts as unknown as Partial<DeployedContractsMap>)[chainId];
+  if (!contracts) return contracts;
+  if (contracts.MeshReputation || !contracts.HumanReputation) return contracts;
+
+  return {
+    ...contracts,
+    MeshReputation: contracts.HumanReputation,
+  };
 }
 
 function buildIdentityKey(params: { chainId: number; environment: string; voterIdTokenId: string }) {
@@ -691,7 +698,7 @@ function validateSponsoredCalls(
   const rewardEscrow = contracts?.QuestionRewardPoolEscrow;
   const votingEngine = contracts?.RoundVotingEngine;
   const allowedApproveSpenders = new Set(
-    [frontendRegistry?.address, rewardEscrow?.address]
+    [frontendRegistry?.address, rewardEscrow?.address, votingEngine?.address]
       .filter((value): value is Address => Boolean(value))
       .map(value => value.toLowerCase()),
   );
@@ -737,16 +744,8 @@ function validateSponsoredCalls(
     }
 
     switch (contract.name) {
-      case "HumanReputation": {
-        if (functionName === "transferAndCall") {
-          const target = normalizeAddressArg(args[0]);
-          if (target && votingEngine && target.toLowerCase() === votingEngine.address.toLowerCase()) {
-            continue;
-          }
-        }
-
+      case "MeshReputation":
         return { ok: false, debugCode: "unsupported_operation" };
-      }
       case "ContentRegistry":
         if (
           functionName === "cancelReservedSubmission" ||
@@ -778,7 +777,7 @@ function validateSponsoredCalls(
         }
         return { ok: false, debugCode: "unsupported_operation" };
       case "RoundVotingEngine":
-        if (functionName === "claimCancelledRoundRefund") {
+        if (functionName === "claimCancelledRoundRefund" || functionName === "commitVote") {
           continue;
         }
         return { ok: false, debugCode: "unsupported_operation" };

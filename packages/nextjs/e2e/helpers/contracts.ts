@@ -8,9 +8,11 @@
 import deployedContracts from "@ratemesh/contracts/deployedContracts";
 
 const chain31337 = (deployedContracts as Record<number, Record<string, { address: string }>>)[31337];
+const reputationContract = chain31337.MeshReputation ?? chain31337.HumanReputation;
 
 export const CONTRACT_ADDRESSES = {
-  HumanReputation: chain31337.HumanReputation.address,
+  HumanReputation: reputationContract.address,
+  MeshReputation: reputationContract.address,
   ContentRegistry: chain31337.ContentRegistry.address,
   RoundVotingEngine: chain31337.RoundVotingEngine.address,
   RoundRewardDistributor: chain31337.RoundRewardDistributor.address,
@@ -19,5 +21,5 @@ export const CONTRACT_ADDRESSES = {
   QuestionRewardPoolEscrow: chain31337.QuestionRewardPoolEscrow.address,
   VoterIdNFT: chain31337.VoterIdNFT.address,
   ParticipationPool: chain31337.ParticipationPool.address,
-  HumanFaucet: chain31337.HumanFaucet.address,
+  HumanFaucet: chain31337.HumanFaucet?.address,
 } as const;

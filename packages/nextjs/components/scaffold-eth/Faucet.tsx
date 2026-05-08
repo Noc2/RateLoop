@@ -150,7 +150,8 @@ export const FaucetModal = () => {
   const queryClient = useQueryClient();
 
   // Get contract addresses from localhost deployment
-  const hrepTokenAddress = (deployedContracts as any)[31337]?.HumanReputation?.address as AddressType | undefined;
+  const hrepTokenAddress = ((deployedContracts as any)[31337]?.MeshReputation?.address ??
+    (deployedContracts as any)[31337]?.HumanReputation?.address) as AddressType | undefined;
   const voterIdNFTAddress = (deployedContracts as any)[31337]?.VoterIdNFT?.address as AddressType | undefined;
   const directMockUsdcTokenAddress = (deployedContracts as any)[31337]?.MockERC20?.address as AddressType | undefined;
   const questionRewardPoolEscrowAddress = (deployedContracts as any)[31337]?.QuestionRewardPoolEscrow?.address as
@@ -293,7 +294,7 @@ export const FaucetModal = () => {
 
   const claimHREP = async () => {
     if (!inputAddress || !hrepTokenAddress) {
-      notification.error("Missing destination address or HumanReputation contract");
+      notification.error("Missing destination address or MeshReputation contract");
       return;
     }
 
@@ -305,7 +306,7 @@ export const FaucetModal = () => {
 
       if (humanFaucetAddr) {
         // Deploy script mints 100% of MAX_SUPPLY, so direct mint() reverts.
-        // Instead, impersonate the HumanFaucet contract (holds ~52M HREP) and transfer.
+        // Instead, impersonate the legacy HumanFaucet contract (holds the launch pool) and transfer.
         // The impersonated address needs ETH for gas.
         await (localPublicClient as any).request({
           method: "anvil_setBalance",
@@ -328,11 +329,11 @@ export const FaucetModal = () => {
           params: [humanFaucetAddr],
         });
       } else if (faucetAddress) {
-        // Fallback: try mint (works only if supply allows)
+        // Fresh RateMesh local deploys hold the launch pool on the deployer.
         const txHash = await localWalletClient.writeContract({
           address: hrepTokenAddress,
           abi: localMintableTokenAbi,
-          functionName: "mint",
+          functionName: "transfer",
           args: [inputAddress, amount],
           account: faucetAddress,
         });
@@ -344,10 +345,10 @@ export const FaucetModal = () => {
       }
 
       queryClient.invalidateQueries();
-      notification.success(`Sent ${hrepAmount} HREP to ${inputAddress.slice(0, 6)}...${inputAddress.slice(-4)}`);
+      notification.success(`Sent ${hrepAmount} MREP to ${inputAddress.slice(0, 6)}...${inputAddress.slice(-4)}`);
       setHrepLoading(false);
     } catch (error: any) {
-      notification.error(error?.message || "Failed to claim HREP tokens");
+      notification.error(error?.message || "Failed to claim MREP tokens");
       setHrepLoading(false);
     }
   };

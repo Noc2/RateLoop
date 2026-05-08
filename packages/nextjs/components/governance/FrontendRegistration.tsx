@@ -15,6 +15,7 @@ import { useFrontendClaimableFees } from "~~/hooks/useFrontendClaimableFees";
 import { useGasBalanceStatus } from "~~/hooks/useGasBalanceStatus";
 import { useThirdwebSponsoredSubmitCalls } from "~~/hooks/useThirdwebSponsoredSubmitCalls";
 import { useWalletRpcRecovery } from "~~/hooks/useWalletRpcRecovery";
+import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
 import {
   getGasBalanceErrorMessage,
   isFreeTransactionExhaustedError,
@@ -85,7 +86,7 @@ export function FrontendRegistration() {
 
   // Contract info
   const { data: frontendRegistryInfo } = useDeployedContractInfo({ contractName: "FrontendRegistry" });
-  const { data: hrepInfo } = useDeployedContractInfo({ contractName: "HumanReputation" });
+  const { data: hrepInfo } = useDeployedContractInfo({ contractName: REPUTATION_CONTRACT_NAME });
   const { data: rewardDistributorInfo } = useDeployedContractInfo({ contractName: "RoundRewardDistributor" });
   const frontendRegistryAddress = frontendRegistryInfo?.address as `0x${string}` | undefined;
   const hrepAddress = hrepInfo?.address as `0x${string}` | undefined;
@@ -116,13 +117,13 @@ export function FrontendRegistration() {
 
   // Read MREP balance
   const { data: hrepBalance, refetch: refetchCuryo } = useScaffoldReadContract({
-    contractName: "HumanReputation",
+    contractName: REPUTATION_CONTRACT_NAME,
     functionName: "balanceOf",
     args: [address],
   });
 
   // Write contracts
-  const { writeContractAsync: writeHrep } = useScaffoldWriteContract({ contractName: "HumanReputation" });
+  const { writeContractAsync: writeHrep } = useScaffoldWriteContract({ contractName: REPUTATION_CONTRACT_NAME });
   const { writeContractAsync: writeFrontendRegistry } = useScaffoldWriteContract({ contractName: "FrontendRegistry" });
   // Separate hook with simulation disabled for register (follows an approve tx,
   // so the simulation may run against stale state before the approve is reflected).

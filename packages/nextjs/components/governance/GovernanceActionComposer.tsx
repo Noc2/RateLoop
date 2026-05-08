@@ -15,6 +15,7 @@ import {
   useGovernanceStats,
   useGovernanceWrite,
 } from "~~/hooks/useGovernance";
+import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
 
 type ComposerFieldType = "address" | "uint" | "hrep" | "string" | "textarea" | "csv" | "bytes32";
 
@@ -41,7 +42,7 @@ type GovernanceActionTemplate = {
   group: string;
   label: string;
   mode: "proposal" | "direct";
-  contractName: "CuryoGovernor" | "HumanReputation" | "FrontendRegistry" | "ContentRegistry" | "ProtocolConfig";
+  contractName: "CuryoGovernor" | "MeshReputation" | "FrontendRegistry" | "ContentRegistry" | "ProtocolConfig";
   functionName: string;
   description: string;
   allowCustomDescription?: boolean;
@@ -174,7 +175,7 @@ const actionTemplates: readonly GovernanceActionTemplate[] = [
     group: "Treasury",
     label: "Treasury grant",
     mode: "proposal",
-    contractName: "HumanReputation",
+    contractName: REPUTATION_CONTRACT_NAME,
     functionName: "transfer",
     description: "Create a proposal to send MREP from the governance timelock treasury to a recipient.",
     allowCustomDescription: false,
@@ -438,7 +439,7 @@ export function GovernanceActionComposer() {
   const [formError, setFormError] = useState<string | null>(null);
 
   const { data: votingPowerRaw } = useScaffoldReadContract({
-    contractName: "HumanReputation",
+    contractName: REPUTATION_CONTRACT_NAME,
     functionName: "getVotes" as any,
     args: [address] as any,
     query: { enabled: !!address },
@@ -464,7 +465,7 @@ export function GovernanceActionComposer() {
   );
 
   const { data: timelockTreasuryBalance } = useScaffoldReadContract({
-    contractName: "HumanReputation",
+    contractName: REPUTATION_CONTRACT_NAME,
     functionName: "balanceOf" as any,
     args: [timelockAddress] as any,
     query: { enabled: isTreasuryGrant && !!timelockAddress },

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { HumanReputationAbi, packVoteRoundContext } from "@ratemesh/contracts";
+import { MeshReputationAbi, packVoteRoundContext } from "@ratemesh/contracts";
 import { ContentRegistryAbi, RoundVotingEngineAbi } from "@ratemesh/contracts/abis";
 import { buildCommitPredictionParams, buildCommitVoteParams } from "@ratemesh/sdk/vote";
 import { useQueryClient } from "@tanstack/react-query";
@@ -22,6 +22,7 @@ import {
   getWalletDisplaySummaryQueryKey,
   persistWalletDisplaySummarySnapshot,
 } from "~~/hooks/useWalletDisplaySummary";
+import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
 import { DEFAULT_VOTING_CONFIG, type VotingConfig } from "~~/lib/contracts/roundVotingEngine";
 import { getGasBalanceErrorMessage, isFreeTransactionExhaustedError } from "~~/lib/transactionErrors";
 import { recordLocalVoteCooldown } from "~~/lib/vote/localCooldown";
@@ -77,7 +78,9 @@ export function useRoundVote() {
   const { data: contentRegistryInfo, isLoading: isContentRegistryLoading } = useDeployedContractInfo({
     contractName: "ContentRegistry",
   } as any);
-  const { data: hrepInfo, isLoading: isHrepLoading } = useDeployedContractInfo({ contractName: "HumanReputation" });
+  const { data: hrepInfo, isLoading: isHrepLoading } = useDeployedContractInfo({
+    contractName: REPUTATION_CONTRACT_NAME,
+  });
   const publicClient = usePublicClient();
   const clearError = useCallback(() => setError(null), []);
 
@@ -227,7 +230,7 @@ export function useRoundVote() {
         frontend,
       ] as const;
       const approveRequest: any = {
-        abi: HumanReputationAbi,
+        abi: MeshReputationAbi,
         address: hrepInfo.address,
         functionName: "approve",
         args: [votingEngineInfo.address, stakeWei] as const,
@@ -240,7 +243,7 @@ export function useRoundVote() {
       };
       const currentAllowance = (await publicClient.readContract({
         address: hrepInfo.address as `0x${string}`,
-        abi: HumanReputationAbi,
+        abi: MeshReputationAbi,
         functionName: "allowance",
         args: [address as `0x${string}`, votingEngineInfo.address as `0x${string}`],
       })) as bigint;
@@ -252,7 +255,7 @@ export function useRoundVote() {
             ...(needsApproval
               ? [
                   {
-                    abi: HumanReputationAbi,
+                    abi: MeshReputationAbi,
                     address: hrepInfo.address as `0x${string}`,
                     args: [votingEngineInfo.address, stakeWei] as const,
                     functionName: "approve",

@@ -12,6 +12,7 @@ import { useContentLabel } from "~~/hooks/useCategoryRegistry";
 import { useParticipationRate } from "~~/hooks/useParticipationRate";
 import { useRoundSnapshot } from "~~/hooks/useRoundSnapshot";
 import { useVoterIdNFT, useVoterIdStake } from "~~/hooks/useVoterIdNFT";
+import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
 import type { OpenRoundFallbackData, VotingConfig } from "~~/lib/contracts/roundVotingEngine";
 import { estimateVoteReturn, formatHrepAmount } from "~~/lib/vote/voteIncentives";
 
@@ -86,13 +87,13 @@ export function StakeSelector({
   const { remainingCapacity } = useVoterIdStake(contentId, currentRoundId, tokenId);
 
   const { data: hrepBalance } = useScaffoldReadContract({
-    contractName: "HumanReputation",
+    contractName: REPUTATION_CONTRACT_NAME,
     functionName: "balanceOf",
     args: [address],
   });
 
   const { data: tokenSymbol } = useScaffoldReadContract({
-    contractName: "HumanReputation",
+    contractName: REPUTATION_CONTRACT_NAME,
     functionName: "symbol",
   });
 

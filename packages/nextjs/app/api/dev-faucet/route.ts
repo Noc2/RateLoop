@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 const DEV_FAUCET_ENABLED = process.env.DEV_FAUCET_ENABLED === "true" && process.env.NODE_ENV === "development";
 const RATE_LIMIT = { limit: 10, windowMs: 60_000 }; // 10 req/min per IP
 
-const HREP_DECIMALS = 6;
+const MREP_DECIMALS = 6;
 const USDC_DECIMALS = 6;
 const MAX_MINT_AMOUNT = 10_000; // Cap per request
 
@@ -124,16 +124,16 @@ export async function POST(request: NextRequest) {
     });
 
     if (action === "mint-hrep") {
-      const hrepAddress = contracts.HumanReputation?.address;
+      const hrepAddress = contracts.MeshReputation?.address ?? contracts.HumanReputation?.address;
       if (!hrepAddress) {
-        return NextResponse.json({ error: "HumanReputation not deployed on localhost" }, { status: 500 });
+        return NextResponse.json({ error: "MeshReputation not deployed on localhost" }, { status: 500 });
       }
 
       const requestedAmount = Number(amount) || 1000;
       if (requestedAmount <= 0 || requestedAmount > MAX_MINT_AMOUNT) {
         return NextResponse.json({ error: `Amount must be between 1 and ${MAX_MINT_AMOUNT}` }, { status: 400 });
       }
-      const mintAmount = parseUnits(requestedAmount.toString(), HREP_DECIMALS);
+      const mintAmount = parseUnits(requestedAmount.toString(), MREP_DECIMALS);
 
       const txHash = await walletClient.writeContract({
         address: hrepAddress,

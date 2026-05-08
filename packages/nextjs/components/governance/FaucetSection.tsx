@@ -21,6 +21,7 @@ import { useTermsAcceptance } from "~~/contexts/TermsAcceptanceContext";
 import { useDeployedContractInfo, useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 import { FREE_TRANSACTION_ALLOWANCE_QUERY_KEY } from "~~/hooks/useFreeTransactionAllowance";
 import { useVoterIdNFT } from "~~/hooks/useVoterIdNFT";
+import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
 import { FAUCET_EXCLUDED_COUNTRY_NAMES, FAUCET_MINIMUM_AGE } from "~~/lib/governance/faucetEligibility";
 import { shouldRefreshAfterFaucetClaim } from "~~/lib/governance/faucetQueryInvalidation";
 import {
@@ -206,7 +207,7 @@ export function FaucetSection({ referrer }: FaucetSectionProps) {
   });
 
   const { refetch: refetchHrepBalance } = useScaffoldReadContract({
-    contractName: "HumanReputation",
+    contractName: REPUTATION_CONTRACT_NAME,
     functionName: "balanceOf",
     args: [address],
     query: { enabled: !!address },

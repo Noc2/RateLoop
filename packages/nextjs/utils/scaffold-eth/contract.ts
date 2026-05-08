@@ -30,8 +30,6 @@ import { WriteContractParameters, WriteContractReturnType, simulateContract } fr
 import { WriteContractVariables } from "wagmi/query";
 import scaffoldConfig from "~~/scaffold.config";
 
-const contractsData = deployedContractsData;
-
 type InheritedFunctions = { readonly [key: string]: string };
 
 type GenericContract = {
@@ -46,6 +44,23 @@ type GenericContractsDeclaration = {
     [contractName: string]: GenericContract;
   };
 };
+
+function withReputationAlias<TContracts extends GenericContractsDeclaration>(declarations: TContracts): TContracts {
+  const normalized = { ...declarations } as GenericContractsDeclaration;
+
+  for (const [chainId, contractsForChain] of Object.entries(declarations)) {
+    if (!contractsForChain.MeshReputation && contractsForChain.HumanReputation) {
+      normalized[Number(chainId)] = {
+        ...contractsForChain,
+        MeshReputation: contractsForChain.HumanReputation,
+      };
+    }
+  }
+
+  return normalized as TContracts;
+}
+
+const contractsData = withReputationAlias(deployedContractsData as GenericContractsDeclaration);
 
 export const contracts = contractsData as GenericContractsDeclaration | null;
 

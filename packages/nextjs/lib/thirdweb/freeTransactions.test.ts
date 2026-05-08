@@ -46,7 +46,7 @@ const EXECUTED_EVENT = parseAbiItem(
   "event Executed(address indexed user, address indexed signer, address indexed executor, uint256 batchSize)",
 );
 const contractsForChain = (deployedContracts as Record<number, Record<string, ContractRecord>>)[CHAIN_ID];
-const hrepContract = contractsForChain.HumanReputation;
+const mrepContract = contractsForChain.MeshReputation ?? contractsForChain.HumanReputation;
 const contentRegistryContract = contractsForChain.ContentRegistry;
 const frontendRegistryContract = contractsForChain.FrontendRegistry;
 const profileRegistryContract = contractsForChain.ProfileRegistry;
@@ -195,7 +195,16 @@ function buildExecutedEventLog(user: `0x${string}`) {
 }
 
 const voteCall = (voteMarker: `0x${string}`) =>
-  encodeCall(hrepContract, "transferAndCall", [votingEngineContract.address, 1n, voteMarker]);
+  encodeCall(votingEngineContract, "commitVote", [
+    1n,
+    1n,
+    1n,
+    `0x${"1".repeat(64)}`,
+    `0x${"2".repeat(64)}`,
+    voteMarker,
+    1n,
+    WALLET,
+  ]);
 
 function createStoreUnavailableError() {
   return new Error("database offline", {
@@ -465,9 +474,10 @@ test("supported sponsored operation families are allowlisted", async () => {
   const supportedCases = [
     [voteCall("0x07")],
     [
-      encodeCall(hrepContract, "approve", [rewardEscrowContract.address, 1_000_000n]),
+      encodeCall(mrepContract, "approve", [rewardEscrowContract.address, 1_000_000n]),
       encodeCall(contentRegistryContract, "reserveSubmission", [`0x${"1".repeat(64)}`]),
     ],
+    [encodeCall(mrepContract, "approve", [votingEngineContract.address, 1_000_000n]), voteCall("0x08")],
     [encodeCall(contentRegistryContract, "cancelReservedSubmission", [`0x${"2".repeat(64)}`])],
     [
       encodeCall(
@@ -527,7 +537,7 @@ test("supported sponsored operation families are allowlisted", async () => {
 
 test("rejects token approvals to unsupported spenders", async () => {
   const decision = await freeTransactions.evaluateFreeTransactionAllowance(
-    buildRequest([encodeCall(hrepContract, "approve", [WALLET, 10n])]) as never,
+    buildRequest([encodeCall(mrepContract, "approve", [WALLET, 10n])]) as never,
   );
 
   assert.equal(decision.isAllowed, false);
@@ -537,7 +547,7 @@ test("rejects token approvals to unsupported spenders", async () => {
 
 test("rejects arbitrary token methods even on allowlisted contracts", async () => {
   const decision = await freeTransactions.evaluateFreeTransactionAllowance(
-    buildRequest([encodeCall(hrepContract, "transfer", [WALLET, 10n])]) as never,
+    buildRequest([encodeCall(mrepContract, "transfer", [WALLET, 10n])]) as never,
   );
 
   assert.equal(decision.isAllowed, false);
