@@ -18,6 +18,7 @@ import { RoundSettlementDistributionLib } from "./libraries/RoundSettlementDistr
 import { RoundCleanupLib } from "./libraries/RoundCleanupLib.sol";
 import { RoundRevealLib } from "./libraries/RoundRevealLib.sol";
 import { VotePreflightLib } from "./libraries/VotePreflightLib.sol";
+import { PredictionRatingMath } from "./libraries/PredictionRatingMath.sol";
 import { IFrontendRegistry } from "./interfaces/IFrontendRegistry.sol";
 import { ICategoryRegistry } from "./interfaces/ICategoryRegistry.sol";
 import { IVoterIdNFT } from "./interfaces/IVoterIdNFT.sol";
@@ -126,6 +127,8 @@ contract RoundVotingEngine is
     // Prediction accounting per round. Kept outside RoundLib structs so legacy tuple getters stay stable.
     mapping(uint256 => mapping(uint256 => uint256)) internal roundPredictionWeight; // contentId => roundId => effective MREP weight
     mapping(uint256 => mapping(uint256 => uint256)) internal roundWeightedRatingSum; // contentId => roundId => ratingBps * weight
+    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint16))) public commitPredictedRatingBps;
+    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint256))) public commitPredictionWeight;
 
     // Cancelled/tied round refund claims: contentId => roundId => voter => claimed
     mapping(uint256 => mapping(uint256 => mapping(address => bool))) public cancelledRoundRefundClaimed;
@@ -183,7 +186,18 @@ contract RoundVotingEngine is
     );
     event VoteRevealed(uint256 indexed contentId, uint256 indexed roundId, address indexed voter, bool isUp);
     event PredictionRevealed(
-        uint256 indexed contentId, uint256 indexed roundId, address indexed voter, uint16 predictedRatingBps
+        uint256 indexed contentId,
+        uint256 indexed roundId,
+        address indexed voter,
+        uint16 predictedRatingBps,
+        uint256 effectiveWeight
+    );
+    event PredictionRoundSettled(
+        uint256 indexed contentId,
+        uint256 indexed roundId,
+        uint16 finalRatingBps,
+        uint256 totalPredictionWeight,
+        uint16 revealedCount
     );
     event RoundSettled(uint256 indexed contentId, uint256 indexed roundId, bool upWins, uint256 losingPool);
     event RoundCancelled(uint256 indexed contentId, uint256 indexed roundId);
@@ -776,6 +790,9 @@ contract RoundVotingEngine is
 
         uint256 predictionWeight = roundPredictionWeight[contentId][roundId];
         bool hasPredictionSettlement = predictionWeight > 0;
+        uint16 finalPredictionRatingBps = hasPredictionSettlement
+            ? PredictionRatingMath.weightedAverageRating(roundWeightedRatingSum[contentId][roundId], predictionWeight)
+            : 0;
 
         // Epoch-weighted winning stake — used for proportional reward distribution
         uint256 weightedWinningStake = upWins ? round.weightedUpPool : round.weightedDownPool;
@@ -822,6 +839,11 @@ contract RoundVotingEngine is
             predictionWeight
         );
         emit RoundSettled(contentId, roundId, upWins, losingPool);
+        if (hasPredictionSettlement) {
+            emit PredictionRoundSettled(
+                contentId, roundId, finalPredictionRatingBps, predictionWeight, round.revealedCount
+            );
+        }
     }
 
     // =========================================================================
@@ -1190,10 +1212,12 @@ contract RoundVotingEngine is
         );
         roundStakeWithEligibleFrontend[contentId][roundId] = eligibleFrontendStake;
         roundEligibleFrontendCount[contentId][roundId] = eligibleFrontendCount;
+        commitPredictedRatingBps[contentId][roundId][commitKey] = predictedRatingBps;
+        commitPredictionWeight[contentId][roundId][commitKey] = effectiveStake;
         roundPredictionWeight[contentId][roundId] += effectiveStake;
         roundWeightedRatingSum[contentId][roundId] += uint256(predictedRatingBps) * uint256(effectiveStake);
 
-        emit PredictionRevealed(contentId, roundId, voter, predictedRatingBps);
+        emit PredictionRevealed(contentId, roundId, voter, predictedRatingBps, effectiveStake);
     }
 
     // =========================================================================
@@ -1213,6 +1237,16 @@ contract RoundVotingEngine is
         bytes32[] storage commitKeys = roundCommitHashes[contentId][roundId];
         if (index >= commitKeys.length) revert IndexOutOfBounds();
         return commitKeys[index];
+    }
+
+    function roundPredictionStats(uint256 contentId, uint256 roundId)
+        external
+        view
+        returns (uint256 weightedRatingSum, uint256 totalPredictionWeight, uint16 finalRatingBps)
+    {
+        weightedRatingSum = roundWeightedRatingSum[contentId][roundId];
+        totalPredictionWeight = roundPredictionWeight[contentId][roundId];
+        finalRatingBps = PredictionRatingMath.weightedAverageRating(weightedRatingSum, totalPredictionWeight);
     }
 
     // --- Admin ---

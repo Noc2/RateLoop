@@ -412,6 +412,19 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         engine.revealPredictionByCommitKey(contentId, roundId, ck2, 5_000, s2);
         engine.revealPredictionByCommitKey(contentId, roundId, ck3, 6_500, s3);
 
+        assertEq(engine.commitPredictedRatingBps(contentId, roundId, ck1), 8_000, "ck1 prediction");
+        assertEq(engine.commitPredictedRatingBps(contentId, roundId, ck2), 5_000, "ck2 prediction");
+        assertEq(engine.commitPredictedRatingBps(contentId, roundId, ck3), 6_500, "ck3 prediction");
+        assertEq(engine.commitPredictionWeight(contentId, roundId, ck1), 30e6, "ck1 weight");
+        assertEq(engine.commitPredictionWeight(contentId, roundId, ck2), 10e6, "ck2 weight");
+        assertEq(engine.commitPredictionWeight(contentId, roundId, ck3), 10e6, "ck3 weight");
+
+        (uint256 weightedRatingSum, uint256 totalPredictionWeight, uint16 finalRatingBps) =
+            engine.roundPredictionStats(contentId, roundId);
+        assertEq(weightedRatingSum, 355_000e6, "weighted rating sum");
+        assertEq(totalPredictionWeight, 50e6, "prediction weight");
+        assertEq(finalRatingBps, 7_100, "prediction final before settle");
+
         engine.settleRound(contentId, roundId);
 
         assertEq(registry.getRating(contentId), 7_100, "registry rating");
