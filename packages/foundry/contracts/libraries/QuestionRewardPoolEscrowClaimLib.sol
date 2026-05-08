@@ -343,7 +343,9 @@ library QuestionRewardPoolEscrowClaimLib {
         view
         returns (uint256)
     {
-        if (votingEngine.roundFinalPredictionRatingBps(contentId, roundId) == 0) return 1;
+        if (votingEngine.roundFinalPredictionRatingBps(contentId, roundId) == 0) {
+            return votingEngine.commitRaterWeightBps(contentId, roundId, commitKey);
+        }
         return votingEngine.commitPredictionRewardWeight(contentId, roundId, commitKey);
     }
 

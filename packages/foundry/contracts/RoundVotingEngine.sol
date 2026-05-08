@@ -24,6 +24,7 @@ import { ICategoryRegistry } from "./interfaces/ICategoryRegistry.sol";
 import { IVoterIdNFT } from "./interfaces/IVoterIdNFT.sol";
 import { IRoundVotingEngine } from "./interfaces/IRoundVotingEngine.sol";
 import { IParticipationPool } from "./interfaces/IParticipationPool.sol";
+import { IRaterRegistryWeights } from "./interfaces/IRaterRegistryWeights.sol";
 
 interface IQuestionBundleRoundObserver {
     function recordBundleQuestionTerminal(uint256 contentId, uint256 roundId, bool settled) external;
@@ -102,6 +103,7 @@ contract RoundVotingEngine is
     uint16 internal constant PREDICTION_FULL_CREDIT_TOLERANCE_BPS = 100;
     uint16 internal constant PREDICTION_ZERO_CREDIT_TOLERANCE_BPS = 8_900;
     uint16 internal constant PREDICTION_SCORE_SCALE_BPS = 10_000;
+    uint16 internal constant WEIGHT_BPS = 10_000;
 
     // --- State ---
     IERC20 internal hrepToken;
@@ -425,6 +427,7 @@ contract RoundVotingEngine is
         _validateCommitTlockData(
             contentId, roundId, ciphertext, targetRound, drandChainHash, epochEnd, roundCfg.epochDuration
         );
+        uint16 raterWeightBps = _currentRaterWeightBps(voter);
 
         // Transfer HREP stake after all lightweight validation passes.
         if (!stakeAlreadyTransferred) {
@@ -449,6 +452,7 @@ contract RoundVotingEngine is
             roundVoterIdNft,
             useTokenIdentity
         );
+        commitRaterWeightBps[contentId][roundId][commitKey] = raterWeightBps;
         _recordCommitAccounting(
             round, roundVoterIdNft, contentId, roundId, voter, voterId, useTokenIdentity, stakeAmount64, stakeAmount
         );
@@ -679,6 +683,7 @@ contract RoundVotingEngine is
         roundDrandPeriodSnapshot[contentId][roundId] = protocolConfig.drandPeriod();
         roundVoterIdNFTSnapshot[contentId][roundId] = protocolConfig.voterIdNFT();
         roundFrontendRegistrySnapshot[contentId][roundId] = protocolConfig.frontendRegistry();
+        roundScorerMetadataHashSnapshot[contentId][roundId] = protocolConfig.scorerMetadataHash();
         emit RoundConfigSnapshotted(
             contentId, roundId, roundCfg.epochDuration, roundCfg.maxDuration, roundCfg.minVoters, roundCfg.maxVoters
         );
@@ -796,7 +801,7 @@ contract RoundVotingEngine is
             && roundPredictionCount[contentId][roundId] == round.revealedCount
             && round.revealedCount >= MIN_LOO_VALID_PARTICIPANTS;
         uint16 finalPredictionRatingBps = hasPredictionSettlement
-            ? _roundWeightedAveragePrediction(contentId, roundId, predictionWeight)
+            ? _roundWeightedMedianPrediction(contentId, roundId, predictionWeight)
             : 0;
 
         uint256 weightedWinningStake;
@@ -1078,6 +1083,15 @@ contract RoundVotingEngine is
         return _getRoundReferenceRatingBps(contentId, openRoundId);
     }
 
+    function previewCommitScorerMetadataHash(uint256 contentId) public view returns (bytes32) {
+        uint256 openRoundId = previewCommitRoundId(contentId);
+        if (openRoundId == nextRoundId[contentId] + 1) {
+            return protocolConfig.scorerMetadataHash();
+        }
+
+        return roundScorerMetadataHashSnapshot[contentId][openRoundId];
+    }
+
     function previewCommitRoundId(uint256 contentId) public view returns (uint256) {
         uint256 openRoundId = currentRoundId[contentId];
         if (openRoundId != 0) {
@@ -1108,6 +1122,39 @@ contract RoundVotingEngine is
 
     function _getParticipationPool() internal view returns (IParticipationPool) {
         return IParticipationPool(protocolConfig.participationPool());
+    }
+
+    function _currentRaterWeightBps(address voter) internal view returns (uint16) {
+        uint256 weightBps = WEIGHT_BPS;
+        address configuredRaterRegistry = protocolConfig.raterRegistry();
+        if (configuredRaterRegistry == address(0)) return WEIGHT_BPS;
+
+        IRaterRegistryWeights registryWeights = IRaterRegistryWeights(configuredRaterRegistry);
+        try registryWeights.getClusterScore(voter) returns (bytes32, uint16 discountBps, uint64, uint64 updatedAt) {
+            if (updatedAt != 0) {
+                if (discountBps >= WEIGHT_BPS) return 0;
+                weightBps = (weightBps * (WEIGHT_BPS - discountBps)) / WEIGHT_BPS;
+            }
+        } catch { }
+
+        try registryWeights.getSelfCredential(voter) returns (
+            bool verified,
+            bool,
+            bool revoked,
+            bytes32,
+            bytes32,
+            uint64,
+            uint64 expiresAt,
+            uint16 multiplierBps,
+            bytes32
+        ) {
+            if (verified && !revoked && (expiresAt == 0 || expiresAt > block.timestamp) && multiplierBps > WEIGHT_BPS) {
+                weightBps = (weightBps * multiplierBps) / WEIGHT_BPS;
+            }
+        } catch { }
+
+        if (weightBps > type(uint16).max) return type(uint16).max;
+        return uint16(weightBps);
     }
 
     function _resolveClaimCommit(uint256 contentId, uint256 roundId, address account)
@@ -1206,6 +1253,35 @@ contract RoundVotingEngine is
         return PredictionRatingMath.weightedAverageRating(roundWeightedRatingSum[contentId][roundId], totalWeight);
     }
 
+    function _roundWeightedMedianPrediction(uint256 contentId, uint256 roundId, uint256 totalWeight)
+        internal
+        view
+        returns (uint16)
+    {
+        bytes32[] storage commitKeys = roundCommitHashes[contentId][roundId];
+        uint256 predictionCount = roundPredictionCount[contentId][roundId];
+        uint16[] memory ratings = new uint16[](predictionCount);
+        uint256[] memory weights = new uint256[](predictionCount);
+        uint256 ratingCount;
+
+        for (uint256 i = 0; i < commitKeys.length && ratingCount < predictionCount;) {
+            bytes32 commitKey = commitKeys[i];
+            uint16 opinionRatingBps = commitOpinionRatingBps[contentId][roundId][commitKey];
+            if (opinionRatingBps != 0) {
+                ratings[ratingCount] = opinionRatingBps;
+                weights[ratingCount] = commitPredictionWeight[contentId][roundId][commitKey];
+                unchecked {
+                    ++ratingCount;
+                }
+            }
+            unchecked {
+                ++i;
+            }
+        }
+
+        return PredictionRatingMath.weightedMedianRating(ratings, weights, totalWeight);
+    }
+
     function _scorePredictionRewards(uint256 contentId, uint256 roundId, uint256 totalWeight)
         internal
         returns (uint256 rewardWeight, uint256 forfeitedPool)
@@ -1286,7 +1362,11 @@ contract RoundVotingEngine is
             salt,
             _getRoundReferenceRatingBps(contentId, roundId),
             roundCfg.minVoters,
-            targetRoundRevealableAt
+            targetRoundRevealableAt,
+            commitRaterWeightBps[contentId][roundId][commitKey],
+            block.chainid,
+            address(this),
+            roundScorerMetadataHashSnapshot[contentId][roundId]
         );
         roundStakeWithEligibleFrontend[contentId][roundId] = eligibleFrontendStake;
         roundEligibleFrontendCount[contentId][roundId] = eligibleFrontendCount;
@@ -1322,7 +1402,8 @@ contract RoundVotingEngine is
             salt,
             _getRoundReferenceRatingBps(contentId, roundId),
             roundCfg.minVoters,
-            targetRoundRevealableAt
+            targetRoundRevealableAt,
+            commitRaterWeightBps[contentId][roundId][commitKey]
         );
         roundStakeWithEligibleFrontend[contentId][roundId] = eligibleFrontendStake;
         roundEligibleFrontendCount[contentId][roundId] = eligibleFrontendCount;
@@ -1364,7 +1445,7 @@ contract RoundVotingEngine is
         totalPredictionWeight = roundPredictionWeight[contentId][roundId];
         finalRatingBps = roundFinalPredictionRatingBps[contentId][roundId];
         if (finalRatingBps == 0 && totalPredictionWeight > 0) {
-            finalRatingBps = _roundWeightedAveragePrediction(contentId, roundId, totalPredictionWeight);
+            finalRatingBps = _roundWeightedMedianPrediction(contentId, roundId, totalPredictionWeight);
         }
     }
 
@@ -1425,6 +1506,12 @@ contract RoundVotingEngine is
     // to preserve the pre-existing prediction/refund slots for proxy upgrades.
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint16))) public commitOpinionRatingBps;
 
+    // Commit-time social graph weight snapshot, in BPS. Used for rating weight and bounty units.
+    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint16))) public commitRaterWeightBps;
+
+    // Round-level scorer metadata bound into prediction commits.
+    mapping(uint256 => mapping(uint256 => bytes32)) public roundScorerMetadataHashSnapshot;
+
     // --- Storage gap reserved for future upgrades ---
-    uint256[32] private __gap;
+    uint256[30] private __gap;
 }

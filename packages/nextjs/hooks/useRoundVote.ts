@@ -190,10 +190,13 @@ export function useRoundVote() {
 
       const commitParams = await buildCommitPredictionParams({
         voter: address as `0x${string}`,
+        chainId: targetNetwork.id,
+        engineAddress: votingEngineInfo.address as `0x${string}`,
         contentId,
         opinionRating,
         predictedCrowdRating,
         stakeAmount,
+        scorerMetadataHash: runtime.scorerMetadataHash,
         epochDuration: runtime.epochDuration,
         roundId: runtime.roundId,
         roundReferenceRatingBps: runtime.roundReferenceRatingBps,

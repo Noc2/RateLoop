@@ -19,45 +19,6 @@ export const QuestionRewardPoolEscrowAbi = [
   },
   {
     "type": "function",
-    "name": "HIGH_VALUE_REWARD_POOL_THRESHOLD",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "MIN_HIGH_VALUE_PARTICIPANTS",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "MIN_LOCO_VALID_EFFECTIVE_UNITS",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "advanceQualificationCursor",
     "inputs": [
       {
@@ -749,35 +710,6 @@ export const QuestionRewardPoolEscrowAbi = [
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "rewardPoolPurpose",
-    "inputs": [
-      {
-        "name": "rewardPoolId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "bountyKind",
-        "type": "uint8",
-        "internalType": "uint8"
-      },
-      {
-        "name": "challengedRoundId",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "reasonHash",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "stateMutability": "view"
   },
   {
     "type": "function",

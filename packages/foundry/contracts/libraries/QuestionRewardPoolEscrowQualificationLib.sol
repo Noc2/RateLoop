@@ -9,6 +9,7 @@ import { RewardPool, RoundSnapshot } from "./QuestionRewardPoolEscrowTypes.sol";
 
 library QuestionRewardPoolEscrowQualificationLib {
     uint256 internal constant MIN_EFFECTIVE_PARTICIPANT_UNITS = 3;
+    uint256 internal constant BPS_SCALE = 10_000;
 
     error RewardPoolCursorNeedsAdvance();
 
@@ -45,9 +46,9 @@ library QuestionRewardPoolEscrowQualificationLib {
 
         roundSettled = true;
         (rawEligibleVoters, effectiveParticipantUnits, totalClaimWeight) = _countEligibleRevealedVoters(ctx);
-        uint256 effectiveFloor = ctx.requiredVoters > MIN_EFFECTIVE_PARTICIPANT_UNITS
-            ? ctx.requiredVoters
-            : MIN_EFFECTIVE_PARTICIPANT_UNITS;
+        uint256 effectiveFloor = (
+            ctx.requiredVoters > MIN_EFFECTIVE_PARTICIPANT_UNITS ? ctx.requiredVoters : MIN_EFFECTIVE_PARTICIPANT_UNITS
+        ) * BPS_SCALE;
         canQualify = rawEligibleVoters >= ctx.requiredVoters && effectiveParticipantUnits >= effectiveFloor
             && totalClaimWeight > 0;
     }
@@ -216,9 +217,8 @@ library QuestionRewardPoolEscrowQualificationLib {
                     uint256 claimWeight = _claimWeight(ctx.votingEngine, ctx.contentId, ctx.roundId, commitKey);
                     if (claimWeight > 0) {
                         totalClaimWeight += claimWeight;
-                        unchecked {
-                            ++effectiveParticipantUnits;
-                        }
+                        effectiveParticipantUnits +=
+                            ctx.votingEngine.commitRaterWeightBps(ctx.contentId, ctx.roundId, commitKey);
                     }
                 }
             }
@@ -233,7 +233,9 @@ library QuestionRewardPoolEscrowQualificationLib {
         view
         returns (uint256)
     {
-        if (votingEngine.roundFinalPredictionRatingBps(contentId, roundId) == 0) return 1;
+        if (votingEngine.roundFinalPredictionRatingBps(contentId, roundId) == 0) {
+            return votingEngine.commitRaterWeightBps(contentId, roundId, commitKey);
+        }
         return votingEngine.commitPredictionRewardWeight(contentId, roundId, commitKey);
     }
 

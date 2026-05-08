@@ -33,7 +33,11 @@ library RoundRevealLib {
         bytes32 salt,
         uint16 roundReferenceRatingBps,
         uint16 minVoters,
-        uint256 targetRoundRevealableAt
+        uint256 targetRoundRevealableAt,
+        uint16 raterWeightBps,
+        uint256 chainId,
+        address engine,
+        bytes32 scorerMetadataHash
     ) external returns (uint256 nextEligibleFrontendStake, uint256 nextEligibleFrontendCount, address voter) {
         if (round.state != RoundLib.RoundState.Open) revert RoundNotOpen();
         if (commit.voter == address(0)) revert NoCommit();
@@ -73,8 +77,7 @@ library RoundRevealLib {
             round.downCount++;
         }
 
-        uint256 epochWeightBps = RoundLib.epochWeightBps(commit.epochIndex);
-        uint64 effectiveStake = ((uint256(commit.stakeAmount) * epochWeightBps) / 10_000).toUint64();
+        uint64 effectiveStake = _effectiveStake(commit.stakeAmount, commit.epochIndex, raterWeightBps);
         if (isUp) {
             round.weightedUpPool += effectiveStake;
         } else {
@@ -114,7 +117,8 @@ library RoundRevealLib {
         bytes32 salt,
         uint16 roundReferenceRatingBps,
         uint16 minVoters,
-        uint256 targetRoundRevealableAt
+        uint256 targetRoundRevealableAt,
+        uint16 raterWeightBps
     )
         external
         returns (
@@ -138,6 +142,10 @@ library RoundRevealLib {
         if (block.timestamp < revealNotBefore) revert EpochNotEnded();
 
         bytes32 expectedHash = TlockVoteLib.buildExpectedPredictionCommitHash(
+            chainId,
+            engine,
+            commit.stakeAmount,
+            scorerMetadataHash,
             opinionRatingBps,
             predictedCrowdRatingBps,
             salt,
@@ -167,8 +175,7 @@ library RoundRevealLib {
             round.downCount++;
         }
 
-        uint256 epochWeightBps = RoundLib.epochWeightBps(commit.epochIndex);
-        effectiveStake = ((uint256(commit.stakeAmount) * epochWeightBps) / 10_000).toUint64();
+        effectiveStake = _effectiveStake(commit.stakeAmount, commit.epochIndex, raterWeightBps);
         if (isUp) {
             round.weightedUpPool += effectiveStake;
         } else {
@@ -190,5 +197,10 @@ library RoundRevealLib {
         }
 
         voter = commit.voter;
+    }
+
+    function _effectiveStake(uint64 stakeAmount, uint8 epochIndex, uint16 raterWeightBps) private pure returns (uint64) {
+        uint256 epochWeightBps = RoundLib.epochWeightBps(epochIndex);
+        return ((uint256(stakeAmount) * epochWeightBps * uint256(raterWeightBps)) / 100_000_000).toUint64();
     }
 }

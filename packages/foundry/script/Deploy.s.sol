@@ -203,6 +203,7 @@ contract DeployRateMesh is ScaffoldETHDeploy {
         protocolConfig.setFrontendRegistry(address(frontendRegistry));
         protocolConfig.setCategoryRegistry(address(categoryRegistry));
         protocolConfig.setVoterIdNFT(address(optionalIdentity));
+        protocolConfig.setRaterRegistry(address(raterRegistry));
 
         registry.setVoterIdNFT(address(optionalIdentity));
         frontendRegistry.setVoterIdNFT(address(optionalIdentity));

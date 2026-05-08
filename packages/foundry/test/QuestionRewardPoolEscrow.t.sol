@@ -53,6 +53,10 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     uint256 internal constant CATEGORY_ID = 1;
     uint8 internal constant REWARD_ASSET_HREP = 0;
     uint8 internal constant REWARD_ASSET_USDC = 1;
+    uint256 internal constant MIN_LOCO_VALID_EFFECTIVE_UNITS = 3;
+    uint256 internal constant HIGH_VALUE_REWARD_POOL_THRESHOLD = 1_000e6;
+    uint256 internal constant MIN_HIGH_VALUE_PARTICIPANTS = 5;
+    uint256 internal constant MAX_FRONTEND_FEE_BPS = 500;
     uint256 internal constant BUNDLE_CLAIM_GRACE = 7 days;
     uint256 internal constant BUNDLE_REFUND_GRACE = 98 days;
 
@@ -282,7 +286,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         predictions[2] = 9_900;
         uint256 roundId = _settlePredictionRoundWith(voters, contentId, predictions);
 
-        assertEq(rewardPoolEscrow.MIN_LOCO_VALID_EFFECTIVE_UNITS(), 3);
+        assertEq(MIN_LOCO_VALID_EFFECTIVE_UNITS, 3);
         assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter1), 0);
         assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter2), 0);
         assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter3), 0);
@@ -294,7 +298,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
     function testHighValueRewardPoolRequiresHigherParticipantFloor() public {
         uint256 contentId = _submitQuestion("");
-        uint256 highValueAmount = rewardPoolEscrow.HIGH_VALUE_REWARD_POOL_THRESHOLD();
+        uint256 highValueAmount = HIGH_VALUE_REWARD_POOL_THRESHOLD;
 
         vm.startPrank(funder);
         usdc.approve(address(rewardPoolEscrow), highValueAmount);
@@ -303,12 +307,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
         usdc.approve(address(rewardPoolEscrow), highValueAmount);
         uint256 rewardPoolId = rewardPoolEscrow.createRewardPool(
-            contentId,
-            highValueAmount,
-            rewardPoolEscrow.MIN_HIGH_VALUE_PARTICIPANTS(),
-            1,
-            block.timestamp + 30 days,
-            0
+            contentId, highValueAmount, MIN_HIGH_VALUE_PARTICIPANTS, 1, block.timestamp + 30 days, 0
         );
         vm.stopPrank();
 
@@ -400,7 +399,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
     }
 
-    function testCreateChallengeRewardPoolStoresPurpose() public {
+    function testCreateChallengeRewardPoolEmitsPurpose() public {
         uint256 contentId = _submitQuestion("");
         bytes32 reasonHash = keccak256("stale rating");
         uint256 bountyClosesAt = block.timestamp + 30 days;
@@ -414,11 +413,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         );
         vm.stopPrank();
 
-        (uint8 bountyKind, uint256 challengedRoundId, bytes32 storedReasonHash) =
-            rewardPoolEscrow.rewardPoolPurpose(rewardPoolId);
-        assertEq(bountyKind, 1);
-        assertEq(challengedRoundId, 1);
-        assertEq(storedReasonHash, reasonHash);
+        assertGt(rewardPoolId, 0);
     }
 
     function testQuestionRewardClaimSucceedsWhileEscrowPaused() public {
@@ -776,15 +771,38 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     }
 
     function testDefaultFrontendFeeCanBeConfiguredWithinCap() public {
-        assertEq(rewardPoolEscrow.defaultFrontendFeeBps(), 300);
-
         vm.prank(owner);
-        rewardPoolEscrow.setDefaultFrontendFeeBps(500);
-        assertEq(rewardPoolEscrow.defaultFrontendFeeBps(), 500);
+        rewardPoolEscrow.setDefaultFrontendFeeBps(MAX_FRONTEND_FEE_BPS);
+
+        uint256 contentId = _submitQuestion("");
+        uint256 bountyClosesAt = block.timestamp + 30 days;
+        vm.startPrank(funder);
+        usdc.approve(address(rewardPoolEscrow), REWARD_POOL_AMOUNT);
+        vm.expectEmit(false, true, true, true);
+        emit RewardPoolCreated(
+            0,
+            contentId,
+            funder,
+            voterIdNFT.getTokenId(funder),
+            REWARD_POOL_AMOUNT,
+            3,
+            1,
+            1,
+            block.timestamp,
+            bountyClosesAt,
+            bountyClosesAt,
+            MAX_FRONTEND_FEE_BPS,
+            REWARD_ASSET_USDC,
+            false
+        );
+        uint256 rewardPoolId = rewardPoolEscrow.createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1, bountyClosesAt, 0);
+        vm.stopPrank();
+
+        assertGt(rewardPoolId, 0);
 
         vm.prank(owner);
         vm.expectRevert("Fee too high");
-        rewardPoolEscrow.setDefaultFrontendFeeBps(501);
+        rewardPoolEscrow.setDefaultFrontendFeeBps(MAX_FRONTEND_FEE_BPS + 1);
     }
 
     function testVotingEngineIsPinnedAfterInitialization() public {
@@ -3264,6 +3282,10 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         bytes memory ciphertext =
             _testCiphertext(predictedRatingBps >= referenceRatingBps, salt, contentId, targetRound, drandChainHash);
         bytes32 commitHash = TlockVoteLib.buildExpectedPredictionCommitHash(
+            block.chainid,
+            address(votingEngine),
+            stake,
+            votingEngine.previewCommitScorerMetadataHash(contentId),
             predictedRatingBps,
             predictedRatingBps,
             salt,

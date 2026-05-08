@@ -40,6 +40,8 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     mapping(address => bool) private rewardDistributorAuthorized;
     mapping(address => address) public rewardDistributorVotingEngine;
     mapping(address => address) public rewardDistributorForVotingEngine;
+    address public raterRegistry;
+    bytes32 public scorerMetadataHash;
 
     struct RoundConfigBounds {
         uint32 minEpochDuration;
@@ -53,7 +55,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     }
 
     /// @dev Reserved storage gap for future proxy-safe upgrades.
-    uint256[29] private __gap;
+    uint256[27] private __gap;
 
     event RewardDistributorUpdated(address rewardDistributor);
     event RewardDistributorAuthorizationUpdated(address rewardDistributor, bool authorized);
@@ -63,6 +65,8 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     event RevealGracePeriodUpdated(uint256 revealGracePeriod);
     event VoterIdNFTUpdated(address voterIdNFT);
     event ParticipationPoolUpdated(address participationPool);
+    event RaterRegistryUpdated(address raterRegistry);
+    event ScorerMetadataHashUpdated(bytes32 scorerMetadataHash);
     event ConfigUpdated(uint256 epochDuration, uint256 maxDuration, uint256 minVoters, uint256 maxVoters);
     event DrandConfigUpdated(bytes32 drandChainHash, uint64 genesisTime, uint64 period);
     event RatingConfigUpdated(
@@ -203,6 +207,16 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
 
     function setParticipationPool(address value) external onlyRole(CONFIG_ROLE) {
         _setParticipationPool(value);
+    }
+
+    function setRaterRegistry(address value) external onlyRole(CONFIG_ROLE) {
+        raterRegistry = value;
+        emit RaterRegistryUpdated(value);
+    }
+
+    function setScorerMetadataHash(bytes32 value) external onlyRole(CONFIG_ROLE) {
+        scorerMetadataHash = value;
+        emit ScorerMetadataHashUpdated(value);
     }
 
     function setConfig(uint256 epochDuration, uint256 maxDuration, uint256 minVoters, uint256 maxVoters)

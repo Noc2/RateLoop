@@ -5,6 +5,7 @@ import {
   type VoteCiphertext,
   type VoteDrandChainHash,
   type VoteCommitHash,
+  type VoteScorerMetadataHash,
   type VoteTlockRuntime,
 } from "@ratemesh/contracts";
 import { type Address } from "viem";
@@ -52,11 +53,14 @@ export function generateVoteSalt(randomValues?: (bytes: Uint8Array) => Uint8Arra
 
 export async function buildCommitPredictionParams(params: {
   voter: Address;
+  chainId: bigint | number;
+  engineAddress: Address;
   contentId: bigint;
   opinionRating?: number;
   predictedCrowdRating?: number;
   predictedRating?: number;
   stakeAmount: number;
+  scorerMetadataHash?: VoteScorerMetadataHash;
   epochDuration: number;
   roundId: bigint;
   roundReferenceRatingBps: number;
@@ -78,7 +82,11 @@ export async function buildCommitPredictionParams(params: {
   const { ciphertext, commitHash, roundReferenceRatingBps, targetRound, drandChainHash } =
     await createTlockPredictionCommit(
       {
+        chainId: params.chainId,
+        engine: params.engineAddress,
         voter: params.voter,
+        stakeAmount: stakeWei,
+        scorerMetadataHash: params.scorerMetadataHash,
         opinionRatingBps,
         predictedCrowdRatingBps,
         salt,

@@ -236,6 +236,10 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         bytes memory ciphertext =
             _testCiphertext(opinionRatingBps >= referenceRatingBps, salt, contentId, targetRound, drandChainHash);
         bytes32 commitHash = _predictionCommitHash(
+            block.chainid,
+            address(engine),
+            stake,
+            engine.previewCommitScorerMetadataHash(contentId),
             opinionRatingBps,
             predictedCrowdRatingBps,
             salt,
@@ -266,6 +270,10 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     }
 
     function _predictionCommitHash(
+        uint256 chainId,
+        address engineAddress,
+        uint256 stake,
+        bytes32 scorerMetadataHash,
         uint16 opinionRatingBps,
         uint16 predictedCrowdRatingBps,
         bytes32 salt,
@@ -279,16 +287,20 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     ) internal pure returns (bytes32) {
         return keccak256(
             abi.encodePacked(
-                opinionRatingBps,
-                predictedCrowdRatingBps,
-                salt,
-                voter,
+                chainId,
+                engineAddress,
                 contentId,
                 roundId,
+                voter,
+                opinionRatingBps,
+                predictedCrowdRatingBps,
+                stake,
+                scorerMetadataHash,
                 referenceRatingBps,
                 targetRound,
                 drandChainHash,
-                keccak256(ciphertext)
+                keccak256(ciphertext),
+                salt
             )
         );
     }

@@ -93,6 +93,10 @@ library TlockVoteLib {
     }
 
     function buildExpectedPredictionCommitHash(
+        uint256 chainId,
+        address engine,
+        uint256 stakeAmount,
+        bytes32 scorerMetadataHash,
         uint16 opinionRatingBps,
         uint16 predictedCrowdRatingBps,
         bytes32 salt,
@@ -107,16 +111,20 @@ library TlockVoteLib {
         bytes32 ciphertextHash = keccak256(ciphertext);
         return keccak256(
             abi.encodePacked(
-                opinionRatingBps,
-                predictedCrowdRatingBps,
-                salt,
-                voter,
+                chainId,
+                engine,
                 contentId,
                 roundId,
+                voter,
+                opinionRatingBps,
+                predictedCrowdRatingBps,
+                stakeAmount,
+                scorerMetadataHash,
                 roundReferenceRatingBps,
                 targetRound,
                 drandChainHash,
-                ciphertextHash
+                ciphertextHash,
+                salt
             )
         );
     }

@@ -44,9 +44,9 @@ contract QuestionRewardPoolEscrow is
     uint256 internal constant MIN_REQUIRED_SETTLED_ROUNDS = 1;
     uint256 internal constant MAX_REQUIRED_SETTLED_ROUNDS = 16;
     uint256 internal constant MAX_REWARD_POOL_ROUND_VOTERS = 200;
-    uint256 public constant MIN_LOCO_VALID_EFFECTIVE_UNITS = 3;
-    uint256 public constant HIGH_VALUE_REWARD_POOL_THRESHOLD = 1_000e6;
-    uint256 public constant MIN_HIGH_VALUE_PARTICIPANTS = 5;
+    uint256 internal constant MIN_LOCO_VALID_EFFECTIVE_UNITS = 3;
+    uint256 internal constant HIGH_VALUE_REWARD_POOL_THRESHOLD = 1_000e6;
+    uint256 internal constant MIN_HIGH_VALUE_PARTICIPANTS = 5;
     uint256 internal constant BPS_SCALE = 10_000;
     uint256 internal constant DEFAULT_FRONTEND_FEE_BPS = 300;
     uint256 internal constant MAX_FRONTEND_FEE_BPS = 500;
@@ -543,15 +543,6 @@ contract QuestionRewardPoolEscrow is
         rewardPool.reasonHash = reasonHash;
 
         emit RewardPoolPurposeSet(rewardPoolId, bountyKind, challengedRoundId, reasonHash);
-    }
-
-    function rewardPoolPurpose(uint256 rewardPoolId)
-        external
-        view
-        returns (uint8 bountyKind, uint256 challengedRoundId, bytes32 reasonHash)
-    {
-        RewardPool storage rewardPool = _getExistingRewardPool(rewardPoolId);
-        return (rewardPool.bountyKind, rewardPool.challengedRoundId, rewardPool.reasonHash);
     }
 
     function qualifyRound(uint256 rewardPoolId, uint256 roundId) external {
@@ -1388,7 +1379,9 @@ contract QuestionRewardPoolEscrow is
     }
 
     function _roundClaimWeight(uint256 contentId, uint256 roundId, bytes32 commitKey) internal view returns (uint256) {
-        if (votingEngine.roundFinalPredictionRatingBps(contentId, roundId) == 0) return 1;
+        if (votingEngine.roundFinalPredictionRatingBps(contentId, roundId) == 0) {
+            return votingEngine.commitRaterWeightBps(contentId, roundId, commitKey);
+        }
         return votingEngine.commitPredictionRewardWeight(contentId, roundId, commitKey);
     }
 

@@ -5,6 +5,7 @@ export type VoteSalt = `0x${string}`;
 export type VoteCiphertext = `0x${string}`;
 export type VoteCommitHash = `0x${string}`;
 export type VoteDrandChainHash = `0x${string}`;
+export type VoteScorerMetadataHash = `0x${string}`;
 export type PredictionCommitHash = VoteCommitHash;
 export interface VoteCommitMetadata {
   targetRound: bigint;
@@ -83,6 +84,8 @@ const ROUND_REFERENCE_RATING_MASK = 0xffffn;
 export const MIN_PREDICTED_RATING_BPS = 1_000;
 export const MAX_PREDICTED_RATING_BPS = 9_900;
 export const RATING_SCALE_MAX = 10;
+export const DEFAULT_SCORER_METADATA_HASH =
+  "0x0000000000000000000000000000000000000000000000000000000000000000" as const;
 const PREDICTION_PLAINTEXT_VERSION = 1;
 
 export function normalizePredictedRatingBps(predictedRatingBps: number): number {
@@ -261,6 +264,10 @@ export function buildCommitHash(
 }
 
 export function buildPredictionCommitHash(
+  chainId: bigint | number,
+  engine: Address,
+  stakeAmount: bigint,
+  scorerMetadataHash: VoteScorerMetadataHash,
   opinionRatingBps: number,
   predictedCrowdRatingBps: number,
   salt: VoteSalt,
@@ -274,18 +281,37 @@ export function buildPredictionCommitHash(
 ): PredictionCommitHash {
   return keccak256(
     encodePacked(
-      ["uint16", "uint16", "bytes32", "address", "uint256", "uint256", "uint16", "uint64", "bytes32", "bytes32"],
       [
-        normalizePredictedRatingBps(opinionRatingBps),
-        normalizePredictedRatingBps(predictedCrowdRatingBps),
-        salt,
-        voter,
+        "uint256",
+        "address",
+        "uint256",
+        "uint256",
+        "address",
+        "uint16",
+        "uint16",
+        "uint256",
+        "bytes32",
+        "uint16",
+        "uint64",
+        "bytes32",
+        "bytes32",
+        "bytes32",
+      ],
+      [
+        BigInt(chainId),
+        engine,
         contentId,
         roundId,
+        voter,
+        normalizePredictedRatingBps(opinionRatingBps),
+        normalizePredictedRatingBps(predictedCrowdRatingBps),
+        stakeAmount,
+        scorerMetadataHash,
         roundReferenceRatingBps,
         targetRound,
         drandChainHash,
         keccak256(ciphertext),
+        salt,
       ],
     ),
   );
@@ -634,7 +660,11 @@ export async function createTlockVoteCommit(params: {
 }
 
 export async function createTlockPredictionCommit(params: {
+  chainId: bigint | number;
+  engine: Address;
   voter: Address;
+  stakeAmount: bigint;
+  scorerMetadataHash?: VoteScorerMetadataHash;
   opinionRatingBps: number;
   predictedCrowdRatingBps: number;
   salt: VoteSalt;
@@ -663,6 +693,10 @@ export async function createTlockPredictionCommit(params: {
     runtime,
   );
   const commitHash = buildPredictionCommitHash(
+    params.chainId,
+    params.engine,
+    params.stakeAmount,
+    params.scorerMetadataHash ?? DEFAULT_SCORER_METADATA_HASH,
     opinionRatingBps,
     predictedCrowdRatingBps,
     params.salt,
