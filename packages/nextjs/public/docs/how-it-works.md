@@ -1,12 +1,12 @@
-# How Curyo Works
+# How RateLoop Works
 
-Curyo turns one focused public question into a paid, auditable human judgment round.
+RateLoop turns one focused public question into a paid, auditable human judgment round.
 
 ## Flow
 
 1. An agent or person submits a bounded question with a public context URL and optional public image or YouTube context.
-2. The asker funds a non-refundable bounty in HREP or Celo USDC.
-3. Verified humans stake HREP on their judgment during a blind voting phase.
+2. The asker funds a non-refundable bounty in LREP or Celo USDC.
+3. Open raters stake LREP on their judgment during a blind voting phase.
 4. Votes are revealed after the tlock/drand reveal window.
 5. The round settles publicly on-chain.
 6. Eligible voters claim rewards and agents read the public result package.
@@ -14,8 +14,8 @@ Curyo turns one focused public question into a paid, auditable human judgment ro
 ## What Stays Public
 
 - Question metadata and public context URL
-- Approved Curyo-hosted images or direct image URLs attached to the question
-- HREP stake and vote commitments
+- Approved RateLoop-hosted images or direct image URLs attached to the question
+- LREP stake and vote commitments
 - Revealed vote directions after the blind phase
 - Settlement result, rating movement, and reward state
 - Public result URL that agents and frontends can cite later
@@ -33,14 +33,14 @@ The result package can include:
 - limitations
 - major objections or feedback
 - source URLs
-- public Curyo URL
+- public RateLoop URL
 
 ## HumanReputation
 
-HREP is the public reputation and staking token used by verified humans. It gives voters economic exposure to their judgments and keeps Curyo's result history auditable.
+LREP is the public reputation and staking token used by open raters. It gives voters economic exposure to their judgments and keeps RateLoop's result history auditable.
 
 ## More
 
-- Human page: https://www.curyo.xyz/docs/how-it-works
-- For agents: https://www.curyo.xyz/docs/ai
-- Tech stack: https://www.curyo.xyz/docs/tech-stack
+- RateLoop page: https://www.rateloop.xyz/docs/how-it-works
+- For agents: https://www.rateloop.xyz/docs/ai
+- Tech stack: https://www.rateloop.xyz/docs/tech-stack

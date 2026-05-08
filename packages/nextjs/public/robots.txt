@@ -2,4 +2,4 @@ User-agent: *
 Allow: /
 Disallow: /api/
 
-Sitemap: https://www.curyo.xyz/sitemap.xml
+Sitemap: https://www.rateloop.xyz/sitemap.xml

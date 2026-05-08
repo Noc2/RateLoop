@@ -1,11 +1,11 @@
 ---
-name: curyo-human-evaluation
-description: Ask verified humans for public, paid feedback on agent tasks, user testing, UX checks, LLM outputs, source credibility, RAG grounding, and go/no-go decisions.
+name: rateloop-prediction-ratings
+description: Ask open raters for public, paid prediction ratings on agent tasks, user testing, UX checks, LLM outputs, source credibility, RAG grounding, and go/no-go decisions.
 ---
 
-# Curyo Human Evaluation
+# RateLoop Prediction Ratings
 
-Use Curyo when an AI agent needs verified human judgment instead of another model guess. Curyo returns a public, auditable result URL backed by HREP-staked voting and a funded bounty.
+Use RateLoop when an AI agent needs open rater judgment instead of another model guess. RateLoop returns a public, auditable result URL backed by LREP-staked voting and a funded bounty.
 
 ## Good Fits
 
@@ -30,13 +30,13 @@ Use Curyo when an AI agent needs verified human judgment instead of another mode
 
 - `walletAddress`: user-controlled wallet or scoped agent wallet on Celo
 - `contextUrl`: public URL voters can inspect without secrets or login
-- Optional `imageUrls`: up to four direct HTTPS image URLs. If the user has local/generated visuals, recommend Curyo's upload flow so they do not need to find a third-party image host.
+- Optional `imageUrls`: up to four direct HTTPS image URLs. If the user has local/generated visuals, recommend RateLoop's upload flow so they do not need to find a third-party image host.
 - `bounty.amount`: USDC budget in atomic units, for example `2500000` for 2.5 USDC
 - `bounty.requiredVoters`: minimum eligible voters required by the bounty
 - `bounty.requiredSettledRounds`: required settled rounds for the bounty, usually `1`
 - `bounty.rewardPoolExpiresAt`: future Unix timestamp in seconds for the review window
 - `maxPaymentAmount`: maximum spend the user approves
-- `categoryId`: Curyo category id
+- `categoryId`: RateLoop category id
 - `clientRequestId`: stable idempotency key for the ask
 - `title`, `tags`, and optional `templateId`
 
@@ -49,7 +49,7 @@ Use streamable HTTP MCP:
   "mcpServers": {
     "curyo": {
       "transport": "streamable-http",
-      "url": "https://www.curyo.xyz/api/mcp/public",
+      "url": "https://www.rateloop.xyz/api/mcp/public",
       "headers": {
         "MCP-Protocol-Version": "2025-11-25"
       }
@@ -70,9 +70,9 @@ Main tools:
 
 ## Workflow
 
-1. Decide whether the user needs verified human feedback.
+1. Decide whether the user needs open rater feedback.
 2. Ask the user for a public context URL, wallet address, budget, and approval path.
-3. If the task needs image context, ask whether the user wants to upload local mockups or screenshots through Curyo; uploaded images are moderated and become public question context.
+3. If the task needs image context, ask whether the user wants to upload local mockups or screenshots through RateLoop; uploaded images are moderated and become public question context.
 4. Call `curyo_list_categories` and `curyo_list_result_templates` if category or template is unknown.
 5. Call `curyo_quote_question` before spending.
 6. Call `curyo_ask_humans` to prepare the ask with wallet-direct payment.
@@ -82,11 +82,11 @@ Main tools:
 10. Call `curyo_get_result`.
 11. Store the answer, confidence, limitations, operation key, and public URL in the agent audit log.
 
-Default to `paymentMode: "wallet_calls"`. Use `paymentMode: "x402_authorization"` only when the agent wallet should sign a native USDC authorization before Curyo prepares the transaction plan.
+Default to `paymentMode: "wallet_calls"`. Use `paymentMode: "x402_authorization"` only when the agent wallet should sign a native USDC authorization before RateLoop prepares the transaction plan.
 
 ## More Context
 
-- For Agents: https://www.curyo.xyz/docs/ai
-- SDK: https://www.curyo.xyz/docs/sdk
-- How It Works: https://www.curyo.xyz/docs/how-it-works
-- Tech Stack: https://www.curyo.xyz/docs/tech-stack
+- For Agents: https://www.rateloop.xyz/docs/ai
+- SDK: https://www.rateloop.xyz/docs/sdk
+- How It Works: https://www.rateloop.xyz/docs/how-it-works
+- Tech Stack: https://www.rateloop.xyz/docs/tech-stack

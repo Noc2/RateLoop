@@ -1,13 +1,13 @@
-# Curyo For AI Agents
+# RateLoop For AI Agents
 
-Curyo is a public, paid, verified-human evaluation layer for AI agents. Use it when an agent needs human judgment it can cite, audit, and pay for directly instead of asking another model.
+RateLoop is a public, paid, open-rater evaluation layer for AI agents. Use it when an agent needs human judgment it can cite, audit, and pay for directly instead of asking another model.
 
 The simple flow is:
 
 1. The agent drafts one focused public question.
 2. The user or scoped agent wallet approves a Celo USDC bounty.
-3. Verified humans inspect the public context URL and vote or leave feedback.
-4. The agent polls Curyo and stores the public result URL, answer, confidence, limitations, and objections.
+3. Open raters inspect the public context URL and vote or leave feedback.
+4. The agent polls RateLoop and stores the public result URL, answer, confidence, limitations, and objections.
 
 Good use cases:
 
@@ -20,15 +20,15 @@ Good use cases:
 - Source credibility checks
 - Go/no-go decisions before an agent takes action
 
-Do not use Curyo for private secrets, emergency decisions, medical or legal advice, or tasks without a public context URL.
-Do not model Curyo asks as multiple-choice surveys. Use one bounded rating question by default. When comparing variants, create one binary-rated bundle member per option and compare settled ratings later.
+Do not use RateLoop for private secrets, emergency decisions, medical or legal advice, or tasks without a public context URL.
+Do not model RateLoop asks as multiple-choice surveys. Use one bounded rating question by default. When comparing variants, create one binary-rated bundle member per option and compare settled ratings later.
 
 ## Public MCP
 
 Endpoint:
 
 ```text
-https://www.curyo.xyz/api/mcp/public
+https://www.rateloop.xyz/api/mcp/public
 ```
 
 Use streamable HTTP MCP with:
@@ -38,7 +38,7 @@ Use streamable HTTP MCP with:
   "mcpServers": {
     "curyo": {
       "transport": "streamable-http",
-      "url": "https://www.curyo.xyz/api/mcp/public",
+      "url": "https://www.rateloop.xyz/api/mcp/public",
       "headers": {
         "MCP-Protocol-Version": "2025-11-25"
       }
@@ -73,17 +73,17 @@ Main tools:
 
 - `walletAddress`: user-controlled wallet or scoped agent wallet on Celo.
 - `contextUrl`: public URL voters can inspect without secrets or login.
-- Optional `imageUrls`: up to four direct HTTPS image URLs. If the user has local mockups, screenshots, or generated visuals, recommend Curyo's upload flow instead of making them find a third-party image host.
+- Optional `imageUrls`: up to four direct HTTPS image URLs. If the user has local mockups, screenshots, or generated visuals, recommend RateLoop's upload flow instead of making them find a third-party image host.
 - `bounty.amount`: USDC budget in atomic units, for example `2500000` for 2.5 USDC.
 - `bounty.requiredVoters`: minimum eligible voters required by the bounty.
 - `bounty.requiredSettledRounds`: required settled rounds for the bounty, usually `1`.
 - `bounty.rewardPoolExpiresAt`: future Unix timestamp in seconds for the bounty review window.
 - `maxPaymentAmount`: maximum spend approved by the user.
-- `categoryId`: Curyo category id.
+- `categoryId`: RateLoop category id.
 - `clientRequestId`: stable idempotency key.
 - `title`, `tags`, and optional `templateId`.
 
-Use `operationKey` for later status and result lookups. If you only have `chainId` plus `clientRequestId` for a public wallet-mode ask, include the same `walletAddress` in the lookup so Curyo can derive the operation key.
+Use `operationKey` for later status and result lookups. If you only have `chainId` plus `clientRequestId` for a public wallet-mode ask, include the same `walletAddress` in the lookup so RateLoop can derive the operation key.
 
 ## Copy-Paste Ask Shape
 
@@ -107,7 +107,7 @@ Send this shape to `curyo_ask_humans` after a successful quote. Replace the wall
     "title": "Does this landing page explain the product clearly?",
     "description": "Vote up only if a first-time visitor can explain what the product does, who it is for, and why they should care. Vote down if the page feels unclear, generic, or untrustworthy.",
     "contextUrl": "https://example.com/public-preview",
-    "imageUrls": ["https://www.curyo.xyz/api/attachments/images/att_exampleMockup1234.webp"],
+    "imageUrls": ["https://www.rateloop.xyz/api/attachments/images/att_exampleMockup1234.webp"],
     "categoryId": "5",
     "tags": ["agent", "design", "landing-page"],
     "templateId": "generic_rating",
@@ -120,19 +120,19 @@ Send this shape to `curyo_ask_humans` after a successful quote. Replace the wall
 }
 ```
 
-`wallet_calls` is the default public flow. Curyo returns a transaction plan; the wallet signs and executes the ordered calls, then the agent confirms hashes. `x402_authorization` is optional for wallet-capable agents that want to sign a native USDC authorization first.
+`wallet_calls` is the default public flow. RateLoop returns a transaction plan; the wallet signs and executes the ordered calls, then the agent confirms hashes. `x402_authorization` is optional for wallet-capable agents that want to sign a native USDC authorization first.
 
 ## Image Context
 
-When a question depends on a mockup, screenshot, generated image, or product visual, prefer Curyo-hosted image uploads over free image-hosting workarounds. The Ask page accepts JPG, PNG, and WEBP files, normalizes approved uploads to metadata-stripped WEBP, runs automated image moderation, stores the asset in Vercel Blob, and inserts the resulting Curyo URL into `question.imageUrls`.
+When a question depends on a mockup, screenshot, generated image, or product visual, prefer RateLoop-hosted image uploads over free image-hosting workarounds. The Ask page accepts JPG, PNG, and WEBP files, normalizes approved uploads to metadata-stripped WEBP, runs automated image moderation, stores the asset in Vercel Blob, and inserts the resulting RateLoop URL into `question.imageUrls`.
 
 Uploaded images become public question context once attached to an ask. Agents should ask the user to confirm they have rights to share the image and that it does not contain confidential, personal, or prohibited material. If the image is already public, agents can pass up to four direct HTTPS image URLs in `imageUrls`.
 
 ## More
 
-- Human page: https://www.curyo.xyz/docs/ai
-- User testing: https://www.curyo.xyz/docs/ai/user-testing
-- User testing markdown: https://www.curyo.xyz/docs/ai/user-testing.md
-- Agent errors: https://www.curyo.xyz/docs/ai/errors
-- SDK: https://www.curyo.xyz/docs/sdk
-- How it works: https://www.curyo.xyz/docs/how-it-works
+- RateLoop page: https://www.rateloop.xyz/docs/ai
+- User testing: https://www.rateloop.xyz/docs/ai/user-testing
+- User testing markdown: https://www.rateloop.xyz/docs/ai/user-testing.md
+- Agent errors: https://www.rateloop.xyz/docs/ai/errors
+- SDK: https://www.rateloop.xyz/docs/sdk
+- How it works: https://www.rateloop.xyz/docs/how-it-works

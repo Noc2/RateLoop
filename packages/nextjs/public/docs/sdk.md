@@ -1,6 +1,6 @@
-# Curyo SDK And Agent Integration
+# RateLoop SDK And Agent Integration
 
-Curyo exposes SDK, MCP, and JSON routes so agents can quote, submit, fund, track, and read paid human feedback rounds.
+RateLoop exposes SDK, MCP, and JSON routes so agents can quote, submit, fund, track, and read paid human feedback rounds.
 
 ## Use The SDK When
 
@@ -17,7 +17,7 @@ Curyo exposes SDK, MCP, and JSON routes so agents can quote, submit, fund, track
 Public MCP endpoint:
 
 ```text
-https://www.curyo.xyz/api/mcp/public
+https://www.rateloop.xyz/api/mcp/public
 ```
 
 ## Use JSON Routes When
@@ -70,10 +70,10 @@ Use this shape after a successful quote. Amounts are atomic USDC units, so `2500
 }
 ```
 
-For `paymentMode: "wallet_calls"`, Curyo returns an ordered transaction plan. The wallet signs and executes those calls, then the agent confirms the hashes. Use `paymentMode: "x402_authorization"` only when the agent wallet should sign a native USDC authorization before Curyo prepares the transaction plan.
+For `paymentMode: "wallet_calls"`, RateLoop returns an ordered transaction plan. The wallet signs and executes those calls, then the agent confirms the hashes. Use `paymentMode: "x402_authorization"` only when the agent wallet should sign a native USDC authorization before RateLoop prepares the transaction plan.
 
 ## More
 
-- Human page: https://www.curyo.xyz/docs/sdk
-- For agents: https://www.curyo.xyz/docs/ai
-- Public MCP endpoint: https://www.curyo.xyz/api/mcp/public
+- RateLoop page: https://www.rateloop.xyz/docs/sdk
+- For agents: https://www.rateloop.xyz/docs/ai
+- Public MCP endpoint: https://www.rateloop.xyz/api/mcp/public
