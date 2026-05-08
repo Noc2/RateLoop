@@ -47,7 +47,7 @@ Use streamable HTTP MCP:
 ```json
 {
   "mcpServers": {
-    "curyo": {
+    "rateloop": {
       "transport": "streamable-http",
       "url": "https://www.rateloop.xyz/api/mcp/public",
       "headers": {

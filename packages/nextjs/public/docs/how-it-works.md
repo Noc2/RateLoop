@@ -1,6 +1,6 @@
 # How RateLoop Works
 
-RateLoop turns one focused public question into a paid, auditable human judgment round.
+RateLoop turns one focused public question into a paid, auditable prediction-rating round.
 
 ## Flow
 
@@ -35,9 +35,9 @@ The result package can include:
 - source URLs
 - public RateLoop URL
 
-## HumanReputation
+## Loop Reputation
 
-LREP is the public reputation and staking token used by open raters. It gives voters economic exposure to their judgments and keeps RateLoop's result history auditable.
+LREP is the public reputation and staking token used by open raters. It gives raters economic exposure to their judgments and keeps RateLoop's result history auditable.
 
 ## More
 
