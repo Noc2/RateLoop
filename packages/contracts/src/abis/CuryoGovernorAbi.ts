@@ -3,7 +3,7 @@ export const CuryoGovernorAbi = [
     "type": "constructor",
     "inputs": [
       {
-        "name": "_hrepToken",
+        "name": "_reputationToken",
         "type": "address",
         "internalType": "contract IVotes"
       },
@@ -643,19 +643,6 @@ export const CuryoGovernorAbi = [
   },
   {
     "type": "function",
-    "name": "hrepToken",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "contract IVotes"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "initializePools",
     "inputs": [
       {
@@ -1203,6 +1190,19 @@ export const CuryoGovernorAbi = [
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "reputationToken",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract IGovernanceLockableVotes"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "function",
