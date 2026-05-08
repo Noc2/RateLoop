@@ -1,19 +1,15 @@
 import {
-  HumanReputationAbi,
   bpsToRating,
   createTlockPredictionCommit,
-  createTlockVoteCommit,
-  encodeVoteTransferPayload,
   ratingToBps,
   type VoteCiphertext,
   type VoteDrandChainHash,
   type VoteCommitHash,
   type VoteTlockRuntime,
-  type VoteTransferPayload,
 } from "@ratemesh/contracts";
-import { encodeFunctionData, type Address, type Hex } from "viem";
+import { type Address } from "viem";
 
-export interface CommitVoteParams {
+export interface CommitPredictionParams {
   commitHash: VoteCommitHash;
   ciphertext: VoteCiphertext;
   roundId: bigint;
@@ -23,11 +19,8 @@ export interface CommitVoteParams {
   salt: `0x${string}`;
   stakeWei: bigint;
   frontend: `0x${string}`;
-}
-export interface CommitPredictionParams extends Omit<CommitVoteParams, "salt"> {
   predictedRatingBps: number;
   rating: number;
-  salt: `0x${string}`;
 }
 
 export function buildStakeAmountWei(stakeAmount: number): bigint {
@@ -52,49 +45,6 @@ export function generateVoteSalt(randomValues?: (bytes: Uint8Array) => Uint8Arra
   return `0x${Array.from(saltBytes)
     .map(byte => byte.toString(16).padStart(2, "0"))
     .join("")}` as `0x${string}`;
-}
-
-export async function buildCommitVoteParams(params: {
-  voter: Address;
-  contentId: bigint;
-  isUp: boolean;
-  stakeAmount: number;
-  epochDuration: number;
-  roundId: bigint;
-  roundReferenceRatingBps: number;
-  frontendCode?: `0x${string}`;
-  defaultFrontendCode?: `0x${string}`;
-  salt?: `0x${string}`;
-  runtime?: VoteTlockRuntime;
-}): Promise<CommitVoteParams> {
-  const stakeWei = buildStakeAmountWei(params.stakeAmount);
-  const frontend = resolveFrontendCode(params.frontendCode, params.defaultFrontendCode);
-  const salt = params.salt ?? generateVoteSalt();
-  const { ciphertext, commitHash, roundReferenceRatingBps, targetRound, drandChainHash } =
-    await createTlockVoteCommit(
-      {
-        voter: params.voter,
-        isUp: params.isUp,
-        salt,
-        contentId: params.contentId,
-        roundId: params.roundId,
-        roundReferenceRatingBps: params.roundReferenceRatingBps,
-        epochDurationSeconds: params.epochDuration,
-      },
-      params.runtime,
-    );
-
-  return {
-    commitHash,
-    ciphertext,
-    roundId: params.roundId,
-    roundReferenceRatingBps,
-    targetRound,
-    drandChainHash,
-    salt,
-    stakeWei,
-    frontend,
-  };
 }
 
 export async function buildCommitPredictionParams(params: {
@@ -141,20 +91,4 @@ export async function buildCommitPredictionParams(params: {
     predictedRatingBps,
     rating: bpsToRating(predictedRatingBps),
   };
-}
-
-export function buildVoteTransferPayload(params: VoteTransferPayload): Hex {
-  return encodeVoteTransferPayload(params);
-}
-
-export function buildVoteTransferAndCallData(params: {
-  votingEngineAddress: Address;
-  stakeWei: bigint;
-  payload: Hex;
-}): Hex {
-  return encodeFunctionData({
-    abi: HumanReputationAbi,
-    functionName: "transferAndCall",
-    args: [params.votingEngineAddress, params.stakeWei, params.payload],
-  });
 }

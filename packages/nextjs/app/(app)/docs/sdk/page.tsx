@@ -1,18 +1,19 @@
 import Link from "next/link";
 import type { NextPage } from "next";
 
-const sdkSourceHref = "https://github.com/Noc2/CURYO/tree/main/packages/sdk";
-const agentExamplesSourceHref = "https://github.com/Noc2/CURYO/tree/main/packages/agents/examples";
-const referenceAppSourceHref = "https://github.com/Noc2/CURYO/tree/main/packages/nextjs";
-const keeperSourceHref = "https://github.com/Noc2/CURYO/tree/main/packages/keeper";
-const ponderSourceHref = "https://github.com/Noc2/CURYO/tree/main/packages/ponder";
+const sdkSourceHref = "https://github.com/Noc2/RateMesh/tree/main/packages/sdk";
+const agentExamplesSourceHref = "https://github.com/Noc2/RateMesh/tree/main/packages/agents/examples";
+const referenceAppSourceHref = "https://github.com/Noc2/RateMesh/tree/main/packages/nextjs";
+const keeperSourceHref = "https://github.com/Noc2/RateMesh/tree/main/packages/keeper";
+const ponderSourceHref = "https://github.com/Noc2/RateMesh/tree/main/packages/ponder";
 
 const SdkPage: NextPage = () => {
   return (
     <article className="prose max-w-none">
       <h1>SDK</h1>
       <p className="lead text-base-content/60 text-lg">
-        Use the Curyo SDK to add hosted reads, frontend attribution, and vote transaction helpers to an existing app.
+        Use the RateMesh SDK to add hosted reads, frontend attribution, and prediction transaction helpers to an
+        existing app.
       </p>
 
       <h2>What It Covers</h2>
@@ -26,12 +27,12 @@ const SdkPage: NextPage = () => {
           operator records, including each question&apos;s selected round settings.
         </li>
         <li>
-          <strong>Vote helpers</strong> for stake normalization, frontend-code resolution, tlock commit generation,
-          drand metadata binding, and transfer payload encoding.
+          <strong>Prediction helpers</strong> for stake normalization, frontend-code resolution, tlock commit
+          generation, and drand metadata binding.
         </li>
         <li>
-          <strong>Wallet-agnostic output</strong> so the resulting calldata can be passed into wagmi, viem, thirdweb, or
-          a custom signing flow.
+          <strong>Wallet-agnostic output</strong> so approve and commit calls can be passed into wagmi, viem, thirdweb,
+          or a custom signing flow.
         </li>
       </ul>
 
@@ -45,12 +46,9 @@ const SdkPage: NextPage = () => {
         if you want to inspect the current implementation or track new helpers as they land.
       </p>
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
-        <code>{`import { createCuryoClient } from "@ratemesh/sdk";
-import {
-  buildCommitVoteParams,
-  buildVoteTransferAndCallData,
-  buildVoteTransferPayload,
-} from "@ratemesh/sdk/vote";`}</code>
+        <code>{`import { packVoteRoundContext } from "@ratemesh/contracts";
+import { createCuryoClient } from "@ratemesh/sdk";
+import { buildCommitPredictionParams } from "@ratemesh/sdk/vote";`}</code>
       </pre>
 
       <h2>Quickstart</h2>
@@ -72,46 +70,44 @@ const { frontend } = await curyo.read.getFrontend(
 );`}</code>
       </pre>
 
-      <h2>Vote Integration</h2>
+      <h2>Prediction Integration</h2>
       <p>
-        For vote flows, the SDK helps you prepare the same single-transaction payload the{" "}
+        For rating flows, the SDK helps you prepare the same private prediction commit the{" "}
         <a href={referenceAppSourceHref} target="_blank" rel="noopener noreferrer" className="link link-primary">
           reference app
         </a>{" "}
-        uses. The host app still decides how to sign and submit the transaction. In the redeployed tlock model, commit
-        helpers also thread the reveal target round and drand chain hash through the payload so the contracts can
-        enforce the new metadata bindings on-chain.
+        uses. The host app still decides how to approve MREP stake and submit the commit transaction. In the redeployed
+        tlock model, commit helpers thread the reveal target round and drand chain hash through the call so the
+        contracts can enforce the metadata bindings on-chain.
       </p>
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
         <code>{`const { content } = await curyo.read.getContent("42");
 const epochDuration =
   content.openRound?.epochDuration ?? content.roundConfig?.epochDuration ?? 20 * 60;
 
-const commit = await buildCommitVoteParams({
+const commit = await buildCommitPredictionParams({
   voter: "0xYourWalletAddress",
   contentId: 42n,
-  isUp: true,
+  roundId: BigInt(content.openRound?.roundId ?? 1),
+  predictedRating: 7.4,
   stakeAmount: 2.5,
   epochDuration,
   roundReferenceRatingBps: content.openRound?.referenceRatingBps ?? content.ratingBps ?? 5000,
   defaultFrontendCode: curyo.config.frontendCode,
 });
+const roundContext = packVoteRoundContext(commit.roundId, commit.roundReferenceRatingBps);
 
-const payload = buildVoteTransferPayload({
-  contentId: 42n,
-  roundReferenceRatingBps: commit.roundReferenceRatingBps,
-  commitHash: commit.commitHash,
-  ciphertext: commit.ciphertext,
-  frontend: commit.frontend,
-  targetRound: commit.targetRound,
-  drandChainHash: commit.drandChainHash,
-});
-
-const txData = buildVoteTransferAndCallData({
-  votingEngineAddress: "0x9999999999999999999999999999999999999999",
-  stakeWei: commit.stakeWei,
-  payload,
-});`}</code>
+await mrep.write.approve(["0xVotingEngine", commit.stakeWei]);
+await votingEngine.write.commitVote([
+  42n,
+  roundContext,
+  commit.targetRound,
+  commit.drandChainHash,
+  commit.commitHash,
+  commit.ciphertext,
+  commit.stakeWei,
+  commit.frontend,
+]);`}</code>
       </pre>
 
       <h2>Frontend Attribution</h2>

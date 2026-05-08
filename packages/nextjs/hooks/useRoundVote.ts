@@ -3,7 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 import { MeshReputationAbi, packVoteRoundContext } from "@ratemesh/contracts";
 import { ContentRegistryAbi, RoundVotingEngineAbi } from "@ratemesh/contracts/abis";
-import { buildCommitPredictionParams, buildCommitVoteParams } from "@ratemesh/sdk/vote";
+import { buildCommitPredictionParams } from "@ratemesh/sdk/vote";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAccount, usePublicClient, useWriteContract } from "wagmi";
 import { useOptimisticVote } from "~~/contexts/OptimisticVoteContext";
@@ -33,8 +33,7 @@ import { getParsedErrorWithAllAbis } from "~~/utils/scaffold-eth/contract";
 
 interface RoundVoteParams {
   contentId: bigint;
-  isUp?: boolean;
-  predictedRating?: number;
+  predictedRating: number;
   stakeAmount: number; // In whole tokens (e.g., 5 = 5 MREP)
   frontendCode?: `0x${string}`; // Optional frontend operator address for fee distribution
   isOwnContent?: boolean;
@@ -47,8 +46,7 @@ interface RoundVoteParams {
  * Handles: optional allowance approval followed by a vote commit.
  *
  * Predicted final ratings are tlock-encrypted to the current epoch's drand round,
- * keeping the rating private until reveal. The binary isUp path remains as a
- * legacy bridge until the new prediction engine is fully deployed.
+ * keeping the rating private until reveal.
  */
 export function useRoundVote() {
   const { address } = useAccount();
@@ -86,7 +84,6 @@ export function useRoundVote() {
 
   const commitVote = async ({
     contentId,
-    isUp,
     predictedRating,
     stakeAmount,
     frontendCode,
@@ -132,7 +129,7 @@ export function useRoundVote() {
       return false;
     }
 
-    if (predictedRating === undefined && isUp === undefined) {
+    if (predictedRating === undefined) {
       setError("Choose a predicted final rating before submitting.");
       return false;
     }
@@ -189,32 +186,18 @@ export function useRoundVote() {
         return false;
       }
 
-      const commitParams =
-        predictedRating !== undefined
-          ? await buildCommitPredictionParams({
-              voter: address as `0x${string}`,
-              contentId,
-              predictedRating,
-              stakeAmount,
-              epochDuration: runtime.epochDuration,
-              roundId: runtime.roundId,
-              roundReferenceRatingBps: runtime.roundReferenceRatingBps,
-              frontendCode,
-              defaultFrontendCode: scaffoldConfig.frontendCode,
-              runtime,
-            })
-          : await buildCommitVoteParams({
-              voter: address as `0x${string}`,
-              contentId,
-              isUp: isUp ?? true,
-              stakeAmount,
-              epochDuration: runtime.epochDuration,
-              roundId: runtime.roundId,
-              roundReferenceRatingBps: runtime.roundReferenceRatingBps,
-              frontendCode,
-              defaultFrontendCode: scaffoldConfig.frontendCode,
-              runtime,
-            });
+      const commitParams = await buildCommitPredictionParams({
+        voter: address as `0x${string}`,
+        contentId,
+        predictedRating,
+        stakeAmount,
+        epochDuration: runtime.epochDuration,
+        roundId: runtime.roundId,
+        roundReferenceRatingBps: runtime.roundReferenceRatingBps,
+        frontendCode,
+        defaultFrontendCode: scaffoldConfig.frontendCode,
+        runtime,
+      });
       const { ciphertext, commitHash, roundReferenceRatingBps, targetRound, drandChainHash, frontend, stakeWei } =
         commitParams;
 

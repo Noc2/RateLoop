@@ -1276,7 +1276,6 @@ const HomeInner = () => {
 
       const success = await commitVote({
         contentId: stakeModal.contentId,
-        isUp: stakeModal.isUp,
         predictedRating,
         isOwnContent: item?.isOwnContent,
         roundConfig: item?.roundConfig ?? stakeModal.roundConfig,

@@ -1,6 +1,6 @@
-# Curyo SDK
+# RateMesh SDK
 
-Framework-agnostic frontend SDK foundations for integrating Curyo into existing websites and apps.
+Framework-agnostic frontend SDK foundations for integrating RateMesh into existing websites and apps.
 
 ## Goals
 
@@ -13,7 +13,7 @@ Framework-agnostic frontend SDK foundations for integrating Curyo into existing 
 
 - `createCuryoClient(...)` for shared configuration
 - typed read helpers for indexed/hosted data
-- vote/frontend helpers for building transaction payloads, including the redeployed tlock metadata bindings
+- prediction/frontend helpers for building transaction parameters, including the redeployed tlock metadata bindings
 - small, wallet-agnostic write helpers
 
 Framework-specific hooks and UI components should live in a follow-up package rather than this core SDK.
@@ -29,23 +29,20 @@ Framework-specific hooks and UI components should live in a follow-up package ra
 
 ```ts
 import { createCuryoClient } from "@ratemesh/sdk";
-import {
-  buildCommitVoteParams,
-  buildVoteTransferPayload,
-  buildVoteTransferAndCallData,
-} from "@ratemesh/sdk/vote";
+import { buildCommitPredictionParams } from "@ratemesh/sdk/vote";
 
 const curyo = createCuryoClient({
-  apiBaseUrl: "https://api.curyo.xyz",
+  apiBaseUrl: "https://api.ratemesh.xyz",
   frontendCode: "0x1234567890123456789012345678901234567890",
 });
 
 const { content } = await curyo.read.getContent("42");
 
-const commit = await buildCommitVoteParams({
+const commit = await buildCommitPredictionParams({
   voter: "0xYourWalletAddress",
   contentId: 42n,
-  isUp: true,
+  roundId: BigInt(content.openRound?.roundId ?? 1),
+  predictedRating: 7.4,
   stakeAmount: 2.5,
   epochDuration: 20 * 60,
   roundReferenceRatingBps:
@@ -53,24 +50,20 @@ const commit = await buildCommitVoteParams({
   defaultFrontendCode: curyo.config.frontendCode,
 });
 
-const payload = buildVoteTransferPayload({
-  contentId: 42n,
-  roundReferenceRatingBps: commit.roundReferenceRatingBps,
-  commitHash: commit.commitHash,
-  ciphertext: commit.ciphertext,
-  frontend: commit.frontend,
-  targetRound: commit.targetRound,
-  drandChainHash: commit.drandChainHash,
-});
-
-const txData = buildVoteTransferAndCallData({
-  votingEngineAddress: "0x9999999999999999999999999999999999999999",
-  stakeWei: commit.stakeWei,
-  payload,
-});
+const commitVoteArgs = [
+  42n,
+  commit.roundId,
+  commit.roundReferenceRatingBps,
+  commit.commitHash,
+  commit.ciphertext,
+  commit.targetRound,
+  commit.drandChainHash,
+  commit.stakeWei,
+  commit.frontend,
+] as const;
 ```
 
-The SDK stays wallet-agnostic on purpose. Host apps can hand the resulting calldata to wagmi, viem, thirdweb, or their own signing flow.
+The SDK stays wallet-agnostic on purpose. Host apps approve `stakeWei` of MREP to the voting engine, then call `commitVote(...commitVoteArgs)` with wagmi, viem, thirdweb, or their own signing flow.
 
 ## Agent Helpers
 
