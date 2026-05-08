@@ -302,10 +302,10 @@ export function registerDataRoutes(app: ApiApp) {
         categoryId: content.categoryId,
         categoryName: category.name,
         settledVotes90d: sql<number>`count(*)`,
-        wins90d: sql<number>`sum(case when ${vote.isUp} = ${round.upWins} then 1 else 0 end)`,
-        losses90d: sql<number>`sum(case when ${vote.isUp} = ${round.upWins} then 0 else 1 end)`,
-        stakeWon90d: sql<bigint>`coalesce(sum(case when ${vote.isUp} = ${round.upWins} then ${vote.stake} else 0 end), 0)`,
-        stakeLost90d: sql<bigint>`coalesce(sum(case when ${vote.isUp} = ${round.upWins} then 0 else ${vote.stake} end), 0)`,
+        wins90d: sql<number>`sum(case when coalesce(${round.finalPredictionRatingBps}, 0) > 0 then case when coalesce(${vote.predictionRewardWeight}, 0) > 0 then 1 else 0 end else case when ${vote.isUp} = ${round.upWins} then 1 else 0 end end)`,
+        losses90d: sql<number>`sum(case when coalesce(${round.finalPredictionRatingBps}, 0) > 0 then case when coalesce(${vote.predictionRewardWeight}, 0) > 0 then 0 else 1 end else case when ${vote.isUp} = ${round.upWins} then 0 else 1 end end)`,
+        stakeWon90d: sql<bigint>`coalesce(sum(case when coalesce(${round.finalPredictionRatingBps}, 0) > 0 then coalesce(${vote.predictionStakeReturned}, 0) else case when ${vote.isUp} = ${round.upWins} then ${vote.stake} else 0 end end), 0)`,
+        stakeLost90d: sql<bigint>`coalesce(sum(case when coalesce(${round.finalPredictionRatingBps}, 0) > 0 then coalesce(${vote.predictionForfeitedStake}, ${vote.stake}) else case when ${vote.isUp} = ${round.upWins} then 0 else ${vote.stake} end end), 0)`,
         lastSettledAt: sql<bigint>`max(${round.settledAt})`,
       })
       .from(vote)

@@ -87,6 +87,32 @@ function accuracyScoreBps(predictionBps: number, peerRatingBps: number) {
   return PREDICTION_SCORE_SCALE_BPS - Math.trunc((PREDICTION_SCORE_SCALE_BPS * excessError) / toleranceRange);
 }
 
+function scorePredictionVote(
+  roundVote: {
+    opinionRatingBps?: number | null;
+    predictedCrowdRatingBps?: number | null;
+    predictedRatingBps?: number | null;
+    predictionWeight?: bigint | null;
+    stake: bigint;
+  },
+  totalWeightedRating: bigint,
+  totalWeight: bigint,
+) {
+  const ownWeight = roundVote.predictionWeight ?? 0n;
+  const ownOpinion = roundVote.opinionRatingBps;
+  const ownPrediction = roundVote.predictedCrowdRatingBps ?? roundVote.predictedRatingBps;
+  if (ownWeight <= 0n || ownOpinion === null || ownOpinion === undefined || ownPrediction === null || ownPrediction === undefined) {
+    return null;
+  }
+
+  const peerRatingBps = leaveOneOutRatingBps(totalWeightedRating, totalWeight, Number(ownOpinion), ownWeight);
+  const scoreBps = accuracyScoreBps(Number(ownPrediction), peerRatingBps);
+  const scoreWeight = (ownWeight * BigInt(scoreBps)) / BigInt(PREDICTION_SCORE_SCALE_BPS);
+  const stakeReturned = (roundVote.stake * BigInt(scoreBps)) / BigInt(PREDICTION_SCORE_SCALE_BPS);
+  const forfeitedStake = roundVote.stake - stakeReturned;
+  return { scoreBps, scoreWeight, stakeReturned, forfeitedStake };
+}
+
 async function recordVoteReveal({
   context,
   contentId,
@@ -501,24 +527,14 @@ ponder.on("RoundVotingEngine:PredictionRewardsScored", async ({ event, context }
     const totalWeight = existingRound.totalPredictionWeight ?? 0n;
 
     for (const roundVote of roundVotes) {
-      const ownWeight = roundVote.predictionWeight ?? 0n;
-      const ownOpinion = roundVote.opinionRatingBps;
-      const ownPrediction = roundVote.predictedCrowdRatingBps ?? roundVote.predictedRatingBps;
-      if (ownWeight <= 0n || ownOpinion === null || ownOpinion === undefined || ownPrediction === null || ownPrediction === undefined) {
-        continue;
-      }
-
-      const peerRatingBps = leaveOneOutRatingBps(totalWeightedRating, totalWeight, Number(ownOpinion), ownWeight);
-      const scoreBps = accuracyScoreBps(Number(ownPrediction), peerRatingBps);
-      const scoreWeight = (ownWeight * BigInt(scoreBps)) / BigInt(PREDICTION_SCORE_SCALE_BPS);
-      const stakeReturned = (roundVote.stake * BigInt(scoreBps)) / BigInt(PREDICTION_SCORE_SCALE_BPS);
-      const forfeitedStake = roundVote.stake - stakeReturned;
+      const score = scorePredictionVote(roundVote, totalWeightedRating, totalWeight);
+      if (!score) continue;
 
       await context.db.update(vote, { id: roundVote.id }).set({
-        predictionScoreBps: scoreBps,
-        predictionRewardWeight: scoreWeight,
-        predictionStakeReturned: stakeReturned,
-        predictionForfeitedStake: forfeitedStake,
+        predictionScoreBps: score.scoreBps,
+        predictionRewardWeight: score.scoreWeight,
+        predictionStakeReturned: score.stakeReturned,
+        predictionForfeitedStake: score.forfeitedStake,
       });
     }
   }
@@ -591,13 +607,28 @@ ponder.on("RoundVotingEngine:RoundSettled", async ({ event, context }) => {
     .select()
     .from(vote)
     .where(and(eq(vote.contentId, contentId), eq(vote.roundId, roundId), eq(vote.revealed, true)));
+  const predictionRound =
+    roundVotes.length >= 3 &&
+    (existingRound?.totalPredictionWeight ?? 0n) > 0n &&
+    roundVotes.every(
+      (v) =>
+        (v.predictionWeight ?? 0n) > 0n &&
+        v.opinionRatingBps !== null &&
+        v.opinionRatingBps !== undefined &&
+        (v.predictedCrowdRatingBps ?? v.predictedRatingBps) !== null &&
+        (v.predictedCrowdRatingBps ?? v.predictedRatingBps) !== undefined,
+    );
+  const totalWeightedRating = existingRound?.predictionWeightedRatingSum ?? 0n;
+  const totalWeight = existingRound?.totalPredictionWeight ?? 0n;
 
   const categoryId = contentRecord?.categoryId ?? 0n;
 
   for (const v of roundVotes) {
     if (v.isUp === null) continue; // skip unrevealed
-    const won = v.isUp === upWins;
-    const stake = v.stake;
+    const predictionScore = predictionRound ? scorePredictionVote(v, totalWeightedRating, totalWeight) : null;
+    const won = predictionScore ? predictionScore.scoreWeight > 0n : v.isUp === upWins;
+    const stakeWon = predictionScore ? predictionScore.stakeReturned : won ? v.stake : 0n;
+    const stakeLost = predictionScore ? predictionScore.forfeitedStake : won ? 0n : v.stake;
 
     await context.db
       .insert(voterStats)
@@ -606,8 +637,8 @@ ponder.on("RoundVotingEngine:RoundSettled", async ({ event, context }) => {
         totalSettledVotes: 1,
         totalWins: won ? 1 : 0,
         totalLosses: won ? 0 : 1,
-        totalStakeWon: won ? stake : 0n,
-        totalStakeLost: won ? 0n : stake,
+        totalStakeWon: stakeWon,
+        totalStakeLost: stakeLost,
         currentStreak: won ? 1 : -1,
         bestWinStreak: won ? 1 : 0,
       })
@@ -619,8 +650,8 @@ ponder.on("RoundVotingEngine:RoundSettled", async ({ event, context }) => {
           totalSettledVotes: row.totalSettledVotes + 1,
           totalWins: row.totalWins + (won ? 1 : 0),
           totalLosses: row.totalLosses + (won ? 0 : 1),
-          totalStakeWon: row.totalStakeWon + (won ? stake : 0n),
-          totalStakeLost: row.totalStakeLost + (won ? 0n : stake),
+          totalStakeWon: row.totalStakeWon + stakeWon,
+          totalStakeLost: row.totalStakeLost + stakeLost,
           currentStreak: newStreak,
           bestWinStreak: Math.max(row.bestWinStreak, won ? newStreak : 0),
         };
@@ -637,15 +668,15 @@ ponder.on("RoundVotingEngine:RoundSettled", async ({ event, context }) => {
           totalSettledVotes: 1,
           totalWins: won ? 1 : 0,
           totalLosses: won ? 0 : 1,
-          totalStakeWon: won ? stake : 0n,
-          totalStakeLost: won ? 0n : stake,
+          totalStakeWon: stakeWon,
+          totalStakeLost: stakeLost,
         })
         .onConflictDoUpdate((row) => ({
           totalSettledVotes: row.totalSettledVotes + 1,
           totalWins: row.totalWins + (won ? 1 : 0),
           totalLosses: row.totalLosses + (won ? 0 : 1),
-          totalStakeWon: row.totalStakeWon + (won ? stake : 0n),
-          totalStakeLost: row.totalStakeLost + (won ? 0n : stake),
+          totalStakeWon: row.totalStakeWon + stakeWon,
+          totalStakeLost: row.totalStakeLost + stakeLost,
         }));
     }
   }
