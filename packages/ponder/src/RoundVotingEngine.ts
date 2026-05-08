@@ -331,6 +331,7 @@ ponder.on("RoundVotingEngine:VoteCommitted", async ({ event, context }) => {
     .onConflictDoNothing();
 
   // Update content aggregate and lastActivityAt
+  const contentRecord = await context.db.find(content, { id: contentId });
   if (contentRecord) {
     await context.db
       .update(content, { id: contentId })
