@@ -11,15 +11,18 @@ import { GovernorTimelockControl } from "@openzeppelin/contracts/governance/exte
 import { GovernorSettings } from "@openzeppelin/contracts/governance/extensions/GovernorSettings.sol";
 import { TimelockController } from "@openzeppelin/contracts/governance/TimelockController.sol";
 import { IVotes } from "@openzeppelin/contracts/governance/utils/IVotes.sol";
-import { HumanReputation } from "../HumanReputation.sol";
+
+interface IGovernanceLockableVotes is IVotes {
+    function lockForGovernance(address account, uint256 amount) external;
+}
 
 /// @title CuryoGovernor
-/// @notice On-chain governance for the Curyo protocol using HREP voting power.
+/// @notice On-chain governance for the RateMesh protocol using MREP voting power.
 /// @dev Implements OpenZeppelin Governor with:
 ///      - Simple counting (For/Against/Abstain)
-///      - Votes from HREP token (which implements ERC20Votes)
+///      - Votes from MREP token (which implements ERC20Votes)
 ///      - Dynamic quorum: 4% of circulating supply (total minus protocol-controlled balances)
-///      - Bootstrap quorum floor of 100K HREP to prevent early capture while circulation is thin
+///      - Bootstrap quorum floor of 100K MREP to prevent early capture while circulation is thin
 ///      - Timelock execution for security
 ///      - 7-day token lock when voting or proposing
 contract CuryoGovernor is
@@ -30,8 +33,8 @@ contract CuryoGovernor is
     GovernorVotesQuorumFraction,
     GovernorTimelockControl
 {
-    /// @notice HREP token used for historical locked-balance checks
-    IVotes public immutable hrepToken;
+    /// @notice MREP token used for historical locked-balance checks
+    IGovernanceLockableVotes public immutable reputationToken;
     /// @notice Address authorized to perform one-time quorum exclusion initialization
     address public immutable poolsInitializer;
     /// @notice Protocol-controlled holders whose balances are excluded from quorum calculation.
@@ -40,9 +43,9 @@ contract CuryoGovernor is
     mapping(address => uint48) public excludedHolderEffectiveBlock;
     /// @notice Whether excluded holders have been set.
     bool public poolsInitialized;
-    /// @notice Bootstrap proposal threshold regardless of early faucet claim sizes (1K HREP with 6 decimals)
+    /// @notice Bootstrap proposal threshold regardless of early distribution sizes (1K MREP with 6 decimals)
     uint256 public constant BOOTSTRAP_PROPOSAL_THRESHOLD = 1_000 * 1e6;
-    /// @notice Minimum quorum regardless of circulating supply (100K HREP with 6 decimals)
+    /// @notice Minimum quorum regardless of circulating supply (100K MREP with 6 decimals)
     uint256 public constant MINIMUM_QUORUM = 100_000 * 1e6;
     /// @notice Highest threshold governance may set, preventing self-bricked proposal creation.
     uint256 public constant MAX_PROPOSAL_THRESHOLD = MINIMUM_QUORUM;
@@ -68,21 +71,21 @@ contract CuryoGovernor is
 
     event ExcludedHolderReplaced(address indexed oldHolder, address indexed newHolder);
 
-    /// @notice Deploy the governor with HREP token and timelock
-    /// @param _hrepToken The HREP voting token address
+    /// @notice Deploy the governor with the reputation token and timelock
+    /// @param _reputationToken The MREP voting token address
     /// @param _timelock The timelock controller address
-    constructor(IVotes _hrepToken, TimelockController _timelock)
+    constructor(IVotes _reputationToken, TimelockController _timelock)
         Governor("CuryoGovernor")
         GovernorSettings(
             86_400, // Voting delay: ~1 day on 1s Celo blocks
             604_800, // Voting period: ~1 week on 1s Celo blocks
             BOOTSTRAP_PROPOSAL_THRESHOLD
         )
-        GovernorVotes(_hrepToken)
+        GovernorVotes(_reputationToken)
         GovernorVotesQuorumFraction(4) // 4% of circulating supply
         GovernorTimelockControl(_timelock)
     {
-        hrepToken = _hrepToken;
+        reputationToken = IGovernanceLockableVotes(address(_reputationToken));
         poolsInitializer = msg.sender;
     }
 
@@ -170,7 +173,7 @@ contract CuryoGovernor is
         for (uint256 i = 0; i < excludedHoldersLength; i++) {
             address holder = _excludedHolders[i];
             if (excludedHolderEffectiveBlock[holder] <= blockNumber) {
-                locked += hrepToken.getPastVotes(holder, blockNumber);
+                locked += reputationToken.getPastVotes(holder, blockNumber);
             }
         }
         uint256 circulating = totalSupply > locked ? totalSupply - locked : 0;
@@ -245,7 +248,7 @@ contract CuryoGovernor is
 
         // Lock the voting power that was used
         if (weight > 0) {
-            HumanReputation(address(token())).lockForGovernance(account, weight);
+            reputationToken.lockForGovernance(account, weight);
         }
 
         return weight;
@@ -269,7 +272,7 @@ contract CuryoGovernor is
         nextProposalBlock[msg.sender] = block.number + PROPOSAL_COOLDOWN_BLOCKS;
 
         // Lock proposal threshold amount for the proposer
-        HumanReputation(address(token())).lockForGovernance(msg.sender, proposalThreshold());
+        reputationToken.lockForGovernance(msg.sender, proposalThreshold());
 
         return proposalId;
     }
