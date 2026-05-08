@@ -89,7 +89,7 @@ test("same avatar accent keeps the same center gradient across addresses", () =>
   const modelA = buildSignalDiscAvatarModel(
     buildPayload({
       address: "0x0000000000000000000000000000000000111111",
-      avatarAccentHex: "#cc490f",
+      avatarAccentHex: "#359eee",
     }),
     {
       nowSeconds: NOW_SECONDS,
@@ -98,7 +98,7 @@ test("same avatar accent keeps the same center gradient across addresses", () =>
   const modelB = buildSignalDiscAvatarModel(
     buildPayload({
       address: "0x0000000000000000000000000000000000222222",
-      avatarAccentHex: "#cc490f",
+      avatarAccentHex: "#359eee",
     }),
     {
       nowSeconds: NOW_SECONDS,

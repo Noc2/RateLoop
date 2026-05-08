@@ -174,7 +174,7 @@ export function SupportedAgentsSection() {
         <p className="text-base leading-7 text-base-content/70 sm:text-lg">Ask your favorite AI agent about RateMesh</p>
       </div>
 
-      <div className="mx-auto flex max-w-full flex-nowrap items-center justify-start gap-2 overflow-x-auto px-4 pb-1 sm:justify-center sm:gap-2.5 sm:px-0 lg:gap-3">
+      <div className="mx-auto flex max-w-full flex-wrap items-center justify-center gap-2 px-4 pb-1 sm:flex-nowrap sm:gap-2.5 sm:px-0 lg:gap-3">
         {AGENTS.map(agent => {
           const isHighlighted = activeAgentName === agent.name;
           return (

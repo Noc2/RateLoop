@@ -1,6 +1,5 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { AnimateInView } from "~~/components/home/AnimateInView";
 import { LandingFaq } from "~~/components/home/LandingFaq";
 import { LandingPageActions } from "~~/components/home/LandingPageActions";
 import OrbAnimation from "~~/components/home/OrbAnimation";
@@ -149,15 +148,15 @@ function AskWorkflowSection() {
     <section className="relative z-10 mt-12 w-full sm:mt-16 lg:mt-20">
       <SectionHeading number="01" title="How It" gradientText="Works" />
       <div className="grid grid-cols-1 items-stretch gap-x-12 gap-y-14 md:grid-cols-3">
-        <AnimateInView className="h-full">
+        <div className="h-full">
           <AskFlowPanel {...agentStep} />
-        </AnimateInView>
-        <AnimateInView className="h-full" delay={150}>
+        </div>
+        <div className="h-full">
           <AskFlowPanel {...mcpStep} />
-        </AnimateInView>
-        <AnimateInView className="h-full" delay={300}>
+        </div>
+        <div className="h-full">
           <AskFlowPanel {...resultStep} />
-        </AnimateInView>
+        </div>
       </div>
     </section>
   );

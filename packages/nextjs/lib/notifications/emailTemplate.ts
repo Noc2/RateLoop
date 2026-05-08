@@ -10,17 +10,18 @@ interface CuryoEmailTemplateParams {
   linkIntro?: string;
 }
 
-const EMAIL_BG = "#090a0c";
-const EMAIL_TEXT = "#f5f0eb";
-const EMAIL_PRIMARY = "#cc490f";
-const EMAIL_PRIMARY_HALO = "rgba(204,73,15,0.14)";
-const EMAIL_SURFACE_TOP = "#1c181e";
-const EMAIL_SURFACE_BOTTOM = "#151217";
-const EMAIL_SURFACE_GLOW = "rgba(204,73,15,0.18)";
-const EMAIL_MUTED_TEXT = "rgba(245,240,235,0.86)";
-const EMAIL_MUTED_LABEL = "rgba(245,240,235,0.64)";
+const EMAIL_BG = "#050505";
+const EMAIL_TEXT = "#f5f5f5";
+const EMAIL_PRIMARY = "#f5f5f5";
+const EMAIL_PRIMARY_HALO = "rgba(245,245,245,0.12)";
+const EMAIL_PRIMARY_TEXT = "#050505";
+const EMAIL_SURFACE_TOP = "#181818";
+const EMAIL_SURFACE_BOTTOM = "#101010";
+const EMAIL_SURFACE_GLOW = "rgba(245,245,245,0.08)";
+const EMAIL_MUTED_TEXT = "rgba(245,245,245,0.82)";
+const EMAIL_MUTED_LABEL = "rgba(245,245,245,0.58)";
 const EMAIL_FOOTER = "rgba(139,133,142,0.92)";
-const EMAIL_BORDER = "rgba(245,240,235,0.08)";
+const EMAIL_BORDER = "rgba(245,245,245,0.1)";
 const EMAIL_SHADOW = "rgba(5,4,8,0.42)";
 
 function escapeHtml(value: string) {
@@ -97,7 +98,7 @@ export function buildCuryoEmailHtml(params: CuryoEmailTemplateParams) {
                         style="
                           border-radius:999px;
                           background:${EMAIL_PRIMARY};
-                          box-shadow:0 14px 30px rgba(204,73,15,0.18);
+                          box-shadow:0 14px 30px rgba(245,245,245,0.12);
                         "
                       >
                         <a
@@ -105,7 +106,7 @@ export function buildCuryoEmailHtml(params: CuryoEmailTemplateParams) {
                           style="
                             display:inline-block;
                             padding:14px 24px;
-                            color:${EMAIL_TEXT};
+                            color:${EMAIL_PRIMARY_TEXT};
                             font-family:Arial, Helvetica, sans-serif;
                             font-size:16px;
                             font-weight:700;

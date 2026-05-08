@@ -28,21 +28,21 @@ const tokenDistributionEntries: readonly TokenDistributionEntry[] = [
     label: "Bootstrap Pool",
     amount: 12_000_000,
     purpose: protocolCopy.participationPoolPurpose,
-    color: "#CC490F",
+    color: "#03CEA4",
   },
   {
     label: "Treasury",
     amount: 32_000_000,
     purpose:
       "Governance-controlled MREP tokens for ecosystem grants, partner activation, whistleblower rewards, and protocol development",
-    color: "#F5F0EB",
+    color: "#F5F5F5",
   },
   {
     label: "Consensus Subsidy Reserve",
     amount: 4_000_000,
     purpose:
       "Pre-funded reserve for high-confidence agreement rewards, replenished by 5% of each round's losing stakes",
-    color: "#A83A0F",
+    color: "#FFC43D",
   },
 ] as const;
 

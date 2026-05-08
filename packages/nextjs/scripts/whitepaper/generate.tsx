@@ -20,12 +20,12 @@ import {
 } from "@react-pdf/renderer";
 
 // ── Brand colors ──
-const EMBER = "#CC490F";
-const EMBER_DEEP = "#A83A0F";
+const EMBER = "#359EEE";
+const EMBER_DEEP = "#03CEA4";
 const STEEL = "#7E8996";
 const DARK = "#090A0C";
 const GRAY = STEEL;
-const LIGHT_BG = "#F5F0EB";
+const LIGHT_BG = "#F5F5F5";
 // Per-section accent colors (cycles through the website palette)
 const SECTION_COLORS = [EMBER, STEEL, EMBER_DEEP, EMBER, STEEL, EMBER_DEEP, EMBER];
 
