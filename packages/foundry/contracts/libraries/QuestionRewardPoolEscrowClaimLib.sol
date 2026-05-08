@@ -158,7 +158,20 @@ library QuestionRewardPoolEscrowClaimLib {
                 0
             );
         }
-        if (snapshot.totalClaimWeight == 0 || snapshot.claimedWeight >= snapshot.totalClaimWeight) return 0;
+        if (snapshot.totalClaimWeight == 0) {
+            return _claimableEqual(
+                votingEngine,
+                rewardPool.contentId,
+                roundId,
+                commitKey,
+                frontend,
+                snapshot.allocation,
+                snapshot.frontendFeeAllocation,
+                snapshot.eligibleVoters,
+                snapshot.claimedCount
+            );
+        }
+        if (snapshot.claimedWeight >= snapshot.totalClaimWeight) return 0;
         return _claimableWeighted(
             votingEngine,
             rewardPool.contentId,
@@ -224,6 +237,23 @@ library QuestionRewardPoolEscrowClaimLib {
         uint256 reservedFrontendFee = _nextWeightedShare(
             frontendFeeAllocation, totalClaimWeight, claimWeight, claimedWeight, frontendFeeClaimedAmount
         );
+        (claimableAmount,,) =
+            _computeClaimSplit(votingEngine, contentId, roundId, commitKey, frontend, grossAmount, reservedFrontendFee);
+    }
+
+    function _claimableEqual(
+        RoundVotingEngine votingEngine,
+        uint256 contentId,
+        uint256 roundId,
+        bytes32 commitKey,
+        address frontend,
+        uint256 allocation,
+        uint256 frontendFeeAllocation,
+        uint256 eligibleVoters,
+        uint256 claimedCount
+    ) private view returns (uint256 claimableAmount) {
+        uint256 grossAmount = _nextEqualShare(allocation, eligibleVoters, claimedCount);
+        uint256 reservedFrontendFee = _nextEqualShare(frontendFeeAllocation, eligibleVoters, claimedCount);
         (claimableAmount,,) =
             _computeClaimSplit(votingEngine, contentId, roundId, commitKey, frontend, grossAmount, reservedFrontendFee);
     }

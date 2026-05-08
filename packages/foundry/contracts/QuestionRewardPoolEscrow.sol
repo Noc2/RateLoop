@@ -606,21 +606,39 @@ contract QuestionRewardPoolEscrow is
         uint256 grossAmount;
         uint256 frontendFee;
         address frontendRecipient;
-        (grossAmount, rewardAmount, frontendFee, frontendRecipient, reservedFrontendFee) =
-            QuestionRewardPoolEscrowClaimLib.computeWeightedClaimSplit(
-                votingEngine,
-                rewardPool.contentId,
-                roundId,
-                commitKey,
-                frontend,
-                snapshot.allocation,
-                snapshot.frontendFeeAllocation,
-                snapshot.totalClaimWeight,
-                claimWeight,
-                snapshot.claimedWeight,
-                snapshot.claimedAmount,
-                snapshot.frontendFeeClaimedAmount
+        if (snapshot.totalClaimWeight == 0) {
+            reservedFrontendFee = QuestionRewardPoolEscrowClaimLib.nextEqualShare(
+                snapshot.frontendFeeAllocation, snapshot.eligibleVoters, snapshot.claimedCount
             );
+            (grossAmount, rewardAmount, frontendFee, frontendRecipient) =
+                QuestionRewardPoolEscrowClaimLib.computeEqualShareClaimSplit(
+                    votingEngine,
+                    rewardPool.contentId,
+                    roundId,
+                    commitKey,
+                    frontend,
+                    snapshot.allocation,
+                    snapshot.frontendFeeAllocation,
+                    snapshot.eligibleVoters,
+                    snapshot.claimedCount
+                );
+        } else {
+            (grossAmount, rewardAmount, frontendFee, frontendRecipient, reservedFrontendFee) =
+                QuestionRewardPoolEscrowClaimLib.computeWeightedClaimSplit(
+                    votingEngine,
+                    rewardPool.contentId,
+                    roundId,
+                    commitKey,
+                    frontend,
+                    snapshot.allocation,
+                    snapshot.frontendFeeAllocation,
+                    snapshot.totalClaimWeight,
+                    claimWeight,
+                    snapshot.claimedWeight,
+                    snapshot.claimedAmount,
+                    snapshot.frontendFeeClaimedAmount
+                );
+        }
         require(grossAmount > 0, "No reward");
 
         rewardClaimed[rewardPoolId][roundId][commitKey] = true;
