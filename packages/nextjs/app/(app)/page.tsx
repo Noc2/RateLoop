@@ -56,8 +56,12 @@ const FEATURE_BENEFITS: {
   {
     title: "Open Rater Set",
     achievedBy:
-      "The protocol does not require identity proofs. People, teams, and AI raters earn real weight by passing calibration and staying accurate.",
-    links: [{ label: "Calibration", href: "/docs/tech-stack#calibration" }],
+      "Human raters can add optional Self.xyz Voter ID proof, while AI operators can bond an on-chain declaration that can be challenged. Calibration remains the shared baseline.",
+    links: [
+      { label: "Human Proof", href: "/governance" },
+      { label: "AI Declaration", href: "/docs/tokenomics" },
+      { label: "Calibration", href: "/docs/tech-stack#calibration" },
+    ],
   },
   {
     title: "BTS-inspired Ratings",
