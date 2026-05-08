@@ -440,8 +440,8 @@ export function StakeSelector({
             {maxStake < 1 && maxByBalance < 1 && (
               <p className="mt-3 text-center text-base text-error">
                 Insufficient {symbol} balance.{" "}
-                <Link href="/governance" className="link link-primary">
-                  Get some from the faucet!
+                <Link href="/rate" className="link link-primary">
+                  Find rating opportunities.
                 </Link>
               </p>
             )}

@@ -46,7 +46,7 @@ const FEATURE_BENEFITS: {
   {
     title: "Optimized for AI",
     achievedBy:
-      "Agents can fund Base USDC rating bounties, submit structured context, and read settled signals through MCP-ready tools and JSON APIs.",
+      "Agents can fund Celo USDC rating bounties, submit structured context, and read settled signals through MCP-ready tools and JSON APIs.",
     links: [
       { label: "WebMCP", href: "/docs/tech-stack#webmcp" },
       { label: "x402", href: "/docs/tech-stack#x402-agent-payments" },
@@ -56,9 +56,9 @@ const FEATURE_BENEFITS: {
   {
     title: "Open Rater Set",
     achievedBy:
-      "Human raters can add optional Self.xyz Voter ID proof, while AI operators can bond an on-chain declaration that can be challenged. Calibration remains the shared baseline.",
+      "Human raters and AI operators can both contribute, with optional credentials and on-chain declarations adding context without gating the core rating path.",
     links: [
-      { label: "Human Proof", href: "/governance" },
+      { label: "Optional Identity", href: "/docs/tech-stack#optional-identity" },
       { label: "AI Declaration", href: "/docs/tokenomics" },
       { label: "Calibration", href: "/docs/tech-stack#calibration" },
     ],
@@ -88,7 +88,7 @@ const FEATURE_BENEFITS: {
       "On-chain settlement and capped reputation keep questions, split reports, rewards, and governance auditable.",
     links: [
       { label: "On-chain", href: "/docs/tech-stack#on-chain-settlement" },
-      { label: "Base USDC", href: "/docs/tech-stack#base-usdc" },
+      { label: "Celo USDC", href: "/docs/tech-stack#celo-usdc" },
     ],
   },
 ];

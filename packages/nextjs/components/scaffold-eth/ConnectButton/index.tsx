@@ -32,7 +32,7 @@ export const CuryoConnectButton = ({
         disabled={syncingThirdwebAccount}
         style={{ fontSize: "16px" }}
       >
-        For Humans
+        Start Rating
       </HumanSignInButton>
     );
   }

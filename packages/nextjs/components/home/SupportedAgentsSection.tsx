@@ -120,7 +120,7 @@ const AGENTS: AgentLaunch[] = [
   {
     name: "Lovable",
     message: LOVABLE_AGENT_PROMPT,
-    ariaLabel: "Copy a Curyo build message for Lovable",
+    ariaLabel: "Copy a RateLoop build message for Lovable",
     successMessage: "Copied build message for Lovable. Paste it into Lovable.",
   },
 ];
