@@ -111,19 +111,19 @@ test("getVoterLeaderboardSnapshot keeps per-chain caches isolated", async () => 
     Object.fromEntries(addresses.map(address => [address.toLowerCase(), BigInt(options?.chainId ?? 0)]));
 
   const first = await getVoterLeaderboardSnapshot({
-    chainId: 42220,
+    chainId: 480,
     listTokenHolders,
     readBalances,
   });
   const second = await getVoterLeaderboardSnapshot({
-    chainId: 11142220,
+    chainId: 4801,
     listTokenHolders,
     readBalances,
   });
 
   assert.equal(listCalls, 2);
-  assert.equal(first.balances[ADDRESS_A], 42220n);
-  assert.equal(second.balances[ADDRESS_A], 11142220n);
+  assert.equal(first.balances[ADDRESS_A], 480n);
+  assert.equal(second.balances[ADDRESS_A], 4801n);
 });
 
 test("resolveVoterLeaderboardSelection appends a missing includeAddress without rebuilding the full snapshot", async () => {

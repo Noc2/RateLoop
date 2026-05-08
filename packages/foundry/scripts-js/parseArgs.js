@@ -11,8 +11,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 config({ path: join(__dirname, "..", ".env") });
 
 const NETWORK_RPC_OVERRIDE_ENV = {
-  celoSepolia: "CELO_SEPOLIA_RPC_URL",
-  celo: "CELO_RPC_URL",
+  worldchainSepolia: "WORLDCHAIN_SEPOLIA_RPC_URL",
+  worldchain: "WORLDCHAIN_RPC_URL",
 };
 
 function formatBlockscoutVerifyCommand(networkName) {
@@ -146,11 +146,10 @@ if (network === "localhost") {
 }
 process.env.RESUME_FLAG = resume ? "--resume" : "";
 
-// Blockscout networks — forge's built-in Celoscan URL returns 403 and the
-// [etherscan] override in foundry.toml is ignored. Skip auto-verification;
-// verify manually via: make verify-blockscout NETWORK=<celo|celoSepolia> CONTRACT_ADDRESS=0x... CONTRACT_NAME=MyContract
-const BLOCKSCOUT_NETWORKS = new Set(["celoSepolia", "celo"]);
-const SLOW_BROADCAST_NETWORKS = new Set(["celoSepolia", "celo"]);
+// World Chain explorer support can vary by provider. Skip auto-verification here;
+// verify manually via: make verify-blockscout NETWORK=<worldchain|worldchainSepolia> CONTRACT_ADDRESS=0x... CONTRACT_NAME=MyContract
+const BLOCKSCOUT_NETWORKS = new Set(["worldchainSepolia", "worldchain"]);
+const SLOW_BROADCAST_NETWORKS = new Set(["worldchainSepolia", "worldchain"]);
 process.env.DEPLOY_FLOW_FLAGS = SLOW_BROADCAST_NETWORKS.has(network)
   ? "--slow"
   : "";
@@ -173,13 +172,13 @@ if (overrideEnvKey) {
 if (network !== "localhost") {
   if (BLOCKSCOUT_NETWORKS.has(network)) {
     process.env.VERIFY_FLAGS = "";
-    // Suppress Forge's built-in etherscan lookups (Celoscan returns 403 for Celo chains)
+    // Suppress Forge's built-in etherscan lookups (manual World Chain verification)
     const existing = process.env.RUST_LOG || "";
     process.env.RUST_LOG = existing
       ? `${existing},etherscan=off`
       : "etherscan=off";
     console.log(
-      `\n⚠️  Skipping auto-verification for ${network} (Celoscan returns 403)`
+      `\n⚠️  Skipping auto-verification for ${network}`
     );
     console.log(
       `   Verify after deploy: ${formatBlockscoutVerifyCommand(network)}`

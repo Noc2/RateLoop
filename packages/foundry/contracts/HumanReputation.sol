@@ -14,7 +14,7 @@ import { Nonces } from "@openzeppelin/contracts/utils/Nonces.sol";
 ///      Minting is role-gated and always bounded by MAX_SUPPLY.
 contract HumanReputation is ERC20, ERC1363, ERC20Permit, ERC20Votes, AccessControl {
     uint8 private constant DECIMALS = 6;
-    uint256 public constant MAX_SUPPLY = 100_000_000 * 10 ** DECIMALS; // 100M HREP total cap; launch deployment mints the full cap across faucet, participation, consensus, and treasury pools
+    uint256 public constant MAX_SUPPLY = 100_000_000 * 10 ** DECIMALS; // 100M HREP total cap across launch, participation, consensus, and treasury pools
 
     /// @notice Role for minting tokens, always bounded by MAX_SUPPLY
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
@@ -83,7 +83,7 @@ contract HumanReputation is ERC20, ERC1363, ERC20Permit, ERC20Votes, AccessContr
         emit ContentVotingContractsSet(_votingEngine, _contentRegistry);
     }
 
-    // --- Minting (HumanFaucet) ---
+    // --- Minting ---
 
     /// @notice Mint new tokens (only callable by addresses with MINTER_ROLE)
     /// @param to Address to receive the minted tokens

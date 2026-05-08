@@ -251,20 +251,9 @@ contract QuestionRewardPoolEscrow is
         uint256 bountyClosesAt,
         uint256 feedbackClosesAt
     ) external nonReentrant whenNotPaused returns (uint256 rewardPoolId) {
-        _requireCurrentRegistryEscrow();
-        rewardPoolId = _createRewardPool(
-            contentId,
-            msg.sender,
-            address(0),
-            REWARD_ASSET_USDC,
-            amount,
-            requiredVoters,
-            MIN_REQUIRED_SETTLED_ROUNDS,
-            bountyClosesAt,
-            feedbackClosesAt,
-            false
+        rewardPoolId = _createPurposeRewardPool(
+            contentId, amount, requiredVoters, challengedRoundId, reasonHash, bountyClosesAt, feedbackClosesAt, 1
         );
-        _setRewardPoolPurpose(rewardPoolId, 1, challengedRoundId, reasonHash);
     }
 
     function createRerateRewardPool(
@@ -276,6 +265,21 @@ contract QuestionRewardPoolEscrow is
         uint256 bountyClosesAt,
         uint256 feedbackClosesAt
     ) external nonReentrant whenNotPaused returns (uint256 rewardPoolId) {
+        rewardPoolId = _createPurposeRewardPool(
+            contentId, amount, requiredVoters, previousRoundId, reasonHash, bountyClosesAt, feedbackClosesAt, 2
+        );
+    }
+
+    function _createPurposeRewardPool(
+        uint256 contentId,
+        uint256 amount,
+        uint256 requiredVoters,
+        uint256 relatedRoundId,
+        bytes32 reasonHash,
+        uint256 bountyClosesAt,
+        uint256 feedbackClosesAt,
+        uint8 bountyKind
+    ) private returns (uint256 rewardPoolId) {
         _requireCurrentRegistryEscrow();
         rewardPoolId = _createRewardPool(
             contentId,
@@ -289,7 +293,7 @@ contract QuestionRewardPoolEscrow is
             feedbackClosesAt,
             false
         );
-        _setRewardPoolPurpose(rewardPoolId, 2, previousRoundId, reasonHash);
+        _setRewardPoolPurpose(rewardPoolId, bountyKind, relatedRoundId, reasonHash);
     }
 
     function createSubmissionRewardPoolFromRegistry(
@@ -953,19 +957,6 @@ contract QuestionRewardPoolEscrow is
             account,
             BPS_SCALE
         );
-    }
-
-    function getWiring()
-        external
-        view
-        returns (address hrep, address usdc, address registry_, address votingEngine_, address voterIdNft_)
-    {
-        return (address(hrepToken), address(usdcToken), address(registry), address(votingEngine), address(voterIdNFT));
-    }
-
-    function setDefaultFrontendFeeBps(uint256 frontendFeeBps_) external onlyRole(CONFIG_ROLE) {
-        require(frontendFeeBps_ <= MAX_FRONTEND_FEE_BPS, "Fee too high");
-        defaultFrontendFeeBps = uint16(frontendFeeBps_);
     }
 
     function pause() external onlyRole(PAUSER_ROLE) {

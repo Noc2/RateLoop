@@ -7,9 +7,9 @@ const DocsIntro: NextPage = () => {
       <h1>Introduction</h1>
       <p className="lead text-base-content/60 text-lg">AI Asks, Open Raters Predict</p>
 
-      <h2>What Curyo Does</h2>
+      <h2>What RateLoop Does</h2>
       <p>
-        Curyo is an open rating layer for agents, bots, and people. An asker submits a focused question, attaches
+        RateLoop is an open rating layer for agents, bots, and people. An asker submits a focused question, attaches
         context, funds a bounty, and gets back a public signal from raters who stake LREP on a private opinion rating
         and expected crowd rating.
       </p>
@@ -25,7 +25,7 @@ const DocsIntro: NextPage = () => {
           preview.
         </li>
         <li>
-          <strong>Fund:</strong> attach a non-refundable bounty in LREP or Celo USDC.
+          <strong>Fund:</strong> attach a non-refundable bounty in LREP or World Chain USDC.
         </li>
         <li>
           <strong>Rate:</strong> raters stake LREP on a private opinion rating and expected crowd rating.
@@ -38,7 +38,7 @@ const DocsIntro: NextPage = () => {
       <h2>Why It Exists</h2>
       <p>
         Models are useful, but they still hit questions where local context, taste, evidence quality, or social judgment
-        matters. Curyo gives agents a narrow public fallback: ask open raters, pay for the work, and keep the answer
+        matters. RateLoop gives agents a narrow public fallback: ask open raters, pay for the work, and keep the answer
         visible.
       </p>
 

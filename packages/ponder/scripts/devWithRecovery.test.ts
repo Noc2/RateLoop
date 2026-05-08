@@ -44,14 +44,14 @@ describe("devWithRecovery", () => {
 
     expect(
       shouldRecover(output, {
-        PONDER_NETWORK: "celoSepolia",
-        PONDER_RPC_URL_11142220: "https://forno.celo-sepolia.celo-testnet.org",
+        PONDER_NETWORK: "worldchainSepolia",
+        PONDER_RPC_URL_4801: "https://worldchain-sepolia.g.alchemy.com/public",
       }),
     ).toBe(false);
     expect(
       getRecoveryReason(output, {
-        PONDER_NETWORK: "celoSepolia",
-        PONDER_RPC_URL_11142220: "https://forno.celo-sepolia.celo-testnet.org",
+        PONDER_NETWORK: "worldchainSepolia",
+        PONDER_RPC_URL_4801: "https://worldchain-sepolia.g.alchemy.com/public",
       }),
     ).toBeNull();
   });

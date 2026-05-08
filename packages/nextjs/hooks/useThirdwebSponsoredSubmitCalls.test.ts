@@ -14,7 +14,7 @@ test("prefers sponsored submit calls for thirdweb connector wallets with free tr
   assert.equal(
     shouldPreferSponsoredSubmitCalls({
       canUseFreeTransactions: true,
-      chainId: 42220,
+      chainId: 480,
       connectorId: "in-app-wallet",
     }),
     true,
@@ -24,7 +24,7 @@ test("prefers sponsored submit calls for thirdweb connector wallets with free tr
 test("expects sponsored submit calls for supported thirdweb connector wallets before allowance resolves", () => {
   assert.equal(
     shouldExpectSponsoredSubmitCalls({
-      chainId: 42220,
+      chainId: 480,
       connectorId: "in-app-wallet",
     }),
     true,
@@ -34,7 +34,7 @@ test("expects sponsored submit calls for supported thirdweb connector wallets be
 test("expects sponsored submit calls from active in-app wallet before wagmi connector settles", () => {
   assert.equal(
     shouldExpectSponsoredSubmitCalls({
-      chainId: 42220,
+      chainId: 480,
       connectorId: undefined,
       isThirdwebInApp: true,
     }),
@@ -45,7 +45,7 @@ test("expects sponsored submit calls from active in-app wallet before wagmi conn
 test("does not expect sponsored submit calls from stale in-app wallet after external connector settles", () => {
   assert.equal(
     shouldExpectSponsoredSubmitCalls({
-      chainId: 42220,
+      chainId: 480,
       connectorId: "injected",
       isThirdwebInApp: true,
     }),
@@ -57,7 +57,7 @@ test("does not prefer sponsored submit calls from stale in-app wallet after exte
   assert.equal(
     shouldPreferSponsoredSubmitCalls({
       canUseFreeTransactions: true,
-      chainId: 42220,
+      chainId: 480,
       connectorId: "io.metamask",
       isThirdwebInApp: true,
     }),
@@ -69,7 +69,7 @@ test("does not prefer sponsored submit calls without free transaction allowance"
   assert.equal(
     shouldPreferSponsoredSubmitCalls({
       canUseFreeTransactions: false,
-      chainId: 42220,
+      chainId: 480,
       connectorId: "in-app-wallet",
     }),
     false,
@@ -80,7 +80,7 @@ test("does not prefer sponsored submit calls for unsupported connectors", () => 
   assert.equal(
     shouldPreferSponsoredSubmitCalls({
       canUseFreeTransactions: true,
-      chainId: 42220,
+      chainId: 480,
       connectorId: "walletConnect",
     }),
     false,
@@ -99,7 +99,7 @@ test("detects thirdweb sponsorship denials", () => {
 test("detects exhausted free transaction denials as sponsorship denials", () => {
   assert.equal(
     isThirdwebSponsorshipDeniedError(
-      new Error('Error executing 7702 transaction: {"reason":"Free transactions used up. Add CELO to continue."}'),
+      new Error('Error executing 7702 transaction: {"reason":"Free transactions used up. Add ETH to continue."}'),
     ),
     true,
   );
@@ -108,7 +108,7 @@ test("detects exhausted free transaction denials as sponsorship denials", () => 
 test("treats exhausted free transactions as eligible for self-funded fallback", () => {
   assert.equal(
     isThirdwebSelfFundedFallbackEligibleError(
-      new Error('Error executing 7702 transaction: {"reason":"Free transactions used up. Add CELO to continue."}'),
+      new Error('Error executing 7702 transaction: {"reason":"Free transactions used up. Add ETH to continue."}'),
     ),
     true,
   );
@@ -122,7 +122,7 @@ test("skips self-funded fallback when a reserved free transaction was denied spo
   assert.equal(
     shouldAttemptSelfFundedThirdwebFallback({
       activeWalletId: "inApp",
-      chainId: 42220,
+      chainId: 480,
       error: new Error('Error executing 7702 transaction: {"reason":"Transaction not sponsored."}'),
       executionMode: "sponsored_7702",
       hasReservedFreeTransaction: true,
@@ -135,7 +135,7 @@ test("allows self-funded fallback when sponsorship denial is unrelated to a rese
   assert.equal(
     shouldAttemptSelfFundedThirdwebFallback({
       activeWalletId: "inApp",
-      chainId: 42220,
+      chainId: 480,
       error: new Error('Error executing 7702 transaction: {"reason":"Transaction not sponsored."}'),
       executionMode: "sponsored_7702",
       hasReservedFreeTransaction: false,
@@ -148,9 +148,9 @@ test("allows self-funded fallback when sponsored free transactions are exhausted
   assert.equal(
     shouldAttemptSelfFundedThirdwebFallback({
       activeWalletId: "inApp",
-      chainId: 42220,
+      chainId: 480,
       error: new Error(
-        'Error executing 7702 transaction: {"reason":"Free transactions used up. Add CELO to continue."}',
+        'Error executing 7702 transaction: {"reason":"Free transactions used up. Add ETH to continue."}',
       ),
       executionMode: "sponsored_7702",
       hasReservedFreeTransaction: false,
@@ -163,9 +163,9 @@ test("allows self-funded fallback for wagmi in-app wallet ids when sponsored fre
   assert.equal(
     shouldAttemptSelfFundedThirdwebFallback({
       activeWalletId: "in-app-wallet",
-      chainId: 42220,
+      chainId: 480,
       error: new Error(
-        'Error executing 7702 transaction: {"reason":"Free transactions used up. Add CELO to continue."}',
+        'Error executing 7702 transaction: {"reason":"Free transactions used up. Add ETH to continue."}',
       ),
       executionMode: "sponsored_7702",
       hasReservedFreeTransaction: false,
@@ -178,7 +178,7 @@ test("awaits self-funded reconnect after free transactions are exhausted for thi
   assert.equal(
     shouldAwaitSelfFundedSubmitCalls({
       canUseFreeTransactions: false,
-      chainId: 42220,
+      chainId: 480,
       connectorId: "in-app-wallet",
       executionMode: "sponsored_7702",
       freeTransactionAllowanceResolved: true,
@@ -191,7 +191,7 @@ test("awaits self-funded reconnect after exhausted free transactions before wagm
   assert.equal(
     shouldAwaitSelfFundedSubmitCalls({
       canUseFreeTransactions: false,
-      chainId: 42220,
+      chainId: 480,
       connectorId: undefined,
       executionMode: "sponsored_7702",
       freeTransactionAllowanceResolved: true,
@@ -205,7 +205,7 @@ test("does not await self-funded reconnect after exhausted free transactions onc
   assert.equal(
     shouldAwaitSelfFundedSubmitCalls({
       canUseFreeTransactions: false,
-      chainId: 42220,
+      chainId: 480,
       connectorId: "injected",
       executionMode: "sponsored_7702",
       freeTransactionAllowanceResolved: true,
@@ -219,7 +219,7 @@ test("stops awaiting self-funded reconnect once the in-app wallet is self-funded
   assert.equal(
     shouldAwaitSelfFundedSubmitCalls({
       canUseFreeTransactions: false,
-      chainId: 42220,
+      chainId: 480,
       connectorId: "in-app-wallet",
       executionMode: "self_funded_7702",
       freeTransactionAllowanceResolved: true,
@@ -232,7 +232,7 @@ test("does not await self-funded reconnect before free transaction allowance res
   assert.equal(
     shouldAwaitSelfFundedSubmitCalls({
       canUseFreeTransactions: false,
-      chainId: 42220,
+      chainId: 480,
       connectorId: "in-app-wallet",
       executionMode: "sponsored_7702",
       freeTransactionAllowanceResolved: false,

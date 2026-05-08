@@ -63,15 +63,20 @@ library RoundEngineReadHelpers {
         (
             c.voter,
             c.stakeAmount,
-            c.ciphertext,
-            c.targetRound,
-            c.drandChainHash,
             c.frontend,
             c.revealableAfter,
             c.revealed,
             c.isUp,
             c.epochIndex
-        ) = engine.commits(contentId, roundId, commitKey);
+        ) = engine.commitCore(contentId, roundId, commitKey);
+        (
+            c.ciphertext,
+            c.targetRound,
+            c.drandChainHash,
+            c.revealableAfter,
+            c.revealed,
+            c.stakeAmount
+        ) = engine.commitRevealData(contentId, roundId, commitKey);
     }
 
     function roundConfig(RoundVotingEngine engine, uint256 contentId, uint256 roundId)

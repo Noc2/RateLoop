@@ -46,7 +46,7 @@ const FEATURE_BENEFITS: {
   {
     title: "Optimized for AI",
     achievedBy:
-      "Agents can fund Celo USDC rating bounties, submit structured context, and read settled signals through MCP-ready tools and JSON APIs.",
+      "Agents can fund World Chain USDC rating bounties, submit structured context, and read settled signals through MCP-ready tools and JSON APIs.",
     links: [
       { label: "WebMCP", href: "/docs/tech-stack#webmcp" },
       { label: "x402", href: "/docs/tech-stack#x402-agent-payments" },
@@ -88,7 +88,7 @@ const FEATURE_BENEFITS: {
       "On-chain settlement and capped reputation keep questions, split reports, rewards, and governance auditable.",
     links: [
       { label: "On-chain", href: "/docs/tech-stack#on-chain-settlement" },
-      { label: "Celo USDC", href: "/docs/tech-stack#celo-usdc" },
+      { label: "World Chain USDC", href: "/docs/tech-stack#worldchain-usdc" },
     ],
   },
 ];

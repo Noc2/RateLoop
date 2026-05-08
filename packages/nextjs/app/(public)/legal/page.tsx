@@ -6,7 +6,7 @@ const LegalPage: NextPage = () => {
   const legalPages = [
     {
       title: "Terms of Service",
-      description: "Rules and conditions for using Curyo",
+      description: "Rules and conditions for using RateLoop",
       href: "/legal/terms",
       icon: DocumentTextIcon,
     },
@@ -28,7 +28,7 @@ const LegalPage: NextPage = () => {
     <div className="container mx-auto px-4 py-8 max-w-4xl">
       <h1 className="text-3xl font-bold mb-2">Legal</h1>
       <p className="mb-8 text-base-content/75">
-        Legal documents and disclosures for Curyo and Human Reputation (HREP).
+        Legal documents and disclosures for RateLoop and Loop Reputation (LREP).
       </p>
 
       <div className="grid gap-4 md:grid-cols-3">
@@ -50,7 +50,7 @@ const LegalPage: NextPage = () => {
       <div className="mt-8 p-4 bg-base-200 rounded-lg">
         <p className="text-base text-base-content/70">
           Last updated: February 2026. These documents may be updated from time to time. Material changes will require
-          re-acceptance through the Terms modal. Continued use of Curyo constitutes acceptance of any changes.
+          re-acceptance through the Terms modal. Continued use of RateLoop constitutes acceptance of any changes.
         </p>
       </div>
     </div>

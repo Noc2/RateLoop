@@ -17,9 +17,9 @@ import {
   serializeQuestionRoundConfig,
 } from "~~/lib/questionRoundConfig";
 
-export const X402_CELO_USDC_BY_CHAIN_ID: Record<number, `0x${string}`> = {
-  42220: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C",
-  11142220: "0x01C5C0122039549AD1493B8220cABEdD739BC44E",
+export const X402_WORLD_CHAIN_USDC_BY_CHAIN_ID: Record<number, `0x${string}`> = {
+  480: "0x79A02482A880bCE3F13e09Da970dC34db4CD24d1",
+  4801: "0x66145f38cBAC35Ca6F1Dfb4914dF98F1614aeA88",
 };
 
 export const X402_SUBMISSION_REWARD_ASSET_USDC = 1;

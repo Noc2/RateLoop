@@ -114,14 +114,29 @@ function parseRoundData(rawRound: unknown): RoundData {
 
 export function parseCommitData(rawCommit: unknown): CommitData {
   const commit = rawCommit as Record<string, unknown> & unknown[];
+  if (commit?.ciphertext != null) {
+    return {
+      voter: "0x0000000000000000000000000000000000000000",
+      stakeAmount: toBigInt(commit.stakeAmount),
+      ciphertext: commit.ciphertext as unknown as `0x${string}`,
+      targetRound: commit.targetRound != null ? toBigInt(commit.targetRound) : undefined,
+      drandChainHash: commit.drandChainHash as unknown as `0x${string}` | undefined,
+      frontend: "0x0000000000000000000000000000000000000000",
+      revealableAfter: toBigInt(commit.revealableAfter),
+      revealed: Boolean(commit.revealed),
+      isUp: false,
+      epochIndex: 0,
+    };
+  }
+
   if (commit?.voter != null) {
     return {
       voter: commit.voter as `0x${string}`,
       stakeAmount: toBigInt(commit.stakeAmount),
-      ciphertext: commit.ciphertext as `0x${string}`,
+      ciphertext: commit.ciphertext as unknown as `0x${string}`,
       targetRound: commit.targetRound != null ? toBigInt(commit.targetRound) : undefined,
-      drandChainHash: commit.drandChainHash as `0x${string}` | undefined,
-      frontend: commit.frontend as `0x${string}`,
+      drandChainHash: commit.drandChainHash as unknown as `0x${string}` | undefined,
+      frontend: commit.frontend as unknown as `0x${string}`,
       revealableAfter: toBigInt(commit.revealableAfter),
       revealed: Boolean(commit.revealed),
       isUp: Boolean(commit.isUp),
@@ -129,7 +144,7 @@ export function parseCommitData(rawCommit: unknown): CommitData {
     };
   }
 
-  if (Array.isArray(commit) && commit.length >= 8) {
+  if (Array.isArray(commit) && commit.length >= 6) {
     if (commit.length >= 10 && typeof commit[3] === "bigint") {
       return {
         voter: commit[0] as `0x${string}`,
@@ -142,6 +157,21 @@ export function parseCommitData(rawCommit: unknown): CommitData {
         revealed: Boolean(commit[7]),
         isUp: Boolean(commit[8]),
         epochIndex: toNumber(commit[9]),
+      };
+    }
+
+    if (commit.length >= 6 && typeof commit[1] === "bigint") {
+      return {
+        voter: "0x0000000000000000000000000000000000000000",
+        stakeAmount: toBigInt(commit[5]),
+        ciphertext: commit[0] as `0x${string}`,
+        targetRound: toBigInt(commit[1]),
+        drandChainHash: commit[2] as `0x${string}`,
+        frontend: "0x0000000000000000000000000000000000000000",
+        revealableAfter: toBigInt(commit[3]),
+        revealed: Boolean(commit[4]),
+        isUp: false,
+        epochIndex: 0,
       };
     }
   }

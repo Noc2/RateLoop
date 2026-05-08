@@ -171,25 +171,22 @@ async function waitForVoteFeedScene(page: Page, timeout = 30_000): Promise<void>
   await indicators.first().waitFor({ state: "visible", timeout });
 }
 
-async function recordFaucetIntro(page: Page): Promise<void> {
-  console.log("Recording faucet intro...");
+async function recordIdentityIntro(page: Page): Promise<void> {
+  console.log("Recording identity intro...");
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await swapWalletSession(page, ANVIL_ACCOUNTS.account1.privateKey);
-  await gotoWithRetry(page, "/governance#faucet", { ensureWalletConnected: true, timeout: 60_000 });
+  await gotoWithRetry(page, "/settings#identity", { ensureWalletConnected: true, timeout: 60_000 });
   await ensureWalletVisible(page, ANVIL_ACCOUNTS.account1.address);
 
-  await page
-    .getByRole("heading", { name: "Human Reputation (HREP) Faucet" })
-    .waitFor({ state: "visible", timeout: 30_000 });
-  await page.getByRole("heading", { name: "How it works" }).waitFor({ state: "visible", timeout: 30_000 });
+  await page.getByRole("heading", { name: "Human credential" }).waitFor({ state: "visible", timeout: 30_000 });
   await page.waitForLoadState("networkidle").catch(() => undefined);
 
-  const verificationServiceLink = page.getByRole("link", { name: "Self.xyz" }).first();
-  await moveMouseTo(page, verificationServiceLink, 32);
+  const worldIdButton = page.getByRole("button", { name: "Verify with World ID" }).first();
+  await moveMouseTo(page, worldIdButton, 32);
   await showCaption(
     page,
-    "Voter ID setup",
-    "Identity verification happens through Self.xyz. For this short demo, we skip the verification ceremony and switch to a pre-verified wallet.",
+    "Optional human credential",
+    "World ID verification is optional. For this short demo, we skip the ceremony and switch to a pre-verified wallet.",
   );
   await pause(page, 2_600);
   await hideCaption(page);
@@ -296,7 +293,7 @@ async function main(): Promise<void> {
   }
 
   try {
-    await recordFaucetIntro(page);
+    await recordIdentityIntro(page);
     if (mode === "full") {
       await recordVoteScene(page, prepared?.searchQuery);
     } else {

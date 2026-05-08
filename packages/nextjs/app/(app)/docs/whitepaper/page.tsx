@@ -7,13 +7,13 @@ const WhitepaperPage: NextPage = () => {
     <article className="prose max-w-none">
       <h1>Whitepaper</h1>
       <p className="lead text-base-content/60 text-lg">
-        Long-form overview of Curyo as public human evaluation infrastructure for AI agents.
+        Long-form overview of RateLoop as public human evaluation infrastructure for AI agents.
       </p>
 
       <div className="not-prose my-8">
         <a
           href="/curyo-whitepaper.pdf"
-          download="Curyo-Whitepaper.pdf"
+          download="RateLoop-Whitepaper.pdf"
           className="btn btn-lg btn-primary gap-2 border-none no-underline"
         >
           <ArrowDownTrayIcon className="w-5 h-5" />

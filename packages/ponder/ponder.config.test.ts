@@ -5,8 +5,8 @@ type DeploymentChain = Record<string, { address: `0x${string}`; deployedOnBlock?
 
 const sharedDeployments = deployedContracts as Record<number, DeploymentChain | undefined>;
 const chain31337 = sharedDeployments[31337];
-const chain42220 = sharedDeployments[42220];
-const chain11142220 = sharedDeployments[11142220];
+const chain480 = sharedDeployments[480];
+const chain4801 = sharedDeployments[4801];
 const REQUIRED_PONDER_CONTRACTS = [
   "ContentRegistry",
   "RoundVotingEngine",
@@ -35,49 +35,49 @@ function getExpectedChainStartBlock(chain: DeploymentChain | undefined) {
   return deployedBlocks.length > 0 ? Math.min(...deployedBlocks) : 0;
 }
 
-const expectedChain42220StartBlock = getExpectedChainStartBlock(chain42220);
-const expectedContentRegistry42220StartBlock =
-  chain42220?.ContentRegistry?.deployedOnBlock ?? expectedChain42220StartBlock;
-const expectedChainStartBlock = getExpectedChainStartBlock(chain11142220);
-const expectedContentRegistryStartBlock = chain11142220?.ContentRegistry?.deployedOnBlock ?? expectedChainStartBlock;
+const expectedChain480StartBlock = getExpectedChainStartBlock(chain480);
+const expectedContentRegistry480StartBlock =
+  chain480?.ContentRegistry?.deployedOnBlock ?? expectedChain480StartBlock;
+const expectedChainStartBlock = getExpectedChainStartBlock(chain4801);
+const expectedContentRegistryStartBlock = chain4801?.ContentRegistry?.deployedOnBlock ?? expectedChainStartBlock;
 const expectedQuestionRewardPoolEscrowStartBlock =
-  chain11142220?.QuestionRewardPoolEscrow?.deployedOnBlock ?? expectedChainStartBlock;
+  chain4801?.QuestionRewardPoolEscrow?.deployedOnBlock ?? expectedChainStartBlock;
 const expectedFeedbackBonusEscrowStartBlock =
-  chain11142220?.FeedbackBonusEscrow?.deployedOnBlock ?? expectedChainStartBlock;
-const missingSepoliaPonderContracts = getMissingPonderContracts(chain11142220);
-const missingCeloPonderContracts = getMissingPonderContracts(chain42220);
+  chain4801?.FeedbackBonusEscrow?.deployedOnBlock ?? expectedChainStartBlock;
+const missingSepoliaPonderContracts = getMissingPonderContracts(chain4801);
+const missingWorldChainPonderContracts = getMissingPonderContracts(chain480);
 const missingHardhatPonderContracts = getMissingPonderContracts(chain31337);
-const itWithSepoliaPonderArtifacts = chain11142220 && missingSepoliaPonderContracts.length === 0 ? it : it.skip;
-const itWithSepoliaContentRegistryArtifact = chain11142220?.ContentRegistry ? it : it.skip;
-const itWithMissingSepoliaPonderArtifacts = chain11142220 && missingSepoliaPonderContracts.length > 0 ? it : it.skip;
-const itWithCeloPonderArtifacts = chain42220 && missingCeloPonderContracts.length === 0 ? it : it.skip;
+const itWithSepoliaPonderArtifacts = chain4801 && missingSepoliaPonderContracts.length === 0 ? it : it.skip;
+const itWithSepoliaContentRegistryArtifact = chain4801?.ContentRegistry ? it : it.skip;
+const itWithMissingSepoliaPonderArtifacts = chain4801 && missingSepoliaPonderContracts.length > 0 ? it : it.skip;
+const itWithWorldChainPonderArtifacts = chain480 && missingWorldChainPonderContracts.length === 0 ? it : it.skip;
 const itWithHardhatArtifacts = chain31337 && missingHardhatPonderContracts.length === 0 ? it : it.skip;
 const ORIGINAL_ENV = { ...process.env };
 const VALID_ENV = {
-  PONDER_NETWORK: "celoSepolia",
-  PONDER_RPC_URL_11142220: "https://forno.celo-sepolia.celo-testnet.org",
-  PONDER_CONTENT_REGISTRY_ADDRESS: chain11142220?.ContentRegistry?.address ?? "0x1111111111111111111111111111111111111111",
+  PONDER_NETWORK: "worldchainSepolia",
+  PONDER_RPC_URL_4801: "https://worldchain-sepolia.g.alchemy.com/public",
+  PONDER_CONTENT_REGISTRY_ADDRESS: chain4801?.ContentRegistry?.address ?? "0x1111111111111111111111111111111111111111",
   PONDER_ROUND_VOTING_ENGINE_ADDRESS:
-    chain11142220?.RoundVotingEngine?.address ?? "0x2222222222222222222222222222222222222222",
+    chain4801?.RoundVotingEngine?.address ?? "0x2222222222222222222222222222222222222222",
   PONDER_ROUND_REWARD_DISTRIBUTOR_ADDRESS:
-    chain11142220?.RoundRewardDistributor?.address ?? "0x3333333333333333333333333333333333333333",
-  PONDER_CATEGORY_REGISTRY_ADDRESS: chain11142220?.CategoryRegistry?.address ?? "0x4444444444444444444444444444444444444444",
-  PONDER_PROFILE_REGISTRY_ADDRESS: chain11142220?.ProfileRegistry?.address ?? "0x5555555555555555555555555555555555555555",
+    chain4801?.RoundRewardDistributor?.address ?? "0x3333333333333333333333333333333333333333",
+  PONDER_CATEGORY_REGISTRY_ADDRESS: chain4801?.CategoryRegistry?.address ?? "0x4444444444444444444444444444444444444444",
+  PONDER_PROFILE_REGISTRY_ADDRESS: chain4801?.ProfileRegistry?.address ?? "0x5555555555555555555555555555555555555555",
   PONDER_FRONTEND_REGISTRY_ADDRESS:
-    chain11142220?.FrontendRegistry?.address ?? "0x6666666666666666666666666666666666666666",
-  PONDER_VOTER_ID_NFT_ADDRESS: chain11142220?.VoterIdNFT?.address ?? "0x7777777777777777777777777777777777777777",
-  PONDER_LREP_ADDRESS: chain11142220?.LoopReputation?.address ?? "0x8888888888888888888888888888888888888888",
+    chain4801?.FrontendRegistry?.address ?? "0x6666666666666666666666666666666666666666",
+  PONDER_VOTER_ID_NFT_ADDRESS: chain4801?.VoterIdNFT?.address ?? "0x7777777777777777777777777777777777777777",
+  PONDER_LREP_ADDRESS: chain4801?.LoopReputation?.address ?? "0x8888888888888888888888888888888888888888",
   PONDER_PARTICIPATION_POOL_ADDRESS:
-    chain11142220?.ParticipationPool?.address ?? "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    chain4801?.ParticipationPool?.address ?? "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   PONDER_QUESTION_REWARD_POOL_ESCROW_ADDRESS:
-    chain11142220?.QuestionRewardPoolEscrow?.address ?? "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    chain4801?.QuestionRewardPoolEscrow?.address ?? "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
   PONDER_QUESTION_REWARD_POOL_ESCROW_START_BLOCK: String(expectedQuestionRewardPoolEscrowStartBlock),
   PONDER_FEEDBACK_BONUS_ESCROW_ADDRESS:
-    chain11142220?.FeedbackBonusEscrow?.address ?? "0xcccccccccccccccccccccccccccccccccccccccc",
+    chain4801?.FeedbackBonusEscrow?.address ?? "0xcccccccccccccccccccccccccccccccccccccccc",
   PONDER_FEEDBACK_BONUS_ESCROW_START_BLOCK: String(expectedFeedbackBonusEscrowStartBlock),
-  PONDER_RATER_REGISTRY_ADDRESS: chain11142220?.RaterRegistry?.address ?? "0xdddddddddddddddddddddddddddddddddddddddd",
+  PONDER_RATER_REGISTRY_ADDRESS: chain4801?.RaterRegistry?.address ?? "0xdddddddddddddddddddddddddddddddddddddddd",
   PONDER_RATER_DECLARATION_REGISTRY_ADDRESS:
-    chain11142220?.RaterDeclarationRegistry?.address ?? "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    chain4801?.RaterDeclarationRegistry?.address ?? "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
   PONDER_CONTENT_REGISTRY_START_BLOCK: String(expectedContentRegistryStartBlock),
 };
 
@@ -128,25 +128,25 @@ describe("ponder config", () => {
 
     const loadedConfig = config as any;
 
-    expect(loadedConfig.contracts.ContentRegistry.network.celoSepolia.address).toBe(
-      chain11142220!.ContentRegistry.address,
+    expect(loadedConfig.contracts.ContentRegistry.network.worldchainSepolia.address).toBe(
+      chain4801!.ContentRegistry.address,
     );
-    expect(loadedConfig.contracts.RoundVotingEngine.network.celoSepolia.address).toBe(
-      chain11142220!.RoundVotingEngine.address,
+    expect(loadedConfig.contracts.RoundVotingEngine.network.worldchainSepolia.address).toBe(
+      chain4801!.RoundVotingEngine.address,
     );
-    expect(loadedConfig.contracts.LoopReputation.network.celoSepolia.address).toBe(
-      chain11142220!.LoopReputation.address,
+    expect(loadedConfig.contracts.LoopReputation.network.worldchainSepolia.address).toBe(
+      chain4801!.LoopReputation.address,
     );
-    expect(loadedConfig.contracts.ContentRegistry.network.celoSepolia.startBlock).toBe(
+    expect(loadedConfig.contracts.ContentRegistry.network.worldchainSepolia.startBlock).toBe(
       expectedContentRegistryStartBlock,
     );
   }, 10_000);
 
-  itWithCeloPonderArtifacts("derives Celo mainnet addresses and start blocks from shared deployment artifacts", async () => {
+  itWithWorldChainPonderArtifacts("derives World Chain mainnet addresses and start blocks from shared deployment artifacts", async () => {
     const { default: config } = await loadPonderConfig(
       {
-        PONDER_NETWORK: "celo",
-        PONDER_RPC_URL_42220: "https://forno.celo.org",
+        PONDER_NETWORK: "worldchain",
+        PONDER_RPC_URL_480: "https://worldchain-mainnet.g.alchemy.com/public",
       },
       [
         "PONDER_CONTENT_REGISTRY_ADDRESS",
@@ -170,10 +170,10 @@ describe("ponder config", () => {
 
     const loadedConfig = config as any;
 
-    expect(loadedConfig.contracts.ContentRegistry.network.celo.address).toBe(chain42220!.ContentRegistry.address);
-    expect(loadedConfig.contracts.RoundVotingEngine.network.celo.address).toBe(chain42220!.RoundVotingEngine.address);
-    expect(loadedConfig.contracts.LoopReputation.network.celo.address).toBe(chain42220!.LoopReputation.address);
-    expect(loadedConfig.contracts.ContentRegistry.network.celo.startBlock).toBe(expectedContentRegistry42220StartBlock);
+    expect(loadedConfig.contracts.ContentRegistry.network.worldchain.address).toBe(chain480!.ContentRegistry.address);
+    expect(loadedConfig.contracts.RoundVotingEngine.network.worldchain.address).toBe(chain480!.RoundVotingEngine.address);
+    expect(loadedConfig.contracts.LoopReputation.network.worldchain.address).toBe(chain480!.LoopReputation.address);
+    expect(loadedConfig.contracts.ContentRegistry.network.worldchain.startBlock).toBe(expectedContentRegistry480StartBlock);
   });
 
   itWithSepoliaContentRegistryArtifact(
@@ -197,7 +197,7 @@ describe("ponder config", () => {
 
   itWithMissingSepoliaPonderArtifacts("rejects non-local env address fallbacks when shared artifacts are missing", async () => {
     await expect(loadPonderConfig()).rejects.toThrow(
-      `Missing shared deployment artifact for ${missingSepoliaPonderContracts[0]} on chain 11142220`,
+      `Missing shared deployment artifact for ${missingSepoliaPonderContracts[0]} on chain 4801`,
     );
   }, 10_000);
 

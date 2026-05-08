@@ -49,14 +49,14 @@ contract CuryoGovernor is
     uint256 public constant MINIMUM_QUORUM = 100_000 * 1e6;
     /// @notice Highest threshold governance may set, preventing self-bricked proposal creation.
     uint256 public constant MAX_PROPOSAL_THRESHOLD = MINIMUM_QUORUM;
-    /// @notice Highest voting delay governance may set (~1 week on 1s Celo blocks).
+    /// @notice Highest voting delay governance may set (~1 week on World Chain blocks).
     uint48 public constant MAX_VOTING_DELAY_BLOCKS = 604_800;
-    /// @notice Voting period bounds governance may set (~1 day to ~30 days on 1s Celo blocks).
+    /// @notice Voting period bounds governance may set (~1 day to ~30 days on World Chain blocks).
     uint32 public constant MIN_VOTING_PERIOD_BLOCKS = 86_400;
     uint32 public constant MAX_VOTING_PERIOD_BLOCKS = 2_592_000;
     /// @notice Hard cap to keep quorum evaluation bounded and proposals cheap to evaluate.
     uint256 public constant MAX_EXCLUDED_HOLDERS = 16;
-    /// @notice Minimum blocks a proposer must wait between successful proposals (~1 day on 1s Celo blocks).
+    /// @notice Minimum blocks a proposer must wait between successful proposals (~1 day on World Chain blocks).
     uint256 public constant PROPOSAL_COOLDOWN_BLOCKS = 86_400;
     /// @notice Block number where each proposal was created.
     mapping(uint256 => uint256) public proposalCreatedBlock;
@@ -77,8 +77,8 @@ contract CuryoGovernor is
     constructor(IVotes _reputationToken, TimelockController _timelock)
         Governor("CuryoGovernor")
         GovernorSettings(
-            86_400, // Voting delay: ~1 day on 1s Celo blocks
-            604_800, // Voting period: ~1 week on 1s Celo blocks
+            86_400, // Voting delay: ~1 day on World Chain blocks
+            604_800, // Voting period: ~1 week on World Chain blocks
             BOOTSTRAP_PROPOSAL_THRESHOLD
         )
         GovernorVotes(_reputationToken)

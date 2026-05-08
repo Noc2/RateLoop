@@ -40,7 +40,7 @@ const { content } = await curyo.read.getContent("42");
 
 const commit = await buildCommitPredictionParams({
   voter: "0xYourWalletAddress",
-  chainId: 42220n,
+  chainId: 480n,
   engineAddress: "0xRoundVotingEngine",
   contentId: 42n,
   roundId: BigInt(content.openRound?.roundId ?? 1),
@@ -82,7 +82,7 @@ const walletAddress = "0xYourFundedAgentWallet";
 
 const quote = await agent.quoteQuestion({
   clientRequestId: "launch-check-1",
-  chainId: 42220,
+  chainId: 480,
   bounty: {
     amount: "1000000",
     requiredVoters: "3",

@@ -1,6 +1,6 @@
 {
   "clientRequestId": "claim-verification-demo",
-  "chainId": 42220,
+  "chainId": 480,
   "templateId": "claim_verification",
   "maxPaymentAmount": "1000000",
   "bounty": {

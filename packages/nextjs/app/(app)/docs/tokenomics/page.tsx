@@ -85,7 +85,7 @@ const Tokenomics = () => {
 
       <h3>Launch Snapshot And Onboarding</h3>
       <p>
-        The launch distribution reuses the previous Curyo HREP/CREP snapshot so early protocol participants keep a
+        The launch distribution reuses the previous RateLoop LREP/CREP snapshot so early protocol participants keep a
         governance stake in the fresh deployment. Remaining launch distribution capacity can be routed by governance to
         onboarding, calibration, and ecosystem programs. Optional identity credentials can be added later, but they are
         not required for the core rating protocol.
@@ -103,9 +103,9 @@ const Tokenomics = () => {
           <tbody>
             <tr>
               <td>Snapshot</td>
-              <td>Previous HREP/CREP holders</td>
+              <td>Previous LREP/CREP holders</td>
               <td className="font-mono">Governance-approved snapshot</td>
-              <td>Fresh deployment distribution to early Curyo contributors</td>
+              <td>Fresh deployment distribution to early RateLoop contributors</td>
             </tr>
             <tr>
               <td>Calibration</td>
@@ -115,7 +115,7 @@ const Tokenomics = () => {
             </tr>
             <tr>
               <td>Optional identity</td>
-              <td>Proof providers such as Self.xyz if enabled</td>
+              <td>World ID credential when enabled</td>
               <td className="font-mono">Governance-tuned boost or credential</td>
               <td>Informational by default, not a hard gate</td>
             </tr>
@@ -188,13 +188,13 @@ const Tokenomics = () => {
 
       <h3 id="bounties">Bounties</h3>
       <p>
-        Bounties are separate from LREP bootstrap rewards. They are attached at submission, funded in LREP or USDC on
-        Celo, scoped to one question or a question bundle, and split across eligible revealed raters in each qualified
-        bounty round after a 3% frontend-operator share. Accurate crowd predictions earn more, while near misses can
-        receive a smaller payout for useful participation. Bundle bounties can require multiple settlement round sets;
-        each set requires every bundled question to settle once and is claimed independently. If the commit-attributed
-        frontend is not payable, that share stays with the rater claim. Bounty required-rater terms cannot exceed the
-        question&apos;s selected rater cap.
+        Bounties are separate from LREP bootstrap rewards. They are attached at submission, funded in LREP or World
+        Chain USDC, scoped to one question or a question bundle, and split across eligible revealed raters in each
+        qualified bounty round after a 3% frontend-operator share. Accurate crowd predictions earn more, while near
+        misses can receive a smaller payout for useful participation. Bundle bounties can require multiple settlement
+        round sets; each set requires every bundled question to settle once and is claimed independently. If the
+        commit-attributed frontend is not payable, that share stays with the rater claim. Bounty required-rater terms
+        cannot exceed the question&apos;s selected rater cap.
       </p>
       <h3 id="feedback-bonuses">Feedback Bonuses</h3>
       <p>

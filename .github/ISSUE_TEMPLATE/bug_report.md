@@ -26,7 +26,7 @@ If applicable, add screenshots to help explain your problem.
 - OS: [e.g. macOS 15, Ubuntu 24.04]
 - Browser: [e.g. Chrome 131, Firefox 133]
 - Node.js version: [e.g. 20.18.3]
-- Network: [e.g. Celo Mainnet, Celo Sepolia, Anvil localhost]
+- Network: [e.g. World Chain Mainnet, World Chain Sepolia, Anvil localhost]
 
 **Additional context**
 Add any other context about the problem here (transaction hashes, console errors, etc.).

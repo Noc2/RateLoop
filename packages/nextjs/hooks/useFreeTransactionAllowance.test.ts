@@ -11,21 +11,21 @@ test("buildFreeTransactionAllowanceSnapshotKey scopes cached summaries by enviro
   assert.equal(
     buildFreeTransactionAllowanceSnapshotKey(
       "0xAbCdEf0000000000000000000000000000000000",
-      11142220,
+      4801,
       "https://preview.curyo.example",
     ),
-    "curyo-free-transactions-summary:https://preview.curyo.example:0xabcdef0000000000000000000000000000000000:11142220",
+    "curyo-free-transactions-summary:https://preview.curyo.example:0xabcdef0000000000000000000000000000000000:4801",
   );
 });
 
 test("buildExhaustionToastKey scopes exhaustion notifications by environment", () => {
   assert.equal(
     buildExhaustionToastKey({
-      chainId: 11142220,
+      chainId: 4801,
       environmentScope: "https://curyo.example",
       voterIdTokenId: "42",
     }),
-    "curyo-free-transactions-exhausted:https://curyo.example:11142220:42",
+    "curyo-free-transactions-exhausted:https://curyo.example:4801:42",
   );
 });
 
@@ -33,18 +33,18 @@ test("buildSponsorshipSyncAttemptKey normalizes the wallet address", () => {
   assert.equal(
     buildSponsorshipSyncAttemptKey({
       address: "0xAbCdEf0000000000000000000000000000000000",
-      chainId: 11142220,
+      chainId: 4801,
       sponsorshipMode: "sponsored",
     }),
-    "0xabcdef0000000000000000000000000000000000:11142220:sponsored",
+    "0xabcdef0000000000000000000000000000000000:4801:sponsored",
   );
 });
 
 test("clearSponsorshipSyncAttemptAfterFailure clears the matching failed attempt", () => {
   assert.equal(
     clearSponsorshipSyncAttemptAfterFailure(
-      "0xabcdef0000000000000000000000000000000000:11142220:self-funded",
-      "0xabcdef0000000000000000000000000000000000:11142220:self-funded",
+      "0xabcdef0000000000000000000000000000000000:4801:self-funded",
+      "0xabcdef0000000000000000000000000000000000:4801:self-funded",
     ),
     null,
   );
@@ -53,9 +53,9 @@ test("clearSponsorshipSyncAttemptAfterFailure clears the matching failed attempt
 test("clearSponsorshipSyncAttemptAfterFailure preserves newer attempts", () => {
   assert.equal(
     clearSponsorshipSyncAttemptAfterFailure(
-      "0xabcdef0000000000000000000000000000000000:42220:sponsored",
-      "0xabcdef0000000000000000000000000000000000:11142220:self-funded",
+      "0xabcdef0000000000000000000000000000000000:480:sponsored",
+      "0xabcdef0000000000000000000000000000000000:4801:self-funded",
     ),
-    "0xabcdef0000000000000000000000000000000000:42220:sponsored",
+    "0xabcdef0000000000000000000000000000000000:480:sponsored",
   );
 });

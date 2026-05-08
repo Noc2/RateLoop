@@ -20,12 +20,12 @@ test("getClaimableQuestionRewardsQueryKey keeps linked claim discovery scoped by
   assert.deepEqual(
     getClaimableQuestionRewardsQueryKey(
       ["0xabcdef0000000000000000000000000000000001", "0xabcdef0000000000000000000000000000000002"],
-      42220,
+      480,
     ),
     [
       "claimableQuestionRewards",
       "0xabcdef0000000000000000000000000000000001,0xabcdef0000000000000000000000000000000002",
-      42220,
+      480,
     ],
   );
 });

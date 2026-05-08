@@ -40,7 +40,7 @@ import {
 import { thirdwebClient } from "~~/services/thirdweb/client";
 import { notification } from "~~/utils/scaffold-eth";
 
-const CELO_MAINNET_CHAIN_ID = 42220;
+const WORLD_CHAIN_MAINNET_CHAIN_ID = 480;
 const DEFAULT_FUNDING_AMOUNT_USDC = "10";
 const DEFAULT_PER_ASK_CAP_ATOMIC = 2_000_000n;
 const DEFAULT_AGENT_SCOPES = ["curyo:ask", "curyo:read", "curyo:quote", "curyo:balance"];
@@ -51,7 +51,7 @@ const AGENT_WALLET_HELP_TEXT =
 const AGENT_FUND_HELP_TEXT =
   "Add USDC to the agent wallet. Agent clients automatically use the compatible payment path when submitting asks.";
 const AGENT_POLICY_HELP_TEXT =
-  "Leave limits blank to allow all usage, or set only the restrictions Curyo should enforce for this agent.";
+  "Leave limits blank to allow all usage, or set only the restrictions RateLoop should enforce for this agent.";
 const AGENT_MCP_HELP_TEXT = "Use public MCP without a token, or create a managed token after saving optional controls.";
 
 type AgentSetupStep = (typeof MANAGED_SETUP_STEP_ORDER)[number];
@@ -227,15 +227,15 @@ export function AgentSubmissionPanel() {
   const walletDirectReady = Boolean(agentWalletAddress && escrowAddress && usdcAddress && fundingReady);
   const ready = policyControlsEnabled ? managedReady : walletDirectReady;
   const canUseThirdwebFunding = Boolean(
-    thirdwebClient && agentWalletAddress && usdcAddress && targetNetwork.id === CELO_MAINNET_CHAIN_ID,
+    thirdwebClient && agentWalletAddress && usdcAddress && targetNetwork.id === WORLD_CHAIN_MAINNET_CHAIN_ID,
   );
   const fundingUnavailableMessage = !agentWalletAddress
     ? "Enter a valid agent wallet before funding it here."
     : !thirdwebClient
       ? "Direct funding appears after thirdweb is configured for this deployment."
-      : targetNetwork.id === CELO_MAINNET_CHAIN_ID
-        ? "Celo USDC is not configured for this network."
-        : "Switch to Celo mainnet to buy Celo USDC here. On local networks, use the faucet from your wallet menu.";
+      : targetNetwork.id === WORLD_CHAIN_MAINNET_CHAIN_ID
+        ? "World Chain USDC is not configured for this network."
+        : "Switch to World Chain mainnet to buy World Chain USDC here. On local networks, use the faucet from your wallet menu.";
   const dashboardMode = Boolean(selectedPolicy && !isSetupMode);
   const activeSetupStepOrder: readonly AgentSetupStep[] = policyControlsEnabled
     ? MANAGED_SETUP_STEP_ORDER
@@ -323,7 +323,7 @@ export function AgentSubmissionPanel() {
       return;
     }
     if (!usdcAddress) {
-      notification.error("Celo USDC is not configured for this network.");
+      notification.error("World Chain USDC is not configured for this network.");
       return;
     }
     const amount = parseSubmissionRewardAmount(transferAmount);
@@ -530,8 +530,8 @@ export function AgentSubmissionPanel() {
   const publicSigningIntentUrl = `${publicAgentHttpUrl}/signing-intents`;
   const localSignerSnippet = [
     "export CURYO_API_BASE_URL=" + publicAgentOrigin,
-    "export CURYO_RPC_URL=https://forno.celo.org",
-    "export CURYO_CHAIN_ID=42220",
+    "export CURYO_RPC_URL=https://worldchain-mainnet.g.alchemy.com/public",
+    "export CURYO_CHAIN_ID=480",
     "export CURYO_LOCAL_SIGNER_KEYSTORE_PATH=$HOME/.curyo/local-signer.json",
     "yarn workspace @rateloop/agents wallet --generate",
     "yarn workspace @rateloop/agents local-ask --file ./ask.json",
@@ -649,9 +649,9 @@ export function AgentSubmissionPanel() {
           onChange={event => handlePolicyControlsChange(event.target.checked)}
         />
         <span>
-          <span className="block text-base font-semibold">Curyo-managed controls</span>
+          <span className="block text-base font-semibold">RateLoop-managed controls</span>
           <span className="mt-1 block text-sm leading-relaxed text-base-content/65">
-            Optional. Leave this off for tokenless wallet calls, or turn it on to let Curyo remember restrictions,
+            Optional. Leave this off for tokenless wallet calls, or turn it on to let RateLoop remember restrictions,
             create an access token, deliver callbacks, and keep an agent audit trail.
           </span>
         </span>
@@ -902,7 +902,7 @@ export function AgentSubmissionPanel() {
               </div>
               <div className="mt-4 grid gap-3">
                 <div className="rounded-lg border border-base-300 bg-base-100/50 p-4">
-                  <p className="text-sm text-base-content/60">Celo USDC</p>
+                  <p className="text-sm text-base-content/60">World Chain USDC</p>
                   <p className="mt-1 text-xl font-semibold">{formatUsdc(balance)}</p>
                   <p className="mt-1 text-sm text-base-content/55">
                     Required per ask: {formatUsdc(requiredPerAskFunding)}
@@ -1051,8 +1051,8 @@ export function AgentSubmissionPanel() {
             <div className="rounded-lg border border-base-300 bg-base-100/50 p-4">
               <h4 className="text-sm font-semibold">User signs in browser</h4>
               <p className="mt-2 text-sm leading-relaxed text-base-content/60">
-                The agent creates a signing link. The user opens Curyo, connects the wallet, and approves the exact ask
-                calls in the browser.
+                The agent creates a signing link. The user opens RateLoop, connects the wallet, and approves the exact
+                ask calls in the browser.
               </p>
               <button type="button" className="btn btn-outline btn-xs mt-3" onClick={() => setActiveSetupStep("mcp")}>
                 View handoff API
@@ -1061,7 +1061,8 @@ export function AgentSubmissionPanel() {
             <div className="rounded-lg border border-base-300 bg-base-100/50 p-4">
               <h4 className="text-sm font-semibold">Local signer CLI</h4>
               <p className="mt-2 text-sm leading-relaxed text-base-content/60">
-                Generate an encrypted local signer, paste its public address here, fund it with Celo USDC, then run
+                Generate an encrypted local signer, paste its public address here, fund it with World Chain USDC, then
+                run
                 <span className="font-mono"> local-ask</span>.
               </p>
               <button type="button" className="btn btn-outline btn-xs mt-3" onClick={() => setActiveSetupStep("fund")}>
@@ -1181,13 +1182,13 @@ export function AgentSubmissionPanel() {
                   buttonLabel="Add USDC"
                   chain={thirdwebTargetChain}
                   client={thirdwebClient}
-                  description="Fund this agent wallet with Celo USDC."
+                  description="Fund this agent wallet with World Chain USDC."
                   onSuccess={() => void refetchBalance()}
                   presetOptions={[5, 10, 20]}
                   receiverAddress={agentWalletAddress}
                   showThirdwebBranding={false}
                   theme="dark"
-                  title="Add Celo USDC"
+                  title="Add World Chain USDC"
                   tokenAddress={usdcAddress}
                   tokenEditable={false}
                 />
@@ -1390,7 +1391,7 @@ export function AgentSubmissionPanel() {
                     <KeyIcon className="h-4 w-4" />
                     <span>Auth</span>
                   </div>
-                  <p className="mt-2 text-sm text-base-content/70">No bearer token or Curyo account required</p>
+                  <p className="mt-2 text-sm text-base-content/70">No bearer token or RateLoop account required</p>
                 </div>
               </div>
 
@@ -1445,7 +1446,7 @@ export function AgentSubmissionPanel() {
                     </button>
                   </div>
                   <p className="mt-2 text-sm leading-relaxed text-base-content/60">
-                    Use this path when a local agent owns an encrypted signer and can execute Curyo wallet calls.
+                    Use this path when a local agent owns an encrypted signer and can execute RateLoop wallet calls.
                   </p>
                   <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded bg-black p-3 text-xs text-white">
                     {localSignerSnippet}
@@ -1487,7 +1488,7 @@ export function AgentSubmissionPanel() {
               <div className="mt-5 rounded-lg border border-base-300 bg-base-100/50 p-4">
                 <h4 className="font-semibold">Access token</h4>
                 <p className="mt-1 text-sm leading-relaxed text-base-content/60">
-                  Use this token and config in the agent client that will call Curyo tools.
+                  Use this token and config in the agent client that will call RateLoop tools.
                 </p>
                 {tokenAccessPanel}
               </div>

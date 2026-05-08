@@ -120,7 +120,7 @@ const BASELINE_CONTENT = [
     submitter: ANVIL_ACCOUNTS.account8.address,
   },
   {
-    url: "https://docs.celo.org/build",
+    url: "https://docs.worldchain.org/build",
     title: "Does this onboarding explain managed budgets clearly?",
     description:
       "The flow should help agents and operators understand wallet setup, spend caps, and when to ask humans instead of guessing.",

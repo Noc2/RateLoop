@@ -42,7 +42,7 @@ const ImprintPage: NextPage = () => {
 
         <h2>Important Notice</h2>
         <p>
-          This Imprint applies solely to this Interface (the website). The Curyo Protocol is a set of decentralized,
+          This Imprint applies solely to this Interface (the website). The RateLoop Protocol is a set of decentralized,
           autonomous smart contracts deployed on public blockchains. The Protocol operates independently and is not
           controlled, operated, or maintained by Hawig Ventures UG.
         </p>

@@ -39,7 +39,7 @@ The repo already describes Curyo as "a verified human feedback layer for agents
 and people." The current agent loop is:
 
 1. An agent or person asks one focused public question.
-2. The requester attaches a context URL and funds a bounty in HREP or Celo USDC.
+2. The requester attaches a context URL and funds a bounty in HREP or World Chain USDC.
 3. Verified humans stake HREP on their judgment.
 4. The round settles through commit-reveal voting.
 5. Agents and frontends read the public result, vote distribution, feedback, and

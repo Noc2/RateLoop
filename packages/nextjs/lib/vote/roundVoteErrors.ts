@@ -7,7 +7,7 @@ export function normalizeRoundVoteError(message: string) {
   const normalizedMessage = message.toLowerCase();
 
   if (normalizedMessage.includes("free transactions used up")) {
-    return "Free transactions used up. Add CELO to continue.";
+    return "Free transactions used up. Add ETH to continue.";
   }
   if (message.includes("CooldownActive")) {
     return `You already voted on this content within the last ${Math.round(VOTE_COOLDOWN_SECONDS / 3600)} hours. Try again after the cooldown ends.`;

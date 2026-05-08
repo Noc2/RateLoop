@@ -16,12 +16,12 @@ const PrivacyPage: NextPage = () => {
         <p>
           This Privacy Notice explains how this interface (&quot;the Interface&quot;), operated by Hawig Ventures UG
           (haftungsbeschr&auml;nkt), Herzogin-Juliana-Stra&szlig;e 7, 55469 Simmern, Germany (&quot;we&quot;,
-          &quot;us&quot;, &quot;the data controller&quot;), handles information when you use it to access the Curyo
+          &quot;us&quot;, &quot;the data controller&quot;), handles information when you use it to access the RateLoop
           Protocol. We are committed to transparency about our data practices.
         </p>
         <p>
           <strong>Important Distinction:</strong> This Privacy Notice applies only to this Interface (the website). The
-          Curyo Protocol is a set of decentralized smart contracts that operate independently on the blockchain. The
+          RateLoop Protocol is a set of decentralized smart contracts that operate independently on the blockchain. The
           Interface operator does not control the Protocol and cannot access, modify, or delete any data recorded on the
           blockchain.
         </p>
@@ -30,7 +30,7 @@ const PrivacyPage: NextPage = () => {
 
         <h3>2.1 Protocol Data (Blockchain - NOT Controlled by Us)</h3>
         <p>
-          When you interact with the Curyo Protocol through any interface, the following information is recorded
+          When you interact with the RateLoop Protocol through any interface, the following information is recorded
           directly on the public blockchain:
         </p>
         <ul>
@@ -102,7 +102,7 @@ const PrivacyPage: NextPage = () => {
         <p>This Interface also does not collect:</p>
         <ul>
           <li>Name, phone number, postal address, or similar offline contact details</li>
-          <li>Passport or government ID document data from Self.xyz</li>
+          <li>Passport, government ID, or biometric document data from optional third-party identity providers</li>
           <li>Analytics, advertising, or cross-site behavioral tracking profiles</li>
           <li>Biometric data</li>
           <li>Your wallet private keys, seed phrases, or custody of your assets</li>
@@ -178,18 +178,10 @@ const PrivacyPage: NextPage = () => {
             served as public question context.
           </li>
           <li>
-            <strong>Identity Verification (Self.xyz):</strong> To claim tokens from the faucet, you may verify your
-            identity through{" "}
-            <a href="https://self.xyz" target="_blank" rel="noopener noreferrer" className="link link-primary">
-              Self.xyz
-            </a>
-            , a third-party identity verification service for supported documents such as passports or biometric ID
-            cards. Self.xyz uses zero-knowledge proofs &mdash; your document data is processed entirely on your mobile
-            device and is never shared with this Interface or stored on the blockchain. Only a cryptographic proof of
-            humanity, 18+ status, sanctioned-country eligibility, and an OFAC compliance result are transmitted
-            on-chain. No personal information (name, document number, exact date of birth, nationality, or gender) is
-            collected, stored, or accessible by the Interface operator. Self.xyz has its own privacy policy which we
-            recommend reviewing.
+            <strong>Optional Identity Providers:</strong> If an interface offers optional credentials, trust badges, or
+            eligibility checks, the provider may process identity information under its own privacy policy. RateLoop
+            should only receive the credential result or on-chain proof required for the feature, not your underlying
+            document data.
           </li>
         </ul>
 

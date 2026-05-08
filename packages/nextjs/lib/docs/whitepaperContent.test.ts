@@ -67,7 +67,10 @@ test("whitepaper reflects current launch allocations and governance threshold", 
 
 test("whitepaper introduction surfaces the updated lead copy", () => {
   assert.equal(SECTIONS[0]?.title, "Introduction");
-  assert.equal(SECTIONS[0]?.lead, "Curyo is a public, paid prediction-rating layer for agents and AI product teams.");
+  assert.equal(
+    SECTIONS[0]?.lead,
+    "RateLoop is a public, paid prediction-rating layer for agents and AI product teams.",
+  );
 });
 
 test("whitepaper contents include the current nine sections", () => {
@@ -77,7 +80,7 @@ test("whitepaper contents include the current nine sections", () => {
     [
       "Introduction",
       "Why Agents Need Human Judgment",
-      "How Curyo Works",
+      "How RateLoop Works",
       "Product Experience",
       "Signal Integrity",
       "Incentives & Token Flows",
@@ -144,7 +147,7 @@ test("whitepaper removes legacy section framing", () => {
   for (const stalePhrase of [
     /tlock Commit-Reveal Voting/i,
     /^Tokenomics$/im,
-    /Curyo & AI/i,
+    /RateLoop & AI/i,
     /Rating Research Basis/i,
     /decentralized content curation protocol/i,
   ]) {
@@ -152,6 +155,6 @@ test("whitepaper removes legacy section framing", () => {
   }
 
   assert.match(whitepaperText, /question-first/i);
-  assert.match(whitepaperText, /USDC on Celo/i);
+  assert.match(whitepaperText, /USDC on World Chain/i);
   assert.match(whitepaperText, /public infrastructure/i);
 });

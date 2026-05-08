@@ -320,7 +320,7 @@ export function useFreeTransactionAllowance() {
     }
 
     markExhaustionToastShown(toastKey);
-    notification.warning("Free transactions used up. Add CELO to continue.");
+    notification.warning("Free transactions used up. Add ETH to continue.");
   }, [allowance.remaining, allowance.verified, allowance.voterIdTokenId, resolvedChainId]);
 
   return allowance;

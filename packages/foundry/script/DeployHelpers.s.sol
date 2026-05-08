@@ -26,11 +26,11 @@ contract ScaffoldETHDeploy is Script {
         if (chainId == 31337) {
             return "hardhat";
         }
-        if (chainId == 11142220) {
-            return "celoSepolia";
+        if (chainId == 4801) {
+            return "worldchainSepolia";
         }
-        if (chainId == 42220) {
-            return "celo";
+        if (chainId == 480) {
+            return "worldchain";
         }
 
         return "";

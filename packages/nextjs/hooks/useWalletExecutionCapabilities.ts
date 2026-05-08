@@ -10,7 +10,7 @@ import {
   supportsThirdwebExecutionCapabilities,
 } from "~~/services/thirdweb/client";
 
-export type WalletExecutionMode = "sponsored_7702" | "self_funded_7702" | "fee_currency" | "direct_celo";
+export type WalletExecutionMode = "sponsored_7702" | "self_funded_7702" | "fee_currency" | "direct_worldchain";
 
 export function resolveWalletExecutionMode(params: {
   hasSendCalls: boolean;
@@ -28,11 +28,11 @@ export function resolveWalletExecutionMode(params: {
 
   if (params.supportedChain) {
     // External wallets may expose `sendCalls`, but hardware-backed accounts
-    // can still reject the EIP-7702 upgrade path. Keep them on plain Celo txs.
+    // can still reject the EIP-7702 upgrade path. Keep them on plain World Chain txs.
     return "fee_currency";
   }
 
-  return "direct_celo";
+  return "direct_worldchain";
 }
 
 export function resolveWalletExecutionChainId(

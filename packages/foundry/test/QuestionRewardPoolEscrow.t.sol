@@ -789,55 +789,12 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertEq(usdc.balanceOf(frontend1), frontendBalanceBefore);
     }
 
-    function testDefaultFrontendFeeCanBeConfiguredWithinCap() public {
-        vm.prank(owner);
-        rewardPoolEscrow.setDefaultFrontendFeeBps(MAX_FRONTEND_FEE_BPS);
-
-        uint256 contentId = _submitQuestion("");
-        uint256 bountyClosesAt = block.timestamp + 30 days;
-        vm.startPrank(funder);
-        usdc.approve(address(rewardPoolEscrow), REWARD_POOL_AMOUNT);
-        vm.expectEmit(false, true, true, true);
-        emit RewardPoolCreated(
-            0,
-            contentId,
-            funder,
-            voterIdNFT.getTokenId(funder),
-            REWARD_POOL_AMOUNT,
-            3,
-            1,
-            1,
-            block.timestamp,
-            bountyClosesAt,
-            bountyClosesAt,
-            MAX_FRONTEND_FEE_BPS,
-            REWARD_ASSET_USDC,
-            false
-        );
-        uint256 rewardPoolId = rewardPoolEscrow.createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1, bountyClosesAt, 0);
-        vm.stopPrank();
-
-        assertGt(rewardPoolId, 0);
-
-        vm.prank(owner);
-        vm.expectRevert("Fee too high");
-        rewardPoolEscrow.setDefaultFrontendFeeBps(MAX_FRONTEND_FEE_BPS + 1);
-    }
-
     function testVotingEngineIsPinnedAfterInitialization() public {
         address newEngine = address(0xBEEF);
 
         vm.prank(owner);
         (bool ok,) = address(rewardPoolEscrow).call(abi.encodeWithSignature("setVotingEngine(address)", newEngine));
         assertFalse(ok);
-
-        (address wiredHrep, address wiredUsdc, address wiredRegistry, address wiredEngine, address wiredVoterIdNFT) =
-            rewardPoolEscrow.getWiring();
-        assertEq(wiredHrep, address(hrepToken));
-        assertEq(wiredUsdc, address(usdc));
-        assertEq(wiredRegistry, address(registry));
-        assertEq(wiredEngine, address(votingEngine));
-        assertEq(wiredVoterIdNFT, address(voterIdNFT));
     }
 
     function testRegistrySubmissionRewardRejectsStaleEscrowAfterEngineRotation() public {
@@ -3589,22 +3546,11 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         );
         vm.mockCall(
             address(votingEngine),
-            abi.encodeWithSignature("commits(uint256,uint256,bytes32)", contentId, roundId, commitKey),
-            abi.encode(
-                voter,
-                uint64(STAKE),
-                bytes(""),
-                uint64(0),
-                bytes32(0),
-                address(0),
-                uint48(block.timestamp),
-                true,
-                true,
-                uint8(0)
-            )
+            abi.encodeWithSignature("commitRevealData(uint256,uint256,bytes32)", contentId, roundId, commitKey),
+            abi.encode(bytes(""), uint64(0), bytes32(0), uint48(block.timestamp), true, uint64(STAKE))
         );
-        // Escrow reads via the narrow commitCore getter for gas; mock it too so tests
-        // that rely on synthetic reveals behave identically to the legacy commits() path.
+        // Escrow reads via the narrow commitCore getter for gas; mock it too so synthetic
+        // reveals behave like real commits.
         vm.mockCall(
             address(votingEngine),
             abi.encodeWithSignature("commitCore(uint256,uint256,bytes32)", contentId, roundId, commitKey),

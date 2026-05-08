@@ -64,11 +64,11 @@ test("detects nested database auth/connect/tls failures for free transaction ses
 test("builds a self-funded fallback summary when the free transaction store is unavailable", () => {
   const summary = buildUnavailableFreeTransactionSummary({
     address: "0xfa9605a2c38a0b4f16f689fdd07b63f295b86d1c",
-    chainId: 11142220,
+    chainId: 4801,
   });
 
   assert.deepEqual(summary, {
-    chainId: 11142220,
+    chainId: 4801,
     environment: "test",
     limit: 25,
     used: 0,
@@ -81,7 +81,7 @@ test("builds a self-funded fallback summary when the free transaction store is u
 });
 
 test("free transaction session route rejects unsupported numeric chain ids", async () => {
-  env.NEXT_PUBLIC_TARGET_NETWORKS = "11142220";
+  env.NEXT_PUBLIC_TARGET_NETWORKS = "4801";
   __setRateLimitStoreForTests({
     execute: async input => {
       const sql = typeof input === "string" ? input : input.sql;
@@ -110,7 +110,7 @@ test("free transaction session route rejects unsupported numeric chain ids", asy
 });
 
 test("free transaction session route falls back to self-funded mode when summary lookup fails", async () => {
-  env.NEXT_PUBLIC_TARGET_NETWORKS = "42220";
+  env.NEXT_PUBLIC_TARGET_NETWORKS = "480";
   __setRateLimitStoreForTests({
     execute: async input => {
       const sql = typeof input === "string" ? input : input.sql;
@@ -134,13 +134,13 @@ test("free transaction session route falls back to self-funded mode when summary
   const route = await import("./route");
   const response = await route.GET(
     new NextRequest(
-      "https://curyo.xyz/api/transactions/free/session?address=0x63cada40E8AcF7A1d47229af5Be35b78b16035fa&chainId=42220",
+      "https://curyo.xyz/api/transactions/free/session?address=0x63cada40E8AcF7A1d47229af5Be35b78b16035fa&chainId=480",
     ),
   );
   const body = await response.json();
 
   assert.equal(response.status, 200);
-  assert.equal(body.chainId, 42220);
+  assert.equal(body.chainId, 480);
   assert.equal(body.verified, false);
   assert.equal(body.remaining, 0);
   assert.equal(body.walletAddress, "0x63cada40E8AcF7A1d47229af5Be35b78b16035fa");

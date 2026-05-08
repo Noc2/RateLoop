@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 const ADDRESS = "0x00000000000000000000000000000000000000aa" as const;
-const CHAIN_ID = 11142220;
+const CHAIN_ID = 4801;
 const SUBMISSION_KEY = "0x1111111111111111111111111111111111111111111111111111111111111111" as const;
 const SALT = "0x2222222222222222222222222222222222222222222222222222222222222222" as const;
 const DEFAULT_DRAFT = {
@@ -45,10 +45,10 @@ test("buildSubmissionReservationStorageKey stays stable when mutable metadata ch
 });
 
 test("buildSubmissionReservationStorageKey is chain-scoped", () => {
-  const celo = buildSubmissionReservationStorageKey(ADDRESS, 42220, SUBMISSION_KEY);
-  const sepolia = buildSubmissionReservationStorageKey(ADDRESS, 11142220, SUBMISSION_KEY);
+  const worldchain = buildSubmissionReservationStorageKey(ADDRESS, 480, SUBMISSION_KEY);
+  const sepolia = buildSubmissionReservationStorageKey(ADDRESS, 4801, SUBMISSION_KEY);
 
-  assert.notEqual(celo, sepolia);
+  assert.notEqual(worldchain, sepolia);
 });
 
 test("buildSubmissionRevealCommitment changes when the reserved metadata changes", () => {
@@ -224,7 +224,7 @@ test("deriveSubmissionReservationSalt recreates the same salt for the same draft
 
     const first = deriveSubmissionReservationSalt(draft, ADDRESS, CHAIN_ID);
     const second = deriveSubmissionReservationSalt(draft, ADDRESS, CHAIN_ID);
-    const otherChain = deriveSubmissionReservationSalt(draft, ADDRESS, 42220);
+    const otherChain = deriveSubmissionReservationSalt(draft, ADDRESS, 480);
 
     assert.equal(first, second);
     assert.notEqual(first, otherChain);

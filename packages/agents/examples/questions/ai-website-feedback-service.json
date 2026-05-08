@@ -1,6 +1,6 @@
 {
   "clientRequestId": "ai-website-feedback-demo",
-  "chainId": 42220,
+  "chainId": 480,
   "templateId": "generic_rating",
   "maxPaymentAmount": "2500000",
   "bounty": {

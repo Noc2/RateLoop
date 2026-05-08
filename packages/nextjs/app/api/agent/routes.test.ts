@@ -127,7 +127,7 @@ function questionPayload(clientRequestId: string) {
       asset: "USDC",
       rewardPoolExpiresAt: "1762000000",
     },
-    chainId: 42220,
+    chainId: 480,
     clientRequestId,
     question: {
       categoryId: "5",
@@ -146,7 +146,7 @@ async function seedManagedAskAudit(params: {
   operationKey?: `0x${string}`;
 }) {
   const operationKey = params.operationKey ?? OPERATION_KEY;
-  const chainId = params.chainId ?? 42220;
+  const chainId = params.chainId ?? 480;
   const now = new Date("2026-04-23T12:00:00.000Z");
   const contentId = params.contentId ?? null;
 
@@ -426,7 +426,7 @@ function installAskOverrides() {
       ({
         agentId: "route-agent",
         categoryId: "5",
-        chainId: 42220,
+        chainId: 480,
         clientRequestId: "ask-http",
         contentId: null,
         createdAt: new Date(),
@@ -768,7 +768,7 @@ test("agent confirm route returns a submitted ask response", async () => {
   mcpToolsModule.__setMcpToolTestOverridesForTests({
     confirmAgentWalletQuestionSubmissionRequest: async () => ({
       body: {
-        chainId: 42220,
+        chainId: 480,
         clientRequestId: "ask-http",
         contentId: "42",
         contentIds: ["42"],
@@ -799,7 +799,7 @@ test("agent confirm route accepts tokenless operation confirmations", async () =
   mcpToolsModule.__setMcpToolTestOverridesForTests({
     confirmAgentWalletQuestionSubmissionRequest: async () => ({
       body: {
-        chainId: 42220,
+        chainId: 480,
         clientRequestId: "ask-public",
         contentId: "42",
         contentIds: ["42"],
@@ -826,7 +826,7 @@ test("agent confirm route accepts tokenless operation confirmations", async () =
 
 test("agent status route returns not_found without treating it as a transport error", async () => {
   const response = await asksByClientRoute.GET(
-    makeGet("https://curyo.xyz/api/agent/asks/by-client-request?chainId=42220&clientRequestId=missing"),
+    makeGet("https://curyo.xyz/api/agent/asks/by-client-request?chainId=480&clientRequestId=missing"),
   );
   const body = (await response.json()) as Record<string, unknown>;
 
@@ -842,7 +842,7 @@ test("agent status route supports tokenless operation lookups", async () => {
       OPERATION_KEY,
       "wallet:public-status",
       "payload-hash",
-      42220,
+      480,
       "0x00000000000000000000000000000000000000aa",
       "0x0000000000000000000000000000000000000001",
       "1000000",
@@ -889,7 +889,7 @@ test("lifecycle sweep uses submitted x402 state even when reservation bookkeepin
       "route-agent",
       "stale-reservation",
       "payload-hash",
-      42220,
+      480,
       "5",
       "1000000",
       "reserved",
@@ -921,7 +921,7 @@ test("lifecycle sweep uses submitted x402 state even when reservation bookkeepin
       OPERATION_KEY,
       "mcp:stale-reservation",
       "payload-hash",
-      42220,
+      480,
       "0x0000000000000000000000000000000000000001",
       "1000000",
       "1000000",
@@ -1038,7 +1038,7 @@ test("agent audit by client request route resolves the same managed ask", async 
   await seedManagedAskAudit({ clientRequestId: "audit-client-http" });
 
   const response = await asksByClientAuditRoute.GET(
-    makeGet("https://curyo.xyz/api/agent/asks/by-client-request/audit?chainId=42220&clientRequestId=audit-client-http"),
+    makeGet("https://curyo.xyz/api/agent/asks/by-client-request/audit?chainId=480&clientRequestId=audit-client-http"),
   );
   const body = (await response.json()) as {
     clientRequestId: string;
@@ -1127,7 +1127,7 @@ test("agent status route includes live ask guidance for underfunded open markets
       OPERATION_KEY,
       "status-guidance",
       "payload-hash",
-      42220,
+      480,
       "0x0000000000000000000000000000000000000001",
       "1000000",
       "1000000",
@@ -1264,7 +1264,7 @@ test("agent status route includes live ask guidance for underfunded open markets
 
 test("agent results route returns the pending result package before settlement", async () => {
   const response = await resultsByClientRoute.GET(
-    makeGet("https://curyo.xyz/api/agent/results/by-client-request?chainId=42220&clientRequestId=missing"),
+    makeGet("https://curyo.xyz/api/agent/results/by-client-request?chainId=480&clientRequestId=missing"),
   );
   const body = (await response.json()) as Record<string, unknown>;
 
@@ -1322,7 +1322,7 @@ test("agent results routes accept contentId for bundle lookups", async () => {
 
   const byClientResponse = await resultsByClientRoute.GET(
     makeGet(
-      "https://curyo.xyz/api/agent/results/by-client-request?chainId=42220&clientRequestId=bundle-result-http&contentId=99",
+      "https://curyo.xyz/api/agent/results/by-client-request?chainId=480&clientRequestId=bundle-result-http&contentId=99",
     ),
   );
   const byClientBody = (await byClientResponse.json()) as {

@@ -19,7 +19,7 @@ const FrontendCodes: NextPage = () => {
     <article className="prose max-w-none">
       <h1>Frontend Integrations</h1>
       <p className="lead text-base-content/60 text-lg">
-        Add Curyo to an existing app with the SDK, then register a frontend operator if you want votes from your
+        Add RateLoop to an existing app with the SDK, then register a frontend operator if you want votes from your
         interface to accrue frontend fees.
       </p>
 
@@ -56,8 +56,8 @@ const FrontendCodes: NextPage = () => {
 
       <h2>Start With the SDK</h2>
       <p>
-        The SDK is the fastest path for integrating Curyo into an existing codebase. It packages the hosted read client
-        and the vote/frontend helpers that the reference app already relies on.
+        The SDK is the fastest path for integrating RateLoop into an existing codebase. It packages the hosted read
+        client and the vote/frontend helpers that the reference app already relies on.
       </p>
       <p>
         If you want implementation details, start with the{" "}
@@ -104,7 +104,7 @@ const FrontendCodes: NextPage = () => {
       </p>
       <ol>
         <li>
-          <strong>Stake 1,000 HREP</strong> to the FrontendRegistry contract.
+          <strong>Stake 1,000 LREP</strong> to the FrontendRegistry contract.
         </li>
         <li>
           <strong>Integrate:</strong> Include your registered address in the prediction commit, or configure it as the
@@ -113,9 +113,9 @@ const FrontendCodes: NextPage = () => {
         <li>
           <strong>Claim:</strong> First call{" "}
           <code>RoundRewardDistributor.claimFrontendFee(contentId, roundId, frontend)</code> from your operator address
-          on each settled round, then withdraw your accumulated HREP from <code>FrontendRegistry.claimFees()</code>{" "}
+          on each settled round, then withdraw your accumulated LREP from <code>FrontendRegistry.claimFees()</code>{" "}
           while active, or with <code>completeDeregister()</code> after exit. If governance slashes your frontend, you
-          must restore the full 1,000 HREP bond before fee claims can accrue to you again. Reward-pool frontend shares
+          must restore the full 1,000 LREP bond before fee claims can accrue to you again. Reward-pool frontend shares
           are paid automatically when eligible voters claim.
         </li>
       </ol>
@@ -227,7 +227,7 @@ RoundVotingEngine.commitVote(
       <h3>Own Your Moderation Layer</h3>
       <p>
         Frontend operators are allowed and encouraged to implement their own <strong>frontend moderation layer</strong>{" "}
-        to comply with local regulations and their own platform policies. Because Curyo is a decentralized protocol,
+        to comply with local regulations and their own platform policies. Because RateLoop is a decentralized protocol,
         there is no protocol-level censorship, and content submitted to the blockchain is permanent. However, each
         frontend is free to decide what it displays to its users.
       </p>
@@ -302,11 +302,11 @@ RoundVotingEngine.commitVote(
       <p>Frontend operators are subject to governance control:</p>
       <ul>
         <li>
-          <strong>Slashing</strong> - Governance can slash staked HREP for abuse and confiscate already accrued frontend
+          <strong>Slashing</strong> - Governance can slash staked LREP for abuse and confiscate already accrued frontend
           fees.
         </li>
         <li>
-          <strong>Rebonding required</strong> - After a partial slash, operators must top back up to the full 1,000 HREP
+          <strong>Rebonding required</strong> - After a partial slash, operators must top back up to the full 1,000 LREP
           stake before frontend fees can accrue again.
         </li>
       </ul>

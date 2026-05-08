@@ -58,7 +58,7 @@ export async function main() {
 
   const quote = await agent.quoteQuestion({
     clientRequestId,
-    chainId: 42220,
+    chainId: 480,
     bounty,
     question,
     walletAddress,

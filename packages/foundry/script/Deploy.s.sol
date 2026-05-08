@@ -24,10 +24,10 @@ import { ParticipationPool } from "../contracts/ParticipationPool.sol";
 import { MockERC20 } from "../contracts/mocks/MockERC20.sol";
 import { CuryoGovernor } from "../contracts/governance/CuryoGovernor.sol";
 
-/// @notice Fresh RateLoop deployment script for Celo.
-/// @dev Optional identity can be wired later by governance; no required Self.xyz faucet is deployed here.
+/// @notice Fresh RateLoop deployment script for World Chain.
+/// @dev Optional identity can be wired later by governance; no required proof-of-personhood faucet is deployed here.
 contract DeployRateLoop is ScaffoldETHDeploy {
-    error UnsupportedCeloChain(uint256 chainId);
+    error UnsupportedWorldChain(uint256 chainId);
     error InvalidLaunchDistributionRecipient();
 
     uint256 public constant TIMELOCK_MIN_DELAY = 2 days;
@@ -41,12 +41,12 @@ contract DeployRateLoop is ScaffoldETHDeploy {
     uint256 public constant MIN_AI_DECLARATION_BOND = 100 * 1e6;
     uint256 public constant AI_DECLARATION_CHALLENGE_BOND = 25 * 1e6;
 
-    address internal constant CELO_MAINNET_USDC = 0xcebA9300f2b948710d2653dD7B07f33A8B32118C;
-    address internal constant CELO_SEPOLIA_USDC = 0x01C5C0122039549AD1493B8220cABEdD739BC44E;
+    address internal constant WORLD_CHAIN_MAINNET_USDC = 0x79A02482A880bCE3F13e09Da970dC34db4CD24d1;
+    address internal constant WORLD_CHAIN_SEPOLIA_USDC = 0x66145f38cBAC35Ca6F1Dfb4914dF98F1614aeA88;
 
     function _preBroadcastChecks() internal view override {
-        if (block.chainid != 31337 && block.chainid != 42220 && block.chainid != 11142220) {
-            revert UnsupportedCeloChain(block.chainid);
+        if (block.chainid != 31337 && block.chainid != 480 && block.chainid != 4801) {
+            revert UnsupportedWorldChain(block.chainid);
         }
     }
 
@@ -158,7 +158,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
             usdcTokenAddress = address(localUsdcToken);
             console.log("Mock USDC deployed at:", usdcTokenAddress);
         } else {
-            usdcTokenAddress = _resolveCeloUsdcAddress();
+            usdcTokenAddress = _resolveWorldChainUsdcAddress();
             console.log("Circle USDC resolved at:", usdcTokenAddress);
         }
 
@@ -319,10 +319,10 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         console.log("Governance:", governance);
     }
 
-    function _resolveCeloUsdcAddress() internal view returns (address) {
-        if (block.chainid == 42220) return CELO_MAINNET_USDC;
-        if (block.chainid == 11142220) return CELO_SEPOLIA_USDC;
-        revert UnsupportedCeloChain(block.chainid);
+    function _resolveWorldChainUsdcAddress() internal view returns (address) {
+        if (block.chainid == 480) return WORLD_CHAIN_MAINNET_USDC;
+        if (block.chainid == 4801) return WORLD_CHAIN_SEPOLIA_USDC;
+        revert UnsupportedWorldChain(block.chainid);
     }
 
     function _buildQuorumExcludedHolders(

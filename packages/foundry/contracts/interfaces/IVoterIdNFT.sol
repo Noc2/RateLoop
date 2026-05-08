@@ -6,7 +6,7 @@ pragma solidity ^0.8.20;
 interface IVoterIdNFT {
     /// @notice Mint a new Voter ID NFT
     /// @param to The address to mint to
-    /// @param nullifier The passport nullifier from Self.xyz
+    /// @param nullifier The identity nullifier
     /// @return tokenId The minted token ID
     function mint(address to, uint256 nullifier) external returns (uint256 tokenId);
 
@@ -49,13 +49,13 @@ interface IVoterIdNFT {
     /// @return True if the nullifier has been used
     function isNullifierUsed(uint256 nullifier) external view returns (bool);
 
-    /// @notice Return the Self.xyz nullifier that minted a Voter ID token
+    /// @notice Return the identity nullifier that minted a Voter ID token
     /// @param tokenId The Voter ID token
     /// @return The nullifier, or 0 when the token has no nullifier snapshot
     function getNullifier(uint256 tokenId) external view returns (uint256);
 
     /// @notice Return the current token ID minted from a nullifier, if any.
-    /// @param nullifier The Self.xyz nullifier
+    /// @param nullifier The identity nullifier
     /// @return The current token ID, or 0 when no active token exists for the nullifier
     function getTokenIdForNullifier(uint256 nullifier) external view returns (uint256);
 

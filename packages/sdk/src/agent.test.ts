@@ -51,7 +51,7 @@ test("agent MCP helpers call tools/call with protocol and bearer headers", async
 
   const quote = await agent.quoteQuestion({
     bounty: { amount: 1_000_000n },
-    chainId: 42220,
+    chainId: 480,
     clientRequestId: "ask-1",
     question: {
       categoryId: 1n,
@@ -99,7 +99,7 @@ test("quoteQuestion uses direct authenticated agent HTTP when apiBaseUrl and tok
 
   const response = await agent.quoteQuestion({
     bounty: { amount: 1_000_000n },
-    chainId: 42220,
+    chainId: 480,
     clientRequestId: "ask-direct",
     question: {
       categoryId: 5n,
@@ -140,7 +140,7 @@ test("quoteQuestion supports tokenless direct agent HTTP with a wallet address",
 
   const response = await agent.quoteQuestion({
     bounty: { amount: 1_000_000n, requiredVoters: 3n },
-    chainId: 42220,
+    chainId: 480,
     clientRequestId: "ask-tokenless-quote",
     question: {
       categoryId: 7n,
@@ -181,7 +181,7 @@ test("askHumans supports tokenless direct agent HTTP with a wallet address", asy
 
   const request: AskHumansRequest = {
     bounty: { amount: 1_000_000n, requiredVoters: 3n },
-    chainId: 42220,
+    chainId: 480,
     clientRequestId: "ask-2",
     maxPaymentAmount: 1_250_000n,
     question: {
@@ -248,7 +248,7 @@ test("signing intent helpers use direct browser-handoff routes", async () => {
   const createResponse = await agent.createSigningIntent({
     request: {
       bounty: { amount: 1_000_000n },
-      chainId: 42220,
+      chainId: 480,
       clientRequestId: "browser-signing",
       maxPaymentAmount: 1_000_000n,
       question: {
@@ -308,7 +308,7 @@ test("askHumans prefers direct authenticated agent HTTP before MCP framing", asy
 
   await agent.askHumans({
     bounty: { amount: 1_000_000n },
-    chainId: 42220,
+    chainId: 480,
     clientRequestId: "ask-http",
     maxPaymentAmount: 1_250_000n,
     question: {
@@ -404,14 +404,14 @@ test("getQuestionStatus supports tokenless direct operation and wallet client lo
     operationKey: `0x${"33".repeat(32)}`,
   });
   const byClient = await agent.getQuestionStatus({
-    chainId: 42220,
+    chainId: 480,
     clientRequestId: "ask-3",
     walletAddress: "0x00000000000000000000000000000000000000aa",
   });
 
   assert.deepEqual(requestedUrls, [
     `https://curyo.example/api/agent/asks/0x${"33".repeat(32)}`,
-    "https://curyo.example/api/agent/asks/by-client-request?chainId=42220&clientRequestId=ask-3&walletAddress=0x00000000000000000000000000000000000000aa",
+    "https://curyo.example/api/agent/asks/by-client-request?chainId=480&clientRequestId=ask-3&walletAddress=0x00000000000000000000000000000000000000aa",
   ]);
   assert.equal(byOperation.status, "awaiting_wallet_signature");
   assert.equal(byClient.terminal, false);
@@ -463,7 +463,7 @@ test("authenticated status, result, and templates use direct agent HTTP endpoint
   const status = await agent.getQuestionStatus({
     operationKey: `0x${"77".repeat(32)}`,
   });
-  await agent.getResult({ chainId: 42220, clientRequestId: "ask-http" });
+  await agent.getResult({ chainId: 480, clientRequestId: "ask-http" });
   await agent.getResult({ contentId: "123" });
   const templates = await agent.listResultTemplates();
 
@@ -480,7 +480,7 @@ test("authenticated status, result, and templates use direct agent HTTP endpoint
   );
   assert.equal(
     requestedUrls[1],
-    "https://curyo.example/api/agent/results/by-client-request?chainId=42220&clientRequestId=ask-http",
+    "https://curyo.example/api/agent/results/by-client-request?chainId=480&clientRequestId=ask-http",
   );
   assert.equal(
     requestedUrls[2],

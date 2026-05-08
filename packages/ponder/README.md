@@ -36,10 +36,10 @@ Within the package directory, additional scripts are available:
 
 | Variable                                   | Description                                                                                      |
 | ------------------------------------------ | ------------------------------------------------------------------------------------------------ |
-| `PONDER_NETWORK`                           | Active network: `hardhat`, `celoSepolia`, or `celo`                                              |
+| `PONDER_NETWORK`                           | Active network: `hardhat`, `worldchainSepolia`, or `worldchain`                                  |
 | `PONDER_RPC_URL_31337`                     | RPC URL for local Hardhat/Anvil chain                                                            |
-| `PONDER_RPC_URL_11142220`                  | RPC URL for Celo Sepolia                                                                         |
-| `PONDER_RPC_URL_42220`                     | RPC URL for Celo mainnet                                                                         |
+| `PONDER_RPC_URL_4801`                      | RPC URL for World Chain Sepolia                                                                  |
+| `PONDER_RPC_URL_480`                       | RPC URL for World Chain mainnet                                                                  |
 | `PONDER_CONTENT_REGISTRY_ADDRESS` etc.     | Local Hardhat address overrides; fallback addresses when the active chain has no shared deployment in `@rateloop/contracts` |
 | `PONDER_CONTENT_REGISTRY_START_BLOCK` etc. | Optional fallback start blocks when the active chain has no shared deployment metadata           |
 | `CORS_ORIGIN`                              | Allowed origins (comma-separated; required in production)                                        |
@@ -50,7 +50,7 @@ For local Hardhat/Anvil, Ponder prefers the address env values generated into `p
 `yarn deploy` does not need machine-specific addresses committed to the shared deployment artifact. After `yarn deploy`,
 the Foundry deployment script refreshes `packages/ponder/.env.local` to match the deployment target. Local deploys set
 `PONDER_NETWORK=hardhat`; live deploys such as
-`yarn deploy --network celoSepolia --keystore <name>` set the matching live network.
+`yarn deploy --network worldchainSepolia --keystore <name>` set the matching live network.
 
 ## Project Structure
 

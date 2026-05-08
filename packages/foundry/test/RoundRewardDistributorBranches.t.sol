@@ -307,7 +307,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         );
         vm.prank(owner);
         hrepToken.transfer(address(emptyOldEngine), 1);
-        assertEq(emptyOldEngine.accountedHrepBalance(), 0);
+        assertEq(hrepToken.balanceOf(address(emptyOldEngine)), 1);
 
         vm.prank(owner);
         vm.expectRevert("Voting engine immutable");

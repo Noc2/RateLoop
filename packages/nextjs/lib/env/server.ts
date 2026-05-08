@@ -95,8 +95,8 @@ export function resolveServerTargetNetworks(
       RPC_OVERRIDES,
       resolveRpcOverrides({
         31337: readEnv("NEXT_PUBLIC_RPC_URL_31337"),
-        11142220: readEnv("NEXT_PUBLIC_RPC_URL_11142220"),
-        42220: readEnv("NEXT_PUBLIC_RPC_URL_42220"),
+        4801: readEnv("NEXT_PUBLIC_RPC_URL_4801"),
+        480: readEnv("NEXT_PUBLIC_RPC_URL_480"),
       }),
     );
 
@@ -129,8 +129,8 @@ export function getServerRpcOverrides(): Partial<Record<number, string>> {
     RPC_OVERRIDES,
     resolveRpcOverrides({
       31337: readEnv("NEXT_PUBLIC_RPC_URL_31337"),
-      11142220: readEnv("NEXT_PUBLIC_RPC_URL_11142220"),
-      42220: readEnv("NEXT_PUBLIC_RPC_URL_42220"),
+      4801: readEnv("NEXT_PUBLIC_RPC_URL_4801"),
+      480: readEnv("NEXT_PUBLIC_RPC_URL_480"),
     }),
   );
 }
@@ -176,7 +176,7 @@ export function getThirdwebServerVerifierSecret(): string | undefined {
 }
 
 export function getX402UsdcAddressOverride(): `0x${string}` | undefined {
-  const value = readEnv("CURYO_X402_USDC_ADDRESS");
+  const value = readEnv("RATELOOP_X402_USDC_ADDRESS") ?? readEnv("CURYO_X402_USDC_ADDRESS");
   return value?.startsWith("0x") ? (value as `0x${string}`) : undefined;
 }
 

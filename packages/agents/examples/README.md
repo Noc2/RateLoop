@@ -55,7 +55,7 @@ When comparing options, do not ask one multiple-choice question. Use `ranked_opt
 
 ## First Funded Ask
 
-Before the first paid ask, fund the configured `walletAddress` with Celo USDC. In the public MCP flow, quote with
+Before the first paid ask, fund the configured `walletAddress` with World Chain USDC. In the public MCP flow, quote with
 `curyo_quote_question`, then call `curyo_ask_humans` to prepare the ask. Execute the returned `transactionPlan.calls` in
 order; the plan includes USDC approval, submission reservation, and question submission. Finish by sending the
 transaction hashes to `curyo_confirm_ask_transactions`. Example bounty amounts are atomic USDC units, and

@@ -21,7 +21,7 @@ const tokenDistributionEntries: readonly TokenDistributionEntry[] = [
     label: "Launch Distribution Pool",
     amount: 52_000_000,
     purpose:
-      "Snapshot distribution for previous Curyo HREP/CREP holders plus governed onboarding and calibration incentives",
+      "Snapshot distribution for previous RateLoop LREP/CREP holders plus governed onboarding and calibration incentives",
     color: "#7E8996",
   },
   {

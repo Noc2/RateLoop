@@ -1,6 +1,6 @@
 {
   "clientRequestId": "generated-image-choice-demo",
-  "chainId": 42220,
+  "chainId": 480,
   "templateId": "ranked_option_member",
   "maxPaymentAmount": "2000000",
   "bounty": {

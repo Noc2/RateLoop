@@ -65,8 +65,8 @@ Key environment variables (see `.env.example` for the full list):
 | ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | `NEXT_PUBLIC_ALCHEMY_API_KEY`                     | Alchemy RPC provider key                                                                                                                 |
 | `NEXT_PUBLIC_RPC_URL_31337`                       | Optional browser RPC override for local Foundry                                                                                          |
-| `NEXT_PUBLIC_RPC_URL_11142220`                    | Optional browser RPC override for Celo Sepolia                                                                                           |
-| `NEXT_PUBLIC_RPC_URL_42220`                       | Optional browser RPC override for Celo mainnet                                                                                           |
+| `NEXT_PUBLIC_RPC_URL_4801`                        | Optional browser RPC override for World Chain Sepolia                                                                                           |
+| `NEXT_PUBLIC_RPC_URL_480`                         | Optional browser RPC override for World Chain mainnet                                                                                           |
 | `NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID`           | Optional WalletConnect project ID for external wallet discovery                                                                          |
 | `NEXT_PUBLIC_THIRDWEB_CLIENT_ID`                  | thirdweb client ID for in-app wallets, sponsored transactions, and settings wallet top-ups                                               |
 | `NEXT_PUBLIC_TARGET_NETWORKS`                     | Comma-separated deployed chain IDs exposed in the UI (required in production)                                                            |
@@ -77,9 +77,17 @@ Key environment variables (see `.env.example` for the full list):
 | `NOTIFICATION_DELIVERY_SECRET`                    | Secret for the email delivery cron endpoint                                                                                              |
 | `NEXT_PUBLIC_PONDER_URL`                          | Public Ponder indexer URL (required in production)                                                                                       |
 | `THIRDWEB_SERVER_VERIFIER_SECRET`                 | Shared secret used by the thirdweb server verifier webhook                                                                               |
-| `CURYO_X402_USDC_ADDRESS`                         | Optional Celo USDC override for direct agent bounty planning; Celo and Celo Sepolia default automatically                    |
+| `RATELOOP_X402_USDC_ADDRESS`                      | Optional World Chain USDC override for direct agent bounty planning; World Chain mainnet and Sepolia default automatically                  |
+| `CURYO_X402_USDC_ADDRESS`                         | Legacy fallback name for `RATELOOP_X402_USDC_ADDRESS`                                                                                         |
 | `NEXT_PUBLIC_QUESTION_REWARD_POOL_ESCROW_ADDRESS` | Optional question reward escrow override while generated deployment metadata catches up; supported chains default from `@rateloop/contracts` |
-| `NEXT_PUBLIC_CELO_USDC_ADDRESS`                   | Optional browser-side Celo USDC override for USDC Bounties                                                                               |
+| `NEXT_PUBLIC_USDC_ADDRESS`                        | Optional browser-side World Chain USDC override for USDC bounties                                                                              |
+| `NEXT_PUBLIC_CELO_USDC_ADDRESS`                   | Legacy fallback name for `NEXT_PUBLIC_USDC_ADDRESS`                                                                                            |
+| `NEXT_PUBLIC_WORLD_ID_APP_ID`                     | Optional World ID app ID for the settings identity credential                                                                                   |
+| `NEXT_PUBLIC_WORLD_ID_ACTION`                     | Optional World ID action ID; defaults to `rateloop-human-credential-v1`                                                                         |
+| `NEXT_PUBLIC_WORLD_ID_ENVIRONMENT`                | World ID environment, `production` or `staging`                                                                                                 |
+| `WORLD_ID_RP_ID`                                  | World ID v4 relying-party ID used by the server verification route                                                                              |
+| `WORLD_ID_SIGNING_KEY`                            | Server-side World ID signing key used to create short-lived proof requests                                                                      |
+| `WORLD_ID_VERIFY_ENDPOINT`                        | Optional World ID verification API override                                                                                                     |
 | `CURYO_MCP_AGENTS`                                | Optional JSON array of managed MCP agents, bearer token hashes, scopes, daily budgets, per-ask caps, wallet addresses, and optional category allowlists |
 | `CURYO_MCP_ALLOWED_ORIGINS`                       | Comma-separated browser origins allowed to call `/api/mcp` and `/api/mcp/public`; non-browser agent calls may omit `Origin`              |
 | `CURYO_MCP_AUTHORIZATION_SERVER_URL`              | Optional real OAuth/OIDC authorization server advertised in MCP protected-resource metadata; omit for pre-registered bearer-token agents |
@@ -99,8 +107,9 @@ Key environment variables (see `.env.example` for the full list):
 Notes:
 
 - Browser RPC reads prefer `NEXT_PUBLIC_RPC_URL_<chainId>` overrides first, then `NEXT_PUBLIC_ALCHEMY_API_KEY`, then the chain's default public RPC list.
-- Mainnet is not a supported `NEXT_PUBLIC_TARGET_NETWORKS` entry. The browser can still add mainnet for wallet tooling when you provide a mainnet-capable RPC via `NEXT_PUBLIC_ALCHEMY_API_KEY` or a mainnet RPC override, but the target-network parser only accepts `31337`, `11142220`, and `42220`.
-- The Wallet settings tab uses thirdweb's BuyWidget to add native CELO for Celo gas. Configure the thirdweb client ID's allowed domains for the production and preview origins that will render `/settings#wallet`.
+- The target-network parser accepts local Foundry plus World Chain Sepolia and mainnet: `31337`, `4801`, and `480`.
+- The Wallet settings tab uses thirdweb's BuyWidget to add native ETH for World Chain gas. Configure the thirdweb client ID's allowed domains for the production and preview origins that will render `/settings#wallet`.
+- The Identity settings tab uses World ID v4 proof requests and server-side Developer Portal verification. Rating, rewards, and governance remain usable without this optional credential.
 - `/api/mcp/public` exposes tokenless quote, ask, confirm, status, result, template, and category tools for agents that already control a funded wallet. `/api/mcp` remains the managed endpoint for bearer-token policies, balances, signed callbacks, and audit surfaces.
 - Agent clients should follow the AI docs flow: list templates, quote with `walletAddress`, ask with a stable client request ID, execute and confirm wallet calls, wait for a status read or signed managed callback, then fetch the structured result. Operator token lifecycle, scopes, budgets, category allowlists, callback recovery, and audit history belong in `/settings?tab=agents` for managed agents; static `CURYO_MCP_AGENTS` remains supported for server-configured policies.
 - The Ask page can host JPG, PNG, and WEBP image context through private Vercel Blob uploads. Uploaded images are validated, metadata-stripped into WEBP, moderated with OpenAI, and served through `/api/attachments/images/{attachmentId}.webp` only after approval. Agents should recommend this route when users have local mockups, screenshots, or generated images instead of asking them to find a third-party image host.
@@ -111,7 +120,7 @@ Notes:
 - For local development, `yarn dev:db` and `yarn dev:stack` manage a Docker Postgres container when `DATABASE_URL` points to localhost. `yarn dev:stack` only runs `db:push` automatically for local databases; non-local databases require a manual `yarn workspace @rateloop/nextjs db:push` or the explicit `CURYO_DEV_STACK_ALLOW_REMOTE_DB_PUSH=1` opt-in.
 - On Next.js 15, `NextRequest.ip` is not reliably populated. On non-Vercel production hosts you must configure `RATE_LIMIT_TRUSTED_IP_HEADERS` to the header(s) your hosting proxy overwrites. Vercel auto-trusts `x-real-ip`, and localhost shortcuts are only enabled for development or explicit local production-style E2E builds. Protected API routes fail closed when no trusted client IP can be derived or when the rate-limit store is unavailable.
 - The free transaction quota is enforced by the thirdweb server verifier route at `/api/thirdweb/verify-transaction`. Configure the same secret in thirdweb’s dashboard and in `THIRDWEB_SERVER_VERIFIER_SECRET`.
-- The old x402 question route has been removed. Paid agent asks use ordered wallet calls or native x402-style USDC authorizations that fund protocol escrow directly; no Curyo executor, custody path, saved policy token, or separate service fee is part of the default ask flow. USDC-funded asks do not require a Voter ID, while voting and identity-gated claim flows still do.
+- The old x402 question route has been removed. Paid agent asks use ordered wallet calls or native x402-style USDC authorizations that fund protocol escrow directly; no Curyo executor, custody path, saved policy token, or separate service fee is part of the default ask flow. USDC-funded asks do not require a Voter ID, while voting and credential-aware claim flows still do.
 - The Next.js dev faucet reads `KEYSTORE_ACCOUNT`/`KEYSTORE_PASSWORD` or `FAUCET_PRIVATE_KEY` from `packages/nextjs/.env.local`. Keeper wallet settings live separately in `packages/keeper/.env.local`.
 
 ## Project Structure

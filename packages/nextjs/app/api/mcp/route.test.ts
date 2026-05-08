@@ -345,7 +345,7 @@ test("public MCP ask returns a tokenless wallet-call plan", async () => {
             asset: "USDC",
             rewardPoolExpiresAt: "1762000000",
           },
-          chainId: 42220,
+          chainId: 480,
           clientRequestId: "public-ask",
           maxPaymentAmount: "1500000",
           question: {
@@ -420,7 +420,7 @@ test("invalid media returns a stable MCP tool error code", async () => {
             asset: "USDC",
             rewardPoolExpiresAt: "1762000000",
           },
-          chainId: 42220,
+          chainId: 480,
           clientRequestId: "invalid-media-check",
           question: {
             categoryId: "5",
@@ -488,7 +488,7 @@ test("category disallowed returns a stable MCP tool error code", async () => {
             asset: "USDC",
             rewardPoolExpiresAt: "1762000000",
           },
-          chainId: 42220,
+          chainId: 480,
           clientRequestId: "category-check",
           maxPaymentAmount: "1500000",
           question: {
@@ -520,7 +520,7 @@ test("pending result returns a full pending result package", async () => {
       method: "tools/call",
       params: {
         arguments: {
-          chainId: 42220,
+          chainId: 480,
           clientRequestId: "missing-result",
         },
         name: "curyo_get_result",
@@ -551,7 +551,7 @@ test("failed submissions return a terminal pending result package without a retr
       "route-agent",
       "failed-result",
       "payload-hash",
-      42220,
+      480,
       "5",
       "1000000",
       "failed",
@@ -584,7 +584,7 @@ test("failed submissions return a terminal pending result package without a retr
       operationKey,
       "failed-result",
       "payload-hash",
-      42220,
+      480,
       "0x0000000000000000000000000000000000000001",
       "1000000",
       "1000000",
@@ -620,7 +620,7 @@ test("failed submissions return a terminal pending result package without a retr
       method: "tools/call",
       params: {
         arguments: {
-          chainId: 42220,
+          chainId: 480,
           clientRequestId: "failed-result",
         },
         name: "curyo_get_result",
@@ -652,7 +652,7 @@ test("submitted status stays non-terminal until the latest round reaches a final
       "route-agent",
       "open-status",
       "payload-hash",
-      42220,
+      480,
       "5",
       "1000000",
       "submitted",
@@ -685,7 +685,7 @@ test("submitted status stays non-terminal until the latest round reaches a final
       operationKey,
       "open-status",
       "payload-hash",
-      42220,
+      480,
       "0x0000000000000000000000000000000000000001",
       "1000000",
       "1000000",
@@ -747,7 +747,7 @@ test("submitted status stays non-terminal until the latest round reaches a final
       method: "tools/call",
       params: {
         arguments: {
-          chainId: 42220,
+          chainId: 480,
           clientRequestId: "open-status",
         },
         name: "curyo_get_question_status",

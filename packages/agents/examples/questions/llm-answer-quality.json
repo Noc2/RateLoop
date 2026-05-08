@@ -1,6 +1,6 @@
 {
   "clientRequestId": "llm-answer-quality-demo",
-  "chainId": 42220,
+  "chainId": 480,
   "templateId": "llm_answer_quality",
   "maxPaymentAmount": "1000000",
   "bounty": {

@@ -92,14 +92,14 @@ contract RoundVotingEngine is
     error NothingProcessed();
 
     // --- Access Control Roles ---
-    bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
+    bytes32 internal constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 
     // --- Constants ---
     uint256 internal constant MIN_STAKE = 1e6; // 1 HREP (6 decimals)
     uint256 internal constant MAX_STAKE = 100e6; // 100 HREP (6 decimals)
     uint256 internal constant VOTE_COOLDOWN = 24 hours; // Time-based cooldown per content per voter
     uint256 internal constant MAX_CIPHERTEXT_SIZE = 2_048; // 2 KB max ciphertext to prevent storage bloat
-    uint16 public constant MIN_LOO_VALID_PARTICIPANTS = 3;
+    uint16 internal constant MIN_LOO_VALID_PARTICIPANTS = 3;
     uint16 internal constant PREDICTION_FULL_CREDIT_TOLERANCE_BPS = 100;
     uint16 internal constant PREDICTION_ZERO_CREDIT_TOLERANCE_BPS = 8_900;
     uint16 internal constant PREDICTION_SCORE_SCALE_BPS = 10_000;
@@ -118,7 +118,7 @@ contract RoundVotingEngine is
     mapping(uint256 => uint256) internal nextRoundId; // contentId => next round ID to create
 
     // Commits: contentId => roundId => commitKey => Commit
-    mapping(uint256 => mapping(uint256 => mapping(bytes32 => RoundLib.Commit))) public commits;
+    mapping(uint256 => mapping(uint256 => mapping(bytes32 => RoundLib.Commit))) internal commits;
 
     // Track commit keys per round for iteration (reveal/settlement)
     mapping(uint256 => mapping(uint256 => bytes32[])) internal roundCommitHashes;
@@ -133,15 +133,15 @@ contract RoundVotingEngine is
     // Prediction accounting per round. Kept outside RoundLib structs so legacy tuple getters stay stable.
     mapping(uint256 => mapping(uint256 => uint256)) internal roundPredictionWeight; // contentId => roundId => effective LREP weight
     mapping(uint256 => mapping(uint256 => uint256)) internal roundWeightedRatingSum; // contentId => roundId => ratingBps * weight
-    mapping(uint256 => mapping(uint256 => uint16)) public roundPredictionCount;
+    mapping(uint256 => mapping(uint256 => uint16)) internal roundPredictionCount;
     mapping(uint256 => mapping(uint256 => uint16)) public roundFinalPredictionRatingBps;
     mapping(uint256 => mapping(uint256 => uint256)) public roundPredictionRewardWeight;
     mapping(uint256 => mapping(uint256 => uint256)) public roundPredictionRewardClaimants;
     mapping(uint256 => mapping(uint256 => uint256)) public roundPredictionForfeitedPool;
     mapping(uint256 => mapping(uint256 => uint256)) public roundPredictionForfeitClaimants;
-    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint16))) public commitPredictedRatingBps;
-    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint256))) public commitPredictionWeight;
-    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint16))) public commitPredictionScoreBps;
+    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint16))) internal commitPredictedRatingBps;
+    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint256))) internal commitPredictionWeight;
+    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint16))) internal commitPredictionScoreBps;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint256))) public commitPredictionRewardWeight;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint256))) public commitPredictionStakeReturned;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint256))) public commitPredictionForfeitedStake;
@@ -158,7 +158,7 @@ contract RoundVotingEngine is
     // Consensus subsidy reserve: pre-funded + replenished by 5% of each losing pool.
     // Pays out on unanimous rounds (losingPool == 0) to incentivize voting on obvious content.
     uint256 public consensusReserve;
-    uint256 public accountedHrepBalance;
+    uint256 internal accountedHrepBalance;
 
     // Config snapshot per round: prevents governance config changes from affecting in-progress rounds
     mapping(uint256 => mapping(uint256 => RoundLib.RoundConfig)) public roundConfigSnapshot;
@@ -270,7 +270,7 @@ contract RoundVotingEngine is
 
     /// @notice Add HREP to the consensus reserve.
     /// @dev Permissionless by design — treasury top-ups and slashed-stake routing both use this same path.
-    function addToConsensusReserve(uint256 amount) external nonReentrant {
+    function addToConsensusReserve(uint256 amount) external {
         if (amount == 0) revert InvalidStake();
         hrepToken.safeTransferFrom(msg.sender, address(this), amount);
         accountedHrepBalance += amount;
@@ -280,13 +280,13 @@ contract RoundVotingEngine is
     /// @notice Recover HREP sent directly to this contract outside accounted protocol flows.
     /// @dev Admin-only and naturally reentrancy-safe: a re-entrant call would compute
     ///      `balanceOf - accountedHrepBalance == 0` after the first transfer, draining nothing.
-    function recoverSurplusHrep() external nonReentrant {
+    function recoverSurplusHrep() external {
         if (!hasRole(bytes32(0), msg.sender)) revert Unauthorized();
         hrepToken.safeTransfer(msg.sender, hrepToken.balanceOf(address(this)) - accountedHrepBalance);
     }
 
     /// @notice Transfer HREP reward tokens to a recipient. Only callable by RewardDistributor.
-    function transferReward(address recipient, uint256 hrepAmount) external nonReentrant {
+    function transferReward(address recipient, uint256 hrepAmount) external {
         if (!protocolConfig.isRewardDistributorForEngine(msg.sender, address(this))) revert Unauthorized();
         if (recipient == address(0)) revert InvalidAddress();
         if (hrepAmount > 0) {
@@ -319,6 +319,25 @@ contract RoundVotingEngine is
     {
         RoundLib.Commit storage c = commits[contentId][roundId][commitKey];
         return (c.voter, c.stakeAmount, c.frontend, c.revealableAfter, c.revealed, c.isUp, c.epochIndex);
+    }
+
+    /// @notice Reveal/decryption data for keeper and manual reveal flows.
+    /// @dev Keeps the full `commits` storage mapping internal so deployed bytecode does not
+    ///      include Solidity's large auto-getter for the full struct.
+    function commitRevealData(uint256 contentId, uint256 roundId, bytes32 commitKey)
+        external
+        view
+        returns (
+            bytes memory ciphertext,
+            uint64 targetRound,
+            bytes32 drandChainHash,
+            uint48 revealableAfter,
+            bool revealed,
+            uint64 stakeAmount
+        )
+    {
+        RoundLib.Commit storage c = commits[contentId][roundId][commitKey];
+        return (c.ciphertext, c.targetRound, c.drandChainHash, c.revealableAfter, c.revealed, c.stakeAmount);
     }
 
     /// @notice Commit a blind vote on content. Direction is hidden via tlock encryption.
@@ -748,11 +767,8 @@ contract RoundVotingEngine is
     ///      `(isUp, salt)` here. Voters can also self-reveal. The contract verifies consistency against the stored
     ///      ciphertext hash. If any past-epoch ciphertext is not revealed, settlement remains blocked until the
     ///      final reveal grace window elapses.
-    function revealVoteByCommitKey(uint256 contentId, uint256 roundId, bytes32 commitKey, bool isUp, bytes32 salt)
-        external
-        nonReentrant
-    {
-        _revealVoteInternal(contentId, roundId, commitKey, isUp, salt);
+    function revealVoteByCommitKey(uint256, uint256, bytes32, bool, bytes32) external pure {
+        revert InvalidCommitHash();
     }
 
     /// @notice Reveal a personal rating and crowd prediction for a specific commit by commit key.
@@ -1340,37 +1356,6 @@ contract RoundVotingEngine is
         roundPredictionForfeitClaimants[contentId][roundId] = forfeitClaimants;
     }
 
-    function _revealVoteInternal(uint256 contentId, uint256 roundId, bytes32 commitKey, bool isUp, bytes32 salt)
-        internal
-    {
-        RoundLib.Round storage round = rounds[contentId][roundId];
-        RoundLib.Commit storage commit = commits[contentId][roundId][commitKey];
-        RoundLib.RoundConfig memory roundCfg = _getRoundConfig(contentId, roundId);
-        uint256 targetRoundRevealableAt = _targetRoundRevealableAt(contentId, roundId, commit.targetRound);
-        (uint256 eligibleFrontendStake, uint256 eligibleFrontendCount, address voter) = RoundRevealLib.revealVote(
-            round,
-            commit,
-            epochUnrevealedCount[contentId][roundId],
-            frontendEligibleAtCommit[contentId][roundId],
-            roundPerFrontendStake[contentId][roundId],
-            roundStakeWithEligibleFrontend[contentId][roundId],
-            roundEligibleFrontendCount[contentId][roundId],
-            contentId,
-            roundId,
-            commitKey,
-            isUp,
-            salt,
-            _getRoundReferenceRatingBps(contentId, roundId),
-            roundCfg.minVoters,
-            targetRoundRevealableAt,
-            commitRaterWeightBps[contentId][roundId][commitKey]
-        );
-        roundStakeWithEligibleFrontend[contentId][roundId] = eligibleFrontendStake;
-        roundEligibleFrontendCount[contentId][roundId] = eligibleFrontendCount;
-
-        emit VoteRevealed(contentId, roundId, voter, isUp);
-    }
-
     function _revealPredictionInternal(
         uint256 contentId,
         uint256 roundId,
@@ -1504,13 +1489,13 @@ contract RoundVotingEngine is
 
     // Opinion rating revealed alongside the crowd prediction. Added at the end of storage
     // to preserve the pre-existing prediction/refund slots for proxy upgrades.
-    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint16))) public commitOpinionRatingBps;
+    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint16))) internal commitOpinionRatingBps;
 
     // Commit-time social graph weight snapshot, in BPS. Used for rating weight and bounty units.
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint16))) public commitRaterWeightBps;
 
     // Round-level scorer metadata bound into prediction commits.
-    mapping(uint256 => mapping(uint256 => bytes32)) public roundScorerMetadataHashSnapshot;
+    mapping(uint256 => mapping(uint256 => bytes32)) internal roundScorerMetadataHashSnapshot;
 
     // --- Storage gap reserved for future upgrades ---
     uint256[30] private __gap;

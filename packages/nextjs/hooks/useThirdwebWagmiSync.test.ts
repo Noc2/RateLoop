@@ -106,10 +106,10 @@ test("shouldSkipThirdwebWagmiSync returns true when the requested thirdweb walle
     shouldSkipThirdwebWagmiSync({
       connectorId: "in-app-wallet",
       currentAddress: "0xabcDEF0000000000000000000000000000000000",
-      currentChainId: 11142220,
+      currentChainId: 4801,
       currentConnectorId: "in-app-wallet",
       requestedAddress: "0xabcdef0000000000000000000000000000000000",
-      requestedChainId: 11142220,
+      requestedChainId: 4801,
     }),
     true,
   );
@@ -120,11 +120,11 @@ test("shouldSkipThirdwebWagmiSync returns false for forced reconnects on the sam
     shouldSkipThirdwebWagmiSync({
       connectorId: "in-app-wallet",
       currentAddress: "0xabcDEF0000000000000000000000000000000000",
-      currentChainId: 42220,
+      currentChainId: 480,
       currentConnectorId: "in-app-wallet",
       forceReconnect: true,
       requestedAddress: "0xabcdef0000000000000000000000000000000000",
-      requestedChainId: 42220,
+      requestedChainId: 480,
     }),
     false,
   );
@@ -135,10 +135,10 @@ test("shouldSkipThirdwebWagmiSync returns false when the requested chain differs
     shouldSkipThirdwebWagmiSync({
       connectorId: "in-app-wallet",
       currentAddress: "0xabcdef0000000000000000000000000000000000",
-      currentChainId: 42220,
+      currentChainId: 480,
       currentConnectorId: "in-app-wallet",
       requestedAddress: "0xabcdef0000000000000000000000000000000000",
-      requestedChainId: 11142220,
+      requestedChainId: 4801,
     }),
     false,
   );

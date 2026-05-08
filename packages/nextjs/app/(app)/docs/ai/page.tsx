@@ -6,7 +6,7 @@ const genericMcpConfig = `{
   "mcpServers": {
     "curyo": {
       "transport": "streamable-http",
-      "url": "https://www.curyo.xyz/api/mcp/public",
+      "url": "https://www.rateloop.xyz/api/mcp/public",
       "headers": {
         "MCP-Protocol-Version": "2025-11-25"
       }
@@ -28,7 +28,7 @@ const directHttpEndpoints = [
 ] as const;
 
 const localDirectHttpOrigin = "http://localhost:3000";
-const productionDirectHttpOrigin = "https://www.curyo.xyz";
+const productionDirectHttpOrigin = "https://www.rateloop.xyz";
 const agentsPackageHref = "https://github.com/Noc2/CURYO/tree/codex/curyo-2-bounties-research/packages/agents";
 const agentsCliHref = "https://github.com/Noc2/CURYO/blob/codex/curyo-2-bounties-research/packages/agents/src/cli.ts";
 const agentsCliDocsHref =
@@ -91,7 +91,7 @@ function resolveDirectHttpOrigin(headerLookup: HeaderLookup) {
 }
 
 const askPayloadExample = `{
-  "chainId": 42220,
+  "chainId": 480,
   "clientRequestId": "design-review-2026-05-05-001",
   "walletAddress": "0x1111111111111111111111111111111111111111",
   "paymentMode": "wallet_calls",
@@ -107,7 +107,7 @@ const askPayloadExample = `{
     "title": "Does this landing page explain the product clearly?",
     "description": "Vote up only if a first-time visitor can explain what the product does, who it is for, and why they should care. Vote down if the page feels unclear, generic, or untrustworthy.",
     "contextUrl": "https://example.com/public-preview",
-    "imageUrls": ["https://www.curyo.xyz/api/attachments/images/att_exampleMockup1234.webp"],
+    "imageUrls": ["https://www.rateloop.xyz/api/attachments/images/att_exampleMockup1234.webp"],
     "categoryId": "5",
     "tags": ["agent", "design", "landing-page"],
     "templateId": "generic_rating",
@@ -142,10 +142,10 @@ const integratedPaths = [
 ] as const;
 
 const publicSetupInputs = [
-  "Curyo origin, usually https://www.curyo.xyz for production or the preview origin the user wants to test",
-  "A funded walletAddress on Celo, or permission to create a local encrypted signer and fund that address",
-  "A public context URL voters can open without secrets or a Curyo login",
-  "Optional image context: direct HTTPS image URLs, or Curyo-hosted uploaded images when the user has local mockups, screenshots, or generated visuals",
+  "RateLoop origin, usually https://www.rateloop.xyz for production or the preview origin the user wants to test",
+  "A funded walletAddress on World Chain, or permission to create a local encrypted signer and fund that address",
+  "A public context URL voters can open without secrets or a RateLoop login",
+  "Optional image context: direct HTTPS image URLs, or RateLoop-hosted uploaded images when the user has local mockups, screenshots, or generated visuals",
   "A bounded USDC budget: bounty.amount, maxPaymentAmount, requiredVoters, requiredSettledRounds, and rewardPoolExpiresAt",
   "The execution path: public MCP wallet calls, direct JSON routes, local signer, or WebMCP-assisted browser signing",
 ] as const;
@@ -154,13 +154,13 @@ const webMcpAgentTools = [
   "explain the accountless public ask flow and the values the agent should request from the user",
   "recommend result templates from the user's task, such as feature_acceptance_test, go_no_go, or rag_grounding_check",
   "list categories and validate that a draft question has a public context URL, tags, bounty, and stable clientRequestId",
-  "recommend Curyo's image upload flow when the user has local/generated image context instead of asking them to find a third-party image host",
+  "recommend RateLoop's image upload flow when the user has local/generated image context instead of asking them to find a third-party image host",
   "route wallet-capable agents to public MCP or JSON calls and route wallet-approval agents to browser signing intents",
 ] as const;
 
 const optionalManagedControls = [
   "saved bearer tokens",
-  "Curyo-enforced per-ask or daily caps",
+  "RateLoop-enforced per-ask or daily caps",
   "category allowlists",
   "signed callbacks",
   "balance tooling",
@@ -177,9 +177,9 @@ const agentFlow = [
 ] as const;
 
 export const metadata = {
-  title: "Human Feedback API For Agents | Curyo Docs",
+  title: "Human Feedback API For Agents | RateLoop Docs",
   description:
-    "How AI agents use Curyo as a human feedback API for user testing, UX checks, LLM evaluation, x402 payments, Celo USDC bounties, MCP tools, and readable public results.",
+    "How AI agents use RateLoop as an open rater feedback API for user testing, UX checks, LLM evaluation, x402 payments, World Chain USDC bounties, MCP tools, and readable public results.",
 } satisfies Metadata;
 
 const AIPage = async () => {
@@ -189,16 +189,16 @@ const AIPage = async () => {
     <article className="prose max-w-none">
       <h1>For Agents</h1>
       <p className="lead text-base-content/60 text-lg">
-        Curyo lets an AI agent ask verified humans for bounded public judgment, user testing, UX feedback, and LLM
-        evaluation, fund the work with Celo USDC, and use the result in its next decision.
+        RateLoop lets an AI agent ask open raters for bounded public judgment, user testing, UX feedback, and LLM
+        evaluation, fund the work with World Chain USDC, and use the result in its next decision.
       </p>
 
       <h2 id="purpose">Purpose</h2>
       <p>
-        Use Curyo as a human feedback API when an agent is uncertain and needs a public, auditable answer from people
-        rather than another model guess. Send a focused question with a public context URL, a result template, a Celo
-        USDC bounty, and a funded EVM wallet address. The output is a structured result package with answer, confidence,
-        vote signal, rationale summary, limitations, and public URL.
+        Use RateLoop as an open rater feedback API when an agent is uncertain and needs a public, auditable answer from
+        people rather than another model guess. Send a focused question with a public context URL, a result template, a
+        World Chain USDC bounty, and a funded EVM wallet address. The output is a structured result package with answer,
+        confidence, vote signal, rationale summary, limitations, and public URL.
       </p>
       <p>
         This page is the public agent entry point. Browser agents should use it to understand the workflow, choose a
@@ -207,7 +207,7 @@ const AIPage = async () => {
         before an agent submits a public wallet-funded question.
       </p>
 
-      <h2 id="when-to-use">When To Use Curyo</h2>
+      <h2 id="when-to-use">When To Use RateLoop</h2>
       <ul>
         {useCases.map(item => (
           <li key={item}>{item}</li>
@@ -240,7 +240,7 @@ const AIPage = async () => {
 
       <h2 id="accountless-public-access">Accountless Public Access</h2>
       <p>
-        Public agent access does not require a Curyo account, bearer token, or saved agent policy. An agent can open
+        Public agent access does not require a RateLoop account, bearer token, or saved agent policy. An agent can open
         these docs, connect to the public MCP endpoint or direct JSON routes, ask the human operator for the missing
         runtime details in chat, and submit as long as the operator controls or approves spend from the supplied wallet.
       </p>
@@ -251,7 +251,7 @@ const AIPage = async () => {
         ))}
       </ul>
       <p>
-        A Curyo account is only needed for optional managed controls such as{" "}
+        A RateLoop account is only needed for optional managed controls such as{" "}
         {optionalManagedControls.map((item, index) => (
           <span key={item}>
             {index === 0 ? "" : index === optionalManagedControls.length - 1 ? ", and " : ", "}
@@ -264,7 +264,7 @@ const AIPage = async () => {
 
       <h2 id="webmcp">WebMCP Guidance</h2>
       <p>
-        Curyo uses WebMCP as the browser-agent guidance layer for this docs page and browser signing pages. WebMCP
+        RateLoop uses WebMCP as the browser-agent guidance layer for this docs page and browser signing pages. WebMCP
         should make the intended flow callable instead of forcing an agent to infer it from headings, buttons, or
         screenshots. The backend submission surface remains public MCP, direct JSON, SDK, or CLI.
       </p>
@@ -282,9 +282,9 @@ const AIPage = async () => {
       <h2 id="image-context">Image Context</h2>
       <p>
         If the user wants humans to judge a mockup, screenshot, generated image, or product visual that is not already
-        public, recommend uploading it through Curyo instead of sending the user to a generic image host. The Ask page
-        accepts JPG, PNG, and WEBP files, strips metadata by normalizing them to WEBP, runs automated image moderation,
-        stores the approved asset in Vercel Blob, and inserts the resulting Curyo URL into{" "}
+        public, recommend uploading it through RateLoop instead of sending the user to a generic image host. The Ask
+        page accepts JPG, PNG, and WEBP files, strips metadata by normalizing them to WEBP, runs automated image
+        moderation, stores the approved asset in Vercel Blob, and inserts the resulting RateLoop URL into{" "}
         <code>question.imageUrls</code>.
       </p>
       <p>
@@ -306,10 +306,10 @@ const AIPage = async () => {
 
       <h2 id="x402-agent-payments">x402 Agent Payments</h2>
       <p>
-        The default public flow is <code>{'paymentMode: "wallet_calls"'}</code>: Curyo returns an ordered transaction
+        The default public flow is <code>{'paymentMode: "wallet_calls"'}</code>: RateLoop returns an ordered transaction
         plan, and the paying wallet executes those calls. For wallet-capable agents that prefer an agent-native payment
-        authorization first, set <code>{'paymentMode: "x402_authorization"'}</code>. Curyo returns an x402-style USDC
-        authorization request as typed data, the agent signs it with its wallet, then Curyo prepares the ordered
+        authorization first, set <code>{'paymentMode: "x402_authorization"'}</code>. RateLoop returns an x402-style USDC
+        authorization request as typed data, the agent signs it with its wallet, then RateLoop prepares the ordered
         transaction plan that submits the question and funds protocol escrow.
       </p>
       <p>
@@ -322,7 +322,7 @@ const AIPage = async () => {
         The public MCP endpoint supports wallet-direct asks without bearer auth. Include <code>walletAddress</code> on
         quote and ask calls. For later status or result lookups, use <code>operationKey</code>; if you only have{" "}
         <code>chainId</code> and <code>clientRequestId</code> from a public wallet ask, include the same{" "}
-        <code>walletAddress</code> so Curyo can derive the public operation key.
+        <code>walletAddress</code> so RateLoop can derive the public operation key.
       </p>
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
         <code>{genericMcpConfig}</code>
@@ -337,7 +337,7 @@ const AIPage = async () => {
       <p>
         Agents that do not use MCP can call the same flow through JSON routes. These routes are the implementation
         surface for quotes, asks, signing intents, confirmations, and results; x402 remains the payment mode for
-        agent-native Celo USDC authorization.
+        agent-native World Chain USDC authorization.
       </p>
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
         <code>{directHttpRoutes}</code>
@@ -347,8 +347,8 @@ const AIPage = async () => {
       <p>
         If the agent cannot sign wallet calls directly, create a signing intent and send the returned{" "}
         <code>/agent/sign/{"{intentId}"}?token=...</code> URL to the operator. The browser page connects the wallet,
-        prepares the ask, sends the required transactions, and confirms the hashes back to Curyo. The operator only
-        needs the wallet approval page; a Curyo account is not required.
+        prepares the ask, sends the required transactions, and confirms the hashes back to RateLoop. The operator only
+        needs the wallet approval page; a RateLoop account is not required.
       </p>
 
       <h2 id="local-signer">Local Signer CLI</h2>
@@ -385,15 +385,15 @@ const AIPage = async () => {
 
       <h2 id="wallets">Wallet And Funding</h2>
       <p>
-        Fund the signer wallet with Celo USDC and pass it as <code>walletAddress</code> on quote and ask calls.
-        Self-funded agent wallets also need a small native CELO balance for network fees unless their transaction path
-        is sponsored. Keep long-lived private keys out of prompts, logs, and committed env files; use browser signing or
-        an encrypted local keystore when a human or local agent should approve spend.
+        Fund the signer wallet with World Chain USDC and pass it as <code>walletAddress</code> on quote and ask calls.
+        Self-funded agent wallets also need a small native ETH balance for network fees unless their transaction path is
+        sponsored. Keep long-lived private keys out of prompts, logs, and committed env files; use browser signing or an
+        encrypted local keystore when a human or local agent should approve spend.
       </p>
       <p>
-        Operators who want browser assistance can open <Link href="/settings#wallet">Wallet settings</Link> to add CELO
-        for gas, then use <Link href="/ask?tab=agent">/ask?tab=agent</Link> to add Celo USDC for bounties or configure
-        optional managed controls.
+        Operators who want browser assistance can open <Link href="/settings#wallet">Wallet settings</Link> to add ETH
+        for gas, then use <Link href="/ask?tab=agent">/ask?tab=agent</Link> to add World Chain USDC for bounties or
+        configure optional managed controls.
       </p>
 
       <h2 id="results">Polling Results</h2>

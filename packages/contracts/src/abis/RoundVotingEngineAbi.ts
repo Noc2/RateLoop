@@ -19,45 +19,6 @@ export const RoundVotingEngineAbi = [
   },
   {
     "type": "function",
-    "name": "MIN_LOO_VALID_PARTICIPANTS",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint16",
-        "internalType": "uint16"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "PAUSER_ROLE",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "accountedHrepBalance",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "addToConsensusReserve",
     "inputs": [
       {
@@ -195,64 +156,6 @@ export const RoundVotingEngineAbi = [
   },
   {
     "type": "function",
-    "name": "commitOpinionRatingBps",
-    "inputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint16",
-        "internalType": "uint16"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "commitPredictedRatingBps",
-    "inputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint16",
-        "internalType": "uint16"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "commitPredictionForfeitedStake",
     "inputs": [
       {
@@ -311,65 +214,7 @@ export const RoundVotingEngineAbi = [
   },
   {
     "type": "function",
-    "name": "commitPredictionScoreBps",
-    "inputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint16",
-        "internalType": "uint16"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "commitPredictionStakeReturned",
-    "inputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "commitPredictionWeight",
     "inputs": [
       {
         "name": "",
@@ -421,6 +266,60 @@ export const RoundVotingEngineAbi = [
         "name": "",
         "type": "uint16",
         "internalType": "uint16"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "commitRevealData",
+    "inputs": [
+      {
+        "name": "contentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "roundId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "commitKey",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "ciphertext",
+        "type": "bytes",
+        "internalType": "bytes"
+      },
+      {
+        "name": "targetRound",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "drandChainHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "revealableAfter",
+        "type": "uint48",
+        "internalType": "uint48"
+      },
+      {
+        "name": "revealed",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "stakeAmount",
+        "type": "uint64",
+        "internalType": "uint64"
       }
     ],
     "stateMutability": "view"
@@ -498,80 +397,6 @@ export const RoundVotingEngineAbi = [
         "name": "",
         "type": "uint256",
         "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "commits",
-    "inputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "voter",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "stakeAmount",
-        "type": "uint64",
-        "internalType": "uint64"
-      },
-      {
-        "name": "ciphertext",
-        "type": "bytes",
-        "internalType": "bytes"
-      },
-      {
-        "name": "targetRound",
-        "type": "uint64",
-        "internalType": "uint64"
-      },
-      {
-        "name": "drandChainHash",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      },
-      {
-        "name": "frontend",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "revealableAfter",
-        "type": "uint48",
-        "internalType": "uint48"
-      },
-      {
-        "name": "revealed",
-        "type": "bool",
-        "internalType": "bool"
-      },
-      {
-        "name": "isUp",
-        "type": "bool",
-        "internalType": "bool"
-      },
-      {
-        "name": "epochIndex",
-        "type": "uint8",
-        "internalType": "uint8"
       }
     ],
     "stateMutability": "view"
@@ -1026,33 +851,33 @@ export const RoundVotingEngineAbi = [
     "name": "revealVoteByCommitKey",
     "inputs": [
       {
-        "name": "contentId",
+        "name": "",
         "type": "uint256",
         "internalType": "uint256"
       },
       {
-        "name": "roundId",
+        "name": "",
         "type": "uint256",
         "internalType": "uint256"
       },
       {
-        "name": "commitKey",
+        "name": "",
         "type": "bytes32",
         "internalType": "bytes32"
       },
       {
-        "name": "isUp",
+        "name": "",
         "type": "bool",
         "internalType": "bool"
       },
       {
-        "name": "salt",
+        "name": "",
         "type": "bytes32",
         "internalType": "bytes32"
       }
     ],
     "outputs": [],
-    "stateMutability": "nonpayable"
+    "stateMutability": "pure"
   },
   {
     "type": "function",
@@ -1238,30 +1063,6 @@ export const RoundVotingEngineAbi = [
   },
   {
     "type": "function",
-    "name": "roundPredictionCount",
-    "inputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint16",
-        "internalType": "uint16"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "roundPredictionForfeitClaimants",
     "inputs": [
       {
@@ -1410,30 +1211,6 @@ export const RoundVotingEngineAbi = [
         "name": "",
         "type": "uint256",
         "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "roundScorerMetadataHashSnapshot",
-    "inputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
       }
     ],
     "stateMutability": "view"

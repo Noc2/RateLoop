@@ -26,7 +26,7 @@ before(async () => {
   env.DATABASE_URL = "memory:";
   env.NODE_ENV = "production";
   env.RATE_LIMIT_TRUSTED_IP_HEADERS = "x-forwarded-for";
-  env.NEXT_PUBLIC_TARGET_NETWORKS = "42220";
+  env.NEXT_PUBLIC_TARGET_NETWORKS = "480";
   rateLimit = await import("~~/utils/rateLimit");
   route = await import("./route");
 });
@@ -35,7 +35,7 @@ beforeEach(() => {
   env.DATABASE_URL = "memory:";
   env.NODE_ENV = "production";
   env.RATE_LIMIT_TRUSTED_IP_HEADERS = "x-forwarded-for";
-  env.NEXT_PUBLIC_TARGET_NETWORKS = "42220";
+  env.NEXT_PUBLIC_TARGET_NETWORKS = "480";
 
   rateLimit.__setRateLimitStoreForTests({
     execute: async () =>
