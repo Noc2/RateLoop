@@ -137,7 +137,6 @@ contract RoundVotingEngine is
     mapping(uint256 => mapping(uint256 => uint256)) public roundPredictionRewardClaimants;
     mapping(uint256 => mapping(uint256 => uint256)) public roundPredictionForfeitedPool;
     mapping(uint256 => mapping(uint256 => uint256)) public roundPredictionForfeitClaimants;
-    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint16))) public commitOpinionRatingBps;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint16))) public commitPredictedRatingBps;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint256))) public commitPredictionWeight;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint16))) public commitPredictionScoreBps;
@@ -1443,6 +1442,10 @@ contract RoundVotingEngine is
     // Cumulative cleanup incentive paid per round.
     mapping(uint256 => mapping(uint256 => uint256)) internal roundCleanupIncentivePaid;
 
+    // Opinion rating revealed alongside the crowd prediction. Added at the end of storage
+    // to preserve the pre-existing prediction/refund slots for proxy upgrades.
+    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint16))) public commitOpinionRatingBps;
+
     // --- Storage gap reserved for future upgrades ---
-    uint256[33] private __gap;
+    uint256[32] private __gap;
 }
