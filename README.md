@@ -43,6 +43,11 @@ Key pieces:
 - **Frontend Attribution** — bounty accounting preserves the frontend operator earning incentive
 - **Security Guardrails** — calibration, reveal reliability, cluster caps, duplicate checks, and governance parameters keep the surface narrow
 
+MREP transferability is intentional: it makes governance and protocol reputation portable instead of company-administered.
+RateMesh does not treat raw token balance as enough to earn or control outcomes. Prediction accuracy, effective-unit
+weighting, cluster scoring, governance locks, proposal/quorum floors, and hard minimums for submission bounties and AI
+declaration/challenge bonds are the main mitigations.
+
 See [docs/implementation-plan.md](docs/implementation-plan.md) for the current design and implementation sequence.
 
 ## Architecture

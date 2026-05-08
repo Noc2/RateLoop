@@ -12,7 +12,8 @@ const GovernanceDocs: NextPage = () => {
       <h2>What Governance Does</h2>
       <p>
         MREP is a capped reputation token with no protocol token sale and no treasury backing. Governance power comes
-        from held and delegated MREP, and proposals execute through the governor and timelock.
+        from held, self-delegated MREP, and proposals execute through the governor and timelock. The current token
+        auto-delegates voting power to the holder and rejects third-party MREP vote delegation.
       </p>
       <ul>
         <li>Upgrade or configure protocol contracts.</li>
@@ -60,6 +61,10 @@ const GovernanceDocs: NextPage = () => {
               <td>{protocolDocFacts.governanceProposalThresholdLabel}</td>
             </tr>
             <tr>
+              <td className="font-mono">Proposal threshold range</td>
+              <td>{protocolDocFacts.governanceProposalThresholdRangeLabel}</td>
+            </tr>
+            <tr>
               <td className="font-mono">Voting delay</td>
               <td>~1 day</td>
             </tr>
@@ -79,9 +84,19 @@ const GovernanceDocs: NextPage = () => {
               <td className="font-mono">Governance lock</td>
               <td>7 days after proposing or voting</td>
             </tr>
+            <tr>
+              <td className="font-mono">Voting delegation</td>
+              <td>{protocolDocFacts.governanceVotingDelegationLabel}</td>
+            </tr>
           </tbody>
         </table>
       </div>
+      <p>
+        Transferable MREP is an explicit launch choice, not an accidental cash-vote shortcut. Rating and payout
+        influence are mitigated by prediction-accuracy scoring, effective-unit weighting, cluster controls, calibration
+        and reveal reliability, while governance uses timelocks, voting locks, a quorum floor, and a proposal-threshold
+        floor.
+      </p>
 
       <h2 id="round-settings-bounds">Round Settings Bounds</h2>
       <p>

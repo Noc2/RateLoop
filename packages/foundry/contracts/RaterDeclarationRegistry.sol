@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import { AccessControl } from "@openzeppelin/contracts/access/AccessControl.sol";
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import { ECDSA } from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
-import { EIP712 } from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
+import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 
 /// @title RaterDeclarationRegistry
 /// @notice Bonded AI rater declarations, optional one-shot probes, drift flags, and community challenges.
@@ -20,6 +20,8 @@ contract RaterDeclarationRegistry is AccessControl, EIP712 {
 
     uint16 public constant BPS_DENOMINATOR = 10_000;
     uint16 public constant MAX_TIER_MULTIPLIER_BPS = 11_500;
+    uint256 public constant MIN_DECLARATION_BOND_MREP_FLOOR = 100e6;
+    uint256 public constant MIN_CHALLENGE_BOND_MREP_FLOOR = 25e6;
 
     bytes32 public constant RATER_DECLARATION_TYPEHASH = keccak256(
         "RaterDeclaration(address rater,address operator,uint8 modelClass,bytes32 modelId,bytes32 provider,bytes32 endpointHint,bytes32 promptTemplateHash,bytes32 retrievalConfigHash,bytes32 toolingHash,uint32 version,uint64 effectiveEpoch,uint64 expiresAtEpoch,uint8 disclosure,uint96 nonce)"
@@ -178,6 +180,12 @@ contract RaterDeclarationRegistry is AccessControl, EIP712 {
             revert InvalidAddress();
         }
         if (treasury_ == address(0)) revert InvalidAddress();
+        if (
+            minDeclarationBondMrep_ < MIN_DECLARATION_BOND_MREP_FLOOR
+                || challengeBondMrep_ < MIN_CHALLENGE_BOND_MREP_FLOOR
+        ) {
+            revert InvalidConfig();
+        }
 
         mrepToken = mrepToken_;
         minDeclarationBondMrep = minDeclarationBondMrep_;
@@ -206,6 +214,12 @@ contract RaterDeclarationRegistry is AccessControl, EIP712 {
         address treasury_
     ) external onlyRole(CONFIG_ROLE) {
         if (challengerRewardBps_ > BPS_DENOMINATOR) revert InvalidConfig();
+        if (
+            minDeclarationBondMrep_ < MIN_DECLARATION_BOND_MREP_FLOOR
+                || challengeBondMrep_ < MIN_CHALLENGE_BOND_MREP_FLOOR
+        ) {
+            revert InvalidConfig();
+        }
         if (treasury_ == address(0)) revert InvalidAddress();
 
         minDeclarationBondMrep = minDeclarationBondMrep_;

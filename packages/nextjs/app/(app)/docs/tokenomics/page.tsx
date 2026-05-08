@@ -49,6 +49,12 @@ const Tokenomics = () => {
         Supply is fixed at <strong>100 million MREP</strong>. The full supply is minted at launch into
         protocol-controlled pools, with no team allocation or token sale.
       </p>
+      <p>
+        Transferable MREP is intentional because the protocol needs portable ownership and reputation, but token balance
+        is only one input. Prediction accuracy, effective-unit scoring, cluster controls, calibration, reveal
+        reliability, governance locks, and hard floors on proposal thresholds, submission bounties, and AI declaration
+        bonds limit the damage from bought or rented balance.
+      </p>
 
       <hr />
 
@@ -242,7 +248,9 @@ const Tokenomics = () => {
             </tr>
             <tr>
               <td>Ask a question</td>
-              <td className="font-mono">1 MREP or 1 USDC minimum</td>
+              <td className="font-mono">
+                {protocolDocFacts.submissionMrepMinimumLabel} or {protocolDocFacts.submissionUsdcMinimumLabel}
+              </td>
               <td>
                 The minimum is non-refundable. It is attached at submission and pays eligible raters if the question
                 qualifies. Bounties can use MREP or USDC.
@@ -257,6 +265,16 @@ const Tokenomics = () => {
               <td>Register as frontend</td>
               <td className="font-mono">1,000 MREP</td>
               <td>Returned on exit unless slashed</td>
+            </tr>
+            <tr>
+              <td>Submit AI declaration</td>
+              <td className="font-mono">{protocolDocFacts.declarationBondMinimumLabel}</td>
+              <td>Operator bond required before declaration-based payout eligibility</td>
+            </tr>
+            <tr>
+              <td>Challenge AI declaration</td>
+              <td className="font-mono">{protocolDocFacts.challengeBondMinimumLabel}</td>
+              <td>Challenge bond is forfeited to treasury if rejected</td>
             </tr>
           </tbody>
         </table>

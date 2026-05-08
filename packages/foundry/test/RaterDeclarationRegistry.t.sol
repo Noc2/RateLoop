@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import { Test } from "forge-std/Test.sol";
-import { MockERC20 } from "../contracts/mocks/MockERC20.sol";
-import { RaterDeclarationRegistry } from "../contracts/RaterDeclarationRegistry.sol";
+import {Test} from "forge-std/Test.sol";
+import {MockERC20} from "../contracts/mocks/MockERC20.sol";
+import {RaterDeclarationRegistry} from "../contracts/RaterDeclarationRegistry.sol";
 
 contract RaterDeclarationRegistryTest is Test {
     RaterDeclarationRegistry internal registry;
@@ -60,6 +60,44 @@ contract RaterDeclarationRegistryTest is Test {
         assertTrue(registry.hasRole(registry.CONFIG_ROLE(), admin));
         assertTrue(registry.hasRole(registry.PROBE_ROLE(), admin));
         assertTrue(registry.hasRole(registry.CHALLENGE_RESOLVER_ROLE(), admin));
+    }
+
+    function test_ConstructorRejectsBondsBelowHardFloors() public {
+        uint256 minDeclarationBondFloor = registry.MIN_DECLARATION_BOND_MREP_FLOOR();
+        uint256 challengeBondFloor = registry.MIN_CHALLENGE_BOND_MREP_FLOOR();
+
+        vm.expectRevert(RaterDeclarationRegistry.InvalidConfig.selector);
+        new RaterDeclarationRegistry(admin, governance, mrep, treasury, minDeclarationBondFloor - 1, challengeBondFloor);
+
+        vm.expectRevert(RaterDeclarationRegistry.InvalidConfig.selector);
+        new RaterDeclarationRegistry(admin, governance, mrep, treasury, minDeclarationBondFloor, challengeBondFloor - 1);
+    }
+
+    function test_SetDeclarationParametersRejectsBondsBelowHardFloors() public {
+        uint256 minDeclarationBondFloor = registry.MIN_DECLARATION_BOND_MREP_FLOOR();
+        uint256 challengeBondFloor = registry.MIN_CHALLENGE_BOND_MREP_FLOOR();
+
+        vm.startPrank(admin);
+
+        vm.expectRevert(RaterDeclarationRegistry.InvalidConfig.selector);
+        registry.setDeclarationParameters(minDeclarationBondFloor - 1, challengeBondFloor, 5_000, treasury);
+
+        vm.expectRevert(RaterDeclarationRegistry.InvalidConfig.selector);
+        registry.setDeclarationParameters(minDeclarationBondFloor, challengeBondFloor - 1, 5_000, treasury);
+
+        vm.stopPrank();
+    }
+
+    function test_SetDeclarationParametersAllowsValuesAtOrAboveHardFloors() public {
+        uint256 nextMinBond = registry.MIN_DECLARATION_BOND_MREP_FLOOR() + 50e6;
+        uint256 nextChallengeBond = registry.MIN_CHALLENGE_BOND_MREP_FLOOR() + 10e6;
+
+        vm.prank(admin);
+        registry.setDeclarationParameters(nextMinBond, nextChallengeBond, 4_000, treasury);
+
+        assertEq(registry.minDeclarationBondMrep(), nextMinBond);
+        assertEq(registry.challengeBondMrep(), nextChallengeBond);
+        assertEq(registry.challengerRewardBps(), 4_000);
     }
 
     function test_SubmitDeclarationLocksBondAndStartsProbeWindow() public {

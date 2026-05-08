@@ -64,9 +64,10 @@ on-chain patterns:
 - OpenZeppelin's timelock guidance says self-governed timelocks should make the
   timelock itself the long-term admin after setup, so future maintenance goes
   through governance.
-- OpenZeppelin `ERC20Votes` keeps historical vote checkpoints and supports
-  delegation, which is the right primitive for transferable governance
-  reputation.
+- OpenZeppelin `ERC20Votes` keeps historical vote checkpoints and can support
+  delegation. RateMesh v1 keeps voting power self-delegated because the current
+  token only allows self-delegation, while still using the checkpoint primitive
+  for transferable governance reputation.
 - Compound shows a mature pattern of tokenholder governance with delegation,
   Governor Bravo, and Timelock-controlled protocol changes.
 - ENS is a relevant launch-distribution precedent: the ENS DAO distributed
@@ -437,13 +438,19 @@ remain company-controlled at launch. The practical product motivation is that
 the existing HREP/legacy CREP snapshot already represents the community that helped
 build the protocol and should be the initial governance and ownership base.
 
-The token should not be the only signal for rating or USDC payouts. Transferable
-reputation can be bought, so RateMesh should pair it with account-level
-calibration and cluster discounts.
+Transferable MREP is intentional: portable reputation and day-one tokenholder
+governance are part of the launch design, not an accidental side effect. The
+token should not be the only signal for rating or USDC payouts. Transferable
+reputation can be bought, so RateMesh pairs it with prediction accuracy,
+effective-unit weighting, calibration, reveal reliability, cluster discounts,
+governance locks, proposal/quorum floors, and hard floors on submission bounties
+and AI declaration/challenge bonds.
 
 Recommended token properties:
 
-- Transferable ERC20 with ERC20Votes checkpoints and delegation.
+- Transferable ERC20 with ERC20Votes checkpoints and self-delegation-on-receipt.
+  The current contract supports self-delegation only, not third-party MREP vote
+  delegation.
 - 6 decimals to preserve compatibility with the old HREP mental model.
 - Hard `MAX_SUPPLY`; no uncapped inflation.
 - Genesis distribution from the existing HREP/legacy CREP snapshot, mapped 1:1 into
@@ -727,7 +734,7 @@ Implementation implications:
 Purpose:
 
 - Transferable capped reputation token.
-- ERC20Votes checkpoints and delegation for day-one governance.
+- ERC20Votes checkpoints and self-delegated voting power for day-one governance.
 - Protocol-native lock, unlock, slash, and redistribution hooks.
 - Governance clock compatible with the previous Curyo launch parameters on
   Celo.
@@ -741,6 +748,9 @@ Reuse:
 - Start from `packages/foundry/contracts/HumanReputation.sol`.
 - Keep 6 decimals, ERC20Votes, ERC20Permit, and self-delegation-on-receipt if
   the UX still benefits from it.
+- Keep documentation and UI copy clear that MREP voting power is self-delegated
+  in the current contract; operational identity delegation is a separate
+  VoterIdNFT/profile concept.
 - Reuse the old Curyo governance durations. If the implementation keeps the old
   block-number clock, preserve the previously used Celo-calibrated values. If
   it moves to an ERC-6372 timestamp clock, preserve the same human durations in
@@ -1034,6 +1044,8 @@ Recommended initial parameters:
 - Voting period: `7 days`.
 - Timelock delay: `2 days`.
 - Proposal threshold: `1,000 MREP`.
+- Proposal threshold floor: `1,000 MREP`; governance cannot lower the threshold
+  below the bootstrap floor.
 - Quorum: `max(4% of circulating MREP, 100,000 MREP)`.
 - Circulating supply for quorum excludes protocol-controlled holders, including
   the genesis distributor, bootstrap pool, consensus reserve, DAO treasury,
@@ -1110,8 +1122,8 @@ tables.
     funder, asset, amount, status, refund/forfeit state.
 - `genesis_claim`
   - account, amount, claim index, claimedAt, transaction hash.
-- `governance_delegate`
-  - delegator, delegate, votes, updatedAt.
+- `governance_voting_power`
+  - account, selfDelegate, votes, updatedAt.
 
 ### API Changes
 
@@ -1294,6 +1306,9 @@ Keep `packages/agents`, but make it a first-class RateMesh package:
   raters.
 - Add tests that ensure agents cannot bypass calibration, required metadata,
   declaration bonds, probes, challenges, or metadata-change cooling periods.
+- Enforce contract hard floors for AI declaration bonds and challenge bonds so
+  governance can tune above launch defaults without reducing accountability to
+  dust.
 
 ## Implementation Sequence
 
@@ -1410,9 +1425,9 @@ Exit criteria:
 Exit criteria:
 
 - Wallet-sensitive flow works: connect, submit content, fund initial bounty,
-  claim/delegate genesis reputation, predict, reveal/settle, fund re-rate,
-  view reputation, claim USDC, claim frontend fees, and recover to self-funded
-  gas when sponsorship is unavailable.
+  claim genesis reputation, verify self-delegated voting power, predict,
+  reveal/settle, fund re-rate, view reputation, claim USDC, claim frontend fees,
+  and recover to self-funded gas when sponsorship is unavailable.
 - Desktop and mobile dense voting surfaces remain usable.
 
 ### Phase 5: Keeper, SDK, And Agents
@@ -1472,8 +1487,8 @@ Exit criteria:
 2. `optional-identity-remove-faucet`: remove faucet paths and make Self optional
    rather than required in packages, UI, routes, and deploy wiring.
 3. `reputation-governance`: add capped transferable reputation, HREP-style MREP
-   launch pools, genesis Merkle distributor, Governor, Timelock, delegation,
-   and launch role wiring.
+   launch pools, genesis Merkle distributor, Governor, Timelock,
+   self-delegated voting power, and launch role wiring.
 4. `rater-registry`: add open rater profiles, metadata, operational delegation,
    and cluster flags.
 5. `prediction-engine`: replace binary votes with predicted final rating commit
@@ -1482,8 +1497,9 @@ Exit criteria:
    bounties, challenge/re-rate metadata, calibrated raters, AI metadata,
    frontend staking/fees, MREP winner/loser redistribution, and cluster caps.
 7. `ponder-predictions`: update schema, handlers, and APIs.
-8. `frontend-prediction-ui`: replace vote controls, add genesis claim/delegate,
-   frontend fee, sponsored transaction, and onboarding surfaces.
+8. `frontend-prediction-ui`: replace vote controls, add genesis claim,
+   self-delegation status, frontend fee, sponsored transaction, and onboarding
+   surfaces.
 9. `keeper-sdk-agents`: update commit builders, keeper reveal, and agent client.
 10. `local-e2e`: add full local lifecycle tests and docs.
 11. `testnet-deploy`: fresh deployment config, monitoring, and launch checklist.
@@ -1510,6 +1526,10 @@ These are launch defaults, not permanent constants:
 - Challenge/re-rate: explicit new bounty referencing a prior round/result.
 - Frontend share: default 3%, max 5%, applies to bounty and feedback payouts.
 - Frontend stake: `1,000 MREP` required for fee eligibility.
+- Submission bounty minimums: hard floor of `1 MREP` or `1 USDC`; governance can
+  raise them but not lower them below that floor.
+- AI declaration bond floors: `100 MREP` minimum operator bond and `25 MREP`
+  minimum challenge bond.
 - Sponsorship: reuse old Curyo's sponsored transaction path with self-funded
   fallback and quotas.
 - Minimum raw reveals: 3.
@@ -1532,9 +1552,11 @@ These are launch defaults, not permanent constants:
 - Missed reveal penalty: reputation lock forfeit/redistribution, tunable and
   capped.
 - Governance launch parameters: 1-day voting delay, 7-day voting period, 2-day
-  timelock, 1,000 MREP proposal threshold, dynamic quorum of `max(4% of
+  timelock, 1,000 MREP proposal-threshold hard floor, dynamic quorum of `max(4% of
   circulating MREP, 100,000 MREP)`, 1-day proposal cooldown, 7-day governance
   lock.
+- Governance voting power is self-delegated MREP in the current contract; docs
+  should not imply third-party MREP vote delegation unless the token changes.
 
 ## Main Risks And Mitigations
 
@@ -1579,7 +1601,8 @@ Mitigations:
   reliability remain account-specific.
 - Behavior-based clustering.
 - Reveal reliability and category history matter more than raw balance.
-- Optional cooling periods after wallet/delegation/metadata changes.
+- Optional cooling periods after wallet, identity-delegation, or metadata
+  changes.
 - Governance uses token checkpoints and timelock delays so last-minute token
   movement cannot rewrite an active vote.
 
@@ -1596,7 +1619,8 @@ Mitigations:
   launch.
 - Timelock delay on all high-impact actions.
 - Proposal threshold, quorum, and late-quorum protection.
-- Public delegation UI and monitoring for delegation concentration.
+- Public holder-concentration monitoring and clear self-delegation status in the
+  governance UI.
 - Conservative treasury roles and pause-only emergency path.
 - Keep v1 scoring simple enough that governance cannot hide discretionary
   off-chain payout changes.

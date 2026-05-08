@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import { Test } from "forge-std/Test.sol";
-import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
-import { RatingLib } from "../contracts/libraries/RatingLib.sol";
-import { RoundLib } from "../contracts/libraries/RoundLib.sol";
-import { deployInitializedProtocolConfig } from "./helpers/VotingTestHelpers.sol";
+import {Test} from "forge-std/Test.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {ProtocolConfig} from "../contracts/ProtocolConfig.sol";
+import {RatingLib} from "../contracts/libraries/RatingLib.sol";
+import {RoundLib} from "../contracts/libraries/RoundLib.sol";
+import {deployInitializedProtocolConfig} from "./helpers/VotingTestHelpers.sol";
 
 contract MockRewardDistributorForConfig {
     address public votingEngine;
@@ -40,6 +40,7 @@ contract ProtocolConfigBranchesTest is Test {
     event SlashConfigUpdated(
         uint16 slashThresholdBps, uint16 minSlashSettledRounds, uint48 minSlashLowDuration, uint256 minSlashEvidence
     );
+    event SubmissionRewardMinimumsUpdated(uint256 minHrepPool, uint256 minUsdcPool);
     event RoundConfigBoundsUpdated(
         uint256 minEpochDuration,
         uint256 maxEpochDuration,
@@ -57,6 +58,40 @@ contract ProtocolConfigBranchesTest is Test {
         assertEq(config.drandChainHash(), QUICKNET_CHAIN_HASH);
         assertEq(config.drandGenesisTime(), 1_692_803_367);
         assertEq(config.drandPeriod(), 3);
+    }
+
+    function test_DefaultSubmissionRewardMinimums_UseHardFloors() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+
+        assertEq(config.minSubmissionHrepPool(), config.MIN_SUBMISSION_HREP_POOL_FLOOR());
+        assertEq(config.minSubmissionUsdcPool(), config.MIN_SUBMISSION_USDC_POOL_FLOOR());
+    }
+
+    function test_SetSubmissionRewardMinimums_UpdatesAboveHardFloors() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+
+        uint256 nextHrepMinimum = config.MIN_SUBMISSION_HREP_POOL_FLOOR() + 1e6;
+        uint256 nextUsdcMinimum = config.MIN_SUBMISSION_USDC_POOL_FLOOR() + 2e6;
+
+        vm.expectEmit(true, true, true, true);
+        emit SubmissionRewardMinimumsUpdated(nextHrepMinimum, nextUsdcMinimum);
+
+        config.setSubmissionRewardMinimums(nextHrepMinimum, nextUsdcMinimum);
+
+        assertEq(config.minSubmissionHrepPool(), nextHrepMinimum);
+        assertEq(config.minSubmissionUsdcPool(), nextUsdcMinimum);
+    }
+
+    function test_SetSubmissionRewardMinimums_RejectsBelowHardFloors() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+        uint256 hrepFloor = config.MIN_SUBMISSION_HREP_POOL_FLOOR();
+        uint256 usdcFloor = config.MIN_SUBMISSION_USDC_POOL_FLOOR();
+
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.setSubmissionRewardMinimums(hrepFloor - 1, usdcFloor);
+
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.setSubmissionRewardMinimums(hrepFloor, usdcFloor - 1);
     }
 
     function test_SetVoterIdNFT_RejectsRotationAfterInitialSet() public {

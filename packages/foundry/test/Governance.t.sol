@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import { Test } from "forge-std/Test.sol";
-import { TimelockController } from "@openzeppelin/contracts/governance/TimelockController.sol";
-import { IVotes } from "@openzeppelin/contracts/governance/utils/IVotes.sol";
-import { IGovernor } from "@openzeppelin/contracts/governance/IGovernor.sol";
+import {Test} from "forge-std/Test.sol";
+import {TimelockController} from "@openzeppelin/contracts/governance/TimelockController.sol";
+import {IVotes} from "@openzeppelin/contracts/governance/utils/IVotes.sol";
+import {IGovernor} from "@openzeppelin/contracts/governance/IGovernor.sol";
 
-import { HumanReputation } from "../contracts/HumanReputation.sol";
-import { CuryoGovernor } from "../contracts/governance/CuryoGovernor.sol";
-import { VoterIdNFT } from "../contracts/VoterIdNFT.sol";
+import {HumanReputation} from "../contracts/HumanReputation.sol";
+import {CuryoGovernor} from "../contracts/governance/CuryoGovernor.sol";
+import {VoterIdNFT} from "../contracts/VoterIdNFT.sol";
 
 contract GovernanceTest is Test {
     HumanReputation public token;
@@ -604,6 +604,19 @@ contract GovernanceTest is Test {
             address(governor),
             abi.encodeWithSignature("setProposalThreshold(uint256)", 0),
             "Reject zero proposal threshold",
+            true
+        );
+
+        assertEq(governor.proposalThreshold(), thresholdBefore);
+    }
+
+    function test_GovernorRejectsBelowBootstrapProposalThreshold() public {
+        uint256 thresholdBefore = governor.proposalThreshold();
+
+        _executeSingleCallProposal(
+            address(governor),
+            abi.encodeWithSignature("setProposalThreshold(uint256)", governor.BOOTSTRAP_PROPOSAL_THRESHOLD() - 1),
+            "Reject below bootstrap proposal threshold",
             true
         );
 

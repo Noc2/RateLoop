@@ -55,10 +55,17 @@ function effectiveRawSharePercent(bucketBps: number): number {
 }
 
 export const protocolDocFacts = {
-  governanceProposalThresholdLabel: "1,000 MREP",
+  governanceProposalThresholdLabel: "1,000 MREP hard floor",
+  governanceMaxProposalThresholdLabel: "100,000 MREP",
+  governanceProposalThresholdRangeLabel: "1,000-100,000 MREP",
   governanceQuorumLabel: "4% of circulating supply (min 100,000 MREP)",
   governanceMinimumQuorumLabel: "100,000 MREP",
   governanceTimelockDelayLabel: "2 days",
+  governanceVotingDelegationLabel: "self-delegated MREP only",
+  submissionMrepMinimumLabel: "1 MREP hard floor",
+  submissionUsdcMinimumLabel: "1 USDC hard floor",
+  declarationBondMinimumLabel: "100 MREP hard floor",
+  challengeBondMinimumLabel: "25 MREP hard floor",
   blindPhaseDurationLabel: formatDurationLabel(DEFAULT_ROUND_CONFIG.epochDurationSeconds),
   revealGracePeriodLabel: formatDurationLabel(DEFAULT_REVEAL_GRACE_PERIOD_SECONDS),
   maxRoundDurationLabel: formatDurationLabel(DEFAULT_ROUND_CONFIG.maxDurationSeconds),

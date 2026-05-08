@@ -175,7 +175,8 @@ const SmartContracts: NextPage = () => {
           <code>getTransferableBalance(account)</code> &mdash; Returns balance minus locked amount.
         </li>
         <li>
-          <code>delegate(delegatee)</code> &mdash; Delegate MREP voting power for on-chain governance.
+          <code>delegate(delegatee)</code> &mdash; Self-delegate MREP voting power; the current token rejects
+          third-party vote delegation.
         </li>
       </ul>
 
@@ -411,15 +412,17 @@ const SmartContracts: NextPage = () => {
           settings users predicted against.
         </li>
         <li>
-          <code>revealPredictionByCommitKey(contentId, roundId, commitKey, predictedRatingBps, salt)</code> &mdash;
-          Reveal a previously committed prediction after the epoch ends. This remains the keeper-assisted/self-reveal
-          path: the keeper normally performs off-chain drand/tlock decryption after validating the stored stanza
-          metadata and submits the reveal, but any caller that knows the plaintext{" "}
-          <code>(predictedRatingBps, salt)</code> can submit it. The production UI keeps this mostly hidden, but
-          connected users also have a small manual fallback link if an auto-reveal appears delayed. The chain binds the
-          reveal to the exact submitted ciphertext via <code>keccak256(ciphertext)</code> and now rejects
-          malformed/non-armored commits on-chain, but it still does not prove on-chain that the ciphertext was honestly
-          decryptable. A future hardening path here would be zk-based reveal proofs.
+          <code>
+            revealPredictionByCommitKey(contentId, roundId, commitKey, opinionRatingBps, predictedCrowdRatingBps, salt)
+          </code>{" "}
+          &mdash; Reveal a previously committed prediction after the epoch ends. This remains the
+          keeper-assisted/self-reveal path: the keeper normally performs off-chain drand/tlock decryption after
+          validating the stored stanza metadata and submits the reveal, but any caller that knows the plaintext{" "}
+          <code>(opinionRatingBps, predictedCrowdRatingBps, salt)</code> can submit it. The production UI keeps this
+          mostly hidden, but connected users also have a small manual fallback link if an auto-reveal appears delayed.
+          The chain binds the reveal to the exact submitted ciphertext via <code>keccak256(ciphertext)</code> and now
+          rejects malformed/non-armored commits on-chain, but it still does not prove on-chain that the ciphertext was
+          honestly decryptable. A future hardening path here would be zk-based reveal proofs.
         </li>
         <li>
           <code>settleRound(contentId, roundId)</code> &mdash; Settle the current round once at least{" "}
@@ -629,11 +632,11 @@ const SmartContracts: NextPage = () => {
           <tbody>
             <tr>
               <td>Voting delay</td>
-              <td>~1 day (7,200 blocks)</td>
+              <td>~1 day (86,400 blocks on the 1s Celo clock)</td>
             </tr>
             <tr>
               <td>Voting period</td>
-              <td>~1 week (50,400 blocks)</td>
+              <td>~1 week (604,800 blocks on the 1s Celo clock)</td>
             </tr>
             <tr>
               <td>Proposal threshold</td>
@@ -646,6 +649,10 @@ const SmartContracts: NextPage = () => {
             <tr>
               <td>Governance lock</td>
               <td>7 days transfer-locked (when proposing or voting)</td>
+            </tr>
+            <tr>
+              <td>Voting delegation</td>
+              <td>{protocolDocFacts.governanceVotingDelegationLabel}</td>
             </tr>
           </tbody>
         </table>

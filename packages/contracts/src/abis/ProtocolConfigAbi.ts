@@ -45,6 +45,32 @@ export const ProtocolConfigAbi = [
   },
   {
     "type": "function",
+    "name": "MIN_SUBMISSION_HREP_POOL_FLOOR",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MIN_SUBMISSION_USDC_POOL_FLOOR",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "TREASURY_ADMIN_ROLE",
     "inputs": [],
     "outputs": [

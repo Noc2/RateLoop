@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import { IRoundRewardDistributor } from "./interfaces/IRoundRewardDistributor.sol";
-import { RoundLib } from "./libraries/RoundLib.sol";
-import { RatingLib } from "./libraries/RatingLib.sol";
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import {IRoundRewardDistributor} from "./interfaces/IRoundRewardDistributor.sol";
+import {RoundLib} from "./libraries/RoundLib.sol";
+import {RatingLib} from "./libraries/RatingLib.sol";
 
 /// @title ProtocolConfig
 /// @notice Governance-controlled configuration and address book for RoundVotingEngine.
@@ -15,6 +15,8 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     bytes32 public constant TREASURY_ROLE = keccak256("TREASURY_ROLE");
     bytes32 public constant TREASURY_ADMIN_ROLE = keccak256("TREASURY_ADMIN_ROLE");
     uint256 public constant ABSOLUTE_MAX_ROUND_DURATION = 30 days;
+    uint256 public constant MIN_SUBMISSION_HREP_POOL_FLOOR = 1e6;
+    uint256 public constant MIN_SUBMISSION_USDC_POOL_FLOOR = 1e6;
 
     error InvalidAddress();
     error InvalidConfig();
@@ -125,10 +127,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         }
 
         config = RoundLib.RoundConfig({
-            epochDuration: uint32(20 minutes),
-            maxDuration: uint32(7 days),
-            minVoters: uint16(3),
-            maxVoters: uint16(200)
+            epochDuration: uint32(20 minutes), maxDuration: uint32(7 days), minVoters: uint16(3), maxVoters: uint16(200)
         });
         roundConfigBounds = RoundConfigBounds({
             minEpochDuration: uint32(5 minutes),
@@ -165,8 +164,8 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
             minSlashLowDuration: uint48(7 days),
             minSlashEvidence: 200e6
         });
-        minSubmissionHrepPool = 1e6;
-        minSubmissionUsdcPool = 1e6;
+        minSubmissionHrepPool = MIN_SUBMISSION_HREP_POOL_FLOOR;
+        minSubmissionUsdcPool = MIN_SUBMISSION_USDC_POOL_FLOOR;
         _setTreasury(treasuryAuthority);
     }
 
@@ -281,7 +280,9 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     }
 
     function setSubmissionRewardMinimums(uint256 minHrepPool, uint256 minUsdcPool) external onlyRole(CONFIG_ROLE) {
-        if (minHrepPool == 0 || minUsdcPool == 0) revert InvalidConfig();
+        if (minHrepPool < MIN_SUBMISSION_HREP_POOL_FLOOR || minUsdcPool < MIN_SUBMISSION_USDC_POOL_FLOOR) {
+            revert InvalidConfig();
+        }
         minSubmissionHrepPool = minHrepPool;
         minSubmissionUsdcPool = minUsdcPool;
         emit SubmissionRewardMinimumsUpdated(minHrepPool, minUsdcPool);
@@ -316,7 +317,8 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     }
 
     function isRewardDistributorForEngine(address value, address engine) external view returns (bool) {
-        return engine != address(0) && rewardDistributorAuthorized[value] && rewardDistributorVotingEngine[value] == engine;
+        return
+            engine != address(0) && rewardDistributorAuthorized[value] && rewardDistributorVotingEngine[value] == engine;
     }
 
     function _setRewardDistributor(address value) internal {

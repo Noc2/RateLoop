@@ -102,6 +102,32 @@ export const RaterDeclarationRegistryAbi = [
   },
   {
     "type": "function",
+    "name": "MIN_CHALLENGE_BOND_MREP_FLOOR",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MIN_DECLARATION_BOND_MREP_FLOOR",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "PROBE_ROLE",
     "inputs": [],
     "outputs": [
@@ -1198,6 +1224,12 @@ export const RaterDeclarationRegistryAbi = [
         "type": "uint32",
         "indexed": false,
         "internalType": "uint32"
+      },
+      {
+        "name": "bondAmount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
       },
       {
         "name": "evidenceHash",

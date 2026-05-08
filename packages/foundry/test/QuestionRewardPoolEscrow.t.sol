@@ -2787,34 +2787,11 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
     }
 
-    function testUnderfundedRoundDoesNotQualifyAndCanBeSkipped() public {
+    function testSubmissionRewardFloorsRejectUnderfundedRoundAllocation() public {
         vm.startPrank(owner);
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
         protocolConfig.setSubmissionRewardMinimums(3, 3);
         vm.stopPrank();
-
-        RoundLib.RoundConfig memory roundConfig = RoundLib.RoundConfig({
-            epochDuration: uint32(EPOCH_DURATION), maxDuration: uint32(7 days), minVoters: 3, maxVoters: 4
-        });
-        uint256 contentId = _submitQuestionWithRoundConfig("https://example.com/underfunded.jpg", roundConfig);
-        uint256 rewardPoolId = 1;
-
-        uint256 underfundedRoundId = _settleRoundWith(_fourVoters(), contentId, _directions(true, true, false, true));
-
-        assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, underfundedRoundId, voter1), 0);
-        vm.prank(voter1);
-        vm.expectRevert("Small allocation");
-        rewardPoolEscrow.claimQuestionReward(rewardPoolId, underfundedRoundId);
-
-        vm.warp(block.timestamp + 25 hours);
-        uint256 eligibleRoundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
-
-        (uint256 skipped, uint256 nextRoundToEvaluate) = rewardPoolEscrow.advanceQualificationCursor(rewardPoolId, 1);
-        assertEq(skipped, 1);
-        assertEq(nextRoundToEvaluate, eligibleRoundId);
-
-        vm.prank(voter1);
-        uint256 reward = rewardPoolEscrow.claimQuestionReward(rewardPoolId, eligibleRoundId);
-        assertEq(reward, 1);
     }
 
     function _submitBundleQuestions() internal returns (uint256[] memory contentIds) {
