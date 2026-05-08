@@ -124,6 +124,9 @@ export const round = onchainTable(
     maxVoters: t.integer().notNull().default(1000),
     upWins: t.boolean(),
     losingPool: t.bigint(),
+    predictionWeightedRatingSum: t.bigint(),
+    totalPredictionWeight: t.bigint(),
+    finalPredictionRatingBps: t.integer(),
     startTime: t.bigint(),
     settledAt: t.bigint(),
   }),
@@ -159,6 +162,7 @@ export const vote = onchainTable(
     drandChainHash: t.hex().notNull(),
     isUp: t.boolean(), // null until revealed; derived from prediction >= round reference for compatibility
     predictedRatingBps: t.integer(), // null until prediction reveal
+    predictionWeight: t.bigint(), // null until prediction reveal
     stake: t.bigint().notNull(),
     epochIndex: t.integer().notNull(), // 0=epoch-1 (100% weight), 1=epoch-2+ (25% weight)
     revealed: t.boolean().notNull().default(false),

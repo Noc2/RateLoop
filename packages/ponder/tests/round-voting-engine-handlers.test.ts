@@ -306,6 +306,7 @@ describe("RoundVotingEngine ponder handlers", () => {
           roundId: 2n,
           voter,
           predictedRatingBps: 7200,
+          effectiveWeight: 25n,
         },
         block: {
           number: 44n,
@@ -321,6 +322,7 @@ describe("RoundVotingEngine ponder handlers", () => {
       values: {
         isUp: true,
         predictedRatingBps: 7200,
+        predictionWeight: 25n,
         revealed: true,
         revealedAt: 2_000n,
       },
@@ -334,7 +336,48 @@ describe("RoundVotingEngine ponder handlers", () => {
         downPool: 0n,
         upCount: 1,
         downCount: 0,
+        predictionWeightedRatingSum: 180_000n,
+        totalPredictionWeight: 25n,
       }),
+    });
+  });
+
+  it("indexes prediction round settlement stats", async () => {
+    const { db, updateCalls } = createDb({
+      existingRound: {
+        id: "7-2",
+        totalPredictionWeight: 50n,
+        finalPredictionRatingBps: null,
+      },
+    });
+    const registeredHandlers = await loadHandlers();
+    const handler = registeredHandlers.get("RoundVotingEngine:PredictionRoundSettled");
+
+    expect(handler).toBeDefined();
+
+    await handler!({
+      event: {
+        args: {
+          contentId: 7n,
+          roundId: 2n,
+          finalRatingBps: 7100,
+          totalPredictionWeight: 50n,
+        },
+        block: {
+          number: 45n,
+          timestamp: 2_100n,
+        },
+      },
+      context: { db },
+    });
+
+    expect(updateCalls).toContainEqual({
+      table: "round",
+      key: { id: "7-2" },
+      values: {
+        finalPredictionRatingBps: 7100,
+        totalPredictionWeight: 50n,
+      },
     });
   });
 });

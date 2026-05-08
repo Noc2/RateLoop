@@ -45,6 +45,7 @@ async function recordVoteReveal({
   voter,
   isUp,
   predictedRatingBps = null,
+  predictionWeight = null,
   revealedAt,
 }: {
   context: any;
@@ -53,6 +54,7 @@ async function recordVoteReveal({
   voter: `0x${string}`;
   isUp: boolean;
   predictedRatingBps?: number | null;
+  predictionWeight?: bigint | null;
   revealedAt: bigint;
 }) {
   const roundKey = `${contentId}-${roundId}`;
@@ -63,6 +65,7 @@ async function recordVoteReveal({
     await context.db.update(vote, { id: voteKey }).set({
       isUp,
       predictedRatingBps,
+      predictionWeight,
       revealed: true,
       revealedAt,
       // epochIndex is not available from reveal events; keep existing
@@ -77,6 +80,12 @@ async function recordVoteReveal({
       downPool: isUp ? row.downPool : row.downPool + (existingVote?.stake ?? 0n),
       upCount: isUp ? row.upCount + 1 : row.upCount,
       downCount: isUp ? row.downCount : row.downCount + 1,
+      predictionWeightedRatingSum:
+        predictedRatingBps === null || predictionWeight === null
+          ? row.predictionWeightedRatingSum
+          : (row.predictionWeightedRatingSum ?? 0n) + BigInt(predictedRatingBps) * predictionWeight,
+      totalPredictionWeight:
+        predictionWeight === null ? row.totalPredictionWeight : (row.totalPredictionWeight ?? 0n) + predictionWeight,
     }));
   }
 }
@@ -198,6 +207,7 @@ ponder.on("RoundVotingEngine:VoteCommitted", async ({ event, context }) => {
       drandChainHash,
       isUp: null,
       predictedRatingBps: null,
+      predictionWeight: null,
       stake,
       epochIndex,
       revealed: false,
@@ -323,11 +333,12 @@ ponder.on("RoundVotingEngine:VoteRevealed", async ({ event, context }) => {
 });
 
 ponder.on("RoundVotingEngine:PredictionRevealed", async ({ event, context }) => {
-  const { contentId, roundId, voter, predictedRatingBps } = event.args as {
+  const { contentId, roundId, voter, predictedRatingBps, effectiveWeight = null } = event.args as {
     contentId: bigint;
     roundId: bigint;
     voter: `0x${string}`;
     predictedRatingBps: number;
+    effectiveWeight?: bigint | null;
   };
   const roundKey = `${contentId}-${roundId}`;
   const existingRound = await context.db.find(round, { id: roundKey });
@@ -341,8 +352,27 @@ ponder.on("RoundVotingEngine:PredictionRevealed", async ({ event, context }) => 
     voter,
     isUp,
     predictedRatingBps: Number(predictedRatingBps),
+    predictionWeight: effectiveWeight,
     revealedAt: event.block.timestamp,
   });
+});
+
+ponder.on("RoundVotingEngine:PredictionRoundSettled", async ({ event, context }) => {
+  const { contentId, roundId, finalRatingBps, totalPredictionWeight } = event.args as {
+    contentId: bigint;
+    roundId: bigint;
+    finalRatingBps: number;
+    totalPredictionWeight: bigint;
+  };
+  const roundKey = `${contentId}-${roundId}`;
+
+  const existingRound = await context.db.find(round, { id: roundKey });
+  if (existingRound) {
+    await context.db.update(round, { id: roundKey }).set({
+      finalPredictionRatingBps: Number(finalRatingBps),
+      totalPredictionWeight,
+    });
+  }
 });
 
 ponder.on("RoundVotingEngine:RoundSettled", async ({ event, context }) => {
