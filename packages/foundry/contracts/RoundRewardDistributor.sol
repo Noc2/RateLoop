@@ -246,6 +246,11 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         rewardCommitClaimed[contentId][roundId][commitKey] = true;
         rewardClaimed[contentId][roundId][commit.voter] = true;
 
+        if (votingEngine.roundFinalPredictionRatingBps(contentId, roundId) != 0) {
+            _claimPredictionReward(contentId, roundId, commitKey, commit, rewardRecipient);
+            return;
+        }
+
         bool voterWon = (commit.isUp == round.upWins);
 
         if (!voterWon) {
@@ -309,6 +314,70 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         }
 
         emit RewardClaimed(contentId, roundId, rewardRecipient, commit.voter, commit.stakeAmount, reward);
+    }
+
+    function _claimPredictionReward(
+        uint256 contentId,
+        uint256 roundId,
+        bytes32 commitKey,
+        RoundLib.Commit memory commit,
+        address rewardRecipient
+    ) internal {
+        uint256 scoreWeight = votingEngine.commitPredictionRewardWeight(contentId, roundId, commitKey);
+        uint256 stakeReturned = votingEngine.commitPredictionStakeReturned(contentId, roundId, commitKey);
+        uint256 forfeitedStake = votingEngine.commitPredictionForfeitedStake(contentId, roundId, commitKey);
+
+        uint256 rebate;
+        if (forfeitedStake > 0) {
+            uint256 forfeitedPool = votingEngine.roundPredictionForfeitedPool(contentId, roundId);
+            uint256 totalForfeitClaimants = votingEngine.roundPredictionForfeitClaimants(contentId, roundId);
+            uint256 claimedCount = roundLoserRebateClaimedCount[contentId][roundId];
+            uint256 claimedAmount = roundLoserRebateClaimedAmount[contentId][roundId];
+            uint256 loserRefundPool = RewardMath.calculateRevealedLoserRefund(forfeitedPool);
+            if (
+                totalForfeitClaimants == 0 || claimedCount >= totalForfeitClaimants
+                    || claimedAmount > loserRefundPool
+            ) {
+                revert PoolExhausted();
+            }
+
+            rebate = claimedCount + 1 == totalForfeitClaimants
+                ? loserRefundPool - claimedAmount
+                : RewardMath.calculateRevealedLoserRefund(forfeitedStake);
+            roundLoserRebateClaimedCount[contentId][roundId] = claimedCount + 1;
+            roundLoserRebateClaimedAmount[contentId][roundId] = claimedAmount + rebate;
+        }
+
+        uint256 reward;
+        if (scoreWeight > 0) {
+            uint256 voterPool = votingEngine.roundVoterPool(contentId, roundId);
+            uint256 totalScoreWeight = votingEngine.roundPredictionRewardWeight(contentId, roundId);
+            uint256 totalRewardClaimants = votingEngine.roundPredictionRewardClaimants(contentId, roundId);
+            uint256 claimedCount = roundVoterRewardClaimedCount[contentId][roundId];
+            uint256 claimedAmount = roundVoterRewardClaimedAmount[contentId][roundId];
+            if (
+                totalRewardClaimants == 0 || claimedCount >= totalRewardClaimants || claimedAmount > voterPool
+                    || totalScoreWeight == 0
+            ) {
+                revert PoolExhausted();
+            }
+
+            reward = claimedCount + 1 == totalRewardClaimants
+                ? voterPool - claimedAmount
+                : RewardMath.calculateVoterReward(scoreWeight, totalScoreWeight, voterPool);
+            roundVoterRewardClaimedCount[contentId][roundId] = claimedCount + 1;
+            roundVoterRewardClaimedAmount[contentId][roundId] = claimedAmount + reward;
+        }
+
+        uint256 returnedStake = stakeReturned + rebate;
+        if (returnedStake > 0) {
+            votingEngine.transferReward(commit.voter, returnedStake);
+        }
+        if (reward > 0) {
+            votingEngine.transferReward(rewardRecipient, reward);
+        }
+
+        emit RewardClaimed(contentId, roundId, rewardRecipient, commit.voter, returnedStake, reward);
     }
 
     // --- Frontend Fee Claims ---
@@ -379,11 +448,16 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         RoundLib.Round memory round = _readSettledStaleRound(contentId, roundId);
         _requireNoPendingUnrevealedCleanup(contentId, roundId);
 
-        uint256 totalWinningClaimants = round.upWins ? round.upCount : round.downCount;
+        bool predictionRewardRound = votingEngine.roundFinalPredictionRatingBps(contentId, roundId) != 0;
+        uint256 totalWinningClaimants = predictionRewardRound
+            ? votingEngine.roundPredictionRewardClaimants(contentId, roundId)
+            : (round.upWins ? round.upCount : round.downCount);
         if (sortedWinningVoters.length != totalWinningClaimants) revert InvalidFinalizationInput();
 
         uint256 voterPool = votingEngine.roundVoterPool(contentId, roundId);
-        uint256 weightedWinningStake = votingEngine.roundWinningStake(contentId, roundId);
+        uint256 weightedWinningStake = predictionRewardRound
+            ? votingEngine.roundPredictionRewardWeight(contentId, roundId)
+            : votingEngine.roundWinningStake(contentId, roundId);
         if (totalWinningClaimants == 0 || voterPool == 0 || weightedWinningStake == 0) revert NoRewardDust();
 
         uint256 expectedTotal;
@@ -393,12 +467,18 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
             if (voter == address(0) || (i != 0 && voter <= previous)) revert InvalidFinalizationInput();
             previous = voter;
 
-            RoundLib.Commit memory commit = _findVoterCommit(contentId, roundId, voter);
-            if (commit.voter != voter || !commit.revealed || commit.isUp != round.upWins) {
+            bytes32 commitKey = _findVoterCommitKey(contentId, roundId, voter);
+            RoundLib.Commit memory commit = _readCommit(contentId, roundId, commitKey);
+            if (commit.voter != voter || !commit.revealed) {
                 revert InvalidFinalizationInput();
             }
 
-            uint256 effectiveStake = (commit.stakeAmount * RoundLib.epochWeightBps(commit.epochIndex)) / 10000;
+            uint256 effectiveStake = predictionRewardRound
+                ? votingEngine.commitPredictionRewardWeight(contentId, roundId, commitKey)
+                : (commit.stakeAmount * RoundLib.epochWeightBps(commit.epochIndex)) / 10000;
+            if (effectiveStake == 0 || (!predictionRewardRound && commit.isUp != round.upWins)) {
+                revert InvalidFinalizationInput();
+            }
             expectedTotal += RewardMath.calculateVoterReward(effectiveStake, weightedWinningStake, voterPool);
         }
 
@@ -430,11 +510,15 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         RoundLib.Round memory round = _readSettledStaleRound(contentId, roundId);
         _requireNoPendingUnrevealedCleanup(contentId, roundId);
 
-        uint256 totalLosingClaimants = round.upWins ? round.downCount : round.upCount;
+        bool predictionRewardRound = votingEngine.roundFinalPredictionRatingBps(contentId, roundId) != 0;
+        uint256 totalLosingClaimants = predictionRewardRound
+            ? votingEngine.roundPredictionForfeitClaimants(contentId, roundId)
+            : (round.upWins ? round.downCount : round.upCount);
         if (sortedLosingVoters.length != totalLosingClaimants) revert InvalidFinalizationInput();
 
-        uint256 loserRefundPool =
-            RewardMath.calculateRevealedLoserRefund(round.upWins ? round.downPool : round.upPool);
+        uint256 loserRefundPool = predictionRewardRound
+            ? RewardMath.calculateRevealedLoserRefund(votingEngine.roundPredictionForfeitedPool(contentId, roundId))
+            : RewardMath.calculateRevealedLoserRefund(round.upWins ? round.downPool : round.upPool);
         if (totalLosingClaimants == 0 || loserRefundPool == 0) revert NoRewardDust();
 
         uint256 expectedTotal;
@@ -444,12 +528,19 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
             if (voter == address(0) || (i != 0 && voter <= previous)) revert InvalidFinalizationInput();
             previous = voter;
 
-            RoundLib.Commit memory commit = _findVoterCommit(contentId, roundId, voter);
-            if (commit.voter != voter || !commit.revealed || commit.isUp == round.upWins) {
+            bytes32 commitKey = _findVoterCommitKey(contentId, roundId, voter);
+            RoundLib.Commit memory commit = _readCommit(contentId, roundId, commitKey);
+            if (commit.voter != voter || !commit.revealed) {
                 revert InvalidFinalizationInput();
             }
 
-            expectedTotal += RewardMath.calculateRevealedLoserRefund(commit.stakeAmount);
+            uint256 forfeitedStake = predictionRewardRound
+                ? votingEngine.commitPredictionForfeitedStake(contentId, roundId, commitKey)
+                : commit.stakeAmount;
+            if (forfeitedStake == 0 || (!predictionRewardRound && commit.isUp == round.upWins)) {
+                revert InvalidFinalizationInput();
+            }
+            expectedTotal += RewardMath.calculateRevealedLoserRefund(forfeitedStake);
         }
 
         releasedDust =
@@ -550,7 +641,9 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         if (round.state != RoundLib.RoundState.Settled) revert RoundNotSettled();
         _requireNoPendingUnrevealedCleanup(contentId, roundId);
 
-        uint256 winningStake = round.upWins ? round.weightedUpPool : round.weightedDownPool;
+        uint256 winningStake = votingEngine.roundFinalPredictionRatingBps(contentId, roundId) != 0
+            ? votingEngine.roundPredictionRewardWeight(contentId, roundId)
+            : (round.upWins ? round.weightedUpPool : round.weightedDownPool);
         uint256 totalReward;
         bool fullyReserved;
         (totalReward, reservedReward, fullyReserved) =
@@ -597,10 +690,13 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         if (!commit.revealed) revert VoteNotRevealed();
         if (commit.stakeAmount == 0) revert NoStake();
 
-        if (commit.isUp != round.upWins) revert NotWinningSide();
         if (rateBps == 0) revert NoParticipationRate();
 
-        uint256 effectiveStake = (commit.stakeAmount * RoundLib.epochWeightBps(commit.epochIndex)) / 10000;
+        bool predictionRewardRound = votingEngine.roundFinalPredictionRatingBps(contentId, roundId) != 0;
+        uint256 effectiveStake = predictionRewardRound
+            ? votingEngine.commitPredictionRewardWeight(contentId, roundId, commitKey)
+            : (commit.stakeAmount * RoundLib.epochWeightBps(commit.epochIndex)) / 10000;
+        if (effectiveStake == 0 || (!predictionRewardRound && commit.isUp != round.upWins)) revert NotWinningSide();
         uint256 reward = effectiveStake * rateBps / 10000;
         if (reward == 0) {
             participationRewardCommitClaimed[contentId][roundId][commitKey] = true;
@@ -653,7 +749,9 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         if (round.state != RoundLib.RoundState.Settled) revert RoundNotSettled();
         _requireNoPendingUnrevealedCleanup(contentId, roundId);
 
-        uint256 winnerCount = round.upWins ? round.upCount : round.downCount;
+        uint256 winnerCount = votingEngine.roundFinalPredictionRatingBps(contentId, roundId) != 0
+            ? votingEngine.roundPredictionRewardClaimants(contentId, roundId)
+            : (round.upWins ? round.upCount : round.downCount);
         bool fullyClaimed = roundParticipationRewardFullyClaimedCount[contentId][roundId] == winnerCount;
         bool stale = _participationRewardsStale(contentId, roundId, round);
         if (!fullyClaimed && !stale) revert ParticipationRewardsOutstanding();
@@ -683,12 +781,15 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         view
         returns (RoundLib.Commit memory)
     {
-        bytes32 commitHash = votingEngine.voterCommitHash(contentId, roundId, voter);
-        if (commitHash == bytes32(0)) {
-            return RoundLib.Commit(address(0), 0, "", 0, bytes32(0), address(0), 0, false, false, 0);
-        }
-        bytes32 commitKey = keccak256(abi.encodePacked(voter, commitHash));
+        bytes32 commitKey = _findVoterCommitKey(contentId, roundId, voter);
+        if (commitKey == bytes32(0)) return RoundLib.Commit(address(0), 0, "", 0, bytes32(0), address(0), 0, false, false, 0);
         return _readCommit(contentId, roundId, commitKey);
+    }
+
+    function _findVoterCommitKey(uint256 contentId, uint256 roundId, address voter) internal view returns (bytes32) {
+        bytes32 commitHash = votingEngine.voterCommitHash(contentId, roundId, voter);
+        if (commitHash == bytes32(0)) return bytes32(0);
+        return keccak256(abi.encodePacked(voter, commitHash));
     }
 
     function _resolveClaimCommit(uint256 contentId, uint256 roundId, address account)

@@ -202,13 +202,13 @@ test("buildCommitHash includes the tlock round metadata", () => {
   );
 });
 
-test("rating helpers normalize the 0-10 prediction scale", () => {
-  assert.equal(ratingToBps(0), 0);
+test("rating helpers normalize the bounded prediction scale", () => {
+  assert.equal(ratingToBps(1), 1_000);
   assert.equal(ratingToBps(7.25), 7_250);
-  assert.equal(ratingToBps(10), 10_000);
+  assert.equal(ratingToBps(9.9), 9_900);
   assert.equal(bpsToRating(8_875), 8.875);
-  assert.throws(() => ratingToBps(-0.1), /rating must be from 0 to 10/);
-  assert.throws(() => ratingToBps(10.1), /rating must be from 0 to 10/);
+  assert.throws(() => ratingToBps(0.9), /rating must be from 1 to 9.9/);
+  assert.throws(() => ratingToBps(10), /rating must be from 1 to 9.9/);
 });
 
 test("prediction plaintext stores the predicted final rating and salt", () => {

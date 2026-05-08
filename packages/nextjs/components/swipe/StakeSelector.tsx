@@ -30,8 +30,8 @@ interface StakeSelectorProps {
 }
 
 const PRESET_AMOUNTS = [1, 5, 25, 50, 100];
-const MIN_RATING = 0;
-const MAX_RATING = 10;
+const MIN_RATING = 1;
+const MAX_RATING = 9.9;
 
 function clampRating(value: number) {
   if (!Number.isFinite(value)) return 5;
@@ -234,11 +234,11 @@ export function StakeSelector({
                 style={sliderStyle}
                 disabled={isConfirming}
                 aria-label="Predicted final rating"
-                aria-valuetext={`${predictedRating.toFixed(1)} out of 10`}
+                aria-valuetext={`${predictedRating.toFixed(1)} out of 9.9`}
               />
               <div className="mt-1 flex justify-between text-xs text-base-content/55">
-                <span>0</span>
-                <span>10</span>
+                <span>1</span>
+                <span>9.9</span>
               </div>
             </div>
 

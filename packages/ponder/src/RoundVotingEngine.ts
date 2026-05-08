@@ -375,6 +375,28 @@ ponder.on("RoundVotingEngine:PredictionRoundSettled", async ({ event, context })
   }
 });
 
+ponder.on("RoundVotingEngine:PredictionRewardsScored", async ({ event, context }) => {
+  const { contentId, roundId, rewardWeight, rewardClaimants, forfeitedPool, forfeitClaimants } = event.args as {
+    contentId: bigint;
+    roundId: bigint;
+    rewardWeight: bigint;
+    rewardClaimants: bigint;
+    forfeitedPool: bigint;
+    forfeitClaimants: bigint;
+  };
+  const roundKey = `${contentId}-${roundId}`;
+
+  const existingRound = await context.db.find(round, { id: roundKey });
+  if (existingRound) {
+    await context.db.update(round, { id: roundKey }).set({
+      predictionRewardWeight: rewardWeight,
+      predictionRewardClaimants: Number(rewardClaimants),
+      predictionForfeitedPool: forfeitedPool,
+      predictionForfeitClaimants: Number(forfeitClaimants),
+    });
+  }
+});
+
 ponder.on("RoundVotingEngine:RoundSettled", async ({ event, context }) => {
   const { contentId, roundId, upWins, losingPool } = event.args;
   const roundKey = `${contentId}-${roundId}`;

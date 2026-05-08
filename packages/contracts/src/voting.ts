@@ -80,8 +80,8 @@ const AGE_MAC_LENGTH = 32;
 const MIN_TLOCK_STANZA_BODY_LENGTH = 80;
 const MIN_ENCRYPTED_BODY_LENGTH = 65;
 const ROUND_REFERENCE_RATING_MASK = 0xffffn;
-export const MIN_PREDICTED_RATING_BPS = 0;
-export const MAX_PREDICTED_RATING_BPS = 10_000;
+export const MIN_PREDICTED_RATING_BPS = 1_000;
+export const MAX_PREDICTED_RATING_BPS = 9_900;
 export const RATING_SCALE_MAX = 10;
 
 export function normalizePredictedRatingBps(predictedRatingBps: number): number {
@@ -90,15 +90,15 @@ export function normalizePredictedRatingBps(predictedRatingBps: number): number 
     predictedRatingBps < MIN_PREDICTED_RATING_BPS ||
     predictedRatingBps > MAX_PREDICTED_RATING_BPS
   ) {
-    throw new Error("predictedRatingBps must be an integer from 0 to 10000");
+    throw new Error("predictedRatingBps must be an integer from 1000 to 9900");
   }
 
   return predictedRatingBps;
 }
 
 export function ratingToBps(rating: number): number {
-  if (!Number.isFinite(rating) || rating < 0 || rating > RATING_SCALE_MAX) {
-    throw new Error("rating must be from 0 to 10");
+  if (!Number.isFinite(rating) || rating < MIN_PREDICTED_RATING_BPS / 1_000 || rating > MAX_PREDICTED_RATING_BPS / 1_000) {
+    throw new Error("rating must be from 1 to 9.9");
   }
 
   return normalizePredictedRatingBps(Math.round(rating * 1_000));
@@ -207,7 +207,7 @@ export function decodePredictionPlaintext(
   if (plaintext.length !== 34) return null;
 
   const predictedRatingBps = (plaintext[0] << 8) | plaintext[1];
-  if (predictedRatingBps > MAX_PREDICTED_RATING_BPS) return null;
+  if (predictedRatingBps < MIN_PREDICTED_RATING_BPS || predictedRatingBps > MAX_PREDICTED_RATING_BPS) return null;
 
   return {
     predictedRatingBps,

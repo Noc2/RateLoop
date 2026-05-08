@@ -13,6 +13,14 @@ contract PredictionRatingMathHarness {
         return PredictionRatingMath.weightedAverageRating(weightedRatingSum, totalWeight);
     }
 
+    function weightedMedianRating(uint16[] memory ratings, uint256[] memory weights, uint256 totalWeight)
+        external
+        pure
+        returns (uint16)
+    {
+        return PredictionRatingMath.weightedMedianRating(ratings, weights, totalWeight);
+    }
+
     function leaveOneOutRating(
         uint256 totalWeightedRating,
         uint256 totalWeight,
@@ -52,9 +60,22 @@ contract PredictionRatingMathTest is Test {
     }
 
     function test_WeightedAverageRoundsAndClamps() public view {
-        assertEq(math.weightedAverageRating(10_001, 1), 10_000);
+        assertEq(math.weightedAverageRating(10_001, 1), 9_900);
         assertEq(math.weightedAverageRating(10_001, 2), 5_001);
         assertEq(math.weightedAverageRating(0, 0), 0);
+    }
+
+    function test_WeightedMedianUsesCrossingWeight() public view {
+        uint16[] memory ratings = new uint16[](3);
+        uint256[] memory weights = new uint256[](3);
+        ratings[0] = 8_000;
+        ratings[1] = 5_000;
+        ratings[2] = 6_500;
+        weights[0] = 30e6;
+        weights[1] = 10e6;
+        weights[2] = 10e6;
+
+        assertEq(math.weightedMedianRating(ratings, weights, 50e6), 8_000);
     }
 
     function test_LeaveOneOutUsesPeerRatingWhenPeersExist() public view {

@@ -4,7 +4,6 @@ pragma solidity ^0.8.24;
 import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
 import { ContentRegistry } from "../ContentRegistry.sol";
-import { PredictionRatingMath } from "./PredictionRatingMath.sol";
 import { RatingLib } from "./RatingLib.sol";
 import { RatingMath } from "./RatingMath.sol";
 import { IParticipationPool } from "../interfaces/IParticipationPool.sol";
@@ -39,8 +38,9 @@ library RoundSettlementSideEffectsLib {
         uint64 upPool,
         uint64 downPool,
         bool usePredictionRating,
-        uint256 predictionWeightedRatingSum,
-        uint256 predictionEvidence
+        uint256,
+        uint256 predictionEvidence,
+        uint16 predictionFinalRatingBps
     ) external {
         // The two rating-state precondition reads share the SettlementSideEffectFailed/RatingStateUpdate
         // stage with the eventual update call: any failure along this chain means "the rating state was
@@ -85,7 +85,7 @@ library RoundSettlementSideEffectsLib {
         if (ratingUpdatePossible) {
             RatingLib.RatingState memory nextState = usePredictionRating
                 ? _applyPredictionSettlement(
-                    predictionWeightedRatingSum, predictionEvidence, previousState, ratingConfig, slashConfig
+                    predictionFinalRatingBps, predictionEvidence, previousState, ratingConfig, slashConfig
                 )
                 : _applyBinarySettlement(referenceRatingBps, upPool, downPool, previousState, ratingConfig, slashConfig);
             try registry.updateRatingState(contentId, roundId, referenceRatingBps, nextState) { }
@@ -132,16 +132,13 @@ library RoundSettlementSideEffectsLib {
     }
 
     function _applyPredictionSettlement(
-        uint256 predictionWeightedRatingSum,
+        uint16 predictionFinalRatingBps,
         uint256 predictionEvidence,
         RatingLib.RatingState memory previousState,
         RatingLib.RatingConfig memory ratingConfig,
         RatingLib.SlashConfig memory slashConfig
     ) private view returns (RatingLib.RatingState memory nextState) {
-        uint16 predictionRatingBps = PredictionRatingMath.weightedAverageRating(
-            predictionWeightedRatingSum, predictionEvidence
-        );
-        uint16 clampedRatingBps = RatingMath.clampRatingBps(predictionRatingBps);
+        uint16 clampedRatingBps = RatingMath.clampRatingBps(predictionFinalRatingBps);
         uint256 previousConfidenceMass =
             previousState.confidenceMass == 0 ? ratingConfig.confidenceMassInitial : previousState.confidenceMass;
         uint256 confidenceGain = (predictionEvidence * ratingConfig.confidenceGainBps) / RatingLib.BPS_SCALE;

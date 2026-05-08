@@ -98,6 +98,9 @@ contract RoundVotingEngine is
     uint256 internal constant MAX_STAKE = 100e6; // 100 HREP (6 decimals)
     uint256 internal constant VOTE_COOLDOWN = 24 hours; // Time-based cooldown per content per voter
     uint256 internal constant MAX_CIPHERTEXT_SIZE = 2_048; // 2 KB max ciphertext to prevent storage bloat
+    uint16 internal constant PREDICTION_FULL_CREDIT_TOLERANCE_BPS = 100;
+    uint16 internal constant PREDICTION_ZERO_CREDIT_TOLERANCE_BPS = 9_900;
+    uint16 internal constant PREDICTION_SCORE_SCALE_BPS = 10_000;
 
     // --- State ---
     IERC20 internal hrepToken;
@@ -127,8 +130,18 @@ contract RoundVotingEngine is
     // Prediction accounting per round. Kept outside RoundLib structs so legacy tuple getters stay stable.
     mapping(uint256 => mapping(uint256 => uint256)) internal roundPredictionWeight; // contentId => roundId => effective MREP weight
     mapping(uint256 => mapping(uint256 => uint256)) internal roundWeightedRatingSum; // contentId => roundId => ratingBps * weight
+    mapping(uint256 => mapping(uint256 => uint16)) public roundPredictionCount;
+    mapping(uint256 => mapping(uint256 => uint16)) public roundFinalPredictionRatingBps;
+    mapping(uint256 => mapping(uint256 => uint256)) public roundPredictionRewardWeight;
+    mapping(uint256 => mapping(uint256 => uint256)) public roundPredictionRewardClaimants;
+    mapping(uint256 => mapping(uint256 => uint256)) public roundPredictionForfeitedPool;
+    mapping(uint256 => mapping(uint256 => uint256)) public roundPredictionForfeitClaimants;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint16))) public commitPredictedRatingBps;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint256))) public commitPredictionWeight;
+    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint16))) public commitPredictionScoreBps;
+    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint256))) public commitPredictionRewardWeight;
+    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint256))) public commitPredictionStakeReturned;
+    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint256))) public commitPredictionForfeitedStake;
 
     // Cancelled/tied round refund claims: contentId => roundId => voter => claimed
     mapping(uint256 => mapping(uint256 => mapping(address => bool))) public cancelledRoundRefundClaimed;
@@ -198,6 +211,14 @@ contract RoundVotingEngine is
         uint16 finalRatingBps,
         uint256 totalPredictionWeight,
         uint16 revealedCount
+    );
+    event PredictionRewardsScored(
+        uint256 indexed contentId,
+        uint256 indexed roundId,
+        uint256 rewardWeight,
+        uint256 rewardClaimants,
+        uint256 forfeitedPool,
+        uint256 forfeitClaimants
     );
     event RoundSettled(uint256 indexed contentId, uint256 indexed roundId, bool upWins, uint256 losingPool);
     event RoundCancelled(uint256 indexed contentId, uint256 indexed roundId);
@@ -767,39 +788,51 @@ contract RoundVotingEngine is
             roundUnrevealedCleanupRemaining[contentId][roundId] = unrevealedPastEpochCount;
         }
 
-        // Determine winner: weighted majority wins (anti-herding)
-        bool upWins = round.weightedUpPool > round.weightedDownPool;
-        if (round.weightedUpPool == round.weightedDownPool) {
-            if (round.upPool == round.downPool) {
-                round.state = RoundLib.RoundState.Tied;
-                round.settledAt = block.timestamp.toUint48();
-                _notifyBundleRoundTerminal(contentId, roundId, false);
-                emit RoundTied(contentId, roundId);
-                return;
+        uint256 predictionWeight = roundPredictionWeight[contentId][roundId];
+        bool hasPredictionSettlement =
+            predictionWeight > 0 && roundPredictionCount[contentId][roundId] == round.revealedCount;
+        uint16 finalPredictionRatingBps = hasPredictionSettlement
+            ? _roundWeightedMedianPrediction(contentId, roundId, predictionWeight)
+            : 0;
+
+        uint256 weightedWinningStake;
+        uint256 losingPool;
+        bool upWins;
+
+        if (hasPredictionSettlement) {
+            upWins = finalPredictionRatingBps >= _getRoundReferenceRatingBps(contentId, roundId);
+            roundFinalPredictionRatingBps[contentId][roundId] = finalPredictionRatingBps;
+            (weightedWinningStake, losingPool) = _scorePredictionRewards(contentId, roundId, predictionWeight);
+        } else {
+            // Determine winner: weighted majority wins (anti-herding)
+            upWins = round.weightedUpPool > round.weightedDownPool;
+            if (round.weightedUpPool == round.weightedDownPool) {
+                if (round.upPool == round.downPool) {
+                    round.state = RoundLib.RoundState.Tied;
+                    round.settledAt = block.timestamp.toUint48();
+                    _notifyBundleRoundTerminal(contentId, roundId, false);
+                    emit RoundTied(contentId, roundId);
+                    return;
+                }
+                // Tiebreak: smaller raw pool wins. Rationale: identical weighted pools with
+                // different raw pools means the smaller-raw side achieved the same weight with
+                // fewer tokens → more concentration in early epochs → "more informed" voters.
+                // This inverts the conventional raw-majority-breaks-tie convention intentionally.
+                upWins = round.upPool < round.downPool;
             }
-            // Tiebreak: smaller raw pool wins. Rationale: identical weighted pools with
-            // different raw pools means the smaller-raw side achieved the same weight with
-            // fewer tokens → more concentration in early epochs → "more informed" voters.
-            // This inverts the conventional raw-majority-breaks-tie convention intentionally.
-            upWins = round.upPool < round.downPool;
+
+            // Epoch-weighted winning stake — used for proportional reward distribution
+            weightedWinningStake = upWins ? round.weightedUpPool : round.weightedDownPool;
+
+            // Raw losing pool — 5% is reserved for revealed losers, the remainder is
+            // redistributed to winners, protocol, treasury, and the consensus reserve.
+            losingPool = upWins ? round.downPool : round.upPool;
         }
+
         round.upWins = upWins;
         round.state = RoundLib.RoundState.Settled;
         round.settledAt = block.timestamp.toUint48();
         _notifyBundleRoundTerminal(contentId, roundId, true);
-
-        uint256 predictionWeight = roundPredictionWeight[contentId][roundId];
-        bool hasPredictionSettlement = predictionWeight > 0;
-        uint16 finalPredictionRatingBps = hasPredictionSettlement
-            ? PredictionRatingMath.weightedAverageRating(roundWeightedRatingSum[contentId][roundId], predictionWeight)
-            : 0;
-
-        // Epoch-weighted winning stake — used for proportional reward distribution
-        uint256 weightedWinningStake = upWins ? round.weightedUpPool : round.weightedDownPool;
-
-        // Raw losing pool — 5% is reserved for revealed losers, the remainder is
-        // redistributed to winners, protocol, treasury, and the consensus reserve.
-        uint256 losingPool = upWins ? round.downPool : round.upPool;
 
         (uint256 updatedConsensusReserve, uint256 treasuryPaid) = RoundSettlementDistributionLib.distribute(
             hrepToken,
@@ -836,12 +869,21 @@ contract RoundVotingEngine is
             round.downPool,
             hasPredictionSettlement,
             roundWeightedRatingSum[contentId][roundId],
-            predictionWeight
+            predictionWeight,
+            finalPredictionRatingBps
         );
         emit RoundSettled(contentId, roundId, upWins, losingPool);
         if (hasPredictionSettlement) {
             emit PredictionRoundSettled(
                 contentId, roundId, finalPredictionRatingBps, predictionWeight, round.revealedCount
+            );
+            emit PredictionRewardsScored(
+                contentId,
+                roundId,
+                roundPredictionRewardWeight[contentId][roundId],
+                roundPredictionRewardClaimants[contentId][roundId],
+                roundPredictionForfeitedPool[contentId][roundId],
+                roundPredictionForfeitClaimants[contentId][roundId]
             );
         }
     }
@@ -1152,6 +1194,92 @@ contract RoundVotingEngine is
         }
     }
 
+    function _roundWeightedMedianPrediction(uint256 contentId, uint256 roundId, uint256 totalWeight)
+        internal
+        view
+        returns (uint16)
+    {
+        bytes32[] storage commitKeys = roundCommitHashes[contentId][roundId];
+        uint256 predictionCount = roundPredictionCount[contentId][roundId];
+        uint16[] memory ratings = new uint16[](predictionCount);
+        uint256[] memory weights = new uint256[](predictionCount);
+        uint256 cursor;
+
+        for (uint256 i = 0; i < commitKeys.length;) {
+            bytes32 commitKey = commitKeys[i];
+            uint256 weight = commitPredictionWeight[contentId][roundId][commitKey];
+            if (weight > 0) {
+                ratings[cursor] = commitPredictedRatingBps[contentId][roundId][commitKey];
+                weights[cursor] = weight;
+                unchecked {
+                    ++cursor;
+                }
+            }
+            unchecked {
+                ++i;
+            }
+        }
+
+        return PredictionRatingMath.weightedMedianRating(ratings, weights, totalWeight);
+    }
+
+    function _scorePredictionRewards(uint256 contentId, uint256 roundId, uint256 totalWeight)
+        internal
+        returns (uint256 rewardWeight, uint256 forfeitedPool)
+    {
+        uint256 totalWeightedRating = roundWeightedRatingSum[contentId][roundId];
+        bytes32[] storage commitKeys = roundCommitHashes[contentId][roundId];
+        uint256 rewardClaimants;
+        uint256 forfeitClaimants;
+
+        for (uint256 i = 0; i < commitKeys.length;) {
+            bytes32 commitKey = commitKeys[i];
+            uint256 ownWeight = commitPredictionWeight[contentId][roundId][commitKey];
+            if (ownWeight > 0) {
+                uint16 ownPrediction = commitPredictedRatingBps[contentId][roundId][commitKey];
+                uint16 peerRating = PredictionRatingMath.leaveOneOutRating(
+                    totalWeightedRating, totalWeight, ownPrediction, ownWeight
+                );
+                uint16 scoreBps = PredictionRatingMath.accuracyScoreBps(
+                    ownPrediction,
+                    peerRating,
+                    PREDICTION_FULL_CREDIT_TOLERANCE_BPS,
+                    PREDICTION_ZERO_CREDIT_TOLERANCE_BPS
+                );
+                uint256 scoreWeight = (ownWeight * scoreBps) / PREDICTION_SCORE_SCALE_BPS;
+                uint256 stakeAmount = commits[contentId][roundId][commitKey].stakeAmount;
+                uint256 stakeReturned = (stakeAmount * scoreBps) / PREDICTION_SCORE_SCALE_BPS;
+                uint256 forfeitedStake = stakeAmount - stakeReturned;
+
+                commitPredictionScoreBps[contentId][roundId][commitKey] = scoreBps;
+                commitPredictionRewardWeight[contentId][roundId][commitKey] = scoreWeight;
+                commitPredictionStakeReturned[contentId][roundId][commitKey] = stakeReturned;
+                commitPredictionForfeitedStake[contentId][roundId][commitKey] = forfeitedStake;
+
+                rewardWeight += scoreWeight;
+                forfeitedPool += forfeitedStake;
+                if (scoreWeight > 0) {
+                    unchecked {
+                        ++rewardClaimants;
+                    }
+                }
+                if (forfeitedStake > 0) {
+                    unchecked {
+                        ++forfeitClaimants;
+                    }
+                }
+            }
+            unchecked {
+                ++i;
+            }
+        }
+
+        roundPredictionRewardWeight[contentId][roundId] = rewardWeight;
+        roundPredictionRewardClaimants[contentId][roundId] = rewardClaimants;
+        roundPredictionForfeitedPool[contentId][roundId] = forfeitedPool;
+        roundPredictionForfeitClaimants[contentId][roundId] = forfeitClaimants;
+    }
+
     function _revealVoteInternal(uint256 contentId, uint256 roundId, bytes32 commitKey, bool isUp, bytes32 salt)
         internal
     {
@@ -1216,6 +1344,7 @@ contract RoundVotingEngine is
         commitPredictionWeight[contentId][roundId][commitKey] = effectiveStake;
         roundPredictionWeight[contentId][roundId] += effectiveStake;
         roundWeightedRatingSum[contentId][roundId] += uint256(predictedRatingBps) * uint256(effectiveStake);
+        roundPredictionCount[contentId][roundId]++;
 
         emit PredictionRevealed(contentId, roundId, voter, predictedRatingBps, effectiveStake);
     }
@@ -1246,7 +1375,10 @@ contract RoundVotingEngine is
     {
         weightedRatingSum = roundWeightedRatingSum[contentId][roundId];
         totalPredictionWeight = roundPredictionWeight[contentId][roundId];
-        finalRatingBps = PredictionRatingMath.weightedAverageRating(weightedRatingSum, totalPredictionWeight);
+        finalRatingBps = roundFinalPredictionRatingBps[contentId][roundId];
+        if (finalRatingBps == 0 && totalPredictionWeight > 0) {
+            finalRatingBps = _roundWeightedMedianPrediction(contentId, roundId, totalPredictionWeight);
+        }
     }
 
     // --- Admin ---
@@ -1303,5 +1435,5 @@ contract RoundVotingEngine is
     mapping(uint256 => mapping(uint256 => uint256)) internal roundCleanupIncentivePaid;
 
     // --- Storage gap reserved for future upgrades ---
-    uint256[43] private __gap;
+    uint256[33] private __gap;
 }

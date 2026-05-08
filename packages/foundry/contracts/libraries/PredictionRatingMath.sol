@@ -4,8 +4,8 @@ pragma solidity ^0.8.20;
 /// @title PredictionRatingMath
 /// @notice Pure helpers for one-round predicted final ratings on a 0-10 scale stored as 0-10000 bps.
 library PredictionRatingMath {
-    uint16 internal constant MIN_RATING_BPS = 0;
-    uint16 internal constant MAX_RATING_BPS = 10_000;
+    uint16 internal constant MIN_RATING_BPS = 1_000;
+    uint16 internal constant MAX_RATING_BPS = 9_900;
     uint16 internal constant SCORE_SCALE_BPS = 10_000;
 
     error InvalidRating();
@@ -13,7 +13,7 @@ library PredictionRatingMath {
     error InvalidOwnWeight();
 
     function requireValidRating(uint16 ratingBps) internal pure {
-        if (ratingBps > MAX_RATING_BPS) revert InvalidRating();
+        if (ratingBps < MIN_RATING_BPS || ratingBps > MAX_RATING_BPS) revert InvalidRating();
     }
 
     function weightedContribution(uint16 ratingBps, uint256 weight) internal pure returns (uint256) {
@@ -26,7 +26,55 @@ library PredictionRatingMath {
 
         uint256 ratingBps = (weightedRatingSum + totalWeight / 2) / totalWeight;
         if (ratingBps > MAX_RATING_BPS) return MAX_RATING_BPS;
+        if (ratingBps < MIN_RATING_BPS) return MIN_RATING_BPS;
         return uint16(ratingBps);
+    }
+
+    function weightedMedianRating(uint16[] memory ratings, uint256[] memory weights, uint256 totalWeight)
+        internal
+        pure
+        returns (uint16)
+    {
+        if (ratings.length != weights.length) revert InvalidOwnWeight();
+        if (totalWeight == 0 || ratings.length == 0) return 0;
+
+        for (uint256 i = 0; i < ratings.length;) {
+            requireValidRating(ratings[i]);
+            uint256 minIndex = i;
+            uint16 minRating = ratings[i];
+            for (uint256 j = i + 1; j < ratings.length;) {
+                uint16 candidate = ratings[j];
+                requireValidRating(candidate);
+                if (candidate < minRating) {
+                    minRating = candidate;
+                    minIndex = j;
+                }
+                unchecked {
+                    ++j;
+                }
+            }
+
+            if (minIndex != i) {
+                (ratings[i], ratings[minIndex]) = (ratings[minIndex], ratings[i]);
+                (weights[i], weights[minIndex]) = (weights[minIndex], weights[i]);
+            }
+
+            unchecked {
+                ++i;
+            }
+        }
+
+        uint256 threshold = (totalWeight + 1) / 2;
+        uint256 cumulativeWeight = 0;
+        for (uint256 i = 0; i < ratings.length;) {
+            cumulativeWeight += weights[i];
+            if (cumulativeWeight >= threshold) return ratings[i];
+            unchecked {
+                ++i;
+            }
+        }
+
+        return ratings[ratings.length - 1];
     }
 
     function leaveOneOutRating(

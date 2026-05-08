@@ -423,11 +423,11 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
             engine.roundPredictionStats(contentId, roundId);
         assertEq(weightedRatingSum, 355_000e6, "weighted rating sum");
         assertEq(totalPredictionWeight, 50e6, "prediction weight");
-        assertEq(finalRatingBps, 7_100, "prediction final before settle");
+        assertEq(finalRatingBps, 8_000, "prediction median before settle");
 
         engine.settleRound(contentId, roundId);
 
-        assertEq(registry.getRating(contentId), 7_100, "registry rating");
+        assertEq(registry.getRating(contentId), 8_000, "registry rating");
     }
 
     function test_PredictionRevealRejectsWrongRating() public {
