@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import deployedContracts from "@ratemesh/contracts/deployedContracts";
+import deployedContracts from "@rateloop/contracts/deployedContracts";
 import { Address, AddressInput, Balance, EtherInput } from "@scaffold-ui/components";
 import { useQueryClient } from "@tanstack/react-query";
 import { Address as AddressType, createPublicClient, createWalletClient, http, parseUnits } from "viem";
@@ -150,7 +150,7 @@ export const FaucetModal = () => {
   const queryClient = useQueryClient();
 
   // Get contract addresses from localhost deployment
-  const hrepTokenAddress = ((deployedContracts as any)[31337]?.MeshReputation?.address ??
+  const hrepTokenAddress = ((deployedContracts as any)[31337]?.LoopReputation?.address ??
     (deployedContracts as any)[31337]?.HumanReputation?.address) as AddressType | undefined;
   const voterIdNFTAddress = (deployedContracts as any)[31337]?.VoterIdNFT?.address as AddressType | undefined;
   const directMockUsdcTokenAddress = (deployedContracts as any)[31337]?.MockERC20?.address as AddressType | undefined;
@@ -294,7 +294,7 @@ export const FaucetModal = () => {
 
   const claimHREP = async () => {
     if (!inputAddress || !hrepTokenAddress) {
-      notification.error("Missing destination address or MeshReputation contract");
+      notification.error("Missing destination address or LoopReputation contract");
       return;
     }
 
@@ -329,7 +329,7 @@ export const FaucetModal = () => {
           params: [humanFaucetAddr],
         });
       } else if (faucetAddress) {
-        // Fresh RateMesh local deploys hold the launch pool on the deployer.
+        // Fresh RateLoop local deploys hold the launch pool on the deployer.
         const txHash = await localWalletClient.writeContract({
           address: hrepTokenAddress,
           abi: localMintableTokenAbi,
@@ -345,10 +345,10 @@ export const FaucetModal = () => {
       }
 
       queryClient.invalidateQueries();
-      notification.success(`Sent ${hrepAmount} MREP to ${inputAddress.slice(0, 6)}...${inputAddress.slice(-4)}`);
+      notification.success(`Sent ${hrepAmount} LREP to ${inputAddress.slice(0, 6)}...${inputAddress.slice(-4)}`);
       setHrepLoading(false);
     } catch (error: any) {
-      notification.error(error?.message || "Failed to claim MREP tokens");
+      notification.error(error?.message || "Failed to claim LREP tokens");
       setHrepLoading(false);
     }
   };

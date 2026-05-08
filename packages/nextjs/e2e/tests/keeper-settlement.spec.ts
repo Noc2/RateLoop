@@ -14,7 +14,7 @@ import "../helpers/fetch-shim";
 import { getContentById, getContentList, getVotes } from "../helpers/ponder-api";
 import { E2E_KEEPER_HEALTH_URL, E2E_RPC_URL } from "../helpers/service-urls";
 import { deriveKeeperDecryptWaitMs } from "../helpers/tlockRuntime";
-import { ProtocolConfigAbi, RoundVotingEngineAbi } from "@ratemesh/contracts/abis";
+import { ProtocolConfigAbi, RoundVotingEngineAbi } from "@rateloop/contracts/abis";
 import { expect, test } from "@playwright/test";
 import { createPublicClient, http } from "viem";
 import { foundry } from "viem/chains";

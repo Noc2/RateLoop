@@ -1,5 +1,5 @@
-import { ContentRegistryAbi, ProtocolConfigAbi } from "@ratemesh/contracts/abis";
-import { getSharedDeploymentAddress } from "@ratemesh/contracts/deployments";
+import { ContentRegistryAbi, ProtocolConfigAbi } from "@rateloop/contracts/abis";
+import { getSharedDeploymentAddress } from "@rateloop/contracts/deployments";
 import { createHash } from "crypto";
 import "server-only";
 import {

@@ -7,7 +7,7 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 const LOCAL_HOSTNAMES = new Set(["127.0.0.1", "localhost", "::1"]);
-const DEFAULT_DATABASE_URL = "postgresql://postgres:postgres@127.0.0.1:5432/ratemesh_app";
+const DEFAULT_DATABASE_URL = "postgresql://postgres:postgres@127.0.0.1:5432/rateloop_app";
 const IN_MEMORY_DATABASE_URL = "memory:";
 const currentFile = fileURLToPath(import.meta.url);
 const repoRoot = path.resolve(path.dirname(currentFile), "..");
@@ -18,7 +18,7 @@ const localStateDir = path.join(repoRoot, ".local");
 const homebrewPostgresBinDir = "/opt/homebrew/opt/postgresql@16/bin";
 const fallbackPostgresDataDir = path.join(localStateDir, "postgres-16");
 const fallbackPostgresLogPath = path.join(localStateDir, "postgres-16.log");
-const fallbackPostgresMarkerPath = path.join(fallbackPostgresDataDir, ".ratemesh-dev-db");
+const fallbackPostgresMarkerPath = path.join(fallbackPostgresDataDir, ".rateloop-dev-db");
 
 export class MissingDockerComposeError extends Error {
   constructor() {
@@ -246,7 +246,7 @@ function initFallbackPostgres(config) {
     );
   }
 
-  writeFileSync(fallbackPostgresMarkerPath, "RateMesh dev database\n");
+  writeFileSync(fallbackPostgresMarkerPath, "RateLoop dev database\n");
 }
 
 async function waitForFallbackPostgresReady(config) {

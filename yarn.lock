@@ -3908,11 +3908,11 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@ratemesh/agents@workspace:*, @ratemesh/agents@workspace:packages/agents":
+"@rateloop/agents@workspace:*, @rateloop/agents@workspace:packages/agents":
   version: 0.0.0-use.local
-  resolution: "@ratemesh/agents@workspace:packages/agents"
+  resolution: "@rateloop/agents@workspace:packages/agents"
   dependencies:
-    "@ratemesh/sdk": "workspace:*"
+    "@rateloop/sdk": "workspace:*"
     "@types/node": ^20.10.7
     dotenv: ^16.4.5
     tsx: ^4.19.0
@@ -3922,9 +3922,9 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@ratemesh/contracts@workspace:*, @ratemesh/contracts@workspace:packages/contracts":
+"@rateloop/contracts@workspace:*, @rateloop/contracts@workspace:packages/contracts":
   version: 0.0.0-use.local
-  resolution: "@ratemesh/contracts@workspace:packages/contracts"
+  resolution: "@rateloop/contracts@workspace:packages/contracts"
   dependencies:
     "@types/node": ^20.10.7
     tlock-js: ^0.9.0
@@ -3934,9 +3934,9 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@ratemesh/foundry@workspace:packages/foundry":
+"@rateloop/foundry@workspace:packages/foundry":
   version: 0.0.0-use.local
-  resolution: "@ratemesh/foundry@workspace:packages/foundry"
+  resolution: "@rateloop/foundry@workspace:packages/foundry"
   dependencies:
     dotenv: ~16.3.1
     prettier: ~2.8.8
@@ -3948,12 +3948,12 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@ratemesh/keeper@workspace:packages/keeper":
+"@rateloop/keeper@workspace:packages/keeper":
   version: 0.0.0-use.local
-  resolution: "@ratemesh/keeper@workspace:packages/keeper"
+  resolution: "@rateloop/keeper@workspace:packages/keeper"
   dependencies:
-    "@ratemesh/contracts": "workspace:*"
-    "@ratemesh/node-utils": "workspace:*"
+    "@rateloop/contracts": "workspace:*"
+    "@rateloop/node-utils": "workspace:*"
     "@types/node": ^20.10.7
     dotenv: ^16.4.5
     tlock-js: ^0.9.0
@@ -3964,19 +3964,19 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@ratemesh/nextjs@workspace:packages/nextjs":
+"@rateloop/nextjs@workspace:packages/nextjs":
   version: 0.0.0-use.local
-  resolution: "@ratemesh/nextjs@workspace:packages/nextjs"
+  resolution: "@rateloop/nextjs@workspace:packages/nextjs"
   dependencies:
     "@axe-core/playwright": ^4.11.1
     "@gsap/react": ^2.1.2
     "@heroicons/react": ~2.1.5
     "@next/bundle-analyzer": ^16.1.6
     "@playwright/test": ^1.58.2
-    "@ratemesh/agents": "workspace:*"
-    "@ratemesh/contracts": "workspace:*"
-    "@ratemesh/node-utils": "workspace:*"
-    "@ratemesh/sdk": "workspace:*"
+    "@rateloop/agents": "workspace:*"
+    "@rateloop/contracts": "workspace:*"
+    "@rateloop/node-utils": "workspace:*"
+    "@rateloop/sdk": "workspace:*"
     "@react-pdf/renderer": ^4.3.2
     "@scaffold-ui/components": 0.1.9
     "@scaffold-ui/hooks": 0.1.7
@@ -4028,9 +4028,9 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@ratemesh/node-utils@workspace:*, @ratemesh/node-utils@workspace:packages/node-utils":
+"@rateloop/node-utils@workspace:*, @rateloop/node-utils@workspace:packages/node-utils":
   version: 0.0.0-use.local
-  resolution: "@ratemesh/node-utils@workspace:packages/node-utils"
+  resolution: "@rateloop/node-utils@workspace:packages/node-utils"
   dependencies:
     "@types/node": ^20.10.7
     typescript: ~5.8.2
@@ -4038,12 +4038,12 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@ratemesh/ponder@workspace:packages/ponder":
+"@rateloop/ponder@workspace:packages/ponder":
   version: 0.0.0-use.local
-  resolution: "@ratemesh/ponder@workspace:packages/ponder"
+  resolution: "@rateloop/ponder@workspace:packages/ponder"
   dependencies:
-    "@ratemesh/contracts": "workspace:*"
-    "@ratemesh/node-utils": "workspace:*"
+    "@rateloop/contracts": "workspace:*"
+    "@rateloop/node-utils": "workspace:*"
     hono: ~4.12.17
     ponder: ^1.0.0
     typescript: ~5.8.2
@@ -4052,11 +4052,11 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@ratemesh/sdk@workspace:*, @ratemesh/sdk@workspace:packages/sdk":
+"@rateloop/sdk@workspace:*, @rateloop/sdk@workspace:packages/sdk":
   version: 0.0.0-use.local
-  resolution: "@ratemesh/sdk@workspace:packages/sdk"
+  resolution: "@rateloop/sdk@workspace:packages/sdk"
   dependencies:
-    "@ratemesh/contracts": "workspace:*"
+    "@rateloop/contracts": "workspace:*"
     "@types/node": ^20.10.7
     tsx: ^4.21.0
     typescript: ~5.8.2
@@ -15948,9 +15948,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"ratemesh@workspace:.":
+"rateloop@workspace:.":
   version: 0.0.0-use.local
-  resolution: "ratemesh@workspace:."
+  resolution: "rateloop@workspace:."
   dependencies:
     husky: ~9.1.6
     knip: ^6.0.5
@@ -16055,9 +16055,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-spinners@patch:react-spinners@npm%3A0.14.1#./.yarn/patches/react-spinners-npm-0.14.1-545ddaba3f.patch::locator=ratemesh%40workspace%3A.":
+"react-spinners@patch:react-spinners@npm%3A0.14.1#./.yarn/patches/react-spinners-npm-0.14.1-545ddaba3f.patch::locator=rateloop%40workspace%3A.":
   version: 0.14.1
-  resolution: "react-spinners@patch:react-spinners@npm%3A0.14.1#./.yarn/patches/react-spinners-npm-0.14.1-545ddaba3f.patch::version=0.14.1&hash=9a6209&locator=ratemesh%40workspace%3A."
+  resolution: "react-spinners@patch:react-spinners@npm%3A0.14.1#./.yarn/patches/react-spinners-npm-0.14.1-545ddaba3f.patch::version=0.14.1&hash=9a6209&locator=rateloop%40workspace%3A."
   peerDependencies:
     react: ^16.0.0 || ^17.0.0 || ^18.0.0
     react-dom: ^16.0.0 || ^17.0.0 || ^18.0.0

@@ -1,11 +1,11 @@
-# RateMesh SDK
+# RateLoop SDK
 
-Framework-agnostic frontend SDK foundations for integrating RateMesh into existing websites and apps.
+Framework-agnostic frontend SDK foundations for integrating RateLoop into existing websites and apps.
 
 ## Goals
 
 - Provide a stable client entrypoint for hosted reads and typed write helpers.
-- Reuse protocol-safe primitives from `@ratemesh/contracts` instead of duplicating ABI logic.
+- Reuse protocol-safe primitives from `@rateloop/contracts` instead of duplicating ABI logic.
 - Stay framework-agnostic so React, Next.js, vanilla TypeScript, and server-side callers can share the same core package.
 - Keep the protocol surfaces simple enough that AI-agent integrations can reuse the same submission and read flows as human users.
 
@@ -22,17 +22,17 @@ Framework-specific hooks and UI components should live in a follow-up package ra
 
 - client config normalization via `createCuryoClient(...)`
 - typed read client for hosted/indexed HTTP routes
-- vote/frontend helpers in `@ratemesh/sdk/vote`
-- wallet-agnostic agent helpers in `@ratemesh/sdk/agent` for MCP-compatible asks, non-custodial agent-wallet flows, result parsing, and webhook verification
+- vote/frontend helpers in `@rateloop/sdk/vote`
+- wallet-agnostic agent helpers in `@rateloop/sdk/agent` for MCP-compatible asks, non-custodial agent-wallet flows, result parsing, and webhook verification
 
 ## Quick Example
 
 ```ts
-import { createCuryoClient } from "@ratemesh/sdk";
-import { buildCommitPredictionParams } from "@ratemesh/sdk/vote";
+import { createCuryoClient } from "@rateloop/sdk";
+import { buildCommitPredictionParams } from "@rateloop/sdk/vote";
 
 const curyo = createCuryoClient({
-  apiBaseUrl: "https://api.ratemesh.xyz",
+  apiBaseUrl: "https://api.rateloop.xyz",
   frontendCode: "0x1234567890123456789012345678901234567890",
 });
 
@@ -40,6 +40,8 @@ const { content } = await curyo.read.getContent("42");
 
 const commit = await buildCommitPredictionParams({
   voter: "0xYourWalletAddress",
+  chainId: 42220n,
+  engineAddress: "0xRoundVotingEngine",
   contentId: 42n,
   roundId: BigInt(content.openRound?.roundId ?? 1),
   predictedRating: 7.4,
@@ -63,12 +65,12 @@ const commitVoteArgs = [
 ] as const;
 ```
 
-The SDK stays wallet-agnostic on purpose. Host apps approve `stakeWei` of MREP to the voting engine, then call `commitVote(...commitVoteArgs)` with wagmi, viem, thirdweb, or their own signing flow.
+The SDK stays wallet-agnostic on purpose. Host apps approve `stakeWei` of LREP to the voting engine, then call `commitVote(...commitVoteArgs)` with wagmi, viem, thirdweb, or their own signing flow.
 
 ## Agent Helpers
 
 ```ts
-import { createCuryoAgentClient, buildWebhookVerifier } from "@ratemesh/sdk/agent";
+import { createCuryoAgentClient, buildWebhookVerifier } from "@rateloop/sdk/agent";
 
 const agent = createCuryoAgentClient({
   apiBaseUrl: "https://curyo.example",

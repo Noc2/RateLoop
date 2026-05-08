@@ -25,7 +25,7 @@ import {
 import scaffoldConfig from "~~/scaffold.config";
 import { notification } from "~~/utils/scaffold-eth";
 
-const STAKE_AMOUNT = 1000; // Fixed 1,000 MREP stake
+const STAKE_AMOUNT = 1000; // Fixed 1,000 LREP stake
 
 function truncateAddress(address: string) {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
@@ -115,7 +115,7 @@ export function FrontendRegistration() {
     args: [address],
   });
 
-  // Read MREP balance
+  // Read LREP balance
   const { data: hrepBalance, refetch: refetchCuryo } = useScaffoldReadContract({
     contractName: REPUTATION_CONTRACT_NAME,
     functionName: "balanceOf",
@@ -141,11 +141,11 @@ export function FrontendRegistration() {
   const isExitPending = exitAvailableAt > 0;
   const canCompleteDeregister = isExitPending && nowMs >= exitAvailableAt * 1000;
   const exitAvailableAtLabel = isExitPending ? new Date(exitAvailableAt * 1000).toLocaleString() : "";
-  // Parse fees (MREP only)
+  // Parse fees (LREP only)
   const hrepFees = accumulatedFees ? Number(accumulatedFees) / 1e6 : 0;
   const hasFees = hrepFees > 0;
 
-  // MREP balance
+  // LREP balance
   const hrepFormatted = hrepBalance ? Number(hrepBalance) / 1e6 : 0;
   const {
     items: claimableRoundFees,
@@ -203,7 +203,7 @@ export function FrontendRegistration() {
     if (!ensureGasBalance()) return;
 
     if (hrepFormatted < STAKE_AMOUNT) {
-      notification.error("Insufficient MREP balance");
+      notification.error("Insufficient LREP balance");
       return;
     }
 
@@ -341,7 +341,7 @@ export function FrontendRegistration() {
         });
       }
 
-      notification.success(`Claimed ${hrepFees.toFixed(2)} MREP!`);
+      notification.success(`Claimed ${hrepFees.toFixed(2)} LREP!`);
       refetchFees();
     } catch (e: any) {
       console.error("Claim failed:", e);
@@ -374,7 +374,7 @@ export function FrontendRegistration() {
         });
       }
 
-      notification.success(`Credited ${(Number(BigInt(claimableFee)) / 1e6).toFixed(2)} MREP from round ${roundId}.`);
+      notification.success(`Credited ${(Number(BigInt(claimableFee)) / 1e6).toFixed(2)} LREP from round ${roundId}.`);
       await Promise.all([refetchClaimableRoundFees(), refetchFees()]);
     } catch (e: any) {
       console.error("Frontend round fee claim failed:", e);
@@ -455,11 +455,11 @@ export function FrontendRegistration() {
     <div className="surface-card rounded-2xl p-6 space-y-5">
       <div className="flex items-center gap-2">
         <h2 className={surfaceSectionHeadingClassName}>Frontend Registration</h2>
-        <InfoTooltip text="Stake 1,000 MREP to earn frontend fees from predictions submitted through your interface." />
+        <InfoTooltip text="Stake 1,000 LREP to earn frontend fees from predictions submitted through your interface." />
       </div>
 
       <p className="text-base text-base-content/60">
-        Stake 1,000 MREP and earn frontend fees.{" "}
+        Stake 1,000 LREP and earn frontend fees.{" "}
         <Link href="/docs/frontend-codes" className="link link-primary">
           Learn about frontend integrations →
         </Link>
@@ -512,7 +512,7 @@ export function FrontendRegistration() {
                 </p>
               </div>
               <div className="text-right">
-                <span className="text-xl font-bold text-base-content">{STAKE_AMOUNT.toLocaleString()} MREP</span>
+                <span className="text-xl font-bold text-base-content">{STAKE_AMOUNT.toLocaleString()} LREP</span>
               </div>
             </div>
           </div>
@@ -548,7 +548,7 @@ export function FrontendRegistration() {
             </div>
             <div className="text-right">
               <p className="text-base text-base-content/60">Staked</p>
-              <p className="text-lg font-bold">{stakedAmount.toLocaleString()} MREP</p>
+              <p className="text-lg font-bold">{stakedAmount.toLocaleString()} LREP</p>
             </div>
           </div>
 
@@ -562,7 +562,7 @@ export function FrontendRegistration() {
               </div>
               <div className="text-right">
                 <p className="text-base text-base-content/60">Claimable</p>
-                <p className="text-lg font-bold text-secondary">{totalClaimableRoundFeesFormatted.toFixed(2)} MREP</p>
+                <p className="text-lg font-bold text-secondary">{totalClaimableRoundFeesFormatted.toFixed(2)} LREP</p>
               </div>
             </div>
 
@@ -617,12 +617,12 @@ export function FrontendRegistration() {
                           </div>
                           <div className="text-right shrink-0">
                             <p className="text-sm text-base-content/60">Claimable</p>
-                            <p className="font-semibold">{(Number(BigInt(item.claimableFee)) / 1e6).toFixed(2)} MREP</p>
+                            <p className="font-semibold">{(Number(BigInt(item.claimableFee)) / 1e6).toFixed(2)} LREP</p>
                           </div>
                         </div>
                         <div className="mt-3 flex items-center justify-between gap-3">
                           <p className="text-xs text-base-content/50 truncate">
-                            Pool {(Number(BigInt(item.totalFrontendPool)) / 1e6).toFixed(2)} MREP
+                            Pool {(Number(BigInt(item.totalFrontendPool)) / 1e6).toFixed(2)} LREP
                           </p>
                           <button
                             className="btn btn-outline btn-primary btn-sm"
@@ -668,7 +668,7 @@ export function FrontendRegistration() {
             <p className="font-medium mb-3">Accumulated Fees</p>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-base text-base-content/60">MREP</p>
+                <p className="text-base text-base-content/60">LREP</p>
                 <p className="text-lg font-bold text-primary">{hrepFees.toFixed(2)}</p>
               </div>
               <button
@@ -709,7 +709,7 @@ export function FrontendRegistration() {
                   </button>
                   <p className="text-sm text-base-content/50 mt-1">
                     Exit requested. Complete it after the unbonding period to withdraw your{" "}
-                    {stakedAmount.toLocaleString()} MREP stake and any pending fees.
+                    {stakedAmount.toLocaleString()} LREP stake and any pending fees.
                     {exitAvailableAtLabel ? ` Available after ${exitAvailableAtLabel}.` : ""}
                   </p>
                 </>
@@ -724,7 +724,7 @@ export function FrontendRegistration() {
                   </button>
                   <p className="text-sm text-base-content/50 mt-1">
                     Starts a 14-day unbonding period. After that, you can complete deregistration to withdraw your{" "}
-                    {stakedAmount.toLocaleString()} MREP stake and any pending fees.
+                    {stakedAmount.toLocaleString()} LREP stake and any pending fees.
                   </p>
                 </>
               )}

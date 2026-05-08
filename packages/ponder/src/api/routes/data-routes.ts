@@ -1,4 +1,4 @@
-import { ROUND_STATE } from "@ratemesh/contracts/protocol";
+import { ROUND_STATE } from "@rateloop/contracts/protocol";
 import { and, asc, desc, eq, gte, inArray, or, sql } from "ponder";
 import { db } from "ponder:api";
 import {

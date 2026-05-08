@@ -59,7 +59,7 @@ test("describeOpenRoundActivity uses revealed predictions for settlement progres
       revealedCount: 0,
       minVoters: 3,
     }),
-    "30 MREP active · 3 more revealed predictions to settle.",
+    "30 LREP active · 3 more revealed predictions to settle.",
   );
 });
 
@@ -71,7 +71,7 @@ test("describeOpenRoundActivity keeps using reveal progress after commit quorum 
       revealedCount: 1,
       minVoters: 3,
     }),
-    "30 MREP active · 2 more revealed predictions to settle.",
+    "30 LREP active · 2 more revealed predictions to settle.",
   );
 });
 

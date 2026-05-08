@@ -2,18 +2,18 @@
 pragma solidity ^0.8.20;
 
 import { Test } from "forge-std/Test.sol";
-import { DeployRateMesh } from "../script/Deploy.s.sol";
-import { MeshReputation } from "../contracts/MeshReputation.sol";
+import { DeployRateLoop } from "../script/Deploy.s.sol";
+import { LoopReputation } from "../contracts/LoopReputation.sol";
 
-contract DeployRateMeshAllocationsTest is Test {
-    function test_LaunchAllocations_MintFullMrepSupplyAtLaunch() public {
-        DeployRateMesh deployScript = new DeployRateMesh();
-        MeshReputation mrepToken = new MeshReputation(address(this), address(this));
+contract DeployRateLoopAllocationsTest is Test {
+    function test_LaunchAllocations_MintFullLrepSupplyAtLaunch() public {
+        DeployRateLoop deployScript = new DeployRateLoop();
+        LoopReputation lrepToken = new LoopReputation(address(this), address(this));
 
         uint256 totalLaunchAllocation = deployScript.CONSENSUS_POOL_AMOUNT() + deployScript.TREASURY_AMOUNT()
             + deployScript.PARTICIPATION_POOL_AMOUNT() + deployScript.LAUNCH_DISTRIBUTION_AMOUNT();
 
-        assertEq(deployScript.TOTAL_SUPPLY_CAP(), mrepToken.MAX_SUPPLY(), "script cap should match token MAX_SUPPLY");
+        assertEq(deployScript.TOTAL_SUPPLY_CAP(), lrepToken.MAX_SUPPLY(), "script cap should match token MAX_SUPPLY");
         assertEq(totalLaunchAllocation, deployScript.TOTAL_SUPPLY_CAP(), "launch allocations should sum to full cap");
         assertEq(deployScript.LAUNCH_DISTRIBUTION_AMOUNT(), 52_000_000 * 1e6, "launch distribution should be 52M");
         assertEq(deployScript.PARTICIPATION_POOL_AMOUNT(), 12_000_000 * 1e6, "bootstrap pool should be 12M");

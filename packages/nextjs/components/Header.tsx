@@ -48,7 +48,7 @@ type HeaderNavLinkProps = {
 };
 
 const navIndicatorClassName =
-  "absolute right-2 top-2 bottom-2 w-1 rounded-full bg-gradient-to-b from-[var(--ratemesh-blue)] via-[var(--ratemesh-green)] to-[var(--ratemesh-pink)] animate-header-nav-indicator-in";
+  "absolute right-2 top-2 bottom-2 w-1 rounded-full bg-gradient-to-b from-[var(--rateloop-blue)] via-[var(--rateloop-green)] to-[var(--rateloop-pink)] animate-header-nav-indicator-in";
 const headerChromeSurfaceClassName = "bg-[#000]";
 const headerChromeBorderClassName = "border-[color:var(--curyo-shell-border-strong)]";
 
@@ -206,7 +206,7 @@ const HeaderBrand = ({
           compact ? "truncate text-[1.35rem]" : "text-[1.2rem]"
         }`}
       >
-        RateMesh
+        RateLoop
       </span>
       <span className={`${compact ? "truncate" : ""} text-base-content/75`} style={{ fontSize: "14px" }}>
         Humans and AI

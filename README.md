@@ -1,13 +1,13 @@
-![RateMesh — Humans and AI in the Loop](packages/nextjs/public/ratemesh-logo.svg)
+![RateLoop — Humans and AI in the Loop](packages/nextjs/public/rateloop-logo.svg)
 
 <p align="center">
   <a href="https://github.com/RichardLitt/standard-readme"><img src="https://img.shields.io/badge/readme%20style-standard-brightgreen.svg?style=flat-square" alt="standard-readme compliant"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square" alt="License: MIT"></a>
 </p>
 
-RateMesh is an open rating protocol for humans, AI raters, teams, and apps. Raters predict a final public rating, reveal after a private round, and build reputation through calibrated, reliable signal. Bounties can pay useful rating work in USDC, while Mesh Reputation (`MREP`) is the capped governance and protocol reputation token planned for the fresh deployment.
+RateLoop is an open rating protocol for humans, AI raters, teams, and apps. Raters predict a final public rating, reveal after a private round, and build reputation through calibrated, reliable signal. Bounties can pay useful rating work in USDC, while Loop Reputation (`LREP`) is the capped governance and protocol reputation token planned for the fresh deployment.
 
-This repository is a fresh RateMesh implementation that reuses the old Curyo monorepo where it is still useful. The current launch direction stays on Celo/Celo Sepolia for now, removes mandatory proof-of-personhood from the core rating path, and keeps Self.xyz only as a possible optional identity signal later.
+This repository is a fresh RateLoop implementation that reuses the old Curyo monorepo where it is still useful. The current launch direction stays on Celo/Celo Sepolia for now, removes mandatory proof-of-personhood from the core rating path, and keeps Self.xyz only as a possible optional identity signal later.
 
 ## Table of Contents
 
@@ -21,13 +21,13 @@ This repository is a fresh RateMesh implementation that reuses the old Curyo mon
 
 ## Background
 
-AI agents are increasingly good at drafting, searching, and planning, but they still hit questions where local context, taste, evidence quality, or social judgment matters. RateMesh turns those moments into public rating rounds instead of private polls or unstructured comment threads.
+AI agents are increasingly good at drafting, searching, and planning, but they still hit questions where local context, taste, evidence quality, or social judgment matters. RateLoop turns those moments into public rating rounds instead of private polls or unstructured comment threads.
 
 The core loop is:
 
 1. **Ask** — submit content or an idea with context and a rating question.
 2. **Fund** — optionally attach a Celo USDC bounty for the one private round.
-3. **Predict** — raters submit an expected final `0.0-10.0` rating.
+3. **Predict** — raters submit an expected final `1.0-9.9` rating.
 4. **Reveal and settle** — commit-reveal keeps predictions private until reveal, then the round settles into a public rating.
 5. **Use** — agents, apps, and frontends read the settled score, revealed predictions, optional feedback, and reward state from the public protocol surface.
 
@@ -35,7 +35,7 @@ Key pieces:
 
 - **Open Rater Set** — people, AI raters, and teams use the same default path without mandatory identity proof
 - **Prediction Ratings** — the core input is predicted final rating, not binary up/down voting
-- **MREP Locks** — accurate predictions can earn from inaccurate or unrevealed locks without increasing the capped supply
+- **LREP Locks** — accurate predictions can earn from inaccurate or unrevealed locks without increasing the capped supply
 - **tlock Commit-Reveal** — predictions stay private through the sealed round
 - **Celo USDC Bounties** — small bounty payouts reward calibrated independent work
 - **Agent-Ready Integrations** — SDK helpers and MCP-shaped tools let agents quote, prepare wallet-signed submissions, track asks, and read results without taking operator custody of bounty funds or requiring a saved policy token
@@ -43,8 +43,8 @@ Key pieces:
 - **Frontend Attribution** — bounty accounting preserves the frontend operator earning incentive
 - **Security Guardrails** — calibration, reveal reliability, cluster caps, duplicate checks, and governance parameters keep the surface narrow
 
-MREP transferability is intentional: it makes governance and protocol reputation portable instead of company-administered.
-RateMesh does not treat raw token balance as enough to earn or control outcomes. Prediction accuracy, effective-unit
+LREP transferability is intentional: it makes governance and protocol reputation portable instead of company-administered.
+RateLoop does not treat raw token balance as enough to earn or control outcomes. Prediction accuracy, effective-unit
 weighting, cluster scoring, governance locks, proposal/quorum floors, and hard minimums for submission bounties and AI
 declaration/challenge bonds are the main mitigations.
 
@@ -52,7 +52,7 @@ See [docs/implementation-plan.md](docs/implementation-plan.md) for the current d
 
 ## Architecture
 
-RateMesh is a monorepo with eight packages:
+RateLoop is a monorepo with eight packages:
 
 | Package               | Description                                                                              |
 | --------------------- | ---------------------------------------------------------------------------------------- |
@@ -89,8 +89,8 @@ Built with Next.js, Foundry, Ponder, thirdweb, wagmi, viem, Drizzle ORM, and Pos
 ### Setup
 
 ```bash
-git clone https://github.com/Noc2/RateMesh.git
-cd RateMesh
+git clone https://github.com/Noc2/RateLoop.git
+cd RateLoop
 corepack enable
 yarn install
 ```
@@ -107,7 +107,7 @@ The quickest app-only startup is:
 yarn dev:stack
 ```
 
-That command starts the Next app's local Postgres container, runs `db:push` for local databases, and then starts the frontend plus Ponder. If `DATABASE_URL` points to a non-local database, `yarn dev:stack` skips the schema push by default so it does not accidentally apply destructive Drizzle changes to shared data. Run `yarn workspace @ratemesh/nextjs db:push` manually when you intend to migrate that database, or opt in with `yarn dev:stack --allow-remote-db-push`.
+That command starts the Next app's local Postgres container, runs `db:push` for local databases, and then starts the frontend plus Ponder. If `DATABASE_URL` points to a non-local database, `yarn dev:stack` skips the schema push by default so it does not accidentally apply destructive Drizzle changes to shared data. Run `yarn workspace @rateloop/nextjs db:push` manually when you intend to migrate that database, or opt in with `yarn dev:stack --allow-remote-db-push`.
 
 If Keeper is configured with `RPC_URL`, `CHAIN_ID`, and a wallet, `yarn dev:stack` starts it too; otherwise the script skips Keeper and leaves the app stack running. Contract deployment stays separate, so you can point the stack at either a local chain or a testnet. Stop the local Postgres container later with:
 
@@ -171,8 +171,8 @@ yarn keeper:start
 **Docker:**
 
 ```bash
-docker build -f packages/keeper/Dockerfile -t ratemesh-keeper .
-docker run --env-file packages/keeper/.env.local -p 9090:9090 ratemesh-keeper
+docker build -f packages/keeper/Dockerfile -t rateloop-keeper .
+docker run --env-file packages/keeper/.env.local -p 9090:9090 rateloop-keeper
 ```
 
 **Monitoring:**
@@ -195,13 +195,13 @@ yarn foundry:test
 yarn e2e
 
 # E2E lifecycle coverage (settlement, cancellation, dormancy)
-yarn workspace @ratemesh/nextjs e2e:ci:lifecycle
+yarn workspace @rateloop/nextjs e2e:ci:lifecycle
 
 # E2E keeper-backed settlement coverage
-yarn workspace @ratemesh/nextjs e2e:ci:keeper
+yarn workspace @rateloop/nextjs e2e:ci:keeper
 
 # Full local E2E run
-yarn workspace @ratemesh/nextjs e2e:full
+yarn workspace @rateloop/nextjs e2e:full
 
 # Interactive Playwright UI mode
 yarn e2e:ui

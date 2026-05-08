@@ -1,4 +1,4 @@
-import { BPS_SCALE, EPOCH_WEIGHT_BPS, REWARD_SPLIT_BPS } from "@ratemesh/contracts/protocol";
+import { BPS_SCALE, EPOCH_WEIGHT_BPS, REWARD_SPLIT_BPS } from "@rateloop/contracts/protocol";
 import type { RoundSnapshot } from "~~/lib/contracts/roundVotingEngine";
 
 const REMAINING_LOSING_POOL_BPS = BPS_SCALE - REWARD_SPLIT_BPS.revealedLoserRefund;
@@ -71,10 +71,10 @@ export function describeOpenRoundActivity(
 ) {
   const revealsNeeded = Math.max(0, snapshot.minVoters - snapshot.revealedCount);
   if (revealsNeeded > 0) {
-    return `${formatHrepAmount(snapshot.totalStake, 0)} MREP active · ${revealsNeeded} more revealed prediction${revealsNeeded === 1 ? "" : "s"} to settle.`;
+    return `${formatHrepAmount(snapshot.totalStake, 0)} LREP active · ${revealsNeeded} more revealed prediction${revealsNeeded === 1 ? "" : "s"} to settle.`;
   }
 
-  return `${formatHrepAmount(snapshot.totalStake, 0)} MREP active · Settlement threshold is in reach.`;
+  return `${formatHrepAmount(snapshot.totalStake, 0)} LREP active · Settlement threshold is in reach.`;
 }
 
 function getBlindParticipationLabel(ratePercent?: number): string | null {

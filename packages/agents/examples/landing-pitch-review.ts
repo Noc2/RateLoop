@@ -1,4 +1,4 @@
-import { createCuryoAgentClient } from "@ratemesh/sdk/agent";
+import { createCuryoAgentClient } from "@rateloop/sdk/agent";
 import { pathToFileURL } from "node:url";
 
 const apiBaseUrl = process.env.CURYO_API_BASE_URL ?? "https://curyo.example";

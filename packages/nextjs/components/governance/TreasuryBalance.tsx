@@ -37,7 +37,7 @@ function PoolStat({ title, description, tooltip, value, isLoading, Icon }: PoolS
       {isLoading ? (
         <div className="h-8 w-32 bg-base-content/10 rounded animate-pulse mt-4" />
       ) : (
-        <p className="text-2xl font-bold tabular-nums mt-4">{formatBalance(value)} MREP</p>
+        <p className="text-2xl font-bold tabular-nums mt-4">{formatBalance(value)} LREP</p>
       )}
     </div>
   );
@@ -50,7 +50,7 @@ export const TreasuryBalance = () => {
     functionName: "treasury",
   });
 
-  // Read MREP balance of treasury
+  // Read LREP balance of treasury
   const { data: treasuryBalanceRaw, isLoading: balanceLoading } = useScaffoldReadContract({
     contractName: REPUTATION_CONTRACT_NAME,
     functionName: "balanceOf",
@@ -82,7 +82,7 @@ export const TreasuryBalance = () => {
       <div className="flex items-center gap-2">
         <h2 className={surfaceSectionHeadingClassName}>Protocol Pools</h2>
         <InfoTooltip
-          text="Live MREP balances across the treasury and protocol-controlled pools."
+          text="Live LREP balances across the treasury and protocol-controlled pools."
           className="[&>svg]:opacity-60"
         />
       </div>
@@ -111,7 +111,7 @@ export const TreasuryBalance = () => {
         />
         <PoolStat
           title="Supply Cap"
-          tooltip="Hard-capped maximum MREP supply. Launch distribution and future programs must fit inside this cap."
+          tooltip="Hard-capped maximum LREP supply. Launch distribution and future programs must fit inside this cap."
           value={maxSupply}
           isLoading={maxSupplyLoading}
           Icon={CircleStackIcon}

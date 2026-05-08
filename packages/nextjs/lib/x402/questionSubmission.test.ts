@@ -1,4 +1,4 @@
-import { ContentRegistryAbi, X402QuestionSubmitterAbi } from "@ratemesh/contracts/abis";
+import { ContentRegistryAbi, X402QuestionSubmitterAbi } from "@rateloop/contracts/abis";
 import assert from "node:assert/strict";
 import { after, before, beforeEach, test } from "node:test";
 import { type Address, type Hex, type TransactionReceipt, encodeAbiParameters, encodeEventTopics } from "viem";

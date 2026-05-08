@@ -27,6 +27,10 @@ const fakeClient = {
 } as any;
 
 const fakeNow = () => 1692803367 * 1000;
+const testChainId = 31337n;
+const testEngine = "0x1111111111111111111111111111111111111111" as const;
+const testStake = 5_000_000n;
+const testScorerMetadataHash = ("0x" + "44".repeat(32)) as `0x${string}`;
 
 function chunkBase64(input: string, chunkSize = 64): string {
   const chunks: string[] = [];
@@ -234,6 +238,10 @@ test("buildPredictionCommitHash includes the opinion, crowd prediction, and tloc
   const voter = "0x2222222222222222222222222222222222222222";
 
   const commitHash = buildPredictionCommitHash(
+    testChainId,
+    testEngine,
+    testStake,
+    testScorerMetadataHash,
     7_250,
     6_900,
     salt,
@@ -248,8 +256,12 @@ test("buildPredictionCommitHash includes the opinion, crowd prediction, and tloc
 
   assert.equal(
     commitHash,
-    buildPredictionCommitHash(
-      7_250,
+      buildPredictionCommitHash(
+        testChainId,
+        testEngine,
+        testStake,
+        testScorerMetadataHash,
+        7_250,
       6_900,
       salt,
       voter,
@@ -263,8 +275,12 @@ test("buildPredictionCommitHash includes the opinion, crowd prediction, and tloc
   );
   assert.notEqual(
     commitHash,
-    buildPredictionCommitHash(
-      7_251,
+      buildPredictionCommitHash(
+        testChainId,
+        testEngine,
+        testStake,
+        testScorerMetadataHash,
+        7_251,
       6_900,
       salt,
       voter,
@@ -278,8 +294,12 @@ test("buildPredictionCommitHash includes the opinion, crowd prediction, and tloc
   );
   assert.notEqual(
     commitHash,
-    buildPredictionCommitHash(
-      7_250,
+      buildPredictionCommitHash(
+        testChainId,
+        testEngine,
+        testStake,
+        testScorerMetadataHash,
+        7_250,
       6_901,
       salt,
       voter,
@@ -322,6 +342,10 @@ test("createTlockPredictionCommit returns the rating metadata used in the commit
   const commit = await createTlockPredictionCommit(
     {
       voter,
+      chainId: testChainId,
+      engine: testEngine,
+      stakeAmount: testStake,
+      scorerMetadataHash: testScorerMetadataHash,
       opinionRatingBps: 7_250,
       predictedCrowdRatingBps: 6_900,
       salt: ("0x" + "66".repeat(32)) as `0x${string}`,
@@ -360,6 +384,10 @@ test("createTlockPredictionCommit returns the rating metadata used in the commit
   assert.equal(
     commit.commitHash,
     buildPredictionCommitHash(
+      testChainId,
+      testEngine,
+      testStake,
+      testScorerMetadataHash,
       7_250,
       6_900,
       ("0x" + "66".repeat(32)) as `0x${string}`,

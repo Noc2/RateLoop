@@ -1,14 +1,14 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
-import { RoundVotingEngineAbi } from "@ratemesh/contracts/abis";
+import { RoundVotingEngineAbi } from "@rateloop/contracts/abis";
 import {
   buildCommitKey,
   decryptTlockPredictionCiphertext,
   deriveVoteTlockRevealAvailableAtSeconds,
   getVoteTlockChainInfo,
   parseTlockCiphertextMetadata,
-} from "@ratemesh/contracts/voting";
+} from "@rateloop/contracts/voting";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Address, zeroHash } from "viem";
 import { useAccount, usePublicClient, useWalletClient } from "wagmi";

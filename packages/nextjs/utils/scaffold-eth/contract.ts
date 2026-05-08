@@ -1,8 +1,8 @@
 import { getParsedError } from "./getParsedError";
 import { AllowedChainIds } from "./networks";
 import { notification } from "./notification";
-import { RoundVotingEngineAbi } from "@ratemesh/contracts/abis";
-import deployedContractsData from "@ratemesh/contracts/deployedContracts";
+import { RoundVotingEngineAbi } from "@rateloop/contracts/abis";
+import deployedContractsData from "@rateloop/contracts/deployedContracts";
 import { MutateOptions } from "@tanstack/react-query";
 import {
   Abi,
@@ -50,10 +50,10 @@ function withReputationAlias<TContracts extends GenericContractsDeclaration>(dec
   const normalized = { ...declarations } as GenericContractsDeclaration;
 
   for (const [chainId, contractsForChain] of Object.entries(declarations)) {
-    if (!contractsForChain.MeshReputation && contractsForChain.HumanReputation) {
+    if (!contractsForChain.LoopReputation && contractsForChain.HumanReputation) {
       normalized[Number(chainId)] = {
         ...contractsForChain,
-        MeshReputation: contractsForChain.HumanReputation,
+        LoopReputation: contractsForChain.HumanReputation,
       };
     }
   }

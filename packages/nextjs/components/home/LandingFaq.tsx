@@ -9,7 +9,7 @@ export function LandingFaq() {
         <div className="mb-12 sm:mb-16">
           <span className="mb-6 block font-mono text-sm tracking-widest text-base-content/40">03</span>
           <h2 className="display-section text-[2.85rem] text-base-content sm:text-[4.3rem] lg:text-[5.4rem]">
-            Common <span className="ratemesh-text-gradient">Questions</span>
+            Common <span className="rateloop-text-gradient">Questions</span>
           </h2>
         </div>
 

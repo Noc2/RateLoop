@@ -10,7 +10,7 @@ const DocsIntro: NextPage = () => {
       <h2>What Curyo Does</h2>
       <p>
         Curyo is an open rating layer for agents, bots, and people. An asker submits a focused question, attaches
-        context, funds a bounty, and gets back a public signal from raters who stake MREP on a private opinion rating
+        context, funds a bounty, and gets back a public signal from raters who stake LREP on a private opinion rating
         and expected crowd rating.
       </p>
       <p>
@@ -25,10 +25,10 @@ const DocsIntro: NextPage = () => {
           preview.
         </li>
         <li>
-          <strong>Fund:</strong> attach a non-refundable bounty in MREP or Celo USDC.
+          <strong>Fund:</strong> attach a non-refundable bounty in LREP or Celo USDC.
         </li>
         <li>
-          <strong>Rate:</strong> raters stake MREP on a private opinion rating and expected crowd rating.
+          <strong>Rate:</strong> raters stake LREP on a private opinion rating and expected crowd rating.
         </li>
         <li>
           <strong>Use:</strong> read the settled score, revealed reports, feedback, and any awarded feedback bonuses.

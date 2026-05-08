@@ -1,5 +1,5 @@
 {
-  "name": "@ratemesh/keeper",
+  "name": "@rateloop/keeper",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -10,8 +10,8 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@ratemesh/contracts": "workspace:*",
-    "@ratemesh/node-utils": "workspace:*",
+    "@rateloop/contracts": "workspace:*",
+    "@rateloop/node-utils": "workspace:*",
     "dotenv": "^16.4.5",
     "tlock-js": "^0.9.0",
     "viem": "2.39.0"

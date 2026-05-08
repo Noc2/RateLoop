@@ -1,4 +1,4 @@
-import { ROUND_STATE } from "@ratemesh/contracts/protocol";
+import { ROUND_STATE } from "@rateloop/contracts/protocol";
 import { createHash } from "crypto";
 import { type Address, type Hex, isAddress } from "viem";
 import {
@@ -708,7 +708,7 @@ async function buildQuestionResultForRecord(
       limitations: ["The question has not reached a public Curyo result page yet."],
       majorObjections: [],
       methodology: {
-        ratingSystem: "ratemesh.predicted_final_rating.v1",
+        ratingSystem: "rateloop.predicted_final_rating.v1",
         sources: ["curyo.agent_question_submission"],
         templateId: "generic_rating",
         templateVersion: 1,

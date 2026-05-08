@@ -1,6 +1,6 @@
 import { type AgentCohortSummary, buildAgentCohortSummary } from "./cohortSummary";
 import { type AgentLiveAskGuidance, buildAgentLiveAskGuidance } from "./liveAskGuidance";
-import { ROUND_STATE, ROUND_STATE_LABEL } from "@ratemesh/contracts/protocol";
+import { ROUND_STATE, ROUND_STATE_LABEL } from "@rateloop/contracts/protocol";
 import {
   type AgentDecisionAnswer,
   type AgentResultTemplate,

@@ -3,7 +3,7 @@
 Research date: 2026-05-07
 
 Implementation status: this is an optional-design research note. The current
-RateMesh implementation intentionally uses capped transferable MREP, with
+RateLoop implementation intentionally uses capped transferable LREP, with
 governance locks, hard economic floors, and cluster-aware controls. Any
 non-transferable reputation recommendations below describe an alternative design
 path rather than the current implementation target.
@@ -29,10 +29,10 @@ The best hybrid design is:
   voting power.
 - The optional Self design originally favored non-transferable reputation for
   protocol scoring, USDC eligibility, and governance; the active implementation
-  instead uses transferable MREP with hard floors and cluster-aware payout
+  instead uses transferable LREP with hard floors and cluster-aware payout
   limits.
 - Allow controlled account recovery or wallet rebinding, especially for
-  Self-verified users, without weakening the active MREP lock and governance
+  Self-verified users, without weakening the active LREP lock and governance
   rules.
 
 The key product framing:

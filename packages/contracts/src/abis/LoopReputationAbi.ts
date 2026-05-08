@@ -1,4 +1,4 @@
-export const MeshReputationAbi = [
+export const LoopReputationAbi = [
   {
     "type": "constructor",
     "inputs": [

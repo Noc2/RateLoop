@@ -34,10 +34,10 @@ test("required deployment helper reports missing contract definitions per target
         ProtocolConfig: {},
       },
     },
-    ["ContentRegistry", "MeshReputation"],
+    ["ContentRegistry", "LoopReputation"],
   );
 
-  assert.deepEqual(missingContracts, ["42220:MeshReputation"]);
+  assert.deepEqual(missingContracts, ["42220:LoopReputation"]);
 });
 
 test("default required deployment list fails closed for core app contracts", () => {
@@ -55,5 +55,5 @@ test("default required deployment list fails closed for core app contracts", () 
     },
   });
 
-  assert.deepEqual(missingContracts, ["42220:MeshReputation"]);
+  assert.deepEqual(missingContracts, ["42220:LoopReputation"]);
 });

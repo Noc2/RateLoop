@@ -20,7 +20,7 @@ const HowItWorks: NextPage = () => {
       <p>
         Every submission starts with one question, a required context URL, and optional image or YouTube preview media.
         Images can be direct HTTPS URLs or Curyo-hosted uploads for public mockups, screenshots, and generated visuals.
-        A non-refundable bounty in MREP or Celo USDC is attached at submission. The bounty pays eligible revealed raters
+        A non-refundable bounty in LREP or Celo USDC is attached at submission. The bounty pays eligible revealed raters
         after qualified rounds; bundled questions can require multiple settlement round sets, where each set means every
         question in the bundle has settled once.
       </p>
@@ -44,9 +44,9 @@ const HowItWorks: NextPage = () => {
 
       <h2 id="commit-reveal-voting">2. Predict</h2>
       <p>
-        Raters stake 1&ndash;100 MREP and submit a BTS-inspired split report: their own 0-10 opinion rating and the 0-10
-        crowd rating they expect after reveal. Both values are encrypted during the blind phase so early raters cannot
-        simply copy visible momentum.
+        Raters stake 1&ndash;100 LREP and submit a BTS-inspired split report: their own 1.0-9.9 opinion rating and the
+        1.0-9.9 crowd rating they expect after reveal. Both values are encrypted during the blind phase so early raters
+        cannot simply copy visible momentum.
       </p>
       <div className="not-prose">
         <VotingFlowDiagram />
@@ -80,13 +80,13 @@ const HowItWorks: NextPage = () => {
       <ul>
         <li>Content submitters cannot vote on their own submissions.</li>
         <li>After rating a content item, a rater waits 24 hours before rating it again.</li>
-        <li>Each account can stake at most 100 MREP per content per round.</li>
+        <li>Each account can stake at most 100 LREP per content per round.</li>
       </ul>
 
       <h2 id="on-chain-settlement">3. Settle Rewards</h2>
-      <h3 id="mrep-stake-settlement">MREP stake settlement</h3>
+      <h3 id="lrep-stake-settlement">LREP stake settlement</h3>
       <p>
-        The most accurate revealed crowd predictions recover stake and share the MREP rater pool. The rater&apos;s own
+        The most accurate revealed crowd predictions recover stake and share the LREP rater pool. The rater&apos;s own
         opinion helps form the public rating, but it is not rewarded for matching the end result. Revealed misses can
         reclaim <strong>{protocolDocFacts.revealedLoserRefundPercentLabel}</strong> of raw stake. The remaining losing
         pool splits <strong>{protocolDocFacts.rewardSplitSummaryLabel}</strong>.
@@ -96,7 +96,7 @@ const HowItWorks: NextPage = () => {
       </div>
       <h3 id="stablecoin-bounties">Stablecoin bounties</h3>
       <p>
-        Bounties are separate from MREP stake settlement. They are scoped to the question or bundle, paid in the funding
+        Bounties are separate from LREP stake settlement. They are scoped to the question or bundle, paid in the funding
         asset, and can reward eligible revealed raters. Accurate crowd predictions earn more, while near misses can
         still earn a smaller payout for doing the work. A bundle payout is claimed per round set, so a rater must reveal
         on every bundled question in that set.
@@ -114,7 +114,7 @@ const HowItWorks: NextPage = () => {
 
       <h2 id="content-rating">4. Read the Result</h2>
       <p>
-        Content starts at 5.0 on the 0-10 scale. When a round opens, it snapshots the current score as the reference.
+        Content starts at 5.0 on the 1.0-9.9 scale. When a round opens, it snapshots the current score as the reference.
         Settlement updates the rating from revealed, epoch-weighted opinion ratings rather than asking for a separate
         up/down signal. Crowd predictions are kept separate and used for calibration and reward scoring.
       </p>
@@ -134,7 +134,7 @@ const HowItWorks: NextPage = () => {
       <h2 id="transaction-costs">Transaction Costs</h2>
       <p>
         With Curyo Wallet, eligible accounts can get <strong>{freeTransactionLimit}</strong> sponsored app transactions.
-        Other wallets use normal Celo network fees paid in native CELO. MREP is rating stake, not gas.
+        Other wallets use normal Celo network fees paid in native CELO. LREP is rating stake, not gas.
       </p>
       <p>
         If your wallet needs gas, open <Link href="/settings#wallet">Wallet settings</Link> to add CELO to the connected
@@ -144,7 +144,7 @@ const HowItWorks: NextPage = () => {
       <p>
         Continue with <Link href="/docs/ai">AI Agent Feedback Guide</Link> for agent use,{" "}
         <Link href="/docs/tech-stack">Tech Stack</Link> for protocol terms,{" "}
-        <Link href="/docs/tokenomics">Tokenomics</Link> for MREP and bounties, or{" "}
+        <Link href="/docs/tokenomics">Tokenomics</Link> for LREP and bounties, or{" "}
         <Link href="/docs/smart-contracts">Smart Contracts</Link> for contract-level detail.
       </p>
     </article>

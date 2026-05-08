@@ -7,10 +7,10 @@ import { ERC20Permit } from "@openzeppelin/contracts/token/ERC20/extensions/ERC2
 import { ERC20Votes } from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Votes.sol";
 import { Nonces } from "@openzeppelin/contracts/utils/Nonces.sol";
 
-/// @title MeshReputation
-/// @notice Transferable capped reputation token for RateMesh governance and prediction locks.
+/// @title LoopReputation
+/// @notice Transferable capped reputation token for RateLoop governance and prediction locks.
 /// @dev Uses 6 decimals and keeps the old Curyo governance-lock behavior as the first migration step.
-contract MeshReputation is ERC20, ERC20Permit, ERC20Votes, AccessControl {
+contract LoopReputation is ERC20, ERC20Permit, ERC20Votes, AccessControl {
     uint8 private constant DECIMALS = 6;
     uint256 public constant MAX_SUPPLY = 100_000_000 * 10 ** DECIMALS;
 
@@ -35,7 +35,7 @@ contract MeshReputation is ERC20, ERC20Permit, ERC20Votes, AccessControl {
     event GovernorSet(address indexed governor);
     event PredictionContractsSet(address indexed votingEngine, address indexed rewardDistributor);
 
-    constructor(address admin, address governance) ERC20("Mesh Reputation", "MREP") ERC20Permit("Mesh Reputation") {
+    constructor(address admin, address governance) ERC20("Loop Reputation", "LREP") ERC20Permit("Loop Reputation") {
         require(admin != address(0), "Invalid admin");
         require(governance != address(0), "Invalid governance");
 

@@ -13,8 +13,8 @@ import { IRoundRewardDistributor } from "./interfaces/IRoundRewardDistributor.so
 import { IVoterIdNFT } from "./interfaces/IVoterIdNFT.sol";
 
 /// @title FrontendRegistry
-/// @notice Manages frontend operator registration (fixed 1,000 MREP stake) and fee distribution.
-/// @dev Frontend operators stake MREP, can be slashed by governance, and earn MREP fees from predictions using their code.
+/// @notice Manages frontend operator registration (fixed 1,000 LREP stake) and fee distribution.
+/// @dev Frontend operators stake LREP, can be slashed by governance, and earn LREP fees from predictions using their code.
 contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgradeable, ReentrancyGuardTransient {
     using SafeERC20 for IERC20;
     using SafeCast for uint256;
@@ -24,13 +24,13 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     bytes32 public constant GOVERNANCE_ROLE = keccak256("GOVERNANCE_ROLE");
     bytes32 public constant FEE_CREDITOR_ROLE = keccak256("FEE_CREDITOR_ROLE");
 
-    /// @notice Maximum MREP that can be credited in a single creditFees() call (50,000 MREP with 6 decimals)
-    /// @dev Launch round caps allow at most about 38,000 MREP of frontend fees in one round.
+    /// @notice Maximum LREP that can be credited in a single creditFees() call (50,000 LREP with 6 decimals)
+    /// @dev Launch round caps allow at most about 38,000 LREP of frontend fees in one round.
     uint256 public constant MAX_FEE_CREDIT = 50_000e6;
     /// @notice Maximum bytes allowed in a slashing reason.
     uint256 public constant MAX_SLASH_REASON_LENGTH = 280;
 
-    /// @notice Fixed MREP stake required for frontend registration (1,000 MREP with 6 decimals)
+    /// @notice Fixed LREP stake required for frontend registration (1,000 LREP with 6 decimals)
     uint256 public constant STAKE_AMOUNT = 1000e6;
 
     /// @notice Slashable cooldown before a frontend can complete a voluntary exit.
@@ -83,7 +83,7 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     /// @notice Initialize the frontend registry contract.
     /// @param _admin Address with temporary admin role for initial wiring.
     /// @param _governance Address with permanent governance roles (timelock).
-    /// @param _hrepToken MREP token address for staking and fee distribution.
+    /// @param _hrepToken LREP token address for staking and fee distribution.
     function initialize(address _admin, address _governance, address _hrepToken) public initializer {
         __AccessControl_init();
 
@@ -177,7 +177,7 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
 
     // --- Registration Functions ---
 
-    /// @notice Register as a frontend operator by staking 1,000 MREP
+    /// @notice Register as a frontend operator by staking 1,000 LREP
     /// @dev Fully bonded, unslashed frontends can earn fees immediately after registration.
     function register() external nonReentrant {
         require(frontends[msg.sender].operator == address(0), "Already registered");
@@ -231,7 +231,7 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
         emit FrontendDeregistered(msg.sender);
     }
 
-    /// @notice Claim accumulated MREP fees
+    /// @notice Claim accumulated LREP fees
     function claimFees() external nonReentrant {
         Frontend storage f = frontends[msg.sender];
         require(f.operator != address(0), "Not registered");

@@ -4,5 +4,5 @@ export {
   getAgentResultTemplate,
   getAgentResultTemplateBySpecHash,
   listAgentResultTemplates,
-} from "@ratemesh/agents/templates";
-export type { AgentDecisionAnswer, AgentResultTemplate } from "@ratemesh/agents/templates";
+} from "@rateloop/agents/templates";
+export type { AgentDecisionAnswer, AgentResultTemplate } from "@rateloop/agents/templates";

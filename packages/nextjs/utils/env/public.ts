@@ -1,4 +1,4 @@
-import deployedContracts from "@ratemesh/contracts/deployedContracts";
+import deployedContracts from "@rateloop/contracts/deployedContracts";
 import { isAddress } from "viem";
 import { RPC_OVERRIDES } from "~~/config/shared";
 import { listMissingRequiredTargetContracts } from "~~/utils/env/requiredDeployments";

@@ -34,7 +34,7 @@ const FrontendCodes: NextPage = () => {
         <div className="surface-card rounded-xl p-4">
           <h3 className="mb-1.5 text-base font-semibold">Use the SDK</h3>
           <p className="text-base text-base-content/60 leading-relaxed">
-            Use <code>@ratemesh/sdk</code> when you want hosted reads, vote helpers, and frontend attribution support in
+            Use <code>@rateloop/sdk</code> when you want hosted reads, vote helpers, and frontend attribution support in
             an existing website or app.
           </p>
           <Link href="/docs/sdk" className="link link-primary">
@@ -121,9 +121,9 @@ const FrontendCodes: NextPage = () => {
       </ol>
 
       <h2>Frontend Attribution</h2>
-      <p>Include your frontend address in the prediction commit after approving MREP stake:</p>
+      <p>Include your frontend address in the prediction commit after approving LREP stake:</p>
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
-        <code>{`MeshReputation.approve(votingEngineAddress, stakeAmount)
+        <code>{`LoopReputation.approve(votingEngineAddress, stakeAmount)
 
 RoundVotingEngine.commitVote(
     contentId,

@@ -131,7 +131,7 @@ contract RoundVotingEngine is
     mapping(uint256 => mapping(uint256 => uint256)) public roundWinningStake; // contentId => roundId => epoch-weighted winning stake
 
     // Prediction accounting per round. Kept outside RoundLib structs so legacy tuple getters stay stable.
-    mapping(uint256 => mapping(uint256 => uint256)) internal roundPredictionWeight; // contentId => roundId => effective MREP weight
+    mapping(uint256 => mapping(uint256 => uint256)) internal roundPredictionWeight; // contentId => roundId => effective LREP weight
     mapping(uint256 => mapping(uint256 => uint256)) internal roundWeightedRatingSum; // contentId => roundId => ratingBps * weight
     mapping(uint256 => mapping(uint256 => uint16)) public roundPredictionCount;
     mapping(uint256 => mapping(uint256 => uint16)) public roundFinalPredictionRatingBps;
@@ -756,7 +756,7 @@ contract RoundVotingEngine is
     }
 
     /// @notice Reveal a personal rating and crowd prediction for a specific commit by commit key.
-    /// @dev Ratings use the 0-10 rating scale encoded as 0-10000 bps.
+    /// @dev Ratings use the 1.0-9.9 rating scale encoded as 1000-9900 bps.
     function revealPredictionByCommitKey(
         uint256 contentId,
         uint256 roundId,
@@ -1363,10 +1363,7 @@ contract RoundVotingEngine is
             _getRoundReferenceRatingBps(contentId, roundId),
             roundCfg.minVoters,
             targetRoundRevealableAt,
-            commitRaterWeightBps[contentId][roundId][commitKey],
-            block.chainid,
-            address(this),
-            roundScorerMetadataHashSnapshot[contentId][roundId]
+            commitRaterWeightBps[contentId][roundId][commitKey]
         );
         roundStakeWithEligibleFrontend[contentId][roundId] = eligibleFrontendStake;
         roundEligibleFrontendCount[contentId][roundId] = eligibleFrontendCount;
@@ -1403,7 +1400,10 @@ contract RoundVotingEngine is
             _getRoundReferenceRatingBps(contentId, roundId),
             roundCfg.minVoters,
             targetRoundRevealableAt,
-            commitRaterWeightBps[contentId][roundId][commitKey]
+            commitRaterWeightBps[contentId][roundId][commitKey],
+            block.chainid,
+            address(this),
+            roundScorerMetadataHashSnapshot[contentId][roundId]
         );
         roundStakeWithEligibleFrontend[contentId][roundId] = eligibleFrontendStake;
         roundEligibleFrontendCount[contentId][roundId] = eligibleFrontendCount;

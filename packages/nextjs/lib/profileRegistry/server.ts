@@ -1,4 +1,4 @@
-import deployedContracts from "@ratemesh/contracts/deployedContracts";
+import deployedContracts from "@rateloop/contracts/deployedContracts";
 import { type Abi, type Address, createPublicClient, http, isAddress } from "viem";
 import { avatarAccentRgbToHex } from "~~/lib/avatar/avatarAccent";
 import { getPrimaryServerTargetNetwork, getServerRpcOverrides, getServerTargetNetworkById } from "~~/lib/env/server";
@@ -74,7 +74,7 @@ function resolveProfileRegistryReadContext(chainId?: number): ProfileRegistryRea
   }
 
   return {
-    hrepToken: contractsForChain?.MeshReputation ?? contractsForChain?.HumanReputation,
+    hrepToken: contractsForChain?.LoopReputation ?? contractsForChain?.HumanReputation,
     profileRegistry: contractsForChain?.ProfileRegistry,
     publicClient: createPublicClient({
       chain: targetNetwork,

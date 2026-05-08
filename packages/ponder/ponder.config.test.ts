@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import deployedContracts from "@ratemesh/contracts/deployedContracts";
+import deployedContracts from "@rateloop/contracts/deployedContracts";
 
 type DeploymentChain = Record<string, { address: `0x${string}`; deployedOnBlock?: number }>;
 
@@ -15,7 +15,7 @@ const REQUIRED_PONDER_CONTRACTS = [
   "ProfileRegistry",
   "FrontendRegistry",
   "VoterIdNFT",
-  "MeshReputation",
+  "LoopReputation",
   "ParticipationPool",
   "QuestionRewardPoolEscrow",
   "FeedbackBonusEscrow",
@@ -66,7 +66,7 @@ const VALID_ENV = {
   PONDER_FRONTEND_REGISTRY_ADDRESS:
     chain11142220?.FrontendRegistry?.address ?? "0x6666666666666666666666666666666666666666",
   PONDER_VOTER_ID_NFT_ADDRESS: chain11142220?.VoterIdNFT?.address ?? "0x7777777777777777777777777777777777777777",
-  PONDER_MREP_ADDRESS: chain11142220?.MeshReputation?.address ?? "0x8888888888888888888888888888888888888888",
+  PONDER_LREP_ADDRESS: chain11142220?.LoopReputation?.address ?? "0x8888888888888888888888888888888888888888",
   PONDER_PARTICIPATION_POOL_ADDRESS:
     chain11142220?.ParticipationPool?.address ?? "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   PONDER_QUESTION_REWARD_POOL_ESCROW_ADDRESS:
@@ -114,7 +114,7 @@ describe("ponder config", () => {
         "PONDER_PROFILE_REGISTRY_ADDRESS",
         "PONDER_FRONTEND_REGISTRY_ADDRESS",
         "PONDER_VOTER_ID_NFT_ADDRESS",
-        "PONDER_MREP_ADDRESS",
+        "PONDER_LREP_ADDRESS",
         "PONDER_PARTICIPATION_POOL_ADDRESS",
         "PONDER_QUESTION_REWARD_POOL_ESCROW_ADDRESS",
         "PONDER_FEEDBACK_BONUS_ESCROW_ADDRESS",
@@ -134,8 +134,8 @@ describe("ponder config", () => {
     expect(loadedConfig.contracts.RoundVotingEngine.network.celoSepolia.address).toBe(
       chain11142220!.RoundVotingEngine.address,
     );
-    expect(loadedConfig.contracts.MeshReputation.network.celoSepolia.address).toBe(
-      chain11142220!.MeshReputation.address,
+    expect(loadedConfig.contracts.LoopReputation.network.celoSepolia.address).toBe(
+      chain11142220!.LoopReputation.address,
     );
     expect(loadedConfig.contracts.ContentRegistry.network.celoSepolia.startBlock).toBe(
       expectedContentRegistryStartBlock,
@@ -156,7 +156,7 @@ describe("ponder config", () => {
         "PONDER_PROFILE_REGISTRY_ADDRESS",
         "PONDER_FRONTEND_REGISTRY_ADDRESS",
         "PONDER_VOTER_ID_NFT_ADDRESS",
-        "PONDER_MREP_ADDRESS",
+        "PONDER_LREP_ADDRESS",
         "PONDER_PARTICIPATION_POOL_ADDRESS",
         "PONDER_QUESTION_REWARD_POOL_ESCROW_ADDRESS",
         "PONDER_FEEDBACK_BONUS_ESCROW_ADDRESS",
@@ -172,7 +172,7 @@ describe("ponder config", () => {
 
     expect(loadedConfig.contracts.ContentRegistry.network.celo.address).toBe(chain42220!.ContentRegistry.address);
     expect(loadedConfig.contracts.RoundVotingEngine.network.celo.address).toBe(chain42220!.RoundVotingEngine.address);
-    expect(loadedConfig.contracts.MeshReputation.network.celo.address).toBe(chain42220!.MeshReputation.address);
+    expect(loadedConfig.contracts.LoopReputation.network.celo.address).toBe(chain42220!.LoopReputation.address);
     expect(loadedConfig.contracts.ContentRegistry.network.celo.startBlock).toBe(expectedContentRegistry42220StartBlock);
   });
 
@@ -217,7 +217,7 @@ describe("ponder config", () => {
         "PONDER_PROFILE_REGISTRY_ADDRESS",
         "PONDER_FRONTEND_REGISTRY_ADDRESS",
         "PONDER_VOTER_ID_NFT_ADDRESS",
-        "PONDER_MREP_ADDRESS",
+        "PONDER_LREP_ADDRESS",
         "PONDER_PARTICIPATION_POOL_ADDRESS",
         "PONDER_QUESTION_REWARD_POOL_ESCROW_ADDRESS",
         "PONDER_FEEDBACK_BONUS_ESCROW_ADDRESS",
@@ -230,7 +230,7 @@ describe("ponder config", () => {
 
     expect(loadedConfig.contracts.ContentRegistry.network.hardhat.address).toBe(chain31337!.ContentRegistry.address);
     expect(loadedConfig.contracts.ContentRegistry.network.hardhat.startBlock).toBe(0);
-    expect(loadedConfig.contracts.MeshReputation.network.hardhat.startBlock).toBe(0);
+    expect(loadedConfig.contracts.LoopReputation.network.hardhat.startBlock).toBe(0);
     expect(warnSpy).toHaveBeenCalledTimes(1);
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("using start block 0"));
   });

@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createCuryoAgentClient } from "@ratemesh/sdk/agent";
+import { createCuryoAgentClient } from "@rateloop/sdk/agent";
 import { loadAgentsRuntimeConfig } from "./config";
 import {
   askHumansWithLocalSigner,
@@ -117,15 +117,15 @@ async function readJsonFile(path: string) {
 
 function usage() {
   return `Usage:
-  yarn workspace @ratemesh/agents templates
-  yarn workspace @ratemesh/agents lint --file packages/agents/examples/questions/landing-pitch-review.json
-  yarn workspace @ratemesh/agents quote --file packages/agents/examples/questions/landing-pitch-review.json
-  yarn workspace @ratemesh/agents ask --file packages/agents/examples/questions/landing-pitch-review.json
-  yarn workspace @ratemesh/agents wallet --generate --keystore ~/.curyo/local-signer.json
-  yarn workspace @ratemesh/agents wallet
-  yarn workspace @ratemesh/agents local-ask --file packages/agents/examples/questions/landing-pitch-review.json
-  yarn workspace @ratemesh/agents status --operation-key 0x...
-  yarn workspace @ratemesh/agents result --operation-key 0x...
+  yarn workspace @rateloop/agents templates
+  yarn workspace @rateloop/agents lint --file packages/agents/examples/questions/landing-pitch-review.json
+  yarn workspace @rateloop/agents quote --file packages/agents/examples/questions/landing-pitch-review.json
+  yarn workspace @rateloop/agents ask --file packages/agents/examples/questions/landing-pitch-review.json
+  yarn workspace @rateloop/agents wallet --generate --keystore ~/.curyo/local-signer.json
+  yarn workspace @rateloop/agents wallet
+  yarn workspace @rateloop/agents local-ask --file packages/agents/examples/questions/landing-pitch-review.json
+  yarn workspace @rateloop/agents status --operation-key 0x...
+  yarn workspace @rateloop/agents result --operation-key 0x...
 
 Environment:
   CURYO_API_BASE_URL     Hosted Curyo origin for HTTP and MCP flows

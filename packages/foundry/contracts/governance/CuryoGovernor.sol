@@ -17,12 +17,12 @@ interface IGovernanceLockableVotes is IVotes {
 }
 
 /// @title CuryoGovernor
-/// @notice On-chain governance for the RateMesh protocol using MREP voting power.
+/// @notice On-chain governance for the RateLoop protocol using LREP voting power.
 /// @dev Implements OpenZeppelin Governor with:
 ///      - Simple counting (For/Against/Abstain)
-///      - Votes from MREP token (which implements ERC20Votes)
+///      - Votes from LREP token (which implements ERC20Votes)
 ///      - Dynamic quorum: 4% of circulating supply (total minus protocol-controlled balances)
-///      - Bootstrap quorum floor of 100K MREP to prevent early capture while circulation is thin
+///      - Bootstrap quorum floor of 100K LREP to prevent early capture while circulation is thin
 ///      - Timelock execution for security
 ///      - 7-day token lock when voting or proposing
 contract CuryoGovernor is
@@ -33,7 +33,7 @@ contract CuryoGovernor is
     GovernorVotesQuorumFraction,
     GovernorTimelockControl
 {
-    /// @notice MREP token used for historical locked-balance checks
+    /// @notice LREP token used for historical locked-balance checks
     IGovernanceLockableVotes public immutable reputationToken;
     /// @notice Address authorized to perform one-time quorum exclusion initialization
     address public immutable poolsInitializer;
@@ -43,9 +43,9 @@ contract CuryoGovernor is
     mapping(address => uint48) public excludedHolderEffectiveBlock;
     /// @notice Whether excluded holders have been set.
     bool public poolsInitialized;
-    /// @notice Bootstrap proposal threshold regardless of early distribution sizes (1K MREP with 6 decimals)
+    /// @notice Bootstrap proposal threshold regardless of early distribution sizes (1K LREP with 6 decimals)
     uint256 public constant BOOTSTRAP_PROPOSAL_THRESHOLD = 1_000 * 1e6;
-    /// @notice Minimum quorum regardless of circulating supply (100K MREP with 6 decimals)
+    /// @notice Minimum quorum regardless of circulating supply (100K LREP with 6 decimals)
     uint256 public constant MINIMUM_QUORUM = 100_000 * 1e6;
     /// @notice Highest threshold governance may set, preventing self-bricked proposal creation.
     uint256 public constant MAX_PROPOSAL_THRESHOLD = MINIMUM_QUORUM;
@@ -72,7 +72,7 @@ contract CuryoGovernor is
     event ExcludedHolderReplaced(address indexed oldHolder, address indexed newHolder);
 
     /// @notice Deploy the governor with the reputation token and timelock
-    /// @param _reputationToken The MREP voting token address
+    /// @param _reputationToken The LREP voting token address
     /// @param _timelock The timelock controller address
     constructor(IVotes _reputationToken, TimelockController _timelock)
         Governor("CuryoGovernor")

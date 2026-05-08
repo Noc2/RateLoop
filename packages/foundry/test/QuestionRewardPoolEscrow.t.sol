@@ -10,6 +10,7 @@ import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.so
 import { MockERC20 } from "../contracts/mocks/MockERC20.sol";
 import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
 import { QuestionRewardPoolEscrow } from "../contracts/QuestionRewardPoolEscrow.sol";
+import { RaterRegistry } from "../contracts/RaterRegistry.sol";
 import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
 import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
 import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
@@ -242,6 +243,24 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertEq(reward1 + reward2 + reward3, REWARD_POOL_AMOUNT);
         assertEq(usdc.balanceOf(voter1), 1_000e6 + reward1);
         assertEq(usdc.balanceOf(address(rewardPoolEscrow)), 0);
+    }
+
+    function testQuestionRewardsUseClusterAdjustedUnitsForBinaryRounds() public {
+        RaterRegistry raterRegistry = new RaterRegistry(owner, owner);
+        vm.prank(owner);
+        protocolConfig.setRaterRegistry(address(raterRegistry));
+        vm.prank(owner);
+        raterRegistry.setClusterScore(voter1, keccak256("shared-cluster"), 5_000, 1);
+
+        uint256 contentId = _submitQuestion("");
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+
+        address[] memory voters = _fourVoters();
+        bool[] memory directions = _directions(true, true, true, true);
+        uint256 roundId = _settleRoundWith(voters, contentId, directions);
+
+        assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter1), 14_285_714);
+        assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter2), 28_571_428);
     }
 
     function testQuestionRewardsUsePredictionEffectiveWeights() public {

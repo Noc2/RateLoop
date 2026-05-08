@@ -53,7 +53,7 @@ contract PredictionRatingMathTest is Test {
         math = new PredictionRatingMathHarness();
     }
 
-    function test_WeightedAverageUsesMrepWeight() public view {
+    function test_WeightedAverageUsesLrepWeight() public view {
         uint256 weightedSum = math.weightedContribution(8_000, 30e6) + math.weightedContribution(5_000, 10e6);
 
         assertEq(math.weightedAverageRating(weightedSum, 40e6), 7_250);

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { MREP_INITIAL_MINTED_SUPPLY_COMPACT_LABEL, tokenAllocationChartSlices } from "~~/lib/docs/tokenomics";
+import { LREP_INITIAL_MINTED_SUPPLY_COMPACT_LABEL, tokenAllocationChartSlices } from "~~/lib/docs/tokenomics";
 
 const SIZE = 200;
 const CENTER = SIZE / 2;
@@ -71,7 +71,7 @@ export function TokenAllocationChart() {
           fontSize={11}
           fontWeight={500}
         >
-          {MREP_INITIAL_MINTED_SUPPLY_COMPACT_LABEL}
+          {LREP_INITIAL_MINTED_SUPPLY_COMPACT_LABEL}
         </text>
         <text
           x={CENTER}
@@ -81,7 +81,7 @@ export function TokenAllocationChart() {
           fillOpacity={0.3}
           fontSize={9}
         >
-          MREP
+          LREP
         </text>
       </svg>
       <div className="flex flex-col gap-2">

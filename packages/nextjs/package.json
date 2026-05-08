@@ -1,5 +1,5 @@
 {
-  "name": "@ratemesh/nextjs",
+  "name": "@rateloop/nextjs",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -41,10 +41,10 @@
   "dependencies": {
     "@gsap/react": "^2.1.2",
     "@heroicons/react": "~2.1.5",
-    "@ratemesh/agents": "workspace:*",
-    "@ratemesh/contracts": "workspace:*",
-    "@ratemesh/node-utils": "workspace:*",
-    "@ratemesh/sdk": "workspace:*",
+    "@rateloop/agents": "workspace:*",
+    "@rateloop/contracts": "workspace:*",
+    "@rateloop/node-utils": "workspace:*",
+    "@rateloop/sdk": "workspace:*",
     "@scaffold-ui/components": "0.1.9",
     "@scaffold-ui/hooks": "0.1.7",
     "@selfxyz/qrcode": "1.0.22",

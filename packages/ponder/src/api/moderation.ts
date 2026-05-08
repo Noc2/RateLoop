@@ -1,4 +1,4 @@
-import { contentModerationPolicy } from "@ratemesh/node-utils/contentModeration";
+import { contentModerationPolicy } from "@rateloop/node-utils/contentModeration";
 import { or, sql } from "ponder";
 import { buildAsciiWordBoundaryPattern, buildSubdomainLikePattern } from "./moderationPatterns.js";
 

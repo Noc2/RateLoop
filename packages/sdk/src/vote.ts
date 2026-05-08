@@ -7,7 +7,7 @@ import {
   type VoteCommitHash,
   type VoteScorerMetadataHash,
   type VoteTlockRuntime,
-} from "@ratemesh/contracts";
+} from "@rateloop/contracts";
 import { type Address } from "viem";
 
 export interface CommitPredictionParams {

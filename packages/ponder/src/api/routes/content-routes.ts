@@ -1,5 +1,5 @@
-import { ROUND_STATE } from "@ratemesh/contracts/protocol";
-import { aggregateProfileSelfReports } from "@ratemesh/node-utils/profileSelfReport";
+import { ROUND_STATE } from "@rateloop/contracts/protocol";
+import { aggregateProfileSelfReports } from "@rateloop/node-utils/profileSelfReport";
 import { and, asc, desc, eq, inArray, or, sql } from "ponder";
 import { db } from "ponder:api";
 import {

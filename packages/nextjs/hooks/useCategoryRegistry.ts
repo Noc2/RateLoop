@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { CategoryRegistryAbi } from "@ratemesh/contracts/abis";
+import { CategoryRegistryAbi } from "@rateloop/contracts/abis";
 import { useReadContract, useReadContracts } from "wagmi";
 import { getSeededCategorySubcategories } from "~~/constants/categories";
 import { useDeployedContractInfo } from "~~/hooks/scaffold-eth";

@@ -1,6 +1,6 @@
 "use client";
 
-import { ROUND_STATE, type RoundState } from "@ratemesh/contracts/protocol";
+import { ROUND_STATE, type RoundState } from "@rateloop/contracts/protocol";
 import { normalizeVoteCommittedAt } from "~~/lib/vote/cooldown";
 
 export interface VoteHistoryItem {

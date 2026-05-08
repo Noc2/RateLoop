@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createHmac } from "node:crypto";
-import { ROUND_STATE } from "@ratemesh/contracts/protocol";
+import { ROUND_STATE } from "@rateloop/contracts/protocol";
 import {
   buildWebhookVerifier,
   createCuryoAgentClient,

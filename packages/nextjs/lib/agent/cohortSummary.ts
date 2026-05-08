@@ -1,4 +1,4 @@
-import type { ProfileSelfReportAudienceContext, ProfileSelfReportBucket } from "@ratemesh/node-utils/profileSelfReport";
+import type { ProfileSelfReportAudienceContext, ProfileSelfReportBucket } from "@rateloop/node-utils/profileSelfReport";
 
 export type AgentCohortSummary = {
   coverageShare: number | null;

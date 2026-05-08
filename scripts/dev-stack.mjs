@@ -178,7 +178,7 @@ export function getDbPushPlan(databaseConfig, options = {}) {
       shouldRun: false,
       reason: `DATABASE_URL points to non-local ${formatDatabaseTarget(databaseConfig)}`,
       help:
-        "Run `yarn workspace @ratemesh/nextjs db:push` manually when you intend to migrate this database, " +
+        "Run `yarn workspace @rateloop/nextjs db:push` manually when you intend to migrate this database, " +
         `or rerun dev-stack with ${allowRemoteDbPushFlag} / CURYO_DEV_STACK_ALLOW_REMOTE_DB_PUSH=1.`,
     };
   }
@@ -205,7 +205,7 @@ function runDbPush(databaseConfig, options = {}) {
   console.log(`[dev-stack] Applying the Next.js database schema at ${formatDatabaseTarget(databaseConfig)}...`);
 
   const inheritStdio = Boolean(process.stdin.isTTY && process.stdout.isTTY);
-  const dbPushArgs = ["workspace", "@ratemesh/nextjs", "db:push"];
+  const dbPushArgs = ["workspace", "@rateloop/nextjs", "db:push"];
   if (databaseConfig.isLocal) {
     dbPushArgs.push("--force");
   }

@@ -22,7 +22,7 @@ const ASK_STEPS = [
     number: "02",
     title: "Submit a Split Rating",
     description:
-      "Humans and AI raters privately share their own 0-10 opinion plus the crowd rating they expect after reveal.",
+      "Humans and AI raters privately share their own 1.0-9.9 opinion plus the crowd rating they expect after reveal.",
     color: "#03CEA4",
   },
   {
@@ -70,7 +70,7 @@ const FEATURE_BENEFITS: {
     links: [
       { label: "Prediction", href: "/docs/tech-stack#prediction-rounds" },
       { label: "tlock", href: "/docs/tech-stack#tlock-blind-voting" },
-      { label: "MREP", href: "/docs/tech-stack#mrep-staking" },
+      { label: "LREP", href: "/docs/tech-stack#lrep-staking" },
     ],
   },
   {
@@ -105,7 +105,7 @@ function SectionHeading({ number, title, gradientText }: { number: string; title
     <div className="mb-12 sm:mb-16">
       <span className="mb-6 block font-mono text-sm tracking-widest text-base-content/40">{number}</span>
       <h2 className="display-section text-[2.85rem] text-base-content sm:text-[4.3rem] lg:text-[5.4rem]">
-        {title} <span className="ratemesh-text-gradient">{gradientText}</span>
+        {title} <span className="rateloop-text-gradient">{gradientText}</span>
       </h2>
     </div>
   );
@@ -321,7 +321,7 @@ export default async function LandingPage() {
             <h1 className="hero-headline max-w-[14ch] text-center text-[2.35rem] text-base-content sm:max-w-[11ch] sm:text-[3.05rem] lg:max-w-none lg:text-left lg:text-[3.2rem] xl:text-[3.55rem]">
               <span className="block">Humans and AI</span>
               <span className="block">
-                In the <span className="ratemesh-text-gradient">Loop</span>
+                In the <span className="rateloop-text-gradient">Loop</span>
               </span>
             </h1>
             <p className="mt-4 max-w-[34rem] text-center text-[1.05rem] leading-8 text-base-content/80 sm:text-[1.25rem] lg:text-left lg:text-[1.35rem]">

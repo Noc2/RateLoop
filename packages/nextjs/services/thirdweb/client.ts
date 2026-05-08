@@ -13,7 +13,7 @@ const THIRDWEB_CONNECT_CHAIN_IDS = new Set([31337, 42220, 11142220]);
 const THIRDWEB_EXECUTION_CHAIN_IDS = new Set([42220, 11142220]);
 const THIRDWEB_ACTIVE_CHAIN_KEY = "thirdweb:active-chain";
 const THIRDWEB_SPONSORSHIP_MODE_KEY = "thirdweb:sponsorship-mode";
-const RATEMESH_THIRDWEB_ICON = "/ratemesh-logo.svg";
+const RATELOOP_THIRDWEB_ICON = "/rateloop-logo.svg";
 
 type ThirdwebWalletExecutionMode =
   | {
@@ -167,12 +167,12 @@ export function createThirdwebInAppWallet(chainId: number, options?: CreateThird
     executionMode: getThirdwebWalletExecutionMode(chainId, options),
     metadata: {
       image: {
-        alt: "RateMesh orbit logo",
+        alt: "RateLoop orbit logo",
         height: 128,
-        src: RATEMESH_THIRDWEB_ICON,
+        src: RATELOOP_THIRDWEB_ICON,
         width: 128,
       },
-      name: "RateMesh Wallet",
+      name: "RateLoop Wallet",
     },
   });
 }
@@ -212,8 +212,8 @@ export function getThirdwebConnectOptions(chainId?: number): UseConnectModalOpti
 
   return {
     appMetadata: {
-      name: "RateMesh",
-      logoUrl: RATEMESH_THIRDWEB_ICON,
+      name: "RateLoop",
+      logoUrl: RATELOOP_THIRDWEB_ICON,
     },
     chain,
     chains: thirdwebSupportedChains,
@@ -221,8 +221,8 @@ export function getThirdwebConnectOptions(chainId?: number): UseConnectModalOpti
     locale: "en_US",
     showThirdwebBranding: false,
     theme: "dark",
-    title: "RateMesh",
-    titleIcon: RATEMESH_THIRDWEB_ICON,
+    title: "RateLoop",
+    titleIcon: RATELOOP_THIRDWEB_ICON,
     ...(publicEnv.walletConnectProjectId
       ? {
           walletConnect: {
@@ -244,8 +244,8 @@ export function getThirdwebAutoConnectOptions(): AutoConnectProps | null {
 
   return {
     appMetadata: {
-      name: "RateMesh",
-      logoUrl: RATEMESH_THIRDWEB_ICON,
+      name: "RateLoop",
+      logoUrl: RATELOOP_THIRDWEB_ICON,
     },
     chain,
     client: thirdwebClient,

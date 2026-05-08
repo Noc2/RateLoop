@@ -9,10 +9,10 @@ import {
   stringToHex,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { packVoteRoundContext } from "@ratemesh/contracts";
-import { ContentRegistryAbi, MeshReputationAbi, ProtocolConfigAbi, RoundVotingEngineAbi } from "@ratemesh/contracts/abis";
-import deployedContracts from "@ratemesh/contracts/deployedContracts";
-import { buildPredictionCommitHash } from "@ratemesh/contracts/voting";
+import { packVoteRoundContext } from "@rateloop/contracts";
+import { ContentRegistryAbi, LoopReputationAbi, ProtocolConfigAbi, RoundVotingEngineAbi } from "@rateloop/contracts/abis";
+import deployedContracts from "@rateloop/contracts/deployedContracts";
+import { DEFAULT_SCORER_METADATA_HASH, buildPredictionCommitHash } from "@rateloop/contracts/voting";
 
 const roundCommitPreviewAbi = [
   {
@@ -75,7 +75,7 @@ import { resetKeeperStateForTests, resolveRounds } from "../keeper.js";
 
 const chain31337 = (deployedContracts as Record<number, Record<string, { address: `0x${string}` }>>)[31337];
 const CONTRACTS = {
-  mrep: chain31337?.MeshReputation?.address ?? "0x0000000000000000000000000000000000000000",
+  lrep: chain31337?.LoopReputation?.address ?? "0x0000000000000000000000000000000000000000",
   contentRegistry: chain31337?.ContentRegistry?.address ?? "0x0000000000000000000000000000000000000000",
   roundVotingEngine: chain31337?.RoundVotingEngine?.address ?? "0x0000000000000000000000000000000000000000",
 } as const;
@@ -295,8 +295,8 @@ describe("resolveRounds integration", () => {
       await submitterClient.writeContract({
         account: ACCOUNTS.submitter,
         chain: CHAIN,
-        address: CONTRACTS.mrep,
-        abi: MeshReputationAbi,
+        address: CONTRACTS.lrep,
+        abi: LoopReputationAbi,
         functionName: "approve",
         args: [questionRewardPoolEscrow, DEFAULT_SUBMISSION_REWARD_AMOUNT],
       }),
@@ -472,8 +472,8 @@ describe("resolveRounds integration", () => {
         await voter.client.writeContract({
           account: voter.account,
           chain: CHAIN,
-          address: CONTRACTS.mrep,
-          abi: MeshReputationAbi,
+          address: CONTRACTS.lrep,
+          abi: LoopReputationAbi,
           functionName: "approve",
           args: [CONTRACTS.roundVotingEngine, STAKE],
         }),
@@ -488,6 +488,10 @@ describe("resolveRounds integration", () => {
       expect(targetRound).toBeGreaterThan(0n);
       const ciphertext = encodeTestCiphertext({ ...voter, targetRound, drandChainHash });
       const commitHash = buildPredictionCommitHash(
+        CHAIN.id,
+        CONTRACTS.roundVotingEngine,
+        STAKE,
+        DEFAULT_SCORER_METADATA_HASH,
         voter.predictedRatingBps,
         voter.predictedRatingBps,
         voter.salt,

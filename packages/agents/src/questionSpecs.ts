@@ -2,7 +2,7 @@ import { type Hex, keccak256, stringToHex } from "viem";
 
 export const DEFAULT_AGENT_TEMPLATE_ID = "generic_rating";
 export const DEFAULT_AGENT_TEMPLATE_VERSION = 1;
-export const PREDICTED_RATING_SYSTEM = "ratemesh.predicted_final_rating.v1";
+export const PREDICTED_RATING_SYSTEM = "rateloop.predicted_final_rating.v1";
 
 type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 

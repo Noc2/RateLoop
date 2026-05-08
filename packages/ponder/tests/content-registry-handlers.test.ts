@@ -28,11 +28,11 @@ vi.mock("ponder:schema", () => ({
   round: "round",
 }));
 
-vi.mock("@ratemesh/contracts/abis", () => ({
+vi.mock("@rateloop/contracts/abis", () => ({
   ContentRegistryAbi: [],
 }));
 
-vi.mock("@ratemesh/contracts/protocol", () => ({
+vi.mock("@rateloop/contracts/protocol", () => ({
   ROUND_STATE: { Settled: 1 },
 }));
 

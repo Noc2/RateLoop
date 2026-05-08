@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { MeshReputationAbi, packVoteRoundContext } from "@ratemesh/contracts";
-import { ContentRegistryAbi, RoundVotingEngineAbi } from "@ratemesh/contracts/abis";
-import { buildCommitPredictionParams } from "@ratemesh/sdk/vote";
+import { LoopReputationAbi, packVoteRoundContext } from "@rateloop/contracts";
+import { ContentRegistryAbi, RoundVotingEngineAbi } from "@rateloop/contracts/abis";
+import { buildCommitPredictionParams } from "@rateloop/sdk/vote";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAccount, usePublicClient, useWriteContract } from "wagmi";
 import { useOptimisticVote } from "~~/contexts/OptimisticVoteContext";
@@ -35,7 +35,7 @@ interface RoundVoteParams {
   contentId: bigint;
   opinionRating: number;
   predictedCrowdRating: number;
-  stakeAmount: number; // In whole tokens (e.g., 5 = 5 MREP)
+  stakeAmount: number; // In whole tokens (e.g., 5 = 5 LREP)
   frontendCode?: `0x${string}`; // Optional frontend operator address for fee distribution
   isOwnContent?: boolean;
   roundConfig?: VotingConfig | null;
@@ -219,7 +219,7 @@ export function useRoundVote() {
         frontend,
       ] as const;
       const approveRequest: any = {
-        abi: MeshReputationAbi,
+        abi: LoopReputationAbi,
         address: hrepInfo.address,
         functionName: "approve",
         args: [votingEngineInfo.address, stakeWei] as const,
@@ -232,7 +232,7 @@ export function useRoundVote() {
       };
       const currentAllowance = (await publicClient.readContract({
         address: hrepInfo.address as `0x${string}`,
-        abi: MeshReputationAbi,
+        abi: LoopReputationAbi,
         functionName: "allowance",
         args: [address as `0x${string}`, votingEngineInfo.address as `0x${string}`],
       })) as bigint;
@@ -244,7 +244,7 @@ export function useRoundVote() {
             ...(needsApproval
               ? [
                   {
-                    abi: MeshReputationAbi,
+                    abi: LoopReputationAbi,
                     address: hrepInfo.address as `0x${string}`,
                     args: [votingEngineInfo.address, stakeWei] as const,
                     functionName: "approve",

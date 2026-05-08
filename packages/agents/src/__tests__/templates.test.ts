@@ -42,7 +42,7 @@ describe("agent templates", () => {
     ]);
     expect(templates).toHaveLength(12);
     for (const template of templates) {
-      expect(template.ratingSystem).toBe("ratemesh.predicted_final_rating.v1");
+      expect(template.ratingSystem).toBe("rateloop.predicted_final_rating.v1");
       expect(template.resultSpecHash).toMatch(/^0x[a-f0-9]{64}$/);
     }
   });
@@ -66,7 +66,7 @@ describe("agent templates", () => {
     expect(aiEvaluationTemplates).toHaveLength(9);
     expect(
       aiEvaluationTemplates.every(
-        (template) => template.ratingSystem === "ratemesh.predicted_final_rating.v1",
+        (template) => template.ratingSystem === "rateloop.predicted_final_rating.v1",
       ),
     ).toBe(true);
     expect(

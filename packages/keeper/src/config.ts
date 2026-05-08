@@ -1,4 +1,4 @@
-import { getSharedDeploymentAddress as getSharedArtifactAddress } from "@ratemesh/contracts/deployments";
+import { getSharedDeploymentAddress as getSharedArtifactAddress } from "@rateloop/contracts/deployments";
 import { config as loadDotenv } from "dotenv";
 import { isAddress } from "viem";
 
@@ -205,7 +205,7 @@ function resolveContractAddress(params: {
     errors.push(`${envName} must be a valid address when provided for chain ${chainId}`);
   }
   errors.push(
-    `Missing shared deployment artifact for ${contractName} on chain ${chainId}. Refresh @ratemesh/contracts deployedContracts.ts before starting the keeper for live networks.`,
+    `Missing shared deployment artifact for ${contractName} on chain ${chainId}. Refresh @rateloop/contracts deployedContracts.ts before starting the keeper for live networks.`,
   );
   return ZERO_ADDRESS;
 }

@@ -1,14 +1,14 @@
 import Image from "next/image";
 
 /**
- * Shared RateMesh logo wrapper.
+ * Shared RateLoop logo wrapper.
  */
 export function CuryoLogo({ className = "h-8 w-8", idPrefix }: { className?: string; idPrefix?: string }) {
   void idPrefix;
 
   return (
     <Image
-      src="/ratemesh-logo.svg"
+      src="/rateloop-logo.svg"
       alt=""
       aria-hidden="true"
       width={128}

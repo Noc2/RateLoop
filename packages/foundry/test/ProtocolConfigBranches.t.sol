@@ -500,4 +500,16 @@ contract ProtocolConfigBranchesTest is Test {
         vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
         config.setRoundConfigBounds(5 minutes, 60 minutes, 1 hours, 30 days + 1, 2, 100, 2, 1_000);
     }
+
+    function test_SetRaterRegistryAndScorerMetadataHash() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+        address raterRegistry = address(0xBEEF);
+        bytes32 scorerMetadataHash = keccak256("scorer-root-v1");
+
+        config.setRaterRegistry(raterRegistry);
+        config.setScorerMetadataHash(scorerMetadataHash);
+
+        assertEq(config.raterRegistry(), raterRegistry);
+        assertEq(config.scorerMetadataHash(), scorerMetadataHash);
+    }
 }

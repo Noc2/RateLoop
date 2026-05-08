@@ -1,13 +1,13 @@
 import { protocolCopy } from "./protocolCopy";
 
-const mrepAmountFormatter = new Intl.NumberFormat("en-US");
-const mrepCompactFormatter = new Intl.NumberFormat("en-US", {
+const lrepAmountFormatter = new Intl.NumberFormat("en-US");
+const lrepCompactFormatter = new Intl.NumberFormat("en-US", {
   notation: "compact",
   maximumFractionDigits: 1,
 });
 
-const MREP_MAX_SUPPLY = 100_000_000;
-export const MREP_MAX_SUPPLY_LABEL = `${mrepAmountFormatter.format(MREP_MAX_SUPPLY)} MREP`;
+const LREP_MAX_SUPPLY = 100_000_000;
+export const LREP_MAX_SUPPLY_LABEL = `${lrepAmountFormatter.format(LREP_MAX_SUPPLY)} LREP`;
 
 type TokenDistributionEntry = {
   label: string;
@@ -34,7 +34,7 @@ const tokenDistributionEntries: readonly TokenDistributionEntry[] = [
     label: "Treasury",
     amount: 32_000_000,
     purpose:
-      "Governance-controlled MREP tokens for ecosystem grants, partner activation, whistleblower rewards, and protocol development",
+      "Governance-controlled LREP tokens for ecosystem grants, partner activation, whistleblower rewards, and protocol development",
     color: "#F5F5F5",
   },
   {
@@ -46,19 +46,19 @@ const tokenDistributionEntries: readonly TokenDistributionEntry[] = [
   },
 ] as const;
 
-const MREP_INITIAL_MINTED_SUPPLY = tokenDistributionEntries.reduce((sum, entry) => sum + entry.amount, 0);
-export const MREP_INITIAL_MINTED_SUPPLY_COMPACT_LABEL = mrepCompactFormatter.format(MREP_INITIAL_MINTED_SUPPLY);
+const LREP_INITIAL_MINTED_SUPPLY = tokenDistributionEntries.reduce((sum, entry) => sum + entry.amount, 0);
+export const LREP_INITIAL_MINTED_SUPPLY_COMPACT_LABEL = lrepCompactFormatter.format(LREP_INITIAL_MINTED_SUPPLY);
 const LAUNCH_DISTRIBUTION_POOL_AMOUNT = tokenDistributionEntries[0].amount;
-export const LAUNCH_DISTRIBUTION_POOL_AMOUNT_COMPACT_LABEL = mrepCompactFormatter.format(
+export const LAUNCH_DISTRIBUTION_POOL_AMOUNT_COMPACT_LABEL = lrepCompactFormatter.format(
   LAUNCH_DISTRIBUTION_POOL_AMOUNT,
 );
 
-function formatMrepAmount(amount: number): string {
-  return `${mrepAmountFormatter.format(amount)} MREP`;
+function formatLrepAmount(amount: number): string {
+  return `${lrepAmountFormatter.format(amount)} LREP`;
 }
 
 function formatAllocationPercent(amount: number): string {
-  const percent = (amount / MREP_MAX_SUPPLY) * 100;
+  const percent = (amount / LREP_MAX_SUPPLY) * 100;
   if (percent === 0) return "0.0%";
   if (Number.isInteger(percent)) return `${percent.toFixed(1)}%`;
   return `${percent.toFixed(4).replace(/0+$/, "").replace(/\.$/, "")}%`;
@@ -66,19 +66,19 @@ function formatAllocationPercent(amount: number): string {
 
 export const tokenDistributionTableRows = tokenDistributionEntries.map(entry => ({
   ...entry,
-  amountLabel: formatMrepAmount(entry.amount),
+  amountLabel: formatLrepAmount(entry.amount),
 }));
 
 export const tokenAllocationChartSlices = tokenDistributionEntries.map((entry, index) => ({
   ...entry,
   index,
-  amountLabel: formatMrepAmount(entry.amount),
+  amountLabel: formatLrepAmount(entry.amount),
   percentLabel: formatAllocationPercent(entry.amount),
-  value: (entry.amount / MREP_MAX_SUPPLY) * 100,
+  value: (entry.amount / LREP_MAX_SUPPLY) * 100,
 }));
 
 export const tokenDistributionWhitepaperRows = tokenDistributionEntries.map(entry => [
   entry.label,
-  formatMrepAmount(entry.amount),
+  formatLrepAmount(entry.amount),
   entry.purpose,
 ]);

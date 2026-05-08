@@ -14,6 +14,7 @@ import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
 import { HumanReputation } from "../contracts/HumanReputation.sol";
 import { ParticipationPool } from "../contracts/ParticipationPool.sol";
 import { FrontendRegistry } from "../contracts/FrontendRegistry.sol";
+import { RaterRegistry } from "../contracts/RaterRegistry.sol";
 import { MockVoterIdNFT } from "./mocks/MockVoterIdNFT.sol";
 import { VotingTestBase } from "./helpers/VotingTestHelpers.sol";
 import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
@@ -211,6 +212,12 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     /// @dev Reveal a vote by commit key. Permissionless — no prank needed.
     function _reveal(uint256 contentId, uint256 roundId, bytes32 commitKey, bool isUp, bytes32 salt) internal {
         engine.revealVoteByCommitKey(contentId, roundId, commitKey, isUp, salt);
+    }
+
+    function _installRaterRegistry() internal returns (RaterRegistry raterRegistry) {
+        raterRegistry = new RaterRegistry(owner, owner);
+        vm.prank(owner);
+        ProtocolConfig(protocolConfigAddress).setRaterRegistry(address(raterRegistry));
     }
 
     function _commitPrediction(address voter, uint256 contentId, uint16 predictedRatingBps, uint256 stake)
@@ -423,7 +430,31 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertGt(round.settledAt, 0);
     }
 
-    function test_PredictionLifecycle_SettlesWeightedFinalRating() public {
+    function test_RevealUsesClusterAdjustedWeight() public {
+        RaterRegistry raterRegistry = _installRaterRegistry();
+        vm.prank(owner);
+        raterRegistry.setClusterScore(voter1, keccak256("shared-cluster"), 7_500, 1);
+
+        uint256 contentId = _submitContent();
+        (bytes32 ck1, bytes32 s1) = _commit(voter1, contentId, true, 40e6);
+        (bytes32 ck2, bytes32 s2) = _commit(voter2, contentId, false, 40e6);
+        (bytes32 ck3, bytes32 s3) = _commit(voter3, contentId, true, 40e6);
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        RoundLib.Round memory r0 = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        _warpPastTlockRevealTime(uint256(r0.startTime) + EPOCH);
+
+        _reveal(contentId, roundId, ck1, true, s1);
+        _reveal(contentId, roundId, ck2, false, s2);
+        _reveal(contentId, roundId, ck3, true, s3);
+
+        RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        assertEq(engine.commitRaterWeightBps(contentId, roundId, ck1), 2_500, "discounted weight");
+        assertEq(engine.commitRaterWeightBps(contentId, roundId, ck2), 10_000, "default weight");
+        assertEq(round.weightedUpPool, 50e6, "up pool includes discounted voter");
+        assertEq(round.weightedDownPool, 40e6, "down pool remains full weight");
+    }
+
+    function test_PredictionLifecycle_SettlesWeightedMedianFinalRating() public {
         uint256 contentId = _submitContent();
 
         (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, 8_000, 30e6);
@@ -452,11 +483,39 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
             engine.roundPredictionStats(contentId, roundId);
         assertEq(weightedRatingSum, 355_000e6, "weighted rating sum");
         assertEq(totalPredictionWeight, 50e6, "prediction weight");
-        assertEq(finalRatingBps, 7_100, "prediction average before settle");
+        assertEq(finalRatingBps, 8_000, "prediction median before settle");
 
         engine.settleRound(contentId, roundId);
 
-        assertEq(registry.getRating(contentId), 7_100, "registry rating");
+        assertEq(registry.getRating(contentId), 8_000, "registry rating");
+    }
+
+    function test_PredictionWeightsUseClusterAdjustedStake() public {
+        RaterRegistry raterRegistry = _installRaterRegistry();
+        vm.prank(owner);
+        raterRegistry.setClusterScore(voter1, keccak256("shared-cluster"), 7_500, 1);
+
+        uint256 contentId = _submitContent();
+
+        (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, 8_000, STAKE);
+        (bytes32 ck2, bytes32 s2) = _commitPrediction(voter2, contentId, 5_000, STAKE);
+        (bytes32 ck3, bytes32 s3) = _commitPrediction(voter3, contentId, 6_500, STAKE);
+
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        RoundLib.Round memory r0 = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        _warpPastTlockRevealTime(uint256(r0.startTime) + EPOCH);
+
+        engine.revealPredictionByCommitKey(contentId, roundId, ck1, 8_000, 8_000, s1);
+        engine.revealPredictionByCommitKey(contentId, roundId, ck2, 5_000, 5_000, s2);
+        engine.revealPredictionByCommitKey(contentId, roundId, ck3, 6_500, 6_500, s3);
+
+        (uint256 weightedRatingSum, uint256 totalPredictionWeight, uint16 finalRatingBps) =
+            engine.roundPredictionStats(contentId, roundId);
+        assertEq(engine.commitPredictionWeight(contentId, roundId, ck1), STAKE / 4, "discounted prediction weight");
+        assertEq(engine.commitPredictionWeight(contentId, roundId, ck2), STAKE, "default prediction weight");
+        assertEq(totalPredictionWeight, 11_250_000, "total adjusted weight");
+        assertEq(weightedRatingSum, 67_500_000_000, "adjusted weighted rating sum");
+        assertEq(finalRatingBps, 6_500, "adjusted median");
     }
 
     function test_PredictionScoringSuppressedBelowLooFloor() public {

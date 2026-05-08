@@ -18,10 +18,10 @@ function PublicHeader() {
     <header className="sticky top-0 z-20 border-b border-white/10 bg-black/95 px-4 py-3 backdrop-blur-xl sm:px-6">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
         <Link href="/?landing=1" className="flex min-w-0 items-center gap-2">
-          <CuryoLogo className="h-9 w-9 shrink-0" idPrefix="ratemesh-public-header-logo" />
+          <CuryoLogo className="h-9 w-9 shrink-0" idPrefix="rateloop-public-header-logo" />
           <div className="flex min-w-0 flex-col gap-0.5">
             <span className="font-display whitespace-nowrap text-[1.2rem] leading-none tracking-normal text-base-content">
-              RateMesh
+              RateLoop
             </span>
             <span className="hidden text-sm text-base-content/75 sm:block">Humans and AI</span>
           </div>

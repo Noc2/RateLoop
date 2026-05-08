@@ -49,7 +49,7 @@ const timelockAbi = parseAbi(["function getMinDelay() view returns (uint256)"]);
 
 type GovernanceManagedContractName =
   | "CuryoGovernor"
-  | "MeshReputation"
+  | "LoopReputation"
   | "FrontendRegistry"
   | "ContentRegistry"
   | "ProtocolConfig";
@@ -194,7 +194,7 @@ export function useGovernanceContracts() {
     }
     if (token.data) {
       items.push({
-        name: "MeshReputation",
+        name: "LoopReputation",
         address: token.data.address,
         abi: token.data.abi as Abi,
       });

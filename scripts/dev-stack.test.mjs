@@ -3,10 +3,10 @@ import test from "node:test";
 import { getDbPushPlan } from "./dev-stack.mjs";
 
 const localDatabaseConfig = {
-  url: "postgresql://postgres:postgres@127.0.0.1:5432/ratemesh_app",
+  url: "postgresql://postgres:postgres@127.0.0.1:5432/rateloop_app",
   host: "127.0.0.1",
   port: 5432,
-  databaseName: "ratemesh_app",
+  databaseName: "rateloop_app",
   user: "postgres",
   password: "postgres",
   isLocal: true,
@@ -14,10 +14,10 @@ const localDatabaseConfig = {
 };
 
 const remoteDatabaseConfig = {
-  url: "postgresql://postgres:postgres@example.com:5432/ratemesh_app",
+  url: "postgresql://postgres:postgres@example.com:5432/rateloop_app",
   host: "example.com",
   port: 5432,
-  databaseName: "ratemesh_app",
+  databaseName: "rateloop_app",
   user: "postgres",
   password: "postgres",
   isLocal: false,
@@ -43,7 +43,7 @@ test("skips the Next.js schema push for remote databases by default", () => {
   const plan = getDbPushPlan(remoteDatabaseConfig);
 
   assert.equal(plan.shouldRun, false);
-  assert.match(plan.reason, /non-local postgres@example\.com:5432\/ratemesh_app/);
+  assert.match(plan.reason, /non-local postgres@example\.com:5432\/rateloop_app/);
   assert.match(plan.help, /--allow-remote-db-push/);
 });
 

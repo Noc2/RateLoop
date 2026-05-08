@@ -73,11 +73,11 @@ function AgentIcon({ name }: { name: string }) {
   }
 }
 
-const RATEMESH_AGENT_PROMPT =
-  "Can you research RateMesh and explain how I can use it with AI agents to get open rating signals? Start with the project docs and summarize the prediction-round flow, reputation requirements, USDC bounty funding, public MCP/API setup, and one concrete workflow I can try.";
+const RATELOOP_AGENT_PROMPT =
+  "Can you research RateLoop and explain how I can use it with AI agents to get open rating signals? Start with the project docs and summarize the prediction-round flow, reputation requirements, USDC bounty funding, public MCP/API setup, and one concrete workflow I can try.";
 
 const LOVABLE_AGENT_PROMPT =
-  "Build a concise interactive page that explains how RateMesh helps AI agents get open rating signals. Include sections for prediction-round use cases, reputation requirements, USDC bounty funding, public MCP/API setup, and one concrete workflow.";
+  "Build a concise interactive page that explains how RateLoop helps AI agents get open rating signals. Include sections for prediction-round use cases, reputation requirements, USDC bounty funding, public MCP/API setup, and one concrete workflow.";
 
 type AgentLaunch = {
   name: string;
@@ -89,32 +89,32 @@ type AgentLaunch = {
 const AGENTS: AgentLaunch[] = [
   {
     name: "Claude Code",
-    message: RATEMESH_AGENT_PROMPT,
-    ariaLabel: "Copy a RateMesh message for Claude Code",
+    message: RATELOOP_AGENT_PROMPT,
+    ariaLabel: "Copy a RateLoop message for Claude Code",
     successMessage: "Copied message for Claude Code. Paste it into Claude Code.",
   },
   {
     name: "GitHub Copilot",
-    message: RATEMESH_AGENT_PROMPT,
-    ariaLabel: "Copy a RateMesh message for GitHub Copilot",
+    message: RATELOOP_AGENT_PROMPT,
+    ariaLabel: "Copy a RateLoop message for GitHub Copilot",
     successMessage: "Copied message for GitHub Copilot. Paste it into the chat window.",
   },
   {
     name: "Cursor",
-    message: RATEMESH_AGENT_PROMPT,
-    ariaLabel: "Copy a RateMesh message for Cursor",
+    message: RATELOOP_AGENT_PROMPT,
+    ariaLabel: "Copy a RateLoop message for Cursor",
     successMessage: "Copied message for Cursor. Paste it into the chat window.",
   },
   {
     name: "OpenAI Codex",
-    message: RATEMESH_AGENT_PROMPT,
-    ariaLabel: "Copy a RateMesh message for OpenAI Codex",
+    message: RATELOOP_AGENT_PROMPT,
+    ariaLabel: "Copy a RateLoop message for OpenAI Codex",
     successMessage: "Copied message for OpenAI Codex. Paste it into Codex.",
   },
   {
     name: "Gemini CLI",
-    message: RATEMESH_AGENT_PROMPT,
-    ariaLabel: "Copy a RateMesh message for Gemini CLI",
+    message: RATELOOP_AGENT_PROMPT,
+    ariaLabel: "Copy a RateLoop message for Gemini CLI",
     successMessage: "Copied message for Gemini CLI. Paste it into your terminal.",
   },
   {
@@ -155,23 +155,23 @@ export function SupportedAgentsSection() {
 
     const copied = await copyTextToClipboard(agent.message);
     if (!copied) {
-      console.error("Failed to copy RateMesh agent message.");
+      console.error("Failed to copy RateLoop agent message.");
       notification.error(`Could not copy the message for ${agent.name}.`, {
-        id: "ratemesh-agent-prompt-launch",
+        id: "rateloop-agent-prompt-launch",
       });
       return;
     }
 
     notification.success(agent.successMessage, {
       duration: 2400,
-      id: "ratemesh-agent-prompt-launch",
+      id: "rateloop-agent-prompt-launch",
     });
   };
 
   return (
     <section className="relative z-20 mt-10 w-full sm:mt-12 lg:mt-32 xl:mt-40">
       <div className="mb-4 text-center sm:mb-5">
-        <p className="text-base leading-7 text-base-content/70 sm:text-lg">Ask your favorite AI agent about RateMesh</p>
+        <p className="text-base leading-7 text-base-content/70 sm:text-lg">Ask your favorite AI agent about RateLoop</p>
       </div>
 
       <div className="mx-auto flex max-w-full flex-wrap items-center justify-center gap-2 px-4 pb-1 sm:flex-nowrap sm:gap-2.5 sm:px-0 lg:gap-3">
@@ -202,7 +202,7 @@ export function SupportedAgentsSection() {
         })}
       </div>
       <span aria-live="polite" className="sr-only">
-        {activeAgentName ? `Copied RateMesh message for ${activeAgentName}` : ""}
+        {activeAgentName ? `Copied RateLoop message for ${activeAgentName}` : ""}
       </span>
     </section>
   );

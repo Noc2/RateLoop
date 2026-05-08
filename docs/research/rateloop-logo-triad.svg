@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
-  <title id="title">RateMesh triad logo concept</title>
+  <title id="title">RateLoop triad logo concept</title>
   <desc id="desc">A transparent-background orange mesh mark made from three connected hexagon clusters.</desc>
   <defs>
     <path id="mesh-cell" d="M0 -68L59 -34L59 34L0 68L-59 34L-59 -34Z" />

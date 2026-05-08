@@ -21,7 +21,7 @@ import type {
   CuryoAgentClient,
   CuryoAgentWalletTransactionCall,
   QuestionStatusResponse,
-} from "@ratemesh/sdk/agent";
+} from "@rateloop/sdk/agent";
 
 type CliOptions = Record<string, string | boolean | undefined>;
 type JsonRecord = Record<string, unknown>;

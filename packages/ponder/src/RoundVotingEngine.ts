@@ -1,6 +1,6 @@
 import { ponder } from "ponder:registry";
 import { eq, and } from "ponder";
-import { DEFAULT_ROUND_CONFIG, ROUND_STATE } from "@ratemesh/contracts/protocol";
+import { DEFAULT_ROUND_CONFIG, ROUND_STATE } from "@rateloop/contracts/protocol";
 import {
   round,
   vote,

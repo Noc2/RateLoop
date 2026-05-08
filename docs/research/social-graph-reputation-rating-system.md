@@ -2,8 +2,8 @@
 
 Research date: 2026-05-07
 
-Implementation status: the current RateMesh implementation intentionally
-diverges from this research note on MREP transferability. MREP is capped,
+Implementation status: the current RateLoop implementation intentionally
+diverges from this research note on LREP transferability. LREP is capped,
 transferable, checkpointed, and protected by governance locks, hard bootstrap
 floors, prediction scoring floors, and cluster-aware payout controls. The
 non-transferable sections below are preserved as the earlier research tradeoff,
@@ -30,7 +30,7 @@ The better design is:
   expect.
 - Treat human and AI raters as first-class accounts. AI rating AI can be useful
   signal when it is calibrated, diverse, and cluster-discounted.
-- Use capped transferable MREP intentionally, with governance locks, hard
+- Use capped transferable LREP intentionally, with governance locks, hard
   economic floors, and cluster-aware scoring to reduce the market and capture
   risks that earlier non-transferable designs tried to address.
 - Score users with a conservative signal-quality model, not raw majority
@@ -68,8 +68,8 @@ rather than each receiving a full independent payout.
 The primary vote payload should be simple:
 
 ```text
-opinionRatingBps: 0-10000
-predictedCrowdRatingBps: 0-10000
+opinionRatingBps: 1000-9900
+predictedCrowdRatingBps: 1000-9900
 stakeAmount: capped reputation at risk
 ```
 
@@ -308,8 +308,8 @@ Recommended reopen/challenge triggers:
 Replace binary voting with one compact split report payload:
 
 ```text
-opinionRatingBps: uint16         // 0-10000, representing own 0.0-10.0 opinion
-predictedCrowdRatingBps: uint16  // 0-10000, representing expected crowd rating
+opinionRatingBps: uint16         // 1000-9900, representing own 1.0-9.9 opinion
+predictedCrowdRatingBps: uint16  // 1000-9900, representing expected crowd rating
 stakeAmount: uint96              // reputation locked as conviction
 salt: bytes32
 ```
@@ -560,7 +560,7 @@ around earned reputation rather than early identity claims.
 
 ## Recommended Protocol Model
 
-### 1. Replace Transferable HREP With Governed Capped MREP
+### 1. Replace Transferable HREP With Governed Capped LREP
 
 The implemented direction keeps transferability instead of turning reputation
 into a soulbound balance. Rename or redefine `HumanReputation` as capped Mesh
@@ -1048,7 +1048,7 @@ This keeps voting thoughtful without punishing useful dissent.
 
 3. Intentional transferability with protocol floors.
 
-   Current MREP is intentionally transferable. Capture and market-risk
+   Current LREP is intentionally transferable. Capture and market-risk
    mitigation comes from capped supply, self-delegated governance locks, hard
    proposal/reward/bond floors, leave-one-out prediction scoring, and
    cluster-aware payout controls.

@@ -1,4 +1,4 @@
-import deployedContracts from "@ratemesh/contracts/deployedContracts";
+import deployedContracts from "@rateloop/contracts/deployedContracts";
 import { and, eq, sql } from "drizzle-orm";
 import "server-only";
 import {
@@ -269,11 +269,11 @@ let freeTransactionTestOverrides: {
 function getContractsForChain(chainId: number) {
   const contracts = (deployedContracts as unknown as Partial<DeployedContractsMap>)[chainId];
   if (!contracts) return contracts;
-  if (contracts.MeshReputation || !contracts.HumanReputation) return contracts;
+  if (contracts.LoopReputation || !contracts.HumanReputation) return contracts;
 
   return {
     ...contracts,
-    MeshReputation: contracts.HumanReputation,
+    LoopReputation: contracts.HumanReputation,
   };
 }
 
@@ -744,7 +744,7 @@ function validateSponsoredCalls(
     }
 
     switch (contract.name) {
-      case "MeshReputation":
+      case "LoopReputation":
         return { ok: false, debugCode: "unsupported_operation" };
       case "ContentRegistry":
         if (

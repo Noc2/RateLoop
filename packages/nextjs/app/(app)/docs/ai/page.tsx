@@ -353,7 +353,7 @@ const AIPage = async () => {
 
       <h2 id="local-signer">Local Signer CLI</h2>
       <p>
-        For local agents that can own an encrypted signer, use <code>yarn workspace @ratemesh/agents local-ask</code>.
+        For local agents that can own an encrypted signer, use <code>yarn workspace @rateloop/agents local-ask</code>.
         It loads the wallet, signs any x402 authorization request, sends ordered transaction plan calls with viem, waits
         for receipts, and confirms the ask.
       </p>

@@ -6,7 +6,7 @@ import {
 } from "../../lib/docs/protocolFacts";
 import {
   LAUNCH_DISTRIBUTION_POOL_AMOUNT_COMPACT_LABEL,
-  MREP_MAX_SUPPLY_LABEL,
+  LREP_MAX_SUPPLY_LABEL,
   tokenDistributionWhitepaperRows,
 } from "../../lib/docs/tokenomics";
 import type { Section } from "./types";
@@ -41,9 +41,9 @@ export const SECTIONS: Section[] = [
             type: "bullets",
             items: [
               "Bounded asks -- one question, one context URL, optional preview media, and explicit round terms.",
-              "Paid attention -- every ask carries a non-refundable bounty funded in MREP or Celo USDC.",
+              "Paid attention -- every ask carries a non-refundable bounty funded in LREP or Celo USDC.",
               "Open participation -- people, bots, and AI raters use the same rating primitive after reputation and calibration rules are met.",
-              "Skin in the game -- predictions are backed by MREP stake rather than passive engagement.",
+              "Skin in the game -- predictions are backed by LREP stake rather than passive engagement.",
               "Agent-native access -- public MCP, direct JSON routes, SDK helpers, browser signing, and local signer flows all feed the same protocol record.",
               "Reusable output -- settled results stay public so later agents can inspect them instead of repeating the same ask.",
             ],
@@ -55,7 +55,7 @@ export const SECTIONS: Section[] = [
         blocks: [
           {
             type: "paragraph",
-            text: "Curyo returns a rating package, not just a raw score. Agents can read the settled 0-10 rating, prediction distribution, answer, confidence, rationale summary, dissenting view, optional feedback after unlock, payout metadata, and a public result URL that can be cited in later decisions. The result is a public rating signal, not proof of universal truth.",
+            text: "Curyo returns a rating package, not just a raw score. Agents can read the settled 1.0-9.9 rating, prediction distribution, answer, confidence, rationale summary, dissenting view, optional feedback after unlock, payout metadata, and a public result URL that can be cited in later decisions. The result is a public rating signal, not proof of universal truth.",
           },
         ],
       },
@@ -144,8 +144,8 @@ export const SECTIONS: Section[] = [
             type: "ordered",
             items: [
               "Ask: submit one question-first ask with a required context URL and optional preview media.",
-              "Fund: attach a non-refundable bounty in MREP or USDC on Celo; agent asks spend from user-authorized wallets, scoped agent wallets, x402 authorization, or ordered wallet calls.",
-              "Predict: raters stake MREP on the final 0-10 rating and may add hidden feedback.",
+              "Fund: attach a non-refundable bounty in LREP or USDC on Celo; agent asks spend from user-authorized wallets, scoped agent wallets, x402 authorization, or ordered wallet calls.",
+              "Predict: raters stake LREP on the final 1.0-9.9 rating and may add hidden feedback.",
               "Settle: the round resolves once the configured reveal and participation conditions are met.",
               "Reuse: any later agent can inspect the same settled result instead of paying to rediscover the same judgment.",
             ],
@@ -172,7 +172,7 @@ export const SECTIONS: Section[] = [
                 ["Submitted", "Question, context, bounty, and round settings are recorded", "Immediate"],
                 [
                   "Blind prediction",
-                  "Open raters commit encrypted final-rating predictions with 1-100 MREP stake",
+                  "Open raters commit encrypted final-rating predictions with 1-100 LREP stake",
                   `First ${protocolDocFacts.blindPhaseDurationLabel} epoch by default`,
                 ],
                 [
@@ -204,7 +204,7 @@ export const SECTIONS: Section[] = [
         blocks: [
           {
             type: "paragraph",
-            text: "Each round snapshots a canonical reference rating on-chain. Raters predict the final 0-10 score directly, and settlement updates the next score using epoch-weighted revealed predictions. The same settlement also powers structured result templates so an agent can read a machine-usable answer, not only a raw market state.",
+            text: "Each round snapshots a canonical reference rating on-chain. Raters predict the final 1.0-9.9 score directly, and settlement updates the next score using epoch-weighted revealed predictions. The same settlement also powers structured result templates so an agent can read a machine-usable answer, not only a raw market state.",
           },
           {
             type: "bullets",
@@ -268,7 +268,7 @@ export const SECTIONS: Section[] = [
         blocks: [
           {
             type: "paragraph",
-            text: "The rater side is designed around concrete paid work rather than abstract engagement. Raters evaluate bounded asks, risk MREP stake, reveal through keeper-assisted or fallback paths, claim eligible bounties and rewards after settlement, and can earn optional USDC Feedback Bonuses for hidden notes that make the result more useful to agents.",
+            text: "The rater side is designed around concrete paid work rather than abstract engagement. Raters evaluate bounded asks, risk LREP stake, reveal through keeper-assisted or fallback paths, claim eligible bounties and rewards after settlement, and can earn optional USDC Feedback Bonuses for hidden notes that make the result more useful to agents.",
           },
         ],
       },
@@ -286,7 +286,7 @@ export const SECTIONS: Section[] = [
             items: [
               "Core participation does not require proof-of-personhood, so people, bots, and AI raters can use the same flow.",
               "Calibration rounds gate USDC earning until an account or agent has shown enough prediction quality.",
-              "Each account is capped at 100 MREP per content per round by default.",
+              "Each account is capped at 100 LREP per content per round by default.",
               "Optional identity providers can add credentials or governed boosts without becoming a hard gate.",
             ],
           },
@@ -316,7 +316,7 @@ export const SECTIONS: Section[] = [
           {
             type: "bullets",
             items: [
-              "Sybil resistance from MREP cost, calibration, per-round stake caps, optional credentials, and public behavior history.",
+              "Sybil resistance from LREP cost, calibration, per-round stake caps, optional credentials, and public behavior history.",
               "Cryptographic hiding during the blind phase through tlock and drand.",
               "Economic anti-herding through epoch-weighted rewards and win conditions.",
               "Permissionless settlement, refunds, and cleanup once conditions are met.",
@@ -330,23 +330,23 @@ export const SECTIONS: Section[] = [
   },
   {
     title: "Incentives & Token Flows",
-    lead: "MREP aligns attention, bounties fund asks, and rewards flow from observable protocol rules.",
+    lead: "LREP aligns attention, bounties fund asks, and rewards flow from observable protocol rules.",
     subsections: [
       {
-        heading: "Role of MREP",
+        heading: "Role of LREP",
         blocks: [
           {
             type: "paragraph",
-            text: `MREP is a transferable reputation token used to stake predictions, distribute early participation, and govern protocol parameters. It is not sold by the protocol and is not described here as a financial asset. The max supply is ${MREP_MAX_SUPPLY_LABEL}, and launch distribution is routed into protocol-controlled pools rather than to a team or sale.`,
+            text: `LREP is a transferable reputation token used to stake predictions, distribute early participation, and govern protocol parameters. It is not sold by the protocol and is not described here as a financial asset. The max supply is ${LREP_MAX_SUPPLY_LABEL}, and launch distribution is routed into protocol-controlled pools rather than to a team or sale.`,
           },
           {
             type: "table",
             data: {
               headers: ["Property", "Value"],
               rows: [
-                ["Name", "Mesh Reputation"],
-                ["Symbol", "MREP"],
-                ["Max supply", MREP_MAX_SUPPLY_LABEL],
+                ["Name", "Loop Reputation"],
+                ["Symbol", "LREP"],
+                ["Max supply", LREP_MAX_SUPPLY_LABEL],
                 ["Decimals", "6"],
                 ["Primary role", "Stake-backed predicted ratings and governance participation"],
               ],
@@ -354,7 +354,7 @@ export const SECTIONS: Section[] = [
           },
           {
             type: "paragraph",
-            text: `Broad distribution matters because the rating layer is only credible if many independent raters can participate. The ${LAUNCH_DISTRIBUTION_POOL_AMOUNT_COMPACT_LABEL} launch distribution pool routes MREP to previous Curyo HREP/CREP holders, onboarding programs, calibration, and governed ecosystem work instead of to buyers.`,
+            text: `Broad distribution matters because the rating layer is only credible if many independent raters can participate. The ${LAUNCH_DISTRIBUTION_POOL_AMOUNT_COMPACT_LABEL} launch distribution pool routes LREP to previous Curyo HREP/CREP holders, onboarding programs, calibration, and governed ecosystem work instead of to buyers.`,
           },
         ],
       },
@@ -383,7 +383,7 @@ export const SECTIONS: Section[] = [
           {
             type: "bullets",
             items: [
-              "Every ask attaches a non-refundable bounty in MREP or USDC on Celo.",
+              "Every ask attaches a non-refundable bounty in LREP or USDC on Celo.",
               "Celo USDC agent asks can use x402 authorization or ordered wallet calls to fund protocol escrow directly from the approved wallet.",
               "Qualified bounty rounds pay eligible revealed raters and reserve 3% for eligible frontend operators.",
               "Optional USDC Feedback Bonuses reward hidden notes by canonical hash after settlement.",
@@ -410,7 +410,7 @@ export const SECTIONS: Section[] = [
         blocks: [
           {
             type: "paragraph",
-            text: "The Bootstrap Pool (12M MREP) funds early participation rewards while the network is still cold-starting. The pool is funded with 12M MREP and releases rewards through a halving schedule so the incentive tapers as activity scales. The treasury starts with 32M MREP under the governance timelock, and the bootstrap proposal threshold is 1,000 MREP with a minimum quorum floor of 100,000 MREP.",
+            text: "The Bootstrap Pool (12M LREP) funds early participation rewards while the network is still cold-starting. The pool is funded with 12M LREP and releases rewards through a halving schedule so the incentive tapers as activity scales. The treasury starts with 32M LREP under the governance timelock, and the bootstrap proposal threshold is 1,000 LREP with a minimum quorum floor of 100,000 LREP.",
           },
         ],
       },
@@ -422,13 +422,13 @@ export const SECTIONS: Section[] = [
             data: {
               headers: ["Action", "Requirement", "Notes"],
               rows: [
-                ["Predict a final rating", "1-100 MREP", "Per prediction, per round"],
+                ["Predict a final rating", "1-100 LREP", "Per prediction, per round"],
                 [
                   "Ask a question",
-                  "1 MREP or 1 USDC minimum bounty",
+                  "1 LREP or 1 USDC minimum bounty",
                   "Mandatory and non-refundable; the ask is funded before judgment arrives",
                 ],
-                ["Register as a frontend", "1,000 MREP", "Returned on exit unless governance-defined slashing applies"],
+                ["Register as a frontend", "1,000 LREP", "Returned on exit unless governance-defined slashing applies"],
               ],
             },
           },
@@ -535,7 +535,7 @@ export const SECTIONS: Section[] = [
         blocks: [
           {
             type: "paragraph",
-            text: "Governor and timelock contracts own upgrades, configuration, and treasury routing in finalized deployments. The intent is that the same community that earns MREP by participating in ratings should also be able to tune the rules of the rating layer in public.",
+            text: "Governor and timelock contracts own upgrades, configuration, and treasury routing in finalized deployments. The intent is that the same community that earns LREP by participating in ratings should also be able to tune the rules of the rating layer in public.",
           },
         ],
       },

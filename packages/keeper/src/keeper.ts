@@ -22,8 +22,8 @@ import {
   ContentRegistryAbi,
   QuestionRewardPoolEscrowAbi,
   RoundVotingEngineAbi,
-} from "@ratemesh/contracts/abis";
-import { decodePredictionPlaintext, parseTlockCiphertextMetadata } from "@ratemesh/contracts/voting";
+} from "@rateloop/contracts/abis";
+import { decodePredictionPlaintext, parseTlockCiphertextMetadata } from "@rateloop/contracts/voting";
 import {
   type CommitData,
   type RoundData,

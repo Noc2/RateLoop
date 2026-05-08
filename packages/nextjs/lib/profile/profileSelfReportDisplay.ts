@@ -7,7 +7,7 @@ import {
   type ProfileRole,
   type ProfileSelfReport,
   ROLE_OPTIONS,
-} from "@ratemesh/node-utils/profileSelfReport";
+} from "@rateloop/node-utils/profileSelfReport";
 
 const PROFILE_LANGUAGE_LABELS: Record<LanguageCode, string> = {
   ar: "Arabic",

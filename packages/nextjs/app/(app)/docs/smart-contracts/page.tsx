@@ -139,7 +139,7 @@ const SmartContracts: NextPage = () => {
       <h2>HumanReputation</h2>
       <p>
         ERC-20 token with ERC20Votes for governance, ERC20Permit for scoped approvals, and a capped reputation supply.
-        The rating flow uses explicit MREP approvals into the voting engine.
+        The rating flow uses explicit LREP approvals into the voting engine.
       </p>
       <h3>Key Features</h3>
       <ul>
@@ -152,20 +152,20 @@ const SmartContracts: NextPage = () => {
         </li>
         <li>
           <strong>Snapshot-based governance:</strong> ERC20Votes provides historical voting-power snapshots for
-          governance, while MREP transfer locks apply after proposing or voting.
+          governance, while LREP transfer locks apply after proposing or voting.
         </li>
         <li>
           <strong>Supply cap:</strong> Distribution and reward recycling stay bounded by <code>MAX_SUPPLY</code>.
         </li>
         <li>
-          <strong>Prediction staking:</strong> The production UI approves MREP stake and submits a private opinion
+          <strong>Prediction staking:</strong> The production UI approves LREP stake and submits a private opinion
           rating plus expected crowd rating through <code>commitVote()</code>.
         </li>
       </ul>
       <h3>Key Functions</h3>
       <ul>
         <li>
-          <code>approve(votingEngine, amount)</code> &mdash; Allow the voting engine to pull MREP stake for a
+          <code>approve(votingEngine, amount)</code> &mdash; Allow the voting engine to pull LREP stake for a
           prediction.
         </li>
         <li>
@@ -175,7 +175,7 @@ const SmartContracts: NextPage = () => {
           <code>getTransferableBalance(account)</code> &mdash; Returns balance minus locked amount.
         </li>
         <li>
-          <code>delegate(delegatee)</code> &mdash; Self-delegate MREP voting power; the current token rejects
+          <code>delegate(delegatee)</code> &mdash; Self-delegate LREP voting power; the current token rejects
           third-party vote delegation.
         </li>
       </ul>
@@ -390,12 +390,12 @@ const SmartContracts: NextPage = () => {
       <h3>Key Functions</h3>
       <ul>
         <li>
-          <code>MeshReputation.approve(votingEngine, stakeAmount)</code> then{" "}
+          <code>LoopReputation.approve(votingEngine, stakeAmount)</code> then{" "}
           <code>
             RoundVotingEngine.commitVote(contentId, roundContext, targetRound, drandChainHash, commitHash, ciphertext,
             stakeAmount, frontend)
           </code>{" "}
-          &mdash; Default split-rating flow. Locks MREP and records the tlock-encrypted opinion rating plus expected
+          &mdash; Default split-rating flow. Locks LREP and records the tlock-encrypted opinion rating plus expected
           crowd rating. The report is hidden until the epoch ends. The redeployed contract rejects malformed or
           non-armored ciphertexts, binds the canonical round reference score into the round context, and binds the
           reveal-target metadata on-chain.

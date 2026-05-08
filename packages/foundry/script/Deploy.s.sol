@@ -6,7 +6,7 @@ import { console } from "forge-std/console.sol";
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import { TimelockController } from "@openzeppelin/contracts/governance/TimelockController.sol";
 import { IVotes } from "@openzeppelin/contracts/governance/utils/IVotes.sol";
-import { MeshReputation } from "../contracts/MeshReputation.sol";
+import { LoopReputation } from "../contracts/LoopReputation.sol";
 import { ContentRegistry } from "../contracts/ContentRegistry.sol";
 import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
 import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
@@ -24,9 +24,9 @@ import { ParticipationPool } from "../contracts/ParticipationPool.sol";
 import { MockERC20 } from "../contracts/mocks/MockERC20.sol";
 import { CuryoGovernor } from "../contracts/governance/CuryoGovernor.sol";
 
-/// @notice Fresh RateMesh deployment script for Celo.
+/// @notice Fresh RateLoop deployment script for Celo.
 /// @dev Optional identity can be wired later by governance; no required Self.xyz faucet is deployed here.
-contract DeployRateMesh is ScaffoldETHDeploy {
+contract DeployRateLoop is ScaffoldETHDeploy {
     error UnsupportedCeloChain(uint256 chainId);
     error InvalidLaunchDistributionRecipient();
 
@@ -73,11 +73,11 @@ contract DeployRateMesh is ScaffoldETHDeploy {
             console.log("TimelockController deployed at:", governance);
         }
 
-        MeshReputation mrepToken = new MeshReputation(deployer, governance);
-        console.log("MeshReputation deployed at:", address(mrepToken));
+        LoopReputation lrepToken = new LoopReputation(deployer, governance);
+        console.log("LoopReputation deployed at:", address(lrepToken));
 
         if (!isLocalDev) {
-            governor = new CuryoGovernor(IVotes(address(mrepToken)), TimelockController(payable(governance)));
+            governor = new CuryoGovernor(IVotes(address(lrepToken)), TimelockController(payable(governance)));
             governorAddr = address(governor);
             console.log("CuryoGovernor deployed at:", governorAddr);
 
@@ -85,7 +85,7 @@ contract DeployRateMesh is ScaffoldETHDeploy {
             tc.grantRole(tc.PROPOSER_ROLE(), governorAddr);
             tc.grantRole(tc.CANCELLER_ROLE(), governorAddr);
             tc.grantRole(tc.CANCELLER_ROLE(), deployer);
-            mrepToken.setGovernor(governorAddr);
+            lrepToken.setGovernor(governorAddr);
         }
 
         ContentRegistry registryImpl = new ContentRegistry();
@@ -100,7 +100,7 @@ contract DeployRateMesh is ScaffoldETHDeploy {
         TransparentUpgradeableProxy frontendRegistryProxy = new TransparentUpgradeableProxy(
             address(frontendRegistryImpl),
             governance,
-            abi.encodeCall(FrontendRegistry.initialize, (deployer, governance, address(mrepToken)))
+            abi.encodeCall(FrontendRegistry.initialize, (deployer, governance, address(lrepToken)))
         );
         FrontendRegistry frontendRegistry = FrontendRegistry(address(frontendRegistryProxy));
 
@@ -113,7 +113,7 @@ contract DeployRateMesh is ScaffoldETHDeploy {
             address(registryImpl),
             governance,
             abi.encodeCall(
-                ContentRegistry.initializeWithTreasury, (deployer, governance, governance, address(mrepToken))
+                ContentRegistry.initializeWithTreasury, (deployer, governance, governance, address(lrepToken))
             )
         );
         ContentRegistry registry = ContentRegistry(address(registryProxy));
@@ -128,7 +128,7 @@ contract DeployRateMesh is ScaffoldETHDeploy {
             governance,
             abi.encodeCall(
                 RoundVotingEngine.initialize,
-                (governance, address(mrepToken), address(registry), address(protocolConfig))
+                (governance, address(lrepToken), address(registry), address(protocolConfig))
             )
         );
         RoundVotingEngine votingEngine = RoundVotingEngine(address(votingEngineProxy));
@@ -138,7 +138,7 @@ contract DeployRateMesh is ScaffoldETHDeploy {
             governance,
             abi.encodeCall(
                 RoundRewardDistributor.initialize,
-                (governance, address(mrepToken), address(votingEngine), address(registry))
+                (governance, address(lrepToken), address(votingEngine), address(registry))
             )
         );
         RoundRewardDistributor rewardDistributor = RoundRewardDistributor(address(rewardDistributorProxy));
@@ -146,7 +146,7 @@ contract DeployRateMesh is ScaffoldETHDeploy {
         CategoryRegistry categoryRegistry = new CategoryRegistry(deployer, governance);
         RaterRegistry raterRegistry = new RaterRegistry(deployer, governance);
         RaterDeclarationRegistry raterDeclarationRegistry = new RaterDeclarationRegistry(
-            deployer, governance, mrepToken, governance, MIN_AI_DECLARATION_BOND, AI_DECLARATION_CHALLENGE_BOND
+            deployer, governance, lrepToken, governance, MIN_AI_DECLARATION_BOND, AI_DECLARATION_CHALLENGE_BOND
         );
         VoterIdNFT optionalIdentity = new VoterIdNFT(deployer, governance);
         optionalIdentity.setStakeRecorder(address(votingEngine));
@@ -169,7 +169,7 @@ contract DeployRateMesh is ScaffoldETHDeploy {
                 QuestionRewardPoolEscrow.initialize,
                 (
                     governance,
-                    address(mrepToken),
+                    address(lrepToken),
                     usdcTokenAddress,
                     address(registry),
                     address(votingEngine),
@@ -213,29 +213,29 @@ contract DeployRateMesh is ScaffoldETHDeploy {
         frontendRegistry.initializeFeeCreditor(address(rewardDistributor));
 
         _seedCategories(categoryRegistry);
-        mrepToken.setPredictionContracts(address(votingEngine), address(rewardDistributor));
+        lrepToken.setPredictionContracts(address(votingEngine), address(rewardDistributor));
         protocolConfig.setConfig(20 minutes, 7 days, 3, 200);
 
-        mrepToken.mint(deployer, CONSENSUS_POOL_AMOUNT);
-        mrepToken.approve(address(votingEngine), CONSENSUS_POOL_AMOUNT);
+        lrepToken.mint(deployer, CONSENSUS_POOL_AMOUNT);
+        lrepToken.approve(address(votingEngine), CONSENSUS_POOL_AMOUNT);
         votingEngine.addToConsensusReserve(CONSENSUS_POOL_AMOUNT);
-        console.log("Funded 4M MREP to consensus reserve");
+        console.log("Funded 4M LREP to consensus reserve");
 
-        mrepToken.mint(governance, TREASURY_AMOUNT);
-        console.log("Minted 32M MREP to governance treasury");
+        lrepToken.mint(governance, TREASURY_AMOUNT);
+        console.log("Minted 32M LREP to governance treasury");
 
-        ParticipationPool participationPool = new ParticipationPool(address(mrepToken), governance);
+        ParticipationPool participationPool = new ParticipationPool(address(lrepToken), governance);
         participationPool.setAuthorizedCaller(address(rewardDistributor), true);
-        mrepToken.mint(deployer, PARTICIPATION_POOL_AMOUNT);
-        mrepToken.approve(address(participationPool), PARTICIPATION_POOL_AMOUNT);
+        lrepToken.mint(deployer, PARTICIPATION_POOL_AMOUNT);
+        lrepToken.approve(address(participationPool), PARTICIPATION_POOL_AMOUNT);
         participationPool.depositPool(PARTICIPATION_POOL_AMOUNT);
         protocolConfig.setParticipationPool(address(participationPool));
-        console.log("ParticipationPool deployed and funded with 12M MREP");
+        console.log("ParticipationPool deployed and funded with 12M LREP");
 
         address launchDistributionRecipient = vm.envOr("LAUNCH_DISTRIBUTION_RECIPIENT", governance);
         if (launchDistributionRecipient == address(0)) revert InvalidLaunchDistributionRecipient();
-        mrepToken.mint(launchDistributionRecipient, LAUNCH_DISTRIBUTION_AMOUNT);
-        console.log("Minted 52M MREP launch distribution pool:", launchDistributionRecipient);
+        lrepToken.mint(launchDistributionRecipient, LAUNCH_DISTRIBUTION_AMOUNT);
+        console.log("Minted 52M LREP launch distribution pool:", launchDistributionRecipient);
 
         if (!isLocalDev) {
             address[] memory excludedHolders = _buildQuorumExcludedHolders(
@@ -252,10 +252,10 @@ contract DeployRateMesh is ScaffoldETHDeploy {
         }
 
         if (isLocalDev) {
-            _fundLocalDevAccounts(mrepToken, localUsdcToken, optionalIdentity);
+            _fundLocalDevAccounts(lrepToken, localUsdcToken, optionalIdentity);
         }
 
-        deployments.push(Deployment("MeshReputation", address(mrepToken)));
+        deployments.push(Deployment("LoopReputation", address(lrepToken)));
         if (address(timelock) != address(0)) deployments.push(Deployment("TimelockController", address(timelock)));
         if (address(governor) != address(0)) deployments.push(Deployment("CuryoGovernor", address(governor)));
         deployments.push(Deployment("FrontendRegistry", address(frontendRegistryProxy)));
@@ -275,8 +275,8 @@ contract DeployRateMesh is ScaffoldETHDeploy {
         if (isLocalDev) deployments.push(Deployment("MockERC20", usdcTokenAddress));
 
         if (!isLocalDev) {
-            mrepToken.renounceRole(mrepToken.MINTER_ROLE(), deployer);
-            mrepToken.renounceRole(mrepToken.CONFIG_ROLE(), deployer);
+            lrepToken.renounceRole(lrepToken.MINTER_ROLE(), deployer);
+            lrepToken.renounceRole(lrepToken.CONFIG_ROLE(), deployer);
             registry.renounceRole(registry.CONFIG_ROLE(), deployer);
             protocolConfig.renounceRole(protocolConfig.CONFIG_ROLE(), deployer);
             frontendRegistry.renounceRole(frontendRegistry.ADMIN_ROLE(), deployer);
@@ -296,11 +296,11 @@ contract DeployRateMesh is ScaffoldETHDeploy {
             tc.revokeRole(tc.CANCELLER_ROLE(), deployer);
             tc.renounceRole(tc.DEFAULT_ADMIN_ROLE(), deployer);
         } else {
-            mrepToken.revokeRole(mrepToken.MINTER_ROLE(), deployer);
+            lrepToken.revokeRole(lrepToken.MINTER_ROLE(), deployer);
         }
 
-        console.log("=== RateMesh Protocol Deployed ===");
-        console.log("MeshReputation:", address(mrepToken));
+        console.log("=== RateLoop Protocol Deployed ===");
+        console.log("LoopReputation:", address(lrepToken));
         console.log("FrontendRegistry:", address(frontendRegistry));
         console.log("ProfileRegistry:", address(profileRegistry));
         console.log("ContentRegistry:", address(registry));
@@ -359,7 +359,7 @@ contract DeployRateMesh is ScaffoldETHDeploy {
         return count + 1;
     }
 
-    function _fundLocalDevAccounts(MeshReputation mrepToken, MockERC20 localUsdcToken, VoterIdNFT optionalIdentity)
+    function _fundLocalDevAccounts(LoopReputation lrepToken, MockERC20 localUsdcToken, VoterIdNFT optionalIdentity)
         internal
     {
         uint256 testAmount = 1000 * 1e6;
@@ -376,7 +376,7 @@ contract DeployRateMesh is ScaffoldETHDeploy {
         ];
 
         for (uint256 i = 0; i < testAccounts.length; i++) {
-            mrepToken.transfer(testAccounts[i], testAmount);
+            lrepToken.transfer(testAccounts[i], testAmount);
             localUsdcToken.mint(testAccounts[i], 10_000 * 1e6);
         }
 
@@ -481,4 +481,4 @@ contract DeployRateMesh is ScaffoldETHDeploy {
 }
 
 /// @notice Main deployment entrypoint used by scaffold-eth/yarn deploy.
-contract DeployScript is DeployRateMesh { }
+contract DeployScript is DeployRateLoop { }

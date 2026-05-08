@@ -1,4 +1,4 @@
-import { getSharedDeploymentAddress } from "@ratemesh/contracts/deployments";
+import { getSharedDeploymentAddress } from "@rateloop/contracts/deployments";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 type RegisteredHandler = (args: {
@@ -53,13 +53,13 @@ async function loadHandlers(overrides: Record<string, string | undefined> = {}) 
     ...overrides,
   };
 
-  await import("../src/MeshReputation.js");
+  await import("../src/LoopReputation.js");
   return handlers;
 }
 
 async function runTransfer(to: `0x${string}`) {
   const { db, insertCalls } = createDb();
-  const handler = handlers.get("MeshReputation:Transfer");
+  const handler = handlers.get("LoopReputation:Transfer");
 
   expect(handler).toBeDefined();
 
@@ -94,7 +94,7 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe("MeshReputation ponder handlers", () => {
+describe("LoopReputation ponder handlers", () => {
   it("excludes shared deployment artifact addresses instead of stale PONDER address env values", async () => {
     const artifactAddress = getSharedDeploymentAddress(31337, "ContentRegistry");
     const staleEnvAddress = "0x1111111111111111111111111111111111111111";
@@ -104,7 +104,7 @@ describe("MeshReputation ponder handlers", () => {
 
     await loadHandlers({
       PONDER_NETWORK: "hardhat",
-      PONDER_MREP_ADDRESS: staleEnvAddress,
+      PONDER_LREP_ADDRESS: staleEnvAddress,
       PONDER_DEPLOYER_ADDRESS: deployerAddress,
     });
 

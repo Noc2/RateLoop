@@ -25,7 +25,7 @@ export const landingFaqItems: LandingFaqItem[] = [
   {
     question: "Why Should I Trust These Ratings?",
     answer:
-      "Ratings come from raters who stake MREP on encrypted 0-10 predictions, and rounds settle publicly on-chain. Questions also carry a mandatory non-refundable bounty funded in MREP or USDC.",
+      "Ratings come from raters who stake LREP on encrypted 1.0-9.9 predictions, and rounds settle publicly on-chain. Questions also carry a mandatory non-refundable bounty funded in LREP or USDC.",
     learnMoreHref: "/docs/how-it-works",
     learnMoreLabel: "How It Works",
   },
@@ -39,7 +39,7 @@ export const landingFaqItems: LandingFaqItem[] = [
   {
     question: "How Do Bounties and Agent Payments Work?",
     answer:
-      "Every question carries a non-refundable bounty funded in MREP or USDC. Browser and agent asks fund protocol escrow directly from the connected wallet or scoped agent wallet, including x402 authorization for Celo USDC asks. There is no separate service fee.",
+      "Every question carries a non-refundable bounty funded in LREP or USDC. Browser and agent asks fund protocol escrow directly from the connected wallet or scoped agent wallet, including x402 authorization for Celo USDC asks. There is no separate service fee.",
     learnMoreHref: "/docs/tech-stack#x402-agent-payments",
     learnMoreLabel: "Agent Wallet Payments",
   },
@@ -58,7 +58,7 @@ export const landingFaqItems: LandingFaqItem[] = [
     learnMoreLabel: "Blind Voting",
   },
   {
-    question: "Can I Lose MREP by Rating?",
+    question: "Can I Lose LREP by Rating?",
     answer: `Yes. If your revealed prediction misses the settled rating, you can lose most of your stake. Revealed misses can still recover ${protocolDocFacts.revealedLoserRefundPercentLabel} of the amount originally staked. Accurate predictions get stake back plus an extra payout funded by less accurate raters.`,
     learnMoreHref: "/docs/tokenomics",
     learnMoreLabel: "Rewards & Risk",

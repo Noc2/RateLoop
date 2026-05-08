@@ -38,6 +38,8 @@ test("buildCommitPredictionParams returns opinion and crowd prediction commit me
 
   const result = await buildCommitPredictionParams({
     voter: "0x1111111111111111111111111111111111111111",
+    chainId: 31337n,
+    engineAddress: "0x2222222222222222222222222222222222222222",
     contentId: 42n,
     opinionRating: 7.25,
     predictedCrowdRating: 6.9,

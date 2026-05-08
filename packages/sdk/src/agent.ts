@@ -1,4 +1,4 @@
-import { ROUND_STATE, ROUND_STATE_LABEL } from "@ratemesh/contracts/protocol";
+import { ROUND_STATE, ROUND_STATE_LABEL } from "@rateloop/contracts/protocol";
 import { CuryoApiError, CuryoSdkError } from "./errors";
 import {
   createCuryoReadClient,
@@ -409,7 +409,7 @@ type PublicFeedbackListResponse = {
   [key: string]: unknown;
 };
 
-const PREDICTED_RATING_SYSTEM = "ratemesh.predicted_final_rating.v1";
+const PREDICTED_RATING_SYSTEM = "rateloop.predicted_final_rating.v1";
 const FEATURE_ACCEPTANCE_RESULT_SPEC_HASH = "0x383236243362c424465503c886244a54c7b038d76e7aa5e06b0e4c70c61d246b";
 
 const DEFAULT_AGENT_RESULT_TEMPLATE = {

@@ -2,10 +2,10 @@
 pragma solidity ^0.8.20;
 
 import { Test } from "forge-std/Test.sol";
-import { MeshReputation } from "../contracts/MeshReputation.sol";
+import { LoopReputation } from "../contracts/LoopReputation.sol";
 
-contract MeshReputationTest is Test {
-    MeshReputation internal token;
+contract LoopReputationTest is Test {
+    LoopReputation internal token;
 
     address internal admin = address(0xA11CE);
     address internal governance = address(0xB0B);
@@ -14,22 +14,22 @@ contract MeshReputationTest is Test {
     address internal recipient = address(0x5678);
 
     function setUp() public {
-        token = new MeshReputation(admin, governance);
+        token = new LoopReputation(admin, governance);
     }
 
-    function test_MetadataUsesRateMeshReputation() public view {
-        assertEq(token.name(), "Mesh Reputation");
-        assertEq(token.symbol(), "MREP");
+    function test_MetadataUsesRateLoopReputation() public view {
+        assertEq(token.name(), "Loop Reputation");
+        assertEq(token.symbol(), "LREP");
         assertEq(token.decimals(), 6);
         assertEq(token.MAX_SUPPLY(), 100_000_000e6);
     }
 
     function test_ConstructorRejectsZeroLaunchRoles() public {
         vm.expectRevert("Invalid admin");
-        new MeshReputation(address(0), governance);
+        new LoopReputation(address(0), governance);
 
         vm.expectRevert("Invalid governance");
-        new MeshReputation(admin, address(0));
+        new LoopReputation(admin, address(0));
     }
 
     function test_AdminMintIsCappedAndSelfDelegatesRecipient() public {
@@ -47,7 +47,7 @@ contract MeshReputationTest is Test {
     }
 
     function test_GovernanceCanMintWhenItIsAlsoAdmin() public {
-        MeshReputation governanceToken = new MeshReputation(governance, governance);
+        LoopReputation governanceToken = new LoopReputation(governance, governance);
 
         vm.prank(governance);
         governanceToken.mint(rater, 1_000e6);

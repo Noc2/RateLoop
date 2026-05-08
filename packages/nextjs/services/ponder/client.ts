@@ -1,5 +1,5 @@
-import type { RoundState } from "@ratemesh/contracts/protocol";
-import type { ProfileSelfReportAudienceContext } from "@ratemesh/node-utils/profileSelfReport";
+import type { RoundState } from "@rateloop/contracts/protocol";
+import type { ProfileSelfReportAudienceContext } from "@rateloop/node-utils/profileSelfReport";
 import { resolvePonderUrlValue } from "~~/utils/env/ponderUrl";
 
 const isProduction = process.env.NODE_ENV === "production";

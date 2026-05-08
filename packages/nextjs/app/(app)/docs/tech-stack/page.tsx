@@ -14,7 +14,7 @@ const circleCeloUsdcHref = "https://www.circle.com/multi-chain-usdc/celo";
 export const metadata = {
   title: "Tech Stack | Curyo Docs",
   description:
-    "The protocol terms behind Curyo: x402 agent payments, MCP and WebMCP tools, optional identity signals, tlock blind prediction rounds, MREP staking, and Celo USDC settlement.",
+    "The protocol terms behind Curyo: x402 agent payments, MCP and WebMCP tools, optional identity signals, tlock blind prediction rounds, LREP staking, and Celo USDC settlement.",
 } satisfies Metadata;
 
 const TechStackPage: NextPage = () => {
@@ -118,11 +118,11 @@ const TechStackPage: NextPage = () => {
         window closes.
       </p>
 
-      <h2 id="mrep-staking">MREP Staking</h2>
+      <h2 id="lrep-staking">LREP Staking</h2>
       <p>
-        MREP is the reputation stake used in rating and governance. Raters stake MREP on a split report: their own 0-10
-        opinion and the 0-10 crowd rating they expect. Accurate revealed crowd predictions recover stake and share
-        rewards; revealed misses recover only a small refund; unrevealed reports can forfeit.
+        LREP is the reputation stake used in rating and governance. Raters stake LREP on a split report: their own
+        1.0-9.9 opinion and the 1.0-9.9 crowd rating they expect. Accurate revealed crowd predictions recover stake and
+        share rewards; revealed misses recover only a small refund; unrevealed reports can forfeit.
       </p>
       <p>
         The reason to use staking is incentive alignment: a rater has to put scarce reputation behind a prediction
@@ -131,8 +131,8 @@ const TechStackPage: NextPage = () => {
 
       <h2 id="bounties">Bounties</h2>
       <p>
-        Bounties are attached when an asker submits a question. They are separate from MREP stake settlement and can be
-        funded in MREP or Celo USDC. Eligible revealed raters claim them after qualified rounds, so useful prediction
+        Bounties are attached when an asker submits a question. They are separate from LREP stake settlement and can be
+        funded in LREP or Celo USDC. Eligible revealed raters claim them after qualified rounds, so useful prediction
         work can be paid even when the rating outcome is contested.
       </p>
 

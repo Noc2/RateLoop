@@ -5,7 +5,7 @@ import {
   EPOCH_WEIGHT_BPS,
   PLATFORM_REWARD_SPLIT_BPS,
   REWARD_SPLIT_BPS,
-} from "@ratemesh/contracts/protocol";
+} from "@rateloop/contracts/protocol";
 
 function formatPercent(value: number): string {
   return `${value.toFixed(2).replace(/\.?0+$/, "")}%`;
@@ -55,17 +55,17 @@ function effectiveRawSharePercent(bucketBps: number): number {
 }
 
 export const protocolDocFacts = {
-  governanceProposalThresholdLabel: "1,000 MREP hard floor",
-  governanceMaxProposalThresholdLabel: "100,000 MREP",
-  governanceProposalThresholdRangeLabel: "1,000-100,000 MREP",
-  governanceQuorumLabel: "4% of circulating supply (min 100,000 MREP)",
-  governanceMinimumQuorumLabel: "100,000 MREP",
+  governanceProposalThresholdLabel: "1,000 LREP hard floor",
+  governanceMaxProposalThresholdLabel: "100,000 LREP",
+  governanceProposalThresholdRangeLabel: "1,000-100,000 LREP",
+  governanceQuorumLabel: "4% of circulating supply (min 100,000 LREP)",
+  governanceMinimumQuorumLabel: "100,000 LREP",
   governanceTimelockDelayLabel: "2 days",
-  governanceVotingDelegationLabel: "self-delegated MREP only",
-  submissionMrepMinimumLabel: "1 MREP hard floor",
+  governanceVotingDelegationLabel: "self-delegated LREP only",
+  submissionLrepMinimumLabel: "1 LREP hard floor",
   submissionUsdcMinimumLabel: "1 USDC hard floor",
-  declarationBondMinimumLabel: "100 MREP hard floor",
-  challengeBondMinimumLabel: "25 MREP hard floor",
+  declarationBondMinimumLabel: "100 LREP hard floor",
+  challengeBondMinimumLabel: "25 LREP hard floor",
   blindPhaseDurationLabel: formatDurationLabel(DEFAULT_ROUND_CONFIG.epochDurationSeconds),
   revealGracePeriodLabel: formatDurationLabel(DEFAULT_REVEAL_GRACE_PERIOD_SECONDS),
   maxRoundDurationLabel: formatDurationLabel(DEFAULT_ROUND_CONFIG.maxDurationSeconds),

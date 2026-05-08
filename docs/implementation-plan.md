@@ -1,12 +1,12 @@
-# RateMesh Implementation Plan
+# RateLoop Implementation Plan
 
 Planning date: 2026-05-07
 
 ## Goal
 
-RateMesh should be a fresh deployment of the protocol, not a legacy-compatible
+RateLoop should be a fresh deployment of the protocol, not a legacy-compatible
 contract migration. The product name, repository, and token should move back to
-RateMesh, with visual identity based on the Hawig hero animation and logo from
+RateLoop, with visual identity based on the Hawig hero animation and logo from
 `https://github.com/Noc2/Hawig` / `https://www.hawig.xyz/`. It should also reuse
 the existing HREP/legacy CREP snapshot as the genesis community distribution
 because those holders helped develop the original protocol.
@@ -20,16 +20,16 @@ The product direction is:
 - Day-one decentralized governance using a genesis distribution to previous
   legacy CREP/HREP snapshot participants.
 - Continue on Celo for now, with Celo Sepolia as the testnet path.
-- Transferable capped Mesh Reputation token (`MREP`) for governance,
+- Transferable capped Loop Reputation token (`LREP`) for governance,
   prediction locks, frontend staking, and long-term protocol ownership.
-- Use `MREP` as the working implementation label unless governance changes
+- Use `LREP` as the working implementation label unless governance changes
   naming before deployment.
-- Reuse HREP tokenomics for MREP: `100,000,000` max supply split into the
+- Reuse HREP tokenomics for LREP: `100,000,000` max supply split into the
   existing `52M / 12M / 32M / 4M` launch pools.
 - Users submit a split rating report instead of a binary up/down vote: their
   own opinion rating plus their expected crowd rating.
 - One sealed private round per bounty, followed by reveal and settlement.
-- MREP locks use a winner/loser redistribution model adapted from old Curyo, so
+- LREP locks use a winner/loser redistribution model adapted from old Curyo, so
   accurate raters earn from less accurate raters without increasing total
   supply.
 - Reputation gates influence, governance, and USDC bounty eligibility.
@@ -38,7 +38,7 @@ The product direction is:
 - USDC payouts reward useful independent signal, not raw wallet count.
 - Frontend operators keep the old 3% default earning share on bounty and
   feedback payouts, with governance able to tune it up to a 5% cap, and must
-  stake MREP to be fee-eligible.
+  stake LREP to be fee-eligible.
 - Headlines, subheadings, onboarding copy, and empty states should be updated
   away from human-only framing toward open rating, prediction, calibration, and
   independent signal.
@@ -46,7 +46,7 @@ The product direction is:
 The implementation should reuse the old Curyo monorepo where the code already
 solves the same problem, but it should not preserve Curyo mechanics for their
 own sake. The frontend should reuse the Hawig hero animation/logo as the new
-RateMesh brand anchor, while retaining useful Curyo app surfaces where they are
+RateLoop brand anchor, while retaining useful Curyo app surfaces where they are
 still ergonomic. The biggest architectural change is replacing binary token
 staking as the core vote primitive with split rating reports, transferable
 capped reputation locks, account-level calibration, cluster-aware payout
@@ -54,7 +54,7 @@ controls, and a Celo-native deployment.
 
 ## Research Notes For The Updated Architecture
 
-This is protocol design context, not legal advice. RateMesh should still get
+This is protocol design context, not legal advice. RateLoop should still get
 jurisdiction-specific legal review before launching a transferable token.
 
 The recommended governance and chain architecture should follow established
@@ -66,7 +66,7 @@ on-chain patterns:
   timelock itself the long-term admin after setup, so future maintenance goes
   through governance.
 - OpenZeppelin `ERC20Votes` keeps historical vote checkpoints and can support
-  delegation. RateMesh v1 keeps voting power self-delegated because the current
+  delegation. RateLoop v1 keeps voting power self-delegated because the current
   token only allows self-delegation, while still using the checkpoint primitive
   for transferable governance reputation.
 - Compound shows a mature pattern of tokenholder governance with delegation,
@@ -90,12 +90,12 @@ on-chain patterns:
 - Circle lists native USDC on Celo mainnet at
   `0xcebA9300f2b948710d2653dD7B07f33A8B32118C` and Celo Sepolia USDC at
   `0x01C5C0122039549AD1493B8220cABEdD739BC44E`.
-- A winner/loser MREP lock model is economically closer to a parimutuel
+- A winner/loser LREP lock model is economically closer to a parimutuel
   prediction mechanism than an inflationary reputation model: accurate
   predictions earn from inaccurate locks, while the protocol's total supply cap
   remains fixed.
 - Proper scoring-rule and forecasting-tournament literature supports rewarding
-  forecast quality rather than raw participation, but RateMesh should avoid a
+  forecast quality rather than raw participation, but RateLoop should avoid a
   pure cash scoring rule because the target result is endogenous: raters are
   predicting the crowd's final rating and can partially influence it. This is
   why the v1 plan uses bounded locks, leave-one-out scoring, calibration, and
@@ -132,10 +132,10 @@ Sources:
 
 ## Recommended Starting Point
 
-Use `https://github.com/Noc2/RateMesh` as the canonical repository and import
+Use `https://github.com/Noc2/RateLoop` as the canonical repository and import
 the old Curyo monorepo as the source tree for the new deployment. The first
 implementation commits should keep the old code structure recognizable, then
-rename package metadata and visible product surfaces to RateMesh:
+rename package metadata and visible product surfaces to RateLoop:
 
 - `packages/foundry` remains the smart-contract package.
 - `packages/contracts` remains the generated ABI/deployment package.
@@ -147,10 +147,10 @@ rename package metadata and visible product surfaces to RateMesh:
 - `packages/agents` remains useful for AI rater workflows, prompt templates,
   and future evaluator integrations.
 
-The intended package scope is `@ratemesh/*`. It is acceptable to keep old
+The intended package scope is `@rateloop/*`. It is acceptable to keep old
 `@curyo/*` package names inside the first mechanical import commit, but the
 bootstrap phase should rename live package metadata and imports before the app
-is treated as a RateMesh baseline.
+is treated as a RateLoop baseline.
 
 Do not treat the existing Self-related packages, generated ABIs, deployment
 addresses, or legacy generated artifacts as canonical artifacts for the new
@@ -160,7 +160,7 @@ regenerated from the new contracts/config.
 
 ## Celo Deployment And Assets
 
-RateMesh should stay on Celo for now.
+RateLoop should stay on Celo for now.
 
 Launch network defaults:
 
@@ -189,17 +189,17 @@ Implementation implications:
 
 ## Resolved Pre-Implementation Decisions
 
-- Token name/symbol: Mesh Reputation (`MREP`).
-- Token contract name: `MeshReputation`.
-- Brand: RateMesh name, Hawig-derived animated hero, Hawig-derived logo mark,
-  and `@ratemesh/*` package scopes.
-- Repository: `https://github.com/Noc2/RateMesh`.
+- Token name/symbol: Loop Reputation (`LREP`).
+- Token contract name: `LoopReputation`.
+- Brand: RateLoop name, Hawig-derived animated hero, Hawig-derived logo mark,
+  and `@rateloop/*` package scopes.
+- Repository: `https://github.com/Noc2/RateLoop`.
 - Genesis snapshot: reuse the existing HREP/legacy CREP snapshot artifact
-  unchanged as the MREP claim source.
-- Rating scale: `0.0-10.0`, stored as `0-10000` BPS.
+  unchanged as the LREP claim source.
+- Rating scale: `1.0-9.9`, stored as `1000-9900` BPS.
 - Governance launch parameters: reuse the previous Curyo durations, threshold,
   dynamic quorum, proposal cooldown, and 7-day governance locks.
-- Frontend stake: `1,000 MREP`.
+- Frontend stake: `1,000 LREP`.
 - Transaction UX: keep sponsored transactions with self-funded fallback.
 - USDC payout: pay a small work stipend to eligible revealed raters, including
   wrong/near-miss raters, and pay the larger accuracy pool to better
@@ -212,8 +212,8 @@ Implementation implications:
 
 ## Optional Identity Signals
 
-The core RateMesh protocol should be identity-agnostic: accounts register, build
-calibration history, lock MREP, reveal predictions, and become USDC-eligible by
+The core RateLoop protocol should be identity-agnostic: accounts register, build
+calibration history, lock LREP, reveal predictions, and become USDC-eligible by
 performance and independence. That keeps AI raters and human raters on the same
 basic rail and avoids making one identity vendor a protocol dependency.
 
@@ -231,7 +231,7 @@ Self.xyz can still be useful as an optional feature:
 - Optional identity must not be enough by itself to bypass calibration,
   reputation locks, reveal reliability, cluster caps, or USDC payout limits.
 - Optional identity should not be required for governance voting power because
-  MREP already represents the launch ownership and protocol-control primitive.
+  LREP already represents the launch ownership and protocol-control primitive.
 - Self credentials should be revocable, scoped by nullifier, capped by modest
   multipliers, and safe to disable without breaking rating, earning, or
   governance.
@@ -273,7 +273,7 @@ modules, and keep all core tests passing with identity disabled.
 
 ### Reuse With Heavy Refactor
 
-- `HumanReputation.sol` becomes `MeshReputation.sol`.
+- `HumanReputation.sol` becomes `LoopReputation.sol`.
   Keep ERC20Votes-style checkpointing, keep transfers enabled, and add a hard
   `MAX_SUPPLY`. Protocol earning can distribute only from pre-funded capped
   pools; there should be no uncapped mint path.
@@ -290,7 +290,7 @@ modules, and keep all core tests passing with identity disabled.
   Preserve funding, windows, claim accounting, frontend fee support, bundles if
   still needed, and forfeiture/refund logic. Replace voter-ID eligibility with
   reputation and cluster eligibility.
-- Keep `RateMeshGovernor.sol` as the governor contract name.
+- Keep `RateLoopGovernor.sol` as the governor contract name.
   Launch it from day one with Timelock-owned protocol roles and genesis
   governance distribution.
 - `VoterIdNFT.sol` should not remain a required mint gate. If profile badges are
@@ -299,7 +299,7 @@ modules, and keep all core tests passing with identity disabled.
   gating core protocol participation.
 - Ponder `voterStats` and `voterCategoryStats` become prediction/reputation
   calibration tables instead of win/loss tables.
-- `StakeSelector` becomes `PredictionComposer`: rating slider, bounded MREP
+- `StakeSelector` becomes `PredictionComposer`: rating slider, bounded LREP
   lock selector, preview of eligibility, and clear reveal state.
 
 ### Remove From The Required Path
@@ -320,17 +320,17 @@ modules, and keep all core tests passing with identity disabled.
 
 ## Source File Reuse Map
 
-| Old Curyo source | New RateMesh action |
+| Old Curyo source | New RateLoop action |
 | --- | --- |
-| `packages/foundry/contracts/HumanReputation.sol` | Rename and refactor into `MeshReputation.sol`; keep transferability and governance checkpoints, add hard supply cap, remove faucet assumptions, and replace binary-vote staking with prediction locks. |
+| `packages/foundry/contracts/HumanReputation.sol` | Rename and refactor into `LoopReputation.sol`; keep transferability and governance checkpoints, add hard supply cap, remove faucet assumptions, and replace binary-vote staking with prediction locks. |
 | `packages/foundry/contracts/RoundVotingEngine.sol` | Rename and refactor into `PredictionVotingEngine.sol`; keep commit/reveal/tlock machinery, replace binary vote settlement. |
-| `packages/foundry/contracts/RoundRewardDistributor.sol` | Reuse claim/dust discipline and old reward-split math for `PredictionRewardDistributor.sol`; replace binary HREP winner/loser payouts with prediction-error MREP redistribution plus USDC bounty claims. |
+| `packages/foundry/contracts/RoundRewardDistributor.sol` | Reuse claim/dust discipline and old reward-split math for `PredictionRewardDistributor.sol`; replace binary HREP winner/loser payouts with prediction-error LREP redistribution plus USDC bounty claims. |
 | `packages/foundry/contracts/QuestionRewardPoolEscrow.sol` | Keep as USDC bounty escrow foundation; remove Voter ID fields and add cluster/reputation eligibility. |
 | `packages/foundry/contracts/ContentRegistry.sol` | Keep content lifecycle, categories, duplicate protection, and rating state; remove required Self/nullifier submission identity snapshots. |
 | `packages/foundry/contracts/ProtocolConfig.sol` | Keep central config/address book; rename and add prediction, reputation, calibration, and cluster parameters. |
 | `packages/foundry/contracts/VoterIdNFT.sol` | Do not keep as a required voter credential. Mine delegation/profile lessons for `RaterRegistry` and optional identity attestations. |
 | `packages/foundry/contracts/HumanFaucet.sol` | Delete; replace the old 52M faucet allocation with the existing HREP/legacy CREP snapshot claim pool. |
-| `packages/foundry/script/DeployRateMesh.s.sol` | Refactor in place; remove faucet and migration tiers from the core deployment; add the existing HREP/legacy CREP snapshot Merkle distribution, HREP-style MREP launch pools, Governor, Timelock, Celo constants, Timelock ownership from launch, and optionally deploy identity adapters only when enabled. |
+| `packages/foundry/script/DeployRateLoop.s.sol` | Refactor in place; remove faucet and migration tiers from the core deployment; add the existing HREP/legacy CREP snapshot Merkle distribution, HREP-style LREP launch pools, Governor, Timelock, Celo constants, Timelock ownership from launch, and optionally deploy identity adapters only when enabled. |
 | `packages/ponder/ponder.schema.ts` | Keep content/profile/feed tables; replace vote/voter/reward tables with prediction/reputation/payout tables. |
 | `packages/ponder/src/RoundVotingEngine.ts` | Refactor event handlers for prediction events and weighted final ratings. |
 | `packages/ponder/src/HumanFaucet.ts` and `packages/ponder/src/VoterIdNFT.ts` | Delete or replace with `RaterRegistry.ts`. |
@@ -355,14 +355,14 @@ Each vote commits to:
 contentId
 roundId
 voter
-opinionRatingBps          // 0-10000, representing the rater's own 0.0-10.0 opinion
-predictedCrowdRatingBps   // 0-10000, representing the expected revealed crowd rating
-reputationLock      // bounded MREP lock escrowed until reveal/settlement
+opinionRatingBps          // 1000-9900, representing the rater's own 1.0-9.9 opinion
+predictedCrowdRatingBps   // 1000-9900, representing the expected revealed crowd rating
+reputationLock      // bounded LREP lock escrowed until reveal/settlement
 salt
 ```
 
 The reveal shows both values. The final rating is computed from revealed
-opinion ratings using effective weights. MREP and USDC reward scoring uses the
+opinion ratings using effective weights. LREP and USDC reward scoring uses the
 expected crowd rating against the leave-one-out or cluster-excluded peer result,
 so the user's own opinion is not rewarded for matching the end result. The
 default bounty workflow is:
@@ -371,7 +371,7 @@ default bounty workflow is:
 bounty funded -> commit window -> reveal window -> settle -> public result
 ```
 
-RateMesh v1 should use exactly one sealed round per bounty. Do not keep old Curyo's
+RateLoop v1 should use exactly one sealed round per bounty. Do not keep old Curyo's
 multi-round bounty model where one bounty waits for several settled rounds.
 After a round reveals, later votes are no longer independent predictions of the
 same hidden result; they are reactions to an already-public rating.
@@ -422,7 +422,7 @@ effectiveVotingPower =
 
 Where:
 
-- `lockedReputation` is transferable Mesh Reputation locked for this
+- `lockedReputation` is transferable Loop Reputation locked for this
   prediction.
 - `calibrationMultiplier` is earned from settled, revealed, calibrated
   participation and is account/category-specific.
@@ -436,17 +436,17 @@ later version.
 
 ### Reputation
 
-Mesh Reputation (`MREP`) should be a transferable, capped ERC20Votes-style
+Loop Reputation (`LREP`) should be a transferable, capped ERC20Votes-style
 token.
 The legal/decentralization motivation is that protocol governance should not
 remain company-controlled at launch. The practical product motivation is that
 the existing HREP/legacy CREP snapshot already represents the community that helped
 build the protocol and should be the initial governance and ownership base.
 
-Transferable MREP is intentional: portable reputation and day-one tokenholder
+Transferable LREP is intentional: portable reputation and day-one tokenholder
 governance are part of the launch design, not an accidental side effect. The
 token should not be the only signal for rating or USDC payouts. Transferable
-reputation can be bought, so RateMesh pairs it with prediction accuracy,
+reputation can be bought, so RateLoop pairs it with prediction accuracy,
 effective-unit weighting, calibration, reveal reliability, cluster discounts,
 governance locks, proposal/quorum floors, and hard floors on submission bounties
 and AI declaration/challenge bonds.
@@ -454,12 +454,12 @@ and AI declaration/challenge bonds.
 Recommended token properties:
 
 - Transferable ERC20 with ERC20Votes checkpoints and self-delegation-on-receipt.
-  The current contract supports self-delegation only, not third-party MREP vote
+  The current contract supports self-delegation only, not third-party LREP vote
   delegation.
 - 6 decimals to preserve compatibility with the old HREP mental model.
 - Hard `MAX_SUPPLY`; no uncapped inflation.
 - Genesis distribution from the existing HREP/legacy CREP snapshot, mapped 1:1 into
-  MREP claim amounts unless the already-approved snapshot artifact says
+  LREP claim amounts unless the already-approved snapshot artifact says
   otherwise.
 - HREP tokenomics reused for launch pools, with the full cap allocated at
   deployment.
@@ -489,9 +489,9 @@ MIN_REPUTATION_FOR_USDC = protocol parameter
 The exact value should be tunable. The important rule is that new wallets cannot
 immediately farm bounties.
 
-### Mesh Reputation (MREP) Tokenomics And Genesis Snapshot
+### Loop Reputation (LREP) Tokenomics And Genesis Snapshot
 
-Mesh Reputation (`MREP`) should reuse HREP tokenomics rather than inventing a
+Loop Reputation (`LREP`) should reuse HREP tokenomics rather than inventing a
 new launch split.
 The deployment should mint or allocate the full capped supply into auditable
 contracts at launch.
@@ -499,12 +499,12 @@ contracts at launch.
 Launch allocation:
 
 ```text
-MAX_SUPPLY = 100,000,000 MREP
+MAX_SUPPLY = 100,000,000 LREP
 
-52,000,000 MREP  Genesis snapshot claim pool
-12,000,000 MREP  Bootstrap / calibrated participation pool
-32,000,000 MREP  DAO treasury
- 4,000,000 MREP  Consensus subsidy / reserve pool
+52,000,000 LREP  Genesis snapshot claim pool
+12,000,000 LREP  Bootstrap / calibrated participation pool
+32,000,000 LREP  DAO treasury
+ 4,000,000 LREP  Consensus subsidy / reserve pool
 ```
 
 Snapshot rule:
@@ -512,53 +512,53 @@ Snapshot rule:
 - Reuse the existing HREP/legacy CREP snapshot artifact as the canonical genesis claim
   list. Do not regenerate a new snapshot formula from current balances unless
   governance explicitly rejects the existing artifact before deployment.
-- Import the snapshot artifact into the RateMesh repo with the claim index,
+- Import the snapshot artifact into the RateLoop repo with the claim index,
   account, amount, snapshot provenance, and Merkle root.
 - If the existing artifact uses older `CREP` or `HREP` labels, treat the claim
-  amount as new `MREP` 1:1.
-- If the snapshot total is below `52,000,000 MREP`, the remainder stays in the
+  amount as new `LREP` 1:1.
+- If the snapshot total is below `52,000,000 LREP`, the remainder stays in the
   Merkle distributor until the claim window ends, then moves to the DAO treasury
   or another governance-controlled reserve by the published claim rules.
-- If the snapshot total exceeds `52,000,000 MREP`, deployment must stop; do not
+- If the snapshot total exceeds `52,000,000 LREP`, deployment must stop; do not
   silently scale claims down.
 - Recommended claim window: 12 months from Celo mainnet deployment. This is
   long enough for prior holders to notice, but still gives governance a clear
-  date when unclaimed MREP can be swept.
+  date when unclaimed LREP can be swept.
 - The claim UI should show the snapshot source and Merkle proof; it should not
   imply a Self.xyz or proof-of-personhood requirement.
 
 Bootstrap pool:
 
-- Reuse the old HREP bootstrap mental model: a fixed `12,000,000 MREP` pool
+- Reuse the old HREP bootstrap mental model: a fixed `12,000,000 LREP` pool
   used for calibrated participation rewards.
 - Bootstrap rewards are not automatic faucet claims. They are paid only after
   valid, revealed, calibrated participation or governance-approved programs.
-- Because MREP is transferable and capped, bootstrap rewards should be
+- Because LREP is transferable and capped, bootstrap rewards should be
   conservative after USDC payouts launch; the main ongoing cash incentive should
   come from funded USDC bounties.
 
 Consensus reserve:
 
-- Keep a fixed `4,000,000 MREP` reserve to handle unanimous or near-unanimous
+- Keep a fixed `4,000,000 LREP` reserve to handle unanimous or near-unanimous
   rounds where there is little or no losing lock pool.
 - Preserve the old safety idea of a capped subsidy per round. A good launch
-  default is `min(5% of revealed locked MREP, 50 MREP)`.
+  default is `min(5% of revealed locked LREP, 50 LREP)`.
 - Subsidies are optional support for signal quality, not a replacement for
   winner/loser redistribution.
 
 ### Reputation Locks
 
-Users should lock transferable MREP on each split report. The lock should keep the
+Users should lock transferable LREP on each split report. The lock should keep the
 old Curyo intuition that accurate raters earn from inaccurate raters, but adapt
 it to continuous expected-crowd ratings instead of binary up/down pools.
 
 Recommended launch defaults:
 
 ```text
-MIN_PREDICTION_LOCK = 1 MREP
-DEFAULT_PREDICTION_LOCK = 5 MREP
-MAX_PREDICTION_LOCK = 100 MREP
-MAX_DAILY_LOCK_PER_ACCOUNT = 250 MREP
+MIN_PREDICTION_LOCK = 1 LREP
+DEFAULT_PREDICTION_LOCK = 5 LREP
+MAX_PREDICTION_LOCK = 100 LREP
+MAX_DAILY_LOCK_PER_ACCOUNT = 250 LREP
 MAX_DAILY_LOCK_PER_CLUSTER = governance parameter
 FULL_WIN_BAND = 0.25 rating points
 LOSS_CUTOFF = 1.00 rating point
@@ -578,7 +578,7 @@ Settlement model:
    full winner score.
 5. If `FULL_WIN_BAND < error < LOSS_CUTOFF`, the rater loses a linear portion
    of the lock and receives a linearly reduced winner score.
-6. If `error >= LOSS_CUTOFF`, the rater is a losing crowd prediction for MREP
+6. If `error >= LOSS_CUTOFF`, the rater is a losing crowd prediction for LREP
    settlement and loses the at-risk lock, except for the revealed-loser refund.
 7. Missed reveals forfeit the rating-report lock after the reveal grace period and
    receive no loser refund.
@@ -601,15 +601,15 @@ Accurate-rater shares should be proportional to:
 ```text
 winnerShareWeight =
   winnerScore
-  * sqrt(lockedMREP)
+  * sqrt(lockedLREP)
   * calibrationMultiplier
   * independenceMultiplier
 ```
 
 Design notes:
 
-- This keeps total MREP supply capped because normal settlement only moves
-  already-issued MREP between raters, frontends, treasury, and reserve.
+- This keeps total LREP supply capped because normal settlement only moves
+  already-issued LREP between raters, frontends, treasury, and reserve.
 - The square-root lock curve prevents large holders from getting linear rating
   control.
 - The error band avoids punishing honest near-misses too harshly.
@@ -654,9 +654,9 @@ Launch recommendation:
 - Pay the larger accuracy pool by prediction quality, so correct raters earn
   materially more.
 - `usdcQualityScore = 1.0` inside the full-win band.
-- Between the full-win band and the MREP `LOSS_CUTOFF`, quality decays
+- Between the full-win band and the LREP `LOSS_CUTOFF`, quality decays
   linearly but stays meaningful.
-- Between the MREP `LOSS_CUTOFF` and a wider `USDC_NEAR_MISS_CUTOFF`, quality
+- Between the LREP `LOSS_CUTOFF` and a wider `USDC_NEAR_MISS_CUTOFF`, quality
   decays to zero. These raters still receive only the work stipend.
 - Far-wrong raters receive only the work stipend, not the accuracy pool.
 - Small bounded multiplier for higher reputation, for example `1.0x-1.25x`.
@@ -689,9 +689,9 @@ public current rating.
 
 Recommended settlement:
 
-- Revealed reports get their MREP locks returned, except for any explicit
+- Revealed reports get their LREP locks returned, except for any explicit
   missed-reveal or fraud penalty that applies independently.
-- Unrevealed reports forfeit their MREP lock after the reveal grace period.
+- Unrevealed reports forfeit their LREP lock after the reveal grace period.
 - No normal accuracy pool is paid because there is no reliable final signal.
 - A small attempt stipend may be paid from the USDC bounty to eligible revealed
   calibrated raters, capped at `ATTEMPT_STIPEND_BPS = 1000` and cluster-capped.
@@ -734,7 +734,7 @@ Implementation implications:
 
 ## Contract Architecture
 
-### `MeshReputation`
+### `LoopReputation`
 
 Purpose:
 
@@ -743,7 +743,7 @@ Purpose:
 - Protocol-native lock, unlock, slash, and redistribution hooks.
 - Governance clock compatible with the previous Curyo launch parameters on
   Celo.
-- Seven-day governance locks for proposal and voting power, reused from RateMesh.
+- Seven-day governance locks for proposal and voting power, reused from RateLoop.
 - Merkle-claimable genesis allocation from the existing HREP/legacy CREP snapshot.
 - Fixed HREP-style launch pools for snapshot claims, bootstrap rewards,
   treasury, and consensus reserve.
@@ -753,7 +753,7 @@ Reuse:
 - Start from `packages/foundry/contracts/HumanReputation.sol`.
 - Keep 6 decimals, ERC20Votes, ERC20Permit, and self-delegation-on-receipt if
   the UX still benefits from it.
-- Keep documentation and UI copy clear that MREP voting power is self-delegated
+- Keep documentation and UI copy clear that LREP voting power is self-delegated
   in the current contract; operational identity delegation is a separate
   VoterIdNFT/profile concept.
 - Reuse the old Curyo governance durations. If the implementation keeps the old
@@ -825,7 +825,7 @@ Purpose:
 
 Reuse:
 
-- Use `MeshReputation` as the bonded asset.
+- Use `LoopReputation` as the bonded asset.
 - Keep full model and prompt metadata off-chain in signed JSON or a
   content-addressed document.
 
@@ -862,7 +862,7 @@ Key changes:
 - Replace up/down pools with weighted prediction aggregates:
   `weightedPredictionSum`, `totalEffectiveWeight`, prediction count,
   dispersion, and final rating.
-- Track MREP lock outcomes: returned lock, revealed-loser refund, net losing
+- Track LREP lock outcomes: returned lock, revealed-loser refund, net losing
   pool, winner pool, frontend share, treasury share, and reserve share.
 - Treat each funded bounty as one sealed prediction round.
 - Allow later `roundId`s for challenge/re-rate bounties, but do not continue the
@@ -932,7 +932,7 @@ event PredictionRoundLinkedToBounty(
 
 Purpose:
 
-- Redistribute MREP lock losses from inaccurate or unrevealed crowd predictions
+- Redistribute LREP lock losses from inaccurate or unrevealed crowd predictions
   to accurate revealed raters, eligible frontends, treasury, and consensus
   reserve.
 - Claim USDC bounty shares for eligible split reports.
@@ -948,11 +948,11 @@ Reuse:
 Key changes:
 
 - Replace binary HREP winner/loser claims with predicted-rating error claims.
-- Preserve the old split defaults for MREP losses: 5% revealed loser refund,
+- Preserve the old split defaults for LREP losses: 5% revealed loser refund,
   then 90% to accurate raters, 4% to eligible frontends, 1% to treasury, and 5%
   to consensus reserve.
 - Pay USDC from bounty pools.
-- Keep USDC payout accounting separate from MREP lock redistribution.
+- Keep USDC payout accounting separate from LREP lock redistribution.
 - Implement USDC work-stipend and accuracy-pool accounting with cluster caps.
 - Implement insufficient-signal attempt stipend and refund accounting.
 - Key claims by rater/round/cluster eligibility instead of voter ID.
@@ -996,7 +996,7 @@ Key changes:
 
 Purpose:
 
-- Give independent frontends a clear economic reason to integrate RateMesh.
+- Give independent frontends a clear economic reason to integrate RateLoop.
 - Attribute prediction commits, bounty claims, and feedback awards to a
   registered frontend/operator.
 - Let frontend operators claim their share through a pull-based flow.
@@ -1005,13 +1005,13 @@ Reuse:
 
 - Keep the current frontend-code attribution model.
 - Keep eligibility/stake concepts for spam resistance and operator
-  accountability, denominated in MREP.
+  accountability, denominated in LREP.
 - Keep keeper/frontend-fee sweep support for hosted frontends.
 
 Launch rule:
 
-- Frontends must stake MREP to be fee-eligible.
-- Default required frontend stake: `1,000 MREP`, matching the old fixed frontend
+- Frontends must stake LREP to be fee-eligible.
+- Default required frontend stake: `1,000 LREP`, matching the old fixed frontend
   registry stake mental model.
 - Default frontend share: 3% of eligible bounty and feedback payouts.
 - Max frontend share: 5%, adjustable only by governance.
@@ -1021,7 +1021,7 @@ Launch rule:
   have historical unclaimed fees routed to the protocol, matching the current
   design intent.
 
-### `RateMeshGovernor`
+### `RateLoopGovernor`
 
 Purpose:
 
@@ -1030,7 +1030,7 @@ Purpose:
 
 Launch requirements:
 
-- Deploy `RateMeshGovernor`, `TimelockController`, `MeshReputation`, and
+- Deploy `RateLoopGovernor`, `TimelockController`, `LoopReputation`, and
   core protocol contracts together.
 - Timelock owns ProxyAdmins, treasury roles, config roles, bootstrap pool roles,
   reserve roles, and protocol upgrade authority from launch.
@@ -1051,15 +1051,15 @@ Recommended initial parameters:
 - Voting delay: `1 day`.
 - Voting period: `7 days`.
 - Timelock delay: `2 days`.
-- Proposal threshold: `1,000 MREP`.
-- Proposal threshold floor: `1,000 MREP`; governance cannot lower the threshold
+- Proposal threshold: `1,000 LREP`.
+- Proposal threshold floor: `1,000 LREP`; governance cannot lower the threshold
   below the bootstrap floor.
-- Quorum: `max(4% of circulating MREP, 100,000 MREP)`.
+- Quorum: `max(4% of circulating LREP, 100,000 LREP)`.
 - Circulating supply for quorum excludes protocol-controlled holders, including
   the genesis distributor, bootstrap pool, consensus reserve, DAO treasury,
   voting engine, content registry, frontend registry, and protocol-owned
   distributor/escrow contracts.
-- Max proposal threshold: `100,000 MREP`.
+- Max proposal threshold: `100,000 LREP`.
 - Proposal cooldown: `1 day` between proposals per proposer.
 - Governance lock: lock used voting power and the proposal-threshold amount for
   `7 days`, preserving the old anti-flash-governance design.
@@ -1152,14 +1152,14 @@ tables.
 
 ### Visual Direction
 
-Use RateMesh as the product brand, with the Hawig visual system as the new
+Use RateLoop as the product brand, with the Hawig visual system as the new
 brand source of truth. Copy and adapt the hero animation and logo from
 `https://github.com/Noc2/Hawig`:
 
-- `src/components/Hero.tsx` becomes the public hero foundation, with RateMesh
+- `src/components/Hero.tsx` becomes the public hero foundation, with RateLoop
   copy instead of Hawig Ventures copy.
-- `src/components/OrbAnimation.tsx` becomes the animated RateMesh hero asset.
-- `src/app/icon.svg` becomes the initial RateMesh logo mark, adapted only as
+- `src/components/OrbAnimation.tsx` becomes the animated RateLoop hero asset.
+- `src/app/icon.svg` becomes the initial RateLoop logo mark, adapted only as
   needed for naming and favicon/app-icon sizes.
 - Reuse the Hawig brand colors: `#359EEE`, `#03CEA4`, `#FFC43D`, `#EF476F`.
 - Reuse the Hawig typography direction: Space Grotesk for display/headings and
@@ -1181,8 +1181,8 @@ a pure marketing page. Reuse old Curyo app surfaces where they are practical:
 
 Copy direction:
 
-- Use the RateMesh name and Hawig-derived logo/hero.
-- Rename token surfaces from HREP to MREP / Mesh Reputation.
+- Use the RateLoop name and Hawig-derived logo/hero.
+- Rename token surfaces from HREP to LREP / Loop Reputation.
 - Replace human-only language with rater, prediction, calibration, rating
   signal, and independent signal language.
 - Update headlines and subheadings so they describe open ratings, prediction
@@ -1197,7 +1197,7 @@ Replace the current binary voting dock:
 
 - Current: rating orb + up/down buttons + stake modal.
 - Target: rating orb + opinion slider/input + expected-crowd slider/input +
-  bounded MREP lock selector.
+  bounded LREP lock selector.
 
 The primary action should be:
 
@@ -1208,7 +1208,7 @@ Submit split rating -> confirm private report -> reveal/settlement status
 User-friendly details:
 
 - Show rating as `x.x / 10`.
-- Use a `0.0-10.0` scale and let the slider snap to tenths while storing BPS.
+- Use a `1.0-9.9` scale and let the slider snap to tenths while storing BPS.
 - Show current rating/reference rating.
 - For challenge/re-rate rounds, show the prior rating being challenged and the
   challenge reason.
@@ -1233,7 +1233,7 @@ journey.
 
 ### Sponsored Transaction UX
 
-Reuse old Curyo's sponsored transaction model. RateMesh should preserve the
+Reuse old Curyo's sponsored transaction model. RateLoop should preserve the
 thirdweb/EIP-5792 sponsored path with a self-funded fallback.
 
 Launch sponsorship policy:
@@ -1241,7 +1241,7 @@ Launch sponsorship policy:
 - Sponsor low-cost product-critical actions: genesis claim, delegation,
   calibration commits, reveals, standard predictions, USDC claims, and frontend
   fee claims.
-- Do not depend on sponsorship for funding bounties, staking frontend MREP, or
+- Do not depend on sponsorship for funding bounties, staking frontend LREP, or
   governance actions; those should work self-funded first, with sponsorship only
   if governance later approves a quota.
 - Keep per-address, per-session, and per-chain sponsorship quotas so bots cannot
@@ -1275,7 +1275,7 @@ Refactor `packages/sdk/src/vote.ts`:
 - Keep salt generation, tlock runtime resolution, frontend code resolution, and
   tests.
 - Add helpers for rating scale conversion:
-  - `0.0-10.0` score -> `0-10000` BPS.
+  - `1.0-9.9` score -> `1000-9900` BPS.
   - BPS -> display score.
   - slider step validation.
 
@@ -1303,7 +1303,7 @@ Changes:
 
 ## AI Rater And Agent Plan
 
-Keep `packages/agents`, but make it a first-class RateMesh package:
+Keep `packages/agents`, but make it a first-class RateLoop package:
 
 - Add an AI rater CLI that reads open questions and submits predictions.
 - Record required model, operator, prompt/version, retrieval, and tooling hashes
@@ -1324,11 +1324,11 @@ Keep `packages/agents`, but make it a first-class RateMesh package:
 
 ### Phase 0: Repository Bootstrap
 
-1. Use `https://github.com/Noc2/RateMesh` as `origin`.
-2. Import or continue the old Curyo monorepo in the RateMesh repository.
-3. Copy the Hawig hero/logo source files into the RateMesh frontend and adapt
-   them for RateMesh naming.
-4. Rename live package metadata and imports from `@curyo/*` to `@ratemesh/*`.
+1. Use `https://github.com/Noc2/RateLoop` as `origin`.
+2. Import or continue the old Curyo monorepo in the RateLoop repository.
+3. Copy the Hawig hero/logo source files into the RateLoop frontend and adapt
+   them for RateLoop naming.
+4. Rename live package metadata and imports from `@curyo/*` to `@rateloop/*`.
 5. Update root package metadata, scripts, environment examples, and generated
    package exports only where they reference removed Self/faucet/chain state.
 6. Delete legacy deployment artifacts from the canonical branch.
@@ -1345,7 +1345,7 @@ Exit criteria:
 - No Self packages are required for core rating, earning, or governance flows.
 - The imported snapshot file, Merkle-generation script, and Celo chain constants
   are present.
-- The Hawig-derived RateMesh logo and hero animation are present in the
+- The Hawig-derived RateLoop logo and hero animation are present in the
   frontend without pulling in unrelated Hawig app content.
 
 ### Phase 1: Make Identity Optional, Remove Faucet, And Replace Legacy Token Flows
@@ -1358,7 +1358,7 @@ Exit criteria:
 4. Remove `VoterIdNFT` requirements from content submission, voting, rewards,
    profiles, and frontend registry.
 5. Remove faucet/referral/migration allocations from deployment scripts.
-6. Keep Celo deployment constants in live RateMesh config.
+6. Keep Celo deployment constants in live RateLoop config.
 7. Update docs and app copy to use rater/reputation language.
 
 Exit criteria:
@@ -1369,9 +1369,9 @@ Exit criteria:
 
 ### Phase 2: Contract MVP
 
-1. Implement `MeshReputation`.
+1. Implement `LoopReputation`.
 2. Implement a genesis Merkle distributor from the existing HREP/legacy CREP snapshot.
-3. Implement `RateMeshGovernor` and `TimelockController` ownership wiring.
+3. Implement `RateLoopGovernor` and `TimelockController` ownership wiring.
 4. Implement `RaterRegistry`.
 5. Implement `RaterDeclarationRegistry` for bonded AI metadata, probes, drift,
    and challenges.
@@ -1379,13 +1379,13 @@ Exit criteria:
 7. Implement the first version of `PredictionRewardDistributor`.
 8. Refactor `QuestionRewardPoolEscrow` for one-round bounties,
    challenge/re-rate metadata, and reputation/cluster eligibility.
-9. Add MREP prediction lock accounting and the prediction-error winner/loser
+9. Add LREP prediction lock accounting and the prediction-error winner/loser
    redistribution model.
-10. Preserve `FrontendRegistry`, require a `1,000 MREP` frontend stake, and keep
+10. Preserve `FrontendRegistry`, require a `1,000 LREP` frontend stake, and keep
    the 3% default frontend share.
 11. Add AI rater metadata requirements to registry, commit/reveal, or payout
     eligibility.
-12. Refactor `DeployRateMesh.s.sol` in place with HREP-style MREP pools and Celo
+12. Refactor `DeployRateLoop.s.sol` in place with HREP-style LREP pools and Celo
     USDC constants.
 13. Regenerate ABIs and deployment package exports.
 
@@ -1394,8 +1394,8 @@ Exit criteria:
 - Foundry tests cover capped supply, transfers, delegation, genesis claims,
   timelock-owned roles, commit, reveal, settle, cancel, missed reveal,
   reputation lock/unlock/redistribution, calibration gating, one-round bounty
-  payout, MREP loser/winner redistribution, frontend stake and fee
-  reservation/claim, challenge bounty creation, AI metadata gating, 0-10 rating
+  payout, LREP loser/winner redistribution, frontend stake and fee
+  reservation/claim, challenge bounty creation, AI metadata gating, 1.0-9.9 rating
   bounds, Curyo-derived governance parameters, and USDC claim gating.
 - No old HREP transfer staking path remains.
 
@@ -1418,7 +1418,7 @@ Exit criteria:
 
 ### Phase 4: Frontend MVP
 
-1. Apply RateMesh branding with the Hawig-derived logo, hero animation, color
+1. Apply RateLoop branding with the Hawig-derived logo, hero animation, color
    palette, and display typography.
 2. Remove faucet screens and required Self verification screens; keep optional
    identity UI only if it is clearly non-blocking.
@@ -1474,38 +1474,38 @@ Exit criteria:
 
 1. Publish the imported legacy CREP/HREP snapshot, Merkle root, provenance, and review
    scripts.
-2. Deploy `MeshReputation`, Merkle distributor, Governor, Timelock, and core
+2. Deploy `LoopReputation`, Merkle distributor, Governor, Timelock, and core
    protocol contracts to Celo mainnet.
 3. Transfer all protocol roles and ProxyAdmin ownership to the timelock.
 4. Renounce deployer setup roles after verification.
 5. Open genesis claims and delegation.
 6. Launch with one-round bounties, frontend fee incentives, AI rater
-   participation, MREP lock redistribution, and capped USDC payouts.
+   participation, LREP lock redistribution, and capped USDC payouts.
 
 Exit criteria:
 
-- RateMesh is tokenholder-governed from the first public deployment.
+- RateLoop is tokenholder-governed from the first public deployment.
 - Proposal, delegation, token supply, genesis claims, and voting power are
   auditable from checkpoints and indexed events.
 
 ## Concrete PR Plan
 
-1. `repo-bootstrap`: point the repo at `https://github.com/Noc2/RateMesh`,
+1. `repo-bootstrap`: point the repo at `https://github.com/Noc2/RateLoop`,
    import old Curyo code, copy the Hawig hero/logo assets, import the existing
    HREP/legacy CREP snapshot, keep Celo defaults, rename live package metadata
-   toward `@ratemesh/*`, and keep the app running.
+   toward `@rateloop/*`, and keep the app running.
 2. `optional-identity-remove-faucet`: remove faucet paths and make Self optional
    rather than required in packages, UI, routes, and deploy wiring.
-3. `reputation-governance`: add capped transferable reputation, HREP-style MREP
+3. `reputation-governance`: add capped transferable reputation, HREP-style LREP
    launch pools, genesis Merkle distributor, Governor, Timelock,
    self-delegated voting power, and launch role wiring.
 4. `rater-registry`: add open rater profiles, metadata, operational delegation,
    and cluster flags.
 5. `prediction-engine`: replace binary votes with split rating commit-reveal
-   and MREP lock accounting.
+   and LREP lock accounting.
 6. `usdc-bounty-refactor`: refactor reward escrow/distributor around one-round
    bounties, challenge/re-rate metadata, calibrated raters, AI metadata,
-   frontend staking/fees, MREP winner/loser redistribution, and cluster caps.
+   frontend staking/fees, LREP winner/loser redistribution, and cluster caps.
 7. `ponder-predictions`: update schema, handlers, and APIs.
 8. `frontend-prediction-ui`: replace vote controls, add genesis claim,
    self-delegation status, frontend fee, sponsored transaction, and onboarding
@@ -1522,23 +1522,23 @@ These are launch defaults, not permanent constants:
 - USDC: Circle native USDC on Celo,
   `0xcebA9300f2b948710d2653dD7B07f33A8B32118C` mainnet and
   `0x01C5C0122039549AD1493B8220cABEdD739BC44E` testnet.
-- Rating scale: `0-10000` BPS, displayed as `0.0-10.0 / 10`.
-- Token name/symbol: Mesh Reputation (`MREP`).
+- Rating scale: `1000-9900` BPS, displayed as `1.0-9.9 / 10`.
+- Token name/symbol: Loop Reputation (`LREP`).
 - Reputation token: transferable ERC20Votes, 6 decimals.
-- Reputation max supply: `100,000,000 MREP`, matching the old HREP cap.
-- MREP tokenomics: `52M` snapshot claim pool, `12M` bootstrap pool, `32M` DAO
+- Reputation max supply: `100,000,000 LREP`, matching the old HREP cap.
+- LREP tokenomics: `52M` snapshot claim pool, `12M` bootstrap pool, `32M` DAO
   treasury, `4M` consensus reserve.
 - Genesis allocation: one-time Merkle claim using the existing legacy CREP/HREP
   snapshot artifact.
-- Genesis claim window: 12 months, with unclaimed MREP swept by governance rule.
+- Genesis claim window: 12 months, with unclaimed LREP swept by governance rule.
 - Bounty scope: one sealed commit window plus reveal window, exactly one
   settlement attempt per bounty.
 - Challenge/re-rate: explicit new bounty referencing a prior round/result.
 - Frontend share: default 3%, max 5%, applies to bounty and feedback payouts.
-- Frontend stake: `1,000 MREP` required for fee eligibility.
-- Submission bounty minimums: hard floor of `1 MREP` or `1 USDC`; governance can
+- Frontend stake: `1,000 LREP` required for fee eligibility.
+- Submission bounty minimums: hard floor of `1 LREP` or `1 USDC`; governance can
   raise them but not lower them below that floor.
-- AI declaration bond floors: `100 MREP` minimum operator bond and `25 MREP`
+- AI declaration bond floors: `100 LREP` minimum operator bond and `25 LREP`
   minimum challenge bond.
 - Sponsorship: reuse old Curyo's sponsored transaction path with self-funded
   fallback and quotas.
@@ -1547,10 +1547,10 @@ These are launch defaults, not permanent constants:
 - Calibration rounds before USDC: 10.
 - AI raters: USDC-eligible at launch after the same 10 calibration rounds and
   required model/operator/prompt-version metadata.
-- Prediction lock: min `1 MREP`, default `5 MREP`, max `100 MREP`.
-- MREP lock settlement: full winner band `0.25` rating points, loss cutoff
+- Prediction lock: min `1 LREP`, default `5 LREP`, max `100 LREP`.
+- LREP lock settlement: full winner band `0.25` rating points, loss cutoff
   `1.00` rating point, revealed loser refund `5%`.
-- MREP losing-pool split after refund: 90% accurate raters, 4% frontends, 1%
+- LREP losing-pool split after refund: 90% accurate raters, 4% frontends, 1%
   DAO treasury, 5% consensus reserve.
 - USDC payout split: 25% work stipend, 75% accuracy pool.
 - USDC near-miss cutoff: `1.50` rating points.
@@ -1562,11 +1562,11 @@ These are launch defaults, not permanent constants:
 - Missed reveal penalty: reputation lock forfeit/redistribution, tunable and
   capped.
 - Governance launch parameters: 1-day voting delay, 7-day voting period, 2-day
-  timelock, 1,000 MREP proposal-threshold hard floor, dynamic quorum of `max(4% of
-  circulating MREP, 100,000 MREP)`, 1-day proposal cooldown, 7-day governance
+  timelock, 1,000 LREP proposal-threshold hard floor, dynamic quorum of `max(4% of
+  circulating LREP, 100,000 LREP)`, 1-day proposal cooldown, 7-day governance
   lock.
-- Governance voting power is self-delegated MREP in the current contract; docs
-  should not imply third-party MREP vote delegation unless the token changes.
+- Governance voting power is self-delegated LREP in the current contract; docs
+  should not imply third-party LREP vote delegation unless the token changes.
 
 ## Main Risks And Mitigations
 
@@ -1592,7 +1592,7 @@ majority and compound reputation.
 
 Mitigations:
 
-- Score MREP locks and USDC eligibility with leave-one-out and
+- Score LREP locks and USDC eligibility with leave-one-out and
   cluster-excluded references where practical.
 - Reward calibration over raw agreement.
 - Cap conviction influence.
@@ -1649,7 +1649,7 @@ Mitigations:
   eligibility when required metadata is missing or stale.
 - Apply a short payout cooling period after material AI metadata changes.
 
-### MREP Lock Harshness
+### LREP Lock Harshness
 
 Risk: if prediction-error slashing is too harsh, honest raters may avoid hard
 questions and only rate obvious content.
@@ -1688,24 +1688,24 @@ Mitigations:
 - Contract state should never carry unspent bounty allocation into an implicit
   second round unless a funder deliberately creates a new bounty.
 
-## Definition Of Done For The First RateMesh MVP
+## Definition Of Done For The First RateLoop MVP
 
 The MVP is done when:
 
 - There is no mandatory Self.xyz dependency.
 - Users can connect a wallet without proof-of-personhood.
-- Users can submit a private `0.0-10.0` opinion rating and expected crowd rating
+- Users can submit a private `1.0-9.9` opinion rating and expected crowd rating
   through commit reveal.
 - Each bounty funds exactly one private prediction round.
 - Users can fund an explicit challenge/re-rate bounty against a prior result.
-- Mesh Reputation is transferable, capped, checkpointed, and claimable by
+- Loop Reputation is transferable, capped, checkpointed, and claimable by
   previous legacy CREP/HREP snapshot participants through a published genesis
   distribution.
-- MREP tokenomics reuse the old HREP `52M / 12M / 32M / 4M` pool structure.
-- MREP rating-report locks redistribute inaccurate crowd predictions and
+- LREP tokenomics reuse the old HREP `52M / 12M / 32M / 4M` pool structure.
+- LREP rating-report locks redistribute inaccurate crowd predictions and
   unrevealed locks to accurate raters, eligible frontends, treasury, and reserve
   without increasing supply.
-- RateMesh governance and timelock own protocol roles from launch.
+- RateLoop governance and timelock own protocol roles from launch.
 - Governance uses the previous Curyo launch durations, thresholds, quorum, and
   governance-lock rules on Celo.
 - Users complete calibration before USDC eligibility.
@@ -1714,10 +1714,10 @@ The MVP is done when:
 - USDC bounty payout is cluster-capped and not linear by wallet count or raw
   reputation, with a small work stipend and a larger accuracy pool.
 - Frontend operators can earn the default 3% share on bounty and feedback
-  payouts only after staking MREP.
+  payouts only after staking LREP.
 - The app preserves sponsored transaction support with a self-funded fallback.
 - Contracts, app, indexer, SDK, and keeper are configured for Celo/Celo Sepolia.
-- The frontend uses the Hawig-derived RateMesh hero/logo system while preserving
+- The frontend uses the Hawig-derived RateLoop hero/logo system while preserving
   old Curyo's usable feed/rating surfaces where they fit the new prediction
   mechanics.
 - Ponder exposes enough data for public auditability of rating, reputation,

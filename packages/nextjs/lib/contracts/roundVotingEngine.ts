@@ -1,7 +1,7 @@
-import { DEFAULT_ROUND_CONFIG, ROUND_STATE } from "@ratemesh/contracts/protocol";
+import { DEFAULT_ROUND_CONFIG, ROUND_STATE } from "@rateloop/contracts/protocol";
 import { RoundData } from "~~/types/votingTypes";
 
-export { buildStakeAmountWei, resolveFrontendCode } from "@ratemesh/sdk/vote";
+export { buildStakeAmountWei, resolveFrontendCode } from "@rateloop/sdk/vote";
 
 export type RoundPhase = "voting" | "settled" | "cancelled" | "tied" | "revealFailed" | "none";
 

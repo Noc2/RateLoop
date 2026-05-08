@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 /// @title PredictionRatingMath
-/// @notice Pure helpers for one-round predicted final ratings on a 0-10 scale stored as 0-10000 bps.
+/// @notice Pure helpers for one-round predicted final ratings on a 1.0-9.9 scale stored as 1000-9900 bps.
 library PredictionRatingMath {
     uint16 internal constant MIN_RATING_BPS = 1_000;
     uint16 internal constant MAX_RATING_BPS = 9_900;

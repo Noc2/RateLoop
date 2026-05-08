@@ -1,6 +1,6 @@
 ---
 name: Feature Request
-about: Suggest an idea for RateMesh
+about: Suggest an idea for RateLoop
 title: ""
 labels: enhancement
 assignees: ""

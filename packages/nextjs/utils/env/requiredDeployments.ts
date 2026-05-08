@@ -1,7 +1,7 @@
 export type DeploymentDefinitions = Record<number, Record<string, unknown> | undefined>;
 
 const REQUIRED_TARGET_CONTRACTS = [
-  "MeshReputation",
+  "LoopReputation",
   "FrontendRegistry",
   "ProfileRegistry",
   "ContentRegistry",
@@ -24,7 +24,7 @@ export function listMissingRequiredTargetContracts(
     return requiredContracts
       .filter(contractName => {
         if (chainDeployments[contractName] !== undefined) return false;
-        return contractName !== "MeshReputation" || chainDeployments.HumanReputation === undefined;
+        return contractName !== "LoopReputation" || chainDeployments.HumanReputation === undefined;
       })
       .map(contractName => `${chainId}:${contractName}`);
   });

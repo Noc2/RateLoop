@@ -6,14 +6,14 @@ const GovernanceDocs: NextPage = () => {
     <article className="prose max-w-none">
       <h1>Governance</h1>
       <p className="lead text-base-content/60 text-lg">
-        MREP governance controls protocol settings, upgrades, treasury routing, and optional identity policy.
+        LREP governance controls protocol settings, upgrades, treasury routing, and optional identity policy.
       </p>
 
       <h2>What Governance Does</h2>
       <p>
-        MREP is a capped reputation token with no protocol token sale and no treasury backing. Governance power comes
-        from held, self-delegated MREP, and proposals execute through the governor and timelock. The current token
-        auto-delegates voting power to the holder and rejects third-party MREP vote delegation.
+        LREP is a capped reputation token with no protocol token sale and no treasury backing. Governance power comes
+        from held, self-delegated LREP, and proposals execute through the governor and timelock. The current token
+        auto-delegates voting power to the holder and rejects third-party LREP vote delegation.
       </p>
       <ul>
         <li>Upgrade or configure protocol contracts.</li>
@@ -92,7 +92,7 @@ const GovernanceDocs: NextPage = () => {
         </table>
       </div>
       <p>
-        Transferable MREP is an explicit launch choice, not an accidental cash-vote shortcut. Rating and payout
+        Transferable LREP is an explicit launch choice, not an accidental cash-vote shortcut. Rating and payout
         influence are mitigated by prediction-accuracy scoring, effective-unit weighting, cluster controls, calibration
         and reveal reliability, while governance uses timelocks, voting locks, a quorum floor, and a proposal-threshold
         floor.
@@ -147,14 +147,14 @@ const GovernanceDocs: NextPage = () => {
 
       <h2>Treasury</h2>
       <p>
-        The treasury starts with 32M MREP under governor/timelock control. Ongoing inflows include the treasury share of
+        The treasury starts with 32M LREP under governor/timelock control. Ongoing inflows include the treasury share of
         contested losing pools, withdrawal fees, and forfeited unrevealed reports. Spending follows the same proposal
         and timelock path as upgrades.
       </p>
       <p>
         Treasury grants can support work that grows the Curyo feedback network: partner activation, integrations,
         research and data projects, community growth, protocol development, and security or whistleblower rewards.
-        Because MREP also carries governance power, grant proposals should explain the recipient, purpose, amount,
+        Because LREP also carries governance power, grant proposals should explain the recipient, purpose, amount,
         expected impact, and any milestone or reporting expectations.
       </p>
 

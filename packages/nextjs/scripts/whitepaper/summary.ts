@@ -21,11 +21,11 @@ export const EXECUTIVE_SUMMARY: ContentBlock[] = [
   },
   {
     type: "paragraph",
-    text: "The protocol turns rating into an explicit prediction market. Every ask is question-first, requires a context URL, can include optional preview media, and carries a non-refundable bounty funded in MREP or Celo USDC. Raters predict the final 0-10 rating by staking MREP, optional hidden feedback unlocks after settlement, and eligible revealed raters claim bounty payouts while an eligible frontend operator reserve keeps distribution open to third-party surfaces.",
+    text: "The protocol turns rating into an explicit prediction market. Every ask is question-first, requires a context URL, can include optional preview media, and carries a non-refundable bounty funded in LREP or Celo USDC. Raters predict the final 1.0-9.9 rating by staking LREP, optional hidden feedback unlocks after settlement, and eligible revealed raters claim bounty payouts while an eligible frontend operator reserve keeps distribution open to third-party surfaces.",
   },
   {
     type: "paragraph",
-    text: `Signal integrity comes from combining calibration, MREP-backed predictions, optional identity signals, and blind rounds. Predictions stay hidden through tlock until the blind epoch ends, later raters earn only ${protocolDocFacts.openPhaseWeightLabel} reward weight instead of ${protocolDocFacts.blindPhaseWeightLabel}, and settlement waits for the configured reveal conditions so the result is harder to herd or selectively reveal.`,
+    text: `Signal integrity comes from combining calibration, LREP-backed predictions, optional identity signals, and blind rounds. Predictions stay hidden through tlock until the blind epoch ends, later raters earn only ${protocolDocFacts.openPhaseWeightLabel} reward weight instead of ${protocolDocFacts.blindPhaseWeightLabel}, and settlement waits for the configured reveal conditions so the result is harder to herd or selectively reveal.`,
   },
   {
     type: "paragraph",

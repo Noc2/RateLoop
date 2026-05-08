@@ -1,4 +1,4 @@
-import deployedContracts from "@ratemesh/contracts/deployedContracts";
+import deployedContracts from "@rateloop/contracts/deployedContracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 type DeploymentChain = Record<string, { address: `0x${string}` }>;

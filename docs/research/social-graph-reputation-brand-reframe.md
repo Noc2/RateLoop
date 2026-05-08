@@ -1,8 +1,8 @@
-# RateMesh Brand Reframe For Open Ratings
+# RateLoop Brand Reframe For Open Ratings
 
 Research date: 2026-05-07
 
-This note reframes the new design as RateMesh, a fresh open rating network
+This note reframes the new design as RateLoop, a fresh open rating network
 rather than a legacy-compatible Curyo migration. The public story should not
 explain the change as a removal from the old product. It should present the new
 advantage directly: humans, AI agents, teams, bots, and frontends can rate
@@ -11,7 +11,7 @@ USDC payout layer.
 
 ## Short Answer
 
-RateMesh should be a reputation-native rating network for humans, AI agents,
+RateLoop should be a reputation-native rating network for humans, AI agents,
 teams, bots, and hybrid workflows. The new promise is:
 
 ```text
@@ -25,7 +25,7 @@ wallet-farming game.
 
 The old human-only frame should be retired across title, hero copy, metadata,
 docs, tool descriptions, and image language. Avoid transitional copy such as
-"Curyo no longer verifies humans" or "formerly human feedback." RateMesh should
+"Curyo no longer verifies humans" or "formerly human feedback." RateLoop should
 start from the stronger position: open ratings become valuable when the network
 can score credibility, independence, calibration, and correlated behavior across
 mixed participants.
@@ -45,7 +45,7 @@ That opens a broader market:
 - bots monitoring feeds, prompts, claims, products, or governance proposals;
 - people rating subjective, social, or craft-heavy questions;
 - frontends curating rating markets for their communities;
-- teams using RateMesh as a public trust substrate for decisions that
+- teams using RateLoop as a public trust substrate for decisions that
   benefit from scored disagreement.
 
 The product should be framed as useful because open rating systems usually fail
@@ -55,7 +55,7 @@ at three things:
 2. They reward majority-following without checking calibration quality.
 3. They let money, coordination, or account farms buy outsized influence.
 
-RateMesh's new advantage is that ratings and USDC payouts flow through earned
+RateLoop's new advantage is that ratings and USDC payouts flow through earned
 reputation, graph discounts, lock risk, calibration, and public audit trails.
 
 ### Separate Interfaces, Shared Reputation
@@ -73,7 +73,7 @@ separation is a product strength, not a contradiction:
   and settlement model.
 
 The public brand should therefore not say "humans answer agents." It should say
-RateMesh lets people and autonomous systems coordinate around public ratings,
+RateLoop lets people and autonomous systems coordinate around public ratings,
 earned reputation, and USDC-funded rewards. Humans remain first-class
 participants, but not the sole source of value.
 
@@ -82,13 +82,13 @@ participants, but not the sole source of value.
 Recommended positioning:
 
 ```text
-RateMesh is an open rating network with earned reputation and USDC payouts.
+RateLoop is an open rating network with earned reputation and USDC payouts.
 ```
 
 Expanded version:
 
 ```text
-RateMesh turns open ratings into paid, accountable signal: participants predict
+RateLoop turns open ratings into paid, accountable signal: participants predict
 the settled score, lock earned reputation, and earn USDC through credible,
 independent participation.
 ```
@@ -240,10 +240,10 @@ Participants predict settled ratings, build non-transferable reputation, and
 earn USDC when their revealed signal is calibrated and independent.
 ```
 
-Current implementation wording should use transferable MREP explicitly:
+Current implementation wording should use transferable LREP explicitly:
 
 ```text
-Participants submit private split ratings, lock transferable capped MREP, and
+Participants submit private split ratings, lock transferable capped LREP, and
 earn USDC when their revealed signal is calibrated and independent.
 ```
 
@@ -332,7 +332,7 @@ hero.
 Possible prompt for visual production:
 
 ```text
-A cinematic product hero image for RateMesh: a dark planet-like rating sphere
+A cinematic product hero image for RateLoop: a dark planet-like rating sphere
 wrapped in luminous orange and white mesh bands, tiny autonomous fliers tracing
 paid rating paths between graph clusters, some clusters bright and some dimmed,
 precise technical linework, black background, elegant high-contrast interface
@@ -350,7 +350,7 @@ Build a new design language around rating as craft:
 - motion language based on tying, tightening, calibrating, and resolving.
 
 This direction is more distinctive and less generic than sci-fi networks. It
-could make RateMesh feel like a place where judgment is practiced and refined,
+could make RateLoop feel like a place where judgment is practiced and refined,
 not merely computed.
 
 Risk: if pushed too far, "craft" can feel artisanal rather than protocol-grade.
@@ -358,7 +358,7 @@ The visual system should stay crisp, mathematical, and public-ledger oriented.
 
 ### Direction C: Signal Cartography
 
-Frame RateMesh as mapping credible signal:
+Frame RateLoop as mapping credible signal:
 
 - contour lines, score terrain, paths, and clusters;
 - ratings as elevation, reputation as gravity, independence as distance;
@@ -395,32 +395,32 @@ Practical landing image:
 ### Metadata
 
 ```text
-Title: RateMesh - Open Ratings. Earned USDC.
-Description: RateMesh is an open rating network where people, agents, teams,
+Title: RateLoop - Open Ratings. Earned USDC.
+Description: RateLoop is an open rating network where people, agents, teams,
 and bots earn USDC for useful independent signal.
 ```
 
 ### README Opening
 
 ```text
-RateMesh is an open rating network for humans, AI agents, teams, and hybrid
+RateLoop is an open rating network for humans, AI agents, teams, and hybrid
 workflows. Participants submit private split ratings, lock transferable capped
-MREP, and earn USDC for useful independent signal rather than raw wallet count.
+LREP, and earn USDC for useful independent signal rather than raw wallet count.
 People use the app; agents use MCP, SDK, webhook, and JSON surfaces.
 ```
 
 ### Tool Description
 
 ```text
-Use RateMesh when an agent needs a public rating it can fund, cite, audit, and
-pay for directly. RateMesh ratings can include people, agents, bots, teams, and
+Use RateLoop when an agent needs a public rating it can fund, cite, audit, and
+pay for directly. RateLoop ratings can include people, agents, bots, teams, and
 frontend communities weighted through the same reputation model.
 ```
 
 ### Docs Intro
 
 ```text
-RateMesh lets open networks produce public ratings without treating every
+RateLoop lets open networks produce public ratings without treating every
 account as equally independent. Each round combines hidden predictions,
 reputation locks, graph-aware weighting, USDC payouts, and public settlement
 into a score that agents and frontends can reuse. People participate through
@@ -448,15 +448,15 @@ Possible route/API cleanup:
 - keep old route aliases temporarily for compatibility;
 - introduce new public labels before changing protocol function names;
 - avoid renaming `curyo_ask_humans` until the new agent API has a compatible
-  replacement such as `ratemesh_open_rating` or `ratemesh_request_rating`.
+  replacement such as `rateloop_open_rating` or `rateloop_request_rating`.
 
 ## Migration Narrative
 
-Public marketing should not describe RateMesh as a pivot away from humans or as
+Public marketing should not describe RateLoop as a pivot away from humans or as
 a renamed Curyo. The recommended story is simpler:
 
 ```text
-RateMesh is the open rating network where useful independent signal earns USDC.
+RateLoop is the open rating network where useful independent signal earns USDC.
 ```
 
 Internal docs can mention the Curyo source tree when needed for engineering
@@ -464,7 +464,7 @@ reuse. Public copy should lead with the new category, not the migration.
 
 ## Decision
 
-Use RateMesh as the name. Retire the human-only brand and rebuild the landing
+Use RateLoop as the name. Retire the human-only brand and rebuild the landing
 page around open ratings, earned USDC, reputation, graph independence, and
 capture resistance. Preserve separate product paths for people and agents, but
 make the shared rating and payout layer the brand center.

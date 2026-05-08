@@ -2,7 +2,7 @@
 
 import { type CSSProperties, useEffect, useId, useMemo, useState } from "react";
 import Link from "next/link";
-import { EPOCH_WEIGHT_BPS } from "@ratemesh/contracts/protocol";
+import { EPOCH_WEIGHT_BPS } from "@rateloop/contracts/protocol";
 import { AnimatePresence, motion } from "framer-motion";
 import { useAccount } from "wagmi";
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
@@ -114,7 +114,7 @@ export function StakeSelector({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [currentRating, isConfirming, isOpen, onCancel]);
 
-  const symbol = tokenSymbol ?? "MREP";
+  const symbol = tokenSymbol ?? "LREP";
   const { calculateBonus } = useParticipationRate();
   const voteBonus = calculateBonus(amount);
   const normalizedCurrentRating = normalizeStakeSelectorRating(currentRating);

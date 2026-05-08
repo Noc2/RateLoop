@@ -34,10 +34,7 @@ library RoundRevealLib {
         uint16 roundReferenceRatingBps,
         uint16 minVoters,
         uint256 targetRoundRevealableAt,
-        uint16 raterWeightBps,
-        uint256 chainId,
-        address engine,
-        bytes32 scorerMetadataHash
+        uint16 raterWeightBps
     ) external returns (uint256 nextEligibleFrontendStake, uint256 nextEligibleFrontendCount, address voter) {
         if (round.state != RoundLib.RoundState.Open) revert RoundNotOpen();
         if (commit.voter == address(0)) revert NoCommit();
@@ -118,7 +115,10 @@ library RoundRevealLib {
         uint16 roundReferenceRatingBps,
         uint16 minVoters,
         uint256 targetRoundRevealableAt,
-        uint16 raterWeightBps
+        uint16 raterWeightBps,
+        uint256 chainId,
+        address engine,
+        bytes32 scorerMetadataHash
     )
         external
         returns (

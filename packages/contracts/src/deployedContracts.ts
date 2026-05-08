@@ -1547,7 +1547,7 @@ const deployedContracts: GenericContractsDeclaration = {
       inheritedFunctions: {},
       deployedOnBlock: 12,
     },
-    MeshReputation: {
+    LoopReputation: {
       address: "0x82C6D3ed4cD33d8EC1E51d0B5Cc1d822Eaa0c3dC",
       abi: [
         {
@@ -18836,7 +18836,7 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "address",
             },
             {
-              name: "mrepToken_",
+              name: "lrepToken_",
               type: "address",
               internalType: "contract IERC20",
             },
@@ -18846,12 +18846,12 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "address",
             },
             {
-              name: "minDeclarationBondMrep_",
+              name: "minDeclarationBondLrep_",
               type: "uint256",
               internalType: "uint256",
             },
             {
-              name: "challengeBondMrep_",
+              name: "challengeBondLrep_",
               type: "uint256",
               internalType: "uint256",
             },
@@ -18925,7 +18925,7 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "MIN_CHALLENGE_BOND_MREP_FLOOR",
+          name: "MIN_CHALLENGE_BOND_LREP_FLOOR",
           inputs: [],
           outputs: [
             {
@@ -18938,7 +18938,7 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "MIN_DECLARATION_BOND_MREP_FLOOR",
+          name: "MIN_DECLARATION_BOND_LREP_FLOOR",
           inputs: [],
           outputs: [
             {
@@ -18996,7 +18996,7 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "challengeBondMrep",
+          name: "challengeBondLrep",
           inputs: [],
           outputs: [
             {
@@ -19572,7 +19572,7 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "minDeclarationBondMrep",
+          name: "minDeclarationBondLrep",
           inputs: [],
           outputs: [
             {
@@ -19585,7 +19585,7 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "mrepToken",
+          name: "lrepToken",
           inputs: [],
           outputs: [
             {
@@ -19785,12 +19785,12 @@ const deployedContracts: GenericContractsDeclaration = {
           name: "setDeclarationParameters",
           inputs: [
             {
-              name: "minDeclarationBondMrep_",
+              name: "minDeclarationBondLrep_",
               type: "uint256",
               internalType: "uint256",
             },
             {
-              name: "challengeBondMrep_",
+              name: "challengeBondLrep_",
               type: "uint256",
               internalType: "uint256",
             },
@@ -20106,13 +20106,13 @@ const deployedContracts: GenericContractsDeclaration = {
           name: "DeclarationParametersUpdated",
           inputs: [
             {
-              name: "minDeclarationBondMrep",
+              name: "minDeclarationBondLrep",
               type: "uint256",
               indexed: false,
               internalType: "uint256",
             },
             {
-              name: "challengeBondMrep",
+              name: "challengeBondLrep",
               type: "uint256",
               indexed: false,
               internalType: "uint256",

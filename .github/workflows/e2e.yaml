@@ -36,27 +36,27 @@ jobs:
       matrix:
         include:
           - suite: smoke
-            command: yarn workspace @ratemesh/nextjs e2e:ci:smoke
+            command: yarn workspace @rateloop/nextjs e2e:ci:smoke
             playwright_browsers: chromium
             timeout: 30
             start_keeper: false
           - suite: responsive
-            command: yarn workspace @ratemesh/nextjs e2e:responsive
+            command: yarn workspace @rateloop/nextjs e2e:responsive
             playwright_browsers: chromium
             timeout: 35
             start_keeper: false
           - suite: a11y
-            command: yarn workspace @ratemesh/nextjs e2e:a11y
+            command: yarn workspace @rateloop/nextjs e2e:a11y
             playwright_browsers: chromium
             timeout: 30
             start_keeper: false
           - suite: lifecycle
-            command: yarn workspace @ratemesh/nextjs e2e:ci:lifecycle
+            command: yarn workspace @rateloop/nextjs e2e:ci:lifecycle
             playwright_browsers: chromium
             timeout: 45
             start_keeper: false
           - suite: keeper
-            command: yarn workspace @ratemesh/nextjs e2e:ci:keeper
+            command: yarn workspace @rateloop/nextjs e2e:ci:keeper
             playwright_browsers: chromium
             timeout: 35
             start_keeper: true
@@ -78,7 +78,7 @@ jobs:
         run: yarn install --immutable
 
       - name: Install Playwright browsers
-        run: yarn workspace @ratemesh/nextjs exec playwright install ${{ matrix.playwright_browsers }} --with-deps
+        run: yarn workspace @rateloop/nextjs exec playwright install ${{ matrix.playwright_browsers }} --with-deps
 
       - name: Start Anvil and deploy contracts
         env:
@@ -104,7 +104,7 @@ jobs:
           NEXT_PUBLIC_TARGET_NETWORKS: "31337"
           NEXT_PUBLIC_THIRDWEB_CLIENT_ID: 124332de491a2aa8b7ba8ea6db1ce693
           NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID: 3a8170812b534d0ff9d794f19a901d64
-        run: yarn workspace @ratemesh/nextjs build
+        run: yarn workspace @rateloop/nextjs build
 
       - name: Start Next.js (production)
         env:
@@ -115,7 +115,7 @@ jobs:
           NEXT_PUBLIC_TARGET_NETWORKS: "31337"
           NEXT_PUBLIC_THIRDWEB_CLIENT_ID: 124332de491a2aa8b7ba8ea6db1ce693
           NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID: 3a8170812b534d0ff9d794f19a901d64
-        run: yarn workspace @ratemesh/nextjs serve &
+        run: yarn workspace @rateloop/nextjs serve &
 
       - name: Wait for services
         run: |
@@ -198,11 +198,11 @@ jobs:
       matrix:
         include:
           - suite: browser-compat
-            command: yarn workspace @ratemesh/nextjs e2e:compat
+            command: yarn workspace @rateloop/nextjs e2e:compat
             playwright_browsers: chromium firefox webkit
             timeout: 45
           - suite: mobile
-            command: yarn workspace @ratemesh/nextjs e2e:mobile
+            command: yarn workspace @rateloop/nextjs e2e:mobile
             playwright_browsers: chromium webkit
             timeout: 45
 
@@ -223,7 +223,7 @@ jobs:
         run: yarn install --immutable
 
       - name: Install Playwright browsers
-        run: yarn workspace @ratemesh/nextjs exec playwright install ${{ matrix.playwright_browsers }} --with-deps
+        run: yarn workspace @rateloop/nextjs exec playwright install ${{ matrix.playwright_browsers }} --with-deps
 
       - name: Start Anvil and deploy contracts
         env:
@@ -249,7 +249,7 @@ jobs:
           NEXT_PUBLIC_TARGET_NETWORKS: "31337"
           NEXT_PUBLIC_THIRDWEB_CLIENT_ID: 124332de491a2aa8b7ba8ea6db1ce693
           NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID: 3a8170812b534d0ff9d794f19a901d64
-        run: yarn workspace @ratemesh/nextjs build
+        run: yarn workspace @rateloop/nextjs build
 
       - name: Start Next.js (production)
         env:
@@ -260,7 +260,7 @@ jobs:
           NEXT_PUBLIC_TARGET_NETWORKS: "31337"
           NEXT_PUBLIC_THIRDWEB_CLIENT_ID: 124332de491a2aa8b7ba8ea6db1ce693
           NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID: 3a8170812b534d0ff9d794f19a901d64
-        run: yarn workspace @ratemesh/nextjs serve &
+        run: yarn workspace @rateloop/nextjs serve &
 
       - name: Wait for services
         run: |

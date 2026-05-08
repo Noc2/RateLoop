@@ -1,24 +1,24 @@
 import Link from "next/link";
 import type { NextPage } from "next";
 
-const sdkSourceHref = "https://github.com/Noc2/RateMesh/tree/main/packages/sdk";
-const agentExamplesSourceHref = "https://github.com/Noc2/RateMesh/tree/main/packages/agents/examples";
-const referenceAppSourceHref = "https://github.com/Noc2/RateMesh/tree/main/packages/nextjs";
-const keeperSourceHref = "https://github.com/Noc2/RateMesh/tree/main/packages/keeper";
-const ponderSourceHref = "https://github.com/Noc2/RateMesh/tree/main/packages/ponder";
+const sdkSourceHref = "https://github.com/Noc2/RateLoop/tree/main/packages/sdk";
+const agentExamplesSourceHref = "https://github.com/Noc2/RateLoop/tree/main/packages/agents/examples";
+const referenceAppSourceHref = "https://github.com/Noc2/RateLoop/tree/main/packages/nextjs";
+const keeperSourceHref = "https://github.com/Noc2/RateLoop/tree/main/packages/keeper";
+const ponderSourceHref = "https://github.com/Noc2/RateLoop/tree/main/packages/ponder";
 
 const SdkPage: NextPage = () => {
   return (
     <article className="prose max-w-none">
       <h1>SDK</h1>
       <p className="lead text-base-content/60 text-lg">
-        Use the RateMesh SDK to add hosted reads, frontend attribution, and prediction transaction helpers to an
+        Use the RateLoop SDK to add hosted reads, frontend attribution, and prediction transaction helpers to an
         existing app.
       </p>
 
       <h2>What It Covers</h2>
       <p>
-        The core SDK in <code>@ratemesh/sdk</code> is intentionally framework-agnostic. It gives integrators a clean
+        The core SDK in <code>@rateloop/sdk</code> is intentionally framework-agnostic. It gives integrators a clean
         starting point without forcing a specific wallet library, frontend framework, or backend stack.
       </p>
       <ul>
@@ -39,16 +39,16 @@ const SdkPage: NextPage = () => {
       <h2>Install</h2>
       <p>
         The SDK currently lives in the monorepo as <code>packages/sdk</code> and is exposed as{" "}
-        <code>@ratemesh/sdk</code>. Browse the{" "}
+        <code>@rateloop/sdk</code>. Browse the{" "}
         <a href={sdkSourceHref} target="_blank" rel="noopener noreferrer" className="link link-primary">
           SDK source on GitHub
         </a>{" "}
         if you want to inspect the current implementation or track new helpers as they land.
       </p>
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
-        <code>{`import { packVoteRoundContext } from "@ratemesh/contracts";
-import { createCuryoClient } from "@ratemesh/sdk";
-import { buildCommitPredictionParams } from "@ratemesh/sdk/vote";`}</code>
+        <code>{`import { packVoteRoundContext } from "@rateloop/contracts";
+import { createCuryoClient } from "@rateloop/sdk";
+import { buildCommitPredictionParams } from "@rateloop/sdk/vote";`}</code>
       </pre>
 
       <h2>Quickstart</h2>
@@ -76,7 +76,7 @@ const { frontend } = await curyo.read.getFrontend(
         <a href={referenceAppSourceHref} target="_blank" rel="noopener noreferrer" className="link link-primary">
           reference app
         </a>{" "}
-        uses. The host app still decides how to approve MREP stake and submit the commit transaction. In the redeployed
+        uses. The host app still decides how to approve LREP stake and submit the commit transaction. In the redeployed
         tlock model, commit helpers thread the reveal target round and drand chain hash through the call so the
         contracts can enforce the metadata bindings on-chain.
       </p>
@@ -87,6 +87,8 @@ const epochDuration =
 
 const commit = await buildCommitPredictionParams({
   voter: "0xYourWalletAddress",
+  chainId: 42220n,
+  engineAddress: "0xRoundVotingEngine",
   contentId: 42n,
   roundId: BigInt(content.openRound?.roundId ?? 1),
   opinionRating: 7.8,
@@ -98,7 +100,7 @@ const commit = await buildCommitPredictionParams({
 });
 const roundContext = packVoteRoundContext(commit.roundId, commit.roundReferenceRatingBps);
 
-await mrep.write.approve(["0xVotingEngine", commit.stakeWei]);
+await lrep.write.approve(["0xVotingEngine", commit.stakeWei]);
 await votingEngine.write.commitVote([
   42n,
   roundContext,

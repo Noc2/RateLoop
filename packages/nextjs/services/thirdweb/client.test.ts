@@ -57,16 +57,16 @@ test("createThirdwebInAppWallet can hide wallet auth to avoid duplicate compact 
   assert.deepEqual(config.auth?.options, ["google", "apple", "email", "passkey"]);
 });
 
-test("createThirdwebInAppWallet uses the RateMesh logo for wallet branding", () => {
+test("createThirdwebInAppWallet uses the RateLoop logo for wallet branding", () => {
   const wallet = createThirdwebInAppWallet(42220);
   const config = wallet.getConfig() as {
     metadata?: { image?: { alt?: string; height?: number; src?: string; width?: number } };
   };
 
   assert.deepEqual(config.metadata?.image, {
-    alt: "RateMesh orbit logo",
+    alt: "RateLoop orbit logo",
     height: 128,
-    src: "/ratemesh-logo.svg",
+    src: "/rateloop-logo.svg",
     width: 128,
   });
 });

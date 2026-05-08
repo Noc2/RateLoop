@@ -1,4 +1,4 @@
-# RateMesh — Keeper (Round Resolution Service)
+# RateLoop — Keeper (Round Resolution Service)
 
 Stateless service that reveals committed predictions via `revealPredictionByCommitKey()` after each epoch, settles eligible rounds via `settleRound()`, finalizes `RevealFailed` rounds after the last grace deadline, sweeps unrevealed-prediction cleanup via `processUnrevealedVotes()`, cancels expired rounds, marks dormant content, and can optionally sweep frontend fees when the keeper wallet is also the frontend operator. In the redeployed tlock model, it also performs deeper AGE/tlock stanza checks against the stored drand metadata before decrypting. Designed for horizontal scaling — multiple instances run independently for redundancy.
 
@@ -25,7 +25,7 @@ yarn keeper:start  # Production mode (long-running service)
 
 Copy `.env.example` to `.env.local` and configure:
 
-For live `CHAIN_ID` values `11142220` and `42220`, Keeper reads the latest contract addresses from `@ratemesh/contracts`.
+For live `CHAIN_ID` values `11142220` and `42220`, Keeper reads the latest contract addresses from `@rateloop/contracts`.
 For local `31337`, address vars override the shared artifact so a fresh Anvil deploy can be used without committing
 machine-specific local addresses. Only set address vars on unsupported chains or local Hardhat/Anvil.
 
@@ -59,7 +59,7 @@ machine-specific local addresses. Only set address vars on unsupported chains or
 ## Docker
 
 ```bash
-# From the monorepo root (the image needs the shared @ratemesh/contracts workspace)
+# From the monorepo root (the image needs the shared @rateloop/contracts workspace)
 docker build -f packages/keeper/Dockerfile -t curyo-keeper .
 docker run --env-file packages/keeper/.env.local -e METRICS_BIND_ADDRESS=0.0.0.0 -p 9090:9090 curyo-keeper
 ```
@@ -88,7 +88,7 @@ src/
 └── revert-utils.ts # Shared revert decoding helpers
 ```
 
-Contract ABIs and deployment metadata are imported from the shared `@ratemesh/contracts` workspace package.
+Contract ABIs and deployment metadata are imported from the shared `@rateloop/contracts` workspace package.
 
 ## Redundancy
 

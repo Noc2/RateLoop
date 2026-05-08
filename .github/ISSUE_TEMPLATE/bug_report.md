@@ -1,6 +1,6 @@
 ---
 name: Bug Report
-about: Report a bug to help us improve RateMesh
+about: Report a bug to help us improve RateLoop
 title: ""
 labels: bug
 assignees: ""

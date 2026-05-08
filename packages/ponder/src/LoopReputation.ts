@@ -1,4 +1,4 @@
-import { getSharedDeploymentAddress } from "@ratemesh/contracts/deployments";
+import { getSharedDeploymentAddress } from "@rateloop/contracts/deployments";
 import { ponder } from "ponder:registry";
 import { tokenHolder, tokenTransfer } from "ponder:schema";
 import { isAddress } from "viem";
@@ -18,7 +18,7 @@ const INDEXED_CONTRACT_NAMES = [
   "ProfileRegistry",
   "FrontendRegistry",
   "VoterIdNFT",
-  "MeshReputation",
+  "LoopReputation",
   "ParticipationPool",
   "QuestionRewardPoolEscrow",
   "FeedbackBonusEscrow",
@@ -50,7 +50,7 @@ function buildExcludedAddresses() {
 
 const excludedAddresses = buildExcludedAddresses();
 
-ponder.on("MeshReputation:Transfer", async ({ event, context }) => {
+ponder.on("LoopReputation:Transfer", async ({ event, context }) => {
   const { from, to, value } = event.args;
 
   // Record every transfer for balance history

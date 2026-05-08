@@ -1,6 +1,6 @@
 import { parseRound, parseVotingConfig } from "../contracts/roundVotingEngine";
 import { deriveCommitVoteRuntimeNowMs } from "./tlockCommitTiming";
-import { RoundVotingEngineAbi } from "@ratemesh/contracts/abis";
+import { RoundVotingEngineAbi } from "@rateloop/contracts/abis";
 import { type PublicClient } from "viem";
 
 const roundCommitPreviewAbi = [
@@ -10,6 +10,20 @@ const roundCommitPreviewAbi = [
     stateMutability: "view",
     inputs: [{ name: "contentId", type: "uint256" }],
     outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "previewCommitReferenceRatingBps",
+    stateMutability: "view",
+    inputs: [{ name: "contentId", type: "uint256" }],
+    outputs: [{ name: "", type: "uint16" }],
+  },
+  {
+    type: "function",
+    name: "previewCommitScorerMetadataHash",
+    stateMutability: "view",
+    inputs: [{ name: "contentId", type: "uint256" }],
+    outputs: [{ name: "", type: "bytes32" }],
   },
 ] as const;
 
@@ -44,14 +58,14 @@ export async function resolveRoundVoteRuntime(params: {
     }),
     params.publicClient.readContract({
       address: params.votingEngineAddress,
-      abi: RoundVotingEngineAbi,
+      abi: roundCommitPreviewAbi,
       functionName: "previewCommitReferenceRatingBps",
       args: [params.contentId],
       ...previewBlock,
     }),
     params.publicClient.readContract({
       address: params.votingEngineAddress,
-      abi: RoundVotingEngineAbi,
+      abi: roundCommitPreviewAbi,
       functionName: "previewCommitScorerMetadataHash",
       args: [params.contentId],
       ...previewBlock,

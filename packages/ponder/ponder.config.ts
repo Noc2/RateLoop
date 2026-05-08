@@ -5,7 +5,7 @@ import { http } from "viem";
 import {
   CategoryRegistryAbi,
   ContentRegistryAbi,
-  MeshReputationAbi,
+  LoopReputationAbi,
   FeedbackBonusEscrowAbi,
   FrontendRegistryAbi,
   ParticipationPoolAbi,
@@ -16,11 +16,11 @@ import {
   RoundRewardDistributorAbi,
   RoundVotingEngineAbi,
   VoterIdNFTAbi,
-} from "@ratemesh/contracts/abis";
+} from "@rateloop/contracts/abis";
 import {
   getSharedDeploymentAddress as getSharedArtifactAddress,
   getSharedDeploymentStartBlock as getSharedArtifactStartBlock,
-} from "@ratemesh/contracts/deployments";
+} from "@rateloop/contracts/deployments";
 
 type PonderNetworkName = "celoSepolia" | "hardhat" | "celo";
 
@@ -214,7 +214,7 @@ const addresses = {
   profileRegistry: resolveAddress("PONDER_PROFILE_REGISTRY_ADDRESS", "ProfileRegistry"),
   frontendRegistry: resolveAddress("PONDER_FRONTEND_REGISTRY_ADDRESS", "FrontendRegistry"),
   voterIdNFT: resolveAddress("PONDER_VOTER_ID_NFT_ADDRESS", "VoterIdNFT"),
-  meshReputation: resolveAddress("PONDER_MREP_ADDRESS", "MeshReputation"),
+  loopReputation: resolveAddress("PONDER_LREP_ADDRESS", "LoopReputation"),
   participationPool: resolveAddress("PONDER_PARTICIPATION_POOL_ADDRESS", "ParticipationPool"),
   questionRewardPoolEscrow: resolveAddress("PONDER_QUESTION_REWARD_POOL_ESCROW_ADDRESS", "QuestionRewardPoolEscrow"),
   feedbackBonusEscrow: resolveAddress("PONDER_FEEDBACK_BONUS_ESCROW_ADDRESS", "FeedbackBonusEscrow"),
@@ -233,7 +233,7 @@ const startBlocks = {
   profileRegistry: resolveStartBlock("PONDER_PROFILE_REGISTRY_START_BLOCK", "ProfileRegistry"),
   frontendRegistry: resolveStartBlock("PONDER_FRONTEND_REGISTRY_START_BLOCK", "FrontendRegistry"),
   voterIdNFT: resolveStartBlock("PONDER_VOTER_ID_NFT_START_BLOCK", "VoterIdNFT"),
-  meshReputation: resolveStartBlock("PONDER_MREP_START_BLOCK", "MeshReputation"),
+  loopReputation: resolveStartBlock("PONDER_LREP_START_BLOCK", "LoopReputation"),
   participationPool: resolveStartBlock("PONDER_PARTICIPATION_POOL_START_BLOCK", "ParticipationPool"),
   questionRewardPoolEscrow: resolveStartBlock("PONDER_QUESTION_REWARD_POOL_ESCROW_START_BLOCK", "QuestionRewardPoolEscrow"),
   feedbackBonusEscrow: resolveStartBlock("PONDER_FEEDBACK_BONUS_ESCROW_START_BLOCK", "FeedbackBonusEscrow"),
@@ -291,9 +291,9 @@ export default createConfig({
       abi: VoterIdNFTAbi,
       network: contractOnActiveNetwork(addresses.voterIdNFT, startBlocks.voterIdNFT),
     },
-    MeshReputation: {
-      abi: MeshReputationAbi,
-      network: contractOnActiveNetwork(addresses.meshReputation, startBlocks.meshReputation),
+    LoopReputation: {
+      abi: LoopReputationAbi,
+      network: contractOnActiveNetwork(addresses.loopReputation, startBlocks.loopReputation),
     },
     ParticipationPool: {
       abi: ParticipationPoolAbi,

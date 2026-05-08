@@ -108,10 +108,10 @@
   --curyo-shell-border: rgb(245 245 245 / 0.1);
   --curyo-shell-border-strong: rgb(245 245 245 / 0.14);
   --curyo-panel-shadow: 0 24px 56px rgb(0 0 0 / 0.56);
-  --ratemesh-pink: #ef476f;
-  --ratemesh-blue: #359eee;
-  --ratemesh-green: #03cea4;
-  --ratemesh-yellow: #ffc43d;
+  --rateloop-pink: #ef476f;
+  --rateloop-blue: #359eee;
+  --rateloop-green: #03cea4;
+  --rateloop-yellow: #ffc43d;
 }
 
 body {
@@ -150,13 +150,13 @@ body {
   letter-spacing: 0;
 }
 
-.ratemesh-text-gradient {
+.rateloop-text-gradient {
   background: linear-gradient(
     90deg,
-    var(--ratemesh-blue),
-    var(--ratemesh-green),
-    var(--ratemesh-yellow),
-    var(--ratemesh-pink)
+    var(--rateloop-blue),
+    var(--rateloop-green),
+    var(--rateloop-yellow),
+    var(--rateloop-pink)
   );
   background-clip: text;
   -webkit-background-clip: text;

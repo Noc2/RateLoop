@@ -1,19 +1,19 @@
 import { TokenAllocationChart } from "~~/components/docs/TokenAllocationChart";
 import { protocolCopy } from "~~/lib/docs/protocolCopy";
 import { protocolDocFacts } from "~~/lib/docs/protocolFacts";
-import { MREP_MAX_SUPPLY_LABEL, tokenDistributionTableRows } from "~~/lib/docs/tokenomics";
+import { LREP_MAX_SUPPLY_LABEL, tokenDistributionTableRows } from "~~/lib/docs/tokenomics";
 
 const Tokenomics = () => {
   return (
     <article className="prose max-w-none">
       <h1>Tokenomics</h1>
       <p className="lead text-base-content/60 text-lg">
-        Mesh Reputation (MREP) token distribution, question funding, and staking mechanics.
+        Loop Reputation (LREP) token distribution, question funding, and staking mechanics.
       </p>
 
       <h2>Overview</h2>
       <p>
-        Mesh Reputation (MREP) is a capped, transferable reputation and governance token. It has no protocol token sale
+        Loop Reputation (LREP) is a capped, transferable reputation and governance token. It has no protocol token sale
         and no treasury backing; supply is distributed through the launch snapshot, governance-controlled pools, and
         earned protocol rewards.
       </p>
@@ -24,15 +24,15 @@ const Tokenomics = () => {
           <tbody>
             <tr>
               <td className="font-medium">Name</td>
-              <td>Mesh Reputation</td>
+              <td>Loop Reputation</td>
             </tr>
             <tr>
               <td className="font-medium">Symbol</td>
-              <td>MREP</td>
+              <td>LREP</td>
             </tr>
             <tr>
               <td className="font-medium">Max Supply</td>
-              <td>{MREP_MAX_SUPPLY_LABEL}</td>
+              <td>{LREP_MAX_SUPPLY_LABEL}</td>
             </tr>
             <tr>
               <td className="font-medium">Decimals</td>
@@ -46,11 +46,11 @@ const Tokenomics = () => {
         </table>
       </div>
       <p>
-        Supply is fixed at <strong>100 million MREP</strong>. The full supply is minted at launch into
+        Supply is fixed at <strong>100 million LREP</strong>. The full supply is minted at launch into
         protocol-controlled pools, with no team allocation or token sale.
       </p>
       <p>
-        Transferable MREP is intentional because the protocol needs portable ownership and reputation, but token balance
+        Transferable LREP is intentional because the protocol needs portable ownership and reputation, but token balance
         is only one input. Prediction accuracy, effective-unit scoring, cluster controls, calibration, reveal
         reliability, governance locks, and hard floors on proposal thresholds, submission bounties, and AI declaration
         bonds limit the damage from bought or rented balance.
@@ -123,7 +123,7 @@ const Tokenomics = () => {
               <td>Governed programs</td>
               <td>Approved grants, integrations, and ecosystem work</td>
               <td className="font-mono">Governor/timelock controlled</td>
-              <td>Counts against the fixed 100M MREP cap</td>
+              <td>Counts against the fixed 100M LREP cap</td>
             </tr>
           </tbody>
         </table>
@@ -132,7 +132,7 @@ const Tokenomics = () => {
       <p>{protocolCopy.participationPoolOverview}</p>
       <p>
         Reward formula: <code>reward = stakeAmount &times; currentRate</code>. The rate starts at <strong>90%</strong>{" "}
-        and halves based on cumulative MREP distributed from the pool &mdash; making the pool&apos;s lifetime
+        and halves based on cumulative LREP distributed from the pool &mdash; making the pool&apos;s lifetime
         predictable regardless of individual stake sizes. Rewards are always less than the staked amount, ensuring
         bootstrap rewards are a bonus, not a primary incentive.
       </p>
@@ -141,11 +141,11 @@ const Tokenomics = () => {
           <thead>
             <tr>
               <th>Tier</th>
-              <th>MREP distributed</th>
+              <th>LREP distributed</th>
               <th>Cumulative</th>
               <th>Rate</th>
-              <th>Stake 10 MREP</th>
-              <th>Stake 100 MREP</th>
+              <th>Stake 10 LREP</th>
+              <th>Stake 100 LREP</th>
             </tr>
           </thead>
           <tbody>
@@ -154,32 +154,32 @@ const Tokenomics = () => {
               <td className="font-mono">1,500,000</td>
               <td className="font-mono">1,500,000</td>
               <td className="font-mono">90%</td>
-              <td className="font-mono">9 MREP</td>
-              <td className="font-mono">90 MREP</td>
+              <td className="font-mono">9 LREP</td>
+              <td className="font-mono">90 LREP</td>
             </tr>
             <tr>
               <td>1</td>
               <td className="font-mono">3,000,000</td>
               <td className="font-mono">4,500,000</td>
               <td className="font-mono">45%</td>
-              <td className="font-mono">4.5 MREP</td>
-              <td className="font-mono">45 MREP</td>
+              <td className="font-mono">4.5 LREP</td>
+              <td className="font-mono">45 LREP</td>
             </tr>
             <tr>
               <td>2</td>
               <td className="font-mono">6,000,000</td>
               <td className="font-mono">10,500,000</td>
               <td className="font-mono">22.5%</td>
-              <td className="font-mono">2.25 MREP</td>
-              <td className="font-mono">22.5 MREP</td>
+              <td className="font-mono">2.25 LREP</td>
+              <td className="font-mono">22.5 LREP</td>
             </tr>
             <tr>
               <td>Tail</td>
               <td className="font-mono">1,500,000</td>
               <td className="font-mono">12,000,000</td>
               <td className="font-mono">11.25%</td>
-              <td className="font-mono">1.125 MREP</td>
-              <td className="font-mono">11.25 MREP</td>
+              <td className="font-mono">1.125 LREP</td>
+              <td className="font-mono">11.25 LREP</td>
             </tr>
           </tbody>
         </table>
@@ -188,7 +188,7 @@ const Tokenomics = () => {
 
       <h3 id="bounties">Bounties</h3>
       <p>
-        Bounties are separate from MREP bootstrap rewards. They are attached at submission, funded in MREP or USDC on
+        Bounties are separate from LREP bootstrap rewards. They are attached at submission, funded in LREP or USDC on
         Celo, scoped to one question or a question bundle, and split across eligible revealed raters in each qualified
         bounty round after a 3% frontend-operator share. Accurate crowd predictions earn more, while near misses can
         receive a smaller payout for useful participation. Bundle bounties can require multiple settlement round sets;
@@ -205,16 +205,16 @@ const Tokenomics = () => {
 
       <h3>Treasury</h3>
       <p>
-        The protocol treasury starts with <strong>32M MREP</strong> on the governor/timelock from launch. It grows over
+        The protocol treasury starts with <strong>32M LREP</strong> on the governor/timelock from launch. It grows over
         time through three main ongoing inflow sources: a 1% treasury fee on contested losing pools, cancellation fees
         from voluntary content withdrawals, and forfeited unrevealed past-epoch reports swept during settlement cleanup.
         Treasury spending follows the same governance proposal path as upgrades and other governed config changes.
       </p>
       <p>
         Appropriate treasury uses include ecosystem grants, partner activation, integration support, research and data
-        work, protocol development, security responses, and whistleblower rewards. MREP grants are not protocol-backed
+        work, protocol development, security responses, and whistleblower rewards. LREP grants are not protocol-backed
         payments; they distribute reputation and voting power, so proposals should state why the recipient should hold
-        MREP and what follow-up reporting or milestone evidence governance voters should expect.
+        LREP and what follow-up reporting or milestone evidence governance voters should expect.
       </p>
 
       <hr />
@@ -242,17 +242,17 @@ const Tokenomics = () => {
           <tbody>
             <tr>
               <td>Predict a final rating</td>
-              <td className="font-mono">1&ndash;100 MREP</td>
+              <td className="font-mono">1&ndash;100 LREP</td>
               <td>Per prediction, per round</td>
             </tr>
             <tr>
               <td>Ask a question</td>
               <td className="font-mono">
-                {protocolDocFacts.submissionMrepMinimumLabel} or {protocolDocFacts.submissionUsdcMinimumLabel}
+                {protocolDocFacts.submissionLrepMinimumLabel} or {protocolDocFacts.submissionUsdcMinimumLabel}
               </td>
               <td>
                 The minimum is non-refundable. It is attached at submission and pays eligible raters if the question
-                qualifies. Bounties can use MREP or USDC.
+                qualifies. Bounties can use LREP or USDC.
               </td>
             </tr>
             <tr>
@@ -262,7 +262,7 @@ const Tokenomics = () => {
             </tr>
             <tr>
               <td>Register as frontend</td>
-              <td className="font-mono">1,000 MREP</td>
+              <td className="font-mono">1,000 LREP</td>
               <td>Returned on exit unless slashed</td>
             </tr>
             <tr>

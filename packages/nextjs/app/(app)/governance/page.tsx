@@ -95,7 +95,7 @@ function GovernancePageInner() {
     return () => window.removeEventListener("hashchange", applyHash);
   }, []);
 
-  // Check MREP balance
+  // Check LREP balance
   const { data: hrepBalance, isLoading: hrepBalanceLoading } = useScaffoldReadContract({
     contractName: REPUTATION_CONTRACT_NAME,
     functionName: "balanceOf",
@@ -146,7 +146,7 @@ function GovernancePageInner() {
   if (!isConnected) {
     return (
       <ConnectWalletCard
-        title="MREP"
+        title="LREP"
         message="Connect a wallet to build reputation, review predictions, and participate in governance."
       />
     );

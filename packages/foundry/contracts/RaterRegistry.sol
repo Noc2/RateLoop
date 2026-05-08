@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 
 /// @title RaterRegistry
-/// @notice Optional rater metadata, human credentials, trust anchors, and scorer labels for RateMesh.
+/// @notice Optional rater metadata, human credentials, trust anchors, and scorer labels for RateLoop.
 /// @dev This registry is intentionally non-gating: rating contracts may read it, but base participation
 ///      must keep working when no profile, credential, or trust signal exists.
 contract RaterRegistry is AccessControl {

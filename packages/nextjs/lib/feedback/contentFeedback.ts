@@ -1,4 +1,4 @@
-import { ROUND_STATE, type RoundState } from "@ratemesh/contracts/protocol";
+import { ROUND_STATE, type RoundState } from "@rateloop/contracts/protocol";
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { db } from "~~/lib/db";
 import { contentFeedback } from "~~/lib/db/schema";

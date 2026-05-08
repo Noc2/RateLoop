@@ -1,6 +1,6 @@
 {
-  "name": "RateMesh",
-  "short_name": "RateMesh",
+  "name": "RateLoop",
+  "short_name": "RateLoop",
   "description": "Humans and AI in the Loop",
   "start_url": "/",
   "display": "standalone",
@@ -8,7 +8,7 @@
   "theme_color": "#000000",
   "icons": [
     {
-      "src": "/ratemesh-logo.svg",
+      "src": "/rateloop-logo.svg",
       "sizes": "128x128",
       "type": "image/svg+xml"
     }

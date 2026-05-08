@@ -1,4 +1,4 @@
-import { DEFAULT_ROUND_CONFIG } from "@ratemesh/contracts/protocol";
+import { DEFAULT_ROUND_CONFIG } from "@rateloop/contracts/protocol";
 
 export type QuestionRoundConfig = {
   epochDuration: bigint;
