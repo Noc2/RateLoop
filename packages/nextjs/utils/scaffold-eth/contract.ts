@@ -1,6 +1,7 @@
 import { getParsedError } from "./getParsedError";
 import { AllowedChainIds } from "./networks";
 import { notification } from "./notification";
+import { RoundVotingEngineAbi } from "@ratemesh/contracts/abis";
 import deployedContractsData from "@ratemesh/contracts/deployedContracts";
 import { MutateOptions } from "@tanstack/react-query";
 import {
@@ -60,7 +61,25 @@ function withReputationAlias<TContracts extends GenericContractsDeclaration>(dec
   return normalized as TContracts;
 }
 
-const contractsData = withReputationAlias(deployedContractsData as GenericContractsDeclaration);
+function withCurrentAbiOverrides<TContracts extends GenericContractsDeclaration>(declarations: TContracts): TContracts {
+  const normalized = { ...declarations } as GenericContractsDeclaration;
+
+  for (const [chainId, contractsForChain] of Object.entries(declarations)) {
+    if (contractsForChain.RoundVotingEngine) {
+      normalized[Number(chainId)] = {
+        ...contractsForChain,
+        RoundVotingEngine: {
+          ...contractsForChain.RoundVotingEngine,
+          abi: RoundVotingEngineAbi as Abi,
+        },
+      };
+    }
+  }
+
+  return normalized as TContracts;
+}
+
+const contractsData = withCurrentAbiOverrides(withReputationAlias(deployedContractsData as GenericContractsDeclaration));
 
 export const contracts = contractsData as GenericContractsDeclaration | null;
 
