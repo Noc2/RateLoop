@@ -11,6 +11,8 @@ import {
   ParticipationPoolAbi,
   ProfileRegistryAbi,
   QuestionRewardPoolEscrowAbi,
+  RaterDeclarationRegistryAbi,
+  RaterRegistryAbi,
   RoundRewardDistributorAbi,
   RoundVotingEngineAbi,
   VoterIdNFTAbi,
@@ -216,6 +218,11 @@ const addresses = {
   participationPool: resolveAddress("PONDER_PARTICIPATION_POOL_ADDRESS", "ParticipationPool"),
   questionRewardPoolEscrow: resolveAddress("PONDER_QUESTION_REWARD_POOL_ESCROW_ADDRESS", "QuestionRewardPoolEscrow"),
   feedbackBonusEscrow: resolveAddress("PONDER_FEEDBACK_BONUS_ESCROW_ADDRESS", "FeedbackBonusEscrow"),
+  raterRegistry: resolveAddress("PONDER_RATER_REGISTRY_ADDRESS", "RaterRegistry"),
+  raterDeclarationRegistry: resolveAddress(
+    "PONDER_RATER_DECLARATION_REGISTRY_ADDRESS",
+    "RaterDeclarationRegistry",
+  ),
 };
 
 const startBlocks = {
@@ -230,6 +237,11 @@ const startBlocks = {
   participationPool: resolveStartBlock("PONDER_PARTICIPATION_POOL_START_BLOCK", "ParticipationPool"),
   questionRewardPoolEscrow: resolveStartBlock("PONDER_QUESTION_REWARD_POOL_ESCROW_START_BLOCK", "QuestionRewardPoolEscrow"),
   feedbackBonusEscrow: resolveStartBlock("PONDER_FEEDBACK_BONUS_ESCROW_START_BLOCK", "FeedbackBonusEscrow"),
+  raterRegistry: resolveStartBlock("PONDER_RATER_REGISTRY_START_BLOCK", "RaterRegistry"),
+  raterDeclarationRegistry: resolveStartBlock(
+    "PONDER_RATER_DECLARATION_REGISTRY_START_BLOCK",
+    "RaterDeclarationRegistry",
+  ),
 };
 
 function contractOnActiveNetwork(address: `0x${string}`, startBlock: number) {
@@ -294,6 +306,14 @@ export default createConfig({
     FeedbackBonusEscrow: {
       abi: FeedbackBonusEscrowAbi,
       network: contractOnActiveNetwork(addresses.feedbackBonusEscrow, startBlocks.feedbackBonusEscrow),
+    },
+    RaterRegistry: {
+      abi: RaterRegistryAbi,
+      network: contractOnActiveNetwork(addresses.raterRegistry, startBlocks.raterRegistry),
+    },
+    RaterDeclarationRegistry: {
+      abi: RaterDeclarationRegistryAbi,
+      network: contractOnActiveNetwork(addresses.raterDeclarationRegistry, startBlocks.raterDeclarationRegistry),
     },
   },
 });

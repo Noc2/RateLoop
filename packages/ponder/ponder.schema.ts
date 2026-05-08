@@ -520,6 +520,243 @@ export const categoryRelations = relations(category, ({ many }) => ({
 }));
 
 // ============================================================
+// RATER REGISTRY AND DECLARATIONS
+// ============================================================
+
+export const raterProfile = onchainTable(
+  "rater_profile",
+  (t) => ({
+    address: t.hex().primaryKey(),
+    raterType: t.integer().notNull(),
+    metadataHash: t.hex().notNull(),
+    updatedAt: t.bigint().notNull(),
+  }),
+  (table) => ({
+    raterTypeIdx: index().on(table.raterType),
+    updatedAtIdx: index().on(table.updatedAt),
+  }),
+);
+
+export const raterSelfCredential = onchainTable(
+  "rater_self_credential",
+  (t) => ({
+    rater: t.hex().primaryKey(),
+    verified: t.boolean().notNull(),
+    legacy: t.boolean().notNull(),
+    revoked: t.boolean().notNull(),
+    nullifierHash: t.hex().notNull(),
+    scope: t.hex().notNull(),
+    verifiedAt: t.bigint().notNull(),
+    expiresAt: t.bigint().notNull(),
+    multiplierBps: t.integer().notNull(),
+    evidenceHash: t.hex().notNull(),
+    updatedAt: t.bigint().notNull(),
+  }),
+  (table) => ({
+    nullifierIdx: index().on(table.nullifierHash),
+    legacyIdx: index().on(table.legacy),
+    revokedIdx: index().on(table.revoked),
+    expiresAtIdx: index().on(table.expiresAt),
+  }),
+);
+
+export const raterTrustSeed = onchainTable(
+  "rater_trust_seed",
+  (t) => ({
+    rater: t.hex().primaryKey(),
+    active: t.boolean().notNull(),
+    seededAt: t.bigint().notNull(),
+    sunsetAt: t.bigint().notNull(),
+    trustBudgetBps: t.integer().notNull(),
+    seedRoot: t.hex().notNull(),
+    updatedAt: t.bigint().notNull(),
+  }),
+  (table) => ({
+    activeIdx: index().on(table.active),
+    sunsetAtIdx: index().on(table.sunsetAt),
+    seedRootIdx: index().on(table.seedRoot),
+  }),
+);
+
+export const raterClusterScore = onchainTable(
+  "rater_cluster_score",
+  (t) => ({
+    rater: t.hex().primaryKey(),
+    clusterId: t.hex().notNull(),
+    discountBps: t.integer().notNull(),
+    scorerEpoch: t.bigint().notNull(),
+    updatedAt: t.bigint().notNull(),
+  }),
+  (table) => ({
+    clusterIdx: index().on(table.clusterId),
+    scorerEpochIdx: index().on(table.scorerEpoch),
+    discountIdx: index().on(table.discountBps),
+  }),
+);
+
+export const raterTrustAttestation = onchainTable(
+  "rater_trust_attestation",
+  (t) => ({
+    id: t.hex().primaryKey(),
+    issuer: t.hex().notNull(),
+    subject: t.hex().notNull(),
+    categoryId: t.bigint().notNull(),
+    trustBudget: t.bigint().notNull(),
+    maxBoostBps: t.integer().notNull(),
+    expiresAt: t.bigint().notNull(),
+    metadataHash: t.hex().notNull(),
+    issuedAt: t.bigint().notNull(),
+    revoked: t.boolean().notNull(),
+    updatedAt: t.bigint().notNull(),
+  }),
+  (table) => ({
+    issuerIdx: index().on(table.issuer),
+    subjectIdx: index().on(table.subject),
+    categoryIdx: index().on(table.categoryId),
+    revokedIdx: index().on(table.revoked),
+    expiresAtIdx: index().on(table.expiresAt),
+  }),
+);
+
+export const aiRaterDeclaration = onchainTable(
+  "ai_rater_declaration",
+  (t) => ({
+    rater: t.hex().primaryKey(),
+    operator: t.hex().notNull(),
+    version: t.integer().notNull(),
+    tier: t.integer().notNull(),
+    behaviorChanged: t.boolean().notNull(),
+    probePending: t.boolean().notNull(),
+    declarationHash: t.hex().notNull(),
+    modelClass: t.integer().notNull(),
+    modelId: t.hex().notNull(),
+    provider: t.hex().notNull(),
+    promptTemplateHash: t.hex().notNull(),
+    retrievalConfigHash: t.hex().notNull(),
+    toolingHash: t.hex().notNull(),
+    disclosure: t.integer().notNull(),
+    declaredAt: t.bigint().notNull(),
+    retiredAt: t.bigint(),
+    lastProbeResultHash: t.hex(),
+    updatedAt: t.bigint().notNull(),
+  }),
+  (table) => ({
+    operatorIdx: index().on(table.operator),
+    tierIdx: index().on(table.tier),
+    modelIdx: index().on(table.modelId),
+    promptIdx: index().on(table.promptTemplateHash),
+    probePendingIdx: index().on(table.probePending),
+  }),
+);
+
+export const aiRaterDeclarationHistory = onchainTable(
+  "ai_rater_declaration_history",
+  (t) => ({
+    id: t.text().primaryKey(), // `${rater}-${version}`
+    rater: t.hex().notNull(),
+    operator: t.hex().notNull(),
+    version: t.integer().notNull(),
+    tier: t.integer().notNull(),
+    behaviorChanged: t.boolean().notNull(),
+    probePending: t.boolean().notNull(),
+    declarationHash: t.hex().notNull(),
+    modelClass: t.integer().notNull(),
+    modelId: t.hex().notNull(),
+    provider: t.hex().notNull(),
+    promptTemplateHash: t.hex().notNull(),
+    retrievalConfigHash: t.hex().notNull(),
+    toolingHash: t.hex().notNull(),
+    disclosure: t.integer().notNull(),
+    declaredAt: t.bigint().notNull(),
+    retiredAt: t.bigint(),
+    lastProbeResultHash: t.hex(),
+    updatedAt: t.bigint().notNull(),
+  }),
+  (table) => ({
+    raterIdx: index().on(table.rater),
+    operatorIdx: index().on(table.operator),
+    versionIdx: index().on(table.rater, table.version),
+    tierIdx: index().on(table.tier),
+  }),
+);
+
+export const aiRaterOperatorBond = onchainTable(
+  "ai_rater_operator_bond",
+  (t) => ({
+    operator: t.hex().primaryKey(),
+    totalBond: t.bigint().notNull(),
+    updatedAt: t.bigint().notNull(),
+  }),
+  (table) => ({
+    totalBondIdx: index().on(table.totalBond),
+  }),
+);
+
+export const aiRaterProbeResult = onchainTable(
+  "ai_rater_probe_result",
+  (t) => ({
+    id: t.text().primaryKey(), // `${rater}-${version}-${txHash}-${logIndex}`
+    rater: t.hex().notNull(),
+    operator: t.hex().notNull(),
+    version: t.integer().notNull(),
+    passed: t.boolean().notNull(),
+    confidenceBps: t.integer().notNull(),
+    probeLibraryHash: t.hex().notNull(),
+    resultHash: t.hex().notNull(),
+    recordedAt: t.bigint().notNull(),
+  }),
+  (table) => ({
+    raterIdx: index().on(table.rater),
+    operatorIdx: index().on(table.operator),
+    versionIdx: index().on(table.rater, table.version),
+    passedIdx: index().on(table.passed),
+  }),
+);
+
+export const aiRaterDriftFlag = onchainTable(
+  "ai_rater_drift_flag",
+  (t) => ({
+    id: t.text().primaryKey(), // `${txHash}-${logIndex}`
+    rater: t.hex().notNull(),
+    operator: t.hex().notNull(),
+    version: t.integer().notNull(),
+    driftScoreBps: t.integer().notNull(),
+    evidenceHash: t.hex().notNull(),
+    flaggedAt: t.bigint().notNull(),
+  }),
+  (table) => ({
+    raterIdx: index().on(table.rater),
+    operatorIdx: index().on(table.operator),
+    versionIdx: index().on(table.rater, table.version),
+  }),
+);
+
+export const aiRaterDeclarationChallenge = onchainTable(
+  "ai_rater_declaration_challenge",
+  (t) => ({
+    challengeId: t.bigint().primaryKey(),
+    challenger: t.hex().notNull(),
+    rater: t.hex().notNull(),
+    operator: t.hex().notNull(),
+    declarationVersion: t.integer().notNull(),
+    evidenceHash: t.hex().notNull(),
+    resolutionHash: t.hex(),
+    bondAmount: t.bigint().notNull(),
+    status: t.integer().notNull(),
+    operatorSlash: t.bigint().notNull(),
+    challengerReward: t.bigint().notNull(),
+    openedAt: t.bigint().notNull(),
+    resolvedAt: t.bigint(),
+  }),
+  (table) => ({
+    challengerIdx: index().on(table.challenger),
+    raterIdx: index().on(table.rater),
+    operatorIdx: index().on(table.operator),
+    statusIdx: index().on(table.status),
+  }),
+);
+
+// ============================================================
 // PROFILE
 // ============================================================
 

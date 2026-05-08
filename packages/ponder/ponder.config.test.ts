@@ -19,6 +19,8 @@ const REQUIRED_PONDER_CONTRACTS = [
   "ParticipationPool",
   "QuestionRewardPoolEscrow",
   "FeedbackBonusEscrow",
+  "RaterRegistry",
+  "RaterDeclarationRegistry",
 ] as const;
 
 function getMissingPonderContracts(chain: DeploymentChain | undefined) {
@@ -73,6 +75,9 @@ const VALID_ENV = {
   PONDER_FEEDBACK_BONUS_ESCROW_ADDRESS:
     chain11142220?.FeedbackBonusEscrow?.address ?? "0xcccccccccccccccccccccccccccccccccccccccc",
   PONDER_FEEDBACK_BONUS_ESCROW_START_BLOCK: String(expectedFeedbackBonusEscrowStartBlock),
+  PONDER_RATER_REGISTRY_ADDRESS: chain11142220?.RaterRegistry?.address ?? "0xdddddddddddddddddddddddddddddddddddddddd",
+  PONDER_RATER_DECLARATION_REGISTRY_ADDRESS:
+    chain11142220?.RaterDeclarationRegistry?.address ?? "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
   PONDER_CONTENT_REGISTRY_START_BLOCK: String(expectedContentRegistryStartBlock),
 };
 
@@ -113,6 +118,8 @@ describe("ponder config", () => {
         "PONDER_PARTICIPATION_POOL_ADDRESS",
         "PONDER_QUESTION_REWARD_POOL_ESCROW_ADDRESS",
         "PONDER_FEEDBACK_BONUS_ESCROW_ADDRESS",
+        "PONDER_RATER_REGISTRY_ADDRESS",
+        "PONDER_RATER_DECLARATION_REGISTRY_ADDRESS",
         "PONDER_CONTENT_REGISTRY_START_BLOCK",
         "PONDER_QUESTION_REWARD_POOL_ESCROW_START_BLOCK",
         "PONDER_FEEDBACK_BONUS_ESCROW_START_BLOCK",
@@ -153,6 +160,8 @@ describe("ponder config", () => {
         "PONDER_PARTICIPATION_POOL_ADDRESS",
         "PONDER_QUESTION_REWARD_POOL_ESCROW_ADDRESS",
         "PONDER_FEEDBACK_BONUS_ESCROW_ADDRESS",
+        "PONDER_RATER_REGISTRY_ADDRESS",
+        "PONDER_RATER_DECLARATION_REGISTRY_ADDRESS",
         "PONDER_CONTENT_REGISTRY_START_BLOCK",
         "PONDER_QUESTION_REWARD_POOL_ESCROW_START_BLOCK",
         "PONDER_FEEDBACK_BONUS_ESCROW_START_BLOCK",
@@ -212,6 +221,8 @@ describe("ponder config", () => {
         "PONDER_PARTICIPATION_POOL_ADDRESS",
         "PONDER_QUESTION_REWARD_POOL_ESCROW_ADDRESS",
         "PONDER_FEEDBACK_BONUS_ESCROW_ADDRESS",
+        "PONDER_RATER_REGISTRY_ADDRESS",
+        "PONDER_RATER_DECLARATION_REGISTRY_ADDRESS",
       ],
     );
 

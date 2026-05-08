@@ -111,7 +111,14 @@ contract RaterDeclarationRegistry is AccessControl, EIP712 {
         RaterTier tier,
         bool behaviorChanged,
         bool probePending,
-        bytes32 declarationHash
+        bytes32 declarationHash,
+        uint8 modelClass,
+        bytes32 modelId,
+        bytes32 provider,
+        bytes32 promptTemplateHash,
+        bytes32 retrievalConfigHash,
+        bytes32 toolingHash,
+        uint8 disclosure
     );
     event DeclarationRetired(address indexed rater, address indexed operator, uint32 indexed version);
     event ProbeRequested(
@@ -139,6 +146,7 @@ contract RaterDeclarationRegistry is AccessControl, EIP712 {
         address indexed rater,
         address operator,
         uint32 declarationVersion,
+        uint256 bondAmount,
         bytes32 evidenceHash
     );
     event ChallengeResolved(
@@ -263,7 +271,14 @@ contract RaterDeclarationRegistry is AccessControl, EIP712 {
             RaterTier.A1Unverified,
             behaviorChanged,
             requestProbe && behaviorChanged,
-            declarationHash
+            declarationHash,
+            declaration.modelClass,
+            declaration.modelId,
+            declaration.provider,
+            declaration.promptTemplateHash,
+            declaration.retrievalConfigHash,
+            declaration.toolingHash,
+            declaration.disclosure
         );
 
         if (requestProbe && behaviorChanged) {
@@ -360,7 +375,13 @@ contract RaterDeclarationRegistry is AccessControl, EIP712 {
         });
 
         emit ChallengeOpened(
-            challengeId, msg.sender, rater, stored.declaration.operator, stored.declaration.version, evidenceHash
+            challengeId,
+            msg.sender,
+            rater,
+            stored.declaration.operator,
+            stored.declaration.version,
+            challengeBondMrep,
+            evidenceHash
         );
     }
 

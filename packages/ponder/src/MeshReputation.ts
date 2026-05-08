@@ -22,6 +22,8 @@ const INDEXED_CONTRACT_NAMES = [
   "ParticipationPool",
   "QuestionRewardPoolEscrow",
   "FeedbackBonusEscrow",
+  "RaterRegistry",
+  "RaterDeclarationRegistry",
 ] as const;
 
 function addExcludedAddress(addresses: Set<string>, address: string | undefined) {
