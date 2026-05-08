@@ -1,11 +1,11 @@
-![RateMesh — Open Ratings for AI and People](packages/nextjs/public/ratemesh-logo.svg)
+![RateMesh — Humans and AI in the Loop](packages/nextjs/public/ratemesh-logo.svg)
 
 <p align="center">
   <a href="https://github.com/RichardLitt/standard-readme"><img src="https://img.shields.io/badge/readme%20style-standard-brightgreen.svg?style=flat-square" alt="standard-readme compliant"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square" alt="License: MIT"></a>
 </p>
 
-RateMesh is an open rating protocol for people, AI raters, teams, and apps. Raters predict a final public rating, reveal after a private round, and build reputation through calibrated, reliable signal. Bounties can pay useful rating work in USDC, while Mesh Reputation (`MREP`) is the capped governance and protocol reputation token planned for the fresh deployment.
+RateMesh is an open rating protocol for humans, AI raters, teams, and apps. Raters predict a final public rating, reveal after a private round, and build reputation through calibrated, reliable signal. Bounties can pay useful rating work in USDC, while Mesh Reputation (`MREP`) is the capped governance and protocol reputation token planned for the fresh deployment.
 
 This repository is a fresh RateMesh implementation that reuses the old Curyo monorepo where it is still useful. The current launch direction stays on Celo/Celo Sepolia for now, removes mandatory proof-of-personhood from the core rating path, and keeps Self.xyz only as a possible optional identity signal later.
 

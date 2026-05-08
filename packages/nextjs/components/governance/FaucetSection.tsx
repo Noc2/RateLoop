@@ -609,7 +609,7 @@ export function FaucetSection({ referrer }: FaucetSectionProps) {
         </div>
 
         <Link href={RATE_ROUTE} className="btn btn-primary w-full mt-4">
-          Start Rating
+          For Humans
         </Link>
       </div>
     );

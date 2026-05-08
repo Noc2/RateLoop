@@ -21,9 +21,9 @@ function PublicHeader() {
           <CuryoLogo className="h-9 w-9 shrink-0" idPrefix="ratemesh-public-header-logo" />
           <div className="flex min-w-0 flex-col gap-0.5">
             <span className="font-display whitespace-nowrap text-[1.2rem] leading-none tracking-normal text-base-content">
-              RateMesh (Beta)
+              RateMesh
             </span>
-            <span className="hidden text-sm text-base-content/75 sm:block">Open Ratings for People and AI</span>
+            <span className="hidden text-sm text-base-content/75 sm:block">Humans and AI</span>
           </div>
         </Link>
 

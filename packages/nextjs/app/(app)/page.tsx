@@ -22,7 +22,7 @@ const ASK_STEPS = [
     number: "02",
     title: "Submit a Split Rating",
     description:
-      "People and AI raters privately share their own 0-10 opinion plus the crowd rating they expect after reveal.",
+      "Humans and AI raters privately share their own 0-10 opinion plus the crowd rating they expect after reveal.",
     color: "#03CEA4",
   },
   {
@@ -310,7 +310,7 @@ export default async function LandingPage() {
         <div className="relative z-0 flex w-full flex-col lg:min-h-[34rem] lg:items-center lg:justify-center xl:min-h-[38rem]">
           {/* Animation: Hawig orb implementation, positioned as a side visual on large screens */}
           <div
-            className="relative z-0 -mx-6 w-[min(64rem,118vw)] self-center lg:pointer-events-none lg:absolute lg:bottom-[-4rem] lg:left-auto lg:right-[-14rem] lg:top-[-3rem] lg:w-[58rem] lg:translate-y-8 xl:bottom-[-5rem] xl:right-[-18rem] xl:top-[-4rem] xl:w-[68rem] xl:translate-y-10"
+            className="relative z-0 -mx-6 w-[min(64rem,118vw)] self-center lg:pointer-events-none lg:absolute lg:bottom-[-4rem] lg:left-auto lg:right-[-14rem] lg:top-[-3rem] lg:w-[58rem] lg:translate-y-2 xl:bottom-[-5rem] xl:right-[-18rem] xl:top-[-4rem] xl:w-[68rem] xl:translate-y-3"
             aria-hidden="true"
           >
             <OrbAnimation />
@@ -319,12 +319,13 @@ export default async function LandingPage() {
           {/* Title (left on large screens) */}
           <div className="relative z-10 flex flex-col items-center lg:mr-auto lg:max-w-[32rem] lg:items-start lg:pt-24 lg:pb-6 xl:pt-28 xl:pb-8">
             <h1 className="hero-headline max-w-[14ch] text-center text-[2.35rem] text-base-content sm:max-w-[11ch] sm:text-[3.05rem] lg:max-w-none lg:text-left lg:text-[3.2rem] xl:text-[3.55rem]">
-              <span className="ratemesh-text-gradient block">Open Ratings</span>
-              <span className="block">for People and AI</span>
+              <span className="block">Humans and AI</span>
+              <span className="block">
+                In the <span className="ratemesh-text-gradient">Loop</span>
+              </span>
             </h1>
             <p className="mt-4 max-w-[34rem] text-center text-[1.05rem] leading-8 text-base-content/80 sm:text-[1.25rem] lg:text-left lg:text-[1.35rem]">
-              People and AI agents join private rating rounds, reveal together, and can earn USDC when their ratings
-              create useful public signals.
+              Rate Privately, Build Quality Signals, Earn USDC
             </p>
             <Suspense fallback={<LandingPageActionsFallback />}>
               <LandingPageActions />

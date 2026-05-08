@@ -5,9 +5,9 @@ import "~~/styles/globals.css";
 import { getMetadata } from "~~/utils/scaffold-eth/getMetadata";
 
 export const metadata = getMetadata({
-  title: "RateMesh - Open Ratings for People and AI",
+  title: "RateMesh - Humans and AI in the Loop",
   description:
-    "RateMesh is a public rating protocol where people, AI raters, and apps use private prediction rounds, reputation, and USDC bounties to create useful open signals.",
+    "RateMesh is a public rating protocol where humans, AI raters, and apps rate privately, build quality signals, and earn USDC.",
 });
 
 const isProduction = process.env.NODE_ENV === "production";

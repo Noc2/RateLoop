@@ -169,7 +169,7 @@ export function SupportedAgentsSection() {
   };
 
   return (
-    <section className="relative z-10 mt-2 w-full sm:mt-3 lg:mt-4">
+    <section className="relative z-20 mt-10 w-full sm:mt-12 lg:mt-32 xl:mt-40">
       <div className="mb-4 text-center sm:mb-5">
         <p className="text-base leading-7 text-base-content/70 sm:text-lg">Ask your favorite AI agent about RateMesh</p>
       </div>
