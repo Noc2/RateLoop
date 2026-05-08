@@ -9,9 +9,10 @@ import {
   stringToHex,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { ContentRegistryAbi, HumanReputationAbi, ProtocolConfigAbi, RoundVotingEngineAbi } from "@ratemesh/contracts/abis";
+import { packVoteRoundContext } from "@ratemesh/contracts";
+import { ContentRegistryAbi, MeshReputationAbi, ProtocolConfigAbi, RoundVotingEngineAbi } from "@ratemesh/contracts/abis";
 import deployedContracts from "@ratemesh/contracts/deployedContracts";
-import { buildCommitHash } from "@ratemesh/contracts/voting";
+import { buildPredictionCommitHash } from "@ratemesh/contracts/voting";
 
 const roundCommitPreviewAbi = [
   {
@@ -51,8 +52,11 @@ const { mockConfig, timelockDecrypt } = vi.hoisted(() => ({
     const footerIndex = armorLines.findIndex(line => line.startsWith("-----END AGE ENCRYPTED FILE-----"));
     const agePayload = Buffer.from(armorLines.slice(1, footerIndex).join(""), "base64").toString("binary");
     const payloadLines = agePayload.split("\n");
-    const [flag, saltHex] = (payloadLines[payloadLines.length - 1] ?? "").split(":");
-    return Buffer.concat([Buffer.from([flag === "1" ? 1 : 0]), Buffer.from((saltHex ?? "").slice(0, 64), "hex")]);
+    const [predictionBps, saltHex] = (payloadLines[payloadLines.length - 1] ?? "").split(":");
+    const plaintext = Buffer.alloc(34);
+    plaintext.writeUInt16BE(Number(predictionBps ?? "0"), 0);
+    Buffer.from((saltHex ?? "").slice(0, 64), "hex").copy(plaintext, 2);
+    return plaintext;
   }),
 }));
 
@@ -69,7 +73,7 @@ import { resetKeeperStateForTests, resolveRounds } from "../keeper.js";
 
 const chain31337 = (deployedContracts as Record<number, Record<string, { address: `0x${string}` }>>)[31337];
 const CONTRACTS = {
-  hrep: chain31337?.HumanReputation?.address ?? "0x0000000000000000000000000000000000000000",
+  mrep: chain31337?.MeshReputation?.address ?? "0x0000000000000000000000000000000000000000",
   contentRegistry: chain31337?.ContentRegistry?.address ?? "0x0000000000000000000000000000000000000000",
   roundVotingEngine: chain31337?.RoundVotingEngine?.address ?? "0x0000000000000000000000000000000000000000",
 } as const;
@@ -97,7 +101,7 @@ function makeLogger() {
 }
 
 function encodeTestCiphertext(params: {
-  isUp: boolean;
+  predictedRatingBps: number;
   salt: `0x${string}`;
   targetRound: bigint;
   drandChainHash: `0x${string}`;
@@ -111,8 +115,11 @@ function encodeTestCiphertext(params: {
   };
   const toUnpaddedBase64 = (input: Buffer | string): string => Buffer.from(input).toString("base64").replace(/=+$/u, "");
   const encryptedBody = Buffer.concat([
-    Buffer.from(`${params.isUp ? "1" : "0"}:${params.salt.slice(2)}`, "utf8"),
-    Buffer.alloc(Math.max(0, 65 - Buffer.byteLength(`${params.isUp ? "1" : "0"}:${params.salt.slice(2)}`, "utf8")), 0x58),
+    Buffer.from(`${params.predictedRatingBps}:${params.salt.slice(2)}`, "utf8"),
+    Buffer.alloc(
+      Math.max(0, 65 - Buffer.byteLength(`${params.predictedRatingBps}:${params.salt.slice(2)}`, "utf8")),
+      0x58,
+    ),
   ]);
   const recipientBody = chunkBase64(toUnpaddedBase64(Buffer.alloc(128, 0x42)));
   const mac = toUnpaddedBase64(Buffer.alloc(32, 0x24));
@@ -283,8 +290,8 @@ describe("resolveRounds integration", () => {
       await submitterClient.writeContract({
         account: ACCOUNTS.submitter,
         chain: CHAIN,
-        address: CONTRACTS.hrep,
-        abi: HumanReputationAbi,
+        address: CONTRACTS.mrep,
+        abi: MeshReputationAbi,
         functionName: "approve",
         args: [questionRewardPoolEscrow, DEFAULT_SUBMISSION_REWARD_AMOUNT],
       }),
@@ -437,19 +444,19 @@ describe("resolveRounds integration", () => {
       {
         client: voter1Client,
         account: ACCOUNTS.voter1.address,
-        isUp: true,
+        predictedRatingBps: 8_000,
         salt: `0x${"11".repeat(32)}` as `0x${string}`,
       },
       {
         client: voter2Client,
         account: ACCOUNTS.voter2.address,
-        isUp: true,
+        predictedRatingBps: 7_500,
         salt: `0x${"22".repeat(32)}` as `0x${string}`,
       },
       {
         client: voter3Client,
         account: ACCOUNTS.voter3.address,
-        isUp: false,
+        predictedRatingBps: 2_000,
         salt: `0x${"33".repeat(32)}` as `0x${string}`,
       },
     ];
@@ -460,8 +467,8 @@ describe("resolveRounds integration", () => {
         await voter.client.writeContract({
           account: voter.account,
           chain: CHAIN,
-          address: CONTRACTS.hrep,
-          abi: HumanReputationAbi,
+          address: CONTRACTS.mrep,
+          abi: MeshReputationAbi,
           functionName: "approve",
           args: [CONTRACTS.roundVotingEngine, STAKE],
         }),
@@ -475,8 +482,8 @@ describe("resolveRounds integration", () => {
       );
       expect(targetRound).toBeGreaterThan(0n);
       const ciphertext = encodeTestCiphertext({ ...voter, targetRound, drandChainHash });
-      const commitHash = buildCommitHash(
-        voter.isUp,
+      const commitHash = buildPredictionCommitHash(
+        voter.predictedRatingBps,
         voter.salt,
         voter.account,
         contentId,
@@ -486,10 +493,11 @@ describe("resolveRounds integration", () => {
         drandChainHash,
         ciphertext,
       );
+      const roundContext = packVoteRoundContext(roundId, roundReferenceRatingBps);
 
       const commitArgs = [
         contentId,
-        roundReferenceRatingBps,
+        roundContext,
         targetRound,
         drandChainHash,
         commitHash,

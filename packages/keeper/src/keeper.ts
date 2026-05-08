@@ -1,9 +1,9 @@
 /**
- * Core keeper logic: reveal tlock votes, advance round terminal states, clean up
+ * Core keeper logic: reveal tlock predictions, advance round terminal states, clean up
  * unrevealed commits, and sweep dormant content.
  *
- * With tlock commit-reveal voting, the keeper has five jobs:
- *   1. Reveal committed votes after each epoch ends (using drand beacon decryption).
+ * With tlock commit-reveal rating, the keeper has six jobs:
+ *   1. Reveal committed predictions after each epoch ends (using drand beacon decryption).
  *   2. Call `settleRound(contentId, roundId)` when ≥minVoters are revealed.
  *   3. Call `finalizeRevealFailedRound(contentId, roundId)` once the last reveal grace
  *      deadline has passed without reveal quorum.
@@ -13,8 +13,8 @@
  *      never reached commit quorum.
  *   6. Call `markDormant(contentId)` for stale content.
  *
- * Vote ciphertext is tlock-encrypted to a future drand round. After the epoch ends,
- * the drand beacon makes the decryption key available and the keeper can decrypt.
+ * Prediction ciphertext is tlock-encrypted to a future drand round. After the epoch
+ * ends, the drand beacon makes the decryption key available and the keeper can decrypt.
  */
 import type { PublicClient, WalletClient, Chain, Account } from "viem";
 import { timelockDecrypt, mainnetClient } from "tlock-js";
@@ -23,7 +23,7 @@ import {
   QuestionRewardPoolEscrowAbi,
   RoundVotingEngineAbi,
 } from "@ratemesh/contracts/abis";
-import { parseTlockCiphertextMetadata } from "@ratemesh/contracts/voting";
+import { decodePredictionPlaintext, parseTlockCiphertextMetadata } from "@ratemesh/contracts/voting";
 import {
   type CommitData,
   type RoundData,
@@ -241,25 +241,21 @@ async function discoverCleanupCandidate(
 /**
  * Decrypt a tlock-encrypted ciphertext using the drand beacon.
  * Ciphertext on-chain is hex-encoded UTF-8 armored AGE string.
- * Plaintext is 33 bytes: [uint8 isUp (0|1), bytes32 salt].
+ * Plaintext is 34 bytes: [uint16 predictedRatingBps, bytes32 salt].
  */
 // Valid tlock ciphertexts are ~600-800 bytes; 4KB is a generous upper bound.
 const MAX_CIPHERTEXT_BYTES = 4096;
 
-export async function decryptTlockCiphertext(
+export async function decryptTlockPredictionCiphertext(
   ciphertext: `0x${string}`,
-): Promise<{ isUp: boolean; salt: `0x${string}` } | null> {
+): Promise<{ predictedRatingBps: number; rating: number; salt: `0x${string}` } | null> {
   const hex = ciphertext.startsWith("0x") ? ciphertext.slice(2) : ciphertext;
   if (hex.length / 2 > MAX_CIPHERTEXT_BYTES) return null;
   // Convert hex bytes back to UTF-8 armored string
   const armored = Buffer.from(hex, "hex").toString("utf-8");
 
   const plaintext = await timelockDecrypt(armored, tlockClient);
-  if (plaintext.length !== 33) return null;
-
-  const isUp = plaintext[0] === 1;
-  const salt = `0x${plaintext.subarray(1, 33).toString("hex")}` as `0x${string}`;
-  return { isUp, salt };
+  return decodePredictionPlaintext(plaintext);
 }
 
 function validateCiphertextMetadata(commit: CommitData): { ok: true } | { ok: false; reason: string } {
@@ -641,9 +637,9 @@ async function _revealCommits(
       }
 
       // Decrypt the tlock ciphertext using the drand beacon
-      let decrypted: { isUp: boolean; salt: `0x${string}` } | null;
+      let decrypted: { predictedRatingBps: number; rating: number; salt: `0x${string}` } | null;
       try {
-        decrypted = await decryptTlockCiphertext(commit.ciphertext as `0x${string}`);
+        decrypted = await decryptTlockPredictionCiphertext(commit.ciphertext as `0x${string}`);
       } catch (err: unknown) {
         const decryptError = classifyDecryptError(err);
         if (decryptError.retryable) {
@@ -696,10 +692,10 @@ async function _revealCommits(
           account,
           address: engineAddr,
           abi: RoundVotingEngineAbi,
-          functionName: "revealVoteByCommitKey",
-          args: [contentId, roundId, commitKey, decrypted.isUp, decrypted.salt],
+          functionName: "revealPredictionByCommitKey",
+          args: [contentId, roundId, commitKey, decrypted.predictedRatingBps, decrypted.salt],
         });
-        logger.info("Revealed vote", {
+        logger.info("Revealed prediction", {
           contentId: Number(contentId),
           roundId: Number(roundId),
           voter: commit.voter,

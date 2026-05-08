@@ -195,7 +195,9 @@ function toRoundConfigTuple(config: { epochDuration: bigint; maxDuration: bigint
 }
 
 function makePlaintext(isUp: boolean, fillByte: number): Buffer {
-  return Buffer.concat([Buffer.from([isUp ? 1 : 0]), Buffer.alloc(32, fillByte)]);
+  const plaintext = Buffer.alloc(34, fillByte);
+  plaintext.writeUInt16BE(isUp ? 8_000 : 2_000, 0);
+  return plaintext;
 }
 
 function makeHarness(options: {
@@ -295,7 +297,7 @@ function makeHarness(options: {
         return "0xcleanup";
       }
 
-      if (functionName === "revealVoteByCommitKey") {
+      if (functionName === "revealPredictionByCommitKey") {
         const commitKey = String(args[2]);
         const commit = commits[commitKey];
         if (!commit || commit.revealed) {
@@ -477,7 +479,7 @@ describe("resolveRounds", () => {
     );
     expect(walletClient.writeContract).not.toHaveBeenCalledWith(
       expect.objectContaining({
-        functionName: "revealVoteByCommitKey",
+        functionName: "revealPredictionByCommitKey",
       }),
     );
   });
@@ -614,7 +616,7 @@ describe("resolveRounds", () => {
 
     expect(timelockDecrypt).toHaveBeenCalledTimes(12);
     expect(walletClient.writeContract).not.toHaveBeenCalledWith(
-      expect.objectContaining({ functionName: "revealVoteByCommitKey" }),
+      expect.objectContaining({ functionName: "revealPredictionByCommitKey" }),
     );
     expect(logger.warn).not.toHaveBeenCalledWith("tlock decryption failed", expect.anything());
     expect(logger.error).not.toHaveBeenCalledWith("tlock decryption failed", expect.anything());
@@ -687,7 +689,7 @@ describe("resolveRounds", () => {
       }),
     );
     expect(walletClient.writeContract).not.toHaveBeenCalledWith(
-      expect.objectContaining({ functionName: "revealVoteByCommitKey" }),
+      expect.objectContaining({ functionName: "revealPredictionByCommitKey" }),
     );
   });
 

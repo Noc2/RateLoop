@@ -4,7 +4,7 @@ import { useCallback, useMemo, useState } from "react";
 import { RoundVotingEngineAbi } from "@ratemesh/contracts/abis";
 import {
   buildCommitKey,
-  decryptTlockCiphertext,
+  decryptTlockPredictionCiphertext,
   deriveVoteTlockRevealAvailableAtSeconds,
   getVoteTlockChainInfo,
   parseTlockCiphertextMetadata,
@@ -360,7 +360,7 @@ export function useManualRevealVotes(voter?: Address) {
           return false;
         }
 
-        const decrypted = await decryptTlockCiphertext(latestCommit.ciphertext as `0x${string}`);
+        const decrypted = await decryptTlockPredictionCiphertext(latestCommit.ciphertext as `0x${string}`);
         if (!decrypted) {
           notification.error("The stored ciphertext could not be decoded.");
           return false;
@@ -371,8 +371,8 @@ export function useManualRevealVotes(voter?: Address) {
         const hash = await walletClient.writeContract({
           address: engineInfo.address,
           abi: RoundVotingEngineAbi,
-          functionName: "revealVoteByCommitKey",
-          args: [vote.contentId, vote.roundId, vote.commitKey, decrypted.isUp, decrypted.salt],
+          functionName: "revealPredictionByCommitKey",
+          args: [vote.contentId, vote.roundId, vote.commitKey, decrypted.predictedRatingBps, decrypted.salt],
           account: address,
           chain: targetNetwork,
         } as any);
@@ -382,7 +382,7 @@ export function useManualRevealVotes(voter?: Address) {
           throw new Error("Transaction reverted");
         }
         notification.remove(toastId);
-        notification.success("Vote revealed.");
+        notification.success("Prediction revealed.");
         await refresh();
         return true;
       } catch (error) {
