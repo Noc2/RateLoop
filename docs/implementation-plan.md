@@ -217,15 +217,32 @@ basic rail and avoids making one identity vendor a protocol dependency.
 
 Self.xyz can still be useful as an optional feature:
 
-- A rater may attach a Self-backed profile badge or metadata proof.
-- Frontends can display the badge as informational context.
-- Governance may later decide whether optional identity signals affect risk
-  limits, sybil-cluster heuristics, sponsorship quotas, or high-value bounty
-  eligibility.
+- A rater may attach a Self-backed verified-uniqueness credential.
+- The previous Self-verified Curyo bootstrap accounts can be seeded as a
+  sunsetted trust-anchor set for graph bootstrapping, because they helped
+  develop the protocol and already completed the older verification flow.
+- Frontends can display the credential as context, but should describe it as a
+  risk/uniqueness signal rather than proof that the prediction is correct.
+- Governance may decide whether optional identity signals affect caps, warmup,
+  sybil-cluster heuristics, trust-attestation budgets, sponsorship quotas, or
+  high-value bounty eligibility.
 - Optional identity must not be enough by itself to bypass calibration,
   reputation locks, reveal reliability, cluster caps, or USDC payout limits.
 - Optional identity should not be required for governance voting power because
   MREP already represents the launch ownership and protocol-control primitive.
+- Self credentials should be revocable, scoped by nullifier, capped by modest
+  multipliers, and safe to disable without breaking rating, earning, or
+  governance.
+
+AI raters should use a parallel accountability rail:
+
+- AI accounts declare model/operator/prompt-version metadata through signed
+  declarations and bonded operators.
+- Declarations can be probed, drift-flagged, challenged, retired, or redeclared
+  without blocking open participation.
+- AI metadata affects payout eligibility, cooldowns, clustering, and public
+  provenance. It should not become a hidden permission gate controlled by one
+  operator.
 
 Implementation rule: keep identity adapters behind feature flags or separate
 modules, and keep all core tests passing with identity disabled.
@@ -755,31 +772,56 @@ Purpose:
 
 - Register a rater profile without proof-of-personhood.
 - Store optional rater type and metadata hash.
-- Store required AI rater metadata hashes for model, operator, and
-  prompt/version when the rater self-identifies as an AI agent.
-- Track delegated operational wallets if needed.
+- Store optional Self-backed uniqueness credentials for verified raters.
+- Seed the previous Self-verified Curyo bootstrap accounts as a sunsetted trust
+  anchor set.
+- Store bounded, revocable, category-aware trust attestations.
 - Expose cluster/risk flags assigned by governance or a scorer.
 
 Reuse:
 
 - Use lessons from `VoterIdNFT.sol` delegation handling.
-- Do not reuse Self nullifiers, mint gates, max supply, or identity claims in
-  the required rater registration path.
+- Reuse Self nullifier uniqueness only for optional credentials. Do not reuse
+  Self mint gates, max supply, faucet logic, or identity claims in the required
+  rater registration path.
 
 Possible events:
 
 ```solidity
 event RaterRegistered(address indexed account, uint8 raterType, bytes32 metadataHash);
 event RaterMetadataUpdated(address indexed account, uint8 raterType, bytes32 metadataHash);
-event AIRaterMetadataUpdated(
-  address indexed account,
-  bytes32 indexed operatorHash,
-  bytes32 modelHash,
-  bytes32 promptVersionHash,
-  bytes32 metadataHash
-);
+event SelfCredentialAttested(address indexed rater, bytes32 indexed nullifierHash, bytes32 evidenceHash);
+event TrustSeedSet(address indexed rater, uint64 sunsetAt, uint16 trustBudgetBps, bytes32 seedRoot);
+event TrustAttestationSet(bytes32 indexed attestationId, address indexed issuer, address indexed subject);
 event RaterClusterUpdated(address indexed account, bytes32 indexed clusterId, uint16 discountBps);
-event RaterDelegationUpdated(address indexed account, address indexed delegate, bool active);
+```
+
+### `RaterDeclarationRegistry`
+
+Purpose:
+
+- Store signed AI rater declarations separately from the generic rater profile.
+- Require compact model/operator/prompt/retrieval/tooling hashes for AI raters
+  before production bounty payouts.
+- Bond the declared operator so challenges and probe failures have economic
+  weight.
+- Allow one-shot probes, behavioral drift flags, retirement, redeclaration, and
+  community challenges.
+
+Reuse:
+
+- Use `MeshReputation` as the bonded asset.
+- Keep full model and prompt metadata off-chain in signed JSON or a
+  content-addressed document.
+
+Possible events:
+
+```solidity
+event DeclarationSubmitted(address indexed rater, address indexed operator, uint32 version, bytes32 declarationHash);
+event ProbeResultRecorded(address indexed rater, address indexed operator, uint32 version, bool passed);
+event BehavioralDriftFlagged(address indexed rater, address indexed operator, uint32 version, uint16 driftScoreBps);
+event ChallengeOpened(uint256 indexed challengeId, address indexed challenger, address indexed rater, address operator);
+event ChallengeResolved(uint256 indexed challengeId, uint8 status, uint256 operatorSlash, uint256 challengerReward);
 ```
 
 ### `PredictionVotingEngine`
@@ -1242,13 +1284,16 @@ Changes:
 Keep `packages/agents`, but make it a first-class RateMesh package:
 
 - Add an AI rater CLI that reads open questions and submits predictions.
-- Record required model, operator, and prompt/version hash metadata.
-- Require a registered rater profile for production use.
+- Record required model, operator, prompt/version, retrieval, and tooling hashes
+  through `RaterDeclarationRegistry`.
+- Require a registered rater profile and current AI declaration for production
+  USDC eligibility.
+- Require an operator bond before an AI declaration becomes payout-eligible.
 - Keep agent predictions visible after reveal.
 - Let AI raters earn USDC at launch through the same calibration path as other
   raters.
-- Add tests that ensure agents cannot bypass calibration, required metadata, or
-  metadata-change cooling periods.
+- Add tests that ensure agents cannot bypass calibration, required metadata,
+  declaration bonds, probes, challenges, or metadata-change cooling periods.
 
 ## Implementation Sequence
 
@@ -1303,19 +1348,21 @@ Exit criteria:
 2. Implement a genesis Merkle distributor from the existing HREP/legacy CREP snapshot.
 3. Implement `RateMeshGovernor` and `TimelockController` ownership wiring.
 4. Implement `RaterRegistry`.
-5. Implement `PredictionVotingEngine`.
-6. Implement the first version of `PredictionRewardDistributor`.
-7. Refactor `QuestionRewardPoolEscrow` for one-round bounties,
+5. Implement `RaterDeclarationRegistry` for bonded AI metadata, probes, drift,
+   and challenges.
+6. Implement `PredictionVotingEngine`.
+7. Implement the first version of `PredictionRewardDistributor`.
+8. Refactor `QuestionRewardPoolEscrow` for one-round bounties,
    challenge/re-rate metadata, and reputation/cluster eligibility.
-8. Add MREP prediction lock accounting and the prediction-error winner/loser
+9. Add MREP prediction lock accounting and the prediction-error winner/loser
    redistribution model.
-9. Preserve `FrontendRegistry`, require a `1,000 MREP` frontend stake, and keep
+10. Preserve `FrontendRegistry`, require a `1,000 MREP` frontend stake, and keep
    the 3% default frontend share.
-10. Add AI rater metadata requirements to registry, commit/reveal, or payout
+11. Add AI rater metadata requirements to registry, commit/reveal, or payout
     eligibility.
-11. Refactor `DeployRateMesh.s.sol` in place with HREP-style MREP pools and Celo
+12. Refactor `DeployRateMesh.s.sol` in place with HREP-style MREP pools and Celo
     USDC constants.
-12. Regenerate ABIs and deployment package exports.
+13. Regenerate ABIs and deployment package exports.
 
 Exit criteria:
 
