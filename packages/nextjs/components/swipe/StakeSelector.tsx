@@ -5,7 +5,6 @@ import Link from "next/link";
 import { EPOCH_WEIGHT_BPS } from "@ratemesh/contracts/protocol";
 import { AnimatePresence, motion } from "framer-motion";
 import { useAccount } from "wagmi";
-import { VoteDirectionIcon } from "~~/components/shared/CuryoVoteButton";
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 import { useContentLabel } from "~~/hooks/useCategoryRegistry";
@@ -18,7 +17,6 @@ import { estimateVoteReturn, formatHrepAmount } from "~~/lib/vote/voteIncentives
 
 interface StakeSelectorProps {
   isOpen: boolean;
-  isUp: boolean;
   contentId: bigint;
   categoryId?: bigint;
   currentRating?: number;
@@ -40,10 +38,9 @@ function clampRating(value: number) {
   return Math.min(MAX_RATING, Math.max(MIN_RATING, value));
 }
 
-function getInitialPredictionRating(currentRating: number | undefined, isUp: boolean) {
+function getInitialPredictionRating(currentRating: number | undefined) {
   const baseRating = clampRating(currentRating ?? 5);
-  const shifted = baseRating + (isUp ? 0.5 : -0.5);
-  return Math.round(clampRating(shifted) * 10) / 10;
+  return Math.round(baseRating * 10) / 10;
 }
 
 /**
@@ -51,7 +48,6 @@ function getInitialPredictionRating(currentRating: number | undefined, isUp: boo
  */
 export function StakeSelector({
   isOpen,
-  isUp,
   contentId,
   categoryId,
   currentRating,
@@ -67,7 +63,7 @@ export function StakeSelector({
   const predictionRatingInputId = useId();
   const contentLabel = useContentLabel(categoryId);
   const [amount, setAmount] = useState(5);
-  const [predictedRating, setPredictedRating] = useState(() => getInitialPredictionRating(currentRating, isUp));
+  const [predictedRating, setPredictedRating] = useState(() => getInitialPredictionRating(currentRating));
   const { address } = useAccount();
   const voterIdData = useVoterIdNFT(address);
   const tokenId = voterIdData.tokenId as bigint;
@@ -99,20 +95,21 @@ export function StakeSelector({
 
   useEffect(() => {
     if (!isOpen) return;
-    setPredictedRating(getInitialPredictionRating(currentRating, isUp));
+    setPredictedRating(getInitialPredictionRating(currentRating));
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape" && !isConfirming) onCancel();
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [currentRating, isConfirming, isOpen, isUp, onCancel]);
+  }, [currentRating, isConfirming, isOpen, onCancel]);
 
   const symbol = tokenSymbol ?? "MREP";
   const { calculateBonus } = useParticipationRate();
   const voteBonus = calculateBonus(amount);
-  const voteEstimate = estimateVoteReturn(estimateSnapshot, isUp, amount);
   const normalizedCurrentRating = clampRating(currentRating ?? 5);
   const predictionDelta = predictedRating - normalizedCurrentRating;
+  const predictionDirectionIsHigher = predictionDelta >= 0;
+  const voteEstimate = estimateVoteReturn(estimateSnapshot, predictionDirectionIsHigher, amount);
   const predictionTone =
     Math.abs(predictionDelta) < 0.05
       ? "Same final rating"
@@ -131,11 +128,11 @@ export function StakeSelector({
   const isCapacityLimited = maxByCapacity < maxByBalance;
   const cooldownActive = cooldownSecondsRemaining > 0;
   const confirmDisabled = isConfirming || cooldownActive || amount < 1 || amount > maxStake || maxStake < 1;
-  const phaseHeadline = effectiveIsBlind ? "Blind phase" : "Open phase";
-  const phaseToneClassName = isUp ? (effectiveIsBlind ? "bg-primary/10" : "bg-warning/10") : "bg-error/10";
-  const phaseHeadlineClassName = isUp ? (effectiveIsBlind ? "text-primary" : "text-warning") : "text-error";
+  const phaseHeadline = effectiveIsBlind ? "Private round" : "Post-epoch reveal";
+  const phaseToneClassName = effectiveIsBlind ? "bg-primary/10" : "bg-warning/10";
+  const phaseHeadlineClassName = effectiveIsBlind ? "text-primary" : "text-warning";
   const selectedPresetClassName = "action-orange-control";
-  const sliderClassName = `range ${isUp ? "range-primary" : "range-error"} range-sm w-full`;
+  const sliderClassName = "range range-primary range-sm w-full";
   const sliderStyle = { "--range-thumb": "var(--curyo-warm-white)" } as CSSProperties;
   const weightPercent = Math.round(
     (effectiveIsBlind ? EPOCH_WEIGHT_BPS.blind : EPOCH_WEIGHT_BPS.informed) / 100,
@@ -175,17 +172,6 @@ export function StakeSelector({
             exit={{ y: 100, opacity: 0 }}
             transition={{ type: "spring", damping: 25, stiffness: 300 }}
           >
-            <div className="mb-5 text-center">
-              <div
-                className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-base font-semibold ${
-                  isUp ? "bg-success/10 text-success" : "bg-error/10 text-error"
-                }`}
-              >
-                <VoteDirectionIcon direction={isUp ? "up" : "down"} className="h-4 w-4 stroke-[2.5]" />
-                {isUp ? "Starts above current rating" : "Starts below current rating"}
-              </div>
-            </div>
-
             <h3 className="mb-3 text-center text-lg font-semibold">
               Predict the final rating
               <span
@@ -372,7 +358,7 @@ export function StakeSelector({
                     <div className="flex items-center justify-between gap-3">
                       <span>Live pools</span>
                       <span className="font-semibold tabular-nums">
-                        higher {formatHrepAmount(upPool, 0)} · lower {formatHrepAmount(downPool, 0)}
+                        above {formatHrepAmount(upPool, 0)} · below {formatHrepAmount(downPool, 0)}
                       </span>
                     </div>
                   </>

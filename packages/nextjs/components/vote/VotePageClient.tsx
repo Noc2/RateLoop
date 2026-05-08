@@ -124,7 +124,7 @@ function areIdListsEqual(left: readonly string[], right: readonly string[]) {
 }
 
 function getVoteCooldownMessage(seconds: number) {
-  return `You already voted on this content recently. Try again in ${formatVoteCooldownRemaining(seconds)}.`;
+  return `You already predicted this content recently. Try again in ${formatVoteCooldownRemaining(seconds)}.`;
 }
 
 function readInternalContentPinKey(contentPinKey: string | null) {
@@ -661,7 +661,6 @@ const HomeInner = () => {
   // Voting state
   const [stakeModal, setStakeModal] = useState<{
     isOpen: boolean;
-    isUp: boolean;
     contentId: bigint;
     categoryId: bigint;
     currentRating: number;
@@ -669,7 +668,6 @@ const HomeInner = () => {
     openRound?: ContentItem["openRound"] | null;
   }>({
     isOpen: false,
-    isUp: false,
     contentId: 0n,
     categoryId: 0n,
     currentRating: 5,
@@ -1095,9 +1093,9 @@ const HomeInner = () => {
   }, [primaryItem?.id, stakeModal.contentId, voteError]);
 
   const handleButtonVote = useCallback(
-    (item: ContentItem, isUp: boolean) => {
+    (item: ContentItem) => {
       if (!address) {
-        notification.info("Sign in to vote.");
+        notification.info("Sign in to predict.");
         void openConnectModal();
         return;
       }
@@ -1110,7 +1108,7 @@ const HomeInner = () => {
       }
 
       if (item.isOwnContent) {
-        notification.info("You cannot vote on your own content.", { duration: 6000 });
+        notification.info("You cannot predict on your own content.", { duration: 6000 });
         return;
       }
 
@@ -1126,10 +1124,9 @@ const HomeInner = () => {
 
       clearVoteError();
       markPrimaryInteraction(item.id);
-      recordRecommendationSignal(item, "vote_intent", { isUp });
+      recordRecommendationSignal(item, "vote_intent", { selected: true });
       setStakeModal({
         isOpen: true,
-        isUp,
         contentId: item.id,
         categoryId: item.categoryId,
         currentRating: item.rating,
@@ -1258,7 +1255,7 @@ const HomeInner = () => {
       }
 
       if (item.isOwnContent) {
-        notification.info("You cannot vote on your own content.", { duration: 6000 });
+        notification.info("You cannot predict on your own content.", { duration: 6000 });
         setStakeModal(prev => ({ ...prev, isOpen: false }));
         return;
       }
@@ -1296,7 +1293,7 @@ const HomeInner = () => {
       setLocalVoteCooldownVersion(version => version + 1);
       if (item) {
         markPrimaryInteraction(item.id, { isVote: true });
-        recordRecommendationSignal(item, "vote_commit", { isUp: stakeModal.isUp, predictedRating });
+        recordRecommendationSignal(item, "vote_commit", { predictedRating });
       }
 
       notification.success(
@@ -1305,7 +1302,7 @@ const HomeInner = () => {
 
       if (isFirstVote) {
         markVoteCompleted();
-        notification.info("Great first vote! Keep going to build your reputation.", { duration: 5000 });
+        notification.info("Great first prediction! Keep going to build your reputation.", { duration: 5000 });
       }
     },
     [
@@ -1846,7 +1843,7 @@ const HomeInner = () => {
                 currentRating={primaryItem.rating}
                 openRound={primaryItem.openRound}
                 roundConfig={primaryItem.roundConfig}
-                onVote={isUp => handleButtonVote(primaryItem, isUp)}
+                onVote={() => handleButtonVote(primaryItem)}
                 isCommitting={isCommitting}
                 address={address}
                 error={voteError}
@@ -1931,7 +1928,6 @@ const HomeInner = () => {
       {stakeModal.isOpen ? (
         <StakeSelector
           isOpen={stakeModal.isOpen}
-          isUp={stakeModal.isUp}
           contentId={stakeModal.contentId}
           categoryId={stakeModal.categoryId}
           currentRating={stakeModal.currentRating}

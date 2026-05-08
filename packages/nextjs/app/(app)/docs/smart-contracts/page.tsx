@@ -138,8 +138,8 @@ const SmartContracts: NextPage = () => {
 
       <h2>HumanReputation</h2>
       <p>
-        ERC-20 token with ERC20Votes for governance, ERC20Permit for scoped approvals, and ERC-1363 transfer hooks for
-        one-transaction voting. Fixed supply of 100M with 6 decimals.
+        ERC-20 token with ERC20Votes for governance, ERC20Permit for scoped approvals, and a capped reputation supply.
+        The rating flow uses explicit MREP approvals into the voting engine.
       </p>
       <h3>Key Features</h3>
       <ul>
@@ -152,20 +152,21 @@ const SmartContracts: NextPage = () => {
         </li>
         <li>
           <strong>Snapshot-based governance:</strong> ERC20Votes provides historical voting-power snapshots for
-          governance, while HREP transfer locks apply after proposing or voting.
+          governance, while MREP transfer locks apply after proposing or voting.
         </li>
         <li>
-          <strong>Minting:</strong> Only <code>MINTER_ROLE</code> (HumanFaucet) can mint, up to <code>MAX_SUPPLY</code>.
+          <strong>Supply cap:</strong> Distribution and reward recycling stay bounded by <code>MAX_SUPPLY</code>.
         </li>
         <li>
-          <strong>Single-tx voting:</strong> The production UI now uses <code>transferAndCall()</code> so HREP transfer
-          and vote commit happen atomically in one wallet transaction.
+          <strong>Prediction staking:</strong> The production UI approves MREP stake and submits a private predicted
+          final rating through <code>commitVote()</code>.
         </li>
       </ul>
       <h3>Key Functions</h3>
       <ul>
         <li>
-          <code>mint(to, amount)</code> &mdash; Mint tokens (MINTER_ROLE only).
+          <code>approve(votingEngine, amount)</code> &mdash; Allow the voting engine to pull MREP stake for a
+          prediction.
         </li>
         <li>
           <code>lockForGovernance(account, amount)</code> &mdash; Lock tokens for 7 days (governor only).
@@ -174,8 +175,7 @@ const SmartContracts: NextPage = () => {
           <code>getTransferableBalance(account)</code> &mdash; Returns balance minus locked amount.
         </li>
         <li>
-          <code>transferAndCall(votingEngine, amount, payload)</code> &mdash; Default vote path used by the app. Sends
-          HREP stake to the voting engine and atomically commits the encrypted vote payload.
+          <code>delegate(delegatee)</code> &mdash; Delegate MREP voting power for on-chain governance.
         </li>
       </ul>
 
@@ -389,35 +389,37 @@ const SmartContracts: NextPage = () => {
       <h3>Key Functions</h3>
       <ul>
         <li>
+          <code>MeshReputation.approve(votingEngine, stakeAmount)</code> then{" "}
           <code>
-            HumanReputation.transferAndCall(votingEngine, stakeAmount, abi.encode(contentId, roundReferenceRatingBps,
-            commitHash, ciphertext, frontend, targetRound, drandChainHash))
+            RoundVotingEngine.commitVote(contentId, roundContext, targetRound, drandChainHash, commitHash, ciphertext,
+            stakeAmount, frontend)
           </code>{" "}
-          &mdash; Default one-transaction vote flow. Transfers HREP and records the tlock-encrypted commit atomically.
-          Direction is hidden until the epoch ends. Requires Voter ID and enforces the same 1&ndash;100 HREP stake
-          bounds. The redeployed contract rejects malformed or non-armored ciphertexts, binds the canonical round
-          reference score into the vote payload, and binds the reveal-target metadata on-chain.
+          &mdash; Default prediction flow. Locks MREP and records the tlock-encrypted predicted final rating. The
+          prediction is hidden until the epoch ends. The redeployed contract rejects malformed or non-armored
+          ciphertexts, binds the canonical round reference score into the round context, and binds the reveal-target
+          metadata on-chain.
         </li>
         <li>
           <code>commitVote(...)</code> &mdash; Lower-level integration path for bots, tests, and direct contract callers
-          that prefer explicit approvals instead of the default single-transaction transfer-and-call flow.
+          that build the approve-plus-commit flow directly.
         </li>
         <li>
           <strong>VoteCommitted event:</strong> emits the commit hash, <code>targetRound</code>, and{" "}
-          <code>drandChainHash</code> so indexers can observe the exact reveal metadata attached to each vote. The
+          <code>drandChainHash</code> so indexers can observe the exact reveal metadata attached to each prediction. The
           redeployed engine also snapshots <code>roundReferenceRatingBps</code> and emits{" "}
           <code>RoundConfigSnapshotted</code> per round so every frontend can recover the exact score anchor and round
-          settings users voted against.
+          settings users predicted against.
         </li>
         <li>
-          <code>revealVoteByCommitKey(contentId, roundId, commitKey, isUp, salt)</code> &mdash; Reveal a previously
-          committed vote after the epoch ends. This remains the keeper-assisted/self-reveal path: the keeper normally
-          performs off-chain drand/tlock decryption after validating the stored stanza metadata and submits the reveal,
-          but any caller that knows the plaintext <code>(isUp, salt)</code> can submit it. The production UI keeps this
-          mostly hidden, but connected users also have a small manual fallback link if an auto-reveal appears delayed.
-          The chain binds the reveal to the exact submitted ciphertext via <code>keccak256(ciphertext)</code> and now
-          rejects malformed/non-armored commits on-chain, but it still does not prove on-chain that the ciphertext was
-          honestly decryptable. A future hardening path here would be zk-based reveal proofs.
+          <code>revealPredictionByCommitKey(contentId, roundId, commitKey, predictedRatingBps, salt)</code> &mdash;
+          Reveal a previously committed prediction after the epoch ends. This remains the keeper-assisted/self-reveal
+          path: the keeper normally performs off-chain drand/tlock decryption after validating the stored stanza
+          metadata and submits the reveal, but any caller that knows the plaintext{" "}
+          <code>(predictedRatingBps, salt)</code> can submit it. The production UI keeps this mostly hidden, but
+          connected users also have a small manual fallback link if an auto-reveal appears delayed. The chain binds the
+          reveal to the exact submitted ciphertext via <code>keccak256(ciphertext)</code> and now rejects
+          malformed/non-armored commits on-chain, but it still does not prove on-chain that the ciphertext was honestly
+          decryptable. A future hardening path here would be zk-based reveal proofs.
         </li>
         <li>
           <code>settleRound(contentId, roundId)</code> &mdash; Settle the current round once at least{" "}

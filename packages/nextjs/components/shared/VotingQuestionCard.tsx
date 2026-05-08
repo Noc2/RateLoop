@@ -4,7 +4,7 @@ import { type ReactNode, useEffect, useState } from "react";
 import { ChatBubbleLeftRightIcon, ShareIcon } from "@heroicons/react/24/outline";
 import { FundQuestionModal } from "~~/components/reward-pool/FundQuestionModal";
 import { CuryoConnectButton } from "~~/components/scaffold-eth";
-import { CuryoVoteButton } from "~~/components/shared/CuryoVoteButton";
+import { CuryoPredictButton } from "~~/components/shared/CuryoVoteButton";
 import { MoreToggleButton } from "~~/components/shared/MoreToggleButton";
 import { RatingOrb } from "~~/components/shared/RatingOrb";
 import { RoundProgress } from "~~/components/shared/RoundProgress";
@@ -24,7 +24,7 @@ interface VotingQuestionCardProps {
   categoryId: bigint;
   questionTitle?: string;
   currentRating: number;
-  onVote: (isUp: boolean) => void;
+  onVote: () => void;
   isCommitting: boolean;
   address?: string;
   error?: string | null;
@@ -453,23 +453,23 @@ export function VotingQuestionCard({
   ) : address ? (
     hasMyVote ? (
       <HoverTooltip
-        text="You voted, and your direction stays hidden until the blind phase ends. After that, eligible votes are normally revealed automatically, and you can self-reveal if needed."
+        text="You submitted a private predicted final rating. After the epoch, eligible predictions are normally revealed automatically, and you can self-reveal if needed."
         position="bottom"
       >
         {usesDockStatusText ? (
           <span className={DOCK_STATUS_TEXT_CLASS_NAME}>
-            <span className="text-[0.95rem] font-semibold leading-none text-primary">Voted</span>
+            <span className="text-[0.95rem] font-semibold leading-none text-primary">Predicted</span>
             <span className="text-[0.95rem] leading-none text-base-content/62">hidden</span>
           </span>
         ) : (
           <span className={STATUS_PILL_CLASS_NAME}>
-            <span className="text-base font-semibold text-primary">Voted</span>
+            <span className="text-base font-semibold text-primary">Predicted</span>
             <span className="text-base text-base-content/70">hidden</span>
           </span>
         )}
       </HoverTooltip>
     ) : isOwnContent ? (
-      <HoverTooltip text="Content submitters cannot vote on their own submissions." position="bottom">
+      <HoverTooltip text="Content submitters cannot predict on their own submissions." position="bottom">
         {usesDockStatusText ? (
           <span
             className={`${DOCK_STATUS_TEXT_CLASS_NAME} max-w-[7.25rem] text-[0.95rem] leading-tight text-base-content/68`}
@@ -484,7 +484,7 @@ export function VotingQuestionCard({
       </HoverTooltip>
     ) : cooldownActive ? (
       <HoverTooltip
-        text={`You already voted on this content within the last 24 hours. Try again in ${cooldownLabel}.`}
+        text={`You already predicted this content within the last 24 hours. Try again in ${cooldownLabel}.`}
         position="bottom"
       >
         {usesDockStatusText ? (
@@ -671,21 +671,10 @@ export function VotingQuestionCard({
                   {compact && !centerStatusContent ? (
                     <div className="grid w-full items-center" style={compactDockControlsGridStyle}>
                       <div className="col-start-2 justify-self-center">{shareDockButton}</div>
-                      <div className="col-start-4 justify-self-center">
-                        <CuryoVoteButton
-                          direction="up"
+                      <div className="col-start-4 col-end-7 justify-self-center">
+                        <CuryoPredictButton
                           size="sm"
-                          onClick={() => onVote(true)}
-                          disabled={dockVoteDisabled}
-                          attention={isAttentionActive && !dockVoteDisabled}
-                          tooltipPosition="top"
-                        />
-                      </div>
-                      <div className="col-start-6 justify-self-center">
-                        <CuryoVoteButton
-                          direction="down"
-                          size="sm"
-                          onClick={() => onVote(false)}
+                          onClick={onVote}
                           disabled={dockVoteDisabled}
                           attention={isAttentionActive && !dockVoteDisabled}
                           tooltipPosition="top"
@@ -696,10 +685,9 @@ export function VotingQuestionCard({
                   ) : !centerStatusContent ? (
                     <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-end gap-3">
                       <div className="justify-self-start">
-                        <CuryoVoteButton
-                          direction="up"
+                        <CuryoPredictButton
                           size="sm"
-                          onClick={() => onVote(true)}
+                          onClick={onVote}
                           disabled={dockVoteDisabled}
                           attention={isAttentionActive && !dockVoteDisabled}
                           tooltipPosition="top"
@@ -713,16 +701,7 @@ export function VotingQuestionCard({
                           className={dockMoreClassName}
                         />
                       </div>
-                      <div className="justify-self-end">
-                        <CuryoVoteButton
-                          direction="down"
-                          size="sm"
-                          onClick={() => onVote(false)}
-                          disabled={dockVoteDisabled}
-                          attention={isAttentionActive && !dockVoteDisabled}
-                          tooltipPosition="top"
-                        />
-                      </div>
+                      <div className="justify-self-end">{feedbackDockButton}</div>
                     </div>
                   ) : compact ? (
                     <div className="grid w-full items-center" style={compactDockControlsGridStyle}>
@@ -750,7 +729,7 @@ export function VotingQuestionCard({
 
                 {showVoteAttentionHint ? (
                   <p className="vote-attention-hint px-4 pb-1 text-center text-[0.72rem] font-semibold uppercase tracking-[0.16em] text-primary/90">
-                    Rate this content here
+                    Predict here
                   </p>
                 ) : null}
 
@@ -803,20 +782,13 @@ export function VotingQuestionCard({
             {ratingOrb}
             {showVoteAttentionHint && isSignalVariant ? (
               <p className="vote-attention-hint mt-3 text-[0.72rem] font-semibold uppercase tracking-[0.16em] text-primary/90">
-                Rate this content here
+                Predict here
               </p>
             ) : null}
             {!(address && hasMyVote) && !centerStatusContent && isSignalVariant ? (
               <div className="mt-3 flex items-center justify-center gap-3">
-                <CuryoVoteButton
-                  direction="up"
-                  onClick={() => onVote(true)}
-                  disabled={voteActionDisabled}
-                  attention={isAttentionActive && !voteActionDisabled}
-                />
-                <CuryoVoteButton
-                  direction="down"
-                  onClick={() => onVote(false)}
+                <CuryoPredictButton
+                  onClick={onVote}
                   disabled={voteActionDisabled}
                   attention={isAttentionActive && !voteActionDisabled}
                 />
@@ -828,24 +800,15 @@ export function VotingQuestionCard({
               {/* Vote error message */}
               {displayError && <p className="text-center text-base text-error">{displayError}</p>}
 
-              {/* Voting arrows - centered below the rating stack */}
+              {/* Prediction action - centered below the rating stack */}
               {!(address && hasMyVote) && !centerStatusContent && !isSignalVariant && !isDockVariant && (
                 <div className="flex shrink-0 items-center justify-center gap-2 lg:gap-3">
                   {address ? (
-                    <>
-                      <CuryoVoteButton
-                        direction="up"
-                        onClick={() => onVote(true)}
-                        disabled={voteActionDisabled}
-                        attention={isAttentionActive && !voteActionDisabled}
-                      />
-                      <CuryoVoteButton
-                        direction="down"
-                        onClick={() => onVote(false)}
-                        disabled={voteActionDisabled}
-                        attention={isAttentionActive && !voteActionDisabled}
-                      />
-                    </>
+                    <CuryoPredictButton
+                      onClick={onVote}
+                      disabled={voteActionDisabled}
+                      attention={isAttentionActive && !voteActionDisabled}
+                    />
                   ) : (
                     <CuryoConnectButton />
                   )}

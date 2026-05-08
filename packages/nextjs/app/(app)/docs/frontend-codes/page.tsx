@@ -107,7 +107,7 @@ const FrontendCodes: NextPage = () => {
           <strong>Stake 1,000 HREP</strong> to the FrontendRegistry contract.
         </li>
         <li>
-          <strong>Integrate:</strong> Include your registered address in the vote payload, or configure it as the
+          <strong>Integrate:</strong> Include your registered address in the prediction commit, or configure it as the
           default frontend code in the SDK.
         </li>
         <li>
@@ -121,20 +121,19 @@ const FrontendCodes: NextPage = () => {
       </ol>
 
       <h2>Frontend Attribution</h2>
-      <p>Include your frontend address in the payload you send through the single-transaction vote flow:</p>
+      <p>Include your frontend address in the prediction commit after approving MREP stake:</p>
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
-        <code>{`HumanReputation.transferAndCall(
-    votingEngineAddress,
+        <code>{`MeshReputation.approve(votingEngineAddress, stakeAmount)
+
+RoundVotingEngine.commitVote(
+    contentId,
+    roundContext,
+    targetRound,
+    drandChainHash,
+    commitHash,
+    ciphertext,
     stakeAmount,
-    abi.encode(
-        contentId,
-        roundReferenceRatingBps,
-        commitHash,
-        ciphertext,
-        frontend, // Your registered frontend address
-        targetRound,
-        drandChainHash
-    )
+    frontend // Your registered frontend address
 )`}</code>
       </pre>
       <p>
@@ -156,10 +155,10 @@ const FrontendCodes: NextPage = () => {
       </p>
       <ol>
         <li>
-          <strong>Revealing votes:</strong> After each 20-minute epoch ends, the service decrypts tlock ciphertexts
-          using the drand randomness beacon and calls{" "}
-          <code>revealVoteByCommitKey(contentId, roundId, commitKey, isUp, salt)</code> for each unrevealed commit.
-          Votes stay hidden until this step runs.
+          <strong>Revealing predictions:</strong> After each 20-minute epoch ends, the service decrypts tlock
+          ciphertexts using the drand randomness beacon and calls{" "}
+          <code>revealPredictionByCommitKey(contentId, roundId, commitKey, predictedRatingBps, salt)</code> for each
+          unrevealed commit. Predictions stay hidden until this step runs.
         </li>
         <li>
           <strong>Settling rounds:</strong> Once at least 3 votes are revealed and all past-epoch votes have been
