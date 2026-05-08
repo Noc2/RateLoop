@@ -38,8 +38,15 @@ function clampRating(value: number) {
   return Math.min(MAX_RATING, Math.max(MIN_RATING, value));
 }
 
+export function normalizeStakeSelectorRating(currentRating: number | undefined) {
+  if (currentRating === undefined || !Number.isFinite(currentRating)) return 5;
+  if (currentRating > 100) return clampRating(currentRating / 1000);
+  if (currentRating > 10) return clampRating(currentRating / 10);
+  return clampRating(currentRating);
+}
+
 function getInitialPredictionRating(currentRating: number | undefined) {
-  const baseRating = clampRating(currentRating ?? 5);
+  const baseRating = normalizeStakeSelectorRating(currentRating);
   return Math.round(baseRating * 10) / 10;
 }
 
@@ -110,7 +117,7 @@ export function StakeSelector({
   const symbol = tokenSymbol ?? "MREP";
   const { calculateBonus } = useParticipationRate();
   const voteBonus = calculateBonus(amount);
-  const normalizedCurrentRating = clampRating(currentRating ?? 5);
+  const normalizedCurrentRating = normalizeStakeSelectorRating(currentRating);
   const predictionDelta = opinionRating - normalizedCurrentRating;
   const predictionDirectionIsHigher = predictionDelta >= 0;
   const voteEstimate = estimateVoteReturn(estimateSnapshot, predictionDirectionIsHigher, amount);

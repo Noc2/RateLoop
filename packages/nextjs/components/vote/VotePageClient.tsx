@@ -91,6 +91,12 @@ const ShareContentModal = dynamic(
   { ssr: false },
 );
 
+function getStakeModalCurrentRating(item: ContentItem) {
+  const referenceRatingBps = item.openRound?.referenceRatingBps;
+  if (referenceRatingBps !== undefined) return Number(referenceRatingBps) / 1000;
+  return item.rating > 10 ? item.rating / 10 : item.rating;
+}
+
 const ALL_FILTER = DISCOVER_ALL_FILTER;
 const BROKEN_FILTER = DISCOVER_BROKEN_FILTER;
 const EXPIRED_BOUNTY_FILTER = DISCOVER_EXPIRED_BOUNTY_FILTER;
@@ -1129,7 +1135,7 @@ const HomeInner = () => {
         isOpen: true,
         contentId: item.id,
         categoryId: item.categoryId,
-        currentRating: item.rating,
+        currentRating: getStakeModalCurrentRating(item),
         roundConfig: item.roundConfig,
         openRound: item.openRound,
       });
