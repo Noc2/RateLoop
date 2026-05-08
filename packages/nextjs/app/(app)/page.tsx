@@ -4,7 +4,7 @@ import { BanknotesIcon, CheckBadgeIcon, CpuChipIcon } from "@heroicons/react/24/
 import { AnimateInView } from "~~/components/home/AnimateInView";
 import { LandingFaq } from "~~/components/home/LandingFaq";
 import { LandingPageActions } from "~~/components/home/LandingPageActions";
-import { RateMeshOrbAnimation } from "~~/components/home/RateMeshOrbAnimation";
+import OrbAnimation from "~~/components/home/OrbAnimation";
 import { SupportedAgentsSection } from "~~/components/home/SupportedAgentsSection";
 import { HumanSignInButton } from "~~/components/shared/HumanSignInButton";
 import { DOCS_AI_ROUTE } from "~~/constants/routes";
@@ -340,21 +340,24 @@ export default async function LandingPage() {
   return (
     <div className="flex flex-col items-center grow px-4 pt-8 pb-16 sm:pt-12 lg:pt-16">
       <div className="relative w-full max-w-6xl flex flex-col items-center">
-        {/* Hero: stacked on mobile, oversized background illustration on large screens */}
+        {/* Hero: stacked on mobile, side animation on large screens */}
         <div className="relative z-0 flex w-full flex-col lg:min-h-[34rem] lg:items-center lg:justify-center xl:min-h-[38rem]">
-          {/* Animation: regular stack on mobile, oversized background layer on large screens */}
-          <div className="relative z-0 lg:pointer-events-none lg:absolute lg:bottom-[-2.5rem] lg:left-[25rem] lg:right-0 lg:top-[-2.5rem] lg:translate-y-7 xl:bottom-[-3.5rem] xl:left-[23rem] xl:right-0 xl:top-[-3.5rem] xl:translate-y-10">
-            <RateMeshOrbAnimation />
+          {/* Animation: Hawig orb implementation, positioned as a side visual on large screens */}
+          <div
+            className="relative z-0 -mx-6 w-[min(64rem,118vw)] self-center lg:pointer-events-none lg:absolute lg:bottom-[-4rem] lg:left-auto lg:right-[-14rem] lg:top-[-3rem] lg:w-[58rem] lg:translate-y-8 xl:bottom-[-5rem] xl:right-[-18rem] xl:top-[-4rem] xl:w-[68rem] xl:translate-y-10"
+            aria-hidden="true"
+          >
+            <OrbAnimation />
           </div>
 
           {/* Title (left on large screens) */}
           <div className="relative z-10 flex flex-col items-center lg:mr-auto lg:max-w-[32rem] lg:items-start lg:pt-24 lg:pb-6 xl:pt-28 xl:pb-8">
             <h1 className="hero-headline max-w-[14ch] text-center text-[2.35rem] text-base-content sm:max-w-[11ch] sm:text-[3.05rem] lg:max-w-none lg:text-left lg:text-[3.2rem] xl:text-[3.55rem]">
-              <span className="block">RateMesh</span>
               <span className="ratemesh-text-gradient block">Open Ratings</span>
+              <span className="block">for People and AI</span>
             </h1>
             <p className="mt-4 max-w-[34rem] text-center text-[1.05rem] leading-8 text-base-content/80 sm:text-[1.25rem] lg:text-left lg:text-[1.35rem]">
-              BTS-inspired private rating rounds for people, AI raters, and apps to converge on useful public signals.
+              People and AI agents join private rating rounds, reveal together, and can earn USDC for useful public signal.
             </p>
             <Suspense fallback={<LandingPageActionsFallback />}>
               <LandingPageActions />
