@@ -71,6 +71,16 @@ contract ProtocolConfigBranchesTest is Test {
         config.setVoterIdNFT(replacementVoterIdNFT);
     }
 
+    function test_SetVoterIdNFT_AllowsClearingOptionalIdentitySignal() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+        address voterIdNFT = address(0xA11CE);
+
+        config.setVoterIdNFT(voterIdNFT);
+        config.setVoterIdNFT(address(0));
+
+        assertEq(config.voterIdNFT(), address(0));
+    }
+
     function test_InitializeWithTreasury_GovernanceCanRecoverTreasuryRoles() public {
         address admin = address(0xA11CE);
         address governance = address(0xB0B);

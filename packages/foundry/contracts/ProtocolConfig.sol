@@ -379,8 +379,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     }
 
     function _setVoterIdNFT(address value) internal {
-        if (value == address(0)) revert InvalidAddress();
-        if (voterIdNFT != address(0) && voterIdNFT != value) revert InvalidConfig();
+        if (value != address(0) && voterIdNFT != address(0) && voterIdNFT != value) revert InvalidConfig();
         voterIdNFT = value;
         emit VoterIdNFTUpdated(value);
     }
