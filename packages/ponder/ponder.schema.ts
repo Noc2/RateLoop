@@ -169,6 +169,10 @@ export const vote = onchainTable(
     predictedCrowdRatingBps: t.integer(), // null until prediction reveal
     predictedRatingBps: t.integer(), // deprecated alias for predictedCrowdRatingBps
     predictionWeight: t.bigint(), // null until prediction reveal
+    predictionScoreBps: t.integer(), // null until prediction rewards are scored
+    predictionRewardWeight: t.bigint(), // null until prediction rewards are scored
+    predictionStakeReturned: t.bigint(), // null until prediction rewards are scored
+    predictionForfeitedStake: t.bigint(), // null until prediction rewards are scored
     stake: t.bigint().notNull(),
     epochIndex: t.integer().notNull(), // 0=epoch-1 (100% weight), 1=epoch-2+ (25% weight)
     revealed: t.boolean().notNull().default(false),

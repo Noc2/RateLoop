@@ -905,6 +905,10 @@ export function registerContentRoutes(app: ApiApp) {
         opinionRatingBps: vote.opinionRatingBps,
         predictedCrowdRatingBps: vote.predictedCrowdRatingBps,
         predictedRatingBps: vote.predictedRatingBps,
+        predictionScoreBps: vote.predictionScoreBps,
+        predictionRewardWeight: vote.predictionRewardWeight,
+        predictionStakeReturned: vote.predictionStakeReturned,
+        predictionForfeitedStake: vote.predictionForfeitedStake,
         stake: vote.stake,
         epochIndex: vote.epochIndex,
         revealed: vote.revealed,
@@ -917,6 +921,11 @@ export function registerContentRoutes(app: ApiApp) {
         roundMaxVoters: round.maxVoters,
         roundState: round.state,
         roundUpWins: round.upWins,
+        roundFinalPredictionRatingBps: round.finalPredictionRatingBps,
+        roundPredictionRewardWeight: round.predictionRewardWeight,
+        roundPredictionRewardClaimants: round.predictionRewardClaimants,
+        roundPredictionForfeitedPool: round.predictionForfeitedPool,
+        roundPredictionForfeitClaimants: round.predictionForfeitClaimants,
       })
       .from(vote)
       .leftJoin(

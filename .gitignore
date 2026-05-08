@@ -19,6 +19,7 @@ node_modules
 
 # build cache
 *.tsbuildinfo
+.local/
 
 # misc
 .DS_Store

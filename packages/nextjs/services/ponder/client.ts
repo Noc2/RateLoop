@@ -779,10 +779,17 @@ export interface PonderVoteItem {
   contentId: string;
   roundId: string;
   voter: string;
+  commitHash?: string;
+  targetRound?: string;
+  drandChainHash?: string;
   isUp: boolean | null; // null until revealed
   opinionRatingBps?: number | null;
   predictedCrowdRatingBps?: number | null;
   predictedRatingBps?: number | null;
+  predictionScoreBps?: number | null;
+  predictionRewardWeight?: string | null;
+  predictionStakeReturned?: string | null;
+  predictionForfeitedStake?: string | null;
   stake: string;
   epochIndex: number; // 0=epoch-1 (100% weight), 1=epoch-2+ (25% weight)
   revealed: boolean;
@@ -795,6 +802,11 @@ export interface PonderVoteItem {
   roundMaxVoters?: number;
   roundState: RoundState | null;
   roundUpWins: boolean | null;
+  roundFinalPredictionRatingBps?: number | null;
+  roundPredictionRewardWeight?: string | null;
+  roundPredictionRewardClaimants?: number | null;
+  roundPredictionForfeitedPool?: string | null;
+  roundPredictionForfeitClaimants?: number | null;
 }
 
 export interface PonderVotesResponse {

@@ -16,6 +16,12 @@ import {
 } from "ponder:schema";
 import { formatUtcDateKey, getPreviousUtcDateKey, normalizeUtcDateKey } from "./streak-utils.js";
 
+const PREDICTION_FULL_CREDIT_TOLERANCE_BPS = 100;
+const PREDICTION_ZERO_CREDIT_TOLERANCE_BPS = 8_900;
+const PREDICTION_SCORE_SCALE_BPS = 10_000;
+const MIN_RATING_BPS = 1_000;
+const MAX_RATING_BPS = 9_900;
+
 function defaultRoundConfigFields() {
   return {
     epochDuration: DEFAULT_ROUND_CONFIG.epochDurationSeconds,
@@ -36,6 +42,41 @@ function computeVoteEpochIndex(committedAt: bigint, roundStartTime: bigint, epoc
 
 function derivePredictionDirection(opinionRatingBps: number, referenceRatingBps: number): boolean {
   return opinionRatingBps >= referenceRatingBps;
+}
+
+function clampRatingBps(ratingBps: number) {
+  if (!Number.isFinite(ratingBps)) return 0;
+  return Math.min(MAX_RATING_BPS, Math.max(MIN_RATING_BPS, Math.trunc(ratingBps)));
+}
+
+function weightedAverageRatingBps(weightedRatingSum: bigint, totalWeight: bigint) {
+  if (totalWeight <= 0n) return 0;
+  const rating = Number((weightedRatingSum + totalWeight / 2n) / totalWeight);
+  return clampRatingBps(rating);
+}
+
+function leaveOneOutRatingBps(
+  totalWeightedRating: bigint,
+  totalWeight: bigint,
+  ownOpinionRatingBps: number,
+  ownWeight: bigint,
+) {
+  if (ownWeight > totalWeight) return weightedAverageRatingBps(totalWeightedRating, totalWeight);
+  const ownContribution = BigInt(ownOpinionRatingBps) * ownWeight;
+  if (ownContribution > totalWeightedRating) return weightedAverageRatingBps(totalWeightedRating, totalWeight);
+  const peerWeight = totalWeight - ownWeight;
+  if (peerWeight === 0n) return weightedAverageRatingBps(totalWeightedRating, totalWeight);
+  return weightedAverageRatingBps(totalWeightedRating - ownContribution, peerWeight);
+}
+
+function accuracyScoreBps(predictionBps: number, peerRatingBps: number) {
+  const errorBps = Math.abs(clampRatingBps(predictionBps) - clampRatingBps(peerRatingBps));
+  if (errorBps <= PREDICTION_FULL_CREDIT_TOLERANCE_BPS) return PREDICTION_SCORE_SCALE_BPS;
+  if (errorBps >= PREDICTION_ZERO_CREDIT_TOLERANCE_BPS) return 0;
+
+  const toleranceRange = PREDICTION_ZERO_CREDIT_TOLERANCE_BPS - PREDICTION_FULL_CREDIT_TOLERANCE_BPS;
+  const excessError = errorBps - PREDICTION_FULL_CREDIT_TOLERANCE_BPS;
+  return PREDICTION_SCORE_SCALE_BPS - Math.trunc((PREDICTION_SCORE_SCALE_BPS * excessError) / toleranceRange);
 }
 
 async function recordVoteReveal({
@@ -412,6 +453,35 @@ ponder.on("RoundVotingEngine:PredictionRewardsScored", async ({ event, context }
       predictionForfeitedPool: forfeitedPool,
       predictionForfeitClaimants: Number(forfeitClaimants),
     });
+
+    const roundVotes = await context.db.sql
+      .select()
+      .from(vote)
+      .where(and(eq(vote.contentId, contentId), eq(vote.roundId, roundId), eq(vote.revealed, true)));
+    const totalWeightedRating = existingRound.predictionWeightedRatingSum ?? 0n;
+    const totalWeight = existingRound.totalPredictionWeight ?? 0n;
+
+    for (const roundVote of roundVotes) {
+      const ownWeight = roundVote.predictionWeight ?? 0n;
+      const ownOpinion = roundVote.opinionRatingBps;
+      const ownPrediction = roundVote.predictedCrowdRatingBps ?? roundVote.predictedRatingBps;
+      if (ownWeight <= 0n || ownOpinion === null || ownOpinion === undefined || ownPrediction === null || ownPrediction === undefined) {
+        continue;
+      }
+
+      const peerRatingBps = leaveOneOutRatingBps(totalWeightedRating, totalWeight, Number(ownOpinion), ownWeight);
+      const scoreBps = accuracyScoreBps(Number(ownPrediction), peerRatingBps);
+      const scoreWeight = (ownWeight * BigInt(scoreBps)) / BigInt(PREDICTION_SCORE_SCALE_BPS);
+      const stakeReturned = (roundVote.stake * BigInt(scoreBps)) / BigInt(PREDICTION_SCORE_SCALE_BPS);
+      const forfeitedStake = roundVote.stake - stakeReturned;
+
+      await context.db.update(vote, { id: roundVote.id }).set({
+        predictionScoreBps: scoreBps,
+        predictionRewardWeight: scoreWeight,
+        predictionStakeReturned: stakeReturned,
+        predictionForfeitedStake: forfeitedStake,
+      });
+    }
   }
 });
 

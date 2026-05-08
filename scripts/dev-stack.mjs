@@ -205,7 +205,12 @@ function runDbPush(databaseConfig, options = {}) {
   console.log(`[dev-stack] Applying the Next.js database schema at ${formatDatabaseTarget(databaseConfig)}...`);
 
   const inheritStdio = Boolean(process.stdin.isTTY && process.stdout.isTTY);
-  const result = spawnSync(yarnCommand, ["workspace", "@ratemesh/nextjs", "db:push"], {
+  const dbPushArgs = ["workspace", "@ratemesh/nextjs", "db:push"];
+  if (databaseConfig.isLocal) {
+    dbPushArgs.push("--force");
+  }
+
+  const result = spawnSync(yarnCommand, dbPushArgs, {
     cwd: repoRoot,
     ...(inheritStdio ? { stdio: "inherit" } : { encoding: "utf8" }),
     env: {

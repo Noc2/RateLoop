@@ -1,19 +1,24 @@
 #!/usr/bin/env node
 
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 const LOCAL_HOSTNAMES = new Set(["127.0.0.1", "localhost", "::1"]);
-const DEFAULT_DATABASE_URL = "postgresql://postgres:postgres@127.0.0.1:5432/curyo_app";
+const DEFAULT_DATABASE_URL = "postgresql://postgres:postgres@127.0.0.1:5432/ratemesh_app";
 const IN_MEMORY_DATABASE_URL = "memory:";
 const currentFile = fileURLToPath(import.meta.url);
 const repoRoot = path.resolve(path.dirname(currentFile), "..");
 const composeFile = path.join(repoRoot, "docker-compose.dev.yml");
 const nextEnvLocalFile = path.join(repoRoot, "packages", "nextjs", ".env.local");
 const postgresServiceName = "next-postgres";
+const localStateDir = path.join(repoRoot, ".local");
+const homebrewPostgresBinDir = "/opt/homebrew/opt/postgresql@16/bin";
+const fallbackPostgresDataDir = path.join(localStateDir, "postgres-16");
+const fallbackPostgresLogPath = path.join(localStateDir, "postgres-16.log");
+const fallbackPostgresMarkerPath = path.join(fallbackPostgresDataDir, ".ratemesh-dev-db");
 
 export class MissingDockerComposeError extends Error {
   constructor() {
@@ -138,6 +143,219 @@ function runCompose(composeArgs, options = {}) {
   });
 }
 
+function getHomebrewPostgresCommand(name) {
+  const commandPath = path.join(homebrewPostgresBinDir, name);
+  return existsSync(commandPath) ? commandPath : null;
+}
+
+function runHomebrewPostgresCommand(name, args, options = {}) {
+  const command = getHomebrewPostgresCommand(name);
+  if (!command) {
+    return {
+      status: 127,
+      error: new Error(`Homebrew postgresql@16 command not found: ${name}`),
+    };
+  }
+
+  return spawnSync(command, args, {
+    cwd: repoRoot,
+    encoding: options.encoding ?? "utf8",
+    stdio: options.stdio ?? "pipe",
+    env: {
+      ...process.env,
+      PGCONNECT_TIMEOUT: "2",
+      ...options.env,
+    },
+  });
+}
+
+function isFallbackPostgresAvailable() {
+  return ["initdb", "pg_ctl", "createdb", "psql"].every(name => Boolean(getHomebrewPostgresCommand(name)));
+}
+
+function fallbackPostgresEnv(config) {
+  return {
+    PGHOST: config.host,
+    PGPORT: String(config.port),
+    PGUSER: config.user,
+    PGPASSWORD: config.password,
+  };
+}
+
+function postgresConnectionIsReady(config, databaseName = config.databaseName) {
+  const result = runHomebrewPostgresCommand(
+    "psql",
+    ["-h", config.host, "-p", String(config.port), "-U", config.user, "-d", databaseName, "-c", "select 1"],
+    {
+      stdio: "ignore",
+      env: fallbackPostgresEnv(config),
+    },
+  );
+
+  return result.status === 0;
+}
+
+function ensureDatabaseOnExistingPostgres(config) {
+  if (postgresConnectionIsReady(config)) {
+    return true;
+  }
+
+  const maintenanceDatabaseName = ["postgres", "template1"].find(databaseName =>
+    postgresConnectionIsReady(config, databaseName),
+  );
+  if (!maintenanceDatabaseName) {
+    return false;
+  }
+
+  console.log(`[dev-db] Creating local database ${config.databaseName} on existing Postgres...`);
+  const result = runHomebrewPostgresCommand(
+    "createdb",
+    ["-h", config.host, "-p", String(config.port), "-U", config.user, config.databaseName],
+    {
+      env: fallbackPostgresEnv(config),
+    },
+  );
+
+  const output = `${result.stdout ?? ""}\n${result.stderr ?? ""}`;
+  if (result.status !== 0 && !/already exists/i.test(output)) {
+    throw new Error(`Failed to create local database ${config.databaseName}. ${output.trim()}`);
+  }
+
+  return postgresConnectionIsReady(config);
+}
+
+function initFallbackPostgres(config) {
+  mkdirSync(localStateDir, { recursive: true });
+
+  if (existsSync(fallbackPostgresDataDir)) {
+    return;
+  }
+
+  console.log(`[dev-db] Initializing fallback Homebrew Postgres at ${path.relative(repoRoot, fallbackPostgresDataDir)}...`);
+  const result = runHomebrewPostgresCommand("initdb", [
+    "-D",
+    fallbackPostgresDataDir,
+    "--auth=trust",
+    "--username",
+    config.user,
+  ]);
+
+  if (result.status !== 0) {
+    throw new Error(
+      `Failed to initialize fallback Homebrew Postgres. ${String(result.stderr || result.error?.message || "").trim()}`,
+    );
+  }
+
+  writeFileSync(fallbackPostgresMarkerPath, "RateMesh dev database\n");
+}
+
+async function waitForFallbackPostgresReady(config) {
+  for (let attempt = 1; attempt <= 30; attempt += 1) {
+    if (postgresConnectionIsReady(config)) {
+      return;
+    }
+
+    await new Promise(resolve => setTimeout(resolve, 1_000));
+  }
+
+  throw new Error(`Fallback Homebrew Postgres did not become ready at ${formatDatabaseTarget(config)} within 30 seconds.`);
+}
+
+function startFallbackPostgres(config) {
+  initFallbackPostgres(config);
+
+  const statusResult = runHomebrewPostgresCommand("pg_ctl", ["-D", fallbackPostgresDataDir, "status"], {
+    stdio: "ignore",
+  });
+
+  if (statusResult.status === 0) {
+    return;
+  }
+
+  console.log(`[dev-db] Starting fallback Homebrew Postgres for ${formatDatabaseTarget(config)}...`);
+  const result = runHomebrewPostgresCommand(
+    "pg_ctl",
+    [
+      "-D",
+      fallbackPostgresDataDir,
+      "-l",
+      fallbackPostgresLogPath,
+      "-o",
+      `-F -h ${config.host} -p ${config.port}`,
+      "start",
+    ],
+    { stdio: "pipe" },
+  );
+
+  if (result.status !== 0) {
+    throw new Error(
+      `Failed to start fallback Homebrew Postgres. ${String(result.stderr || result.stdout || result.error?.message || "").trim()}`,
+    );
+  }
+}
+
+function ensureFallbackDatabaseExists(config) {
+  if (postgresConnectionIsReady(config)) {
+    return;
+  }
+
+  const result = runHomebrewPostgresCommand(
+    "createdb",
+    ["-h", config.host, "-p", String(config.port), "-U", config.user, config.databaseName],
+    {
+      env: fallbackPostgresEnv(config),
+    },
+  );
+
+  const output = `${result.stdout ?? ""}\n${result.stderr ?? ""}`;
+  if (result.status !== 0 && !/already exists/i.test(output)) {
+    throw new Error(`Failed to create fallback database ${config.databaseName}. ${output.trim()}`);
+  }
+}
+
+async function ensureFallbackLocalDatabase(config) {
+  if (!isFallbackPostgresAvailable()) {
+    throw new Error(
+      "Docker is not running and Homebrew postgresql@16 is not available. Start Docker Desktop or install postgresql@16.",
+    );
+  }
+
+  startFallbackPostgres(config);
+  ensureFallbackDatabaseExists(config);
+  await waitForFallbackPostgresReady(config);
+  console.log(`[dev-db] Fallback Homebrew Postgres is ready at ${formatDatabaseTarget(config)}.`);
+}
+
+function fallbackPostgresWasInitialized() {
+  return existsSync(fallbackPostgresDataDir) && existsSync(fallbackPostgresMarkerPath);
+}
+
+function fallbackPostgresIsRunning() {
+  if (!fallbackPostgresWasInitialized()) {
+    return false;
+  }
+
+  const result = runHomebrewPostgresCommand("pg_ctl", ["-D", fallbackPostgresDataDir, "status"], {
+    stdio: "ignore",
+  });
+  return result.status === 0;
+}
+
+function stopFallbackPostgres() {
+  if (!fallbackPostgresIsRunning()) {
+    return false;
+  }
+
+  const result = runHomebrewPostgresCommand("pg_ctl", ["-D", fallbackPostgresDataDir, "stop", "-m", "fast"], {
+    stdio: "inherit",
+  });
+  if (result.status !== 0) {
+    throw new Error("Failed to stop fallback Homebrew Postgres.");
+  }
+
+  return true;
+}
+
 async function waitForDatabaseReady(config) {
   for (let attempt = 1; attempt <= 30; attempt += 1) {
     const result = runCompose(["exec", "-T", postgresServiceName, "pg_isready", "-U", config.user, "-d", config.databaseName], {
@@ -179,10 +397,25 @@ export async function ensureLocalDatabase(config = resolveNextDatabaseConfig()) 
     );
   }
 
+  if (ensureDatabaseOnExistingPostgres(config)) {
+    console.log(`[dev-db] Local Postgres is already ready at ${formatDatabaseTarget(config)}.`);
+    return {
+      skipped: false,
+      config,
+      existing: true,
+    };
+  }
+
   console.log(`[dev-db] Starting local Postgres for ${formatDatabaseTarget(config)}...`);
   const upResult = runCompose(["up", "-d", postgresServiceName], { env: getComposeEnv(config) });
   if (upResult.status !== 0) {
-    throw new Error("Failed to start the local Postgres container.");
+    console.warn("[dev-db] Docker-managed Postgres could not start; trying fallback Homebrew postgresql@16.");
+    await ensureFallbackLocalDatabase(config);
+    return {
+      skipped: false,
+      config,
+      fallback: "homebrew-postgres",
+    };
   }
 
   await waitForDatabaseReady(config);
@@ -195,20 +428,53 @@ export async function ensureLocalDatabase(config = resolveNextDatabaseConfig()) 
 }
 
 export function stopLocalDatabase() {
-  const result = runCompose(["down"]);
-  if (result.status !== 0) {
+  try {
+    const result = runCompose(["down"]);
+    if (result.status === 0) {
+      stopFallbackPostgres();
+      return;
+    }
+  } catch (error) {
+    if (!(error instanceof MissingDockerComposeError)) {
+      throw error;
+    }
+  }
+
+  if (!stopFallbackPostgres()) {
     throw new Error("Failed to stop the local Postgres container.");
   }
 }
 
 export function resetLocalDatabase() {
-  const result = runCompose(["down", "-v"]);
-  if (result.status !== 0) {
-    throw new Error("Failed to reset the local Postgres container and volume.");
+  try {
+    const result = runCompose(["down", "-v"]);
+    if (result.status !== 0 && !fallbackPostgresWasInitialized()) {
+      throw new Error("Failed to reset the local Postgres container and volume.");
+    }
+  } catch (error) {
+    if (!(error instanceof MissingDockerComposeError)) {
+      throw error;
+    }
+  }
+
+  stopFallbackPostgres();
+  if (fallbackPostgresWasInitialized()) {
+    rmSync(fallbackPostgresDataDir, { recursive: true, force: true });
+  }
+  if (existsSync(fallbackPostgresLogPath)) {
+    rmSync(fallbackPostgresLogPath, { force: true });
   }
 }
 
 export function streamLocalDatabaseLogs() {
+  if (fallbackPostgresWasInitialized() && existsSync(fallbackPostgresLogPath)) {
+    const result = spawnSync("tail", ["-f", fallbackPostgresLogPath], {
+      cwd: repoRoot,
+      stdio: "inherit",
+    });
+    process.exit(result.status ?? 0);
+  }
+
   const result = runCompose(["logs", "-f", postgresServiceName]);
   process.exit(result.status ?? 0);
 }
