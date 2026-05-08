@@ -9,9 +9,7 @@ const REQUIRED_TARGET_CONTRACTS = [
   "ProtocolConfig",
   "RoundRewardDistributor",
   "CategoryRegistry",
-  "VoterIdNFT",
   "ParticipationPool",
-  "HumanFaucet",
 ] as const;
 
 export function listMissingRequiredTargetContracts(

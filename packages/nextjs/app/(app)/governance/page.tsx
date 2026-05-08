@@ -2,22 +2,15 @@
 
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { useSearchParams } from "next/navigation";
 import { useAccount } from "wagmi";
 import { AppPageShell } from "~~/components/shared/AppPageShell";
 import { ConnectWalletCard } from "~~/components/shared/ConnectWalletCard";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
-import { useVoterIdNFT } from "~~/hooks/useVoterIdNFT";
-import {
-  captureReferralAttributionFromSearchParams,
-  getStoredReferralAddress,
-} from "~~/lib/referrals/referralAttribution";
 import { replaceUrlPreservingHistoryState } from "~~/lib/ui/browserHistory";
 
-type GovernanceTab = "profile" | "leaderboard" | "governance" | "faucet";
+type GovernanceTab = "profile" | "leaderboard" | "governance";
 
-const governanceTabs: GovernanceTab[] = ["profile", "leaderboard", "governance", "faucet"];
-const zeroBalanceTabs: GovernanceTab[] = ["profile", "faucet"];
+const governanceTabs: GovernanceTab[] = ["profile", "leaderboard", "governance"];
 
 function GovernanceSectionLoading() {
   return (
@@ -34,9 +27,6 @@ const PublicProfileView = dynamic(
   () => import("~~/components/profile/PublicProfileView").then(mod => mod.PublicProfileView),
   { loading: GovernanceSectionLoading },
 );
-const FaucetSection = dynamic(() => import("~~/components/governance/FaucetSection").then(mod => mod.FaucetSection), {
-  loading: GovernanceSectionLoading,
-});
 const VoterAccuracyStats = dynamic(
   () => import("~~/components/leaderboard/VoterAccuracyStats").then(mod => mod.VoterAccuracyStats),
   { loading: GovernanceSectionLoading },
@@ -73,10 +63,8 @@ function normalizeGovernanceHash(hash: string): GovernanceTab | null {
 
 function GovernancePageInner() {
   const { isConnected, address } = useAccount();
-  const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<GovernanceTab>("profile");
   const [hashInitialized, setHashInitialized] = useState(false);
-  const [referrer, setReferrer] = useState<string | null>(null);
   const autoSelectedEntryAddressRef = useRef<string | null>(null);
 
   // Sync tab with URL hash (e.g. /governance#governance)
@@ -106,33 +94,24 @@ function GovernancePageInner() {
     return () => window.removeEventListener("hashchange", applyHash);
   }, []);
 
-  // Extract and validate referral code from URL, then fall back to stored attribution.
-  useEffect(() => {
-    const capturedAttribution = captureReferralAttributionFromSearchParams(searchParams, { source: "url" });
-    setReferrer(capturedAttribution?.referrer ?? getStoredReferralAddress());
-  }, [searchParams]);
-
-  // Check HREP balance
+  // Check MREP balance
   const { data: hrepBalance, isLoading: hrepBalanceLoading } = useScaffoldReadContract({
     contractName: "HumanReputation",
     functionName: "balanceOf",
     args: [address],
     query: { enabled: !!address },
   });
-  const { hasVoterId, isResolved: voterIdResolved } = useVoterIdNFT(address);
 
   const hasResolvedBalance = !!address && !hrepBalanceLoading && hrepBalance !== undefined;
-  const hasZeroBalance = hasResolvedBalance && hrepBalance === 0n;
   const addressKey = address?.toLowerCase() ?? null;
-  const shouldWaitForEntryRouting = Boolean(address) && (!hashInitialized || !voterIdResolved);
-  const faucetOnly = Boolean(address) && hashInitialized && voterIdResolved && !hasVoterId;
+  const shouldWaitForEntryRouting = Boolean(address) && !hashInitialized;
 
   useEffect(() => {
     autoSelectedEntryAddressRef.current = null;
   }, [addressKey]);
 
   useEffect(() => {
-    if (!addressKey || !hashInitialized || !hasResolvedBalance || !voterIdResolved) {
+    if (!addressKey || !hashInitialized || !hasResolvedBalance) {
       return;
     }
 
@@ -145,50 +124,29 @@ function GovernancePageInner() {
       return;
     }
 
-    if (faucetOnly) {
-      selectTab("faucet");
-    } else {
-      selectTab("profile");
-    }
+    selectTab("profile");
 
     autoSelectedEntryAddressRef.current = addressKey;
-  }, [addressKey, faucetOnly, hasResolvedBalance, hashInitialized, selectTab, voterIdResolved]);
+  }, [addressKey, hasResolvedBalance, hashInitialized, selectTab]);
 
-  // Update tab when balance changes
+  // Keep an invalid hash from pinning users to a removed legacy tab.
   useEffect(() => {
     if (!hashInitialized) {
       return;
     }
 
-    if (faucetOnly) {
-      if (activeTab !== "faucet") {
-        selectTab("faucet");
-      }
-      return;
-    }
-
-    if (!hasResolvedBalance) {
-      return;
-    }
-
     const hashTab = normalizeGovernanceHash(window.location.hash.replace(/^#/, ""));
-
-    if (hasZeroBalance && !zeroBalanceTabs.includes(activeTab)) {
-      selectTab(hashTab && zeroBalanceTabs.includes(hashTab) ? hashTab : "profile");
-      return;
+    if (!hashTab) {
+      selectTab("profile");
     }
-
-    if (!hasZeroBalance && activeTab === "faucet") {
-      selectTab(hashTab && hashTab !== "faucet" ? hashTab : "profile");
-    }
-  }, [faucetOnly, hasResolvedBalance, hasZeroBalance, activeTab, hashInitialized, selectTab]);
+  }, [hashInitialized, selectTab]);
 
   // Show connect wallet prompt if not connected
   if (!isConnected) {
     return (
       <ConnectWalletCard
-        title="HREP"
-        message="Humans should sign in with a wallet to participate. AI agents should open the For Agents docs to submit questions."
+        title="MREP"
+        message="Connect a wallet to build reputation, review predictions, and participate in governance."
       />
     );
   }
@@ -198,16 +156,8 @@ function GovernancePageInner() {
       <AppPageShell contentClassName="space-y-6">
         <div className="flex min-h-[40vh] flex-col items-center justify-center px-4 text-center">
           <span className="loading loading-spinner loading-lg text-primary" />
-          <p className="mt-4 text-sm text-base-content/60">Checking Voter ID...</p>
+          <p className="mt-4 text-sm text-base-content/60">Loading governance...</p>
         </div>
-      </AppPageShell>
-    );
-  }
-
-  if (faucetOnly) {
-    return (
-      <AppPageShell contentClassName="space-y-6">
-        <FaucetSection referrer={referrer} />
       </AppPageShell>
     );
   }
@@ -215,58 +165,33 @@ function GovernancePageInner() {
   return (
     <AppPageShell contentClassName="space-y-6">
       <div className="flex flex-wrap gap-2">
-        {hasZeroBalance ? (
-          <>
-            <button
-              onClick={() => selectTab("profile")}
-              className={`tab-control px-4 py-1.5 text-base font-medium transition-colors ${
-                activeTab === "profile" ? "pill-active" : "pill-inactive"
-              }`}
-            >
-              Profile
-            </button>
-            <button
-              onClick={() => selectTab("faucet")}
-              className={`tab-control px-4 py-1.5 text-base font-medium transition-colors ${
-                activeTab === "faucet" ? "pill-active" : "pill-inactive"
-              }`}
-            >
-              Voter ID
-            </button>
-          </>
-        ) : (
-          <>
-            <button
-              onClick={() => selectTab("profile")}
-              className={`tab-control px-4 py-1.5 text-base font-medium transition-colors ${
-                activeTab === "profile" ? "pill-active" : "pill-inactive"
-              }`}
-            >
-              Profile
-            </button>
-            <button
-              onClick={() => selectTab("leaderboard")}
-              className={`tab-control px-4 py-1.5 text-base font-medium transition-colors ${
-                activeTab === "leaderboard" ? "pill-active" : "pill-inactive"
-              }`}
-            >
-              Leaderboard
-            </button>
-            <button
-              onClick={() => selectTab("governance")}
-              className={`tab-control px-4 py-1.5 text-base font-medium transition-colors ${
-                activeTab === "governance" ? "pill-active" : "pill-inactive"
-              }`}
-            >
-              Governance
-            </button>
-          </>
-        )}
+        <button
+          onClick={() => selectTab("profile")}
+          className={`tab-control px-4 py-1.5 text-base font-medium transition-colors ${
+            activeTab === "profile" ? "pill-active" : "pill-inactive"
+          }`}
+        >
+          Profile
+        </button>
+        <button
+          onClick={() => selectTab("leaderboard")}
+          className={`tab-control px-4 py-1.5 text-base font-medium transition-colors ${
+            activeTab === "leaderboard" ? "pill-active" : "pill-inactive"
+          }`}
+        >
+          Leaderboard
+        </button>
+        <button
+          onClick={() => selectTab("governance")}
+          className={`tab-control px-4 py-1.5 text-base font-medium transition-colors ${
+            activeTab === "governance" ? "pill-active" : "pill-inactive"
+          }`}
+        >
+          Governance
+        </button>
       </div>
 
       {activeTab === "profile" && address && <PublicProfileView address={address as `0x${string}`} embedded />}
-
-      {activeTab === "faucet" && <FaucetSection referrer={referrer} />}
 
       {activeTab === "leaderboard" && (
         <>

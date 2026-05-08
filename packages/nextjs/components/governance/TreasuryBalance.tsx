@@ -1,6 +1,6 @@
 "use client";
 
-import { BuildingLibraryIcon, GiftIcon, ShieldCheckIcon, UserGroupIcon } from "@heroicons/react/24/outline";
+import { BuildingLibraryIcon, CircleStackIcon, ShieldCheckIcon, UserGroupIcon } from "@heroicons/react/24/outline";
 import { surfaceSectionHeadingClassName } from "~~/components/shared/sectionHeading";
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
@@ -69,9 +69,9 @@ export const TreasuryBalance = () => {
     functionName: "poolBalance",
   });
 
-  const { data: faucetBalance, isLoading: faucetBalanceLoading } = useScaffoldReadContract({
-    contractName: "HumanFaucet",
-    functionName: "getRemainingBalance",
+  const { data: maxSupply, isLoading: maxSupplyLoading } = useScaffoldReadContract({
+    contractName: "HumanReputation",
+    functionName: "MAX_SUPPLY",
   });
 
   const treasuryLoading = treasuryAddressLoading || (!!treasuryAddress && balanceLoading);
@@ -109,11 +109,11 @@ export const TreasuryBalance = () => {
           Icon={UserGroupIcon}
         />
         <PoolStat
-          title="Launch Distribution"
-          tooltip="Remaining launch distribution capacity for snapshot claims, calibration, onboarding, and governed ecosystem programs."
-          value={faucetBalance}
-          isLoading={faucetBalanceLoading}
-          Icon={GiftIcon}
+          title="Supply Cap"
+          tooltip="Hard-capped maximum MREP supply. Launch distribution and future programs must fit inside this cap."
+          value={maxSupply}
+          isLoading={maxSupplyLoading}
+          Icon={CircleStackIcon}
         />
       </div>
     </div>
