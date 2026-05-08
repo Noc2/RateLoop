@@ -8,9 +8,42 @@ import { useDeployedContractInfo } from "~~/hooks/scaffold-eth";
 import { useClaimableFrontendRewards } from "~~/hooks/useClaimableFrontendRewards";
 import { useClaimableQuestionRewards } from "~~/hooks/useClaimableQuestionRewards";
 import { useRecentUserVotes } from "~~/hooks/useRecentUserVotes";
+import type { PonderVoteItem } from "~~/services/ponder/client";
+
+const BPS_SCALE = 10000n;
+
+function safeBigInt(val: unknown): bigint {
+  try {
+    return BigInt(val as string | number | bigint);
+  } catch {
+    return 0n;
+  }
+}
 
 function epochWeightBps(epochIndex: number): number {
   return epochIndex === 0 ? EPOCH_WEIGHT_BPS.blind : EPOCH_WEIGHT_BPS.informed;
+}
+
+function isPredictionRewardRound(vote: PonderVoteItem) {
+  return Number(vote.roundFinalPredictionRatingBps ?? 0) > 0;
+}
+
+function isBinaryWinningVote(vote: PonderVoteItem) {
+  return vote.isUp !== null && vote.roundUpWins !== null && vote.isUp === vote.roundUpWins;
+}
+
+function predictionRewardWeight(vote: PonderVoteItem) {
+  return safeBigInt(vote.predictionRewardWeight);
+}
+
+function predictionForfeitedStake(vote: PonderVoteItem) {
+  return safeBigInt(vote.predictionForfeitedStake);
+}
+
+function participationStake(vote: PonderVoteItem) {
+  if (isPredictionRewardRound(vote)) return predictionRewardWeight(vote);
+  const stake = safeBigInt(vote.stake);
+  return (stake * BigInt(epochWeightBps(vote.epochIndex))) / BPS_SCALE;
 }
 
 /**
@@ -89,31 +122,36 @@ export function useAllClaimableRewards() {
     return { rewardVotes: rewards, refundVotes: refunds };
   }, [unclaimedVotes]);
 
-  const settledWinners = useMemo(
-    () => rewardVotes.filter(v => v.isUp !== null && v.roundUpWins !== null && v.isUp === v.roundUpWins),
+  const settledPredictionVotes = useMemo(
+    () => rewardVotes.filter(v => isPredictionRewardRound(v)),
     [rewardVotes],
   );
-  const settledLosers = useMemo(
-    () => rewardVotes.filter(v => v.isUp !== null && v.roundUpWins !== null && v.isUp !== v.roundUpWins),
+  const settledBinaryWinners = useMemo(
+    () => rewardVotes.filter(v => !isPredictionRewardRound(v) && isBinaryWinningVote(v)),
     [rewardVotes],
   );
-  const settledWinningTerminalVotes = useMemo(
+  const settledBinaryLosers = useMemo(
+    () =>
+      rewardVotes.filter(
+        v => !isPredictionRewardRound(v) && v.isUp !== null && v.roundUpWins !== null && v.isUp !== v.roundUpWins,
+      ),
+    [rewardVotes],
+  );
+  const settledParticipationTerminalVotes = useMemo(
     () =>
       terminalVotes.filter(
         v =>
           v.roundState === ROUND_STATE.Settled &&
           v.revealed &&
-          v.isUp !== null &&
-          v.roundUpWins !== null &&
-          v.isUp === v.roundUpWins,
+          (isPredictionRewardRound(v) ? predictionRewardWeight(v) > 0n : isBinaryWinningVote(v)),
       ),
     [terminalVotes],
   );
 
   // --- Step 5: Multicall roundVoterPool + roundWinningStake for winners ---
-  const rewardContracts = useMemo(() => {
-    if (!engineInfo || settledWinners.length === 0) return [];
-    return settledWinners.flatMap(v => [
+  const binaryRewardContracts = useMemo(() => {
+    if (!engineInfo || settledBinaryWinners.length === 0) return [];
+    return settledBinaryWinners.flatMap(v => [
       {
         address: engineInfo.address,
         abi: engineInfo.abi,
@@ -127,16 +165,31 @@ export function useAllClaimableRewards() {
         args: [BigInt(v.contentId), BigInt(v.roundId)],
       },
     ]);
-  }, [engineInfo, settledWinners]);
+  }, [engineInfo, settledBinaryWinners]);
 
-  const { data: rewardResults, isLoading: rewardsLoading } = useReadContracts({
-    contracts: rewardContracts,
-    query: { enabled: rewardContracts.length > 0 },
+  const { data: binaryRewardResults, isLoading: binaryRewardsLoading } = useReadContracts({
+    contracts: binaryRewardContracts,
+    query: { enabled: binaryRewardContracts.length > 0 },
+  });
+
+  const predictionPoolContracts = useMemo(() => {
+    if (!engineInfo || settledPredictionVotes.length === 0) return [];
+    return settledPredictionVotes.map(v => ({
+      address: engineInfo.address,
+      abi: engineInfo.abi,
+      functionName: "roundVoterPool" as const,
+      args: [BigInt(v.contentId), BigInt(v.roundId)],
+    }));
+  }, [engineInfo, settledPredictionVotes]);
+
+  const { data: predictionPoolResults, isLoading: predictionRewardsLoading } = useReadContracts({
+    contracts: predictionPoolContracts,
+    query: { enabled: predictionPoolContracts.length > 0 },
   });
 
   const participationRewardContracts = useMemo(() => {
-    if (!distributorInfo || !address || settledWinningTerminalVotes.length === 0) return [];
-    return settledWinningTerminalVotes.flatMap(v => {
+    if (!distributorInfo || !address || settledParticipationTerminalVotes.length === 0) return [];
+    return settledParticipationTerminalVotes.flatMap(v => {
       const contentId = BigInt(v.contentId);
       const roundId = BigInt(v.roundId);
 
@@ -179,7 +232,7 @@ export function useAllClaimableRewards() {
         },
       ];
     });
-  }, [address, distributorInfo, settledWinningTerminalVotes]);
+  }, [address, distributorInfo, settledParticipationTerminalVotes]);
 
   const {
     data: participationRewardResults,
@@ -194,15 +247,6 @@ export function useAllClaimableRewards() {
   const { claimableItems, activeStake } = useMemo(() => {
     const items: ClaimableRewardItem[] = [];
 
-    // Safe BigInt conversion — Ponder returns numeric strings, but guard against bad data
-    const safeBigInt = (val: unknown): bigint => {
-      try {
-        return BigInt(val as string | number);
-      } catch {
-        return 0n;
-      }
-    };
-
     // Add cancelled / tied / reveal-failed refunds.
     for (const v of refundVotes) {
       const stake = safeBigInt(v.stake);
@@ -214,13 +258,13 @@ export function useAllClaimableRewards() {
       });
     }
 
-    // Add settled winners (stake + weighted share of the winner pool).
-    if (rewardResults && rewardResults.length === settledWinners.length * 2) {
-      for (let i = 0; i < settledWinners.length; i++) {
-        const v = settledWinners[i];
+    // Add binary settled winners (stake + weighted share of the winner pool).
+    if (binaryRewardResults && binaryRewardResults.length === settledBinaryWinners.length * 2) {
+      for (let i = 0; i < settledBinaryWinners.length; i++) {
+        const v = settledBinaryWinners[i];
         const stake = safeBigInt(v.stake);
-        const poolResult = rewardResults[i * 2];
-        const winStakeResult = rewardResults[i * 2 + 1];
+        const poolResult = binaryRewardResults[i * 2];
+        const winStakeResult = binaryRewardResults[i * 2 + 1];
 
         let reward = stake; // at minimum, get stake back
         if (poolResult?.status === "success" && winStakeResult?.status === "success") {
@@ -243,10 +287,40 @@ export function useAllClaimableRewards() {
       }
     }
 
-    // Add settled losers (fixed 5% rebate for revealed losing votes).
-    for (const v of settledLosers) {
+    // Add prediction-scored rewards. Positive score returns stake and earns pool share; forfeited stake gets a rebate.
+    if (predictionPoolResults && predictionPoolResults.length === settledPredictionVotes.length) {
+      for (let i = 0; i < settledPredictionVotes.length; i++) {
+        const v = settledPredictionVotes[i];
+        const scoreWeight = predictionRewardWeight(v);
+        const stakeReturned = safeBigInt(v.predictionStakeReturned);
+        const forfeitedStake = predictionForfeitedStake(v);
+        const totalScoreWeight = safeBigInt(v.roundPredictionRewardWeight);
+        const poolResult = predictionPoolResults[i];
+        let reward = stakeReturned;
+
+        if (forfeitedStake > 0n) {
+          reward += (forfeitedStake * BigInt(REWARD_SPLIT_BPS.revealedLoserRefund)) / BPS_SCALE;
+        }
+
+        if (scoreWeight > 0n && poolResult?.status === "success" && totalScoreWeight > 0n) {
+          reward += (scoreWeight * safeBigInt(poolResult.result)) / totalScoreWeight;
+        }
+
+        if (reward > 0n) {
+          items.push({
+            contentId: safeBigInt(v.contentId),
+            roundId: safeBigInt(v.roundId),
+            reward,
+            claimType: "reward",
+          });
+        }
+      }
+    }
+
+    // Add binary settled losers (fixed 5% rebate for revealed losing votes).
+    for (const v of settledBinaryLosers) {
       const stake = safeBigInt(v.stake);
-      const reward = (stake * BigInt(REWARD_SPLIT_BPS.revealedLoserRefund)) / 10000n;
+      const reward = (stake * BigInt(REWARD_SPLIT_BPS.revealedLoserRefund)) / BPS_SCALE;
       items.push({
         contentId: safeBigInt(v.contentId),
         roundId: safeBigInt(v.roundId),
@@ -264,22 +338,25 @@ export function useAllClaimableRewards() {
     }
 
     return { claimableItems: items, activeStake: active };
-  }, [refundVotes, settledWinners, settledLosers, rewardResults, votes]);
+  }, [
+    refundVotes,
+    settledBinaryWinners,
+    settledPredictionVotes,
+    settledBinaryLosers,
+    binaryRewardResults,
+    predictionPoolResults,
+    votes,
+  ]);
 
   const participationClaimableItems = useMemo<ClaimableRewardItem[]>(() => {
-    if (!participationRewardResults || participationRewardResults.length !== settledWinningTerminalVotes.length * 6) {
+    if (
+      !participationRewardResults ||
+      participationRewardResults.length !== settledParticipationTerminalVotes.length * 6
+    ) {
       return [];
     }
 
-    const safeBigInt = (val: unknown): bigint => {
-      try {
-        return BigInt(val as string | number | bigint);
-      } catch {
-        return 0n;
-      }
-    };
-
-    const candidates = settledWinningTerminalVotes.map((vote, index) => {
+    const candidates = settledParticipationTerminalVotes.map((vote, index) => {
       const claimed = participationRewardResults[index * 6];
       const paid = participationRewardResults[index * 6 + 1];
       const rate = participationRewardResults[index * 6 + 2];
@@ -294,7 +371,7 @@ export function useAllClaimableRewards() {
       return {
         contentId: safeBigInt(vote.contentId),
         roundId: safeBigInt(vote.roundId),
-        stake: safeBigInt(vote.stake),
+        stake: participationStake(vote),
         alreadyClaimed: claimed?.status === "success" && claimed.result === true,
         alreadyPaid: paid?.status === "success" ? safeBigInt(paid.result) : 0n,
         rateBps: rate?.status === "success" ? safeBigInt(rate.result) : 0n,
@@ -305,7 +382,7 @@ export function useAllClaimableRewards() {
     });
 
     return buildVoterParticipationClaimableRewards(candidates);
-  }, [participationRewardResults, settledWinningTerminalVotes]);
+  }, [participationRewardResults, settledParticipationTerminalVotes]);
 
   const combinedClaimableItems = useMemo(
     () => [
@@ -346,7 +423,8 @@ export function useAllClaimableRewards() {
 
   const isLoading =
     claimedLoading ||
-    rewardsLoading ||
+    binaryRewardsLoading ||
+    predictionRewardsLoading ||
     participationRewardsLoading ||
     frontendClaimableLoading ||
     questionRewardPoolClaimableLoading;

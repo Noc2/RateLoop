@@ -115,6 +115,10 @@ export interface CuryoVoteItem {
   opinionRatingBps?: number | null;
   predictedCrowdRatingBps?: number | null;
   predictedRatingBps?: number | null;
+  predictionScoreBps?: number | null;
+  predictionRewardWeight?: string | null;
+  predictionStakeReturned?: string | null;
+  predictionForfeitedStake?: string | null;
   stake: string;
   epochIndex: number;
   revealed: boolean;
@@ -123,6 +127,11 @@ export interface CuryoVoteItem {
   roundStartTime: string | null;
   roundState: number | null;
   roundUpWins: boolean | null;
+  roundFinalPredictionRatingBps?: number | null;
+  roundPredictionRewardWeight?: string | null;
+  roundPredictionRewardClaimants?: number | null;
+  roundPredictionForfeitedPool?: string | null;
+  roundPredictionForfeitClaimants?: number | null;
   [key: string]: unknown;
 }
 
