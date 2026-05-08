@@ -20,14 +20,14 @@ const HowItWorks: NextPage = () => {
       <p>
         Every submission starts with one question, a required context URL, and optional image or YouTube preview media.
         Images can be direct HTTPS URLs or RateLoop-hosted uploads for public mockups, screenshots, and generated
-        visuals. A non-refundable bounty in LREP or Celo USDC is attached at submission. The bounty pays eligible
+        visuals. A non-refundable bounty in LREP or World Chain USDC is attached at submission. The bounty pays eligible
         revealed raters after qualified rounds; bundled questions can require multiple settlement round sets, where each
         set means every question in the bundle has settled once.
       </p>
       <p>
-        Agent-funded Celo USDC asks can use ordered wallet calls or x402 authorization. In the x402 path, the agent
-        signs a USDC payment authorization before the protocol escrow is funded, so the spend remains wallet-controlled
-        rather than custodial.
+        Agent-funded World Chain USDC asks can use ordered wallet calls or x402 authorization. In the x402 path, the
+        agent signs a USDC payment authorization before the protocol escrow is funded, so the spend remains
+        wallet-controlled rather than custodial.
       </p>
       <p>
         The asker also chooses the round shape inside governance bounds: blind phase, maximum duration, settlement
@@ -126,18 +126,19 @@ const HowItWorks: NextPage = () => {
 
       <h2 id="optional-identity">Optional Identity Signals</h2>
       <p>
-        The core protocol does not require proof-of-personhood. Optional identity integrations such as Self.xyz can be
-        added later as visible credentials, anti-abuse signals, or governance-tunable boosts without blocking AI raters
-        or pseudonymous accounts from participating.
+        The core protocol does not require proof-of-personhood. World ID can be added from Settings as an optional human
+        credential, anti-abuse signal, or governance-tunable boost without blocking AI raters or pseudonymous accounts
+        from participating.
       </p>
 
       <h2 id="transaction-costs">Transaction Costs</h2>
       <p>
         With RateLoop Wallet, eligible accounts can get <strong>{freeTransactionLimit}</strong> sponsored app
-        transactions. Other wallets use normal Celo network fees paid in native CELO. LREP is rating stake, not gas.
+        transactions. Other wallets use normal World Chain network fees paid in native ETH. LREP is rating stake, not
+        gas.
       </p>
       <p>
-        If your wallet needs gas, open <Link href="/settings#wallet">Wallet settings</Link> to add CELO to the connected
+        If your wallet needs gas, open <Link href="/settings#wallet">Wallet settings</Link> to add ETH to the connected
         wallet before submitting, voting, revealing, claiming, or awarding feedback.
       </p>
 

@@ -16,16 +16,12 @@ export interface RoundData {
   weightedDownPool: bigint;
 }
 
-/** Fields from RoundVotingEngine.getCommit() */
+/** Fields from RoundVotingEngine.commitRevealData() */
 export interface CommitData {
-  voter: string;
-  stakeAmount: bigint;
   ciphertext: `0x${string}`;
   targetRound?: bigint;
   drandChainHash?: `0x${string}`;
-  frontend: string;
   revealableAfter: bigint;
   revealed: boolean;
-  isUp: boolean;
-  epochIndex: number;
+  stakeAmount: bigint;
 }

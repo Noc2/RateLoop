@@ -27,9 +27,9 @@ const rawPublicEnv = {
   frontendCode: optionalEnv(process.env.NEXT_PUBLIC_FRONTEND_CODE),
   localE2EProductionBuild: optionalEnv(process.env.NEXT_PUBLIC_CURYO_E2E_PRODUCTION_BUILD),
   ponderUrl: optionalEnv(process.env.NEXT_PUBLIC_PONDER_URL),
-  rpcUrl11142220: optionalEnv(process.env.NEXT_PUBLIC_RPC_URL_11142220),
+  rpcUrl4801: optionalEnv(process.env.NEXT_PUBLIC_RPC_URL_4801),
   rpcUrl31337: optionalEnv(process.env.NEXT_PUBLIC_RPC_URL_31337),
-  rpcUrl42220: optionalEnv(process.env.NEXT_PUBLIC_RPC_URL_42220),
+  rpcUrl480: optionalEnv(process.env.NEXT_PUBLIC_RPC_URL_480),
   targetNetworks: optionalEnv(process.env.NEXT_PUBLIC_TARGET_NETWORKS),
   thirdwebClientId: optionalEnv(process.env.NEXT_PUBLIC_THIRDWEB_CLIENT_ID),
   walletConnectProjectId: optionalEnv(process.env.NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID),
@@ -39,8 +39,8 @@ const rpcOverrides = mergeRpcOverrides(
   RPC_OVERRIDES,
   resolveRpcOverrides({
     31337: rawPublicEnv.rpcUrl31337,
-    11142220: rawPublicEnv.rpcUrl11142220,
-    42220: rawPublicEnv.rpcUrl42220,
+    4801: rawPublicEnv.rpcUrl4801,
+    480: rawPublicEnv.rpcUrl480,
   }),
 );
 

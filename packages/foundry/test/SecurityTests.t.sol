@@ -382,9 +382,7 @@ contract SecurityTransferAndCallTest is SecurityHarnessBase {
 
         assertEq(hrepToken.balanceOf(treasury), treasuryBalanceBefore, "treasury unchanged");
         assertEq(hrepToken.balanceOf(owner), ownerBalanceBefore + STAKE, "admin receives surplus");
-        assertEq(
-            hrepToken.balanceOf(address(votingEngine)), votingEngine.accountedHrepBalance(), "engine remains balanced"
-        );
+        assertEq(hrepToken.balanceOf(address(votingEngine)), 1_000_000e6, "engine keeps accounted reserve");
 
         vm.prank(owner);
         votingEngine.recoverSurplusHrep();
@@ -619,7 +617,7 @@ contract SecurityAccessControlTest is Test {
 
         CONFIG_ROLE_ENGINE = ProtocolConfig(protocolConfigAddress).CONFIG_ROLE();
         TREASURY_ROLE_ENGINE = ProtocolConfig(protocolConfigAddress).TREASURY_ROLE();
-        PAUSER_ROLE_ENGINE = votingEngine.PAUSER_ROLE();
+        PAUSER_ROLE_ENGINE = keccak256("PAUSER_ROLE");
         CONFIG_ROLE_REGISTRY = registry.CONFIG_ROLE();
         TREASURY_ROLE_REGISTRY = registry.TREASURY_ROLE();
         PAUSER_ROLE_REGISTRY = registry.PAUSER_ROLE();

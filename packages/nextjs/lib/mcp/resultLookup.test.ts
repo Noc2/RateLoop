@@ -49,7 +49,7 @@ test("curyo_get_result requires contentId when an operation maps to multiple bun
       AGENT.id,
       "bundle-result",
       "payload-hash",
-      42220,
+      480,
       "5",
       "1000000",
       "submitted",
@@ -82,7 +82,7 @@ test("curyo_get_result requires contentId when an operation maps to multiple bun
       operationKey,
       "bundle-result",
       "payload-hash",
-      42220,
+      480,
       "0x0000000000000000000000000000000000000001",
       "1000000",
       "1000000",
@@ -126,7 +126,7 @@ test("curyo_get_result requires contentId when an operation maps to multiple bun
       callCuryoMcpTool({
         agent: AGENT,
         arguments: {
-          chainId: 42220,
+          chainId: 480,
           clientRequestId: "bundle-result",
         },
         name: "curyo_get_result",
@@ -145,7 +145,7 @@ test("curyo_get_result accepts an explicit bundle contentId without bypassing op
       AGENT.id,
       "bundle-result-selected",
       "payload-hash",
-      42220,
+      480,
       "5",
       "1000000",
       "submitted",
@@ -178,7 +178,7 @@ test("curyo_get_result accepts an explicit bundle contentId without bypassing op
       operationKey,
       "bundle-result-selected",
       "payload-hash",
-      42220,
+      480,
       "0x0000000000000000000000000000000000000001",
       "1000000",
       "1000000",
@@ -244,7 +244,7 @@ test("curyo_get_result accepts an explicit bundle contentId without bypassing op
   const result = (await callCuryoMcpTool({
     agent: AGENT,
     arguments: {
-      chainId: 42220,
+      chainId: 480,
       clientRequestId: "bundle-result-selected",
       contentId: "456",
     },

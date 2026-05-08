@@ -41,7 +41,7 @@ export const SECTIONS: Section[] = [
             type: "bullets",
             items: [
               "Bounded asks -- one question, one context URL, optional preview media, and explicit round terms.",
-              "Paid attention -- every ask carries a non-refundable bounty funded in LREP or Celo USDC.",
+              "Paid attention -- every ask carries a non-refundable bounty funded in LREP or World Chain USDC.",
               "Open participation -- people, bots, and AI raters use the same rating primitive after reputation and calibration rules are met.",
               "Skin in the game -- predictions are backed by LREP stake rather than passive engagement.",
               "Agent-native access -- public MCP, direct JSON routes, SDK helpers, browser signing, and local signer flows all feed the same protocol record.",
@@ -144,7 +144,7 @@ export const SECTIONS: Section[] = [
             type: "ordered",
             items: [
               "Ask: submit one question-first ask with a required context URL and optional preview media.",
-              "Fund: attach a non-refundable bounty in LREP or USDC on Celo; agent asks spend from user-authorized wallets, scoped agent wallets, x402 authorization, or ordered wallet calls.",
+              "Fund: attach a non-refundable bounty in LREP or USDC on World Chain; agent asks spend from user-authorized wallets, scoped agent wallets, x402 authorization, or ordered wallet calls.",
               "Predict: raters stake LREP on the final 1.0-9.9 rating and may add hidden feedback.",
               "Settle: the round resolves once the configured reveal and participation conditions are met.",
               "Reuse: any later agent can inspect the same settled result instead of paying to rediscover the same judgment.",
@@ -258,7 +258,7 @@ export const SECTIONS: Section[] = [
               "Public agent access works without a RateLoop account, bearer token, or saved policy when the agent supplies a funded `walletAddress` and the user approves the spend path.",
               "Browser signing creates an `/agent/sign/{intentId}` handoff for MetaMask, Ledger, and other injected-wallet approval flows.",
               "Local signer tooling lets a Codex-like local agent use an encrypted keystore, sign x402 authorization when required, execute returned calls, and confirm hashes.",
-              "Wallet settings cover CELO for gas, while the agent setup screen can help fund Celo USDC for bounties.",
+              "Wallet settings cover ETH for gas, while the agent setup screen can help fund World Chain USDC for bounties.",
             ],
           },
         ],
@@ -383,8 +383,8 @@ export const SECTIONS: Section[] = [
           {
             type: "bullets",
             items: [
-              "Every ask attaches a non-refundable bounty in LREP or USDC on Celo.",
-              "Celo USDC agent asks can use x402 authorization or ordered wallet calls to fund protocol escrow directly from the approved wallet.",
+              "Every ask attaches a non-refundable bounty in LREP or USDC on World Chain.",
+              "World Chain USDC agent asks can use x402 authorization or ordered wallet calls to fund protocol escrow directly from the approved wallet.",
               "Qualified bounty rounds pay eligible revealed raters and reserve 3% for eligible frontend operators.",
               "Optional USDC Feedback Bonuses reward hidden notes by canonical hash after settlement.",
               "USDC asks do not require proof-of-personhood; USDC earning starts after the required calibration rounds.",
@@ -448,7 +448,7 @@ export const SECTIONS: Section[] = [
             items: [
               "Public MCP and direct JSON routes support wallet-direct asks with `walletAddress` and no bearer token.",
               "MCP-style tools include `curyo_list_categories`, `curyo_list_result_templates`, `curyo_quote_question`, `curyo_ask_humans`, `curyo_confirm_ask_transactions`, `curyo_get_question_status`, and `curyo_get_result`.",
-              "Payment modes include ordered `wallet_calls` and native `x402_authorization` for Celo USDC asks.",
+              "Payment modes include ordered `wallet_calls` and native `x402_authorization` for World Chain USDC asks.",
               "Browser signing intents let an agent create an approval URL for a human operator to connect a wallet, prepare the ask, execute transactions, and confirm hashes.",
               "The local signer CLI loads an encrypted keystore, signs x402 authorization when needed, sends returned transaction plan calls through viem, waits for receipts, and confirms the ask.",
               "Optional managed policies add bearer tokens, RateLoop-enforced spend caps, category allowlists, signed callbacks, balance tooling through `curyo_get_agent_balance`, and audit exports.",

@@ -5,7 +5,7 @@ RateLoop turns one focused public question into a paid, auditable prediction-rat
 ## Flow
 
 1. An agent or person submits a bounded question with a public context URL and optional public image or YouTube context.
-2. The asker funds a non-refundable bounty in LREP or Celo USDC.
+2. The asker funds a non-refundable bounty in LREP or World Chain USDC.
 3. Open raters stake LREP on their judgment during a blind voting phase.
 4. Votes are revealed after the tlock/drand reveal window.
 5. The round settles publicly on-chain.

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 const BASE_PARAMS = {
-  chainId: 42220,
+  chainId: 480,
   sender: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd",
 };
 

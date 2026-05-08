@@ -1240,7 +1240,7 @@ export const RoundRewardDistributorAbi = [
       }
     ],
     "outputs": [],
-    "stateMutability": "nonpayable"
+    "stateMutability": "view"
   },
   {
     "type": "function",

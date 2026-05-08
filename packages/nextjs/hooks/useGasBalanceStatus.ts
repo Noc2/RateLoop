@@ -73,7 +73,7 @@ export function useGasBalanceStatus(options: GasBalanceStatusOptions = {}) {
 
   return useMemo(() => {
     const nativeBalanceValue = nativeBalance?.value ?? 0n;
-    const nativeTokenSymbol = chain?.nativeCurrency?.symbol ?? "CELO";
+    const nativeTokenSymbol = chain?.nativeCurrency?.symbol ?? "ETH";
     const hasResolvedNativeBalance = Boolean(address) && !nativeBalanceLoading && nativeBalance !== undefined;
     const expectsThirdwebGasMode = shouldExpectThirdwebGasMode({
       chainId: resolvedChainId,

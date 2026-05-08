@@ -1,6 +1,6 @@
 {
   "clientRequestId": "local-context-check-demo",
-  "chainId": 42220,
+  "chainId": 480,
   "templateId": "generic_rating",
   "maxPaymentAmount": "1000000",
   "bounty": {

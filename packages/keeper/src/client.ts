@@ -6,7 +6,7 @@ import { getKeystoreAccount } from "./keystore.js";
 export const chain = defineChain({
   id: config.chainId,
   name: config.chainName,
-  nativeCurrency: { name: "CELO", symbol: "CELO", decimals: 18 },
+  nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
   rpcUrls: {
     default: { http: [config.rpcUrl] },
   },

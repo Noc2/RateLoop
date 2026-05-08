@@ -2,6 +2,12 @@
 
 Planning date: 2026-05-07
 
+> 2026-05-08 update: the live repo now targets World Chain mainnet (`480`) and
+> World Chain Sepolia (`4801`), with optional World ID credentials replacing the
+> earlier optional Self.xyz direction. Older Celo/Self references below are
+> retained as implementation history unless a later checklist item explicitly
+> says otherwise.
+
 ## Goal
 
 RateLoop should be a fresh deployment of the protocol, not a legacy-compatible
@@ -19,7 +25,7 @@ The product direction is:
   signal or badge.
 - Day-one decentralized governance using a genesis distribution to previous
   legacy CREP/HREP snapshot participants.
-- Continue on Celo for now, with Celo Sepolia as the testnet path.
+- Continue on Celo for now, with World Chain Sepolia as the testnet path.
 - Transferable capped Loop Reputation token (`LREP`) for governance,
   prediction locks, frontend staking, and long-term protocol ownership.
 - Use `LREP` as the working implementation label unless governance changes
@@ -79,16 +85,16 @@ on-chain patterns:
   payout eligibility from day one.
 - Celo remains a practical launch target because the existing Curyo codebase,
   deployment scripts, sponsored transaction work, and USDC bounty paths already
-  support it. The official Celo network docs list Celo mainnet chain ID `42220`
-  and Celo Sepolia chain ID `11142220`.
-- Celo Sepolia is the current developer testnet path and replaces the older
-  Alfajores-centric workflow. Existing Curyo assumptions around Celo Sepolia
+  support it. The official Celo network docs list World Chain mainnet chain ID `42220`
+  and World Chain Sepolia chain ID `11142220`.
+- World Chain Sepolia is the current developer testnet path and replaces the older
+  Alfajores-centric workflow. Existing Curyo assumptions around World Chain Sepolia
   should be kept, while old Alfajores references should be removed.
 - OpenZeppelin's governance guide recommends timestamp-based governance on L2s
   where block timing can be inconsistent; the Governor automatically follows the
   token's ERC-6372 clock.
-- Circle lists native USDC on Celo mainnet at
-  `0xcebA9300f2b948710d2653dD7B07f33A8B32118C` and Celo Sepolia USDC at
+- Circle lists native USDC on World Chain mainnet at
+  `0xcebA9300f2b948710d2653dD7B07f33A8B32118C` and World Chain Sepolia USDC at
   `0x01C5C0122039549AD1493B8220cABEdD739BC44E`.
 - A winner/loser LREP lock model is economically closer to a parimutuel
   prediction mechanism than an inflationary reputation model: accurate
@@ -119,9 +125,9 @@ Sources:
   https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A32023R1114
 - Celo network information:
   https://docs.celo.org/network
-- Celo Sepolia testnet:
+- World Chain Sepolia testnet:
   https://docs.celo.org/network/celo-sepolia
-- USDC on Celo:
+- USDC on World Chain:
   https://www.circle.com/multi-chain-usdc/celo
 - Circle USDC contract addresses:
   https://developers.circle.com/stablecoins/usdc-contract-addresses
@@ -165,16 +171,16 @@ RateLoop should stay on Celo for now.
 Launch network defaults:
 
 - Mainnet: Celo, chain ID `42220`, CELO gas.
-- Testnet: Celo Sepolia, chain ID `11142220`, CELO gas.
+- Testnet: World Chain Sepolia, chain ID `11142220`, CELO gas.
 - Mainnet USDC: `0xcebA9300f2b948710d2653dD7B07f33A8B32118C`.
-- Celo Sepolia USDC: `0x01C5C0122039549AD1493B8220cABEdD739BC44E`.
+- World Chain Sepolia USDC: `0x01C5C0122039549AD1493B8220cABEdD739BC44E`.
 - Production RPC should use a paid/provider endpoint or self-hosted node. Celo's
   public Forno RPC endpoints are useful for defaults and tests, not production
   throughput.
 
 Implementation implications:
 
-- Keep Celo and Celo Sepolia chain constants across Foundry deployment scripts,
+- Keep Celo and World Chain Sepolia chain constants across Foundry deployment scripts,
   Wagmi/thirdweb config, Ponder config, keeper config, SDK runtime helpers,
   docs, and environment examples.
 - Keep the existing Celo environment variables unless there is a narrow reason
@@ -185,7 +191,7 @@ Implementation implications:
 - Keep block explorer links on CeloScan, Celo Explorer, or Celo Blockscout
   consistently.
 - Audit every chain ID and USDC-address constant before deployment to remove
-  stale Alfajores values and ensure Celo Sepolia is the only testnet path.
+  stale Alfajores values and ensure World Chain Sepolia is the only testnet path.
 
 ## Resolved Pre-Implementation Decisions
 
@@ -521,7 +527,7 @@ Snapshot rule:
   or another governance-controlled reserve by the published claim rules.
 - If the snapshot total exceeds `52,000,000 LREP`, deployment must stop; do not
   silently scale claims down.
-- Recommended claim window: 12 months from Celo mainnet deployment. This is
+- Recommended claim window: 12 months from World Chain mainnet deployment. This is
   long enough for prior holders to notice, but still gives governance a clear
   date when unclaimed LREP can be swept.
 - The claim UI should show the snapshot source and Merkle proof; it should not
@@ -1334,7 +1340,7 @@ Keep `packages/agents`, but make it a first-class RateLoop package:
 6. Delete legacy deployment artifacts from the canonical branch.
 7. Import the existing HREP/legacy CREP snapshot artifact and document its
    provenance.
-8. Keep chain defaults and environment examples on Celo/Celo Sepolia.
+8. Keep chain defaults and environment examples on Celo/World Chain Sepolia.
 9. Keep old Curyo commit history if practical, but do not keep old deployment
    state as live deployment state.
 
@@ -1454,7 +1460,7 @@ Exit criteria:
 
 ### Phase 6: Testnet Launch Hardening
 
-1. Deploy to Celo Sepolia with fresh contracts and governance/timelock active.
+1. Deploy to World Chain Sepolia with fresh contracts and governance/timelock active.
 2. Run a capped calibration-only period.
 3. Enable small USDC bounties after telemetry confirms reveal reliability.
 4. Add monitoring for clusters, correlated reveals, missed reveals, payout
@@ -1475,7 +1481,7 @@ Exit criteria:
 1. Publish the imported legacy CREP/HREP snapshot, Merkle root, provenance, and review
    scripts.
 2. Deploy `LoopReputation`, Merkle distributor, Governor, Timelock, and core
-   protocol contracts to Celo mainnet.
+   protocol contracts to World Chain mainnet.
 3. Transfer all protocol roles and ProxyAdmin ownership to the timelock.
 4. Renounce deployer setup roles after verification.
 5. Open genesis claims and delegation.
@@ -1492,7 +1498,7 @@ Exit criteria:
 
 1. `repo-bootstrap`: point the repo at `https://github.com/Noc2/RateLoop`,
    import old Curyo code, copy the Hawig hero/logo assets, import the existing
-   HREP/legacy CREP snapshot, keep Celo defaults, rename live package metadata
+   HREP/legacy CREP snapshot, keep World Chain defaults, rename live package metadata
    toward `@rateloop/*`, and keep the app running.
 2. `optional-identity-remove-faucet`: remove faucet paths and make Self optional
    rather than required in packages, UI, routes, and deploy wiring.
@@ -1518,8 +1524,8 @@ Exit criteria:
 
 These are launch defaults, not permanent constants:
 
-- Chain: Celo mainnet (`42220`), Celo Sepolia (`11142220`) for testnet.
-- USDC: Circle native USDC on Celo,
+- Chain: World Chain mainnet (`42220`), World Chain Sepolia (`11142220`) for testnet.
+- USDC: Circle native USDC on World Chain,
   `0xcebA9300f2b948710d2653dD7B07f33A8B32118C` mainnet and
   `0x01C5C0122039549AD1493B8220cABEdD739BC44E` testnet.
 - Rating scale: `1000-9900` BPS, displayed as `1.0-9.9 / 10`.
@@ -1716,7 +1722,7 @@ The MVP is done when:
 - Frontend operators can earn the default 3% share on bounty and feedback
   payouts only after staking LREP.
 - The app preserves sponsored transaction support with a self-funded fallback.
-- Contracts, app, indexer, SDK, and keeper are configured for Celo/Celo Sepolia.
+- Contracts, app, indexer, SDK, and keeper are configured for Celo/World Chain Sepolia.
 - The frontend uses the Hawig-derived RateLoop hero/logo system while preserving
   old Curyo's usable feed/rating surfaces where they fit the new prediction
   mechanics.

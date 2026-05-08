@@ -40,7 +40,7 @@ import {
 import { thirdwebClient } from "~~/services/thirdweb/client";
 import { notification } from "~~/utils/scaffold-eth";
 
-const CELO_MAINNET_CHAIN_ID = 42220;
+const WORLD_CHAIN_MAINNET_CHAIN_ID = 480;
 const DEFAULT_FUNDING_AMOUNT_USDC = "10";
 const DEFAULT_PER_ASK_CAP_ATOMIC = 2_000_000n;
 const DEFAULT_AGENT_SCOPES = ["curyo:ask", "curyo:read", "curyo:quote", "curyo:balance"];
@@ -227,15 +227,15 @@ export function AgentSubmissionPanel() {
   const walletDirectReady = Boolean(agentWalletAddress && escrowAddress && usdcAddress && fundingReady);
   const ready = policyControlsEnabled ? managedReady : walletDirectReady;
   const canUseThirdwebFunding = Boolean(
-    thirdwebClient && agentWalletAddress && usdcAddress && targetNetwork.id === CELO_MAINNET_CHAIN_ID,
+    thirdwebClient && agentWalletAddress && usdcAddress && targetNetwork.id === WORLD_CHAIN_MAINNET_CHAIN_ID,
   );
   const fundingUnavailableMessage = !agentWalletAddress
     ? "Enter a valid agent wallet before funding it here."
     : !thirdwebClient
       ? "Direct funding appears after thirdweb is configured for this deployment."
-      : targetNetwork.id === CELO_MAINNET_CHAIN_ID
-        ? "Celo USDC is not configured for this network."
-        : "Switch to Celo mainnet to buy Celo USDC here. On local networks, use the faucet from your wallet menu.";
+      : targetNetwork.id === WORLD_CHAIN_MAINNET_CHAIN_ID
+        ? "World Chain USDC is not configured for this network."
+        : "Switch to World Chain mainnet to buy World Chain USDC here. On local networks, use the faucet from your wallet menu.";
   const dashboardMode = Boolean(selectedPolicy && !isSetupMode);
   const activeSetupStepOrder: readonly AgentSetupStep[] = policyControlsEnabled
     ? MANAGED_SETUP_STEP_ORDER
@@ -323,7 +323,7 @@ export function AgentSubmissionPanel() {
       return;
     }
     if (!usdcAddress) {
-      notification.error("Celo USDC is not configured for this network.");
+      notification.error("World Chain USDC is not configured for this network.");
       return;
     }
     const amount = parseSubmissionRewardAmount(transferAmount);
@@ -530,8 +530,8 @@ export function AgentSubmissionPanel() {
   const publicSigningIntentUrl = `${publicAgentHttpUrl}/signing-intents`;
   const localSignerSnippet = [
     "export CURYO_API_BASE_URL=" + publicAgentOrigin,
-    "export CURYO_RPC_URL=https://forno.celo.org",
-    "export CURYO_CHAIN_ID=42220",
+    "export CURYO_RPC_URL=https://worldchain-mainnet.g.alchemy.com/public",
+    "export CURYO_CHAIN_ID=480",
     "export CURYO_LOCAL_SIGNER_KEYSTORE_PATH=$HOME/.curyo/local-signer.json",
     "yarn workspace @rateloop/agents wallet --generate",
     "yarn workspace @rateloop/agents local-ask --file ./ask.json",
@@ -902,7 +902,7 @@ export function AgentSubmissionPanel() {
               </div>
               <div className="mt-4 grid gap-3">
                 <div className="rounded-lg border border-base-300 bg-base-100/50 p-4">
-                  <p className="text-sm text-base-content/60">Celo USDC</p>
+                  <p className="text-sm text-base-content/60">World Chain USDC</p>
                   <p className="mt-1 text-xl font-semibold">{formatUsdc(balance)}</p>
                   <p className="mt-1 text-sm text-base-content/55">
                     Required per ask: {formatUsdc(requiredPerAskFunding)}
@@ -1061,7 +1061,8 @@ export function AgentSubmissionPanel() {
             <div className="rounded-lg border border-base-300 bg-base-100/50 p-4">
               <h4 className="text-sm font-semibold">Local signer CLI</h4>
               <p className="mt-2 text-sm leading-relaxed text-base-content/60">
-                Generate an encrypted local signer, paste its public address here, fund it with Celo USDC, then run
+                Generate an encrypted local signer, paste its public address here, fund it with World Chain USDC, then
+                run
                 <span className="font-mono"> local-ask</span>.
               </p>
               <button type="button" className="btn btn-outline btn-xs mt-3" onClick={() => setActiveSetupStep("fund")}>
@@ -1181,13 +1182,13 @@ export function AgentSubmissionPanel() {
                   buttonLabel="Add USDC"
                   chain={thirdwebTargetChain}
                   client={thirdwebClient}
-                  description="Fund this agent wallet with Celo USDC."
+                  description="Fund this agent wallet with World Chain USDC."
                   onSuccess={() => void refetchBalance()}
                   presetOptions={[5, 10, 20]}
                   receiverAddress={agentWalletAddress}
                   showThirdwebBranding={false}
                   theme="dark"
-                  title="Add Celo USDC"
+                  title="Add World Chain USDC"
                   tokenAddress={usdcAddress}
                   tokenEditable={false}
                 />

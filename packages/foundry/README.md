@@ -27,9 +27,9 @@ yarn foundry:test # Run test suite
 | `yarn account:generate` | Create a new keystore account                           |
 | `yarn account:import`   | Import an existing account into keystore                |
 
-On Celo and Celo Sepolia, deploys use a Foundry keystore selected via `--keystore <name>` and skip Forge's
+On World Chain mainnet and World Chain Sepolia, deploys use a Foundry keystore selected via `--keystore <name>` and skip Forge's
 auto-verification flow. Verify those contracts manually with
-`make verify-blockscout NETWORK=<celo|celoSepolia> CONTRACT_ADDRESS=0x... CONTRACT_NAME=MyContract`.
+`make verify-blockscout NETWORK=<worldchain|worldchainSepolia> CONTRACT_ADDRESS=0x... CONTRACT_NAME=MyContract`.
 
 ## Configuration
 
@@ -58,7 +58,6 @@ contracts/
 ├── FrontendRegistry.sol         # Frontend operator fee tracking
 ├── VoterIdNFT.sol               # Soulbound NFT for verified voters
 ├── HumanReputation.sol          # HREP token (staking & reputation)
-├── HumanFaucet.sol              # Passport-verified faucet for HREP + Voter ID
 ├── ParticipationPool.sol        # Halving-tier HREP Bootstrap Pool rewards
 ├── QuestionRewardPoolEscrow.sol     # Bounty custody and claims
 ├── governance/                  # Governor contracts
@@ -69,8 +68,7 @@ contracts/
 test/                            # Foundry test suite
 script/
 ├── Deploy.s.sol                 # Main deployment entry point
-├── DeployCuryo.s.sol            # Core deployment logic
-└── VerifyAll.s.sol              # Batch contract verification
+└── DeployHelpers.s.sol          # Shared deployment helpers
 
 scripts-js/                      # JS helpers for deployment & account management
 ```
@@ -79,15 +77,9 @@ scripts-js/                      # JS helpers for deployment & account managemen
 
 The upgradeable control-plane contracts are deployed behind **transparent upgradeable proxies** and use
 `AccessControlUpgradeable` for role-based permissions: `ContentRegistry`, `RoundVotingEngine`,
-`RoundRewardDistributor`, `ProtocolConfig`, `FrontendRegistry`, and `ProfileRegistry`. Token, identity, faucet,
+`RoundRewardDistributor`, `ProtocolConfig`, `FrontendRegistry`, and `ProfileRegistry`. Token, identity,
 participation, governance, and helper contracts are intentionally non-upgradeable. For upgradeable implementation
 contracts, storage layout must be preserved across upgrades — never reorder, remove, or change types of existing
 storage variables.
-
-Human faucet coverage includes direct callback simulation for hook-level cases and the bytes-based `verifySelfProof`
-entrypoint via the mock Self hub. The mock proof path now enforces the same bound user-context hash shape used by the
-real hub. Before a live Celo redeploy, still run at least one environment-level proof against the real Self hub/config
-for the new faucet address and scope. Faucet config updates should always use a hub-created config ID; the contract now
-rejects zero and unknown config IDs before storing them.
 
 Compiled ABIs and deployed addresses are generated into `packages/contracts/src/` and consumed via the `@rateloop/contracts` workspace package.

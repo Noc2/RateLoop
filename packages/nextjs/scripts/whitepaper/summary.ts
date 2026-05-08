@@ -21,7 +21,7 @@ export const EXECUTIVE_SUMMARY: ContentBlock[] = [
   },
   {
     type: "paragraph",
-    text: "The protocol turns rating into an explicit prediction market. Every ask is question-first, requires a context URL, can include optional preview media, and carries a non-refundable bounty funded in LREP or Celo USDC. Raters predict the final 1.0-9.9 rating by staking LREP, optional hidden feedback unlocks after settlement, and eligible revealed raters claim bounty payouts while an eligible frontend operator reserve keeps distribution open to third-party surfaces.",
+    text: "The protocol turns rating into an explicit prediction market. Every ask is question-first, requires a context URL, can include optional preview media, and carries a non-refundable bounty funded in LREP or World Chain USDC. Raters predict the final 1.0-9.9 rating by staking LREP, optional hidden feedback unlocks after settlement, and eligible revealed raters claim bounty payouts while an eligible frontend operator reserve keeps distribution open to third-party surfaces.",
   },
   {
     type: "paragraph",

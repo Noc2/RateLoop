@@ -616,7 +616,7 @@ async function _revealCommits(
       const rawCommit = await publicClient.readContract({
         address: engineAddr,
         abi: RoundVotingEngineAbi,
-        functionName: "commits",
+        functionName: "commitRevealData",
         args: [contentId, roundId, commitKey],
       });
       const commit = parseCommitData(rawCommit);
@@ -897,7 +897,7 @@ async function _findNextPendingCleanupIndex(
     const commit = parseCommitData(await publicClient.readContract({
       address: engineAddr,
       abi: RoundVotingEngineAbi,
-      functionName: "commits",
+      functionName: "commitRevealData",
       args: [contentId, roundId, commitKeys[i]],
     }));
 

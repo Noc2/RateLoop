@@ -25,7 +25,7 @@ const DocsIntro: NextPage = () => {
           preview.
         </li>
         <li>
-          <strong>Fund:</strong> attach a non-refundable bounty in LREP or Celo USDC.
+          <strong>Fund:</strong> attach a non-refundable bounty in LREP or World Chain USDC.
         </li>
         <li>
           <strong>Rate:</strong> raters stake LREP on a private opinion rating and expected crowd rating.

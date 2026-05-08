@@ -7,7 +7,7 @@ import { IVoterIdNFT } from "./interfaces/IVoterIdNFT.sol";
 
 /// @title VoterIdNFT
 /// @notice Soulbound (non-transferable) ERC721 NFT representing a verified human identity
-/// @dev Minted by HumanFaucet upon successful Self.xyz verification. Token ID 0 is reserved (indicates no Voter ID).
+/// @dev Minted by governance-approved identity issuers. Token ID 0 is reserved (indicates no Voter ID).
 contract VoterIdNFT is ERC721, Ownable, IVoterIdNFT {
     // ====================================================
     // Constants
@@ -16,7 +16,7 @@ contract VoterIdNFT is ERC721, Ownable, IVoterIdNFT {
     /// @notice Maximum stake per Voter ID per content per epoch (100 HREP with 6 decimals)
     uint256 public constant MAX_STAKE_PER_VOTER = 100e6;
 
-    /// @notice Maximum supply of Voter IDs; matches the 52M HREP faucet's no-referral claimant capacity.
+    /// @notice Maximum supply of Voter IDs.
     uint256 public constant MAX_SUPPLY = 41_110_000;
 
     // ====================================================
@@ -41,7 +41,7 @@ contract VoterIdNFT is ERC721, Ownable, IVoterIdNFT {
     /// @notice Mapping from token ID to the nullifier used to mint it
     mapping(uint256 => uint256) private _tokenIdToNullifier;
 
-    /// @notice Current active token ID for a Self.xyz nullifier
+    /// @notice Current active token ID for an identity nullifier
     mapping(uint256 => uint256) private _nullifierToTokenId;
 
     /// @notice Whether a token ID has a recorded nullifier snapshot
@@ -53,7 +53,7 @@ contract VoterIdNFT is ERC721, Ownable, IVoterIdNFT {
     /// @notice Stake tracking per identity nullifier: contentId => epochId => nullifier => stakedAmount
     mapping(uint256 => mapping(uint256 => mapping(uint256 => uint256))) private _nullifierEpochContentStake;
 
-    /// @notice Authorized minters (e.g., HumanFaucet, WorldIdFaucet)
+    /// @notice Authorized identity minters
     mapping(address => bool) public authorizedMinters;
 
     /// @notice Authorized stake recorder (RoundVotingEngine)
@@ -141,7 +141,7 @@ contract VoterIdNFT is ERC721, Ownable, IVoterIdNFT {
     // Admin Functions
     // ====================================================
 
-    /// @notice Add an authorized minter (e.g., HumanFaucet)
+    /// @notice Add an authorized identity minter
     /// @param _minter The minter address to authorize
     function addMinter(address _minter) external onlyOwner {
         if (_minter == address(0)) revert InvalidAddress();
@@ -238,12 +238,12 @@ contract VoterIdNFT is ERC721, Ownable, IVoterIdNFT {
     // ====================================================
 
     /// @notice Mint a new Voter ID NFT
-    /// @dev Supply is bounded by unique passport nullifiers from Self.xyz (one per real human)
+    /// @dev Supply is bounded by unique identity nullifiers
     ///      plus an on-chain MAX_SUPPLY cap as defense-in-depth. If the recipient was
     ///      previously assigned as someone else's delegate, direct ownership wins and the
     ///      inbound delegation is cleared before minting.
     /// @param to The address to mint to
-    /// @param nullifier The passport nullifier from Self.xyz
+    /// @param nullifier The identity nullifier
     /// @return tokenId The minted token ID
     function mint(address to, uint256 nullifier) external override returns (uint256 tokenId) {
         if (!authorizedMinters[msg.sender]) revert OnlyMinter();
@@ -327,7 +327,7 @@ contract VoterIdNFT is ERC721, Ownable, IVoterIdNFT {
         return _tokenIdHasNullifier[tokenId] ? _tokenIdToNullifier[tokenId] : 0;
     }
 
-    /// @notice Return the currently active token ID for a Self.xyz nullifier.
+    /// @notice Return the currently active token ID for an identity nullifier.
     function getTokenIdForNullifier(uint256 nullifier) external view override returns (uint256 tokenId) {
         tokenId = _nullifierToTokenId[nullifier];
         return tokenIdToHolder[tokenId] == address(0) ? 0 : tokenId;

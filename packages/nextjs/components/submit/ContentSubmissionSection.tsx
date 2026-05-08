@@ -60,7 +60,6 @@ import {
   MAX_REWARD_POOL_SETTLED_ROUNDS,
   MIN_REWARD_POOL_REQUIRED_VOTERS,
   MIN_REWARD_POOL_SETTLED_ROUNDS,
-  QUESTION_REWARD_POOL_ESCROW_WIRING_ABI,
   QUESTION_SUBMISSION_ABI,
   SUBMISSION_REWARD_ASSET_HREP,
   SUBMISSION_REWARD_ASSET_USDC,
@@ -1286,79 +1285,40 @@ export function ContentSubmissionSection() {
 
     let verifiedRewardTokenAddress = rewardTokenAddress;
     try {
-      const [
-        escrowWiring,
-        activeRewardEscrowAddress,
-        registryHrepAddress,
-        registryVoterIdNftAddress,
-        registryVotingEngineAddress,
-      ] = (await Promise.all([
-        readContract(wagmiConfig, {
-          address: rewardEscrowAddress,
-          abi: QUESTION_REWARD_POOL_ESCROW_WIRING_ABI,
-          functionName: "getWiring",
-        }) as Promise<readonly [`0x${string}`, `0x${string}`, `0x${string}`, `0x${string}`, `0x${string}`]>,
-        readContract(wagmiConfig, {
-          address: registryAddress,
-          abi: QUESTION_SUBMISSION_ABI,
-          functionName: "questionRewardPoolEscrow",
-        }) as Promise<`0x${string}`>,
-        readContract(wagmiConfig, {
-          address: registryAddress,
-          abi: QUESTION_SUBMISSION_ABI,
-          functionName: "hrepToken",
-        }) as Promise<`0x${string}`>,
-        readContract(wagmiConfig, {
-          address: registryAddress,
-          abi: QUESTION_SUBMISSION_ABI,
-          functionName: "voterIdNFT",
-        }) as Promise<`0x${string}`>,
-        readContract(wagmiConfig, {
-          address: registryAddress,
-          abi: QUESTION_SUBMISSION_ABI,
-          functionName: "votingEngine",
-        }) as Promise<`0x${string}`>,
-      ])) as readonly [
-        readonly [`0x${string}`, `0x${string}`, `0x${string}`, `0x${string}`, `0x${string}`],
-        `0x${string}`,
-        `0x${string}`,
-        `0x${string}`,
-        `0x${string}`,
-      ];
-      const [
-        wiredHrepAddress,
-        wiredUsdcAddress,
-        wiredRegistryAddress,
-        wiredVotingEngineAddress,
-        wiredVoterIdNftAddress,
-      ] = escrowWiring;
+      const [activeRewardEscrowAddress, registryHrepAddress, registryVoterIdNftAddress, registryVotingEngineAddress] =
+        (await Promise.all([
+          readContract(wagmiConfig, {
+            address: registryAddress,
+            abi: QUESTION_SUBMISSION_ABI,
+            functionName: "questionRewardPoolEscrow",
+          }) as Promise<`0x${string}`>,
+          readContract(wagmiConfig, {
+            address: registryAddress,
+            abi: QUESTION_SUBMISSION_ABI,
+            functionName: "hrepToken",
+          }) as Promise<`0x${string}`>,
+          readContract(wagmiConfig, {
+            address: registryAddress,
+            abi: QUESTION_SUBMISSION_ABI,
+            functionName: "voterIdNFT",
+          }) as Promise<`0x${string}`>,
+          readContract(wagmiConfig, {
+            address: registryAddress,
+            abi: QUESTION_SUBMISSION_ABI,
+            functionName: "votingEngine",
+          }) as Promise<`0x${string}`>,
+        ])) as readonly [`0x${string}`, `0x${string}`, `0x${string}`, `0x${string}`];
 
       if (activeRewardEscrowAddress.toLowerCase() !== rewardEscrowAddress.toLowerCase()) {
         notification.error("Bounty escrow is not active for this registry.");
-        return;
-      }
-      if (wiredRegistryAddress.toLowerCase() !== registryAddress.toLowerCase()) {
-        notification.error("Bounty escrow registry does not match this network.");
-        return;
-      }
-      if (wiredVotingEngineAddress.toLowerCase() !== registryVotingEngineAddress.toLowerCase()) {
-        notification.error("Bounty escrow voting engine does not match this registry.");
         return;
       }
       if (registryHrepAddress.toLowerCase() !== hrepAddress.toLowerCase()) {
         notification.error("Configured HREP token does not match this registry.");
         return;
       }
-      if (wiredHrepAddress.toLowerCase() !== registryHrepAddress.toLowerCase()) {
-        notification.error("Bounty escrow HREP token does not match this network.");
-        return;
-      }
-      if (rewardAsset === "usdc" && wiredUsdcAddress.toLowerCase() !== rewardTokenAddress.toLowerCase()) {
-        notification.error("Bounty escrow USDC token does not match this network.");
-        return;
-      }
-      if (wiredVoterIdNftAddress.toLowerCase() !== registryVoterIdNftAddress.toLowerCase()) {
-        notification.error("Bounty escrow Voter ID does not match this registry.");
+      if (!registryVotingEngineAddress || !registryVoterIdNftAddress) {
+        notification.error("Bounty registry wiring is incomplete for this network.");
         return;
       }
 

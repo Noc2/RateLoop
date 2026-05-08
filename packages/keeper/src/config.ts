@@ -7,8 +7,8 @@ loadDotenv();
 
 const CHAIN_NAMES: Record<number, string> = {
   31337: "Foundry",
-  11142220: "Celo Sepolia",
-  42220: "Celo",
+  4801: "World Chain Sepolia",
+  480: "World Chain",
 };
 
 const LOCAL_HARDHAT_CHAIN_ID = 31337;
@@ -278,7 +278,7 @@ function loadConfig() {
 
     // Tuning
     dormancyPeriod: readPositiveBigIntEnv("DORMANCY_PERIOD", String(30 * 24 * 60 * 60), errors),
-    minGasBalanceWei: readNonNegativeBigIntStringEnv("MIN_GAS_BALANCE_WEI", "10000000000000000", errors), // 0.01 CELO
+    minGasBalanceWei: readNonNegativeBigIntStringEnv("MIN_GAS_BALANCE_WEI", "10000000000000000", errors), // 0.01 ETH
     maxGasPerTx: readPositiveIntEnv("MAX_GAS_PER_TX", "2000000", errors),
 
     // Monitoring

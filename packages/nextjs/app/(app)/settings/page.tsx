@@ -10,13 +10,14 @@ import { AppPageShell } from "~~/components/shared/AppPageShell";
 import { SETTINGS_FRONTEND_HASH, SETTINGS_ROUTE } from "~~/constants/routes";
 import { replaceUrlPreservingHistoryState } from "~~/lib/ui/browserHistory";
 
-type SettingsTab = "delegation" | "notifications" | "wallet" | typeof SETTINGS_FRONTEND_HASH;
+type SettingsTab = "delegation" | "identity" | "notifications" | "wallet" | typeof SETTINGS_FRONTEND_HASH;
 
-const settingsTabs: SettingsTab[] = ["wallet", "notifications", "delegation", SETTINGS_FRONTEND_HASH];
+const settingsTabs: SettingsTab[] = ["wallet", "identity", "notifications", "delegation", SETTINGS_FRONTEND_HASH];
 
 const SETTINGS_TAB_LABELS: Record<SettingsTab, string> = {
   delegation: "Delegation",
   frontend: "Frontend",
+  identity: "Identity",
   notifications: "Notifications",
   wallet: "Wallet",
 };
@@ -42,6 +43,10 @@ const DelegationSection = dynamic(
 );
 const WalletSettingsPanel = dynamic(
   () => import("~~/components/settings/WalletSettingsPanel").then(mod => mod.WalletSettingsPanel),
+  { loading: SettingsSectionLoading },
+);
+const WorldIdVerificationCard = dynamic(
+  () => import("~~/components/settings/WorldIdVerificationCard").then(mod => mod.WorldIdVerificationCard),
   { loading: SettingsSectionLoading },
 );
 
@@ -125,6 +130,7 @@ function SettingsPageInner() {
 
       {activeTab === "delegation" && <DelegationSection />}
       {activeTab === SETTINGS_FRONTEND_HASH && <FrontendRegistration />}
+      {activeTab === "identity" && <WorldIdVerificationCard address={address} />}
       {activeTab === "notifications" && <NotificationSettingsPanel address={address} />}
       {activeTab === "wallet" && <WalletSettingsPanel address={address} />}
     </AppPageShell>

@@ -3,32 +3,32 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import * as chains from "viem/chains";
 
-test("Celo Sepolia uses CELO as the native token symbol", () => {
-  assert.equal(AVAILABLE_TARGET_NETWORKS[chains.celoSepolia.id].nativeCurrency.symbol, "CELO");
+test("World Chain Sepolia uses ETH as the native token symbol", () => {
+  assert.equal(AVAILABLE_TARGET_NETWORKS[chains.worldchainSepolia.id].nativeCurrency.symbol, "ETH");
 
-  const [network] = resolveTargetNetworks(`${chains.celoSepolia.id}`, {
+  const [network] = resolveTargetNetworks(`${chains.worldchainSepolia.id}`, {
     production: false,
   });
 
-  assert.equal(network.nativeCurrency.symbol, "CELO");
+  assert.equal(network.nativeCurrency.symbol, "ETH");
 });
 
 test("production builds can explicitly opt into the local Foundry chain", () => {
-  const networks = resolveTargetNetworks(`${chains.foundry.id},${chains.celoSepolia.id}`, {
+  const networks = resolveTargetNetworks(`${chains.foundry.id},${chains.worldchainSepolia.id}`, {
     allowFoundryInProduction: true,
     production: true,
   });
 
   assert.deepEqual(
     networks.map(network => network.id),
-    [chains.foundry.id, chains.celoSepolia.id],
+    [chains.foundry.id, chains.worldchainSepolia.id],
   );
 });
 
 test("target network parsing rejects chain IDs with non-numeric suffixes", () => {
   assert.throws(
     () =>
-      resolveTargetNetworks(`${chains.celo.id}abc`, {
+      resolveTargetNetworks(`${chains.worldchain.id}abc`, {
         production: true,
       }),
     /comma-separated list of numeric chain IDs/,
@@ -36,12 +36,12 @@ test("target network parsing rejects chain IDs with non-numeric suffixes", () =>
 });
 
 test("configured RPC overrides become the preferred browser transport for target chains", () => {
-  const [network] = resolveTargetNetworks(`${chains.celoSepolia.id}`, {
+  const [network] = resolveTargetNetworks(`${chains.worldchainSepolia.id}`, {
     production: false,
     rpcOverrides: {
-      [chains.celoSepolia.id]: "https://11142220.rpc.thirdweb.com/client-id",
+      [chains.worldchainSepolia.id]: "https://4801.rpc.thirdweb.com/client-id",
     },
   });
 
-  assert.equal(network.rpcUrls.default.http[0], "https://11142220.rpc.thirdweb.com/client-id");
+  assert.equal(network.rpcUrls.default.http[0], "https://4801.rpc.thirdweb.com/client-id");
 });

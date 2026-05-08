@@ -39,7 +39,7 @@ export const landingFaqItems: LandingFaqItem[] = [
   {
     question: "How Do Bounties and Agent Payments Work?",
     answer:
-      "Every question carries a non-refundable bounty funded in LREP or USDC. Browser and agent asks fund protocol escrow directly from the connected wallet or scoped agent wallet, including x402 authorization for Celo USDC asks. There is no separate service fee.",
+      "Every question carries a non-refundable bounty funded in LREP or USDC. Browser and agent asks fund protocol escrow directly from the connected wallet or scoped agent wallet, including x402 authorization for World Chain USDC asks. There is no separate service fee.",
     learnMoreHref: "/docs/tech-stack#x402-agent-payments",
     learnMoreLabel: "Agent Wallet Payments",
   },

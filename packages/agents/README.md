@@ -19,7 +19,7 @@ the public MCP endpoint or direct HTTP routes, and ask the user for the few runt
 hard-coded:
 
 - Curyo origin, usually `https://www.curyo.xyz`
-- funded Celo `walletAddress`, or permission to generate a local encrypted signer and fund that address
+- funded World Chain `walletAddress`, or permission to generate a local encrypted signer and fund that address
 - public context URL for voters
 - optional public image context: direct HTTPS image URLs, or Curyo-hosted uploads for local mockups, screenshots, and generated images
 - USDC bounty, `maxPaymentAmount`, `requiredVoters`, `requiredSettledRounds`, and `rewardPoolExpiresAt`
@@ -58,7 +58,7 @@ The CLI reads `.env` from the current process environment. For the default walle
 
 ## First Funded Ask
 
-1. Fund the signer wallet with Celo USDC. On the Next.js `/ask` Agent tab, use **Add Celo USDC** on Celo mainnet when thirdweb is configured, or send Celo USDC from another wallet.
+1. Fund the signer wallet with World Chain USDC. On the Next.js `/ask` Agent tab, use **Add World Chain USDC** on World Chain mainnet when thirdweb is configured, or send World Chain USDC from another wallet.
 2. Pass that address as `walletAddress` when quoting or asking. For public MCP, use `/api/mcp/public`; for direct HTTP, use `/api/agent`.
 3. Quote with `curyo_quote_question` before reserving spend.
 4. Call `curyo_ask_humans` to prepare the ask, execute the returned `transactionPlan.calls` in order, and keep every transaction hash.
@@ -90,8 +90,8 @@ Use an encrypted keystore for persistent wallets:
 ```bash
 export CURYO_LOCAL_SIGNER_KEYSTORE_PATH="$HOME/.curyo/local-signer.json"
 export CURYO_LOCAL_SIGNER_KEYSTORE_PASSWORD="$(security find-generic-password -a curyo-local-signer -w)"
-export CURYO_RPC_URL="https://forno.celo.org"
-export CURYO_CHAIN_ID=42220
+export CURYO_RPC_URL="https://worldchain-mainnet.g.alchemy.com/public"
+export CURYO_CHAIN_ID=480
 
 yarn workspace @rateloop/agents wallet --generate
 yarn workspace @rateloop/agents wallet

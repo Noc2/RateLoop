@@ -152,7 +152,7 @@ test.describe("Keeper-backed settlement lifecycle", () => {
       const commit = await publicClient.readContract({
         address: VOTING_ENGINE,
         abi: RoundVotingEngineAbi,
-        functionName: "commits",
+        functionName: "commitRevealData",
         args: [BigInt(contentId!), roundId, commitKey],
       });
 
@@ -160,8 +160,8 @@ test.describe("Keeper-backed settlement lifecycle", () => {
         keeperDecryptWaitMs,
         deriveKeeperDecryptWaitMs({
           wallClockNowSeconds: Math.floor(Date.now() / 1000),
-          revealableAfterSeconds: commit[6],
-          targetRound: commit[3],
+          revealableAfterSeconds: commit[3],
+          targetRound: commit[1],
           drandGenesisTimeSeconds: drandGenesisTime,
           drandPeriodSeconds: drandPeriod,
           keeperIntervalMs: KEEPER_INTERVAL_MS,

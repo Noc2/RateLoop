@@ -48,11 +48,11 @@ test("resolveRoundVoteRuntime anchors tlock timing to the pending block timestam
     blockCalls.map(call => call.blockTag),
     ["latest", "pending"],
   );
-  assert.equal(readCalls.length, 4);
-  for (const call of readCalls.slice(0, 2)) {
+  assert.equal(readCalls.length, 5);
+  for (const call of readCalls.slice(0, 3)) {
     assert.equal(call.blockTag, "pending");
   }
-  for (const call of readCalls.slice(2)) {
+  for (const call of readCalls.slice(3)) {
     assert.equal(call.blockNumber, 123n);
   }
   assert.equal(runtime.now(), 1_101_000);

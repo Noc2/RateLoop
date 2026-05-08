@@ -39,8 +39,8 @@ scrollSepolia = "https://sepolia-rpc.scroll.io"
 scroll = "https://rpc.scroll.io"
 pgn = "https://rpc.publicgoods.network"
 pgnTestnet = "https://sepolia.publicgoods.network"
-celo = "https://forno.celo.org"
-celoSepolia = "https://forno.celo-sepolia.celo-testnet.org"
+worldchain = "https://worldchain-mainnet.g.alchemy.com/public"
+worldchainSepolia = "https://worldchain-sepolia.g.alchemy.com/public"
 
 
 localhost = "http://127.0.0.1:8545"
@@ -49,9 +49,8 @@ localhost = "http://127.0.0.1:8545"
 polygonMumbai = { key = "${ETHERSCAN_API_KEY}" }
 sepolia = { key = "${ETHERSCAN_API_KEY}" }
 baseSepolia = { key = "${BASESCAN_API_KEY}", url = "https://api-sepolia.basescan.org/api" }
-# Celo uses Blockscout (not Celoscan). Forge's built-in Celoscan URL returns 403,
-# and the [etherscan] override is ignored. Verify manually after deploy:
-#   make verify-blockscout NETWORK=celo CONTRACT_ADDRESS=0x... CONTRACT_NAME=MyContract
+# World Chain explorer support can vary by provider. Verify manually after deploy when Forge auto-verification is unavailable:
+#   make verify-blockscout NETWORK=worldchain CONTRACT_ADDRESS=0x... CONTRACT_NAME=MyContract
 
 
 

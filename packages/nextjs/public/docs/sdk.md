@@ -42,7 +42,7 @@ Use this shape after a successful quote. Amounts are atomic USDC units, so `2500
 
 ```json
 {
-  "chainId": 42220,
+  "chainId": 480,
   "clientRequestId": "design-review-2026-05-05-001",
   "walletAddress": "0x1111111111111111111111111111111111111111",
   "paymentMode": "wallet_calls",

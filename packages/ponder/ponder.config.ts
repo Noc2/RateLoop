@@ -22,7 +22,7 @@ import {
   getSharedDeploymentStartBlock as getSharedArtifactStartBlock,
 } from "@rateloop/contracts/deployments";
 
-type PonderNetworkName = "celoSepolia" | "hardhat" | "celo";
+type PonderNetworkName = "worldchainSepolia" | "hardhat" | "worldchain";
 
 const isProduction = process.env.NODE_ENV === "production";
 
@@ -34,9 +34,9 @@ const NETWORKS: Record<
     pollingInterval: number;
   }
 > = {
-  celoSepolia: {
-    chainId: 11142220,
-    defaultRpcUrl: "https://forno.celo-sepolia.celo-testnet.org",
+  worldchainSepolia: {
+    chainId: 4801,
+    defaultRpcUrl: "https://worldchain-sepolia.g.alchemy.com/public",
     pollingInterval: 5_000,
   },
   hardhat: {
@@ -44,15 +44,15 @@ const NETWORKS: Record<
     defaultRpcUrl: "http://127.0.0.1:8545",
     pollingInterval: 1_000,
   },
-  celo: {
-    chainId: 42220,
-    defaultRpcUrl: "https://forno.celo.org",
+  worldchain: {
+    chainId: 480,
+    defaultRpcUrl: "https://worldchain-mainnet.g.alchemy.com/public",
     pollingInterval: 5_000,
   },
 };
 
 function isPonderNetworkName(value: string | undefined): value is PonderNetworkName {
-  return value === "celoSepolia" || value === "hardhat" || value === "celo";
+  return value === "worldchainSepolia" || value === "hardhat" || value === "worldchain";
 }
 
 function getActiveNetwork(): PonderNetworkName {
@@ -60,14 +60,14 @@ function getActiveNetwork(): PonderNetworkName {
 
   if (!value) {
     if (isProduction) {
-      throw new Error("Missing PONDER_NETWORK. Set it to hardhat, celoSepolia, or celo.");
+      throw new Error("Missing PONDER_NETWORK. Set it to hardhat, worldchainSepolia, or worldchain.");
     }
 
     return "hardhat";
   }
 
   if (!isPonderNetworkName(value)) {
-    throw new Error(`Unsupported PONDER_NETWORK "${value}". Use hardhat, celoSepolia, or celo.`);
+    throw new Error(`Unsupported PONDER_NETWORK "${value}". Use hardhat, worldchainSepolia, or worldchain.`);
   }
 
   return value;

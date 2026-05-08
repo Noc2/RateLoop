@@ -2,8 +2,8 @@ import type { Chain } from "viem";
 
 const RPC_CHAIN_NAMES: Record<number, string> = {
   1: "eth-mainnet",
-  42220: "celo-mainnet",
-  11142220: "celo-sepolia",
+  480: "worldchain-mainnet",
+  4801: "worldchain-sepolia",
 };
 
 type RpcPreferenceOptions = {

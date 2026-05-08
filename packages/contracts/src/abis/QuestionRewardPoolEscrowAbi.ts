@@ -446,39 +446,6 @@ export const QuestionRewardPoolEscrowAbi = [
   },
   {
     "type": "function",
-    "name": "getWiring",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "hrep",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "usdc",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "registry_",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "votingEngine_",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "voterIdNft_",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "grantRole",
     "inputs": [
       {
@@ -706,19 +673,6 @@ export const QuestionRewardPoolEscrowAbi = [
         "name": "account",
         "type": "address",
         "internalType": "address"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "setDefaultFrontendFeeBps",
-    "inputs": [
-      {
-        "name": "frontendFeeBps_",
-        "type": "uint256",
-        "internalType": "uint256"
       }
     ],
     "outputs": [],

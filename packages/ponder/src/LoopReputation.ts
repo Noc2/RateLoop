@@ -6,8 +6,8 @@ import { isAddress } from "viem";
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const PONDER_NETWORK_CHAIN_IDS: Record<string, number> = {
   hardhat: 31337,
-  celoSepolia: 11142220,
-  celo: 42220,
+  worldchainSepolia: 4801,
+  worldchain: 480,
 };
 
 const INDEXED_CONTRACT_NAMES = [

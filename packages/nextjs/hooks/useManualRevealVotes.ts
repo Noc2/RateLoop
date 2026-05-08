@@ -54,6 +54,40 @@ type LiveDrandConfig = {
   drandPeriod: bigint;
 };
 
+function normalizeCommitData(rawCommit: unknown): CommitData {
+  const commit = rawCommit as Record<string, unknown> & readonly unknown[];
+  if (commit?.ciphertext != null) {
+    return {
+      ciphertext: commit.ciphertext as `0x${string}`,
+      targetRound: commit.targetRound as bigint | undefined,
+      drandChainHash: commit.drandChainHash as `0x${string}` | undefined,
+      revealableAfter: (commit.revealableAfter as bigint | undefined) ?? 0n,
+      revealed: Boolean(commit.revealed),
+      stakeAmount: (commit.stakeAmount as bigint | undefined) ?? 0n,
+    };
+  }
+
+  if (Array.isArray(commit) && commit.length >= 6) {
+    return {
+      ciphertext: commit[0] as `0x${string}`,
+      targetRound: commit[1] as bigint,
+      drandChainHash: commit[2] as `0x${string}`,
+      revealableAfter: commit[3] as bigint,
+      revealed: Boolean(commit[4]),
+      stakeAmount: commit[5] as bigint,
+    };
+  }
+
+  return {
+    ciphertext: "0x",
+    targetRound: 0n,
+    drandChainHash: zeroHash,
+    revealableAfter: 0n,
+    revealed: true,
+    stakeAmount: 0n,
+  };
+}
+
 async function readLiveDrandConfig(
   publicClient: NonNullable<ReturnType<typeof usePublicClient>>,
   engineAddress: Address,
@@ -218,7 +252,7 @@ export function useManualRevealVotes(voter?: Address) {
         contracts: withCommitHashes.map(({ vote, commitKey }) => ({
           address: engineInfo.address,
           abi: RoundVotingEngineAbi,
-          functionName: "commits",
+          functionName: "commitRevealData",
           args: [BigInt(vote.contentId), BigInt(vote.roundId), commitKey],
         })) as any,
       });
@@ -230,8 +264,8 @@ export function useManualRevealVotes(voter?: Address) {
           const commitResult = commitResults[index];
           if (commitResult?.status !== "success") return null;
 
-          const commit = commitResult.result as CommitData;
-          if (!commit.voter || commit.voter === "0x0000000000000000000000000000000000000000" || commit.revealed) {
+          const commit = normalizeCommitData(commitResult.result);
+          if (commit.revealed || commit.stakeAmount === 0n) {
             return null;
           }
 
@@ -250,9 +284,9 @@ export function useManualRevealVotes(voter?: Address) {
           return {
             contentId: BigInt(vote.contentId),
             roundId: BigInt(vote.roundId),
-            voter: commit.voter as Address,
-            stake: commit.stakeAmount,
-            epochIndex: commit.epochIndex,
+            voter: vote.voter as Address,
+            stake: BigInt(vote.stake),
+            epochIndex: vote.epochIndex,
             committedAt: vote.committedAt,
             revealableAfter: commit.revealableAfter,
             revealAvailableAt: timing.revealAvailableAt,
@@ -314,12 +348,13 @@ export function useManualRevealVotes(voter?: Address) {
       let toastId: string | undefined;
 
       try {
-        const latestCommit = (await publicClient.readContract({
+        const rawLatestCommit = await publicClient.readContract({
           address: engineInfo.address,
           abi: RoundVotingEngineAbi,
-          functionName: "commits",
+          functionName: "commitRevealData",
           args: [vote.contentId, vote.roundId, vote.commitKey],
-        })) as unknown as CommitData;
+        });
+        const latestCommit = normalizeCommitData(rawLatestCommit);
 
         if (latestCommit.revealed) {
           notification.info("That vote has already been revealed.");

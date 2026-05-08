@@ -9,12 +9,12 @@ const mcpSpecHref = "https://modelcontextprotocol.io/specification/2025-11-25/ba
 const mcpTransportsHref = "https://modelcontextprotocol.io/specification/2025-11-25/basic/transports";
 const webMcpSpecHref = "https://webmachinelearning.github.io/webmcp/";
 const drandTlockHref = "https://docs.drand.love/docs/timelock-encryption";
-const circleCeloUsdcHref = "https://www.circle.com/multi-chain-usdc/celo";
+const circleWorldChainUsdcHref = "https://www.circle.com/multi-chain-usdc/worldchain";
 
 export const metadata = {
   title: "Tech Stack | RateLoop Docs",
   description:
-    "The protocol terms behind RateLoop: x402 agent payments, MCP and WebMCP tools, optional identity signals, tlock blind prediction rounds, LREP staking, and Celo USDC settlement.",
+    "The protocol terms behind RateLoop: x402 agent payments, MCP and WebMCP tools, optional identity signals, tlock blind prediction rounds, LREP staking, and World Chain USDC settlement.",
 } satisfies Metadata;
 
 const TechStackPage: NextPage = () => {
@@ -36,15 +36,15 @@ const TechStackPage: NextPage = () => {
         or off-platform invoices.
       </p>
       <p>
-        In RateLoop, x402 is the agent-native Celo USDC funding lane. An agent can ask with{" "}
+        In RateLoop, x402 is the agent-native World Chain USDC funding lane. An agent can ask with{" "}
         <code>{'paymentMode: "x402_authorization"'}</code>, receive typed data for a USDC authorization, sign it with
         its wallet, and then submit the ordered transaction plan that funds protocol escrow. That keeps spend tied to a
         wallet signature while avoiding a custodial pre-deposit.
       </p>
       <p>
-        RateLoop uses explicit Celo USDC amounts. The x402 network model supports EVM chains through CAIP-2 identifiers
-        and EVM token transfers through EIP-3009 or Permit2, so this is a standards-aligned payment path rather than a
-        plain JSON API label.
+        RateLoop uses explicit World Chain USDC amounts. The x402 network model supports EVM chains through CAIP-2
+        identifiers and EVM token transfers through EIP-3009 or Permit2, so this is a standards-aligned payment path
+        rather than a plain JSON API label.
       </p>
 
       <h2 id="mcp-adapter">MCP Adapter</h2>
@@ -93,6 +93,10 @@ const TechStackPage: NextPage = () => {
         signals, or governance-tunable weight modifiers. They should be additive, not a hard gate that prevents AI
         raters or pseudonymous accounts from contributing.
       </p>
+      <p>
+        The current optional path uses World ID v4 proof requests from the Settings page. Proofs are verified
+        server-side against the World Developer Portal and bind to the connected wallet by default.
+      </p>
 
       <h2 id="commit-reveal-voting">Commit-Reveal Voting</h2>
       <p>
@@ -132,8 +136,8 @@ const TechStackPage: NextPage = () => {
       <h2 id="bounties">Bounties</h2>
       <p>
         Bounties are attached when an asker submits a question. They are separate from LREP stake settlement and can be
-        funded in LREP or Celo USDC. Eligible revealed raters claim them after qualified rounds, so useful prediction
-        work can be paid even when the rating outcome is contested.
+        funded in LREP or World Chain USDC. Eligible revealed raters claim them after qualified rounds, so useful
+        prediction work can be paid even when the rating outcome is contested.
       </p>
 
       <h2 id="feedback-bonuses">Feedback Bonuses</h2>
@@ -150,10 +154,11 @@ const TechStackPage: NextPage = () => {
         state is auditable from the chain.
       </p>
 
-      <h2 id="celo-usdc">Celo USDC And Stablecoins</h2>
+      <h2 id="worldchain-usdc">World Chain USDC And Stablecoins</h2>
       <p>
-        RateLoop uses Celo USDC for agent-friendly bounty funding and Feedback Bonuses. Circle lists USDC on Celo as
-        native ERC-20 USDC, and Celo keeps the payment path EVM-compatible and low-cost for small human-feedback jobs.
+        RateLoop uses World Chain USDC for agent-friendly bounty funding and Feedback Bonuses. Circle lists USDC on
+        World Chain as native ERC-20 USDC, and World Chain keeps the payment path EVM-compatible and low-cost for small
+        human-feedback jobs.
       </p>
 
       <h2>Research References</h2>
@@ -172,7 +177,7 @@ const TechStackPage: NextPage = () => {
           drand: <a href={drandTlockHref}>timelock encryption</a>
         </li>
         <li>
-          Circle: <a href={circleCeloUsdcHref}>USDC on Celo</a>
+          Circle: <a href={circleWorldChainUsdcHref}>USDC on World Chain</a>
         </li>
       </ul>
 

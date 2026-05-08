@@ -32,9 +32,9 @@ import {
   X402QuestionInputError,
   type X402QuestionOperation,
   type X402QuestionPayload,
-  X402_CELO_USDC_BY_CHAIN_ID,
   X402_SUBMISSION_REWARD_ASSET_USDC,
   X402_USDC_DECIMALS,
+  X402_WORLD_CHAIN_USDC_BY_CHAIN_ID,
   assertSupportedX402BundleBounty,
   buildX402QuestionOperation,
 } from "~~/lib/x402/questionPayload";
@@ -621,9 +621,9 @@ export function resolveX402QuestionConfig(chainId: number): X402QuestionSubmissi
     throw new X402QuestionConfigError(`Chain ${chainId} is not configured for this server.`);
   }
 
-  const usdcAddress = getX402UsdcAddressOverride() ?? X402_CELO_USDC_BY_CHAIN_ID[chainId];
+  const usdcAddress = getX402UsdcAddressOverride() ?? X402_WORLD_CHAIN_USDC_BY_CHAIN_ID[chainId];
   if (!usdcAddress || !isAddress(usdcAddress)) {
-    throw new X402QuestionConfigError("x402 question submissions require Celo or Celo Sepolia USDC.");
+    throw new X402QuestionConfigError("x402 question submissions require World Chain or World Chain Sepolia USDC.");
   }
 
   const contentRegistryAddress = getSharedDeploymentAddress(chainId, "ContentRegistry");

@@ -1,6 +1,6 @@
 {
   "clientRequestId": "feature-acceptance-test-demo",
-  "chainId": 42220,
+  "chainId": 480,
   "templateId": "feature_acceptance_test",
   "maxPaymentAmount": "1500000",
   "bounty": {

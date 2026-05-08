@@ -21,14 +21,14 @@ test("local vote cooldown cache returns same-browser address matches", () => {
 
   recordLocalVoteCooldown({
     address: "0xAbC0000000000000000000000000000000000000",
-    chainId: 11142220,
+    chainId: 4801,
     contentId: 7n,
     nowSeconds,
     storage,
   });
 
   const cooldowns = getLocalVoteCooldownsByContentId({
-    chainId: 11142220,
+    chainId: 4801,
     contentIds: [7n],
     identities: [{ address: "0xabc0000000000000000000000000000000000000" }],
     nowSeconds: nowSeconds + 60,
@@ -44,7 +44,7 @@ test("local vote cooldown cache matches voter id tokens across linked addresses"
 
   recordLocalVoteCooldown({
     address: "0x1111111111111111111111111111111111111111",
-    chainId: 11142220,
+    chainId: 4801,
     contentId: "9",
     nowSeconds,
     storage,
@@ -52,7 +52,7 @@ test("local vote cooldown cache matches voter id tokens across linked addresses"
   });
 
   const cooldowns = getLocalVoteCooldownsByContentId({
-    chainId: 11142220,
+    chainId: 4801,
     contentIds: [9n],
     identities: [{ address: "0x2222222222222222222222222222222222222222", voterIdTokenId: "42" }],
     nowSeconds: nowSeconds + 30,
@@ -69,21 +69,21 @@ test("local vote cooldown cache ignores expired entries and other chains", () =>
 
   recordLocalVoteCooldown({
     address,
-    chainId: 11142220,
+    chainId: 4801,
     contentId: 7n,
     nowSeconds: nowSeconds - VOTE_COOLDOWN_SECONDS - 1,
     storage,
   });
   recordLocalVoteCooldown({
     address,
-    chainId: 42220,
+    chainId: 480,
     contentId: 8n,
     nowSeconds,
     storage,
   });
 
   const cooldowns = getLocalVoteCooldownsByContentId({
-    chainId: 11142220,
+    chainId: 4801,
     contentIds: [7n, 8n],
     identities: [{ address }],
     nowSeconds,

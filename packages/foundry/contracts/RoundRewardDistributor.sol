@@ -208,7 +208,7 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
     /// @notice The voting engine is immutable for this distributor.
     /// @dev Claim accounting is keyed by contentId/roundId, so a fresh engine with reused round IDs
     ///      must use a fresh distributor instead of reusing this stateful instance.
-    function setVotingEngine(address _votingEngine) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setVotingEngine(address _votingEngine) external view onlyRole(DEFAULT_ADMIN_ROLE) {
         require(_votingEngine != address(0), "Invalid voting engine");
         require(_votingEngine == address(votingEngine), "Voting engine immutable");
     }
@@ -879,10 +879,8 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         view
         returns (RoundLib.Commit memory commit)
     {
-        // Use the narrow getter that skips `ciphertext` / `targetRound` / `drandChainHash`.
-        // The full public `commits()` accessor copies the ~2 KB `bytes ciphertext` field
-        // per call, which blows out memory expansion when iterating many commits during
-        // dust finalization at bounds-limit maxVoters.
+        // Use the narrow getter that skips `ciphertext` / `targetRound` / `drandChainHash`,
+        // avoiding ~2 KB of memory expansion per commit during bounds-limit dust finalization.
         (
             commit.voter,
             commit.stakeAmount,

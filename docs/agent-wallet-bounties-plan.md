@@ -12,7 +12,7 @@
 
 ## Agent Flow
 
-1. Fund a wallet with Celo USDC and pass it as `walletAddress`.
+1. Fund a wallet with World Chain USDC and pass it as `walletAddress`.
 2. Quote before spending.
 3. Ask with a stable client request ID and public context URL.
 4. Execute the returned wallet calls from the authorized wallet.

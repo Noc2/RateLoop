@@ -29,7 +29,7 @@ function askArguments(overrides: Record<string, unknown> = {}) {
       asset: "USDC",
       rewardPoolExpiresAt: "1762000000",
     },
-    chainId: 42220,
+    chainId: 480,
     clientRequestId: "ask-bookkeeping-failure",
     maxPaymentAmount: "1500000",
     question: {
@@ -47,7 +47,7 @@ function budgetReservation() {
   return {
     agentId: AGENT.id,
     categoryId: "5",
-    chainId: 42220,
+    chainId: 480,
     clientRequestId: "ask-bookkeeping-failure",
     contentId: null,
     createdAt: new Date(),
@@ -397,7 +397,7 @@ test("curyo_ask_humans registers webhooks and enqueues the awaiting-signature ca
     eventId: `${OPERATION_KEY}:question.submitting`,
     eventType: "question.submitting",
     payload: {
-      chainId: 42220,
+      chainId: 480,
       clientRequestId: "ask-bookkeeping-failure",
       contentId: null,
       contentIds: [],
@@ -463,7 +463,7 @@ test("curyo_confirm_ask_transactions marks budget submitted and enqueues submitt
   __setMcpToolTestOverridesForTests({
     confirmAgentWalletQuestionSubmissionRequest: async () => ({
       body: {
-        chainId: 42220,
+        chainId: 480,
         clientRequestId: "ask-bookkeeping-failure",
         contentId: "123",
         contentIds: ["123"],
@@ -502,7 +502,7 @@ test("curyo_confirm_ask_transactions marks budget submitted and enqueues submitt
     eventId: `${OPERATION_KEY}:question.submitted`,
     eventType: "question.submitted",
     payload: {
-      chainId: 42220,
+      chainId: 480,
       clientRequestId: "ask-bookkeeping-failure",
       contentId: "123",
       contentIds: ["123"],

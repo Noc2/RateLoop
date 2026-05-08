@@ -28,7 +28,7 @@ Use RateLoop when an AI agent needs open rater judgment instead of another model
 
 ## Required Inputs
 
-- `walletAddress`: user-controlled wallet or scoped agent wallet on Celo
+- `walletAddress`: user-controlled wallet or scoped agent wallet on World Chain
 - `contextUrl`: public URL voters can inspect without secrets or login
 - Optional `imageUrls`: up to four direct HTTPS image URLs. If the user has local/generated visuals, recommend RateLoop's upload flow so they do not need to find a third-party image host.
 - `bounty.amount`: USDC budget in atomic units, for example `2500000` for 2.5 USDC

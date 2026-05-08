@@ -11,16 +11,16 @@ test("canRepairWalletRpc only enables MetaMask wallets with a configured chain R
   assert.equal(
     canRepairWalletRpc({
       chain: {
-        id: 42220,
-        name: "Celo",
+        id: 480,
+        name: "World Chain",
         nativeCurrency: {
           decimals: 18,
-          name: "CELO",
-          symbol: "CELO",
+          name: "Ether",
+          symbol: "ETH",
         },
         rpcUrls: {
           default: {
-            http: ["https://forno.celo.org"],
+            http: ["https://worldchain-mainnet.g.alchemy.com/public"],
           },
         },
       } as any,
@@ -32,16 +32,16 @@ test("canRepairWalletRpc only enables MetaMask wallets with a configured chain R
   assert.equal(
     canRepairWalletRpc({
       chain: {
-        id: 42220,
-        name: "Celo",
+        id: 480,
+        name: "World Chain",
         nativeCurrency: {
           decimals: 18,
-          name: "CELO",
-          symbol: "CELO",
+          name: "Ether",
+          symbol: "ETH",
         },
         rpcUrls: {
           default: {
-            http: ["https://forno.celo.org"],
+            http: ["https://worldchain-mainnet.g.alchemy.com/public"],
           },
         },
       } as any,
@@ -57,32 +57,32 @@ test("buildAddEthereumChainParameter keeps preferred RPC and explorer URLs", () 
       blockExplorers: {
         default: {
           name: "Blockscout",
-          url: "https://celoscan.io",
+          url: "https://worldscan.org",
         },
       },
-      id: 42220,
-      name: "Celo",
+      id: 480,
+      name: "World Chain",
       nativeCurrency: {
         decimals: 18,
-        name: "CELO",
-        symbol: "CELO",
+        name: "Ether",
+        symbol: "ETH",
       },
       rpcUrls: {
         default: {
-          http: ["https://forno.celo.org"],
+          http: ["https://worldchain-mainnet.g.alchemy.com/public"],
         },
       },
     } as any),
     {
-      blockExplorerUrls: ["https://celoscan.io"],
-      chainId: "0xa4ec",
-      chainName: "Celo",
+      blockExplorerUrls: ["https://worldscan.org"],
+      chainId: "0x1e0",
+      chainName: "World Chain",
       nativeCurrency: {
         decimals: 18,
-        name: "CELO",
-        symbol: "CELO",
+        name: "Ether",
+        symbol: "ETH",
       },
-      rpcUrls: ["https://forno.celo.org"],
+      rpcUrls: ["https://worldchain-mainnet.g.alchemy.com/public"],
     },
   );
 });
@@ -138,19 +138,19 @@ test("addAndSwitchEthereumChain adds the configured chain before switching", asy
     blockExplorers: {
       default: {
         name: "Blockscout",
-        url: "https://celoscan.io",
+        url: "https://worldscan.org",
       },
     },
-    id: 42220,
-    name: "Celo",
+    id: 480,
+    name: "World Chain",
     nativeCurrency: {
       decimals: 18,
-      name: "CELO",
-      symbol: "CELO",
+      name: "Ether",
+      symbol: "ETH",
     },
     rpcUrls: {
       default: {
-        http: ["https://forno.celo.org"],
+        http: ["https://worldchain-mainnet.g.alchemy.com/public"],
       },
     },
   } as any);
@@ -160,21 +160,21 @@ test("addAndSwitchEthereumChain adds the configured chain before switching", asy
       method: "wallet_addEthereumChain",
       params: [
         {
-          blockExplorerUrls: ["https://celoscan.io"],
-          chainId: "0xa4ec",
-          chainName: "Celo",
+          blockExplorerUrls: ["https://worldscan.org"],
+          chainId: "0x1e0",
+          chainName: "World Chain",
           nativeCurrency: {
             decimals: 18,
-            name: "CELO",
-            symbol: "CELO",
+            name: "Ether",
+            symbol: "ETH",
           },
-          rpcUrls: ["https://forno.celo.org"],
+          rpcUrls: ["https://worldchain-mainnet.g.alchemy.com/public"],
         },
       ],
     },
     {
       method: "wallet_switchEthereumChain",
-      params: [{ chainId: "0xa4ec" }],
+      params: [{ chainId: "0x1e0" }],
     },
   ]);
 });

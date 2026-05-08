@@ -7,7 +7,7 @@ Options:
   --help, -h           Show this help message
 Examples:
   yarn deploy --network sepolia --keystore my-account
-  yarn deploy --network celoSepolia --keystore my-account --resume
+  yarn deploy --network worldchainSepolia --keystore my-account --resume
   yarn deploy
   `;
 

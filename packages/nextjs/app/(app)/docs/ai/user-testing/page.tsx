@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 
 const websiteFeedbackPayloadExample = `{
-  "chainId": 42220,
+  "chainId": 480,
   "clientRequestId": "ai-website-feedback-2026-05-06-001",
   "walletAddress": "0x1111111111111111111111111111111111111111",
   "paymentMode": "wallet_calls",

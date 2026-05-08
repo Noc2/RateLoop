@@ -51,14 +51,14 @@ test("shouldIncludeThirdwebWalletAuthOption uses wallet auth when no branded inj
 });
 
 test("createThirdwebInAppWallet can hide wallet auth to avoid duplicate compact mobile wallet rows", () => {
-  const wallet = createThirdwebInAppWallet(42220, { includeWalletAuthOption: false });
+  const wallet = createThirdwebInAppWallet(480, { includeWalletAuthOption: false });
   const config = wallet.getConfig() as { auth?: { options?: string[] } };
 
   assert.deepEqual(config.auth?.options, ["google", "apple", "email", "passkey"]);
 });
 
 test("createThirdwebInAppWallet uses the RateLoop logo for wallet branding", () => {
-  const wallet = createThirdwebInAppWallet(42220);
+  const wallet = createThirdwebInAppWallet(480);
   const config = wallet.getConfig() as {
     metadata?: { image?: { alt?: string; height?: number; src?: string; width?: number } };
   };
@@ -72,7 +72,7 @@ test("createThirdwebInAppWallet uses the RateLoop logo for wallet branding", () 
 });
 
 test("getThirdwebWallets keeps wallet auth inside in-app wallet when no branded injected wallet exists", () => {
-  const wallets = getThirdwebWallets(42220, {
+  const wallets = getThirdwebWallets(480, {
     ethereum: {
       providers: [{ isFrame: true }],
     },
@@ -86,7 +86,7 @@ test("getThirdwebWallets keeps wallet auth inside in-app wallet when no branded 
 });
 
 test("getThirdwebWallets omits in-app wallet auth when a branded injected wallet is listed separately", () => {
-  const wallets = getThirdwebWallets(42220, {
+  const wallets = getThirdwebWallets(480, {
     ethereum: {
       providers: [{ isMetaMask: true }],
     },

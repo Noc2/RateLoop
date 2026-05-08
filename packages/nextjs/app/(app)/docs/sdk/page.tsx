@@ -87,7 +87,7 @@ const epochDuration =
 
 const commit = await buildCommitPredictionParams({
   voter: "0xYourWalletAddress",
-  chainId: 42220n,
+  chainId: 480n,
   engineAddress: "0xRoundVotingEngine",
   contentId: 42n,
   roundId: BigInt(content.openRound?.roundId ?? 1),

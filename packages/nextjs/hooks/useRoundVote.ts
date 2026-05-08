@@ -349,7 +349,7 @@ export function useRoundVote() {
       void queryClient.invalidateQueries({ queryKey: FREE_TRANSACTION_ALLOWANCE_QUERY_KEY });
       console.error("Round vote commit failed:", e);
       if (isFreeTransactionExhaustedError(e)) {
-        setError("Free transactions used up. Add CELO to continue.");
+        setError("Free transactions used up. Add ETH to continue.");
         return false;
       }
       const parsedError = getParsedErrorWithAllAbis(e, targetNetwork.id as any);

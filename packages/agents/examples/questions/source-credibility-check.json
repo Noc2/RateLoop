@@ -1,6 +1,6 @@
 {
   "clientRequestId": "source-credibility-check-demo",
-  "chainId": 42220,
+  "chainId": 480,
   "templateId": "source_credibility_check",
   "maxPaymentAmount": "1000000",
   "bounty": {

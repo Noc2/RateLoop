@@ -26,19 +26,19 @@ test("ignores unrelated transaction failures", () => {
 });
 
 test("formats a short gas guidance message", () => {
-  assert.equal(getGasBalanceErrorMessage("CELO"), "Add some CELO for gas, then retry.");
+  assert.equal(getGasBalanceErrorMessage("ETH"), "Add some ETH for gas, then retry.");
 });
 
 test("formats sponsored-wallet gas guidance", () => {
   assert.equal(
-    getGasBalanceErrorMessage("CELO", { canSponsorTransactions: true }),
-    "Gas is sponsored for now. If it still fails, add some CELO and retry.",
+    getGasBalanceErrorMessage("ETH", { canSponsorTransactions: true }),
+    "Gas is sponsored for now. If it still fails, add some ETH and retry.",
   );
 });
 
 test("detects exhausted free transaction verifier errors", () => {
   const error = {
-    details: "Free transactions used up. Add CELO to continue.",
+    details: "Free transactions used up. Add ETH to continue.",
   };
 
   assert.equal(isFreeTransactionExhaustedError(error), true);

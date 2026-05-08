@@ -114,7 +114,7 @@ export type FreeTransactionAllowanceDecision =
     };
 
 const DEFAULT_DENY_REASON = "Transaction not sponsored.";
-const FREE_TX_EXHAUSTED_REASON = "Free transactions used up. Add CELO to continue.";
+const FREE_TX_EXHAUSTED_REASON = "Free transactions used up. Add ETH to continue.";
 const NO_VOTER_ID_REASON = "Verify your ID to unlock free transactions.";
 const FREE_TRANSACTION_RESERVATION_TTL_MS = 5 * 60_000;
 const FREE_TRANSACTION_IDEMPOTENCY_WINDOW_MS = 2 * 60_000;
@@ -353,11 +353,12 @@ async function getTransactionVerificationClient(chainId: number): Promise<Transa
   return {
     getTransaction: async params => {
       const transaction = await client.getTransaction(params);
+      const transactionChainId = "chainId" in transaction ? transaction.chainId : undefined;
 
       return {
         chainId:
-          typeof transaction.chainId === "bigint" || typeof transaction.chainId === "number"
-            ? transaction.chainId
+          typeof transactionChainId === "bigint" || typeof transactionChainId === "number"
+            ? transactionChainId
             : Number.NaN,
         from: transaction.from,
       };

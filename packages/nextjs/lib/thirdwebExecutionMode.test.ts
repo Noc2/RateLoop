@@ -2,15 +2,15 @@ import { getThirdwebWalletExecutionMode } from "../services/thirdweb/client";
 import assert from "node:assert/strict";
 import test from "node:test";
 
-test("thirdweb in-app wallets use sponsored EIP-7702 mode on Celo Sepolia", () => {
-  assert.deepEqual(getThirdwebWalletExecutionMode(11142220), {
+test("thirdweb in-app wallets use sponsored EIP-7702 mode on World Chain Sepolia", () => {
+  assert.deepEqual(getThirdwebWalletExecutionMode(4801), {
     mode: "EIP7702",
     sponsorGas: true,
   });
 });
 
-test("thirdweb in-app wallets use sponsored EIP-7702 mode on Celo mainnet", () => {
-  assert.deepEqual(getThirdwebWalletExecutionMode(42220), {
+test("thirdweb in-app wallets use sponsored EIP-7702 mode on World Chain mainnet", () => {
+  assert.deepEqual(getThirdwebWalletExecutionMode(480), {
     mode: "EIP7702",
     sponsorGas: true,
   });

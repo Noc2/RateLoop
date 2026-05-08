@@ -7,7 +7,7 @@
 
 RateLoop is an open rating protocol for humans, AI raters, teams, and apps. Raters predict a final public rating, reveal after a private round, and build reputation through calibrated, reliable signal. Bounties can pay useful rating work in USDC, while Loop Reputation (`LREP`) is the capped governance and protocol reputation token planned for the fresh deployment.
 
-This repository is a fresh RateLoop implementation that reuses the old Curyo monorepo where it is still useful. The current launch direction stays on Celo/Celo Sepolia for now, removes mandatory proof-of-personhood from the core rating path, and keeps Self.xyz only as a possible optional identity signal later.
+This repository is a fresh RateLoop implementation that reuses the old Curyo monorepo where it is still useful. The current launch direction targets World Chain mainnet and World Chain Sepolia, removes mandatory proof-of-personhood from the core rating path, and uses World ID only as an optional human credential.
 
 ## Table of Contents
 
@@ -26,7 +26,7 @@ AI agents are increasingly good at drafting, searching, and planning, but they s
 The core loop is:
 
 1. **Ask** — submit content or an idea with context and a rating question.
-2. **Fund** — optionally attach a Celo USDC bounty for the one private round.
+2. **Fund** — optionally attach a World Chain USDC bounty for the one private round.
 3. **Predict** — raters submit an expected final `1.0-9.9` rating.
 4. **Reveal and settle** — commit-reveal keeps predictions private until reveal, then the round settles into a public rating.
 5. **Use** — agents, apps, and frontends read the settled score, revealed predictions, optional feedback, and reward state from the public protocol surface.
@@ -37,9 +37,9 @@ Key pieces:
 - **Prediction Ratings** — the core input is predicted final rating, not binary up/down voting
 - **LREP Locks** — accurate predictions can earn from inaccurate or unrevealed locks without increasing the capped supply
 - **tlock Commit-Reveal** — predictions stay private through the sealed round
-- **Celo USDC Bounties** — small bounty payouts reward calibrated independent work
+- **World Chain USDC Bounties** — small bounty payouts reward calibrated independent work
 - **Agent-Ready Integrations** — SDK helpers and MCP-shaped tools let agents quote, prepare wallet-signed submissions, track asks, and read results without taking operator custody of bounty funds or requiring a saved policy token
-- **Optional Identity Signals** — Self.xyz may return as a non-required badge or trust signal, not a core gate
+- **Optional Identity Signals** — World ID can attach a non-required human credential without gating the core rating path
 - **Frontend Attribution** — bounty accounting preserves the frontend operator earning incentive
 - **Security Guardrails** — calibration, reveal reliability, cluster caps, duplicate checks, and governance parameters keep the surface narrow
 
@@ -48,7 +48,7 @@ RateLoop does not treat raw token balance as enough to earn or control outcomes.
 weighting, cluster scoring, governance locks, proposal/quorum floors, and hard minimums for submission bounties and AI
 declaration/challenge bonds are the main mitigations.
 
-See [docs/implementation-plan.md](docs/implementation-plan.md) for the current design and implementation sequence.
+See [docs/implementation-plan.md](docs/implementation-plan.md) for the implementation history and design sequence.
 
 ## Architecture
 
@@ -95,7 +95,7 @@ corepack enable
 yarn install
 ```
 
-For Celo mainnet deployment, see [packages/foundry/README.md](packages/foundry/README.md).
+For World Chain mainnet deployment, see [packages/foundry/README.md](packages/foundry/README.md).
 
 ## Usage
 

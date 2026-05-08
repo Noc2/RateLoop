@@ -17,7 +17,7 @@ const BASE_CONTEXT: ClaimTransactionFeedbackContext = {
   isAwaitingSelfFundedWalletReconnect: false,
   isAwaitingSponsoredWalletReconnect: false,
   isMissingGasBalance: false,
-  nativeTokenSymbol: "CELO",
+  nativeTokenSymbol: "ETH",
 };
 
 test("getClaimGasErrorMessage explains when free transactions are exhausted", () => {
@@ -26,18 +26,18 @@ test("getClaimGasErrorMessage explains when free transactions are exhausted", ()
       ...BASE_CONTEXT,
       freeTransactionRemaining: 0,
     }),
-    "Free transactions used up. Add some CELO for gas, then retry.",
+    "Free transactions used up. Add some ETH for gas, then retry.",
   );
 });
 
-test("getClaimGasErrorMessage does not ask funded wallets to add CELO", () => {
+test("getClaimGasErrorMessage does not ask funded wallets to add ETH", () => {
   assert.equal(
     getClaimGasErrorMessage({
       ...BASE_CONTEXT,
       freeTransactionRemaining: 0,
       hasNativeGasBalance: true,
     }),
-    "Free transactions used up. Retry to use CELO for gas.",
+    "Free transactions used up. Retry to use ETH for gas.",
   );
 });
 
@@ -48,7 +48,7 @@ test("getClaimGasErrorMessage uses normal gas guidance when free transactions ar
       canShowFreeTransactionAllowance: false,
       freeTransactionRemaining: 0,
     }),
-    "Add some CELO for gas, then retry.",
+    "Add some ETH for gas, then retry.",
   );
 });
 
@@ -89,7 +89,7 @@ test("getClaimPreflightErrorMessage returns the gas guidance when gas is missing
       ...BASE_CONTEXT,
       isMissingGasBalance: true,
     }),
-    "Add some CELO for gas, then retry.",
+    "Add some ETH for gas, then retry.",
   );
 });
 

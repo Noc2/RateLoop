@@ -91,7 +91,7 @@ function resolveDirectHttpOrigin(headerLookup: HeaderLookup) {
 }
 
 const askPayloadExample = `{
-  "chainId": 42220,
+  "chainId": 480,
   "clientRequestId": "design-review-2026-05-05-001",
   "walletAddress": "0x1111111111111111111111111111111111111111",
   "paymentMode": "wallet_calls",
@@ -143,7 +143,7 @@ const integratedPaths = [
 
 const publicSetupInputs = [
   "RateLoop origin, usually https://www.rateloop.xyz for production or the preview origin the user wants to test",
-  "A funded walletAddress on Celo, or permission to create a local encrypted signer and fund that address",
+  "A funded walletAddress on World Chain, or permission to create a local encrypted signer and fund that address",
   "A public context URL voters can open without secrets or a RateLoop login",
   "Optional image context: direct HTTPS image URLs, or RateLoop-hosted uploaded images when the user has local mockups, screenshots, or generated visuals",
   "A bounded USDC budget: bounty.amount, maxPaymentAmount, requiredVoters, requiredSettledRounds, and rewardPoolExpiresAt",
@@ -179,7 +179,7 @@ const agentFlow = [
 export const metadata = {
   title: "Human Feedback API For Agents | RateLoop Docs",
   description:
-    "How AI agents use RateLoop as an open rater feedback API for user testing, UX checks, LLM evaluation, x402 payments, Celo USDC bounties, MCP tools, and readable public results.",
+    "How AI agents use RateLoop as an open rater feedback API for user testing, UX checks, LLM evaluation, x402 payments, World Chain USDC bounties, MCP tools, and readable public results.",
 } satisfies Metadata;
 
 const AIPage = async () => {
@@ -190,14 +190,14 @@ const AIPage = async () => {
       <h1>For Agents</h1>
       <p className="lead text-base-content/60 text-lg">
         RateLoop lets an AI agent ask open raters for bounded public judgment, user testing, UX feedback, and LLM
-        evaluation, fund the work with Celo USDC, and use the result in its next decision.
+        evaluation, fund the work with World Chain USDC, and use the result in its next decision.
       </p>
 
       <h2 id="purpose">Purpose</h2>
       <p>
         Use RateLoop as an open rater feedback API when an agent is uncertain and needs a public, auditable answer from
         people rather than another model guess. Send a focused question with a public context URL, a result template, a
-        Celo USDC bounty, and a funded EVM wallet address. The output is a structured result package with answer,
+        World Chain USDC bounty, and a funded EVM wallet address. The output is a structured result package with answer,
         confidence, vote signal, rationale summary, limitations, and public URL.
       </p>
       <p>
@@ -337,7 +337,7 @@ const AIPage = async () => {
       <p>
         Agents that do not use MCP can call the same flow through JSON routes. These routes are the implementation
         surface for quotes, asks, signing intents, confirmations, and results; x402 remains the payment mode for
-        agent-native Celo USDC authorization.
+        agent-native World Chain USDC authorization.
       </p>
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
         <code>{directHttpRoutes}</code>
@@ -385,15 +385,15 @@ const AIPage = async () => {
 
       <h2 id="wallets">Wallet And Funding</h2>
       <p>
-        Fund the signer wallet with Celo USDC and pass it as <code>walletAddress</code> on quote and ask calls.
-        Self-funded agent wallets also need a small native CELO balance for network fees unless their transaction path
-        is sponsored. Keep long-lived private keys out of prompts, logs, and committed env files; use browser signing or
-        an encrypted local keystore when a human or local agent should approve spend.
+        Fund the signer wallet with World Chain USDC and pass it as <code>walletAddress</code> on quote and ask calls.
+        Self-funded agent wallets also need a small native ETH balance for network fees unless their transaction path is
+        sponsored. Keep long-lived private keys out of prompts, logs, and committed env files; use browser signing or an
+        encrypted local keystore when a human or local agent should approve spend.
       </p>
       <p>
-        Operators who want browser assistance can open <Link href="/settings#wallet">Wallet settings</Link> to add CELO
-        for gas, then use <Link href="/ask?tab=agent">/ask?tab=agent</Link> to add Celo USDC for bounties or configure
-        optional managed controls.
+        Operators who want browser assistance can open <Link href="/settings#wallet">Wallet settings</Link> to add ETH
+        for gas, then use <Link href="/ask?tab=agent">/ask?tab=agent</Link> to add World Chain USDC for bounties or
+        configure optional managed controls.
       </p>
 
       <h2 id="results">Polling Results</h2>

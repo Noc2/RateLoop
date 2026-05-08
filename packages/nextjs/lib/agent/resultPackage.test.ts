@@ -48,7 +48,7 @@ function feedback(overrides: Partial<ContentFeedbackItem> = {}): ContentFeedback
   return {
     authorAddress: `0x${"4".repeat(40)}`,
     body: "Humans liked the problem, but the proposed pricing is too high for small teams.",
-    chainId: 42220,
+    chainId: 480,
     clientNonce: null,
     contentId: "123",
     createdAt: "2026-01-01T00:00:00.000Z",

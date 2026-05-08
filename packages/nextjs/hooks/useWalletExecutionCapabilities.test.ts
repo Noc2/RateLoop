@@ -9,11 +9,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 test("resolveWalletExecutionChainId prefers the wagmi chain when it is available", () => {
-  assert.equal(resolveWalletExecutionChainId(42220, 11142220), 42220);
+  assert.equal(resolveWalletExecutionChainId(480, 4801), 480);
 });
 
 test("resolveWalletExecutionChainId falls back to the thirdweb chain during reconnect", () => {
-  assert.equal(resolveWalletExecutionChainId(undefined, 11142220), 11142220);
+  assert.equal(resolveWalletExecutionChainId(undefined, 4801), 4801);
 });
 
 test("resolveWalletExecutionChainId returns undefined when no wallet chain is available", () => {
@@ -44,7 +44,7 @@ test("resolveWalletExecutionMode keeps external wallets on fee-currency flow for
   );
 });
 
-test("resolveWalletExecutionMode keeps unsupported external wallets on direct celo transactions", () => {
+test("resolveWalletExecutionMode keeps unsupported external wallets on direct worldchain transactions", () => {
   assert.equal(
     resolveWalletExecutionMode({
       hasSendCalls: true,
@@ -52,14 +52,14 @@ test("resolveWalletExecutionMode keeps unsupported external wallets on direct ce
       supportedChain: false,
       thirdwebSponsorshipMode: null,
     }),
-    "direct_celo",
+    "direct_worldchain",
   );
 });
 
 test("shouldQueryWalletCapabilities only enables capability probing for in-app wallets on supported chains", () => {
   assert.equal(
     shouldQueryWalletCapabilities({
-      chainId: 42220,
+      chainId: 480,
       supportedChain: true,
       walletId: "inApp",
     }),
@@ -68,7 +68,7 @@ test("shouldQueryWalletCapabilities only enables capability probing for in-app w
 
   assert.equal(
     shouldQueryWalletCapabilities({
-      chainId: 42220,
+      chainId: 480,
       supportedChain: true,
       walletId: "in-app-wallet",
     }),
@@ -77,7 +77,7 @@ test("shouldQueryWalletCapabilities only enables capability probing for in-app w
 
   assert.equal(
     shouldQueryWalletCapabilities({
-      chainId: 42220,
+      chainId: 480,
       supportedChain: true,
       walletId: "io.metamask",
     }),
@@ -98,13 +98,13 @@ test("resolveWalletCapabilitiesForChain reads chain-keyed capabilities", () => {
   assert.deepEqual(
     resolveWalletCapabilitiesForChain(
       {
-        42220: {
+        480: {
           paymasterService: {
             supported: true,
           },
         },
       },
-      42220,
+      480,
     ),
     {
       paymasterService: {
@@ -122,7 +122,7 @@ test("resolveWalletCapabilitiesForChain accepts direct chain-filtered capabiliti
           supported: true,
         },
       } as any,
-      42220,
+      480,
     ),
     {
       paymasterService: {

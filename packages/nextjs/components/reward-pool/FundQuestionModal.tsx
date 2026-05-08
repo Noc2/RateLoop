@@ -141,7 +141,7 @@ export function FundQuestionModal({ contentId, title, onClose, onCreated }: Fund
       }
 
       if (!usdcAddress) {
-        notification.error("Celo USDC is not configured for this network.");
+        notification.error("World Chain USDC is not configured for this network.");
         return;
       }
 
@@ -181,7 +181,7 @@ export function FundQuestionModal({ contentId, title, onClose, onCreated }: Fund
       });
       await waitForTransactionReceipt(wagmiConfig, { hash: rewardPoolHash });
 
-      notification.success(`Bounty funded with ${formatUsdAmount(parsedAmount)}. Paid in USDC on Celo.`);
+      notification.success(`Bounty funded with ${formatUsdAmount(parsedAmount)}. Paid in USDC on World Chain.`);
       onCreated?.();
       onClose();
     } catch (error) {
@@ -210,8 +210,8 @@ export function FundQuestionModal({ contentId, title, onClose, onCreated }: Fund
         <p className="text-sm font-semibold uppercase text-base-content/50">Fund a bounty for</p>
         <h3 className="mt-1 line-clamp-2 text-xl font-semibold text-base-content">{title}</h3>
         <p className="mt-2 text-base text-base-content/70">
-          Paid in USDC on Celo. Qualified claims reserve {FRONTEND_FEE_PERCENT}% for the eligible frontend operator; the
-          rest goes to eligible revealed voters.
+          Paid in USDC on World Chain. Qualified claims reserve {FRONTEND_FEE_PERCENT}% for the eligible frontend
+          operator; the rest goes to eligible revealed voters.
         </p>
 
         <div className="mt-5 grid gap-4">

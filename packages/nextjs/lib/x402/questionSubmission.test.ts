@@ -30,7 +30,7 @@ function buildPayload(clientRequestId: string): X402QuestionPayload {
       requiredVoters: 3n,
       rewardPoolExpiresAt: 1_762_000_000n,
     },
-    chainId: 42220,
+    chainId: 480,
     clientRequestId,
     questions: [
       {
@@ -113,11 +113,11 @@ async function insertQuestionImageAttachment(params: {
 }
 
 const TEST_CONFIG = {
-  chainId: 42220,
+  chainId: 480,
   contentRegistryAddress: "0x0000000000000000000000000000000000000011" as const,
   questionRewardPoolEscrowAddress: "0x0000000000000000000000000000000000000013" as const,
   rpcUrl: "http://localhost:8545",
-  targetNetwork: { id: 42220 } as never,
+  targetNetwork: { id: 480 } as never,
   usdcAddress: "0x0000000000000000000000000000000000000014" as const,
   x402QuestionSubmitterAddress: "0x0000000000000000000000000000000000000015" as const,
 };

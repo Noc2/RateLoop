@@ -30,7 +30,7 @@ before(async () => {
   env.NODE_ENV = "production";
   env.RATE_LIMIT_TRUSTED_IP_HEADERS = "x-forwarded-for";
   env.NEXT_PUBLIC_PONDER_URL = "";
-  env.NEXT_PUBLIC_TARGET_NETWORKS = "42220";
+  env.NEXT_PUBLIC_TARGET_NETWORKS = "480";
 
   rateLimit = await import("~~/utils/rateLimit");
   route = await import("./route");
@@ -41,7 +41,7 @@ beforeEach(() => {
   env.NODE_ENV = "production";
   env.RATE_LIMIT_TRUSTED_IP_HEADERS = "x-forwarded-for";
   env.NEXT_PUBLIC_PONDER_URL = "";
-  env.NEXT_PUBLIC_TARGET_NETWORKS = "42220";
+  env.NEXT_PUBLIC_TARGET_NETWORKS = "480";
 
   rateLimit.__setRateLimitStoreForTests({
     execute: async () => {
@@ -102,7 +102,7 @@ test("frontend claimable fees route fails open when the rate limit store is unav
 test("frontend claimable fees route accepts an explicit supported chain id", async () => {
   const response = await route.GET(
     makeRequest(
-      `/api/frontend/claimable-fees?frontend=${encodeURIComponent(TEST_FRONTEND)}&chainId=42220&limit=10&offset=0`,
+      `/api/frontend/claimable-fees?frontend=${encodeURIComponent(TEST_FRONTEND)}&chainId=480&limit=10&offset=0`,
     ),
   );
 

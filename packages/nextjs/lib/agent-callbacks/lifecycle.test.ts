@@ -4,7 +4,7 @@ import test, { afterEach } from "node:test";
 
 const CANDIDATE = {
   agentId: "agent-a",
-  chainId: 42220,
+  chainId: 480,
   clientRequestId: "pitch-1",
   contentId: "42",
   operationKey: `0x${"1".repeat(64)}` as const,

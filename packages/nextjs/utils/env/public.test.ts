@@ -22,14 +22,14 @@ test("browser-facing public env modules avoid computed process.env access", () =
 
 test("required deployment helper reports missing contract definitions per target chain", () => {
   const missingContracts = listMissingRequiredTargetContracts(
-    [31337, 42220],
+    [31337, 480],
     {
       31337: {
         ContentRegistry: {},
         HumanReputation: {},
         ProtocolConfig: {},
       },
-      42220: {
+      480: {
         ContentRegistry: {},
         ProtocolConfig: {},
       },
@@ -37,12 +37,12 @@ test("required deployment helper reports missing contract definitions per target
     ["ContentRegistry", "LoopReputation"],
   );
 
-  assert.deepEqual(missingContracts, ["42220:LoopReputation"]);
+  assert.deepEqual(missingContracts, ["480:LoopReputation"]);
 });
 
 test("default required deployment list fails closed for core app contracts", () => {
-  const missingContracts = listMissingRequiredTargetContracts([42220], {
-    42220: {
+  const missingContracts = listMissingRequiredTargetContracts([480], {
+    480: {
       CategoryRegistry: {},
       ContentRegistry: {},
       FrontendRegistry: {},
@@ -55,5 +55,5 @@ test("default required deployment list fails closed for core app contracts", () 
     },
   });
 
-  assert.deepEqual(missingContracts, ["42220:LoopReputation"]);
+  assert.deepEqual(missingContracts, ["480:LoopReputation"]);
 });

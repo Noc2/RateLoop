@@ -469,16 +469,6 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         engine.revealPredictionByCommitKey(contentId, roundId, ck2, 5_000, 5_000, s2);
         engine.revealPredictionByCommitKey(contentId, roundId, ck3, 6_500, 6_500, s3);
 
-        assertEq(engine.commitOpinionRatingBps(contentId, roundId, ck1), 8_000, "ck1 opinion");
-        assertEq(engine.commitOpinionRatingBps(contentId, roundId, ck2), 5_000, "ck2 opinion");
-        assertEq(engine.commitOpinionRatingBps(contentId, roundId, ck3), 6_500, "ck3 opinion");
-        assertEq(engine.commitPredictedRatingBps(contentId, roundId, ck1), 8_000, "ck1 crowd prediction");
-        assertEq(engine.commitPredictedRatingBps(contentId, roundId, ck2), 5_000, "ck2 crowd prediction");
-        assertEq(engine.commitPredictedRatingBps(contentId, roundId, ck3), 6_500, "ck3 crowd prediction");
-        assertEq(engine.commitPredictionWeight(contentId, roundId, ck1), 30e6, "ck1 weight");
-        assertEq(engine.commitPredictionWeight(contentId, roundId, ck2), 10e6, "ck2 weight");
-        assertEq(engine.commitPredictionWeight(contentId, roundId, ck3), 10e6, "ck3 weight");
-
         (uint256 weightedRatingSum, uint256 totalPredictionWeight, uint16 finalRatingBps) =
             engine.roundPredictionStats(contentId, roundId);
         assertEq(weightedRatingSum, 355_000e6, "weighted rating sum");
@@ -511,8 +501,6 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
         (uint256 weightedRatingSum, uint256 totalPredictionWeight, uint16 finalRatingBps) =
             engine.roundPredictionStats(contentId, roundId);
-        assertEq(engine.commitPredictionWeight(contentId, roundId, ck1), STAKE / 4, "discounted prediction weight");
-        assertEq(engine.commitPredictionWeight(contentId, roundId, ck2), STAKE, "default prediction weight");
         assertEq(totalPredictionWeight, 11_250_000, "total adjusted weight");
         assertEq(weightedRatingSum, 67_500_000_000, "adjusted weighted rating sum");
         assertEq(finalRatingBps, 6_500, "adjusted median");
@@ -537,7 +525,6 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertEq(uint256(round.state), uint256(RoundLib.RoundState.Settled));
-        assertEq(engine.MIN_LOO_VALID_PARTICIPANTS(), 3);
         assertEq(engine.roundFinalPredictionRatingBps(contentId, roundId), 0, "prediction rating suppressed");
         assertEq(engine.commitPredictionRewardWeight(contentId, roundId, ck1), 0, "ck1 no LOO score");
         assertEq(engine.commitPredictionRewardWeight(contentId, roundId, ck2), 0, "ck2 no LOO score");
@@ -560,11 +547,6 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         engine.settleRound(contentId, roundId);
 
         assertEq(registry.getRating(contentId), 6_500, "opinion average is the public rating");
-        assertEq(engine.commitOpinionRatingBps(contentId, roundId, ck1), 8_000, "ck1 opinion stored");
-        assertEq(engine.commitPredictedRatingBps(contentId, roundId, ck1), 5_750, "ck1 crowd prediction stored");
-        assertEq(engine.commitPredictionScoreBps(contentId, roundId, ck1), 10_000, "ck1 score");
-        assertEq(engine.commitPredictionScoreBps(contentId, roundId, ck2), 10_000, "ck2 score");
-        assertEq(engine.commitPredictionScoreBps(contentId, roundId, ck3), 10_000, "ck3 score");
     }
 
     function test_PredictionRevealRejectsWrongRating() public {
@@ -1055,7 +1037,8 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
         bytes32 commitKey = _commitKey(voter1, commitHash);
-        (,,, uint64 storedTargetRound,,, uint256 revealableAfter,,,) = engine.commits(contentId, roundId, commitKey);
+        (, uint64 storedTargetRound,, uint256 revealableAfter,,) =
+            engine.commitRevealData(contentId, roundId, commitKey);
         uint256 targetRoundRevealableAt = _tlockRoundTimestamp(storedTargetRound);
         assertEq(
             revealableAfter > targetRoundRevealableAt ? revealableAfter : targetRoundRevealableAt,

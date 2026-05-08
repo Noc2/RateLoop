@@ -175,18 +175,14 @@ function toRoundTuple(round: RoundData) {
   ] as const;
 }
 
-function toCommitTuple(commit: CommitData) {
+function toCommitRevealTuple(commit: CommitData) {
   return [
-    commit.voter,
-    commit.stakeAmount,
     commit.ciphertext,
     commit.targetRound ?? 0n,
     commit.drandChainHash ?? `0x${"0".repeat(64)}`,
-    commit.frontend,
     commit.revealableAfter,
     commit.revealed,
-    commit.isUp,
-    commit.epochIndex,
+    commit.stakeAmount,
   ] as const;
 }
 
@@ -262,9 +258,9 @@ function makeHarness(options: {
           return BigInt(commitKeys.length);
         case "getRoundCommitKey":
           return commitKeys[Number(args[2])] ?? zeroHash;
-        case "commits":
+        case "commitRevealData":
           return tupleResults
-            ? toCommitTuple(commits[String(args[2])] ?? makeCommit({ revealed: true, stakeAmount: 0n }))
+            ? toCommitRevealTuple(commits[String(args[2])] ?? makeCommit({ revealed: true, stakeAmount: 0n }))
             : commits[String(args[2])] ?? makeCommit({ revealed: true, stakeAmount: 0n });
         case "isDormancyEligible":
           return dormancyEligible;

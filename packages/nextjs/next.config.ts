@@ -13,8 +13,8 @@ const rpcOverrides = mergeRpcOverrides(
   RPC_OVERRIDES,
   resolveRpcOverrides({
     31337: process.env.NEXT_PUBLIC_RPC_URL_31337,
-    11142220: process.env.NEXT_PUBLIC_RPC_URL_11142220,
-    42220: process.env.NEXT_PUBLIC_RPC_URL_42220,
+    4801: process.env.NEXT_PUBLIC_RPC_URL_4801,
+    480: process.env.NEXT_PUBLIC_RPC_URL_480,
   }),
 );
 const targetNetworks = resolveTargetNetworks(process.env.NEXT_PUBLIC_TARGET_NETWORKS, {

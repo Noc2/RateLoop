@@ -17,22 +17,6 @@ export type SubmissionRewardAsset = "hrep" | "usdc";
 
 export const QUESTION_SUBMISSION_ABI = ContentRegistryAbi;
 export const QUESTION_REWARD_POOL_ESCROW_ABI = QuestionRewardPoolEscrowAbi;
-export const QUESTION_REWARD_POOL_ESCROW_WIRING_ABI = [
-  {
-    type: "function",
-    name: "getWiring",
-    inputs: [],
-    outputs: [
-      { name: "hrep", type: "address", internalType: "address" },
-      { name: "usdc", type: "address", internalType: "address" },
-      { name: "registry_", type: "address", internalType: "address" },
-      { name: "votingEngine_", type: "address", internalType: "address" },
-      { name: "voterIdNft_", type: "address", internalType: "address" },
-    ],
-    stateMutability: "view",
-  },
-] as const;
-
 export const ERC20_APPROVAL_ABI = [
   {
     type: "function",
@@ -56,9 +40,9 @@ export const ERC20_APPROVAL_ABI = [
   },
 ] as const;
 
-const CELO_USDC_BY_CHAIN_ID: Record<number, `0x${string}`> = {
-  42220: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C",
-  11142220: "0x01C5C0122039549AD1493B8220cABEdD739BC44E",
+const WORLD_CHAIN_USDC_BY_CHAIN_ID: Record<number, `0x${string}`> = {
+  480: "0x79A02482A880bCE3F13e09Da970dC34db4CD24d1",
+  4801: "0x66145f38cBAC35Ca6F1Dfb4914dF98F1614aeA88",
 };
 
 const LOCAL_MOCK_USDC_CONTRACT_NAME = "MockERC20";
@@ -66,6 +50,13 @@ const LOCAL_MOCK_USDC_CONTRACT_NAME = "MockERC20";
 function normalizeAddress(value: string | undefined): `0x${string}` | undefined {
   const trimmed = value?.trim();
   return trimmed && isAddress(trimmed) ? (trimmed as `0x${string}`) : undefined;
+}
+
+function getPublicUsdcAddressOverride(): `0x${string}` | undefined {
+  return (
+    normalizeAddress(process.env.NEXT_PUBLIC_USDC_ADDRESS) ??
+    normalizeAddress(process.env.NEXT_PUBLIC_CELO_USDC_ADDRESS)
+  );
 }
 
 function getDeployedContractAddress(chainId: number, contractName: string): `0x${string}` | undefined {
@@ -102,21 +93,18 @@ export function getConfiguredQuestionRewardPoolEscrowAddress(chainId: number): `
 
 export function getDefaultUsdcAddress(chainId: number): `0x${string}` | undefined {
   return (
-    normalizeAddress(process.env.NEXT_PUBLIC_CELO_USDC_ADDRESS) ??
+    getPublicUsdcAddressOverride() ??
     getDeployedContractAddress(chainId, LOCAL_MOCK_USDC_CONTRACT_NAME) ??
-    CELO_USDC_BY_CHAIN_ID[chainId]
+    WORLD_CHAIN_USDC_BY_CHAIN_ID[chainId]
   );
 }
 
 export function getDefaultUsdcDisplayName(chainId: number): string {
-  if (
-    !normalizeAddress(process.env.NEXT_PUBLIC_CELO_USDC_ADDRESS) &&
-    getDeployedContractAddress(chainId, LOCAL_MOCK_USDC_CONTRACT_NAME)
-  ) {
+  if (!getPublicUsdcAddressOverride() && getDeployedContractAddress(chainId, LOCAL_MOCK_USDC_CONTRACT_NAME)) {
     return "Mock USDC";
   }
 
-  return "Celo USDC";
+  return "World Chain USDC";
 }
 
 export function parseUsdRewardPoolAmount(value: string): bigint | null {

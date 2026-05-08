@@ -76,29 +76,29 @@ test:
 verify:
 	FOUNDRY_PROFILE=$(DEPLOY_PROFILE) forge script script/VerifyAll.s.sol --ffi --rpc-url $(RPC_URL)
 
-# Verify a single contract on Blockscout (Celo chains)
-# Usage: make verify-blockscout NETWORK=<celo|celoSepolia> CONTRACT_ADDRESS=0x... CONTRACT_NAME=MyContract
+# Verify a single contract on Blockscout (World Chain networks)
+# Usage: make verify-blockscout NETWORK=<worldchain|worldchainSepolia> CONTRACT_ADDRESS=0x... CONTRACT_NAME=MyContract
 # Optional overrides: BLOCKSCOUT_URL=... BLOCKSCOUT_CHAIN_ID=...
 verify-blockscout:
 	@if [ -z "$(NETWORK)" ]; then \
-		echo "Missing NETWORK. Use NETWORK=celo or NETWORK=celoSepolia."; \
+		echo "Missing NETWORK. Use NETWORK=worldchain or NETWORK=worldchainSepolia."; \
 		exit 1; \
 	fi
 	@if [ -z "$(CONTRACT_ADDRESS)" ] || [ -z "$(CONTRACT_NAME)" ]; then \
-		echo "Usage: make verify-blockscout NETWORK=<celo|celoSepolia> CONTRACT_ADDRESS=0x... CONTRACT_NAME=MyContract"; \
+		echo "Usage: make verify-blockscout NETWORK=<worldchain|worldchainSepolia> CONTRACT_ADDRESS=0x... CONTRACT_NAME=MyContract"; \
 		exit 1; \
 	fi
 	@case "$(NETWORK)" in \
-		celo) \
-			blockscout_url="https://celo.blockscout.com/api/"; \
-			chain_id="42220"; \
+		worldchain) \
+			blockscout_url="https://worldchain.blockscout.com/api/"; \
+			chain_id="480"; \
 			;; \
-		celoSepolia) \
-			blockscout_url="https://celo-sepolia.blockscout.com/api/"; \
-			chain_id="11142220"; \
+		worldchainSepolia) \
+			blockscout_url="https://worldchain-sepolia.blockscout.com/api/"; \
+			chain_id="4801"; \
 			;; \
 		*) \
-			echo "Unsupported NETWORK='$(NETWORK)'. Use celo or celoSepolia."; \
+			echo "Unsupported NETWORK='$(NETWORK)'. Use worldchain or worldchainSepolia."; \
 			exit 1; \
 			;; \
 	esac; \

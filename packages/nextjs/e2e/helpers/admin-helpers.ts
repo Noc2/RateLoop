@@ -676,7 +676,7 @@ async function readCommitTiming(
   const { decodeFunctionResult, encodeFunctionData } = await import("viem");
   const abi = [
     {
-      name: "commits",
+      name: "commitRevealData",
       type: "function",
       inputs: [
         { name: "contentId", type: "uint256" },
@@ -684,23 +684,19 @@ async function readCommitTiming(
         { name: "commitKey", type: "bytes32" },
       ],
       outputs: [
-        { name: "voter", type: "address" },
-        { name: "stakeAmount", type: "uint64" },
         { name: "ciphertext", type: "bytes" },
         { name: "targetRound", type: "uint64" },
         { name: "drandChainHash", type: "bytes32" },
-        { name: "frontend", type: "address" },
         { name: "revealableAfter", type: "uint48" },
         { name: "revealed", type: "bool" },
-        { name: "isUp", type: "bool" },
-        { name: "epochIndex", type: "uint8" },
+        { name: "stakeAmount", type: "uint64" },
       ],
       stateMutability: "view",
     },
   ] as const;
   const data = encodeFunctionData({
     abi,
-    functionName: "commits",
+    functionName: "commitRevealData",
     args: [contentId, roundId, commitKey],
   });
   const result = await rpcRequest<`0x${string}`>("eth_call", [{ to: contractAddress, data }, blockTag]);
@@ -710,28 +706,24 @@ async function readCommitTiming(
 
   const commit = decodeFunctionResult({
     abi,
-    functionName: "commits",
+    functionName: "commitRevealData",
     data: result,
-  }) as readonly [
+  }) as unknown as readonly [
     `0x${string}`,
     bigint,
     `0x${string}`,
+    bigint | number,
+    boolean,
     bigint,
-    `0x${string}`,
-    string,
-    number,
-    boolean,
-    boolean,
-    number,
   ];
 
-  if (commit[0] === "0x0000000000000000000000000000000000000000") {
+  if (commit[5] === 0n) {
     return null;
   }
 
   return {
-    targetRound: commit[3],
-    revealableAfter: BigInt(commit[6]),
+    targetRound: commit[1],
+    revealableAfter: BigInt(commit[3]),
   };
 }
 

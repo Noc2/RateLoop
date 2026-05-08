@@ -2914,10 +2914,17 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@noble/hashes@npm:1.8.0, @noble/hashes@npm:^1.3.1, @noble/hashes@npm:^1.4.0, @noble/hashes@npm:^1.5.0, @noble/hashes@npm:^1.8.0, @noble/hashes@npm:~1.8.0":
+"@noble/hashes@npm:1.8.0, @noble/hashes@npm:^1.3.1, @noble/hashes@npm:^1.4.0, @noble/hashes@npm:^1.5.0, @noble/hashes@npm:^1.7.2, @noble/hashes@npm:^1.8.0, @noble/hashes@npm:~1.8.0":
   version: 1.8.0
   resolution: "@noble/hashes@npm:1.8.0"
   checksum: c94e98b941963676feaba62475b1ccfa8341e3f572adbb3b684ee38b658df44100187fa0ef4220da580b13f8d27e87d5492623c8a02ecc61f23fb9960c7918f5
+  languageName: node
+  linkType: hard
+
+"@noble/secp256k1@npm:^2.2.3":
+  version: 2.3.0
+  resolution: "@noble/secp256k1@npm:2.3.0"
+  checksum: 423c7242203fe843f630b48eb3188ca73fffdc81dc29ce8b2579db850c381fb32cda82a8e721623007762241547527c0d5d76d56aa6570bfe077e71dcfbbd583
   languageName: node
   linkType: hard
 
@@ -3980,7 +3987,6 @@ __metadata:
     "@react-pdf/renderer": ^4.3.2
     "@scaffold-ui/components": 0.1.9
     "@scaffold-ui/hooks": 0.1.7
-    "@selfxyz/qrcode": 1.0.22
     "@tailwindcss/postcss": 4.0.15
     "@tanstack/react-query": ~5.59.15
     "@thirdweb-dev/wagmi-adapter": 0.2.208
@@ -3990,6 +3996,7 @@ __metadata:
     "@types/react": ~19.0.7
     "@vercel/blob": 2.3.0
     "@wagmi/core": 2.22.1
+    "@worldcoin/idkit": 4.1.4
     "@xmldom/xmldom": ^0.9.10
     abitype: 1.0.6
     daisyui: 5.0.9
@@ -4809,38 +4816,6 @@ __metadata:
     "@noble/hashes": ~1.8.0
     "@scure/base": ~1.2.5
   checksum: 96d46420780473d6c6c9700254a0eceec60302f61d7f9d7f29024e90c7acff3e8e40a5ee52dfaf104db539a10462e531996aaf9e69f082b8540b0a25870545fc
-  languageName: node
-  linkType: hard
-
-"@selfxyz/qrcode@npm:1.0.22":
-  version: 1.0.22
-  resolution: "@selfxyz/qrcode@npm:1.0.22"
-  dependencies:
-    "@selfxyz/sdk-common": ^1.0.0
-    js-sha1: ^0.7.0
-    js-sha256: ^0.11.0
-    js-sha512: ^0.9.0
-    lottie-react: ^2.4.0
-    node-forge: ^1.3.3
-    poseidon-lite: ^0.3.0
-    qrcode.react: ^4.1.0
-    react-spinners: ^0.14.1
-    socket.io-client: ^4.8.3
-    uuid: ^11.1.0
-  peerDependencies:
-    lottie-react: ^2.4.0
-    react: ">=18.0.0 <20.0.0"
-    react-dom: ">=18.0.0 <20.0.0"
-  checksum: 8748c6c44dfaca2f8333e39b90358784a038cd914cb3fb3193d0a24ef04604b97d010a97705f673348876e42e94d4fea7ecafca97fe9b0a3d7c8593349a71d3b
-  languageName: node
-  linkType: hard
-
-"@selfxyz/sdk-common@npm:^1.0.0":
-  version: 1.0.0
-  resolution: "@selfxyz/sdk-common@npm:1.0.0"
-  dependencies:
-    uuid: ^13.0.0
-  checksum: 3b57cfcad0aba4f64b177bf152bf8fc628c5211cbf244f17694cc32b41d4c325982b412a71229f60af23c5cca719302c2bd52f285e3d5928a0f98b9602a28030
   languageName: node
   linkType: hard
 
@@ -8043,6 +8018,39 @@ __metadata:
     "@whatwg-node/promise-helpers": ^1.3.2
     tslib: ^2.6.3
   checksum: 265b607e8505903a45616e2e3bea5dc78466a28d3f2bc4c3e3aa98f319b6e466a8b9878ae4a154d1449310ae0f7cb777886cd3bb383599c63b90e30a892f592f
+  languageName: node
+  linkType: hard
+
+"@worldcoin/idkit-core@npm:4.1.4":
+  version: 4.1.4
+  resolution: "@worldcoin/idkit-core@npm:4.1.4"
+  dependencies:
+    "@noble/hashes": ^1.7.2
+    "@worldcoin/idkit-server": 1.1.1
+  checksum: 03ae1580a370febd9130f824100b64f23653f5de199890015952b5c5237d335d29710ed06a3d09043ae48650a58cd1d89238e55d06304cc452686cea5ab21806
+  languageName: node
+  linkType: hard
+
+"@worldcoin/idkit-server@npm:1.1.1":
+  version: 1.1.1
+  resolution: "@worldcoin/idkit-server@npm:1.1.1"
+  dependencies:
+    "@noble/hashes": ^1.7.2
+    "@noble/secp256k1": ^2.2.3
+  checksum: 0d787ad9a70fd12b94218d0e30d8cdab3e1ed8bf4edfed60b773e06ccb87dea2e5cced8b9d4628c5d9eff86fa79f41f41b02669d9254ee02b044adc33dc55059
+  languageName: node
+  linkType: hard
+
+"@worldcoin/idkit@npm:4.1.4":
+  version: 4.1.4
+  resolution: "@worldcoin/idkit@npm:4.1.4"
+  dependencies:
+    "@worldcoin/idkit-core": 4.1.4
+    qrcode: ^1.5.4
+  peerDependencies:
+    react: ">=18"
+    react-dom: ">=18"
+  checksum: f326717d4cf9f7df6620d27b67364621eaaa58eb0488f06078e846509a93cd62d7b84d9740e5b0da27a60563b54d212f6f7c249fdeae6b36286e8677483bd757
   languageName: node
   linkType: hard
 
@@ -12938,31 +12946,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"js-sha1@npm:^0.7.0":
-  version: 0.7.0
-  resolution: "js-sha1@npm:0.7.0"
-  checksum: c0dfb69df9979025f7ebc7a91ebbf43920d736c584c83cfc94747241dba6be27dc2a5afdc3e8fa178cc54908123677d435f2c65c256c6d3f53d8179a2650dba2
-  languageName: node
-  linkType: hard
-
-"js-sha256@npm:^0.11.0":
-  version: 0.11.1
-  resolution: "js-sha256@npm:0.11.1"
-  checksum: c23821003bd7459d0af0a7aef8de1b93e126f378588a3fb181ee2dd7c4d2531fba19112b518f649601f34332f159efe194c0aada7b35afef030d7a5c295eb645
-  languageName: node
-  linkType: hard
-
 "js-sha3@npm:0.8.0":
   version: 0.8.0
   resolution: "js-sha3@npm:0.8.0"
   checksum: 75df77c1fc266973f06cce8309ce010e9e9f07ec35ab12022ed29b7f0d9c8757f5a73e1b35aa24840dced0dea7059085aa143d817aea9e188e2a80d569d9adce
-  languageName: node
-  linkType: hard
-
-"js-sha512@npm:^0.9.0":
-  version: 0.9.0
-  resolution: "js-sha512@npm:0.9.0"
-  checksum: da00d207d0c66469f816db9176bb6fc13cfacd1606352910cb0d6ca287946d379c2ba260e0d6ca8d7b3f3b94734c284fe8e609e8bd8212b3f7e0e51be276c90c
   languageName: node
   linkType: hard
 
@@ -13513,25 +13500,6 @@ __metadata:
   bin:
     loose-envify: cli.js
   checksum: 6517e24e0cad87ec9888f500c5b5947032cdfe6ef65e1c1936a0c48a524b81e65542c9c3edc91c97d5bddc806ee2a985dbc79be89215d613b1de5db6d1cfe6f4
-  languageName: node
-  linkType: hard
-
-"lottie-react@npm:^2.4.0":
-  version: 2.4.1
-  resolution: "lottie-react@npm:2.4.1"
-  dependencies:
-    lottie-web: ^5.10.2
-  peerDependencies:
-    react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
-    react-dom: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
-  checksum: ac79931d98ea38fd3a9139139fb976d24a3e4e0ede86c74d69c5571b971122ee7e98432949f0f4af33f48b736fe8448918f124d48548dd46925bab484c09e73f
-  languageName: node
-  linkType: hard
-
-"lottie-web@npm:^5.10.2":
-  version: 5.13.0
-  resolution: "lottie-web@npm:5.13.0"
-  checksum: f634eddbfc49a243af598c8c3b5b2bc347c6980cb85ef3e17a394aa52e2d4d1d04ef565d9cf1581727eec598717932abf5e0e0aba111b4d64f2a9dadaeaa98e2
   languageName: node
   linkType: hard
 
@@ -14121,13 +14089,6 @@ __metadata:
     encoding:
       optional: true
   checksum: d76d2f5edb451a3f05b15115ec89fc6be39de37c6089f1b6368df03b91e1633fd379a7e01b7ab05089a25034b2023d959b47e59759cb38d88341b2459e89d6e5
-  languageName: node
-  linkType: hard
-
-"node-forge@npm:^1.3.3":
-  version: 1.4.0
-  resolution: "node-forge@npm:1.4.0"
-  checksum: c97c634d4d483aae815677db5b1bd14bfea4d873ab48817e020610a2b4d8bc6b3e77994860189b44151ff8e0842c0c4ba6faa80b9a6e6fbd6989865e8eb80b96
   languageName: node
   linkType: hard
 
@@ -15590,13 +15551,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"poseidon-lite@npm:^0.3.0":
-  version: 0.3.0
-  resolution: "poseidon-lite@npm:0.3.0"
-  checksum: 49e46dc43d222f12b76bd3758ef4d4a507d9c788d4221a0e29ad9d29a7ddff54d1e0f9fc58dff15aba8bef87b36b0a47925af5cc4663e2724b14243ef6076247
-  languageName: node
-  linkType: hard
-
 "possible-typed-array-names@npm:^1.0.0":
   version: 1.1.0
   resolution: "possible-typed-array-names@npm:1.1.0"
@@ -15853,15 +15807,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"qrcode.react@npm:^4.1.0":
-  version: 4.2.0
-  resolution: "qrcode.react@npm:4.2.0"
-  peerDependencies:
-    react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
-  checksum: fe7f496bb3696eedf4113390c6feda386e7a5e5d69d12fcc2489c55ecec467f682dc99b0d8085afbeb8ed3962c1f7554b26225cd78b72e78416f9506abbebd5d
-  languageName: node
-  linkType: hard
-
 "qrcode@npm:1.5.3":
   version: 1.5.3
   resolution: "qrcode@npm:1.5.3"
@@ -15876,7 +15821,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"qrcode@npm:~1.5.3":
+"qrcode@npm:^1.5.4, qrcode@npm:~1.5.3":
   version: 1.5.4
   resolution: "qrcode@npm:1.5.4"
   dependencies:
@@ -16042,26 +15987,6 @@ __metadata:
     "@types/react":
       optional: true
   checksum: 70179d794b3172afea8f1df7aedab0df2849f8f9662e20814a3ef6268564f19f077e1153e80c4ab3b379543e7ac1492bec921db130018ca74f2eaedeea841f4d
-  languageName: node
-  linkType: hard
-
-"react-spinners@npm:0.14.1":
-  version: 0.14.1
-  resolution: "react-spinners@npm:0.14.1"
-  peerDependencies:
-    react: ^16.0.0 || ^17.0.0 || ^18.0.0
-    react-dom: ^16.0.0 || ^17.0.0 || ^18.0.0
-  checksum: 42da89561e8ebcd2576f5ea96a6ac6a5288783d271769901edd00f03f66565ea1be79f5519766d6fe576a6f2c6a29bd2ae5bedaf9e90b1765adfd9ea7f30a78e
-  languageName: node
-  linkType: hard
-
-"react-spinners@patch:react-spinners@npm%3A0.14.1#./.yarn/patches/react-spinners-npm-0.14.1-545ddaba3f.patch::locator=rateloop%40workspace%3A.":
-  version: 0.14.1
-  resolution: "react-spinners@patch:react-spinners@npm%3A0.14.1#./.yarn/patches/react-spinners-npm-0.14.1-545ddaba3f.patch::version=0.14.1&hash=9a6209&locator=rateloop%40workspace%3A."
-  peerDependencies:
-    react: ^16.0.0 || ^17.0.0 || ^18.0.0
-    react-dom: ^16.0.0 || ^17.0.0 || ^18.0.0
-  checksum: b01d79707b7021e8965ed2ffb539d0f43ba0643664f26ddc1d2f206372c6194028fff731ebd411c3515839a798aeed34296fa767f40d315bc2a315789ccfa232
   languageName: node
   linkType: hard
 
@@ -17014,7 +16939,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"socket.io-client@npm:^4.5.1, socket.io-client@npm:^4.8.3":
+"socket.io-client@npm:^4.5.1":
   version: 4.8.3
   resolution: "socket.io-client@npm:4.8.3"
   dependencies:
@@ -18529,24 +18454,6 @@ __metadata:
     is-typed-array: ^1.1.3
     which-typed-array: ^1.1.2
   checksum: 705e51f0de5b446f4edec10739752ac25856541e0254ea1e7e45e5b9f9b0cb105bc4bd415736a6210edc68245a7f903bf085ffb08dd7deb8a0e847f60538a38a
-  languageName: node
-  linkType: hard
-
-"uuid@npm:^11.1.0":
-  version: 11.1.0
-  resolution: "uuid@npm:11.1.0"
-  bin:
-    uuid: dist/esm/bin/uuid
-  checksum: 840f19758543c4631e58a29439e51b5b669d5f34b4dd2700b6a1d15c5708c7a6e0c3e2c8c4a2eae761a3a7caa7e9884d00c86c02622ba91137bd3deade6b4b4a
-  languageName: node
-  linkType: hard
-
-"uuid@npm:^13.0.0":
-  version: 13.0.0
-  resolution: "uuid@npm:13.0.0"
-  bin:
-    uuid: dist-node/bin/uuid
-  checksum: 7510ee1ab371be5339ef26ff8cabc2f4a2c60640ff880652968f758072f53bd4f4af1c8b0e671a8c9bb29ef926a24dec3ef0e3861d78183b39291a85743a9f96
   languageName: node
   linkType: hard
 

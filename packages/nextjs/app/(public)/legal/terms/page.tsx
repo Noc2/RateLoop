@@ -191,10 +191,10 @@ const TermsPage: NextPage = () => {
         </ul>
         <p>
           Submission and bounty features are question-first: a submission may be text-only or include one image or one
-          YouTube link, and the submission must attach a non-refundable bounty funded in LREP or USDC on Celo. A default
-          frontend-operator share may be reserved from qualified claims when the vote was attributed to an eligible
-          frontend. Bounty funds are sent from your connected wallet, smart wallet, or user-authorized agent wallet
-          directly to protocol smart contracts; the Interface operator does not custody those bounty funds. The
+          YouTube link, and the submission must attach a non-refundable bounty funded in LREP or USDC on World Chain. A
+          default frontend-operator share may be reserved from qualified claims when the vote was attributed to an
+          eligible frontend. Bounty funds are sent from your connected wallet, smart wallet, or user-authorized agent
+          wallet directly to protocol smart contracts; the Interface operator does not custody those bounty funds. The
           Interface does not impose a hard bounty cap, but it may apply moderation, duplicate-detection, media-type, and
           eligibility checks before a submission is accepted or a claim is processed.
         </p>

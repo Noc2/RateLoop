@@ -24,7 +24,7 @@ function x402AuthorizationRequest(from = account.address) {
     authorization,
     typedData: {
       domain: {
-        chainId: 42220,
+        chainId: 480,
         name: "USDC",
         verifyingContract: "0x00000000000000000000000000000000000000cc",
         version: "2",

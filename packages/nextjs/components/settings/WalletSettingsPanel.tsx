@@ -3,26 +3,26 @@
 import { defineChain } from "thirdweb";
 import { BuyWidget } from "thirdweb/react";
 import { formatEther, isAddress } from "viem";
-import { celo } from "viem/chains";
+import { worldchain } from "viem/chains";
 import { useAccount, useBalance } from "wagmi";
 import { ArrowsRightLeftIcon, BanknotesIcon, WalletIcon } from "@heroicons/react/24/outline";
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import { useCuryoSwitchNetwork } from "~~/hooks/useCuryoSwitchNetwork";
 import { thirdwebClient } from "~~/services/thirdweb/client";
 
-const CELO_MAINNET_CHAIN_ID = 42220;
-const DEFAULT_CELO_TOP_UP_AMOUNT = "1";
-const CELO_TOP_UP_PRESET_OPTIONS: [number, number, number] = [5, 10, 20];
-const THIRDWEB_CELO_CHAIN = defineChain(celo);
+const WORLD_CHAIN_MAINNET_CHAIN_ID = 480;
+const DEFAULT_ETH_TOP_UP_AMOUNT = "1";
+const ETH_TOP_UP_PRESET_OPTIONS: [number, number, number] = [5, 10, 20];
+const THIRDWEB_WORLD_CHAIN = defineChain(worldchain);
 
-function formatCeloBalance(value: bigint | undefined) {
+function formatEthBalance(value: bigint | undefined) {
   if (value === undefined) return "Loading...";
 
   const formatted = Number(formatEther(value));
   return `${formatted.toLocaleString(undefined, {
     maximumFractionDigits: formatted >= 1 ? 3 : 6,
     minimumFractionDigits: 0,
-  })} CELO`;
+  })} ETH`;
 }
 
 function shortAddress(value: string | undefined) {
@@ -34,24 +34,24 @@ export function WalletSettingsPanel({ address }: { address?: string }) {
   const { targetNetwork } = useTargetNetwork();
   const { switchToChain, switchingChainId } = useCuryoSwitchNetwork();
   const walletAddress = address && isAddress(address) ? (address as `0x${string}`) : undefined;
-  const targetIsCelo = targetNetwork.id === CELO_MAINNET_CHAIN_ID;
-  const connectedToCelo = chain?.id === CELO_MAINNET_CHAIN_ID;
-  const { data: celoBalance } = useBalance({
+  const targetIsWorldChain = targetNetwork.id === WORLD_CHAIN_MAINNET_CHAIN_ID;
+  const connectedToWorldChain = chain?.id === WORLD_CHAIN_MAINNET_CHAIN_ID;
+  const { data: ethBalance } = useBalance({
     address: walletAddress,
-    chainId: CELO_MAINNET_CHAIN_ID,
+    chainId: WORLD_CHAIN_MAINNET_CHAIN_ID,
     query: {
-      enabled: Boolean(walletAddress && targetIsCelo),
+      enabled: Boolean(walletAddress && targetIsWorldChain),
     },
   });
-  const canUseCeloTopUp = Boolean(thirdwebClient && walletAddress && targetIsCelo && connectedToCelo);
+  const canUseEthTopUp = Boolean(thirdwebClient && walletAddress && targetIsWorldChain && connectedToWorldChain);
 
   const unavailableMessage = !thirdwebClient
-    ? "CELO top-up is unavailable until thirdweb is configured for this deployment."
-    : !targetIsCelo
-      ? "CELO top-up is available on Celo mainnet deployments."
-      : !connectedToCelo
-        ? "Switch to Celo mainnet to buy CELO for gas."
-        : "Connect a wallet to buy CELO for gas.";
+    ? "ETH top-up is unavailable until thirdweb is configured for this deployment."
+    : !targetIsWorldChain
+      ? "ETH top-up is available on World Chain mainnet deployments."
+      : !connectedToWorldChain
+        ? "Switch to World Chain mainnet to buy ETH for gas."
+        : "Connect a wallet to buy ETH for gas.";
 
   return (
     <section className="space-y-6">
@@ -64,14 +64,16 @@ export function WalletSettingsPanel({ address }: { address?: string }) {
             </div>
             <h2 className="mt-3 text-3xl font-semibold text-base-content sm:text-4xl">Gas and wallet funding</h2>
             <p className="mt-3 max-w-2xl text-base leading-relaxed text-base-content/65">
-              RateLoop uses Celo. External wallets need a small native CELO balance for transaction fees, while bounties
-              and agent asks still use LREP or Celo USDC.
+              RateLoop uses World Chain. External wallets need a small native ETH balance for transaction fees, while
+              bounties and agent asks still use LREP or World Chain USDC.
             </p>
           </div>
 
           <div className="rounded-2xl bg-base-300 px-4 py-3 text-sm text-base-content/70">
             <p className="font-medium text-base-content">{shortAddress(walletAddress)}</p>
-            <p className="mt-1">{targetIsCelo ? formatCeloBalance(celoBalance?.value) : "Celo mainnet required"}</p>
+            <p className="mt-1">
+              {targetIsWorldChain ? formatEthBalance(ethBalance?.value) : "World Chain mainnet required"}
+            </p>
           </div>
         </div>
       </div>
@@ -80,41 +82,41 @@ export function WalletSettingsPanel({ address }: { address?: string }) {
         <div className="surface-card rounded-2xl p-6">
           <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-base-content/55">
             <BanknotesIcon className="h-4 w-4" />
-            CELO for gas
+            ETH for gas
           </div>
           <h3 className="mt-3 text-2xl font-semibold text-base-content">Top up network fees</h3>
           <p className="mt-3 text-base leading-relaxed text-base-content/65">
-            Buy native CELO directly to the connected wallet. CELO covers Celo network gas for normal wallet
-            transactions after sponsored RateLoop Wallet transactions are used or unavailable.
+            Buy native ETH directly to the connected wallet. ETH covers World Chain gas for normal wallet transactions
+            after sponsored RateLoop Wallet transactions are used or unavailable.
           </p>
 
-          {targetIsCelo && !connectedToCelo ? (
+          {targetIsWorldChain && !connectedToWorldChain ? (
             <button
               type="button"
               className="btn btn-primary mt-5 gap-2"
-              disabled={switchingChainId === CELO_MAINNET_CHAIN_ID}
-              onClick={() => void switchToChain(CELO_MAINNET_CHAIN_ID)}
+              disabled={switchingChainId === WORLD_CHAIN_MAINNET_CHAIN_ID}
+              onClick={() => void switchToChain(WORLD_CHAIN_MAINNET_CHAIN_ID)}
             >
               <ArrowsRightLeftIcon className="h-5 w-5" />
-              {switchingChainId === CELO_MAINNET_CHAIN_ID ? "Switching..." : "Switch to Celo"}
+              {switchingChainId === WORLD_CHAIN_MAINNET_CHAIN_ID ? "Switching..." : "Switch to World Chain"}
             </button>
           ) : null}
         </div>
 
         <div className="min-w-0">
-          {canUseCeloTopUp && thirdwebClient && walletAddress ? (
+          {canUseEthTopUp && thirdwebClient && walletAddress ? (
             <BuyWidget
-              amount={DEFAULT_CELO_TOP_UP_AMOUNT}
+              amount={DEFAULT_ETH_TOP_UP_AMOUNT}
               amountEditable
-              buttonLabel="Add CELO"
-              chain={THIRDWEB_CELO_CHAIN}
+              buttonLabel="Add ETH"
+              chain={THIRDWEB_WORLD_CHAIN}
               client={thirdwebClient}
-              description="Fund your connected wallet with native CELO for Celo gas costs."
-              presetOptions={CELO_TOP_UP_PRESET_OPTIONS}
+              description="Fund your connected wallet with native ETH for World Chain gas costs."
+              presetOptions={ETH_TOP_UP_PRESET_OPTIONS}
               receiverAddress={walletAddress}
               showThirdwebBranding={false}
               theme="dark"
-              title="Add CELO"
+              title="Add ETH"
               tokenEditable={false}
             />
           ) : (

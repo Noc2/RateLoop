@@ -133,7 +133,7 @@ test("free transaction confirm route fails open when the rate limit store is una
   const response = await route.POST(
     makeRequest({
       address: TEST_ADDRESS,
-      chainId: 42220,
+      chainId: 480,
       operationKey: TEST_OPERATION_KEY,
       transactionHashes: [TEST_TX_HASH],
     }),
@@ -150,7 +150,7 @@ test("free transaction confirm route fails open when the quota store is unavaila
     const response = await route.POST(
       makeRequest({
         address: TEST_ADDRESS,
-        chainId: 42220,
+        chainId: 480,
         operationKey: TEST_OPERATION_KEY,
         transactionHashes: [TEST_TX_HASH],
       }),

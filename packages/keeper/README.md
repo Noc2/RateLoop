@@ -25,7 +25,7 @@ yarn keeper:start  # Production mode (long-running service)
 
 Copy `.env.example` to `.env.local` and configure:
 
-For live `CHAIN_ID` values `11142220` and `42220`, Keeper reads the latest contract addresses from `@rateloop/contracts`.
+For live `CHAIN_ID` values `4801` and `480`, Keeper reads the latest contract addresses from `@rateloop/contracts`.
 For local `31337`, address vars override the shared artifact so a fresh Anvil deploy can be used without committing
 machine-specific local addresses. Only set address vars on unsupported chains or local Hardhat/Anvil.
 

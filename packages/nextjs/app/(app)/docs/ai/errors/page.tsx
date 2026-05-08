@@ -159,7 +159,7 @@ const AIErrorsPage: NextPage = () => {
           state, audit events, callback deliveries, and live ask guidance.
         </li>
         <li>
-          <code>/api/agent/asks/by-client-request/audit?chainId=42220&amp;clientRequestId=...</code>: alternate lookup
+          <code>/api/agent/asks/by-client-request/audit?chainId=480&amp;clientRequestId=...</code>: alternate lookup
           using the agent&apos;s idempotency key.
         </li>
         <li>

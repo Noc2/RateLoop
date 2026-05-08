@@ -174,7 +174,7 @@ CONTEXT_URLS=(
   "https://picsum.photos/seed/curyo-cafe-review/1200/800.jpg"
   "https://picsum.photos/seed/curyo-hotel-room/1200/800.jpg"
   "https://www.youtube.com/watch?v=jNQXAC9IVRw"
-  "https://docs.celo.org/build"
+  "https://docs.worldchain.org/build"
   "https://picsum.photos/seed/curyo-event-poster/1200/800.jpg"
   "https://picsum.photos/seed/curyo-weeknight-dinner/1200/800.jpg"
   "https://picsum.photos/seed/curyo-media-hero-primary/1200/800.jpg"

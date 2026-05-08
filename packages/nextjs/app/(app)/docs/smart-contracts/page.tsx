@@ -106,11 +106,6 @@ const SmartContracts: NextPage = () => {
               <td>Transparent</td>
             </tr>
             <tr>
-              <td className="font-mono text-primary">HumanFaucet</td>
-              <td>Sybil-resistant token distribution via Self.xyz age, document, and sanctions verification</td>
-              <td>No</td>
-            </tr>
-            <tr>
               <td className="font-mono text-primary">CuryoGovernor</td>
               <td>On-chain governance with timelock (proposals, voting, execution)</td>
               <td>No</td>
@@ -184,9 +179,8 @@ const SmartContracts: NextPage = () => {
 
       <h2>VoterIdNFT</h2>
       <p>
-        Soulbound (non-transferable) ERC-721 representing an open rater identity. Minted by HumanFaucet upon successful
-        Self.xyz passport or biometric ID verification for an eligible 18+ claimant. Token ID 0 is reserved (indicates
-        no Voter ID).
+        Soulbound (non-transferable) ERC-721 representing an open rater identity. Minted by governance-approved identity
+        issuers. Token ID 0 is reserved (indicates no Voter ID).
       </p>
       <h3>Sybil Resistance</h3>
       <p>
@@ -198,7 +192,7 @@ const SmartContracts: NextPage = () => {
       <h3>Key Functions</h3>
       <ul>
         <li>
-          <code>mint(holder, nullifier)</code> &mdash; Mint a new Voter ID (authorized minters only, e.g., HumanFaucet).
+          <code>mint(holder, nullifier)</code> &mdash; Mint a new Voter ID (authorized identity minters only).
         </li>
         <li>
           <code>revokeVoterId(holder)</code> &mdash; Revoke a Voter ID (owner/governance).
@@ -599,23 +593,6 @@ const SmartContracts: NextPage = () => {
 
       <hr />
 
-      <h2>HumanFaucet</h2>
-      <p>
-        Sybil-resistant token distribution using Self.xyz zero-knowledge passport or biometric ID-card verification.
-        Claims require a supported credential, proof that the claimant is 18 or older, OFAC sanctions clearance, and the
-        configured sanctioned-country exclusion check, currently covering Cuba, Iran, North Korea, and Syria. Five tiers
-        run from Genesis (10,000 LREP for the first 10 users) down to Settler (1 LREP), with claim sizes stepping down
-        10x at claimant thresholds 10 / 1,000 / 10,000 / 1,000,000. Referral bonuses are 50% of the claim amount for
-        both claimant and referrer.
-      </p>
-      <p>
-        On a successful claim, HumanFaucet attempts to mint a <strong>VoterIdNFT</strong> for the claimant, enabling
-        participation across the platform. Governance can retry the mint if the claim succeeds but the NFT mint fails.
-      </p>
-      <p>Privileged sweeps of accounted faucet funds are disabled in the current launch hardening.</p>
-
-      <hr />
-
       <h2>CuryoGovernor</h2>
       <p>
         OpenZeppelin Governor with timelock control. Uses LREP voting power (ERC20Votes). Tokens are locked for 7 days
@@ -632,11 +609,11 @@ const SmartContracts: NextPage = () => {
           <tbody>
             <tr>
               <td>Voting delay</td>
-              <td>~1 day (86,400 blocks on the 1s Celo clock)</td>
+              <td>~1 day (86,400 blocks on the 1s World Chain clock)</td>
             </tr>
             <tr>
               <td>Voting period</td>
-              <td>~1 week (604,800 blocks on the 1s Celo clock)</td>
+              <td>~1 week (604,800 blocks on the 1s World Chain clock)</td>
             </tr>
             <tr>
               <td>Proposal threshold</td>
@@ -707,7 +684,7 @@ const SmartContracts: NextPage = () => {
         </li>
         <li>
           <strong>Reentrancy protection:</strong> Core registry, voting, reward, frontend, category, and participation
-          flows use reentrancy guards; HumanFaucet uses a dedicated claim lock.
+          flows use reentrancy guards.
         </li>
         <li>
           <strong>Snapshot-based governance:</strong> CuryoGovernor uses ERC20Votes snapshots for proposal voting power,
@@ -724,8 +701,8 @@ const SmartContracts: NextPage = () => {
           per-proposal bond and the same voting power can support multiple concurrent proposals.
         </li>
         <li>
-          <strong>Pausable:</strong> ContentRegistry, RoundVotingEngine, and HumanFaucet can be paused.
-          RoundRewardDistributor cannot be paused (users can always withdraw).
+          <strong>Pausable:</strong> ContentRegistry and RoundVotingEngine can be paused. RoundRewardDistributor cannot
+          be paused (users can always withdraw).
         </li>
         <li>
           <strong>Governance-owned access control:</strong> The governor/timelock owns upgrade, config, and treasury

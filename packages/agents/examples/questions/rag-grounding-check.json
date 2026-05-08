@@ -1,6 +1,6 @@
 {
   "clientRequestId": "rag-grounding-check-demo",
-  "chainId": 42220,
+  "chainId": 480,
   "templateId": "rag_grounding_check",
   "maxPaymentAmount": "1000000",
   "bounty": {

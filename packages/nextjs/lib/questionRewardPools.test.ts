@@ -64,23 +64,23 @@ test("getConfiguredQuestionRewardPoolEscrowAddress rejects mismatched production
   }
 });
 
-test("getDefaultUsdcAddress uses local MockERC20 before Celo defaults", () => {
+test("getDefaultUsdcAddress uses local MockERC20 before World Chain defaults", () => {
   const env = process.env as Record<string, string | undefined>;
-  const originalOverride = env.NEXT_PUBLIC_CELO_USDC_ADDRESS;
+  const originalOverride = env.NEXT_PUBLIC_USDC_ADDRESS;
   assert.ok(contracts);
   const localMockUsdcAddress = (contracts[31337] as Record<string, { address?: string }>).MockERC20.address;
   assert.ok(localMockUsdcAddress);
 
   try {
-    delete env.NEXT_PUBLIC_CELO_USDC_ADDRESS;
+    delete env.NEXT_PUBLIC_USDC_ADDRESS;
     assert.equal(getDefaultUsdcAddress(31337)?.toLowerCase(), localMockUsdcAddress.toLowerCase());
     assert.equal(getDefaultUsdcDisplayName(31337), "Mock USDC");
-    assert.equal(getDefaultUsdcAddress(42220), "0xcebA9300f2b948710d2653dD7B07f33A8B32118C");
+    assert.equal(getDefaultUsdcAddress(480), "0x79A02482A880bCE3F13e09Da970dC34db4CD24d1");
   } finally {
     if (originalOverride === undefined) {
-      delete env.NEXT_PUBLIC_CELO_USDC_ADDRESS;
+      delete env.NEXT_PUBLIC_USDC_ADDRESS;
     } else {
-      env.NEXT_PUBLIC_CELO_USDC_ADDRESS = originalOverride;
+      env.NEXT_PUBLIC_USDC_ADDRESS = originalOverride;
     }
   }
 });
