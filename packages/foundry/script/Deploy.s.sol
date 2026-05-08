@@ -16,6 +16,8 @@ import { FeedbackBonusEscrow } from "../contracts/FeedbackBonusEscrow.sol";
 import { ProfileRegistry } from "../contracts/ProfileRegistry.sol";
 import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
 import { QuestionRewardPoolEscrow } from "../contracts/QuestionRewardPoolEscrow.sol";
+import { RaterDeclarationRegistry } from "../contracts/RaterDeclarationRegistry.sol";
+import { RaterRegistry } from "../contracts/RaterRegistry.sol";
 import { X402QuestionSubmitter } from "../contracts/X402QuestionSubmitter.sol";
 import { VoterIdNFT } from "../contracts/VoterIdNFT.sol";
 import { ParticipationPool } from "../contracts/ParticipationPool.sol";
@@ -36,6 +38,8 @@ contract DeployRateMesh is ScaffoldETHDeploy {
     uint256 public constant PARTICIPATION_POOL_AMOUNT = 12_000_000 * 1e6;
     uint256 public constant LAUNCH_DISTRIBUTION_AMOUNT =
         TOTAL_SUPPLY_CAP - CONSENSUS_POOL_AMOUNT - TREASURY_AMOUNT - PARTICIPATION_POOL_AMOUNT;
+    uint256 public constant MIN_AI_DECLARATION_BOND = 100 * 1e6;
+    uint256 public constant AI_DECLARATION_CHALLENGE_BOND = 25 * 1e6;
 
     address internal constant CELO_MAINNET_USDC = 0xcebA9300f2b948710d2653dD7B07f33A8B32118C;
     address internal constant CELO_SEPOLIA_USDC = 0x01C5C0122039549AD1493B8220cABEdD739BC44E;
@@ -140,6 +144,10 @@ contract DeployRateMesh is ScaffoldETHDeploy {
         RoundRewardDistributor rewardDistributor = RoundRewardDistributor(address(rewardDistributorProxy));
 
         CategoryRegistry categoryRegistry = new CategoryRegistry(deployer, governance);
+        RaterRegistry raterRegistry = new RaterRegistry(deployer, governance);
+        RaterDeclarationRegistry raterDeclarationRegistry = new RaterDeclarationRegistry(
+            deployer, governance, mrepToken, governance, MIN_AI_DECLARATION_BOND, AI_DECLARATION_CHALLENGE_BOND
+        );
         VoterIdNFT optionalIdentity = new VoterIdNFT(deployer, governance);
         optionalIdentity.setStakeRecorder(address(votingEngine));
 
@@ -259,6 +267,8 @@ contract DeployRateMesh is ScaffoldETHDeploy {
         deployments.push(Deployment("X402QuestionSubmitter", address(x402QuestionSubmitter)));
         deployments.push(Deployment("FeedbackBonusEscrow", address(feedbackBonusEscrowProxy)));
         deployments.push(Deployment("CategoryRegistry", address(categoryRegistry)));
+        deployments.push(Deployment("RaterRegistry", address(raterRegistry)));
+        deployments.push(Deployment("RaterDeclarationRegistry", address(raterDeclarationRegistry)));
         deployments.push(Deployment("VoterIdNFT", address(optionalIdentity)));
         deployments.push(Deployment("ParticipationPool", address(participationPool)));
         if (isLocalDev) deployments.push(Deployment("MockERC20", usdcTokenAddress));
@@ -271,6 +281,13 @@ contract DeployRateMesh is ScaffoldETHDeploy {
             frontendRegistry.renounceRole(frontendRegistry.ADMIN_ROLE(), deployer);
             profileRegistry.renounceRole(profileRegistry.ADMIN_ROLE(), deployer);
             categoryRegistry.renounceRole(categoryRegistry.ADMIN_ROLE(), deployer);
+            raterRegistry.renounceRole(raterRegistry.ADMIN_ROLE(), deployer);
+            raterRegistry.renounceRole(raterRegistry.SELF_ATTESTOR_ROLE(), deployer);
+            raterRegistry.renounceRole(raterRegistry.SEEDER_ROLE(), deployer);
+            raterRegistry.renounceRole(raterRegistry.SCORER_ROLE(), deployer);
+            raterDeclarationRegistry.renounceRole(raterDeclarationRegistry.CONFIG_ROLE(), deployer);
+            raterDeclarationRegistry.renounceRole(raterDeclarationRegistry.PROBE_ROLE(), deployer);
+            raterDeclarationRegistry.renounceRole(raterDeclarationRegistry.CHALLENGE_RESOLVER_ROLE(), deployer);
             optionalIdentity.transferOwnership(governance);
 
             TimelockController tc = TimelockController(payable(governance));
@@ -294,6 +311,8 @@ contract DeployRateMesh is ScaffoldETHDeploy {
         console.log("FeedbackBonusEscrow:", address(feedbackBonusEscrow));
         console.log("USDC token:", usdcTokenAddress);
         console.log("CategoryRegistry:", address(categoryRegistry));
+        console.log("RaterRegistry:", address(raterRegistry));
+        console.log("RaterDeclarationRegistry:", address(raterDeclarationRegistry));
         console.log("Optional identity NFT:", address(optionalIdentity));
         console.log("ParticipationPool:", address(participationPool));
         console.log("Governance:", governance);

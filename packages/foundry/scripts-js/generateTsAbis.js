@@ -37,6 +37,8 @@ const REQUIRED_NON_LOCAL_DEPLOYMENT_EXPORT_CONTRACTS = [
   "X402QuestionSubmitter",
   "FeedbackBonusEscrow",
   "CategoryRegistry",
+  "RaterRegistry",
+  "RaterDeclarationRegistry",
   "VoterIdNFT",
   "ParticipationPool",
 ];
@@ -828,6 +830,8 @@ const ABI_TARGETS = [
   { contract: "FeedbackBonusEscrow", targets: ["contracts/src/abis"] },
   { contract: "ProfileRegistry", targets: ["contracts/src/abis"] },
   { contract: "ProtocolConfig", targets: ["contracts/src/abis"] },
+  { contract: "RaterRegistry", targets: ["contracts/src/abis"] },
+  { contract: "RaterDeclarationRegistry", targets: ["contracts/src/abis"] },
   { contract: "HumanFaucet", targets: ["contracts/src/abis"] },
   { contract: "ParticipationPool", targets: ["contracts/src/abis"] },
   { contract: "TimelockController", targets: ["contracts/src/abis"] },

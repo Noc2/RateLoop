@@ -8,6 +8,8 @@ export { FrontendRegistryAbi } from "./FrontendRegistryAbi";
 export { ProfileRegistryAbi } from "./ProfileRegistryAbi";
 export { ProtocolConfigAbi } from "./ProtocolConfigAbi";
 export { QuestionRewardPoolEscrowAbi } from "./QuestionRewardPoolEscrowAbi";
+export { RaterDeclarationRegistryAbi } from "./RaterDeclarationRegistryAbi";
+export { RaterRegistryAbi } from "./RaterRegistryAbi";
 export { RoundRewardDistributorAbi } from "./RoundRewardDistributorAbi";
 export { RoundVotingEngineAbi } from "./RoundVotingEngineAbi";
 export { VoterIdNFTAbi } from "./VoterIdNFTAbi";
