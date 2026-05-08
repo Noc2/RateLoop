@@ -34,6 +34,53 @@ function computeVoteEpochIndex(committedAt: bigint, roundStartTime: bigint, epoc
   return committedAt - roundStartTime < BigInt(epochDuration) ? 0 : 1;
 }
 
+function derivePredictionDirection(predictedRatingBps: number, referenceRatingBps: number): boolean {
+  return predictedRatingBps >= referenceRatingBps;
+}
+
+async function recordVoteReveal({
+  context,
+  contentId,
+  roundId,
+  voter,
+  isUp,
+  predictedRatingBps = null,
+  revealedAt,
+}: {
+  context: any;
+  contentId: bigint;
+  roundId: bigint;
+  voter: `0x${string}`;
+  isUp: boolean;
+  predictedRatingBps?: number | null;
+  revealedAt: bigint;
+}) {
+  const roundKey = `${contentId}-${roundId}`;
+  const voteKey = `${contentId}-${roundId}-${voter}`;
+  const existingVote = await context.db.find(vote, { id: voteKey });
+
+  if (existingVote) {
+    await context.db.update(vote, { id: voteKey }).set({
+      isUp,
+      predictedRatingBps,
+      revealed: true,
+      revealedAt,
+      // epochIndex is not available from reveal events; keep existing
+    });
+  }
+
+  const existingRound = await context.db.find(round, { id: roundKey });
+  if (existingRound) {
+    await context.db.update(round, { id: roundKey }).set((row) => ({
+      revealedCount: row.revealedCount + 1,
+      upPool: isUp ? row.upPool + (existingVote?.stake ?? 0n) : row.upPool,
+      downPool: isUp ? row.downPool : row.downPool + (existingVote?.stake ?? 0n),
+      upCount: isUp ? row.upCount + 1 : row.upCount,
+      downCount: isUp ? row.downCount : row.downCount + 1,
+    }));
+  }
+}
+
 ponder.on("RoundVotingEngine:RoundConfigSnapshotted", async ({ event, context }) => {
   const { contentId, roundId, epochDuration, maxDuration, minVoters, maxVoters } = event.args;
   const roundKey = `${contentId}-${roundId}`;
@@ -150,6 +197,7 @@ ponder.on("RoundVotingEngine:VoteCommitted", async ({ event, context }) => {
       targetRound,
       drandChainHash,
       isUp: null,
+      predictedRatingBps: null,
       stake,
       epochIndex,
       revealed: false,
@@ -264,31 +312,37 @@ ponder.on("RoundVotingEngine:VoteCommitted", async ({ event, context }) => {
 
 ponder.on("RoundVotingEngine:VoteRevealed", async ({ event, context }) => {
   const { contentId, roundId, voter, isUp } = event.args;
+  await recordVoteReveal({
+    context,
+    contentId,
+    roundId,
+    voter,
+    isUp,
+    revealedAt: event.block.timestamp,
+  });
+});
+
+ponder.on("RoundVotingEngine:PredictionRevealed", async ({ event, context }) => {
+  const { contentId, roundId, voter, predictedRatingBps } = event.args as {
+    contentId: bigint;
+    roundId: bigint;
+    voter: `0x${string}`;
+    predictedRatingBps: number;
+  };
   const roundKey = `${contentId}-${roundId}`;
-  const voteKey = `${contentId}-${roundId}-${voter}`;
-
-  // Mark vote as revealed (direction now known)
-  const existingVote = await context.db.find(vote, { id: voteKey });
-  if (existingVote) {
-    await context.db.update(vote, { id: voteKey }).set({
-      isUp,
-      revealed: true,
-      revealedAt: event.block.timestamp,
-      // epochIndex is not available from VoteRevealed event; keep existing
-    });
-  }
-
-  // Update round pools (direction now known)
   const existingRound = await context.db.find(round, { id: roundKey });
-  if (existingRound) {
-    await context.db.update(round, { id: roundKey }).set((row) => ({
-      revealedCount: row.revealedCount + 1,
-      upPool: isUp ? row.upPool + (existingVote?.stake ?? 0n) : row.upPool,
-      downPool: isUp ? row.downPool : row.downPool + (existingVote?.stake ?? 0n),
-      upCount: isUp ? row.upCount + 1 : row.upCount,
-      downCount: isUp ? row.downCount : row.downCount + 1,
-    }));
-  }
+  const referenceRatingBps = existingRound?.referenceRatingBps ?? 5000;
+  const isUp = derivePredictionDirection(Number(predictedRatingBps), referenceRatingBps);
+
+  await recordVoteReveal({
+    context,
+    contentId,
+    roundId,
+    voter,
+    isUp,
+    predictedRatingBps: Number(predictedRatingBps),
+    revealedAt: event.block.timestamp,
+  });
 });
 
 ponder.on("RoundVotingEngine:RoundSettled", async ({ event, context }) => {

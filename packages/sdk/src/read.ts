@@ -112,6 +112,7 @@ export interface CuryoVoteItem {
   targetRound: string;
   drandChainHash: `0x${string}`;
   isUp: boolean | null;
+  predictedRatingBps?: number | null;
   stake: string;
   epochIndex: number;
   revealed: boolean;

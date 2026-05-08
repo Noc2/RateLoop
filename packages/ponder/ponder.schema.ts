@@ -157,7 +157,8 @@ export const vote = onchainTable(
     commitHash: t.hex().notNull(),
     targetRound: t.bigint().notNull(),
     drandChainHash: t.hex().notNull(),
-    isUp: t.boolean(), // null until revealed
+    isUp: t.boolean(), // null until revealed; derived from prediction >= round reference for compatibility
+    predictedRatingBps: t.integer(), // null until prediction reveal
     stake: t.bigint().notNull(),
     epochIndex: t.integer().notNull(), // 0=epoch-1 (100% weight), 1=epoch-2+ (25% weight)
     revealed: t.boolean().notNull().default(false),

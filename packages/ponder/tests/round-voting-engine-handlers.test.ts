@@ -53,7 +53,13 @@ vi.mock("@ratemesh/contracts/protocol", () => ({
   },
 }));
 
-function createDb({ existingRound = null }: { existingRound?: Record<string, unknown> | null } = {}) {
+function createDb({
+  existingRound = null,
+  existingVote = null,
+}: {
+  existingRound?: Record<string, unknown> | null;
+  existingVote?: Record<string, unknown> | null;
+} = {}) {
   const insertCalls: Array<{ table: string; values: Record<string, unknown> }> = [];
   const updateCalls: Array<{ table: string; key: Record<string, unknown>; values: Record<string, unknown> }> = [];
   const contentRecord = {
@@ -85,6 +91,7 @@ function createDb({ existingRound = null }: { existingRound?: Record<string, unk
   const rowsByTable: Record<string, Record<string, unknown>> = {
     content: contentRecord,
     round: roundRecord ?? {},
+    vote: existingVote ?? {},
     globalStats: { totalVotes: 0, totalRoundsSettled: 0 },
     dailyVoteActivity: { voteCount: 0 },
     voterStreak: {
@@ -104,6 +111,7 @@ function createDb({ existingRound = null }: { existingRound?: Record<string, unk
       find: vi.fn(async (table: string) => {
         if (table === "content") return contentRecord;
         if (table === "round") return roundRecord;
+        if (table === "vote") return existingVote;
         return null;
       }),
       insert: vi.fn((table: string) => ({
@@ -263,6 +271,69 @@ describe("RoundVotingEngine ponder handlers", () => {
         id: `7-2-${voter}`,
         epochIndex: 1,
         committedAt: 1_601n,
+      }),
+    });
+  });
+
+  it("stores revealed predictions and updates compatibility pools", async () => {
+    const voter = "0x0000000000000000000000000000000000000001";
+    const { db, updateCalls } = createDb({
+      existingRound: {
+        id: "7-2",
+        referenceRatingBps: 6400,
+        revealedCount: 0,
+        upPool: 0n,
+        downPool: 0n,
+        upCount: 0,
+        downCount: 0,
+      },
+      existingVote: {
+        id: `7-2-${voter}`,
+        voter,
+        stake: 25n,
+        revealed: false,
+      },
+    });
+    const registeredHandlers = await loadHandlers();
+    const handler = registeredHandlers.get("RoundVotingEngine:PredictionRevealed");
+
+    expect(handler).toBeDefined();
+
+    await handler!({
+      event: {
+        args: {
+          contentId: 7n,
+          roundId: 2n,
+          voter,
+          predictedRatingBps: 7200,
+        },
+        block: {
+          number: 44n,
+          timestamp: 2_000n,
+        },
+      },
+      context: { db },
+    });
+
+    expect(updateCalls).toContainEqual({
+      table: "vote",
+      key: { id: `7-2-${voter}` },
+      values: {
+        isUp: true,
+        predictedRatingBps: 7200,
+        revealed: true,
+        revealedAt: 2_000n,
+      },
+    });
+    expect(updateCalls).toContainEqual({
+      table: "round",
+      key: { id: "7-2" },
+      values: expect.objectContaining({
+        revealedCount: 1,
+        upPool: 25n,
+        downPool: 0n,
+        upCount: 1,
+        downCount: 0,
       }),
     });
   });
