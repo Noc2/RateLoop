@@ -116,9 +116,9 @@ export function buildDefaultResultSpec(
       "effectiveEvidence",
     ],
     predictionScale: {
-      display: "0.0-10.0",
-      maxBps: 10000,
-      minBps: 0,
+      display: "1.0-9.9",
+      maxBps: 9900,
+      minBps: 1000,
       unit: "predicted final rating",
     },
     ratingSystem: PREDICTED_RATING_SYSTEM,
