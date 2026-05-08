@@ -19,6 +19,45 @@ export const QuestionRewardPoolEscrowAbi = [
   },
   {
     "type": "function",
+    "name": "HIGH_VALUE_REWARD_POOL_THRESHOLD",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MIN_HIGH_VALUE_PARTICIPANTS",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MIN_LOCO_VALID_EFFECTIVE_UNITS",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "advanceQualificationCursor",
     "inputs": [
       {
@@ -1378,6 +1417,49 @@ export const QuestionRewardPoolEscrowAbi = [
   },
   {
     "type": "event",
+    "name": "RewardPoolRoundEffectiveUnits",
+    "inputs": [
+      {
+        "name": "rewardPoolId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "contentId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "roundId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "rawEligibleVoters",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "effectiveParticipantUnits",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "totalClaimWeight",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "RewardPoolRoundQualified",
     "inputs": [
       {
@@ -1571,17 +1653,6 @@ export const QuestionRewardPoolEscrowAbi = [
         "name": "value",
         "type": "uint256",
         "internalType": "uint256"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "SafeERC20FailedOperation",
-    "inputs": [
-      {
-        "name": "token",
-        "type": "address",
-        "internalType": "address"
       }
     ]
   }

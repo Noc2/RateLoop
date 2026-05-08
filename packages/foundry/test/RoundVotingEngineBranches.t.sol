@@ -430,6 +430,31 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertEq(registry.getRating(contentId), 8_000, "registry rating");
     }
 
+    function test_PredictionScoringSuppressedBelowLooFloor() public {
+        vm.prank(owner);
+        _setTlockRoundConfig(ProtocolConfig(protocolConfigAddress), 1 hours, 7 days, 2, 1000);
+        uint256 contentId = _submitContent();
+
+        (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, 8_000, STAKE);
+        (bytes32 ck2, bytes32 s2) = _commitPrediction(voter2, contentId, 5_000, STAKE);
+
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        RoundLib.Round memory r0 = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        _warpPastTlockRevealTime(uint256(r0.startTime) + EPOCH);
+
+        engine.revealPredictionByCommitKey(contentId, roundId, ck1, 8_000, s1);
+        engine.revealPredictionByCommitKey(contentId, roundId, ck2, 5_000, s2);
+
+        engine.settleRound(contentId, roundId);
+
+        RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        assertEq(uint256(round.state), uint256(RoundLib.RoundState.Settled));
+        assertEq(engine.MIN_LOO_VALID_PARTICIPANTS(), 3);
+        assertEq(engine.roundFinalPredictionRatingBps(contentId, roundId), 0, "prediction rating suppressed");
+        assertEq(engine.commitPredictionRewardWeight(contentId, roundId, ck1), 0, "ck1 no LOO score");
+        assertEq(engine.commitPredictionRewardWeight(contentId, roundId, ck2), 0, "ck2 no LOO score");
+    }
+
     function test_PredictionRevealRejectsWrongRating() public {
         uint256 contentId = _submitContent();
         (bytes32 commitKey, bytes32 salt) = _commitPrediction(voter1, contentId, 7_000, STAKE);

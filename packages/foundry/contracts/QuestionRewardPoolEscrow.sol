@@ -44,6 +44,9 @@ contract QuestionRewardPoolEscrow is
     uint256 internal constant MIN_REQUIRED_SETTLED_ROUNDS = 1;
     uint256 internal constant MAX_REQUIRED_SETTLED_ROUNDS = 16;
     uint256 internal constant MAX_REWARD_POOL_ROUND_VOTERS = 200;
+    uint256 public constant MIN_LOCO_VALID_EFFECTIVE_UNITS = 3;
+    uint256 public constant HIGH_VALUE_REWARD_POOL_THRESHOLD = 1_000e6;
+    uint256 public constant MIN_HIGH_VALUE_PARTICIPANTS = 5;
     uint256 internal constant BPS_SCALE = 10_000;
     uint256 internal constant DEFAULT_FRONTEND_FEE_BPS = 300;
     uint256 internal constant MAX_FRONTEND_FEE_BPS = 500;
@@ -336,6 +339,7 @@ contract QuestionRewardPoolEscrow is
         require(funder != address(0), "Invalid funder");
         require(asset == REWARD_ASSET_HREP || asset == REWARD_ASSET_USDC, "Invalid asset");
         require(requiredCompleters >= MIN_REQUIRED_VOTERS, "Too few voters");
+        require(requiredCompleters >= _requiredParticipantFloorForAmount(amount), "High-value floor");
         require(requiredSettledRounds >= MIN_REQUIRED_SETTLED_ROUNDS, "Too few rounds");
         require(requiredSettledRounds <= MAX_REQUIRED_SETTLED_ROUNDS, "Too many rounds");
         require(amount >= requiredCompleters * requiredSettledRounds, "Amount too small");
@@ -448,6 +452,7 @@ contract QuestionRewardPoolEscrow is
         require(asset == REWARD_ASSET_HREP || asset == REWARD_ASSET_USDC, "Invalid asset");
         require(registry.isContentActive(contentId), "Content not active");
         require(requiredVoters >= MIN_REQUIRED_VOTERS, "Too few voters");
+        require(requiredVoters >= _requiredParticipantFloorForAmount(amount), "High-value floor");
         require(requiredSettledRounds >= MIN_REQUIRED_SETTLED_ROUNDS, "Too few rounds");
         require(requiredSettledRounds <= MAX_REQUIRED_SETTLED_ROUNDS, "Too many rounds");
         require(amount >= requiredSettledRounds * requiredVoters, "Amount too small");
@@ -984,6 +989,10 @@ contract QuestionRewardPoolEscrow is
 
     function _pullExactToken(address funder, uint8 asset, uint256 amount) internal returns (uint256 receivedAmount) {
         receivedAmount = QuestionRewardPoolEscrowTransferLib.pullExactToken(_rewardToken(asset), funder, amount);
+    }
+
+    function _requiredParticipantFloorForAmount(uint256 amount) internal pure returns (uint256) {
+        return amount >= HIGH_VALUE_REWARD_POOL_THRESHOLD ? MIN_HIGH_VALUE_PARTICIPANTS : MIN_LOCO_VALID_EFFECTIVE_UNITS;
     }
 
     function _requireFutureBountyWindow(uint256 bountyClosesAt) internal view {

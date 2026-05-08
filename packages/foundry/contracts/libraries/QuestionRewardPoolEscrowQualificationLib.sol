@@ -8,6 +8,8 @@ import { RoundLib } from "./RoundLib.sol";
 import { RewardPool, RoundSnapshot } from "./QuestionRewardPoolEscrowTypes.sol";
 
 library QuestionRewardPoolEscrowQualificationLib {
+    uint256 internal constant MIN_EFFECTIVE_PARTICIPANT_UNITS = 3;
+
     error RewardPoolCursorNeedsAdvance();
 
     struct QualificationContext {
@@ -43,7 +45,10 @@ library QuestionRewardPoolEscrowQualificationLib {
 
         roundSettled = true;
         (rawEligibleVoters, effectiveParticipantUnits, totalClaimWeight) = _countEligibleRevealedVoters(ctx);
-        canQualify = rawEligibleVoters >= ctx.requiredVoters && effectiveParticipantUnits >= ctx.requiredVoters
+        uint256 effectiveFloor = ctx.requiredVoters > MIN_EFFECTIVE_PARTICIPANT_UNITS
+            ? ctx.requiredVoters
+            : MIN_EFFECTIVE_PARTICIPANT_UNITS;
+        canQualify = rawEligibleVoters >= ctx.requiredVoters && effectiveParticipantUnits >= effectiveFloor
             && totalClaimWeight > 0;
     }
 

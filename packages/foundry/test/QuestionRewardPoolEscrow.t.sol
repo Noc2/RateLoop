@@ -271,6 +271,50 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertEq(usdc.balanceOf(address(rewardPoolEscrow)), 0);
     }
 
+    function testQuestionRewardsBlockWhenPredictionEffectiveUnitsBelowFloor() public {
+        uint256 contentId = _submitQuestion("");
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+
+        address[] memory voters = _threeVoters();
+        uint16[] memory predictions = new uint16[](3);
+        predictions[0] = 1_000;
+        predictions[1] = 9_900;
+        predictions[2] = 9_900;
+        uint256 roundId = _settlePredictionRoundWith(voters, contentId, predictions);
+
+        assertEq(rewardPoolEscrow.MIN_LOCO_VALID_EFFECTIVE_UNITS(), 3);
+        assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter1), 0);
+        assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter2), 0);
+        assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter3), 0);
+
+        vm.prank(voter1);
+        vm.expectRevert("Too few eligible voters");
+        rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
+    }
+
+    function testHighValueRewardPoolRequiresHigherParticipantFloor() public {
+        uint256 contentId = _submitQuestion("");
+        uint256 highValueAmount = rewardPoolEscrow.HIGH_VALUE_REWARD_POOL_THRESHOLD();
+
+        vm.startPrank(funder);
+        usdc.approve(address(rewardPoolEscrow), highValueAmount);
+        vm.expectRevert("High-value floor");
+        rewardPoolEscrow.createRewardPool(contentId, highValueAmount, 3, 1, block.timestamp + 30 days, 0);
+
+        usdc.approve(address(rewardPoolEscrow), highValueAmount);
+        uint256 rewardPoolId = rewardPoolEscrow.createRewardPool(
+            contentId,
+            highValueAmount,
+            rewardPoolEscrow.MIN_HIGH_VALUE_PARTICIPANTS(),
+            1,
+            block.timestamp + 30 days,
+            0
+        );
+        vm.stopPrank();
+
+        assertGt(rewardPoolId, 0);
+    }
+
     function testOpenWalletCanClaimQuestionRewardWithoutVoterId() public {
         address openVoter1 = address(201);
         address openVoter2 = address(202);

@@ -98,8 +98,9 @@ contract RoundVotingEngine is
     uint256 internal constant MAX_STAKE = 100e6; // 100 HREP (6 decimals)
     uint256 internal constant VOTE_COOLDOWN = 24 hours; // Time-based cooldown per content per voter
     uint256 internal constant MAX_CIPHERTEXT_SIZE = 2_048; // 2 KB max ciphertext to prevent storage bloat
+    uint16 public constant MIN_LOO_VALID_PARTICIPANTS = 3;
     uint16 internal constant PREDICTION_FULL_CREDIT_TOLERANCE_BPS = 100;
-    uint16 internal constant PREDICTION_ZERO_CREDIT_TOLERANCE_BPS = 9_900;
+    uint16 internal constant PREDICTION_ZERO_CREDIT_TOLERANCE_BPS = 8_900;
     uint16 internal constant PREDICTION_SCORE_SCALE_BPS = 10_000;
 
     // --- State ---
@@ -789,8 +790,9 @@ contract RoundVotingEngine is
         }
 
         uint256 predictionWeight = roundPredictionWeight[contentId][roundId];
-        bool hasPredictionSettlement =
-            predictionWeight > 0 && roundPredictionCount[contentId][roundId] == round.revealedCount;
+        bool hasPredictionSettlement = predictionWeight > 0
+            && roundPredictionCount[contentId][roundId] == round.revealedCount
+            && round.revealedCount >= MIN_LOO_VALID_PARTICIPANTS;
         uint16 finalPredictionRatingBps = hasPredictionSettlement
             ? _roundWeightedMedianPrediction(contentId, roundId, predictionWeight)
             : 0;
