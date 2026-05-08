@@ -464,6 +464,8 @@ export function registerDataRoutes(app: ApiApp) {
         targetRound: vote.targetRound,
         drandChainHash: vote.drandChainHash,
         isUp: vote.isUp,
+        opinionRatingBps: vote.opinionRatingBps,
+        predictedCrowdRatingBps: vote.predictedCrowdRatingBps,
         predictedRatingBps: vote.predictedRatingBps,
         stake: vote.stake,
         epochIndex: vote.epochIndex,

@@ -305,7 +305,8 @@ describe("RoundVotingEngine ponder handlers", () => {
           contentId: 7n,
           roundId: 2n,
           voter,
-          predictedRatingBps: 7200,
+          opinionRatingBps: 7200,
+          predictedCrowdRatingBps: 6800,
           effectiveWeight: 25n,
         },
         block: {
@@ -321,7 +322,9 @@ describe("RoundVotingEngine ponder handlers", () => {
       key: { id: `7-2-${voter}` },
       values: {
         isUp: true,
-        predictedRatingBps: 7200,
+        opinionRatingBps: 7200,
+        predictedCrowdRatingBps: 6800,
+        predictedRatingBps: 6800,
         predictionWeight: 25n,
         revealed: true,
         revealedAt: 2_000n,

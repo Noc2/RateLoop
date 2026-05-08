@@ -195,8 +195,11 @@ function toRoundConfigTuple(config: { epochDuration: bigint; maxDuration: bigint
 }
 
 function makePlaintext(isUp: boolean, fillByte: number): Buffer {
-  const plaintext = Buffer.alloc(34, fillByte);
-  plaintext.writeUInt16BE(isUp ? 8_000 : 2_000, 0);
+  const plaintext = Buffer.alloc(37, fillByte);
+  const ratingBps = isUp ? 8_000 : 2_000;
+  plaintext.writeUInt8(1, 0);
+  plaintext.writeUInt16BE(ratingBps, 1);
+  plaintext.writeUInt16BE(ratingBps, 3);
   return plaintext;
 }
 

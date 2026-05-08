@@ -34,8 +34,8 @@ function computeVoteEpochIndex(committedAt: bigint, roundStartTime: bigint, epoc
   return committedAt - roundStartTime < BigInt(epochDuration) ? 0 : 1;
 }
 
-function derivePredictionDirection(predictedRatingBps: number, referenceRatingBps: number): boolean {
-  return predictedRatingBps >= referenceRatingBps;
+function derivePredictionDirection(opinionRatingBps: number, referenceRatingBps: number): boolean {
+  return opinionRatingBps >= referenceRatingBps;
 }
 
 async function recordVoteReveal({
@@ -44,6 +44,8 @@ async function recordVoteReveal({
   roundId,
   voter,
   isUp,
+  opinionRatingBps = null,
+  predictedCrowdRatingBps = null,
   predictedRatingBps = null,
   predictionWeight = null,
   revealedAt,
@@ -53,6 +55,8 @@ async function recordVoteReveal({
   roundId: bigint;
   voter: `0x${string}`;
   isUp: boolean;
+  opinionRatingBps?: number | null;
+  predictedCrowdRatingBps?: number | null;
   predictedRatingBps?: number | null;
   predictionWeight?: bigint | null;
   revealedAt: bigint;
@@ -64,6 +68,8 @@ async function recordVoteReveal({
   if (existingVote) {
     await context.db.update(vote, { id: voteKey }).set({
       isUp,
+      opinionRatingBps,
+      predictedCrowdRatingBps,
       predictedRatingBps,
       predictionWeight,
       revealed: true,
@@ -81,9 +87,9 @@ async function recordVoteReveal({
       upCount: isUp ? row.upCount + 1 : row.upCount,
       downCount: isUp ? row.downCount : row.downCount + 1,
       predictionWeightedRatingSum:
-        predictedRatingBps === null || predictionWeight === null
+        opinionRatingBps === null || predictionWeight === null
           ? row.predictionWeightedRatingSum
-          : (row.predictionWeightedRatingSum ?? 0n) + BigInt(predictedRatingBps) * predictionWeight,
+          : (row.predictionWeightedRatingSum ?? 0n) + BigInt(opinionRatingBps) * predictionWeight,
       totalPredictionWeight:
         predictionWeight === null ? row.totalPredictionWeight : (row.totalPredictionWeight ?? 0n) + predictionWeight,
     }));
@@ -206,6 +212,8 @@ ponder.on("RoundVotingEngine:VoteCommitted", async ({ event, context }) => {
       targetRound,
       drandChainHash,
       isUp: null,
+      opinionRatingBps: null,
+      predictedCrowdRatingBps: null,
       predictedRatingBps: null,
       predictionWeight: null,
       stake,
@@ -333,17 +341,25 @@ ponder.on("RoundVotingEngine:VoteRevealed", async ({ event, context }) => {
 });
 
 ponder.on("RoundVotingEngine:PredictionRevealed", async ({ event, context }) => {
-  const { contentId, roundId, voter, predictedRatingBps, effectiveWeight = null } = event.args as {
+  const {
+    contentId,
+    roundId,
+    voter,
+    opinionRatingBps,
+    predictedCrowdRatingBps,
+    effectiveWeight = null,
+  } = event.args as {
     contentId: bigint;
     roundId: bigint;
     voter: `0x${string}`;
-    predictedRatingBps: number;
+    opinionRatingBps: number;
+    predictedCrowdRatingBps: number;
     effectiveWeight?: bigint | null;
   };
   const roundKey = `${contentId}-${roundId}`;
   const existingRound = await context.db.find(round, { id: roundKey });
   const referenceRatingBps = existingRound?.referenceRatingBps ?? 5000;
-  const isUp = derivePredictionDirection(Number(predictedRatingBps), referenceRatingBps);
+  const isUp = derivePredictionDirection(Number(opinionRatingBps), referenceRatingBps);
 
   await recordVoteReveal({
     context,
@@ -351,7 +367,9 @@ ponder.on("RoundVotingEngine:PredictionRevealed", async ({ event, context }) => 
     roundId,
     voter,
     isUp,
-    predictedRatingBps: Number(predictedRatingBps),
+    opinionRatingBps: Number(opinionRatingBps),
+    predictedCrowdRatingBps: Number(predictedCrowdRatingBps),
+    predictedRatingBps: Number(predictedCrowdRatingBps),
     predictionWeight: effectiveWeight,
     revealedAt: event.block.timestamp,
   });

@@ -241,14 +241,21 @@ async function discoverCleanupCandidate(
 /**
  * Decrypt a tlock-encrypted ciphertext using the drand beacon.
  * Ciphertext on-chain is hex-encoded UTF-8 armored AGE string.
- * Plaintext is 34 bytes: [uint16 predictedRatingBps, bytes32 salt].
+ * Plaintext is 37 bytes: [uint8 version, uint16 opinionRatingBps, uint16 predictedCrowdRatingBps, bytes32 salt].
  */
 // Valid tlock ciphertexts are ~600-800 bytes; 4KB is a generous upper bound.
 const MAX_CIPHERTEXT_BYTES = 4096;
 
 export async function decryptTlockPredictionCiphertext(
   ciphertext: `0x${string}`,
-): Promise<{ predictedRatingBps: number; rating: number; salt: `0x${string}` } | null> {
+): Promise<{
+  opinionRatingBps: number;
+  predictedCrowdRatingBps: number;
+  predictedRatingBps: number;
+  rating: number;
+  crowdRating: number;
+  salt: `0x${string}`;
+} | null> {
   const hex = ciphertext.startsWith("0x") ? ciphertext.slice(2) : ciphertext;
   if (hex.length / 2 > MAX_CIPHERTEXT_BYTES) return null;
   // Convert hex bytes back to UTF-8 armored string
@@ -637,7 +644,14 @@ async function _revealCommits(
       }
 
       // Decrypt the tlock ciphertext using the drand beacon
-      let decrypted: { predictedRatingBps: number; rating: number; salt: `0x${string}` } | null;
+      let decrypted: {
+        opinionRatingBps: number;
+        predictedCrowdRatingBps: number;
+        predictedRatingBps: number;
+        rating: number;
+        crowdRating: number;
+        salt: `0x${string}`;
+      } | null;
       try {
         decrypted = await decryptTlockPredictionCiphertext(commit.ciphertext as `0x${string}`);
       } catch (err: unknown) {
@@ -693,7 +707,14 @@ async function _revealCommits(
           address: engineAddr,
           abi: RoundVotingEngineAbi,
           functionName: "revealPredictionByCommitKey",
-          args: [contentId, roundId, commitKey, decrypted.predictedRatingBps, decrypted.salt],
+          args: [
+            contentId,
+            roundId,
+            commitKey,
+            decrypted.opinionRatingBps,
+            decrypted.predictedCrowdRatingBps,
+            decrypted.salt,
+          ],
         });
         logger.info("Revealed prediction", {
           contentId: Number(contentId),

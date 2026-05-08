@@ -319,6 +319,8 @@ async function getAudienceContextForContent(contentId: bigint) {
   const rows = await db
     .select({
       isUp: vote.isUp,
+      opinionRatingBps: vote.opinionRatingBps,
+      predictedCrowdRatingBps: vote.predictedCrowdRatingBps,
       predictedRatingBps: vote.predictedRatingBps,
       selfReport: profile.selfReport,
     })
@@ -900,6 +902,8 @@ export function registerContentRoutes(app: ApiApp) {
         targetRound: vote.targetRound,
         drandChainHash: vote.drandChainHash,
         isUp: vote.isUp,
+        opinionRatingBps: vote.opinionRatingBps,
+        predictedCrowdRatingBps: vote.predictedCrowdRatingBps,
         predictedRatingBps: vote.predictedRatingBps,
         stake: vote.stake,
         epochIndex: vote.epochIndex,

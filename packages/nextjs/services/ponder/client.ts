@@ -780,6 +780,9 @@ export interface PonderVoteItem {
   roundId: string;
   voter: string;
   isUp: boolean | null; // null until revealed
+  opinionRatingBps?: number | null;
+  predictedCrowdRatingBps?: number | null;
+  predictedRatingBps?: number | null;
   stake: string;
   epochIndex: number; // 0=epoch-1 (100% weight), 1=epoch-2+ (25% weight)
   revealed: boolean;

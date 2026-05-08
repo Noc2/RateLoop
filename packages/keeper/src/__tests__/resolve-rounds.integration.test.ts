@@ -52,10 +52,12 @@ const { mockConfig, timelockDecrypt } = vi.hoisted(() => ({
     const footerIndex = armorLines.findIndex(line => line.startsWith("-----END AGE ENCRYPTED FILE-----"));
     const agePayload = Buffer.from(armorLines.slice(1, footerIndex).join(""), "base64").toString("binary");
     const payloadLines = agePayload.split("\n");
-    const [predictionBps, saltHex] = (payloadLines[payloadLines.length - 1] ?? "").split(":");
-    const plaintext = Buffer.alloc(34);
-    plaintext.writeUInt16BE(Number(predictionBps ?? "0"), 0);
-    Buffer.from((saltHex ?? "").slice(0, 64), "hex").copy(plaintext, 2);
+    const [opinionBps, crowdPredictionBps, saltHex] = (payloadLines[payloadLines.length - 1] ?? "").split(":");
+    const plaintext = Buffer.alloc(37);
+    plaintext.writeUInt8(1, 0);
+    plaintext.writeUInt16BE(Number(opinionBps ?? "0"), 1);
+    plaintext.writeUInt16BE(Number(crowdPredictionBps ?? "0"), 3);
+    Buffer.from((saltHex ?? "").slice(0, 64), "hex").copy(plaintext, 5);
     return plaintext;
   }),
 }));
@@ -115,9 +117,12 @@ function encodeTestCiphertext(params: {
   };
   const toUnpaddedBase64 = (input: Buffer | string): string => Buffer.from(input).toString("base64").replace(/=+$/u, "");
   const encryptedBody = Buffer.concat([
-    Buffer.from(`${params.predictedRatingBps}:${params.salt.slice(2)}`, "utf8"),
+    Buffer.from(`${params.predictedRatingBps}:${params.predictedRatingBps}:${params.salt.slice(2)}`, "utf8"),
     Buffer.alloc(
-      Math.max(0, 65 - Buffer.byteLength(`${params.predictedRatingBps}:${params.salt.slice(2)}`, "utf8")),
+      Math.max(
+        0,
+        65 - Buffer.byteLength(`${params.predictedRatingBps}:${params.predictedRatingBps}:${params.salt.slice(2)}`, "utf8"),
+      ),
       0x58,
     ),
   ]);
@@ -483,6 +488,7 @@ describe("resolveRounds integration", () => {
       expect(targetRound).toBeGreaterThan(0n);
       const ciphertext = encodeTestCiphertext({ ...voter, targetRound, drandChainHash });
       const commitHash = buildPredictionCommitHash(
+        voter.predictedRatingBps,
         voter.predictedRatingBps,
         voter.salt,
         voter.account,
