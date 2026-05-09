@@ -214,14 +214,14 @@ contract RewardMathTest is Test {
     }
 
     function test_SplitPool_SmallValues() public view {
-        // With 100 tokens: platform = 4, treasury = 1, consensus = 5, voter = 90
+        // With 100 tokens: platform = 3, treasury = 1, consensus = 5, voter = 91
         (uint256 voterShare, uint256 platformShare, uint256 treasuryShare, uint256 consensusShare) =
             harness.splitPool(100);
 
-        assertEq(platformShare, 4);
+        assertEq(platformShare, 3);
         assertEq(treasuryShare, 1);
         assertEq(consensusShare, 5);
-        assertEq(voterShare, 90);
+        assertEq(voterShare, 91);
     }
 
     function test_SplitPool_One() public view {

@@ -2953,7 +2953,7 @@ contract RoundIntegrationTest is VotingTestBase {
         );
     }
 
-    function test_ClaimFrontendFee_ReroutesHistoricalShareAfterVoterIdRevocation() public {
+    function test_ClaimFrontendFee_KeepsHistoricalShareAfterVoterIdRevocation() public {
         FrontendRegistry frontendReg;
         MockVoterIdNFT voterIdNFT;
         (frontendReg, voterIdNFT) = _setupFrontendRegistryWithVoterId();
@@ -2963,21 +2963,18 @@ contract RoundIntegrationTest is VotingTestBase {
 
         voterIdNFT.removeHolder(frontendOp);
 
+        (uint256 fee,,,) = rewardDistributor.previewFrontendFee(contentId, roundId, frontendOp);
         uint256 feesBefore = frontendReg.getAccumulatedFees(frontendOp);
         uint256 frontendBalanceBefore = hrepToken.balanceOf(frontendOp);
         uint256 treasuryBalanceBefore = hrepToken.balanceOf(treasury);
         uint256 reserveBefore = votingEngine.consensusReserve();
 
-        vm.expectRevert(RoundRewardDistributor.FrontendFeeNotClaimable.selector);
         _claimFrontendFeeAsOperator(contentId, roundId, frontendOp);
-        _confiscateFrontendFee(contentId, roundId, frontendOp);
 
-        assertEq(hrepToken.balanceOf(frontendOp), frontendBalanceBefore, "revoked frontend must not be paid directly");
-        assertEq(frontendReg.getAccumulatedFees(frontendOp), feesBefore, "revoked frontend must not accrue fees");
-        assertTrue(
-            hrepToken.balanceOf(treasury) > treasuryBalanceBefore || votingEngine.consensusReserve() > reserveBefore,
-            "redirected fee should reach protocol"
-        );
+        assertEq(hrepToken.balanceOf(frontendOp), frontendBalanceBefore, "fee should still credit registry first");
+        assertEq(frontendReg.getAccumulatedFees(frontendOp), feesBefore + fee, "revocation should not erase earned historical fees");
+        assertEq(hrepToken.balanceOf(treasury), treasuryBalanceBefore, "claim should not route earned fees to treasury");
+        assertEq(votingEngine.consensusReserve(), reserveBefore, "claim should not route earned fees to reserve");
     }
 
     /// @dev After completeDeregister + register(), the frontend's `registeredAt` is set to
