@@ -62,7 +62,7 @@ const cspDirectives = [
     ...vercelLiveScriptSources,
   ].join(" "),
   ["style-src 'self' 'unsafe-inline'", ...vercelLiveStyleSources].join(" "),
-  ["font-src 'self'", ...vercelLiveFontSources].join(" "),
+  ["font-src 'self'", "https://world-id-assets.com", ...vercelLiveFontSources].join(" "),
   "img-src 'self' data: blob: https:",
   [
     "connect-src 'self'",
@@ -73,9 +73,12 @@ const cspDirectives = [
     // drand (tlock encryption)
     "https://api.drand.sh",
     "https://mainnet.drand.sh",
-    // Self.xyz verification
-    "wss://websocket.self.xyz",
-    "wss://websocket.staging.self.xyz",
+    // World ID bridge + verification assets
+    "https://bridge.worldcoin.org",
+    "https://developer.world.org",
+    "https://simulator.worldcoin.org",
+    "https://*.worldcoin.org",
+    "wss://*.worldcoin.org",
     // Wallet connections
     "wss://*.walletconnect.com",
     "https://*.walletconnect.com",
@@ -100,7 +103,9 @@ const cspDirectives = [
     "https://embedded-wallet.thirdweb.com",
     "https://www.youtube-nocookie.com",
     "https://youtube.com",
-    "https://self.xyz",
+    "https://bridge.worldcoin.org",
+    "https://simulator.worldcoin.org",
+    "https://*.worldcoin.org",
     "https://verify.walletconnect.com",
     ...vercelLiveFrameSources,
   ].join(" "),
