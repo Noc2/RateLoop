@@ -8,7 +8,7 @@ const LREP_DECIMALS = 6;
 const USDC_DECIMALS = 6;
 const MAX_MINT_AMOUNT = 10_000; // Cap per request
 
-const mintERC20Abi = [
+const erc20FaucetAbi = [
   {
     type: "function",
     name: "mint",
@@ -17,6 +17,16 @@ const mintERC20Abi = [
       { name: "amount", type: "uint256" },
     ],
     outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "transfer",
+    inputs: [
+      { name: "to", type: "address" },
+      { name: "amount", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "bool" }],
     stateMutability: "nonpayable",
   },
 ] as const;
@@ -137,8 +147,8 @@ export async function POST(request: NextRequest) {
 
       const txHash = await walletClient.writeContract({
         address: hrepAddress,
-        abi: mintERC20Abi,
-        functionName: "mint",
+        abi: erc20FaucetAbi,
+        functionName: "transfer",
         args: [address as `0x${string}`, mintAmount],
       });
 
@@ -176,7 +186,7 @@ export async function POST(request: NextRequest) {
 
       const txHash = await walletClient.writeContract({
         address: usdcAddress,
-        abi: mintERC20Abi,
+        abi: erc20FaucetAbi,
         functionName: "mint",
         args: [address as `0x${string}`, mintAmount],
       });
