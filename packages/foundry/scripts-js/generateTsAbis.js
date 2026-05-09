@@ -166,6 +166,14 @@ function getInheritedFunctions(mainArtifact) {
   return inheritedFunctions;
 }
 
+function parseOptionalBlockNumber(value) {
+  if (value === undefined || value === null || value === "") {
+    return undefined;
+  }
+
+  return Number(BigInt(value));
+}
+
 function processAllDeployments(broadcastPath) {
   const scriptFolders = getDirectories(broadcastPath);
   const allDeployments = new Map();
@@ -183,10 +191,10 @@ function processAllDeployments(broadcastPath) {
       const deploymentHistory = getDeploymentHistory(chainPath);
 
       deploymentHistory.forEach((deployment) => {
-        const deployedOnBlock =
-          deployment?.receipt?.blockNumber &&
-          Number(BigInt(deployment.receipt.blockNumber));
-        if (deployedOnBlock) {
+        const deployedOnBlock = parseOptionalBlockNumber(
+          deployment?.receipt?.blockNumber
+        );
+        if (deployedOnBlock !== undefined) {
           latestBroadcastBlockNumbers[chainId] = Math.max(
             latestBroadcastBlockNumbers[chainId] || 0,
             deployedOnBlock
@@ -263,9 +271,7 @@ function processAllDeployments(broadcastPath) {
         inheritedFunctions: getInheritedFunctions(artifact),
         deploymentFile: deployment.deploymentFile,
         deploymentScript: deployment.deploymentScript,
-        deployedOnBlock:
-          deployment?.deployedOnBlock &&
-          Number(BigInt(deployment.deployedOnBlock)),
+        deployedOnBlock: parseOptionalBlockNumber(deployment?.deployedOnBlock),
       };
     }
   });
@@ -525,6 +531,8 @@ function main() {
     if (typeof chainDeployments !== "object" || chainDeployments === null)
       return;
 
+    const chainDeploymentBlockNumber = deploymentExportBlockNumber(chainDeployments);
+
     Object.entries(chainDeployments).forEach(([address, contractName]) => {
       // Skip metadata entries like "networkName"
       if (!address.startsWith("0x")) return;
@@ -545,10 +553,10 @@ function main() {
           const deployment = deploymentsByAddress.get(
             `${chainId}-${address.toLowerCase()}`
           );
-          return (
-            deployment?.deployedOnBlock &&
-            Number(BigInt(deployment.deployedOnBlock))
+          const broadcastBlockNumber = parseOptionalBlockNumber(
+            deployment?.deployedOnBlock
           );
+          return broadcastBlockNumber ?? chainDeploymentBlockNumber;
         })(),
       };
     });

@@ -2295,6 +2295,7 @@ const deployedContracts: GenericContractsDeclaration = {
         paused:
           "lib/openzeppelin-contracts-upgradeable/contracts/utils/PausableUpgradeable.sol",
       },
+      deployedOnBlock: 0,
     },
     FrontendRegistry: {
       address: "0x19A1c09fE3399C4Daaa2C98b936a8E460fC5Eaa4",
@@ -3400,6 +3401,7 @@ const deployedContracts: GenericContractsDeclaration = {
         supportsInterface:
           "lib/openzeppelin-contracts-upgradeable/contracts/access/AccessControlUpgradeable.sol",
       },
+      deployedOnBlock: 0,
     },
     VoterIdNFT: {
       address: "0x2c4b93b614DdbfAF0807e8F4Ca982e9f9c2e2Aa4",
@@ -4842,6 +4844,7 @@ const deployedContracts: GenericContractsDeclaration = {
         revokeVoterId: "contracts/interfaces/IVoterIdNFT.sol",
         setDelegate: "contracts/interfaces/IVoterIdNFT.sol",
       },
+      deployedOnBlock: 0,
     },
     ProtocolConfig: {
       address: "0x45009DD3aBBE29Db54fc5D893CeAa98a624882DF",
@@ -6654,6 +6657,7 @@ const deployedContracts: GenericContractsDeclaration = {
         supportsInterface:
           "lib/openzeppelin-contracts-upgradeable/contracts/access/AccessControlUpgradeable.sol",
       },
+      deployedOnBlock: 0,
     },
     ProfileRegistry: {
       address: "0x49B8E3b089d4ebf9F37B1dA9B839Ec013C2cD8c9",
@@ -7348,6 +7352,7 @@ const deployedContracts: GenericContractsDeclaration = {
         supportsInterface:
           "lib/openzeppelin-contracts-upgradeable/contracts/access/AccessControlUpgradeable.sol",
       },
+      deployedOnBlock: 0,
     },
     ParticipationPool: {
       address: "0x49EA5126fD67f877b62dDC0144DBeb42591DF7bb",
@@ -8011,6 +8016,7 @@ const deployedContracts: GenericContractsDeclaration = {
         transferOwnership:
           "lib/openzeppelin-contracts/contracts/access/Ownable.sol",
       },
+      deployedOnBlock: 0,
     },
     FeedbackBonusEscrow: {
       address: "0x4d8E02BBfCf205828A8352Af4376b165E123D7b0",
@@ -9055,6 +9061,7 @@ const deployedContracts: GenericContractsDeclaration = {
         paused:
           "lib/openzeppelin-contracts-upgradeable/contracts/utils/PausableUpgradeable.sol",
       },
+      deployedOnBlock: 0,
     },
     X402QuestionSubmitter: {
       address: "0x4e85DC48a70DA1298489d5B6FC2492767d98f384",
@@ -9517,6 +9524,7 @@ const deployedContracts: GenericContractsDeclaration = {
         },
       ],
       inheritedFunctions: {},
+      deployedOnBlock: 0,
     },
     RaterDeclarationRegistry: {
       address: "0x5621d0B4D8043524Ac5837918D6a95b1050eF228",
@@ -11298,6 +11306,7 @@ const deployedContracts: GenericContractsDeclaration = {
         eip712Domain:
           "lib/openzeppelin-contracts/contracts/utils/cryptography/EIP712.sol",
       },
+      deployedOnBlock: 0,
     },
     RaterRegistry: {
       address: "0x6d014319E0F36651997697C98Da594c7Cf235fa4",
@@ -13227,6 +13236,7 @@ const deployedContracts: GenericContractsDeclaration = {
         supportsInterface:
           "lib/openzeppelin-contracts/contracts/access/AccessControl.sol",
       },
+      deployedOnBlock: 0,
     },
     LoopReputation: {
       address: "0x82C6D3ed4cD33d8EC1E51d0B5Cc1d822Eaa0c3dC",
@@ -14693,6 +14703,7 @@ const deployedContracts: GenericContractsDeclaration = {
         supportsInterface:
           "lib/openzeppelin-contracts/contracts/access/AccessControl.sol",
       },
+      deployedOnBlock: 0,
     },
     CategoryRegistry: {
       address: "0xDFD787c807DEA8d7e53311b779BC0c6a4704D286",
@@ -15231,6 +15242,7 @@ const deployedContracts: GenericContractsDeclaration = {
         supportsInterface:
           "lib/openzeppelin-contracts/contracts/access/AccessControl.sol",
       },
+      deployedOnBlock: 0,
     },
     MockERC20: {
       address: "0xF1078fD568Ad76E49E6F88D1fF485402a086976b",
@@ -15710,6 +15722,7 @@ const deployedContracts: GenericContractsDeclaration = {
         transferFrom:
           "lib/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol",
       },
+      deployedOnBlock: 0,
     },
     RoundRewardDistributor: {
       address: "0xdBD296711eC8eF9Aacb623ee3F1C0922dce0D7b2",
@@ -17858,6 +17871,7 @@ const deployedContracts: GenericContractsDeclaration = {
         supportsInterface:
           "lib/openzeppelin-contracts-upgradeable/contracts/access/AccessControlUpgradeable.sol",
       },
+      deployedOnBlock: 0,
     },
     QuestionRewardPoolEscrow: {
       address: "0xe8F76a822B57b973c7a89006092364fFF8f69040",
@@ -19424,6 +19438,7 @@ const deployedContracts: GenericContractsDeclaration = {
         paused:
           "lib/openzeppelin-contracts-upgradeable/contracts/utils/PausableUpgradeable.sol",
       },
+      deployedOnBlock: 0,
     },
     RoundVotingEngine: {
       address: "0xf56AA3aCedDf88Ab12E494d0B96DA3C09a5d264e",
@@ -21974,6 +21989,7 @@ const deployedContracts: GenericContractsDeclaration = {
         paused:
           "lib/openzeppelin-contracts-upgradeable/contracts/utils/PausableUpgradeable.sol",
       },
+      deployedOnBlock: 0,
     },
   },
 };
