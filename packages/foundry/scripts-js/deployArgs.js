@@ -6,10 +6,16 @@ Options:
   --resume              Resume a partial broadcast for the current network + account
   --help, -h           Show this help message
 Examples:
-  yarn deploy --network sepolia --keystore my-account
   yarn deploy --network worldchainSepolia --keystore my-account --resume
+  yarn deploy --network worldchain --keystore my-account
   yarn deploy
   `;
+
+const SUPPORTED_DEPLOY_NETWORKS = new Set([
+  "localhost",
+  "worldchainSepolia",
+  "worldchain",
+]);
 
 function readOptionValue(args, index, optionName) {
   const value = args[index + 1];
@@ -58,6 +64,12 @@ export function parseDeployArgs(args) {
 
     throw new Error(
       `Unexpected argument: ${arg}. Run \`yarn deploy --help\` for usage.`
+    );
+  }
+
+  if (!SUPPORTED_DEPLOY_NETWORKS.has(network)) {
+    throw new Error(
+      `Unsupported deploy network: ${network}. Supported networks: ${Array.from(SUPPORTED_DEPLOY_NETWORKS).join(", ")}.`
     );
   }
 

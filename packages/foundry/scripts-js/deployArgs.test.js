@@ -13,10 +13,10 @@ test("parseDeployArgs returns defaults with no options", () => {
 
 test("parseDeployArgs reads supported options", () => {
   assert.deepEqual(
-    parseDeployArgs(["--network", "sepolia", "--keystore", "deployer"]),
+    parseDeployArgs(["--network", "worldchainSepolia", "--keystore", "deployer"]),
     {
       showHelp: false,
-      network: "sepolia",
+      network: "worldchainSepolia",
       keystoreArg: "deployer",
       resume: false,
     }
@@ -56,5 +56,12 @@ test("parseDeployArgs rejects positional arguments", () => {
   assert.throws(
     () => parseDeployArgs(["sepolia"]),
     /Unexpected argument: sepolia/
+  );
+});
+
+test("parseDeployArgs rejects networks unsupported by the deploy script", () => {
+  assert.throws(
+    () => parseDeployArgs(["--network", "sepolia"]),
+    /Unsupported deploy network: sepolia/
   );
 });
