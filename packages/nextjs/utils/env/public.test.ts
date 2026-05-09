@@ -37,7 +37,7 @@ test("required deployment helper reports missing contract definitions per target
     ["ContentRegistry", "LoopReputation"],
   );
 
-  assert.deepEqual(missingContracts, ["480:LoopReputation"]);
+  assert.deepEqual(missingContracts, ["31337:LoopReputation", "480:LoopReputation"]);
 });
 
 test("default required deployment list fails closed for core app contracts", () => {

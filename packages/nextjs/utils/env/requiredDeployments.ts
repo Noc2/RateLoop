@@ -22,10 +22,7 @@ export function listMissingRequiredTargetContracts(
     if (!chainDeployments) return [];
 
     return requiredContracts
-      .filter(contractName => {
-        if (chainDeployments[contractName] !== undefined) return false;
-        return contractName !== "LoopReputation" || chainDeployments.HumanReputation === undefined;
-      })
+      .filter(contractName => chainDeployments[contractName] === undefined)
       .map(contractName => `${chainId}:${contractName}`);
   });
 }

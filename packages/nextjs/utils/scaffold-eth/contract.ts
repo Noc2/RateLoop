@@ -46,21 +46,6 @@ type GenericContractsDeclaration = {
   };
 };
 
-function withReputationAlias<TContracts extends GenericContractsDeclaration>(declarations: TContracts): TContracts {
-  const normalized = { ...declarations } as GenericContractsDeclaration;
-
-  for (const [chainId, contractsForChain] of Object.entries(declarations)) {
-    if (!contractsForChain.LoopReputation && contractsForChain.HumanReputation) {
-      normalized[Number(chainId)] = {
-        ...contractsForChain,
-        LoopReputation: contractsForChain.HumanReputation,
-      };
-    }
-  }
-
-  return normalized as TContracts;
-}
-
 function withCurrentAbiOverrides<TContracts extends GenericContractsDeclaration>(declarations: TContracts): TContracts {
   const normalized = { ...declarations } as GenericContractsDeclaration;
 
@@ -79,9 +64,7 @@ function withCurrentAbiOverrides<TContracts extends GenericContractsDeclaration>
   return normalized as TContracts;
 }
 
-const contractsData = withCurrentAbiOverrides(
-  withReputationAlias(deployedContractsData as GenericContractsDeclaration),
-);
+const contractsData = withCurrentAbiOverrides(deployedContractsData as GenericContractsDeclaration);
 
 export const contracts = contractsData as GenericContractsDeclaration | null;
 

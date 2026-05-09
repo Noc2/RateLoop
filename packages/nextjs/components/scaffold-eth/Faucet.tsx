@@ -150,8 +150,7 @@ export const FaucetModal = () => {
   const queryClient = useQueryClient();
 
   // Get contract addresses from localhost deployment
-  const hrepTokenAddress = ((deployedContracts as any)[31337]?.LoopReputation?.address ??
-    (deployedContracts as any)[31337]?.HumanReputation?.address) as AddressType | undefined;
+  const hrepTokenAddress = (deployedContracts as any)[31337]?.LoopReputation?.address as AddressType | undefined;
   const voterIdNFTAddress = (deployedContracts as any)[31337]?.VoterIdNFT?.address as AddressType | undefined;
   const directMockUsdcTokenAddress = (deployedContracts as any)[31337]?.MockERC20?.address as AddressType | undefined;
   const questionRewardPoolEscrowAddress = (deployedContracts as any)[31337]?.QuestionRewardPoolEscrow?.address as

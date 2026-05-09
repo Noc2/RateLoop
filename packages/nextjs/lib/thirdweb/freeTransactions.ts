@@ -267,14 +267,7 @@ let freeTransactionTestOverrides: {
 } | null = null;
 
 function getContractsForChain(chainId: number) {
-  const contracts = (deployedContracts as unknown as Partial<DeployedContractsMap>)[chainId];
-  if (!contracts) return contracts;
-  if (contracts.LoopReputation || !contracts.HumanReputation) return contracts;
-
-  return {
-    ...contracts,
-    LoopReputation: contracts.HumanReputation,
-  };
+  return (deployedContracts as unknown as Partial<DeployedContractsMap>)[chainId];
 }
 
 function buildIdentityKey(params: { chainId: number; environment: string; voterIdTokenId: string }) {

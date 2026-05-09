@@ -74,7 +74,7 @@ function resolveProfileRegistryReadContext(chainId?: number): ProfileRegistryRea
   }
 
   return {
-    hrepToken: contractsForChain?.LoopReputation ?? contractsForChain?.HumanReputation,
+    hrepToken: contractsForChain?.LoopReputation,
     profileRegistry: contractsForChain?.ProfileRegistry,
     publicClient: createPublicClient({
       chain: targetNetwork,

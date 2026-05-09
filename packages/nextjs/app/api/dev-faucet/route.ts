@@ -134,7 +134,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (action === "mint-hrep") {
-      const hrepAddress = contracts.LoopReputation?.address ?? contracts.HumanReputation?.address;
+      const hrepAddress = contracts.LoopReputation?.address;
       if (!hrepAddress) {
         return NextResponse.json({ error: "LoopReputation not deployed on localhost" }, { status: 500 });
       }

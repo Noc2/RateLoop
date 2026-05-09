@@ -46,7 +46,7 @@ const EXECUTED_EVENT = parseAbiItem(
   "event Executed(address indexed user, address indexed signer, address indexed executor, uint256 batchSize)",
 );
 const contractsForChain = (deployedContracts as Record<number, Record<string, ContractRecord>>)[CHAIN_ID];
-const lrepContract = contractsForChain.LoopReputation ?? contractsForChain.HumanReputation;
+const lrepContract = contractsForChain.LoopReputation;
 const contentRegistryContract = contractsForChain.ContentRegistry;
 const frontendRegistryContract = contractsForChain.FrontendRegistry;
 const profileRegistryContract = contractsForChain.ProfileRegistry;
