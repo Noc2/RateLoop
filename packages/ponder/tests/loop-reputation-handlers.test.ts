@@ -95,16 +95,18 @@ afterEach(() => {
 });
 
 describe("LoopReputation ponder handlers", () => {
-  it("excludes shared deployment artifact addresses instead of stale PONDER address env values", async () => {
+  it("excludes protocol addresses from artifacts and active env overrides", async () => {
     const artifactAddress = getSharedDeploymentAddress(31337, "ContentRegistry");
     const staleEnvAddress = "0x1111111111111111111111111111111111111111";
     const deployerAddress = "0x2222222222222222222222222222222222222222";
+    const envProtocolAddress = "0x3333333333333333333333333333333333333333";
 
     expect(artifactAddress).toBeDefined();
 
     await loadHandlers({
       PONDER_NETWORK: "hardhat",
       PONDER_LREP_ADDRESS: staleEnvAddress,
+      PONDER_CONTENT_REGISTRY_ADDRESS: envProtocolAddress,
       PONDER_DEPLOYER_ADDRESS: deployerAddress,
     });
 
@@ -113,6 +115,9 @@ describe("LoopReputation ponder handlers", () => {
 
     const deployerInsertCalls = await runTransfer(deployerAddress);
     expect(deployerInsertCalls.filter(call => call.table === "tokenHolder")).toHaveLength(0);
+
+    const envProtocolInsertCalls = await runTransfer(envProtocolAddress);
+    expect(envProtocolInsertCalls.filter(call => call.table === "tokenHolder")).toHaveLength(0);
 
     const staleEnvInsertCalls = await runTransfer(staleEnvAddress);
     expect(staleEnvInsertCalls).toEqual(

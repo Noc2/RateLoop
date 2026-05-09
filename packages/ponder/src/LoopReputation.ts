@@ -26,6 +26,23 @@ const INDEXED_CONTRACT_NAMES = [
   "RaterDeclarationRegistry",
 ] as const;
 
+type IndexedContractName = (typeof INDEXED_CONTRACT_NAMES)[number];
+
+const INDEXED_CONTRACT_ENV_KEYS: Partial<Record<IndexedContractName, string>> = {
+  ContentRegistry: "PONDER_CONTENT_REGISTRY_ADDRESS",
+  RoundVotingEngine: "PONDER_ROUND_VOTING_ENGINE_ADDRESS",
+  RoundRewardDistributor: "PONDER_ROUND_REWARD_DISTRIBUTOR_ADDRESS",
+  CategoryRegistry: "PONDER_CATEGORY_REGISTRY_ADDRESS",
+  ProfileRegistry: "PONDER_PROFILE_REGISTRY_ADDRESS",
+  FrontendRegistry: "PONDER_FRONTEND_REGISTRY_ADDRESS",
+  VoterIdNFT: "PONDER_VOTER_ID_NFT_ADDRESS",
+  ParticipationPool: "PONDER_PARTICIPATION_POOL_ADDRESS",
+  QuestionRewardPoolEscrow: "PONDER_QUESTION_REWARD_POOL_ESCROW_ADDRESS",
+  FeedbackBonusEscrow: "PONDER_FEEDBACK_BONUS_ESCROW_ADDRESS",
+  RaterRegistry: "PONDER_RATER_REGISTRY_ADDRESS",
+  RaterDeclarationRegistry: "PONDER_RATER_DECLARATION_REGISTRY_ADDRESS",
+};
+
 function addExcludedAddress(addresses: Set<string>, address: string | undefined) {
   if (address && isAddress(address)) {
     addresses.add(address.toLowerCase());
@@ -40,6 +57,10 @@ function buildExcludedAddresses() {
   if (chainId !== undefined) {
     for (const contractName of INDEXED_CONTRACT_NAMES) {
       addExcludedAddress(addresses, getSharedDeploymentAddress(chainId, contractName));
+      const envKey = INDEXED_CONTRACT_ENV_KEYS[contractName];
+      if (envKey) {
+        addExcludedAddress(addresses, process.env[envKey]?.trim());
+      }
     }
   }
 
