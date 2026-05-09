@@ -11,7 +11,7 @@ CATEGORY_ID_RESOLVER="$SCRIPT_DIR/../scripts-js/resolveCategoryId.js"
 PONDER_ENV="$SCRIPT_DIR/../../ponder/.env.local"
 
 RPC="http://127.0.0.1:8545"
-SUBMISSION_BOUNTY_AMOUNT="1000000" # 1 HREP in 6 decimals (default minimum submission Bounty)
+SUBMISSION_BOUNTY_AMOUNT="1000000" # 1 LREP in 6 decimals (default minimum submission Bounty)
 SUBMISSION_BOUNTY_REQUIRED_VOTERS="3"
 SUBMISSION_BOUNTY_REQUIRED_SETTLED_ROUNDS="1"
 SUBMISSION_BOUNTY_EXPIRES_AT="0"
@@ -26,7 +26,7 @@ SUBMISSION_ROUND_MAX_VOTERS="200"
 SUBMISSION_BUNDLE_ROUND_MAX_VOTERS="100"
 DEFAULT_QUESTION_METADATA_HASH="0xed39b36e9ce5c1bfc657909c2f687347be2de998bc871eb8d33df17fdfa0d8cd"
 DEFAULT_RESULT_SPEC_HASH="0x8e5f27bc3269c62c92754f76279bd83838462060fc6cd77411b7407027cfa11f"
-VOTE_STAKE="5000000" # 5 HREP for votes
+VOTE_STAKE="5000000" # 5 LREP for votes
 
 # Check if localhost deployment exists
 if [ ! -f "$DEPLOY_JSON" ]; then
@@ -116,7 +116,7 @@ read_local_contract_address() {
   fi
 }
 
-TOKEN=$(read_local_contract_address "HumanReputation" "PONDER_HREP_ADDRESS")
+TOKEN=$(read_local_contract_address "LoopReputation" "PONDER_LREP_ADDRESS")
 REGISTRY=$(read_local_contract_address "ContentRegistry" "PONDER_CONTENT_REGISTRY_ADDRESS")
 QUESTION_REWARD_POOL_ESCROW=$(read_local_contract_address "QuestionRewardPoolEscrow" "PONDER_QUESTION_REWARD_POOL_ESCROW_ADDRESS")
 FEEDBACK_BONUS_ESCROW=$(read_local_contract_address "FeedbackBonusEscrow" "PONDER_FEEDBACK_BONUS_ESCROW_ADDRESS")
@@ -126,11 +126,11 @@ CATEGORY_REGISTRY=$(read_local_contract_address "CategoryRegistry" "PONDER_CATEG
 
 if [ -z "$TOKEN" ] || [ -z "$REGISTRY" ] || [ -z "$QUESTION_REWARD_POOL_ESCROW" ] || [ -z "$CATEGORY_REGISTRY" ]; then
   echo "ERROR: Could not read contract addresses from $DEPLOY_JSON"
-  echo "Missing required addresses: HumanReputation=${TOKEN:+set}, ContentRegistry=${REGISTRY:+set}, QuestionRewardPoolEscrow=${QUESTION_REWARD_POOL_ESCROW:+set}, CategoryRegistry=${CATEGORY_REGISTRY:+set}"
+  echo "Missing required addresses: LoopReputation=${TOKEN:+set}, ContentRegistry=${REGISTRY:+set}, QuestionRewardPoolEscrow=${QUESTION_REWARD_POOL_ESCROW:+set}, CategoryRegistry=${CATEGORY_REGISTRY:+set}"
   exit 1
 fi
 
-echo "HumanReputation:         $TOKEN"
+echo "LoopReputation:          $TOKEN"
 echo "ContentRegistry:         $REGISTRY"
 echo "QuestionRewardPoolEscrow: $QUESTION_REWARD_POOL_ESCROW"
 echo "FeedbackBonusEscrow:     $FEEDBACK_BONUS_ESCROW"
@@ -141,7 +141,7 @@ echo ""
 
 # Anvil/hardhat default private keys
 # Accounts 2-10 for question submission (some reused for later questions), 9-10 also for voting
-# Note: These accounts are pre-funded with HREP during deployment (see DeployCuryo.s.sol)
+# Note: These accounts are pre-funded with LREP during deployment (see Deploy.s.sol)
 KEYS=(
   "0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a"  # Account 2
   "0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6"  # Account 3
@@ -401,7 +401,7 @@ for BUNDLE_CATEGORY_SLUG in "${BUNDLE_CATEGORY_SLUGS[@]}"; do
 done
 
 echo "=== Seeding example AI agent and research questions ==="
-echo "(Test accounts were pre-funded with HREP during deployment; seeded Bounties use varied HREP amounts)"
+echo "(Test accounts were pre-funded with LREP during deployment; seeded Bounties use varied LREP amounts)"
 echo ""
 
 TOTAL_ITEMS="${#CONTEXT_URLS[@]}"
@@ -470,8 +470,8 @@ for ((i = 0; i < TOTAL_ITEMS; i++)); do
     cast rpc anvil_setBalance "$ADDR" "0x8AC7230489E80000" --rpc-url "$RPC" > /dev/null 2>&1
   fi
 
-  # 1. Approve the Bounty escrow to pull the non-refundable HREP submission Bounty
-  echo "  Approving HREP Bounty: $BOUNTY_AMOUNT"
+  # 1. Approve the Bounty escrow to pull the non-refundable LREP submission Bounty
+  echo "  Approving LREP Bounty: $BOUNTY_AMOUNT"
   cast send "$TOKEN" "approve(address,uint256)" "$QUESTION_REWARD_POOL_ESCROW" "$BOUNTY_AMOUNT" --private-key "$KEY" --rpc-url "$RPC" > /dev/null
 
   # 2. Reserve the hidden submission commitment before revealing the question metadata
