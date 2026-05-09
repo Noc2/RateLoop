@@ -14,7 +14,7 @@ import { notification } from "~~/utils/scaffold-eth";
 // Account index to use from generated hardhat accounts.
 const FAUCET_ACCOUNT_INDEX = 0;
 
-// HREP token has 6 decimals
+// LREP token has 6 decimals
 const HREP_DECIMALS = 6;
 const USDC_DECIMALS = 6;
 
@@ -126,7 +126,7 @@ export const FaucetTrigger = ({
 };
 
 /**
- * Faucet modal which lets you send ETH and claim HREP tokens on local testnet.
+ * Faucet modal which lets you send ETH and claim LREP tokens on local testnet.
  */
 export const FaucetModal = () => {
   const [loading, setLoading] = useState(false);
@@ -500,10 +500,10 @@ export const FaucetModal = () => {
               </>
             )}
 
-            {/* HREP Faucet Section */}
+            {/* LREP Faucet Section */}
             <div className="bg-primary/10 rounded-xl p-4 space-y-3">
-              <h4 className="font-semibold text-primary">Claim HREP Tokens</h4>
-              <p className="text-base text-base-content/60">Mint HREP tokens directly to your wallet for testing.</p>
+              <h4 className="font-semibold text-primary">Claim LREP Tokens</h4>
+              <p className="text-base text-base-content/60">Mint LREP tokens directly to your wallet for testing.</p>
               <div className="flex gap-2">
                 <input
                   type="number"
@@ -513,7 +513,7 @@ export const FaucetModal = () => {
                   onChange={e => setHrepAmount(e.target.value)}
                   min="1"
                 />
-                <span className="self-center text-base font-medium">HREP</span>
+                <span className="self-center text-base font-medium">LREP</span>
               </div>
               <button
                 className="h-10 btn btn-primary btn-sm px-4 rounded-full w-full"
@@ -525,7 +525,7 @@ export const FaucetModal = () => {
                 ) : (
                   <span className="loading loading-spinner loading-sm"></span>
                 )}
-                <span>Claim HREP</span>
+                <span>Claim LREP</span>
               </button>
             </div>
 

@@ -6,7 +6,7 @@ import { gotoWithRetry } from "../helpers/wait-helpers";
 import { setupWallet } from "../helpers/wallet-session";
 
 test.describe("Settings page", () => {
-  test("delegation tab can transfer HREP to another address", async ({ connectedPage: page }) => {
+  test("delegation tab can transfer LREP to another address", async ({ connectedPage: page }) => {
     test.setTimeout(60_000);
 
     const sender = ANVIL_ACCOUNTS.account2.address;
@@ -21,16 +21,16 @@ test.describe("Settings page", () => {
     await gotoWithRetry(page, "/settings#delegation");
 
     await expect(page.getByRole("heading", { name: "Delegated Vote ID" })).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByRole("heading", { name: "Transfer HREP" })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("heading", { name: "Transfer LREP" })).toBeVisible({ timeout: 15_000 });
 
     await page.getByLabel("Transfer recipient").fill(recipient);
     await page.getByLabel("Transfer amount").fill(transferAmount);
 
-    const sendButton = page.getByRole("button", { name: "Send HREP", exact: true });
+    const sendButton = page.getByRole("button", { name: "Send LREP", exact: true });
     await expect(sendButton).toBeEnabled();
     await sendButton.click();
 
-    await expect(page.getByText(`Sent ${transferAmount} HREP`)).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText(`Sent ${transferAmount} LREP`)).toBeVisible({ timeout: 30_000 });
     await expect(page.getByLabel("Transfer amount")).toHaveValue("");
 
     const senderBalanceAfter = await readTokenBalance(sender, tokenAddress);
@@ -49,7 +49,7 @@ test.describe("Settings page", () => {
     await expect(page.getByRole("heading", { name: "Voter ID required for delegation" })).toBeVisible({
       timeout: 15_000,
     });
-    await expect(page.getByRole("link", { name: "Open HREP faucet" })).toHaveAttribute("href", "/governance#faucet");
+    await expect(page.getByRole("link", { name: "Open LREP faucet" })).toHaveAttribute("href", "/governance#faucet");
   });
 
   test("frontend tab shows the registration surface", async ({ connectedPage: page }) => {

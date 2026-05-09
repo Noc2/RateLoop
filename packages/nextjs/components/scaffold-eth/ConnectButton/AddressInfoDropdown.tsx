@@ -108,10 +108,10 @@ function WalletSummaryDetails({
 
   const stakeParts: string[] = [];
   if (submissionStakedMicro > 0n) {
-    stakeParts.push(`${formatHrepAmount(submissionStakedMicro)} HREP submissions`);
+    stakeParts.push(`${formatHrepAmount(submissionStakedMicro)} LREP submissions`);
   }
   if (votingStakedMicro > 0n) {
-    let votingLabel = `${formatHrepAmount(votingStakedMicro)} HREP voting`;
+    let votingLabel = `${formatHrepAmount(votingStakedMicro)} LREP voting`;
     if (earliestReveal) {
       votingLabel += ` · reveals in ${earliestReveal}`;
     } else if (hasPendingReveals) {
@@ -120,7 +120,7 @@ function WalletSummaryDetails({
     stakeParts.push(votingLabel);
   }
   if (frontendStakedMicro > 0n) {
-    stakeParts.push(`${formatHrepAmount(frontendStakedMicro)} HREP frontend`);
+    stakeParts.push(`${formatHrepAmount(frontendStakedMicro)} LREP frontend`);
   }
   const stakeTooltip = stakeParts.join(" · ");
 
@@ -128,7 +128,7 @@ function WalletSummaryDetails({
     <>
       <div className={balanceClassName}>
         <span className="tabular-nums">{formatHrepAmount(liquidBalance)}</span>{" "}
-        <span className="text-base-content/52">HREP</span>
+        <span className="text-base-content/52">LREP</span>
       </div>
       {showStaked ? (
         <div className={stakeClassName}>

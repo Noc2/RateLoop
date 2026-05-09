@@ -140,7 +140,7 @@ export function formatSubmissionRewardAmount(
   value: bigint | number | string | undefined | null,
   asset: SubmissionRewardAsset,
 ): string {
-  return `${formatTokenAmount6(value)} ${asset === "hrep" ? "HREP" : "USDC"}`;
+  return `${formatTokenAmount6(value)} ${asset === "hrep" ? "LREP" : "USDC"}`;
 }
 
 export function formatUsdAmount(value: bigint | number | string | undefined | null): string {

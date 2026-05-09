@@ -47,7 +47,7 @@ const RATING_GUIDANCE_TEXT =
   "The community score runs from 1.0 to 9.9, where higher means better. Predict the final rating you expect after the private round. Always rate illegal, broken, or misdescribed content near the bottom of the scale.";
 const REWARD_POOL_TOOLTIP_TEXT =
   "This question's bounty is shown in USD and backed by USDC on World Chain. Eligible revealed raters can claim from it in qualified rounds, with 3% reserved for the eligible frontend operator.";
-const HREP_REWARD_POOL_TOOLTIP_TEXT =
+const LREP_REWARD_POOL_TOOLTIP_TEXT =
   "This question's bounty is funded in LREP on World Chain. Eligible revealed raters can claim from it in qualified rounds, with 3% reserved for the eligible frontend operator.";
 const MIXED_REWARD_POOL_TOOLTIP_TEXT =
   "This question's bounty includes multiple assets on World Chain. Eligible revealed raters can claim from qualified rounds, with 3% reserved for the eligible frontend operator.";
@@ -107,7 +107,7 @@ function LiveRoundActivity({
   const exampleBonus = calculateBonus(5);
   const blindDetail =
     exampleBonus != null
-      ? `+${exampleBonus.toLocaleString(undefined, { maximumFractionDigits: 1 })} HREP bonus on 5 HREP`
+      ? `+${exampleBonus.toLocaleString(undefined, { maximumFractionDigits: 1 })} LREP bonus on 5 LREP`
       : "Blind-phase bonus loading";
   const detailCopy =
     snapshot.phase !== "voting"
@@ -258,10 +258,10 @@ function RewardAmountDisplay({
 }
 
 function getRewardPoolDisplay(amount: bigint, currency: RewardPoolCurrency | undefined) {
-  if (currency === "HREP") {
+  if (currency === "LREP") {
     return {
       amountLabel: formatSubmissionRewardAmount(amount, "hrep"),
-      tooltip: HREP_REWARD_POOL_TOOLTIP_TEXT,
+      tooltip: LREP_REWARD_POOL_TOOLTIP_TEXT,
     };
   }
   if (currency === "MIXED") {

@@ -200,8 +200,8 @@ export function registerDataRoutes(app: ApiApp) {
     return jsonBig(c, {
       items: items.map((item) => ({
         ...item,
-        currency: item.asset === 0 ? "HREP" : "USDC",
-        displayCurrency: item.asset === 0 ? "HREP" : "USD",
+        currency: item.asset === 0 ? "LREP" : "USDC",
+        displayCurrency: item.asset === 0 ? "LREP" : "USD",
         decimals: 6,
       })),
       limit,
@@ -634,8 +634,8 @@ export function registerDataRoutes(app: ApiApp) {
     return jsonBig(c, {
       items: items.map((item) => ({
         ...item,
-        currency: item.asset === 0 ? "HREP" : "USDC",
-        displayCurrency: item.asset === 0 ? "HREP" : "USD",
+        currency: item.asset === 0 ? "LREP" : "USDC",
+        displayCurrency: item.asset === 0 ? "LREP" : "USD",
         decimals: 6,
       })),
       limit,

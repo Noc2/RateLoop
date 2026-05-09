@@ -26,7 +26,7 @@ export interface QuestionRewardPoolClaimableRewardItem {
   contentId: bigint;
   roundId: bigint;
   reward: bigint;
-  asset: "HREP" | "USDC";
+  asset: "LREP" | "USDC";
   title: string;
   claimType: "question_reward";
 }
@@ -35,7 +35,7 @@ export interface QuestionBundleRewardClaimableRewardItem {
   bundleId: bigint;
   roundSetIndex: bigint;
   reward: bigint;
-  asset: "HREP" | "USDC";
+  asset: "LREP" | "USDC";
   title: string;
   claimType: "question_bundle_reward";
 }

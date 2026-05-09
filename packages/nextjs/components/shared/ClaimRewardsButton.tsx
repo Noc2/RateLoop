@@ -41,10 +41,10 @@ export function ClaimRewardsButton({ buttonClassName, className, showTokenSymbol
       >
         {isPreparingClaim ? "Preparing..." : isClaiming ? `Claim ${progress.current}/${progress.total}` : null}
         {!isPreparingClaim && !isClaiming && totalHrepClaimable > 0n && totalUsdcClaimable > 0n
-          ? `Claim ${formatHrepAmount(totalHrepClaimable)}${showTokenSymbol ? " HREP" : ""} + ${formatUsdAmount(totalUsdcClaimable)}`
+          ? `Claim ${formatHrepAmount(totalHrepClaimable)}${showTokenSymbol ? " LREP" : ""} + ${formatUsdAmount(totalUsdcClaimable)}`
           : null}
         {!isPreparingClaim && !isClaiming && totalHrepClaimable > 0n && totalUsdcClaimable <= 0n
-          ? `Claim ${formatHrepAmount(totalHrepClaimable)}${showTokenSymbol ? " HREP" : ""}`
+          ? `Claim ${formatHrepAmount(totalHrepClaimable)}${showTokenSymbol ? " LREP" : ""}`
           : null}
         {!isPreparingClaim && !isClaiming && totalHrepClaimable <= 0n && totalUsdcClaimable > 0n
           ? `Claim ${formatUsdAmount(totalUsdcClaimable)}`

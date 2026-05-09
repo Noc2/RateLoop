@@ -400,7 +400,7 @@ export function useAllClaimableRewards() {
         ...questionRewardPoolClaimableItems.filter(
           item =>
             (item.claimType === "question_reward" || item.claimType === "question_bundle_reward") &&
-            item.asset === "HREP",
+            item.asset === "LREP",
         ),
       ].reduce((sum, item) => sum + item.reward, 0n),
     [claimableItems, participationClaimableItems, frontendClaimableItems, questionRewardPoolClaimableItems],

@@ -33,8 +33,8 @@ async function buildIncludedAddressFallback(address: string, chainId: number) {
   });
 }
 
-// GET: Fetch HREP leaderboard data.
-// Uses Ponder when available for candidate discovery, then ranks by live on-chain HREP balances.
+// GET: Fetch LREP leaderboard data.
+// Uses Ponder when available for candidate discovery, then ranks by live on-chain LREP balances.
 export async function GET(request: NextRequest) {
   const limited = await checkRateLimit(request, RATE_LIMIT);
   if (limited) return limited;

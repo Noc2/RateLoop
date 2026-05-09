@@ -335,8 +335,8 @@ function formatQuestionRewardAsset(value: number | string | bigint | null | unde
   if (asset === 0) {
     return {
       asset,
-      currency: "HREP",
-      displayCurrency: "HREP",
+      currency: "LREP",
+      displayCurrency: "LREP",
     };
   }
   if (asset === 1) {

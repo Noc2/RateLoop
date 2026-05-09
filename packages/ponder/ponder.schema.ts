@@ -234,7 +234,7 @@ export const rewardClaim = onchainTable(
 );
 
 // ============================================================
-// QUESTION REWARD POOLS (HREP or USDC)
+// QUESTION REWARD POOLS (LREP or USDC)
 // ============================================================
 
 export const questionRewardPool = onchainTable(
@@ -965,7 +965,7 @@ export const humanFaucetReferralReward = onchainTable(
 );
 
 // ============================================================
-// TOKEN HOLDERS (HREP)
+// TOKEN HOLDERS (LREP)
 // ============================================================
 
 export const tokenHolder = onchainTable("token_holder", (t) => ({
@@ -974,7 +974,7 @@ export const tokenHolder = onchainTable("token_holder", (t) => ({
 }));
 
 // ============================================================
-// TOKEN TRANSFERS (HREP balance history)
+// TOKEN TRANSFERS (LREP balance history)
 // ============================================================
 
 export const tokenTransfer = onchainTable(

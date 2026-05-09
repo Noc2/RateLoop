@@ -353,9 +353,9 @@ export interface PonderContentItem {
   feedbackBonusSummary?: PonderFeedbackBonusSummary | null;
 }
 
-export type PonderRewardCurrency = "HREP" | "USDC";
+export type PonderRewardCurrency = "LREP" | "USDC";
 export type PonderRewardPoolCurrency = PonderRewardCurrency | "MIXED";
-export type PonderRewardPoolDisplayCurrency = "HREP" | "USD" | "MIXED";
+export type PonderRewardPoolDisplayCurrency = "LREP" | "USD" | "MIXED";
 
 export interface PonderRewardPoolSummary {
   asset: number | null;
@@ -412,7 +412,7 @@ export interface PonderQuestionRewardClaimCandidate {
   eligibleVoters: number | null;
   qualified: boolean;
   currency: PonderRewardCurrency;
-  displayCurrency: "HREP" | "USD";
+  displayCurrency: "LREP" | "USD";
   decimals: 6;
 }
 
@@ -442,7 +442,7 @@ export interface PonderQuestionBundleRewardClaimCandidate {
   expiresAt: string;
   updatedAt: string;
   currency: PonderRewardCurrency;
-  displayCurrency: "HREP" | "USD";
+  displayCurrency: "LREP" | "USD";
   decimals: 6;
 }
 

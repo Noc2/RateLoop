@@ -1002,7 +1002,7 @@ export function ContentSubmissionSection() {
         ? `For a stronger signal, consider ${formatSubmissionRewardAmount(
             oneTokenPerMinimumVoterBounty,
             rewardAsset,
-          )} or more so the minimum cohort earns about 1 ${rewardAsset === "hrep" ? "HREP" : "USDC"} each.`
+          )} or more so the minimum cohort earns about 1 ${rewardAsset === "hrep" ? "LREP" : "USDC"} each.`
         : parsedRoundMaxVoters > Math.max(parsedRewardRequiredVoters, 1) * 3
           ? "A wide voter cap can dilute the per-voter payout if participation is high; use it when broader input matters more than payout density."
           : "These settings give a clear payout target for a small qualifying round.";
@@ -1234,7 +1234,7 @@ export function ContentSubmissionSection() {
     }
 
     if (!rewardTokenAddress) {
-      notification.error(`${rewardAsset === "hrep" ? "HREP" : "USDC"} funding is unavailable right now.`);
+      notification.error(`${rewardAsset === "hrep" ? "LREP" : "USDC"} funding is unavailable right now.`);
       return;
     }
 
@@ -1314,7 +1314,7 @@ export function ContentSubmissionSection() {
         return;
       }
       if (registryHrepAddress.toLowerCase() !== hrepAddress.toLowerCase()) {
-        notification.error("Configured HREP token does not match this registry.");
+        notification.error("Configured LREP token does not match this registry.");
         return;
       }
       if (!registryVotingEngineAddress || !registryVoterIdNftAddress) {
@@ -1329,7 +1329,7 @@ export function ContentSubmissionSection() {
     }
 
     if (!verifiedRewardTokenAddress) {
-      notification.error(`${rewardAsset === "hrep" ? "HREP" : "USDC"} funding is unavailable right now.`);
+      notification.error(`${rewardAsset === "hrep" ? "LREP" : "USDC"} funding is unavailable right now.`);
       return;
     }
 
@@ -1436,7 +1436,7 @@ export function ContentSubmissionSection() {
         const spec = buildQuestionSpecHashes({
           bounty: {
             amount: selectedRewardAmount,
-            asset: rewardAsset === "hrep" ? "HREP" : "USDC",
+            asset: rewardAsset === "hrep" ? "LREP" : "USDC",
             requiredSettledRounds: selectedRequiredSettledRounds,
             requiredVoters: selectedRequiredVoters,
           },
@@ -1979,7 +1979,7 @@ export function ContentSubmissionSection() {
           onClick={() => setRewardAsset("hrep")}
           className={`btn btn-sm ${rewardAsset === "hrep" ? "btn-primary" : "btn-outline"}`}
         >
-          HREP
+          LREP
         </button>
       </div>
 
@@ -1996,7 +1996,7 @@ export function ContentSubmissionSection() {
           className="grow bg-transparent"
           aria-label="Bounty amount"
         />
-        <span className="text-sm font-semibold text-base-content/50">{rewardAsset === "hrep" ? "HREP" : "USDC"}</span>
+        <span className="text-sm font-semibold text-base-content/50">{rewardAsset === "hrep" ? "LREP" : "USDC"}</span>
       </label>
       {bountyStepAttempted && rewardAmountError ? <p className="text-base text-error">{rewardAmountError}</p> : null}
 

@@ -41,8 +41,8 @@ export interface ContentOpenRoundSummary {
   estimatedSettlementTime: bigint | null;
 }
 
-export type RewardPoolCurrency = "HREP" | "USDC" | "MIXED";
-export type RewardPoolDisplayCurrency = "HREP" | "USD" | "MIXED";
+export type RewardPoolCurrency = "LREP" | "USDC" | "MIXED";
+export type RewardPoolDisplayCurrency = "LREP" | "USD" | "MIXED";
 
 export interface ContentItem {
   id: bigint;
@@ -186,11 +186,12 @@ function normalizeRewardPoolCurrency(
   asset: number | string | bigint | null | undefined,
 ): RewardPoolCurrency {
   const normalizedCurrency = currency?.toUpperCase();
-  if (normalizedCurrency === "HREP" || normalizedCurrency === "USDC" || normalizedCurrency === "MIXED") {
+  if (normalizedCurrency === "LREP" || normalizedCurrency === "USDC" || normalizedCurrency === "MIXED") {
     return normalizedCurrency;
   }
+  if (normalizedCurrency === "HREP") return "LREP";
 
-  if (asset === 0 || asset === "0" || asset === 0n) return "HREP";
+  if (asset === 0 || asset === "0" || asset === 0n) return "LREP";
   if (asset === 1 || asset === "1" || asset === 1n) return "USDC";
 
   return "USDC";
@@ -202,14 +203,15 @@ function normalizeRewardPoolDisplayCurrency(
 ): RewardPoolDisplayCurrency {
   const normalizedDisplayCurrency = displayCurrency?.toUpperCase();
   if (
-    normalizedDisplayCurrency === "HREP" ||
+    normalizedDisplayCurrency === "LREP" ||
     normalizedDisplayCurrency === "USD" ||
     normalizedDisplayCurrency === "MIXED"
   ) {
     return normalizedDisplayCurrency;
   }
+  if (normalizedDisplayCurrency === "HREP") return "LREP";
 
-  if (currency === "HREP") return "HREP";
+  if (currency === "LREP") return "LREP";
   if (currency === "MIXED") return "MIXED";
   return "USD";
 }

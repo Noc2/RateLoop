@@ -1,7 +1,7 @@
 import { ponder } from "ponder:registry";
 import { frontend } from "ponder:schema";
 
-/** Must match FrontendRegistry.STAKE_AMOUNT (1000 HREP with 6 decimals). */
+/** Must match FrontendRegistry.STAKE_AMOUNT (1000 LREP with 6 decimals). */
 const STAKE_AMOUNT = 1000_000000n;
 
 ponder.on(
