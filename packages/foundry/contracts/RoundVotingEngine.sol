@@ -767,8 +767,11 @@ contract RoundVotingEngine is
     ///      `(isUp, salt)` here. Voters can also self-reveal. The contract verifies consistency against the stored
     ///      ciphertext hash. If any past-epoch ciphertext is not revealed, settlement remains blocked until the
     ///      final reveal grace window elapses.
-    function revealVoteByCommitKey(uint256, uint256, bytes32, bool, bytes32) external pure {
-        revert InvalidCommitHash();
+    function revealVoteByCommitKey(uint256 contentId, uint256 roundId, bytes32 commitKey, bool isUp, bytes32 salt)
+        external
+        nonReentrant
+    {
+        _revealVoteInternal(contentId, roundId, commitKey, isUp, salt);
     }
 
     /// @notice Reveal a personal rating and crowd prediction for a specific commit by commit key.
@@ -1354,6 +1357,41 @@ contract RoundVotingEngine is
         roundPredictionRewardClaimants[contentId][roundId] = rewardClaimants;
         roundPredictionForfeitedPool[contentId][roundId] = forfeitedPool;
         roundPredictionForfeitClaimants[contentId][roundId] = forfeitClaimants;
+    }
+
+    function _revealVoteInternal(
+        uint256 contentId,
+        uint256 roundId,
+        bytes32 commitKey,
+        bool isUp,
+        bytes32 salt
+    ) internal {
+        RoundLib.Round storage round = rounds[contentId][roundId];
+        RoundLib.Commit storage commit = commits[contentId][roundId][commitKey];
+        RoundLib.RoundConfig memory roundCfg = _getRoundConfig(contentId, roundId);
+        uint256 targetRoundRevealableAt = _targetRoundRevealableAt(contentId, roundId, commit.targetRound);
+        (uint256 eligibleFrontendStake, uint256 eligibleFrontendCount, address voter) = RoundRevealLib.revealVote(
+            round,
+            commit,
+            epochUnrevealedCount[contentId][roundId],
+            frontendEligibleAtCommit[contentId][roundId],
+            roundPerFrontendStake[contentId][roundId],
+            roundStakeWithEligibleFrontend[contentId][roundId],
+            roundEligibleFrontendCount[contentId][roundId],
+            contentId,
+            roundId,
+            commitKey,
+            isUp,
+            salt,
+            _getRoundReferenceRatingBps(contentId, roundId),
+            roundCfg.minVoters,
+            targetRoundRevealableAt,
+            commitRaterWeightBps[contentId][roundId][commitKey]
+        );
+        roundStakeWithEligibleFrontend[contentId][roundId] = eligibleFrontendStake;
+        roundEligibleFrontendCount[contentId][roundId] = eligibleFrontendCount;
+
+        emit VoteRevealed(contentId, roundId, voter, isUp);
     }
 
     function _revealPredictionInternal(
