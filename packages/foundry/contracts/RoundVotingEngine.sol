@@ -819,9 +819,8 @@ contract RoundVotingEngine is
         bool hasPredictionSettlement = predictionWeight > 0
             && roundPredictionCount[contentId][roundId] == round.revealedCount
             && round.revealedCount >= MIN_LOO_VALID_PARTICIPANTS;
-        uint16 finalPredictionRatingBps = hasPredictionSettlement
-            ? _roundWeightedMedianPrediction(contentId, roundId, predictionWeight)
-            : 0;
+        uint16 finalPredictionRatingBps =
+            hasPredictionSettlement ? _roundWeightedMedianPrediction(contentId, roundId, predictionWeight) : 0;
 
         uint256 weightedWinningStake;
         uint256 losingPool;
@@ -1156,20 +1155,8 @@ contract RoundVotingEngine is
             }
         } catch { }
 
-        try registryWeights.getSelfCredential(voter) returns (
-            bool verified,
-            bool,
-            bool revoked,
-            bytes32,
-            bytes32,
-            uint64,
-            uint64 expiresAt,
-            uint16 multiplierBps,
-            bytes32
-        ) {
-            if (verified && !revoked && (expiresAt == 0 || expiresAt > block.timestamp) && multiplierBps > WEIGHT_BPS) {
-                weightBps = (weightBps * multiplierBps) / WEIGHT_BPS;
-            }
+        try registryWeights.credentialMultiplierBps(voter) returns (uint16 multiplierBps) {
+            if (multiplierBps > WEIGHT_BPS) weightBps = (weightBps * multiplierBps) / WEIGHT_BPS;
         } catch { }
 
         if (weightBps > type(uint16).max) return type(uint16).max;
@@ -1264,41 +1251,43 @@ contract RoundVotingEngine is
         }
     }
 
-    function _roundWeightedAveragePrediction(uint256 contentId, uint256 roundId, uint256 totalWeight)
-        internal
-        view
-        returns (uint16)
-    {
-        return PredictionRatingMath.weightedAverageRating(roundWeightedRatingSum[contentId][roundId], totalWeight);
-    }
-
     function _roundWeightedMedianPrediction(uint256 contentId, uint256 roundId, uint256 totalWeight)
         internal
         view
         returns (uint16)
     {
         bytes32[] storage commitKeys = roundCommitHashes[contentId][roundId];
-        uint256 predictionCount = roundPredictionCount[contentId][roundId];
-        uint16[] memory ratings = new uint16[](predictionCount);
-        uint256[] memory weights = new uint256[](predictionCount);
-        uint256 ratingCount;
+        uint256 threshold = (totalWeight + 1) / 2;
+        uint256 cumulativeWeight;
+        uint16 lastRatingBps;
 
-        for (uint256 i = 0; i < commitKeys.length && ratingCount < predictionCount;) {
-            bytes32 commitKey = commitKeys[i];
-            uint16 opinionRatingBps = commitOpinionRatingBps[contentId][roundId][commitKey];
-            if (opinionRatingBps != 0) {
-                ratings[ratingCount] = opinionRatingBps;
-                weights[ratingCount] = commitPredictionWeight[contentId][roundId][commitKey];
+        while (cumulativeWeight < threshold) {
+            uint16 nextRatingBps = type(uint16).max;
+            uint256 nextRatingWeight;
+
+            for (uint256 i = 0; i < commitKeys.length;) {
+                bytes32 commitKey = commitKeys[i];
+                uint16 opinionRatingBps = commitOpinionRatingBps[contentId][roundId][commitKey];
+                if (opinionRatingBps > lastRatingBps) {
+                    if (opinionRatingBps < nextRatingBps) {
+                        nextRatingBps = opinionRatingBps;
+                        nextRatingWeight = commitPredictionWeight[contentId][roundId][commitKey];
+                    } else if (opinionRatingBps == nextRatingBps) {
+                        nextRatingWeight += commitPredictionWeight[contentId][roundId][commitKey];
+                    }
+                }
                 unchecked {
-                    ++ratingCount;
+                    ++i;
                 }
             }
-            unchecked {
-                ++i;
-            }
+
+            if (nextRatingBps == type(uint16).max) return lastRatingBps;
+            cumulativeWeight += nextRatingWeight;
+            if (cumulativeWeight >= threshold) return nextRatingBps;
+            lastRatingBps = nextRatingBps;
         }
 
-        return PredictionRatingMath.weightedMedianRating(ratings, weights, totalWeight);
+        return lastRatingBps;
     }
 
     function _scorePredictionRewards(uint256 contentId, uint256 roundId, uint256 totalWeight)
@@ -1316,9 +1305,8 @@ contract RoundVotingEngine is
             if (ownWeight > 0) {
                 uint16 ownOpinion = commitOpinionRatingBps[contentId][roundId][commitKey];
                 uint16 ownPrediction = commitPredictedRatingBps[contentId][roundId][commitKey];
-                uint16 peerRating = PredictionRatingMath.leaveOneOutRating(
-                    totalWeightedRating, totalWeight, ownOpinion, ownWeight
-                );
+                uint16 peerRating =
+                    PredictionRatingMath.leaveOneOutRating(totalWeightedRating, totalWeight, ownOpinion, ownWeight);
                 uint16 scoreBps = PredictionRatingMath.accuracyScoreBps(
                     ownPrediction,
                     peerRating,
@@ -1359,13 +1347,9 @@ contract RoundVotingEngine is
         roundPredictionForfeitClaimants[contentId][roundId] = forfeitClaimants;
     }
 
-    function _revealVoteInternal(
-        uint256 contentId,
-        uint256 roundId,
-        bytes32 commitKey,
-        bool isUp,
-        bytes32 salt
-    ) internal {
+    function _revealVoteInternal(uint256 contentId, uint256 roundId, bytes32 commitKey, bool isUp, bytes32 salt)
+        internal
+    {
         RoundLib.Round storage round = rounds[contentId][roundId];
         RoundLib.Commit storage commit = commits[contentId][roundId][commitKey];
         RoundLib.RoundConfig memory roundCfg = _getRoundConfig(contentId, roundId);
@@ -1449,10 +1433,6 @@ contract RoundVotingEngine is
     // previewCommitRoundId / previewCommitReferenceRatingBps are public above (their internal
     // wrappers were merged into the externals to fit the EIP-170 size limit).
 
-    function getRoundCommitCount(uint256 contentId, uint256 roundId) external view returns (uint256) {
-        return roundCommitHashes[contentId][roundId].length;
-    }
-
     function getRoundCommitKey(uint256 contentId, uint256 roundId, uint256 index) external view returns (bytes32) {
         bytes32[] storage commitKeys = roundCommitHashes[contentId][roundId];
         if (index >= commitKeys.length) revert IndexOutOfBounds();
@@ -1467,9 +1447,6 @@ contract RoundVotingEngine is
         weightedRatingSum = roundWeightedRatingSum[contentId][roundId];
         totalPredictionWeight = roundPredictionWeight[contentId][roundId];
         finalRatingBps = roundFinalPredictionRatingBps[contentId][roundId];
-        if (finalRatingBps == 0 && totalPredictionWeight > 0) {
-            finalRatingBps = _roundWeightedMedianPrediction(contentId, roundId, totalPredictionWeight);
-        }
     }
 
     // --- Admin ---

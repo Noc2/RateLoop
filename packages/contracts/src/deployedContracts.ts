@@ -19945,30 +19945,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "getRoundCommitCount",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "roundId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
           name: "getRoundCommitKey",
           inputs: [
             {
@@ -20295,33 +20271,33 @@ const deployedContracts: GenericContractsDeclaration = {
           name: "revealVoteByCommitKey",
           inputs: [
             {
-              name: "",
+              name: "contentId",
               type: "uint256",
               internalType: "uint256",
             },
             {
-              name: "",
+              name: "roundId",
               type: "uint256",
               internalType: "uint256",
             },
             {
-              name: "",
+              name: "commitKey",
               type: "bytes32",
               internalType: "bytes32",
             },
             {
-              name: "",
+              name: "isUp",
               type: "bool",
               internalType: "bool",
             },
             {
-              name: "",
+              name: "salt",
               type: "bytes32",
               internalType: "bytes32",
             },
           ],
           outputs: [],
-          stateMutability: "pure",
+          stateMutability: "nonpayable",
         },
         {
           type: "function",

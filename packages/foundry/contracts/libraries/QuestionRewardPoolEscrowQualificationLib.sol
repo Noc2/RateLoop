@@ -46,9 +46,9 @@ library QuestionRewardPoolEscrowQualificationLib {
 
         roundSettled = true;
         (rawEligibleVoters, effectiveParticipantUnits, totalClaimWeight) = _countEligibleRevealedVoters(ctx);
-        uint256 effectiveFloor = (
-            ctx.requiredVoters > MIN_EFFECTIVE_PARTICIPANT_UNITS ? ctx.requiredVoters : MIN_EFFECTIVE_PARTICIPANT_UNITS
-        ) * BPS_SCALE;
+        uint256 minEffectiveUnits =
+            ctx.requiredVoters > MIN_EFFECTIVE_PARTICIPANT_UNITS ? ctx.requiredVoters : MIN_EFFECTIVE_PARTICIPANT_UNITS;
+        uint256 effectiveFloor = minEffectiveUnits * BPS_SCALE;
         canQualify = rawEligibleVoters >= ctx.requiredVoters && effectiveParticipantUnits >= effectiveFloor
             && totalClaimWeight > 0;
     }
@@ -197,7 +197,7 @@ library QuestionRewardPoolEscrowQualificationLib {
         view
         returns (uint256 rawEligibleVoters, uint256 effectiveParticipantUnits, uint256 totalClaimWeight)
     {
-        uint256 commitCount = ctx.votingEngine.getRoundCommitCount(ctx.contentId, ctx.roundId);
+        (,, uint16 commitCount,,,,,,,,,,,) = ctx.votingEngine.rounds(ctx.contentId, ctx.roundId);
         for (uint256 i = 0; i < commitCount;) {
             bytes32 commitKey = ctx.votingEngine.getRoundCommitKey(ctx.contentId, ctx.roundId, i);
             (address voter,,, uint48 revealedAt, bool revealed,,) =
@@ -217,8 +217,8 @@ library QuestionRewardPoolEscrowQualificationLib {
                     uint256 claimWeight = _claimWeight(ctx.votingEngine, ctx.contentId, ctx.roundId, commitKey);
                     if (claimWeight > 0) {
                         totalClaimWeight += claimWeight;
-                        effectiveParticipantUnits +=
-                            ctx.votingEngine.commitRaterWeightBps(ctx.contentId, ctx.roundId, commitKey);
+                        effectiveParticipantUnits += ctx.votingEngine
+                        .commitRaterWeightBps(ctx.contentId, ctx.roundId, commitKey);
                     }
                 }
             }

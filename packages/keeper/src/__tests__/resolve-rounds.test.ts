@@ -254,8 +254,6 @@ function makeHarness(options: {
               return commit.revealableAfter > max ? commit.revealableAfter : max;
             }, 0n)
           );
-        case "getRoundCommitCount":
-          return BigInt(commitKeys.length);
         case "getRoundCommitKey":
           return commitKeys[Number(args[2])] ?? zeroHash;
         case "commitRevealData":

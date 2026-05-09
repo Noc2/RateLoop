@@ -1174,7 +1174,7 @@ contract QuestionRewardPoolEscrow is
 
         uint256 firstContentId = questions[0].contentId;
         uint256 firstRoundId = bundleRoundIds[bundleId][0][roundSetIndex];
-        uint256 commitCount = votingEngine.getRoundCommitCount(firstContentId, firstRoundId);
+        (,, uint16 commitCount,,,,,,,,,,,) = votingEngine.rounds(firstContentId, firstRoundId);
         for (uint256 i = 0; i < commitCount;) {
             bytes32 commitKey = votingEngine.getRoundCommitKey(firstContentId, firstRoundId, i);
             address voter = _bundleCompleterAccount(firstContentId, firstRoundId, commitKey);

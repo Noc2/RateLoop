@@ -233,8 +233,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         uint16 opinionRatingBps,
         uint16 predictedCrowdRatingBps,
         uint256 stake
-    ) internal returns (bytes32 commitKey, bytes32 salt)
-    {
+    ) internal returns (bytes32 commitKey, bytes32 salt) {
         salt = keccak256(abi.encodePacked(voter, opinionRatingBps, predictedCrowdRatingBps, block.timestamp));
         uint256 roundId = engine.previewCommitRoundId(contentId);
         uint16 referenceRatingBps = engine.previewCommitReferenceRatingBps(contentId);
@@ -473,11 +472,13 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
             engine.roundPredictionStats(contentId, roundId);
         assertEq(weightedRatingSum, 355_000e6, "weighted rating sum");
         assertEq(totalPredictionWeight, 50e6, "prediction weight");
-        assertEq(finalRatingBps, 8_000, "prediction median before settle");
+        assertEq(finalRatingBps, 0, "final rating is only stored after settle");
 
         engine.settleRound(contentId, roundId);
 
         assertEq(registry.getRating(contentId), 8_000, "registry rating");
+        (,, finalRatingBps) = engine.roundPredictionStats(contentId, roundId);
+        assertEq(finalRatingBps, 8_000, "prediction median after settle");
     }
 
     function test_PredictionWeightsUseClusterAdjustedStake() public {
@@ -498,6 +499,8 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         engine.revealPredictionByCommitKey(contentId, roundId, ck1, 8_000, 8_000, s1);
         engine.revealPredictionByCommitKey(contentId, roundId, ck2, 5_000, 5_000, s2);
         engine.revealPredictionByCommitKey(contentId, roundId, ck3, 6_500, 6_500, s3);
+
+        engine.settleRound(contentId, roundId);
 
         (uint256 weightedRatingSum, uint256 totalPredictionWeight, uint16 finalRatingBps) =
             engine.roundPredictionStats(contentId, roundId);
