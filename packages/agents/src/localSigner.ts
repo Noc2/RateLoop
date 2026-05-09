@@ -213,6 +213,19 @@ function normalizeOptionalBigInt(value: unknown, name: string): bigint | undefin
   return normalizeBigInt(value, name);
 }
 
+function normalizeOptionalChainId(value: unknown, name: string): number | undefined {
+  if (value === undefined || value === null || value === "") return undefined;
+  const parsed = normalizeBigInt(value, name);
+  if (parsed > BigInt(Number.MAX_SAFE_INTEGER)) {
+    throw new Error(`${name} must be a positive safe integer.`);
+  }
+  const chainId = Number(parsed);
+  if (chainId <= 0) {
+    throw new Error(`${name} must be a positive safe integer.`);
+  }
+  return chainId;
+}
+
 function normalizeZeroNativeValue(value: unknown, name: string): 0n {
   const parsed = normalizeOptionalBigInt(value, name) ?? 0n;
   if (parsed !== 0n) {
@@ -505,13 +518,33 @@ export function withLocalSignerWallet(payload: unknown, walletAddress: Address):
   return { ...request, walletAddress };
 }
 
+function withLocalSignerChainId(request: AskHumansRequest, chainId: number | undefined): AskHumansRequest {
+  const requestedChainId = normalizeOptionalChainId(request.chainId, "ask payload chainId");
+  if (chainId === undefined) {
+    return requestedChainId === undefined ? request : { ...request, chainId: requestedChainId };
+  }
+
+  if (requestedChainId !== undefined && requestedChainId !== chainId) {
+    throw new Error(`Ask payload chainId ${requestedChainId} does not match local signer chain ${chainId}.`);
+  }
+
+  return { ...request, chainId };
+}
+
 export async function signX402AuthorizationRequest(
   account: PrivateKeyAccount,
   x402AuthorizationRequest: unknown,
+  options: { expectedChainId?: number } = {},
 ): Promise<X402Authorization> {
   const { authorization, typedData } = parseX402AuthorizationRequest(x402AuthorizationRequest);
   if (authorization.from && !sameAddress(authorization.from, account.address)) {
     throw new Error(`x402 authorization is for ${authorization.from}, but local signer is ${account.address}.`);
+  }
+  const domainChainId = normalizeOptionalChainId(typedData.domain.chainId, "x402 typedData.domain.chainId");
+  if (options.expectedChainId !== undefined && domainChainId !== options.expectedChainId) {
+    throw new Error(
+      `x402 authorization chainId ${domainChainId ?? "missing"} does not match local signer chain ${options.expectedChainId}.`,
+    );
   }
 
   const signature = await account.signTypedData({
@@ -543,6 +576,13 @@ async function resolveChain(config: LocalSignerConfig) {
       default: { http: [config.rpcUrl] },
     },
   });
+}
+
+async function resolveConfiguredChainId(config: LocalSignerConfig): Promise<number | undefined> {
+  if (config.rpcUrl) {
+    return (await resolveChain(config)).id;
+  }
+  return config.chainId;
 }
 
 function summarizeReceipt(receipt: TransactionReceipt): LocalTransactionReceiptSummary {
@@ -611,7 +651,8 @@ export async function askHumansWithLocalSigner(params: {
   paymentMode?: AskHumansRequest["paymentMode"];
   payload: unknown;
 }): Promise<LocalAskResult> {
-  const baseAsk = withLocalSignerWallet(params.payload, params.account.address);
+  const expectedChainId = await resolveConfiguredChainId(params.config);
+  const baseAsk = withLocalSignerChainId(withLocalSignerWallet(params.payload, params.account.address), expectedChainId);
   if (params.paymentMode) {
     baseAsk.paymentMode = params.paymentMode;
   }
@@ -622,7 +663,9 @@ export async function askHumansWithLocalSigner(params: {
   let finalAsk = initialAsk;
   let signedX402Authorization = false;
   if (initialAsk.x402AuthorizationRequest) {
-    const paymentAuthorization = await signX402AuthorizationRequest(params.account, initialAsk.x402AuthorizationRequest);
+    const paymentAuthorization = await signX402AuthorizationRequest(params.account, initialAsk.x402AuthorizationRequest, {
+      expectedChainId: baseAsk.chainId,
+    });
     signedX402Authorization = true;
     params.onProgress?.({ type: "x402_signed" });
 

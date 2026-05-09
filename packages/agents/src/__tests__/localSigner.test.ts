@@ -85,6 +85,12 @@ describe("local signer", () => {
     expect(paymentAuthorization.signature).toMatch(/^0x[0-9a-f]{130}$/i);
   });
 
+  it("rejects x402 authorizations for the wrong chain", async () => {
+    await expect(
+      signX402AuthorizationRequest(account, x402AuthorizationRequest(), { expectedChainId: 4801 }),
+    ).rejects.toThrow(/does not match local signer chain 4801/);
+  });
+
   it("re-calls askHumans with a signed x402 authorization", async () => {
     const askCalls: AskHumansRequest[] = [];
     const agent = {
@@ -113,6 +119,7 @@ describe("local signer", () => {
       account,
       agent,
       config: {
+        chainId: 480,
         chainName: "test",
         pollingIntervalMs: 1,
         receiptTimeoutMs: 1,
@@ -124,10 +131,39 @@ describe("local signer", () => {
     expect(result.signedX402Authorization).toBe(true);
     expect(askCalls).toHaveLength(2);
     expect(askCalls[0]).toMatchObject({
+      chainId: 480,
       paymentMode: "x402_authorization",
       walletAddress: account.address,
     });
     expect(askCalls[1].paymentAuthorization?.signature).toMatch(/^0x[0-9a-f]{130}$/i);
     expect(result.transactions).toBeUndefined();
+  });
+
+  it("rejects ask payloads that target a different configured chain", async () => {
+    const agent = {
+      askHumans: async () => {
+        throw new Error("askHumans should not run for a chain mismatch.");
+      },
+      confirmAskTransactions: async () => {
+        throw new Error("confirmAskTransactions should not run for a chain mismatch.");
+      },
+    } satisfies Pick<CuryoAgentClient, "askHumans" | "confirmAskTransactions">;
+
+    await expect(
+      askHumansWithLocalSigner({
+        account,
+        agent,
+        config: {
+          chainId: 480,
+          chainName: "test",
+          pollingIntervalMs: 1,
+          receiptTimeoutMs: 1,
+        },
+        payload: {
+          ...askPayload(),
+          chainId: 4801,
+        },
+      }),
+    ).rejects.toThrow(/chainId 4801 does not match local signer chain 480/);
   });
 });
