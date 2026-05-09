@@ -53,10 +53,7 @@ function normalizeAddress(value: string | undefined): `0x${string}` | undefined 
 }
 
 function getPublicUsdcAddressOverride(): `0x${string}` | undefined {
-  return (
-    normalizeAddress(process.env.NEXT_PUBLIC_USDC_ADDRESS) ??
-    normalizeAddress(process.env.NEXT_PUBLIC_CELO_USDC_ADDRESS)
-  );
+  return normalizeAddress(process.env.NEXT_PUBLIC_USDC_ADDRESS);
 }
 
 function getDeployedContractAddress(chainId: number, contractName: string): `0x${string}` | undefined {

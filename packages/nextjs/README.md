@@ -77,11 +77,9 @@ Key environment variables (see `.env.example` for the full list):
 | `NOTIFICATION_DELIVERY_SECRET`                    | Secret for the email delivery cron endpoint                                                                                              |
 | `NEXT_PUBLIC_PONDER_URL`                          | Public Ponder indexer URL (required in production)                                                                                       |
 | `THIRDWEB_SERVER_VERIFIER_SECRET`                 | Shared secret used by the thirdweb server verifier webhook                                                                               |
-| `RATELOOP_X402_USDC_ADDRESS`                      | Optional World Chain USDC override for direct agent bounty planning; World Chain mainnet and Sepolia default automatically                  |
-| `CURYO_X402_USDC_ADDRESS`                         | Legacy fallback name for `RATELOOP_X402_USDC_ADDRESS`                                                                                         |
+| `RATELOOP_X402_USDC_ADDRESS`                      | Optional World Chain USDC override for direct agent bounty planning; World Chain mainnet and Sepolia default automatically                |
 | `NEXT_PUBLIC_QUESTION_REWARD_POOL_ESCROW_ADDRESS` | Optional question reward escrow override while generated deployment metadata catches up; supported chains default from `@rateloop/contracts` |
-| `NEXT_PUBLIC_USDC_ADDRESS`                        | Optional browser-side World Chain USDC override for USDC bounties                                                                              |
-| `NEXT_PUBLIC_CELO_USDC_ADDRESS`                   | Legacy fallback name for `NEXT_PUBLIC_USDC_ADDRESS`                                                                                            |
+| `NEXT_PUBLIC_USDC_ADDRESS`                        | Optional browser-side World Chain USDC override for USDC bounties                                                                        |
 | `NEXT_PUBLIC_WORLD_ID_APP_ID`                     | Optional World ID app ID for the settings identity credential                                                                                   |
 | `NEXT_PUBLIC_WORLD_ID_ACTION`                     | Optional World ID action ID; defaults to `rateloop-human-credential-v1`                                                                         |
 | `NEXT_PUBLIC_WORLD_ID_ENVIRONMENT`                | World ID environment, `production` or `staging`                                                                                                 |

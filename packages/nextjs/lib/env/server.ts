@@ -176,7 +176,7 @@ export function getThirdwebServerVerifierSecret(): string | undefined {
 }
 
 export function getX402UsdcAddressOverride(): `0x${string}` | undefined {
-  const value = readEnv("RATELOOP_X402_USDC_ADDRESS") ?? readEnv("CURYO_X402_USDC_ADDRESS");
+  const value = readEnv("RATELOOP_X402_USDC_ADDRESS");
   return value?.startsWith("0x") ? (value as `0x${string}`) : undefined;
 }
 
