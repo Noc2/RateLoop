@@ -844,7 +844,6 @@ const ABI_TARGETS = [
   { contract: "ProtocolConfig", targets: ["contracts/src/abis"] },
   { contract: "RaterRegistry", targets: ["contracts/src/abis"] },
   { contract: "RaterDeclarationRegistry", targets: ["contracts/src/abis"] },
-  { contract: "HumanFaucet", targets: ["contracts/src/abis"] },
   { contract: "ParticipationPool", targets: ["contracts/src/abis"] },
   { contract: "TimelockController", targets: ["contracts/src/abis"] },
   { contract: "CuryoGovernor", targets: ["contracts/src/abis"] },
