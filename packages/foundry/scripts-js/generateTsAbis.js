@@ -833,7 +833,6 @@ const ABI_TARGETS = [
   },
   { contract: "CategoryRegistry", targets: ["contracts/src/abis"] },
   { contract: "LoopReputation", targets: ["contracts/src/abis"] },
-  { contract: "HumanReputation", targets: ["contracts/src/abis"] },
   { contract: "VoterIdNFT", targets: ["contracts/src/abis"] },
   { contract: "FrontendRegistry", targets: ["contracts/src/abis"] },
   { contract: "RoundRewardDistributor", targets: ["contracts/src/abis"] },
