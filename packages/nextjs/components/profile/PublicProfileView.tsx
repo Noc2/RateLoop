@@ -15,14 +15,7 @@ import {
   serializeProfileSelfReport,
 } from "@rateloop/node-utils/profileSelfReport";
 import { useAccount } from "wagmi";
-import {
-  ArrowLeftIcon,
-  CheckIcon,
-  ClipboardDocumentIcon,
-  LinkIcon,
-  UserGroupIcon,
-  XMarkIcon,
-} from "@heroicons/react/24/outline";
+import { ArrowLeftIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { BalanceHistory } from "~~/components/leaderboard/BalanceHistory";
 import { CategoryBars } from "~~/components/leaderboard/CategoryBars";
 import { StakeBreakdown } from "~~/components/leaderboard/StakeBreakdown";
@@ -31,7 +24,6 @@ import { FollowProfileButton } from "~~/components/shared/FollowProfileButton";
 import { ProfileImageLightbox } from "~~/components/shared/ProfileImageLightbox";
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import { buildRateContentHref } from "~~/constants/routes";
-import { useCopyToClipboard } from "~~/hooks/scaffold-eth";
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import { useCuryoConnectModal } from "~~/hooks/useCuryoConnectModal";
 import { useFollowedProfiles } from "~~/hooks/useFollowedProfiles";
@@ -45,7 +37,6 @@ import {
   useSetAvatarAccent,
   useSetProfile,
 } from "~~/hooks/useProfileRegistry";
-import { formatReferralAmount, useReferralProgram } from "~~/hooks/useReferralProgram";
 import { useVoterAccuracy } from "~~/hooks/useVoterAccuracy";
 import { useVoterIdNFT } from "~~/hooks/useVoterIdNFT";
 import { useVoterStreak } from "~~/hooks/useVoterStreak";
@@ -449,12 +440,9 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
     isLoading: avatarAccentLoading,
     refetch: refetchAvatarAccent,
   } = useAvatarAccent(normalizedAddress);
-  const { copyToClipboard, isCopiedToClipboard } = useCopyToClipboard();
   const { setProfile, isPending: isSavingProfile } = useSetProfile();
   const { setAvatarAccent, isPending: avatarAccentPending } = useSetAvatarAccent();
   const { clearAvatarAccent, isPending: clearAvatarAccentPending } = useClearAvatarAccent();
-  const { claimantBonus, referralCount, referralLink, referralReward, totalEarned } =
-    useReferralProgram(normalizedAddress);
 
   const { data: profileResult, isLoading: profileLoading } = usePonderQuery<
     PonderProfileDetailResponse,
@@ -486,7 +474,6 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
   const ownProfile = connectedAddress?.toLowerCase() === normalizedAddress;
   const [isEditing, setIsEditing] = useState(false);
   const [isAvatarEditorOpen, setIsAvatarEditorOpen] = useState(false);
-  const [isReferralModalOpen, setIsReferralModalOpen] = useState(false);
   const [nameInput, setNameInput] = useState("");
   const [selfReportInput, setSelfReportInput] = useState<ProfileSelfReport>(() => emptySelfReport());
   const [avatarAccentInput, setAvatarAccentInput] = useState("");
@@ -506,7 +493,6 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
   useEffect(() => {
     setIsEditing(false);
     setIsAvatarEditorOpen(false);
-    setIsReferralModalOpen(false);
     setNameInput("");
     setSelfReportInput(emptySelfReport());
     setAvatarAccentInput("");
@@ -592,8 +578,6 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
     : "";
   const avatarAccentBusy = avatarAccentPending || clearAvatarAccentPending;
   const hasAvatarAccentChanges = normalizedAvatarAccentInput !== committedAvatarAccentHex;
-  const referralCountLabel = Number(referralCount).toLocaleString();
-  const referralTweetText = `Join RateLoop, build LREP, and help calibrate public ratings. Use my referral link so we both receive a LREP bonus: ${referralLink}`;
   const winRateLabel = stats && stats.totalSettledVotes > 0 ? `${(stats.winRate * 100).toFixed(1)}%` : "—";
   const dailyStreakLabel = (dailyStreak?.currentDailyStreak ?? 0).toLocaleString();
   const resolvedVotesLabel = (stats?.totalSettledVotes ?? 0).toLocaleString();
@@ -643,11 +627,6 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
   }, [currentName, currentSelfReport]);
 
   const handleSaveProfile = useCallback(async () => {
-    if (!hasVoterId) {
-      notification.info("Set up a rater credential before creating a profile.");
-      return;
-    }
-
     const trimmedName = nameInput.trim();
     let serializedSelfReport: string;
     let normalizedSelfReport: ProfileSelfReport;
@@ -697,42 +676,19 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
       console.error("Profile update failed:", error);
       setProfileError(getProfileWriteErrorMessage(error, "Failed to update profile"));
     }
-  }, [hasLiveProfile, hasVoterId, isNameTaken, isOwnName, nameInput, refetchLiveProfile, selfReportInput, setProfile]);
+  }, [hasLiveProfile, isNameTaken, isOwnName, nameInput, refetchLiveProfile, selfReportInput, setProfile]);
 
   const openAvatarEditor = useCallback(() => {
-    if (!hasVoterId) {
-      notification.info("Set up a rater credential before editing your avatar.");
-      return;
-    }
-
     setAvatarAccentInput(committedAvatarAccentHex ?? "");
     setAccentError(null);
     setIsAvatarEditorOpen(true);
-  }, [committedAvatarAccentHex, hasVoterId]);
+  }, [committedAvatarAccentHex]);
 
   const closeAvatarEditor = useCallback(() => {
     setAvatarAccentInput(committedAvatarAccentHex ?? "");
     setAccentError(null);
     setIsAvatarEditorOpen(false);
   }, [committedAvatarAccentHex]);
-
-  const openReferralModal = useCallback(() => {
-    if (!hasVoterId) {
-      notification.info("Set up a rater credential before using referrals.");
-      return;
-    }
-
-    setIsReferralModalOpen(true);
-  }, [hasVoterId]);
-
-  const closeReferralModal = useCallback(() => {
-    setIsReferralModalOpen(false);
-  }, []);
-
-  const handleCopyReferralLink = useCallback(() => {
-    if (!referralLink) return;
-    copyToClipboard(referralLink);
-  }, [copyToClipboard, referralLink]);
 
   const handleSaveAvatarAccent = useCallback(async () => {
     const normalizedAccentHex = normalizeAvatarAccentHex(avatarAccentInput);
@@ -873,14 +829,7 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
             </div>
 
             {ownProfile ? (
-              !hasVoterId ? (
-                <Link
-                  href="/governance"
-                  className="inline-flex items-center justify-center rounded-full bg-base-200 px-4 py-2 text-base font-medium text-white transition-colors hover:bg-base-300"
-                >
-                  Set Up Rater
-                </Link>
-              ) : isEditing ? (
+              isEditing ? (
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
@@ -909,11 +858,6 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
                   <button type="button" onClick={openEditMode} className="btn btn-submit">
                     Edit profile
                   </button>
-                  {hasVoterId ? (
-                    <button type="button" onClick={openReferralModal} className="btn border-none action-orange-control">
-                      Referrals
-                    </button>
-                  ) : null}
                 </div>
               )
             ) : (
@@ -951,9 +895,6 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
                       ? `Credential #${tokenId.toString()}`
                       : "No credential"}
                 </span>
-              </div>
-              <div className="font-medium text-base-content/65 lg:ml-auto">
-                Referrals <span className="font-mono tabular-nums text-base-content/85">{referralCountLabel}</span>
               </div>
             </div>
           ) : null}
@@ -1142,14 +1083,6 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
           ) : ownProfile ? (
             <div className="mt-6 rounded-2xl border border-dashed border-base-content/15 px-5 py-4">
               <AudienceContextHeading />
-              {!hasVoterId ? (
-                <Link
-                  href="/governance"
-                  className="mt-4 inline-flex items-center justify-center rounded-full bg-base-content/[0.06] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-base-content/[0.1]"
-                >
-                  Set Up Rater
-                </Link>
-              ) : null}
             </div>
           ) : null}
         </div>
@@ -1436,101 +1369,6 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
                   disabled={avatarAccentBusy || (!committedAvatarAccentHex && avatarAccentInput.trim().length === 0)}
                 >
                   {clearAvatarAccentPending ? "Resetting..." : "Reset"}
-                </button>
-              </div>
-            </div>
-          </div>
-        ) : null}
-
-        {ownProfile && isReferralModalOpen ? (
-          <div
-            className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 px-4 py-6 backdrop-blur-md"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Referrals"
-            onClick={closeReferralModal}
-          >
-            <div
-              className="w-full max-w-2xl rounded-3xl bg-base-200 p-6 shadow-2xl"
-              onClick={event => event.stopPropagation()}
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex items-center gap-2">
-                  <UserGroupIcon className="h-6 w-6 text-primary" />
-                  <h2 className="text-2xl font-semibold">Referrals</h2>
-                </div>
-                <button
-                  type="button"
-                  onClick={closeReferralModal}
-                  className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-base-300 text-base-content transition-colors hover:bg-base-300/80"
-                  aria-label="Close referrals"
-                >
-                  <XMarkIcon className="h-6 w-6" />
-                </button>
-              </div>
-
-              <div className="mt-6 grid gap-3 sm:grid-cols-2">
-                <div className="rounded-2xl bg-base-content/[0.04] px-5 py-4">
-                  <div className="text-base text-base-content/60">Successful referrals</div>
-                  <div className="mt-1 text-3xl font-semibold tabular-nums">{referralCountLabel}</div>
-                </div>
-                <div className="rounded-2xl bg-base-content/[0.04] px-5 py-4">
-                  <div className="text-base text-base-content/60">Total received</div>
-                  <div className="mt-1 text-3xl font-semibold tabular-nums text-primary">
-                    {formatReferralAmount(totalEarned)} LREP
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-4 rounded-2xl bg-primary/10 px-5 py-4">
-                <div className="text-lg font-semibold">Referral tokens</div>
-                <div className="mt-2 text-base text-base-content/70">
-                  You get{" "}
-                  <span className="font-semibold text-primary">{formatReferralAmount(referralReward)} LREP</span> per
-                  referral
-                </div>
-                <div className="text-base text-base-content/70">
-                  Friend gets{" "}
-                  <span className="font-semibold text-primary">{formatReferralAmount(claimantBonus)} LREP</span> bonus
-                </div>
-              </div>
-
-              <div className="mt-6">
-                <div className="text-base font-medium">Referral link</div>
-                <div className="mt-3 flex gap-2">
-                  <input
-                    type="text"
-                    value={referralLink}
-                    readOnly
-                    className="input input-bordered flex-1 bg-base-100 font-mono text-base"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleCopyReferralLink}
-                    className="btn btn-submit btn-square"
-                    title="Copy referral link"
-                  >
-                    {isCopiedToClipboard ? (
-                      <CheckIcon className="h-5 w-5" />
-                    ) : (
-                      <ClipboardDocumentIcon className="h-5 w-5" />
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-                <a
-                  href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(referralTweetText)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="btn btn-submit sm:flex-1"
-                >
-                  Share on X
-                </a>
-                <button type="button" onClick={handleCopyReferralLink} className="btn btn-submit sm:flex-1 gap-2">
-                  <LinkIcon className="h-5 w-5" />
-                  {isCopiedToClipboard ? "Copied!" : "Copy link"}
                 </button>
               </div>
             </div>

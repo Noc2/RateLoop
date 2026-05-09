@@ -562,7 +562,7 @@ export const FaucetModal = () => {
             <div className="bg-secondary/10 rounded-xl p-4 space-y-3">
               <h4 className="font-semibold text-secondary">Claim Voter ID</h4>
               <p className="text-base text-base-content/60">
-                Create a non-transferable Voter ID. Required for voting and profile actions.
+                Create a non-transferable local rater credential for delegation and legacy identity test paths.
               </p>
               {voterIdReadFailed && (
                 <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-warning">
