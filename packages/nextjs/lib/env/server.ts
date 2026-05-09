@@ -10,7 +10,7 @@ import {
 import { mergeRpcOverrides, resolveRpcOverrides } from "~~/utils/rpcUrls";
 
 const isProduction = process.env.NODE_ENV === "production";
-const defaultDevDatabaseUrl = "postgresql://postgres:postgres@127.0.0.1:5432/curyo_app";
+const defaultDevDatabaseUrl = "postgresql://postgres:postgres@127.0.0.1:5432/rateloop_app";
 const allowLocalE2EProductionBuild = isLocalE2EProductionBuildEnabled();
 
 function readEnv(name: string): string | undefined {

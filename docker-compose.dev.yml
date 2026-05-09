@@ -2,7 +2,7 @@ services:
   next-postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: ${CURYO_LOCAL_DB_NAME:-curyo_app}
+      POSTGRES_DB: ${CURYO_LOCAL_DB_NAME:-rateloop_app}
       POSTGRES_USER: ${CURYO_LOCAL_DB_USER:-postgres}
       POSTGRES_PASSWORD: ${CURYO_LOCAL_DB_PASSWORD:-postgres}
     ports:
