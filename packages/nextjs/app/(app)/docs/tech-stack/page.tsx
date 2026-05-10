@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Metadata, NextPage } from "next";
+import { DocsTitle } from "~~/components/docs/DocsTitle";
 
 const x402IntroHref = "https://docs.x402.org/introduction";
 const x402Http402Href = "https://docs.x402.org/core-concepts/http-402";
@@ -14,13 +15,13 @@ const circleWorldChainUsdcHref = "https://www.circle.com/multi-chain-usdc/worldc
 export const metadata = {
   title: "Tech Stack | RateLoop Docs",
   description:
-    "The protocol terms behind RateLoop: x402 agent payments, MCP and WebMCP tools, optional identity signals, tlock blind prediction rounds, LREP staking, and World Chain USDC settlement.",
+    "The protocol terms behind RateLoop: x402 agent payments, MCP and WebMCP tools, optional identity signals, tlock blind prediction rounds, optional LREP staking, and World Chain USDC settlement.",
 } satisfies Metadata;
 
 const TechStackPage: NextPage = () => {
   return (
     <article className="prose max-w-none">
-      <h1>Tech Stack</h1>
+      <DocsTitle gradientText="Stack">Tech</DocsTitle>
       <p className="lead text-base-content/60 text-lg">
         The landing page uses compact protocol terms. This page spells out what they mean, where RateLoop uses them, and
         why they matter for AI-funded open feedback.
@@ -124,13 +125,14 @@ const TechStackPage: NextPage = () => {
 
       <h2 id="lrep-staking">LREP Staking</h2>
       <p>
-        LREP is the reputation stake used in rating and governance. Raters stake LREP on a split report: their own
-        1.0-9.9 opinion and the 1.0-9.9 crowd rating they expect. Accurate revealed crowd predictions recover stake and
-        share rewards; revealed misses recover only a small refund; unrevealed reports can forfeit.
+        LREP is the optional reputation stake used in rating and the governance token used for protocol control. Raters
+        submit a split report: their own 1.0-9.9 opinion and the 1.0-9.9 crowd rating they expect. They can stake 0-100
+        LREP on that prediction; accurate revealed staked crowd predictions recover stake and share rewards, revealed
+        misses recover only a small refund, and unrevealed staked reports can forfeit.
       </p>
       <p>
-        The reason to use staking is incentive alignment: a rater has to put scarce reputation behind a prediction
-        instead of submitting cost-free noise.
+        The reason to use staking is incentive alignment: a rater can put scarce reputation behind a prediction for
+        higher upside and risk. New raters can still begin through zero-LREP predictions and earned launch rewards.
       </p>
 
       <h2 id="bounties">Bounties</h2>

@@ -60,8 +60,8 @@ machine-specific local addresses. Only set address vars on unsupported chains or
 
 ```bash
 # From the monorepo root (the image needs the shared @rateloop/contracts workspace)
-docker build -f packages/keeper/Dockerfile -t curyo-keeper .
-docker run --env-file packages/keeper/.env.local -e METRICS_BIND_ADDRESS=0.0.0.0 -p 9090:9090 curyo-keeper
+docker build -f packages/keeper/Dockerfile -t rateloop-keeper .
+docker run --env-file packages/keeper/.env.local -e METRICS_BIND_ADDRESS=0.0.0.0 -p 9090:9090 rateloop-keeper
 ```
 
 ## Monitoring

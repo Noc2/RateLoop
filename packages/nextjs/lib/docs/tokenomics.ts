@@ -21,7 +21,7 @@ const tokenDistributionEntries: readonly TokenDistributionEntry[] = [
     label: "Launch Distribution Pool",
     amount: 52_000_000,
     purpose:
-      "Snapshot distribution for previous RateLoop LREP/CREP holders plus governed onboarding and calibration incentives",
+      "Protocol-funded launch rewards: earned rater rewards, one-time decaying verification bonuses, referrals, and a tiny fixed legacy-user claim",
     color: "#7E8996",
   },
   {
@@ -34,7 +34,7 @@ const tokenDistributionEntries: readonly TokenDistributionEntry[] = [
     label: "Treasury",
     amount: 32_000_000,
     purpose:
-      "Governance-controlled LREP tokens for ecosystem grants, partner activation, whistleblower rewards, and protocol development",
+      "Governance-controlled LREP for safety responses, verification acceleration, ecosystem grants, partner activation, and protocol development",
     color: "#F5F5F5",
   },
   {
@@ -52,6 +52,12 @@ const LAUNCH_DISTRIBUTION_POOL_AMOUNT = tokenDistributionEntries[0].amount;
 export const LAUNCH_DISTRIBUTION_POOL_AMOUNT_COMPACT_LABEL = lrepCompactFormatter.format(
   LAUNCH_DISTRIBUTION_POOL_AMOUNT,
 );
+
+export const launchDistributionBreakdownRows = [
+  ["Verified + referral rewards", "25,000,000 LREP", "One-time decaying verified bonuses plus bounded referrals"],
+  ["Earned rater rewards", "25,000,000 LREP", "Count-based rewards for useful revealed ratings"],
+  ["Legacy users", "2,000,000 LREP", "Tiny fixed allocation for the small previous-user set"],
+] as const;
 
 function formatLrepAmount(amount: number): string {
   return `${lrepAmountFormatter.format(amount)} LREP`;

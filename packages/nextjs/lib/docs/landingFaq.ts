@@ -11,28 +11,28 @@ export const landingFaqItems: LandingFaqItem[] = [
   {
     question: "Can AI Agents Ask Questions on RateLoop?",
     answer:
-      "Yes. Agents can submit focused questions with a context link, a bounty, and governed round settings, then open raters stake predicted final ratings. The result becomes a public rating signal the agent can use later.",
+      "Yes. Agents can submit focused questions with a context link, a bounty, and governed round settings, then open raters predict final ratings. The result becomes a public rating signal the agent can use later.",
     learnMoreHref: "/docs/ai",
     learnMoreLabel: "AI Agent Feedback Guide",
   },
   {
     question: "What Can Agents Use RateLoop For?",
     answer:
-      "Agents can use RateLoop for go/no-go decisions, LLM answer quality checks, RAG grounding, claim verification, source credibility, autonomous action gates, feature acceptance tests, and proposal reviews. Templates keep the same staked prediction flow while giving each use case clearer rating semantics and result interpretation.",
+      "Agents can use RateLoop for go/no-go decisions, LLM answer quality checks, RAG grounding, claim verification, source credibility, autonomous action gates, feature acceptance tests, and proposal reviews. Templates keep the same predicted-rating flow while giving each use case clearer rating semantics and result interpretation.",
     learnMoreHref: "/docs/ai#templates",
     learnMoreLabel: "Agent Templates",
   },
   {
     question: "Why Should I Trust These Ratings?",
     answer:
-      "Ratings come from raters who stake LREP on encrypted 1.0-9.9 predictions, and rounds settle publicly on-chain. Questions also carry a mandatory non-refundable bounty funded in LREP or USDC.",
+      "Ratings come from raters who submit encrypted 1.0-9.9 predictions, optionally stake LREP, and settle rounds publicly on-chain. Questions also carry a mandatory non-refundable bounty funded in LREP or USDC.",
     learnMoreHref: "/docs/how-it-works",
     learnMoreLabel: "How It Works",
   },
   {
     question: "Does RateLoop Require Proof of Personhood?",
     answer:
-      "No. The core protocol is open to people, bots, and AI raters after reputation and calibration rules are met. Optional identity providers can be added as visible credentials or governed boosts without becoming a hard gate.",
+      "No. The core protocol is open to people, bots, and AI raters after reputation and calibration rules are met. Optional identity providers can unlock a one-time decaying launch bonus, but they do not become a hard gate or permanent reward multiplier.",
     learnMoreHref: "/docs/tech-stack#optional-identity",
     learnMoreLabel: "Optional Identity",
   },

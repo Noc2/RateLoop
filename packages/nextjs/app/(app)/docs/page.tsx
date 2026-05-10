@@ -1,11 +1,11 @@
 import Link from "next/link";
 import type { NextPage } from "next";
+import { DocsTitle } from "~~/components/docs/DocsTitle";
 
 const DOCS_PATHS = [
   {
     number: "01",
-    title: "For",
-    gradientTitle: "Agents",
+    title: "For Agents",
     description: "Turn uncertainty into a paid question with a structured result.",
     href: "/docs/ai",
     label: "Agent guide",
@@ -13,17 +13,15 @@ const DOCS_PATHS = [
   },
   {
     number: "02",
-    title: "For",
-    gradientTitle: "Raters",
-    description: "Stake split ratings, add feedback, and earn from useful answers.",
+    title: "For Raters",
+    description: "Rate, add feedback, earn starter LREP, and stake when you want more upside.",
     href: "/docs/how-it-works",
     label: "Rating flow",
     color: "var(--rateloop-green)",
   },
   {
     number: "03",
-    title: "For",
-    gradientTitle: "Builders",
+    title: "For Builders",
     description: "Use the SDK, bot, API, or indexed data without a closed data silo.",
     href: "/docs/sdk",
     label: "SDK docs",
@@ -31,8 +29,7 @@ const DOCS_PATHS = [
   },
   {
     number: "04",
-    title: "For",
-    gradientTitle: "Governance",
+    title: "For Governance",
     description: "Tune round settings, rewards, and safety limits on-chain.",
     href: "/docs/governance",
     label: "Governance",
@@ -43,21 +40,21 @@ const DOCS_PATHS = [
 const DocsIntro: NextPage = () => {
   return (
     <article className="prose max-w-none">
-      <DocsHeading as="h1" title="RateLoop" gradientText="Introduction" />
+      <DocsTitle gradientText="Introduction">RateLoop</DocsTitle>
       <p className="lead text-base-content/60 text-lg">AI Asks, Open Raters Predict</p>
 
-      <DocsHeading as="h2" title="What" gradientText="RateLoop Does" />
+      <h2>What RateLoop Does</h2>
       <p>
         RateLoop is an open rating layer for agents, bots, and people. An asker submits a focused question, attaches
-        context, funds a bounty, and gets back a public signal from raters who stake LREP on a private opinion rating
-        and expected crowd rating.
+        context, funds a bounty, and gets back a public signal from raters who submit a private opinion rating and
+        expected crowd rating, with optional LREP stake for additional upside and risk.
       </p>
       <p>
         The result is not a private poll or a comment thread. It is a question, a round, revealed split reports,
         optional rater-only feedback, rewards, and a rating history that other agents and frontends can inspect later.
       </p>
 
-      <DocsHeading as="h2" title="Fast" gradientText="Path" />
+      <h2>Fast Path</h2>
       <ol>
         <li>
           <strong>Ask:</strong> submit one short question with a required context URL and an optional image or YouTube
@@ -67,14 +64,15 @@ const DocsIntro: NextPage = () => {
           <strong>Fund:</strong> attach a non-refundable bounty in LREP or World Chain USDC.
         </li>
         <li>
-          <strong>Rate:</strong> raters stake LREP on a private opinion rating and expected crowd rating.
+          <strong>Rate:</strong> raters predict with a private opinion rating and expected crowd rating, optionally
+          adding LREP stake.
         </li>
         <li>
           <strong>Use:</strong> read the settled score, revealed reports, feedback, and any awarded feedback bonuses.
         </li>
       </ol>
 
-      <DocsHeading as="h2" title="Why It" gradientText="Exists" />
+      <h2>Why It Exists</h2>
       <p>
         Models are useful, but they still hit questions where local context, taste, evidence quality, or social judgment
         matters. RateLoop gives agents a narrow public fallback: ask open raters, pay for the work, and keep the answer
@@ -87,7 +85,7 @@ const DocsIntro: NextPage = () => {
         ))}
       </div>
 
-      <DocsHeading as="h2" title="Where To Go" gradientText="Next" />
+      <h2>Where To Go Next</h2>
       <ul>
         <li>
           <Link href="/docs/ai">AI Agent Feedback Guide</Link> explains the agent loop, templates, and wallet-funded
@@ -109,18 +107,9 @@ const DocsIntro: NextPage = () => {
   );
 };
 
-function DocsHeading({ as: Heading, title, gradientText }: { as: "h1" | "h2"; title: string; gradientText: string }) {
-  return (
-    <Heading>
-      {title} <span className="rateloop-text-gradient">{gradientText}</span>
-    </Heading>
-  );
-}
-
 function FeatureCard({
   number,
   title,
-  gradientTitle,
   description,
   href,
   label,
@@ -128,7 +117,6 @@ function FeatureCard({
 }: {
   number: string;
   title: string;
-  gradientTitle: string;
   description: string;
   href: string;
   label: string;
@@ -136,15 +124,10 @@ function FeatureCard({
 }) {
   return (
     <article className="flex min-h-[12rem] flex-col border-l-2 py-2 pl-5" style={{ borderColor: color }}>
-      <div className="flex items-center gap-3">
-        <span className="rateloop-text-gradient inline-block font-mono text-sm font-semibold tracking-widest">
-          {number}
-        </span>
-        <span aria-hidden="true" className="rateloop-gradient-rule h-px w-10 rounded-full" />
-      </div>
-      <h3 className="mt-4 text-[1.45rem] font-bold leading-tight text-base-content">
-        {title} <span className="rateloop-text-gradient">{gradientTitle}</span>
-      </h3>
+      <span className="font-mono text-sm font-semibold tracking-widest" style={{ color }}>
+        {number}
+      </span>
+      <h3 className="mt-4 text-[1.45rem] font-bold leading-tight text-base-content">{title}</h3>
       <p className="mt-4 text-base leading-7 text-base-content/62">{description}</p>
       <Link
         href={href}

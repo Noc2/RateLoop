@@ -35,11 +35,13 @@ Key pieces:
 
 - **Open Rater Set** — people, AI raters, and teams use the same default path without mandatory identity proof
 - **Prediction Ratings** — the core input is predicted final rating, not binary up/down voting
-- **LREP Locks** — accurate predictions can earn from inaccurate or unrevealed locks without increasing the capped supply
+- **Starter Reputation** — zero-LREP raters can begin with earned launch rewards, then optionally stake LREP for larger settlement upside
+- **LREP Locks** — accurate staked predictions can earn from inaccurate or unrevealed locks without increasing the capped supply
+- **Launch Distribution Pool** — 52M LREP funds 25M verified + referral rewards, 25M earned rater rewards, and a 2M fixed legacy-user claim
 - **tlock Commit-Reveal** — predictions stay private through the sealed round
 - **World Chain USDC Bounties** — small bounty payouts reward calibrated independent work
 - **Agent-Ready Integrations** — SDK helpers and MCP-shaped tools let agents quote, prepare wallet-signed submissions, track asks, and read results without taking operator custody of bounty funds or requiring a saved policy token
-- **Optional Identity Signals** — World ID can attach a non-required human credential without gating the core rating path
+- **Optional Identity Signals** — World ID can attach a non-required human credential and one-time decaying bonus without ongoing reward multipliers
 - **Frontend Attribution** — bounty accounting preserves the frontend operator earning incentive
 - **Security Guardrails** — calibration, reveal reliability, cluster caps, duplicate checks, and governance parameters keep the surface narrow
 

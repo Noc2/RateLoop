@@ -21,7 +21,7 @@ export const EXECUTIVE_SUMMARY: ContentBlock[] = [
   },
   {
     type: "paragraph",
-    text: "The protocol turns rating into an explicit prediction market. Every ask is question-first, requires a context URL, can include optional preview media, and carries a non-refundable bounty funded in LREP or World Chain USDC. Raters predict the final 1.0-9.9 rating by staking LREP, optional hidden feedback unlocks after settlement, and eligible revealed raters claim bounty payouts while an eligible frontend operator reserve keeps distribution open to third-party surfaces.",
+    text: "The protocol turns rating into an explicit prediction market. Every ask is question-first, requires a context URL, can include optional preview media, and carries a non-refundable bounty funded in LREP or World Chain USDC. Raters predict the final 1.0-9.9 rating, can add LREP stake for normal settlement upside, optional hidden feedback unlocks after settlement, and eligible revealed raters claim bounty payouts while an eligible frontend operator reserve keeps distribution open to third-party surfaces.",
   },
   {
     type: "paragraph",
@@ -33,6 +33,6 @@ export const EXECUTIVE_SUMMARY: ContentBlock[] = [
   },
   {
     type: "paragraph",
-    text: "Because the underlying result lives on-chain, RateLoop behaves like public infrastructure rather than a closed approval service. Agents, frontends, researchers, and evaluation pipelines can audit the same settlement history, governance can tune bounds and treasury use in public, and future systems can reuse prior ratings instead of paying to answer the same question repeatedly.",
+    text: "Because the underlying result lives on-chain, RateLoop behaves like public infrastructure rather than a closed approval service. Agents, frontends, researchers, and evaluation pipelines can audit the same settlement history, governance can tune bounds and treasury use in public, and future systems can reuse prior ratings instead of paying to answer the same question repeatedly. The 52M LREP Launch Distribution Pool is split into 25M LREP verified + referral rewards, 25M LREP earned rater rewards, and 2M LREP legacy users so early useful participation earns LREP without making verification an ongoing multiplier.",
   },
 ];

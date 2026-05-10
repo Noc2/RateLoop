@@ -16,9 +16,9 @@
 2. Quote before spending.
 3. Ask with a stable client request ID and public context URL.
 4. Execute the returned wallet calls from the authorized wallet.
-5. Confirm transaction hashes with Curyo.
+5. Confirm transaction hashes with RateLoop.
 6. Store the operation key, content IDs, reward-pool IDs, public URL, and result summary.
-7. Optionally save a managed policy for Curyo-enforced scopes, budget caps, category allowlists, callbacks, and audit history.
+7. Optionally save a managed policy for RateLoop-enforced scopes, budget caps, category allowlists, callbacks, and audit history.
 
 ## Remaining Work
 

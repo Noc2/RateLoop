@@ -1,6 +1,6 @@
-# Curyo — Next.js (Frontend)
+# RateLoop — Next.js (Frontend)
 
-Full-stack web application built with Next.js 15 and React 19. Provides the UI for voting on content, question-first submissions with a required context URL, optional image or YouTube preview media, governed per-question round settings, managing profiles, and reading in-app documentation. Question submissions must attach a non-refundable bounty funded in LREP or USDC, while claim flows remain tied to Voter ID where the protocol still requires it. Humans, bots, and AI agents all submit through the same question-first path. The app includes server-side API routes plus a PostgreSQL database via Drizzle ORM.
+Full-stack web application built with Next.js 15 and React 19. Provides the UI for rating content, question-first submissions with a required context URL, optional image or YouTube preview media, governed per-question round settings, managing profiles, and reading in-app documentation. Question submissions must attach a non-refundable bounty funded in LREP or USDC. Humans, bots, and AI agents all submit through the same question-first path, and optional identity credentials only unlock one-time onboarding bonuses rather than permanent reward multipliers. The app includes server-side API routes plus a PostgreSQL database via Drizzle ORM.
 
 ## Quick Start
 
@@ -98,7 +98,7 @@ Key environment variables (see `.env.example` for the full list):
 | `CURYO_E2E_PRODUCTION_BUILD`                      | Server-side opt-in for local production-style E2E builds                                                                                 |
 | `NEXT_PUBLIC_CURYO_E2E_PRODUCTION_BUILD`          | Browser-side opt-in for local production-style E2E builds                                                                                |
 | `CURYO_AGENT_CALLBACK_DELIVERY_SECRET`            | Shared secret required to trigger the internal callback delivery worker at `/api/agent-callbacks/deliver`                               |
-| `BLOB_READ_WRITE_TOKEN`                           | Vercel Blob read-write token used for private image uploads and moderated Curyo-hosted image delivery                                   |
+| `BLOB_READ_WRITE_TOKEN`                           | Vercel Blob read-write token used for private image uploads and moderated RateLoop-hosted image delivery                                 |
 | `OPENAI_API_KEY`                                  | OpenAI API key used for automated uploaded-image moderation in production                                                               |
 | `CURYO_IMAGE_MODERATION_MODE`                     | Optional development override; set to `disabled` only for local testing of the image pipeline                                           |
 
@@ -118,7 +118,7 @@ Notes:
 - For local development, `yarn dev:db` and `yarn dev:stack` manage a Docker Postgres container when `DATABASE_URL` points to localhost. `yarn dev:stack` only runs `db:push` automatically for local databases; non-local databases require a manual `yarn workspace @rateloop/nextjs db:push` or the explicit `CURYO_DEV_STACK_ALLOW_REMOTE_DB_PUSH=1` opt-in.
 - On Next.js 15, `NextRequest.ip` is not reliably populated. On non-Vercel production hosts you must configure `RATE_LIMIT_TRUSTED_IP_HEADERS` to the header(s) your hosting proxy overwrites. Vercel auto-trusts `x-real-ip`, and localhost shortcuts are only enabled for development or explicit local production-style E2E builds. Protected API routes fail closed when no trusted client IP can be derived or when the rate-limit store is unavailable.
 - The free transaction quota is enforced by the thirdweb server verifier route at `/api/thirdweb/verify-transaction`. Configure the same secret in thirdweb’s dashboard and in `THIRDWEB_SERVER_VERIFIER_SECRET`.
-- The old x402 question route has been removed. Paid agent asks use ordered wallet calls or native x402-style USDC authorizations that fund protocol escrow directly; no Curyo executor, custody path, saved policy token, or separate service fee is part of the default ask flow. USDC-funded asks do not require a Voter ID, while voting and credential-aware claim flows still do.
+- The old x402 question route has been removed. Paid agent asks use ordered wallet calls or native x402-style USDC authorizations that fund protocol escrow directly; no legacy Curyo executor, custody path, saved policy token, or separate service fee is part of the default ask flow. USDC-funded asks do not require identity verification.
 - The Next.js dev faucet reads `KEYSTORE_ACCOUNT`/`KEYSTORE_PASSWORD` or `FAUCET_PRIVATE_KEY` from `packages/nextjs/.env.local`. Keeper wallet settings live separately in `packages/keeper/.env.local`.
 
 ## Project Structure

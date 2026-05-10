@@ -1,4 +1,4 @@
-# Curyo — Ponder (Indexer & API)
+# RateLoop — Ponder (Indexer & API)
 
 On-chain event indexer built with [Ponder](https://ponder.sh/). Listens to smart contract events, stores processed data, and exposes a REST API on port 42069 for consumption by the frontend, bot, and AI/MCP adapters.
 

@@ -1,6 +1,6 @@
-# Curyo — Foundry (Smart Contracts)
+# RateLoop — Foundry (Smart Contracts)
 
-Solidity smart contracts implementing the Curyo protocol: voting engine, content registry, reputation token, HREP stake settlement, Bounty escrow, and governance. Built with [Foundry](https://book.getfoundry.sh/). The docs now describe the question-first submission flow, a required context URL with optional preview media, mandatory non-refundable Bounties funded in HREP or USDC, flexible minimum Bounty terms for voters and settlement rounds, Voter ID-gated claims where still needed, and the default frontend-operator fee on qualified Bounty claims.
+Solidity smart contracts implementing the RateLoop protocol: voting engine, content registry, Loop Reputation token, LREP settlement, bounty escrow, launch distribution, and governance. Built with [Foundry](https://book.getfoundry.sh/). The docs now describe the question-first submission flow, a required context URL with optional preview media, mandatory non-refundable bounties funded in LREP or USDC, flexible minimum bounty terms for raters and settlement rounds, optional identity credentials, and the default frontend-operator fee on qualified bounty claims.
 
 ## Quick Start
 
@@ -56,9 +56,10 @@ contracts/
 ├── CategoryRegistry.sol         # Content category management
 ├── ProfileRegistry.sol          # User reputation & metadata
 ├── FrontendRegistry.sol         # Frontend operator fee tracking
-├── VoterIdNFT.sol               # Soulbound NFT for verified voters
-├── HumanReputation.sol          # HREP token (staking & reputation)
-├── ParticipationPool.sol        # Halving-tier HREP Bootstrap Pool rewards
+├── VoterIdNFT.sol               # Optional soulbound credential for verified raters
+├── LoopReputation.sol           # LREP token (governance and reputation)
+├── ParticipationPool.sol        # Halving-tier LREP Bootstrap Pool rewards
+├── LaunchDistributionPool.sol   # Earned rater, verification, referral, and legacy launch rewards
 ├── QuestionRewardPoolEscrow.sol     # Bounty custody and claims
 ├── governance/                  # Governor contracts
 ├── interfaces/                  # Contract interfaces

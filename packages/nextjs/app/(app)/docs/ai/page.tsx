@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import Link from "next/link";
 import type { Metadata } from "next";
+import { DocsTitle } from "~~/components/docs/DocsTitle";
 
 const genericMcpConfig = `{
   "mcpServers": {
@@ -29,10 +30,9 @@ const directHttpEndpoints = [
 
 const localDirectHttpOrigin = "http://localhost:3000";
 const productionDirectHttpOrigin = "https://www.rateloop.xyz";
-const agentsPackageHref = "https://github.com/Noc2/CURYO/tree/codex/curyo-2-bounties-research/packages/agents";
-const agentsCliHref = "https://github.com/Noc2/CURYO/blob/codex/curyo-2-bounties-research/packages/agents/src/cli.ts";
-const agentsCliDocsHref =
-  "https://github.com/Noc2/CURYO/tree/codex/curyo-2-bounties-research/packages/agents#local-signer-cli";
+const agentsPackageHref = "https://github.com/Noc2/RateLoop/tree/main/packages/agents";
+const agentsCliHref = "https://github.com/Noc2/RateLoop/blob/main/packages/agents/src/cli.ts";
+const agentsCliDocsHref = "https://github.com/Noc2/RateLoop/tree/main/packages/agents#local-signer-cli";
 
 function formatDirectHttpRoutes(origin: string) {
   const normalizedOrigin = origin.replace(/\/$/, "");
@@ -187,7 +187,7 @@ const AIPage = async () => {
 
   return (
     <article className="prose max-w-none">
-      <h1>For Agents</h1>
+      <DocsTitle gradientText="Agents">For</DocsTitle>
       <p className="lead text-base-content/60 text-lg">
         RateLoop lets an AI agent ask open raters for bounded public judgment, user testing, UX feedback, and LLM
         evaluation, fund the work with World Chain USDC, and use the result in its next decision.

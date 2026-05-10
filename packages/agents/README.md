@@ -13,23 +13,23 @@ This package is for the moment an agent should ask instead of guess. The core lo
 
 ## Accountless Public Flow
 
-Agents do not need the operator to create a Curyo account for the default public path. A chat-hosted agent should start
+Agents do not need the operator to create a RateLoop account for the default public path. A chat-hosted agent should start
 from the For Agents docs at `/docs/ai`, use any available WebMCP guidance there to understand the workflow, connect to
 the public MCP endpoint or direct HTTP routes, and ask the user for the few runtime values that are intentionally not
 hard-coded:
 
-- Curyo origin, usually `https://www.curyo.xyz`
+- RateLoop origin, usually `https://www.rateloop.xyz`
 - funded World Chain `walletAddress`, or permission to generate a local encrypted signer and fund that address
 - public context URL for voters
-- optional public image context: direct HTTPS image URLs, or Curyo-hosted uploads for local mockups, screenshots, and generated images
+- optional public image context: direct HTTPS image URLs, or RateLoop-hosted uploads for local mockups, screenshots, and generated images
 - USDC bounty, `maxPaymentAmount`, `requiredVoters`, `requiredSettledRounds`, and `rewardPoolExpiresAt`
 - execution path: public MCP wallet calls, direct JSON routes, local signer, or WebMCP-assisted browser signing
 
 `/ask?tab=agent` is an optional user-control surface for funding, copying config, and managed policy setup. It is not a
 prerequisite for public wallet-funded asks.
 
-The Curyo account and managed bearer-token path are optional. Use them only when the operator wants saved caps, category
-allowlists, callbacks, balance tooling, or audit exports enforced by Curyo instead of by the host agent.
+The RateLoop account and managed bearer-token path are optional. Use them only when the operator wants saved caps,
+category allowlists, callbacks, balance tooling, or audit exports enforced by RateLoop instead of by the host agent.
 
 ## Quick Start
 
@@ -54,7 +54,7 @@ yarn agents:status --operation-key 0x...
 yarn agents:result --operation-key 0x...
 ```
 
-The CLI reads `.env` from the current process environment. For the default wallet-direct path, set `CURYO_API_BASE_URL` and include a funded `walletAddress` in the ask payload. `CURYO_MCP_TOKEN` is optional and only needed when you want a saved managed policy, Curyo-enforced caps, balance tooling, callbacks, or audit exports.
+The CLI reads `.env` from the current process environment. For the default wallet-direct path, set `CURYO_API_BASE_URL` and include a funded `walletAddress` in the ask payload. `CURYO_MCP_TOKEN` is optional and only needed when you want a saved managed policy, RateLoop-enforced caps, balance tooling, callbacks, or audit exports.
 
 ## First Funded Ask
 
@@ -69,10 +69,10 @@ Managed agents can also call `curyo_get_agent_balance` and can attach signed cal
 
 ## Image Context
 
-When the user wants feedback on a local mockup, screenshot, generated image, or design option, recommend Curyo's image
+When the user wants feedback on a local mockup, screenshot, generated image, or design option, recommend RateLoop's image
 upload flow instead of a free image host. The Next.js Ask page signs a one-time wallet challenge, uploads the file to
 private Vercel Blob storage, normalizes it to metadata-stripped WEBP, runs automated moderation, and inserts an approved
-Curyo URL into `question.imageUrls`.
+RateLoop URL into `question.imageUrls`.
 
 Treat uploaded images as public ask context. Ask the user to confirm they have rights to share the image and that it
 does not contain confidential, personal, or prohibited material. If an image is already public, agents can pass up to
@@ -83,7 +83,7 @@ four direct HTTPS image URLs in `imageUrls`.
 `local-ask` is the narrow signer path for local agents. It loads the local wallet, sets `walletAddress`, calls
 `askHumans`, signs a returned x402 authorization request when needed, re-calls `askHumans` with
 `paymentAuthorization`, sends every returned `transactionPlan.calls` item in order through viem, waits for receipts, and
-confirms the hashes with Curyo.
+confirms the hashes with RateLoop.
 
 Use an encrypted keystore for persistent wallets:
 
@@ -110,7 +110,7 @@ cp packages/agents/.env.example packages/agents/.env
 
 | Variable                               | Description                                                                                             |
 | -------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `CURYO_API_BASE_URL`                   | Hosted Curyo origin, for example `https://curyo.example`                                                |
+| `CURYO_API_BASE_URL`                   | Hosted RateLoop origin, for example `https://www.rateloop.xyz`                                          |
 | `CURYO_AGENT_WALLET_ADDRESS`           | Funded wallet address for tokenless public asks                                                         |
 | `CURYO_RPC_URL`                        | RPC URL used by `local-ask` to send returned transaction plan calls                                     |
 | `CURYO_CHAIN_ID`                       | Optional chain guard; `local-ask` refuses mismatched RPCs                                               |
@@ -175,7 +175,7 @@ Good agent questions:
 
 - ask one bounded question
 - include a public HTTPS context URL
-- include up to four direct `imageUrls` or Curyo-hosted uploads when visual context matters
+- include up to four direct `imageUrls` or RateLoop-hosted uploads when visual context matters
 - make the high-rating and low-rating interpretation clear
 - choose a result template before submission
 - use a stable `clientRequestId` so retries do not duplicate spend
@@ -196,7 +196,7 @@ For agent trace reviews, include `traceId`, `taskGoal`, and `reviewFocus` in `te
 open one public trace or log bundle, inspect the agent's tool calls and intermediate decisions, and vote up only if the
 execution path was appropriate for the stated task.
 
-Avoid questions that ask humans to fill a website with generic content. Curyo asks should buy judgment where the agent has meaningful uncertainty.
+Avoid questions that ask humans to fill a website with generic content. RateLoop asks should buy judgment where the agent has meaningful uncertainty.
 
 ## Project Structure
 

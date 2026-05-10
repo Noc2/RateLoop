@@ -1,23 +1,24 @@
 import Link from "next/link";
 import type { NextPage } from "next";
+import { DocsTitle } from "~~/components/docs/DocsTitle";
 import { SETTINGS_FRONTEND_ROUTE } from "~~/constants/routes";
 import { protocolDocFacts } from "~~/lib/docs/protocolFacts";
 
-const sdkSourceHref = "https://github.com/Noc2/CURYO/tree/main/packages/sdk";
-const referenceAppSourceHref = "https://github.com/Noc2/CURYO/tree/main/packages/nextjs";
-const keeperSourceHref = "https://github.com/Noc2/CURYO/tree/main/packages/keeper";
-const ponderSourceHref = "https://github.com/Noc2/CURYO/tree/main/packages/ponder";
+const sdkSourceHref = "https://github.com/Noc2/RateLoop/tree/main/packages/sdk";
+const referenceAppSourceHref = "https://github.com/Noc2/RateLoop/tree/main/packages/nextjs";
+const keeperSourceHref = "https://github.com/Noc2/RateLoop/tree/main/packages/keeper";
+const ponderSourceHref = "https://github.com/Noc2/RateLoop/tree/main/packages/ponder";
 const contentModerationPolicySourceHref =
-  "https://github.com/Noc2/CURYO/blob/main/packages/node-utils/src/contentModeration.ts";
-const contentFilterSourceHref = "https://github.com/Noc2/CURYO/blob/main/packages/nextjs/utils/contentFilter.ts";
-const ponderModerationSourceHref = "https://github.com/Noc2/CURYO/blob/main/packages/ponder/src/api/moderation.ts";
+  "https://github.com/Noc2/RateLoop/blob/main/packages/node-utils/src/contentModeration.ts";
+const contentFilterSourceHref = "https://github.com/Noc2/RateLoop/blob/main/packages/nextjs/utils/contentFilter.ts";
+const ponderModerationSourceHref = "https://github.com/Noc2/RateLoop/blob/main/packages/ponder/src/api/moderation.ts";
 const submissionValidationSourceHref =
-  "https://github.com/Noc2/CURYO/blob/main/packages/nextjs/lib/moderation/submissionValidation.ts";
+  "https://github.com/Noc2/RateLoop/blob/main/packages/nextjs/lib/moderation/submissionValidation.ts";
 
 const FrontendCodes: NextPage = () => {
   return (
     <article className="prose max-w-none">
-      <h1>Frontend Integrations</h1>
+      <DocsTitle gradientText="Integrations">Frontend</DocsTitle>
       <p className="lead text-base-content/60 text-lg">
         Add RateLoop to an existing app with the SDK, then register a frontend operator if you want votes from your
         interface to accrue frontend fees.

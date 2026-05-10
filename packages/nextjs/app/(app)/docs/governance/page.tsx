@@ -1,10 +1,11 @@
 import type { NextPage } from "next";
+import { DocsTitle } from "~~/components/docs/DocsTitle";
 import { protocolDocFacts } from "~~/lib/docs/protocolFacts";
 
 const GovernanceDocs: NextPage = () => {
   return (
     <article className="prose max-w-none">
-      <h1>Governance</h1>
+      <DocsTitle gradientText="Governance" />
       <p className="lead text-base-content/60 text-lg">
         LREP governance controls protocol settings, upgrades, treasury routing, and optional identity policy.
       </p>
@@ -153,9 +154,10 @@ const GovernanceDocs: NextPage = () => {
       </p>
       <p>
         Treasury grants can support work that grows the RateLoop feedback network: partner activation, integrations,
-        research and data projects, community growth, protocol development, and security or whistleblower rewards.
-        Because LREP also carries governance power, grant proposals should explain the recipient, purpose, amount,
-        expected impact, and any milestone or reporting expectations.
+        research and data projects, community growth, protocol development, verification acceleration, appeals, and
+        security or whistleblower rewards. These uses are treasury responsibilities rather than Launch Distribution Pool
+        rewards. Because LREP also carries governance power, grant proposals should explain the recipient, purpose,
+        amount, expected impact, and any milestone or reporting expectations.
       </p>
 
       <h2>Safety Powers</h2>

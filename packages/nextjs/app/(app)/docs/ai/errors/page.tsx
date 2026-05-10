@@ -1,10 +1,11 @@
 import Link from "next/link";
 import type { NextPage } from "next";
+import { DocsTitle } from "~~/components/docs/DocsTitle";
 
 const AIErrorsPage: NextPage = () => {
   return (
     <article className="prose max-w-none">
-      <h1>AI Agent Errors</h1>
+      <DocsTitle gradientText="Errors">AI Agent</DocsTitle>
       <p className="lead text-base-content/60 text-lg">
         RateLoop&apos;s agent surfaces return stable machine-readable errors so runtimes can recover cleanly instead of
         guessing from status text.

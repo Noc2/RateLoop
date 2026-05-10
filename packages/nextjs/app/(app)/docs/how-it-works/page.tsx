@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { NextPage } from "next";
+import { DocsTitle } from "~~/components/docs/DocsTitle";
 import { RewardSplitChart } from "~~/components/docs/RewardSplitChart";
 import { VotingFlowDiagram } from "~~/components/docs/VotingFlowDiagram";
 import { protocolDocFacts } from "~~/lib/docs/protocolFacts";
@@ -10,7 +11,7 @@ const HowItWorks: NextPage = () => {
 
   return (
     <article className="prose max-w-none">
-      <h1>How It Works</h1>
+      <DocsTitle gradientText="Works">How It</DocsTitle>
       <p className="lead text-base-content/60 text-lg">
         Ask a focused question, fund the round, let open raters submit private split ratings, then read the settled
         signal.
@@ -38,23 +39,24 @@ const HowItWorks: NextPage = () => {
       <ul>
         <li>Question submissions are permissionless.</li>
         <li>Core rating and bounty flows do not require proof-of-personhood.</li>
-        <li>Optional identity credentials can be added as informational signals or governed boosts.</li>
+        <li>Optional identity credentials can unlock a one-time decaying launch bonus, but not ongoing multipliers.</li>
         <li>Agents, bots, and people use the same submission path.</li>
       </ul>
 
       <h2 id="commit-reveal-voting">2. Predict</h2>
       <p>
-        Raters stake 1&ndash;100 LREP and submit a BTS-inspired split report: their own 1.0-9.9 opinion rating and the
-        1.0-9.9 crowd rating they expect after reveal. Both values are encrypted during the blind phase so early raters
-        cannot simply copy visible momentum.
+        Raters submit a BTS-inspired split report: their own 1.0-9.9 opinion rating and the 1.0-9.9 crowd rating they
+        expect after reveal. They can stake 0&ndash;100 LREP per prediction; zero-LREP ratings can bootstrap earned
+        launch reputation, while staked ratings add settlement upside and risk. Both values are encrypted during the
+        blind phase so early raters cannot simply copy visible momentum.
       </p>
       <div className="not-prose">
         <VotingFlowDiagram />
       </div>
       <ol>
         <li>
-          <strong>Commit:</strong> choose an opinion rating, expected crowd rating, and stake. The app submits one
-          encrypted rating report.
+          <strong>Commit:</strong> choose an opinion rating, expected crowd rating, and optional stake. The app submits
+          one encrypted rating report.
         </li>
         <li>
           <strong>Reveal:</strong> after the blind phase, the keeper normally reveals eligible predictions. Users can
@@ -86,10 +88,11 @@ const HowItWorks: NextPage = () => {
       <h2 id="on-chain-settlement">3. Settle Rewards</h2>
       <h3 id="lrep-stake-settlement">LREP stake settlement</h3>
       <p>
-        The most accurate revealed crowd predictions recover stake and share the LREP rater pool. The rater&apos;s own
-        opinion helps form the public rating, but it is not rewarded for matching the end result. Revealed misses can
-        reclaim <strong>{protocolDocFacts.revealedLoserRefundPercentLabel}</strong> of raw stake. The remaining losing
-        pool splits <strong>{protocolDocFacts.rewardSplitSummaryLabel}</strong>.
+        The most accurate revealed staked crowd predictions recover stake and share the LREP rater pool. The
+        rater&apos;s own opinion helps form the public rating, but it is not rewarded for matching the end result.
+        Revealed misses can reclaim <strong>{protocolDocFacts.revealedLoserRefundPercentLabel}</strong> of raw stake.
+        The remaining losing pool splits <strong>{protocolDocFacts.rewardSplitSummaryLabel}</strong>. Separately, the
+        Launch Distribution Pool can pay starter LREP for useful revealed ratings.
       </p>
       <div className="not-prose my-6">
         <RewardSplitChart />

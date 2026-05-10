@@ -54,9 +54,11 @@ test("whitepaper reflects current launch allocations and governance threshold", 
   const whitepaperText = collectWhitepaperText();
 
   assert.match(whitepaperText, /Bootstrap Pool \(12M LREP\)/i);
-  assert.match(whitepaperText, /pool is funded with 12M LREP/i);
   assert.match(whitepaperText, /treasury starts with 32M LREP/i);
   assert.match(whitepaperText, /bootstrap proposal threshold is 1,000 LREP/i);
+  assert.match(whitepaperText, /25M LREP for verified \+ referral rewards/i);
+  assert.match(whitepaperText, /25M LREP for earned rater rewards/i);
+  assert.match(whitepaperText, /2M LREP for legacy users/i);
 
   assert.doesNotMatch(whitepaperText, /Bootstrap Pool \(24M LREP\)/i);
   assert.doesNotMatch(whitepaperText, /pool is funded with 24M LREP/i);

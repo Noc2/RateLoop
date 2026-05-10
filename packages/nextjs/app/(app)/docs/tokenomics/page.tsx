@@ -1,21 +1,26 @@
+import { DocsTitle } from "~~/components/docs/DocsTitle";
 import { TokenAllocationChart } from "~~/components/docs/TokenAllocationChart";
 import { protocolCopy } from "~~/lib/docs/protocolCopy";
 import { protocolDocFacts } from "~~/lib/docs/protocolFacts";
-import { LREP_MAX_SUPPLY_LABEL, tokenDistributionTableRows } from "~~/lib/docs/tokenomics";
+import {
+  LREP_MAX_SUPPLY_LABEL,
+  launchDistributionBreakdownRows,
+  tokenDistributionTableRows,
+} from "~~/lib/docs/tokenomics";
 
 const Tokenomics = () => {
   return (
     <article className="prose max-w-none">
-      <h1>Tokenomics</h1>
+      <DocsTitle gradientText="Tokenomics" />
       <p className="lead text-base-content/60 text-lg">
-        Loop Reputation (LREP) token distribution, question funding, and staking mechanics.
+        Loop Reputation (LREP) token distribution, question funding, and reward mechanics.
       </p>
 
       <h2>Overview</h2>
       <p>
         Loop Reputation (LREP) is a capped, transferable reputation and governance token. It has no protocol token sale
-        and no treasury backing; supply is distributed through the launch snapshot, governance-controlled pools, and
-        earned protocol rewards.
+        and no treasury backing; supply is distributed through protocol-controlled pools, earned protocol rewards, and
+        governance-approved programs.
       </p>
 
       <h2>Token Overview</h2>
@@ -83,18 +88,42 @@ const Tokenomics = () => {
         </table>
       </div>
 
-      <h3>Launch Snapshot And Onboarding</h3>
+      <h3>Launch Distribution Pool</h3>
       <p>
-        The launch distribution reuses the previous RateLoop LREP/CREP snapshot so early protocol participants keep a
-        governance stake in the fresh deployment. Remaining launch distribution capacity can be routed by governance to
-        onboarding, calibration, and ecosystem programs. Optional identity credentials can be added later, but they are
-        not required for the core rating protocol.
+        The 52M LREP Launch Distribution Pool is the protocol&apos;s onboarding engine. It is not a large airdrop to the
+        nine legacy users. The split is <strong>25M LREP</strong> for verified + referral rewards,{" "}
+        <strong>25M LREP</strong> for earned rater rewards, and <strong>2M LREP</strong> for legacy users.
+      </p>
+      <p>
+        New users can start with a zero-LREP prediction path and earn initial LREP when their ratings are useful.
+        Staking LREP remains available for raters who want more upside from normal winner/loser settlement, but owning
+        LREP is not intended to be the first barrier to participation.
       </p>
       <div className="not-prose overflow-x-auto my-6 rounded-xl bg-base-200">
         <table className="table table-zebra [&_th]:text-base [&_td]:text-base [&_.badge]:text-base [&_th]:bg-base-300">
           <thead>
             <tr>
-              <th>Phase</th>
+              <th>Launch rail</th>
+              <th>Allocation</th>
+              <th>Purpose</th>
+            </tr>
+          </thead>
+          <tbody>
+            {launchDistributionBreakdownRows.map(([rail, amount, purpose]) => (
+              <tr key={rail}>
+                <td className="font-medium">{rail}</td>
+                <td className="font-mono">{amount}</td>
+                <td>{purpose}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="not-prose overflow-x-auto my-6 rounded-xl bg-base-200">
+        <table className="table table-zebra [&_th]:text-base [&_td]:text-base [&_.badge]:text-base [&_th]:bg-base-300">
+          <thead>
+            <tr>
+              <th>Rail</th>
               <th>Eligibility</th>
               <th>Distribution</th>
               <th>Notes</th>
@@ -102,32 +131,38 @@ const Tokenomics = () => {
           </thead>
           <tbody>
             <tr>
-              <td>Snapshot</td>
-              <td>Previous LREP/CREP holders</td>
-              <td className="font-mono">Governance-approved snapshot</td>
-              <td>Fresh deployment distribution to early RateLoop contributors</td>
+              <td>Earned rater rewards</td>
+              <td>Accounts that complete qualifying revealed ratings</td>
+              <td className="font-mono">Count-based, decaying cohorts</td>
+              <td>Earlier useful raters earn more; later cohorts receive lower per-user caps</td>
             </tr>
             <tr>
-              <td>Calibration</td>
-              <td>Accounts or agents completing required calibration rounds</td>
-              <td className="font-mono">Governance-tuned rewards</td>
-              <td>USDC earning starts after calibration is met</td>
+              <td>Verified bonus</td>
+              <td>One optional uniqueness credential per person</td>
+              <td className="font-mono">One-time decaying bonus</td>
+              <td>Verification does not create an ongoing multiplier after the one-time bonus</td>
             </tr>
             <tr>
-              <td>Optional identity</td>
-              <td>World ID credential when enabled</td>
-              <td className="font-mono">Governance-tuned boost or credential</td>
-              <td>Informational by default, not a hard gate</td>
+              <td>Referrals</td>
+              <td>Valid referrer and referred rater activity</td>
+              <td className="font-mono">Small bounded bonus</td>
+              <td>Designed to reward real onboarding, not passive invite farming</td>
             </tr>
             <tr>
-              <td>Governed programs</td>
-              <td>Approved grants, integrations, and ecosystem work</td>
-              <td className="font-mono">Governor/timelock controlled</td>
-              <td>Counts against the fixed 100M LREP cap</td>
+              <td>Legacy claim</td>
+              <td>The small set of previous protocol users</td>
+              <td className="font-mono">Tiny fixed allocation</td>
+              <td>Recognizes early history without consuming the launch pool&apos;s growth budget</td>
             </tr>
           </tbody>
         </table>
       </div>
+      <p>
+        Verification acceleration, safety responses, appeals, and governance programs are treasury responsibilities.
+        They do not draw from the Launch Distribution Pool. The Bootstrap Pool and Consensus Subsidy Reserve also keep
+        their separate purposes: the Bootstrap Pool tops up early settled participation, and the Consensus Subsidy
+        Reserve supports high-agreement rounds with little losing stake.
+      </p>
       <h3>Bootstrap Rewards</h3>
       <p>{protocolCopy.participationPoolOverview}</p>
       <p>
@@ -242,8 +277,10 @@ const Tokenomics = () => {
           <tbody>
             <tr>
               <td>Predict a final rating</td>
-              <td className="font-mono">1&ndash;100 LREP</td>
-              <td>Per prediction, per round</td>
+              <td className="font-mono">0&ndash;100 LREP</td>
+              <td>
+                Zero-LREP predictions can bootstrap reputation; larger stakes add normal settlement upside and risk
+              </td>
             </tr>
             <tr>
               <td>Ask a question</td>

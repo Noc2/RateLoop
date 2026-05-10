@@ -1,14 +1,15 @@
 import type { NextPage } from "next";
+import { DocsTitle } from "~~/components/docs/DocsTitle";
 import { protocolDocFacts } from "~~/lib/docs/protocolFacts";
 
-const contractsSourceHref = "https://github.com/Noc2/CURYO/tree/main/packages/foundry/contracts";
-const deploymentsSourceHref = "https://github.com/Noc2/CURYO/tree/main/packages/foundry/deployments";
-const tsContractsSourceHref = "https://github.com/Noc2/CURYO/tree/main/packages/contracts";
+const contractsSourceHref = "https://github.com/Noc2/RateLoop/tree/main/packages/foundry/contracts";
+const deploymentsSourceHref = "https://github.com/Noc2/RateLoop/tree/main/packages/foundry/deployments";
+const tsContractsSourceHref = "https://github.com/Noc2/RateLoop/tree/main/packages/contracts";
 
 const SmartContracts: NextPage = () => {
   return (
     <article className="prose max-w-none">
-      <h1>Smart Contracts</h1>
+      <DocsTitle gradientText="Contracts">Smart</DocsTitle>
       <p className="lead text-base-content/60 text-lg">
         Technical reference for the RateLoop smart contract architecture.
       </p>
@@ -17,8 +18,8 @@ const SmartContracts: NextPage = () => {
       <p>
         The upgradeable control-plane contracts use <strong>transparent proxies</strong> managed by timelock-owned proxy
         admins: ContentRegistry, ProtocolConfig, RoundVotingEngine, RoundRewardDistributor, FrontendRegistry, and
-        ProfileRegistry. Token, identity, faucet, participation, governance, and helper contracts are intentionally
-        non-upgradeable.
+        ProfileRegistry. Token, identity, launch distribution, participation, governance, and helper contracts are
+        intentionally non-upgradeable.
       </p>
       <p>
         The Solidity sources live in{" "}
@@ -52,7 +53,7 @@ const SmartContracts: NextPage = () => {
             </tr>
             <tr>
               <td className="font-mono text-primary">VoterIdNFT</td>
-              <td>Soulbound ERC-721 representing open rater identity (sybil resistance)</td>
+              <td>Soulbound ERC-721 representing optional verified-rater credentials</td>
               <td>No</td>
             </tr>
             <tr>
@@ -88,6 +89,11 @@ const SmartContracts: NextPage = () => {
             <tr>
               <td className="font-mono text-primary">ParticipationPool</td>
               <td>Halving-tier LREP Bootstrap Pool rewards used by voter reward claims</td>
+              <td>No</td>
+            </tr>
+            <tr>
+              <td className="font-mono text-primary">LaunchDistributionPool</td>
+              <td>52M LREP launch rewards: 25M verified/referral, 25M earned rater, and 2M legacy users</td>
               <td>No</td>
             </tr>
             <tr>
@@ -134,7 +140,7 @@ const SmartContracts: NextPage = () => {
       <h2>LoopReputation</h2>
       <p>
         ERC-20 token with ERC20Votes for governance, ERC20Permit for scoped approvals, and a capped reputation supply.
-        The rating flow uses explicit LREP approvals into the voting engine.
+        The rating flow supports explicit LREP approvals into the voting engine when a rater chooses to stake.
       </p>
       <h3>Key Features</h3>
       <ul>
@@ -153,8 +159,8 @@ const SmartContracts: NextPage = () => {
           <strong>Supply cap:</strong> Distribution and reward recycling stay bounded by <code>MAX_SUPPLY</code>.
         </li>
         <li>
-          <strong>Prediction staking:</strong> The production UI approves LREP stake and submits a private opinion
-          rating plus expected crowd rating through <code>commitVote()</code>.
+          <strong>Prediction staking:</strong> The production UI can approve optional LREP stake and submits a private
+          opinion rating plus expected crowd rating through <code>commitVote()</code>.
         </li>
       </ul>
       <h3>Key Functions</h3>
@@ -641,7 +647,8 @@ const SmartContracts: NextPage = () => {
       <p>
         Implements the user-facing Bootstrap Pool for voters. Voter rewards are claimed after round settlement using the
         rate snapshotted at settlement time. Funded with 12M LREP. Uses a halving schedule: starting at 90% reward rate,
-        halving each time a tier threshold is reached (1.5M, 4.5M, 10.5M, 22.5M cumulative), with a 1% floor rate.
+        halving each time a tier threshold is reached (1.5M, 4.5M, 10.5M cumulative, then the tail to 12M), with a 1%
+        floor rate.
       </p>
       <p>
         Privileged sweeps of accounted bootstrap rewards are disabled; only reward accounting and surplus recovery move

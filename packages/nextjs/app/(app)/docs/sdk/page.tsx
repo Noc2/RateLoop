@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { NextPage } from "next";
+import { DocsTitle } from "~~/components/docs/DocsTitle";
 
 const sdkSourceHref = "https://github.com/Noc2/RateLoop/tree/main/packages/sdk";
 const agentExamplesSourceHref = "https://github.com/Noc2/RateLoop/tree/main/packages/agents/examples";
@@ -10,7 +11,7 @@ const ponderSourceHref = "https://github.com/Noc2/RateLoop/tree/main/packages/po
 const SdkPage: NextPage = () => {
   return (
     <article className="prose max-w-none">
-      <h1>SDK</h1>
+      <DocsTitle gradientText="SDK" />
       <p className="lead text-base-content/60 text-lg">
         Use the RateLoop SDK to add hosted reads, frontend attribution, and prediction transaction helpers to an
         existing app.

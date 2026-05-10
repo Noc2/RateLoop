@@ -13,9 +13,9 @@ Planning date: 2026-05-07
 RateLoop should be a fresh deployment of the protocol, not a legacy-compatible
 contract migration. The product name, repository, and token should move back to
 RateLoop, with visual identity based on the Hawig hero animation and logo from
-`https://github.com/Noc2/Hawig` / `https://www.hawig.xyz/`. It should also reuse
-the existing HREP/legacy CREP snapshot as the genesis community distribution
-because those holders helped develop the original protocol.
+`https://github.com/Noc2/Hawig` / `https://www.hawig.xyz/`. It should also reserve
+`2M LREP` for the small previous-user set because those holders helped develop
+the original protocol.
 The product direction is:
 
 - Open rating network for independent raters, AI agents, teams, and hybrid
@@ -23,8 +23,9 @@ The product direction is:
 - No mandatory Self.xyz or proof-of-personhood dependency in the rating,
   payout, or governance path. Self.xyz may return later as an optional identity
   signal or badge.
-- Day-one decentralized governance using a genesis distribution to previous
-  legacy CREP/HREP snapshot participants.
+- Day-one decentralized governance using a broad launch distribution: `25M LREP`
+  verified + referral rewards, `25M LREP` earned rater rewards, and `2M LREP`
+  for the small previous-user set.
 - Continue on Celo for now, with World Chain Sepolia as the testnet path.
 - Transferable capped Loop Reputation token (`LREP`) for governance,
   prediction locks, frontend staking, and long-term protocol ownership.
@@ -32,6 +33,9 @@ The product direction is:
   naming before deployment.
 - Reuse HREP tokenomics for LREP: `100,000,000` max supply split into the
   existing `52M / 12M / 32M / 4M` launch pools.
+- The `52M` Launch Distribution Pool should not be a large legacy airdrop.
+  Old users receive `2M LREP`; the remaining `50M LREP` is split evenly between
+  earned rater rewards and verified/referral onboarding.
 - Users submit a split rating report instead of a binary up/down vote: their
   own opinion rating plus their expected crowd rating.
 - One sealed private round per bounty, followed by reveal and settlement.
@@ -200,8 +204,9 @@ Implementation implications:
 - Brand: RateLoop name, Hawig-derived animated hero, Hawig-derived logo mark,
   and `@rateloop/*` package scopes.
 - Repository: `https://github.com/Noc2/RateLoop`.
-- Genesis snapshot: reuse the existing HREP/legacy CREP snapshot artifact
-  unchanged as the LREP claim source.
+- Launch distribution: use the `52M LREP` Launch Distribution Pool as
+  `25M LREP` verified + referral rewards, `25M LREP` earned rater rewards, and
+  `2M LREP` for the small set of previous users.
 - Rating scale: `1.0-9.9`, stored as `1000-9900` BPS.
 - Governance launch parameters: reuse the previous Curyo durations, threshold,
   dynamic quorum, proposal cooldown, and 7-day governance locks.
@@ -215,6 +220,9 @@ Implementation implications:
 - Contract implementation must not require Self.xyz or proof-of-personhood gates
   for rating, earning, or governance. Optional Self attestations may be added as
   non-required profile/trust metadata after the core prediction path works.
+- Optional verification is an onboarding accelerator only: a verified account
+  can receive one decaying starter bonus, but verified users do not receive
+  ongoing reward multipliers after that bonus.
 
 ## Optional Identity Signals
 
@@ -297,7 +305,7 @@ modules, and keep all core tests passing with identity disabled.
   still needed, and forfeiture/refund logic. Replace voter-ID eligibility with
   reputation and cluster eligibility.
 - Keep `RateLoopGovernor.sol` as the governor contract name.
-  Launch it from day one with Timelock-owned protocol roles and genesis
+  Launch it from day one with Timelock-owned protocol roles and launch
   governance distribution.
 - `VoterIdNFT.sol` should not remain a required mint gate. If profile badges are
   useful, create an optional `RaterProfileBadge`, `RaterRegistry`, or
@@ -314,8 +322,10 @@ modules, and keep all core tests passing with identity disabled.
   OFAC/age attestation policy, proof routes, telemetry, UI, and tests should be
   removed from required rating, earning, and governance flows. Keep or re-add
   them only inside an optional identity module.
-- `HumanFaucet.sol` and any faucet/referral/migration allocations. The old
-  52M faucet-sized pool becomes the existing HREP/legacy CREP snapshot claim pool.
+- `HumanFaucet.sol` and any legacy faucet/migration allocations. The old
+  52M faucet-sized pool becomes the Launch Distribution Pool: `25M LREP`
+  verified + referral rewards, `25M LREP` earned rater rewards, and `2M LREP`
+  legacy users.
 - `HumanSignInButton`, `SelfVerifyButton`, `useVoterIdNFT`, and the gating copy
   that says identity verification is required to vote. If Self returns, use new
   optional identity copy and hooks instead of required verification language.
@@ -335,8 +345,8 @@ modules, and keep all core tests passing with identity disabled.
 | `packages/foundry/contracts/ContentRegistry.sol` | Keep content lifecycle, categories, duplicate protection, and rating state; remove required Self/nullifier submission identity snapshots. |
 | `packages/foundry/contracts/ProtocolConfig.sol` | Keep central config/address book; rename and add prediction, reputation, calibration, and cluster parameters. |
 | `packages/foundry/contracts/VoterIdNFT.sol` | Do not keep as a required voter credential. Mine delegation/profile lessons for `RaterRegistry` and optional identity attestations. |
-| `packages/foundry/contracts/HumanFaucet.sol` | Delete; replace the old 52M faucet allocation with the existing HREP/legacy CREP snapshot claim pool. |
-| `packages/foundry/script/DeployRateLoop.s.sol` | Refactor in place; remove faucet and migration tiers from the core deployment; add the existing HREP/legacy CREP snapshot Merkle distribution, HREP-style LREP launch pools, Governor, Timelock, Celo constants, Timelock ownership from launch, and optionally deploy identity adapters only when enabled. |
+| `packages/foundry/contracts/HumanFaucet.sol` | Delete; replace the old 52M faucet allocation with the Launch Distribution Pool. |
+| `packages/foundry/script/DeployRateLoop.s.sol` | Refactor in place; remove faucet and migration tiers from the core deployment; add Launch Distribution Pool funding, LREP launch pools, Governor, Timelock, Celo constants, Timelock ownership from launch, and optionally deploy identity adapters only when enabled. |
 | `packages/ponder/ponder.schema.ts` | Keep content/profile/feed tables; replace vote/voter/reward tables with prediction/reputation/payout tables. |
 | `packages/ponder/src/RoundVotingEngine.ts` | Refactor event handlers for prediction events and weighted final ratings. |
 | `packages/ponder/src/HumanFaucet.ts` and `packages/ponder/src/VoterIdNFT.ts` | Delete or replace with `RaterRegistry.ts`. |
@@ -446,8 +456,8 @@ Loop Reputation (`LREP`) should be a transferable, capped ERC20Votes-style
 token.
 The legal/decentralization motivation is that protocol governance should not
 remain company-controlled at launch. The practical product motivation is that
-the existing HREP/legacy CREP snapshot already represents the community that helped
-build the protocol and should be the initial governance and ownership base.
+new raters should be able to earn into governance while the small previous-user
+set still receives a fixed recognition allocation.
 
 Transferable LREP is intentional: portable reputation and day-one tokenholder
 governance are part of the launch design, not an accidental side effect. The
@@ -464,11 +474,9 @@ Recommended token properties:
   delegation.
 - 6 decimals to preserve compatibility with the old HREP mental model.
 - Hard `MAX_SUPPLY`; no uncapped inflation.
-- Genesis distribution from the existing HREP/legacy CREP snapshot, mapped 1:1 into
-  LREP claim amounts unless the already-approved snapshot artifact says
-  otherwise.
-- HREP tokenomics reused for launch pools, with the full cap allocated at
-  deployment.
+- Launch distribution from the `52M LREP` pool: `25M LREP` verified + referral
+  rewards, `25M LREP` earned rater rewards, and `2M LREP` legacy users.
+- Full cap allocated at deployment into auditable protocol pools.
 - Bootstrap rewards and consensus subsidies distribute from fixed pre-funded
   pools instead of open-ended minting.
 - Governance/timelock controls pool parameters and treasury usage, not
@@ -495,10 +503,11 @@ MIN_REPUTATION_FOR_USDC = protocol parameter
 The exact value should be tunable. The important rule is that new wallets cannot
 immediately farm bounties.
 
-### Loop Reputation (LREP) Tokenomics And Genesis Snapshot
+### Loop Reputation (LREP) Tokenomics And Launch Distribution
 
-Loop Reputation (`LREP`) should reuse HREP tokenomics rather than inventing a
-new launch split.
+Loop Reputation (`LREP`) should keep the `100M` max supply and the
+`52M / 12M / 32M / 4M` pool structure, but the purpose of the `52M` bucket
+changes from a broad legacy snapshot into a Launch Distribution Pool.
 The deployment should mint or allocate the full capped supply into auditable
 contracts at launch.
 
@@ -507,36 +516,42 @@ Launch allocation:
 ```text
 MAX_SUPPLY = 100,000,000 LREP
 
-52,000,000 LREP  Genesis snapshot claim pool
+52,000,000 LREP  Launch Distribution Pool
+  ├─ 25,000,000 LREP  Verified + referral rewards
+  ├─ 25,000,000 LREP  Earned rater rewards
+  └─  2,000,000 LREP  Legacy users
 12,000,000 LREP  Bootstrap / calibrated participation pool
 32,000,000 LREP  DAO treasury
  4,000,000 LREP  Consensus subsidy / reserve pool
 ```
 
-Snapshot rule:
+Launch Distribution Pool rule:
 
-- Reuse the existing HREP/legacy CREP snapshot artifact as the canonical genesis claim
-  list. Do not regenerate a new snapshot formula from current balances unless
-  governance explicitly rejects the existing artifact before deployment.
-- Import the snapshot artifact into the RateLoop repo with the claim index,
-  account, amount, snapshot provenance, and Merkle root.
-- If the existing artifact uses older `CREP` or `HREP` labels, treat the claim
-  amount as new `LREP` 1:1.
-- If the snapshot total is below `52,000,000 LREP`, the remainder stays in the
-  Merkle distributor until the claim window ends, then moves to the DAO treasury
-  or another governance-controlled reserve by the published claim rules.
-- If the snapshot total exceeds `52,000,000 LREP`, deployment must stop; do not
-  silently scale claims down.
-- Recommended claim window: 12 months from World Chain mainnet deployment. This is
-  long enough for prior holders to notice, but still gives governance a clear
-  date when unclaimed LREP can be swept.
-- The claim UI should show the snapshot source and Merkle proof; it should not
-  imply a Self.xyz or proof-of-personhood requirement.
+- Allocate `2,000,000 LREP` to the previous user set. There are only nine old
+  users, so the legacy claim should recognize history without consuming the pool
+  intended to onboard the new network.
+- Put `25,000,000 LREP` behind earned rater rewards. A new rater can
+  start with zero LREP, submit revealed predictions, and earn starter LREP when
+  those predictions are useful.
+- Make earned rater rewards count-based and stricter over time. Early raters get
+  higher per-account caps; each larger cohort receives a lower cap, similar to a
+  halving schedule but keyed to verified participation counts instead of time.
+- Use `25,000,000 LREP` for one-time verified-user bonuses plus bounded referral
+  rewards. The verification bonus decays by the number of already verified users
+  and can be claimed only once per uniqueness credential. After that, verified
+  users earn under the same rules as everyone else.
+- Referral rewards should be paid only after the referred account completes
+  useful rating activity or a valid verification claim, with per-referrer caps
+  and no infinite tree.
+- Keep verification acceleration, appeals, security responses, grants, and
+  governance programs in the DAO treasury, not the Launch Distribution Pool.
+- The claim UI should explain each rail separately: earned rater rewards, one-time
+  verification bonus, referral bonus, and tiny legacy claim.
 
 Bootstrap pool:
 
-- Reuse the old HREP bootstrap mental model: a fixed `12,000,000 LREP` pool
-  used for calibrated participation rewards.
+- Keep the fixed `12,000,000 LREP` Bootstrap Pool separate from the Launch
+  Distribution Pool.
 - Bootstrap rewards are not automatic faucet claims. They are paid only after
   valid, revealed, calibrated participation or governance-approved programs.
 - Because LREP is transferable and capped, bootstrap rewards should be
@@ -750,9 +765,10 @@ Purpose:
 - Governance clock compatible with the previous Curyo launch parameters on
   Celo.
 - Seven-day governance locks for proposal and voting power, reused from RateLoop.
-- Merkle-claimable genesis allocation from the existing HREP/legacy CREP snapshot.
-- Fixed HREP-style launch pools for snapshot claims, bootstrap rewards,
-  treasury, and consensus reserve.
+- Launch Distribution Pool allocation: `25M LREP` verified + referral rewards,
+  `25M LREP` earned rater rewards, and `2M LREP` legacy users.
+- Fixed launch pools for launch distribution, bootstrap rewards, treasury, and
+  consensus reserve.
 
 Reuse:
 
@@ -776,12 +792,15 @@ Key changes:
 - Enforce hard max supply on all mint paths.
 - Add protocol lock ledger with per-round lock accounting.
 - Add fixed launch-pool accounting:
-  `GENESIS_SNAPSHOT_POOL = 52_000_000e6`,
+  `LAUNCH_DISTRIBUTION_POOL = 52_000_000e6`,
+  `LAUNCH_VERIFIED_REFERRAL_POOL = 25_000_000e6`,
+  `LAUNCH_EARNED_RATER_POOL = 25_000_000e6`,
+  `LAUNCH_LEGACY_POOL = 2_000_000e6`,
   `BOOTSTRAP_POOL = 12_000_000e6`, `DAO_TREASURY = 32_000_000e6`, and
   `CONSENSUS_RESERVE = 4_000_000e6`.
-- Add `GENESIS_DISTRIBUTOR_ROLE`, `BOOTSTRAP_DISTRIBUTOR_ROLE`, and protocol
+- Add launch-distribution, bootstrap-distribution, and protocol
   lock/slash roles controlled by governance/timelock.
-- Add events for genesis claims, bootstrap distributions, locks, unlocks,
+- Add events for launch rewards, legacy claims, bootstrap distributions, locks, unlocks,
   redistributions, and slashes.
 - Preserve vote checkpoints for historical governance snapshots.
 - Keep governance transfer restrictions for active proposal/vote locks, but
@@ -1062,7 +1081,7 @@ Recommended initial parameters:
   below the bootstrap floor.
 - Quorum: `max(4% of circulating LREP, 100,000 LREP)`.
 - Circulating supply for quorum excludes protocol-controlled holders, including
-  the genesis distributor, bootstrap pool, consensus reserve, DAO treasury,
+  the launch distribution pool, bootstrap pool, consensus reserve, DAO treasury,
   voting engine, content registry, frontend registry, and protocol-owned
   distributor/escrow contracts.
 - Max proposal threshold: `100,000 LREP`.
@@ -1135,8 +1154,8 @@ tables.
 - `rating_bounty`
   - bountyId, contentId, roundId, bounty kind, challengedRoundId, reason hash,
     funder, asset, amount, status, refund/forfeit state.
-- `genesis_claim`
-  - account, amount, claim index, claimedAt, transaction hash.
+- `launch_distribution_claim`
+  - account, rail, amount, cohort, claim index, claimedAt, transaction hash.
 - `governance_voting_power`
   - account, selfDelegate, votes, updatedAt.
 
@@ -1244,7 +1263,7 @@ thirdweb/EIP-5792 sponsored path with a self-funded fallback.
 
 Launch sponsorship policy:
 
-- Sponsor low-cost product-critical actions: genesis claim, delegation,
+- Sponsor low-cost product-critical actions: launch or legacy claim, delegation,
   calibration commits, reveals, standard predictions, USDC claims, and frontend
   fee claims.
 - Do not depend on sponsorship for funding bounties, staking frontend LREP, or
@@ -1338,8 +1357,8 @@ Keep `packages/agents`, but make it a first-class RateLoop package:
 5. Update root package metadata, scripts, environment examples, and generated
    package exports only where they reference removed Self/faucet/chain state.
 6. Delete legacy deployment artifacts from the canonical branch.
-7. Import the existing HREP/legacy CREP snapshot artifact and document its
-   provenance.
+7. Configure the `25M / 25M / 2M` Launch Distribution Pool and document any
+   legacy-user claim provenance.
 8. Keep chain defaults and environment examples on Celo/World Chain Sepolia.
 9. Keep old Curyo commit history if practical, but do not keep old deployment
    state as live deployment state.
@@ -1363,7 +1382,8 @@ Exit criteria:
    feature boundary, or delete it if it cannot be cleanly isolated.
 4. Remove `VoterIdNFT` requirements from content submission, voting, rewards,
    profiles, and frontend registry.
-5. Remove faucet/referral/migration allocations from deployment scripts.
+5. Remove legacy faucet/migration allocations from deployment scripts and
+   replace them with the Launch Distribution Pool rails.
 6. Keep Celo deployment constants in live RateLoop config.
 7. Update docs and app copy to use rater/reputation language.
 
@@ -1376,7 +1396,8 @@ Exit criteria:
 ### Phase 2: Contract MVP
 
 1. Implement `LoopReputation`.
-2. Implement a genesis Merkle distributor from the existing HREP/legacy CREP snapshot.
+2. Implement the Launch Distribution Pool: earned rater rewards, one-time
+   decaying verified bonuses, bounded referrals, and a tiny legacy Merkle claim.
 3. Implement `RateLoopGovernor` and `TimelockController` ownership wiring.
 4. Implement `RaterRegistry`.
 5. Implement `RaterDeclarationRegistry` for bonded AI metadata, probes, drift,
@@ -1397,7 +1418,7 @@ Exit criteria:
 
 Exit criteria:
 
-- Foundry tests cover capped supply, transfers, delegation, genesis claims,
+- Foundry tests cover capped supply, transfers, delegation, launch distribution claims,
   timelock-owned roles, commit, reveal, settle, cancel, missed reveal,
   reputation lock/unlock/redistribution, calibration gating, one-round bounty
   payout, LREP loser/winner redistribution, frontend stake and fee
@@ -1408,7 +1429,7 @@ Exit criteria:
 ### Phase 3: Ponder And API
 
 1. Rename schema tables and handlers.
-2. Add prediction, reputation, genesis-claim, governance, calibration, cluster,
+2. Add prediction, reputation, launch-distribution, governance, calibration, cluster,
    and payout tables.
 3. Replace binary round aggregation with predicted-rating aggregation.
 4. Update read API routes for feed, history, leaderboard, rating bounties, and
@@ -1417,7 +1438,7 @@ Exit criteria:
 
 Exit criteria:
 
-- Ponder indexes local deployment, genesis claim, governance delegation,
+- Ponder indexes local deployment, launch distribution, governance delegation,
   frontend-fee, and prediction events.
 - Feed API can render content, open rounds, revealed split reports, final rating,
   challenge/re-rate history, and claimable USDC.
@@ -1430,7 +1451,7 @@ Exit criteria:
    identity UI only if it is clearly non-blocking.
 3. Replace up/down vote controls with prediction composer.
 4. Add funding UI for explicit challenge/re-rate bounties.
-5. Add genesis reputation claim and delegation UI.
+5. Add launch reward/legacy claim and delegation UI.
 6. Show calibration and reputation state in profile/feed surfaces.
 7. Update reward/claim UI for USDC payout eligibility and frontend fee
    claimability.
@@ -1441,7 +1462,7 @@ Exit criteria:
 Exit criteria:
 
 - Wallet-sensitive flow works: connect, submit content, fund initial bounty,
-  claim genesis reputation, verify self-delegated voting power, predict,
+  claim launch or legacy reputation, verify self-delegated voting power, predict,
   reveal/settle, fund re-rate, view reputation, claim USDC, claim frontend fees,
   and recover to self-funded gas when sponsorship is unavailable.
 - Desktop and mobile dense voting surfaces remain usable.
@@ -1478,32 +1499,32 @@ Exit criteria:
 
 ### Phase 7: Mainnet Launch
 
-1. Publish the imported legacy CREP/HREP snapshot, Merkle root, provenance, and review
-   scripts.
-2. Deploy `LoopReputation`, Merkle distributor, Governor, Timelock, and core
+1. Publish the Launch Distribution Pool parameters, any legacy-user Merkle root,
+   provenance, and review scripts.
+2. Deploy `LoopReputation`, LaunchDistributionPool, Governor, Timelock, and core
    protocol contracts to World Chain mainnet.
 3. Transfer all protocol roles and ProxyAdmin ownership to the timelock.
 4. Renounce deployer setup roles after verification.
-5. Open genesis claims and delegation.
+5. Open launch claims and delegation.
 6. Launch with one-round bounties, frontend fee incentives, AI rater
    participation, LREP lock redistribution, and capped USDC payouts.
 
 Exit criteria:
 
 - RateLoop is tokenholder-governed from the first public deployment.
-- Proposal, delegation, token supply, genesis claims, and voting power are
+- Proposal, delegation, token supply, launch claims, and voting power are
   auditable from checkpoints and indexed events.
 
 ## Concrete PR Plan
 
 1. `repo-bootstrap`: point the repo at `https://github.com/Noc2/RateLoop`,
-   import old Curyo code, copy the Hawig hero/logo assets, import the existing
-   HREP/legacy CREP snapshot, keep World Chain defaults, rename live package metadata
+   import old Curyo code, copy the Hawig hero/logo assets, configure the
+   `25M / 25M / 2M` Launch Distribution Pool, keep World Chain defaults, rename live package metadata
    toward `@rateloop/*`, and keep the app running.
 2. `optional-identity-remove-faucet`: remove faucet paths and make Self optional
    rather than required in packages, UI, routes, and deploy wiring.
-3. `reputation-governance`: add capped transferable reputation, HREP-style LREP
-   launch pools, genesis Merkle distributor, Governor, Timelock,
+3. `reputation-governance`: add capped transferable reputation, LREP launch
+   pools, LaunchDistributionPool, Governor, Timelock,
    self-delegated voting power, and launch role wiring.
 4. `rater-registry`: add open rater profiles, metadata, operational delegation,
    and cluster flags.
@@ -1513,7 +1534,7 @@ Exit criteria:
    bounties, challenge/re-rate metadata, calibrated raters, AI metadata,
    frontend staking/fees, LREP winner/loser redistribution, and cluster caps.
 7. `ponder-predictions`: update schema, handlers, and APIs.
-8. `frontend-prediction-ui`: replace vote controls, add genesis claim,
+8. `frontend-prediction-ui`: replace vote controls, add launch claim,
    self-delegation status, frontend fee, sponsored transaction, and onboarding
    surfaces.
 9. `keeper-sdk-agents`: update commit builders, keeper reveal, and agent client.
@@ -1532,11 +1553,11 @@ These are launch defaults, not permanent constants:
 - Token name/symbol: Loop Reputation (`LREP`).
 - Reputation token: transferable ERC20Votes, 6 decimals.
 - Reputation max supply: `100,000,000 LREP`, matching the old HREP cap.
-- LREP tokenomics: `52M` snapshot claim pool, `12M` bootstrap pool, `32M` DAO
-  treasury, `4M` consensus reserve.
-- Genesis allocation: one-time Merkle claim using the existing legacy CREP/HREP
-  snapshot artifact.
-- Genesis claim window: 12 months, with unclaimed LREP swept by governance rule.
+- LREP tokenomics: `52M` Launch Distribution Pool, `12M` bootstrap pool, `32M`
+  DAO treasury, `4M` consensus reserve.
+- Launch Distribution Pool split: `25M LREP` verified + referral rewards,
+  `25M LREP` earned rater rewards, `2M LREP` legacy users.
+- Legacy claim window: 12 months, with unclaimed LREP swept by governance rule.
 - Bounty scope: one sealed commit window plus reveal window, exactly one
   settlement attempt per bounty.
 - Challenge/re-rate: explicit new bounty referencing a prior round/result.
@@ -1630,9 +1651,8 @@ upgrades.
 
 Mitigations:
 
-- Capped supply and published genesis allocation.
-- Broad legacy CREP/HREP snapshot genesis distribution instead of team-only
-  launch.
+- Capped supply and published launch allocation.
+- Broad earned launch distribution instead of team-only launch.
 - Timelock delay on all high-impact actions.
 - Proposal threshold, quorum, and late-quorum protection.
 - Public holder-concentration monitoring and clear self-delegation status in the
@@ -1704,10 +1724,11 @@ The MVP is done when:
   through commit reveal.
 - Each bounty funds exactly one private prediction round.
 - Users can fund an explicit challenge/re-rate bounty against a prior result.
-- Loop Reputation is transferable, capped, checkpointed, and claimable by
-  previous legacy CREP/HREP snapshot participants through a published genesis
-  distribution.
-- LREP tokenomics reuse the old HREP `52M / 12M / 32M / 4M` pool structure.
+- Loop Reputation is transferable, capped, checkpointed, and distributed through
+  a published launch pool that gives the small legacy user set only `2M LREP`.
+- LREP tokenomics use a `52M / 12M / 32M / 4M` pool structure; the `52M`
+  Launch Distribution Pool is split into `25M` verified + referral rewards,
+  `25M` earned rater rewards, and `2M` legacy users.
 - LREP rating-report locks redistribute inaccurate crowd predictions and
   unrevealed locks to accurate raters, eligible frontends, treasury, and reserve
   without increasing supply.
@@ -1727,5 +1748,5 @@ The MVP is done when:
   old Curyo's usable feed/rating surfaces where they fit the new prediction
   mechanics.
 - Ponder exposes enough data for public auditability of rating, reputation,
-  genesis claims, governance, frontend fees, and payout decisions.
+  launch claims, governance, frontend fees, and payout decisions.
 - Local end-to-end tests cover the full lifecycle.

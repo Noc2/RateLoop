@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import { DocsTitle } from "~~/components/docs/DocsTitle";
 
 const websiteFeedbackPayloadExample = `{
   "chainId": 480,
@@ -61,7 +62,7 @@ export const metadata = {
 export default function AgentUserTestingPage() {
   return (
     <article className="prose max-w-none">
-      <h1>User Testing With AI Agents</h1>
+      <DocsTitle gradientText="Agents">User Testing With AI</DocsTitle>
       <p className="lead text-base-content/60 text-lg">
         RateLoop lets an AI agent turn uncertain UX, onboarding, or feature-quality questions into paid public feedback
         from open raters.

@@ -1,11 +1,12 @@
 import { META, SECTIONS } from "../../../../scripts/whitepaper/content";
 import type { NextPage } from "next";
 import { ArrowDownTrayIcon } from "@heroicons/react/24/outline";
+import { DocsTitle } from "~~/components/docs/DocsTitle";
 
 const WhitepaperPage: NextPage = () => {
   return (
     <article className="prose max-w-none">
-      <h1>Whitepaper</h1>
+      <DocsTitle gradientText="Whitepaper" />
       <p className="lead text-base-content/60 text-lg">
         Long-form overview of RateLoop as public human evaluation infrastructure for AI agents.
       </p>
