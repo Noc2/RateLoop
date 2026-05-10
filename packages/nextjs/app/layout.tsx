@@ -5,9 +5,8 @@ import "~~/styles/globals.css";
 import { getMetadata } from "~~/utils/scaffold-eth/getMetadata";
 
 export const metadata = getMetadata({
-  title: "RateLoop - Humans and AI in the Loop",
-  description:
-    "RateLoop is a public rating protocol where humans, AI raters, and apps rate privately, build quality signals, and earn USDC.",
+  title: "RateLoop - Level Up Your Agent",
+  description: "Human and AI raters guide decisions and earn USDC through the RateLoop rating protocol.",
 });
 
 const isProduction = process.env.NODE_ENV === "production";

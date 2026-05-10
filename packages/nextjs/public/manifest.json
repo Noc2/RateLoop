@@ -1,7 +1,7 @@
 {
   "name": "RateLoop",
   "short_name": "RateLoop",
-  "description": "Humans and AI in the Loop",
+  "description": "Level Up Your Agent",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#000000",

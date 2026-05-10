@@ -6,7 +6,6 @@ import { clampContentRating, formatCommunityRatingAriaLabel, formatRatingScoreOu
 const START_ANGLE = 0;
 const MIN_ANIMATION_MS = 500;
 const MAX_ANIMATION_MS = 1200;
-const PROGRESS_STROKE = "var(--curyo-warm-white)";
 const INNER_SURFACE = "var(--curyo-surface-nested)";
 const INNER_SURFACE_EDGE = "var(--curyo-surface-elevated-hover)";
 
@@ -30,6 +29,8 @@ interface RatingOrbProps {
 
 export function RatingOrb({ rating, size = 196, className = "" }: RatingOrbProps) {
   const orbId = useId().replace(/:/g, "");
+  const progressGradientId = `${orbId}-progress-gradient`;
+  const progressStroke = `url(#${progressGradientId})`;
   const clampedRating = clampContentRating(rating);
   const [animatedRating, setAnimatedRating] = useState(0);
   const animatedRatingRef = useRef(0);
@@ -122,6 +123,12 @@ export function RatingOrb({ rating, size = 196, className = "" }: RatingOrbProps
             <stop offset="68%" stopColor={INNER_SURFACE} stopOpacity="0.95" />
             <stop offset="100%" stopColor={INNER_SURFACE_EDGE} stopOpacity="0.9" />
           </radialGradient>
+          <linearGradient id={progressGradientId} x1="0%" y1="50%" x2="100%" y2="50%">
+            <stop offset="0%" stopColor="var(--rateloop-blue)" />
+            <stop offset="38%" stopColor="var(--rateloop-green)" />
+            <stop offset="68%" stopColor="var(--rateloop-yellow)" />
+            <stop offset="100%" stopColor="var(--rateloop-pink)" />
+          </linearGradient>
         </defs>
 
         {progress >= 1 ? (
@@ -131,7 +138,7 @@ export function RatingOrb({ rating, size = 196, className = "" }: RatingOrbProps
               cy={center}
               r={trackRadius}
               fill="none"
-              stroke={PROGRESS_STROKE}
+              stroke={progressStroke}
               strokeWidth={progressStrokeWidth}
               strokeLinecap="round"
             />
@@ -140,7 +147,7 @@ export function RatingOrb({ rating, size = 196, className = "" }: RatingOrbProps
               cy={center}
               r={trackRadius}
               fill="none"
-              stroke={PROGRESS_STROKE}
+              stroke={progressStroke}
               strokeWidth={progressHighlightStrokeWidth}
               strokeLinecap="round"
               opacity="0.82"
@@ -153,7 +160,7 @@ export function RatingOrb({ rating, size = 196, className = "" }: RatingOrbProps
               cy={center}
               r={trackRadius}
               fill="none"
-              stroke={PROGRESS_STROKE}
+              stroke={progressStroke}
               strokeWidth={progressStrokeWidth}
               strokeLinecap="round"
               strokeDasharray={`${progressLength} ${circumference}`}
@@ -164,14 +171,14 @@ export function RatingOrb({ rating, size = 196, className = "" }: RatingOrbProps
               cy={center}
               r={trackRadius}
               fill="none"
-              stroke={PROGRESS_STROKE}
+              stroke={progressStroke}
               strokeWidth={progressHighlightStrokeWidth}
               strokeLinecap="round"
               opacity="0.82"
               strokeDasharray={`${progressLength} ${circumference}`}
               transform={`rotate(-90 ${center} ${center})`}
             />
-            <circle cx={endPoint.x} cy={endPoint.y} r={trackWidth * 0.3} fill={PROGRESS_STROKE} />
+            <circle cx={endPoint.x} cy={endPoint.y} r={trackWidth * 0.3} fill={progressStroke} />
           </>
         ) : null}
 

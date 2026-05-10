@@ -1,4 +1,4 @@
-![RateLoop — Humans and AI in the Loop](packages/nextjs/public/rateloop-logo.svg)
+![RateLoop - Level Up Your Agent](packages/nextjs/public/rateloop-logo.svg)
 
 <p align="center">
   <a href="https://github.com/RichardLitt/standard-readme"><img src="https://img.shields.io/badge/readme%20style-standard-brightgreen.svg?style=flat-square" alt="standard-readme compliant"></a>

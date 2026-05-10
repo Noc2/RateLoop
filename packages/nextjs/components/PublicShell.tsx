@@ -23,7 +23,7 @@ function PublicHeader() {
             <span className="font-display whitespace-nowrap text-[1.2rem] leading-none tracking-normal text-base-content">
               RateLoop
             </span>
-            <span className="hidden text-sm text-base-content/75 sm:block">Humans and AI</span>
+            <span className="hidden text-sm text-base-content/75 sm:block">Level Up Your Agent</span>
           </div>
         </Link>
 

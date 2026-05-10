@@ -208,8 +208,11 @@ const HeaderBrand = ({
       >
         RateLoop
       </span>
-      <span className={`${compact ? "truncate" : ""} text-base-content/75`} style={{ fontSize: "14px" }}>
-        Humans and AI
+      <span
+        className={`whitespace-nowrap ${compact ? "truncate" : ""} text-base-content/75`}
+        style={{ fontSize: "12px" }}
+      >
+        Level Up Your Agent
       </span>
     </div>
   </Link>

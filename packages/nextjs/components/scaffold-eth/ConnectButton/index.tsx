@@ -8,6 +8,7 @@ import { Address } from "viem";
 import { useAccount } from "wagmi";
 import { HumanSignInButton } from "~~/components/shared/HumanSignInButton";
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
+import { HUMAN_SIGN_IN_LABEL } from "~~/lib/home/humanSignInRoute";
 
 export const CuryoConnectButton = ({
   inlineMenu = false,
@@ -32,7 +33,7 @@ export const CuryoConnectButton = ({
         disabled={syncingThirdwebAccount}
         style={{ fontSize: "16px" }}
       >
-        Start Rating
+        {HUMAN_SIGN_IN_LABEL}
       </HumanSignInButton>
     );
   }

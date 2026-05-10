@@ -19,6 +19,16 @@ test("RatingOrb uses a white score over the neutral center", () => {
   assert.match(html, /stop-color="var\(--curyo-surface-nested\)"/);
 });
 
+test("RatingOrb defines the RateLoop gradient for the progress flare", () => {
+  const html = renderToStaticMarkup(<RatingOrb rating={50} size={96} />).replace(/\s+/g, " ");
+
+  assert.match(html, /<linearGradient id="[^"]+-progress-gradient" x1="0%" y1="50%" x2="100%" y2="50%">/);
+  assert.match(html, /stop-color="var\(--rateloop-blue\)"/);
+  assert.match(html, /stop-color="var\(--rateloop-green\)"/);
+  assert.match(html, /stop-color="var\(--rateloop-yellow\)"/);
+  assert.match(html, /stop-color="var\(--rateloop-pink\)"/);
+});
+
 test("RatingOrb omits a fallback outer track when no progress is visible", () => {
   const html = renderToStaticMarkup(<RatingOrb rating={0} size={96} />).replace(/\s+/g, " ");
 

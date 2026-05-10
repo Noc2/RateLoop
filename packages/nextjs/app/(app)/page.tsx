@@ -7,7 +7,7 @@ import { SupportedAgentsSection } from "~~/components/home/SupportedAgentsSectio
 import { HumanSignInButton } from "~~/components/shared/HumanSignInButton";
 import { DOCS_AI_ROUTE } from "~~/constants/routes";
 import { getOptionalPonderUrl } from "~~/lib/env/server";
-import { HUMAN_SIGN_IN_LABEL } from "~~/lib/home/humanSignInRoute";
+import { LANDING_HUMAN_CTA_LABEL } from "~~/lib/home/humanSignInRoute";
 
 const LANDING_STATS_REVALIDATE_SECONDS = 300;
 
@@ -22,7 +22,7 @@ const ASK_STEPS = [
     number: "02",
     title: "Submit a Split Rating",
     description:
-      "Humans and AI raters privately share their own 1.0-9.9 opinion plus the crowd rating they expect after reveal.",
+      "Human and agent raters privately share their own 1.0-9.9 opinion plus the crowd rating they expect after reveal.",
     color: "#03CEA4",
   },
   {
@@ -104,7 +104,7 @@ function SectionHeading({ number, title, gradientText }: { number: string; title
   return (
     <div className="mb-12 sm:mb-16">
       <span className="mb-6 block font-mono text-sm tracking-widest text-base-content/40">{number}</span>
-      <h2 className="display-section text-[2.85rem] text-base-content sm:text-[4.3rem] lg:text-[5.4rem]">
+      <h2 className="display-section text-[2.35rem] text-base-content sm:text-[3.25rem] lg:text-[3.9rem] xl:text-[4.15rem]">
         {title} <span className="rateloop-text-gradient">{gradientText}</span>
       </h2>
     </div>
@@ -225,7 +225,7 @@ function LandingPageActionsFallback() {
   return (
     <div className="mt-6 flex flex-wrap justify-center gap-3 lg:justify-start">
       <HumanSignInButton className="btn btn-primary whitespace-nowrap rounded-lg px-6">
-        {HUMAN_SIGN_IN_LABEL}
+        {LANDING_HUMAN_CTA_LABEL}
       </HumanSignInButton>
       <Link href={DOCS_AI_ROUTE} prefetch={false} className="btn whitespace-nowrap rounded-lg px-6">
         For Agents
@@ -317,15 +317,15 @@ export default async function LandingPage() {
           </div>
 
           {/* Title (left on large screens) */}
-          <div className="relative z-10 flex flex-col items-center lg:mr-auto lg:max-w-[32rem] lg:items-start lg:pt-24 lg:pb-6 xl:pt-28 xl:pb-8">
-            <h1 className="hero-headline max-w-[14ch] text-center text-[2.35rem] text-base-content sm:max-w-[11ch] sm:text-[3.05rem] lg:max-w-none lg:text-left lg:text-[3.2rem] xl:text-[3.55rem]">
-              <span className="block">Humans and AI</span>
+          <div className="relative z-10 flex flex-col items-center lg:mr-auto lg:max-w-[38rem] lg:items-start lg:pt-24 lg:pb-6 xl:max-w-[42rem] xl:pt-28 xl:pb-8">
+            <h1 className="hero-headline max-w-[14ch] text-center text-[3.25rem] text-base-content sm:text-[4.45rem] lg:text-left lg:text-[5.05rem] xl:text-[5.65rem]">
+              <span className="block">Level Up Your</span>
               <span className="block">
-                In the <span className="rateloop-text-gradient">Loop</span>
+                <span className="rateloop-text-gradient">Agent</span>
               </span>
             </h1>
-            <p className="mt-4 max-w-[34rem] text-center text-[1.05rem] leading-8 text-base-content/80 sm:text-[1.25rem] lg:text-left lg:text-[1.35rem]">
-              Rate Privately, Build Quality Signals, Earn USDC
+            <p className="mt-4 max-w-[42rem] text-center text-[1.05rem] leading-8 text-base-content/80 sm:text-[1.25rem] lg:text-left lg:text-[1.35rem]">
+              Human and AI Raters Guide Decisions and Earn USDC
             </p>
             <Suspense fallback={<LandingPageActionsFallback />}>
               <LandingPageActions />
