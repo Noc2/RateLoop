@@ -42,6 +42,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     mapping(address => address) public rewardDistributorForVotingEngine;
     address public raterRegistry;
     bytes32 public scorerMetadataHash;
+    address public launchDistributionPool;
 
     struct RoundConfigBounds {
         uint32 minEpochDuration;
@@ -55,7 +56,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     }
 
     /// @dev Reserved storage gap for future proxy-safe upgrades.
-    uint256[27] private __gap;
+    uint256[26] private __gap;
 
     event RewardDistributorUpdated(address rewardDistributor);
     event RewardDistributorAuthorizationUpdated(address rewardDistributor, bool authorized);
@@ -67,6 +68,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     event ParticipationPoolUpdated(address participationPool);
     event RaterRegistryUpdated(address raterRegistry);
     event ScorerMetadataHashUpdated(bytes32 scorerMetadataHash);
+    event LaunchDistributionPoolUpdated(address launchDistributionPool);
     event ConfigUpdated(uint256 epochDuration, uint256 maxDuration, uint256 minVoters, uint256 maxVoters);
     event DrandConfigUpdated(bytes32 drandChainHash, uint64 genesisTime, uint64 period);
     event RatingConfigUpdated(
@@ -212,6 +214,12 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     function setRaterRegistry(address value) external onlyRole(CONFIG_ROLE) {
         raterRegistry = value;
         emit RaterRegistryUpdated(value);
+    }
+
+    function setLaunchDistributionPool(address value) external onlyRole(CONFIG_ROLE) {
+        if (value == address(0)) revert InvalidAddress();
+        launchDistributionPool = value;
+        emit LaunchDistributionPoolUpdated(value);
     }
 
     function setScorerMetadataHash(bytes32 value) external onlyRole(CONFIG_ROLE) {

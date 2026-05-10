@@ -2386,11 +2386,10 @@ contract RoundIntegrationTest is VotingTestBase {
         bytes32 ch = _commitHash(true, salt, voter1, contentId);
         uint16 referenceRatingBps = _currentRatingReferenceBps(contentId);
 
-        // Below minimum (1 HREP)
+        // Zero-stake ratings are valid so new raters can bootstrap reputation.
         vm.startPrank(voter1);
-        hrepToken.approve(address(votingEngine), 0.5e6);
+        hrepToken.approve(address(votingEngine), 0);
         uint256 cachedRoundContext47 = _roundContext(votingEngine.previewCommitRoundId(contentId), referenceRatingBps);
-        vm.expectRevert(RoundVotingEngine.InvalidStake.selector);
         votingEngine.commitVote(
             contentId,
             cachedRoundContext47,
@@ -2398,7 +2397,7 @@ contract RoundIntegrationTest is VotingTestBase {
             _tlockDrandChainHash(),
             ch,
             _testCiphertext(true, salt, contentId),
-            0.5e6,
+            0,
             address(0)
         );
         vm.stopPrank();

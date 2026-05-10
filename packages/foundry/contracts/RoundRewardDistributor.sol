@@ -12,6 +12,7 @@ import {ContentRegistry} from "./ContentRegistry.sol";
 import {ProtocolConfig} from "./ProtocolConfig.sol";
 import {IFrontendRegistry} from "./interfaces/IFrontendRegistry.sol";
 import {IParticipationPool} from "./interfaces/IParticipationPool.sol";
+import {ILaunchDistributionPool} from "./interfaces/ILaunchDistributionPool.sol";
 import {IVoterIdNFT} from "./interfaces/IVoterIdNFT.sol";
 import {RoundLib} from "./libraries/RoundLib.sol";
 import {RewardMath} from "./libraries/RewardMath.sol";
@@ -377,7 +378,20 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
             votingEngine.transferReward(rewardRecipient, reward);
         }
 
+        _claimLaunchRaterReward(contentId, roundId, commitKey, rewardRecipient);
         emit RewardClaimed(contentId, roundId, rewardRecipient, commit.voter, returnedStake, reward);
+    }
+
+    function _claimLaunchRaterReward(uint256 contentId, uint256 roundId, bytes32 commitKey, address rewardRecipient)
+        internal
+    {
+        address launchPool = ProtocolConfig(votingEngine.protocolConfig()).launchDistributionPool();
+        if (launchPool == address(0)) return;
+        uint16 scoreBps = votingEngine.commitPredictionScoreBps(contentId, roundId, commitKey);
+        if (scoreBps == 0) return;
+
+        try ILaunchDistributionPool(launchPool).recordEarnedRaterReward(rewardRecipient, scoreBps) returns (uint256) {}
+        catch {}
     }
 
     // --- Frontend Fee Claims ---

@@ -1198,8 +1198,8 @@ contract AdversarialTests is VotingTestBase {
     // 13. STAKE BOUNDS
     // =========================================================================
 
-    /// @notice Stake below MIN_STAKE reverts
-    function test_StakeBounds_BelowMin_Reverts() public {
+    /// @notice Zero-stake ratings are accepted for bootstrap participation.
+    function test_StakeBounds_ZeroStakeAccepted() public {
         uint256 contentId = _submitContent();
 
         bytes32 salt = keccak256(abi.encodePacked(voter1, block.timestamp, contentId));
@@ -1207,10 +1207,9 @@ contract AdversarialTests is VotingTestBase {
         bytes memory ciphertext = _testCiphertext(true, salt, contentId);
 
         vm.startPrank(voter1);
-        hrepToken.approve(address(engine), 1); // tiny amount
+        hrepToken.approve(address(engine), 0);
         uint256 cachedRoundContext12 =
             _roundContext(engine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());
-        vm.expectRevert(RoundVotingEngine.InvalidStake.selector);
         engine.commitVote(
             contentId,
             cachedRoundContext12,
@@ -1218,7 +1217,7 @@ contract AdversarialTests is VotingTestBase {
             _tlockDrandChainHash(),
             commitHash,
             ciphertext,
-            1,
+            0,
             address(0)
         );
         vm.stopPrank();

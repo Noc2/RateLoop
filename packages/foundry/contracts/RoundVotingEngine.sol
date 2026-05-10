@@ -95,7 +95,7 @@ contract RoundVotingEngine is
     bytes32 internal constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 
     // --- Constants ---
-    uint256 internal constant MIN_STAKE = 1e6; // 1 HREP (6 decimals)
+    uint256 internal constant MIN_STAKE = 0; // zero-LREP ratings bootstrap new raters
     uint256 internal constant MAX_STAKE = 100e6; // 100 HREP (6 decimals)
     uint256 internal constant VOTE_COOLDOWN = 24 hours; // Time-based cooldown per content per voter
     uint256 internal constant MAX_CIPHERTEXT_SIZE = 2_048; // 2 KB max ciphertext to prevent storage bloat
@@ -141,7 +141,7 @@ contract RoundVotingEngine is
     mapping(uint256 => mapping(uint256 => uint256)) public roundPredictionForfeitClaimants;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint16))) internal commitPredictedRatingBps;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint256))) internal commitPredictionWeight;
-    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint16))) internal commitPredictionScoreBps;
+    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint16))) public commitPredictionScoreBps;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint256))) public commitPredictionRewardWeight;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint256))) public commitPredictionStakeReturned;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint256))) public commitPredictionForfeitedStake;

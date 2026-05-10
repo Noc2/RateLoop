@@ -1843,7 +1843,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     // ADDITIONAL BRANCH COVERAGE
     // =========================================================================
 
-    function test_Commit_InvalidStake_BelowMin_Reverts() public {
+    function test_Commit_ZeroStakeAccepted() public {
         uint256 contentId = _submitContent();
 
         bytes32 salt = keccak256(abi.encodePacked(voter1, block.timestamp));
@@ -1851,11 +1851,10 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         bytes memory ciphertext = _testCiphertext(true, salt, contentId);
 
         vm.prank(voter1);
-        hrepToken.approve(address(engine), 1e5);
+        hrepToken.approve(address(engine), 0);
         uint256 cachedRoundContext7 =
             _roundContext(engine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());
         vm.prank(voter1);
-        vm.expectRevert(RoundVotingEngine.InvalidStake.selector);
         engine.commitVote(
             contentId,
             cachedRoundContext7,
@@ -1863,7 +1862,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
             _tlockDrandChainHash(),
             commitHash,
             ciphertext,
-            1e5,
+            0,
             address(0)
         );
     }
