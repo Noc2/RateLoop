@@ -21,6 +21,7 @@ import { RaterRegistry } from "../contracts/RaterRegistry.sol";
 import { X402QuestionSubmitter } from "../contracts/X402QuestionSubmitter.sol";
 import { VoterIdNFT } from "../contracts/VoterIdNFT.sol";
 import { ParticipationPool } from "../contracts/ParticipationPool.sol";
+import { LaunchDistributionPool } from "../contracts/LaunchDistributionPool.sol";
 import { MockERC20 } from "../contracts/mocks/MockERC20.sol";
 import { CuryoGovernor } from "../contracts/governance/CuryoGovernor.sol";
 
@@ -28,7 +29,6 @@ import { CuryoGovernor } from "../contracts/governance/CuryoGovernor.sol";
 /// @dev Optional identity can be wired later by governance; no required proof-of-personhood faucet is deployed here.
 contract DeployRateLoop is ScaffoldETHDeploy {
     error UnsupportedWorldChain(uint256 chainId);
-    error InvalidLaunchDistributionRecipient();
 
     uint256 public constant TIMELOCK_MIN_DELAY = 2 days;
 
@@ -232,14 +232,18 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         protocolConfig.setParticipationPool(address(participationPool));
         console.log("ParticipationPool deployed and funded with 12M LREP");
 
-        address launchDistributionRecipient = vm.envOr("LAUNCH_DISTRIBUTION_RECIPIENT", governance);
-        if (launchDistributionRecipient == address(0)) revert InvalidLaunchDistributionRecipient();
-        lrepToken.mint(launchDistributionRecipient, LAUNCH_DISTRIBUTION_AMOUNT);
-        console.log("Minted 52M LREP launch distribution pool:", launchDistributionRecipient);
+        LaunchDistributionPool launchDistributionPool =
+            new LaunchDistributionPool(address(lrepToken), address(raterRegistry), governance);
+        launchDistributionPool.setAuthorizedCaller(address(rewardDistributor), true);
+        lrepToken.mint(deployer, LAUNCH_DISTRIBUTION_AMOUNT);
+        lrepToken.approve(address(launchDistributionPool), LAUNCH_DISTRIBUTION_AMOUNT);
+        launchDistributionPool.depositPool(LAUNCH_DISTRIBUTION_AMOUNT);
+        protocolConfig.setLaunchDistributionPool(address(launchDistributionPool));
+        console.log("LaunchDistributionPool deployed and funded with 52M LREP");
 
         if (!isLocalDev) {
             address[] memory excludedHolders = _buildQuorumExcludedHolders(
-                launchDistributionRecipient,
+                address(launchDistributionPool),
                 address(participationPool),
                 address(rewardDistributor),
                 address(votingEngine),
@@ -249,6 +253,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
             );
             CuryoGovernor(payable(governorAddr)).initializePools(excludedHolders);
             participationPool.transferOwnership(governance);
+            launchDistributionPool.transferOwnership(governance);
         }
 
         if (isLocalDev) {
@@ -272,6 +277,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         deployments.push(Deployment("RaterDeclarationRegistry", address(raterDeclarationRegistry)));
         deployments.push(Deployment("VoterIdNFT", address(optionalIdentity)));
         deployments.push(Deployment("ParticipationPool", address(participationPool)));
+        deployments.push(Deployment("LaunchDistributionPool", address(launchDistributionPool)));
         if (isLocalDev) deployments.push(Deployment("MockERC20", usdcTokenAddress));
 
         if (!isLocalDev) {
@@ -316,6 +322,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         console.log("RaterDeclarationRegistry:", address(raterDeclarationRegistry));
         console.log("Optional identity NFT:", address(optionalIdentity));
         console.log("ParticipationPool:", address(participationPool));
+        console.log("LaunchDistributionPool:", address(launchDistributionPool));
         console.log("Governance:", governance);
     }
 

@@ -10,6 +10,7 @@ const REQUIRED_TARGET_CONTRACTS = [
   "RoundRewardDistributor",
   "CategoryRegistry",
   "ParticipationPool",
+  "LaunchDistributionPool",
 ] as const;
 
 export function listMissingRequiredTargetContracts(

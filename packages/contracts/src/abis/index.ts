@@ -4,6 +4,7 @@ export { CuryoGovernorAbi } from "./CuryoGovernorAbi";
 export { LoopReputationAbi } from "./LoopReputationAbi";
 export { FeedbackBonusEscrowAbi } from "./FeedbackBonusEscrowAbi";
 export { FrontendRegistryAbi } from "./FrontendRegistryAbi";
+export { LaunchDistributionPoolAbi } from "./LaunchDistributionPoolAbi";
 export { ProfileRegistryAbi } from "./ProfileRegistryAbi";
 export { ProtocolConfigAbi } from "./ProtocolConfigAbi";
 export { QuestionRewardPoolEscrowAbi } from "./QuestionRewardPoolEscrowAbi";

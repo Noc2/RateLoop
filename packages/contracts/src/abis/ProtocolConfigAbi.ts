@@ -518,6 +518,19 @@ export const ProtocolConfigAbi = [
   },
   {
     "type": "function",
+    "name": "launchDistributionPool",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "minSubmissionHrepPool",
     "inputs": [],
     "outputs": [
@@ -882,6 +895,19 @@ export const ProtocolConfigAbi = [
   {
     "type": "function",
     "name": "setFrontendRegistry",
+    "inputs": [
+      {
+        "name": "value",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setLaunchDistributionPool",
     "inputs": [
       {
         "name": "value",
@@ -1370,6 +1396,19 @@ export const ProtocolConfigAbi = [
         "type": "uint64",
         "indexed": false,
         "internalType": "uint64"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "LaunchDistributionPoolUpdated",
+    "inputs": [
+      {
+        "name": "launchDistributionPool",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
       }
     ],
     "anonymous": false

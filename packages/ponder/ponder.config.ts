@@ -8,6 +8,7 @@ import {
   LoopReputationAbi,
   FeedbackBonusEscrowAbi,
   FrontendRegistryAbi,
+  LaunchDistributionPoolAbi,
   ParticipationPoolAbi,
   ProfileRegistryAbi,
   QuestionRewardPoolEscrowAbi,
@@ -216,6 +217,7 @@ const addresses = {
   voterIdNFT: resolveAddress("PONDER_VOTER_ID_NFT_ADDRESS", "VoterIdNFT"),
   loopReputation: resolveAddress("PONDER_LREP_ADDRESS", "LoopReputation"),
   participationPool: resolveAddress("PONDER_PARTICIPATION_POOL_ADDRESS", "ParticipationPool"),
+  launchDistributionPool: resolveAddress("PONDER_LAUNCH_DISTRIBUTION_POOL_ADDRESS", "LaunchDistributionPool"),
   questionRewardPoolEscrow: resolveAddress("PONDER_QUESTION_REWARD_POOL_ESCROW_ADDRESS", "QuestionRewardPoolEscrow"),
   feedbackBonusEscrow: resolveAddress("PONDER_FEEDBACK_BONUS_ESCROW_ADDRESS", "FeedbackBonusEscrow"),
   raterRegistry: resolveAddress("PONDER_RATER_REGISTRY_ADDRESS", "RaterRegistry"),
@@ -235,6 +237,7 @@ const startBlocks = {
   voterIdNFT: resolveStartBlock("PONDER_VOTER_ID_NFT_START_BLOCK", "VoterIdNFT"),
   loopReputation: resolveStartBlock("PONDER_LREP_START_BLOCK", "LoopReputation"),
   participationPool: resolveStartBlock("PONDER_PARTICIPATION_POOL_START_BLOCK", "ParticipationPool"),
+  launchDistributionPool: resolveStartBlock("PONDER_LAUNCH_DISTRIBUTION_POOL_START_BLOCK", "LaunchDistributionPool"),
   questionRewardPoolEscrow: resolveStartBlock("PONDER_QUESTION_REWARD_POOL_ESCROW_START_BLOCK", "QuestionRewardPoolEscrow"),
   feedbackBonusEscrow: resolveStartBlock("PONDER_FEEDBACK_BONUS_ESCROW_START_BLOCK", "FeedbackBonusEscrow"),
   raterRegistry: resolveStartBlock("PONDER_RATER_REGISTRY_START_BLOCK", "RaterRegistry"),
@@ -298,6 +301,10 @@ export default createConfig({
     ParticipationPool: {
       abi: ParticipationPoolAbi,
       network: contractOnActiveNetwork(addresses.participationPool, startBlocks.participationPool),
+    },
+    LaunchDistributionPool: {
+      abi: LaunchDistributionPoolAbi,
+      network: contractOnActiveNetwork(addresses.launchDistributionPool, startBlocks.launchDistributionPool),
     },
     QuestionRewardPoolEscrow: {
       abi: QuestionRewardPoolEscrowAbi,
