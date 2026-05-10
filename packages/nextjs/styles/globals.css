@@ -163,6 +163,16 @@ body {
   -webkit-text-fill-color: transparent;
 }
 
+.rateloop-gradient-rule {
+  background: linear-gradient(
+    90deg,
+    var(--rateloop-blue),
+    var(--rateloop-green),
+    var(--rateloop-yellow),
+    var(--rateloop-pink)
+  );
+}
+
 .orb-animation-shell {
   max-width: 1100px;
 }

@@ -136,9 +136,12 @@ function FeatureCard({
 }) {
   return (
     <article className="flex min-h-[12rem] flex-col border-l-2 py-2 pl-5" style={{ borderColor: color }}>
-      <span className="rateloop-text-gradient inline-block font-mono text-sm font-semibold tracking-widest">
-        {number}
-      </span>
+      <div className="flex items-center gap-3">
+        <span className="rateloop-text-gradient inline-block font-mono text-sm font-semibold tracking-widest">
+          {number}
+        </span>
+        <span aria-hidden="true" className="rateloop-gradient-rule h-px w-10 rounded-full" />
+      </div>
       <h3 className="mt-4 text-[1.45rem] font-bold leading-tight text-base-content">
         {title} <span className="rateloop-text-gradient">{gradientTitle}</span>
       </h3>
