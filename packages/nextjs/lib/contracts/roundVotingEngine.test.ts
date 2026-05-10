@@ -220,6 +220,7 @@ test("deriveVoteDeadlines falls back to round expiry after epoch 1", () => {
 
 test("vote helpers normalize stake and frontend codes", () => {
   assert.equal(buildStakeAmountWei(2.5), 2_500_000n);
+  assert.equal(buildStakeAmountWei(0), 0n);
   assert.equal(
     resolveFrontendCode(undefined, "0x1111111111111111111111111111111111111111"),
     "0x1111111111111111111111111111111111111111",

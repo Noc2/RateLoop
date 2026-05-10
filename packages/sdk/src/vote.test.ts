@@ -9,6 +9,7 @@ import {
 
 test("vote helpers normalize stake amounts and frontend defaults", () => {
   assert.equal(buildStakeAmountWei(2.5), 2_500_000n);
+  assert.equal(buildStakeAmountWei(0), 0n);
   assert.equal(
     resolveFrontendCode(undefined, "0x1111111111111111111111111111111111111111"),
     "0x1111111111111111111111111111111111111111",

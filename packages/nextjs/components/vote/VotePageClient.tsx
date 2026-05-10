@@ -1303,10 +1303,12 @@ const HomeInner = () => {
         recordRecommendationSignal(item, "vote_commit", { predictedRating: predictedCrowdRating });
       }
 
+      const stakeStatus =
+        stakeAmount > 0 ? `${stakeAmount} reputation locked.` : "no reputation locked; network fee only.";
       notification.success(
         `Report submitted: ${opinionRating.toFixed(1)}/10 rating, ${predictedCrowdRating.toFixed(
           1,
-        )}/10 crowd prediction, ${stakeAmount} reputation locked.`,
+        )}/10 crowd prediction, ${stakeStatus}`,
       );
 
       if (isFirstVote) {

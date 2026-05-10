@@ -1,7 +1,6 @@
 "use client";
 
 import { type CSSProperties, useEffect, useId, useMemo, useState } from "react";
-import Link from "next/link";
 import { EPOCH_WEIGHT_BPS } from "@rateloop/contracts/protocol";
 import { AnimatePresence, motion } from "framer-motion";
 import { useAccount } from "wagmi";
@@ -29,7 +28,7 @@ interface StakeSelectorProps {
   onCancel: () => void;
 }
 
-const PRESET_AMOUNTS = [1, 5, 25, 50, 100];
+const PRESET_AMOUNTS = [0, 1, 5, 25, 50, 100];
 const MIN_RATING = 1;
 const MAX_RATING = 9.9;
 
@@ -70,7 +69,7 @@ export function StakeSelector({
   const opinionRatingInputId = useId();
   const crowdPredictionInputId = useId();
   const contentLabel = useContentLabel(categoryId);
-  const [amount, setAmount] = useState(5);
+  const [amount, setAmount] = useState(0);
   const [opinionRating, setOpinionRating] = useState(() => getInitialPredictionRating(currentRating));
   const [predictedCrowdRating, setPredictedCrowdRating] = useState(() => getInitialPredictionRating(currentRating));
   const { address } = useAccount();
@@ -136,9 +135,9 @@ export function StakeSelector({
   const maxByCapacity = Math.floor(capacityFormatted);
   const maxStake = Math.min(maxByBalance, maxByCapacity);
   const sliderMax = Math.max(1, maxStake);
-  const isCapacityLimited = maxByCapacity < maxByBalance;
+  const isCapacityLimited = amount > 0 && maxByCapacity < maxByBalance;
   const cooldownActive = cooldownSecondsRemaining > 0;
-  const confirmDisabled = isConfirming || cooldownActive || amount < 1 || amount > maxStake || maxStake < 1;
+  const confirmDisabled = isConfirming || cooldownActive || amount < 0 || (amount > 0 && amount > maxStake);
   const phaseHeadline = effectiveIsBlind ? "Private round" : "Post-epoch reveal";
   const phaseToneClassName = effectiveIsBlind ? "bg-primary/10" : "bg-warning/10";
   const phaseHeadlineClassName = effectiveIsBlind ? "text-primary" : "text-warning";
@@ -294,7 +293,7 @@ export function StakeSelector({
             </div>
 
             <div className="mb-5 flex flex-wrap justify-center gap-2">
-              {PRESET_AMOUNTS.filter(a => a <= maxStake).map(preset => (
+              {PRESET_AMOUNTS.filter(a => a === 0 || a <= maxStake).map(preset => (
                 <button
                   key={preset}
                   onClick={() => setAmount(preset)}
@@ -316,9 +315,9 @@ export function StakeSelector({
                 id={stakeAmountInputId}
                 name="stake-amount"
                 type="range"
-                min={1}
+                min={0}
                 max={sliderMax}
-                value={Math.min(amount, sliderMax)}
+                value={amount > 0 ? Math.min(amount, sliderMax) : 0}
                 onChange={e => setAmount(Number(e.target.value))}
                 className={sliderClassName}
                 style={sliderStyle}
@@ -326,7 +325,7 @@ export function StakeSelector({
                 aria-label="Stake amount"
               />
               <div className="mt-1 flex justify-between text-base text-base-content/60">
-                <span>1</span>
+                <span>0</span>
                 <span>{sliderMax}</span>
               </div>
             </div>
@@ -368,20 +367,33 @@ export function StakeSelector({
               </div>
               <div className="mt-3 grid grid-cols-1 gap-2 text-sm text-base-content/80">
                 {effectiveIsBlind ? (
-                  <>
-                    <div className="flex items-center justify-between gap-3">
-                      <span>Participation bonus</span>
-                      <span className="font-semibold tabular-nums">
-                        {voteBonus !== undefined
-                          ? `+${voteBonus.toLocaleString(undefined, { maximumFractionDigits: 1 })} ${symbol}`
-                          : "Loading"}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between gap-3">
-                      <span>Reward weight</span>
-                      <span className="font-semibold tabular-nums">{weightPercent}% (4x vs open)</span>
-                    </div>
-                  </>
+                  amount === 0 ? (
+                    <>
+                      <div className="flex items-center justify-between gap-3">
+                        <span>Starter rewards</span>
+                        <span className="font-semibold tabular-nums">Accuracy based</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-3">
+                        <span>LREP at risk</span>
+                        <span className="font-semibold tabular-nums">0 {symbol}</span>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-between gap-3">
+                        <span>Participation bonus</span>
+                        <span className="font-semibold tabular-nums">
+                          {voteBonus !== undefined
+                            ? `+${voteBonus.toLocaleString(undefined, { maximumFractionDigits: 1 })} ${symbol}`
+                            : "Loading"}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between gap-3">
+                        <span>Reward weight</span>
+                        <span className="font-semibold tabular-nums">{weightPercent}% (4x vs open)</span>
+                      </div>
+                    </>
+                  )
                 ) : (
                   <>
                     <div className="flex items-center justify-between gap-3">
@@ -429,6 +441,8 @@ export function StakeSelector({
                     <span className="loading loading-spinner loading-xs" />
                     <span>Submitting...</span>
                   </span>
+                ) : amount === 0 ? (
+                  "Submit report"
                 ) : (
                   `Stake ${amount} ${symbol}`
                 )}
@@ -436,20 +450,6 @@ export function StakeSelector({
             </div>
 
             {confirmError && !isConfirming && <p className="mt-3 text-center text-base text-error">{confirmError}</p>}
-
-            {maxStake < 1 && maxByBalance < 1 && (
-              <p className="mt-3 text-center text-base text-error">
-                Insufficient {symbol} balance.{" "}
-                <Link href="/rate" className="link link-primary">
-                  Find rating opportunities.
-                </Link>
-              </p>
-            )}
-            {maxStake < 1 && maxByBalance >= 1 && maxByCapacity < 1 && (
-              <p className="mt-3 text-center text-base text-warning">
-                You have reached the 100 {symbol} stake limit for this {contentLabel} this round.
-              </p>
-            )}
           </motion.div>
         </motion.div>
       )}
