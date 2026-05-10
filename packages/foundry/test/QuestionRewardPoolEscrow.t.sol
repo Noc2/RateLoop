@@ -61,6 +61,8 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     uint256 internal constant BUNDLE_CLAIM_GRACE = 7 days;
     uint256 internal constant BUNDLE_REFUND_GRACE = 98 days;
 
+    mapping(uint256 => mapping(uint256 => uint256)) internal mockedRoundCommitCount;
+
     event RewardPoolCreated(
         uint256 indexed rewardPoolId,
         uint256 indexed contentId,
@@ -1795,7 +1797,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertNotEq(voterIdNFT.getTokenId(submitter), submitterSnapshotVoterId);
 
         uint256 roundId = 1;
-        _mockSettledRound(contentId, roundId, 3);
+        _mockSettledRound(contentId, roundId, 2);
         _mockRevealedCommitForVoterId(contentId, roundId, submitterSnapshotVoterId, submitter);
         _mockRevealedCommitForVoterId(contentId, roundId, voterIdNFT.getTokenId(voter1), voter1);
 
@@ -3524,6 +3526,12 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         internal
     {
         bytes32 commitKey = keccak256(abi.encode(contentId, roundId, voterId, voter));
+        uint256 index = mockedRoundCommitCount[contentId][roundId]++;
+        vm.mockCall(
+            address(votingEngine),
+            abi.encodeWithSignature("getRoundCommitKey(uint256,uint256,uint256)", contentId, roundId, index),
+            abi.encode(commitKey)
+        );
         vm.mockCall(
             address(votingEngine),
             abi.encodeWithSignature("voterIdCommitKey(uint256,uint256,uint256)", contentId, roundId, voterId),
