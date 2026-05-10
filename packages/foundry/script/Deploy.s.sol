@@ -429,6 +429,28 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         softwareSubcats[11] = "Pricing";
         registry.addCategory("Software", "software", softwareSubcats);
 
+        string[] memory mediaSubcats = new string[](8);
+        mediaSubcats[0] = "Images";
+        mediaSubcats[1] = "YouTube";
+        mediaSubcats[2] = "Education";
+        mediaSubcats[3] = "Entertainment";
+        mediaSubcats[4] = "Art";
+        mediaSubcats[5] = "Photography";
+        mediaSubcats[6] = "Audio";
+        mediaSubcats[7] = "Culture";
+        registry.addCategory("Media", "media", mediaSubcats);
+
+        string[] memory designSubcats = new string[](8);
+        designSubcats[0] = "Visual Design";
+        designSubcats[1] = "Brand";
+        designSubcats[2] = "Typography";
+        designSubcats[3] = "Layout";
+        designSubcats[4] = "Accessibility";
+        designSubcats[5] = "Photography";
+        designSubcats[6] = "Fashion";
+        designSubcats[7] = "Architecture";
+        registry.addCategory("Design", "design", designSubcats);
+
         string[] memory aiAnswerSubcats = new string[](8);
         aiAnswerSubcats[0] = "Helpfulness";
         aiAnswerSubcats[1] = "Clarity";

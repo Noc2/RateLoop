@@ -384,10 +384,19 @@ BUNDLE_CATEGORY_SLUGS=(
 resolve_category_id() {
   local slug="$1"
   local category_id
-  if ! category_id=$(node "$CATEGORY_ID_RESOLVER" "$CATEGORY_REGISTRY" "$slug" "$RPC"); then
-    exit 1
+  if category_id=$(node "$CATEGORY_ID_RESOLVER" "$CATEGORY_REGISTRY" "$slug" "$RPC" 2>/dev/null); then
+    printf "%s" "$category_id"
+    return 0
   fi
-  printf "%s" "$category_id"
+
+  echo "WARN: Category slug '$slug' is missing from this local deployment; falling back to 'general' for seed content." >&2
+  if category_id=$(node "$CATEGORY_ID_RESOLVER" "$CATEGORY_REGISTRY" "general" "$RPC"); then
+    printf "%s" "$category_id"
+    return 0
+  fi
+
+  echo "ERROR: Could not resolve fallback category slug general from CategoryRegistry" >&2
+  exit 1
 }
 
 CATEGORY_IDS=()

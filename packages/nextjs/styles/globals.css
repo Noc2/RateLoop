@@ -487,7 +487,7 @@ body {
   overflow: hidden;
   border-radius: var(--curyo-card-radius);
   background: rgb(var(--curyo-surface-elevated-rgb) / 0.82);
-  border: 1px solid rgb(245 245 245 / 0.1);
+  border: none;
   box-shadow: none;
 }
 
@@ -498,7 +498,7 @@ body {
 .surface-card-nested {
   border-radius: var(--curyo-card-radius);
   background: rgb(var(--curyo-surface-nested-rgb) / 0.96);
-  border: 1px solid rgb(245 245 245 / 0.08);
+  border: none;
   box-shadow: none;
 }
 
