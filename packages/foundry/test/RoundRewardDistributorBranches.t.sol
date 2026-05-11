@@ -4,13 +4,17 @@ pragma solidity ^0.8.20;
 import { VotingTestBase } from "./helpers/VotingTestHelpers.sol";
 import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import { ContentRegistry } from "../contracts/ContentRegistry.sol";
+import { LaunchDistributionPool } from "../contracts/LaunchDistributionPool.sol";
+import { LoopReputation } from "../contracts/LoopReputation.sol";
 import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
 import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
+import { RaterRegistry } from "../contracts/RaterRegistry.sol";
 import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
 import { RoundLib } from "../contracts/libraries/RoundLib.sol";
 import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
 import { HumanReputation } from "../contracts/HumanReputation.sol";
 import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
+import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
 
 /// @title RoundRewardDistributor branch coverage tests (tlock commit-reveal)
 contract RoundRewardDistributorBranchesTest is VotingTestBase {
@@ -18,6 +22,10 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
     ContentRegistry public registry;
     RoundVotingEngine public votingEngine;
     RoundRewardDistributor public rewardDistributor;
+    LoopReputation public lrepToken;
+    RaterRegistry public raterRegistry;
+    MockWorldIDRouter public worldIdRouter;
+    LaunchDistributionPool public launchPool;
 
     address public owner = address(1);
     address public submitter = address(2);
@@ -77,11 +85,23 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         MockCategoryRegistry mockCategoryRegistry = new MockCategoryRegistry();
         mockCategoryRegistry.seedDefaultTestCategories();
         registry.setCategoryRegistry(address(mockCategoryRegistry));
-        ProtocolConfig(address(votingEngine.protocolConfig())).setRewardDistributor(address(rewardDistributor));
-        ProtocolConfig(address(votingEngine.protocolConfig())).setCategoryRegistry(address(mockCategoryRegistry));
-        ProtocolConfig(address(votingEngine.protocolConfig())).setTreasury(treasury);
+        ProtocolConfig config = ProtocolConfig(address(votingEngine.protocolConfig()));
+        config.setRewardDistributor(address(rewardDistributor));
+        config.setCategoryRegistry(address(mockCategoryRegistry));
+        config.setTreasury(treasury);
         // 4 params: epochDuration, maxDuration, minVoters, maxVoters
-        _setTlockRoundConfig(ProtocolConfig(address(votingEngine.protocolConfig())), EPOCH_DURATION, 7 days, 2, 200);
+        _setTlockRoundConfig(config, EPOCH_DURATION, 7 days, 2, 200);
+
+        lrepToken = new LoopReputation(owner, owner);
+        worldIdRouter = new MockWorldIDRouter();
+        raterRegistry = new RaterRegistry(owner, owner, address(worldIdRouter), bytes32("rate-loop"), 1, 365 days);
+        launchPool = new LaunchDistributionPool(address(lrepToken), address(raterRegistry), owner);
+        launchPool.setAuthorizedCaller(address(rewardDistributor), true);
+        lrepToken.mint(owner, launchPool.TOTAL_POOL_AMOUNT());
+        lrepToken.approve(address(launchPool), launchPool.TOTAL_POOL_AMOUNT());
+        launchPool.depositPool(launchPool.TOTAL_POOL_AMOUNT());
+        config.setRaterRegistry(address(raterRegistry));
+        config.setLaunchDistributionPool(address(launchPool));
 
         hrepToken.mint(owner, 1_000_000e6);
         hrepToken.approve(address(votingEngine), 500_000e6);
@@ -119,6 +139,85 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
 
     function _vote(address voter, uint256 contentId, bool isUp) internal {
         _commit(voter, contentId, isUp, STAKE);
+    }
+
+    function _commitPrediction(address voter, uint256 contentId, uint16 predictedRatingBps, uint256 stake)
+        internal
+        returns (bytes32 commitKey, bytes32 salt)
+    {
+        salt = keccak256(abi.encodePacked(voter, predictedRatingBps, block.timestamp));
+        uint256 roundId = votingEngine.previewCommitRoundId(contentId);
+        uint16 referenceRatingBps = votingEngine.previewCommitReferenceRatingBps(contentId);
+        uint64 targetRound = _tlockCommitTargetRound();
+        bytes32 drandChainHash = _tlockDrandChainHash();
+        bytes memory ciphertext =
+            _testCiphertext(predictedRatingBps >= referenceRatingBps, salt, contentId, targetRound, drandChainHash);
+        bytes32 commitHash = _predictionCommitHash(
+            block.chainid,
+            address(votingEngine),
+            stake,
+            votingEngine.previewCommitScorerMetadataHash(contentId),
+            predictedRatingBps,
+            salt,
+            voter,
+            contentId,
+            roundId,
+            referenceRatingBps,
+            targetRound,
+            drandChainHash,
+            ciphertext
+        );
+
+        commitKey = _commitKey(voter, commitHash);
+
+        vm.startPrank(voter);
+        hrepToken.approve(address(votingEngine), stake);
+        votingEngine.commitVote(
+            contentId,
+            _roundContext(roundId, referenceRatingBps),
+            targetRound,
+            drandChainHash,
+            commitHash,
+            ciphertext,
+            stake,
+            address(0)
+        );
+        vm.stopPrank();
+    }
+
+    function _predictionCommitHash(
+        uint256 chainId,
+        address engineAddress,
+        uint256 stake,
+        bytes32 scorerMetadataHash,
+        uint16 predictedRatingBps,
+        bytes32 salt,
+        address voter,
+        uint256 contentId,
+        uint256 roundId,
+        uint16 referenceRatingBps,
+        uint64 targetRound,
+        bytes32 drandChainHash,
+        bytes memory ciphertext
+    ) internal pure returns (bytes32) {
+        return keccak256(
+            abi.encodePacked(
+                chainId,
+                engineAddress,
+                contentId,
+                roundId,
+                voter,
+                predictedRatingBps,
+                predictedRatingBps,
+                stake,
+                scorerMetadataHash,
+                referenceRatingBps,
+                targetRound,
+                drandChainHash,
+                keccak256(ciphertext),
+                salt
+            )
+        );
     }
 
     function _revealAll(uint256 contentId, uint256 roundId) internal {
@@ -159,6 +258,33 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
 
         roundId = RoundEngineReadHelpers.activeRoundId(votingEngine, contentId);
         _forceSettle(contentId);
+    }
+
+    function _setupSettledPredictionRound() internal returns (uint256 contentId, uint256 roundId) {
+        vm.startPrank(submitter);
+        hrepToken.approve(address(registry), 10e6);
+        _submitContentWithReservation(registry, "https://example.com/prediction", "goal", "goal", "tags", 0);
+        vm.stopPrank();
+        contentId = 1;
+
+        (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, 8_000, STAKE);
+        (bytes32 ck2, bytes32 s2) = _commitPrediction(voter2, contentId, 8_000, STAKE);
+        (bytes32 ck3, bytes32 s3) = _commitPrediction(voter3, contentId, 7_000, STAKE);
+
+        roundId = RoundEngineReadHelpers.activeRoundId(votingEngine, contentId);
+        RoundLib.Round memory r0 = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
+        _warpPastTlockRevealTime(uint256(r0.startTime) + EPOCH_DURATION);
+
+        votingEngine.revealPredictionByCommitKey(contentId, roundId, ck1, 8_000, 8_000, s1);
+        votingEngine.revealPredictionByCommitKey(contentId, roundId, ck2, 8_000, 8_000, s2);
+        votingEngine.revealPredictionByCommitKey(contentId, roundId, ck3, 7_000, 7_000, s3);
+        votingEngine.settleRound(contentId, roundId);
+    }
+
+    function _verifyHuman(address account, bytes32 nullifier) internal {
+        uint256[8] memory proof;
+        vm.prank(account);
+        raterRegistry.attestSelfCredentialWithProof(1, uint256(nullifier), proof);
     }
 
     // =========================================================================
@@ -220,6 +346,32 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         uint256 balAfter = hrepToken.balanceOf(voter1);
 
         assertGt(balAfter, balBefore); // winner gets stake + reward
+    }
+
+    function test_ClaimReward_RecordsLaunchCreditWithVerifiedHumanAnchor() public {
+        _verifyHuman(voter2, bytes32("anchor-voter-2"));
+        (uint256 contentId, uint256 roundId) = _setupSettledPredictionRound();
+
+        vm.prank(voter1);
+        rewardDistributor.claimReward(contentId, roundId);
+
+        assertEq(launchPool.qualifyingRatingCount(voter1), 1);
+        assertEq(launchPool.raterDistinctVerifiedAnchorCount(voter1), 1);
+        assertEq(launchPool.raterDistinctAnchorRoundCount(voter1), 1);
+        assertEq(lrepToken.balanceOf(voter1), 0);
+    }
+
+    function test_ClaimReward_DoesNotRecordLaunchCreditWithoutIndependentVerifiedAnchor() public {
+        _verifyHuman(voter1, bytes32("claimant-voter-1"));
+        (uint256 contentId, uint256 roundId) = _setupSettledPredictionRound();
+
+        vm.prank(voter1);
+        rewardDistributor.claimReward(contentId, roundId);
+
+        assertEq(launchPool.qualifyingRatingCount(voter1), 0);
+        assertEq(launchPool.raterDistinctVerifiedAnchorCount(voter1), 0);
+        assertEq(launchPool.raterDistinctAnchorRoundCount(voter1), 0);
+        assertEq(lrepToken.balanceOf(voter1), 0);
     }
 
     // =========================================================================
