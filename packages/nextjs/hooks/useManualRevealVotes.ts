@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
-import { RoundVotingEngineAbi } from "@rateloop/contracts/abis";
+import { ProtocolConfigAbi, RoundVotingEngineAbi, VoterIdNFTAbi } from "@rateloop/contracts/abis";
 import {
   buildCommitKey,
   decryptTlockVoteCiphertext,
@@ -10,7 +10,7 @@ import {
   parseTlockCiphertextMetadata,
 } from "@rateloop/contracts/voting";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Address, zeroHash } from "viem";
+import { Address, isAddress, zeroAddress, zeroHash } from "viem";
 import { useAccount, usePublicClient, useWalletClient } from "wagmi";
 import { useDeployedContractInfo } from "~~/hooks/scaffold-eth";
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
@@ -20,6 +20,7 @@ import { useUnixTime } from "~~/hooks/useUnixTime";
 import { getVoteHistoryQueryKey } from "~~/hooks/useVoteHistoryQuery";
 import { getVotingStakesQueryKey } from "~~/hooks/useVotingStakes";
 import { getSubmittingTransactionMessage } from "~~/lib/ui/transactionStatusCopy";
+import type { PonderVoteItem } from "~~/services/ponder/client";
 import { CommitData } from "~~/types/votingTypes";
 import { getParsedErrorWithAllAbis } from "~~/utils/scaffold-eth/contract";
 import { notification } from "~~/utils/scaffold-eth/notification";
@@ -53,6 +54,25 @@ type LiveDrandConfig = {
   drandGenesisTime: bigint;
   drandPeriod: bigint;
 };
+
+type PublicClient = NonNullable<ReturnType<typeof usePublicClient>>;
+
+type CommitReference = {
+  commitHash: `0x${string}`;
+  commitKey: `0x${string}`;
+};
+
+function isNonZeroAddress(value: unknown): value is Address {
+  return typeof value === "string" && isAddress(value) && value.toLowerCase() !== zeroAddress;
+}
+
+function isNonZeroBytes32(value: unknown): value is `0x${string}` {
+  return typeof value === "string" && /^0x[0-9a-fA-F]{64}$/.test(value) && value.toLowerCase() !== zeroHash;
+}
+
+function indexedCommitHash(vote: PonderVoteItem): `0x${string}` {
+  return isNonZeroBytes32(vote.commitHash) ? vote.commitHash : zeroHash;
+}
 
 function normalizeCommitData(rawCommit: unknown): CommitData {
   const commit = rawCommit as Record<string, unknown> & readonly unknown[];
@@ -88,10 +108,7 @@ function normalizeCommitData(rawCommit: unknown): CommitData {
   };
 }
 
-async function readLiveDrandConfig(
-  publicClient: NonNullable<ReturnType<typeof usePublicClient>>,
-  engineAddress: Address,
-): Promise<LiveDrandConfig> {
+async function readLiveDrandConfig(publicClient: PublicClient, engineAddress: Address): Promise<LiveDrandConfig> {
   const protocolConfigAddress = (await publicClient.readContract({
     address: engineAddress,
     abi: RoundVotingEngineAbi,
@@ -131,6 +148,172 @@ async function readLiveDrandConfig(
     drandGenesisTime: drandGenesisTime as bigint,
     drandPeriod: drandPeriod as bigint,
   };
+}
+
+async function readProtocolVoterIdNft(publicClient: PublicClient, engineAddress: Address): Promise<Address | null> {
+  try {
+    const protocolConfigAddress = (await publicClient.readContract({
+      address: engineAddress,
+      abi: RoundVotingEngineAbi,
+      functionName: "protocolConfig",
+    })) as Address;
+    if (!isNonZeroAddress(protocolConfigAddress)) return null;
+
+    const voterIdNft = (await publicClient.readContract({
+      address: protocolConfigAddress,
+      abi: ProtocolConfigAbi,
+      functionName: "voterIdNFT",
+    })) as Address;
+    return isNonZeroAddress(voterIdNft) ? voterIdNft : null;
+  } catch {
+    return null;
+  }
+}
+
+async function readRoundVoterIdNft(
+  publicClient: PublicClient,
+  engineAddress: Address,
+  contentId: bigint,
+  roundId: bigint,
+): Promise<Address | null> {
+  try {
+    const snapshot = (await publicClient.readContract({
+      address: engineAddress,
+      abi: RoundVotingEngineAbi,
+      functionName: "roundVoterIdNFTSnapshot",
+      args: [contentId, roundId],
+    })) as Address;
+    if (isNonZeroAddress(snapshot)) return snapshot;
+  } catch {
+    return null;
+  }
+
+  return readProtocolVoterIdNft(publicClient, engineAddress);
+}
+
+async function readDirectCommitReference(params: {
+  publicClient: PublicClient;
+  engineAddress: Address;
+  contentId: bigint;
+  roundId: bigint;
+  voter: Address;
+}): Promise<CommitReference | null> {
+  try {
+    const commitHash = await params.publicClient.readContract({
+      address: params.engineAddress,
+      abi: RoundVotingEngineAbi,
+      functionName: "voterCommitHash",
+      args: [params.contentId, params.roundId, params.voter],
+    });
+    if (!isNonZeroBytes32(commitHash)) return null;
+    return {
+      commitHash,
+      commitKey: buildCommitKey(params.voter, commitHash),
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function readVoterIdCommitReference(params: {
+  publicClient: PublicClient;
+  engineAddress: Address;
+  contentId: bigint;
+  roundId: bigint;
+  voter: Address;
+  indexedCommitHash: `0x${string}`;
+}): Promise<CommitReference | null> {
+  const voterIdNft = await readRoundVoterIdNft(
+    params.publicClient,
+    params.engineAddress,
+    params.contentId,
+    params.roundId,
+  );
+  if (!voterIdNft) return null;
+
+  let voterId = 0n;
+  try {
+    voterId = (await params.publicClient.readContract({
+      address: voterIdNft,
+      abi: VoterIdNFTAbi,
+      functionName: "getTokenId",
+      args: [params.voter],
+    })) as bigint;
+  } catch {
+    return null;
+  }
+  if (voterId <= 0n) return null;
+
+  try {
+    const commitKey = await params.publicClient.readContract({
+      address: params.engineAddress,
+      abi: RoundVotingEngineAbi,
+      functionName: "voterIdCommitKey",
+      args: [params.contentId, params.roundId, voterId],
+    });
+    if (isNonZeroBytes32(commitKey)) {
+      return { commitHash: params.indexedCommitHash, commitKey };
+    }
+  } catch {
+    return null;
+  }
+
+  try {
+    const nullifier = (await params.publicClient.readContract({
+      address: voterIdNft,
+      abi: VoterIdNFTAbi,
+      functionName: "getNullifier",
+      args: [voterId],
+    })) as bigint;
+    if (nullifier <= 0n) return null;
+
+    const commitKey = await params.publicClient.readContract({
+      address: params.engineAddress,
+      abi: RoundVotingEngineAbi,
+      functionName: "voterNullifierCommitKey",
+      args: [params.contentId, params.roundId, nullifier],
+    });
+    return isNonZeroBytes32(commitKey) ? { commitHash: params.indexedCommitHash, commitKey } : null;
+  } catch {
+    return null;
+  }
+}
+
+function readIndexedCommitReference(vote: PonderVoteItem): CommitReference | null {
+  if (!isAddress(vote.voter) || !isNonZeroBytes32(vote.commitHash)) return null;
+  const voter = vote.voter as Address;
+  return {
+    commitHash: vote.commitHash,
+    commitKey: buildCommitKey(voter, vote.commitHash),
+  };
+}
+
+async function resolveManualRevealCommitReference(params: {
+  publicClient: PublicClient;
+  engineAddress: Address;
+  voter: Address;
+  vote: PonderVoteItem;
+}): Promise<CommitReference | null> {
+  const contentId = BigInt(params.vote.contentId);
+  const roundId = BigInt(params.vote.roundId);
+  return (
+    (await readDirectCommitReference({
+      publicClient: params.publicClient,
+      engineAddress: params.engineAddress,
+      contentId,
+      roundId,
+      voter: params.voter,
+    })) ??
+    (await readVoterIdCommitReference({
+      publicClient: params.publicClient,
+      engineAddress: params.engineAddress,
+      contentId,
+      roundId,
+      voter: params.voter,
+      indexedCommitHash: indexedCommitHash(params.vote),
+    })) ??
+    readIndexedCommitReference(params.vote)
+  );
 }
 
 function deriveRevealAvailableAtFromLiveConfig(
@@ -227,23 +410,19 @@ export function useManualRevealVotes(voter?: Address) {
     queryFn: async (): Promise<ManualRevealVote[]> => {
       if (!voter || !publicClient || !engineInfo?.address || pendingVotes.length === 0) return [];
 
-      const commitHashResults = await publicClient.multicall({
-        allowFailure: true,
-        contracts: pendingVotes.map(vote => ({
-          address: engineInfo.address,
-          abi: RoundVotingEngineAbi,
-          functionName: "voterCommitHash",
-          args: [BigInt(vote.contentId), BigInt(vote.roundId), voter],
-        })) as any,
-      });
-
-      const withCommitHashes = pendingVotes.flatMap((vote, index) => {
-        const result = commitHashResults[index];
-        if (result?.status !== "success") return [];
-        if (!result.result || result.result === zeroHash) return [];
-        const commitHash = result.result as `0x${string}`;
-        return [{ vote, commitHash, commitKey: buildCommitKey(voter, commitHash) }];
-      });
+      const withCommitHashes = (
+        await Promise.all(
+          pendingVotes.map(async vote => {
+            const commitReference = await resolveManualRevealCommitReference({
+              publicClient,
+              engineAddress: engineInfo.address,
+              voter,
+              vote,
+            });
+            return commitReference ? { vote, ...commitReference } : null;
+          }),
+        )
+      ).flatMap(reference => (reference ? [reference] : []));
 
       if (withCommitHashes.length === 0) return [];
 
@@ -265,7 +444,7 @@ export function useManualRevealVotes(voter?: Address) {
           if (commitResult?.status !== "success") return null;
 
           const commit = normalizeCommitData(commitResult.result);
-          if (commit.revealed || commit.stakeAmount === 0n) {
+          if (commit.revealed) {
             return null;
           }
 
