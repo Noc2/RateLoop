@@ -19,13 +19,12 @@ import { RoundCleanupLib } from "./libraries/RoundCleanupLib.sol";
 import { RoundRevealLib } from "./libraries/RoundRevealLib.sol";
 import { VotePreflightLib } from "./libraries/VotePreflightLib.sol";
 import { PredictionRatingMath } from "./libraries/PredictionRatingMath.sol";
+import { RaterWeightLib } from "./libraries/RaterWeightLib.sol";
 import { IFrontendRegistry } from "./interfaces/IFrontendRegistry.sol";
 import { ICategoryRegistry } from "./interfaces/ICategoryRegistry.sol";
 import { IVoterIdNFT } from "./interfaces/IVoterIdNFT.sol";
 import { IRoundVotingEngine } from "./interfaces/IRoundVotingEngine.sol";
 import { IParticipationPool } from "./interfaces/IParticipationPool.sol";
-import { IRaterRegistryWeights } from "./interfaces/IRaterRegistryWeights.sol";
-import { IRaterDeclarationWeights } from "./interfaces/IRaterDeclarationWeights.sol";
 
 interface IQuestionBundleRoundObserver {
     function recordBundleQuestionTerminal(uint256 contentId, uint256 roundId, bool settled) external;
@@ -104,8 +103,6 @@ contract RoundVotingEngine is
     uint16 internal constant PREDICTION_FULL_CREDIT_TOLERANCE_BPS = 100;
     uint16 internal constant PREDICTION_ZERO_CREDIT_TOLERANCE_BPS = 8_900;
     uint16 internal constant PREDICTION_SCORE_SCALE_BPS = 10_000;
-    uint16 internal constant WEIGHT_BPS = 10_000;
-    uint16 internal constant MAX_COMBINED_RATER_WEIGHT_BPS = 12_500;
 
     // --- State ---
     IERC20 internal hrepToken;
@@ -448,7 +445,8 @@ contract RoundVotingEngine is
         _validateCommitTlockData(
             contentId, roundId, ciphertext, targetRound, drandChainHash, epochEnd, roundCfg.epochDuration
         );
-        uint16 raterWeightBps = _currentRaterWeightBps(voter);
+        (uint16 raterWeightBps, bool hadActiveAiDeclaration) =
+            RaterWeightLib.currentRaterWeightAndAiStatus(protocolConfig, voter);
 
         // Transfer HREP stake after all lightweight validation passes.
         if (!stakeAlreadyTransferred) {
@@ -474,6 +472,7 @@ contract RoundVotingEngine is
             useTokenIdentity
         );
         commitRaterWeightBps[contentId][roundId][commitKey] = raterWeightBps;
+        commitHadActiveAiDeclaration[contentId][roundId][commitKey] = hadActiveAiDeclaration;
         _recordCommitAccounting(
             round, roundVoterIdNft, contentId, roundId, voter, voterId, useTokenIdentity, stakeAmount64, stakeAmount
         );
@@ -1144,36 +1143,6 @@ contract RoundVotingEngine is
         return IParticipationPool(protocolConfig.participationPool());
     }
 
-    function _currentRaterWeightBps(address voter) internal view returns (uint16) {
-        uint256 weightBps = WEIGHT_BPS;
-        address configuredRaterRegistry = protocolConfig.raterRegistry();
-        if (configuredRaterRegistry != address(0)) {
-            IRaterRegistryWeights registryWeights = IRaterRegistryWeights(configuredRaterRegistry);
-            try registryWeights.getClusterScore(voter) returns (bytes32, uint16 discountBps, uint64, uint64 updatedAt) {
-                if (updatedAt != 0) {
-                    if (discountBps >= WEIGHT_BPS) return 0;
-                    weightBps = (weightBps * (WEIGHT_BPS - discountBps)) / WEIGHT_BPS;
-                }
-            } catch { }
-
-            try registryWeights.credentialMultiplierBps(voter) returns (uint16 multiplierBps) {
-                if (multiplierBps > WEIGHT_BPS) weightBps = (weightBps * multiplierBps) / WEIGHT_BPS;
-            } catch { }
-        }
-
-        address configuredRaterDeclarationRegistry = protocolConfig.raterDeclarationRegistry();
-        if (configuredRaterDeclarationRegistry != address(0)) {
-            IRaterDeclarationWeights declarationWeights =
-                IRaterDeclarationWeights(configuredRaterDeclarationRegistry);
-            try declarationWeights.tierMultiplierBps(voter) returns (uint16 multiplierBps) {
-                if (multiplierBps > WEIGHT_BPS) weightBps = (weightBps * multiplierBps) / WEIGHT_BPS;
-            } catch { }
-        }
-
-        if (weightBps > MAX_COMBINED_RATER_WEIGHT_BPS) return MAX_COMBINED_RATER_WEIGHT_BPS;
-        return uint16(weightBps);
-    }
-
     function _resolveClaimCommit(uint256 contentId, uint256 roundId, address account)
         internal
         view
@@ -1520,9 +1489,12 @@ contract RoundVotingEngine is
     // Commit-time social graph weight snapshot, in BPS. Used for rating weight and bounty units.
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint16))) public commitRaterWeightBps;
 
+    // Commit-time AI declaration snapshot, used to keep launch anchors human-only at claim time.
+    mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) public commitHadActiveAiDeclaration;
+
     // Round-level scorer metadata bound into prediction commits.
     mapping(uint256 => mapping(uint256 => bytes32)) internal roundScorerMetadataHashSnapshot;
 
     // --- Storage gap reserved for future upgrades ---
-    uint256[30] private __gap;
+    uint256[29] private __gap;
 }

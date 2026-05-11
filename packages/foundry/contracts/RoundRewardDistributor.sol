@@ -1,23 +1,23 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-import {RoundVotingEngine} from "./RoundVotingEngine.sol";
-import {ContentRegistry} from "./ContentRegistry.sol";
-import {ProtocolConfig} from "./ProtocolConfig.sol";
-import {RaterRegistry} from "./RaterRegistry.sol";
-import {IFrontendRegistry} from "./interfaces/IFrontendRegistry.sol";
-import {IParticipationPool} from "./interfaces/IParticipationPool.sol";
-import {ILaunchDistributionPool} from "./interfaces/ILaunchDistributionPool.sol";
-import {IRaterDeclarationWeights} from "./interfaces/IRaterDeclarationWeights.sol";
-import {IVoterIdNFT} from "./interfaces/IVoterIdNFT.sol";
-import {RoundLib} from "./libraries/RoundLib.sol";
-import {RewardMath} from "./libraries/RewardMath.sol";
+import { RoundVotingEngine } from "./RoundVotingEngine.sol";
+import { ContentRegistry } from "./ContentRegistry.sol";
+import { ProtocolConfig } from "./ProtocolConfig.sol";
+import { IFrontendRegistry } from "./interfaces/IFrontendRegistry.sol";
+import { IParticipationPool } from "./interfaces/IParticipationPool.sol";
+import { ILaunchDistributionPool } from "./interfaces/ILaunchDistributionPool.sol";
+import { IVoterIdNFT } from "./interfaces/IVoterIdNFT.sol";
+import { FrontendFeeDustLib } from "./libraries/FrontendFeeDustLib.sol";
+import { LaunchRaterRewardLib } from "./libraries/LaunchRaterRewardLib.sol";
+import { RoundLib } from "./libraries/RoundLib.sol";
+import { RewardMath } from "./libraries/RewardMath.sol";
 
 /// @title RoundRewardDistributor
 /// @notice Pull-based reward claiming for settled rounds.
@@ -337,10 +337,8 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
             uint256 claimedCount = roundLoserRebateClaimedCount[contentId][roundId];
             uint256 claimedAmount = roundLoserRebateClaimedAmount[contentId][roundId];
             uint256 loserRefundPool = RewardMath.calculateRevealedLoserRefund(forfeitedPool);
-            if (
-                totalForfeitClaimants == 0 || claimedCount >= totalForfeitClaimants
-                    || claimedAmount > loserRefundPool
-            ) {
+            if (totalForfeitClaimants == 0 || claimedCount >= totalForfeitClaimants || claimedAmount > loserRefundPool)
+            {
                 revert PoolExhausted();
             }
 
@@ -393,19 +391,24 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         uint16 scoreBps = votingEngine.commitPredictionScoreBps(contentId, roundId, commitKey);
         if (scoreBps == 0) return;
         RoundLib.Round memory round = _readRound(contentId, roundId);
-        bytes32[] memory verifiedAnchorIds =
-            _collectLaunchRewardAnchorIds(config, contentId, roundId, rewardRecipient, round.voteCount);
+        bytes32[] memory verifiedAnchorIds = LaunchRaterRewardLib.collectAnchorIds(
+            config, votingEngine, registry, contentId, roundId, rewardRecipient, round.voteCount
+        );
 
-        try ILaunchDistributionPool(launchPool).recordEarnedRaterReward(
-            rewardRecipient,
-            contentId,
-            roundId,
-            commitKey,
-            scoreBps,
-            round.revealedCount,
-            votingEngine.roundUnrevealedCleanupRemaining(contentId, roundId) == 0,
-            verifiedAnchorIds
-        ) returns (uint256) {} catch {}
+        try ILaunchDistributionPool(launchPool)
+            .recordEarnedRaterReward(
+                rewardRecipient,
+                contentId,
+                roundId,
+                commitKey,
+                scoreBps,
+                round.revealedCount,
+                votingEngine.roundUnrevealedCleanupRemaining(contentId, roundId) == 0,
+                verifiedAnchorIds
+            ) returns (
+            uint256
+        ) { }
+            catch { }
     }
 
     // --- Frontend Fee Claims ---
@@ -810,7 +813,9 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         returns (RoundLib.Commit memory)
     {
         bytes32 commitKey = _findVoterCommitKey(contentId, roundId, voter);
-        if (commitKey == bytes32(0)) return RoundLib.Commit(address(0), 0, "", 0, bytes32(0), address(0), 0, false, false, 0);
+        if (commitKey == bytes32(0)) {
+            return RoundLib.Commit(address(0), 0, "", 0, bytes32(0), address(0), 0, false, false, 0);
+        }
         return _readCommit(contentId, roundId, commitKey);
     }
 
@@ -881,96 +886,6 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         address snapshot = votingEngine.roundVoterIdNFTSnapshot(contentId, roundId);
         if (snapshot != address(0)) return snapshot;
         return votingEngine.protocolConfig().voterIdNFT();
-    }
-
-    function _collectLaunchRewardAnchorIds(
-        ProtocolConfig config,
-        uint256 contentId,
-        uint256 roundId,
-        address rewardRecipient,
-        uint256 voteCount
-    ) internal view returns (bytes32[] memory anchorIds) {
-        address raterRegistryAddress = config.raterRegistry();
-        if (raterRegistryAddress == address(0) || voteCount == 0) return new bytes32[](0);
-
-        RaterRegistry raterRegistry = RaterRegistry(raterRegistryAddress);
-        address raterDeclarationRegistry = config.raterDeclarationRegistry();
-        address submitterIdentity = registry.getSubmitterIdentity(contentId);
-        address voterIdNftAddress = _roundVoterIdNftAddress(contentId, roundId);
-        bytes32[] memory candidates = new bytes32[](voteCount);
-        uint256 anchorCount;
-
-        for (uint256 i = 0; i < voteCount; i++) {
-            bytes32 roundCommitKey = votingEngine.getRoundCommitKey(contentId, roundId, i);
-            RoundLib.Commit memory commit = _readCommit(contentId, roundId, roundCommitKey);
-            if (!commit.revealed) continue;
-
-            address anchorAccount =
-                _launchRewardAnchorAccount(voterIdNftAddress, contentId, roundId, roundCommitKey, commit.voter);
-            if (anchorAccount == rewardRecipient || anchorAccount == submitterIdentity) continue;
-            if (_hasActiveAiDeclaration(raterDeclarationRegistry, anchorAccount)) continue;
-
-            bytes32 anchorId = _launchRewardAnchorId(raterRegistry, anchorAccount);
-            if (anchorId == bytes32(0) || _launchRewardAnchorSeen(candidates, anchorCount, anchorId)) continue;
-
-            candidates[anchorCount] = anchorId;
-            anchorCount += 1;
-        }
-
-        anchorIds = new bytes32[](anchorCount);
-        for (uint256 i = 0; i < anchorCount; i++) {
-            anchorIds[i] = candidates[i];
-        }
-    }
-
-    function _launchRewardAnchorAccount(
-        address voterIdNftAddress,
-        uint256 contentId,
-        uint256 roundId,
-        bytes32 commitKey,
-        address fallbackAccount
-    ) internal view returns (address) {
-        if (voterIdNftAddress == address(0)) return fallbackAccount;
-        uint256 voterId = votingEngine.commitVoterId(contentId, roundId, commitKey);
-        if (voterId == 0) return fallbackAccount;
-
-        address rewardRecipient = _currentVoterIdRewardRecipient(IVoterIdNFT(voterIdNftAddress), voterId);
-        return rewardRecipient == address(0) ? fallbackAccount : rewardRecipient;
-    }
-
-    function _hasActiveAiDeclaration(address raterDeclarationRegistry, address account) internal view returns (bool) {
-        if (raterDeclarationRegistry == address(0) || account == address(0)) return false;
-        try IRaterDeclarationWeights(raterDeclarationRegistry).tierMultiplierBps(account) returns (uint16 multiplierBps) {
-            return multiplierBps > 10_000;
-        } catch {
-            return false;
-        }
-    }
-
-    function _launchRewardAnchorId(RaterRegistry raterRegistry, address account) internal view returns (bytes32) {
-        if (account == address(0)) return bytes32(0);
-        try raterRegistry.getSelfCredential(account) returns (RaterRegistry.SelfCredential memory credential) {
-            if (
-                !credential.verified || credential.legacy || credential.revoked || credential.expiresAt <= block.timestamp
-                    || credential.nullifierHash == bytes32(0)
-            ) {
-                return bytes32(0);
-            }
-            return credential.nullifierHash;
-        } catch {
-            return bytes32(0);
-        }
-    }
-
-    function _launchRewardAnchorSeen(bytes32[] memory anchors, uint256 anchorCount, bytes32 anchorId)
-        internal
-        pure
-        returns (bool)
-    {
-        for (uint256 i = 0; i < anchorCount; i++) {
-            if (anchors[i] == anchorId) return true;
-        }
-        return false;
     }
 
     function _readRound(uint256 contentId, uint256 roundId) internal view returns (RoundLib.Round memory round) {
@@ -1053,12 +968,7 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         }
     }
 
-    function _resolveFrontendFeeDisposition(
-        uint256 contentId,
-        uint256 roundId,
-        address frontend,
-        uint48 roundSettledAt
-    )
+    function _resolveFrontendFeeDisposition(uint256 contentId, uint256 roundId, address frontend, uint48 roundSettledAt)
         internal
         view
         returns (
@@ -1163,37 +1073,17 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         internal
         returns (uint256 processedCount, uint256 expectedTotal)
     {
-        if (roundFrontendFeeDustFinalized[contentId][roundId]) revert RewardDustAlreadyFinalized();
-        if (sortedFrontends.length == 0) revert InvalidFinalizationInput();
-
-        _readSettledStaleRound(contentId, roundId);
-        _requireNoPendingUnrevealedCleanup(contentId, roundId);
-
-        uint256 totalFrontendPool = votingEngine.roundFrontendPool(contentId, roundId);
-        uint256 totalEligibleStake = votingEngine.roundStakeWithEligibleFrontend(contentId, roundId);
-        uint256 totalFrontendClaimants = votingEngine.roundEligibleFrontendCount(contentId, roundId);
-        if (totalFrontendPool == 0 || totalEligibleStake == 0 || totalFrontendClaimants == 0) revert NoRewardDust();
-
-        processedCount = roundFrontendFeeDustProcessedCount[contentId][roundId];
-        expectedTotal = roundFrontendFeeDustExpectedTotal[contentId][roundId];
-        address previous = roundFrontendFeeDustLastFrontend[contentId][roundId];
-
-        for (uint256 i = 0; i < sortedFrontends.length; i++) {
-            address frontend = sortedFrontends[i];
-            if (frontend == address(0) || frontend <= previous) revert InvalidFinalizationInput();
-            previous = frontend;
-
-            uint256 frontendStake = votingEngine.roundPerFrontendStake(contentId, roundId, frontend);
-            if (frontendStake == 0) revert InvalidFinalizationInput();
-            expectedTotal += (totalFrontendPool * frontendStake) / totalEligibleStake;
-        }
-
-        processedCount += sortedFrontends.length;
-        if (processedCount > totalFrontendClaimants) revert InvalidFinalizationInput();
-
-        roundFrontendFeeDustProcessedCount[contentId][roundId] = processedCount;
-        roundFrontendFeeDustExpectedTotal[contentId][roundId] = expectedTotal;
-        roundFrontendFeeDustLastFrontend[contentId][roundId] = previous;
+        (processedCount, expectedTotal) = FrontendFeeDustLib.processBatch(
+            votingEngine,
+            roundFrontendFeeDustFinalized,
+            roundFrontendFeeDustProcessedCount,
+            roundFrontendFeeDustExpectedTotal,
+            roundFrontendFeeDustLastFrontend,
+            contentId,
+            roundId,
+            sortedFrontends,
+            STALE_REWARD_FINALIZATION_DELAY
+        );
 
         emit FrontendFeeDustBatchProcessed(contentId, roundId, processedCount, expectedTotal);
     }
@@ -1292,10 +1182,7 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
             roundParticipationRewardOwed[contentId][roundId] = totalReward;
         }
         roundParticipationRewardReserved[contentId][roundId] = reservedReward;
-        if (
-            roundParticipationRewardClaimableAt[contentId][roundId] == 0
-                || reservedReward > previousReservedReward
-        ) {
+        if (roundParticipationRewardClaimableAt[contentId][roundId] == 0 || reservedReward > previousReservedReward) {
             roundParticipationRewardClaimableAt[contentId][roundId] = uint48(block.timestamp);
         }
         fullyReserved = true;

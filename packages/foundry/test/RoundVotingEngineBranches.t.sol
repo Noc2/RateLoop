@@ -1,23 +1,23 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {Test} from "forge-std/Test.sol";
-import {Base64} from "@openzeppelin/contracts/utils/Base64.sol";
-import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
-import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import {ContentRegistry} from "../contracts/ContentRegistry.sol";
-import {RoundVotingEngine} from "../contracts/RoundVotingEngine.sol";
-import {ProtocolConfig} from "../contracts/ProtocolConfig.sol";
-import {RoundRewardDistributor} from "../contracts/RoundRewardDistributor.sol";
-import {RoundLib} from "../contracts/libraries/RoundLib.sol";
-import {RoundEngineReadHelpers} from "./helpers/RoundEngineReadHelpers.sol";
-import {HumanReputation} from "../contracts/HumanReputation.sol";
-import {ParticipationPool} from "../contracts/ParticipationPool.sol";
-import {FrontendRegistry} from "../contracts/FrontendRegistry.sol";
-import {RaterRegistry} from "../contracts/RaterRegistry.sol";
-import {MockVoterIdNFT} from "./mocks/MockVoterIdNFT.sol";
-import {VotingTestBase} from "./helpers/VotingTestHelpers.sol";
-import {MockCategoryRegistry} from "../contracts/mocks/MockCategoryRegistry.sol";
+import { Test } from "forge-std/Test.sol";
+import { Base64 } from "@openzeppelin/contracts/utils/Base64.sol";
+import { Strings } from "@openzeppelin/contracts/utils/Strings.sol";
+import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import { ContentRegistry } from "../contracts/ContentRegistry.sol";
+import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
+import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
+import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
+import { RoundLib } from "../contracts/libraries/RoundLib.sol";
+import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
+import { HumanReputation } from "../contracts/HumanReputation.sol";
+import { ParticipationPool } from "../contracts/ParticipationPool.sol";
+import { FrontendRegistry } from "../contracts/FrontendRegistry.sol";
+import { RaterRegistry } from "../contracts/RaterRegistry.sol";
+import { MockVoterIdNFT } from "./mocks/MockVoterIdNFT.sol";
+import { VotingTestBase } from "./helpers/VotingTestHelpers.sol";
+import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
 
 contract MockRaterDeclarationWeights {
     mapping(address => uint16) public tierMultiplierBps;
@@ -486,6 +486,8 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertEq(engine.commitRaterWeightBps(contentId, roundId, ck1), 11_500, "verified agent weight");
         assertEq(engine.commitRaterWeightBps(contentId, roundId, ck2), 10_000, "default weight");
+        assertTrue(engine.commitHadActiveAiDeclaration(contentId, roundId, ck1), "agent flag snapshotted");
+        assertFalse(engine.commitHadActiveAiDeclaration(contentId, roundId, ck2), "human flag snapshotted");
         assertEq(round.weightedUpPool, 8_600_000, "up pool includes verified-agent uplift");
         assertEq(round.weightedDownPool, 4e6, "down pool remains default");
     }
@@ -495,7 +497,9 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         MockRaterDeclarationWeights declarationWeights = _installRaterDeclarationWeights();
 
         vm.prank(owner);
-        raterRegistry.seedLegacySelfCredential(voter1, uint64(block.timestamp + 30 days), 12_000, 0, bytes32("seed"), keccak256("legacy"));
+        raterRegistry.seedLegacySelfCredential(
+            voter1, uint64(block.timestamp + 30 days), 12_000, 0, bytes32("seed"), keccak256("legacy")
+        );
         declarationWeights.setTierMultiplierBps(voter1, 11_500);
 
         uint256 contentId = _submitContent();
@@ -511,6 +515,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         _reveal(contentId, roundId, ck3, true, s3);
 
         assertEq(engine.commitRaterWeightBps(contentId, roundId, ck1), 12_500, "combined weight is capped");
+        assertTrue(engine.commitHadActiveAiDeclaration(contentId, roundId, ck1), "agent flag survives cap");
     }
 
     function test_PredictionLifecycle_SettlesWeightedMedianFinalRating() public {

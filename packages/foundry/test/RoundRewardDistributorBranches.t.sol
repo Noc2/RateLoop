@@ -382,7 +382,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         assertEq(lrepToken.balanceOf(voter1), 0);
     }
 
-    function test_ClaimReward_VerifiedAgentDeclarationDoesNotAnchorLaunchCredit() public {
+    function test_ClaimReward_AgentDeclarationSnapshotDoesNotAnchorLaunchCreditAfterRetirement() public {
         _verifyHuman(voter2, bytes32("anchor-voter-2"));
         MockRaterDeclarationWeightsForRewards declarationWeights = new MockRaterDeclarationWeightsForRewards();
         declarationWeights.setTierMultiplierBps(voter2, 11_500);
@@ -391,6 +391,11 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         config.setRaterDeclarationRegistry(address(declarationWeights));
 
         (uint256 contentId, uint256 roundId) = _setupSettledPredictionRound();
+        bytes32 voter2CommitKey =
+            keccak256(abi.encodePacked(voter2, votingEngine.voterCommitHash(contentId, roundId, voter2)));
+        assertTrue(votingEngine.commitHadActiveAiDeclaration(contentId, roundId, voter2CommitKey));
+
+        declarationWeights.setTierMultiplierBps(voter2, 10_000);
 
         vm.prank(voter1);
         rewardDistributor.claimReward(contentId, roundId);
