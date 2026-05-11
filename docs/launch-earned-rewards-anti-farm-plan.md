@@ -32,6 +32,7 @@ Initial governance defaults:
 | `minQualifyingScoreBps` | `7_000` |
 | `eligibilityRatingCount` | `5` |
 | `rewardingRatingCount` | `10` |
+| `earnedRaterCapSchedule` | `10 / 5 / 2.5 / 1.25 / 0.5 LREP` |
 | `requireNoPendingCleanup` | `true` |
 
 A prediction creates a qualifying launch credit only when:
@@ -58,8 +59,19 @@ Credits that arrive before the diversity gate is satisfied are not back-paid.
 They count toward eligibility, and future qualifying credits pay the normal
 per-credit slice once all gates are satisfied.
 
+Earned-rater caps start at `10 LREP` for the first `100,000` eligible raters,
+then step down to `5`, `2.5`, `1.25`, and `0.5 LREP` at the existing count
+thresholds. With the `25M LREP` earned-rater allocation, this supports about
+`12.6M` fully paid earned-rater recipients before the pool exhausts.
+
 All policy values must be timelock-governance updateable so the network can
 start permissive and become stricter if farming pressure appears.
+
+Negative invariant: an AI rater declaration, including `A1Verified`, is not a
+verified-human anchor. Verified agents can receive bounded reward-weight
+treatment through `RaterDeclarationRegistry`, but the earned launch pool only
+counts active, non-legacy human self credentials from `RaterRegistry` as
+anchors.
 
 ## Contract Implementation
 

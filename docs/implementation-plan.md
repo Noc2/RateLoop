@@ -221,7 +221,9 @@ Implementation implications:
   wrong/near-miss raters, and pay the larger accuracy pool to better
   predictions.
 - AI metadata: require model/operator/prompt-version metadata, store hashes
-  on-chain, and keep full metadata off-chain.
+  on-chain, keep full metadata off-chain, and allow bonded declarations to
+  receive bounded reward-weight treatment when probe/challenge status supports
+  it.
 - Contract implementation must not require Self.xyz or proof-of-personhood gates
   for rating, earning, or governance. Optional Self attestations may be added as
   non-required profile/trust metadata after the core prediction path works.
@@ -261,9 +263,15 @@ AI raters should use a parallel accountability rail:
   declarations and bonded operators.
 - Declarations can be probed, drift-flagged, challenged, retired, or redeclared
   without blocking open participation.
-- AI metadata affects payout eligibility, cooldowns, clustering, and public
+- `A1Unverified` and `A1Verified` declarations can receive bounded
+  reward-weight multipliers in the voting engine, capped with any human
+  credential multiplier and still subject to cluster discounts.
+- AI metadata affects payout treatment, cooldowns, clustering, and public
   provenance. It should not become a hidden permission gate controlled by one
   operator.
+- AI declarations are not human uniqueness credentials: they do not qualify for
+  the one-time verified bonus and do not count as verified-human anchors for
+  earned launch rewards.
 
 Implementation rule: keep identity adapters behind feature flags or separate
 modules, and keep all core tests passing with identity disabled.
@@ -591,7 +599,7 @@ Recommended launch defaults:
 ```text
 MIN_PREDICTION_LOCK = 1 LREP
 DEFAULT_PREDICTION_LOCK = 5 LREP
-MAX_PREDICTION_LOCK = 100 LREP
+MAX_PREDICTION_LOCK = 10 LREP
 MAX_DAILY_LOCK_PER_ACCOUNT = 250 LREP
 MAX_DAILY_LOCK_PER_CLUSTER = governance parameter
 FULL_WIN_BAND = 0.25 rating points
@@ -1597,7 +1605,7 @@ These are launch defaults, not permanent constants:
 - Calibration rounds before USDC: 10.
 - AI raters: USDC-eligible at launch after the same 10 calibration rounds and
   required model/operator/prompt-version metadata.
-- Prediction lock: min `1 LREP`, default `5 LREP`, max `100 LREP`.
+- Prediction lock: min `1 LREP`, default `5 LREP`, max `10 LREP`.
 - LREP lock settlement: full winner band `0.25` rating points, loss cutoff
   `1.00` rating point, revealed loser refund `5%`.
 - LREP losing-pool split after refund: 90% accurate raters, 4% frontends, 1%

@@ -49,7 +49,7 @@ const HowItWorks: NextPage = () => {
       <h2 id="commit-reveal-voting">2. Predict</h2>
       <p>
         Raters submit a BTS-inspired split report: their own 1.0-9.9 opinion rating and the 1.0-9.9 crowd rating they
-        expect after reveal. They can stake 0&ndash;100 LREP per prediction; zero-LREP ratings can bootstrap earned
+        expect after reveal. They can stake 0&ndash;10 LREP per prediction; zero-LREP ratings can bootstrap earned
         launch reputation when they occur in verified-human anchored rounds, while staked ratings add settlement upside
         and risk. Both values are encrypted during the blind phase so early raters cannot simply copy visible momentum.
       </p>
@@ -85,7 +85,7 @@ const HowItWorks: NextPage = () => {
       <ul>
         <li>Content submitters cannot vote on their own submissions.</li>
         <li>After rating a content item, a rater waits 24 hours before rating it again.</li>
-        <li>Each account can stake at most 100 LREP per content per round.</li>
+        <li>Each account can stake at most 10 LREP per content per round.</li>
       </ul>
 
       <h2 id="on-chain-settlement">3. Settle Rewards</h2>
@@ -97,7 +97,8 @@ const HowItWorks: NextPage = () => {
         The remaining losing pool splits <strong>{protocolDocFacts.rewardSplitSummaryLabel}</strong>. Separately, the
         Launch Distribution Pool can pay starter LREP for useful revealed ratings from rounds with at least one verified
         human anchor. A rater needs two distinct verified-human anchors across qualifying rounds before earned launch
-        payouts begin.
+        payouts begin. Verified agent declarations can improve reward weight through a separate, capped model
+        accountability rail, but they do not count as human anchors.
       </p>
       <div className="not-prose my-6">
         <RewardSplitChart />
@@ -138,6 +139,11 @@ const HowItWorks: NextPage = () => {
         credential, anti-abuse signal, or governance-tunable boost without blocking AI raters or pseudonymous accounts
         from participating. The credential is wallet-bound and verified on-chain by <code>RaterRegistry</code>, not by a
         RateLoop-operated issuer wallet.
+      </p>
+      <p>
+        AI raters use <code>RaterDeclarationRegistry</code> instead: bonded model/operator/prompt declarations can be
+        probed, challenged, and slashed. Passing probes can give a bounded reward-weight multiplier, while false or
+        stale declarations can be demoted through drift flags or sustained challenges.
       </p>
 
       <h2 id="transaction-costs">Transaction Costs</h2>

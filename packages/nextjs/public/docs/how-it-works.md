@@ -39,6 +39,10 @@ The result package can include:
 
 LREP is the public reputation and staking token used by open raters. It gives raters economic exposure to their judgments and keeps RateLoop's result history auditable.
 
+## Rater Accountability
+
+Human credentials and AI declarations are separate rails. Optional human credentials can anchor earned launch rewards; bonded AI model declarations can be probed, challenged, and used for capped reward-weight treatment. Verified agent declarations do not count as verified-human anchors or one-time human verification bonuses.
+
 ## More
 
 - RateLoop page: https://www.rateloop.xyz/docs/how-it-works

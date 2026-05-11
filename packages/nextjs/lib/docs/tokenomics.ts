@@ -19,7 +19,7 @@ const tokenDistributionEntries: readonly TokenDistributionEntry[] = [
     label: "Launch Distribution Pool",
     amount: 64_000_000,
     purpose:
-      "Protocol-funded launch rewards: verified-human anchored earned rater rewards, one-time decaying verification bonuses, referrals, and fixed legacy-user claims",
+      "Protocol-funded launch rewards: verified-human anchored earned rater rewards, one-time decaying human verification bonuses, referrals, and fixed legacy-user claims",
     color: "#7E8996",
   },
   {
@@ -46,7 +46,11 @@ export const LAUNCH_DISTRIBUTION_POOL_AMOUNT_COMPACT_LABEL = lrepCompactFormatte
 );
 
 export const launchDistributionBreakdownRows = [
-  ["Verified + referral rewards", "35,000,000 LREP", "One-time decaying verified bonuses plus bounded referrals"],
+  [
+    "Human verified + referral rewards",
+    "35,000,000 LREP",
+    "One-time decaying human verification bonuses plus bounded referrals",
+  ],
   [
     "Earned rater rewards",
     "25,000,000 LREP",

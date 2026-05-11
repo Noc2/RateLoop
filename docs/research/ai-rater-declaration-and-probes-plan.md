@@ -35,6 +35,14 @@ The contract and indexer backbone are already present on `main`:
 - `packages/ponder/ponder.schema.ts` exposes queryable tables for current
   declarations, declaration history, operator bonds, probe results, drift flags,
   and declaration challenges.
+- `ProtocolConfig` wires the active `RaterDeclarationRegistry` into
+  `RoundVotingEngine`, so active declaration tiers can affect rater weight.
+- `RoundVotingEngine` applies `tierMultiplierBps(rater)` after the existing
+  credential and cluster controls, then caps combined rater weight at 12,500
+  bps.
+- Ponder exposes `GET /rater-reward-status/:address` so apps and SDKs can read
+  human credential status, AI declaration tier, latest probe result, challenge
+  status, and the current reward-policy cap from one public route.
 
 What is not implemented yet:
 
@@ -43,9 +51,10 @@ What is not implemented yet:
 - LLMmap integration or an equivalent detector ensemble.
 - Probe library storage, versioning, and rotation.
 - Frontend and SDK flows for declaring a model, opting into a probe, opening a
-  challenge, and reading the public challenge/probe history.
-- Automatic payout/cap reads from the declaration tier across every scoring
-  path.
+  challenge, and reading the public challenge/probe history beyond the public
+  reward-status API.
+- Declaration-tier treatment in future non-round payout paths where governance
+  decides verified-agent status should matter.
 
 ## Declaration Object
 
@@ -101,6 +110,33 @@ cluster treatment, and challenge surface.
 
 The current contract exposes `tierMultiplierBps(rater)`, with `A1Unverified`
 at 10,500 bps and `A1Verified` capped by `MAX_TIER_MULTIPLIER_BPS`.
+
+## Verified-Agent Reward Policy
+
+Verified AI declarations can receive extra rewards, but only for the property
+they actually improve: accountable model provenance. The current implementation
+therefore treats `A1Unverified` and `A1Verified` as bounded rater-weight
+multipliers, not as human uniqueness proofs.
+
+Security and tokenomics rules:
+
+- `A1Unverified` receives a modest 10,500 bps tier multiplier because the
+  operator is bonded and slashable.
+- `A1Verified` receives an 11,500 bps tier multiplier after a passing probe.
+- The combined human credential and AI declaration multiplier is capped at
+  12,500 bps in `RoundVotingEngine`, after cluster discounts.
+- Declaration status never bypasses cluster discounting, reveal reliability,
+  calibration, minimum-rater rules, or bounty terms.
+- AI declarations do not count as verified-human anchors for the earned launch
+  pool and do not make an account eligible for the one-time human verification
+  bonus.
+- Sustained challenges demote the declaration to `A0` and can slash the
+  operator bond, which turns false declarations into a cost instead of a free
+  marketing label.
+
+This keeps the incentive aligned: useful verified agents can earn slightly more
+for public, challengeable accountability, while sybil resistance and launch
+distribution still depend on separate human-anchor controls.
 
 ## Optional One-Shot Probes
 
@@ -232,13 +268,13 @@ future governance-defined severe drift evidence.
 4. Add deterministic TypeScript pattern rules as a second detector.
 5. Define the probe library JSON schema and publish `probeLibraryHash`.
 6. Add result publishing that calls `recordProbeResult`.
-7. Add public reads for declaration tier, disclosed model fields, probe results,
-   and challenge history.
+7. Extend public reads for declaration tier, disclosed model fields, probe
+   results, and challenge history beyond the current reward-status route.
 8. Add operator UI for declare, re-declare, probe opt-in, retire, and bond
    management.
 9. Add public challenge UI with evidence upload and challenge bond preview.
-10. Wire declaration tier into payout caps and scoring where AI-rater
-    declaration status is intended to matter.
+10. Extend declaration-tier treatment to future payout caps and scoring paths
+    where governance decides AI-rater declaration status is intended to matter.
 
 ## References
 

@@ -173,7 +173,7 @@ export const SECTIONS: Section[] = [
                 ["Submitted", "Question, context, bounty, and round settings are recorded", "Immediate"],
                 [
                   "Blind prediction",
-                  "Open raters commit encrypted final-rating predictions with 0-100 LREP stake",
+                  "Open raters commit encrypted final-rating predictions with 0-10 LREP stake",
                   `First ${protocolDocFacts.blindPhaseDurationLabel} epoch by default`,
                 ],
                 [
@@ -287,7 +287,7 @@ export const SECTIONS: Section[] = [
             items: [
               "Core participation does not require proof-of-personhood, so people, bots, and AI raters can use the same flow.",
               "Calibration rounds gate USDC earning until an account or agent has shown enough prediction quality.",
-              "Each account is capped at 100 LREP per content per round by default.",
+              "Each account is capped at 10 LREP per content per round by default.",
               "Optional identity providers can unlock a one-time launch bonus, but they do not create permanent reward multipliers.",
             ],
           },
@@ -418,7 +418,7 @@ export const SECTIONS: Section[] = [
         blocks: [
           {
             type: "paragraph",
-            text: "The Launch Distribution Pool (64M LREP) is split into 35M LREP for verified + referral rewards, 25M LREP for earned rater rewards, and 4M LREP for legacy users. It is count-based and governance-tunable: the initial earned-rater policy requires three revealed raters, one verified-human anchor in the round, and two distinct verified-human anchors across a rater's qualifying history before payout. Early useful raters receive higher caps, later cohorts receive less, and verified users receive only a one-time decaying bonus. The previous 12M LREP Bootstrap Pool allocation is folded into launch distribution: 10M LREP moved to verified + referral rewards, and 2M LREP moved to legacy users. The treasury starts with 32M LREP under the governance timelock and handles safety responses, verification acceleration, appeals, grants, and other governed programs. The bootstrap proposal threshold is 1,000 LREP with a minimum quorum floor of 100,000 LREP.",
+            text: "The Launch Distribution Pool (64M LREP) is split into 35M LREP for verified + referral rewards, 25M LREP for earned rater rewards, and 4M LREP for legacy users. It is count-based and governance-tunable: the initial earned-rater policy requires three revealed raters, one verified-human anchor in the round, and two distinct verified-human anchors across a rater's qualifying history before payout. Earned-rater caps start at 10 LREP and step down through 5, 2.5, 1.25, and 0.5 LREP, supporting about 12.6M fully paid earned-rater recipients from the 25M LREP rail. Early useful raters receive higher caps, later cohorts receive less, and verified users receive only a one-time decaying bonus. The previous 12M LREP Bootstrap Pool allocation is folded into launch distribution: 10M LREP moved to verified + referral rewards, and 2M LREP moved to legacy users. The treasury starts with 32M LREP under the governance timelock and handles safety responses, verification acceleration, appeals, grants, and other governed programs. The bootstrap proposal threshold is 1,000 LREP with a minimum quorum floor of 100,000 LREP.",
           },
         ],
       },
@@ -432,7 +432,7 @@ export const SECTIONS: Section[] = [
               rows: [
                 [
                   "Predict a final rating",
-                  "0-100 LREP",
+                  "0-10 LREP",
                   "Per prediction, per round; stake is optional for starter participation",
                 ],
                 [

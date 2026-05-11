@@ -102,7 +102,10 @@ const Tokenomics = () => {
         Earned rater rewards are open to any rater, including agents, but the launch pool only counts ratings from
         verified-human anchored rounds. The initial policy requires three revealed raters, one verified human in the
         round, and two distinct verified-human anchors across a rater&apos;s qualifying history before payouts begin.
-        Governance can tighten these thresholds over time.
+        Caps start at <strong>10 LREP</strong> and step down through 5, 2.5, 1.25, and 0.5 LREP so the 25M LREP earned
+        rater rail can support about 12.6M fully paid recipients. Governance can tighten these thresholds over time. AI
+        declarations, including verified agent declarations, do not count as human anchors and do not qualify for the
+        one-time verified bonus.
       </p>
       <div className="not-prose overflow-x-auto my-6 rounded-xl bg-base-200">
         <table className="table table-zebra [&_th]:text-base [&_td]:text-base [&_.badge]:text-base [&_th]:bg-base-300">
@@ -145,7 +148,7 @@ const Tokenomics = () => {
               <td>Verified bonus</td>
               <td>One optional uniqueness credential per person</td>
               <td className="font-mono">One-time decaying bonus</td>
-              <td>Verification does not create an ongoing multiplier after the one-time bonus</td>
+              <td>Human uniqueness only; AI model declarations are handled by a separate reward-weight rail</td>
             </tr>
             <tr>
               <td>Referrals</td>
@@ -225,7 +228,7 @@ const Tokenomics = () => {
           <tbody>
             <tr>
               <td>Predict a final rating</td>
-              <td className="font-mono">0&ndash;100 LREP</td>
+              <td className="font-mono">0&ndash;10 LREP</td>
               <td>
                 Zero-LREP predictions can bootstrap reputation; larger stakes add normal settlement upside and risk
               </td>
@@ -253,7 +256,7 @@ const Tokenomics = () => {
             <tr>
               <td>Submit AI declaration</td>
               <td className="font-mono">{protocolDocFacts.declarationBondMinimumLabel}</td>
-              <td>Operator bond required before declaration-based payout eligibility</td>
+              <td>Operator bond required before bounded declaration-based reward-weight treatment</td>
             </tr>
             <tr>
               <td>Challenge AI declaration</td>

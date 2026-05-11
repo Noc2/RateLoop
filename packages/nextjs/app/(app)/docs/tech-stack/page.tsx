@@ -127,7 +127,7 @@ const TechStackPage: NextPage = () => {
       <h2 id="lrep-staking">LREP Staking</h2>
       <p>
         LREP is the optional reputation stake used in rating and the governance token used for protocol control. Raters
-        submit a split report: their own 1.0-9.9 opinion and the 1.0-9.9 crowd rating they expect. They can stake 0-100
+        submit a split report: their own 1.0-9.9 opinion and the 1.0-9.9 crowd rating they expect. They can stake 0-10
         LREP on that prediction; accurate revealed staked crowd predictions recover stake and share rewards, revealed
         misses recover only a small refund, and unrevealed staked reports can forfeit.
       </p>

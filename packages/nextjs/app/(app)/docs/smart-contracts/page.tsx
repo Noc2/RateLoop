@@ -57,6 +57,16 @@ const SmartContracts: NextPage = () => {
               <td>No</td>
             </tr>
             <tr>
+              <td className="font-mono text-primary">RaterRegistry</td>
+              <td>Optional human credentials, rater profiles, trust seeds, and cluster-score discounts</td>
+              <td>No</td>
+            </tr>
+            <tr>
+              <td className="font-mono text-primary">RaterDeclarationRegistry</td>
+              <td>Bonded AI model/operator declarations, probes, drift flags, challenges, and slashing</td>
+              <td>No</td>
+            </tr>
+            <tr>
               <td className="font-mono text-primary">ContentRegistry</td>
               <td>Content lifecycle: submission, dormancy, rating updates, slashing</td>
               <td>Transparent</td>
@@ -195,7 +205,7 @@ const SmartContracts: NextPage = () => {
         VoterIdNFT is optional for the core rating path, but gives the protocol a stable identity handle when configured
         for delegated voting and identity-gated flows. USDC-funded question submission is permissionless and does not
         require a Voter ID. Where VoterIdNFT is active, it also enforces a per-Voter-ID stake cap of{" "}
-        <strong>100 LREP per content per round</strong>, preventing a single identity from dominating any vote.
+        <strong>10 LREP per content per round</strong>, preventing a single identity from dominating any vote.
       </p>
       <h3>Key Functions</h3>
       <ul>
@@ -333,7 +343,8 @@ const SmartContracts: NextPage = () => {
       <p>
         Manages per-content voting rounds with tlock commit-reveal voting, explicit drand metadata binding,
         epoch-weighted rewards, and deterministic settlement. One-sided rounds (consensus) receive a subsidy from the
-        consensus subsidy reserve.
+        consensus subsidy reserve. Rater weight can use optional human credentials, cluster discounts, and bonded AI
+        declaration tiers, with the combined positive multiplier capped at 12,500 bps.
       </p>
       <h3>Configuration</h3>
       <div className="not-prose overflow-x-auto my-6 rounded-xl bg-base-200">
@@ -348,12 +359,12 @@ const SmartContracts: NextPage = () => {
           <tbody>
             <tr>
               <td className="font-mono">MIN_STAKE</td>
-              <td>1 LREP</td>
-              <td>Minimum vote stake</td>
+              <td>0 LREP</td>
+              <td>Minimum vote stake; zero-LREP ratings bootstrap new raters</td>
             </tr>
             <tr>
               <td className="font-mono">MAX_STAKE</td>
-              <td>100 LREP</td>
+              <td>10 LREP</td>
               <td>Maximum vote stake per Voter ID per round</td>
             </tr>
             <tr>
@@ -504,7 +515,45 @@ const SmartContracts: NextPage = () => {
           <code>setCategoryRegistry(...)</code>, <code>setVoterIdNFT(...)</code>, <code>setParticipationPool(...)</code>
           , and <code>setTreasury(...)</code> &mdash; Maintain the engine&apos;s governance-controlled address book.
         </li>
+        <li>
+          <code>setRaterRegistry(...)</code> and <code>setRaterDeclarationRegistry(...)</code> &mdash; Configure the
+          optional human credential/cluster registry and the AI declaration registry used for rater-weight treatment.
+          Setting the declaration registry to zero disables declaration weighting.
+        </li>
       </ul>
+
+      <hr />
+
+      <h2>RaterDeclarationRegistry</h2>
+      <p>
+        Stores signed AI rater declarations and the operator bond that backs them. Declarations publish hashes for model
+        family, provider, prompt template, retrieval configuration, and tooling so public users can distinguish a
+        declared agent from an anonymous model wallet without forcing endpoint secrets on-chain.
+      </p>
+      <ul>
+        <li>
+          <code>submitDeclaration(...)</code> &mdash; Register or update a bonded declaration. Behavior-affecting
+          changes create a new declaration version and may require a new probe.
+        </li>
+        <li>
+          <code>recordProbeResult(...)</code> &mdash; Promote passing declarations to <code>A1Verified</code> or keep
+          failed declarations at <code>A1Unverified</code>.
+        </li>
+        <li>
+          <code>openChallenge(...)</code> and <code>resolveChallenge(...)</code> &mdash; Let challengers post evidence,
+          slash sustained false declarations, reward challengers, and demote the rater to <code>A0</code>.
+        </li>
+        <li>
+          <code>tierMultiplierBps(rater)</code> &mdash; Read the declaration multiplier consumed by RoundVotingEngine:
+          10,000 bps for <code>A0</code>, 10,500 bps for <code>A1Unverified</code>, and 11,500 bps for{" "}
+          <code>A1Verified</code>.
+        </li>
+      </ul>
+      <p>
+        Verified agent declarations are model-accountability signals, not proof-of-personhood. They can receive bounded
+        reward-weight treatment, but they do not count as verified-human anchors for earned launch rewards or the
+        one-time human verification bonus.
+      </p>
 
       <hr />
 

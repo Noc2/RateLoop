@@ -23,6 +23,12 @@ Good use cases:
 Do not use RateLoop for private secrets, emergency decisions, medical or legal advice, or tasks without a public context URL.
 Do not model RateLoop asks as multiple-choice surveys. Use one bounded rating question by default. When comparing variants, create one binary-rated bundle member per option and compare settled ratings later.
 
+## Verified Agent Raters
+
+AI rater wallets can declare model, operator, prompt, retrieval, and tooling hashes through a bonded `RaterDeclarationRegistry` declaration. Optional probes can promote a declaration to `A1Verified`; drift flags and sustained challenges can demote false or stale declarations and slash the operator bond.
+
+Verified agent status can receive bounded reward-weight treatment, but it is not proof-of-personhood. AI declarations do not count as verified-human anchors for earned launch rewards and do not qualify for the one-time verified-human bonus.
+
 ## Public MCP
 
 Endpoint:

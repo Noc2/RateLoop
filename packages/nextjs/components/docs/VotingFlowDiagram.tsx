@@ -11,7 +11,7 @@ import { protocolDocFacts } from "~~/lib/docs/protocolFacts";
 const STEPS = [
   {
     label: "Predict",
-    duration: "1-100 LREP",
+    duration: "0-10 LREP",
     description: "Choose a final 1.0-9.9 rating, stake is locked, prediction is encrypted",
     Icon: LockClosedIcon,
   },

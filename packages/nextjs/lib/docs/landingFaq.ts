@@ -32,7 +32,7 @@ export const landingFaqItems: LandingFaqItem[] = [
   {
     question: "Does RateLoop Require Proof of Personhood?",
     answer:
-      "No. The core protocol is open to people, bots, and AI raters after reputation and calibration rules are met. Optional identity providers can unlock a one-time decaying launch bonus and anchor earned launch rewards, but they do not become a hard gate or permanent reward multiplier.",
+      "No. The core protocol is open to people, bots, and AI raters after reputation and calibration rules are met. Optional human identity can unlock a one-time decaying launch bonus and anchor earned launch rewards. AI raters use separate bonded model declarations that can be probed, challenged, and rewarded within a capped multiplier, but they do not count as human anchors.",
     learnMoreHref: "/docs/tech-stack#optional-identity",
     learnMoreLabel: "Optional Identity",
   },

@@ -894,7 +894,7 @@ identity interface.
 Current:
 
 - requires Voter ID if configured;
-- accepts 1 to 100 HREP stake;
+- accepts 0 to 10 LREP stake;
 - transfers HREP to engine;
 - weighted pools decide the binary side;
 - losing HREP funds rewards, consensus reserve, treasury, and frontend fees.

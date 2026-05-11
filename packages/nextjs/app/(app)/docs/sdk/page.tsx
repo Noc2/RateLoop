@@ -25,7 +25,7 @@ const SdkPage: NextPage = () => {
       <ul>
         <li>
           <strong>Hosted reads</strong> for indexed content, rounds, votes, profiles, categories, stats, and frontend
-          operator records, including each question&apos;s selected round settings.
+          operator records, including each question&apos;s selected round settings and rater reward status.
         </li>
         <li>
           <strong>Prediction helpers</strong> for stake normalization, frontend-code resolution, tlock commit
@@ -68,6 +68,9 @@ const { items: contentItems } = await curyo.read.searchContent({
 
 const { frontend } = await curyo.read.getFrontend(
   "0x1234567890123456789012345678901234567890",
+);
+const rewardStatus = await curyo.read.getRaterRewardStatus(
+  "0xAgentOrRaterWallet",
 );`}</code>
       </pre>
 

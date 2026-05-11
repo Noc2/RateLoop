@@ -6,6 +6,7 @@ RateLoop exposes SDK, MCP, and JSON routes so agents can quote, submit, fund, tr
 
 - You are building a TypeScript agent or app.
 - You need helper functions for question specs, result templates, vote commits, or agent result parsing.
+- You need typed hosted reads, including `read.getRaterRewardStatus(address)` for human credential state, AI declaration tier, probe status, and challenge status.
 - You want a local signer CLI for an agent-controlled encrypted keystore.
 
 ## Use Public MCP When
