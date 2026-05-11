@@ -23782,6 +23782,58 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "MIN_EARNED_REWARD_DISTINCT_ANCHOR_ROUNDS",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint16",
+              internalType: "uint16",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "MIN_EARNED_REWARD_DISTINCT_VERIFIED_ANCHORS",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint16",
+              internalType: "uint16",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "MIN_EARNED_REWARD_VERIFIED_HUMANS",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint16",
+              internalType: "uint16",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "MIN_EARNED_REWARD_VOTERS",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint16",
+              internalType: "uint16",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "MIN_QUALIFYING_SCORE_BPS",
           inputs: [],
           outputs: [
@@ -23961,6 +24013,35 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "earnedRewardCreditRecorded",
+          inputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "eligibleRaterCount",
           inputs: [],
           outputs: [
@@ -23981,6 +24062,54 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "address",
               internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "launchRewardPolicy",
+          inputs: [],
+          outputs: [
+            {
+              name: "minQualifyingScoreBps",
+              type: "uint16",
+              internalType: "uint16",
+            },
+            {
+              name: "minVoters",
+              type: "uint16",
+              internalType: "uint16",
+            },
+            {
+              name: "minVerifiedHumans",
+              type: "uint16",
+              internalType: "uint16",
+            },
+            {
+              name: "minDistinctVerifiedAnchors",
+              type: "uint16",
+              internalType: "uint16",
+            },
+            {
+              name: "minDistinctAnchorRounds",
+              type: "uint16",
+              internalType: "uint16",
+            },
+            {
+              name: "eligibilityRatingCount",
+              type: "uint32",
+              internalType: "uint32",
+            },
+            {
+              name: "rewardingRatingCount",
+              type: "uint32",
+              internalType: "uint32",
+            },
+            {
+              name: "requireNoPendingCleanup",
+              type: "bool",
+              internalType: "bool",
             },
           ],
           stateMutability: "view",
@@ -24090,6 +24219,68 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "raterAnchorRoundSeen",
+          inputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "raterDistinctAnchorRoundCount",
+          inputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "uint32",
+              internalType: "uint32",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "raterDistinctVerifiedAnchorCount",
+          inputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "uint32",
+              internalType: "uint32",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "raterLaunchCap",
           inputs: [
             {
@@ -24141,6 +24332,30 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "raterVerifiedAnchorSeen",
+          inputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "recordEarnedRaterReward",
           inputs: [
             {
@@ -24149,9 +24364,39 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "address",
             },
             {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "commitKey",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
               name: "scoreBps",
               type: "uint16",
               internalType: "uint16",
+            },
+            {
+              name: "revealedRaterCount",
+              type: "uint16",
+              internalType: "uint16",
+            },
+            {
+              name: "noPendingCleanup",
+              type: "bool",
+              internalType: "bool",
+            },
+            {
+              name: "verifiedAnchorIds",
+              type: "bytes32[]",
+              internalType: "bytes32[]",
             },
           ],
           outputs: [
@@ -24273,6 +24518,61 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "newGovernance",
               type: "address",
               internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "setLaunchRewardPolicy",
+          inputs: [
+            {
+              name: "policy",
+              type: "tuple",
+              internalType: "struct ILaunchDistributionPool.LaunchRewardPolicy",
+              components: [
+                {
+                  name: "minQualifyingScoreBps",
+                  type: "uint16",
+                  internalType: "uint16",
+                },
+                {
+                  name: "minVoters",
+                  type: "uint16",
+                  internalType: "uint16",
+                },
+                {
+                  name: "minVerifiedHumans",
+                  type: "uint16",
+                  internalType: "uint16",
+                },
+                {
+                  name: "minDistinctVerifiedAnchors",
+                  type: "uint16",
+                  internalType: "uint16",
+                },
+                {
+                  name: "minDistinctAnchorRounds",
+                  type: "uint16",
+                  internalType: "uint16",
+                },
+                {
+                  name: "eligibilityRatingCount",
+                  type: "uint32",
+                  internalType: "uint32",
+                },
+                {
+                  name: "rewardingRatingCount",
+                  type: "uint32",
+                  internalType: "uint32",
+                },
+                {
+                  name: "requireNoPendingCleanup",
+                  type: "bool",
+                  internalType: "bool",
+                },
+              ],
             },
           ],
           outputs: [],
@@ -24435,6 +24735,24 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "address",
             },
             {
+              name: "contentId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "commitKey",
+              type: "bytes32",
+              indexed: false,
+              internalType: "bytes32",
+            },
+            {
               name: "amount",
               type: "uint256",
               indexed: false,
@@ -24447,7 +24765,25 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "uint16",
             },
             {
+              name: "qualifyingRatingCount",
+              type: "uint32",
+              indexed: false,
+              internalType: "uint32",
+            },
+            {
               name: "rewardedRatingCount",
+              type: "uint32",
+              indexed: false,
+              internalType: "uint32",
+            },
+            {
+              name: "distinctVerifiedAnchorCount",
+              type: "uint32",
+              indexed: false,
+              internalType: "uint32",
+            },
+            {
+              name: "distinctAnchorRoundCount",
               type: "uint32",
               indexed: false,
               internalType: "uint32",
@@ -24464,6 +24800,61 @@ const deployedContracts: GenericContractsDeclaration = {
               type: "address",
               indexed: true,
               internalType: "address",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "LaunchRewardPolicyUpdated",
+          inputs: [
+            {
+              name: "policy",
+              type: "tuple",
+              indexed: false,
+              internalType: "struct ILaunchDistributionPool.LaunchRewardPolicy",
+              components: [
+                {
+                  name: "minQualifyingScoreBps",
+                  type: "uint16",
+                  internalType: "uint16",
+                },
+                {
+                  name: "minVoters",
+                  type: "uint16",
+                  internalType: "uint16",
+                },
+                {
+                  name: "minVerifiedHumans",
+                  type: "uint16",
+                  internalType: "uint16",
+                },
+                {
+                  name: "minDistinctVerifiedAnchors",
+                  type: "uint16",
+                  internalType: "uint16",
+                },
+                {
+                  name: "minDistinctAnchorRounds",
+                  type: "uint16",
+                  internalType: "uint16",
+                },
+                {
+                  name: "eligibilityRatingCount",
+                  type: "uint32",
+                  internalType: "uint32",
+                },
+                {
+                  name: "rewardingRatingCount",
+                  type: "uint32",
+                  internalType: "uint32",
+                },
+                {
+                  name: "requireNoPendingCleanup",
+                  type: "bool",
+                  internalType: "bool",
+                },
+              ],
             },
           ],
           anonymous: false,
@@ -24652,6 +25043,11 @@ const deployedContracts: GenericContractsDeclaration = {
         {
           type: "error",
           name: "InvalidAmount",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "InvalidPolicy",
           inputs: [],
         },
         {
