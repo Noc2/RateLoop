@@ -1,23 +1,23 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import { Test } from "forge-std/Test.sol";
-import { Base64 } from "@openzeppelin/contracts/utils/Base64.sol";
-import { Strings } from "@openzeppelin/contracts/utils/Strings.sol";
-import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import { ContentRegistry } from "../contracts/ContentRegistry.sol";
-import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
-import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
-import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
-import { RoundLib } from "../contracts/libraries/RoundLib.sol";
-import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
-import { HumanReputation } from "../contracts/HumanReputation.sol";
-import { ParticipationPool } from "../contracts/ParticipationPool.sol";
-import { FrontendRegistry } from "../contracts/FrontendRegistry.sol";
-import { RaterRegistry } from "../contracts/RaterRegistry.sol";
-import { MockVoterIdNFT } from "./mocks/MockVoterIdNFT.sol";
-import { VotingTestBase } from "./helpers/VotingTestHelpers.sol";
-import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
+import {Test} from "forge-std/Test.sol";
+import {Base64} from "@openzeppelin/contracts/utils/Base64.sol";
+import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {ContentRegistry} from "../contracts/ContentRegistry.sol";
+import {RoundVotingEngine} from "../contracts/RoundVotingEngine.sol";
+import {ProtocolConfig} from "../contracts/ProtocolConfig.sol";
+import {RoundRewardDistributor} from "../contracts/RoundRewardDistributor.sol";
+import {RoundLib} from "../contracts/libraries/RoundLib.sol";
+import {RoundEngineReadHelpers} from "./helpers/RoundEngineReadHelpers.sol";
+import {HumanReputation} from "../contracts/HumanReputation.sol";
+import {ParticipationPool} from "../contracts/ParticipationPool.sol";
+import {FrontendRegistry} from "../contracts/FrontendRegistry.sol";
+import {RaterRegistry} from "../contracts/RaterRegistry.sol";
+import {MockVoterIdNFT} from "./mocks/MockVoterIdNFT.sol";
+import {VotingTestBase} from "./helpers/VotingTestHelpers.sol";
+import {MockCategoryRegistry} from "../contracts/mocks/MockCategoryRegistry.sol";
 
 // =========================================================================
 // TEST CONTRACT
@@ -215,7 +215,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     }
 
     function _installRaterRegistry() internal returns (RaterRegistry raterRegistry) {
-        raterRegistry = new RaterRegistry(owner, owner);
+        raterRegistry = new RaterRegistry(owner, owner, address(0x1234), bytes32("rate-loop"), 1, 365 days);
         vm.prank(owner);
         ProtocolConfig(protocolConfigAddress).setRaterRegistry(address(raterRegistry));
     }

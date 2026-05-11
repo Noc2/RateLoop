@@ -3,9 +3,11 @@ pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
 import {RaterRegistry} from "../contracts/RaterRegistry.sol";
+import {MockWorldIDRouter} from "../contracts/mocks/MockWorldIDRouter.sol";
 
 contract RaterRegistryTest is Test {
     RaterRegistry internal registry;
+    MockWorldIDRouter internal worldIdRouter;
 
     address internal admin = address(0xA11CE);
     address internal governance = address(0xB0B);
@@ -15,29 +17,37 @@ contract RaterRegistryTest is Test {
 
     bytes32 internal constant METADATA_HASH = keccak256("metadata");
     bytes32 internal constant NULLIFIER_HASH = keccak256("self-nullifier");
-    bytes32 internal constant SELF_SCOPE = keccak256("curyo-human-v1");
+    bytes32 internal constant SELF_SCOPE = keccak256("rateloop-human-v1");
     bytes32 internal constant EVIDENCE_HASH = keccak256("evidence");
     bytes32 internal constant ALGORITHM_HASH = keccak256("cluster-algorithm-v1");
     bytes32 internal constant MODEL_VERSION_HASH = keccak256("cluster-model-v1.0.0");
     bytes32 internal constant SCORE_ROOT = keccak256("cluster-score-root");
     bytes32 internal constant RESOLUTION_HASH = keccak256("cluster-challenge-resolution");
     bytes32 internal constant SEED_ROOT = keccak256("legacy-seed-root");
+    uint256 internal constant WORLD_ID_EXTERNAL_NULLIFIER_HASH = 12_345;
+    uint64 internal constant WORLD_ID_CREDENTIAL_TTL = 365 days;
 
     function setUp() public {
-        registry = new RaterRegistry(admin, governance);
+        worldIdRouter = new MockWorldIDRouter();
+        registry = new RaterRegistry(
+            admin,
+            governance,
+            address(worldIdRouter),
+            SELF_SCOPE,
+            WORLD_ID_EXTERNAL_NULLIFIER_HASH,
+            WORLD_ID_CREDENTIAL_TTL
+        );
     }
 
     function test_ConstructorGrantsGovernanceAndAdminRoles() public view {
         assertTrue(registry.hasRole(registry.DEFAULT_ADMIN_ROLE(), governance));
         assertTrue(registry.hasRole(registry.ADMIN_ROLE(), governance));
-        assertTrue(registry.hasRole(registry.SELF_ATTESTOR_ROLE(), governance));
         assertTrue(registry.hasRole(registry.SEEDER_ROLE(), governance));
         assertTrue(registry.hasRole(registry.SCORER_ROLE(), governance));
         assertTrue(registry.hasRole(registry.CLUSTER_CHALLENGE_RESOLVER_ROLE(), governance));
 
         assertFalse(registry.hasRole(registry.DEFAULT_ADMIN_ROLE(), admin));
         assertTrue(registry.hasRole(registry.ADMIN_ROLE(), admin));
-        assertTrue(registry.hasRole(registry.SELF_ATTESTOR_ROLE(), admin));
         assertTrue(registry.hasRole(registry.SEEDER_ROLE(), admin));
         assertTrue(registry.hasRole(registry.SCORER_ROLE(), admin));
         assertTrue(registry.hasRole(registry.CLUSTER_CHALLENGE_RESOLVER_ROLE(), admin));
@@ -53,11 +63,12 @@ contract RaterRegistryTest is Test {
         assertEq(profile.updatedAt, uint64(block.timestamp));
     }
 
-    function test_AttestSelfCredentialStoresUniquenessCredential() public {
-        uint64 expiresAt = uint64(block.timestamp + 90 days);
+    function test_AttestSelfCredentialWithProofStoresUniquenessCredentialForSender() public {
+        uint256[8] memory proof;
+        uint256 nullifierHash = uint256(NULLIFIER_HASH);
 
-        vm.prank(admin);
-        registry.attestSelfCredential(rater, NULLIFIER_HASH, SELF_SCOPE, expiresAt, 11_000, EVIDENCE_HASH);
+        vm.prank(rater);
+        registry.attestSelfCredentialWithProof(1, nullifierHash, proof);
 
         RaterRegistry.SelfCredential memory credential = registry.getSelfCredential(rater);
         assertTrue(credential.verified);
@@ -66,32 +77,65 @@ contract RaterRegistryTest is Test {
         assertEq(credential.nullifierHash, NULLIFIER_HASH);
         assertEq(credential.scope, SELF_SCOPE);
         assertEq(credential.verifiedAt, uint64(block.timestamp));
-        assertEq(credential.expiresAt, expiresAt);
-        assertEq(credential.multiplierBps, 11_000);
-        assertEq(credential.evidenceHash, EVIDENCE_HASH);
+        assertEq(credential.expiresAt, uint64(block.timestamp + WORLD_ID_CREDENTIAL_TTL));
+        assertEq(credential.multiplierBps, registry.WORLD_ID_MULTIPLIER_BPS());
+        assertTrue(credential.evidenceHash != bytes32(0));
         assertEq(registry.selfNullifierOwner(NULLIFIER_HASH), rater);
         assertTrue(registry.hasActiveSelfCredential(rater));
-        assertEq(registry.credentialMultiplierBps(rater), 11_000);
+        assertEq(registry.credentialMultiplierBps(rater), registry.BASE_MULTIPLIER_BPS());
     }
 
-    function test_AttestSelfCredentialRejectsReusedNullifier() public {
-        uint64 expiresAt = uint64(block.timestamp + 90 days);
+    function test_AttestSelfCredentialWithProofUsesMsgSenderSignal() public {
+        uint256[8] memory proof;
+        uint256 expectedSignalHash = registry.worldIdSignalHash(rater);
 
-        vm.prank(admin);
-        registry.attestSelfCredential(rater, NULLIFIER_HASH, SELF_SCOPE, expiresAt, 11_000, EVIDENCE_HASH);
+        assertEq(expectedSignalHash, registry.hashToField(abi.encodePacked(rater)));
+        worldIdRouter.setExpectedSignalHash(expectedSignalHash);
+        worldIdRouter.setExpectedExternalNullifierHash(WORLD_ID_EXTERNAL_NULLIFIER_HASH);
 
-        vm.prank(admin);
+        vm.prank(rater);
+        registry.attestSelfCredentialWithProof(1, uint256(NULLIFIER_HASH), proof);
+    }
+
+    function test_AttestSelfCredentialWithProofRejectsReusedNullifier() public {
+        uint256[8] memory proof;
+
+        vm.prank(rater);
+        registry.attestSelfCredentialWithProof(1, uint256(NULLIFIER_HASH), proof);
+
+        vm.prank(otherRater);
         vm.expectRevert(RaterRegistry.NullifierAlreadyAssigned.selector);
-        registry.attestSelfCredential(otherRater, NULLIFIER_HASH, SELF_SCOPE, expiresAt, 11_000, EVIDENCE_HASH);
+        registry.attestSelfCredentialWithProof(1, uint256(NULLIFIER_HASH), proof);
+    }
+
+    function test_AttestSelfCredentialWithProofRejectsIdentitySwitchWhileActive() public {
+        uint256[8] memory proof;
+
+        vm.startPrank(rater);
+        registry.attestSelfCredentialWithProof(1, uint256(NULLIFIER_HASH), proof);
+
+        vm.expectRevert(RaterRegistry.InvalidCredential.selector);
+        registry.attestSelfCredentialWithProof(1, uint256(keccak256("other-nullifier")), proof);
+        vm.stopPrank();
+    }
+
+    function test_AttestSelfCredentialWithProofBubblesInvalidProof() public {
+        uint256[8] memory proof;
+        worldIdRouter.setShouldReject(true);
+
+        vm.prank(rater);
+        vm.expectRevert(MockWorldIDRouter.InvalidMockWorldIdProof.selector);
+        registry.attestSelfCredentialWithProof(1, uint256(NULLIFIER_HASH), proof);
     }
 
     function test_RevokeSelfCredentialClearsNullifierOwner() public {
-        uint64 expiresAt = uint64(block.timestamp + 90 days);
+        uint256[8] memory proof;
 
-        vm.startPrank(admin);
-        registry.attestSelfCredential(rater, NULLIFIER_HASH, SELF_SCOPE, expiresAt, 11_000, EVIDENCE_HASH);
+        vm.prank(rater);
+        registry.attestSelfCredentialWithProof(1, uint256(NULLIFIER_HASH), proof);
+
+        vm.prank(admin);
         registry.revokeSelfCredential(rater);
-        vm.stopPrank();
 
         RaterRegistry.SelfCredential memory credential = registry.getSelfCredential(rater);
         assertTrue(credential.revoked);

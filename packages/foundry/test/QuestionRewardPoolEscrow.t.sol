@@ -1,24 +1,24 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import { VotingTestBase } from "./helpers/VotingTestHelpers.sol";
-import { ContentRegistry } from "../contracts/ContentRegistry.sol";
-import { HumanReputation } from "../contracts/HumanReputation.sol";
-import { FrontendRegistry } from "../contracts/FrontendRegistry.sol";
-import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
-import { MockERC20 } from "../contracts/mocks/MockERC20.sol";
-import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
-import { QuestionRewardPoolEscrow } from "../contracts/QuestionRewardPoolEscrow.sol";
-import { RaterRegistry } from "../contracts/RaterRegistry.sol";
-import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
-import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
-import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
-import { RoundLib } from "../contracts/libraries/RoundLib.sol";
-import { TlockVoteLib } from "../contracts/libraries/TlockVoteLib.sol";
-import { Eip3009Authorization, X402QuestionSubmitter } from "../contracts/X402QuestionSubmitter.sol";
-import { MockQuestionRewardPoolEscrow } from "./mocks/MockQuestionRewardPoolEscrow.sol";
-import { MockVoterIdNFT } from "./mocks/MockVoterIdNFT.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {VotingTestBase} from "./helpers/VotingTestHelpers.sol";
+import {ContentRegistry} from "../contracts/ContentRegistry.sol";
+import {HumanReputation} from "../contracts/HumanReputation.sol";
+import {FrontendRegistry} from "../contracts/FrontendRegistry.sol";
+import {MockCategoryRegistry} from "../contracts/mocks/MockCategoryRegistry.sol";
+import {MockERC20} from "../contracts/mocks/MockERC20.sol";
+import {ProtocolConfig} from "../contracts/ProtocolConfig.sol";
+import {QuestionRewardPoolEscrow} from "../contracts/QuestionRewardPoolEscrow.sol";
+import {RaterRegistry} from "../contracts/RaterRegistry.sol";
+import {RoundRewardDistributor} from "../contracts/RoundRewardDistributor.sol";
+import {RoundVotingEngine} from "../contracts/RoundVotingEngine.sol";
+import {RoundEngineReadHelpers} from "./helpers/RoundEngineReadHelpers.sol";
+import {RoundLib} from "../contracts/libraries/RoundLib.sol";
+import {TlockVoteLib} from "../contracts/libraries/TlockVoteLib.sol";
+import {Eip3009Authorization, X402QuestionSubmitter} from "../contracts/X402QuestionSubmitter.sol";
+import {MockQuestionRewardPoolEscrow} from "./mocks/MockQuestionRewardPoolEscrow.sol";
+import {MockVoterIdNFT} from "./mocks/MockVoterIdNFT.sol";
 
 contract QuestionRewardPoolEscrowTest is VotingTestBase {
     HumanReputation public hrepToken;
@@ -248,7 +248,8 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     }
 
     function testQuestionRewardsUseClusterAdjustedUnitsForBinaryRounds() public {
-        RaterRegistry raterRegistry = new RaterRegistry(owner, owner);
+        RaterRegistry raterRegistry =
+            new RaterRegistry(owner, owner, address(0x1234), bytes32("rate-loop"), 1, 365 days);
         vm.prank(owner);
         protocolConfig.setRaterRegistry(address(raterRegistry));
         vm.prank(owner);
@@ -656,7 +657,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
     function testRefundableRewardPoolAmountUsesQuestionSelectedVoterCap() public {
         RoundLib.RoundConfig memory roundConfig =
-            RoundLib.RoundConfig({ epochDuration: 10 minutes, maxDuration: 1 hours, minVoters: 3, maxVoters: 4 });
+            RoundLib.RoundConfig({epochDuration: 10 minutes, maxDuration: 1 hours, minVoters: 3, maxVoters: 4});
         uint256 contentId = _submitQuestionWithRoundConfig("https://example.com/small-cap.jpg", roundConfig);
 
         uint256 rewardPoolId = _createRewardPool(contentId, 4, 3, 1);
@@ -667,7 +668,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
     function testRewardPoolRejectsRequiredVotersAboveQuestionCap() public {
         RoundLib.RoundConfig memory roundConfig =
-            RoundLib.RoundConfig({ epochDuration: 10 minutes, maxDuration: 1 hours, minVoters: 3, maxVoters: 4 });
+            RoundLib.RoundConfig({epochDuration: 10 minutes, maxDuration: 1 hours, minVoters: 3, maxVoters: 4});
         uint256 contentId = _submitQuestionWithRoundConfig("https://example.com/impossible-cap.jpg", roundConfig);
 
         vm.startPrank(funder);
@@ -683,7 +684,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             address(registry),
             abi.encodeWithSelector(ContentRegistry.getContentRoundConfig.selector, contentId),
             abi.encode(
-                RoundLib.RoundConfig({ epochDuration: 10 minutes, maxDuration: 1 hours, minVoters: 3, maxVoters: 201 })
+                RoundLib.RoundConfig({epochDuration: 10 minutes, maxDuration: 1 hours, minVoters: 3, maxVoters: 201})
             )
         );
 

@@ -5,10 +5,12 @@ import {Test} from "forge-std/Test.sol";
 import {LaunchDistributionPool} from "../contracts/LaunchDistributionPool.sol";
 import {LoopReputation} from "../contracts/LoopReputation.sol";
 import {RaterRegistry} from "../contracts/RaterRegistry.sol";
+import {MockWorldIDRouter} from "../contracts/mocks/MockWorldIDRouter.sol";
 
 contract LaunchDistributionPoolTest is Test {
     LoopReputation internal lrep;
     RaterRegistry internal registry;
+    MockWorldIDRouter internal worldIdRouter;
     LaunchDistributionPool internal pool;
 
     address internal alice = address(0xA11CE);
@@ -17,7 +19,9 @@ contract LaunchDistributionPoolTest is Test {
 
     function setUp() public {
         lrep = new LoopReputation(address(this), address(this));
-        registry = new RaterRegistry(address(this), address(this));
+        worldIdRouter = new MockWorldIDRouter();
+        registry =
+            new RaterRegistry(address(this), address(this), address(worldIdRouter), bytes32("rate-loop"), 1, 365 days);
         pool = new LaunchDistributionPool(address(lrep), address(registry), address(this));
         pool.setAuthorizedCaller(address(this), true);
 
@@ -113,8 +117,8 @@ contract LaunchDistributionPoolTest is Test {
     }
 
     function _verify(address account, bytes32 nullifier) internal {
-        registry.attestSelfCredential(
-            account, nullifier, bytes32("rate-loop"), uint64(block.timestamp + 365 days), 10_000, bytes32(0)
-        );
+        uint256[8] memory proof;
+        vm.prank(account);
+        registry.attestSelfCredentialWithProof(1, uint256(nullifier), proof);
     }
 }

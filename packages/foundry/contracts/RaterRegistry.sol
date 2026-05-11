@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
+import {IWorldIDRouter} from "./interfaces/IWorldIDRouter.sol";
 
 /// @title RaterRegistry
 /// @notice Optional rater metadata, human credentials, trust anchors, and scorer labels for RateLoop.
@@ -9,15 +10,16 @@ import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 ///      must keep working when no profile, credential, or trust signal exists.
 contract RaterRegistry is AccessControl {
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
-    bytes32 public constant SELF_ATTESTOR_ROLE = keccak256("SELF_ATTESTOR_ROLE");
     bytes32 public constant SEEDER_ROLE = keccak256("SEEDER_ROLE");
     bytes32 public constant SCORER_ROLE = keccak256("SCORER_ROLE");
     bytes32 public constant CLUSTER_CHALLENGE_RESOLVER_ROLE = keccak256("CLUSTER_CHALLENGE_RESOLVER_ROLE");
 
     uint16 public constant BASE_MULTIPLIER_BPS = 10_000;
+    uint16 public constant WORLD_ID_MULTIPLIER_BPS = 10_000;
     uint16 public constant MAX_CREDENTIAL_MULTIPLIER_BPS = 12_000;
     uint16 public constant MAX_CLUSTER_DISCOUNT_BPS = 10_000;
     uint16 public constant MAX_TRUST_BOOST_BPS = 12_000;
+    uint256 public constant WORLD_ID_GROUP_ID = 1;
 
     enum RaterType {
         Unknown,
@@ -125,6 +127,10 @@ contract RaterRegistry is AccessControl {
     mapping(bytes32 => TrustAttestation) private _trustAttestations;
 
     uint256 public nextClusterScoreChallengeId = 1;
+    IWorldIDRouter public immutable worldIdRouter;
+    bytes32 public immutable worldIdScope;
+    uint256 public immutable worldIdExternalNullifierHash;
+    uint64 public immutable worldIdCredentialTtl;
 
     event RaterProfileUpdated(
         address indexed rater, RaterType indexed raterType, bytes32 indexed metadataHash, uint64 updatedAt
@@ -194,19 +200,34 @@ contract RaterRegistry is AccessControl {
     error InvalidChallenge();
     error NullifierAlreadyAssigned();
 
-    constructor(address admin, address governance) {
-        if (admin == address(0) || governance == address(0)) revert InvalidAddress();
+    constructor(
+        address admin,
+        address governance,
+        address _worldIdRouter,
+        bytes32 _worldIdScope,
+        uint256 _worldIdExternalNullifierHash,
+        uint64 _worldIdCredentialTtl
+    ) {
+        if (admin == address(0) || governance == address(0) || _worldIdRouter == address(0)) {
+            revert InvalidAddress();
+        }
+        if (_worldIdScope == bytes32(0) || _worldIdExternalNullifierHash == 0 || _worldIdCredentialTtl == 0) {
+            revert InvalidCredential();
+        }
+
+        worldIdRouter = IWorldIDRouter(_worldIdRouter);
+        worldIdScope = _worldIdScope;
+        worldIdExternalNullifierHash = _worldIdExternalNullifierHash;
+        worldIdCredentialTtl = _worldIdCredentialTtl;
 
         _grantRole(DEFAULT_ADMIN_ROLE, governance);
         _grantRole(ADMIN_ROLE, governance);
-        _grantRole(SELF_ATTESTOR_ROLE, governance);
         _grantRole(SEEDER_ROLE, governance);
         _grantRole(SCORER_ROLE, governance);
         _grantRole(CLUSTER_CHALLENGE_RESOLVER_ROLE, governance);
 
         if (admin != governance) {
             _grantRole(ADMIN_ROLE, admin);
-            _grantRole(SELF_ATTESTOR_ROLE, admin);
             _grantRole(SEEDER_ROLE, admin);
             _grantRole(SCORER_ROLE, admin);
             _grantRole(CLUSTER_CHALLENGE_RESOLVER_ROLE, admin);
@@ -222,17 +243,36 @@ contract RaterRegistry is AccessControl {
         emit RaterProfileUpdated(msg.sender, raterType, metadataHash, uint64(block.timestamp));
     }
 
-    /// @notice Attach a fresh Self-backed uniqueness credential to a rater.
-    /// @dev One active account may hold a given nullifier hash under the configured scope.
-    function attestSelfCredential(
-        address rater,
-        bytes32 nullifierHash,
-        bytes32 scope,
-        uint64 expiresAt,
-        uint16 multiplierBps,
-        bytes32 evidenceHash
-    ) external onlyRole(SELF_ATTESTOR_ROLE) {
-        _attestSelfCredential(rater, nullifierHash, scope, expiresAt, multiplierBps, evidenceHash, false);
+    /// @notice Attach a fresh World ID uniqueness credential to the calling wallet.
+    /// @dev The World ID signal is derived from msg.sender, so wallet ownership is proven by the transaction sender.
+    function attestSelfCredentialWithProof(uint256 root, uint256 nullifierHash, uint256[8] calldata proof) external {
+        if (nullifierHash == 0) revert InvalidCredential();
+
+        bytes32 storedNullifier = bytes32(nullifierHash);
+        SelfCredential storage previous = _selfCredentials[msg.sender];
+        if (
+            previous.verified && !previous.legacy && !previous.revoked && previous.expiresAt > block.timestamp
+                && previous.nullifierHash != storedNullifier
+        ) {
+            revert InvalidCredential();
+        }
+
+        address currentOwner = selfNullifierOwner[storedNullifier];
+        if (currentOwner != address(0) && currentOwner != msg.sender) revert NullifierAlreadyAssigned();
+
+        uint256 signalHash = worldIdSignalHash(msg.sender);
+        worldIdRouter.verifyProof(
+            root, WORLD_ID_GROUP_ID, signalHash, nullifierHash, worldIdExternalNullifierHash, proof
+        );
+
+        uint256 expiresAt = block.timestamp + worldIdCredentialTtl;
+        if (expiresAt > type(uint64).max) revert InvalidCredential();
+
+        bytes32 evidenceHash =
+            keccak256(abi.encodePacked("world-id-v3", block.chainid, address(worldIdRouter), root, signalHash));
+        _attestSelfCredential(
+            msg.sender, storedNullifier, worldIdScope, uint64(expiresAt), WORLD_ID_MULTIPLIER_BPS, evidenceHash, false
+        );
     }
 
     /// @notice Seed a previous Curyo Self-verified account as a temporary graph anchor.
@@ -250,7 +290,7 @@ contract RaterRegistry is AccessControl {
         _setTrustSeed(rater, sunsetAt, trustBudgetBps, seedRoot);
     }
 
-    function revokeSelfCredential(address rater) external onlyRole(SELF_ATTESTOR_ROLE) {
+    function revokeSelfCredential(address rater) external onlyRole(SEEDER_ROLE) {
         if (rater == address(0)) revert InvalidAddress();
         SelfCredential storage credential = _selfCredentials[rater];
         if (!credential.verified || credential.revoked) revert InvalidCredential();
@@ -441,6 +481,14 @@ contract RaterRegistry is AccessControl {
         returns (bytes32)
     {
         return keccak256(abi.encode(rater, scorerEpoch, algorithmHash, modelVersionHash));
+    }
+
+    function worldIdSignalHash(address rater) public pure returns (uint256) {
+        return hashToField(abi.encodePacked(rater));
+    }
+
+    function hashToField(bytes memory value) public pure returns (uint256) {
+        return uint256(keccak256(value)) >> 8;
     }
 
     function hasActiveSelfCredential(address rater) public view returns (bool) {

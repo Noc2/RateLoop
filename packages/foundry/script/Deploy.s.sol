@@ -1,29 +1,30 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import { ScaffoldETHDeploy } from "./DeployHelpers.s.sol";
-import { console } from "forge-std/console.sol";
-import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
-import { TimelockController } from "@openzeppelin/contracts/governance/TimelockController.sol";
-import { IVotes } from "@openzeppelin/contracts/governance/utils/IVotes.sol";
-import { LoopReputation } from "../contracts/LoopReputation.sol";
-import { ContentRegistry } from "../contracts/ContentRegistry.sol";
-import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
-import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
-import { FrontendRegistry } from "../contracts/FrontendRegistry.sol";
-import { CategoryRegistry } from "../contracts/CategoryRegistry.sol";
-import { FeedbackBonusEscrow } from "../contracts/FeedbackBonusEscrow.sol";
-import { ProfileRegistry } from "../contracts/ProfileRegistry.sol";
-import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
-import { QuestionRewardPoolEscrow } from "../contracts/QuestionRewardPoolEscrow.sol";
-import { RaterDeclarationRegistry } from "../contracts/RaterDeclarationRegistry.sol";
-import { RaterRegistry } from "../contracts/RaterRegistry.sol";
-import { X402QuestionSubmitter } from "../contracts/X402QuestionSubmitter.sol";
-import { VoterIdNFT } from "../contracts/VoterIdNFT.sol";
-import { ParticipationPool } from "../contracts/ParticipationPool.sol";
-import { LaunchDistributionPool } from "../contracts/LaunchDistributionPool.sol";
-import { MockERC20 } from "../contracts/mocks/MockERC20.sol";
-import { CuryoGovernor } from "../contracts/governance/CuryoGovernor.sol";
+import {ScaffoldETHDeploy} from "./DeployHelpers.s.sol";
+import {console} from "forge-std/console.sol";
+import {TransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
+import {TimelockController} from "@openzeppelin/contracts/governance/TimelockController.sol";
+import {IVotes} from "@openzeppelin/contracts/governance/utils/IVotes.sol";
+import {LoopReputation} from "../contracts/LoopReputation.sol";
+import {ContentRegistry} from "../contracts/ContentRegistry.sol";
+import {RoundVotingEngine} from "../contracts/RoundVotingEngine.sol";
+import {RoundRewardDistributor} from "../contracts/RoundRewardDistributor.sol";
+import {FrontendRegistry} from "../contracts/FrontendRegistry.sol";
+import {CategoryRegistry} from "../contracts/CategoryRegistry.sol";
+import {FeedbackBonusEscrow} from "../contracts/FeedbackBonusEscrow.sol";
+import {ProfileRegistry} from "../contracts/ProfileRegistry.sol";
+import {ProtocolConfig} from "../contracts/ProtocolConfig.sol";
+import {QuestionRewardPoolEscrow} from "../contracts/QuestionRewardPoolEscrow.sol";
+import {RaterDeclarationRegistry} from "../contracts/RaterDeclarationRegistry.sol";
+import {RaterRegistry} from "../contracts/RaterRegistry.sol";
+import {X402QuestionSubmitter} from "../contracts/X402QuestionSubmitter.sol";
+import {VoterIdNFT} from "../contracts/VoterIdNFT.sol";
+import {ParticipationPool} from "../contracts/ParticipationPool.sol";
+import {LaunchDistributionPool} from "../contracts/LaunchDistributionPool.sol";
+import {MockERC20} from "../contracts/mocks/MockERC20.sol";
+import {MockWorldIDRouter} from "../contracts/mocks/MockWorldIDRouter.sol";
+import {CuryoGovernor} from "../contracts/governance/CuryoGovernor.sol";
 
 /// @notice Fresh RateLoop deployment script for World Chain.
 /// @dev Optional identity can be wired later by governance; no required proof-of-personhood faucet is deployed here.
@@ -43,6 +44,11 @@ contract DeployRateLoop is ScaffoldETHDeploy {
 
     address internal constant WORLD_CHAIN_MAINNET_USDC = 0x79A02482A880bCE3F13e09Da970dC34db4CD24d1;
     address internal constant WORLD_CHAIN_SEPOLIA_USDC = 0x66145f38cBAC35Ca6F1Dfb4914dF98F1614aeA88;
+    address internal constant WORLD_CHAIN_MAINNET_WORLD_ID_ROUTER = 0x17B354dD2595411ff79041f930e491A4Df39A278;
+    address internal constant WORLD_CHAIN_SEPOLIA_WORLD_ID_ROUTER = 0x57f928158C3EE7CDad1e4D8642503c4D0201f611;
+    uint64 internal constant WORLD_ID_CREDENTIAL_TTL_SECONDS = 365 days;
+    string internal constant DEFAULT_WORLD_ID_ACTION = "rateloop-human-credential-v1";
+    string internal constant LOCAL_WORLD_ID_APP_ID = "app_staging_rateloop_local";
 
     function _preBroadcastChecks() internal view override {
         if (block.chainid != 31337 && block.chainid != 480 && block.chainid != 4801) {
@@ -143,8 +149,26 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         );
         RoundRewardDistributor rewardDistributor = RoundRewardDistributor(address(rewardDistributorProxy));
 
+        MockWorldIDRouter localWorldIdRouter;
+        address worldIdRouterAddress = _resolveWorldIdRouterAddress(isLocalDev);
+        if (isLocalDev) {
+            localWorldIdRouter = new MockWorldIDRouter();
+            worldIdRouterAddress = address(localWorldIdRouter);
+            console.log("MockWorldIDRouter deployed at:", worldIdRouterAddress);
+        }
+        string memory worldIdAction = _resolveWorldIdAction();
+        uint256 worldIdExternalNullifierHash = _resolveWorldIdExternalNullifierHash(isLocalDev, worldIdAction);
+        bytes32 worldIdScope = keccak256(bytes(worldIdAction));
+
         CategoryRegistry categoryRegistry = new CategoryRegistry(deployer, governance);
-        RaterRegistry raterRegistry = new RaterRegistry(deployer, governance);
+        RaterRegistry raterRegistry = new RaterRegistry(
+            deployer,
+            governance,
+            worldIdRouterAddress,
+            worldIdScope,
+            worldIdExternalNullifierHash,
+            WORLD_ID_CREDENTIAL_TTL_SECONDS
+        );
         RaterDeclarationRegistry raterDeclarationRegistry = new RaterDeclarationRegistry(
             deployer, governance, lrepToken, governance, MIN_AI_DECLARATION_BOND, AI_DECLARATION_CHALLENGE_BOND
         );
@@ -274,6 +298,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         deployments.push(Deployment("FeedbackBonusEscrow", address(feedbackBonusEscrowProxy)));
         deployments.push(Deployment("CategoryRegistry", address(categoryRegistry)));
         deployments.push(Deployment("RaterRegistry", address(raterRegistry)));
+        if (isLocalDev) deployments.push(Deployment("MockWorldIDRouter", address(localWorldIdRouter)));
         deployments.push(Deployment("RaterDeclarationRegistry", address(raterDeclarationRegistry)));
         deployments.push(Deployment("VoterIdNFT", address(optionalIdentity)));
         deployments.push(Deployment("ParticipationPool", address(participationPool)));
@@ -289,7 +314,6 @@ contract DeployRateLoop is ScaffoldETHDeploy {
             profileRegistry.renounceRole(profileRegistry.ADMIN_ROLE(), deployer);
             categoryRegistry.renounceRole(categoryRegistry.ADMIN_ROLE(), deployer);
             raterRegistry.renounceRole(raterRegistry.ADMIN_ROLE(), deployer);
-            raterRegistry.renounceRole(raterRegistry.SELF_ATTESTOR_ROLE(), deployer);
             raterRegistry.renounceRole(raterRegistry.SEEDER_ROLE(), deployer);
             raterRegistry.renounceRole(raterRegistry.SCORER_ROLE(), deployer);
             raterDeclarationRegistry.renounceRole(raterDeclarationRegistry.CONFIG_ROLE(), deployer);
@@ -319,6 +343,8 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         console.log("USDC token:", usdcTokenAddress);
         console.log("CategoryRegistry:", address(categoryRegistry));
         console.log("RaterRegistry:", address(raterRegistry));
+        console.log("World ID Router:", worldIdRouterAddress);
+        console.log("World ID External Nullifier Hash:", worldIdExternalNullifierHash);
         console.log("RaterDeclarationRegistry:", address(raterDeclarationRegistry));
         console.log("Optional identity NFT:", address(optionalIdentity));
         console.log("ParticipationPool:", address(participationPool));
@@ -330,6 +356,40 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         if (block.chainid == 480) return WORLD_CHAIN_MAINNET_USDC;
         if (block.chainid == 4801) return WORLD_CHAIN_SEPOLIA_USDC;
         revert UnsupportedWorldChain(block.chainid);
+    }
+
+    function _resolveWorldIdRouterAddress(bool isLocalDev) internal view returns (address) {
+        if (isLocalDev) return address(0);
+        if (block.chainid == 480) return WORLD_CHAIN_MAINNET_WORLD_ID_ROUTER;
+        if (block.chainid == 4801) return WORLD_CHAIN_SEPOLIA_WORLD_ID_ROUTER;
+        revert UnsupportedWorldChain(block.chainid);
+    }
+
+    function _resolveWorldIdAction() internal view returns (string memory) {
+        return vm.envOr("NEXT_PUBLIC_WORLD_ID_ACTION", DEFAULT_WORLD_ID_ACTION);
+    }
+
+    function _resolveWorldIdExternalNullifierHash(bool isLocalDev, string memory action)
+        internal
+        view
+        returns (uint256)
+    {
+        uint256 overrideHash = vm.envOr("WORLD_ID_EXTERNAL_NULLIFIER_HASH", uint256(0));
+        if (overrideHash != 0) return overrideHash;
+
+        string memory appId = isLocalDev
+            ? vm.envOr("NEXT_PUBLIC_WORLD_ID_APP_ID", LOCAL_WORLD_ID_APP_ID)
+            : vm.envString("NEXT_PUBLIC_WORLD_ID_APP_ID");
+        return _worldIdExternalNullifierHash(appId, action);
+    }
+
+    function _worldIdExternalNullifierHash(string memory appId, string memory action) internal pure returns (uint256) {
+        uint256 appIdHash = _hashToField(bytes(appId));
+        return _hashToField(abi.encodePacked(appIdHash, action));
+    }
+
+    function _hashToField(bytes memory value) internal pure returns (uint256) {
+        return uint256(keccak256(value)) >> 8;
     }
 
     function _buildQuorumExcludedHolders(
@@ -510,4 +570,4 @@ contract DeployRateLoop is ScaffoldETHDeploy {
 }
 
 /// @notice Main deployment entrypoint used by scaffold-eth/yarn deploy.
-contract DeployScript is DeployRateLoop { }
+contract DeployScript is DeployRateLoop {}
