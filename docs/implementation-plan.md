@@ -7,6 +7,11 @@ Planning date: 2026-05-07
 > earlier optional Self.xyz direction. Older Celo/Self references below are
 > retained as implementation history unless a later checklist item explicitly
 > says otherwise.
+>
+> 2026-05-11 update: World ID credential issuance is designed as direct
+> on-chain self-attestation. A wallet submits its own World ID proof to
+> `RaterRegistry`, the contract verifies it through the World ID Router, and no
+> RateLoop-operated hot wallet has authority to issue normal human credentials.
 
 ## Goal
 

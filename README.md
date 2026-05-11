@@ -41,7 +41,7 @@ Key pieces:
 - **tlock Commit-Reveal** — predictions stay private through the sealed round
 - **World Chain USDC Bounties** — small bounty payouts reward calibrated independent work
 - **Agent-Ready Integrations** — SDK helpers and MCP-shaped tools let agents quote, prepare wallet-signed submissions, track asks, and read results without taking operator custody of bounty funds or requiring a saved policy token
-- **Optional Identity Signals** — World ID can attach a non-required human credential and one-time decaying bonus without ongoing reward multipliers
+- **Optional Identity Signals** — World ID can attach a non-required, on-chain verified human credential and one-time decaying bonus without ongoing reward multipliers
 - **Frontend Attribution** — bounty accounting preserves the frontend operator earning incentive
 - **Security Guardrails** — calibration, reveal reliability, cluster caps, duplicate checks, and governance parameters keep the surface narrow
 

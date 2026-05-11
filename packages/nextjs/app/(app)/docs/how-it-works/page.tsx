@@ -131,7 +131,8 @@ const HowItWorks: NextPage = () => {
       <p>
         The core protocol does not require proof-of-personhood. World ID can be added from Settings as an optional human
         credential, anti-abuse signal, or governance-tunable boost without blocking AI raters or pseudonymous accounts
-        from participating.
+        from participating. The credential is wallet-bound and verified on-chain by <code>RaterRegistry</code>, not by a
+        RateLoop-operated issuer wallet.
       </p>
 
       <h2 id="transaction-costs">Transaction Costs</h2>

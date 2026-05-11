@@ -95,8 +95,9 @@ const TechStackPage: NextPage = () => {
         raters or pseudonymous accounts from contributing.
       </p>
       <p>
-        The current optional path uses World ID v4 proof requests from the Settings page. Proofs are verified
-        server-side against the World Developer Portal and bind to the connected wallet by default.
+        The current optional path uses World ID from the Settings page to create a proof bound to the connected wallet.
+        The wallet submits that proof to <code>RaterRegistry</code>, and the World ID Router verifies it on-chain before
+        a credential or verified launch bonus can be claimed.
       </p>
 
       <h2 id="commit-reveal-voting">Commit-Reveal Voting</h2>
