@@ -595,7 +595,7 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         _requireNoPendingUnrevealedCleanup(contentId, roundId);
 
         if (!votingEngine.roundRbtsScored(contentId, roundId)) revert RoundNotSettled();
-        uint256 winningStake = votingEngine.roundRbtsRewardWeight(contentId, roundId);
+        uint256 winningStake = votingEngine.roundRbtsParticipationWeight(contentId, roundId);
         uint256 totalReward;
         bool fullyReserved;
         (totalReward, reservedReward, fullyReserved) =
@@ -645,9 +645,13 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         if (rateBps == 0) revert NoParticipationRate();
 
         bool rbtsRewardRound = votingEngine.roundRbtsScored(contentId, roundId);
-        uint256 effectiveStake = rbtsRewardRound
-            ? votingEngine.commitRbtsRewardWeight(contentId, roundId, commitKey)
-            : (commit.stakeAmount * RoundLib.epochWeightBps(commit.epochIndex)) / 10000;
+        uint256 effectiveStake;
+        if (rbtsRewardRound) {
+            if (commit.isUp != round.upWins) revert NotWinningSide();
+            effectiveStake = votingEngine.commitRbtsRewardWeight(contentId, roundId, commitKey);
+        } else {
+            effectiveStake = (commit.stakeAmount * RoundLib.epochWeightBps(commit.epochIndex)) / 10000;
+        }
         if (effectiveStake == 0 || (!rbtsRewardRound && commit.isUp != round.upWins)) revert NotWinningSide();
         uint256 reward = effectiveStake * rateBps / 10000;
         if (reward == 0) {
@@ -702,7 +706,7 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         _requireNoPendingUnrevealedCleanup(contentId, roundId);
 
         uint256 winnerCount = votingEngine.roundRbtsScored(contentId, roundId)
-            ? votingEngine.roundRbtsRewardClaimants(contentId, roundId)
+            ? votingEngine.roundRbtsParticipationClaimants(contentId, roundId)
             : (round.upWins ? round.upCount : round.downCount);
         bool fullyClaimed = roundParticipationRewardFullyClaimedCount[contentId][roundId] == winnerCount;
         bool stale = _participationRewardsStale(contentId, roundId, round);

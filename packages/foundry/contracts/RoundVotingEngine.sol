@@ -131,6 +131,8 @@ contract RoundVotingEngine is
     mapping(uint256 => mapping(uint256 => bool)) public roundRbtsScored;
     mapping(uint256 => mapping(uint256 => uint256)) public roundRbtsRewardWeight;
     mapping(uint256 => mapping(uint256 => uint256)) public roundRbtsRewardClaimants;
+    mapping(uint256 => mapping(uint256 => uint256)) public roundRbtsParticipationWeight;
+    mapping(uint256 => mapping(uint256 => uint256)) public roundRbtsParticipationClaimants;
     mapping(uint256 => mapping(uint256 => uint256)) public roundRbtsForfeitedPool;
     mapping(uint256 => mapping(uint256 => uint256)) public roundRbtsForfeitClaimants;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint16))) public commitPredictedUpBps;
@@ -817,7 +819,7 @@ contract RoundVotingEngine is
             upWins = round.upPool < round.downPool;
         }
 
-        (weightedWinningStake, losingPool) = _scoreRbtsRewards(contentId, roundId, round.revealedCount);
+        (weightedWinningStake, losingPool) = _scoreRbtsRewards(contentId, roundId, round.revealedCount, upWins);
         roundRbtsScored[contentId][roundId] = true;
 
         round.upWins = upWins;
@@ -855,7 +857,7 @@ contract RoundVotingEngine is
             contentId,
             roundId,
             _getRoundReferenceRatingBps(contentId, roundId),
-            weightedWinningStake,
+            roundRbtsParticipationWeight[contentId][roundId],
             round.upPool,
             round.downPool
         );
@@ -1192,7 +1194,7 @@ contract RoundVotingEngine is
         }
     }
 
-    function _scoreRbtsRewards(uint256 contentId, uint256 roundId, uint256 revealedCount)
+    function _scoreRbtsRewards(uint256 contentId, uint256 roundId, uint256 revealedCount, bool upWins)
         internal
         returns (uint256 rewardWeight, uint256 forfeitedPool)
     {
@@ -1222,6 +1224,8 @@ contract RoundVotingEngine is
         if (revealedIndex != revealedCount) revert NotEnoughVotes();
 
         uint256 rewardClaimants;
+        uint256 participationClaimants;
+        uint256 participationWeight;
         uint256 forfeitClaimants;
 
         if (scoreableCount < MIN_RBTS_PARTICIPANTS) {
@@ -1261,6 +1265,12 @@ contract RoundVotingEngine is
                 rewardWeight += scoreWeight;
                 forfeitedPool += forfeitedStake;
                 if (scoreWeight > 0) {
+                    if (commits[contentId][roundId][commitKey].isUp == upWins) {
+                        participationWeight += scoreWeight;
+                        unchecked {
+                            ++participationClaimants;
+                        }
+                    }
                     unchecked {
                         ++rewardClaimants;
                     }
@@ -1278,6 +1288,8 @@ contract RoundVotingEngine is
 
         roundRbtsRewardWeight[contentId][roundId] = rewardWeight;
         roundRbtsRewardClaimants[contentId][roundId] = rewardClaimants;
+        roundRbtsParticipationWeight[contentId][roundId] = participationWeight;
+        roundRbtsParticipationClaimants[contentId][roundId] = participationClaimants;
         roundRbtsForfeitedPool[contentId][roundId] = forfeitedPool;
         roundRbtsForfeitClaimants[contentId][roundId] = forfeitClaimants;
     }
