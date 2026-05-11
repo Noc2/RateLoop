@@ -53,6 +53,7 @@ contract RaterDeclarationRegistryTest is Test {
         assertEq(registry.minDeclarationBondLrep(), MIN_BOND);
         assertEq(registry.challengeBondLrep(), CHALLENGE_BOND);
         assertEq(registry.challengerRewardBps(), 5_000);
+        assertEq(registry.challengeResolutionWindow(), registry.DEFAULT_CHALLENGE_RESOLUTION_WINDOW());
         assertEq(registry.treasury(), treasury);
 
         assertTrue(registry.hasRole(registry.DEFAULT_ADMIN_ROLE(), governance));
@@ -102,6 +103,24 @@ contract RaterDeclarationRegistryTest is Test {
         assertEq(registry.minDeclarationBondLrep(), nextMinBond);
         assertEq(registry.challengeBondLrep(), nextChallengeBond);
         assertEq(registry.challengerRewardBps(), 4_000);
+    }
+
+    function test_SetChallengeResolutionWindowEnforcesBounds() public {
+        uint64 minWindow = registry.MIN_CHALLENGE_RESOLUTION_WINDOW();
+        uint64 maxWindow = registry.MAX_CHALLENGE_RESOLUTION_WINDOW();
+
+        vm.startPrank(admin);
+
+        vm.expectRevert(RaterDeclarationRegistry.InvalidConfig.selector);
+        registry.setChallengeResolutionWindow(minWindow - 1);
+
+        vm.expectRevert(RaterDeclarationRegistry.InvalidConfig.selector);
+        registry.setChallengeResolutionWindow(maxWindow + 1);
+
+        registry.setChallengeResolutionWindow(3 days);
+        vm.stopPrank();
+
+        assertEq(registry.challengeResolutionWindow(), 3 days);
     }
 
     function test_SubmitDeclarationLocksBondAndStartsProbeWindow() public {
@@ -359,6 +378,88 @@ contract RaterDeclarationRegistryTest is Test {
         vm.prank(rater);
         vm.expectRevert(RaterDeclarationRegistry.OpenChallenges.selector);
         registry.retireDeclaration();
+    }
+
+    function test_OpenChallengeRejectsDuplicateChallengeForSameDeclaration() public {
+        _submitDefaultDeclaration(false);
+
+        vm.prank(challenger);
+        registry.openChallenge(rater, EVIDENCE_HASH);
+
+        vm.prank(challenger);
+        vm.expectRevert(RaterDeclarationRegistry.OpenChallenges.selector);
+        registry.openChallenge(rater, keccak256("second-evidence"));
+    }
+
+    function test_OpenChallengeRequiresActiveDeclarationWindow() public {
+        RaterDeclarationRegistry.RaterDeclaration memory futureDeclaration = _declaration(1, 0, PROMPT_HASH);
+        futureDeclaration.effectiveEpoch = uint64(block.timestamp + 1 days);
+        bytes memory futureSignature = _signature(futureDeclaration);
+
+        vm.prank(rater);
+        registry.submitDeclaration(futureDeclaration, futureSignature, MIN_BOND, false);
+
+        vm.prank(challenger);
+        vm.expectRevert(RaterDeclarationRegistry.InvalidChallenge.selector);
+        registry.openChallenge(rater, EVIDENCE_HASH);
+
+        vm.warp(futureDeclaration.effectiveEpoch);
+        vm.prank(challenger);
+        uint256 challengeId = registry.openChallenge(rater, EVIDENCE_HASH);
+        assertEq(registry.getChallenge(challengeId).expiresAt, block.timestamp + registry.challengeResolutionWindow());
+    }
+
+    function test_ExpireChallengeAfterWindowClosesLocks() public {
+        _submitDefaultDeclaration(false);
+
+        vm.prank(challenger);
+        uint256 challengeId = registry.openChallenge(rater, EVIDENCE_HASH);
+        uint256 treasuryBefore = lrep.balanceOf(treasury);
+
+        vm.warp(registry.getChallenge(challengeId).expiresAt);
+        registry.expireChallenge(challengeId);
+
+        RaterDeclarationRegistry.Challenge memory challenge = registry.getChallenge(challengeId);
+        assertEq(uint256(challenge.status), uint256(RaterDeclarationRegistry.ChallengeStatus.Expired));
+        assertEq(lrep.balanceOf(treasury), treasuryBefore + CHALLENGE_BOND);
+        assertEq(registry.openOperatorChallenges(operator), 0);
+        assertEq(registry.openDeclarationChallenges(_declarationKey(rater, 1)), 0);
+        assertEq(registry.tierMultiplierBps(rater), 10_500);
+
+        RaterDeclarationRegistry.RaterDeclaration memory nextDeclaration = _declaration(2, 1, PROMPT_HASH);
+        bytes memory nextSignature = _signature(nextDeclaration);
+        vm.prank(rater);
+        registry.submitDeclaration(nextDeclaration, nextSignature, 0, false);
+        assertEq(registry.getDeclaration(rater).declaration.version, 2);
+    }
+
+    function test_ExpireChallengeBeforeWindowReverts() public {
+        _submitDefaultDeclaration(false);
+
+        vm.prank(challenger);
+        uint256 challengeId = registry.openChallenge(rater, EVIDENCE_HASH);
+
+        vm.expectRevert(RaterDeclarationRegistry.ChallengeResolutionPending.selector);
+        registry.expireChallenge(challengeId);
+    }
+
+    function test_ExpiredChallengeCannotBeResolvedAgain() public {
+        _submitDefaultDeclaration(false);
+
+        vm.prank(challenger);
+        uint256 challengeId = registry.openChallenge(rater, EVIDENCE_HASH);
+
+        vm.warp(registry.getChallenge(challengeId).expiresAt);
+
+        vm.prank(admin);
+        vm.expectRevert(RaterDeclarationRegistry.ChallengeResolutionExpired.selector);
+        registry.resolveChallenge(challengeId, false, 0, RESOLUTION_HASH);
+
+        registry.expireChallenge(challengeId);
+
+        vm.prank(admin);
+        vm.expectRevert(RaterDeclarationRegistry.InvalidChallenge.selector);
+        registry.resolveChallenge(challengeId, false, 0, RESOLUTION_HASH);
     }
 
     function test_HasActiveAiDeclarationClearsAfterRetirement() public {

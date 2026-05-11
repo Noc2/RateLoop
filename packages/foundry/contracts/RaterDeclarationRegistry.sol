@@ -22,6 +22,9 @@ contract RaterDeclarationRegistry is AccessControl, EIP712 {
     uint16 public constant MAX_TIER_MULTIPLIER_BPS = 11_500;
     uint256 public constant MIN_DECLARATION_BOND_LREP_FLOOR = 100e6;
     uint256 public constant MIN_CHALLENGE_BOND_LREP_FLOOR = 25e6;
+    uint64 public constant MIN_CHALLENGE_RESOLUTION_WINDOW = 1 days;
+    uint64 public constant MAX_CHALLENGE_RESOLUTION_WINDOW = 30 days;
+    uint64 public constant DEFAULT_CHALLENGE_RESOLUTION_WINDOW = 7 days;
     uint64 public constant RETIRED_DECLARATION_BOND_LOCK = 62 days;
 
     bytes32 public constant RATER_DECLARATION_TYPEHASH = keccak256(
@@ -38,7 +41,8 @@ contract RaterDeclarationRegistry is AccessControl, EIP712 {
         None,
         Open,
         Sustained,
-        Rejected
+        Rejected,
+        Expired
     }
 
     struct RaterDeclaration {
@@ -84,6 +88,7 @@ contract RaterDeclarationRegistry is AccessControl, EIP712 {
         bytes32 resolutionHash;
         uint256 bondAmount;
         uint64 openedAt;
+        uint64 expiresAt;
         ChallengeStatus status;
     }
 
@@ -92,6 +97,7 @@ contract RaterDeclarationRegistry is AccessControl, EIP712 {
     uint256 public minDeclarationBondLrep;
     uint256 public challengeBondLrep;
     uint16 public challengerRewardBps;
+    uint64 public challengeResolutionWindow;
     address public treasury;
     uint256 public nextChallengeId = 1;
 
@@ -112,6 +118,7 @@ contract RaterDeclarationRegistry is AccessControl, EIP712 {
     event DeclarationParametersUpdated(
         uint256 minDeclarationBondLrep, uint256 challengeBondLrep, uint16 challengerRewardBps, address treasury
     );
+    event ChallengeResolutionWindowUpdated(uint64 challengeResolutionWindow);
     event OperatorBondDeposited(address indexed operator, address indexed payer, uint256 amount, uint256 totalBond);
     event OperatorBondWithdrawn(address indexed operator, uint256 amount, uint256 remainingBond);
     event DeclarationBondReleased(address indexed rater, address indexed operator);
@@ -180,6 +187,8 @@ contract RaterDeclarationRegistry is AccessControl, EIP712 {
     error ActiveDeclarations();
     error OpenChallenges();
     error BondReleasePending();
+    error ChallengeResolutionPending();
+    error ChallengeResolutionExpired();
 
     constructor(
         address admin,
@@ -204,6 +213,7 @@ contract RaterDeclarationRegistry is AccessControl, EIP712 {
         minDeclarationBondLrep = minDeclarationBondLrep_;
         challengeBondLrep = challengeBondLrep_;
         challengerRewardBps = 5_000;
+        challengeResolutionWindow = DEFAULT_CHALLENGE_RESOLUTION_WINDOW;
         treasury = treasury_;
 
         _grantRole(DEFAULT_ADMIN_ROLE, governance);
@@ -241,6 +251,18 @@ contract RaterDeclarationRegistry is AccessControl, EIP712 {
         treasury = treasury_;
 
         emit DeclarationParametersUpdated(minDeclarationBondLrep_, challengeBondLrep_, challengerRewardBps_, treasury_);
+    }
+
+    function setChallengeResolutionWindow(uint64 challengeResolutionWindow_) external onlyRole(CONFIG_ROLE) {
+        if (
+            challengeResolutionWindow_ < MIN_CHALLENGE_RESOLUTION_WINDOW
+                || challengeResolutionWindow_ > MAX_CHALLENGE_RESOLUTION_WINDOW
+        ) {
+            revert InvalidConfig();
+        }
+
+        challengeResolutionWindow = challengeResolutionWindow_;
+        emit ChallengeResolutionWindowUpdated(challengeResolutionWindow_);
     }
 
     function submitDeclaration(
@@ -419,13 +441,16 @@ contract RaterDeclarationRegistry is AccessControl, EIP712 {
         if (evidenceHash == bytes32(0)) revert InvalidChallenge();
         StoredDeclaration storage stored = _declarations[rater];
         if (stored.tier == RaterTier.A0) revert InvalidChallenge();
+        if (!_declarationIsActive(stored.declaration)) revert InvalidChallenge();
+        bytes32 declarationKey = _declarationKey(rater, stored.declaration.version);
+        if (openDeclarationChallenges[declarationKey] != 0) revert OpenChallenges();
 
         lrepToken.safeTransferFrom(msg.sender, address(this), challengeBondLrep);
-        bytes32 declarationKey = _declarationKey(rater, stored.declaration.version);
         openOperatorChallenges[stored.declaration.operator] += 1;
         openDeclarationChallenges[declarationKey] += 1;
 
         challengeId = nextChallengeId++;
+        uint64 expiresAt = uint64(block.timestamp) + challengeResolutionWindow;
         challengeOperatorBondAmount[challengeId] = declarationBondAmount[rater];
         _challenges[challengeId] = Challenge({
             challenger: msg.sender,
@@ -436,6 +461,7 @@ contract RaterDeclarationRegistry is AccessControl, EIP712 {
             resolutionHash: bytes32(0),
             bondAmount: challengeBondLrep,
             openedAt: uint64(block.timestamp),
+            expiresAt: expiresAt,
             status: ChallengeStatus.Open
         });
 
@@ -457,6 +483,7 @@ contract RaterDeclarationRegistry is AccessControl, EIP712 {
         if (slashBps > BPS_DENOMINATOR || resolutionHash == bytes32(0)) revert InvalidChallenge();
         Challenge storage challenge = _challenges[challengeId];
         if (challenge.status != ChallengeStatus.Open) revert InvalidChallenge();
+        if (block.timestamp >= challenge.expiresAt) revert ChallengeResolutionExpired();
 
         uint256 operatorSlash;
         uint256 challengerReward;
@@ -489,6 +516,19 @@ contract RaterDeclarationRegistry is AccessControl, EIP712 {
         _closeChallengeLock(challenge.operator, challenge.rater, challenge.declarationVersion);
 
         emit ChallengeResolved(challengeId, challenge.status, operatorSlash, challengerReward, resolutionHash);
+    }
+
+    function expireChallenge(uint256 challengeId) external {
+        Challenge storage challenge = _challenges[challengeId];
+        if (challenge.status != ChallengeStatus.Open) revert InvalidChallenge();
+        if (block.timestamp < challenge.expiresAt) revert ChallengeResolutionPending();
+
+        challenge.status = ChallengeStatus.Expired;
+        challenge.resolutionHash = keccak256("challenge-expired");
+        lrepToken.safeTransfer(treasury, challenge.bondAmount);
+        _closeChallengeLock(challenge.operator, challenge.rater, challenge.declarationVersion);
+
+        emit ChallengeResolved(challengeId, challenge.status, 0, 0, challenge.resolutionHash);
     }
 
     function getDeclaration(address rater) external view returns (StoredDeclaration memory) {
