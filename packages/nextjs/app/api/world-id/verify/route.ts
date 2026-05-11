@@ -1,11 +1,16 @@
 import { NextResponse } from "next/server";
 import type { IDKitResult, ResponseItemV4 } from "@worldcoin/idkit";
 import { hashSignal } from "@worldcoin/idkit/hashing";
+import { getAddress, isAddress } from "viem";
+import { WorldIdAttestationError, attestWorldIdCredential } from "~~/lib/world-id/attestation";
 import { getWorldIdServerConfig } from "~~/lib/world-id/config";
 
 type WorldIdVerifyRequest = {
   idkitResponse?: IDKitResult;
   signal?: string;
+  walletAddress?: string;
+  chainId?: number | string;
+  requireOnChainAttestation?: boolean;
 };
 
 type WorldIdVerifyResponse = {
@@ -56,6 +61,38 @@ function getSignal(body: unknown) {
   return isRecord(body) && typeof body.signal === "string" ? body.signal : "";
 }
 
+function getWalletAddress(body: unknown): `0x${string}` | null {
+  if (!isRecord(body) || typeof body.walletAddress !== "string" || !isAddress(body.walletAddress, { strict: false })) {
+    return null;
+  }
+
+  return getAddress(body.walletAddress) as `0x${string}`;
+}
+
+function getChainId(body: unknown): number | null {
+  if (!isRecord(body)) {
+    return null;
+  }
+
+  const rawChainId = body.chainId;
+  const parsedChainId =
+    typeof rawChainId === "number"
+      ? rawChainId
+      : typeof rawChainId === "string" && /^\d+$/.test(rawChainId)
+        ? Number(rawChainId)
+        : Number.NaN;
+
+  return Number.isSafeInteger(parsedChainId) ? parsedChainId : null;
+}
+
+function requiresOnChainAttestation(body: unknown) {
+  return isRecord(body) && body.requireOnChainAttestation === true;
+}
+
+function matchesWalletSignal(signal: string, walletAddress: string) {
+  return isAddress(signal, { strict: false }) && getAddress(signal) === getAddress(walletAddress);
+}
+
 export async function POST(request: Request): Promise<Response> {
   const config = getWorldIdServerConfig();
 
@@ -91,6 +128,21 @@ export async function POST(request: Request): Promise<Response> {
     }
   }
 
+  const shouldAttestOnChain = requiresOnChainAttestation(body);
+  const walletAddress = getWalletAddress(body);
+  const chainId = getChainId(body);
+
+  if (shouldAttestOnChain && (!walletAddress || chainId === null)) {
+    return NextResponse.json(
+      { error: "Wallet address and chain ID are required for on-chain World ID attestation." },
+      { status: 400 },
+    );
+  }
+
+  if (shouldAttestOnChain && walletAddress && (!signal || !matchesWalletSignal(signal, walletAddress))) {
+    return NextResponse.json({ error: "World ID proof must be bound to the wallet being attested." }, { status: 400 });
+  }
+
   const response = await fetch(`${config.endpoint}/${encodeURIComponent(config.rpId)}`, {
     method: "POST",
     headers: {
@@ -110,9 +162,32 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
+  const nullifier = getVerifiedNullifier(payload, idkitResponse);
+  let attestation;
+
+  if (shouldAttestOnChain && walletAddress && chainId !== null) {
+    try {
+      attestation = await attestWorldIdCredential({
+        walletAddress,
+        chainId,
+        nullifier,
+        action: config.action,
+        rpId: config.rpId,
+        signalHash: getResponseSignalHash(idkitResponse),
+      });
+    } catch (error) {
+      if (error instanceof WorldIdAttestationError) {
+        return NextResponse.json({ error: error.message }, { status: error.status });
+      }
+
+      return NextResponse.json({ error: "World ID credential attestation failed." }, { status: 500 });
+    }
+  }
+
   return NextResponse.json({
-    nullifier: getVerifiedNullifier(payload, idkitResponse),
+    nullifier,
     success: true,
+    ...(attestation ? { attestation } : {}),
     verifiedAt: new Date().toISOString(),
   });
 }

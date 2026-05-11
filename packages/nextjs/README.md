@@ -15,27 +15,27 @@ Deployment stays separate, so you can point the app stack at either a local chai
 
 Run these from the monorepo root unless noted otherwise:
 
-| Command                                         | Description                                                                                |
-| ----------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `yarn start`                                    | Start development server (localhost:3000)                                                  |
-| `yarn dev:db`                                   | Start the local Postgres container for the Next app                                        |
-| `yarn dev:db:down`                              | Stop the local Postgres container                                                          |
-| `yarn dev:db:reset`                             | Reset the local Postgres container and its data volume                                     |
-| `yarn dev:stack`                                | Start local Postgres, apply schema, then run Next.js + Ponder, plus Keeper when configured |
-| `yarn next:build`                               | Production build                                                                           |
-| `yarn next:lint`                                | Run ESLint                                                                                 |
-| `yarn next:check-types`                         | TypeScript type checking                                                                   |
+| Command                                            | Description                                                                                |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `yarn start`                                       | Start development server (localhost:3000)                                                  |
+| `yarn dev:db`                                      | Start the local Postgres container for the Next app                                        |
+| `yarn dev:db:down`                                 | Stop the local Postgres container                                                          |
+| `yarn dev:db:reset`                                | Reset the local Postgres container and its data volume                                     |
+| `yarn dev:stack`                                   | Start local Postgres, apply schema, then run Next.js + Ponder, plus Keeper when configured |
+| `yarn next:build`                                  | Production build                                                                           |
+| `yarn next:lint`                                   | Run ESLint                                                                                 |
+| `yarn next:check-types`                            | TypeScript type checking                                                                   |
 | `yarn workspace @rateloop/nextjs format`           | Format frontend code with Prettier                                                         |
 | `yarn workspace @rateloop/nextjs db:generate`      | Generate Drizzle migrations                                                                |
 | `yarn workspace @rateloop/nextjs db:push`          | Apply migrations to the configured database                                                |
 | `yarn workspace @rateloop/nextjs db:studio`        | Open the Drizzle studio UI                                                                 |
 | `yarn workspace @rateloop/nextjs whitepaper`       | Generate the whitepaper PDF                                                                |
 | `yarn workspace @rateloop/nextjs demo:record`      | Record the short Playwright product demo video                                             |
-| `yarn e2e`                                      | Run the Playwright smoke suite (Chromium)                                                  |
+| `yarn e2e`                                         | Run the Playwright smoke suite (Chromium)                                                  |
 | `yarn workspace @rateloop/nextjs e2e:ci:lifecycle` | Run lifecycle suites for settlement, cancellation, and dormancy                            |
 | `yarn workspace @rateloop/nextjs e2e:ci:keeper`    | Run keeper-backed settlement coverage                                                      |
 | `yarn workspace @rateloop/nextjs e2e:full`         | Run the full local Playwright suite, including keeper coverage                             |
-| `yarn e2e:ui`                                   | Run E2E tests with interactive Playwright UI                                               |
+| `yarn e2e:ui`                                      | Run E2E tests with interactive Playwright UI                                               |
 
 CI runs the smoke, lifecycle, and keeper-backed suites separately, so `yarn e2e` is only the smallest browser pass.
 
@@ -61,53 +61,57 @@ The recorder saves a `.webm` file under `packages/nextjs/e2e/artifacts/demo/`. S
 
 Key environment variables (see `.env.example` for the full list):
 
-| Variable                                          | Description                                                                                                                              |
-| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `NEXT_PUBLIC_ALCHEMY_API_KEY`                     | Alchemy RPC provider key                                                                                                                 |
-| `NEXT_PUBLIC_RPC_URL_31337`                       | Optional browser RPC override for local Foundry                                                                                          |
-| `NEXT_PUBLIC_RPC_URL_4801`                        | Optional browser RPC override for World Chain Sepolia                                                                                           |
-| `NEXT_PUBLIC_RPC_URL_480`                         | Optional browser RPC override for World Chain mainnet                                                                                           |
-| `NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID`           | Optional WalletConnect project ID for external wallet discovery                                                                          |
-| `NEXT_PUBLIC_THIRDWEB_CLIENT_ID`                  | thirdweb client ID for in-app wallets, sponsored transactions, and settings wallet top-ups                                               |
-| `NEXT_PUBLIC_TARGET_NETWORKS`                     | Comma-separated deployed chain IDs exposed in the UI (required in production)                                                            |
-| `DATABASE_URL`                                    | PostgreSQL URL for the Next app logical database                                                                                         |
-| `RESEND_API_KEY`                                  | Resend API key for email notification delivery                                                                                           |
-| `RESEND_FROM_EMAIL`                               | Verified sender address/domain used by Resend                                                                                            |
-| `APP_URL`                                         | Public app URL used in verification and email links                                                                                      |
-| `NOTIFICATION_DELIVERY_SECRET`                    | Secret for the email delivery cron endpoint                                                                                              |
-| `NEXT_PUBLIC_PONDER_URL`                          | Public Ponder indexer URL (required in production)                                                                                       |
-| `THIRDWEB_SERVER_VERIFIER_SECRET`                 | Shared secret used by the thirdweb server verifier webhook                                                                               |
-| `RATELOOP_X402_USDC_ADDRESS`                      | Optional World Chain USDC override for direct agent bounty planning; World Chain mainnet and Sepolia default automatically                |
-| `NEXT_PUBLIC_QUESTION_REWARD_POOL_ESCROW_ADDRESS` | Optional question reward escrow override while generated deployment metadata catches up; supported chains default from `@rateloop/contracts` |
-| `NEXT_PUBLIC_USDC_ADDRESS`                        | Optional browser-side World Chain USDC override for USDC bounties                                                                        |
-| `NEXT_PUBLIC_WORLD_ID_APP_ID`                     | Optional World ID app ID for the settings identity credential                                                                                   |
-| `NEXT_PUBLIC_WORLD_ID_ACTION`                     | Optional World ID action ID; defaults to `rateloop-human-credential-v1`                                                                         |
-| `NEXT_PUBLIC_WORLD_ID_ENVIRONMENT`                | World ID environment, `production` or `staging`                                                                                                 |
-| `WORLD_ID_RP_ID`                                  | World ID v4 relying-party ID used by the server verification route                                                                              |
-| `WORLD_ID_SIGNING_KEY`                            | Server-side World ID signing key used to create short-lived proof requests                                                                      |
-| `WORLD_ID_VERIFY_ENDPOINT`                        | Optional World ID verification API override                                                                                                     |
+| Variable                                          | Description                                                                                                                                             |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NEXT_PUBLIC_ALCHEMY_API_KEY`                     | Alchemy RPC provider key                                                                                                                                |
+| `NEXT_PUBLIC_RPC_URL_31337`                       | Optional browser RPC override for local Foundry                                                                                                         |
+| `NEXT_PUBLIC_RPC_URL_4801`                        | Optional browser RPC override for World Chain Sepolia                                                                                                   |
+| `NEXT_PUBLIC_RPC_URL_480`                         | Optional browser RPC override for World Chain mainnet                                                                                                   |
+| `NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID`           | Optional WalletConnect project ID for external wallet discovery                                                                                         |
+| `NEXT_PUBLIC_THIRDWEB_CLIENT_ID`                  | thirdweb client ID for in-app wallets, sponsored transactions, and settings wallet top-ups                                                              |
+| `NEXT_PUBLIC_TARGET_NETWORKS`                     | Comma-separated deployed chain IDs exposed in the UI (required in production)                                                                           |
+| `DATABASE_URL`                                    | PostgreSQL URL for the Next app logical database                                                                                                        |
+| `RESEND_API_KEY`                                  | Resend API key for email notification delivery                                                                                                          |
+| `RESEND_FROM_EMAIL`                               | Verified sender address/domain used by Resend                                                                                                           |
+| `APP_URL`                                         | Public app URL used in verification and email links                                                                                                     |
+| `NOTIFICATION_DELIVERY_SECRET`                    | Secret for the email delivery cron endpoint                                                                                                             |
+| `NEXT_PUBLIC_PONDER_URL`                          | Public Ponder indexer URL (required in production)                                                                                                      |
+| `THIRDWEB_SERVER_VERIFIER_SECRET`                 | Shared secret used by the thirdweb server verifier webhook                                                                                              |
+| `RATELOOP_X402_USDC_ADDRESS`                      | Optional World Chain USDC override for direct agent bounty planning; World Chain mainnet and Sepolia default automatically                              |
+| `NEXT_PUBLIC_QUESTION_REWARD_POOL_ESCROW_ADDRESS` | Optional question reward escrow override while generated deployment metadata catches up; supported chains default from `@rateloop/contracts`            |
+| `NEXT_PUBLIC_USDC_ADDRESS`                        | Optional browser-side World Chain USDC override for USDC bounties                                                                                       |
+| `NEXT_PUBLIC_WORLD_ID_APP_ID`                     | Optional World ID app ID for the settings identity credential                                                                                           |
+| `NEXT_PUBLIC_WORLD_ID_ACTION`                     | Optional World ID action ID; defaults to `rateloop-human-credential-v1`                                                                                 |
+| `NEXT_PUBLIC_WORLD_ID_ENVIRONMENT`                | World ID environment, `production` or `staging`                                                                                                         |
+| `WORLD_ID_RP_ID`                                  | World ID v4 relying-party ID used by the server verification route                                                                                      |
+| `WORLD_ID_SIGNING_KEY`                            | Server-side World ID signing key used to create short-lived proof requests                                                                              |
+| `WORLD_ID_VERIFY_ENDPOINT`                        | Optional World ID verification API override                                                                                                             |
+| `WORLD_ID_ATTESTOR_PRIVATE_KEY`                   | Optional server-side wallet key that writes `RaterRegistry` World ID credentials; governance must grant it `SELF_ATTESTOR_ROLE`                         |
+| `WORLD_ID_CREDENTIAL_TTL_SECONDS`                 | Optional on-chain World ID credential lifetime; defaults to 365 days                                                                                    |
 | `CURYO_MCP_AGENTS`                                | Optional JSON array of managed MCP agents, bearer token hashes, scopes, daily budgets, per-ask caps, wallet addresses, and optional category allowlists |
-| `CURYO_MCP_ALLOWED_ORIGINS`                       | Comma-separated browser origins allowed to call `/api/mcp` and `/api/mcp/public`; non-browser agent calls may omit `Origin`              |
-| `CURYO_MCP_AUTHORIZATION_SERVER_URL`              | Optional real OAuth/OIDC authorization server advertised in MCP protected-resource metadata; omit for pre-registered bearer-token agents |
-| `FREE_TRANSACTION_LIMIT`                          | Free sponsored app transactions per verified wallet or identity-gated flow (defaults to `25`)                                            |
-| `RATE_LIMIT_TRUSTED_IP_HEADERS`                   | Comma-separated proxy IP headers to trust for API rate limiting in production                                                            |
-| `KEYSTORE_ACCOUNT`                                | Optional Foundry keystore name used by the development faucet                                                                            |
-| `KEYSTORE_PASSWORD`                               | Optional password used to decrypt the development faucet keystore                                                                        |
-| `DEV_FAUCET_ENABLED`                              | Enable the development-only LREP, mock USDC, and Voter ID faucet route                                                                   |
-| `FAUCET_PRIVATE_KEY`                              | Server-side faucet wallet key                                                                                                            |
-| `CURYO_E2E_PRODUCTION_BUILD`                      | Server-side opt-in for local production-style E2E builds                                                                                 |
-| `NEXT_PUBLIC_CURYO_E2E_PRODUCTION_BUILD`          | Browser-side opt-in for local production-style E2E builds                                                                                |
-| `CURYO_AGENT_CALLBACK_DELIVERY_SECRET`            | Shared secret required to trigger the internal callback delivery worker at `/api/agent-callbacks/deliver`                               |
-| `BLOB_READ_WRITE_TOKEN`                           | Vercel Blob read-write token used for private image uploads and moderated RateLoop-hosted image delivery                                 |
-| `OPENAI_API_KEY`                                  | OpenAI API key used for automated uploaded-image moderation in production                                                               |
-| `CURYO_IMAGE_MODERATION_MODE`                     | Optional development override; set to `disabled` only for local testing of the image pipeline                                           |
+| `CURYO_MCP_ALLOWED_ORIGINS`                       | Comma-separated browser origins allowed to call `/api/mcp` and `/api/mcp/public`; non-browser agent calls may omit `Origin`                             |
+| `CURYO_MCP_AUTHORIZATION_SERVER_URL`              | Optional real OAuth/OIDC authorization server advertised in MCP protected-resource metadata; omit for pre-registered bearer-token agents                |
+| `FREE_TRANSACTION_LIMIT`                          | Free sponsored app transactions per verified wallet or identity-gated flow (defaults to `25`)                                                           |
+| `RATE_LIMIT_TRUSTED_IP_HEADERS`                   | Comma-separated proxy IP headers to trust for API rate limiting in production                                                                           |
+| `KEYSTORE_ACCOUNT`                                | Optional Foundry keystore name used by the development faucet                                                                                           |
+| `KEYSTORE_PASSWORD`                               | Optional password used to decrypt the development faucet keystore                                                                                       |
+| `DEV_FAUCET_ENABLED`                              | Enable the development-only LREP, mock USDC, and Voter ID faucet route                                                                                  |
+| `FAUCET_PRIVATE_KEY`                              | Server-side faucet wallet key                                                                                                                           |
+| `CURYO_E2E_PRODUCTION_BUILD`                      | Server-side opt-in for local production-style E2E builds                                                                                                |
+| `NEXT_PUBLIC_CURYO_E2E_PRODUCTION_BUILD`          | Browser-side opt-in for local production-style E2E builds                                                                                               |
+| `CURYO_AGENT_CALLBACK_DELIVERY_SECRET`            | Shared secret required to trigger the internal callback delivery worker at `/api/agent-callbacks/deliver`                                               |
+| `BLOB_READ_WRITE_TOKEN`                           | Vercel Blob read-write token used for private image uploads and moderated RateLoop-hosted image delivery                                                |
+| `OPENAI_API_KEY`                                  | OpenAI API key used for automated uploaded-image moderation in production                                                                               |
+| `CURYO_IMAGE_MODERATION_MODE`                     | Optional development override; set to `disabled` only for local testing of the image pipeline                                                           |
 
 Notes:
 
 - Browser RPC reads prefer `NEXT_PUBLIC_RPC_URL_<chainId>` overrides first, then `NEXT_PUBLIC_ALCHEMY_API_KEY`, then the chain's default public RPC list.
 - The target-network parser accepts local Foundry plus World Chain Sepolia and mainnet: `31337`, `4801`, and `480`.
 - The Wallet settings tab uses thirdweb's BuyWidget to add native ETH for World Chain gas. Configure the thirdweb client ID's allowed domains for the production and preview origins that will render `/settings#wallet`.
-- The Identity settings tab uses World ID v4 proof requests and server-side Developer Portal verification. Rating, rewards, and governance remain usable without this optional credential.
+- The Identity settings tab uses World ID v4 proof requests, server-side Developer Portal verification, and an optional `RaterRegistry` attestor wallet for the one-time verified launch bonus. Rating, rewards, and governance remain usable without this optional credential.
+- To enable verified launch claims and referral payouts, grant `RaterRegistry.SELF_ATTESTOR_ROLE` to the `WORLD_ID_ATTESTOR_PRIVATE_KEY` wallet, or configure a Foundry keystore through `KEYSTORE_ACCOUNT`/`KEYSTORE_PASSWORD`. Local Foundry development can also use `FAUCET_PRIVATE_KEY` as a fallback when that wallet still has the attestor role.
+- Leave `NEXT_PUBLIC_WORLD_ID_SIGNAL` unset for launch-bonus deployments; on-chain attestation requires the World ID proof to be bound to the connected wallet address.
 - `/api/mcp/public` exposes tokenless quote, ask, confirm, status, result, template, and category tools for agents that already control a funded wallet. `/api/mcp` remains the managed endpoint for bearer-token policies, balances, signed callbacks, and audit surfaces.
 - Agent clients should follow the AI docs flow: list templates, quote with `walletAddress`, ask with a stable client request ID, execute and confirm wallet calls, wait for a status read or signed managed callback, then fetch the structured result. Operator token lifecycle, scopes, budgets, category allowlists, callback recovery, and audit history belong in `/settings?tab=agents` for managed agents; static `CURYO_MCP_AGENTS` remains supported for server-configured policies.
 - The Ask page can host JPG, PNG, and WEBP image context through private Vercel Blob uploads. Uploaded images are validated, metadata-stripped into WEBP, moderated with OpenAI, and served through `/api/attachments/images/{attachmentId}.webp` only after approval. Agents should recommend this route when users have local mockups, screenshots, or generated images instead of asking them to find a third-party image host.

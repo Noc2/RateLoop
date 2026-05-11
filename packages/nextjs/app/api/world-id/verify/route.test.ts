@@ -97,6 +97,56 @@ test("World ID verify route rejects proofs for a different wallet signal", async
   assert.equal(body.error, "World ID signal does not match this request.");
 });
 
+test("World ID verify route requires wallet and chain for on-chain attestation", async () => {
+  env.NEXT_PUBLIC_WORLD_ID_ACTION = "rateloop-test";
+  env.WORLD_ID_RP_ID = "rp_test";
+
+  let fetchCalled = false;
+  globalThis.fetch = async () => {
+    fetchCalled = true;
+    return Response.json({ success: true });
+  };
+
+  const response = await POST(
+    makeRequest({
+      idkitResponse: makeWorldIdResult(),
+      signal: TEST_SIGNAL,
+      requireOnChainAttestation: true,
+    }),
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 400);
+  assert.equal(fetchCalled, false);
+  assert.equal(body.error, "Wallet address and chain ID are required for on-chain World ID attestation.");
+});
+
+test("World ID verify route only attests proofs bound to the requested wallet", async () => {
+  env.NEXT_PUBLIC_WORLD_ID_ACTION = "rateloop-test";
+  env.WORLD_ID_RP_ID = "rp_test";
+
+  let fetchCalled = false;
+  globalThis.fetch = async () => {
+    fetchCalled = true;
+    return Response.json({ success: true });
+  };
+
+  const response = await POST(
+    makeRequest({
+      idkitResponse: makeWorldIdResult("not-a-wallet-signal"),
+      signal: "not-a-wallet-signal",
+      walletAddress: TEST_SIGNAL,
+      chainId: 31_337,
+      requireOnChainAttestation: true,
+    }),
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 400);
+  assert.equal(fetchCalled, false);
+  assert.equal(body.error, "World ID proof must be bound to the wallet being attested.");
+});
+
 test("World ID verify route rejects legacy proofs", async () => {
   env.NEXT_PUBLIC_WORLD_ID_ACTION = "rateloop-test";
   env.WORLD_ID_RP_ID = "rp_test";
