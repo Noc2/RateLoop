@@ -59,6 +59,71 @@ interface VoterParticipationRewardClaimCandidate {
   alreadyClaimed: boolean;
 }
 
+interface LastClaimAwarePoolShareParams {
+  claimantWeight: bigint;
+  totalWeight: bigint;
+  pool: bigint;
+  totalClaimants: bigint;
+  claimedCount: bigint;
+  claimedAmount: bigint;
+}
+
+interface RevealedLoserRebateParams {
+  forfeitedStake: bigint;
+  forfeitedPool: bigint;
+  refundBps: bigint;
+  totalClaimants: bigint;
+  claimedCount: bigint;
+  claimedAmount: bigint;
+}
+
+export function calculateLastClaimAwarePoolShare({
+  claimantWeight,
+  totalWeight,
+  pool,
+  totalClaimants,
+  claimedCount,
+  claimedAmount,
+}: LastClaimAwarePoolShareParams) {
+  if (
+    claimantWeight <= 0n ||
+    totalWeight <= 0n ||
+    pool <= 0n ||
+    totalClaimants <= 0n ||
+    claimedCount >= totalClaimants ||
+    claimedAmount > pool
+  ) {
+    return 0n;
+  }
+
+  return claimedCount + 1n === totalClaimants ? pool - claimedAmount : (claimantWeight * pool) / totalWeight;
+}
+
+export function calculateRevealedLoserRebate({
+  forfeitedStake,
+  forfeitedPool,
+  refundBps,
+  totalClaimants,
+  claimedCount,
+  claimedAmount,
+}: RevealedLoserRebateParams) {
+  if (forfeitedStake <= 0n || forfeitedPool <= 0n || refundBps <= 0n) {
+    return 0n;
+  }
+
+  const loserRefundPool = (forfeitedPool * refundBps) / 10000n;
+  if (
+    loserRefundPool <= 0n ||
+    totalClaimants <= 0n ||
+    claimedCount >= totalClaimants ||
+    claimedAmount > loserRefundPool
+  ) {
+    return 0n;
+  }
+
+  return claimedCount + 1n === totalClaimants ? loserRefundPool - claimedAmount : (forfeitedStake * refundBps) / 10000n;
+}
+
 export function buildVoterParticipationClaimableRewards(candidates: readonly VoterParticipationRewardClaimCandidate[]) {
   return candidates.flatMap(candidate => {
     const { contentId, roundId, stake, rateBps, totalReward, alreadyPaid, reservedReward, rewardPool, alreadyClaimed } =

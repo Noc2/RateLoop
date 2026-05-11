@@ -1,4 +1,9 @@
-import { buildVoterParticipationClaimableRewards, sortClaimableRewardItems } from "./claimableRewards";
+import {
+  buildVoterParticipationClaimableRewards,
+  calculateLastClaimAwarePoolShare,
+  calculateRevealedLoserRebate,
+  sortClaimableRewardItems,
+} from "./claimableRewards";
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -54,6 +59,58 @@ test("buildVoterParticipationClaimableRewards skips already claimed or unbacked 
   ]);
 
   assert.deepEqual(items, []);
+});
+
+test("calculateLastClaimAwarePoolShare returns final claimant dust remainder", () => {
+  assert.equal(
+    calculateLastClaimAwarePoolShare({
+      claimantWeight: 1n,
+      totalWeight: 3n,
+      pool: 10n,
+      totalClaimants: 3n,
+      claimedCount: 2n,
+      claimedAmount: 6n,
+    }),
+    4n,
+  );
+
+  assert.equal(
+    calculateLastClaimAwarePoolShare({
+      claimantWeight: 1n,
+      totalWeight: 3n,
+      pool: 10n,
+      totalClaimants: 3n,
+      claimedCount: 1n,
+      claimedAmount: 3n,
+    }),
+    3n,
+  );
+});
+
+test("calculateRevealedLoserRebate returns final claimant rebate remainder", () => {
+  assert.equal(
+    calculateRevealedLoserRebate({
+      forfeitedStake: 5n,
+      forfeitedPool: 10n,
+      refundBps: 5000n,
+      totalClaimants: 2n,
+      claimedCount: 1n,
+      claimedAmount: 2n,
+    }),
+    3n,
+  );
+
+  assert.equal(
+    calculateRevealedLoserRebate({
+      forfeitedStake: 5n,
+      forfeitedPool: 10n,
+      refundBps: 5000n,
+      totalClaimants: 2n,
+      claimedCount: 0n,
+      claimedAmount: 0n,
+    }),
+    2n,
+  );
 });
 
 test("sortClaimableRewardItems keeps frontend round credits ahead of the final frontend withdrawal", () => {
