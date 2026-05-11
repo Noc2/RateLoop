@@ -429,9 +429,9 @@ contract ProtocolConfigBranchesTest is Test {
         assertEq(bounds.minRoundDuration, 1 hours);
         assertEq(bounds.maxRoundDuration, 30 days);
         assertEq(config.ABSOLUTE_MAX_ROUND_DURATION(), 30 days);
-        assertEq(bounds.minSettlementVoters, 2);
+        assertEq(bounds.minSettlementVoters, 3);
         assertEq(bounds.maxSettlementVoters, 100);
-        assertEq(bounds.minVoterCap, 2);
+        assertEq(bounds.minVoterCap, 3);
         assertEq(bounds.maxVoterCap, 1_000);
     }
 
@@ -481,25 +481,25 @@ contract ProtocolConfigBranchesTest is Test {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
         vm.warp(100);
 
-        config.setRoundConfigBounds(10 minutes, 60 minutes, 1 hours, 30 days, 2, 100, 2, 1_000);
+        config.setRoundConfigBounds(10 minutes, 60 minutes, 1 hours, 30 days, 3, 100, 3, 1_000);
         config.setDrandConfig(QUICKNET_CHAIN_HASH, 1, uint64(10 minutes));
 
         vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
-        config.setRoundConfigBounds(5 minutes, 60 minutes, 1 hours, 30 days, 2, 100, 2, 1_000);
+        config.setRoundConfigBounds(5 minutes, 60 minutes, 1 hours, 30 days, 3, 100, 3, 1_000);
     }
 
     function test_SetRoundConfigBounds_RejectsBoundsThatExcludeCurrentDefault() public {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
 
         vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
-        config.setRoundConfigBounds(5 minutes, 60 minutes, 1 hours, 1 days, 2, 100, 2, 1_000);
+        config.setRoundConfigBounds(5 minutes, 60 minutes, 1 hours, 1 days, 3, 100, 3, 1_000);
     }
 
     function test_SetRoundConfigBounds_RejectsAbsoluteMaxRoundDuration() public {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
 
         vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
-        config.setRoundConfigBounds(5 minutes, 60 minutes, 1 hours, 30 days + 1, 2, 100, 2, 1_000);
+        config.setRoundConfigBounds(5 minutes, 60 minutes, 1 hours, 30 days + 1, 3, 100, 3, 1_000);
     }
 
     function test_SetRaterRegistryAndScorerMetadataHash() public {

@@ -142,9 +142,9 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
             maxEpochDuration: uint32(60 minutes),
             minRoundDuration: uint32(1 hours),
             maxRoundDuration: uint32(30 days),
-            minSettlementVoters: uint16(2),
+            minSettlementVoters: uint16(3),
             maxSettlementVoters: uint16(100),
-            minVoterCap: uint16(2),
+            minVoterCap: uint16(3),
             maxVoterCap: uint16(1_000)
         });
         revealGracePeriod = 60 minutes;
@@ -505,7 +505,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
             revert InvalidConfig();
         }
         if (minRoundDuration / minEpochDuration > 2016) revert InvalidConfig();
-        if (minSettlementVoters < 2 || maxSettlementVoters < minSettlementVoters) revert InvalidConfig();
+        if (minSettlementVoters < 3 || maxSettlementVoters < minSettlementVoters) revert InvalidConfig();
         if (minVoterCap < minSettlementVoters || maxVoterCap < maxSettlementVoters) revert InvalidConfig();
         if (maxVoterCap > 1_000) revert InvalidConfig();
 

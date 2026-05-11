@@ -146,8 +146,8 @@ contract RoundIntegrationTest is VotingTestBase {
         );
 
         // setConfig(epochDuration, maxDuration, minVoters, maxVoters)
-        // Use short 10-minute epochs for tests, minVoters=2 to keep tests lean
-        _setTlockRoundConfig(ProtocolConfig(address(votingEngine.protocolConfig())), EPOCH_DURATION, 7 days, 2, 200);
+        // Use short 10-minute epochs for tests.
+        _setTlockRoundConfig(ProtocolConfig(address(votingEngine.protocolConfig())), EPOCH_DURATION, 7 days, 3, 200);
 
         // Fund consensus reserve
         uint256 reserveAmount = 1_000_000e6;
@@ -1748,8 +1748,10 @@ contract RoundIntegrationTest is VotingTestBase {
         // Only UP voters, no DOWN — still need ≥minVoters revealed
         bytes32 s1 = keccak256(abi.encodePacked(voter1, contentId, true, uint256(0)));
         bytes32 s2 = keccak256(abi.encodePacked(voter2, contentId, true, uint256(1)));
+        bytes32 s3 = keccak256(abi.encodePacked(voter3, contentId, true, uint256(2)));
         bytes32 ch1 = _commitHash(true, s1, voter1, contentId);
         bytes32 ch2 = _commitHash(true, s2, voter2, contentId);
+        bytes32 ch3 = _commitHash(true, s3, voter3, contentId);
 
         vm.startPrank(voter1);
         hrepToken.approve(address(votingEngine), STAKE);
@@ -1778,6 +1780,22 @@ contract RoundIntegrationTest is VotingTestBase {
             _tlockDrandChainHash(),
             ch2,
             _testCiphertext(true, s2, contentId),
+            STAKE,
+            address(0)
+        );
+        vm.stopPrank();
+
+        vm.startPrank(voter3);
+        hrepToken.approve(address(votingEngine), STAKE);
+        uint256 cachedRoundContext41 =
+            _roundContext(votingEngine.previewCommitRoundId(contentId), _currentRatingReferenceBps(contentId));
+        votingEngine.commitVote(
+            contentId,
+            cachedRoundContext41,
+            _tlockCommitTargetRound(),
+            _tlockDrandChainHash(),
+            ch3,
+            _testCiphertext(true, s3, contentId),
             STAKE,
             address(0)
         );
@@ -2025,8 +2043,10 @@ contract RoundIntegrationTest is VotingTestBase {
         // All voters same direction — unanimous UP
         bytes32 s1 = keccak256(abi.encodePacked(voter1, contentId, true, uint256(0)));
         bytes32 s2 = keccak256(abi.encodePacked(voter2, contentId, true, uint256(1)));
+        bytes32 s3 = keccak256(abi.encodePacked(voter3, contentId, true, uint256(2)));
         bytes32 ch1 = _commitHash(true, s1, voter1, contentId);
         bytes32 ch2 = _commitHash(true, s2, voter2, contentId);
+        bytes32 ch3 = _commitHash(true, s3, voter3, contentId);
 
         vm.startPrank(voter1);
         hrepToken.approve(address(votingEngine), STAKE);
@@ -2055,6 +2075,22 @@ contract RoundIntegrationTest is VotingTestBase {
             _tlockDrandChainHash(),
             ch2,
             _testCiphertext(true, s2, contentId),
+            STAKE,
+            address(0)
+        );
+        vm.stopPrank();
+
+        vm.startPrank(voter3);
+        hrepToken.approve(address(votingEngine), STAKE);
+        uint256 cachedRoundContext41 =
+            _roundContext(votingEngine.previewCommitRoundId(contentId), _currentRatingReferenceBps(contentId));
+        votingEngine.commitVote(
+            contentId,
+            cachedRoundContext41,
+            _tlockCommitTargetRound(),
+            _tlockDrandChainHash(),
+            ch3,
+            _testCiphertext(true, s3, contentId),
             STAKE,
             address(0)
         );
@@ -2158,8 +2194,10 @@ contract RoundIntegrationTest is VotingTestBase {
 
         bytes32 s1 = keccak256(abi.encodePacked(voter1, contentId, true, uint256(0)));
         bytes32 s2 = keccak256(abi.encodePacked(voter2, contentId, true, uint256(1)));
+        bytes32 s3 = keccak256(abi.encodePacked(voter3, contentId, true, uint256(2)));
         bytes32 ch1 = _commitHash(true, s1, voter1, contentId);
         bytes32 ch2 = _commitHash(true, s2, voter2, contentId);
+        bytes32 ch3 = _commitHash(true, s3, voter3, contentId);
 
         vm.startPrank(voter1);
         hrepToken.approve(address(votingEngine), STAKE);
@@ -2193,13 +2231,29 @@ contract RoundIntegrationTest is VotingTestBase {
         );
         vm.stopPrank();
 
+        vm.startPrank(voter3);
+        hrepToken.approve(address(votingEngine), STAKE);
+        uint256 cachedRoundContext41 =
+            _roundContext(votingEngine.previewCommitRoundId(contentId), _currentRatingReferenceBps(contentId));
+        votingEngine.commitVote(
+            contentId,
+            cachedRoundContext41,
+            _tlockCommitTargetRound(),
+            _tlockDrandChainHash(),
+            ch3,
+            _testCiphertext(true, s3, contentId),
+            STAKE,
+            address(0)
+        );
+        vm.stopPrank();
+
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(votingEngine, contentId);
 
         // Verify snapshot matches config at creation
         RoundLib.RoundConfig memory cfg = RoundEngineReadHelpers.roundConfig(votingEngine, contentId, roundId);
         assertEq(cfg.epochDuration, EPOCH_DURATION);
         assertEq(cfg.maxDuration, 7 days);
-        assertEq(cfg.minVoters, 2);
+        assertEq(cfg.minVoters, 3);
 
         // Change config: increase minVoters to 10
         ProtocolConfig protoCfg = ProtocolConfig(address(votingEngine.protocolConfig()));
@@ -2208,13 +2262,14 @@ contract RoundIntegrationTest is VotingTestBase {
 
         // Snapshot unchanged
         cfg = RoundEngineReadHelpers.roundConfig(votingEngine, contentId, roundId);
-        assertEq(cfg.minVoters, 2, "Snapshot should still have minVoters=2");
+        assertEq(cfg.minVoters, 3, "Snapshot should still have minVoters=3");
 
-        // Reveal and settle using snapshotted config (minVoters=2, we have 2 revealed votes)
+        // Reveal and settle using snapshotted config (minVoters=3, we have 3 revealed votes)
         RoundLib.Round memory rCSN0 = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
         _warpPastTlockRevealTime(uint256(rCSN0.startTime) + EPOCH_DURATION);
         votingEngine.revealVoteByCommitKey(contentId, roundId, _commitKey(voter1, ch1), true, 5_000, s1);
         votingEngine.revealVoteByCommitKey(contentId, roundId, _commitKey(voter2, ch2), true, 5_000, s2);
+        votingEngine.revealVoteByCommitKey(contentId, roundId, _commitKey(voter3, ch3), true, 5_000, s3);
 
         votingEngine.settleRound(contentId, roundId);
 

@@ -44,9 +44,9 @@ const ROUND_CONFIG_BOUNDS = {
   maxEpochDurationSeconds: 60 * 60,
   minRoundDurationSeconds: 60 * 60,
   maxRoundDurationSeconds: 30 * 24 * 60 * 60,
-  minSettlementVoters: 2,
+  minSettlementVoters: 3,
   maxSettlementVoters: 100,
-  minVoterCap: 2,
+  minVoterCap: 3,
   maxVoterCap: 10_000,
 } as const;
 

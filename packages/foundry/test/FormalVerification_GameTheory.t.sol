@@ -28,11 +28,11 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
     address treasuryAddr = address(3);
     address[10] v; // voter addresses
 
-    // Config values matching setConfig(10, 50, 7 days, 2, 200, 30, 3, 500, 1000e6)
+    // Config values matching the Robust BTS 3-rater settlement floor.
     uint64 constant MIN_EPOCH_BLOCKS = 10;
     uint64 constant MAX_EPOCH_BLOCKS = 50;
     uint256 constant MAX_DURATION = 7 days;
-    uint256 constant MIN_VOTERS = 2;
+    uint256 constant MIN_VOTERS = 3;
 
     uint256 contentNonce;
 
@@ -90,7 +90,7 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
         ProtocolConfig(address(engine.protocolConfig())).setCategoryRegistry(address(mockCategoryRegistry));
         ProtocolConfig(address(engine.protocolConfig())).setTreasury(treasuryAddr);
 
-        // Config: epochDuration=1h, maxDuration=7d, minVoters=2, maxVoters=200
+        // Config: epochDuration=1h, maxDuration=7d, minVoters=3, maxVoters=200
         _setTlockRoundConfig(ProtocolConfig(address(engine.protocolConfig())), 1 hours, MAX_DURATION, MIN_VOTERS, 200);
 
         // Fund consensus reserve: 100K HREP
@@ -588,7 +588,7 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
         uint256 cid = _submit();
 
         (bytes32 ck1, bytes32 s1) = _vote(v[0], cid, true, 5e6);
-        // Only 1 voter — minVoters=2 not reached
+        // Only 1 voter — minVoters=3 not reached
 
         uint256 rid = RoundEngineReadHelpers.activeRoundId(engine, cid);
         RoundLib.Round memory r = RoundEngineReadHelpers.round(engine, cid, rid);

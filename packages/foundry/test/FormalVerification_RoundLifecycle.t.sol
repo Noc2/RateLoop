@@ -29,7 +29,7 @@ contract FormalVerification_RoundLifecycleTest is VotingTestBase {
 
     uint256 constant EPOCH_DURATION = 5 minutes;
     uint256 constant MAX_DURATION = 7 days;
-    uint256 constant MIN_VOTERS = 2;
+    uint256 constant MIN_VOTERS = 3;
 
     uint256 contentNonce;
 
@@ -87,7 +87,7 @@ contract FormalVerification_RoundLifecycleTest is VotingTestBase {
         ProtocolConfig(address(engine.protocolConfig())).setCategoryRegistry(address(mockCategoryRegistry));
         ProtocolConfig(address(engine.protocolConfig())).setTreasury(treasuryAddr);
 
-        // Config: epochDuration=5min, maxDuration=7d, minVoters=2, maxVoters=200
+        // Config: epochDuration=5min, maxDuration=7d, minVoters=3, maxVoters=200
         _setTlockRoundConfig(
             ProtocolConfig(address(engine.protocolConfig())), EPOCH_DURATION, MAX_DURATION, MIN_VOTERS, 200
         );
@@ -335,6 +335,7 @@ contract FormalVerification_RoundLifecycleTest is VotingTestBase {
         // Two-sided votes
         (bytes32 ck0, bytes32 s0) = _vote(v[0], cid, true, 5e6);
         (bytes32 ck1, bytes32 s1) = _vote(v[1], cid, false, 10e6);
+        (bytes32 ck2, bytes32 s2) = _vote(v[2], cid, true, 6e6);
 
         uint256 rid = RoundEngineReadHelpers.activeRoundId(engine, cid);
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, cid, rid);
@@ -347,6 +348,7 @@ contract FormalVerification_RoundLifecycleTest is VotingTestBase {
         _warpPastTlockRevealTime(uint256(round.startTime) + EPOCH_DURATION);
         engine.revealVoteByCommitKey(cid, rid, ck0, true, 5_000, s0);
         engine.revealVoteByCommitKey(cid, rid, ck1, false, 5_000, s1);
+        engine.revealVoteByCommitKey(cid, rid, ck2, true, 5_000, s2);
 
         // After minVoters revealed, thresholdReachedAt is set
         RoundLib.Round memory afterReveal = RoundEngineReadHelpers.round(engine, cid, rid);
@@ -399,6 +401,8 @@ contract FormalVerification_RoundLifecycleTest is VotingTestBase {
         // Equal stakes on both sides (same epoch = same weight)
         (bytes32 ck0, bytes32 s0) = _vote(v[0], cid, true, 5e6);
         (bytes32 ck1, bytes32 s1) = _vote(v[1], cid, false, 5e6);
+        (bytes32 ck2, bytes32 s2) = _vote(v[2], cid, true, 5e6);
+        (bytes32 ck3, bytes32 s3) = _vote(v[3], cid, false, 5e6);
 
         uint256 rid = RoundEngineReadHelpers.activeRoundId(engine, cid);
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, cid, rid);
@@ -407,6 +411,8 @@ contract FormalVerification_RoundLifecycleTest is VotingTestBase {
         _warpPastTlockRevealTime(uint256(round.startTime) + EPOCH_DURATION);
         engine.revealVoteByCommitKey(cid, rid, ck0, true, 5_000, s0);
         engine.revealVoteByCommitKey(cid, rid, ck1, false, 5_000, s1);
+        engine.revealVoteByCommitKey(cid, rid, ck2, true, 5_000, s2);
+        engine.revealVoteByCommitKey(cid, rid, ck3, false, 5_000, s3);
 
         RoundLib.Round memory afterReveal = RoundEngineReadHelpers.round(engine, cid, rid);
         assertGt(afterReveal.thresholdReachedAt, 0, "Threshold reached");
@@ -489,6 +495,7 @@ contract FormalVerification_RoundLifecycleTest is VotingTestBase {
         // Round 1: two-sided votes
         _vote(v[0], cid, true, 5e6);
         _vote(v[1], cid, false, 10e6);
+        _vote(v[2], cid, true, 6e6);
 
         uint256 rid1 = RoundEngineReadHelpers.activeRoundId(engine, cid);
         assertEq(rid1, 1, "First round has ID 1");
@@ -502,7 +509,7 @@ contract FormalVerification_RoundLifecycleTest is VotingTestBase {
         vm.warp(block.timestamp + 24 hours);
 
         // New vote on same content creates round 2
-        _vote(v[2], cid, true, 10e6);
+        _vote(v[3], cid, true, 10e6);
         uint256 rid2 = RoundEngineReadHelpers.activeRoundId(engine, cid);
         assertEq(rid2, 2, "New round created after settlement");
         assertGt(rid2, rid1, "Round ID incremented");

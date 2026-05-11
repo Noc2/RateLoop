@@ -104,6 +104,7 @@ export const DEFAULT_VOTING_CONFIG: VotingConfig = {
   minVoters: DEFAULT_ROUND_CONFIG.minVoters,
   maxVoters: DEFAULT_ROUND_CONFIG.maxVoters,
 };
+const RBTS_MIN_REVEALS = 3;
 
 function toBigInt(value: unknown, fallback = 0n): bigint {
   return typeof value === "bigint" ? value : fallback;
@@ -344,6 +345,7 @@ export function deriveRoundSnapshot(params: {
   const voteCount = Number(voteCountBigInt);
   const totalStake = (round?.totalStake ?? 0n) + optimisticStake;
   const thresholdReachedAt = round ? Number(round.thresholdReachedAt) : 0;
+  const settlementQuorum = Math.max(params.config.minVoters, RBTS_MIN_REVEALS);
   const timing = deriveRoundTiming({
     startTime,
     now: params.now,
@@ -371,8 +373,8 @@ export function deriveRoundSnapshot(params: {
     thresholdReachedAt,
     settlementTime: thresholdReachedAt > 0 ? thresholdReachedAt : 0,
     settlementCountdown: 0,
-    votersNeeded: Math.max(0, params.config.minVoters - revealedCount),
-    readyToSettle: state === ROUND_STATE.Open && revealedCount >= params.config.minVoters,
+    votersNeeded: Math.max(0, settlementQuorum - revealedCount),
+    readyToSettle: state === ROUND_STATE.Open && revealedCount >= settlementQuorum,
     isRoundFull: voteCount >= params.config.maxVoters,
     minVoters: params.config.minVoters,
     maxVoters: params.config.maxVoters,

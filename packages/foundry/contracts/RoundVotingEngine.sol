@@ -728,8 +728,8 @@ contract RoundVotingEngine is
         if (round.state != RoundLib.RoundState.Open) revert RoundNotOpen();
         RoundLib.RoundConfig memory roundCfg = _getRoundConfig(contentId, roundId);
         if (!RoundLib.isExpired(round, roundCfg.maxDuration)) revert RoundNotExpired();
-        // Cannot cancel once the round has meaningful commit quorum.
-        if (round.voteCount >= roundCfg.minVoters) revert ThresholdReached();
+        // Cannot cancel once the round has meaningful RBTS commit quorum.
+        if (round.voteCount >= _rbtsRevealQuorum(roundCfg.minVoters)) revert ThresholdReached();
 
         round.state = RoundLib.RoundState.Cancelled;
 
@@ -742,8 +742,9 @@ contract RoundVotingEngine is
         RoundLib.Round storage round = rounds[contentId][roundId];
         if (round.state != RoundLib.RoundState.Open) revert RoundNotOpen();
         RoundLib.RoundConfig memory roundCfg = _getRoundConfig(contentId, roundId);
-        if (round.voteCount < roundCfg.minVoters) revert NotEnoughVotes();
-        if (round.revealedCount >= roundCfg.minVoters) revert ThresholdReached();
+        uint16 rbtsRevealQuorum = _rbtsRevealQuorum(roundCfg.minVoters);
+        if (round.voteCount < rbtsRevealQuorum) revert NotEnoughVotes();
+        if (round.revealedCount >= rbtsRevealQuorum) revert ThresholdReached();
         if (!_canFinalizeRevealFailedRound(contentId, roundId, round)) revert RevealGraceActive();
 
         _markRoundRevealFailed(contentId, roundId, round);
@@ -780,9 +781,8 @@ contract RoundVotingEngine is
 
         RoundLib.RoundConfig memory roundCfg = _getRoundConfig(contentId, roundId);
 
-        // Must have ≥ minVoters revealed votes
-        if (round.revealedCount < roundCfg.minVoters) revert NotEnoughVotes();
-        if (round.revealedCount < MIN_RBTS_PARTICIPANTS) revert NotEnoughVotes();
+        // Must have enough revealed votes for both the round config and Robust BTS.
+        if (round.revealedCount < _rbtsRevealQuorum(roundCfg.minVoters)) revert NotEnoughVotes();
 
         // Prevent selective revelation: all past-epoch commits must be revealed before settlement is allowed.
         // Once the final reveal grace window has elapsed, revealed quorum is enough to settle and unrevealed
@@ -1142,8 +1142,9 @@ contract RoundVotingEngine is
         if (round.state != RoundLib.RoundState.Open) return false;
 
         RoundLib.RoundConfig memory roundCfg = _getRoundConfig(contentId, roundId);
-        if (round.voteCount < roundCfg.minVoters) return false;
-        if (round.revealedCount >= roundCfg.minVoters) return false;
+        uint16 rbtsRevealQuorum = _rbtsRevealQuorum(roundCfg.minVoters);
+        if (round.voteCount < rbtsRevealQuorum) return false;
+        if (round.revealedCount >= rbtsRevealQuorum) return false;
 
         return _isFinalRevealGraceElapsed(contentId, roundId, round);
     }
@@ -1290,7 +1291,7 @@ contract RoundVotingEngine is
             predictedUpBps,
             salt,
             _getRoundReferenceRatingBps(contentId, roundId),
-            roundCfg.minVoters,
+            _rbtsRevealQuorum(roundCfg.minVoters),
             targetRoundRevealableAt,
             commitRaterWeightBps[contentId][roundId][commitKey]
         );
@@ -1306,6 +1307,10 @@ contract RoundVotingEngine is
     // =========================================================================
     // VIEW FUNCTIONS
     // =========================================================================
+
+    function _rbtsRevealQuorum(uint16 minVoters) internal pure returns (uint16) {
+        return minVoters < MIN_RBTS_PARTICIPANTS ? MIN_RBTS_PARTICIPANTS : minVoters;
+    }
 
     // Note: computeCurrentEpochEnd removed to fit size limit.
     // Use config().epochDuration plus rounds(contentId, roundId).startTime to compute off-chain.

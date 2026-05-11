@@ -19,7 +19,7 @@ contract GasBudgetTest is RoundIntegrationTest {
     uint256 internal constant MAX_COMMIT_VOTE_GAS = 2_725_000;
     uint256 internal constant MAX_REVEAL_VOTE_GAS = 320_000;
     uint256 internal constant MAX_SETTLE_ROUND_GAS = 475_000;
-    uint256 internal constant MAX_SETTLE_ROUND_MAX_EPOCH_SCAN_GAS = 5_500_000;
+    uint256 internal constant MAX_SETTLE_ROUND_MAX_EPOCH_SCAN_GAS = 5_900_000;
     uint256 internal constant MAX_PROCESS_UNREVEALED_GAS = 250_000;
     uint256 internal constant MAX_CANCEL_EXPIRED_ROUND_GAS = 60_000;
     uint256 internal constant MAX_CLAIM_REWARD_GAS = 190_000;
@@ -188,17 +188,19 @@ contract GasBudgetTest is RoundIntegrationTest {
 
         ProtocolConfig config = ProtocolConfig(address(votingEngine.protocolConfig()));
         vm.startPrank(owner);
-        _setTlockRoundConfig(config, 5 minutes, 7 days, 2, 200);
+        _setTlockRoundConfig(config, 5 minutes, 7 days, 3, 200);
         vm.stopPrank();
 
         uint256 contentId = _submitContent();
 
-        address[] memory voters = new address[](2);
+        address[] memory voters = new address[](3);
         voters[0] = voter1;
         voters[1] = voter2;
-        bool[] memory directions = new bool[](2);
+        voters[2] = voter3;
+        bool[] memory directions = new bool[](3);
         directions[0] = true;
         directions[1] = false;
+        directions[2] = true;
 
         _commitAllThenReveal(voters, contentId, directions, STAKE);
         uint256 roundId = _getActiveOrLatestRoundId(contentId);

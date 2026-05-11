@@ -592,9 +592,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertGt(engine.roundRbtsRewardWeight(contentId, roundId), 0, "adjusted RBTS weights accumulated");
     }
 
-    function test_RbtsSettlementRequiresThreeRevealsEvenIfRoundConfigAllowsTwo() public {
-        vm.prank(owner);
-        _setTlockRoundConfig(ProtocolConfig(protocolConfigAddress), 1 hours, 7 days, 2, 1000);
+    function test_RbtsSettlementRequiresThreeReveals() public {
         uint256 contentId = _submitContent();
 
         (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, true, 8_000, STAKE);

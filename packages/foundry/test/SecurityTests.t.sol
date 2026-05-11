@@ -103,7 +103,7 @@ abstract contract SecurityHarnessBase is VotingTestBase {
         config.setCategoryRegistry(address(mockCategoryRegistry));
         config.setTreasury(treasury);
         _setTlockDrandConfig(config, DEFAULT_DRAND_CHAIN_HASH, DEFAULT_DRAND_GENESIS_TIME, DEFAULT_DRAND_PERIOD);
-        _setTlockRoundConfig(config, epochDuration, 7 days, 2, 200);
+        _setTlockRoundConfig(config, epochDuration, 7 days, 3, 200);
     }
 
     function _fundConsensusReserve(HumanReputation token, RoundVotingEngine votingEngine, address owner) internal {
@@ -124,7 +124,8 @@ contract SecurityReentrancyTest is SecurityHarnessBase {
     address submitter = address(0xC);
     address voter1 = address(0xD);
     address voter2 = address(0xE);
-    address attacker = address(0xF);
+    address voter3 = address(0xF);
+    address attacker = address(0x10);
 
     uint256 constant STAKE = 10e6;
     uint256 constant EPOCH_DURATION = 5 minutes;
@@ -158,7 +159,7 @@ contract SecurityReentrancyTest is SecurityHarnessBase {
         _fundConsensusReserve(hrepToken, votingEngine, owner);
 
         {
-            address[4] memory users = [submitter, voter1, voter2, attacker];
+            address[5] memory users = [submitter, voter1, voter2, voter3, attacker];
             for (uint256 i = 0; i < users.length; i++) {
                 hrepToken.mint(users[i], 10_000e6);
             }
@@ -238,6 +239,7 @@ contract SecurityReentrancyTest is SecurityHarnessBase {
 
         bytes32 ck1 = _commit(voter1, contentId, true);
         bytes32 ck2 = _commit(voter2, contentId, false);
+        bytes32 ck3 = _commit(voter3, contentId, true);
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(votingEngine, contentId);
         RoundLib.Round memory round = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
@@ -246,6 +248,7 @@ contract SecurityReentrancyTest is SecurityHarnessBase {
         _warpPastTlockRevealTime(uint256(round.startTime) + EPOCH_DURATION);
         _revealFromCiphertext(contentId, roundId, ck1);
         _revealFromCiphertext(contentId, roundId, ck2);
+        _revealFromCiphertext(contentId, roundId, ck3);
 
         // Settle
         votingEngine.settleRound(contentId, roundId);
@@ -403,6 +406,7 @@ contract SecuritySettlementTimingTest is SecurityHarnessBase {
     address submitter = address(0xC);
     address voter1 = address(0xD);
     address voter2 = address(0xE);
+    address voter3 = address(0xF);
 
     uint256 constant STAKE = 10e6;
     uint256 constant EPOCH_DURATION = 5 minutes;
@@ -436,7 +440,7 @@ contract SecuritySettlementTimingTest is SecurityHarnessBase {
         _fundConsensusReserve(hrepToken, votingEngine, owner);
 
         {
-            address[3] memory users = [submitter, voter1, voter2];
+            address[4] memory users = [submitter, voter1, voter2, voter3];
             for (uint256 i = 0; i < users.length; i++) {
                 hrepToken.mint(users[i], 10_000e6);
             }
@@ -510,6 +514,7 @@ contract SecuritySettlementTimingTest is SecurityHarnessBase {
         uint256 contentId = _submitContent();
         bytes32 ck1 = _commit(voter1, contentId, true);
         bytes32 ck2 = _commit(voter2, contentId, false);
+        bytes32 ck3 = _commit(voter3, contentId, true);
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(votingEngine, contentId);
         RoundLib.Round memory round = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
@@ -517,6 +522,7 @@ contract SecuritySettlementTimingTest is SecurityHarnessBase {
         _warpPastTlockRevealTime(uint256(round.startTime) + EPOCH_DURATION);
         _revealFromCiphertext(contentId, roundId, ck1);
         _revealFromCiphertext(contentId, roundId, ck2);
+        _revealFromCiphertext(contentId, roundId, ck3);
 
         votingEngine.settleRound(contentId, roundId);
 
@@ -534,6 +540,7 @@ contract SecuritySettlementTimingTest is SecurityHarnessBase {
         // Only UP votes
         bytes32 ck1 = _commit(voter1, contentId, true);
         bytes32 ck2 = _commit(voter2, contentId, true);
+        bytes32 ck3 = _commit(voter3, contentId, true);
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(votingEngine, contentId);
         RoundLib.Round memory round = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
@@ -541,6 +548,7 @@ contract SecuritySettlementTimingTest is SecurityHarnessBase {
         _warpPastTlockRevealTime(uint256(round.startTime) + EPOCH_DURATION);
         _revealFromCiphertext(contentId, roundId, ck1);
         _revealFromCiphertext(contentId, roundId, ck2);
+        _revealFromCiphertext(contentId, roundId, ck3);
 
         votingEngine.settleRound(contentId, roundId);
 
@@ -611,7 +619,7 @@ contract SecurityAccessControlTest is Test {
         registry.setCategoryRegistry(address(mockCategoryRegistry));
         ProtocolConfig(protocolConfigAddress).setCategoryRegistry(address(mockCategoryRegistry));
         ProtocolConfig(protocolConfigAddress).setTreasury(treasury);
-        ProtocolConfig(protocolConfigAddress).setConfig(5 minutes, 7 days, 2, 200);
+        ProtocolConfig(protocolConfigAddress).setConfig(5 minutes, 7 days, 3, 200);
 
         vm.stopPrank();
 
@@ -658,7 +666,7 @@ contract SecurityAccessControlTest is Test {
     function test_ACL_Engine_setConfig_Unauthorized() public {
         vm.prank(attacker);
         _expectUnauthorized(attacker, CONFIG_ROLE_ENGINE);
-        ProtocolConfig(protocolConfigAddress).setConfig(5 minutes, 7 days, 2, 200);
+        ProtocolConfig(protocolConfigAddress).setConfig(5 minutes, 7 days, 3, 200);
     }
 
     function test_ACL_Engine_addToConsensusReserve_IsPermissionless() public {

@@ -114,7 +114,7 @@ contract AdversarialTests is VotingTestBase {
             DEFAULT_DRAND_GENESIS_TIME,
             DEFAULT_DRAND_PERIOD
         );
-        _setTlockRoundConfig(ProtocolConfig(address(engine.protocolConfig())), EPOCH_DURATION, 7 days, 2, 200);
+        _setTlockRoundConfig(ProtocolConfig(address(engine.protocolConfig())), EPOCH_DURATION, 7 days, 3, 200);
 
         // Fund consensus reserve
         uint256 reserveAmount = 1_000_000e6;
@@ -596,7 +596,7 @@ contract AdversarialTests is VotingTestBase {
             DEFAULT_DRAND_GENESIS_TIME,
             DEFAULT_DRAND_PERIOD
         );
-        _setTlockRoundConfig(ProtocolConfig(address(eng2.protocolConfig())), EPOCH_DURATION, 7 days, 2, 200);
+        _setTlockRoundConfig(ProtocolConfig(address(eng2.protocolConfig())), EPOCH_DURATION, 7 days, 3, 200);
 
         // NO fundConsensusReserve — reserve is zero
 
