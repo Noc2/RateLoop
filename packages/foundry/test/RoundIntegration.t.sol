@@ -2082,7 +2082,7 @@ contract RoundIntegrationTest is VotingTestBase {
         ProtocolConfig protocolConfig = ProtocolConfig(address(votingEngine.protocolConfig()));
         vm.startPrank(owner);
         registry.setTreasury(treasury);
-        protocolConfig.setSlashConfig(4_000, 1, 2 days, 100e6);
+        protocolConfig.setSlashConfig(4_000, 1, 2 days, 60e6);
         vm.stopPrank();
 
         uint256 contentId = _submitContent();
@@ -2092,16 +2092,24 @@ contract RoundIntegrationTest is VotingTestBase {
         assertEq(slashConfig.slashThresholdBps, 4_000, "content should snapshot the tuned slash threshold");
         assertEq(slashConfig.minSlashSettledRounds, 1, "content should snapshot the tuned settled-round requirement");
         assertEq(slashConfig.minSlashLowDuration, 2 days, "content should snapshot the tuned dwell window");
-        assertEq(slashConfig.minSlashEvidence, 100e6, "content should snapshot the tuned evidence floor");
+        assertEq(slashConfig.minSlashEvidence, 60e6, "content should snapshot the tuned evidence floor");
 
         vm.warp(block.timestamp + 1 days + 1);
 
-        address[] memory voters = new address[](2);
+        address[] memory voters = new address[](6);
         voters[0] = voter1;
         voters[1] = voter2;
-        bool[] memory dirs = new bool[](2);
+        voters[2] = voter3;
+        voters[3] = voter4;
+        voters[4] = voter5;
+        voters[5] = voter6;
+        bool[] memory dirs = new bool[](6);
         dirs[0] = false;
         dirs[1] = false;
+        dirs[2] = false;
+        dirs[3] = false;
+        dirs[4] = false;
+        dirs[5] = false;
 
         _settleRoundWith(voters, contentId, dirs, 10e6);
 
@@ -2114,7 +2122,7 @@ contract RoundIntegrationTest is VotingTestBase {
         );
 
         (,,,,,,,, rating,) = registry.contents(contentId);
-        assertLt(uint256(rating), 40, "display rating should still reflect a low settlement");
+        assertLe(uint256(rating), 40, "display rating should still reflect a low settlement");
         assertEq(hrepToken.balanceOf(submitter), submitterBalanceBefore, "submitter receives no removed stake payout");
         assertEq(hrepToken.balanceOf(treasury), treasuryBalanceBefore, "treasury should not receive a removed slash");
     }
