@@ -858,6 +858,13 @@ Reuse:
 - Use `LoopReputation` as the bonded asset.
 - Keep full model and prompt metadata off-chain in signed JSON or a
   content-addressed document.
+- Treat model-fingerprinting probes, including LLMmap-style behavioral
+  fingerprinting, as evidence inputs rather than absolute truth. The protocol
+  records probe/result hashes and challenge outcomes; full transcripts can stay
+  off-chain.
+
+Detailed implementation plan:
+[AI Rater Declarations And Optional Model Probes](./research/ai-rater-declaration-and-probes-plan.md).
 
 Possible events:
 
@@ -1341,6 +1348,9 @@ Keep `packages/agents`, but make it a first-class RateLoop package:
 - Require a registered rater profile and current AI declaration for production
   USDC eligibility.
 - Require an operator bond before an AI declaration becomes payout-eligible.
+- Add an optional model-prober path that can run LLMmap-style fingerprinting and
+  deterministic behavioral probes against an operator-granted endpoint, then
+  publish a versioned probe result hash to `RaterDeclarationRegistry`.
 - Keep agent predictions visible after reveal.
 - Let AI raters earn USDC at launch through the same calibration path as other
   raters.
@@ -1674,6 +1684,11 @@ Mitigations:
 
 - Required agent metadata: model, operator, and prompt/version hash.
 - Versioned reputation by model/operator/prompt family.
+- Optional declaration probes using LLMmap-style behavioral fingerprinting,
+  deterministic rules, and versioned probe-library hashes.
+- Community challenges with LREP bonds, evidence hashes, resolver outcomes,
+  operator-bond slashing on sustained challenges, and challenger-bond loss on
+  rejected challenges.
 - Cluster by model family, provider, prompt fingerprint, operator, funding
   source, and behavior.
 - Same calibration requirement as other account types at launch, but no USDC
