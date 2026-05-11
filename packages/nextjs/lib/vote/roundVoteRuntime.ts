@@ -18,13 +18,6 @@ const roundCommitPreviewAbi = [
     inputs: [{ name: "contentId", type: "uint256" }],
     outputs: [{ name: "", type: "uint16" }],
   },
-  {
-    type: "function",
-    name: "previewCommitScorerMetadataHash",
-    stateMutability: "view",
-    inputs: [{ name: "contentId", type: "uint256" }],
-    outputs: [{ name: "", type: "bytes32" }],
-  },
 ] as const;
 
 export async function resolveRoundVoteRuntime(params: {
@@ -48,7 +41,7 @@ export async function resolveRoundVoteRuntime(params: {
   const runtimeTimestampSeconds = Math.max(Number(latestBlock.timestamp), pendingTimestampSeconds);
   const previewBlock = canReadPendingBlock ? { blockTag: "pending" as const } : { blockNumber: snapshotBlockNumber };
 
-  const [roundId, roundReferenceRatingBps, scorerMetadataHash] = await Promise.all([
+  const [roundId, roundReferenceRatingBps] = await Promise.all([
     params.publicClient.readContract({
       address: params.votingEngineAddress,
       abi: roundCommitPreviewAbi,
@@ -60,13 +53,6 @@ export async function resolveRoundVoteRuntime(params: {
       address: params.votingEngineAddress,
       abi: roundCommitPreviewAbi,
       functionName: "previewCommitReferenceRatingBps",
-      args: [params.contentId],
-      ...previewBlock,
-    }),
-    params.publicClient.readContract({
-      address: params.votingEngineAddress,
-      abi: roundCommitPreviewAbi,
-      functionName: "previewCommitScorerMetadataHash",
       args: [params.contentId],
       ...previewBlock,
     }),
@@ -116,6 +102,5 @@ export async function resolveRoundVoteRuntime(params: {
     now: () => runtimeNowMs,
     roundId,
     roundReferenceRatingBps: roundReferenceRatingBps as number,
-    scorerMetadataHash: scorerMetadataHash as `0x${string}`,
   };
 }

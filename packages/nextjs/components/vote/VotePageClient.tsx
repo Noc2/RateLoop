@@ -1245,7 +1245,7 @@ const HomeInner = () => {
   }, []);
 
   const handleConfirmStake = useCallback(
-    async (stakeAmount: number, opinionRating: number, predictedCrowdRating: number) => {
+    async (stakeAmount: number, isUp: boolean, predictedUpPercent: number) => {
       const cooldownSeconds = stakeModalCooldownSeconds;
       if (cooldownSeconds > 0) {
         notification.info(getVoteCooldownMessage(cooldownSeconds), { duration: 6000 });
@@ -1279,8 +1279,8 @@ const HomeInner = () => {
 
       const success = await commitVote({
         contentId: stakeModal.contentId,
-        opinionRating,
-        predictedCrowdRating,
+        isUp,
+        predictedUpPercent,
         isOwnContent: item?.isOwnContent,
         roundConfig: item?.roundConfig ?? stakeModal.roundConfig,
         stakeAmount,
@@ -1300,15 +1300,13 @@ const HomeInner = () => {
       setLocalVoteCooldownVersion(version => version + 1);
       if (item) {
         markPrimaryInteraction(item.id, { isVote: true });
-        recordRecommendationSignal(item, "vote_commit", { predictedRating: predictedCrowdRating });
+        recordRecommendationSignal(item, "vote_commit", { isUp, predictedRating: predictedUpPercent / 10 });
       }
 
       const stakeStatus =
         stakeAmount > 0 ? `${stakeAmount} reputation locked.` : "no reputation locked; network fee only.";
       notification.success(
-        `Report submitted: ${opinionRating.toFixed(1)}/10 rating, ${predictedCrowdRating.toFixed(
-          1,
-        )}/10 crowd prediction, ${stakeStatus}`,
+        `Vote submitted: ${isUp ? "up" : "down"}, crowd prediction ${predictedUpPercent.toFixed(0)}% up, ${stakeStatus}`,
       );
 
       if (isFirstVote) {

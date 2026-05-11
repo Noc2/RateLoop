@@ -4,7 +4,12 @@ import { resolvePonderUrlValue } from "./utils/env/ponderUrl";
 import { DEFAULT_DEV_TARGET_NETWORKS, resolveTargetNetworks } from "./utils/env/targetNetworks";
 import { mergeRpcOverrides, resolveRpcOverrides } from "./utils/rpcUrls";
 import withBundleAnalyzer from "@next/bundle-analyzer";
+import { loadEnvConfig } from "@next/env";
 import type { NextConfig } from "next";
+import { dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+
+loadEnvConfig(dirname(fileURLToPath(import.meta.url)));
 
 const isDev = process.env.NODE_ENV === "development";
 const isVercelDeployment = process.env.VERCEL === "1" || Boolean(process.env.VERCEL_ENV);

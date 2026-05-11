@@ -25,6 +25,12 @@ const ANVIL_RPC = E2E_RPC_URL;
 const DEFAULT_TX_GAS_LIMIT = 10_000_000n;
 const ESTIMATED_TX_GAS_BUFFER = 300_000n;
 const DIRECT_VOTE_COMMIT_ATTEMPTS = 3;
+const DEFAULT_UP_PREDICTION_BPS = 8_000;
+const DEFAULT_DOWN_PREDICTION_BPS = 2_000;
+
+function defaultPredictedUpBps(isUp: boolean) {
+  return isUp ? DEFAULT_UP_PREDICTION_BPS : DEFAULT_DOWN_PREDICTION_BPS;
+}
 const ANVIL_PRIVATE_KEYS_BY_ADDRESS = new Map(
   Object.values(ANVIL_ACCOUNTS).map(account => [account.address.toLowerCase(), account.privateKey as `0x${string}`]),
 );
@@ -708,14 +714,7 @@ async function readCommitTiming(
     abi,
     functionName: "commitRevealData",
     data: result,
-  }) as unknown as readonly [
-    `0x${string}`,
-    bigint,
-    `0x${string}`,
-    bigint | number,
-    boolean,
-    bigint,
-  ];
+  }) as unknown as readonly [`0x${string}`, bigint, `0x${string}`, bigint | number, boolean, bigint];
 
   if (commit[5] === 0n) {
     return null;
@@ -1551,7 +1550,7 @@ async function buildVoteCommitSalt(
  * Encrypts vote direction with drand tlock and computes commitHash/commitKey.
  * Caller must have approved stakeAmount of HREP to the RoundVotingEngine.
  *
- * Returns { success, commitKey, isUp, salt } for later reveal.
+ * Returns { success, commitKey, isUp, predictedUpBps, salt } for later reveal.
  */
 export async function commitVoteDirect(
   contentId: number | bigint,
@@ -1561,7 +1560,14 @@ export async function commitVoteDirect(
   fromAddress: string,
   contractAddress: string,
   epochDurationSeconds?: number,
-): Promise<{ success: boolean; retryable: boolean; commitKey: `0x${string}`; isUp: boolean; salt: `0x${string}` }> {
+): Promise<{
+  success: boolean;
+  retryable: boolean;
+  commitKey: `0x${string}`;
+  isUp: boolean;
+  predictedUpBps: number;
+  salt: `0x${string}`;
+}> {
   const { encodeFunctionData } = await import("viem");
   const resolvedEpochDurationSeconds = await resolveVoteCommitEpochDurationSeconds(
     contractAddress,
@@ -1582,6 +1588,7 @@ export async function commitVoteDirect(
       );
       const roundContext = packVoteRoundContext(roundId, roundReferenceRatingBps);
       const tlockRuntime = await resolveTlockCommitRuntime(contractAddress, contentIdBigInt, roundId);
+      const predictedUpBps = defaultPredictedUpBps(isUp);
       const {
         ciphertext,
         commitHash: chash,
@@ -1592,6 +1599,7 @@ export async function commitVoteDirect(
         {
           voter: fromAddress as `0x${string}`,
           isUp,
+          predictedUpBps,
           salt,
           contentId: contentIdBigInt,
           roundId,
@@ -1641,6 +1649,7 @@ export async function commitVoteDirect(
         retryable: isRetryableDirectCommitSendResult(sendResult),
         commitKey: ckey!,
         isUp,
+        predictedUpBps,
         salt,
       };
     },
@@ -1667,7 +1676,14 @@ export async function commitVoteWithTransferAndCallDirect(
   tokenAddress: string,
   votingEngineAddress: string,
   epochDurationSeconds?: number,
-): Promise<{ success: boolean; retryable: boolean; commitKey: `0x${string}`; isUp: boolean; salt: `0x${string}` }> {
+): Promise<{
+  success: boolean;
+  retryable: boolean;
+  commitKey: `0x${string}`;
+  isUp: boolean;
+  predictedUpBps: number;
+  salt: `0x${string}`;
+}> {
   const { encodeFunctionData } = await import("viem");
   const resolvedEpochDurationSeconds = await resolveVoteCommitEpochDurationSeconds(
     votingEngineAddress,
@@ -1687,6 +1703,7 @@ export async function commitVoteWithTransferAndCallDirect(
         latestBlock.blockTag,
       );
       const tlockRuntime = await resolveTlockCommitRuntime(votingEngineAddress, contentIdBigInt, roundId);
+      const predictedUpBps = defaultPredictedUpBps(isUp);
       const {
         ciphertext,
         commitHash: chash,
@@ -1697,6 +1714,7 @@ export async function commitVoteWithTransferAndCallDirect(
         {
           voter: fromAddress as `0x${string}`,
           isUp,
+          predictedUpBps,
           salt,
           contentId: contentIdBigInt,
           roundId,
@@ -1743,6 +1761,7 @@ export async function commitVoteWithTransferAndCallDirect(
         retryable: isRetryableDirectCommitSendResult(sendResult),
         commitKey: ckey!,
         isUp,
+        predictedUpBps,
         salt,
       };
     },
@@ -1758,7 +1777,7 @@ export async function commitVoteWithTransferAndCallDirect(
 
 /**
  * Reveal a committed vote via contract call.
- * Calls revealVoteByCommitKey(contentId, roundId, commitKey, isUp, salt).
+ * Calls revealVoteByCommitKey(contentId, roundId, commitKey, isUp, predictedUpBps, salt).
  * Anyone can reveal — the keeper normally does this after epoch ends.
  */
 export async function revealVoteDirect(
@@ -1772,6 +1791,7 @@ export async function revealVoteDirect(
 ): Promise<boolean> {
   const { encodeFunctionData } = await import("viem");
   await ensureCommitRevealable(contractAddress, BigInt(contentId), BigInt(roundId), commitKey);
+  const predictedUpBps = defaultPredictedUpBps(isUp);
   const data = encodeFunctionData({
     abi: [
       {
@@ -1782,6 +1802,7 @@ export async function revealVoteDirect(
           { name: "roundId", type: "uint256" },
           { name: "commitKey", type: "bytes32" },
           { name: "isUp", type: "bool" },
+          { name: "predictedUpBps", type: "uint16" },
           { name: "salt", type: "bytes32" },
         ],
         outputs: [],
@@ -1789,7 +1810,7 @@ export async function revealVoteDirect(
       },
     ],
     functionName: "revealVoteByCommitKey",
-    args: [BigInt(contentId), BigInt(roundId), commitKey, isUp, salt],
+    args: [BigInt(contentId), BigInt(roundId), commitKey, isUp, predictedUpBps, salt],
   });
   return sendTx(fromAddress, contractAddress, data);
 }

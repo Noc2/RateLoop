@@ -3,7 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 import { LoopReputationAbi, packVoteRoundContext } from "@rateloop/contracts";
 import { ContentRegistryAbi, RoundVotingEngineAbi } from "@rateloop/contracts/abis";
-import { buildCommitPredictionParams } from "@rateloop/sdk/vote";
+import { buildCommitVoteParams } from "@rateloop/sdk/vote";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAccount, usePublicClient, useWriteContract } from "wagmi";
 import { useOptimisticVote } from "~~/contexts/OptimisticVoteContext";
@@ -33,8 +33,8 @@ import { getParsedErrorWithAllAbis } from "~~/utils/scaffold-eth/contract";
 
 interface RoundVoteParams {
   contentId: bigint;
-  opinionRating: number;
-  predictedCrowdRating: number;
+  isUp: boolean;
+  predictedUpPercent: number;
   stakeAmount: number; // In display tokens (e.g., 2.5 = 2.5 LREP)
   frontendCode?: `0x${string}`; // Optional frontend operator address for fee distribution
   isOwnContent?: boolean;
@@ -43,11 +43,10 @@ interface RoundVoteParams {
 }
 
 /**
- * Hook for tlock commit-reveal rating commits using reputation approval + commit.
+ * Hook for tlock commit-reveal RBTS vote commits using reputation approval + commit.
  * Handles: optional allowance approval followed by a vote commit.
  *
- * Opinion ratings and crowd predictions are tlock-encrypted to the current epoch's drand round,
- * keeping the report private until reveal.
+ * Binary signals and predicted up-share are tlock-encrypted to the current epoch's drand round.
  */
 export function useRoundVote() {
   const { address } = useAccount();
@@ -85,8 +84,8 @@ export function useRoundVote() {
 
   const commitVote = async ({
     contentId,
-    opinionRating,
-    predictedCrowdRating,
+    isUp,
+    predictedUpPercent,
     stakeAmount,
     frontendCode,
     isOwnContent,
@@ -131,8 +130,8 @@ export function useRoundVote() {
       return false;
     }
 
-    if (opinionRating === undefined || predictedCrowdRating === undefined) {
-      setError("Choose your rating and expected crowd rating before submitting.");
+    if (isUp === undefined || predictedUpPercent === undefined) {
+      setError("Choose your vote and expected up-share before submitting.");
       return false;
     }
 
@@ -188,15 +187,12 @@ export function useRoundVote() {
         return false;
       }
 
-      const commitParams = await buildCommitPredictionParams({
+      const commitParams = await buildCommitVoteParams({
         voter: address as `0x${string}`,
-        chainId: targetNetwork.id,
-        engineAddress: votingEngineInfo.address as `0x${string}`,
         contentId,
-        opinionRating,
-        predictedCrowdRating,
+        isUp,
+        predictedUpPercent,
         stakeAmount,
-        scorerMetadataHash: runtime.scorerMetadataHash,
         epochDuration: runtime.epochDuration,
         roundId: runtime.roundId,
         roundReferenceRatingBps: runtime.roundReferenceRatingBps,
