@@ -36,9 +36,8 @@ contract DeployRateLoop is ScaffoldETHDeploy {
     uint256 public constant TOTAL_SUPPLY_CAP = 100_000_000 * 1e6;
     uint256 public constant CONSENSUS_POOL_AMOUNT = 4_000_000 * 1e6;
     uint256 public constant TREASURY_AMOUNT = 32_000_000 * 1e6;
-    uint256 public constant PARTICIPATION_POOL_AMOUNT = 12_000_000 * 1e6;
-    uint256 public constant LAUNCH_DISTRIBUTION_AMOUNT =
-        TOTAL_SUPPLY_CAP - CONSENSUS_POOL_AMOUNT - TREASURY_AMOUNT - PARTICIPATION_POOL_AMOUNT;
+    uint256 public constant PARTICIPATION_POOL_AMOUNT = 0;
+    uint256 public constant LAUNCH_DISTRIBUTION_AMOUNT = TOTAL_SUPPLY_CAP - CONSENSUS_POOL_AMOUNT - TREASURY_AMOUNT;
     uint256 public constant MIN_AI_DECLARATION_BOND = 100 * 1e6;
     uint256 public constant AI_DECLARATION_CHALLENGE_BOND = 25 * 1e6;
 
@@ -250,11 +249,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
 
         ParticipationPool participationPool = new ParticipationPool(address(lrepToken), governance);
         participationPool.setAuthorizedCaller(address(rewardDistributor), true);
-        lrepToken.mint(deployer, PARTICIPATION_POOL_AMOUNT);
-        lrepToken.approve(address(participationPool), PARTICIPATION_POOL_AMOUNT);
-        participationPool.depositPool(PARTICIPATION_POOL_AMOUNT);
-        protocolConfig.setParticipationPool(address(participationPool));
-        console.log("ParticipationPool deployed and funded with 12M LREP");
+        console.log("ParticipationPool deployed without launch funding");
 
         LaunchDistributionPool launchDistributionPool =
             new LaunchDistributionPool(address(lrepToken), address(raterRegistry), governance);
@@ -263,7 +258,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         lrepToken.approve(address(launchDistributionPool), LAUNCH_DISTRIBUTION_AMOUNT);
         launchDistributionPool.depositPool(LAUNCH_DISTRIBUTION_AMOUNT);
         protocolConfig.setLaunchDistributionPool(address(launchDistributionPool));
-        console.log("LaunchDistributionPool deployed and funded with 52M LREP");
+        console.log("LaunchDistributionPool deployed and funded with 64M LREP");
 
         if (!isLocalDev) {
             address[] memory excludedHolders = _buildQuorumExcludedHolders(

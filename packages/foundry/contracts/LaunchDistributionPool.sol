@@ -10,7 +10,7 @@ import {RaterRegistry} from "./RaterRegistry.sol";
 import {ILaunchDistributionPool} from "./interfaces/ILaunchDistributionPool.sol";
 
 /// @title LaunchDistributionPool
-/// @notice Holds the 52M LREP launch allocation and releases it through earned, verified, and legacy paths.
+/// @notice Holds the 64M LREP launch allocation and releases it through earned, verified, and legacy paths.
 contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyGuardTransient {
     using SafeERC20 for IERC20;
 
@@ -20,16 +20,21 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
     error AlreadyClaimed();
     error NotVerified();
     error PoolDepleted();
+    error InvalidPolicy();
 
-    uint256 public constant LEGACY_POOL_AMOUNT = 2_000_000e6;
+    uint256 public constant LEGACY_POOL_AMOUNT = 4_000_000e6;
     uint256 public constant EARNED_RATER_POOL_AMOUNT = 25_000_000e6;
-    uint256 public constant VERIFIED_REFERRAL_POOL_AMOUNT = 25_000_000e6;
+    uint256 public constant VERIFIED_REFERRAL_POOL_AMOUNT = 35_000_000e6;
     uint256 public constant TOTAL_POOL_AMOUNT =
         LEGACY_POOL_AMOUNT + EARNED_RATER_POOL_AMOUNT + VERIFIED_REFERRAL_POOL_AMOUNT;
 
     uint32 public constant ELIGIBILITY_RATING_COUNT = 5;
     uint32 public constant REWARDING_RATING_COUNT = 10;
     uint16 public constant MIN_QUALIFYING_SCORE_BPS = 7_000;
+    uint16 public constant MIN_EARNED_REWARD_VOTERS = 3;
+    uint16 public constant MIN_EARNED_REWARD_VERIFIED_HUMANS = 1;
+    uint16 public constant MIN_EARNED_REWARD_DISTINCT_VERIFIED_ANCHORS = 2;
+    uint16 public constant MIN_EARNED_REWARD_DISTINCT_ANCHOR_ROUNDS = 2;
 
     uint256 public constant REFERRAL_BONUS_BPS = 5_000;
     uint256 public constant MAX_REFERRAL_REWARD_PER_REFERRER = 10_000e6;
@@ -55,6 +60,7 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
     mapping(bytes32 => bool) public verifiedCredentialClaimed;
     mapping(address => bool) public verifiedBonusClaimedByAccount;
     mapping(address => uint256) public referralEarnings;
+    LaunchRewardPolicy public launchRewardPolicy;
 
     event PoolDeposit(uint256 amount);
     event PoolWithdrawal(address indexed to, uint256 amount);
@@ -62,6 +68,7 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
     event GovernanceUpdated(address indexed governance);
     event RaterRegistryUpdated(address indexed raterRegistry);
     event AuthorizedCallerUpdated(address indexed caller, bool authorized);
+    event LaunchRewardPolicyUpdated(LaunchRewardPolicy policy);
     event LegacyClaimed(address indexed account, uint256 amount);
     event RaterLaunchCapAssigned(address indexed rater, uint256 cap, uint256 cohortIndex);
     event EarnedRaterRewardPaid(address indexed rater, uint256 amount, uint16 scoreBps, uint32 rewardedRatingCount);
@@ -80,6 +87,7 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
         lrepToken = IERC20(_lrepToken);
         raterRegistry = RaterRegistry(_raterRegistry);
         governance = _governance;
+        _setLaunchRewardPolicy(_defaultLaunchRewardPolicy());
     }
 
     function transferOwnership(address newOwner) public override onlyOwner {
@@ -112,6 +120,10 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
     function setLegacyRoot(bytes32 newRoot) external onlyOwner {
         legacyRoot = newRoot;
         emit LegacyRootUpdated(newRoot);
+    }
+
+    function setLaunchRewardPolicy(LaunchRewardPolicy calldata policy) external onlyOwner {
+        _setLaunchRewardPolicy(policy);
     }
 
     function depositPool(uint256 amount) external {
@@ -178,11 +190,29 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
         nonReentrant
         returns (uint256 paidAmount)
     {
-        if (rater == address(0) || scoreBps < MIN_QUALIFYING_SCORE_BPS) return 0;
+        return _recordEarnedRaterReward(rater, scoreBps);
+    }
+
+    function recordEarnedRaterReward(
+        address rater,
+        uint256,
+        uint256,
+        bytes32,
+        uint16 scoreBps,
+        uint16,
+        bool,
+        bytes32[] calldata
+    ) external onlyAuthorized nonReentrant returns (uint256 paidAmount) {
+        return _recordEarnedRaterReward(rater, scoreBps);
+    }
+
+    function _recordEarnedRaterReward(address rater, uint16 scoreBps) internal returns (uint256 paidAmount) {
+        LaunchRewardPolicy memory policy = launchRewardPolicy;
+        if (rater == address(0) || scoreBps < policy.minQualifyingScoreBps) return 0;
 
         uint32 qualifyingCount = qualifyingRatingCount[rater] + 1;
         qualifyingRatingCount[rater] = qualifyingCount;
-        if (qualifyingCount < ELIGIBILITY_RATING_COUNT) return 0;
+        if (qualifyingCount < policy.eligibilityRatingCount) return 0;
 
         uint256 cap = raterLaunchCap[rater];
         if (cap == 0) {
@@ -193,11 +223,11 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
         }
 
         uint32 rewardedCount = rewardedRatingCount[rater];
-        if (rewardedCount >= REWARDING_RATING_COUNT || raterLaunchPaid[rater] >= cap) return 0;
+        if (rewardedCount >= policy.rewardingRatingCount || raterLaunchPaid[rater] >= cap) return 0;
 
-        uint256 targetPaid = rewardedCount + 1 == REWARDING_RATING_COUNT
+        uint256 targetPaid = rewardedCount + 1 == policy.rewardingRatingCount
             ? cap
-            : (cap * uint256(rewardedCount + 1)) / REWARDING_RATING_COUNT;
+            : (cap * uint256(rewardedCount + 1)) / policy.rewardingRatingCount;
         paidAmount = targetPaid - raterLaunchPaid[rater];
         uint256 remaining = _remainingEarnedRaterPool();
         if (paidAmount > remaining) paidAmount = remaining;
@@ -264,6 +294,38 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
         verifiedReferralDistributed += referralBonus;
         _pay(referrer, referralBonus);
         emit ReferralBonusPaid(referrer, referee, referralBonus);
+    }
+
+    function _defaultLaunchRewardPolicy() internal pure returns (LaunchRewardPolicy memory policy) {
+        policy = LaunchRewardPolicy({
+            minQualifyingScoreBps: MIN_QUALIFYING_SCORE_BPS,
+            minVoters: MIN_EARNED_REWARD_VOTERS,
+            minVerifiedHumans: MIN_EARNED_REWARD_VERIFIED_HUMANS,
+            minDistinctVerifiedAnchors: MIN_EARNED_REWARD_DISTINCT_VERIFIED_ANCHORS,
+            minDistinctAnchorRounds: MIN_EARNED_REWARD_DISTINCT_ANCHOR_ROUNDS,
+            eligibilityRatingCount: ELIGIBILITY_RATING_COUNT,
+            rewardingRatingCount: REWARDING_RATING_COUNT,
+            requireNoPendingCleanup: true
+        });
+    }
+
+    function _setLaunchRewardPolicy(LaunchRewardPolicy memory policy) internal {
+        _validateLaunchRewardPolicy(policy);
+        launchRewardPolicy = policy;
+        emit LaunchRewardPolicyUpdated(policy);
+    }
+
+    function _validateLaunchRewardPolicy(LaunchRewardPolicy memory policy) internal pure {
+        if (
+            policy.minQualifyingScoreBps > 10_000 || policy.minVoters == 0
+                || policy.minVerifiedHumans > policy.minVoters || policy.eligibilityRatingCount == 0
+                || policy.rewardingRatingCount == 0
+                || policy.minDistinctVerifiedAnchors > policy.eligibilityRatingCount
+                || policy.minDistinctAnchorRounds > policy.eligibilityRatingCount
+                || (policy.minVerifiedHumans == 0 && policy.minDistinctVerifiedAnchors > 0)
+        ) {
+            revert InvalidPolicy();
+        }
     }
 
     function _remainingLegacyPool() internal view returns (uint256) {

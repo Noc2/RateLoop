@@ -19,14 +19,12 @@ contract FormalVerification_GovernanceTest is Test {
     address deployer = address(1);
 
     // Mock pool addresses
-    address mockFaucet = address(10);
-    address mockBootstrapPool = address(11);
+    address mockLaunchDistribution = address(10);
     address mockConsensusReserve = address(12);
     address mockTreasury = address(13);
 
     // Realistic launch balances excluded from dynamic quorum.
-    uint256 constant FAUCET_BAL = 52_000_000e6;
-    uint256 constant BOOTSTRAP_POOL_BAL = 12_000_000e6;
+    uint256 constant LAUNCH_DISTRIBUTION_BAL = 64_000_000e6;
     uint256 constant CONSENSUS_RESERVE_BAL = 4_000_000e6;
     uint256 constant TREASURY_BAL = 32_000_000e6;
     // Total excluded at launch = 100M
@@ -41,11 +39,10 @@ contract FormalVerification_GovernanceTest is Test {
         timelock = new TimelockController(2 days, empty, empty, deployer);
 
         governor = new CuryoGovernor(IVotes(address(token)), timelock);
-        address[] memory holders = new address[](4);
-        holders[0] = mockFaucet;
-        holders[1] = mockBootstrapPool;
-        holders[2] = mockConsensusReserve;
-        holders[3] = mockTreasury;
+        address[] memory holders = new address[](3);
+        holders[0] = mockLaunchDistribution;
+        holders[1] = mockConsensusReserve;
+        holders[2] = mockTreasury;
         governor.initializePools(holders);
 
         token.setGovernor(address(governor));
@@ -53,8 +50,7 @@ contract FormalVerification_GovernanceTest is Test {
         timelock.grantRole(timelock.EXECUTOR_ROLE(), address(0)); // anyone can execute
 
         // Fund excluded launch holders with realistic balances.
-        token.mint(mockFaucet, FAUCET_BAL);
-        token.mint(mockBootstrapPool, BOOTSTRAP_POOL_BAL);
+        token.mint(mockLaunchDistribution, LAUNCH_DISTRIBUTION_BAL);
         token.mint(mockConsensusReserve, CONSENSUS_RESERVE_BAL);
         token.mint(mockTreasury, TREASURY_BAL);
 
@@ -64,7 +60,7 @@ contract FormalVerification_GovernanceTest is Test {
     // ==================== Helpers ====================
 
     function _mintCirculating(address to, uint256 amount) internal {
-        vm.prank(mockFaucet);
+        vm.prank(mockLaunchDistribution);
         token.transfer(to, amount);
     }
 
@@ -123,34 +119,30 @@ contract FormalVerification_GovernanceTest is Test {
         uint256 beforeSnapshotBlock = transferBlock - 1;
         uint256 qBefore = governor.quorum(beforeSnapshotBlock);
 
-        // Faucet transfers 25M to users (simulating claims) so dynamic quorum exceeds the bootstrap floor.
-        vm.prank(mockFaucet);
+        // Launch distribution transfers 25M to users so dynamic quorum exceeds the bootstrap floor.
+        vm.prank(mockLaunchDistribution);
         token.transfer(address(101), 25_000_000e6);
 
         vm.roll(transferBlock + 1);
         uint256 qAfter = governor.quorum(transferBlock);
 
         // Circulating went from 1M to 26M, quorum moves above the 100K floor to 1.04M.
-        assertGt(qAfter, qBefore, "Quorum increases as faucet drains");
+        assertGt(qAfter, qBefore, "Quorum increases as launch distribution drains");
         assertEq(qAfter, 1_040_000e6, "4% of 26M = 1.04M");
     }
 
     // ==================== Test 4: Mature Protocol Quorum ====================
 
-    /// @notice At maturity: faucet drained 30M, bootstrap pool drained 12M.
+    /// @notice At maturity: launch distribution drained 42M.
     ///         Circulating = total - remaining_pools. Quorum scales with circulating.
     function test_QuorumGrows_MatureProtocol() public {
-        // Simulate faucet draining 30M to users (faucet had 52M, now has 22M)
-        vm.prank(mockFaucet);
-        token.transfer(address(100), 30_000_000e6);
-
-        // Simulate bootstrap pool draining 12M (pool had 12M, now has 0)
-        vm.prank(mockBootstrapPool);
-        token.transfer(address(101), 12_000_000e6);
+        // Simulate launch distribution draining 42M to users (launch pool had 64M, now has 22M)
+        vm.prank(mockLaunchDistribution);
+        token.transfer(address(100), 42_000_000e6);
 
         vm.roll(block.number + 1);
 
-        // Excluded holders now hold: faucet=22M, bootstrap=0, consensus=4M, treasury=32M = 58M locked
+        // Excluded holders now hold: launch=22M, consensus=4M, treasury=32M = 58M locked
         // Total supply = 100M
         // Circulating = 100M - 58M = 42M
         // Quorum = 4% of 42M = 1.68M
@@ -186,9 +178,9 @@ contract FormalVerification_GovernanceTest is Test {
 
     /// @notice A whale can still pass alone once circulation is large enough that 4% exceeds the bootstrap floor.
     function test_WhaleGovernance_UnilateralPass() public {
-        // Drain 30M from the excluded faucet balance into circulation. Quorum becomes 1.2M.
+        // Drain 30M from the excluded launch distribution balance into circulation. Quorum becomes 1.2M.
         address whale = address(200);
-        vm.startPrank(mockFaucet);
+        vm.startPrank(mockLaunchDistribution);
         token.transfer(whale, 1_300_000e6);
         token.transfer(address(201), 28_700_000e6);
         vm.stopPrank();

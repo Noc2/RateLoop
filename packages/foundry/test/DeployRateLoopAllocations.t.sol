@@ -18,20 +18,20 @@ contract DeployRateLoopAllocationsTest is Test {
 
         assertEq(deployScript.TOTAL_SUPPLY_CAP(), lrepToken.MAX_SUPPLY(), "script cap should match token MAX_SUPPLY");
         assertEq(totalLaunchAllocation, deployScript.TOTAL_SUPPLY_CAP(), "launch allocations should sum to full cap");
-        assertEq(deployScript.LAUNCH_DISTRIBUTION_AMOUNT(), 52_000_000 * 1e6, "launch distribution should be 52M");
-        assertEq(launchPool.LEGACY_POOL_AMOUNT(), 2_000_000 * 1e6, "legacy pool should be 2M");
+        assertEq(deployScript.LAUNCH_DISTRIBUTION_AMOUNT(), 64_000_000 * 1e6, "launch distribution should be 64M");
+        assertEq(launchPool.LEGACY_POOL_AMOUNT(), 4_000_000 * 1e6, "legacy pool should be 4M");
         assertEq(launchPool.EARNED_RATER_POOL_AMOUNT(), 25_000_000 * 1e6, "earned rater pool should be 25M");
         assertEq(
             launchPool.VERIFIED_REFERRAL_POOL_AMOUNT(),
-            25_000_000 * 1e6,
-            "verified/referral pool should be 25M"
+            35_000_000 * 1e6,
+            "verified/referral pool should be 35M"
         );
         assertEq(
             launchPool.TOTAL_POOL_AMOUNT(),
             deployScript.LAUNCH_DISTRIBUTION_AMOUNT(),
-            "launch pool split should equal 52M"
+            "launch pool split should equal 64M"
         );
-        assertEq(deployScript.PARTICIPATION_POOL_AMOUNT(), 12_000_000 * 1e6, "bootstrap pool should be 12M");
+        assertEq(deployScript.PARTICIPATION_POOL_AMOUNT(), 0, "bootstrap pool should have no launch allocation");
         assertEq(deployScript.TREASURY_AMOUNT(), 32_000_000 * 1e6, "treasury should be 32M");
         assertEq(deployScript.CONSENSUS_POOL_AMOUNT(), 4_000_000 * 1e6, "consensus reserve should be 4M");
     }

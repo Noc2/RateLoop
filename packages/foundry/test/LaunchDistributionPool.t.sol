@@ -5,6 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {LaunchDistributionPool} from "../contracts/LaunchDistributionPool.sol";
 import {LoopReputation} from "../contracts/LoopReputation.sol";
 import {RaterRegistry} from "../contracts/RaterRegistry.sol";
+import {ILaunchDistributionPool} from "../contracts/interfaces/ILaunchDistributionPool.sol";
 import {MockWorldIDRouter} from "../contracts/mocks/MockWorldIDRouter.sol";
 
 contract LaunchDistributionPoolTest is Test {
@@ -31,13 +32,58 @@ contract LaunchDistributionPoolTest is Test {
     }
 
     function test_PoolSplitSumsToLaunchDistribution() public view {
-        assertEq(pool.LEGACY_POOL_AMOUNT(), 2_000_000e6);
+        assertEq(pool.LEGACY_POOL_AMOUNT(), 4_000_000e6);
         assertEq(pool.EARNED_RATER_POOL_AMOUNT(), 25_000_000e6);
-        assertEq(pool.VERIFIED_REFERRAL_POOL_AMOUNT(), 25_000_000e6);
+        assertEq(pool.VERIFIED_REFERRAL_POOL_AMOUNT(), 35_000_000e6);
         assertEq(
             pool.LEGACY_POOL_AMOUNT() + pool.EARNED_RATER_POOL_AMOUNT() + pool.VERIFIED_REFERRAL_POOL_AMOUNT(),
             pool.TOTAL_POOL_AMOUNT()
         );
+    }
+
+    function test_DefaultLaunchRewardPolicyUsesAntiFarmDefaults() public view {
+        (
+            uint16 minQualifyingScoreBps,
+            uint16 minVoters,
+            uint16 minVerifiedHumans,
+            uint16 minDistinctVerifiedAnchors,
+            uint16 minDistinctAnchorRounds,
+            uint32 eligibilityRatingCount,
+            uint32 rewardingRatingCount,
+            bool requireNoPendingCleanup
+        ) = pool.launchRewardPolicy();
+
+        assertEq(minQualifyingScoreBps, 7_000);
+        assertEq(minVoters, 3);
+        assertEq(minVerifiedHumans, 1);
+        assertEq(minDistinctVerifiedAnchors, 2);
+        assertEq(minDistinctAnchorRounds, 2);
+        assertEq(eligibilityRatingCount, 5);
+        assertEq(rewardingRatingCount, 10);
+        assertTrue(requireNoPendingCleanup);
+    }
+
+    function test_SetLaunchRewardPolicyUpdatesRewardMath() public {
+        pool.setLaunchRewardPolicy(
+            ILaunchDistributionPool.LaunchRewardPolicy({
+                minQualifyingScoreBps: 8_500,
+                minVoters: 3,
+                minVerifiedHumans: 1,
+                minDistinctVerifiedAnchors: 2,
+                minDistinctAnchorRounds: 2,
+                eligibilityRatingCount: 2,
+                rewardingRatingCount: 4,
+                requireNoPendingCleanup: true
+            })
+        );
+
+        assertEq(pool.recordEarnedRaterReward(alice, 8_499), 0);
+        assertEq(pool.qualifyingRatingCount(alice), 0);
+
+        assertEq(pool.recordEarnedRaterReward(alice, 9_000), 0);
+        uint256 firstReward = pool.recordEarnedRaterReward(alice, 9_000);
+        assertEq(firstReward, 3e6);
+        assertEq(pool.raterLaunchPaid(alice), 3e6);
     }
 
     function test_RecordEarnedRaterRewardPaysAfterFiveQualifiedRatings() public {

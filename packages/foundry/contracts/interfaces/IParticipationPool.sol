@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 /// @title IParticipationPool
-/// @notice Interface for the user-facing Bootstrap Pool — proportional-to-stake rewards with halving schedule
+/// @notice Interface for optional proportional-to-stake participation rewards with a halving schedule
 interface IParticipationPool {
     /// @notice Get the current reward rate in basis points based on the halving schedule
     /// @return The current rate in BPS (e.g. 9000 = 90%)
