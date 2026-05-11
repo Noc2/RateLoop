@@ -173,10 +173,12 @@ contract RaterDeclarationRegistryTest is Test {
         registry.submitDeclaration(declaration, signature, MIN_BOND, false);
 
         assertEq(registry.tierMultiplierBps(rater), 10_000);
+        assertFalse(registry.hasActiveAiDeclaration(rater));
 
         vm.warp(declaration.effectiveEpoch);
 
         assertEq(registry.tierMultiplierBps(rater), 10_500);
+        assertTrue(registry.hasActiveAiDeclaration(rater));
     }
 
     function test_TierMultiplierExpiresDeclarationWindow() public {
@@ -196,6 +198,7 @@ contract RaterDeclarationRegistryTest is Test {
         vm.warp(declaration.expiresAtEpoch);
 
         assertEq(registry.tierMultiplierBps(rater), 10_000);
+        assertFalse(registry.hasActiveAiDeclaration(rater));
     }
 
     function test_FlagBehavioralDriftDemotesVerifiedRater() public {
@@ -344,6 +347,7 @@ contract RaterDeclarationRegistryTest is Test {
         registry.openChallenge(rater, EVIDENCE_HASH);
 
         assertEq(registry.tierMultiplierBps(rater), 10_000);
+        assertTrue(registry.hasActiveAiDeclaration(rater));
 
         RaterDeclarationRegistry.RaterDeclaration memory nextDeclaration = _declaration(2, 1, PROMPT_HASH);
         bytes memory nextSignature = _signature(nextDeclaration);
@@ -355,6 +359,17 @@ contract RaterDeclarationRegistryTest is Test {
         vm.prank(rater);
         vm.expectRevert(RaterDeclarationRegistry.OpenChallenges.selector);
         registry.retireDeclaration();
+    }
+
+    function test_HasActiveAiDeclarationClearsAfterRetirement() public {
+        _submitDefaultDeclaration(false);
+        assertTrue(registry.hasActiveAiDeclaration(rater));
+
+        vm.prank(rater);
+        registry.retireDeclaration();
+
+        assertEq(registry.tierMultiplierBps(rater), 10_000);
+        assertFalse(registry.hasActiveAiDeclaration(rater));
     }
 
     function test_SustainedChallengeSlashesOnlyChallengedDeclarationBond() public {

@@ -18,9 +18,14 @@ import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
 
 contract MockRaterDeclarationWeightsForRewards {
     mapping(address => uint16) public tierMultiplierBps;
+    mapping(address => bool) public hasActiveAiDeclaration;
 
     function setTierMultiplierBps(address rater, uint16 multiplierBps) external {
         tierMultiplierBps[rater] = multiplierBps;
+    }
+
+    function setActiveAiDeclaration(address rater, bool active) external {
+        hasActiveAiDeclaration[rater] = active;
     }
 }
 
@@ -385,6 +390,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
     function test_ClaimReward_AgentDeclarationSnapshotDoesNotAnchorLaunchCreditAfterRetirement() public {
         _verifyHuman(voter2, bytes32("anchor-voter-2"));
         MockRaterDeclarationWeightsForRewards declarationWeights = new MockRaterDeclarationWeightsForRewards();
+        declarationWeights.setActiveAiDeclaration(voter2, true);
         declarationWeights.setTierMultiplierBps(voter2, 11_500);
         ProtocolConfig config = ProtocolConfig(address(votingEngine.protocolConfig()));
         vm.prank(owner);
@@ -395,7 +401,31 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
             keccak256(abi.encodePacked(voter2, votingEngine.voterCommitHash(contentId, roundId, voter2)));
         assertTrue(votingEngine.commitHadActiveAiDeclaration(contentId, roundId, voter2CommitKey));
 
+        declarationWeights.setActiveAiDeclaration(voter2, false);
         declarationWeights.setTierMultiplierBps(voter2, 10_000);
+
+        vm.prank(voter1);
+        rewardDistributor.claimReward(contentId, roundId);
+
+        assertEq(launchPool.qualifyingRatingCount(voter1), 0);
+        assertEq(launchPool.raterDistinctVerifiedAnchorCount(voter1), 0);
+        assertEq(launchPool.raterDistinctAnchorRoundCount(voter1), 0);
+        assertEq(lrepToken.balanceOf(voter1), 0);
+    }
+
+    function test_ClaimReward_AgentDeclarationWithBaseMultiplierDoesNotAnchorLaunchCredit() public {
+        _verifyHuman(voter2, bytes32("anchor-voter-2"));
+        MockRaterDeclarationWeightsForRewards declarationWeights = new MockRaterDeclarationWeightsForRewards();
+        declarationWeights.setActiveAiDeclaration(voter2, true);
+        declarationWeights.setTierMultiplierBps(voter2, 10_000);
+        ProtocolConfig config = ProtocolConfig(address(votingEngine.protocolConfig()));
+        vm.prank(owner);
+        config.setRaterDeclarationRegistry(address(declarationWeights));
+
+        (uint256 contentId, uint256 roundId) = _setupSettledPredictionRound();
+        bytes32 voter2CommitKey =
+            keccak256(abi.encodePacked(voter2, votingEngine.voterCommitHash(contentId, roundId, voter2)));
+        assertTrue(votingEngine.commitHadActiveAiDeclaration(contentId, roundId, voter2CommitKey));
 
         vm.prank(voter1);
         rewardDistributor.claimReward(contentId, roundId);

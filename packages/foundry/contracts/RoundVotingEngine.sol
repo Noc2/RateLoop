@@ -447,6 +447,9 @@ contract RoundVotingEngine is
         );
         (uint16 raterWeightBps, bool hadActiveAiDeclaration) =
             RaterWeightLib.currentRaterWeightAndAiStatus(protocolConfig, voter);
+        if (!hadActiveAiDeclaration && useTokenIdentity) {
+            hadActiveAiDeclaration = _resolvedVoterIdHolderHasActiveAiDeclaration(roundVoterIdNft, voter);
+        }
 
         // Transfer HREP stake after all lightweight validation passes.
         if (!stakeAlreadyTransferred) {
@@ -1141,6 +1144,21 @@ contract RoundVotingEngine is
 
     function _getParticipationPool() internal view returns (IParticipationPool) {
         return IParticipationPool(protocolConfig.participationPool());
+    }
+
+    function _resolvedVoterIdHolderHasActiveAiDeclaration(IVoterIdNFT voterIdNft, address voter)
+        internal
+        view
+        returns (bool)
+    {
+        if (address(voterIdNft) == address(0)) return false;
+
+        try voterIdNft.resolveHolder(voter) returns (address resolvedHolder) {
+            if (resolvedHolder == address(0) || resolvedHolder == voter) return false;
+            return RaterWeightLib.hasActiveAiDeclaration(protocolConfig, resolvedHolder);
+        } catch {
+            return false;
+        }
     }
 
     function _resolveClaimCommit(uint256 contentId, uint256 roundId, address account)

@@ -545,6 +545,11 @@ contract RaterDeclarationRegistry is AccessControl, EIP712 {
         return BPS_DENOMINATOR;
     }
 
+    function hasActiveAiDeclaration(address rater) external view returns (bool) {
+        StoredDeclaration storage stored = _declarations[rater];
+        return stored.tier != RaterTier.A0 && _declarationIsActive(stored.declaration);
+    }
+
     function _behaviorChanged(RaterDeclaration memory previous, RaterDeclaration calldata next)
         internal
         pure

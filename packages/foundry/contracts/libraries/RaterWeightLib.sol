@@ -27,8 +27,11 @@ library RaterWeightLib {
             IRaterRegistryWeights registryWeights = IRaterRegistryWeights(configuredRaterRegistry);
             try registryWeights.getClusterScore(voter) returns (bytes32, uint16 discountBps, uint64, uint64 updatedAt) {
                 if (updatedAt != 0) {
-                    if (discountBps >= WEIGHT_BPS) return (0, hadActiveAiDeclaration);
-                    weightBps = (weightBps * (WEIGHT_BPS - discountBps)) / WEIGHT_BPS;
+                    if (discountBps >= WEIGHT_BPS) {
+                        weightBps = 0;
+                    } else {
+                        weightBps = (weightBps * (WEIGHT_BPS - discountBps)) / WEIGHT_BPS;
+                    }
                 }
             } catch { }
 
@@ -40,9 +43,12 @@ library RaterWeightLib {
         address configuredRaterDeclarationRegistry = protocolConfig.raterDeclarationRegistry();
         if (configuredRaterDeclarationRegistry != address(0)) {
             IRaterDeclarationWeights declarationWeights = IRaterDeclarationWeights(configuredRaterDeclarationRegistry);
+            try declarationWeights.hasActiveAiDeclaration(voter) returns (bool active) {
+                hadActiveAiDeclaration = active;
+            } catch { }
+
             try declarationWeights.tierMultiplierBps(voter) returns (uint16 multiplierBps) {
                 if (multiplierBps > WEIGHT_BPS) {
-                    hadActiveAiDeclaration = true;
                     weightBps = (weightBps * multiplierBps) / WEIGHT_BPS;
                 }
             } catch { }
@@ -50,5 +56,17 @@ library RaterWeightLib {
 
         if (weightBps > MAX_COMBINED_RATER_WEIGHT_BPS) return (MAX_COMBINED_RATER_WEIGHT_BPS, hadActiveAiDeclaration);
         return (uint16(weightBps), hadActiveAiDeclaration);
+    }
+
+    function hasActiveAiDeclaration(ProtocolConfig protocolConfig, address rater) public view returns (bool) {
+        address configuredRaterDeclarationRegistry = protocolConfig.raterDeclarationRegistry();
+        if (configuredRaterDeclarationRegistry == address(0)) return false;
+
+        IRaterDeclarationWeights declarationWeights = IRaterDeclarationWeights(configuredRaterDeclarationRegistry);
+        try declarationWeights.hasActiveAiDeclaration(rater) returns (bool active) {
+            return active;
+        } catch {
+            return false;
+        }
     }
 }

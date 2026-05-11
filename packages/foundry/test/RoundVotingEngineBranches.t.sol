@@ -21,9 +21,14 @@ import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.so
 
 contract MockRaterDeclarationWeights {
     mapping(address => uint16) public tierMultiplierBps;
+    mapping(address => bool) public hasActiveAiDeclaration;
 
     function setTierMultiplierBps(address rater, uint16 multiplierBps) external {
         tierMultiplierBps[rater] = multiplierBps;
+    }
+
+    function setActiveAiDeclaration(address rater, bool active) external {
+        hasActiveAiDeclaration[rater] = active;
     }
 }
 
@@ -469,6 +474,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
     function test_RevealUsesVerifiedAgentDeclarationWeight() public {
         MockRaterDeclarationWeights declarationWeights = _installRaterDeclarationWeights();
+        declarationWeights.setActiveAiDeclaration(voter1, true);
         declarationWeights.setTierMultiplierBps(voter1, 11_500);
 
         uint256 contentId = _submitContent();
@@ -500,6 +506,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         raterRegistry.seedLegacySelfCredential(
             voter1, uint64(block.timestamp + 30 days), 12_000, 0, bytes32("seed"), keccak256("legacy")
         );
+        declarationWeights.setActiveAiDeclaration(voter1, true);
         declarationWeights.setTierMultiplierBps(voter1, 11_500);
 
         uint256 contentId = _submitContent();
@@ -516,6 +523,57 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
         assertEq(engine.commitRaterWeightBps(contentId, roundId, ck1), 12_500, "combined weight is capped");
         assertTrue(engine.commitHadActiveAiDeclaration(contentId, roundId, ck1), "agent flag survives cap");
+    }
+
+    function test_CommitAiSnapshotSurvivesFullClusterDiscount() public {
+        RaterRegistry raterRegistry = _installRaterRegistry();
+        MockRaterDeclarationWeights declarationWeights = _installRaterDeclarationWeights();
+        vm.prank(owner);
+        raterRegistry.setClusterScore(voter1, keccak256("shared-cluster"), 10_000, 1);
+        declarationWeights.setActiveAiDeclaration(voter1, true);
+        declarationWeights.setTierMultiplierBps(voter1, 11_500);
+
+        uint256 contentId = _submitContent();
+        (bytes32 ck1,) = _commit(voter1, contentId, true, 4e6);
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+
+        assertEq(engine.commitRaterWeightBps(contentId, roundId, ck1), 0, "cluster discount still freezes weight");
+        assertTrue(engine.commitHadActiveAiDeclaration(contentId, roundId, ck1), "agent flag survives discount");
+    }
+
+    function test_CommitAiSnapshotUsesActiveStatusWhenMultiplierBase() public {
+        MockRaterDeclarationWeights declarationWeights = _installRaterDeclarationWeights();
+        declarationWeights.setActiveAiDeclaration(voter1, true);
+        declarationWeights.setTierMultiplierBps(voter1, 10_000);
+
+        uint256 contentId = _submitContent();
+        (bytes32 ck1,) = _commit(voter1, contentId, true, 4e6);
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+
+        assertEq(engine.commitRaterWeightBps(contentId, roundId, ck1), 10_000, "base multiplier keeps base weight");
+        assertTrue(engine.commitHadActiveAiDeclaration(contentId, roundId, ck1), "agent flag does not depend on uplift");
+    }
+
+    function test_CommitAiSnapshotIncludesResolvedVoterIdHolder() public {
+        MockRaterDeclarationWeights declarationWeights = _installRaterDeclarationWeights();
+        declarationWeights.setActiveAiDeclaration(voter1, true);
+        declarationWeights.setTierMultiplierBps(delegate1, 10_000);
+
+        vm.startPrank(owner);
+        registry.setVoterIdNFT(address(mockVoterIdNFT));
+        ProtocolConfig(protocolConfigAddress).setVoterIdNFT(address(mockVoterIdNFT));
+        mockVoterIdNFT.setHolder(voter1);
+        vm.stopPrank();
+
+        vm.prank(voter1);
+        mockVoterIdNFT.setDelegate(delegate1);
+
+        uint256 contentId = _submitContent();
+        (bytes32 ck1,) = _commit(delegate1, contentId, true, 4e6);
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+
+        assertEq(engine.commitRaterWeightBps(contentId, roundId, ck1), 10_000, "delegate keeps own weight");
+        assertTrue(engine.commitHadActiveAiDeclaration(contentId, roundId, ck1), "holder agent flag is snapshotted");
     }
 
     function test_PredictionLifecycle_SettlesWeightedMedianFinalRating() public {
