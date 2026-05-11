@@ -2,7 +2,7 @@ import type { IDKitResult, ResponseItemV3 } from "@worldcoin/idkit";
 import { hashSignal } from "@worldcoin/idkit/hashing";
 import { type Hex, decodeAbiParameters, hexToBigInt, isHex } from "viem";
 
-export type WorldIdProofTuple = [bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint];
+type WorldIdProofTuple = [bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint];
 type LegacyProofResponse = ResponseItemV3 & {
   identifier: string;
   proof: string;
@@ -11,7 +11,7 @@ type LegacyProofResponse = ResponseItemV3 & {
   signal_hash: string;
 };
 
-export type WorldIdOnchainProof = {
+type WorldIdOnchainProof = {
   root: bigint;
   nullifierHash: bigint;
   proof: WorldIdProofTuple;

@@ -11,7 +11,7 @@ const MCP_SCOPE_VALUES = ["curyo:ask", "curyo:balance", "curyo:quote", "curyo:re
 const DEFAULT_AGENT_SCOPES = MCP_SCOPE_VALUES;
 const TOKEN_PREFIX = "curyo_mcp_";
 
-export type AgentPolicyRecord = {
+type AgentPolicyRecord = {
   agentId: string;
   agentWalletAddress: `0x${string}`;
   categories: string[];
@@ -30,7 +30,7 @@ export type AgentPolicyRecord = {
   updatedAt: string;
 };
 
-export type AgentAskSummary = {
+type AgentAskSummary = {
   categoryId: string;
   chainId: number;
   clientRequestId: string;
@@ -50,7 +50,7 @@ export class AgentPolicyLifecycleError extends Error {
   }
 }
 
-export type AgentPolicyInput = {
+type AgentPolicyInput = {
   agentId: string;
   agentWalletAddress: string;
   categories?: string[];

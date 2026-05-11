@@ -3,8 +3,7 @@
   "solc_remaps": [
     "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts",
     "@openzeppelin/contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts",
-    "@prb/math/=lib/prb-math/src/",
-    "@selfxyz/contracts/=lib/self/contracts/"
+    "@prb/math/=lib/prb-math/src/"
   ],
   "exclude_informational": true
 }

@@ -17,7 +17,7 @@ type AddEthereumChainParameter = {
   rpcUrls: readonly string[];
 };
 
-export type EthereumRequestProvider = {
+type EthereumRequestProvider = {
   request: (args: any) => Promise<unknown>;
 };
 

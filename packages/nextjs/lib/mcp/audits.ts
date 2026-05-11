@@ -16,7 +16,7 @@ import { ponderApi } from "~~/services/ponder/client";
 
 type QueryRow = Record<string, unknown>;
 
-export type McpAskAuditRecord = {
+type McpAskAuditRecord = {
   agentId: string;
   categoryId: string;
   chainId: number;
@@ -32,7 +32,7 @@ export type McpAskAuditRecord = {
   status: string;
 };
 
-export type McpAskAuditDetails = {
+type McpAskAuditDetails = {
   auditEvents: Array<Record<string, unknown>>;
   callbackDeliveries: Array<Record<string, unknown>>;
   categoryId: string;
@@ -52,7 +52,7 @@ export type McpAskAuditDetails = {
   updatedAt: string;
 };
 
-export type McpAskAuditFilters = {
+type McpAskAuditFilters = {
   agentId: string;
   chainId?: number;
   eventType?: string;

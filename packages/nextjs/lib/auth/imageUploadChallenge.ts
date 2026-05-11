@@ -6,7 +6,7 @@ import { isValidWalletAddress, normalizeWalletAddress } from "~~/lib/watchlist/c
 export const IMAGE_UPLOAD_CHALLENGE_TITLE = "Curyo image upload";
 export const UPLOAD_IMAGE_ACTION = "attachments:upload_image";
 
-export type ImageUploadChallengePayload = {
+type ImageUploadChallengePayload = {
   attachmentId: string;
   filename: string;
   mimeType: string;

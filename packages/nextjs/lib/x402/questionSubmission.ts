@@ -89,13 +89,9 @@ type SubmittedRewardAttachment = StoredQuestionRewardTerms & {
   submitter: Address;
 };
 
-export type AgentWalletTransactionPhase =
-  | "approve_usdc"
-  | "reserve_submission"
-  | "submit_question"
-  | "submit_x402_question";
+type AgentWalletTransactionPhase = "approve_usdc" | "reserve_submission" | "submit_question" | "submit_x402_question";
 
-export type AgentWalletTransactionCall = {
+type AgentWalletTransactionCall = {
   data: Hex;
   description: string;
   functionName: string;
@@ -106,7 +102,7 @@ export type AgentWalletTransactionCall = {
   waitAfterMs?: number;
 };
 
-export type AgentWalletQuestionSubmissionPlan = {
+type AgentWalletQuestionSubmissionPlan = {
   chainId: number;
   calls: AgentWalletTransactionCall[];
   operationKey: `0x${string}`;
@@ -127,7 +123,7 @@ export type AgentWalletQuestionSubmissionPlan = {
   walletAddress: Address;
 };
 
-export type NativeX402PaymentAuthorization = {
+type NativeX402PaymentAuthorization = {
   from: Address;
   nonce: Hex;
   signature?: Hex;
@@ -137,7 +133,7 @@ export type NativeX402PaymentAuthorization = {
   value: string;
 };
 
-export type NativeX402QuestionSubmissionPlan = {
+type NativeX402QuestionSubmissionPlan = {
   authorization: NativeX402PaymentAuthorization;
   chainId: number;
   calls: AgentWalletTransactionCall[];

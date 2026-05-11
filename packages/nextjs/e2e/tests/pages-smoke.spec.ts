@@ -10,14 +10,14 @@ test.describe("Page smoke tests", () => {
 
   test("landing page loads", async ({ page }) => {
     await gotoPath(page, "/");
-    // The page title should contain "Curyo" regardless of redirects
-    await expect(page).toHaveTitle(/Curyo/i);
+    // The page title should contain "RateLoop" regardless of redirects
+    await expect(page).toHaveTitle(/RateLoop/i);
 
     // The landing page may redirect to /governance or /rate if a test wallet
     // session is already active. Either the hero section or a redirected page is acceptable.
-    const heroHeading = page.getByRole("heading", { name: /AI Asks,\s*Humans Earn/i }).first();
+    const heroHeading = page.getByRole("heading", { name: /Level Up Your Agent/i }).first();
     const governancePage = page.getByRole("button", { name: /Profile|Leaderboard|Faucet/i }).first();
-    const feedPage = page.getByRole("button", { name: /Vote up|Vote down/i }).first();
+    const feedPage = page.getByRole("button", { name: /Predict final rating|Vote up|Vote down/i }).first();
 
     const landingOrRedirect = heroHeading.or(governancePage).or(feedPage);
     await expect(landingOrRedirect.first()).toBeVisible({ timeout: 15_000 });
@@ -29,10 +29,10 @@ test.describe("Page smoke tests", () => {
     const introHeading = page.getByRole("heading", { name: /Introduction/i }).first();
     await expect(introHeading).toBeVisible({ timeout: 10_000 });
 
-    const whatCuryoDoesHeading = page.getByRole("heading", { name: /What Curyo Does/i }).first();
-    await expect(whatCuryoDoesHeading).toBeVisible({ timeout: 5_000 });
+    const whatRateLoopDoesHeading = page.getByRole("heading", { name: /What RateLoop Does/i }).first();
+    await expect(whatRateLoopDoesHeading).toBeVisible({ timeout: 5_000 });
 
-    const agentFeedback = page.locator("#main-content").getByText("AI Asks, Humans Earn");
+    const agentFeedback = page.locator("#main-content").getByText("AI Asks, Open Raters Predict");
     await expect(agentFeedback).toBeVisible({ timeout: 5_000 });
   });
 

@@ -1244,7 +1244,7 @@ contract RoundVotingEngine is
             return (0, 0, bytes32(0));
         }
 
-        scoreSeed = _rbtsScoreSeed(contentId, roundId, scoreableCount);
+        scoreSeed = _rbtsScoreSeed(contentId, roundId, scoreableKeys, scoreableCount);
         for (uint256 i = 0; i < scoreableCount;) {
             bytes32 commitKey = scoreableKeys[i];
             uint256 ownWeight = commitRbtsWeight[contentId][roundId][commitKey];
@@ -1301,10 +1301,18 @@ contract RoundVotingEngine is
         roundRbtsForfeitClaimants[contentId][roundId] = forfeitClaimants;
     }
 
-    function _rbtsScoreSeed(uint256 contentId, uint256 roundId, uint256 scoreableCount) internal view returns (bytes32) {
-        return keccak256(
-            abi.encodePacked(blockhash(block.number - 1), block.prevrandao, address(this), contentId, roundId, scoreableCount)
-        );
+    function _rbtsScoreSeed(uint256 contentId, uint256 roundId, bytes32[] memory scoreableKeys, uint256 scoreableCount)
+        internal
+        view
+        returns (bytes32 scoreSeed)
+    {
+        scoreSeed = keccak256(abi.encodePacked(address(this), contentId, roundId, scoreableCount));
+        for (uint256 i = 0; i < scoreableCount;) {
+            scoreSeed = keccak256(abi.encodePacked(scoreSeed, scoreableKeys[i]));
+            unchecked {
+                ++i;
+            }
+        }
     }
 
     function _rbtsOtherIndex(bytes32 seed, bytes32 commitKey, uint256 ownIndex, uint256 count, uint8 domain)
@@ -1312,6 +1320,8 @@ contract RoundVotingEngine is
         pure
         returns (uint256)
     {
+        // Deterministic sampler over pre-committed vote keys; not chain entropy for custody or authorization.
+        // slither-disable-next-line weak-prng
         uint256 drawn = uint256(keccak256(abi.encodePacked(seed, commitKey, ownIndex, domain))) % (count - 1);
         return drawn >= ownIndex ? drawn + 1 : drawn;
     }
@@ -1321,6 +1331,8 @@ contract RoundVotingEngine is
         pure
         returns (uint256)
     {
+        // Deterministic sampler over pre-committed vote keys; not chain entropy for custody or authorization.
+        // slither-disable-next-line weak-prng
         uint256 drawn = uint256(keccak256(abi.encodePacked(seed, commitKey, ownIndex, uint8(2)))) % (count - 2);
         uint256 firstExcluded = ownIndex < referenceIndex ? ownIndex : referenceIndex;
         uint256 secondExcluded = ownIndex < referenceIndex ? referenceIndex : ownIndex;

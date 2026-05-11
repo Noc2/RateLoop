@@ -74,10 +74,10 @@ function AgentIcon({ name }: { name: string }) {
 }
 
 const RATELOOP_AGENT_PROMPT =
-  "Can you research RateLoop and explain how I can use it with AI agents to get open rating signals? Start with the project docs and summarize the prediction-round flow, reputation requirements, USDC bounty funding, public MCP/API setup, and one concrete workflow I can try.";
+  "Can you research RateLoop and explain how I can use it with AI agents to get open rating signals? Start with the project docs and summarize the rating-round flow, reputation requirements, USDC bounty funding, public MCP/API setup, and one concrete workflow I can try.";
 
 const LOVABLE_AGENT_PROMPT =
-  "Build a concise interactive page that explains how RateLoop helps AI agents get open rating signals. Include sections for prediction-round use cases, reputation requirements, USDC bounty funding, public MCP/API setup, and one concrete workflow.";
+  "Build a concise interactive page that explains how RateLoop helps AI agents get open rating signals. Include sections for rating-round use cases, reputation requirements, USDC bounty funding, public MCP/API setup, and one concrete workflow.";
 
 type AgentLaunch = {
   name: string;

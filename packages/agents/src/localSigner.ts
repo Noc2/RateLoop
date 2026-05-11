@@ -34,7 +34,7 @@ const DEFAULT_SCRYPT_PARAMS = {
   r: 8,
 };
 
-export type LocalSignerConfig = {
+type LocalSignerConfig = {
   chainId?: number;
   chainName: string;
   keystorePassword?: string;
@@ -45,12 +45,12 @@ export type LocalSignerConfig = {
   rpcUrl?: string;
 };
 
-export type LoadedLocalSignerWallet = {
+type LoadedLocalSignerWallet = {
   account: PrivateKeyAccount;
   source: "keystore" | "private-key";
 };
 
-export type GeneratedLocalSignerWallet = LoadedLocalSignerWallet & {
+type GeneratedLocalSignerWallet = LoadedLocalSignerWallet & {
   keystorePath: string;
 };
 
@@ -61,7 +61,7 @@ export type LocalTransactionReceiptSummary = {
   transactionHash: Hex;
 };
 
-export type LocalTransactionExecutionSummary = {
+type LocalTransactionExecutionSummary = {
   calls: Array<{
     hash: Hex;
     index: number;
@@ -72,7 +72,7 @@ export type LocalTransactionExecutionSummary = {
   transactionHashes: Hex[];
 };
 
-export type LocalAskResult = {
+type LocalAskResult = {
   confirmed?: QuestionStatusResponse;
   finalAsk: AskHumansResponse;
   initialAsk: AskHumansResponse;

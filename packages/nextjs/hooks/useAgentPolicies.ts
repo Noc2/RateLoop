@@ -40,7 +40,7 @@ export type AgentAskSummary = {
   updatedAt: string;
 };
 
-export type AgentPolicySaveInput = {
+type AgentPolicySaveInput = {
   agentId: string;
   agentWalletAddress: string;
   categories: string[];
@@ -51,14 +51,14 @@ export type AgentPolicySaveInput = {
   scopes: string[];
 };
 
-export type AgentPolicyMutationResult = {
+type AgentPolicyMutationResult = {
   ok: boolean;
   error?: string;
   policy?: AgentPolicyRecord;
   reason?: "not_connected" | "rejected" | "request_failed";
 };
 
-export type AgentPolicyTokenResult = AgentPolicyMutationResult & {
+type AgentPolicyTokenResult = AgentPolicyMutationResult & {
   token?: string;
   mcpConfig?: unknown;
 };

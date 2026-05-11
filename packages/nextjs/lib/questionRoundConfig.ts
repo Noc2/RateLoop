@@ -14,7 +14,7 @@ export type SerializedQuestionRoundConfig = {
   maxVoters: string;
 };
 
-export type QuestionRoundConfigBounds = {
+type QuestionRoundConfigBounds = {
   minEpochDuration: number;
   maxEpochDuration: number;
   minRoundDuration: number;

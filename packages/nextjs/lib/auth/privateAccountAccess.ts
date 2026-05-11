@@ -5,7 +5,7 @@ import { isValidWalletAddress, normalizeWalletAddress } from "~~/lib/watchlist/c
 export const PRIVATE_ACCOUNT_ACCESS_CHALLENGE_TITLE = "Curyo account access";
 export const READ_PRIVATE_ACCOUNT_ACTION = "account:read_private";
 
-export type PrivateAccountReadPayload = {
+type PrivateAccountReadPayload = {
   normalizedAddress: `0x${string}`;
 };
 

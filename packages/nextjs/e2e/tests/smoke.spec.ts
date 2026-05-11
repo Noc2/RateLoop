@@ -11,7 +11,7 @@ import { expect, test } from "@playwright/test";
 test.describe("Smoke tests", () => {
   test("landing page loads without wallet", async ({ page }) => {
     await page.goto("/");
-    await expect(page).toHaveTitle(/Curyo/i);
+    await expect(page).toHaveTitle(/RateLoop/i);
   });
 
   test("wallet auto-connects via the localhost thirdweb test wallet", async ({ page }) => {
@@ -23,13 +23,13 @@ test.describe("Smoke tests", () => {
     // After feed loads, check for wallet connection indicators.
     // If the feed is empty ("No questions have been asked yet"), the sort dropdown still renders,
     // proving the wallet connected and the page loaded (just no content in Ponder yet).
-    const voteUp = page.getByRole("button", { name: "Vote up" });
+    const predictButton = page.getByRole("button", { name: "Predict final rating" });
     const votedStatus = page.getByText(/Voted(?: hidden| Up| Down)?/i);
     const ownContent = page.getByText("Your question");
     const emptyFeed = page.getByText("No questions have been asked yet");
     const sortDropdown = page.locator("select").first();
 
-    const connectedIndicator = voteUp.or(votedStatus).or(ownContent).or(emptyFeed).or(sortDropdown);
+    const connectedIndicator = predictButton.or(votedStatus).or(ownContent).or(emptyFeed).or(sortDropdown);
     // Use .first() to avoid strict mode violation when multiple indicators match
     await connectedIndicator.first().waitFor({ state: "visible", timeout: 15_000 });
 
@@ -42,9 +42,9 @@ test.describe("Smoke tests", () => {
     await waitForWalletConnected(page);
     await waitForFeedLoaded(page, 30_000);
 
-    await page.getByRole("link", { name: /CURYO \(BETA\)/i }).click();
+    await page.getByRole("link", { name: /RateLoop/i }).first().click();
 
-    await expect(page.getByRole("heading", { name: /AI Asks,\s*Humans Earn/i }).first()).toBeVisible({
+    await expect(page.getByRole("heading", { name: /Level Up Your Agent/i }).first()).toBeVisible({
       timeout: 15_000,
     });
     await expect(page).toHaveURL(/\/(?:\?landing=1)?$/);

@@ -1,7 +1,5 @@
 export {
-  AGENT_RESULT_TEMPLATES,
   findAgentResultTemplate,
-  getAgentResultTemplate,
   getAgentResultTemplateBySpecHash,
   listAgentResultTemplates,
 } from "@rateloop/agents/templates";

@@ -12,25 +12,15 @@ export const PAUSE_AGENT_POLICY_ACTION = "agent_policies:pause";
 export const RESUME_AGENT_POLICY_ACTION = "agent_policies:resume";
 export const REVOKE_AGENT_POLICY_ACTION = "agent_policies:revoke";
 
-export const AGENT_POLICY_MANAGEMENT_ACTIONS = [
-  ROTATE_AGENT_POLICY_TOKEN_ACTION,
-  REVOKE_AGENT_POLICY_TOKEN_ACTION,
-  PAUSE_AGENT_POLICY_ACTION,
-  RESUME_AGENT_POLICY_ACTION,
-  REVOKE_AGENT_POLICY_ACTION,
-] as const;
-
-export type AgentPolicyManagementAction = (typeof AGENT_POLICY_MANAGEMENT_ACTIONS)[number];
-
-export type AgentPoliciesReadPayload = {
+type AgentPoliciesReadPayload = {
   normalizedAddress: `0x${string}`;
 };
 
-export type AgentPolicySavePayload = AgentPoliciesReadPayload & {
+type AgentPolicySavePayload = AgentPoliciesReadPayload & {
   policy: NormalizedAgentPolicyInput;
 };
 
-export type AgentPolicyManagementPayload = AgentPoliciesReadPayload & {
+type AgentPolicyManagementPayload = AgentPoliciesReadPayload & {
   policyId: string;
 };
 

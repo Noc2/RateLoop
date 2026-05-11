@@ -39,7 +39,7 @@ const OBJECTION_FEEDBACK_TYPES = new Set([
 ]);
 const FEATURE_FAILURE_FEEDBACK_TYPES = new Set(["bug_report", "repro_steps", "usability_blocker"]);
 
-export type AgentResultPackage = {
+type AgentResultPackage = {
   ready: boolean;
   answer: AgentDecisionAnswer;
   confidence: {

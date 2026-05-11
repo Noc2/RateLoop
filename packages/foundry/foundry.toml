@@ -9,7 +9,6 @@ optimizer = true
 optimizer_runs = 100
 build_info = true
 extra_output = ['abi', 'evm.bytecode', 'evm.deployedBytecode']
-ignored_warnings_from = ['lib/self']
 
 [profile.deploy]
 optimizer_runs = 0

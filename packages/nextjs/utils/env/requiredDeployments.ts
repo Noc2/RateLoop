@@ -1,4 +1,4 @@
-export type DeploymentDefinitions = Record<number, Record<string, unknown> | undefined>;
+type DeploymentDefinitions = Record<number, Record<string, unknown> | undefined>;
 
 const REQUIRED_TARGET_CONTRACTS = [
   "LoopReputation",

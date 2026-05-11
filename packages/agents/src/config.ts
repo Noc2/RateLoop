@@ -1,6 +1,6 @@
 import "dotenv/config";
 
-export type AgentsRuntimeConfig = {
+type AgentsRuntimeConfig = {
   apiBaseUrl?: string;
   mcpAccessToken?: string;
   mcpApiUrl?: string;

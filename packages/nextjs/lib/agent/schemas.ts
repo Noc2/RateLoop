@@ -45,7 +45,7 @@ const templateSelectorSchema = {
   type: "object",
 } satisfies JsonSchema;
 
-export const agentQuestionInputSchema = {
+const agentQuestionInputSchema = {
   additionalProperties: true,
   properties: {
     categoryId: { description: "Curyo category id.", type: ["integer", "string"] },
@@ -81,7 +81,7 @@ export const agentQuestionInputSchema = {
   type: "object",
 } satisfies JsonSchema;
 
-export const agentBountyInputSchema = {
+const agentBountyInputSchema = {
   additionalProperties: false,
   properties: {
     amount: atomicAmountSchema,
@@ -111,7 +111,7 @@ export const agentBountyInputSchema = {
   type: "object",
 } satisfies JsonSchema;
 
-export const agentRoundConfigInputSchema = {
+const agentRoundConfigInputSchema = {
   additionalProperties: false,
   properties: {
     epochDuration: { type: ["integer", "string"] },
@@ -137,7 +137,7 @@ export const agentOperationLookupInputSchema = {
   type: "object",
 } satisfies JsonSchema;
 
-export const agentAskInputBaseProperties = {
+const agentAskInputBaseProperties = {
   bounty: agentBountyInputSchema,
   chainId: chainIdSchema,
   clientRequestId: {
@@ -283,7 +283,7 @@ export const templateListOutputSchema = {
   type: "object",
 } satisfies JsonSchema;
 
-export const agentPaymentOutputSchema = {
+const agentPaymentOutputSchema = {
   additionalProperties: false,
   properties: {
     amount: atomicAmountSchema,

@@ -7,9 +7,9 @@ import { parseX402QuestionRequest } from "~~/lib/x402/questionPayload";
 
 type JsonObject = Record<string, unknown>;
 
-export type AgentSigningIntentStatus = "pending" | "prepared" | "submitted" | "failed" | "expired";
+type AgentSigningIntentStatus = "pending" | "prepared" | "submitted" | "failed" | "expired";
 
-export type AgentSigningIntentRecord = {
+type AgentSigningIntentRecord = {
   chainId: number | null;
   clientRequestId: string | null;
   completedAt: Date | null;

@@ -28,7 +28,7 @@ type QuestionSubmissionRevealCommitmentParams = {
   videoUrl: string;
 };
 
-export type QuestionBundleSubmissionItem = {
+type QuestionBundleSubmissionItem = {
   categoryId: bigint;
   contextUrl: string;
   description: string;

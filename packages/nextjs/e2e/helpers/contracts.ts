@@ -8,7 +8,7 @@
 import deployedContracts from "@rateloop/contracts/deployedContracts";
 
 const chain31337 = (deployedContracts as Record<number, Record<string, { address: string }>>)[31337];
-const reputationContract = chain31337.LoopReputation ?? chain31337.HumanReputation;
+const reputationContract = chain31337.LoopReputation;
 
 export const CONTRACT_ADDRESSES = {
   HumanReputation: reputationContract.address,
@@ -21,5 +21,4 @@ export const CONTRACT_ADDRESSES = {
   QuestionRewardPoolEscrow: chain31337.QuestionRewardPoolEscrow.address,
   VoterIdNFT: chain31337.VoterIdNFT.address,
   ParticipationPool: chain31337.ParticipationPool.address,
-  HumanFaucet: chain31337.HumanFaucet?.address,
 } as const;

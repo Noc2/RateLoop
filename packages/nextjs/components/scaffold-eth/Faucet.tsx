@@ -297,38 +297,11 @@ export const FaucetModal = () => {
       return;
     }
 
-    const humanFaucetAddr = (deployedContracts as any)[31337]?.HumanFaucet?.address as AddressType | undefined;
-
     try {
       setHrepLoading(true);
       const amount = parseUnits(hrepAmount, HREP_DECIMALS);
 
-      if (humanFaucetAddr) {
-        // Deploy script mints 100% of MAX_SUPPLY, so direct mint() reverts.
-        // Instead, impersonate the legacy HumanFaucet contract (holds the launch pool) and transfer.
-        // The impersonated address needs ETH for gas.
-        await (localPublicClient as any).request({
-          method: "anvil_setBalance",
-          params: [humanFaucetAddr, "0xDE0B6B3A7640000"], // 1 ETH
-        });
-        await (localPublicClient as any).request({
-          method: "anvil_impersonateAccount",
-          params: [humanFaucetAddr],
-        });
-        const txHash = await localWalletClient.writeContract({
-          address: hrepTokenAddress,
-          abi: localMintableTokenAbi,
-          functionName: "transfer",
-          args: [inputAddress, amount],
-          account: humanFaucetAddr,
-        });
-        await localPublicClient.waitForTransactionReceipt({ hash: txHash });
-        await (localPublicClient as any).request({
-          method: "anvil_stopImpersonatingAccount",
-          params: [humanFaucetAddr],
-        });
-      } else if (faucetAddress) {
-        // Fresh RateLoop local deploys hold the launch pool on the deployer.
+      if (faucetAddress) {
         const txHash = await localWalletClient.writeContract({
           address: hrepTokenAddress,
           abi: localMintableTokenAbi,
@@ -561,7 +534,7 @@ export const FaucetModal = () => {
             <div className="bg-secondary/10 rounded-xl p-4 space-y-3">
               <h4 className="font-semibold text-secondary">Claim Voter ID</h4>
               <p className="text-base text-base-content/60">
-                Create a non-transferable local rater credential for delegation and legacy identity test paths.
+                Create a non-transferable local rater credential for delegation and identity test paths.
               </p>
               {voterIdReadFailed && (
                 <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-warning">

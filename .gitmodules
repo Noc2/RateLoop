@@ -13,6 +13,3 @@
 [submodule "packages/foundry/lib/prb-math"]
 	path = packages/foundry/lib/prb-math
 	url = https://github.com/PaulRBerg/prb-math
-[submodule "packages/foundry/lib/self"]
-	path = packages/foundry/lib/self
-	url = https://github.com/selfxyz/self

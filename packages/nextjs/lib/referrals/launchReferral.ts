@@ -1,7 +1,7 @@
 import { normalizeReferralAddress } from "./referralAttribution";
 import { getAddress, zeroAddress } from "viem";
 
-export type LaunchReferralInputState =
+type LaunchReferralInputState =
   | {
       status: "empty";
       normalizedReferrer: null;
@@ -36,7 +36,7 @@ export function normalizeLaunchReferralAddress(value: string | null | undefined)
   return getAddress(normalized) as `0x${string}`;
 }
 
-export function isSameAddress(left: string | null | undefined, right: string | null | undefined): boolean {
+function isSameAddress(left: string | null | undefined, right: string | null | undefined): boolean {
   const normalizedLeft = normalizeReferralAddress(left);
   const normalizedRight = normalizeReferralAddress(right);
   if (!normalizedLeft || !normalizedRight) {
