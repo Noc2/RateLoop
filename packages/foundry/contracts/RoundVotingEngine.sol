@@ -1489,11 +1489,11 @@ contract RoundVotingEngine is
     // Commit-time social graph weight snapshot, in BPS. Used for rating weight and bounty units.
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint16))) public commitRaterWeightBps;
 
-    // Commit-time AI declaration snapshot, used to keep launch anchors human-only at claim time.
-    mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) public commitHadActiveAiDeclaration;
-
     // Round-level scorer metadata bound into prediction commits.
     mapping(uint256 => mapping(uint256 => bytes32)) internal roundScorerMetadataHashSnapshot;
+
+    // Commit-time AI declaration snapshot, used to keep launch anchors human-only at claim time.
+    mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) public commitHadActiveAiDeclaration;
 
     // --- Storage gap reserved for future upgrades ---
     uint256[29] private __gap;
