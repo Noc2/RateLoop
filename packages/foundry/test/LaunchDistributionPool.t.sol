@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {Test} from "forge-std/Test.sol";
-import {LaunchDistributionPool} from "../contracts/LaunchDistributionPool.sol";
-import {LoopReputation} from "../contracts/LoopReputation.sol";
-import {RaterRegistry} from "../contracts/RaterRegistry.sol";
-import {ILaunchDistributionPool} from "../contracts/interfaces/ILaunchDistributionPool.sol";
-import {MockWorldIDRouter} from "../contracts/mocks/MockWorldIDRouter.sol";
+import { Test } from "forge-std/Test.sol";
+import { LaunchDistributionPool } from "../contracts/LaunchDistributionPool.sol";
+import { LoopReputation } from "../contracts/LoopReputation.sol";
+import { RaterRegistry } from "../contracts/RaterRegistry.sol";
+import { ILaunchDistributionPool } from "../contracts/interfaces/ILaunchDistributionPool.sol";
+import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
 
 contract LaunchDistributionPoolTest is Test {
     LoopReputation internal lrep;
@@ -77,46 +77,102 @@ contract LaunchDistributionPoolTest is Test {
             })
         );
 
-        assertEq(pool.recordEarnedRaterReward(alice, 8_499), 0);
+        assertEq(_recordLaunchRewardWithScore(alice, 1, bytes32("anchor-a"), 8_499), 0);
         assertEq(pool.qualifyingRatingCount(alice), 0);
 
-        assertEq(pool.recordEarnedRaterReward(alice, 9_000), 0);
-        uint256 firstReward = pool.recordEarnedRaterReward(alice, 9_000);
+        assertEq(_recordLaunchRewardWithScore(alice, 1, bytes32("anchor-a"), 9_000), 0);
+        uint256 firstReward = _recordLaunchRewardWithScore(alice, 2, bytes32("anchor-b"), 9_000);
         assertEq(firstReward, 3e6);
         assertEq(pool.raterLaunchPaid(alice), 3e6);
     }
 
     function test_RecordEarnedRaterRewardPaysAfterFiveQualifiedRatings() public {
         for (uint256 i = 0; i < 4; i++) {
-            assertEq(pool.recordEarnedRaterReward(alice, 8_000), 0);
+            bytes32 anchorId = i % 2 == 0 ? bytes32("anchor-a") : bytes32("anchor-b");
+            assertEq(_recordLaunchReward(alice, i + 1, anchorId), 0);
         }
         assertEq(lrep.balanceOf(alice), 0);
         assertEq(pool.qualifyingRatingCount(alice), 4);
 
-        uint256 firstReward = pool.recordEarnedRaterReward(alice, 8_000);
+        uint256 firstReward = _recordLaunchReward(alice, 5, bytes32("anchor-a"));
         assertEq(firstReward, 1_200_000);
         assertEq(pool.raterLaunchCap(alice), 12e6);
         assertEq(pool.eligibleRaterCount(), 1);
         assertEq(lrep.balanceOf(alice), firstReward);
 
         for (uint256 i = 0; i < 9; i++) {
-            pool.recordEarnedRaterReward(alice, 8_000);
+            bytes32 anchorId = i % 2 == 0 ? bytes32("anchor-b") : bytes32("anchor-a");
+            pool.recordEarnedRaterReward(alice, 1, 6 + i, _commitKey(6 + i), 8_000, 3, true, _singleAnchor(anchorId));
         }
         assertEq(pool.rewardedRatingCount(alice), 10);
         assertEq(pool.raterLaunchPaid(alice), 12e6);
         assertEq(lrep.balanceOf(alice), 12e6);
 
-        assertEq(pool.recordEarnedRaterReward(alice, 8_000), 0);
+        assertEq(_recordLaunchReward(alice, 15, bytes32("anchor-a")), 0);
         assertEq(lrep.balanceOf(alice), 12e6);
     }
 
     function test_RecordEarnedRaterRewardIgnoresLowScoresAndUnauthorizedCallers() public {
         assertEq(pool.recordEarnedRaterReward(alice, 6_999), 0);
+        assertEq(pool.recordEarnedRaterReward(alice, 8_000), 0);
+        assertEq(_recordLaunchRewardWithScore(alice, 1, bytes32("anchor-a"), 6_999), 0);
         assertEq(pool.qualifyingRatingCount(alice), 0);
 
+        bytes32[] memory anchors = _singleAnchor(bytes32("anchor-a"));
         vm.prank(bob);
         vm.expectRevert(LaunchDistributionPool.InvalidAddress.selector);
-        pool.recordEarnedRaterReward(alice, 8_000);
+        pool.recordEarnedRaterReward(alice, 1, 1, _commitKey(1), 8_000, 3, true, anchors);
+    }
+
+    function test_RecordEarnedRaterRewardRequiresRoundContext() public {
+        assertEq(
+            pool.recordEarnedRaterReward(
+                alice, 1, 1, _commitKey(1), 8_000, 2, true, _singleAnchor(bytes32("anchor-a"))
+            ),
+            0
+        );
+        assertEq(pool.recordEarnedRaterReward(alice, 1, 2, _commitKey(2), 8_000, 3, true, new bytes32[](0)), 0);
+        assertEq(
+            pool.recordEarnedRaterReward(
+                alice, 1, 3, _commitKey(3), 8_000, 3, false, _singleAnchor(bytes32("anchor-a"))
+            ),
+            0
+        );
+
+        assertEq(pool.qualifyingRatingCount(alice), 0);
+        assertEq(pool.raterDistinctVerifiedAnchorCount(alice), 0);
+        assertEq(pool.raterDistinctAnchorRoundCount(alice), 0);
+    }
+
+    function test_RecordEarnedRaterRewardRequiresDistinctAnchorsAcrossRounds() public {
+        for (uint256 i = 0; i < 5; i++) {
+            assertEq(_recordLaunchReward(alice, i + 1, bytes32("anchor-a")), 0);
+        }
+
+        assertEq(pool.qualifyingRatingCount(alice), 5);
+        assertEq(pool.raterDistinctVerifiedAnchorCount(alice), 1);
+        assertEq(pool.raterDistinctAnchorRoundCount(alice), 5);
+        assertEq(lrep.balanceOf(alice), 0);
+
+        uint256 firstReward = _recordLaunchReward(alice, 6, bytes32("anchor-b"));
+        assertEq(firstReward, 1_200_000);
+        assertEq(pool.raterDistinctVerifiedAnchorCount(alice), 2);
+        assertEq(lrep.balanceOf(alice), firstReward);
+    }
+
+    function test_RecordEarnedRaterRewardDeduplicatesCommitKeysAndAnchors() public {
+        bytes32[] memory anchors = new bytes32[](2);
+        anchors[0] = bytes32("anchor-a");
+        anchors[1] = bytes32("anchor-a");
+        bytes32 commitKey = _commitKey(1);
+
+        assertEq(pool.recordEarnedRaterReward(alice, 1, 1, commitKey, 8_000, 3, true, anchors), 0);
+        assertEq(pool.recordEarnedRaterReward(alice, 1, 1, commitKey, 8_000, 3, true, anchors), 0);
+
+        assertTrue(pool.earnedRewardCreditRecorded(1, 1, commitKey));
+        assertEq(pool.qualifyingRatingCount(alice), 1);
+        assertEq(pool.raterDistinctVerifiedAnchorCount(alice), 1);
+        assertEq(pool.raterDistinctAnchorRoundCount(alice), 1);
     }
 
     function test_ClaimVerifiedBonusPaysOneTimeBonusAndReferral() public {
@@ -160,6 +216,28 @@ contract LaunchDistributionPoolTest is Test {
         vm.prank(alice);
         vm.expectRevert(LaunchDistributionPool.AlreadyClaimed.selector);
         pool.claimLegacy(amount, new bytes32[](0));
+    }
+
+    function _recordLaunchReward(address rater, uint256 roundId, bytes32 anchorId) internal returns (uint256) {
+        return _recordLaunchRewardWithScore(rater, roundId, anchorId, 8_000);
+    }
+
+    function _recordLaunchRewardWithScore(address rater, uint256 roundId, bytes32 anchorId, uint16 scoreBps)
+        internal
+        returns (uint256)
+    {
+        return pool.recordEarnedRaterReward(
+            rater, 1, roundId, _commitKey(roundId), scoreBps, 3, true, _singleAnchor(anchorId)
+        );
+    }
+
+    function _singleAnchor(bytes32 anchorId) internal pure returns (bytes32[] memory anchors) {
+        anchors = new bytes32[](1);
+        anchors[0] = anchorId;
+    }
+
+    function _commitKey(uint256 roundId) internal pure returns (bytes32) {
+        return keccak256(abi.encode("commit", roundId));
     }
 
     function _verify(address account, bytes32 nullifier) internal {

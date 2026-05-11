@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {MerkleProof} from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
-import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
-import {RaterRegistry} from "./RaterRegistry.sol";
-import {ILaunchDistributionPool} from "./interfaces/ILaunchDistributionPool.sol";
+import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { MerkleProof } from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
+import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
+import { RaterRegistry } from "./RaterRegistry.sol";
+import { ILaunchDistributionPool } from "./interfaces/ILaunchDistributionPool.sol";
 
 /// @title LaunchDistributionPool
 /// @notice Holds the 64M LREP launch allocation and releases it through earned, verified, and legacy paths.
@@ -60,6 +60,11 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
     mapping(bytes32 => bool) public verifiedCredentialClaimed;
     mapping(address => bool) public verifiedBonusClaimedByAccount;
     mapping(address => uint256) public referralEarnings;
+    mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) public earnedRewardCreditRecorded;
+    mapping(address => mapping(bytes32 => bool)) public raterVerifiedAnchorSeen;
+    mapping(address => uint32) public raterDistinctVerifiedAnchorCount;
+    mapping(address => mapping(bytes32 => bool)) public raterAnchorRoundSeen;
+    mapping(address => uint32) public raterDistinctAnchorRoundCount;
     LaunchRewardPolicy public launchRewardPolicy;
 
     event PoolDeposit(uint256 amount);
@@ -71,7 +76,18 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
     event LaunchRewardPolicyUpdated(LaunchRewardPolicy policy);
     event LegacyClaimed(address indexed account, uint256 amount);
     event RaterLaunchCapAssigned(address indexed rater, uint256 cap, uint256 cohortIndex);
-    event EarnedRaterRewardPaid(address indexed rater, uint256 amount, uint16 scoreBps, uint32 rewardedRatingCount);
+    event EarnedRaterRewardPaid(
+        address indexed rater,
+        uint256 indexed contentId,
+        uint256 indexed roundId,
+        bytes32 commitKey,
+        uint256 amount,
+        uint16 scoreBps,
+        uint32 qualifyingRatingCount,
+        uint32 rewardedRatingCount,
+        uint32 distinctVerifiedAnchorCount,
+        uint32 distinctAnchorRoundCount
+    );
     event VerifiedBonusClaimed(address indexed account, uint256 amount, bytes32 indexed nullifierHash);
     event ReferralBonusPaid(address indexed referrer, address indexed referee, uint256 amount);
 
@@ -161,7 +177,8 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
 
     function claimVerifiedBonus(address referrer) external nonReentrant returns (uint256 paidAmount) {
         RaterRegistry.SelfCredential memory credential = raterRegistry.getSelfCredential(msg.sender);
-        if (!credential.verified || credential.revoked || credential.legacy || credential.expiresAt <= block.timestamp) {
+        if (!credential.verified || credential.revoked || credential.legacy || credential.expiresAt <= block.timestamp)
+        {
             revert NotVerified();
         }
         if (credential.nullifierHash == bytes32(0)) revert NotVerified();
@@ -190,29 +207,50 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
         nonReentrant
         returns (uint256 paidAmount)
     {
-        return _recordEarnedRaterReward(rater, scoreBps);
+        rater;
+        scoreBps;
+        return 0;
     }
 
     function recordEarnedRaterReward(
         address rater,
-        uint256,
-        uint256,
-        bytes32,
+        uint256 contentId,
+        uint256 roundId,
+        bytes32 commitKey,
         uint16 scoreBps,
-        uint16,
-        bool,
-        bytes32[] calldata
+        uint16 revealedRaterCount,
+        bool noPendingCleanup,
+        bytes32[] calldata verifiedAnchorIds
     ) external onlyAuthorized nonReentrant returns (uint256 paidAmount) {
-        return _recordEarnedRaterReward(rater, scoreBps);
+        LaunchRewardPolicy memory policy = launchRewardPolicy;
+        uint16 distinctRoundAnchors = _countDistinctAnchors(verifiedAnchorIds);
+        if (!_passesLaunchRewardContext(
+                policy, rater, commitKey, scoreBps, revealedRaterCount, noPendingCleanup, distinctRoundAnchors
+            )) {
+            return 0;
+        }
+
+        if (earnedRewardCreditRecorded[contentId][roundId][commitKey]) return 0;
+        earnedRewardCreditRecorded[contentId][roundId][commitKey] = true;
+        _recordAnchorRound(rater, contentId, roundId);
+        _recordVerifiedAnchors(rater, verifiedAnchorIds);
+
+        return _recordEarnedRaterReward(rater, contentId, roundId, commitKey, scoreBps, policy);
     }
 
-    function _recordEarnedRaterReward(address rater, uint16 scoreBps) internal returns (uint256 paidAmount) {
-        LaunchRewardPolicy memory policy = launchRewardPolicy;
-        if (rater == address(0) || scoreBps < policy.minQualifyingScoreBps) return 0;
-
+    function _recordEarnedRaterReward(
+        address rater,
+        uint256 contentId,
+        uint256 roundId,
+        bytes32 commitKey,
+        uint16 scoreBps,
+        LaunchRewardPolicy memory policy
+    ) internal returns (uint256 paidAmount) {
         uint32 qualifyingCount = qualifyingRatingCount[rater] + 1;
         qualifyingRatingCount[rater] = qualifyingCount;
         if (qualifyingCount < policy.eligibilityRatingCount) return 0;
+        if (raterDistinctVerifiedAnchorCount[rater] < policy.minDistinctVerifiedAnchors) return 0;
+        if (raterDistinctAnchorRoundCount[rater] < policy.minDistinctAnchorRounds) return 0;
 
         uint256 cap = raterLaunchCap[rater];
         if (cap == 0) {
@@ -237,7 +275,18 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
         raterLaunchPaid[rater] += paidAmount;
         earnedRaterDistributed += paidAmount;
         _pay(rater, paidAmount);
-        emit EarnedRaterRewardPaid(rater, paidAmount, scoreBps, rewardedRatingCount[rater]);
+        emit EarnedRaterRewardPaid(
+            rater,
+            contentId,
+            roundId,
+            commitKey,
+            paidAmount,
+            scoreBps,
+            qualifyingCount,
+            rewardedRatingCount[rater],
+            raterDistinctVerifiedAnchorCount[rater],
+            raterDistinctAnchorRoundCount[rater]
+        );
     }
 
     function currentRaterLaunchCap() public view returns (uint256) {
@@ -275,7 +324,8 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
     {
         if (referrer == address(0) || referrer == referee) return 0;
         RaterRegistry.SelfCredential memory credential = raterRegistry.getSelfCredential(referrer);
-        if (!credential.verified || credential.revoked || credential.legacy || credential.expiresAt <= block.timestamp) {
+        if (!credential.verified || credential.revoked || credential.legacy || credential.expiresAt <= block.timestamp)
+        {
             return 0;
         }
 
@@ -294,6 +344,58 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
         verifiedReferralDistributed += referralBonus;
         _pay(referrer, referralBonus);
         emit ReferralBonusPaid(referrer, referee, referralBonus);
+    }
+
+    function _passesLaunchRewardContext(
+        LaunchRewardPolicy memory policy,
+        address rater,
+        bytes32 commitKey,
+        uint16 scoreBps,
+        uint16 revealedRaterCount,
+        bool noPendingCleanup,
+        uint16 distinctRoundAnchors
+    ) internal pure returns (bool) {
+        if (rater == address(0) || commitKey == bytes32(0)) return false;
+        if (scoreBps < policy.minQualifyingScoreBps) return false;
+        if (revealedRaterCount < policy.minVoters) return false;
+        if (policy.requireNoPendingCleanup && !noPendingCleanup) return false;
+        if (distinctRoundAnchors < policy.minVerifiedHumans) return false;
+        return true;
+    }
+
+    function _recordAnchorRound(address rater, uint256 contentId, uint256 roundId) internal {
+        bytes32 roundKey = keccak256(abi.encode(contentId, roundId));
+        if (raterAnchorRoundSeen[rater][roundKey]) return;
+        raterAnchorRoundSeen[rater][roundKey] = true;
+        raterDistinctAnchorRoundCount[rater] += 1;
+    }
+
+    function _recordVerifiedAnchors(address rater, bytes32[] calldata verifiedAnchorIds) internal {
+        uint256 anchorCount = verifiedAnchorIds.length;
+        for (uint256 i = 0; i < anchorCount; i++) {
+            bytes32 anchorId = verifiedAnchorIds[i];
+            if (anchorId == bytes32(0) || _isDuplicateAnchor(verifiedAnchorIds, i)) continue;
+            if (raterVerifiedAnchorSeen[rater][anchorId]) continue;
+
+            raterVerifiedAnchorSeen[rater][anchorId] = true;
+            raterDistinctVerifiedAnchorCount[rater] += 1;
+        }
+    }
+
+    function _countDistinctAnchors(bytes32[] calldata verifiedAnchorIds) internal pure returns (uint16 distinctCount) {
+        uint256 anchorCount = verifiedAnchorIds.length;
+        for (uint256 i = 0; i < anchorCount; i++) {
+            if (verifiedAnchorIds[i] == bytes32(0) || _isDuplicateAnchor(verifiedAnchorIds, i)) continue;
+            distinctCount += 1;
+        }
+    }
+
+    function _isDuplicateAnchor(bytes32[] calldata verifiedAnchorIds, uint256 index) internal pure returns (bool) {
+        bytes32 anchorId = verifiedAnchorIds[index];
+        for (uint256 i = 0; i < index; i++) {
+            if (verifiedAnchorIds[i] == anchorId) return true;
+        }
+        return false;
     }
 
     function _defaultLaunchRewardPolicy() internal pure returns (LaunchRewardPolicy memory policy) {
@@ -319,8 +421,7 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
         if (
             policy.minQualifyingScoreBps > 10_000 || policy.minVoters == 0
                 || policy.minVerifiedHumans > policy.minVoters || policy.eligibilityRatingCount == 0
-                || policy.rewardingRatingCount == 0
-                || policy.minDistinctVerifiedAnchors > policy.eligibilityRatingCount
+                || policy.rewardingRatingCount == 0 || policy.minDistinctVerifiedAnchors > policy.eligibilityRatingCount
                 || policy.minDistinctAnchorRounds > policy.eligibilityRatingCount
                 || (policy.minVerifiedHumans == 0 && policy.minDistinctVerifiedAnchors > 0)
         ) {
