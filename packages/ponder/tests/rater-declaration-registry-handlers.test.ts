@@ -135,7 +135,13 @@ describe("RaterDeclarationRegistry ponder handlers", () => {
   });
 
   it("indexes probe results and updates the current declaration tier", async () => {
-    const { db, inserts, updates } = createDb();
+    const rater = "0x0000000000000000000000000000000000001234";
+    const { db, inserts, updates } = createDb({
+      [findKey("aiRaterDeclaration", { rater })]: {
+        rater,
+        version: 1,
+      },
+    });
     const registeredHandlers = await loadHandlers();
     const handler = registeredHandlers.get("RaterDeclarationRegistry:ProbeResultRecorded");
 
@@ -145,7 +151,7 @@ describe("RaterDeclarationRegistry ponder handlers", () => {
       event: {
         ...baseEvent,
         args: {
-          rater: "0x0000000000000000000000000000000000001234",
+          rater,
           operator: "0x000000000000000000000000000000000000abcd",
           version: 1,
           passed: true,
@@ -169,7 +175,7 @@ describe("RaterDeclarationRegistry ponder handlers", () => {
       expect.arrayContaining([
         {
           table: "aiRaterDeclaration",
-          key: { rater: "0x0000000000000000000000000000000000001234" },
+          key: { rater },
           update: expect.objectContaining({
             tier: 2,
             probePending: false,
@@ -178,6 +184,45 @@ describe("RaterDeclarationRegistry ponder handlers", () => {
         },
       ]),
     );
+  });
+
+  it("does not let stale probe events mutate the current declaration row", async () => {
+    const rater = "0x0000000000000000000000000000000000001234";
+    const { db, updates } = createDb({
+      [findKey("aiRaterDeclaration", { rater })]: {
+        rater,
+        version: 2,
+      },
+    });
+    const registeredHandlers = await loadHandlers();
+    const handler = registeredHandlers.get("RaterDeclarationRegistry:ProbeResultRecorded");
+
+    await handler!({
+      event: {
+        ...baseEvent,
+        args: {
+          rater,
+          operator: "0x000000000000000000000000000000000000abcd",
+          version: 1,
+          passed: true,
+          confidenceBps: 8_500,
+          probeLibraryHash: `0x${"77".repeat(32)}`,
+          resultHash: `0x${"88".repeat(32)}`,
+        },
+      },
+      context: { db },
+    });
+
+    expect(updates).toEqual([
+      {
+        table: "aiRaterDeclarationHistory",
+        key: { id: `${rater}-1` },
+        update: expect.objectContaining({
+          tier: 2,
+          lastProbeResultHash: `0x${"88".repeat(32)}`,
+        }),
+      },
+    ]);
   });
 
   it("indexes declaration challenges with their bond amount", async () => {
@@ -218,10 +263,20 @@ describe("RaterDeclarationRegistry ponder handlers", () => {
   it("marks the current declaration inactive when a challenge is sustained", async () => {
     const challengeId = 1n;
     const rater = "0x0000000000000000000000000000000000001234";
-    const { db, updates } = createDb({
+    const operator = "0x000000000000000000000000000000000000abcd";
+    const { db, inserts, updates } = createDb({
       [findKey("aiRaterDeclarationChallenge", { challengeId })]: {
         rater,
+        operator,
         declarationVersion: 3,
+      },
+      [findKey("aiRaterDeclaration", { rater })]: {
+        rater,
+        version: 3,
+      },
+      [findKey("aiRaterOperatorBond", { operator })]: {
+        operator,
+        totalBond: 100n,
       },
     });
     const registeredHandlers = await loadHandlers();
@@ -254,6 +309,82 @@ describe("RaterDeclarationRegistry ponder handlers", () => {
             retiredAt: 123n,
           }),
         },
+        {
+          table: "aiRaterDeclarationHistory",
+          key: { id: `${rater}-3` },
+          update: expect.objectContaining({
+            tier: 0,
+            probePending: false,
+            retiredAt: 123n,
+          }),
+        },
+      ]),
+    );
+    expect(inserts).toEqual(
+      expect.arrayContaining([
+        {
+          table: "aiRaterOperatorBond",
+          mode: "update",
+          values: {
+            operator,
+            totalBond: 50n,
+            updatedAt: 123n,
+          },
+          update: {
+            totalBond: 50n,
+            updatedAt: 123n,
+          },
+        },
+      ]),
+    );
+  });
+
+  it("does not demote the current declaration for a stale sustained challenge", async () => {
+    const challengeId = 1n;
+    const rater = "0x0000000000000000000000000000000000001234";
+    const operator = "0x000000000000000000000000000000000000abcd";
+    const { db, updates } = createDb({
+      [findKey("aiRaterDeclarationChallenge", { challengeId })]: {
+        rater,
+        operator,
+        declarationVersion: 3,
+      },
+      [findKey("aiRaterDeclaration", { rater })]: {
+        rater,
+        version: 4,
+      },
+      [findKey("aiRaterOperatorBond", { operator })]: {
+        operator,
+        totalBond: 100n,
+      },
+    });
+    const registeredHandlers = await loadHandlers();
+    const handler = registeredHandlers.get("RaterDeclarationRegistry:ChallengeResolved");
+
+    await handler!({
+      event: {
+        ...baseEvent,
+        args: {
+          challengeId,
+          status: 2,
+          operatorSlash: 50n,
+          challengerReward: 25n,
+          resolutionHash: `0x${"aa".repeat(32)}`,
+        },
+      },
+      context: { db },
+    });
+
+    expect(updates).toEqual(
+      expect.not.arrayContaining([
+        expect.objectContaining({
+          table: "aiRaterDeclaration",
+          key: { rater },
+        }),
+      ]),
+    );
+    expect(updates).toEqual(
+      expect.arrayContaining([
         {
           table: "aiRaterDeclarationHistory",
           key: { id: `${rater}-3` },

@@ -16,6 +16,18 @@ function eventId(event: { transaction: { hash: string }; log: { logIndex: number
   return `${event.transaction.hash}-${event.log.logIndex}`;
 }
 
+async function updateCurrentDeclarationIfVersionMatches(
+  context: Parameters<Parameters<typeof ponder.on>[1]>[0]["context"],
+  rater: string,
+  version: number,
+  update: Record<string, unknown>,
+) {
+  const current = await context.db.find(aiRaterDeclaration, { rater });
+  if (current?.version !== version) return;
+
+  await context.db.update(aiRaterDeclaration, { rater }).set(update);
+}
+
 ponder.on("RaterDeclarationRegistry:OperatorBondDeposited", async ({ event, context }) => {
   const { operator, totalBond } = event.args;
 
@@ -104,21 +116,19 @@ ponder.on("RaterDeclarationRegistry:DeclarationSubmitted", async ({ event, conte
 
 ponder.on("RaterDeclarationRegistry:DeclarationRetired", async ({ event, context }) => {
   const { rater, version } = event.args;
-  const historyId = declarationHistoryId(rater, Number(version));
+  const numericVersion = Number(version);
+  const historyId = declarationHistoryId(rater, numericVersion);
 
-  await context.db.update(aiRaterDeclaration, { rater }).set({
+  const update = {
     tier: 0,
     probePending: false,
     retiredAt: event.block.timestamp,
     updatedAt: event.block.timestamp,
-  });
+  };
 
-  await context.db.update(aiRaterDeclarationHistory, { id: historyId }).set({
-    tier: 0,
-    probePending: false,
-    retiredAt: event.block.timestamp,
-    updatedAt: event.block.timestamp,
-  });
+  await updateCurrentDeclarationIfVersionMatches(context, rater, numericVersion, update);
+
+  await context.db.update(aiRaterDeclarationHistory, { id: historyId }).set(update);
 });
 
 ponder.on("RaterDeclarationRegistry:ProbeResultRecorded", async ({ event, context }) => {
@@ -142,19 +152,16 @@ ponder.on("RaterDeclarationRegistry:ProbeResultRecorded", async ({ event, contex
     })
     .onConflictDoNothing();
 
-  await context.db.update(aiRaterDeclaration, { rater }).set({
+  const update = {
     tier,
     probePending: false,
     lastProbeResultHash: resultHash,
     updatedAt: event.block.timestamp,
-  });
+  };
 
-  await context.db.update(aiRaterDeclarationHistory, { id: historyId }).set({
-    tier,
-    probePending: false,
-    lastProbeResultHash: resultHash,
-    updatedAt: event.block.timestamp,
-  });
+  await updateCurrentDeclarationIfVersionMatches(context, rater, numericVersion, update);
+
+  await context.db.update(aiRaterDeclarationHistory, { id: historyId }).set(update);
 });
 
 ponder.on("RaterDeclarationRegistry:BehavioralDriftFlagged", async ({ event, context }) => {
@@ -175,15 +182,14 @@ ponder.on("RaterDeclarationRegistry:BehavioralDriftFlagged", async ({ event, con
     })
     .onConflictDoNothing();
 
-  await context.db.update(aiRaterDeclaration, { rater }).set({
+  const update = {
     tier: 1,
     updatedAt: event.block.timestamp,
-  });
+  };
 
-  await context.db.update(aiRaterDeclarationHistory, { id: historyId }).set({
-    tier: 1,
-    updatedAt: event.block.timestamp,
-  });
+  await updateCurrentDeclarationIfVersionMatches(context, rater, numericVersion, update);
+
+  await context.db.update(aiRaterDeclarationHistory, { id: historyId }).set(update);
 });
 
 ponder.on("RaterDeclarationRegistry:ChallengeOpened", async ({ event, context }) => {
@@ -223,6 +229,24 @@ ponder.on("RaterDeclarationRegistry:ChallengeResolved", async ({ event, context 
     resolvedAt: event.block.timestamp,
   });
 
+  if (challenge && operatorSlash > 0n) {
+    const bond = await context.db.find(aiRaterOperatorBond, { operator: challenge.operator });
+    const previousBond = bond?.totalBond ?? 0n;
+    const totalBond = previousBond > operatorSlash ? previousBond - operatorSlash : 0n;
+
+    await context.db
+      .insert(aiRaterOperatorBond)
+      .values({
+        operator: challenge.operator,
+        totalBond,
+        updatedAt: event.block.timestamp,
+      })
+      .onConflictDoUpdate({
+        totalBond,
+        updatedAt: event.block.timestamp,
+      });
+  }
+
   if (Number(status) === 2 && challenge) {
     const historyId = declarationHistoryId(challenge.rater, challenge.declarationVersion);
     const update = {
@@ -232,7 +256,7 @@ ponder.on("RaterDeclarationRegistry:ChallengeResolved", async ({ event, context 
       updatedAt: event.block.timestamp,
     };
 
-    await context.db.update(aiRaterDeclaration, { rater: challenge.rater }).set(update);
+    await updateCurrentDeclarationIfVersionMatches(context, challenge.rater, challenge.declarationVersion, update);
     await context.db.update(aiRaterDeclarationHistory, { id: historyId }).set(update);
   }
 });

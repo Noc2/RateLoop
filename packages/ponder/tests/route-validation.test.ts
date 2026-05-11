@@ -131,6 +131,7 @@ function mockPonderModules<T>(result: T) {
     },
     aiRaterProbeResult: {
       confidenceBps: "aiRaterProbeResult.confidenceBps",
+      id: "aiRaterProbeResult.id",
       passed: "aiRaterProbeResult.passed",
       probeLibraryHash: "aiRaterProbeResult.probeLibraryHash",
       rater: "aiRaterProbeResult.rater",
@@ -828,8 +829,10 @@ describe("registerDataRoutes", () => {
       },
       aiDeclaration: {
         declared: true,
-        tierName: "A1Verified",
-        tierMultiplierBps: 11_500,
+        active: false,
+        inactiveReason: "challenged",
+        tierName: "A0",
+        tierMultiplierBps: 10_000,
         probeStatus: "passed",
       },
       challengeStatus: {
@@ -838,7 +841,7 @@ describe("registerDataRoutes", () => {
         latestStatus: 1,
       },
       rewardPolicy: {
-        combinedMultiplierBps: 12_500,
+        combinedMultiplierBps: 12_000,
         combinedMultiplierCapBps: 12_500,
         verifiedAgentsCanAnchorLaunchRewards: false,
         verifiedAgentSignupBonusEligible: false,
@@ -906,10 +909,18 @@ describe("registerDataRoutes", () => {
     expect(body).toMatchObject({
       aiDeclaration: {
         declared: true,
+        active: false,
+        inactiveReason: "retired",
         tier: 0,
         tierName: "A0",
         tierMultiplierBps: 10_000,
         retiredAt: "4000",
+        probeStatus: "passed",
+      },
+      challengeStatus: {
+        latestChallengeId: "7",
+        latestStatus: 2,
+        latestResolvedAt: "4000",
       },
       rewardPolicy: {
         agentTierMultiplierBps: 10_000,

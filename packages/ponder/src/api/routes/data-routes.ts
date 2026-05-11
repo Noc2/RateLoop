@@ -112,6 +112,25 @@ function declarationIsActive(
   return declaration.expiresAtEpoch === 0n || nowSeconds < declaration.expiresAtEpoch;
 }
 
+function declarationInactiveReason(
+  declaration:
+    | {
+        retiredAt: bigint | null;
+        effectiveEpoch: bigint;
+        expiresAtEpoch: bigint;
+      }
+    | undefined,
+  nowSeconds: bigint,
+  openChallengeCount: number,
+) {
+  if (!declaration) return "missing";
+  if (declaration.retiredAt != null) return "retired";
+  if (declaration.effectiveEpoch > nowSeconds) return "future";
+  if (declaration.expiresAtEpoch !== 0n && nowSeconds >= declaration.expiresAtEpoch) return "expired";
+  if (openChallengeCount > 0) return "challenged";
+  return "none";
+}
+
 export function registerDataRoutes(app: ApiApp) {
   app.get("/question-bundles/:id", async (c) => {
     const bundleId = safeBigInt(c.req.param("id"));
@@ -348,8 +367,8 @@ export function registerDataRoutes(app: ApiApp) {
     ]);
 
     const nowSeconds = BigInt(Math.floor(Date.now() / 1000));
-    const currentDeclarationVersion = declarationIsActive(declaration, nowSeconds) ? declaration?.version : null;
-    const [[latestProbe], [challengeStats], [latestChallenge]] = currentDeclarationVersion
+    const declarationVersion = declaration?.version ?? null;
+    const [[latestProbe], [challengeStats], [latestChallenge]] = declarationVersion
       ? await Promise.all([
           db
             .select()
@@ -357,10 +376,10 @@ export function registerDataRoutes(app: ApiApp) {
             .where(
               and(
                 eq(aiRaterProbeResult.rater, address),
-                eq(aiRaterProbeResult.version, currentDeclarationVersion),
+                eq(aiRaterProbeResult.version, declarationVersion),
               ),
             )
-            .orderBy(desc(aiRaterProbeResult.recordedAt))
+            .orderBy(desc(aiRaterProbeResult.recordedAt), desc(aiRaterProbeResult.id))
             .limit(1),
           db
             .select({
@@ -370,7 +389,7 @@ export function registerDataRoutes(app: ApiApp) {
             .where(
               and(
                 eq(aiRaterDeclarationChallenge.rater, address),
-                eq(aiRaterDeclarationChallenge.declarationVersion, currentDeclarationVersion),
+                eq(aiRaterDeclarationChallenge.declarationVersion, declarationVersion),
                 eq(aiRaterDeclarationChallenge.status, OPEN_CHALLENGE_STATUS),
               ),
             ),
@@ -380,10 +399,10 @@ export function registerDataRoutes(app: ApiApp) {
             .where(
               and(
                 eq(aiRaterDeclarationChallenge.rater, address),
-                eq(aiRaterDeclarationChallenge.declarationVersion, currentDeclarationVersion),
+                eq(aiRaterDeclarationChallenge.declarationVersion, declarationVersion),
               ),
             )
-            .orderBy(desc(aiRaterDeclarationChallenge.openedAt))
+            .orderBy(desc(aiRaterDeclarationChallenge.openedAt), desc(aiRaterDeclarationChallenge.challengeId))
             .limit(1),
         ])
       : [
@@ -397,7 +416,9 @@ export function registerDataRoutes(app: ApiApp) {
       humanCredentialStatus === "verified"
         ? selfCredential?.multiplierBps ?? BASE_RATER_MULTIPLIER_BPS
         : BASE_RATER_MULTIPLIER_BPS;
-    const activeDeclarationTier = declarationIsActive(declaration, nowSeconds) ? declaration?.tier : 0;
+    const openChallengeCount = Number(challengeStats?.openCount ?? 0);
+    const aiDeclarationInactiveReason = declarationInactiveReason(declaration, nowSeconds, openChallengeCount);
+    const activeDeclarationTier = aiDeclarationInactiveReason === "none" ? declaration?.tier : 0;
     const agentTierMultiplierBps = aiTierMultiplierBps(activeDeclarationTier);
     const combinedMultiplierBps = Math.min(
       Math.floor((humanMultiplierBps * agentTierMultiplierBps) / BASE_RATER_MULTIPLIER_BPS),
@@ -421,6 +442,8 @@ export function registerDataRoutes(app: ApiApp) {
       aiDeclaration: declaration
         ? {
             declared: true,
+            active: aiDeclarationInactiveReason === "none",
+            inactiveReason: aiDeclarationInactiveReason,
             operator: declaration.operator,
             version: declaration.version,
             effectiveEpoch: declaration.effectiveEpoch,
@@ -454,6 +477,8 @@ export function registerDataRoutes(app: ApiApp) {
           }
         : {
             declared: false,
+            active: false,
+            inactiveReason: "missing",
             operator: null,
             version: 0,
             effectiveEpoch: null,
@@ -478,7 +503,7 @@ export function registerDataRoutes(app: ApiApp) {
             latestProbe: null,
           },
       challengeStatus: {
-        openCount: Number(challengeStats?.openCount ?? 0),
+        openCount: openChallengeCount,
         latestChallengeId: latestChallenge?.challengeId ?? null,
         latestStatus: latestChallenge?.status ?? 0,
         latestResolvedAt: latestChallenge?.resolvedAt ?? null,
