@@ -315,6 +315,65 @@ contract RaterDeclarationRegistryTest is Test {
         assertEq(lrep.balanceOf(operator), operatorBalanceBefore + MIN_BOND);
     }
 
+    function test_ExpiredDeclarationBondCanBeReleasedAfterGracePeriod() public {
+        RaterDeclarationRegistry.RaterDeclaration memory declaration = _declaration(1, 0, PROMPT_HASH);
+        declaration.expiresAtEpoch = uint64(block.timestamp + 1 days);
+        bytes memory signature = _signature(declaration);
+
+        vm.prank(rater);
+        registry.submitDeclaration(declaration, signature, MIN_BOND, true);
+
+        vm.warp(uint256(declaration.expiresAtEpoch) + registry.RETIRED_DECLARATION_BOND_LOCK());
+        registry.releaseExpiredDeclarationBond(rater);
+
+        assertEq(registry.activeOperatorDeclarations(operator), 0);
+        assertEq(registry.operatorBondReserved(operator), 0);
+        assertEq(registry.declarationBondOperator(rater), address(0));
+        assertEq(registry.declarationBondAmount(rater), 0);
+        assertEq(uint256(registry.getDeclaration(rater).tier), uint256(RaterDeclarationRegistry.RaterTier.A0));
+        assertFalse(registry.hasActiveAiDeclaration(rater));
+
+        uint256 operatorBalanceBefore = lrep.balanceOf(operator);
+        vm.prank(operator);
+        registry.withdrawRetiredOperatorBond(MIN_BOND);
+        assertEq(lrep.balanceOf(operator), operatorBalanceBefore + MIN_BOND);
+    }
+
+    function test_ExpiredDeclarationBondReleaseBeforeGracePeriodReverts() public {
+        RaterDeclarationRegistry.RaterDeclaration memory declaration = _declaration(1, 0, PROMPT_HASH);
+        declaration.expiresAtEpoch = uint64(block.timestamp + 1 days);
+        bytes memory signature = _signature(declaration);
+
+        vm.prank(rater);
+        registry.submitDeclaration(declaration, signature, MIN_BOND, true);
+
+        vm.warp(declaration.expiresAtEpoch);
+        vm.expectRevert(RaterDeclarationRegistry.BondReleasePending.selector);
+        registry.releaseExpiredDeclarationBond(rater);
+    }
+
+    function test_ExpiredDeclarationBondReleaseBlockedByOpenChallenge() public {
+        RaterDeclarationRegistry.RaterDeclaration memory declaration = _declaration(1, 0, PROMPT_HASH);
+        declaration.expiresAtEpoch = uint64(block.timestamp + 1 days);
+        bytes memory signature = _signature(declaration);
+
+        vm.prank(rater);
+        registry.submitDeclaration(declaration, signature, MIN_BOND, false);
+
+        vm.prank(challenger);
+        uint256 challengeId = registry.openChallenge(rater, EVIDENCE_HASH);
+
+        vm.warp(uint256(declaration.expiresAtEpoch) + registry.RETIRED_DECLARATION_BOND_LOCK());
+        vm.expectRevert(RaterDeclarationRegistry.OpenChallenges.selector);
+        registry.releaseExpiredDeclarationBond(rater);
+
+        registry.expireChallenge(challengeId);
+        registry.releaseExpiredDeclarationBond(rater);
+
+        assertEq(registry.activeOperatorDeclarations(operator), 0);
+        assertEq(registry.operatorBondReserved(operator), 0);
+    }
+
     function test_SustainedChallengeSlashesOperatorBondAndDemotesDeclaration() public {
         _submitDefaultDeclaration(false);
 

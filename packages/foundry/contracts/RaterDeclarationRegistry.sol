@@ -141,6 +141,7 @@ contract RaterDeclarationRegistry is AccessControl, EIP712 {
         uint8 disclosure
     );
     event DeclarationRetired(address indexed rater, address indexed operator, uint32 indexed version);
+    event DeclarationExpired(address indexed rater, address indexed operator, uint32 indexed version);
     event ProbeRequested(
         address indexed rater, address indexed operator, uint32 indexed version, bytes32 declarationHash
     );
@@ -379,6 +380,24 @@ contract RaterDeclarationRegistry is AccessControl, EIP712 {
         if (block.timestamp < releaseAt) revert BondReleasePending();
 
         _releaseDeclarationBondLock(rater, operator);
+    }
+
+    function releaseExpiredDeclarationBond(address rater) external {
+        StoredDeclaration storage stored = _declarations[rater];
+        RaterDeclaration memory declaration = stored.declaration;
+        if (stored.tier == RaterTier.A0 || declaration.rater != rater || declaration.expiresAtEpoch == 0) {
+            revert InvalidDeclaration();
+        }
+        bytes32 declarationKey = _declarationKey(rater, declaration.version);
+        if (openDeclarationChallenges[declarationKey] != 0) revert OpenChallenges();
+
+        uint256 releaseAt = uint256(declaration.expiresAtEpoch) + RETIRED_DECLARATION_BOND_LOCK;
+        if (block.timestamp < releaseAt) revert BondReleasePending();
+
+        stored.tier = RaterTier.A0;
+        stored.probePending = false;
+        emit DeclarationExpired(rater, declaration.operator, declaration.version);
+        _releaseDeclarationBondLock(rater, declaration.operator);
     }
 
     function withdrawRetiredOperatorBond(uint256 amount) external {
