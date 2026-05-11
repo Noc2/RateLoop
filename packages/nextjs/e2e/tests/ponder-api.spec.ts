@@ -113,6 +113,7 @@ test.describe("Ponder API endpoints", () => {
     expect(data).toHaveProperty("totalVotes");
     expect(data).toHaveProperty("totalRoundsSettled");
     expect(data).toHaveProperty("totalQuestionRewardsPaid");
+    expect(data).toHaveProperty("totalVerifiedHumans");
   });
 
   test("GET /profile/:address returns profile activity payload", async () => {

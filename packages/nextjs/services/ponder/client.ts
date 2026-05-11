@@ -1125,6 +1125,7 @@ export const ponderApi = {
       totalFeedbackBonusesForfeited: string;
       totalProfiles: number;
       totalVoterIds: number;
+      totalVerifiedHumans: number | string;
     }>("/stats");
   },
 

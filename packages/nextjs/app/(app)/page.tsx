@@ -95,7 +95,7 @@ const FEATURE_BENEFITS: {
 
 const FALLBACK_SOCIAL_PROOF_STATS = {
   totalVotes: 3482,
-  totalVoterIds: 287,
+  totalVerifiedHumans: 287,
   totalQuestionRewardsPaid: "0",
   totalFeedbackBonusesPaid: "0",
 };
@@ -259,7 +259,10 @@ async function getLandingPageSocialProofItems() {
     BigInt(FALLBACK_SOCIAL_PROOF_STATS.totalQuestionRewardsPaid) +
     BigInt(FALLBACK_SOCIAL_PROOF_STATS.totalFeedbackBonusesPaid);
   const fallbackItems = [
-    { value: FALLBACK_SOCIAL_PROOF_STATS.totalVoterIds.toLocaleString("en-US"), label: "Calibrated Raters" },
+    {
+      value: FALLBACK_SOCIAL_PROOF_STATS.totalVerifiedHumans.toLocaleString("en-US"),
+      label: "Verified Humans",
+    },
     { value: FALLBACK_SOCIAL_PROOF_STATS.totalVotes.toLocaleString("en-US"), label: "Predictions" },
     { value: formatUsdcPaidOut(fallbackPaidOut), label: "USDC Paid" },
   ];
@@ -280,7 +283,7 @@ async function getLandingPageSocialProofItems() {
 
     const stats = (await response.json()) as {
       totalVotes?: number;
-      totalVoterIds?: number;
+      totalVerifiedHumans?: number | string;
       totalQuestionRewardsPaid?: string;
       totalFeedbackBonusesPaid?: string;
     };
@@ -288,7 +291,10 @@ async function getLandingPageSocialProofItems() {
       BigInt(String(stats.totalQuestionRewardsPaid ?? 0)) + BigInt(String(stats.totalFeedbackBonusesPaid ?? 0));
 
     return [
-      { value: Math.max(0, Number(stats.totalVoterIds ?? 0)).toLocaleString("en-US"), label: "Calibrated Raters" },
+      {
+        value: Math.max(0, Number(stats.totalVerifiedHumans ?? 0)).toLocaleString("en-US"),
+        label: "Verified Humans",
+      },
       { value: Math.max(0, Number(stats.totalVotes ?? 0)).toLocaleString("en-US"), label: "Predictions" },
       {
         value: formatUsdcPaidOut(paidOut),

@@ -203,6 +203,7 @@ export interface CuryoGlobalStats {
   totalQuestionRewardsPaidToFrontends?: string;
   totalProfiles?: number;
   totalVoterIds?: number;
+  totalVerifiedHumans?: number | string;
   [key: string]: unknown;
 }
 

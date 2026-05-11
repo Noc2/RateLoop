@@ -930,7 +930,7 @@ describe("registerDataRoutes", () => {
   });
 
   it("includes bounty payouts in global stats", async () => {
-    mockPonderModules([
+    const { queryBuilder } = mockPonderModules([
       {
         totalContent: 2,
         totalVotes: 3,
@@ -938,6 +938,7 @@ describe("registerDataRoutes", () => {
         totalRewardsClaimed: 0n,
         totalProfiles: 4,
         totalVoterIds: 5,
+        totalVerifiedHumans: 6,
         totalQuestionRewardsPaid: 123_450_000n,
         totalQuestionRewardsPaidToVoters: 119_746_500n,
         totalQuestionRewardsPaidToFrontends: 3_703_500n,
@@ -967,7 +968,14 @@ describe("registerDataRoutes", () => {
       totalFeedbackBonusesPaidToVoters: "11640000",
       totalFeedbackBonusesPaidToFrontends: "360000",
       totalFeedbackBonusesForfeited: "5000000",
+      totalVerifiedHumans: 6,
     });
+    const verifiedHumanWhere = queryBuilder.where.mock.calls
+      .map(([value]) => serializeExpression(value))
+      .find((value) => value.includes("raterSelfCredential.expiresAt"));
+    expect(verifiedHumanWhere ?? "").toContain("raterSelfCredential.verified");
+    expect(verifiedHumanWhere ?? "").toContain("raterSelfCredential.revoked");
+    expect(verifiedHumanWhere ?? "").toContain("raterSelfCredential.expiresAt");
   });
 
   it("rejects vote cooldown requests without valid voters before querying the database", async () => {

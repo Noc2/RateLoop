@@ -962,12 +962,14 @@ export function registerDataRoutes(app: ApiApp) {
   });
 
   app.get("/stats", async (c) => {
+    const nowSeconds = BigInt(Math.floor(Date.now() / 1000));
     const [
       [stats],
       [rewardPoolStats],
       [bundleRewardStats],
       [feedbackBonusAwardStats],
       [feedbackBonusPoolStats],
+      [verifiedHumanStats],
     ] = await Promise.all([
       db
         .select()
@@ -1001,6 +1003,18 @@ export function registerDataRoutes(app: ApiApp) {
           totalFeedbackBonusesForfeited: sql<bigint>`coalesce(sum(${feedbackBonusPool.forfeitedAmount}), 0)`,
         })
         .from(feedbackBonusPool),
+      db
+        .select({
+          totalVerifiedHumans: sql<number>`count(*)`,
+        })
+        .from(raterSelfCredential)
+        .where(
+          and(
+            eq(raterSelfCredential.verified, true),
+            eq(raterSelfCredential.revoked, false),
+            sql`${raterSelfCredential.expiresAt} > ${nowSeconds}`,
+          ),
+        ),
     ]);
 
     const fallbackStats = {
@@ -1010,10 +1024,12 @@ export function registerDataRoutes(app: ApiApp) {
       totalRewardsClaimed: "0",
       totalProfiles: 0,
       totalVoterIds: 0,
+      totalVerifiedHumans: 0,
     };
 
     return jsonBig(c, {
       ...(stats ?? fallbackStats),
+      totalVerifiedHumans: verifiedHumanStats?.totalVerifiedHumans ?? 0,
       totalQuestionRewardsPaid: rewardPoolStats?.totalQuestionRewardsPaid ?? 0n,
       totalQuestionRewardsPaidToVoters:
         rewardPoolStats?.totalQuestionRewardsPaidToVoters ?? 0n,

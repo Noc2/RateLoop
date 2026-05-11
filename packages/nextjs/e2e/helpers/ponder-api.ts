@@ -123,6 +123,7 @@ export async function getStats(baseURL = PONDER_URL): Promise<{
   totalQuestionRewardsPaid: string;
   totalQuestionRewardsPaidToVoters: string;
   totalQuestionRewardsPaidToFrontends: string;
+  totalVerifiedHumans: number | string;
 }> {
   const res = await fetchWithRetry(`${baseURL}/stats`);
   if (!res.ok) throw new Error(`GET /stats returned ${res.status}`);
