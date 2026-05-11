@@ -94,6 +94,11 @@ const Tokenomics = () => {
         <strong>25M LREP</strong> for earned rater rewards, and <strong>4M LREP</strong> for legacy users.
       </p>
       <p>
+        The 4M legacy claim is split across the same nine migrated verified users from the old redeploy manifest.
+        Allocation is proportional to old claimant amount plus old referrer rewards earned, so claimant-side referral
+        bonuses and the recorded referrer bonus are both preserved in the fixed legacy rail.
+      </p>
+      <p>
         New users can start with a zero-LREP prediction path and earn initial LREP when their ratings are useful.
         Staking LREP remains available for raters who want more upside from normal winner/loser settlement, but owning
         LREP is not intended to be the first barrier to participation.

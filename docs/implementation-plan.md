@@ -542,7 +542,13 @@ Launch Distribution Pool rule:
 
 - Allocate `4,000,000 LREP` to the previous user set. There are only nine old
   users, so the legacy claim should recognize history without consuming the pool
-  intended to onboard the new network.
+  intended to onboard the new network. Use the old redeploy bootstrap manifest
+  as provenance and preserve referral economics in the fixed legacy split:
+  `legacyWeight = old migrated claimant amount + old referrer rewards earned`.
+  The recorded 9-user snapshot has `115,000 HREP` of claimant amounts and
+  `25,000 HREP` of referrer rewards, so the `4,000,000 LREP` claim is pro-rata
+  over `140,000 HREP` of total legacy weight. The concrete claim file lives at
+  `packages/foundry/migrations/legacy-lrep-claims.json`.
 - Put `25,000,000 LREP` behind earned rater rewards. A new rater can
   start with zero LREP, submit revealed predictions, and earn starter LREP when
   those predictions are useful.

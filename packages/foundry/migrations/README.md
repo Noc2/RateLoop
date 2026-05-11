@@ -89,3 +89,49 @@ For every migrated holder, verify:
 - `HumanFaucet.isNullifierUsed(nullifier)` is true
 - `VoterIdNFT.hasVoterId(holder)` is true
 - Ponder indexes the expected `voter_id` rows from the new deployment start block
+
+## Legacy LREP Claim
+
+`legacy-lrep-claims.json` converts the same 9 migrated verified humans into the
+fixed `4,000,000 LREP` legacy claim for the RateLoop redeployment.
+
+The allocation intentionally preserves the old referral economics instead of
+splitting the pool equally:
+
+```text
+legacyWeight = old migrated claimant amount + old referrer rewards earned
+```
+
+That means claimant-side referral bonuses remain in each claimant's old amount,
+and the first verified user also receives credit for the five old referrer
+rewards recorded in `faucet-bootstrap.json`.
+
+Snapshot totals:
+
+- Old claimant amounts: `115,000 HREP`
+- Old referrer rewards: `25,000 HREP`
+- Total legacy weight: `140,000 HREP`
+- New fixed legacy pool: `4,000,000 LREP`
+
+The resulting claim weights are:
+
+| Old manifest index | Address | Legacy weight | LREP claim |
+| --- | --- | ---: | ---: |
+| 1 | `0x63cada40e8acf7a1d47229af5be35b78b16035fa` | 35,000 | 1,000,000.000000 |
+| 2 | `0x7c6425827bb8d848808cbb8fe2bd55fd2f2fa41a` | 15,000 | 428,571.428572 |
+| 3 | `0xc1cd80c7cd37b5499560c362b164cba1cff71b44` | 15,000 | 428,571.428572 |
+| 4 | `0x455ee797cea79a936ba8e8ed888e0b20ca1a1ba3` | 10,000 | 285,714.285714 |
+| 5 | `0x5a5148e7963c732e4c0991726793a726ce28046a` | 15,000 | 428,571.428572 |
+| 6 | `0x3ea207780415e2ab68b97eb3b02addd70020ac4c` | 10,000 | 285,714.285714 |
+| 7 | `0xe6722d1fdca78552eae5ea12ea3a8b7d6eec7aa8` | 15,000 | 428,571.428571 |
+| 8 | `0x74cc77fda426225470351f93c6ce4382b4b51aa8` | 15,000 | 428,571.428571 |
+| 9 | `0x4b98406f108d1a19dbbbe22216d432a5b1a5e22b` | 10,000 | 285,714.285714 |
+
+The JSON amounts are 6-decimal atomic LREP units. They sum exactly to
+`4,000,000e6`. The tiny rounding remainder is assigned by largest fractional
+remainder with old manifest order as the tiebreaker. The legacy Merkle tree
+should use the `LaunchDistributionPool` leaf shape:
+
+```text
+keccak256(abi.encode(account, amount))
+```
