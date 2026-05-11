@@ -154,7 +154,7 @@ contract GameTheoryImprovementsTest is VotingTestBase {
         bytes32 ck = _commitKey(voter, ch);
 
         vm.prank(voter);
-        engine.revealVoteByCommitKey(contentId, roundId, ck, isUp, salt);
+        engine.revealVoteByCommitKey(contentId, roundId, ck, isUp, 5_000, salt);
     }
 
     /// @dev Settle the round. Caller must ensure minVoters have been revealed.

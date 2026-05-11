@@ -11,6 +11,7 @@ import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
 import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
 import { RoundLib } from "../contracts/libraries/RoundLib.sol";
 import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
+import { TlockVoteLib } from "../contracts/libraries/TlockVoteLib.sol";
 import { HumanReputation } from "../contracts/HumanReputation.sol";
 import { ParticipationPool } from "../contracts/ParticipationPool.sol";
 import { FrontendRegistry } from "../contracts/FrontendRegistry.sol";
@@ -224,7 +225,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
     /// @dev Reveal a vote by commit key. Permissionless — no prank needed.
     function _reveal(uint256 contentId, uint256 roundId, bytes32 commitKey, bool isUp, bytes32 salt) internal {
-        engine.revealVoteByCommitKey(contentId, roundId, commitKey, isUp, salt);
+        engine.revealVoteByCommitKey(contentId, roundId, commitKey, isUp, 5_000, salt);
     }
 
     function _installRaterRegistry() internal returns (RaterRegistry raterRegistry) {
@@ -243,30 +244,25 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         internal
         returns (bytes32 commitKey, bytes32 salt)
     {
-        return _commitPrediction(voter, contentId, predictedRatingBps, predictedRatingBps, stake);
+        return _commitPrediction(voter, contentId, predictedRatingBps >= 5_000, predictedRatingBps, stake);
     }
 
     function _commitPrediction(
         address voter,
         uint256 contentId,
-        uint16 opinionRatingBps,
-        uint16 predictedCrowdRatingBps,
+        bool isUp,
+        uint16 predictedUpBps,
         uint256 stake
     ) internal returns (bytes32 commitKey, bytes32 salt) {
-        salt = keccak256(abi.encodePacked(voter, opinionRatingBps, predictedCrowdRatingBps, block.timestamp));
+        salt = keccak256(abi.encodePacked(voter, isUp, predictedUpBps, block.timestamp));
         uint256 roundId = engine.previewCommitRoundId(contentId);
         uint16 referenceRatingBps = engine.previewCommitReferenceRatingBps(contentId);
         uint64 targetRound = _tlockCommitTargetRound();
         bytes32 drandChainHash = _tlockDrandChainHash();
-        bytes memory ciphertext =
-            _testCiphertext(opinionRatingBps >= referenceRatingBps, salt, contentId, targetRound, drandChainHash);
-        bytes32 commitHash = _predictionCommitHash(
-            block.chainid,
-            address(engine),
-            stake,
-            engine.previewCommitScorerMetadataHash(contentId),
-            opinionRatingBps,
-            predictedCrowdRatingBps,
+        bytes memory ciphertext = _testCiphertext(isUp, salt, contentId, targetRound, drandChainHash);
+        bytes32 commitHash = TlockVoteLib.buildExpectedRbtsCommitHash(
+            isUp,
+            predictedUpBps,
             salt,
             voter,
             contentId,
@@ -292,42 +288,6 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
             address(0)
         );
         vm.stopPrank();
-    }
-
-    function _predictionCommitHash(
-        uint256 chainId,
-        address engineAddress,
-        uint256 stake,
-        bytes32 scorerMetadataHash,
-        uint16 opinionRatingBps,
-        uint16 predictedCrowdRatingBps,
-        bytes32 salt,
-        address voter,
-        uint256 contentId,
-        uint256 roundId,
-        uint16 referenceRatingBps,
-        uint64 targetRound,
-        bytes32 drandChainHash,
-        bytes memory ciphertext
-    ) internal pure returns (bytes32) {
-        return keccak256(
-            abi.encodePacked(
-                chainId,
-                engineAddress,
-                contentId,
-                roundId,
-                voter,
-                opinionRatingBps,
-                predictedCrowdRatingBps,
-                stake,
-                scorerMetadataHash,
-                referenceRatingBps,
-                targetRound,
-                drandChainHash,
-                keccak256(ciphertext),
-                salt
-            )
-        );
     }
 
     function _maxAgeCiphertext() internal view returns (bytes memory ciphertext) {
@@ -576,106 +536,109 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertTrue(engine.commitHadActiveAiDeclaration(contentId, roundId, ck1), "holder agent flag is snapshotted");
     }
 
-    function test_PredictionLifecycle_SettlesWeightedMedianFinalRating() public {
+    function test_RbtsLifecycle_SettlesBinaryRatingAndScoresRewards() public {
         uint256 contentId = _submitContent();
 
-        (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, 8_000, 10e6);
-        (bytes32 ck2, bytes32 s2) = _commitPrediction(voter2, contentId, 5_000, 3e6);
-        (bytes32 ck3, bytes32 s3) = _commitPrediction(voter3, contentId, 6_500, 3e6);
+        (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, true, 8_000, 10e6);
+        (bytes32 ck2, bytes32 s2) = _commitPrediction(voter2, contentId, false, 5_000, 3e6);
+        (bytes32 ck3, bytes32 s3) = _commitPrediction(voter3, contentId, true, 6_500, 3e6);
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
         RoundLib.Round memory r0 = RoundEngineReadHelpers.round(engine, contentId, roundId);
         _warpPastTlockRevealTime(uint256(r0.startTime) + EPOCH);
 
-        engine.revealPredictionByCommitKey(contentId, roundId, ck1, 8_000, 8_000, s1);
-        engine.revealPredictionByCommitKey(contentId, roundId, ck2, 5_000, 5_000, s2);
-        engine.revealPredictionByCommitKey(contentId, roundId, ck3, 6_500, 6_500, s3);
+        engine.revealVoteByCommitKey(contentId, roundId, ck1, true, 8_000, s1);
+        engine.revealVoteByCommitKey(contentId, roundId, ck2, false, 5_000, s2);
+        engine.revealVoteByCommitKey(contentId, roundId, ck3, true, 6_500, s3);
 
-        (uint256 weightedRatingSum, uint256 totalPredictionWeight, uint16 finalRatingBps) =
-            engine.roundPredictionStats(contentId, roundId);
-        assertEq(weightedRatingSum, 114_500e6, "weighted rating sum");
-        assertEq(totalPredictionWeight, 16e6, "prediction weight");
-        assertEq(finalRatingBps, 0, "final rating is only stored after settle");
+        (bool scored, uint256 rewardWeight, uint256 forfeitedPool) = engine.roundRbtsStats(contentId, roundId);
+        assertFalse(scored, "RBTS scores are stored at settlement");
+        assertEq(rewardWeight, 0, "reward weight starts empty");
+        assertEq(forfeitedPool, 0, "forfeited pool starts empty");
 
         engine.settleRound(contentId, roundId);
 
-        assertEq(registry.getRating(contentId), 8_000, "registry rating");
-        (,, finalRatingBps) = engine.roundPredictionStats(contentId, roundId);
-        assertEq(finalRatingBps, 8_000, "prediction median after settle");
+        assertGt(registry.getRating(contentId), 5_000, "binary up majority moves rating up");
+        (scored, rewardWeight, forfeitedPool) = engine.roundRbtsStats(contentId, roundId);
+        assertTrue(scored, "RBTS scored");
+        assertGt(rewardWeight, 0, "positive RBTS reward weight");
+        assertGt(forfeitedPool, 0, "imperfect scores forfeit some stake");
+        assertGt(engine.commitRbtsScoreBps(contentId, roundId, ck1), 0, "ck1 scored");
     }
 
-    function test_PredictionWeightsUseClusterAdjustedStake() public {
+    function test_RbtsWeightsUseClusterAdjustedStake() public {
         RaterRegistry raterRegistry = _installRaterRegistry();
         vm.prank(owner);
         raterRegistry.setClusterScore(voter1, keccak256("shared-cluster"), 7_500, 1);
 
         uint256 contentId = _submitContent();
 
-        (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, 8_000, STAKE);
-        (bytes32 ck2, bytes32 s2) = _commitPrediction(voter2, contentId, 5_000, STAKE);
-        (bytes32 ck3, bytes32 s3) = _commitPrediction(voter3, contentId, 6_500, STAKE);
+        (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, true, 8_000, STAKE);
+        (bytes32 ck2, bytes32 s2) = _commitPrediction(voter2, contentId, true, 5_000, STAKE);
+        (bytes32 ck3, bytes32 s3) = _commitPrediction(voter3, contentId, true, 6_500, STAKE);
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
         RoundLib.Round memory r0 = RoundEngineReadHelpers.round(engine, contentId, roundId);
         _warpPastTlockRevealTime(uint256(r0.startTime) + EPOCH);
 
-        engine.revealPredictionByCommitKey(contentId, roundId, ck1, 8_000, 8_000, s1);
-        engine.revealPredictionByCommitKey(contentId, roundId, ck2, 5_000, 5_000, s2);
-        engine.revealPredictionByCommitKey(contentId, roundId, ck3, 6_500, 6_500, s3);
+        engine.revealVoteByCommitKey(contentId, roundId, ck1, true, 8_000, s1);
+        engine.revealVoteByCommitKey(contentId, roundId, ck2, true, 5_000, s2);
+        engine.revealVoteByCommitKey(contentId, roundId, ck3, true, 6_500, s3);
 
         engine.settleRound(contentId, roundId);
 
-        (uint256 weightedRatingSum, uint256 totalPredictionWeight, uint16 finalRatingBps) =
-            engine.roundPredictionStats(contentId, roundId);
-        assertEq(totalPredictionWeight, 11_250_000, "total adjusted weight");
-        assertEq(weightedRatingSum, 67_500_000_000, "adjusted weighted rating sum");
-        assertEq(finalRatingBps, 6_500, "adjusted median");
+        assertEq(engine.commitRaterWeightBps(contentId, roundId, ck1), 2_500, "discounted weight");
+        assertTrue(engine.roundRbtsScored(contentId, roundId), "RBTS scored");
+        assertGt(engine.roundRbtsRewardWeight(contentId, roundId), 0, "adjusted RBTS weights accumulated");
     }
 
-    function test_PredictionScoringSuppressedBelowLooFloor() public {
+    function test_RbtsSettlementRequiresThreeRevealsEvenIfRoundConfigAllowsTwo() public {
         vm.prank(owner);
         _setTlockRoundConfig(ProtocolConfig(protocolConfigAddress), 1 hours, 7 days, 2, 1000);
         uint256 contentId = _submitContent();
 
-        (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, 8_000, STAKE);
-        (bytes32 ck2, bytes32 s2) = _commitPrediction(voter2, contentId, 5_000, STAKE);
+        (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, true, 8_000, STAKE);
+        (bytes32 ck2, bytes32 s2) = _commitPrediction(voter2, contentId, true, 5_000, STAKE);
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
         RoundLib.Round memory r0 = RoundEngineReadHelpers.round(engine, contentId, roundId);
         _warpPastTlockRevealTime(uint256(r0.startTime) + EPOCH);
 
-        engine.revealPredictionByCommitKey(contentId, roundId, ck1, 8_000, 8_000, s1);
-        engine.revealPredictionByCommitKey(contentId, roundId, ck2, 5_000, 5_000, s2);
+        engine.revealVoteByCommitKey(contentId, roundId, ck1, true, 8_000, s1);
+        engine.revealVoteByCommitKey(contentId, roundId, ck2, true, 5_000, s2);
 
+        vm.expectRevert(RoundVotingEngine.NotEnoughVotes.selector);
         engine.settleRound(contentId, roundId);
 
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
-        assertEq(uint256(round.state), uint256(RoundLib.RoundState.Settled));
-        assertEq(engine.roundFinalPredictionRatingBps(contentId, roundId), 0, "prediction rating suppressed");
-        assertEq(engine.commitPredictionRewardWeight(contentId, roundId, ck1), 0, "ck1 no LOO score");
-        assertEq(engine.commitPredictionRewardWeight(contentId, roundId, ck2), 0, "ck2 no LOO score");
+        assertEq(uint256(round.state), uint256(RoundLib.RoundState.Open));
+        assertFalse(engine.roundRbtsScored(contentId, roundId), "RBTS not scored below n=3");
     }
 
-    function test_PredictionRewardsScoreCrowdPredictionAgainstPeerOpinions() public {
+    function test_RbtsRewardsScorePredictionAgainstPeerSignals() public {
         uint256 contentId = _submitContent();
 
-        (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, 8_000, 5_750, STAKE);
-        (bytes32 ck2, bytes32 s2) = _commitPrediction(voter2, contentId, 5_000, 7_250, STAKE);
-        (bytes32 ck3, bytes32 s3) = _commitPrediction(voter3, contentId, 6_500, 6_500, STAKE);
+        (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, true, 5_750, STAKE);
+        (bytes32 ck2, bytes32 s2) = _commitPrediction(voter2, contentId, false, 7_250, STAKE);
+        (bytes32 ck3, bytes32 s3) = _commitPrediction(voter3, contentId, true, 6_500, STAKE);
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
         RoundLib.Round memory r0 = RoundEngineReadHelpers.round(engine, contentId, roundId);
         _warpPastTlockRevealTime(uint256(r0.startTime) + EPOCH);
 
-        engine.revealPredictionByCommitKey(contentId, roundId, ck1, 8_000, 5_750, s1);
-        engine.revealPredictionByCommitKey(contentId, roundId, ck2, 5_000, 7_250, s2);
-        engine.revealPredictionByCommitKey(contentId, roundId, ck3, 6_500, 6_500, s3);
+        engine.revealVoteByCommitKey(contentId, roundId, ck1, true, 5_750, s1);
+        engine.revealVoteByCommitKey(contentId, roundId, ck2, false, 7_250, s2);
+        engine.revealVoteByCommitKey(contentId, roundId, ck3, true, 6_500, s3);
         engine.settleRound(contentId, roundId);
 
-        assertEq(registry.getRating(contentId), 6_500, "opinion average is the public rating");
+        assertGt(registry.getRating(contentId), 5_000, "binary signal remains public rating input");
+        assertEq(engine.commitPredictedUpBps(contentId, roundId, ck2), 7_250, "crowd prediction stored");
+        assertGt(engine.commitRbtsScoreBps(contentId, roundId, ck1), 0, "ck1 RBTS score");
+        assertGt(engine.commitRbtsScoreBps(contentId, roundId, ck2), 0, "ck2 RBTS score");
+        assertGt(engine.commitRbtsScoreBps(contentId, roundId, ck3), 0, "ck3 RBTS score");
     }
 
-    function test_PredictionRevealRejectsWrongRating() public {
+    function test_RbtsRevealRejectsWrongPrediction() public {
         uint256 contentId = _submitContent();
         (bytes32 commitKey, bytes32 salt) = _commitPrediction(voter1, contentId, 7_000, STAKE);
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
@@ -683,7 +646,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         _warpPastTlockRevealTime(uint256(r0.startTime) + EPOCH);
 
         vm.expectRevert();
-        engine.revealPredictionByCommitKey(contentId, roundId, commitKey, 7_001, 7_000, salt);
+        engine.revealVoteByCommitKey(contentId, roundId, commitKey, true, 7_001, salt);
     }
 
     function test_BasicLifecycle_ThreeVoters_DownWins() public {
@@ -1054,7 +1017,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
         // Do NOT warp — epoch has not ended yet
         vm.expectRevert(RoundVotingEngine.EpochNotEnded.selector);
-        engine.revealVoteByCommitKey(contentId, roundId, commitKey, true, salt);
+        engine.revealVoteByCommitKey(contentId, roundId, commitKey, true, 5_000, salt);
     }
 
     function test_Reveal_ExactlyAtEpochEnd_Succeeds() public {
@@ -1067,7 +1030,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         _warpPastTlockRevealTime(block.timestamp + EPOCH);
 
         // Should not revert
-        engine.revealVoteByCommitKey(contentId, roundId, commitKey, true, salt);
+        engine.revealVoteByCommitKey(contentId, roundId, commitKey, true, 5_000, salt);
 
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertEq(round.revealedCount, 1);
@@ -1088,7 +1051,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
         // Reveal with isUp=false (wrong direction — hash won't match)
         vm.expectRevert(RoundVotingEngine.HashMismatch.selector);
-        engine.revealVoteByCommitKey(contentId, roundId, commitKey, false, salt);
+        engine.revealVoteByCommitKey(contentId, roundId, commitKey, false, 5_000, salt);
     }
 
     function test_Reveal_WrongSalt_HashMismatch() public {
@@ -1101,7 +1064,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
         bytes32 wrongSalt = keccak256("wrong");
         vm.expectRevert(RoundVotingEngine.HashMismatch.selector);
-        engine.revealVoteByCommitKey(contentId, roundId, commitKey, true, wrongSalt);
+        engine.revealVoteByCommitKey(contentId, roundId, commitKey, true, 5_000, wrongSalt);
     }
 
     function test_Reveal_TamperedCiphertext_HashMismatch() public {
@@ -1134,7 +1097,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         _warpPastTlockRevealTime(block.timestamp + EPOCH);
 
         vm.expectRevert(RoundVotingEngine.HashMismatch.selector);
-        engine.revealVoteByCommitKey(contentId, roundId, commitKey, true, salt);
+        engine.revealVoteByCommitKey(contentId, roundId, commitKey, true, 5_000, salt);
     }
 
     function test_Reveal_BeforeCommittedDrandRound_Reverts() public {
@@ -1173,10 +1136,10 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
         _warpPastTlockRevealTime(block.timestamp + EPOCH);
         vm.expectRevert(RoundVotingEngine.EpochNotEnded.selector);
-        engine.revealVoteByCommitKey(contentId, roundId, commitKey, true, salt);
+        engine.revealVoteByCommitKey(contentId, roundId, commitKey, true, 5_000, salt);
 
         vm.warp(_tlockRoundTimestamp(targetRound));
-        engine.revealVoteByCommitKey(contentId, roundId, commitKey, true, salt);
+        engine.revealVoteByCommitKey(contentId, roundId, commitKey, true, 5_000, salt);
     }
 
     function test_Reveal_NonExistentCommitKey_Reverts() public {
@@ -1188,7 +1151,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
         bytes32 badKey = keccak256("bogus");
         vm.expectRevert(RoundVotingEngine.TargetRoundOutOfWindow.selector);
-        engine.revealVoteByCommitKey(contentId, roundId, badKey, true, bytes32(0));
+        engine.revealVoteByCommitKey(contentId, roundId, badKey, true, 5_000, bytes32(0));
     }
 
     function test_Reveal_AlreadyRevealed_Reverts() public {
@@ -1202,7 +1165,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
         // Try to reveal again
         vm.expectRevert(RoundVotingEngine.AlreadyRevealed.selector);
-        engine.revealVoteByCommitKey(contentId, roundId, commitKey, true, salt);
+        engine.revealVoteByCommitKey(contentId, roundId, commitKey, true, 5_000, salt);
     }
 
     // =========================================================================

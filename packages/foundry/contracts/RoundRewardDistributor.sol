@@ -22,8 +22,7 @@ import { RewardMath } from "./libraries/RewardMath.sol";
 /// @title RoundRewardDistributor
 /// @notice Pull-based reward claiming for settled rounds.
 /// @dev NOT pausable — users must always be able to withdraw their funds.
-///      Rewards are distributed proportional to epoch-weighted effective stake.
-///      Epoch-1 (blind) voters earn 4× more per HREP than epoch-2+ voters.
+///      When RBTS scoring is active, revealed voters receive score-based stake return and rewards.
 contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, ReentrancyGuardTransient {
     using SafeERC20 for IERC20;
 
@@ -219,10 +218,7 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
     // --- Voter Reward Claiming ---
 
     /// @notice Claim reward for a settled round.
-    /// @dev Winners receive stake + epoch-weighted-stake-proportional rewards from the voter pool.
-    ///      Revealed losers receive a fixed 5% rebate and unrevealed losers cannot claim.
-    ///      Epoch-1 voters (blind) get 100% weight; epoch-2+ voters (informed) get 25% weight.
-    ///      This creates a 4:1 reward ratio incentivizing early blind voting.
+    /// @dev RBTS-scored rounds pay score-based stake return plus voter-pool rewards by score weight.
     ///      Recipient split: stake refunds and loser rebates flow to `commit.voter` (whoever
     ///      funded the stake — typically a delegate), while voter-pool rewards flow to the
     ///      current SBT holder (resolved via VoterIdNFT). A rotated or removed delegate
@@ -249,91 +245,25 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         rewardCommitClaimed[contentId][roundId][commitKey] = true;
         rewardClaimed[contentId][roundId][commit.voter] = true;
 
-        if (votingEngine.roundFinalPredictionRatingBps(contentId, roundId) != 0) {
-            _claimPredictionReward(contentId, roundId, commitKey, commit, rewardRecipient);
-            return;
-        }
-
-        bool voterWon = (commit.isUp == round.upWins);
-
-        if (!voterWon) {
-            uint256 loserRefundPool =
-                RewardMath.calculateRevealedLoserRefund(round.upWins ? round.downPool : round.upPool);
-            uint256 totalLosingClaimants = round.upWins ? round.downCount : round.upCount;
-            uint256 loserClaimedCount = roundLoserRebateClaimedCount[contentId][roundId];
-            uint256 loserClaimedAmount = roundLoserRebateClaimedAmount[contentId][roundId];
-            if (
-                totalLosingClaimants == 0 || loserClaimedCount >= totalLosingClaimants
-                    || loserClaimedAmount > loserRefundPool
-            ) {
-                revert PoolExhausted();
-            }
-
-            uint256 refund = loserClaimedCount + 1 == totalLosingClaimants
-                ? loserRefundPool - loserClaimedAmount
-                : RewardMath.calculateRevealedLoserRefund(commit.stakeAmount);
-            roundLoserRebateClaimedCount[contentId][roundId] = loserClaimedCount + 1;
-            roundLoserRebateClaimedAmount[contentId][roundId] = loserClaimedAmount + refund;
-            if (refund > 0) {
-                // Loser rebate is a partial stake refund; route to the stake payer.
-                votingEngine.transferReward(commit.voter, refund);
-            }
-
-            // Loser rebate occupies the stakeReturned slot since it is a stake refund.
-            emit RewardClaimed(contentId, roundId, rewardRecipient, commit.voter, refund, 0);
-            return;
-        }
-
-        // Compute epoch-weighted effective stake (determines share of voter pool)
-        uint256 w = RoundLib.epochWeightBps(commit.epochIndex);
-        uint256 effectiveStake = (commit.stakeAmount * w) / 10000;
-
-        uint256 voterPool = votingEngine.roundVoterPool(contentId, roundId);
-        uint256 weightedWinningStake = votingEngine.roundWinningStake(contentId, roundId);
-        uint256 totalWinningClaimants = round.upWins ? round.upCount : round.downCount;
-        uint256 claimedCount = roundVoterRewardClaimedCount[contentId][roundId];
-        uint256 claimedAmount = roundVoterRewardClaimedAmount[contentId][roundId];
-        if (totalWinningClaimants == 0 || claimedCount >= totalWinningClaimants || claimedAmount > voterPool) {
-            revert PoolExhausted();
-        }
-
-        uint256 reward;
-        if (claimedCount + 1 == totalWinningClaimants) {
-            reward = voterPool - claimedAmount;
-        } else {
-            reward = RewardMath.calculateVoterReward(effectiveStake, weightedWinningStake, voterPool);
-        }
-        roundVoterRewardClaimedCount[contentId][roundId] = claimedCount + 1;
-        roundVoterRewardClaimedAmount[contentId][roundId] = claimedAmount + reward;
-
-        // Stake refund routes back to the original payer; the voter-pool reward routes to the
-        // current SBT holder. When commit.voter == rewardRecipient (no delegation, or delegate
-        // unchanged) this is identical to a single transfer of stake + reward.
-        if (commit.stakeAmount > 0) {
-            votingEngine.transferReward(commit.voter, commit.stakeAmount);
-        }
-        if (reward > 0) {
-            votingEngine.transferReward(rewardRecipient, reward);
-        }
-
-        emit RewardClaimed(contentId, roundId, rewardRecipient, commit.voter, commit.stakeAmount, reward);
+        if (!votingEngine.roundRbtsScored(contentId, roundId)) revert RoundNotSettled();
+        _claimRbtsReward(contentId, roundId, commitKey, commit, rewardRecipient);
     }
 
-    function _claimPredictionReward(
+    function _claimRbtsReward(
         uint256 contentId,
         uint256 roundId,
         bytes32 commitKey,
         RoundLib.Commit memory commit,
         address rewardRecipient
     ) internal {
-        uint256 scoreWeight = votingEngine.commitPredictionRewardWeight(contentId, roundId, commitKey);
-        uint256 stakeReturned = votingEngine.commitPredictionStakeReturned(contentId, roundId, commitKey);
-        uint256 forfeitedStake = votingEngine.commitPredictionForfeitedStake(contentId, roundId, commitKey);
+        uint256 scoreWeight = votingEngine.commitRbtsRewardWeight(contentId, roundId, commitKey);
+        uint256 stakeReturned = votingEngine.commitRbtsStakeReturned(contentId, roundId, commitKey);
+        uint256 forfeitedStake = votingEngine.commitRbtsForfeitedStake(contentId, roundId, commitKey);
 
         uint256 rebate;
         if (forfeitedStake > 0) {
-            uint256 forfeitedPool = votingEngine.roundPredictionForfeitedPool(contentId, roundId);
-            uint256 totalForfeitClaimants = votingEngine.roundPredictionForfeitClaimants(contentId, roundId);
+            uint256 forfeitedPool = votingEngine.roundRbtsForfeitedPool(contentId, roundId);
+            uint256 totalForfeitClaimants = votingEngine.roundRbtsForfeitClaimants(contentId, roundId);
             uint256 claimedCount = roundLoserRebateClaimedCount[contentId][roundId];
             uint256 claimedAmount = roundLoserRebateClaimedAmount[contentId][roundId];
             uint256 loserRefundPool = RewardMath.calculateRevealedLoserRefund(forfeitedPool);
@@ -352,22 +282,25 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         uint256 reward;
         if (scoreWeight > 0) {
             uint256 voterPool = votingEngine.roundVoterPool(contentId, roundId);
-            uint256 totalScoreWeight = votingEngine.roundPredictionRewardWeight(contentId, roundId);
-            uint256 totalRewardClaimants = votingEngine.roundPredictionRewardClaimants(contentId, roundId);
+            uint256 totalScoreWeight = votingEngine.roundRbtsRewardWeight(contentId, roundId);
+            uint256 totalRewardClaimants = votingEngine.roundRbtsRewardClaimants(contentId, roundId);
             uint256 claimedCount = roundVoterRewardClaimedCount[contentId][roundId];
             uint256 claimedAmount = roundVoterRewardClaimedAmount[contentId][roundId];
+            if (voterPool == 0) {
+                totalRewardClaimants = 0;
+            }
             if (
                 totalRewardClaimants == 0 || claimedCount >= totalRewardClaimants || claimedAmount > voterPool
                     || totalScoreWeight == 0
             ) {
-                revert PoolExhausted();
+                if (voterPool > 0) revert PoolExhausted();
+            } else {
+                reward = claimedCount + 1 == totalRewardClaimants
+                    ? voterPool - claimedAmount
+                    : RewardMath.calculateVoterReward(scoreWeight, totalScoreWeight, voterPool);
+                roundVoterRewardClaimedCount[contentId][roundId] = claimedCount + 1;
+                roundVoterRewardClaimedAmount[contentId][roundId] = claimedAmount + reward;
             }
-
-            reward = claimedCount + 1 == totalRewardClaimants
-                ? voterPool - claimedAmount
-                : RewardMath.calculateVoterReward(scoreWeight, totalScoreWeight, voterPool);
-            roundVoterRewardClaimedCount[contentId][roundId] = claimedCount + 1;
-            roundVoterRewardClaimedAmount[contentId][roundId] = claimedAmount + reward;
         }
 
         uint256 returnedStake = stakeReturned + rebate;
@@ -388,7 +321,7 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         ProtocolConfig config = ProtocolConfig(votingEngine.protocolConfig());
         address launchPool = config.launchDistributionPool();
         if (launchPool == address(0)) return;
-        uint16 scoreBps = votingEngine.commitPredictionScoreBps(contentId, roundId, commitKey);
+        uint16 scoreBps = votingEngine.commitRbtsScoreBps(contentId, roundId, commitKey);
         if (scoreBps == 0) return;
         RoundLib.Round memory round = _readRound(contentId, roundId);
         bytes32[] memory verifiedAnchorIds = LaunchRaterRewardLib.collectAnchorIds(
@@ -461,8 +394,8 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         emit FrontendFeeConfiscated(contentId, roundId, frontend, fee);
     }
 
-    /// @notice Finalize only mathematical voter-reward dust after stale winners have had time to claim.
-    /// @dev `sortedWinningVoters` must contain every revealed winner exactly once, sorted by
+    /// @notice Finalize only mathematical voter-reward dust after stale RBTS reward claimants had time to claim.
+    /// @dev `sortedWinningVoters` must contain every positive-score reward claimant exactly once, sorted by
     ///      address ascending. NOTE: each entry is the **`commit.voter`** address — the EOA
     ///      that originally committed the vote — not the SBT holder. For delegated commits
     ///      these differ; off-chain dust finalizers must enumerate `commit.voter` from the
@@ -476,19 +409,15 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
     {
         if (roundVoterRewardDustFinalized[contentId][roundId]) revert RewardDustAlreadyFinalized();
 
-        RoundLib.Round memory round = _readSettledStaleRound(contentId, roundId);
+        _readSettledStaleRound(contentId, roundId);
         _requireNoPendingUnrevealedCleanup(contentId, roundId);
 
-        bool predictionRewardRound = votingEngine.roundFinalPredictionRatingBps(contentId, roundId) != 0;
-        uint256 totalWinningClaimants = predictionRewardRound
-            ? votingEngine.roundPredictionRewardClaimants(contentId, roundId)
-            : (round.upWins ? round.upCount : round.downCount);
+        if (!votingEngine.roundRbtsScored(contentId, roundId)) revert RoundNotSettled();
+        uint256 totalWinningClaimants = votingEngine.roundRbtsRewardClaimants(contentId, roundId);
         if (sortedWinningVoters.length != totalWinningClaimants) revert InvalidFinalizationInput();
 
         uint256 voterPool = votingEngine.roundVoterPool(contentId, roundId);
-        uint256 weightedWinningStake = predictionRewardRound
-            ? votingEngine.roundPredictionRewardWeight(contentId, roundId)
-            : votingEngine.roundWinningStake(contentId, roundId);
+        uint256 weightedWinningStake = votingEngine.roundRbtsRewardWeight(contentId, roundId);
         if (totalWinningClaimants == 0 || voterPool == 0 || weightedWinningStake == 0) revert NoRewardDust();
 
         uint256 expectedTotal;
@@ -504,10 +433,8 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
                 revert InvalidFinalizationInput();
             }
 
-            uint256 effectiveStake = predictionRewardRound
-                ? votingEngine.commitPredictionRewardWeight(contentId, roundId, commitKey)
-                : (commit.stakeAmount * RoundLib.epochWeightBps(commit.epochIndex)) / 10000;
-            if (effectiveStake == 0 || (!predictionRewardRound && commit.isUp != round.upWins)) {
+            uint256 effectiveStake = votingEngine.commitRbtsRewardWeight(contentId, roundId, commitKey);
+            if (effectiveStake == 0) {
                 revert InvalidFinalizationInput();
             }
             expectedTotal += RewardMath.calculateVoterReward(effectiveStake, weightedWinningStake, voterPool);
@@ -523,8 +450,8 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         emit VoterRewardDustFinalized(contentId, roundId, releasedDust);
     }
 
-    /// @notice Finalize only mathematical loser-rebate dust after stale losers have had time to claim.
-    /// @dev `sortedLosingVoters` must contain every revealed loser exactly once, sorted by
+    /// @notice Finalize only mathematical forfeited-stake rebate dust after stale RBTS forfeit claimants had time to claim.
+    /// @dev `sortedLosingVoters` must contain every voter with forfeited stake exactly once, sorted by
     ///      address ascending. Each entry is the **`commit.voter`** address — the EOA that
     ///      originally committed the vote — not the SBT holder. For delegated commits these
     ///      differ; off-chain dust finalizers must enumerate `commit.voter` from the
@@ -538,18 +465,15 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
     {
         if (roundLoserRebateDustFinalized[contentId][roundId]) revert RewardDustAlreadyFinalized();
 
-        RoundLib.Round memory round = _readSettledStaleRound(contentId, roundId);
+        _readSettledStaleRound(contentId, roundId);
         _requireNoPendingUnrevealedCleanup(contentId, roundId);
 
-        bool predictionRewardRound = votingEngine.roundFinalPredictionRatingBps(contentId, roundId) != 0;
-        uint256 totalLosingClaimants = predictionRewardRound
-            ? votingEngine.roundPredictionForfeitClaimants(contentId, roundId)
-            : (round.upWins ? round.downCount : round.upCount);
+        if (!votingEngine.roundRbtsScored(contentId, roundId)) revert RoundNotSettled();
+        uint256 totalLosingClaimants = votingEngine.roundRbtsForfeitClaimants(contentId, roundId);
         if (sortedLosingVoters.length != totalLosingClaimants) revert InvalidFinalizationInput();
 
-        uint256 loserRefundPool = predictionRewardRound
-            ? RewardMath.calculateRevealedLoserRefund(votingEngine.roundPredictionForfeitedPool(contentId, roundId))
-            : RewardMath.calculateRevealedLoserRefund(round.upWins ? round.downPool : round.upPool);
+        uint256 loserRefundPool =
+            RewardMath.calculateRevealedLoserRefund(votingEngine.roundRbtsForfeitedPool(contentId, roundId));
         if (totalLosingClaimants == 0 || loserRefundPool == 0) revert NoRewardDust();
 
         uint256 expectedTotal;
@@ -565,10 +489,8 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
                 revert InvalidFinalizationInput();
             }
 
-            uint256 forfeitedStake = predictionRewardRound
-                ? votingEngine.commitPredictionForfeitedStake(contentId, roundId, commitKey)
-                : commit.stakeAmount;
-            if (forfeitedStake == 0 || (!predictionRewardRound && commit.isUp == round.upWins)) {
+            uint256 forfeitedStake = votingEngine.commitRbtsForfeitedStake(contentId, roundId, commitKey);
+            if (forfeitedStake == 0) {
                 revert InvalidFinalizationInput();
             }
             expectedTotal += RewardMath.calculateRevealedLoserRefund(forfeitedStake);
@@ -672,9 +594,8 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         if (round.state != RoundLib.RoundState.Settled) revert RoundNotSettled();
         _requireNoPendingUnrevealedCleanup(contentId, roundId);
 
-        uint256 winningStake = votingEngine.roundFinalPredictionRatingBps(contentId, roundId) != 0
-            ? votingEngine.roundPredictionRewardWeight(contentId, roundId)
-            : (round.upWins ? round.weightedUpPool : round.weightedDownPool);
+        if (!votingEngine.roundRbtsScored(contentId, roundId)) revert RoundNotSettled();
+        uint256 winningStake = votingEngine.roundRbtsRewardWeight(contentId, roundId);
         uint256 totalReward;
         bool fullyReserved;
         (totalReward, reservedReward, fullyReserved) =
@@ -723,11 +644,11 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
 
         if (rateBps == 0) revert NoParticipationRate();
 
-        bool predictionRewardRound = votingEngine.roundFinalPredictionRatingBps(contentId, roundId) != 0;
-        uint256 effectiveStake = predictionRewardRound
-            ? votingEngine.commitPredictionRewardWeight(contentId, roundId, commitKey)
+        bool rbtsRewardRound = votingEngine.roundRbtsScored(contentId, roundId);
+        uint256 effectiveStake = rbtsRewardRound
+            ? votingEngine.commitRbtsRewardWeight(contentId, roundId, commitKey)
             : (commit.stakeAmount * RoundLib.epochWeightBps(commit.epochIndex)) / 10000;
-        if (effectiveStake == 0 || (!predictionRewardRound && commit.isUp != round.upWins)) revert NotWinningSide();
+        if (effectiveStake == 0 || (!rbtsRewardRound && commit.isUp != round.upWins)) revert NotWinningSide();
         uint256 reward = effectiveStake * rateBps / 10000;
         if (reward == 0) {
             participationRewardCommitClaimed[contentId][roundId][commitKey] = true;
@@ -780,8 +701,8 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         if (round.state != RoundLib.RoundState.Settled) revert RoundNotSettled();
         _requireNoPendingUnrevealedCleanup(contentId, roundId);
 
-        uint256 winnerCount = votingEngine.roundFinalPredictionRatingBps(contentId, roundId) != 0
-            ? votingEngine.roundPredictionRewardClaimants(contentId, roundId)
+        uint256 winnerCount = votingEngine.roundRbtsScored(contentId, roundId)
+            ? votingEngine.roundRbtsRewardClaimants(contentId, roundId)
             : (round.upWins ? round.upCount : round.downCount);
         bool fullyClaimed = roundParticipationRewardFullyClaimedCount[contentId][roundId] == winnerCount;
         bool stale = _participationRewardsStale(contentId, roundId, round);

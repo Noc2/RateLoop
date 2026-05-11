@@ -154,7 +154,7 @@ contract GasBudgetTest is RoundIntegrationTest {
             address(votingEngine),
             abi.encodeCall(
                 RoundVotingEngine.revealVoteByCommitKey,
-                (contentId, roundId, _commitKey(voter1, commitHash), true, salt)
+                (contentId, roundId, _commitKey(voter1, commitHash), true, 5_000, salt)
             )
         );
 
@@ -276,8 +276,8 @@ contract GasBudgetTest is RoundIntegrationTest {
         RoundLib.Round memory round = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
 
         _warpPastTlockRevealTime(uint256(round.startTime) + EPOCH_DURATION);
-        votingEngine.revealVoteByCommitKey(contentId, roundId, _commitKey(voter1, ch1), true, s1);
-        votingEngine.revealVoteByCommitKey(contentId, roundId, _commitKey(voter2, ch2), true, s2);
+        votingEngine.revealVoteByCommitKey(contentId, roundId, _commitKey(voter1, ch1), true, 5_000, s1);
+        votingEngine.revealVoteByCommitKey(contentId, roundId, _commitKey(voter2, ch2), true, 5_000, s2);
 
         vm.warp(
             round.startTime + 7 days + ProtocolConfig(address(votingEngine.protocolConfig())).revealGracePeriod() + 1

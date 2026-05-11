@@ -688,7 +688,7 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         _warpPastTlockRevealTime(block.timestamp + EPOCH_DURATION);
 
         for (uint256 i = 0; i < voters.length; i++) {
-            votingEngine.revealVoteByCommitKey(contentId, roundId, commitKeys[i], directions[i], salts[i]);
+            votingEngine.revealVoteByCommitKey(contentId, roundId, commitKeys[i], directions[i], 5_000, salts[i]);
         }
 
         votingEngine.settleRound(contentId, roundId);

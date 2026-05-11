@@ -155,9 +155,9 @@ contract FrontendRegistrySnapshotTest is VotingTestBase {
 
         RoundLib.Round memory round = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
         _warpPastTlockRevealTime(uint256(round.startTime) + DEFAULT_TLOCK_EPOCH_DURATION);
-        votingEngine.revealVoteByCommitKey(contentId, roundId, ck1, true, salt1);
-        votingEngine.revealVoteByCommitKey(contentId, roundId, ck2, true, salt2);
-        votingEngine.revealVoteByCommitKey(contentId, roundId, ck3, false, salt3);
+        votingEngine.revealVoteByCommitKey(contentId, roundId, ck1, true, 5_000, salt1);
+        votingEngine.revealVoteByCommitKey(contentId, roundId, ck2, true, 5_000, salt2);
+        votingEngine.revealVoteByCommitKey(contentId, roundId, ck3, false, 5_000, salt3);
 
         votingEngine.settleRound(contentId, roundId);
 

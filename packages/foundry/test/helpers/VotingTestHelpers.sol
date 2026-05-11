@@ -905,6 +905,7 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
         return keccak256(
             abi.encodePacked(
                 isUp,
+                uint16(5_000),
                 salt,
                 voter,
                 contentId,

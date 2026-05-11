@@ -12,6 +12,7 @@ import { RaterRegistry } from "../contracts/RaterRegistry.sol";
 import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
 import { RoundLib } from "../contracts/libraries/RoundLib.sol";
 import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
+import { TlockVoteLib } from "../contracts/libraries/TlockVoteLib.sol";
 import { HumanReputation } from "../contracts/HumanReputation.sol";
 import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
 import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
@@ -163,13 +164,10 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         uint16 referenceRatingBps = votingEngine.previewCommitReferenceRatingBps(contentId);
         uint64 targetRound = _tlockCommitTargetRound();
         bytes32 drandChainHash = _tlockDrandChainHash();
-        bytes memory ciphertext =
-            _testCiphertext(predictedRatingBps >= referenceRatingBps, salt, contentId, targetRound, drandChainHash);
-        bytes32 commitHash = _predictionCommitHash(
-            block.chainid,
-            address(votingEngine),
-            stake,
-            votingEngine.previewCommitScorerMetadataHash(contentId),
+        bool isUp = predictedRatingBps >= 5_000;
+        bytes memory ciphertext = _testCiphertext(isUp, salt, contentId, targetRound, drandChainHash);
+        bytes32 commitHash = TlockVoteLib.buildExpectedRbtsCommitHash(
+            isUp,
             predictedRatingBps,
             salt,
             voter,
@@ -198,48 +196,13 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         vm.stopPrank();
     }
 
-    function _predictionCommitHash(
-        uint256 chainId,
-        address engineAddress,
-        uint256 stake,
-        bytes32 scorerMetadataHash,
-        uint16 predictedRatingBps,
-        bytes32 salt,
-        address voter,
-        uint256 contentId,
-        uint256 roundId,
-        uint16 referenceRatingBps,
-        uint64 targetRound,
-        bytes32 drandChainHash,
-        bytes memory ciphertext
-    ) internal pure returns (bytes32) {
-        return keccak256(
-            abi.encodePacked(
-                chainId,
-                engineAddress,
-                contentId,
-                roundId,
-                voter,
-                predictedRatingBps,
-                predictedRatingBps,
-                stake,
-                scorerMetadataHash,
-                referenceRatingBps,
-                targetRound,
-                drandChainHash,
-                keccak256(ciphertext),
-                salt
-            )
-        );
-    }
-
     function _revealAll(uint256 contentId, uint256 roundId) internal {
         bytes32[] memory keys = RoundEngineReadHelpers.commitKeys(votingEngine, contentId, roundId);
         for (uint256 i = 0; i < keys.length; i++) {
             RoundLib.Commit memory c = RoundEngineReadHelpers.commit(votingEngine, contentId, roundId, keys[i]);
             if (!c.revealed && c.stakeAmount > 0) {
                 (bool isUp, bytes32 salt) = _decodeTestCiphertext(c.ciphertext);
-                try votingEngine.revealVoteByCommitKey(contentId, roundId, keys[i], isUp, salt) { } catch { }
+                try votingEngine.revealVoteByCommitKey(contentId, roundId, keys[i], isUp, 5_000, salt) { } catch { }
             }
         }
     }
@@ -288,9 +251,9 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         RoundLib.Round memory r0 = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
         _warpPastTlockRevealTime(uint256(r0.startTime) + EPOCH_DURATION);
 
-        votingEngine.revealPredictionByCommitKey(contentId, roundId, ck1, 8_000, 8_000, s1);
-        votingEngine.revealPredictionByCommitKey(contentId, roundId, ck2, 8_000, 8_000, s2);
-        votingEngine.revealPredictionByCommitKey(contentId, roundId, ck3, 7_000, 7_000, s3);
+        votingEngine.revealVoteByCommitKey(contentId, roundId, ck1, true, 8_000, s1);
+        votingEngine.revealVoteByCommitKey(contentId, roundId, ck2, true, 8_000, s2);
+        votingEngine.revealVoteByCommitKey(contentId, roundId, ck3, true, 7_000, s3);
         votingEngine.settleRound(contentId, roundId);
     }
 
@@ -339,15 +302,21 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         rewardDistributor.claimReward(contentId, roundId);
     }
 
-    function test_ClaimReward_LoserGetsFivePercentRefund() public {
+    function test_ClaimReward_RbtsScoredVoterGetsStakeReturnAndReward() public {
         (uint256 contentId, uint256 roundId) = _setupSettledRound();
+        bytes32 voter3CommitKey =
+            keccak256(abi.encodePacked(voter3, votingEngine.voterCommitHash(contentId, roundId, voter3)));
+        uint256 rbtsStakeReturned = votingEngine.commitRbtsStakeReturned(contentId, roundId, voter3CommitKey);
 
         uint256 balBefore = hrepToken.balanceOf(voter3);
         vm.prank(voter3);
         rewardDistributor.claimReward(contentId, roundId);
         uint256 balAfter = hrepToken.balanceOf(voter3);
 
-        assertEq(balAfter - balBefore, STAKE / 20); // loser gets 5%
+        uint256 claimedAmount = balAfter - balBefore;
+        assertGt(rbtsStakeReturned, 0, "RBTS returns scored stake");
+        assertGe(claimedAmount, rbtsStakeReturned, "claim includes scored stake return");
+        assertGt(claimedAmount, STAKE / 20, "not capped at old loser rebate");
     }
 
     function test_ClaimReward_WinnerGetsReward() public {

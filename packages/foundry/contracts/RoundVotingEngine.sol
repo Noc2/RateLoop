@@ -18,7 +18,7 @@ import { RoundSettlementDistributionLib } from "./libraries/RoundSettlementDistr
 import { RoundCleanupLib } from "./libraries/RoundCleanupLib.sol";
 import { RoundRevealLib } from "./libraries/RoundRevealLib.sol";
 import { VotePreflightLib } from "./libraries/VotePreflightLib.sol";
-import { PredictionRatingMath } from "./libraries/PredictionRatingMath.sol";
+import { RobustBtsMath } from "./libraries/RobustBtsMath.sol";
 import { RaterWeightLib } from "./libraries/RaterWeightLib.sol";
 import { IFrontendRegistry } from "./interfaces/IFrontendRegistry.sol";
 import { ICategoryRegistry } from "./interfaces/ICategoryRegistry.sol";
@@ -99,10 +99,8 @@ contract RoundVotingEngine is
     uint256 internal constant MAX_STAKE = 10e6; // 10 LREP (6 decimals)
     uint256 internal constant VOTE_COOLDOWN = 24 hours; // Time-based cooldown per content per voter
     uint256 internal constant MAX_CIPHERTEXT_SIZE = 2_048; // 2 KB max ciphertext to prevent storage bloat
-    uint16 internal constant MIN_LOO_VALID_PARTICIPANTS = 3;
-    uint16 internal constant PREDICTION_FULL_CREDIT_TOLERANCE_BPS = 100;
-    uint16 internal constant PREDICTION_ZERO_CREDIT_TOLERANCE_BPS = 8_900;
-    uint16 internal constant PREDICTION_SCORE_SCALE_BPS = 10_000;
+    uint16 internal constant MIN_RBTS_PARTICIPANTS = 3;
+    uint16 internal constant RBTS_SCORE_SCALE_BPS = 10_000;
 
     // --- State ---
     IERC20 internal hrepToken;
@@ -129,21 +127,18 @@ contract RoundVotingEngine is
     mapping(uint256 => mapping(uint256 => uint256)) public roundVoterPool; // contentId => roundId => voter pool
     mapping(uint256 => mapping(uint256 => uint256)) public roundWinningStake; // contentId => roundId => epoch-weighted winning stake
 
-    // Prediction accounting per round. Kept outside RoundLib structs so legacy tuple getters stay stable.
-    mapping(uint256 => mapping(uint256 => uint256)) internal roundPredictionWeight; // contentId => roundId => effective LREP weight
-    mapping(uint256 => mapping(uint256 => uint256)) internal roundWeightedRatingSum; // contentId => roundId => ratingBps * weight
-    mapping(uint256 => mapping(uint256 => uint16)) internal roundPredictionCount;
-    mapping(uint256 => mapping(uint256 => uint16)) public roundFinalPredictionRatingBps;
-    mapping(uint256 => mapping(uint256 => uint256)) public roundPredictionRewardWeight;
-    mapping(uint256 => mapping(uint256 => uint256)) public roundPredictionRewardClaimants;
-    mapping(uint256 => mapping(uint256 => uint256)) public roundPredictionForfeitedPool;
-    mapping(uint256 => mapping(uint256 => uint256)) public roundPredictionForfeitClaimants;
-    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint16))) internal commitPredictedRatingBps;
-    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint256))) internal commitPredictionWeight;
-    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint16))) public commitPredictionScoreBps;
-    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint256))) public commitPredictionRewardWeight;
-    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint256))) public commitPredictionStakeReturned;
-    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint256))) public commitPredictionForfeitedStake;
+    // Robust BTS reward accounting per round.
+    mapping(uint256 => mapping(uint256 => bool)) public roundRbtsScored;
+    mapping(uint256 => mapping(uint256 => uint256)) public roundRbtsRewardWeight;
+    mapping(uint256 => mapping(uint256 => uint256)) public roundRbtsRewardClaimants;
+    mapping(uint256 => mapping(uint256 => uint256)) public roundRbtsForfeitedPool;
+    mapping(uint256 => mapping(uint256 => uint256)) public roundRbtsForfeitClaimants;
+    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint16))) public commitPredictedUpBps;
+    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint256))) internal commitRbtsWeight;
+    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint16))) public commitRbtsScoreBps;
+    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint256))) public commitRbtsRewardWeight;
+    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint256))) public commitRbtsStakeReturned;
+    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint256))) public commitRbtsForfeitedStake;
 
     // Cancelled/tied round refund claims: contentId => roundId => voter => claimed
     mapping(uint256 => mapping(uint256 => mapping(address => bool))) public cancelledRoundRefundClaimed;
@@ -200,22 +195,15 @@ contract RoundVotingEngine is
         uint16 maxVoters
     );
     event VoteRevealed(uint256 indexed contentId, uint256 indexed roundId, address indexed voter, bool isUp);
-    event PredictionRevealed(
+    event RbtsVoteRevealed(
         uint256 indexed contentId,
         uint256 indexed roundId,
         address indexed voter,
-        uint16 opinionRatingBps,
-        uint16 predictedCrowdRatingBps,
+        bool isUp,
+        uint16 predictedUpBps,
         uint256 effectiveWeight
     );
-    event PredictionRoundSettled(
-        uint256 indexed contentId,
-        uint256 indexed roundId,
-        uint16 finalRatingBps,
-        uint256 totalPredictionWeight,
-        uint16 revealedCount
-    );
-    event PredictionRewardsScored(
+    event RbtsRewardsScored(
         uint256 indexed contentId,
         uint256 indexed roundId,
         uint256 rewardWeight,
@@ -706,7 +694,6 @@ contract RoundVotingEngine is
         roundDrandPeriodSnapshot[contentId][roundId] = protocolConfig.drandPeriod();
         roundVoterIdNFTSnapshot[contentId][roundId] = protocolConfig.voterIdNFT();
         roundFrontendRegistrySnapshot[contentId][roundId] = protocolConfig.frontendRegistry();
-        roundScorerMetadataHashSnapshot[contentId][roundId] = protocolConfig.scorerMetadataHash();
         emit RoundConfigSnapshotted(
             contentId, roundId, roundCfg.epochDuration, roundCfg.maxDuration, roundCfg.minVoters, roundCfg.maxVoters
         );
@@ -766,29 +753,17 @@ contract RoundVotingEngine is
     // REVEAL PHASE (keeper-assisted / self-reveal)
     // =========================================================================
 
-    /// @notice Reveal a specific commit by commit key. Any caller that knows the plaintext may call.
-    /// @dev In normal operation a keeper decrypts the tlock ciphertext off-chain using drand and submits the plaintext
-    ///      `(isUp, salt)` here. Voters can also self-reveal. The contract verifies consistency against the stored
-    ///      ciphertext hash. If any past-epoch ciphertext is not revealed, settlement remains blocked until the
-    ///      final reveal grace window elapses.
-    function revealVoteByCommitKey(uint256 contentId, uint256 roundId, bytes32 commitKey, bool isUp, bytes32 salt)
-        external
-        nonReentrant
-    {
-        _revealVoteInternal(contentId, roundId, commitKey, isUp, salt);
-    }
-
-    /// @notice Reveal a personal rating and crowd prediction for a specific commit by commit key.
-    /// @dev Ratings use the 1.0-9.9 rating scale encoded as 1000-9900 bps.
-    function revealPredictionByCommitKey(
+    /// @notice Reveal a Robust BTS vote and crowd-frequency prediction for a specific commit by commit key.
+    /// @dev `predictedUpBps` is the voter's expected share of revealed raters who vote up, encoded as 0-10000 BPS.
+    function revealVoteByCommitKey(
         uint256 contentId,
         uint256 roundId,
         bytes32 commitKey,
-        uint16 opinionRatingBps,
-        uint16 predictedCrowdRatingBps,
+        bool isUp,
+        uint16 predictedUpBps,
         bytes32 salt
     ) external nonReentrant {
-        _revealPredictionInternal(contentId, roundId, commitKey, opinionRatingBps, predictedCrowdRatingBps, salt);
+        _revealRbtsVoteInternal(contentId, roundId, commitKey, isUp, predictedUpBps, salt);
     }
 
     // =========================================================================
@@ -807,6 +782,7 @@ contract RoundVotingEngine is
 
         // Must have ≥ minVoters revealed votes
         if (round.revealedCount < roundCfg.minVoters) revert NotEnoughVotes();
+        if (round.revealedCount < MIN_RBTS_PARTICIPANTS) revert NotEnoughVotes();
 
         // Prevent selective revelation: all past-epoch commits must be revealed before settlement is allowed.
         // Once the final reveal grace window has elapsed, revealed quorum is enough to settle and unrevealed
@@ -819,46 +795,30 @@ contract RoundVotingEngine is
             roundUnrevealedCleanupRemaining[contentId][roundId] = unrevealedPastEpochCount;
         }
 
-        uint256 predictionWeight = roundPredictionWeight[contentId][roundId];
-        bool hasPredictionSettlement = predictionWeight > 0
-            && roundPredictionCount[contentId][roundId] == round.revealedCount
-            && round.revealedCount >= MIN_LOO_VALID_PARTICIPANTS;
-        uint16 finalPredictionRatingBps =
-            hasPredictionSettlement ? _roundWeightedMedianPrediction(contentId, roundId, predictionWeight) : 0;
-
         uint256 weightedWinningStake;
         uint256 losingPool;
         bool upWins;
 
-        if (hasPredictionSettlement) {
-            upWins = finalPredictionRatingBps >= _getRoundReferenceRatingBps(contentId, roundId);
-            roundFinalPredictionRatingBps[contentId][roundId] = finalPredictionRatingBps;
-            (weightedWinningStake, losingPool) = _scorePredictionRewards(contentId, roundId, predictionWeight);
-        } else {
-            // Determine winner: weighted majority wins (anti-herding)
-            upWins = round.weightedUpPool > round.weightedDownPool;
-            if (round.weightedUpPool == round.weightedDownPool) {
-                if (round.upPool == round.downPool) {
-                    round.state = RoundLib.RoundState.Tied;
-                    round.settledAt = block.timestamp.toUint48();
-                    _notifyBundleRoundTerminal(contentId, roundId, false);
-                    emit RoundTied(contentId, roundId);
-                    return;
-                }
-                // Tiebreak: smaller raw pool wins. Rationale: identical weighted pools with
-                // different raw pools means the smaller-raw side achieved the same weight with
-                // fewer tokens → more concentration in early epochs → "more informed" voters.
-                // This inverts the conventional raw-majority-breaks-tie convention intentionally.
-                upWins = round.upPool < round.downPool;
+        // Determine winner: weighted majority wins (anti-herding). Robust BTS scores only
+        // calibrate rewards; they do not override the binary signal used for rating movement.
+        upWins = round.weightedUpPool > round.weightedDownPool;
+        if (round.weightedUpPool == round.weightedDownPool) {
+            if (round.upPool == round.downPool) {
+                round.state = RoundLib.RoundState.Tied;
+                round.settledAt = block.timestamp.toUint48();
+                _notifyBundleRoundTerminal(contentId, roundId, false);
+                emit RoundTied(contentId, roundId);
+                return;
             }
-
-            // Epoch-weighted winning stake — used for proportional reward distribution
-            weightedWinningStake = upWins ? round.weightedUpPool : round.weightedDownPool;
-
-            // Raw losing pool — 5% is reserved for revealed losers, the remainder is
-            // redistributed to winners, protocol, treasury, and the consensus reserve.
-            losingPool = upWins ? round.downPool : round.upPool;
+            // Tiebreak: smaller raw pool wins. Rationale: identical weighted pools with
+            // different raw pools means the smaller-raw side achieved the same weight with
+            // fewer tokens → more concentration in early epochs → "more informed" voters.
+            // This inverts the conventional raw-majority-breaks-tie convention intentionally.
+            upWins = round.upPool < round.downPool;
         }
+
+        (weightedWinningStake, losingPool) = _scoreRbtsRewards(contentId, roundId, round.revealedCount);
+        roundRbtsScored[contentId][roundId] = true;
 
         round.upWins = upWins;
         round.state = RoundLib.RoundState.Settled;
@@ -897,26 +857,17 @@ contract RoundVotingEngine is
             _getRoundReferenceRatingBps(contentId, roundId),
             weightedWinningStake,
             round.upPool,
-            round.downPool,
-            hasPredictionSettlement,
-            roundWeightedRatingSum[contentId][roundId],
-            predictionWeight,
-            finalPredictionRatingBps
+            round.downPool
         );
         emit RoundSettled(contentId, roundId, upWins, losingPool);
-        if (hasPredictionSettlement) {
-            emit PredictionRoundSettled(
-                contentId, roundId, finalPredictionRatingBps, predictionWeight, round.revealedCount
-            );
-            emit PredictionRewardsScored(
-                contentId,
-                roundId,
-                roundPredictionRewardWeight[contentId][roundId],
-                roundPredictionRewardClaimants[contentId][roundId],
-                roundPredictionForfeitedPool[contentId][roundId],
-                roundPredictionForfeitClaimants[contentId][roundId]
-            );
-        }
+        emit RbtsRewardsScored(
+            contentId,
+            roundId,
+            roundRbtsRewardWeight[contentId][roundId],
+            roundRbtsRewardClaimants[contentId][roundId],
+            roundRbtsForfeitedPool[contentId][roundId],
+            roundRbtsForfeitClaimants[contentId][roundId]
+        );
     }
 
     // =========================================================================
@@ -1105,15 +1056,6 @@ contract RoundVotingEngine is
         return _getRoundReferenceRatingBps(contentId, openRoundId);
     }
 
-    function previewCommitScorerMetadataHash(uint256 contentId) public view returns (bytes32) {
-        uint256 openRoundId = previewCommitRoundId(contentId);
-        if (openRoundId == nextRoundId[contentId] + 1) {
-            return protocolConfig.scorerMetadataHash();
-        }
-
-        return roundScorerMetadataHashSnapshot[contentId][openRoundId];
-    }
-
     function previewCommitRoundId(uint256 contentId) public view returns (uint256) {
         uint256 openRoundId = currentRoundId[contentId];
         if (openRoundId != 0) {
@@ -1249,77 +1191,53 @@ contract RoundVotingEngine is
         }
     }
 
-    function _roundWeightedMedianPrediction(uint256 contentId, uint256 roundId, uint256 totalWeight)
-        internal
-        view
-        returns (uint16)
-    {
-        bytes32[] storage commitKeys = roundCommitHashes[contentId][roundId];
-        uint256 threshold = (totalWeight + 1) / 2;
-        uint256 cumulativeWeight;
-        uint16 lastRatingBps;
-
-        while (cumulativeWeight < threshold) {
-            uint16 nextRatingBps = type(uint16).max;
-            uint256 nextRatingWeight;
-
-            for (uint256 i = 0; i < commitKeys.length;) {
-                bytes32 commitKey = commitKeys[i];
-                uint16 opinionRatingBps = commitOpinionRatingBps[contentId][roundId][commitKey];
-                if (opinionRatingBps > lastRatingBps) {
-                    if (opinionRatingBps < nextRatingBps) {
-                        nextRatingBps = opinionRatingBps;
-                        nextRatingWeight = commitPredictionWeight[contentId][roundId][commitKey];
-                    } else if (opinionRatingBps == nextRatingBps) {
-                        nextRatingWeight += commitPredictionWeight[contentId][roundId][commitKey];
-                    }
-                }
-                unchecked {
-                    ++i;
-                }
-            }
-
-            if (nextRatingBps == type(uint16).max) return lastRatingBps;
-            cumulativeWeight += nextRatingWeight;
-            if (cumulativeWeight >= threshold) return nextRatingBps;
-            lastRatingBps = nextRatingBps;
-        }
-
-        return lastRatingBps;
-    }
-
-    function _scorePredictionRewards(uint256 contentId, uint256 roundId, uint256 totalWeight)
+    function _scoreRbtsRewards(uint256 contentId, uint256 roundId, uint256 revealedCount)
         internal
         returns (uint256 rewardWeight, uint256 forfeitedPool)
     {
-        uint256 totalWeightedRating = roundWeightedRatingSum[contentId][roundId];
+        if (revealedCount < MIN_RBTS_PARTICIPANTS) revert NotEnoughVotes();
+
         bytes32[] storage commitKeys = roundCommitHashes[contentId][roundId];
+        bytes32[] memory revealedKeys = new bytes32[](revealedCount);
+        uint256 revealedIndex;
+        for (uint256 i = 0; i < commitKeys.length;) {
+            bytes32 commitKey = commitKeys[i];
+            if (commits[contentId][roundId][commitKey].revealed) {
+                revealedKeys[revealedIndex] = commitKey;
+                unchecked {
+                    ++revealedIndex;
+                }
+            }
+            unchecked {
+                ++i;
+            }
+        }
+        if (revealedIndex != revealedCount) revert NotEnoughVotes();
+
         uint256 rewardClaimants;
         uint256 forfeitClaimants;
 
-        for (uint256 i = 0; i < commitKeys.length;) {
-            bytes32 commitKey = commitKeys[i];
-            uint256 ownWeight = commitPredictionWeight[contentId][roundId][commitKey];
+        for (uint256 i = 0; i < revealedCount;) {
+            bytes32 commitKey = revealedKeys[i];
+            uint256 ownWeight = commitRbtsWeight[contentId][roundId][commitKey];
             if (ownWeight > 0) {
-                uint16 ownOpinion = commitOpinionRatingBps[contentId][roundId][commitKey];
-                uint16 ownPrediction = commitPredictedRatingBps[contentId][roundId][commitKey];
-                uint16 peerRating =
-                    PredictionRatingMath.leaveOneOutRating(totalWeightedRating, totalWeight, ownOpinion, ownWeight);
-                uint16 scoreBps = PredictionRatingMath.accuracyScoreBps(
-                    ownPrediction,
-                    peerRating,
-                    PREDICTION_FULL_CREDIT_TOLERANCE_BPS,
-                    PREDICTION_ZERO_CREDIT_TOLERANCE_BPS
+                bytes32 referenceKey = revealedKeys[(i + 1) % revealedCount];
+                bytes32 peerKey = revealedKeys[(i + 2) % revealedCount];
+                uint16 scoreBps = RobustBtsMath.scoreBps(
+                    commits[contentId][roundId][commitKey].isUp,
+                    commitPredictedUpBps[contentId][roundId][commitKey],
+                    commitPredictedUpBps[contentId][roundId][referenceKey],
+                    commits[contentId][roundId][peerKey].isUp
                 );
-                uint256 scoreWeight = (ownWeight * scoreBps) / PREDICTION_SCORE_SCALE_BPS;
+                uint256 scoreWeight = (ownWeight * scoreBps) / RBTS_SCORE_SCALE_BPS;
                 uint256 stakeAmount = commits[contentId][roundId][commitKey].stakeAmount;
-                uint256 stakeReturned = (stakeAmount * scoreBps) / PREDICTION_SCORE_SCALE_BPS;
+                uint256 stakeReturned = (stakeAmount * scoreBps) / RBTS_SCORE_SCALE_BPS;
                 uint256 forfeitedStake = stakeAmount - stakeReturned;
 
-                commitPredictionScoreBps[contentId][roundId][commitKey] = scoreBps;
-                commitPredictionRewardWeight[contentId][roundId][commitKey] = scoreWeight;
-                commitPredictionStakeReturned[contentId][roundId][commitKey] = stakeReturned;
-                commitPredictionForfeitedStake[contentId][roundId][commitKey] = forfeitedStake;
+                commitRbtsScoreBps[contentId][roundId][commitKey] = scoreBps;
+                commitRbtsRewardWeight[contentId][roundId][commitKey] = scoreWeight;
+                commitRbtsStakeReturned[contentId][roundId][commitKey] = stakeReturned;
+                commitRbtsForfeitedStake[contentId][roundId][commitKey] = forfeitedStake;
 
                 rewardWeight += scoreWeight;
                 forfeitedPool += forfeitedStake;
@@ -1339,20 +1257,25 @@ contract RoundVotingEngine is
             }
         }
 
-        roundPredictionRewardWeight[contentId][roundId] = rewardWeight;
-        roundPredictionRewardClaimants[contentId][roundId] = rewardClaimants;
-        roundPredictionForfeitedPool[contentId][roundId] = forfeitedPool;
-        roundPredictionForfeitClaimants[contentId][roundId] = forfeitClaimants;
+        roundRbtsRewardWeight[contentId][roundId] = rewardWeight;
+        roundRbtsRewardClaimants[contentId][roundId] = rewardClaimants;
+        roundRbtsForfeitedPool[contentId][roundId] = forfeitedPool;
+        roundRbtsForfeitClaimants[contentId][roundId] = forfeitClaimants;
     }
 
-    function _revealVoteInternal(uint256 contentId, uint256 roundId, bytes32 commitKey, bool isUp, bytes32 salt)
-        internal
-    {
+    function _revealRbtsVoteInternal(
+        uint256 contentId,
+        uint256 roundId,
+        bytes32 commitKey,
+        bool isUp,
+        uint16 predictedUpBps,
+        bytes32 salt
+    ) internal {
         RoundLib.Round storage round = rounds[contentId][roundId];
         RoundLib.Commit storage commit = commits[contentId][roundId][commitKey];
         RoundLib.RoundConfig memory roundCfg = _getRoundConfig(contentId, roundId);
         uint256 targetRoundRevealableAt = _targetRoundRevealableAt(contentId, roundId, commit.targetRound);
-        (uint256 eligibleFrontendStake, uint256 eligibleFrontendCount, address voter) = RoundRevealLib.revealVote(
+        (uint256 eligibleFrontendStake, uint256 eligibleFrontendCount, address voter, uint64 effectiveStake) = RoundRevealLib.revealRbtsVote(
             round,
             commit,
             epochUnrevealedCount[contentId][roundId],
@@ -1364,6 +1287,7 @@ contract RoundVotingEngine is
             roundId,
             commitKey,
             isUp,
+            predictedUpBps,
             salt,
             _getRoundReferenceRatingBps(contentId, roundId),
             roundCfg.minVoters,
@@ -1372,54 +1296,11 @@ contract RoundVotingEngine is
         );
         roundStakeWithEligibleFrontend[contentId][roundId] = eligibleFrontendStake;
         roundEligibleFrontendCount[contentId][roundId] = eligibleFrontendCount;
+        commitPredictedUpBps[contentId][roundId][commitKey] = predictedUpBps;
+        commitRbtsWeight[contentId][roundId][commitKey] = effectiveStake;
 
         emit VoteRevealed(contentId, roundId, voter, isUp);
-    }
-
-    function _revealPredictionInternal(
-        uint256 contentId,
-        uint256 roundId,
-        bytes32 commitKey,
-        uint16 opinionRatingBps,
-        uint16 predictedCrowdRatingBps,
-        bytes32 salt
-    ) internal {
-        RoundLib.Round storage round = rounds[contentId][roundId];
-        RoundLib.Commit storage commit = commits[contentId][roundId][commitKey];
-        RoundLib.RoundConfig memory roundCfg = _getRoundConfig(contentId, roundId);
-        uint256 targetRoundRevealableAt = _targetRoundRevealableAt(contentId, roundId, commit.targetRound);
-        (uint256 eligibleFrontendStake, uint256 eligibleFrontendCount, address voter,, uint64 effectiveStake) = RoundRevealLib.revealPrediction(
-            round,
-            commit,
-            epochUnrevealedCount[contentId][roundId],
-            frontendEligibleAtCommit[contentId][roundId],
-            roundPerFrontendStake[contentId][roundId],
-            roundStakeWithEligibleFrontend[contentId][roundId],
-            roundEligibleFrontendCount[contentId][roundId],
-            contentId,
-            roundId,
-            commitKey,
-            opinionRatingBps,
-            predictedCrowdRatingBps,
-            salt,
-            _getRoundReferenceRatingBps(contentId, roundId),
-            roundCfg.minVoters,
-            targetRoundRevealableAt,
-            commitRaterWeightBps[contentId][roundId][commitKey],
-            block.chainid,
-            address(this),
-            roundScorerMetadataHashSnapshot[contentId][roundId]
-        );
-        roundStakeWithEligibleFrontend[contentId][roundId] = eligibleFrontendStake;
-        roundEligibleFrontendCount[contentId][roundId] = eligibleFrontendCount;
-        commitOpinionRatingBps[contentId][roundId][commitKey] = opinionRatingBps;
-        commitPredictedRatingBps[contentId][roundId][commitKey] = predictedCrowdRatingBps;
-        commitPredictionWeight[contentId][roundId][commitKey] = effectiveStake;
-        roundPredictionWeight[contentId][roundId] += effectiveStake;
-        roundWeightedRatingSum[contentId][roundId] += uint256(opinionRatingBps) * uint256(effectiveStake);
-        roundPredictionCount[contentId][roundId]++;
-
-        emit PredictionRevealed(contentId, roundId, voter, opinionRatingBps, predictedCrowdRatingBps, effectiveStake);
+        emit RbtsVoteRevealed(contentId, roundId, voter, isUp, predictedUpBps, effectiveStake);
     }
 
     // =========================================================================
@@ -1437,14 +1318,14 @@ contract RoundVotingEngine is
         return commitKeys[index];
     }
 
-    function roundPredictionStats(uint256 contentId, uint256 roundId)
+    function roundRbtsStats(uint256 contentId, uint256 roundId)
         external
         view
-        returns (uint256 weightedRatingSum, uint256 totalPredictionWeight, uint16 finalRatingBps)
+        returns (bool scored, uint256 rewardWeight, uint256 forfeitedPool)
     {
-        weightedRatingSum = roundWeightedRatingSum[contentId][roundId];
-        totalPredictionWeight = roundPredictionWeight[contentId][roundId];
-        finalRatingBps = roundFinalPredictionRatingBps[contentId][roundId];
+        scored = roundRbtsScored[contentId][roundId];
+        rewardWeight = roundRbtsRewardWeight[contentId][roundId];
+        forfeitedPool = roundRbtsForfeitedPool[contentId][roundId];
     }
 
     // --- Admin ---
@@ -1500,15 +1381,8 @@ contract RoundVotingEngine is
     // Cumulative cleanup incentive paid per round.
     mapping(uint256 => mapping(uint256 => uint256)) internal roundCleanupIncentivePaid;
 
-    // Opinion rating revealed alongside the crowd prediction. Added at the end of storage
-    // to preserve the pre-existing prediction/refund slots for proxy upgrades.
-    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint16))) internal commitOpinionRatingBps;
-
     // Commit-time social graph weight snapshot, in BPS. Used for rating weight and bounty units.
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint16))) public commitRaterWeightBps;
-
-    // Round-level scorer metadata bound into prediction commits.
-    mapping(uint256 => mapping(uint256 => bytes32)) internal roundScorerMetadataHashSnapshot;
 
     // Commit-time AI declaration snapshot, used to keep launch anchors human-only at claim time.
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) public commitHadActiveAiDeclaration;

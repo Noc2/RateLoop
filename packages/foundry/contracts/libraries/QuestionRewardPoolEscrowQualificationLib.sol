@@ -233,10 +233,10 @@ library QuestionRewardPoolEscrowQualificationLib {
         view
         returns (uint256)
     {
-        if (votingEngine.roundFinalPredictionRatingBps(contentId, roundId) == 0) {
+        if (!votingEngine.roundRbtsScored(contentId, roundId)) {
             return votingEngine.commitRaterWeightBps(contentId, roundId, commitKey);
         }
-        return votingEngine.commitPredictionRewardWeight(contentId, roundId, commitKey);
+        return votingEngine.commitRbtsRewardWeight(contentId, roundId, commitKey);
     }
 
     function _previewRoundAllocation(RewardPool storage rewardPool) private view returns (uint256 allocation) {

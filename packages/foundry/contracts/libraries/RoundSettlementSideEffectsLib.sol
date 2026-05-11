@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
-
 import { ContentRegistry } from "../ContentRegistry.sol";
 import { RatingLib } from "./RatingLib.sol";
 import { RatingMath } from "./RatingMath.sol";
@@ -12,9 +10,6 @@ import { IRoundRewardDistributor } from "../interfaces/IRoundRewardDistributor.s
 /// @title RoundSettlementSideEffectsLib
 /// @notice Moves best-effort post-settlement external calls out of RoundVotingEngine runtime bytecode.
 library RoundSettlementSideEffectsLib {
-    using SafeCast for uint256;
-    using SafeCast for int256;
-
     enum SideEffectFailureStage {
         ParticipationRateQuery,
         VoterParticipationRewardsSnapshot,
@@ -36,11 +31,7 @@ library RoundSettlementSideEffectsLib {
         uint16 referenceRatingBps,
         uint256 weightedWinningStake,
         uint64 upPool,
-        uint64 downPool,
-        bool usePredictionRating,
-        uint256,
-        uint256 predictionEvidence,
-        uint16 predictionFinalRatingBps
+        uint64 downPool
     ) external {
         // The two rating-state precondition reads share the SettlementSideEffectFailed/RatingStateUpdate
         // stage with the eventual update call: any failure along this chain means "the rating state was
@@ -83,11 +74,8 @@ library RoundSettlementSideEffectsLib {
         }
 
         if (ratingUpdatePossible) {
-            RatingLib.RatingState memory nextState = usePredictionRating
-                ? _applyPredictionSettlement(
-                    predictionFinalRatingBps, predictionEvidence, previousState, ratingConfig, slashConfig
-                )
-                : _applyBinarySettlement(referenceRatingBps, upPool, downPool, previousState, ratingConfig, slashConfig);
+            RatingLib.RatingState memory nextState =
+                _applyBinarySettlement(referenceRatingBps, upPool, downPool, previousState, ratingConfig, slashConfig);
             try registry.updateRatingState(contentId, roundId, referenceRatingBps, nextState) { }
             catch {
                 emit SettlementSideEffectFailed(
@@ -131,38 +119,4 @@ library RoundSettlementSideEffectsLib {
         );
     }
 
-    function _applyPredictionSettlement(
-        uint16 predictionFinalRatingBps,
-        uint256 predictionEvidence,
-        RatingLib.RatingState memory previousState,
-        RatingLib.RatingConfig memory ratingConfig,
-        RatingLib.SlashConfig memory slashConfig
-    ) private view returns (RatingLib.RatingState memory nextState) {
-        uint16 clampedRatingBps = RatingMath.clampRatingBps(predictionFinalRatingBps);
-        uint256 previousConfidenceMass =
-            previousState.confidenceMass == 0 ? ratingConfig.confidenceMassInitial : previousState.confidenceMass;
-        uint256 confidenceGain = (predictionEvidence * ratingConfig.confidenceGainBps) / RatingLib.BPS_SCALE;
-        uint256 nextConfidenceMass = previousConfidenceMass + confidenceGain;
-        if (nextConfidenceMass < ratingConfig.confidenceMassMin) {
-            nextConfidenceMass = ratingConfig.confidenceMassMin;
-        }
-        if (nextConfidenceMass > ratingConfig.confidenceMassMax) {
-            nextConfidenceMass = ratingConfig.confidenceMassMax;
-        }
-
-        nextState.ratingLogitX18 = RatingMath.ratingBpsToLogitX18(clampedRatingBps).toInt128();
-        nextState.confidenceMass = nextConfidenceMass.toUint128();
-        nextState.effectiveEvidence = (uint256(previousState.effectiveEvidence) + predictionEvidence).toUint128();
-        nextState.settledRounds = previousState.settledRounds + 1;
-        nextState.ratingBps = clampedRatingBps;
-        nextState.conservativeRatingBps =
-            RatingMath.computeConservativeRatingBps(clampedRatingBps, nextConfidenceMass, ratingConfig);
-        nextState.lastUpdatedAt = uint48(block.timestamp);
-
-        bool canTrackLowRating = uint256(nextState.effectiveEvidence) >= slashConfig.minSlashEvidence
-            && nextState.settledRounds >= slashConfig.minSlashSettledRounds;
-        if (canTrackLowRating && nextState.conservativeRatingBps < slashConfig.slashThresholdBps) {
-            nextState.lowSince = previousState.lowSince == 0 ? uint48(block.timestamp) : previousState.lowSince;
-        }
-    }
 }

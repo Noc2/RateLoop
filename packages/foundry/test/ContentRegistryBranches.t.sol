@@ -366,9 +366,9 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
         roundId = RoundEngineReadHelpers.activeRoundId(votingEngine, contentId);
         _warpPastTlockRevealTime(block.timestamp + 1 hours);
-        votingEngine.revealVoteByCommitKey(contentId, roundId, ck1, true, salt1);
-        votingEngine.revealVoteByCommitKey(contentId, roundId, ck2, true, salt2);
-        votingEngine.revealVoteByCommitKey(contentId, roundId, ck3, false, salt3);
+        votingEngine.revealVoteByCommitKey(contentId, roundId, ck1, true, 5_000, salt1);
+        votingEngine.revealVoteByCommitKey(contentId, roundId, ck2, true, 5_000, salt2);
+        votingEngine.revealVoteByCommitKey(contentId, roundId, ck3, false, 5_000, salt3);
         votingEngine.settleRound(contentId, roundId);
     }
 
@@ -2011,9 +2011,9 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         registry.updateActivity(1);
 
         _warpPastTlockRevealTime(block.timestamp + 1 hours);
-        votingEngine.revealVoteByCommitKey(1, roundId, ck1, true, salt1);
-        votingEngine.revealVoteByCommitKey(1, roundId, ck2, true, salt2);
-        votingEngine.revealVoteByCommitKey(1, roundId, ck3, false, salt3);
+        votingEngine.revealVoteByCommitKey(1, roundId, ck1, true, 5_000, salt1);
+        votingEngine.revealVoteByCommitKey(1, roundId, ck2, true, 5_000, salt2);
+        votingEngine.revealVoteByCommitKey(1, roundId, ck3, false, 5_000, salt3);
         votingEngine.settleRound(1, roundId);
 
         assertGt(registry.getRating(1), 5000);
@@ -2086,9 +2086,9 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         registry.updateRatingState(1, 1, 5000, replacementState);
 
         _warpPastTlockRevealTime(block.timestamp + 1 hours);
-        votingEngine.revealVoteByCommitKey(1, roundId, ck1, true, salt1);
-        votingEngine.revealVoteByCommitKey(1, roundId, ck2, true, salt2);
-        votingEngine.revealVoteByCommitKey(1, roundId, ck3, false, salt3);
+        votingEngine.revealVoteByCommitKey(1, roundId, ck1, true, 5_000, salt1);
+        votingEngine.revealVoteByCommitKey(1, roundId, ck2, true, 5_000, salt2);
+        votingEngine.revealVoteByCommitKey(1, roundId, ck3, false, 5_000, salt3);
 
         votingEngine.settleRound(1, roundId);
 
@@ -2145,9 +2145,9 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.stopPrank();
 
         _warpPastTlockRevealTime(block.timestamp + 1 hours);
-        votingEngine.revealVoteByCommitKey(1, roundId, ck1, true, salt1);
-        votingEngine.revealVoteByCommitKey(1, roundId, ck2, true, salt2);
-        votingEngine.revealVoteByCommitKey(1, roundId, ck3, false, salt3);
+        votingEngine.revealVoteByCommitKey(1, roundId, ck1, true, 5_000, salt1);
+        votingEngine.revealVoteByCommitKey(1, roundId, ck2, true, 5_000, salt2);
+        votingEngine.revealVoteByCommitKey(1, roundId, ck3, false, 5_000, salt3);
         votingEngine.settleRound(1, roundId);
 
         assertEq(rewardDistributor.roundParticipationRewardPool(1, roundId), address(participationPool));
@@ -2312,7 +2312,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(votingEngine, 1);
 
         _warpPastTlockRevealTime(block.timestamp + 1 hours);
-        votingEngine.revealVoteByCommitKey(1, roundId, commitKey, true, salt);
+        votingEngine.revealVoteByCommitKey(1, roundId, commitKey, true, 5_000, salt);
 
         assertEq(RoundEngineReadHelpers.activeRoundId(votingEngine, 1), roundId, "Round should still be open");
         RoundLib.Round memory round = RoundEngineReadHelpers.round(votingEngine, 1, roundId);
@@ -2333,7 +2333,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(votingEngine, 1);
 
         _warpPastTlockRevealTime(block.timestamp + 1 hours);
-        votingEngine.revealVoteByCommitKey(1, roundId, commitKey, true, salt);
+        votingEngine.revealVoteByCommitKey(1, roundId, commitKey, true, 5_000, salt);
 
         vm.warp(T0 + 31 days);
         assertFalse(registry.isDormancyEligible(1), "open rounds should block dormancy eligibility");

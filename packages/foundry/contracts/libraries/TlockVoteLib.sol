@@ -65,8 +65,9 @@ library TlockVoteLib {
         return uint256(genesisTime) + (uint256(targetRound) - 1) * uint256(period);
     }
 
-    function buildExpectedCommitHash(
+    function buildExpectedRbtsCommitHash(
         bool isUp,
+        uint16 predictedUpBps,
         bytes32 salt,
         address voter,
         uint256 contentId,
@@ -80,6 +81,7 @@ library TlockVoteLib {
         return keccak256(
             abi.encodePacked(
                 isUp,
+                predictedUpBps,
                 salt,
                 voter,
                 contentId,
@@ -88,43 +90,6 @@ library TlockVoteLib {
                 targetRound,
                 drandChainHash,
                 ciphertextHash
-            )
-        );
-    }
-
-    function buildExpectedPredictionCommitHash(
-        uint256 chainId,
-        address engine,
-        uint256 stakeAmount,
-        bytes32 scorerMetadataHash,
-        uint16 opinionRatingBps,
-        uint16 predictedCrowdRatingBps,
-        bytes32 salt,
-        address voter,
-        uint256 contentId,
-        uint256 roundId,
-        uint16 roundReferenceRatingBps,
-        uint64 targetRound,
-        bytes32 drandChainHash,
-        bytes memory ciphertext
-    ) external pure returns (bytes32) {
-        bytes32 ciphertextHash = keccak256(ciphertext);
-        return keccak256(
-            abi.encodePacked(
-                chainId,
-                engine,
-                contentId,
-                roundId,
-                voter,
-                opinionRatingBps,
-                predictedCrowdRatingBps,
-                stakeAmount,
-                scorerMetadataHash,
-                roundReferenceRatingBps,
-                targetRound,
-                drandChainHash,
-                ciphertextHash,
-                salt
             )
         );
     }

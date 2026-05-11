@@ -190,7 +190,7 @@ contract VotingHandler is VotingTestBase {
             vm.warp(commit.revealableAfter + 1);
         }
 
-        try engine.revealVoteByCommitKey(contentId, roundId, record.commitKey, record.isUp, record.salt) {
+        try engine.revealVoteByCommitKey(contentId, roundId, record.commitKey, record.isUp, 5_000, record.salt) {
             record.revealed = true;
             revealCount++;
         } catch {

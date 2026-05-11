@@ -176,7 +176,7 @@ contract UserTransactionGasEstimatesTest is RoundIntegrationTest {
 
         uint256 gasUsed = _measureCall(
             address(votingEngine),
-            abi.encodeCall(RoundVotingEngine.revealVoteByCommitKey, (contentId, roundId, commitKey, true, salt))
+            abi.encodeCall(RoundVotingEngine.revealVoteByCommitKey, (contentId, roundId, commitKey, true, 5_000, salt))
         );
         console2.log("reveal_vote_gas", gasUsed);
     }

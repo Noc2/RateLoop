@@ -571,7 +571,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         // Reveal A, B, C — all timely (revealedAt < bountyClosesAt).
         _warpPastTlockRevealTime(block.timestamp + EPOCH_DURATION);
         for (uint256 i = 0; i < 3; i++) {
-            votingEngine.revealVoteByCommitKey(contentId, roundId, commitKeys[i], directions[i], salts[i]);
+            votingEngine.revealVoteByCommitKey(contentId, roundId, commitKeys[i], directions[i], 5_000, salts[i]);
         }
         // Sanity: thresholdReachedAt is still 0 (only 3 revealed, minVoters=5).
         (,,,,,,,,,,, uint48 thresholdReachedMid,,) = votingEngine.rounds(contentId, roundId);
@@ -579,8 +579,8 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
         // Warp past bountyClosesAt; reveal D and E now (they are NOT timely).
         vm.warp(bountyClosesAt + 1);
-        votingEngine.revealVoteByCommitKey(contentId, roundId, commitKeys[3], directions[3], salts[3]);
-        votingEngine.revealVoteByCommitKey(contentId, roundId, commitKeys[4], directions[4], salts[4]);
+        votingEngine.revealVoteByCommitKey(contentId, roundId, commitKeys[3], directions[3], 5_000, salts[3]);
+        votingEngine.revealVoteByCommitKey(contentId, roundId, commitKeys[4], directions[4], 5_000, salts[4]);
 
         // thresholdReachedAt now equals E's revealedAt — past bountyClosesAt.
         (,,,,,,,,,,, uint48 thresholdReachedAfter,,) = votingEngine.rounds(contentId, roundId);
@@ -992,9 +992,9 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         );
 
         _warpPastTlockRevealTime(block.timestamp + EPOCH_DURATION);
-        votingEngine.revealVoteByCommitKey(contentId, roundId, commitKey1, true, salt1);
-        votingEngine.revealVoteByCommitKey(contentId, roundId, commitKey2, true, salt2);
-        votingEngine.revealVoteByCommitKey(contentId, roundId, commitKey3, false, salt3);
+        votingEngine.revealVoteByCommitKey(contentId, roundId, commitKey1, true, 5_000, salt1);
+        votingEngine.revealVoteByCommitKey(contentId, roundId, commitKey2, true, 5_000, salt2);
+        votingEngine.revealVoteByCommitKey(contentId, roundId, commitKey3, false, 5_000, salt3);
         votingEngine.settleRound(contentId, roundId);
 
         vm.prank(voter2);
@@ -1175,10 +1175,10 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
         vm.warp(closesAt + 1);
         votingEngine.revealVoteByCommitKey(
-            contentIds[0], firstRoundId, firstLateCommitKey, firstLateDirection, firstLateSalt
+            contentIds[0], firstRoundId, firstLateCommitKey, firstLateDirection, 5_000, firstLateSalt
         );
         votingEngine.revealVoteByCommitKey(
-            contentIds[1], secondRoundId, secondLateCommitKey, secondLateDirection, secondLateSalt
+            contentIds[1], secondRoundId, secondLateCommitKey, secondLateDirection, 5_000, secondLateSalt
         );
         votingEngine.settleRound(contentIds[0], firstRoundId);
         votingEngine.settleRound(contentIds[1], secondRoundId);
@@ -1210,10 +1210,10 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
         vm.warp(closesAt + 1);
         votingEngine.revealVoteByCommitKey(
-            contentIds[0], firstRoundId, firstLateCommitKey, firstLateDirection, firstLateSalt
+            contentIds[0], firstRoundId, firstLateCommitKey, firstLateDirection, 5_000, firstLateSalt
         );
         votingEngine.revealVoteByCommitKey(
-            contentIds[1], secondRoundId, secondLateCommitKey, secondLateDirection, secondLateSalt
+            contentIds[1], secondRoundId, secondLateCommitKey, secondLateDirection, 5_000, secondLateSalt
         );
         votingEngine.settleRound(contentIds[0], firstRoundId);
         votingEngine.settleRound(contentIds[1], secondRoundId);
@@ -2118,7 +2118,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertLe(RoundEngineReadHelpers.round(votingEngine, contentId, roundId).thresholdReachedAt, expiresAt);
 
         vm.warp(expiresAt + 1);
-        votingEngine.revealVoteByCommitKey(contentId, roundId, lateCommitKey, lateDirection, lateSalt);
+        votingEngine.revealVoteByCommitKey(contentId, roundId, lateCommitKey, lateDirection, 5_000, lateSalt);
         votingEngine.settleRound(contentId, roundId);
 
         assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter1), 0);
@@ -2144,7 +2144,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertLe(RoundEngineReadHelpers.round(votingEngine, contentId, roundId).thresholdReachedAt, expiresAt);
 
         vm.warp(expiresAt + 1);
-        votingEngine.revealVoteByCommitKey(contentId, roundId, lateCommitKey, lateDirection, lateSalt);
+        votingEngine.revealVoteByCommitKey(contentId, roundId, lateCommitKey, lateDirection, 5_000, lateSalt);
         votingEngine.settleRound(contentId, roundId);
 
         assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter1), REWARD_POOL_AMOUNT / 3);
@@ -2904,7 +2904,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     ) internal {
         bool[5] memory directions = [true, true, true, false, false];
         for (uint256 i = startIndex; i < endIndex; i++) {
-            votingEngine.revealVoteByCommitKey(contentId, roundId, commitKeys[i], directions[i], salts[i]);
+            votingEngine.revealVoteByCommitKey(contentId, roundId, commitKeys[i], directions[i], 5_000, salts[i]);
         }
     }
 
@@ -3239,8 +3239,8 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         _warpPastTlockRevealTime(block.timestamp + EPOCH_DURATION);
 
         for (uint256 i = 0; i < voters.length; i++) {
-            votingEngine.revealPredictionByCommitKey(
-                contentId, roundId, commitKeys[i], predictions[i], predictions[i], salts[i]
+            votingEngine.revealVoteByCommitKey(
+                contentId, roundId, commitKeys[i], predictions[i] >= 5_000, predictions[i], salts[i]
             );
         }
 
@@ -3258,14 +3258,10 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         uint16 referenceRatingBps = _currentRatingReferenceBps(contentId);
         uint64 targetRound = _tlockCommitTargetRound();
         bytes32 drandChainHash = _tlockDrandChainHash();
-        bytes memory ciphertext =
-            _testCiphertext(predictedRatingBps >= referenceRatingBps, salt, contentId, targetRound, drandChainHash);
-        bytes32 commitHash = TlockVoteLib.buildExpectedPredictionCommitHash(
-            block.chainid,
-            address(votingEngine),
-            stake,
-            votingEngine.previewCommitScorerMetadataHash(contentId),
-            predictedRatingBps,
+        bool isUp = predictedRatingBps >= 5_000;
+        bytes memory ciphertext = _testCiphertext(isUp, salt, contentId, targetRound, drandChainHash);
+        bytes32 commitHash = TlockVoteLib.buildExpectedRbtsCommitHash(
+            isUp,
             predictedRatingBps,
             salt,
             voter,
@@ -3320,7 +3316,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         roundId = RoundEngineReadHelpers.activeRoundId(votingEngine, contentId);
         _warpPastTlockRevealTime(block.timestamp + EPOCH_DURATION);
         for (uint256 i = 0; i < voters.length; i++) {
-            votingEngine.revealVoteByCommitKey(contentId, roundId, commitKeys[i], directions[i], salts[i]);
+            votingEngine.revealVoteByCommitKey(contentId, roundId, commitKeys[i], directions[i], 5_000, salts[i]);
         }
         votingEngine.settleRound(contentId, roundId);
     }
@@ -3354,7 +3350,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         _warpPastTlockRevealTime(block.timestamp + EPOCH_DURATION);
 
         for (uint256 i = 0; i < voters.length; i++) {
-            votingEngine.revealVoteByCommitKey(contentId, roundId, commitKeys[i], directions[i], salts[i]);
+            votingEngine.revealVoteByCommitKey(contentId, roundId, commitKeys[i], directions[i], 5_000, salts[i]);
         }
 
         votingEngine.settleRound(contentId, roundId);
@@ -3392,7 +3388,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         _warpPastTlockRevealTime(block.timestamp + EPOCH_DURATION);
 
         for (uint256 i = 0; i < voters.length; i++) {
-            votingEngine.revealVoteByCommitKey(contentId, roundId, commitKeys[i], directions[i], salts[i]);
+            votingEngine.revealVoteByCommitKey(contentId, roundId, commitKeys[i], directions[i], 5_000, salts[i]);
         }
     }
 
@@ -3423,7 +3419,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         _warpPastTlockRevealTime(uint256(round.startTime) + EPOCH_DURATION);
 
         for (uint256 i = 0; i < voters.length - 1; i++) {
-            votingEngine.revealVoteByCommitKey(contentId, roundId, commitKeys[i], directions[i], salts[i]);
+            votingEngine.revealVoteByCommitKey(contentId, roundId, commitKeys[i], directions[i], 5_000, salts[i]);
         }
 
         vm.warp(round.startTime + 7 days + protocolConfig.revealGracePeriod() + 1);
@@ -3458,7 +3454,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         _warpPastTlockRevealTime(uint256(round.startTime) + EPOCH_DURATION);
 
         for (uint256 i = 0; i < voters.length - 1; i++) {
-            votingEngine.revealVoteByCommitKey(contentId, roundId, commitKeys[i], directions[i], salts[i]);
+            votingEngine.revealVoteByCommitKey(contentId, roundId, commitKeys[i], directions[i], 5_000, salts[i]);
         }
     }
 
@@ -3492,7 +3488,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         _warpPastTlockRevealTime(uint256(round.startTime) + EPOCH_DURATION);
 
         for (uint256 i = 0; i < voters.length - 1; i++) {
-            votingEngine.revealVoteByCommitKey(contentId, roundId, commitKeys[i], directions[i], salts[i]);
+            votingEngine.revealVoteByCommitKey(contentId, roundId, commitKeys[i], directions[i], 5_000, salts[i]);
         }
 
         lateCommitKey = commitKeys[voters.length - 1];

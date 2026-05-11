@@ -262,7 +262,7 @@ contract SecurityReentrancyTest is SecurityHarnessBase {
         if (c.revealed || c.stakeAmount == 0) return;
         bool up = commitDirections[commitKey];
         bytes32 s = commitSalts[commitKey];
-        votingEngine.revealVoteByCommitKey(cid, roundId, commitKey, up, s);
+        votingEngine.revealVoteByCommitKey(cid, roundId, commitKey, up, 5_000, s);
     }
 }
 
@@ -486,7 +486,7 @@ contract SecuritySettlementTimingTest is SecurityHarnessBase {
         if (c.revealed || c.stakeAmount == 0) return;
         bool up = commitDirections[commitKey];
         bytes32 s = commitSalts[commitKey];
-        votingEngine.revealVoteByCommitKey(cid, roundId, commitKey, up, s);
+        votingEngine.revealVoteByCommitKey(cid, roundId, commitKey, up, 5_000, s);
     }
 
     /// @notice Cannot reveal before epoch ends
@@ -502,7 +502,7 @@ contract SecuritySettlementTimingTest is SecurityHarnessBase {
         bool up = commitDirections[ck1];
         bytes32 s = commitSalts[ck1];
         vm.expectRevert(RoundVotingEngine.EpochNotEnded.selector);
-        votingEngine.revealVoteByCommitKey(contentId, roundId, ck1, up, s);
+        votingEngine.revealVoteByCommitKey(contentId, roundId, ck1, up, 5_000, s);
     }
 
     /// @notice Settlement is possible immediately after minVoters revealed

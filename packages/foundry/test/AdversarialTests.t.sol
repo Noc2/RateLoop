@@ -180,7 +180,7 @@ contract AdversarialTests is VotingTestBase {
         if (c.revealed || c.stakeAmount == 0) return;
         bool up = commitDirections[commitKey];
         bytes32 s = commitSalts[commitKey];
-        engine.revealVoteByCommitKey(contentId, roundId, commitKey, up, s);
+        engine.revealVoteByCommitKey(contentId, roundId, commitKey, up, 5_000, s);
     }
 
     function _settleRound(uint256 contentId, uint256 roundId, bytes32[] memory commitKeys) internal {
@@ -643,8 +643,8 @@ contract AdversarialTests is VotingTestBase {
         _warpPastTlockRevealTime(uint256(round.startTime) + EPOCH_DURATION);
 
         // Reveal
-        eng2.revealVoteByCommitKey(1, 1, ck1, true, salt1);
-        eng2.revealVoteByCommitKey(1, 1, ck2, true, salt2);
+        eng2.revealVoteByCommitKey(1, 1, ck1, true, 5_000, salt1);
+        eng2.revealVoteByCommitKey(1, 1, ck2, true, 5_000, salt2);
 
         eng2.settleRound(1, 1);
 
@@ -1026,7 +1026,7 @@ contract AdversarialTests is VotingTestBase {
 
         // Try to reveal immediately (before epoch end)
         vm.expectRevert(RoundVotingEngine.EpochNotEnded.selector);
-        engine.revealVoteByCommitKey(contentId, roundId, commitKey, true, salt);
+        engine.revealVoteByCommitKey(contentId, roundId, commitKey, true, 5_000, salt);
     }
 
     /// @notice Cannot reveal with wrong salt (commit hash mismatch)
@@ -1061,7 +1061,7 @@ contract AdversarialTests is VotingTestBase {
 
         bytes32 wrongSalt = keccak256("wrong");
         vm.expectRevert(RoundVotingEngine.HashMismatch.selector);
-        engine.revealVoteByCommitKey(contentId, roundId, commitKey, true, wrongSalt);
+        engine.revealVoteByCommitKey(contentId, roundId, commitKey, true, 5_000, wrongSalt);
     }
 
     /// @notice Cannot reveal with wrong direction
@@ -1095,7 +1095,7 @@ contract AdversarialTests is VotingTestBase {
         _warpPastTlockRevealTime(uint256(round.startTime) + EPOCH_DURATION);
 
         vm.expectRevert(RoundVotingEngine.HashMismatch.selector);
-        engine.revealVoteByCommitKey(contentId, roundId, commitKey, false, salt); // wrong direction
+        engine.revealVoteByCommitKey(contentId, roundId, commitKey, false, 5_000, salt); // wrong direction
     }
 
     /// @notice Fake AGE armor without an embedded tlock stanza is rejected at commit time.

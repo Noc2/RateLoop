@@ -156,7 +156,7 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
             RoundLib.Commit memory c = RoundEngineReadHelpers.commit(engine, cid, roundId, keys[i]);
             if (!c.revealed && c.stakeAmount > 0) {
                 (bool up, bytes32 s) = _decodeTestCiphertext(c.ciphertext);
-                try engine.revealVoteByCommitKey(cid, roundId, keys[i], up, s) { } catch { }
+                try engine.revealVoteByCommitKey(cid, roundId, keys[i], up, 5_000, s) { } catch { }
             }
         }
         RoundLib.Round memory r2 = RoundEngineReadHelpers.round(engine, cid, roundId);
@@ -571,7 +571,7 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
         for (uint256 i = 0; i < keys.length; i++) {
             RoundLib.Commit memory c = RoundEngineReadHelpers.commit(engine, cid, rid, keys[i]);
             (bool up, bytes32 s) = _decodeTestCiphertext(c.ciphertext);
-            engine.revealVoteByCommitKey(cid, rid, keys[i], up, s);
+            engine.revealVoteByCommitKey(cid, rid, keys[i], up, 5_000, s);
         }
 
         // Settlement succeeds immediately after minVoters revealed
@@ -594,7 +594,7 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
         RoundLib.Round memory r = RoundEngineReadHelpers.round(engine, cid, rid);
 
         _warpPastTlockRevealTime(uint256(r.startTime) + 1 hours);
-        engine.revealVoteByCommitKey(cid, rid, ck1, true, s1);
+        engine.revealVoteByCommitKey(cid, rid, ck1, true, 5_000, s1);
 
         vm.warp(block.timestamp + 1 hours + 1);
 

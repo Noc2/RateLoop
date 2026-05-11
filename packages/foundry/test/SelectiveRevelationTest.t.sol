@@ -156,7 +156,7 @@ contract SelectiveRevelationTest is VotingTestBase {
     }
 
     function _reveal(uint256 contentId, uint256 roundId, bytes32 commitKey, bool isUp, bytes32 salt) internal {
-        engine.revealVoteByCommitKey(contentId, roundId, commitKey, isUp, salt);
+        engine.revealVoteByCommitKey(contentId, roundId, commitKey, isUp, 5_000, salt);
     }
 
     function _submitContent() internal returns (uint256 contentId) {

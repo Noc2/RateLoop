@@ -172,7 +172,7 @@ contract SettlementEdgeCasesTest is VotingTestBase {
     }
 
     function _reveal(uint256 contentId, uint256 roundId, bytes32 commitKey, bool isUp, bytes32 salt) internal {
-        engine.revealVoteByCommitKey(contentId, roundId, commitKey, isUp, salt);
+        engine.revealVoteByCommitKey(contentId, roundId, commitKey, isUp, 5_000, salt);
     }
 
     function _submitContent() internal returns (uint256 contentId) {
@@ -309,9 +309,9 @@ contract SettlementEdgeCasesTest is VotingTestBase {
         if (targetRound3 > maxTargetRound) maxTargetRound = targetRound3;
         vm.warp(_tlockRoundTimestamp(maxTargetRound) + 1);
 
-        votingEngine.revealVoteByCommitKey(contentId, roundId, ck1, true, s1);
-        votingEngine.revealVoteByCommitKey(contentId, roundId, ck2, true, s2);
-        votingEngine.revealVoteByCommitKey(contentId, roundId, ck3, true, s3);
+        votingEngine.revealVoteByCommitKey(contentId, roundId, ck1, true, 5_000, s1);
+        votingEngine.revealVoteByCommitKey(contentId, roundId, ck2, true, 5_000, s2);
+        votingEngine.revealVoteByCommitKey(contentId, roundId, ck3, true, 5_000, s3);
     }
 
     /// @dev Full 3-voter round: commit, warp past epoch, reveal all 3.
