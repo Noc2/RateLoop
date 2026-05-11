@@ -210,6 +210,13 @@ export type CuryoRaterTypeName = "Unknown" | "Human" | "AI" | "Team" | "Hybrid";
 export type CuryoSelfCredentialStatus = "missing" | "verified" | "expired" | "revoked";
 export type CuryoAiDeclarationTierName = "A0" | "A1Unverified" | "A1Verified";
 export type CuryoAiProbeStatus = "none" | "pending" | "passed" | "failed";
+export type CuryoAiDeclarationInactiveReason =
+  | "none"
+  | "missing"
+  | "retired"
+  | "future"
+  | "expired"
+  | "challenged";
 
 export interface CuryoRaterRewardStatusResponse {
   rater: `0x${string}`;
@@ -227,6 +234,8 @@ export interface CuryoRaterRewardStatusResponse {
   };
   aiDeclaration: {
     declared: boolean;
+    active: boolean;
+    inactiveReason: CuryoAiDeclarationInactiveReason;
     operator: `0x${string}` | null;
     version: number;
     effectiveEpoch: string | null;

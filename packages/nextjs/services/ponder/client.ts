@@ -855,6 +855,7 @@ export type PonderRaterTypeName = "Unknown" | "Human" | "AI" | "Team" | "Hybrid"
 export type PonderSelfCredentialStatus = "missing" | "verified" | "expired" | "revoked";
 export type PonderAiDeclarationTierName = "A0" | "A1Unverified" | "A1Verified";
 export type PonderAiProbeStatus = "none" | "pending" | "passed" | "failed";
+export type PonderAiDeclarationInactiveReason = "none" | "missing" | "retired" | "future" | "expired" | "challenged";
 
 export interface PonderRaterRewardStatusResponse {
   rater: string;
@@ -872,6 +873,8 @@ export interface PonderRaterRewardStatusResponse {
   };
   aiDeclaration: {
     declared: boolean;
+    active: boolean;
+    inactiveReason: PonderAiDeclarationInactiveReason;
     operator: string | null;
     version: number;
     effectiveEpoch: string | null;

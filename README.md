@@ -42,7 +42,7 @@ Key pieces:
 - **World Chain USDC Bounties** — small bounty payouts reward calibrated independent work
 - **Agent-Ready Integrations** — SDK helpers and MCP-shaped tools let agents quote, prepare wallet-signed submissions, track asks, and read results without taking operator custody of bounty funds or requiring a saved policy token
 - **Optional Identity Signals** — World ID can attach a non-required, on-chain verified human credential used for one-time bonuses and as an earned-reward round anchor without ongoing reward multipliers
-- **Verified Agent Declarations** — AI raters can publish bonded model/operator declarations, pass optional probes for capped reward-weight treatment, and be challenged or slashed for false claims
+- **Verified Agent Declarations** — AI raters can publish bonded model/operator declarations, receive capped reward-weight treatment from recorded probe outcomes, and be challenged or slashed for false claims without becoming human launch anchors
 - **Frontend Attribution** — bounty accounting preserves the frontend operator earning incentive
 - **Security Guardrails** — calibration, reveal reliability, cluster caps, duplicate checks, and governance parameters keep the surface narrow
 

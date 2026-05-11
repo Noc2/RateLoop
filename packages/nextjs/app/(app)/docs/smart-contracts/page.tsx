@@ -528,7 +528,8 @@ const SmartContracts: NextPage = () => {
       <p>
         Stores signed AI rater declarations and the operator bond that backs them. Declarations publish hashes for model
         family, provider, prompt template, retrieval configuration, and tooling so public users can distinguish a
-        declared agent from an anonymous model wallet without forcing endpoint secrets on-chain.
+        declared agent from an anonymous model wallet without forcing endpoint secrets on-chain. Each active or retiring
+        declaration reserves its own operator bond capacity.
       </p>
       <ul>
         <li>
@@ -541,7 +542,12 @@ const SmartContracts: NextPage = () => {
         </li>
         <li>
           <code>openChallenge(...)</code> and <code>resolveChallenge(...)</code> &mdash; Let challengers post evidence,
-          slash sustained false declarations, reward challengers, and demote the rater to <code>A0</code>.
+          freeze challenged declaration benefits, slash sustained false declarations, reward challengers, and demote the
+          rater to <code>A0</code>.
+        </li>
+        <li>
+          <code>releaseRetiredDeclarationBond(rater)</code> &mdash; Release a retired declaration&apos;s reserved bond
+          after the exit window elapses, so boosted commits and open challenge exposure cannot be escaped immediately.
         </li>
         <li>
           <code>tierMultiplierBps(rater)</code> &mdash; Read the declaration multiplier consumed by RoundVotingEngine:
@@ -552,7 +558,8 @@ const SmartContracts: NextPage = () => {
       <p>
         Verified agent declarations are model-accountability signals, not proof-of-personhood. They can receive bounded
         reward-weight treatment, but they do not count as verified-human anchors for earned launch rewards or the
-        one-time human verification bonus.
+        one-time human verification bonus. Launch-anchor exclusion is based on each commit&apos;s AI declaration
+        snapshot.
       </p>
 
       <hr />

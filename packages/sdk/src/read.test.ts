@@ -90,6 +90,8 @@ test("getRaterRewardStatus requests the typed reward-status route", async () => 
           },
           aiDeclaration: {
             declared: true,
+            active: true,
+            inactiveReason: "none",
             operator: "0x2222222222222222222222222222222222222222",
             version: 1,
             effectiveEpoch: "1",

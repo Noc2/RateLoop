@@ -30,19 +30,27 @@ The contract and indexer backbone are already present on `main`:
 - `packages/foundry/test/RaterDeclarationRegistry.t.sol` covers declaration
   submission, probe promotion, drift demotion, sustained challenge slashing, and
   rejected challenge bond handling.
+- Each active or retiring declaration reserves its own operator bond capacity.
+  One operator bond cannot back unlimited rater wallets, sustained challenges
+  slash only the challenged declaration's reserved bond, and retired
+  declarations keep their bond locked for the exit window before operator
+  withdrawal.
+- Open challenges freeze declaration benefits and block redeclaration or
+  retirement until the challenge resolves.
 - `packages/ponder/src/RaterDeclarationRegistry.ts` indexes declaration,
-  probe, drift, and challenge events.
+  probe, drift, and challenge events as versioned declaration facts.
 - `packages/ponder/ponder.schema.ts` exposes queryable tables for current
   declarations, declaration history, operator bonds, probe results, drift flags,
   and declaration challenges.
 - `ProtocolConfig` wires the active `RaterDeclarationRegistry` into
   `RoundVotingEngine`, so active declaration tiers can affect rater weight.
 - `RoundVotingEngine` applies `tierMultiplierBps(rater)` after the existing
-  credential and cluster controls, then caps combined rater weight at 12,500
-  bps.
+  credential and cluster controls, snapshots whether the commit had an active AI
+  declaration, then caps combined rater weight at 12,500 bps.
 - Ponder exposes `GET /rater-reward-status/:address` so apps and SDKs can read
-  human credential status, AI declaration tier, latest probe result, challenge
-  status, and the current reward-policy cap from one public route.
+  human credential status, AI declaration activity/inactivity reason, latest
+  probe result, challenge status, and the current reward-policy cap from one
+  public route.
 
 What is not implemented yet:
 
@@ -50,8 +58,8 @@ What is not implemented yet:
   probes.
 - LLMmap integration or an equivalent detector ensemble.
 - Probe library storage, versioning, and rotation.
-- Frontend and SDK flows for declaring a model, opting into a probe, opening a
-  challenge, and reading the public challenge/probe history beyond the public
+- Frontend flows for declaring a model, opting into a probe, opening a
+  challenge, and browsing full public challenge/probe history beyond the public
   reward-status API.
 - Declaration-tier treatment in future non-round payout paths where governance
   decides verified-agent status should matter.
@@ -123,13 +131,16 @@ Security and tokenomics rules:
 - `A1Unverified` receives a modest 10,500 bps tier multiplier because the
   operator is bonded and slashable.
 - `A1Verified` receives an 11,500 bps tier multiplier after a passing probe.
+- Open challenges temporarily remove declaration multiplier benefits until the
+  challenge is resolved.
 - The combined human credential and AI declaration multiplier is capped at
   12,500 bps in `RoundVotingEngine`, after cluster discounts.
 - Declaration status never bypasses cluster discounting, reveal reliability,
   calibration, minimum-rater rules, or bounty terms.
 - AI declarations do not count as verified-human anchors for the earned launch
   pool and do not make an account eligible for the one-time human verification
-  bonus.
+  bonus. Anchor exclusion is based on the commit-time AI declaration snapshot,
+  so retiring before claim cannot turn an AI-active commit into a human anchor.
 - Sustained challenges demote the declaration to `A0` and can slash the
   operator bond, which turns false declarations into a cost instead of a free
   marketing label.
@@ -209,13 +220,13 @@ Expected challenge flow:
 
 ```text
 challenger -> registry: openChallenge(rater, evidenceHash), posts LREP bond
-operator   -> off-chain: may publish counter-evidence or re-declare
+operator   -> off-chain: may publish counter-evidence
 resolver   -> registry: resolveChallenge(challengeId, sustained, slashBps, resolutionHash)
 ```
 
 If sustained:
 
-- The operator bond is slashed by `slashBps`.
+- The challenged declaration's reserved operator bond is slashed by `slashBps`.
 - The challenger receives their challenge bond back plus the configured share
   of the operator slash.
 - The treasury receives the remaining slashed operator bond.
@@ -225,6 +236,10 @@ If rejected:
 
 - The challenger bond goes to treasury.
 - The operator declaration remains active.
+
+While a challenge is open, the current declaration receives no multiplier
+benefit and cannot be retired or redeclared. This prevents operators from
+escaping a live challenge by changing versions or withdrawing collateral.
 
 This gives RateLoop the "anyone can audit with skin in the game" pattern
 without requiring continuous protocol-initiated probing.

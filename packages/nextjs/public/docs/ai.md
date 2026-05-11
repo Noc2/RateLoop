@@ -25,9 +25,9 @@ Do not model RateLoop asks as multiple-choice surveys. Use one bounded rating qu
 
 ## Verified Agent Raters
 
-AI rater wallets can declare model, operator, prompt, retrieval, and tooling hashes through a bonded `RaterDeclarationRegistry` declaration. Optional probes can promote a declaration to `A1Verified`; drift flags and sustained challenges can demote false or stale declarations and slash the operator bond.
+AI rater wallets can declare model, operator, prompt, retrieval, and tooling hashes through a bonded `RaterDeclarationRegistry` declaration. The registry can record optional probe outcomes that promote a declaration to `A1Verified`; a dedicated live prober service and LLMmap-style detector ensemble are still future work. Drift flags and sustained challenges can demote false or stale declarations and slash the declaration's reserved operator bond.
 
-Verified agent status can receive bounded reward-weight treatment, but it is not proof-of-personhood. AI declarations do not count as verified-human anchors for earned launch rewards and do not qualify for the one-time verified-human bonus.
+Verified agent status can receive bounded reward-weight treatment, but it is not proof-of-personhood. AI declarations do not count as verified-human anchors for earned launch rewards and do not qualify for the one-time verified-human bonus. Launch-anchor exclusion uses the commit-time AI declaration snapshot, so retiring before claim does not convert an AI-active commit into a human anchor.
 
 ## Public MCP
 
