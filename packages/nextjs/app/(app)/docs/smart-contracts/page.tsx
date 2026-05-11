@@ -543,16 +543,23 @@ const SmartContracts: NextPage = () => {
         <li>
           <code>openChallenge(...)</code> and <code>resolveChallenge(...)</code> &mdash; Let challengers post evidence,
           freeze challenged declaration benefits, slash sustained false declarations, reward challengers, and demote the
-          rater to <code>A0</code>.
+          rater to <code>A0</code>. Only one open challenge can lock a declaration version, and unresolved challenges
+          can expire after the resolver window.
         </li>
         <li>
-          <code>releaseRetiredDeclarationBond(rater)</code> &mdash; Release a retired declaration&apos;s reserved bond
-          after the exit window elapses, so boosted commits and open challenge exposure cannot be escaped immediately.
+          <code>releaseRetiredDeclarationBond(rater)</code> and <code>releaseExpiredDeclarationBond(rater)</code>{" "}
+          &mdash; Release a retired or expired declaration&apos;s reserved bond after the exit window elapses, so
+          boosted commits and open challenge exposure cannot be escaped immediately.
         </li>
         <li>
           <code>tierMultiplierBps(rater)</code> &mdash; Read the declaration multiplier consumed by RoundVotingEngine:
           10,000 bps for <code>A0</code>, 10,500 bps for <code>A1Unverified</code>, and 11,500 bps for{" "}
-          <code>A1Verified</code>.
+          <code>A1Verified</code>, falling back to 10,000 bps when the declaration is not yet effective, expired,
+          retired, or locked by an open challenge.
+        </li>
+        <li>
+          <code>hasActiveAiDeclaration(rater)</code> &mdash; Read the active AI declaration status used for human-anchor
+          exclusion without conflating it with the reward multiplier.
         </li>
       </ul>
       <p>

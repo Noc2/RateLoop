@@ -48,10 +48,11 @@ const HowItWorks: NextPage = () => {
 
       <h2 id="commit-reveal-voting">2. Predict</h2>
       <p>
-        Raters submit a BTS-inspired split report: their own 1.0-9.9 opinion rating and the 1.0-9.9 crowd rating they
-        expect after reveal. They can stake 0&ndash;10 LREP per prediction; zero-LREP ratings can bootstrap earned
-        launch reputation when they occur in verified-human anchored rounds, while staked ratings add settlement upside
-        and risk. Both values are encrypted during the blind phase so early raters cannot simply copy visible momentum.
+        Raters submit a <Link href="/docs/tech-stack#bayesian-truth-serum">BTS-inspired split report</Link>: their own
+        1.0-9.9 opinion rating and the 1.0-9.9 crowd rating they expect after reveal. They can stake 0&ndash;10 LREP per
+        prediction; zero-LREP ratings can bootstrap earned launch reputation when they occur in verified-human anchored
+        rounds, while staked ratings add settlement upside and risk. Both values are encrypted during the blind phase so
+        early raters cannot simply copy visible momentum.
       </p>
       <div className="not-prose">
         <VotingFlowDiagram />
@@ -77,8 +78,8 @@ const HowItWorks: NextPage = () => {
         <strong>{protocolDocFacts.openPhaseWeightLabel}</strong> reward weight.
       </p>
       <p>
-        Split rating reports are hidden with tlock-style timelock encryption tied to drand metadata. After the epoch
-        ends, the keeper normally derives the reveal data; users can self-reveal if the automatic path is delayed.
+        Split rating reports stay hidden through the commit-reveal flow until the blind phase ends. The keeper normally
+        derives the reveal data after the epoch closes; users can self-reveal if the automatic path is delayed.
       </p>
 
       <h3>Voting Rules</h3>

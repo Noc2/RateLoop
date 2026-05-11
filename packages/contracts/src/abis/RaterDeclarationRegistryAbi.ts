@@ -89,6 +89,32 @@ export const RaterDeclarationRegistryAbi = [
   },
   {
     "type": "function",
+    "name": "DEFAULT_CHALLENGE_RESOLUTION_WINDOW",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MAX_CHALLENGE_RESOLUTION_WINDOW",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "MAX_TIER_MULTIPLIER_BPS",
     "inputs": [],
     "outputs": [
@@ -109,6 +135,19 @@ export const RaterDeclarationRegistryAbi = [
         "name": "",
         "type": "uint256",
         "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MIN_CHALLENGE_RESOLUTION_WINDOW",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
       }
     ],
     "stateMutability": "view"
@@ -218,6 +257,19 @@ export const RaterDeclarationRegistryAbi = [
   },
   {
     "type": "function",
+    "name": "challengeResolutionWindow",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "challengerRewardBps",
     "inputs": [],
     "outputs": [
@@ -312,6 +364,19 @@ export const RaterDeclarationRegistryAbi = [
   },
   {
     "type": "function",
+    "name": "expireChallenge",
+    "inputs": [
+      {
+        "name": "challengeId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "flagBehavioralDrift",
     "inputs": [
       {
@@ -391,6 +456,11 @@ export const RaterDeclarationRegistryAbi = [
           },
           {
             "name": "openedAt",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "expiresAt",
             "type": "uint64",
             "internalType": "uint64"
           },
@@ -609,6 +679,25 @@ export const RaterDeclarationRegistryAbi = [
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "hasActiveAiDeclaration",
+    "inputs": [
+      {
+        "name": "rater",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -1014,6 +1103,19 @@ export const RaterDeclarationRegistryAbi = [
   },
   {
     "type": "function",
+    "name": "releaseExpiredDeclarationBond",
+    "inputs": [
+      {
+        "name": "rater",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "releaseRetiredDeclarationBond",
     "inputs": [
       {
@@ -1110,6 +1212,19 @@ export const RaterDeclarationRegistryAbi = [
         "name": "account",
         "type": "address",
         "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setChallengeResolutionWindow",
+    "inputs": [
+      {
+        "name": "challengeResolutionWindow_",
+        "type": "uint64",
+        "internalType": "uint64"
       }
     ],
     "outputs": [],
@@ -1401,6 +1516,19 @@ export const RaterDeclarationRegistryAbi = [
   },
   {
     "type": "event",
+    "name": "ChallengeResolutionWindowUpdated",
+    "inputs": [
+      {
+        "name": "challengeResolutionWindow",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "ChallengeResolved",
     "inputs": [
       {
@@ -1451,6 +1579,31 @@ export const RaterDeclarationRegistryAbi = [
         "type": "address",
         "indexed": true,
         "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "DeclarationExpired",
+    "inputs": [
+      {
+        "name": "rater",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "operator",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "version",
+        "type": "uint32",
+        "indexed": true,
+        "internalType": "uint32"
       }
     ],
     "anonymous": false
@@ -1860,6 +2013,16 @@ export const RaterDeclarationRegistryAbi = [
   {
     "type": "error",
     "name": "BondReleasePending",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ChallengeResolutionExpired",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ChallengeResolutionPending",
     "inputs": []
   },
   {

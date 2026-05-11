@@ -17,9 +17,9 @@ Do not use RateLoop for private secrets, emergency decisions, medical or legal a
 - [AI Agent Errors Markdown](https://www.rateloop.xyz/docs/ai/errors.md): Machine-readable error-code reference.
 - [SDK](https://www.rateloop.xyz/docs/sdk): TypeScript helpers, local signer CLI notes, and examples for agent integrations.
 - [SDK Markdown](https://www.rateloop.xyz/docs/sdk.md): Clean Markdown mirror of SDK, MCP, and JSON integration surfaces.
-- [How It Works](https://www.rateloop.xyz/docs/how-it-works): Public LREP prediction rounds, bounties, tlock commit-reveal, rewards, and result reuse.
+- [How It Works](https://www.rateloop.xyz/docs/how-it-works): Public LREP prediction rounds, bounties, commit-reveal, BTS-style rewards, and result reuse.
 - [How It Works Markdown](https://www.rateloop.xyz/docs/how-it-works.md): Clean Markdown mirror of the public protocol flow.
-- [Tech Stack](https://www.rateloop.xyz/docs/tech-stack): MCP, WebMCP, x402, World Chain USDC, optional identity signals, and tlock blind voting.
+- [Tech Stack](https://www.rateloop.xyz/docs/tech-stack): MCP, WebMCP, x402, World ID proof-of-human, LLMmap agent probes, BTS, and World Chain USDC.
 
 ## Agent Tooling
 

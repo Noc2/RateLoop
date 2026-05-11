@@ -19,10 +19,13 @@ test("searchContent forwards query params to the hosted API", async () => {
     apiBaseUrl: "https://api.curyo.xyz",
     fetchImpl: async (input: URL | RequestInfo) => {
       requestedUrl = String(input);
-      return new Response(JSON.stringify({ items: [], total: 0, limit: 10, offset: 20 }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ items: [], total: 0, limit: 10, offset: 20 }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        },
+      );
     },
     timeoutMs: 5_000,
   });
@@ -75,6 +78,11 @@ test("getRaterRewardStatus requests the typed reward-status route", async () => 
       requestedUrl = String(input);
       return new Response(
         JSON.stringify({
+          asOf: {
+            chainTimestamp: "1000",
+            wallTimestamp: "1000",
+            indexedBlockNumber: null,
+          },
           rater: "0x1111111111111111111111111111111111111111",
           raterType: 2,
           raterTypeName: "AI",
@@ -96,6 +104,12 @@ test("getRaterRewardStatus requests the typed reward-status route", async () => 
             version: 1,
             effectiveEpoch: "1",
             expiresAtEpoch: "0",
+            effectiveAt: "1",
+            expiresAt: null,
+            declaredTier: 2,
+            declaredTierName: "A1Verified",
+            effectiveTier: 2,
+            effectiveTierName: "A1Verified",
             tier: 2,
             tierName: "A1Verified",
             tierMultiplierBps: 11500,
@@ -142,11 +156,19 @@ test("getRaterRewardStatus requests the typed reward-status route", async () => 
     timeoutMs: 5_000,
   });
 
-  const response = await read.getRaterRewardStatus("0x1111111111111111111111111111111111111111");
+  const response = await read.getRaterRewardStatus(
+    "0x1111111111111111111111111111111111111111",
+  );
 
-  assert.match(requestedUrl, /\/rater-reward-status\/0x1111111111111111111111111111111111111111$/);
+  assert.match(
+    requestedUrl,
+    /\/rater-reward-status\/0x1111111111111111111111111111111111111111$/,
+  );
   assert.equal(response.aiDeclaration.tierName, "A1Verified");
-  assert.equal(response.rewardPolicy.verifiedAgentsCanAnchorLaunchRewards, false);
+  assert.equal(
+    response.rewardPolicy.verifiedAgentsCanAnchorLaunchRewards,
+    false,
+  );
 });
 
 test("read client surfaces API errors with status codes", async () => {

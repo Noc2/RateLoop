@@ -208,7 +208,11 @@ export interface CuryoGlobalStats {
 }
 
 export type CuryoRaterTypeName = "Unknown" | "Human" | "AI" | "Team" | "Hybrid";
-export type CuryoSelfCredentialStatus = "missing" | "verified" | "expired" | "revoked";
+export type CuryoSelfCredentialStatus =
+  | "missing"
+  | "verified"
+  | "expired"
+  | "revoked";
 export type CuryoAiDeclarationTierName = "A0" | "A1Unverified" | "A1Verified";
 export type CuryoAiProbeStatus = "none" | "pending" | "passed" | "failed";
 export type CuryoAiDeclarationInactiveReason =
@@ -220,6 +224,11 @@ export type CuryoAiDeclarationInactiveReason =
   | "challenged";
 
 export interface CuryoRaterRewardStatusResponse {
+  asOf: {
+    chainTimestamp: string;
+    wallTimestamp: string;
+    indexedBlockNumber: string | null;
+  };
   rater: `0x${string}`;
   raterType: number;
   raterTypeName: CuryoRaterTypeName;
@@ -241,6 +250,12 @@ export interface CuryoRaterRewardStatusResponse {
     version: number;
     effectiveEpoch: string | null;
     expiresAtEpoch: string | null;
+    effectiveAt: string | null;
+    expiresAt: string | null;
+    declaredTier: number;
+    declaredTierName: CuryoAiDeclarationTierName;
+    effectiveTier: number;
+    effectiveTierName: CuryoAiDeclarationTierName;
     tier: number;
     tierName: CuryoAiDeclarationTierName;
     tierMultiplierBps: number;
@@ -320,7 +335,12 @@ export interface SearchContentParams {
   categoryId?: string;
   search?: string;
   submitter?: string;
-  sortBy?: "newest" | "oldest" | "highest_rated" | "lowest_rated" | "most_votes";
+  sortBy?:
+    | "newest"
+    | "oldest"
+    | "highest_rated"
+    | "lowest_rated"
+    | "most_votes";
   limit?: number;
   offset?: number;
 }
@@ -342,7 +362,14 @@ export interface SearchRoundsParams {
 }
 
 export interface ListFrontendsParams {
-  status?: "all" | "active" | "eligible" | "slashed" | "exiting" | "inactive" | "pending";
+  status?:
+    | "all"
+    | "active"
+    | "eligible"
+    | "slashed"
+    | "exiting"
+    | "inactive"
+    | "pending";
   limit?: number;
   offset?: number;
 }
@@ -353,40 +380,83 @@ export interface ListCategoriesParams {
 }
 
 export interface CuryoReadClient {
-  searchContent(params?: SearchContentParams): Promise<CuryoPaginatedResponse<CuryoContentItem>>;
+  searchContent(
+    params?: SearchContentParams,
+  ): Promise<CuryoPaginatedResponse<CuryoContentItem>>;
   getContent(contentId: string | bigint): Promise<CuryoContentDetailsResponse>;
   getContentByUrl(url: string): Promise<CuryoContentDetailsResponse>;
-  getCategories(params?: ListCategoriesParams): Promise<{ items: CuryoCategoryItem[] }>;
+  getCategories(
+    params?: ListCategoriesParams,
+  ): Promise<{ items: CuryoCategoryItem[] }>;
   getProfile(address: string): Promise<CuryoProfileResponse>;
   getProfiles(addresses: string[]): Promise<Record<string, CuryoProfileItem>>;
   getVoterAccuracy(address: string): Promise<JsonRecord>;
-  getRaterRewardStatus(address: string): Promise<CuryoRaterRewardStatusResponse>;
+  getRaterRewardStatus(
+    address: string,
+  ): Promise<CuryoRaterRewardStatusResponse>;
   getStats(): Promise<CuryoGlobalStats>;
-  searchVotes(params?: SearchVotesParams): Promise<CuryoPaginatedResponse<CuryoVoteItem>>;
-  searchRounds(params?: SearchRoundsParams): Promise<CuryoPaginatedResponse<CuryoRoundItem>>;
-  listFrontends(params?: ListFrontendsParams): Promise<{ items: CuryoFrontendItem[] }>;
+  searchVotes(
+    params?: SearchVotesParams,
+  ): Promise<CuryoPaginatedResponse<CuryoVoteItem>>;
+  searchRounds(
+    params?: SearchRoundsParams,
+  ): Promise<CuryoPaginatedResponse<CuryoRoundItem>>;
+  listFrontends(
+    params?: ListFrontendsParams,
+  ): Promise<{ items: CuryoFrontendItem[] }>;
   getFrontend(address: string): Promise<{ frontend: CuryoFrontendItem }>;
 }
 
-export function createCuryoReadClient(config: Pick<CuryoClientConfig, "apiBaseUrl" | "fetchImpl" | "timeoutMs">): CuryoReadClient {
+export function createCuryoReadClient(
+  config: Pick<CuryoClientConfig, "apiBaseUrl" | "fetchImpl" | "timeoutMs">,
+): CuryoReadClient {
   return {
-    searchContent: params => request<CuryoPaginatedResponse<CuryoContentItem>>(config, "/content", params),
-    getContent: contentId => request<CuryoContentDetailsResponse>(config, `/content/${contentId}`),
-    getContentByUrl: url => request<CuryoContentDetailsResponse>(config, "/content/by-url", { url }),
-    getCategories: params => request<{ items: CuryoCategoryItem[] }>(config, "/categories", params),
-    getProfile: address => request<CuryoProfileResponse>(config, `/profile/${address}`),
-    getProfiles: addresses => request<Record<string, CuryoProfileItem>>(config, "/profiles", { addresses: addresses.join(",") }),
-    getVoterAccuracy: address => request<JsonRecord>(config, `/voter-accuracy/${address}`),
-    getRaterRewardStatus: address => request<CuryoRaterRewardStatusResponse>(config, `/rater-reward-status/${address}`),
+    searchContent: (params) =>
+      request<CuryoPaginatedResponse<CuryoContentItem>>(
+        config,
+        "/content",
+        params,
+      ),
+    getContent: (contentId) =>
+      request<CuryoContentDetailsResponse>(config, `/content/${contentId}`),
+    getContentByUrl: (url) =>
+      request<CuryoContentDetailsResponse>(config, "/content/by-url", { url }),
+    getCategories: (params) =>
+      request<{ items: CuryoCategoryItem[] }>(config, "/categories", params),
+    getProfile: (address) =>
+      request<CuryoProfileResponse>(config, `/profile/${address}`),
+    getProfiles: (addresses) =>
+      request<Record<string, CuryoProfileItem>>(config, "/profiles", {
+        addresses: addresses.join(","),
+      }),
+    getVoterAccuracy: (address) =>
+      request<JsonRecord>(config, `/voter-accuracy/${address}`),
+    getRaterRewardStatus: (address) =>
+      request<CuryoRaterRewardStatusResponse>(
+        config,
+        `/rater-reward-status/${address}`,
+      ),
     getStats: () => request<CuryoGlobalStats>(config, "/stats"),
-    searchVotes: params => request<CuryoPaginatedResponse<CuryoVoteItem>>(config, "/votes", params),
-    searchRounds: params => request<CuryoPaginatedResponse<CuryoRoundItem>>(config, "/rounds", params),
-    listFrontends: params => request<{ items: CuryoFrontendItem[] }>(config, "/frontends", params),
-    getFrontend: address => request<{ frontend: CuryoFrontendItem }>(config, `/frontend/${address}`),
+    searchVotes: (params) =>
+      request<CuryoPaginatedResponse<CuryoVoteItem>>(config, "/votes", params),
+    searchRounds: (params) =>
+      request<CuryoPaginatedResponse<CuryoRoundItem>>(
+        config,
+        "/rounds",
+        params,
+      ),
+    listFrontends: (params) =>
+      request<{ items: CuryoFrontendItem[] }>(config, "/frontends", params),
+    getFrontend: (address) =>
+      request<{ frontend: CuryoFrontendItem }>(config, `/frontend/${address}`),
   };
 }
 
-async function request<T>(config: Pick<CuryoClientConfig, "apiBaseUrl" | "fetchImpl" | "timeoutMs">, path: string, params?: object): Promise<T> {
+async function request<T>(
+  config: Pick<CuryoClientConfig, "apiBaseUrl" | "fetchImpl" | "timeoutMs">,
+  path: string,
+  params?: object,
+): Promise<T> {
   const baseUrl = config.apiBaseUrl;
   if (!baseUrl) {
     throw new CuryoSdkError("apiBaseUrl is required for read operations");
@@ -394,7 +464,9 @@ async function request<T>(config: Pick<CuryoClientConfig, "apiBaseUrl" | "fetchI
 
   const url = new URL(path, `${baseUrl}/`);
 
-  for (const [key, value] of Object.entries((params ?? {}) as Record<string, QueryValue>)) {
+  for (const [key, value] of Object.entries(
+    (params ?? {}) as Record<string, QueryValue>,
+  )) {
     if (value !== undefined) {
       url.searchParams.set(key, String(value));
     }
@@ -413,10 +485,14 @@ async function request<T>(config: Pick<CuryoClientConfig, "apiBaseUrl" | "fetchI
     });
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
-      throw new CuryoApiError(`Curyo request timed out after ${config.timeoutMs}ms`, 504);
+      throw new CuryoApiError(
+        `Curyo request timed out after ${config.timeoutMs}ms`,
+        504,
+      );
     }
 
-    const message = error instanceof Error ? error.message : "Unknown fetch error";
+    const message =
+      error instanceof Error ? error.message : "Unknown fetch error";
     throw new CuryoApiError(`Curyo request failed: ${message}`, 502);
   } finally {
     clearTimeout(timeoutHandle);
@@ -440,7 +516,8 @@ function parseJson(body: string): unknown {
   try {
     return JSON.parse(body) as unknown;
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown parse error";
+    const message =
+      error instanceof Error ? error.message : "Unknown parse error";
     throw new CuryoApiError(`Curyo returned invalid JSON: ${message}`, 502);
   }
 }

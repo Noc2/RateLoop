@@ -858,6 +858,11 @@ export type PonderAiProbeStatus = "none" | "pending" | "passed" | "failed";
 export type PonderAiDeclarationInactiveReason = "none" | "missing" | "retired" | "future" | "expired" | "challenged";
 
 export interface PonderRaterRewardStatusResponse {
+  asOf: {
+    chainTimestamp: string;
+    wallTimestamp: string;
+    indexedBlockNumber: string | null;
+  };
   rater: string;
   raterType: number;
   raterTypeName: PonderRaterTypeName;
@@ -879,6 +884,12 @@ export interface PonderRaterRewardStatusResponse {
     version: number;
     effectiveEpoch: string | null;
     expiresAtEpoch: string | null;
+    effectiveAt: string | null;
+    expiresAt: string | null;
+    declaredTier: number;
+    declaredTierName: PonderAiDeclarationTierName;
+    effectiveTier: number;
+    effectiveTierName: PonderAiDeclarationTierName;
     tier: number;
     tierName: PonderAiDeclarationTierName;
     tierMultiplierBps: number;

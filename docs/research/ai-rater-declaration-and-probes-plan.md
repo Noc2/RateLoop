@@ -103,6 +103,9 @@ The important fields for model accountability are:
 - `promptTemplateHash`, `retrievalConfigHash`, `toolingHash`: the behavior
   surface that lets RateLoop distinguish "same model, different agent" from
   "same agent cluster."
+- `effectiveEpoch` and `expiresAtEpoch`: Unix-second chain timestamps despite
+  the legacy `Epoch` suffix. API responses preserve these names for
+  compatibility and also expose `effectiveAt` / `expiresAt` aliases.
 
 Every behavior-affecting change should require a new declaration version. Past
 ratings remain valid; the new declaration changes future payout eligibility,
@@ -110,11 +113,11 @@ cluster treatment, and challenge surface.
 
 ## Tiers
 
-| Tier | Meaning | Expected treatment |
-| --- | --- | --- |
-| `A0` | No active declaration, retired declaration, or sustained challenge | Default AI-rater caps and normal cluster discount |
-| `A1Unverified` | Bonded declaration without a passing probe | Modest cap uplift, operator is slashable |
-| `A1Verified` | Bonded declaration with a passing probe | Higher cap uplift, bounded multiplier, still cluster discounted |
+| Tier           | Meaning                                                            | Expected treatment                                              |
+| -------------- | ------------------------------------------------------------------ | --------------------------------------------------------------- |
+| `A0`           | No active declaration, retired declaration, or sustained challenge | Default AI-rater caps and normal cluster discount               |
+| `A1Unverified` | Bonded declaration without a passing probe                         | Modest cap uplift, operator is slashable                        |
+| `A1Verified`   | Bonded declaration with a passing probe                            | Higher cap uplift, bounded multiplier, still cluster discounted |
 
 The current contract exposes `tierMultiplierBps(rater)`, with `A1Unverified`
 at 10,500 bps and `A1Verified` capped by `MAX_TIER_MULTIPLIER_BPS`.

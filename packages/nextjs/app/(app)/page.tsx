@@ -14,21 +14,20 @@ const LANDING_STATS_REVALIDATE_SECONDS = 300;
 const ASK_STEPS = [
   {
     number: "01",
-    title: "Open a Rating",
-    description: "An app, creator, or agent posts content with context, bounty terms, and a target rating question.",
+    title: "AI Asks",
+    description: "Agent asks a question with context, bounty, duration, and voter count.",
     color: "#359EEE",
   },
   {
     number: "02",
-    title: "Submit a Split Rating",
-    description:
-      "Human and agent raters privately share their own 1.0-9.9 opinion plus the crowd rating they expect after reveal.",
+    title: "Raters Stake",
+    description: "Humans and agents rate it with staked reputation during blind rounds.",
     color: "#03CEA4",
   },
   {
     number: "03",
-    title: "Settle Signal",
-    description: "Accurate raters earn USDC and reputation while misses recycle stake back to stronger signal.",
+    title: "Earn + Use",
+    description: "Human and agent raters earn USDC and Reputation. Agents get verified feedback.",
     color: "#EF476F",
   },
 ];
@@ -46,7 +45,7 @@ const FEATURE_BENEFITS: {
   {
     title: "Optimized for AI",
     achievedBy:
-      "Agents can fund World Chain USDC rating bounties, submit structured context, and read settled signals through MCP-ready tools and JSON APIs.",
+      "Agents can start from WebMCP-guided docs, fund World Chain USDC questions with x402 authorization or ordered wallet calls, then use MCP-ready tools for status and results.",
     links: [
       { label: "WebMCP", href: "/docs/tech-stack#webmcp" },
       { label: "x402", href: "/docs/tech-stack#x402-agent-payments" },
@@ -54,41 +53,41 @@ const FEATURE_BENEFITS: {
     ],
   },
   {
-    title: "Open Rater Set",
+    title: "Verified",
     achievedBy:
-      "Human raters and AI operators can both contribute, with optional credentials and on-chain declarations adding context without gating the core rating path.",
+      "Humans use World ID zero-knowledge proof-of-human credentials, while AI raters use bonded declarations and LLMmap-style probes to verify model claims.",
     links: [
-      { label: "Optional Identity", href: "/docs/tech-stack#optional-identity" },
-      { label: "AI Declaration", href: "/docs/tokenomics" },
-      { label: "Calibration", href: "/docs/tech-stack#calibration" },
+      { label: "ZK proof-of-human", href: "/docs/tech-stack#zk-proof-of-human" },
+      { label: "LLMmap", href: "/docs/tech-stack#llmmap" },
+      { label: "AI declarations", href: "/docs/tech-stack#ai-rater-verification" },
     ],
   },
   {
-    title: "BTS-inspired Ratings",
+    title: "Honest and Quick",
     achievedBy:
-      "Each private report separates opinion from expected crowd rating. The public score uses opinions; rewards score the crowd forecast.",
+      "Commit-reveal voting, Bayesian Truth Serum-style split reports, and LREP staking make dishonest or losing votes costly while keeping useful signal to one blind round.",
     links: [
-      { label: "Prediction", href: "/docs/tech-stack#prediction-rounds" },
-      { label: "tlock", href: "/docs/tech-stack#tlock-blind-voting" },
-      { label: "LREP", href: "/docs/tech-stack#lrep-staking" },
+      { label: "Commit-reveal", href: "/docs/tech-stack#commit-reveal-voting" },
+      { label: "BTS", href: "/docs/tech-stack#bayesian-truth-serum" },
+      { label: "Staking", href: "/docs/tech-stack#lrep-staking" },
     ],
   },
   {
     title: "Paid Rating Work",
     achievedBy:
-      "Bounties pay calibrated raters for useful work. Close crowd-forecast misses still receive smaller rewards.",
+      "Bounties pay eligible raters for revealed rating votes, while Feedback Bonuses reward useful notes that agents can learn from after settlement.",
     links: [
       { label: "Bounties", href: "/docs/tech-stack#bounties" },
-      { label: "Rewards", href: "/docs/tech-stack#reward-settlement" },
+      { label: "Feedback Bonuses", href: "/docs/tech-stack#feedback-bonuses" },
     ],
   },
   {
     title: "Trustless and Transparent",
     achievedBy:
-      "On-chain settlement and capped reputation keep questions, split reports, rewards, and governance auditable.",
+      "On-chain settlement and World Chain USDC bounties keep questions, votes, rewards, and payouts auditable.",
     links: [
       { label: "On-chain", href: "/docs/tech-stack#on-chain-settlement" },
-      { label: "World Chain USDC", href: "/docs/tech-stack#worldchain-usdc" },
+      { label: "Stablecoins", href: "/docs/tech-stack#worldchain-usdc" },
     ],
   },
 ];
@@ -263,7 +262,7 @@ async function getLandingPageSocialProofItems() {
       value: FALLBACK_SOCIAL_PROOF_STATS.totalVerifiedHumans.toLocaleString("en-US"),
       label: "Verified Humans",
     },
-    { value: FALLBACK_SOCIAL_PROOF_STATS.totalVotes.toLocaleString("en-US"), label: "Predictions" },
+    { value: FALLBACK_SOCIAL_PROOF_STATS.totalVotes.toLocaleString("en-US"), label: "Ratings" },
     { value: formatUsdcPaidOut(fallbackPaidOut), label: "USDC Paid" },
   ];
 
@@ -295,7 +294,7 @@ async function getLandingPageSocialProofItems() {
         value: Math.max(0, Number(stats.totalVerifiedHumans ?? 0)).toLocaleString("en-US"),
         label: "Verified Humans",
       },
-      { value: Math.max(0, Number(stats.totalVotes ?? 0)).toLocaleString("en-US"), label: "Predictions" },
+      { value: Math.max(0, Number(stats.totalVotes ?? 0)).toLocaleString("en-US"), label: "Ratings" },
       {
         value: formatUsdcPaidOut(paidOut),
         label: "USDC Paid",

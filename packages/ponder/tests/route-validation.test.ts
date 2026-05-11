@@ -333,6 +333,7 @@ function mockPonderModules<T>(result: T) {
 afterEach(() => {
   vi.unmock("../src/api/shared.js");
   vi.resetModules();
+  vi.restoreAllMocks();
   vi.clearAllMocks();
 });
 
@@ -831,6 +832,8 @@ describe("registerDataRoutes", () => {
         declared: true,
         active: false,
         inactiveReason: "challenged",
+        declaredTierName: "A1Verified",
+        effectiveTierName: "A0",
         tierName: "A0",
         tierMultiplierBps: 10_000,
         probeStatus: "passed",
@@ -911,6 +914,10 @@ describe("registerDataRoutes", () => {
         declared: true,
         active: false,
         inactiveReason: "retired",
+        declaredTier: 2,
+        declaredTierName: "A1Verified",
+        effectiveTier: 0,
+        effectiveTierName: "A0",
         tier: 0,
         tierName: "A0",
         tierMultiplierBps: 10_000,
@@ -927,6 +934,83 @@ describe("registerDataRoutes", () => {
         combinedMultiplierBps: 10_000,
       },
     });
+  });
+
+  it("evaluates rater reward status against indexed chain time", async () => {
+    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(20_000_000);
+    const zeroHash =
+      "0x0000000000000000000000000000000000000000000000000000000000000000";
+    mockPonderModules([
+      {
+        raterType: 2,
+        updatedAt: 5_000n,
+        verified: true,
+        legacy: false,
+        revoked: false,
+        verifiedAt: 1_000n,
+        expiresAt: 30_000n,
+        multiplierBps: 10_000,
+        evidenceHash: zeroHash,
+        operator: "0x00000000000000000000000000000000000000bb",
+        version: 1,
+        effectiveEpoch: 1_000n,
+        expiresAtEpoch: 10_000n,
+        tier: 2,
+        behaviorChanged: false,
+        probePending: false,
+        declarationHash: zeroHash,
+        modelClass: 1,
+        modelId: zeroHash,
+        provider: zeroHash,
+        promptTemplateHash: zeroHash,
+        retrievalConfigHash: zeroHash,
+        toolingHash: zeroHash,
+        disclosure: 1,
+        declaredAt: 5_000n,
+        retiredAt: null,
+        lastProbeResultHash: zeroHash,
+        passed: true,
+        confidenceBps: 9_400,
+        probeLibraryHash: zeroHash,
+        resultHash: zeroHash,
+        recordedAt: 5_000n,
+        openCount: 0,
+        challengeId: null,
+        status: null,
+        resolvedAt: null,
+        operatorSlash: 0n,
+        challengerReward: 0n,
+      },
+    ]);
+    const { registerDataRoutes } = await import(
+      "../src/api/routes/data-routes.js"
+    );
+
+    const app = new Hono();
+    registerDataRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/rater-reward-status/0x00000000000000000000000000000000000000aa",
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      asOf: {
+        chainTimestamp: "5000",
+        wallTimestamp: "20000",
+        indexedBlockNumber: null,
+      },
+      aiDeclaration: {
+        active: true,
+        inactiveReason: "none",
+        declaredTierName: "A1Verified",
+        effectiveTierName: "A1Verified",
+        tierMultiplierBps: 11_500,
+      },
+    });
+
+    nowSpy.mockRestore();
   });
 
   it("includes bounty payouts in global stats", async () => {

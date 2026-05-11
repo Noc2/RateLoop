@@ -67,6 +67,16 @@ function aiTierMultiplierBps(tier: number | null | undefined) {
   return BASE_RATER_MULTIPLIER_BPS;
 }
 
+function maxBigInt(values: Array<bigint | number | null | undefined>) {
+  let max: bigint | null = null;
+  for (const value of values) {
+    if (value == null) continue;
+    const next = typeof value === "bigint" ? value : BigInt(value);
+    if (max === null || next > max) max = next;
+  }
+  return max;
+}
+
 function raterTypeName(raterType: number | null | undefined) {
   return RATER_TYPES[raterType ?? 0] ?? "Unknown";
 }
@@ -83,7 +93,8 @@ function credentialStatus(
 ) {
   if (!credential?.verified) return "missing";
   if (credential.revoked) return "revoked";
-  if (credential.expiresAt !== 0n && credential.expiresAt <= nowSeconds) return "expired";
+  if (credential.expiresAt !== 0n && credential.expiresAt <= nowSeconds)
+    return "expired";
   return "verified";
 }
 
@@ -109,7 +120,9 @@ function declarationIsActive(
 ) {
   if (!declaration || declaration.retiredAt != null) return false;
   if (declaration.effectiveEpoch > nowSeconds) return false;
-  return declaration.expiresAtEpoch === 0n || nowSeconds < declaration.expiresAtEpoch;
+  return (
+    declaration.expiresAtEpoch === 0n || nowSeconds < declaration.expiresAtEpoch
+  );
 }
 
 function declarationInactiveReason(
@@ -126,7 +139,11 @@ function declarationInactiveReason(
   if (!declaration) return "missing";
   if (declaration.retiredAt != null) return "retired";
   if (declaration.effectiveEpoch > nowSeconds) return "future";
-  if (declaration.expiresAtEpoch !== 0n && nowSeconds >= declaration.expiresAtEpoch) return "expired";
+  if (
+    declaration.expiresAtEpoch !== 0n &&
+    nowSeconds >= declaration.expiresAtEpoch
+  )
+    return "expired";
   if (openChallengeCount > 0) return "challenged";
   return "none";
 }
@@ -366,66 +383,101 @@ export function registerDataRoutes(app: ApiApp) {
         .limit(1),
     ]);
 
-    const nowSeconds = BigInt(Math.floor(Date.now() / 1000));
+    const wallSeconds = BigInt(Math.floor(Date.now() / 1000));
     const declarationVersion = declaration?.version ?? null;
-    const [[latestProbe], [challengeStats], [latestChallenge]] = declarationVersion
-      ? await Promise.all([
-          db
-            .select()
-            .from(aiRaterProbeResult)
-            .where(
-              and(
-                eq(aiRaterProbeResult.rater, address),
-                eq(aiRaterProbeResult.version, declarationVersion),
+    const [[latestProbe], [challengeStats], [latestChallenge]] =
+      declarationVersion
+        ? await Promise.all([
+            db
+              .select()
+              .from(aiRaterProbeResult)
+              .where(
+                and(
+                  eq(aiRaterProbeResult.rater, address),
+                  eq(aiRaterProbeResult.version, declarationVersion),
+                ),
+              )
+              .orderBy(
+                desc(aiRaterProbeResult.recordedAt),
+                desc(aiRaterProbeResult.id),
+              )
+              .limit(1),
+            db
+              .select({
+                openCount: sql<number>`count(*)`,
+              })
+              .from(aiRaterDeclarationChallenge)
+              .where(
+                and(
+                  eq(aiRaterDeclarationChallenge.rater, address),
+                  eq(
+                    aiRaterDeclarationChallenge.declarationVersion,
+                    declarationVersion,
+                  ),
+                  eq(aiRaterDeclarationChallenge.status, OPEN_CHALLENGE_STATUS),
+                ),
               ),
-            )
-            .orderBy(desc(aiRaterProbeResult.recordedAt), desc(aiRaterProbeResult.id))
-            .limit(1),
-          db
-            .select({
-              openCount: sql<number>`count(*)`,
-            })
-            .from(aiRaterDeclarationChallenge)
-            .where(
-              and(
-                eq(aiRaterDeclarationChallenge.rater, address),
-                eq(aiRaterDeclarationChallenge.declarationVersion, declarationVersion),
-                eq(aiRaterDeclarationChallenge.status, OPEN_CHALLENGE_STATUS),
-              ),
-            ),
-          db
-            .select()
-            .from(aiRaterDeclarationChallenge)
-            .where(
-              and(
-                eq(aiRaterDeclarationChallenge.rater, address),
-                eq(aiRaterDeclarationChallenge.declarationVersion, declarationVersion),
-              ),
-            )
-            .orderBy(desc(aiRaterDeclarationChallenge.openedAt), desc(aiRaterDeclarationChallenge.challengeId))
-            .limit(1),
-        ])
-      : [
-          [],
-          [{ openCount: 0 }],
-          [],
-        ];
+            db
+              .select()
+              .from(aiRaterDeclarationChallenge)
+              .where(
+                and(
+                  eq(aiRaterDeclarationChallenge.rater, address),
+                  eq(
+                    aiRaterDeclarationChallenge.declarationVersion,
+                    declarationVersion,
+                  ),
+                ),
+              )
+              .orderBy(
+                desc(aiRaterDeclarationChallenge.openedAt),
+                desc(aiRaterDeclarationChallenge.challengeId),
+              )
+              .limit(1),
+          ])
+        : [[], [{ openCount: 0 }], []];
 
+    const nowSeconds =
+      maxBigInt([
+        profile?.updatedAt,
+        selfCredential?.updatedAt,
+        declaration?.updatedAt,
+        declaration?.declaredAt,
+        latestProbe?.recordedAt,
+        latestChallenge?.openedAt,
+        latestChallenge?.resolvedAt,
+      ]) ?? wallSeconds;
     const humanCredentialStatus = credentialStatus(selfCredential, nowSeconds);
     const humanMultiplierBps =
       humanCredentialStatus === "verified"
-        ? selfCredential?.multiplierBps ?? BASE_RATER_MULTIPLIER_BPS
+        ? (selfCredential?.multiplierBps ?? BASE_RATER_MULTIPLIER_BPS)
         : BASE_RATER_MULTIPLIER_BPS;
     const openChallengeCount = Number(challengeStats?.openCount ?? 0);
-    const aiDeclarationInactiveReason = declarationInactiveReason(declaration, nowSeconds, openChallengeCount);
-    const activeDeclarationTier = aiDeclarationInactiveReason === "none" ? declaration?.tier : 0;
-    const agentTierMultiplierBps = aiTierMultiplierBps(activeDeclarationTier);
+    const aiDeclarationInactiveReason = declarationInactiveReason(
+      declaration,
+      nowSeconds,
+      openChallengeCount,
+    );
+    const declaredDeclarationTier = declaration?.tier ?? 0;
+    const effectiveDeclarationTier =
+      aiDeclarationInactiveReason === "none" ? declaredDeclarationTier : 0;
+    const agentTierMultiplierBps = aiTierMultiplierBps(
+      effectiveDeclarationTier,
+    );
     const combinedMultiplierBps = Math.min(
-      Math.floor((humanMultiplierBps * agentTierMultiplierBps) / BASE_RATER_MULTIPLIER_BPS),
+      Math.floor(
+        (humanMultiplierBps * agentTierMultiplierBps) /
+          BASE_RATER_MULTIPLIER_BPS,
+      ),
       MAX_COMBINED_RATER_WEIGHT_BPS,
     );
 
     return jsonBig(c, {
+      asOf: {
+        chainTimestamp: nowSeconds,
+        wallTimestamp: wallSeconds,
+        indexedBlockNumber: null,
+      },
       rater: address,
       raterType: profile?.raterType ?? 0,
       raterTypeName: raterTypeName(profile?.raterType),
@@ -448,8 +500,17 @@ export function registerDataRoutes(app: ApiApp) {
             version: declaration.version,
             effectiveEpoch: declaration.effectiveEpoch,
             expiresAtEpoch: declaration.expiresAtEpoch,
-            tier: activeDeclarationTier,
-            tierName: aiTierName(activeDeclarationTier),
+            effectiveAt: declaration.effectiveEpoch,
+            expiresAt:
+              declaration.expiresAtEpoch === 0n
+                ? null
+                : declaration.expiresAtEpoch,
+            declaredTier: declaredDeclarationTier,
+            declaredTierName: aiTierName(declaredDeclarationTier),
+            effectiveTier: effectiveDeclarationTier,
+            effectiveTierName: aiTierName(effectiveDeclarationTier),
+            tier: effectiveDeclarationTier,
+            tierName: aiTierName(effectiveDeclarationTier),
             tierMultiplierBps: agentTierMultiplierBps,
             behaviorChanged: declaration.behaviorChanged,
             probePending: declaration.probePending,
@@ -483,6 +544,12 @@ export function registerDataRoutes(app: ApiApp) {
             version: 0,
             effectiveEpoch: null,
             expiresAtEpoch: null,
+            effectiveAt: null,
+            expiresAt: null,
+            declaredTier: 0,
+            declaredTierName: "A0",
+            effectiveTier: 0,
+            effectiveTierName: "A0",
             tier: 0,
             tierName: "A0",
             tierMultiplierBps: BASE_RATER_MULTIPLIER_BPS,
@@ -853,7 +920,8 @@ export function registerDataRoutes(app: ApiApp) {
         allocation: questionRewardPoolRound.allocation,
         eligibleVoters: questionRewardPoolRound.eligibleVoters,
         rawEligibleVoters: questionRewardPoolRound.rawEligibleVoters,
-        effectiveParticipantUnits: questionRewardPoolRound.effectiveParticipantUnits,
+        effectiveParticipantUnits:
+          questionRewardPoolRound.effectiveParticipantUnits,
         totalClaimWeight: questionRewardPoolRound.totalClaimWeight,
         qualified: sql<boolean>`${questionRewardPoolRound.rewardPoolId} is not null`,
       })
@@ -927,7 +995,9 @@ export function registerDataRoutes(app: ApiApp) {
     const items = await db
       .select()
       .from(rewardClaim)
-      .where(or(eq(rewardClaim.voter, address), eq(rewardClaim.stakePayer, address)))
+      .where(
+        or(eq(rewardClaim.voter, address), eq(rewardClaim.stakePayer, address)),
+      )
       .orderBy(desc(rewardClaim.claimedAt))
       .limit(limit);
 

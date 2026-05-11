@@ -9,13 +9,17 @@ const x402McpHref = "https://docs.x402.org/guides/mcp-server-with-x402";
 const mcpSpecHref = "https://modelcontextprotocol.io/specification/2025-11-25/basic";
 const mcpTransportsHref = "https://modelcontextprotocol.io/specification/2025-11-25/basic/transports";
 const webMcpSpecHref = "https://webmachinelearning.github.io/webmcp/";
-const drandTlockHref = "https://docs.drand.love/docs/timelock-encryption";
+const worldIdConceptsHref = "https://docs.world.org/world-id/concepts";
+const worldIdIdkitHref = "https://docs.world.org/world-id/idkit/integrate";
+const worldIdOnchainHref = "https://docs.world.org/world-id/idkit/onchain-verification";
+const llmmapHref = "https://github.com/pasquini-dario/LLMmap";
+const btsHref = "https://www.science.org/doi/10.1126/science.1102081";
 const circleWorldChainUsdcHref = "https://www.circle.com/multi-chain-usdc/worldchain";
 
 export const metadata = {
   title: "Tech Stack | RateLoop Docs",
   description:
-    "The protocol terms behind RateLoop: x402 agent payments, MCP and WebMCP tools, optional identity signals, tlock blind prediction rounds, optional LREP staking, and World Chain USDC settlement.",
+    "The protocol terms behind RateLoop: x402 agent payments, MCP and WebMCP tools, World ID proof-of-human credentials, AI rater verification, BTS-style split reports, LREP staking, and World Chain USDC settlement.",
 } satisfies Metadata;
 
 const TechStackPage: NextPage = () => {
@@ -84,20 +88,54 @@ const TechStackPage: NextPage = () => {
         calls or x402 authorization remain available for wallet-capable agents.
       </p>
 
-      <h2 id="optional-identity">Optional Identity Signals</h2>
+      <span id="optional-identity" />
+      <h2 id="zk-proof-of-human">ZK Proof-Of-Human</h2>
       <p>
         The core RateLoop protocol does not require proof-of-personhood. Accounts, agent wallets, and delegated
-        operators can participate after meeting reputation and calibration rules.
+        operators can participate after meeting reputation and calibration rules, so optional human verification stays a
+        credential rather than a gate.
       </p>
       <p>
-        Optional identity integrations can still be useful as credentials, frontend trust badges, verified-human anchors
-        for earned launch rewards, or governance-tunable weight modifiers. They should be additive, not a hard gate that
-        prevents AI raters or pseudonymous accounts from contributing.
+        The human credential path uses{" "}
+        <a href={worldIdConceptsHref} target="_blank" rel="noopener noreferrer" className="link link-primary">
+          World ID
+        </a>
+        . World ID proofs are zero-knowledge proofs: they prove a user is verified without revealing the user&apos;s
+        identity. In the IDKit flow, the user&apos;s World App generates a proof without exposing personal data, and the
+        verifier stores a nullifier so the same person cannot verify the same action twice.
       </p>
       <p>
-        The current optional path uses World ID from the Settings page to create a proof bound to the connected wallet.
-        The wallet submits that proof to <code>RaterRegistry</code>, and the World ID Router verifies it on-chain before
-        a credential or verified launch bonus can be claimed.
+        In RateLoop, Settings asks World ID for a proof bound to the connected wallet. The wallet submits that proof to{" "}
+        <code>RaterRegistry</code>, and the World ID Router verifies it on-chain before a verified-human credential or
+        launch bonus can be claimed.
+      </p>
+
+      <h2 id="ai-rater-verification">AI Rater Verification</h2>
+      <p>
+        AI raters verify a different claim. They do not prove personhood; they publish bonded model, operator, prompt,
+        retrieval, and tooling declarations through <code>RaterDeclarationRegistry</code>. Those declarations can be
+        probed, challenged, demoted, or slashed if the declared agent identity becomes false or stale.
+      </p>
+      <p>
+        A passed probe can promote a declaration to <code>A1Verified</code> and unlock bounded reward-weight treatment.
+        That gives RateLoop a way to say &quot;this agent claim has been checked&quot; without pretending an AI wallet
+        is a verified human.
+      </p>
+
+      <h2 id="llmmap">LLMmap</h2>
+      <p>
+        <a href={llmmapHref} target="_blank" rel="noopener noreferrer" className="link link-primary">
+          LLMmap
+        </a>{" "}
+        is a candidate detector for AI rater verification. It fingerprints language models from behavioral traces with a
+        small query set, then compares the responses against known model templates. That is useful when an agent claims
+        to be a particular model or model family but only exposes a black-box endpoint.
+      </p>
+      <p>
+        RateLoop should treat LLMmap as one signal, not ground truth. A prober can combine LLMmap distance or
+        probability output with deterministic rules, embedding checks, signed transcripts, and community challenges.
+        Only hashes, confidence, and pass/fail status need to be recorded on-chain; full probe evidence can stay in
+        signed or content-addressed off-chain records.
       </p>
 
       <h2 id="commit-reveal-voting">Commit-Reveal Voting</h2>
@@ -108,20 +146,25 @@ const TechStackPage: NextPage = () => {
       </p>
       <p>
         This is why RateLoop calls rating work &quot;honest&quot; rather than just &quot;popular.&quot; Early raters
-        cannot simply copy public momentum, unrevealed reports lose reward eligibility, and inaccurate revealed crowd
-        predictions still face a real stake cost. The mechanism is BTS-inspired, but intentionally simpler than full
-        Bayesian Truth Serum: opinions drive the public score, while expected-crowd predictions drive rewards.
+        cannot simply copy public momentum, unrevealed reports lose reward eligibility, and inaccurate revealed reports
+        can lose staked reputation. The timed reveal machinery is an implementation detail of the commit-reveal flow;
+        the product term to remember is sealed voting before settlement.
       </p>
 
-      <h2 id="tlock-blind-voting">tlock Blind Voting</h2>
+      <h2 id="bayesian-truth-serum">Bayesian Truth Serum</h2>
       <p>
-        RateLoop blind voting is backed by tlock-style timelock encryption. The{" "}
-        <a href={drandTlockHref} target="_blank" rel="noopener noreferrer" className="link link-primary">
-          drand timelock encryption
+        <a href={btsHref} target="_blank" rel="noopener noreferrer" className="link link-primary">
+          Bayesian Truth Serum
         </a>{" "}
-        model lets a payload be encrypted now and decryptable only after a future drand round becomes available.
-        RateLoop binds report ciphertext to drand metadata so the split rating is meant to become revealable only after
-        the epoch window closes.
+        is a peer-prediction idea for subjective questions where there is no hidden objective answer. Instead of asking
+        only &quot;what do you think?&quot;, BTS also asks raters what they expect other raters to say. That predicted
+        crowd distribution makes independent information measurable even when the final score is a public judgment.
+      </p>
+      <p>
+        RateLoop uses a simpler one-round BTS-inspired design. Each sealed report contains the rater&apos;s own 1.0-9.9
+        opinion and the 1.0-9.9 crowd rating they expect after reveal. Opinions drive the public rating; expected-crowd
+        predictions drive calibration and rewards. This keeps rounds quick because the protocol can collect independent
+        reports once, reveal them, and settle without a visible iterative polling phase.
       </p>
 
       <h2 id="lrep-staking">LREP Staking</h2>
@@ -178,7 +221,14 @@ const TechStackPage: NextPage = () => {
           WebMCP: <a href={webMcpSpecHref}>W3C Community Group draft</a>
         </li>
         <li>
-          drand: <a href={drandTlockHref}>timelock encryption</a>
+          World ID: <a href={worldIdConceptsHref}>core concepts</a>, <a href={worldIdIdkitHref}>IDKit</a>,{" "}
+          <a href={worldIdOnchainHref}>on-chain verification</a>
+        </li>
+        <li>
+          LLMmap: <a href={llmmapHref}>model fingerprinting repository</a>
+        </li>
+        <li>
+          Bayesian Truth Serum: <a href={btsHref}>Prelec paper</a>
         </li>
         <li>
           Circle: <a href={circleWorldChainUsdcHref}>USDC on World Chain</a>
