@@ -15,6 +15,6 @@ test("normalizeStakeSelectorRating converts basis-point ratings", () => {
 });
 
 test("normalizeStakeSelectorRating clamps protocol maximum to slider maximum", () => {
-  assert.equal(normalizeStakeSelectorRating(100), 9.9);
-  assert.equal(normalizeStakeSelectorRating(10_000), 9.9);
+  assert.equal(normalizeStakeSelectorRating(100), 10);
+  assert.equal(normalizeStakeSelectorRating(10_000), 10);
 });
