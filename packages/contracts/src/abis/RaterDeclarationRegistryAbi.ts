@@ -154,6 +154,19 @@ export const RaterDeclarationRegistryAbi = [
   },
   {
     "type": "function",
+    "name": "RETIRED_DECLARATION_BOND_LOCK",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "activeOperatorDeclarations",
     "inputs": [
       {
@@ -186,6 +199,25 @@ export const RaterDeclarationRegistryAbi = [
   },
   {
     "type": "function",
+    "name": "challengeOperatorBondAmount",
+    "inputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "challengerRewardBps",
     "inputs": [],
     "outputs": [
@@ -193,6 +225,44 @@ export const RaterDeclarationRegistryAbi = [
         "name": "",
         "type": "uint16",
         "internalType": "uint16"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "declarationBondAmount",
+    "inputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "declarationBondOperator",
+    "inputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "stateMutability": "view"
@@ -830,7 +900,64 @@ export const RaterDeclarationRegistryAbi = [
   },
   {
     "type": "function",
+    "name": "openDeclarationChallenges",
+    "inputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "openOperatorChallenges",
+    "inputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "operatorBond",
+    "inputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "operatorBondReserved",
     "inputs": [
       {
         "name": "",
@@ -880,6 +1007,19 @@ export const RaterDeclarationRegistryAbi = [
         "name": "resultHash",
         "type": "bytes32",
         "internalType": "bytes32"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "releaseRetiredDeclarationBond",
+    "inputs": [
+      {
+        "name": "rater",
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "outputs": [],
@@ -937,6 +1077,25 @@ export const RaterDeclarationRegistryAbi = [
     "inputs": [],
     "outputs": [],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "retiredDeclarationBondReleaseAt",
+    "inputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -1273,6 +1432,25 @@ export const RaterDeclarationRegistryAbi = [
         "type": "bytes32",
         "indexed": false,
         "internalType": "bytes32"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "DeclarationBondReleased",
+    "inputs": [
+      {
+        "name": "rater",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "operator",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
       }
     ],
     "anonymous": false
@@ -1681,6 +1859,11 @@ export const RaterDeclarationRegistryAbi = [
   },
   {
     "type": "error",
+    "name": "BondReleasePending",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "ECDSAInvalidSignature",
     "inputs": []
   },
@@ -1744,6 +1927,11 @@ export const RaterDeclarationRegistryAbi = [
   {
     "type": "error",
     "name": "InvalidSignature",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "OpenChallenges",
     "inputs": []
   },
   {

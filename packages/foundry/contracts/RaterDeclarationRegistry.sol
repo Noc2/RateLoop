@@ -22,6 +22,7 @@ contract RaterDeclarationRegistry is AccessControl, EIP712 {
     uint16 public constant MAX_TIER_MULTIPLIER_BPS = 11_500;
     uint256 public constant MIN_DECLARATION_BOND_LREP_FLOOR = 100e6;
     uint256 public constant MIN_CHALLENGE_BOND_LREP_FLOOR = 25e6;
+    uint64 public constant RETIRED_DECLARATION_BOND_LOCK = 62 days;
 
     bytes32 public constant RATER_DECLARATION_TYPEHASH = keccak256(
         "RaterDeclaration(address rater,address operator,uint8 modelClass,bytes32 modelId,bytes32 provider,bytes32 endpointHint,bytes32 promptTemplateHash,bytes32 retrievalConfigHash,bytes32 toolingHash,uint32 version,uint64 effectiveEpoch,uint64 expiresAtEpoch,uint8 disclosure,uint96 nonce)"
@@ -97,6 +98,13 @@ contract RaterDeclarationRegistry is AccessControl, EIP712 {
     mapping(address => uint96) public nonces;
     mapping(address => uint256) public operatorBond;
     mapping(address => uint256) public activeOperatorDeclarations;
+    mapping(address => uint256) public operatorBondReserved;
+    mapping(address => address) public declarationBondOperator;
+    mapping(address => uint256) public declarationBondAmount;
+    mapping(address => uint64) public retiredDeclarationBondReleaseAt;
+    mapping(address => uint256) public openOperatorChallenges;
+    mapping(bytes32 => uint256) public openDeclarationChallenges;
+    mapping(uint256 => uint256) public challengeOperatorBondAmount;
     mapping(address => StoredDeclaration) private _declarations;
     mapping(address => ProbeResult) private _latestProbeResults;
     mapping(uint256 => Challenge) private _challenges;
@@ -106,6 +114,7 @@ contract RaterDeclarationRegistry is AccessControl, EIP712 {
     );
     event OperatorBondDeposited(address indexed operator, address indexed payer, uint256 amount, uint256 totalBond);
     event OperatorBondWithdrawn(address indexed operator, uint256 amount, uint256 remainingBond);
+    event DeclarationBondReleased(address indexed rater, address indexed operator);
     event DeclarationSubmitted(
         address indexed rater,
         address indexed operator,
@@ -169,6 +178,8 @@ contract RaterDeclarationRegistry is AccessControl, EIP712 {
     error InvalidProbeResult();
     error InvalidChallenge();
     error ActiveDeclarations();
+    error OpenChallenges();
+    error BondReleasePending();
 
     constructor(
         address admin,
@@ -261,14 +272,33 @@ contract RaterDeclarationRegistry is AccessControl, EIP712 {
         }
         if (operatorBond[declaration.operator] < minDeclarationBondLrep) revert InsufficientBond();
 
-        bool behaviorChanged = _behaviorChanged(previous.declaration, declaration);
-        bool wasActive = previous.tier != RaterTier.A0;
-        if (!wasActive) {
-            activeOperatorDeclarations[declaration.operator] += 1;
-        } else if (previous.declaration.operator != declaration.operator) {
-            activeOperatorDeclarations[previous.declaration.operator] -= 1;
-            activeOperatorDeclarations[declaration.operator] += 1;
+        address previousBondOperator = declarationBondOperator[declaration.rater];
+        if (
+            previousBondOperator != address(0)
+                && openDeclarationChallenges[_declarationKey(declaration.rater, previous.declaration.version)] != 0
+        ) {
+            revert OpenChallenges();
         }
+
+        bool behaviorChanged = _behaviorChanged(previous.declaration, declaration);
+        uint256 requiredBondAmount = minDeclarationBondLrep;
+        if (previousBondOperator == address(0)) {
+            _reserveDeclarationBond(declaration.operator, requiredBondAmount);
+            activeOperatorDeclarations[declaration.operator] += 1;
+            declarationBondOperator[declaration.rater] = declaration.operator;
+            declarationBondAmount[declaration.rater] = requiredBondAmount;
+        } else if (previousBondOperator != declaration.operator) {
+            _unreserveDeclarationBond(previousBondOperator, declarationBondAmount[declaration.rater]);
+            _reserveDeclarationBond(declaration.operator, requiredBondAmount);
+            activeOperatorDeclarations[previousBondOperator] -= 1;
+            activeOperatorDeclarations[declaration.operator] += 1;
+            declarationBondOperator[declaration.rater] = declaration.operator;
+            declarationBondAmount[declaration.rater] = requiredBondAmount;
+        } else {
+            _resizeDeclarationBond(declaration.operator, declarationBondAmount[declaration.rater], requiredBondAmount);
+            declarationBondAmount[declaration.rater] = requiredBondAmount;
+        }
+        retiredDeclarationBondReleaseAt[declaration.rater] = 0;
 
         nonces[declaration.rater] = declaration.nonce + 1;
         _declarations[declaration.rater] = StoredDeclaration({
@@ -307,18 +337,31 @@ contract RaterDeclarationRegistry is AccessControl, EIP712 {
     function retireDeclaration() external {
         StoredDeclaration storage stored = _declarations[msg.sender];
         if (stored.tier == RaterTier.A0 || stored.declaration.rater != msg.sender) revert InvalidDeclaration();
+        bytes32 declarationKey = _declarationKey(msg.sender, stored.declaration.version);
+        if (openDeclarationChallenges[declarationKey] != 0) revert OpenChallenges();
 
         address operator = stored.declaration.operator;
         uint32 version = stored.declaration.version;
         stored.tier = RaterTier.A0;
         stored.probePending = false;
-        activeOperatorDeclarations[operator] -= 1;
+        retiredDeclarationBondReleaseAt[msg.sender] = uint64(block.timestamp) + RETIRED_DECLARATION_BOND_LOCK;
 
         emit DeclarationRetired(msg.sender, operator, version);
     }
 
+    function releaseRetiredDeclarationBond(address rater) external {
+        StoredDeclaration storage stored = _declarations[rater];
+        address operator = declarationBondOperator[rater];
+        uint64 releaseAt = retiredDeclarationBondReleaseAt[rater];
+        if (operator == address(0) || stored.tier != RaterTier.A0 || releaseAt == 0) revert InvalidDeclaration();
+        if (block.timestamp < releaseAt) revert BondReleasePending();
+
+        _releaseDeclarationBondLock(rater, operator);
+    }
+
     function withdrawRetiredOperatorBond(uint256 amount) external {
         if (activeOperatorDeclarations[msg.sender] != 0) revert ActiveDeclarations();
+        if (openOperatorChallenges[msg.sender] != 0) revert OpenChallenges();
         if (amount == 0 || amount > operatorBond[msg.sender]) revert InsufficientBond();
 
         operatorBond[msg.sender] -= amount;
@@ -378,8 +421,12 @@ contract RaterDeclarationRegistry is AccessControl, EIP712 {
         if (stored.tier == RaterTier.A0) revert InvalidChallenge();
 
         lrepToken.safeTransferFrom(msg.sender, address(this), challengeBondLrep);
+        bytes32 declarationKey = _declarationKey(rater, stored.declaration.version);
+        openOperatorChallenges[stored.declaration.operator] += 1;
+        openDeclarationChallenges[declarationKey] += 1;
 
         challengeId = nextChallengeId++;
+        challengeOperatorBondAmount[challengeId] = declarationBondAmount[rater];
         _challenges[challengeId] = Challenge({
             challenger: msg.sender,
             rater: rater,
@@ -417,7 +464,10 @@ contract RaterDeclarationRegistry is AccessControl, EIP712 {
 
         if (sustained) {
             challenge.status = ChallengeStatus.Sustained;
-            operatorSlash = (operatorBond[challenge.operator] * slashBps) / BPS_DENOMINATOR;
+            operatorSlash = (challengeOperatorBondAmount[challengeId] * slashBps) / BPS_DENOMINATOR;
+            if (operatorSlash > operatorBond[challenge.operator]) {
+                operatorSlash = operatorBond[challenge.operator];
+            }
             operatorBond[challenge.operator] -= operatorSlash;
             challengerReward = (operatorSlash * challengerRewardBps) / BPS_DENOMINATOR;
 
@@ -425,7 +475,7 @@ contract RaterDeclarationRegistry is AccessControl, EIP712 {
             if (stored.declaration.version == challenge.declarationVersion && stored.tier != RaterTier.A0) {
                 stored.tier = RaterTier.A0;
                 stored.probePending = false;
-                activeOperatorDeclarations[challenge.operator] -= 1;
+                _releaseDeclarationBondLock(challenge.rater, challenge.operator);
             }
 
             lrepToken.safeTransfer(challenge.challenger, challenge.bondAmount + challengerReward);
@@ -436,6 +486,7 @@ contract RaterDeclarationRegistry is AccessControl, EIP712 {
             challenge.status = ChallengeStatus.Rejected;
             lrepToken.safeTransfer(treasury, challenge.bondAmount);
         }
+        _closeChallengeLock(challenge.operator, challenge.rater, challenge.declarationVersion);
 
         emit ChallengeResolved(challengeId, challenge.status, operatorSlash, challengerReward, resolutionHash);
     }
@@ -482,6 +533,9 @@ contract RaterDeclarationRegistry is AccessControl, EIP712 {
         StoredDeclaration storage stored = _declarations[rater];
         RaterTier tier = stored.tier;
         if (!_declarationIsActive(stored.declaration)) return BPS_DENOMINATOR;
+        if (openDeclarationChallenges[_declarationKey(rater, stored.declaration.version)] != 0) {
+            return BPS_DENOMINATOR;
+        }
         if (tier == RaterTier.A1Verified) {
             return MAX_TIER_MULTIPLIER_BPS;
         }
@@ -506,5 +560,44 @@ contract RaterDeclarationRegistry is AccessControl, EIP712 {
         if (declaration.rater == address(0)) return false;
         if (declaration.effectiveEpoch > block.timestamp) return false;
         return declaration.expiresAtEpoch == 0 || block.timestamp < declaration.expiresAtEpoch;
+    }
+
+    function _releaseDeclarationBondLock(address rater, address operator) internal {
+        if (declarationBondOperator[rater] != operator) return;
+        _unreserveDeclarationBond(operator, declarationBondAmount[rater]);
+        activeOperatorDeclarations[operator] -= 1;
+        delete declarationBondOperator[rater];
+        delete declarationBondAmount[rater];
+        delete retiredDeclarationBondReleaseAt[rater];
+        emit DeclarationBondReleased(rater, operator);
+    }
+
+    function _reserveDeclarationBond(address operator, uint256 amount) internal {
+        uint256 nextReserved = operatorBondReserved[operator] + amount;
+        if (operatorBond[operator] < nextReserved) revert InsufficientBond();
+        operatorBondReserved[operator] = nextReserved;
+    }
+
+    function _unreserveDeclarationBond(address operator, uint256 amount) internal {
+        operatorBondReserved[operator] -= amount;
+    }
+
+    function _resizeDeclarationBond(address operator, uint256 previousAmount, uint256 nextAmount) internal {
+        if (nextAmount == previousAmount) return;
+        if (nextAmount > previousAmount) {
+            _reserveDeclarationBond(operator, nextAmount - previousAmount);
+        } else {
+            _unreserveDeclarationBond(operator, previousAmount - nextAmount);
+        }
+    }
+
+    function _closeChallengeLock(address operator, address rater, uint32 version) internal {
+        openOperatorChallenges[operator] -= 1;
+        bytes32 declarationKey = _declarationKey(rater, version);
+        openDeclarationChallenges[declarationKey] -= 1;
+    }
+
+    function _declarationKey(address rater, uint32 version) internal pure returns (bytes32) {
+        return keccak256(abi.encode(rater, version));
     }
 }

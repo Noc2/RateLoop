@@ -15,6 +15,7 @@ contract RaterDeclarationRegistryTest is Test {
     address internal governance = address(0xCAFE);
     address internal treasury = address(0x7777);
     address internal rater = address(0x1234);
+    address internal rater2 = address(0x5678);
     address internal challenger = address(0x8888);
 
     uint256 internal constant MIN_BOND = 100e6;
@@ -36,9 +37,12 @@ contract RaterDeclarationRegistryTest is Test {
         registry = new RaterDeclarationRegistry(admin, governance, lrep, treasury, MIN_BOND, CHALLENGE_BOND);
 
         lrep.mint(rater, 1_000e6);
+        lrep.mint(rater2, 1_000e6);
         lrep.mint(challenger, 1_000e6);
 
         vm.prank(rater);
+        lrep.approve(address(registry), type(uint256).max);
+        vm.prank(rater2);
         lrep.approve(address(registry), type(uint256).max);
         vm.prank(challenger);
         lrep.approve(address(registry), type(uint256).max);
@@ -116,6 +120,9 @@ contract RaterDeclarationRegistryTest is Test {
         assertTrue(stored.probePending);
         assertEq(registry.operatorBond(operator), MIN_BOND);
         assertEq(registry.activeOperatorDeclarations(operator), 1);
+        assertEq(registry.operatorBondReserved(operator), MIN_BOND);
+        assertEq(registry.declarationBondOperator(rater), operator);
+        assertEq(registry.declarationBondAmount(rater), MIN_BOND);
         assertEq(registry.nonces(rater), 1);
         assertEq(registry.tierMultiplierBps(rater), 10_500);
     }
@@ -217,6 +224,7 @@ contract RaterDeclarationRegistryTest is Test {
         RaterDeclarationRegistry.StoredDeclaration memory stored = registry.getDeclaration(rater);
         assertFalse(stored.probePending);
         assertEq(registry.activeOperatorDeclarations(operator), 1);
+        assertEq(registry.operatorBondReserved(operator), MIN_BOND);
 
         RaterDeclarationRegistry.RaterDeclaration memory promptChange = _declaration(3, 2, keccak256("prompt-v2"));
         bytes memory promptChangeSignature = _signature(promptChange);
@@ -228,17 +236,54 @@ contract RaterDeclarationRegistryTest is Test {
         assertTrue(stored.probePending);
         assertEq(stored.declaration.promptTemplateHash, keccak256("prompt-v2"));
         assertEq(registry.activeOperatorDeclarations(operator), 1);
+        assertEq(registry.operatorBondReserved(operator), MIN_BOND);
     }
 
-    function test_RetireDeclarationAllowsOperatorBondWithdrawal() public {
+    function test_SubmitDeclarationRequiresBondPerActiveRater() public {
+        _submitDefaultDeclaration(false);
+
+        RaterDeclarationRegistry.RaterDeclaration memory secondDeclaration =
+            _declarationFor(rater2, 1, 0, keccak256("prompt-rater-2"));
+        bytes memory secondSignature = _signature(secondDeclaration);
+
+        vm.prank(rater2);
+        vm.expectRevert(RaterDeclarationRegistry.InsufficientBond.selector);
+        registry.submitDeclaration(secondDeclaration, secondSignature, 0, false);
+
+        vm.prank(rater2);
+        registry.submitDeclaration(secondDeclaration, secondSignature, MIN_BOND, false);
+
+        assertEq(registry.operatorBond(operator), MIN_BOND * 2);
+        assertEq(registry.operatorBondReserved(operator), MIN_BOND * 2);
+        assertEq(registry.activeOperatorDeclarations(operator), 2);
+    }
+
+    function test_RetireDeclarationRequiresExitDelayBeforeBondRelease() public {
         _submitDefaultDeclaration(false);
 
         vm.prank(rater);
         registry.retireDeclaration();
 
-        assertEq(registry.activeOperatorDeclarations(operator), 0);
+        assertEq(registry.activeOperatorDeclarations(operator), 1);
+        assertEq(registry.operatorBondReserved(operator), MIN_BOND);
+        assertEq(registry.retiredDeclarationBondReleaseAt(rater), block.timestamp + registry.RETIRED_DECLARATION_BOND_LOCK());
         RaterDeclarationRegistry.StoredDeclaration memory stored = registry.getDeclaration(rater);
         assertEq(uint256(stored.tier), uint256(RaterDeclarationRegistry.RaterTier.A0));
+
+        vm.prank(operator);
+        vm.expectRevert(RaterDeclarationRegistry.ActiveDeclarations.selector);
+        registry.withdrawRetiredOperatorBond(MIN_BOND);
+
+        vm.expectRevert(RaterDeclarationRegistry.BondReleasePending.selector);
+        registry.releaseRetiredDeclarationBond(rater);
+
+        vm.warp(block.timestamp + registry.RETIRED_DECLARATION_BOND_LOCK());
+        registry.releaseRetiredDeclarationBond(rater);
+
+        assertEq(registry.activeOperatorDeclarations(operator), 0);
+        assertEq(registry.operatorBondReserved(operator), 0);
+        assertEq(registry.declarationBondOperator(rater), address(0));
+        assertEq(registry.declarationBondAmount(rater), 0);
 
         uint256 operatorBalanceBefore = lrep.balanceOf(operator);
         vm.prank(operator);
@@ -263,6 +308,7 @@ contract RaterDeclarationRegistryTest is Test {
         RaterDeclarationRegistry.Challenge memory challenge = registry.getChallenge(challengeId);
         assertEq(uint256(challenge.status), uint256(RaterDeclarationRegistry.ChallengeStatus.Sustained));
         assertEq(registry.operatorBond(operator), MIN_BOND / 2);
+        assertEq(registry.operatorBondReserved(operator), 0);
         assertEq(lrep.balanceOf(challenger), challengerBefore + CHALLENGE_BOND + 25e6);
         assertEq(lrep.balanceOf(treasury), treasuryBefore + 25e6);
         assertEq(registry.activeOperatorDeclarations(operator), 0);
@@ -286,6 +332,52 @@ contract RaterDeclarationRegistryTest is Test {
         assertEq(uint256(challenge.status), uint256(RaterDeclarationRegistry.ChallengeStatus.Rejected));
         assertEq(registry.operatorBond(operator), MIN_BOND);
         assertEq(lrep.balanceOf(treasury), treasuryBefore + CHALLENGE_BOND);
+        assertEq(registry.tierMultiplierBps(rater), 10_500);
+        assertEq(registry.openOperatorChallenges(operator), 0);
+        assertEq(registry.openDeclarationChallenges(_declarationKey(rater, 1)), 0);
+    }
+
+    function test_OpenChallengeFreezesBenefitsAndBlocksRedeclareOrRetire() public {
+        _submitDefaultDeclaration(false);
+
+        vm.prank(challenger);
+        registry.openChallenge(rater, EVIDENCE_HASH);
+
+        assertEq(registry.tierMultiplierBps(rater), 10_000);
+
+        RaterDeclarationRegistry.RaterDeclaration memory nextDeclaration = _declaration(2, 1, PROMPT_HASH);
+        bytes memory nextSignature = _signature(nextDeclaration);
+
+        vm.prank(rater);
+        vm.expectRevert(RaterDeclarationRegistry.OpenChallenges.selector);
+        registry.submitDeclaration(nextDeclaration, nextSignature, 0, false);
+
+        vm.prank(rater);
+        vm.expectRevert(RaterDeclarationRegistry.OpenChallenges.selector);
+        registry.retireDeclaration();
+    }
+
+    function test_SustainedChallengeSlashesOnlyChallengedDeclarationBond() public {
+        _submitDefaultDeclaration(false);
+
+        RaterDeclarationRegistry.RaterDeclaration memory secondDeclaration =
+            _declarationFor(rater2, 1, 0, keccak256("prompt-rater-2"));
+        bytes memory secondSignature = _signature(secondDeclaration);
+
+        vm.prank(rater2);
+        registry.submitDeclaration(secondDeclaration, secondSignature, MIN_BOND, false);
+
+        vm.prank(challenger);
+        uint256 challengeId = registry.openChallenge(rater, EVIDENCE_HASH);
+
+        vm.prank(admin);
+        registry.resolveChallenge(challengeId, true, 10_000, RESOLUTION_HASH);
+
+        assertEq(registry.operatorBond(operator), MIN_BOND);
+        assertEq(registry.operatorBondReserved(operator), MIN_BOND);
+        assertEq(registry.activeOperatorDeclarations(operator), 1);
+        assertEq(uint256(registry.getDeclaration(rater).tier), uint256(RaterDeclarationRegistry.RaterTier.A0));
+        assertEq(uint256(registry.getDeclaration(rater2).tier), uint256(RaterDeclarationRegistry.RaterTier.A1Unverified));
     }
 
     function _submitDefaultDeclaration(bool requestProbe) internal {
@@ -301,8 +393,16 @@ contract RaterDeclarationRegistryTest is Test {
         view
         returns (RaterDeclarationRegistry.RaterDeclaration memory)
     {
+        return _declarationFor(rater, version, nonce, promptHash);
+    }
+
+    function _declarationFor(address declarationRater, uint32 version, uint96 nonce, bytes32 promptHash)
+        internal
+        view
+        returns (RaterDeclarationRegistry.RaterDeclaration memory)
+    {
         return RaterDeclarationRegistry.RaterDeclaration({
-            rater: rater,
+            rater: declarationRater,
             operator: operator,
             modelClass: 0,
             modelId: MODEL_ID,
@@ -317,6 +417,10 @@ contract RaterDeclarationRegistryTest is Test {
             disclosure: 1,
             nonce: nonce
         });
+    }
+
+    function _declarationKey(address declarationRater, uint32 version) internal pure returns (bytes32) {
+        return keccak256(abi.encode(declarationRater, version));
     }
 
     function _signature(RaterDeclarationRegistry.RaterDeclaration memory declaration)
