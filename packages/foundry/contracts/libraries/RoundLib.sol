@@ -11,8 +11,6 @@ pragma solidity ^0.8.20;
 ///      and become decryptable via drand after each epoch window.
 ///      Epoch-weighting: epoch-1 (blind) = 100% reward weight; epoch-2+ (informed) = 25%.
 library RoundLib {
-    uint256 internal constant ZERO_STAKE_BASE_WEIGHT = 100_000;
-
     // --- Enums ---
 
     enum RoundState {
@@ -85,8 +83,8 @@ library RoundLib {
 
     /// @notice Compute epoch-weighted effective stake for a commit.
     function effectiveStake(Commit storage commit) internal view returns (uint256) {
-        uint256 baseWeight = commit.stakeAmount == 0 ? ZERO_STAKE_BASE_WEIGHT : uint256(commit.stakeAmount);
-        return (baseWeight * epochWeightBps(commit.epochIndex)) / 10000;
+        if (commit.stakeAmount == 0) return 0;
+        return (uint256(commit.stakeAmount) * epochWeightBps(commit.epochIndex)) / 10000;
     }
 
     // --- State checks ---

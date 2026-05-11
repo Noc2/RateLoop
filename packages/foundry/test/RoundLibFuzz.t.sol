@@ -60,8 +60,7 @@ contract RoundLibFuzz is Test {
 
         harness.setCommit(stakeAmount, 0);
         uint256 effective = harness.getEffectiveStake();
-        uint256 expected = stakeAmount == 0 ? 100_000 : stakeAmount;
-        assertEq(effective, expected, "epoch 0 should return full stake or zero-stake base weight");
+        assertEq(effective, stakeAmount, "epoch 0 should return full stake");
     }
 
     function testFuzz_effectiveStake_Epoch1Quarter(uint256 stakeAmount) public {
@@ -69,8 +68,7 @@ contract RoundLibFuzz is Test {
 
         harness.setCommit(stakeAmount, 1);
         uint256 effective = harness.getEffectiveStake();
-        uint256 expectedBase = stakeAmount == 0 ? 100_000 : stakeAmount;
-        assertEq(effective, (expectedBase * 2500) / 10000, "epoch 1+ should return 25%");
+        assertEq(effective, (stakeAmount * 2500) / 10000, "epoch 1+ should return 25%");
     }
 
     // =========================================================================

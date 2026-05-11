@@ -592,6 +592,36 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertGt(engine.roundRbtsRewardWeight(contentId, roundId), 0, "adjusted RBTS weights accumulated");
     }
 
+    function test_RbtsZeroStakeRevealDoesNotCreateEconomicRewards() public {
+        uint256 contentId = _submitContent();
+
+        (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, true, 8_000, STAKE);
+        (bytes32 ck2, bytes32 s2) = _commitPrediction(voter2, contentId, true, 7_000, STAKE);
+        (bytes32 ck3, bytes32 s3) = _commitPrediction(voter3, contentId, false, 3_000, 0);
+
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        RoundLib.Round memory r0 = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        _warpPastTlockRevealTime(uint256(r0.startTime) + EPOCH);
+
+        engine.revealVoteByCommitKey(contentId, roundId, ck1, true, 8_000, s1);
+        engine.revealVoteByCommitKey(contentId, roundId, ck2, true, 7_000, s2);
+        engine.revealVoteByCommitKey(contentId, roundId, ck3, false, 3_000, s3);
+        engine.settleRound(contentId, roundId);
+
+        assertTrue(engine.roundRbtsScored(contentId, roundId), "round settles and is marked scored");
+        assertEq(engine.roundRbtsRewardWeight(contentId, roundId), 0, "no RBTS reward weight below 3 staked voters");
+        assertEq(engine.roundRbtsForfeitedPool(contentId, roundId), 0, "no stake is slashed below 3 staked voters");
+        assertEq(engine.roundVoterPool(contentId, roundId), 0, "no consensus subsidy or voter reward pool");
+        assertEq(engine.commitRbtsStakeReturned(contentId, roundId, ck1), STAKE, "staked voter gets stake back");
+        assertEq(engine.commitRbtsStakeReturned(contentId, roundId, ck2), STAKE, "staked voter gets stake back");
+        assertEq(engine.commitRbtsStakeReturned(contentId, roundId, ck3), 0, "zero stake has no return");
+
+        uint256 voter1BalanceBefore = hrepToken.balanceOf(voter1);
+        vm.prank(voter1);
+        rewardDistributor.claimReward(contentId, roundId);
+        assertEq(hrepToken.balanceOf(voter1), voter1BalanceBefore + STAKE, "claim returns stake only");
+    }
+
     function test_RbtsSettlementRequiresThreeReveals() public {
         uint256 contentId = _submitContent();
 

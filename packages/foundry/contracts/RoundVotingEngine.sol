@@ -1199,12 +1199,18 @@ contract RoundVotingEngine is
         if (revealedCount < MIN_RBTS_PARTICIPANTS) revert NotEnoughVotes();
 
         bytes32[] storage commitKeys = roundCommitHashes[contentId][roundId];
-        bytes32[] memory revealedKeys = new bytes32[](revealedCount);
+        bytes32[] memory scoreableKeys = new bytes32[](revealedCount);
         uint256 revealedIndex;
+        uint256 scoreableCount;
         for (uint256 i = 0; i < commitKeys.length;) {
             bytes32 commitKey = commitKeys[i];
             if (commits[contentId][roundId][commitKey].revealed) {
-                revealedKeys[revealedIndex] = commitKey;
+                if (commitRbtsWeight[contentId][roundId][commitKey] > 0) {
+                    scoreableKeys[scoreableCount] = commitKey;
+                    unchecked {
+                        ++scoreableCount;
+                    }
+                }
                 unchecked {
                     ++revealedIndex;
                 }
@@ -1218,12 +1224,24 @@ contract RoundVotingEngine is
         uint256 rewardClaimants;
         uint256 forfeitClaimants;
 
-        for (uint256 i = 0; i < revealedCount;) {
-            bytes32 commitKey = revealedKeys[i];
+        if (scoreableCount < MIN_RBTS_PARTICIPANTS) {
+            for (uint256 i = 0; i < scoreableCount;) {
+                bytes32 commitKey = scoreableKeys[i];
+                commitRbtsStakeReturned[contentId][roundId][commitKey] =
+                    commits[contentId][roundId][commitKey].stakeAmount;
+                unchecked {
+                    ++i;
+                }
+            }
+            return (0, 0);
+        }
+
+        for (uint256 i = 0; i < scoreableCount;) {
+            bytes32 commitKey = scoreableKeys[i];
             uint256 ownWeight = commitRbtsWeight[contentId][roundId][commitKey];
             if (ownWeight > 0) {
-                bytes32 referenceKey = revealedKeys[(i + 1) % revealedCount];
-                bytes32 peerKey = revealedKeys[(i + 2) % revealedCount];
+                bytes32 referenceKey = scoreableKeys[(i + 1) % scoreableCount];
+                bytes32 peerKey = scoreableKeys[(i + 2) % scoreableCount];
                 uint16 scoreBps = RobustBtsMath.scoreBps(
                     commits[contentId][roundId][commitKey].isUp,
                     commitPredictedUpBps[contentId][roundId][commitKey],

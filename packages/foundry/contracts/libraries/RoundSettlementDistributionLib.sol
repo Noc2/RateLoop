@@ -71,12 +71,14 @@ library RoundSettlementDistributionLib {
             return (updatedConsensusReserve, treasuryPaid);
         }
 
-        uint256 totalStake = round.upPool + round.downPool;
-        uint256 subsidy = RewardMath.calculateConsensusSubsidy(totalStake, consensusReserve);
-        if (subsidy > 0) {
-            updatedConsensusReserve -= subsidy;
-            roundVoterPool[contentId][roundId] = subsidy;
-            emit ConsensusSubsidyDistributed(contentId, roundId, subsidy);
+        if (weightedWinningStake > 0) {
+            uint256 totalStake = round.upPool + round.downPool;
+            uint256 subsidy = RewardMath.calculateConsensusSubsidy(totalStake, consensusReserve);
+            if (subsidy > 0) {
+                updatedConsensusReserve -= subsidy;
+                roundVoterPool[contentId][roundId] = subsidy;
+                emit ConsensusSubsidyDistributed(contentId, roundId, subsidy);
+            }
         }
 
         roundWinningStake[contentId][roundId] = weightedWinningStake;

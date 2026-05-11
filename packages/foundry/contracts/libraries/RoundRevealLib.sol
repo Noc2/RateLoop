@@ -12,8 +12,6 @@ import { TlockVoteLib } from "./TlockVoteLib.sol";
 library RoundRevealLib {
     using SafeCast for uint256;
 
-    uint64 internal constant ZERO_STAKE_BASE_WEIGHT = 100_000; // 0.1 LREP voting weight
-
     error RoundNotOpen();
     error NoCommit();
     error AlreadyRevealed();
@@ -112,8 +110,8 @@ library RoundRevealLib {
     }
 
     function _effectiveStake(uint64 stakeAmount, uint8 epochIndex, uint16 raterWeightBps) private pure returns (uint64) {
+        if (stakeAmount == 0) return 0;
         uint256 epochWeightBps = RoundLib.epochWeightBps(epochIndex);
-        uint256 baseWeight = stakeAmount == 0 ? ZERO_STAKE_BASE_WEIGHT : uint256(stakeAmount);
-        return ((baseWeight * epochWeightBps * uint256(raterWeightBps)) / 100_000_000).toUint64();
+        return ((uint256(stakeAmount) * epochWeightBps * uint256(raterWeightBps)) / 100_000_000).toUint64();
     }
 }
