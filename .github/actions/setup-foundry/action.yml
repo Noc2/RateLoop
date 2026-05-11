@@ -4,11 +4,15 @@ description: "Init nested submodules and install Foundry"
 runs:
   using: "composite"
   steps:
-    - name: Init nested submodules (skip unavailable mobile-sdk-native)
+    - name: Init optional Self.xyz nested submodules
       shell: bash
       run: |
-        cd packages/foundry/lib/self
-        git submodule update --init contracts/lib/openzeppelin-foundry-upgrades contracts/lib/forge-std
+        if [ -d packages/foundry/lib/self ]; then
+          cd packages/foundry/lib/self
+          git submodule update --init contracts/lib/openzeppelin-foundry-upgrades contracts/lib/forge-std
+        else
+          echo "packages/foundry/lib/self is not present; skipping legacy Self.xyz nested submodules."
+        fi
     - name: Install Foundry v1.5.1
       shell: bash
       env:
