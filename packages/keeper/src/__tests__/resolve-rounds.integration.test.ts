@@ -10,9 +10,14 @@ import {
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { packVoteRoundContext } from "@rateloop/contracts";
-import { ContentRegistryAbi, LoopReputationAbi, ProtocolConfigAbi, RoundVotingEngineAbi } from "@rateloop/contracts/abis";
+import {
+  ContentRegistryAbi,
+  LoopReputationAbi,
+  ProtocolConfigAbi,
+  RoundVotingEngineAbi,
+} from "@rateloop/contracts/abis";
 import deployedContracts from "@rateloop/contracts/deployedContracts";
-import { DEFAULT_SCORER_METADATA_HASH, buildPredictionCommitHash } from "@rateloop/contracts/voting";
+import { buildRbtsCommitHash } from "@rateloop/contracts/voting";
 
 const roundCommitPreviewAbi = [
   {
@@ -24,7 +29,8 @@ const roundCommitPreviewAbi = [
   },
 ] as const;
 
-const LOCAL_RPC_URL = process.env.KEEPER_INTEGRATION_RPC_URL || "http://127.0.0.1:8545";
+const LOCAL_RPC_URL =
+  process.env.KEEPER_INTEGRATION_RPC_URL || "http://127.0.0.1:8545";
 const CHAIN = defineChain({
   id: 31337,
   name: "Anvil",
@@ -49,15 +55,22 @@ const { mockConfig, timelockDecrypt } = vi.hoisted(() => ({
   },
   timelockDecrypt: vi.fn(async (armored: string) => {
     const armorLines = armored.split("\n");
-    const footerIndex = armorLines.findIndex(line => line.startsWith("-----END AGE ENCRYPTED FILE-----"));
-    const agePayload = Buffer.from(armorLines.slice(1, footerIndex).join(""), "base64").toString("binary");
+    const footerIndex = armorLines.findIndex((line) =>
+      line.startsWith("-----END AGE ENCRYPTED FILE-----"),
+    );
+    const agePayload = Buffer.from(
+      armorLines.slice(1, footerIndex).join(""),
+      "base64",
+    ).toString("binary");
     const payloadLines = agePayload.split("\n");
-    const [opinionBps, crowdPredictionBps, saltHex] = (payloadLines[payloadLines.length - 1] ?? "").split(":");
-    const plaintext = Buffer.alloc(37);
-    plaintext.writeUInt8(1, 0);
-    plaintext.writeUInt16BE(Number(opinionBps ?? "0"), 1);
-    plaintext.writeUInt16BE(Number(crowdPredictionBps ?? "0"), 3);
-    Buffer.from((saltHex ?? "").slice(0, 64), "hex").copy(plaintext, 5);
+    const [signal, predictedUpBps, saltHex] = (
+      payloadLines[payloadLines.length - 1] ?? ""
+    ).split(":");
+    const plaintext = Buffer.alloc(36);
+    plaintext.writeUInt8(2, 0);
+    plaintext.writeUInt8(signal === "1" ? 1 : 0, 1);
+    plaintext.writeUInt16BE(Number(predictedUpBps ?? "0"), 2);
+    Buffer.from((saltHex ?? "").slice(0, 64), "hex").copy(plaintext, 4);
     return plaintext;
   }),
 }));
@@ -73,25 +86,50 @@ vi.mock("tlock-js", () => ({
 
 import { resetKeeperStateForTests, resolveRounds } from "../keeper.js";
 
-const chain31337 = (deployedContracts as Record<number, Record<string, { address: `0x${string}` }>>)[31337];
+const chain31337 = (
+  deployedContracts as Record<
+    number,
+    Record<string, { address: `0x${string}` }>
+  >
+)[31337];
 const CONTRACTS = {
-  lrep: chain31337?.LoopReputation?.address ?? "0x0000000000000000000000000000000000000000",
-  contentRegistry: chain31337?.ContentRegistry?.address ?? "0x0000000000000000000000000000000000000000",
-  roundVotingEngine: chain31337?.RoundVotingEngine?.address ?? "0x0000000000000000000000000000000000000000",
+  lrep:
+    chain31337?.LoopReputation?.address ??
+    "0x0000000000000000000000000000000000000000",
+  contentRegistry:
+    chain31337?.ContentRegistry?.address ??
+    "0x0000000000000000000000000000000000000000",
+  roundVotingEngine:
+    chain31337?.RoundVotingEngine?.address ??
+    "0x0000000000000000000000000000000000000000",
 } as const;
 
 const ACCOUNTS = {
-  keeper: privateKeyToAccount("0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d"),
-  submitter: privateKeyToAccount("0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a"),
-  voter1: privateKeyToAccount("0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6"),
-  voter2: privateKeyToAccount("0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a"),
-  voter3: privateKeyToAccount("0x4bbbf85ce3377467afe5d46f804f221813b2bb87f24d81f60f1fcdbf7cbf4356"),
+  keeper: privateKeyToAccount(
+    "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d",
+  ),
+  submitter: privateKeyToAccount(
+    "0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a",
+  ),
+  voter1: privateKeyToAccount(
+    "0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6",
+  ),
+  voter2: privateKeyToAccount(
+    "0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a",
+  ),
+  voter3: privateKeyToAccount(
+    "0x4bbbf85ce3377467afe5d46f804f221813b2bb87f24d81f60f1fcdbf7cbf4356",
+  ),
 } as const;
 
 const STAKE = 1n * 10n ** 6n;
 const DEFAULT_SUBMISSION_REWARD_AMOUNT = 1_000_000n;
-const DEFAULT_QUESTION_METADATA_HASH = keccak256(stringToHex("curyo.generic.question.metadata.v1"));
-const DEFAULT_RESULT_SPEC_HASH = keccak256(stringToHex("curyo.generic.result.spec.v1"));
+const DEFAULT_QUESTION_METADATA_HASH = keccak256(
+  stringToHex("curyo.generic.question.metadata.v1"),
+);
+const DEFAULT_RESULT_SPEC_HASH = keccak256(
+  stringToHex("curyo.generic.result.spec.v1"),
+);
 
 function makeLogger() {
   return {
@@ -103,7 +141,8 @@ function makeLogger() {
 }
 
 function encodeTestCiphertext(params: {
-  predictedRatingBps: number;
+  isUp: boolean;
+  predictedUpBps: number;
   salt: `0x${string}`;
   targetRound: bigint;
   drandChainHash: `0x${string}`;
@@ -115,14 +154,13 @@ function encodeTestCiphertext(params: {
     }
     return chunks.join("\n");
   };
-  const toUnpaddedBase64 = (input: Buffer | string): string => Buffer.from(input).toString("base64").replace(/=+$/u, "");
+  const toUnpaddedBase64 = (input: Buffer | string): string =>
+    Buffer.from(input).toString("base64").replace(/=+$/u, "");
+  const rbtsPayload = `${params.isUp ? 1 : 0}:${params.predictedUpBps}:${params.salt.slice(2)}`;
   const encryptedBody = Buffer.concat([
-    Buffer.from(`${params.predictedRatingBps}:${params.predictedRatingBps}:${params.salt.slice(2)}`, "utf8"),
+    Buffer.from(rbtsPayload, "utf8"),
     Buffer.alloc(
-      Math.max(
-        0,
-        65 - Buffer.byteLength(`${params.predictedRatingBps}:${params.predictedRatingBps}:${params.salt.slice(2)}`, "utf8"),
-      ),
+      Math.max(0, 65 - Buffer.byteLength(rbtsPayload, "utf8")),
       0x58,
     ),
   ]);
@@ -152,13 +190,19 @@ function encodeTestCiphertext(params: {
   ) as `0x${string}`;
 }
 
-async function waitForReceipt(publicClient: ReturnType<typeof createPublicClient>, hash: `0x${string}`) {
+async function waitForReceipt(
+  publicClient: ReturnType<typeof createPublicClient>,
+  hash: `0x${string}`,
+) {
   const receipt = await publicClient.waitForTransactionReceipt({ hash });
   expect(receipt.status).toBe("success");
   return receipt;
 }
 
-async function increaseTime(publicClient: ReturnType<typeof createPublicClient>, seconds: number) {
+async function increaseTime(
+  publicClient: ReturnType<typeof createPublicClient>,
+  seconds: number,
+) {
   await publicClient.request({
     method: "evm_increaseTime",
     params: [seconds],
@@ -171,7 +215,7 @@ async function increaseTime(publicClient: ReturnType<typeof createPublicClient>,
 
 function roundAt(timestamp: bigint, genesisTime: bigint, period: bigint) {
   if (period === 0n || timestamp < genesisTime) return 0n;
-  return ((timestamp - genesisTime) / period) + 1n;
+  return (timestamp - genesisTime) / period + 1n;
 }
 
 describe("resolveRounds integration", () => {
@@ -222,7 +266,12 @@ describe("resolveRounds integration", () => {
         publicClient.getCode({ address: CONTRACTS.roundVotingEngine }),
         publicClient.getCode({ address: CONTRACTS.contentRegistry }),
       ]);
-      integrationReady = chainId === 31337 && !!engineCode && engineCode !== "0x" && !!registryCode && registryCode !== "0x";
+      integrationReady =
+        chainId === 31337 &&
+        !!engineCode &&
+        engineCode !== "0x" &&
+        !!registryCode &&
+        registryCode !== "0x";
       if (integrationReady) {
         mockConfig.contracts.votingEngine = CONTRACTS.roundVotingEngine;
         mockConfig.contracts.contentRegistry = CONTRACTS.contentRegistry;
@@ -236,7 +285,9 @@ describe("resolveRounds integration", () => {
     }
   });
 
-  it("reveals and settles a real local round via the keeper", async ({ skip }) => {
+  it("reveals and settles a real local round via the keeper", async ({
+    skip,
+  }) => {
     if (!integrationReady) {
       if (process.env.KEEPER_INTEGRATION_REQUIRE_LOCALHOST === "1") {
         throw new Error(integrationIssue);
@@ -324,7 +375,10 @@ describe("resolveRounds integration", () => {
       ],
     })) as readonly [bigint, `0x${string}`];
     const submissionMediaHash = keccak256(
-      encodeAbiParameters([{ type: "string[]" }, { type: "string" }], [[submissionImageUrl], ""]),
+      encodeAbiParameters(
+        [{ type: "string[]" }, { type: "string" }],
+        [[submissionImageUrl], ""],
+      ),
     );
     const submissionTextHash = keccak256(
       encodeAbiParameters(
@@ -347,7 +401,12 @@ describe("resolveRounds integration", () => {
     );
     const roundConfigHash = keccak256(
       encodeAbiParameters(
-        [{ type: "uint32" }, { type: "uint32" }, { type: "uint16" }, { type: "uint16" }],
+        [
+          { type: "uint32" },
+          { type: "uint32" },
+          { type: "uint16" },
+          { type: "uint16" },
+        ],
         [1_200, 604_800, 3, 1_000],
       ),
     );
@@ -449,19 +508,22 @@ describe("resolveRounds integration", () => {
       {
         client: voter1Client,
         account: ACCOUNTS.voter1.address,
-        predictedRatingBps: 8_000,
+        isUp: true,
+        predictedUpBps: 8_000,
         salt: `0x${"11".repeat(32)}` as `0x${string}`,
       },
       {
         client: voter2Client,
         account: ACCOUNTS.voter2.address,
-        predictedRatingBps: 7_500,
+        isUp: true,
+        predictedUpBps: 7_500,
         salt: `0x${"22".repeat(32)}` as `0x${string}`,
       },
       {
         client: voter3Client,
         account: ACCOUNTS.voter3.address,
-        predictedRatingBps: 2_000,
+        isUp: false,
+        predictedUpBps: 2_000,
         salt: `0x${"33".repeat(32)}` as `0x${string}`,
       },
     ];
@@ -486,14 +548,14 @@ describe("resolveRounds integration", () => {
         drandPeriod,
       );
       expect(targetRound).toBeGreaterThan(0n);
-      const ciphertext = encodeTestCiphertext({ ...voter, targetRound, drandChainHash });
-      const commitHash = buildPredictionCommitHash(
-        CHAIN.id,
-        CONTRACTS.roundVotingEngine,
-        STAKE,
-        DEFAULT_SCORER_METADATA_HASH,
-        voter.predictedRatingBps,
-        voter.predictedRatingBps,
+      const ciphertext = encodeTestCiphertext({
+        ...voter,
+        targetRound,
+        drandChainHash,
+      });
+      const commitHash = buildRbtsCommitHash(
+        voter.isUp,
+        voter.predictedUpBps,
         voter.salt,
         voter.account,
         contentId,
@@ -503,7 +565,10 @@ describe("resolveRounds integration", () => {
         drandChainHash,
         ciphertext,
       );
-      const roundContext = packVoteRoundContext(roundId, roundReferenceRatingBps);
+      const roundContext = packVoteRoundContext(
+        roundId,
+        roundReferenceRatingBps,
+      );
 
       const commitArgs = [
         contentId,
@@ -543,9 +608,18 @@ describe("resolveRounds integration", () => {
     })) as bigint;
     expect(currentRoundId).toBe(roundId);
 
-    await increaseTime(publicClient, epochDurationSeconds + Number(drandPeriod) + 5);
+    await increaseTime(
+      publicClient,
+      epochDurationSeconds + Number(drandPeriod) + 5,
+    );
 
-    const result = await resolveRounds(publicClient as any, keeperClient as any, CHAIN, ACCOUNTS.keeper as any, logger as any);
+    const result = await resolveRounds(
+      publicClient as any,
+      keeperClient as any,
+      CHAIN,
+      ACCOUNTS.keeper as any,
+      logger as any,
+    );
 
     expect(result.votesRevealed).toBeGreaterThanOrEqual(3);
     expect(result.roundsSettled).toBeGreaterThanOrEqual(1);
@@ -555,17 +629,33 @@ describe("resolveRounds integration", () => {
       abi: RoundVotingEngineAbi,
       functionName: "rounds",
       args: [contentId, roundId],
-    })) as unknown as { state?: number; revealedCount?: bigint; settledAt?: bigint; thresholdReachedAt?: bigint } & readonly unknown[];
+    })) as unknown as {
+      state?: number;
+      revealedCount?: bigint;
+      settledAt?: bigint;
+      thresholdReachedAt?: bigint;
+    } & readonly unknown[];
     const roundTuple = round as readonly unknown[];
     const state = Number(round.state ?? roundTuple[1] ?? 0);
-    const revealedCount = BigInt((round.revealedCount ?? roundTuple[3] ?? 0) as bigint | number | string);
-    const settledAt = BigInt((round.settledAt ?? roundTuple[10] ?? 0) as bigint | number | string);
-    const thresholdReachedAt = BigInt((round.thresholdReachedAt ?? roundTuple[11] ?? 0) as bigint | number | string);
+    const revealedCount = BigInt(
+      (round.revealedCount ?? roundTuple[3] ?? 0) as bigint | number | string,
+    );
+    const settledAt = BigInt(
+      (round.settledAt ?? roundTuple[10] ?? 0) as bigint | number | string,
+    );
+    const thresholdReachedAt = BigInt(
+      (round.thresholdReachedAt ?? roundTuple[11] ?? 0) as
+        | bigint
+        | number
+        | string,
+    );
 
     expect(revealedCount).toBe(3n);
     expect(thresholdReachedAt).toBeGreaterThan(0n);
     expect(settledAt).toBeGreaterThan(0n);
     expect(state).toBe(1);
-    expect(logger.warn).not.toHaveBeenCalledWith(expect.stringContaining("Failed"));
+    expect(logger.warn).not.toHaveBeenCalledWith(
+      expect.stringContaining("Failed"),
+    );
   }, 30_000);
 });

@@ -24,22 +24,22 @@ vi.mock("../logger.js", () => ({
   }),
 }));
 
-import { decryptTlockPredictionCiphertext } from "../keeper.js";
+import { decryptTlockVoteCiphertext } from "../keeper.js";
 import { timelockDecrypt } from "tlock-js";
 
-describe("decryptTlockPredictionCiphertext", () => {
+describe("decryptTlockVoteCiphertext", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("returns opinion, crowd prediction, rating, and salt for valid plaintext", async () => {
+  it("returns the RBTS signal, crowd prediction, and salt for valid plaintext", async () => {
     const saltHex = "ab".repeat(32);
     const saltBytes = Buffer.from(saltHex, "hex");
-    const plaintext = Buffer.alloc(37);
-    plaintext.writeUInt8(1, 0);
-    plaintext.writeUInt16BE(7250, 1);
-    plaintext.writeUInt16BE(6900, 3);
-    saltBytes.copy(plaintext, 5);
+    const plaintext = Buffer.alloc(36);
+    plaintext.writeUInt8(2, 0);
+    plaintext.writeUInt8(1, 1);
+    plaintext.writeUInt16BE(6900, 2);
+    saltBytes.copy(plaintext, 4);
 
     vi.mocked(timelockDecrypt).mockResolvedValue(plaintext);
 
@@ -47,28 +47,26 @@ describe("decryptTlockPredictionCiphertext", () => {
     const armored = "FAKE-ARMORED-AGE-STRING";
     const hex = `0x${Buffer.from(armored, "utf-8").toString("hex")}`;
 
-    const result = await decryptTlockPredictionCiphertext(hex as `0x${string}`);
+    const result = await decryptTlockVoteCiphertext(hex as `0x${string}`);
     expect(result).not.toBeNull();
-    expect(result!.opinionRatingBps).toBe(7250);
-    expect(result!.predictedCrowdRatingBps).toBe(6900);
-    expect(result!.predictedRatingBps).toBe(6900);
-    expect(result!.rating).toBe(7.25);
-    expect(result!.crowdRating).toBe(6.9);
+    expect(result!.isUp).toBe(true);
+    expect(result!.predictedUpBps).toBe(6900);
+    expect(result!.predictedUpPercent).toBe(69);
     expect(result!.salt).toBe(`0x${saltHex}`);
   });
 
   it("returns null for out-of-range prediction", async () => {
     const salt = Buffer.alloc(32, 0xcd);
-    const plaintext = Buffer.alloc(37);
-    plaintext.writeUInt8(1, 0);
-    plaintext.writeUInt16BE(10001, 1);
-    plaintext.writeUInt16BE(6900, 3);
-    salt.copy(plaintext, 5);
+    const plaintext = Buffer.alloc(36);
+    plaintext.writeUInt8(2, 0);
+    plaintext.writeUInt8(1, 1);
+    plaintext.writeUInt16BE(10001, 2);
+    salt.copy(plaintext, 4);
 
     vi.mocked(timelockDecrypt).mockResolvedValue(plaintext);
 
     const hex = `0x${Buffer.from("ARMORED", "utf-8").toString("hex")}`;
-    const result = await decryptTlockPredictionCiphertext(hex as `0x${string}`);
+    const result = await decryptTlockVoteCiphertext(hex as `0x${string}`);
     expect(result).toBeNull();
   });
 
@@ -76,14 +74,18 @@ describe("decryptTlockPredictionCiphertext", () => {
     vi.mocked(timelockDecrypt).mockResolvedValue(Buffer.alloc(10));
 
     const hex = `0x${Buffer.from("ARMORED", "utf-8").toString("hex")}`;
-    const result = await decryptTlockPredictionCiphertext(hex as `0x${string}`);
+    const result = await decryptTlockVoteCiphertext(hex as `0x${string}`);
     expect(result).toBeNull();
   });
 
   it("propagates beacon errors", async () => {
-    vi.mocked(timelockDecrypt).mockRejectedValue(new Error("beacon not available"));
+    vi.mocked(timelockDecrypt).mockRejectedValue(
+      new Error("beacon not available"),
+    );
 
     const hex = `0x${Buffer.from("ARMORED", "utf-8").toString("hex")}`;
-    await expect(decryptTlockPredictionCiphertext(hex as `0x${string}`)).rejects.toThrow("beacon not available");
+    await expect(
+      decryptTlockVoteCiphertext(hex as `0x${string}`),
+    ).rejects.toThrow("beacon not available");
   });
 });

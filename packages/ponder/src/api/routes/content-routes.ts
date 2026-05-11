@@ -319,9 +319,6 @@ async function getAudienceContextForContent(contentId: bigint) {
   const rows = await db
     .select({
       isUp: vote.isUp,
-      opinionRatingBps: vote.opinionRatingBps,
-      predictedCrowdRatingBps: vote.predictedCrowdRatingBps,
-      predictedRatingBps: vote.predictedRatingBps,
       selfReport: profile.selfReport,
     })
     .from(vote)
@@ -902,13 +899,12 @@ export function registerContentRoutes(app: ApiApp) {
         targetRound: vote.targetRound,
         drandChainHash: vote.drandChainHash,
         isUp: vote.isUp,
-        opinionRatingBps: vote.opinionRatingBps,
-        predictedCrowdRatingBps: vote.predictedCrowdRatingBps,
-        predictedRatingBps: vote.predictedRatingBps,
-        predictionScoreBps: vote.predictionScoreBps,
-        predictionRewardWeight: vote.predictionRewardWeight,
-        predictionStakeReturned: vote.predictionStakeReturned,
-        predictionForfeitedStake: vote.predictionForfeitedStake,
+        predictedUpBps: vote.predictedUpBps,
+        rbtsWeight: vote.rbtsWeight,
+        rbtsScoreBps: vote.rbtsScoreBps,
+        rbtsRewardWeight: vote.rbtsRewardWeight,
+        rbtsStakeReturned: vote.rbtsStakeReturned,
+        rbtsForfeitedStake: vote.rbtsForfeitedStake,
         stake: vote.stake,
         epochIndex: vote.epochIndex,
         revealed: vote.revealed,
@@ -921,10 +917,10 @@ export function registerContentRoutes(app: ApiApp) {
         roundMaxVoters: round.maxVoters,
         roundState: round.state,
         roundUpWins: round.upWins,
-        roundFinalPredictionRatingBps: round.finalPredictionRatingBps,
-        roundPredictionRewardWeight: round.predictionRewardWeight,
-        roundPredictionRewardClaimants: round.predictionRewardClaimants,
-        roundPredictionForfeitedPool: round.predictionForfeitedPool,
+        roundRbtsRewardWeight: round.rbtsRewardWeight,
+        roundRbtsRewardClaimants: round.rbtsRewardClaimants,
+        roundRbtsForfeitedPool: round.rbtsForfeitedPool,
+        roundRbtsForfeitClaimants: round.rbtsForfeitClaimants,
         roundPredictionForfeitClaimants: round.predictionForfeitClaimants,
       })
       .from(vote)

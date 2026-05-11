@@ -124,13 +124,10 @@ export const round = onchainTable(
     maxVoters: t.integer().notNull().default(1000),
     upWins: t.boolean(),
     losingPool: t.bigint(),
-    predictionWeightedRatingSum: t.bigint(),
-    totalPredictionWeight: t.bigint(),
-    finalPredictionRatingBps: t.integer(),
-    predictionRewardWeight: t.bigint(),
-    predictionRewardClaimants: t.integer(),
-    predictionForfeitedPool: t.bigint(),
-    predictionForfeitClaimants: t.integer(),
+    rbtsRewardWeight: t.bigint(),
+    rbtsRewardClaimants: t.integer(),
+    rbtsForfeitedPool: t.bigint(),
+    rbtsForfeitClaimants: t.integer(),
     startTime: t.bigint(),
     settledAt: t.bigint(),
   }),
@@ -164,15 +161,13 @@ export const vote = onchainTable(
     commitHash: t.hex().notNull(),
     targetRound: t.bigint().notNull(),
     drandChainHash: t.hex().notNull(),
-    isUp: t.boolean(), // null until revealed; derived from prediction >= round reference for compatibility
-    opinionRatingBps: t.integer(), // null until prediction reveal
-    predictedCrowdRatingBps: t.integer(), // null until prediction reveal
-    predictedRatingBps: t.integer(), // deprecated alias for predictedCrowdRatingBps
-    predictionWeight: t.bigint(), // null until prediction reveal
-    predictionScoreBps: t.integer(), // null until prediction rewards are scored
-    predictionRewardWeight: t.bigint(), // null until prediction rewards are scored
-    predictionStakeReturned: t.bigint(), // null until prediction rewards are scored
-    predictionForfeitedStake: t.bigint(), // null until prediction rewards are scored
+    isUp: t.boolean(), // null until revealed
+    predictedUpBps: t.integer(), // null until RBTS reveal
+    rbtsWeight: t.bigint(), // null until RBTS reveal
+    rbtsScoreBps: t.integer(), // null until RBTS rewards are scored
+    rbtsRewardWeight: t.bigint(), // null until RBTS rewards are scored
+    rbtsStakeReturned: t.bigint(), // null until RBTS rewards are scored
+    rbtsForfeitedStake: t.bigint(), // null until RBTS rewards are scored
     stake: t.bigint().notNull(),
     epochIndex: t.integer().notNull(), // 0=epoch-1 (100% weight), 1=epoch-2+ (25% weight)
     revealed: t.boolean().notNull().default(false),

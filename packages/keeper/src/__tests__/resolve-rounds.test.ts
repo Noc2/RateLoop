@@ -2,9 +2,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const VOTER = "0x3333333333333333333333333333333333333333" as const;
 const ACCOUNT = "0x4444444444444444444444444444444444444444" as const;
-const COMMIT_KEY_1 = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" as const;
-const COMMIT_KEY_2 = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" as const;
-const TOO_EARLY_TLOCK_ERROR = "It's too early to decrypt the ciphertext - decryptable at round 27013021";
+const COMMIT_KEY_1 =
+  "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" as const;
+const COMMIT_KEY_2 =
+  "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" as const;
+const TOO_EARLY_TLOCK_ERROR =
+  "It's too early to decrypt the ciphertext - decryptable at round 27013021";
 const zeroHash = `0x${"0".repeat(64)}` as const;
 
 const { mockConfig, timelockDecrypt } = vi.hoisted(() => ({
@@ -100,10 +103,26 @@ function makeTlockCiphertext(params: {
     }
     return chunks.join("\n");
   };
-  const toUnpaddedBase64 = (input: Buffer | string): string => Buffer.from(input).toString("base64").replace(/=+$/u, "");
+  const toUnpaddedBase64 = (input: Buffer | string): string =>
+    Buffer.from(input).toString("base64").replace(/=+$/u, "");
   const encryptedBody = Buffer.concat([
-    Buffer.from(params.plaintextMarker ?? `${params.isUp ? "1" : "0"}:${params.salt.slice(2)}`, "utf8"),
-    Buffer.alloc(Math.max(0, 65 - Buffer.byteLength(params.plaintextMarker ?? `${params.isUp ? "1" : "0"}:${params.salt.slice(2)}`, "utf8")), 0x58),
+    Buffer.from(
+      params.plaintextMarker ??
+        `${params.isUp ? "1" : "0"}:${params.salt.slice(2)}`,
+      "utf8",
+    ),
+    Buffer.alloc(
+      Math.max(
+        0,
+        65 -
+          Buffer.byteLength(
+            params.plaintextMarker ??
+              `${params.isUp ? "1" : "0"}:${params.salt.slice(2)}`,
+            "utf8",
+          ),
+      ),
+      0x58,
+    ),
   ]);
   const recipientBody = chunkBase64(toUnpaddedBase64(Buffer.alloc(128, 0x42)));
   const mac = toUnpaddedBase64(Buffer.alloc(32, 0x24));
@@ -186,16 +205,26 @@ function toCommitRevealTuple(commit: CommitData) {
   ] as const;
 }
 
-function toRoundConfigTuple(config: { epochDuration: bigint; maxDuration: bigint; minVoters: bigint; maxVoters: bigint }) {
-  return [config.epochDuration, config.maxDuration, config.minVoters, config.maxVoters] as const;
+function toRoundConfigTuple(config: {
+  epochDuration: bigint;
+  maxDuration: bigint;
+  minVoters: bigint;
+  maxVoters: bigint;
+}) {
+  return [
+    config.epochDuration,
+    config.maxDuration,
+    config.minVoters,
+    config.maxVoters,
+  ] as const;
 }
 
 function makePlaintext(isUp: boolean, fillByte: number): Buffer {
-  const plaintext = Buffer.alloc(37, fillByte);
-  const ratingBps = isUp ? 8_000 : 2_000;
-  plaintext.writeUInt8(1, 0);
-  plaintext.writeUInt16BE(ratingBps, 1);
-  plaintext.writeUInt16BE(ratingBps, 3);
+  const plaintext = Buffer.alloc(36, fillByte);
+  const predictedUpBps = isUp ? 8_000 : 2_000;
+  plaintext.writeUInt8(2, 0);
+  plaintext.writeUInt8(isUp ? 1 : 0, 1);
+  plaintext.writeUInt16BE(predictedUpBps, 2);
   return plaintext;
 }
 
@@ -207,7 +236,12 @@ function makeHarness(options: {
   tupleResults?: boolean;
   dormancyEligible?: boolean;
   round: RoundData;
-  roundConfig?: { epochDuration: bigint; maxDuration: bigint; minVoters: bigint; maxVoters: bigint };
+  roundConfig?: {
+    epochDuration: bigint;
+    maxDuration: bigint;
+    minVoters: bigint;
+    maxVoters: bigint;
+  };
   commitKeys?: readonly `0x${string}`[];
   commits?: Record<string, CommitData>;
   revealGracePeriod?: bigint;
@@ -222,7 +256,9 @@ function makeHarness(options: {
   const now = options.now ?? 10_000n;
   const latestRoundId = options.latestRoundId ?? 1n;
   const activeRoundId = options.activeRoundId ?? 0n;
-  const currentRoundId = options.currentRoundId ?? (latestRoundId > 0n ? latestRoundId : activeRoundId);
+  const currentRoundId =
+    options.currentRoundId ??
+    (latestRoundId > 0n ? latestRoundId : activeRoundId);
   const tupleResults = options.tupleResults ?? false;
   const dormancyEligible = options.dormancyEligible ?? false;
   const commitKeys = options.commitKeys ?? [];
@@ -231,100 +267,127 @@ function makeHarness(options: {
 
   const publicClient = {
     getBlock: vi.fn().mockResolvedValue({ timestamp: now }),
-    readContract: vi.fn(async ({ functionName, args }: { functionName: string; args: readonly unknown[] }) => {
-      switch (functionName) {
-        case "nextContentId":
-          return 2n;
-        case "currentRoundId":
-          return currentRoundId;
-        case "nextRoundId":
-          return latestRoundId;
-        case "rounds":
-          return tupleResults ? toRoundTuple(round) : round;
-        case "roundConfigSnapshot":
-          return tupleResults ? toRoundConfigTuple(roundConfig) : roundConfig;
-        case "roundRevealGracePeriodSnapshot":
-          return options.revealGracePeriod ?? 3600n;
-        case "revealGracePeriod":
-          return options.revealGracePeriod ?? 3600n;
-        case "lastCommitRevealableAfter":
-          return (
-            options.lastCommitRevealableAfter ??
-            Object.values(commits).reduce((max, commit) => {
-              return commit.revealableAfter > max ? commit.revealableAfter : max;
-            }, 0n)
-          );
-        case "getRoundCommitKey":
-          return commitKeys[Number(args[2])] ?? zeroHash;
-        case "commitRevealData":
-          return tupleResults
-            ? toCommitRevealTuple(commits[String(args[2])] ?? makeCommit({ revealed: true, stakeAmount: 0n }))
-            : commits[String(args[2])] ?? makeCommit({ revealed: true, stakeAmount: 0n });
-        case "isDormancyEligible":
-          return dormancyEligible;
-        default:
-          throw new Error(`Unexpected readContract(${functionName})`);
-      }
-    }),
+    readContract: vi.fn(
+      async ({
+        functionName,
+        args,
+      }: {
+        functionName: string;
+        args: readonly unknown[];
+      }) => {
+        switch (functionName) {
+          case "nextContentId":
+            return 2n;
+          case "currentRoundId":
+            return currentRoundId;
+          case "nextRoundId":
+            return latestRoundId;
+          case "rounds":
+            return tupleResults ? toRoundTuple(round) : round;
+          case "roundConfigSnapshot":
+            return tupleResults ? toRoundConfigTuple(roundConfig) : roundConfig;
+          case "roundRevealGracePeriodSnapshot":
+            return options.revealGracePeriod ?? 3600n;
+          case "revealGracePeriod":
+            return options.revealGracePeriod ?? 3600n;
+          case "lastCommitRevealableAfter":
+            return (
+              options.lastCommitRevealableAfter ??
+              Object.values(commits).reduce((max, commit) => {
+                return commit.revealableAfter > max
+                  ? commit.revealableAfter
+                  : max;
+              }, 0n)
+            );
+          case "getRoundCommitKey":
+            return commitKeys[Number(args[2])] ?? zeroHash;
+          case "commitRevealData":
+            return tupleResults
+              ? toCommitRevealTuple(
+                  commits[String(args[2])] ??
+                    makeCommit({ revealed: true, stakeAmount: 0n }),
+                )
+              : (commits[String(args[2])] ??
+                  makeCommit({ revealed: true, stakeAmount: 0n }));
+          case "isDormancyEligible":
+            return dormancyEligible;
+          default:
+            throw new Error(`Unexpected readContract(${functionName})`);
+        }
+      },
+    ),
   };
 
   const walletClient = {
-    writeContract: vi.fn(async ({ functionName, args }: { functionName: string; args: readonly unknown[] }) => {
-      if (functionName === "finalizeRevealFailedRound") {
-        round.state = 4;
-        round.settledAt = now;
-        return "0xfinalized";
-      }
+    writeContract: vi.fn(
+      async ({
+        functionName,
+        args,
+      }: {
+        functionName: string;
+        args: readonly unknown[];
+      }) => {
+        if (functionName === "finalizeRevealFailedRound") {
+          round.state = 4;
+          round.settledAt = now;
+          return "0xfinalized";
+        }
 
-      if (functionName === "processUnrevealedVotes") {
-        const startIndex = Number(args[2]);
-        const count = Number(args[3]);
-        const endIndex = Math.min(commitKeys.length, startIndex + count);
-        let processed = false;
-        for (let i = startIndex; i < endIndex; i++) {
-          const commit = commits[String(commitKeys[i])];
-          if (commit && !commit.revealed && commit.stakeAmount > 0n) {
-            commit.stakeAmount = 0n;
-            processed = true;
+        if (functionName === "processUnrevealedVotes") {
+          const startIndex = Number(args[2]);
+          const count = Number(args[3]);
+          const endIndex = Math.min(commitKeys.length, startIndex + count);
+          let processed = false;
+          for (let i = startIndex; i < endIndex; i++) {
+            const commit = commits[String(commitKeys[i])];
+            if (commit && !commit.revealed && commit.stakeAmount > 0n) {
+              commit.stakeAmount = 0n;
+              processed = true;
+            }
           }
+          if (!processed) {
+            throw new Error("NothingProcessed");
+          }
+          return "0xcleanup";
         }
-        if (!processed) {
-          throw new Error("NothingProcessed");
+
+        if (functionName === "revealVoteByCommitKey") {
+          const commitKey = String(args[2]);
+          const commit = commits[commitKey];
+          if (!commit || commit.revealed) {
+            throw new Error("AlreadyRevealed");
+          }
+          commit.revealed = true;
+          round.revealedCount += 1n;
+          const rbtsRevealQuorum =
+            roundConfig.minVoters > 3n ? roundConfig.minVoters : 3n;
+          if (
+            round.revealedCount >= rbtsRevealQuorum &&
+            round.thresholdReachedAt === 0n
+          ) {
+            round.thresholdReachedAt = now;
+          }
+          return "0xrevealed";
         }
-        return "0xcleanup";
-      }
 
-      if (functionName === "revealPredictionByCommitKey") {
-        const commitKey = String(args[2]);
-        const commit = commits[commitKey];
-        if (!commit || commit.revealed) {
-          throw new Error("AlreadyRevealed");
+        if (functionName === "settleRound") {
+          round.state = 1;
+          round.settledAt = now;
+          return "0xsettled";
         }
-        commit.revealed = true;
-        round.revealedCount += 1n;
-        if (round.revealedCount >= roundConfig.minVoters && round.thresholdReachedAt === 0n) {
-          round.thresholdReachedAt = now;
+
+        if (functionName === "cancelExpiredRound") {
+          round.state = 2;
+          return "0xcancelled";
         }
-        return "0xrevealed";
-      }
 
-      if (functionName === "settleRound") {
-        round.state = 1;
-        round.settledAt = now;
-        return "0xsettled";
-      }
+        if (functionName === "markDormant") {
+          return "0xdormant";
+        }
 
-      if (functionName === "cancelExpiredRound") {
-        round.state = 2;
-        return "0xcancelled";
-      }
-
-      if (functionName === "markDormant") {
-        return "0xdormant";
-      }
-
-      throw new Error(`Unexpected writeContract(${functionName})`);
-    }),
+        throw new Error(`Unexpected writeContract(${functionName})`);
+      },
+    ),
   };
 
   return { publicClient, walletClient, round, commits };
@@ -400,14 +463,19 @@ describe("resolveRounds", () => {
       activeRoundId: 1n,
       latestRoundId: 1n,
       round,
-      commitKeys: [COMMIT_KEY_1, COMMIT_KEY_2, "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"],
+      commitKeys: [
+        COMMIT_KEY_1,
+        COMMIT_KEY_2,
+        "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      ],
       commits: {
         [COMMIT_KEY_1]: makeCommit({ revealableAfter: 100n }),
         [COMMIT_KEY_2]: makeCommit({ revealableAfter: 100n }),
-        "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc": makeCommit({
-          revealableAfter: 100n,
-          isUp: false,
-        }),
+        "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc":
+          makeCommit({
+            revealableAfter: 100n,
+            isUp: false,
+          }),
       },
       now: 1_000n,
     });
@@ -476,7 +544,7 @@ describe("resolveRounds", () => {
     );
     expect(walletClient.writeContract).not.toHaveBeenCalledWith(
       expect.objectContaining({
-        functionName: "revealPredictionByCommitKey",
+        functionName: "revealVoteByCommitKey",
       }),
     );
   });
@@ -488,7 +556,7 @@ describe("resolveRounds", () => {
       revealedCount: 0n,
     });
     const badCommit = makeCommit({ revealableAfter: 100n });
-    badCommit.ciphertext = (`0x${Buffer.from(
+    badCommit.ciphertext = `0x${Buffer.from(
       [
         "-----BEGIN AGE ENCRYPTED FILE-----",
         Buffer.from(
@@ -504,7 +572,7 @@ describe("resolveRounds", () => {
         "",
       ].join("\n"),
       "utf8",
-    ).toString("hex")}`) as `0x${string}`;
+    ).toString("hex")}` as `0x${string}`;
     const { publicClient, walletClient } = makeHarness({
       activeRoundId: 1n,
       latestRoundId: 1n,
@@ -613,10 +681,16 @@ describe("resolveRounds", () => {
 
     expect(timelockDecrypt).toHaveBeenCalledTimes(12);
     expect(walletClient.writeContract).not.toHaveBeenCalledWith(
-      expect.objectContaining({ functionName: "revealPredictionByCommitKey" }),
+      expect.objectContaining({ functionName: "revealVoteByCommitKey" }),
     );
-    expect(logger.warn).not.toHaveBeenCalledWith("tlock decryption failed", expect.anything());
-    expect(logger.error).not.toHaveBeenCalledWith("tlock decryption failed", expect.anything());
+    expect(logger.warn).not.toHaveBeenCalledWith(
+      "tlock decryption failed",
+      expect.anything(),
+    );
+    expect(logger.error).not.toHaveBeenCalledWith(
+      "tlock decryption failed",
+      expect.anything(),
+    );
     expect(logger.debug).toHaveBeenCalledTimes(12);
     expect(logger.debug).toHaveBeenLastCalledWith(
       "tlock ciphertext not decryptable yet",
@@ -686,7 +760,7 @@ describe("resolveRounds", () => {
       }),
     );
     expect(walletClient.writeContract).not.toHaveBeenCalledWith(
-      expect.objectContaining({ functionName: "revealPredictionByCommitKey" }),
+      expect.objectContaining({ functionName: "revealVoteByCommitKey" }),
     );
   });
 
@@ -706,14 +780,19 @@ describe("resolveRounds", () => {
       latestRoundId: 1n,
       tupleResults: true,
       round,
-      commitKeys: [COMMIT_KEY_1, COMMIT_KEY_2, "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"],
+      commitKeys: [
+        COMMIT_KEY_1,
+        COMMIT_KEY_2,
+        "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      ],
       commits: {
         [COMMIT_KEY_1]: makeCommit({ revealableAfter: 100n }),
         [COMMIT_KEY_2]: makeCommit({ revealableAfter: 100n }),
-        "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc": makeCommit({
-          revealableAfter: 100n,
-          isUp: false,
-        }),
+        "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc":
+          makeCommit({
+            revealableAfter: 100n,
+            isUp: false,
+          }),
       },
       now: 1_000n,
     });
@@ -874,5 +953,4 @@ describe("resolveRounds", () => {
       expect.objectContaining({ functionName: "finalizeRevealFailedRound" }),
     );
   });
-
 });

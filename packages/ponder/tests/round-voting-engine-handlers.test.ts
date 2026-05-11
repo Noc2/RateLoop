@@ -20,6 +20,7 @@ vi.mock("ponder:registry", () => ({
 
 vi.mock("ponder", () => ({
   and: vi.fn(() => "and"),
+  asc: vi.fn((expr: unknown) => ({ kind: "asc", expr })),
   eq: vi.fn(() => "eq"),
 }));
 
@@ -60,8 +61,13 @@ function createDb({
   existingRound?: Record<string, unknown> | null;
   existingVote?: Record<string, unknown> | null;
 } = {}) {
-  const insertCalls: Array<{ table: string; values: Record<string, unknown> }> = [];
-  const updateCalls: Array<{ table: string; key: Record<string, unknown>; values: Record<string, unknown> }> = [];
+  const insertCalls: Array<{ table: string; values: Record<string, unknown> }> =
+    [];
+  const updateCalls: Array<{
+    table: string;
+    key: Record<string, unknown>;
+    values: Record<string, unknown>;
+  }> = [];
   const contentRecord = {
     id: 7n,
     rating: 64,
@@ -103,8 +109,11 @@ function createDb({
   };
   const resolveSetValues = (
     table: string,
-    values: Record<string, unknown> | ((row: Record<string, any>) => Record<string, unknown>),
-  ) => (typeof values === "function" ? values(rowsByTable[table] ?? {}) : values);
+    values:
+      | Record<string, unknown>
+      | ((row: Record<string, any>) => Record<string, unknown>),
+  ) =>
+    typeof values === "function" ? values(rowsByTable[table] ?? {}) : values;
 
   return {
     db: {
@@ -125,11 +134,28 @@ function createDb({
       })),
       update: vi.fn((table: string, key: Record<string, unknown>) => ({
         set: vi.fn(
-          async (values: Record<string, unknown> | ((row: Record<string, any>) => Record<string, unknown>)) => {
-            updateCalls.push({ table, key, values: resolveSetValues(table, values) });
+          async (
+            values:
+              | Record<string, unknown>
+              | ((row: Record<string, any>) => Record<string, unknown>),
+          ) => {
+            updateCalls.push({
+              table,
+              key,
+              values: resolveSetValues(table, values),
+            });
           },
         ),
       })),
+      sql: {
+        select: vi.fn(() => ({
+          from: vi.fn(() => ({
+            where: vi.fn(() => ({
+              orderBy: vi.fn(async () => []),
+            })),
+          })),
+        })),
+      },
     },
     insertCalls,
     updateCalls,
@@ -152,7 +178,9 @@ describe("RoundVotingEngine ponder handlers", () => {
   it("inserts per-round config snapshots before votes arrive", async () => {
     const { db, insertCalls } = createDb();
     const registeredHandlers = await loadHandlers();
-    const handler = registeredHandlers.get("RoundVotingEngine:RoundConfigSnapshotted");
+    const handler = registeredHandlers.get(
+      "RoundVotingEngine:RoundConfigSnapshotted",
+    );
 
     expect(handler).toBeDefined();
 
@@ -194,7 +222,9 @@ describe("RoundVotingEngine ponder handlers", () => {
   it("updates an existing round when the config snapshot arrives late", async () => {
     const { db, updateCalls } = createDb({ existingRound: { id: "7-2" } });
     const registeredHandlers = await loadHandlers();
-    const handler = registeredHandlers.get("RoundVotingEngine:RoundConfigSnapshotted");
+    const handler = registeredHandlers.get(
+      "RoundVotingEngine:RoundConfigSnapshotted",
+    );
 
     expect(handler).toBeDefined();
 
@@ -240,7 +270,9 @@ describe("RoundVotingEngine ponder handlers", () => {
       },
     });
     const registeredHandlers = await loadHandlers();
-    const handler = registeredHandlers.get("RoundVotingEngine:RoundReferenceSnapshotted");
+    const handler = registeredHandlers.get(
+      "RoundVotingEngine:RoundReferenceSnapshotted",
+    );
 
     expect(handler).toBeDefined();
 
@@ -316,7 +348,7 @@ describe("RoundVotingEngine ponder handlers", () => {
     });
   });
 
-  it("stores revealed predictions and updates compatibility pools", async () => {
+  it("stores revealed RBTS votes and updates compatibility pools", async () => {
     const voter = "0x0000000000000000000000000000000000000001";
     const { db, updateCalls } = createDb({
       existingRound: {
@@ -336,7 +368,9 @@ describe("RoundVotingEngine ponder handlers", () => {
       },
     });
     const registeredHandlers = await loadHandlers();
-    const handler = registeredHandlers.get("RoundVotingEngine:PredictionRevealed");
+    const handler = registeredHandlers.get(
+      "RoundVotingEngine:RbtsVoteRevealed",
+    );
 
     expect(handler).toBeDefined();
 
@@ -346,8 +380,8 @@ describe("RoundVotingEngine ponder handlers", () => {
           contentId: 7n,
           roundId: 2n,
           voter,
-          opinionRatingBps: 7200,
-          predictedCrowdRatingBps: 6800,
+          isUp: true,
+          predictedUpBps: 6800,
           effectiveWeight: 25n,
         },
         block: {
@@ -363,10 +397,8 @@ describe("RoundVotingEngine ponder handlers", () => {
       key: { id: `7-2-${voter}` },
       values: {
         isUp: true,
-        opinionRatingBps: 7200,
-        predictedCrowdRatingBps: 6800,
-        predictedRatingBps: 6800,
-        predictionWeight: 25n,
+        predictedUpBps: 6800,
+        rbtsWeight: 25n,
         revealed: true,
         revealedAt: 2_000n,
       },
@@ -380,22 +412,21 @@ describe("RoundVotingEngine ponder handlers", () => {
         downPool: 0n,
         upCount: 1,
         downCount: 0,
-        predictionWeightedRatingSum: 180_000n,
-        totalPredictionWeight: 25n,
       }),
     });
   });
 
-  it("indexes prediction round settlement stats", async () => {
+  it("indexes RBTS reward scoring stats", async () => {
     const { db, updateCalls } = createDb({
       existingRound: {
         id: "7-2",
-        totalPredictionWeight: 50n,
-        finalPredictionRatingBps: null,
+        rbtsRewardWeight: null,
       },
     });
     const registeredHandlers = await loadHandlers();
-    const handler = registeredHandlers.get("RoundVotingEngine:PredictionRoundSettled");
+    const handler = registeredHandlers.get(
+      "RoundVotingEngine:RbtsRewardsScored",
+    );
 
     expect(handler).toBeDefined();
 
@@ -404,8 +435,10 @@ describe("RoundVotingEngine ponder handlers", () => {
         args: {
           contentId: 7n,
           roundId: 2n,
-          finalRatingBps: 7100,
-          totalPredictionWeight: 50n,
+          rewardWeight: 50n,
+          rewardClaimants: 2n,
+          forfeitedPool: 5n,
+          forfeitClaimants: 1n,
         },
         block: {
           number: 45n,
@@ -419,8 +452,10 @@ describe("RoundVotingEngine ponder handlers", () => {
       table: "round",
       key: { id: "7-2" },
       values: {
-        finalPredictionRatingBps: 7100,
-        totalPredictionWeight: 50n,
+        rbtsRewardWeight: 50n,
+        rbtsRewardClaimants: 2,
+        rbtsForfeitedPool: 5n,
+        rbtsForfeitClaimants: 1,
       },
     });
   });

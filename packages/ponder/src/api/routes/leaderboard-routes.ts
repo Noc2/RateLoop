@@ -1,8 +1,19 @@
 import { ROUND_STATE } from "@rateloop/contracts/protocol";
 import { and, asc, desc, eq, gte, lt, notInArray, sql } from "ponder";
 import { db } from "ponder:api";
-import { content, profile, round, tokenHolder, vote, voterCategoryStats, voterStats } from "ponder:schema";
-import { resolveAccuracyLeaderboardWindow, type AccuracyLeaderboardSortBy } from "../leaderboard-utils.js";
+import {
+  content,
+  profile,
+  round,
+  tokenHolder,
+  vote,
+  voterCategoryStats,
+  voterStats,
+} from "ponder:schema";
+import {
+  resolveAccuracyLeaderboardWindow,
+  type AccuracyLeaderboardSortBy,
+} from "../leaderboard-utils.js";
 import type { ApiApp } from "../shared.js";
 import { jsonBig } from "../shared.js";
 import { safeBigInt, safeLimit, safeOffset } from "../utils.js";
@@ -78,17 +89,20 @@ export function registerLeaderboardRoutes(app: ApiApp) {
       .limit(limit);
 
     const remaining = limit - profileItems.length;
-    const profileAddresses = profileItems.map(item => item.address);
+    const profileAddresses = profileItems.map((item) => item.address);
     let holderOnly: typeof profileItems = [];
 
     if (remaining > 0) {
-      const holders = profileAddresses.length > 0
-        ? await db.select().from(tokenHolder)
-            .where(notInArray(tokenHolder.address, profileAddresses))
-            .limit(remaining)
-        : await db.select().from(tokenHolder).limit(remaining);
+      const holders =
+        profileAddresses.length > 0
+          ? await db
+              .select()
+              .from(tokenHolder)
+              .where(notInArray(tokenHolder.address, profileAddresses))
+              .limit(remaining)
+          : await db.select().from(tokenHolder).limit(remaining);
 
-      holderOnly = holders.map(holder => ({
+      holderOnly = holders.map((holder) => ({
         address: holder.address,
         name: "",
         selfReport: "",
@@ -131,17 +145,18 @@ export function registerLeaderboardRoutes(app: ApiApp) {
   app.get("/accuracy-leaderboard", async (c) => {
     const categoryIdParam = c.req.query("categoryId");
     const sortByRaw = c.req.query("sortBy") ?? "winRate";
-    const sortBy = (
-      sortByRaw === "winRate"
-      || sortByRaw === "wins"
-      || sortByRaw === "stakeWon"
-      || sortByRaw === "settledVotes"
-    )
-      ? sortByRaw
-      : null;
+    const sortBy =
+      sortByRaw === "winRate" ||
+      sortByRaw === "wins" ||
+      sortByRaw === "stakeWon" ||
+      sortByRaw === "settledVotes"
+        ? sortByRaw
+        : null;
     if (sortBy === null) return c.json({ error: "Invalid sortBy" }, 400);
 
-    const windowBounds = resolveAccuracyLeaderboardWindow(c.req.query("window"));
+    const windowBounds = resolveAccuracyLeaderboardWindow(
+      c.req.query("window"),
+    );
     if (windowBounds === null) return c.json({ error: "Invalid window" }, 400);
 
     const minVotesParam = c.req.query("minVotes") ?? "3";
@@ -150,36 +165,46 @@ export function registerLeaderboardRoutes(app: ApiApp) {
     if (Number.isNaN(offset)) return c.json({ error: "Invalid offset" }, 400);
 
     const minVotes = parseInt(minVotesParam);
-    if (isNaN(minVotes) || minVotes < 1) return c.json({ error: "Invalid minVotes" }, 400);
+    if (isNaN(minVotes) || minVotes < 1)
+      return c.json({ error: "Invalid minVotes" }, 400);
 
     const categoryId = categoryIdParam ? safeBigInt(categoryIdParam) : null;
-    if (categoryIdParam && categoryId === null) return c.json({ error: "Invalid categoryId" }, 400);
+    if (categoryIdParam && categoryId === null)
+      return c.json({ error: "Invalid categoryId" }, 400);
 
     const categoryWinRateExpr = sql<number>`CAST(${voterCategoryStats.totalWins} AS FLOAT) / ${voterCategoryStats.totalSettledVotes}`;
-    const categoryOrderByExprs = getAccuracyLeaderboardOrderByExpressions(sortBy, {
-      totalSettledVotes: voterCategoryStats.totalSettledVotes,
-      totalWins: voterCategoryStats.totalWins,
-      totalStakeWon: voterCategoryStats.totalStakeWon,
-      winRate: categoryWinRateExpr,
-      voter: voterCategoryStats.voter,
-    });
+    const categoryOrderByExprs = getAccuracyLeaderboardOrderByExpressions(
+      sortBy,
+      {
+        totalSettledVotes: voterCategoryStats.totalSettledVotes,
+        totalWins: voterCategoryStats.totalWins,
+        totalStakeWon: voterCategoryStats.totalStakeWon,
+        winRate: categoryWinRateExpr,
+        voter: voterCategoryStats.voter,
+      },
+    );
     const overallWinRateExpr = sql<number>`CAST(${voterStats.totalWins} AS FLOAT) / ${voterStats.totalSettledVotes}`;
-    const overallOrderByExprs = getAccuracyLeaderboardOrderByExpressions(sortBy, {
-      totalSettledVotes: voterStats.totalSettledVotes,
-      totalWins: voterStats.totalWins,
-      totalStakeWon: voterStats.totalStakeWon,
-      winRate: overallWinRateExpr,
-      voter: voterStats.voter,
-    });
+    const overallOrderByExprs = getAccuracyLeaderboardOrderByExpressions(
+      sortBy,
+      {
+        totalSettledVotes: voterStats.totalSettledVotes,
+        totalWins: voterStats.totalWins,
+        totalStakeWon: voterStats.totalStakeWon,
+        winRate: overallWinRateExpr,
+        voter: voterStats.voter,
+      },
+    );
 
-    if (windowBounds.window !== "all" && windowBounds.startsAt !== null && windowBounds.endsAt !== null) {
+    if (
+      windowBounds.window !== "all" &&
+      windowBounds.startsAt !== null &&
+      windowBounds.endsAt !== null
+    ) {
       const aggregateTotalSettledVotes = sql<number>`count(*)`;
-      const aggregateTotalWins = sql<number>`sum(case when coalesce(${round.finalPredictionRatingBps}, 0) > 0 then case when coalesce(${vote.predictionRewardWeight}, 0) > 0 then 1 else 0 end else case when ${vote.isUp} = ${round.upWins} then 1 else 0 end end)`;
-      const aggregateTotalLosses = sql<number>`sum(case when coalesce(${round.finalPredictionRatingBps}, 0) > 0 then case when coalesce(${vote.predictionRewardWeight}, 0) > 0 then 0 else 1 end else case when ${vote.isUp} = ${round.upWins} then 0 else 1 end end)`;
-      const aggregateTotalStakeWon =
-        sql<bigint>`coalesce(sum(case when coalesce(${round.finalPredictionRatingBps}, 0) > 0 then coalesce(${vote.predictionStakeReturned}, 0) else case when ${vote.isUp} = ${round.upWins} then ${vote.stake} else 0 end end), 0)`;
-      const aggregateTotalStakeLost =
-        sql<bigint>`coalesce(sum(case when coalesce(${round.finalPredictionRatingBps}, 0) > 0 then coalesce(${vote.predictionForfeitedStake}, ${vote.stake}) else case when ${vote.isUp} = ${round.upWins} then 0 else ${vote.stake} end end), 0)`;
+      const aggregateTotalWins = sql<number>`sum(case when ${vote.rbtsRewardWeight} is not null then case when coalesce(${vote.rbtsRewardWeight}, 0) > 0 then 1 else 0 end else case when ${vote.isUp} = ${round.upWins} then 1 else 0 end end)`;
+      const aggregateTotalLosses = sql<number>`sum(case when ${vote.rbtsRewardWeight} is not null then case when coalesce(${vote.rbtsRewardWeight}, 0) > 0 then 0 else 1 end else case when ${vote.isUp} = ${round.upWins} then 0 else 1 end end)`;
+      const aggregateTotalStakeWon = sql<bigint>`coalesce(sum(case when ${vote.rbtsStakeReturned} is not null then coalesce(${vote.rbtsStakeReturned}, 0) else case when ${vote.isUp} = ${round.upWins} then ${vote.stake} else 0 end end), 0)`;
+      const aggregateTotalStakeLost = sql<bigint>`coalesce(sum(case when ${vote.rbtsForfeitedStake} is not null then coalesce(${vote.rbtsForfeitedStake}, ${vote.stake}) else case when ${vote.isUp} = ${round.upWins} then 0 else ${vote.stake} end end), 0)`;
       const aggregateWinRate = sql<number>`CAST(${aggregateTotalWins} AS FLOAT) / ${aggregateTotalSettledVotes}`;
       const aggregateSelection = {
         voter: vote.voter,
@@ -191,13 +216,16 @@ export function registerLeaderboardRoutes(app: ApiApp) {
         winRate: aggregateWinRate,
         profileName: profile.name,
       };
-      const windowedOrderByExprs = getAccuracyLeaderboardOrderByExpressions(sortBy, {
-        totalSettledVotes: aggregateTotalSettledVotes,
-        totalWins: aggregateTotalWins,
-        totalStakeWon: aggregateTotalStakeWon,
-        winRate: aggregateWinRate,
-        voter: vote.voter,
-      });
+      const windowedOrderByExprs = getAccuracyLeaderboardOrderByExpressions(
+        sortBy,
+        {
+          totalSettledVotes: aggregateTotalSettledVotes,
+          totalWins: aggregateTotalWins,
+          totalStakeWon: aggregateTotalStakeWon,
+          winRate: aggregateWinRate,
+          voter: vote.voter,
+        },
+      );
 
       const baseConditions = [
         eq(vote.revealed, true),
@@ -206,44 +234,57 @@ export function registerLeaderboardRoutes(app: ApiApp) {
         lt(round.settledAt, windowBounds.endsAt),
       ];
 
-      const rows = categoryId !== null
-        ? await db
-            .select(aggregateSelection)
-            .from(vote)
-            .innerJoin(
-              round,
-              and(eq(vote.contentId, round.contentId), eq(vote.roundId, round.roundId)),
-            )
-            .innerJoin(content, eq(vote.contentId, content.id))
-            .leftJoin(profile, eq(vote.voter, profile.address))
-            .where(and(...baseConditions, eq(content.categoryId, categoryId)))
-            .groupBy(vote.voter, profile.name)
-            .having(sql`count(*) >= ${minVotes}`)
-            .orderBy(...windowedOrderByExprs)
-            .limit(limit)
-            .offset(offset)
-        : await db
-            .select(aggregateSelection)
-            .from(vote)
-            .innerJoin(
-              round,
-              and(eq(vote.contentId, round.contentId), eq(vote.roundId, round.roundId)),
-            )
-            .leftJoin(profile, eq(vote.voter, profile.address))
-            .where(and(...baseConditions))
-            .groupBy(vote.voter, profile.name)
-            .having(sql`count(*) >= ${minVotes}`)
-            .orderBy(...windowedOrderByExprs)
-            .limit(limit)
-            .offset(offset);
+      const rows =
+        categoryId !== null
+          ? await db
+              .select(aggregateSelection)
+              .from(vote)
+              .innerJoin(
+                round,
+                and(
+                  eq(vote.contentId, round.contentId),
+                  eq(vote.roundId, round.roundId),
+                ),
+              )
+              .innerJoin(content, eq(vote.contentId, content.id))
+              .leftJoin(profile, eq(vote.voter, profile.address))
+              .where(and(...baseConditions, eq(content.categoryId, categoryId)))
+              .groupBy(vote.voter, profile.name)
+              .having(sql`count(*) >= ${minVotes}`)
+              .orderBy(...windowedOrderByExprs)
+              .limit(limit)
+              .offset(offset)
+          : await db
+              .select(aggregateSelection)
+              .from(vote)
+              .innerJoin(
+                round,
+                and(
+                  eq(vote.contentId, round.contentId),
+                  eq(vote.roundId, round.roundId),
+                ),
+              )
+              .leftJoin(profile, eq(vote.voter, profile.address))
+              .where(and(...baseConditions))
+              .groupBy(vote.voter, profile.name)
+              .having(sql`count(*) >= ${minVotes}`)
+              .orderBy(...windowedOrderByExprs)
+              .limit(limit)
+              .offset(offset);
 
       const items = rows.map((row) => ({
         voter: row.voter,
         totalSettledVotes: Number(row.totalSettledVotes),
         totalWins: Number(row.totalWins),
         totalLosses: Number(row.totalLosses),
-        totalStakeWon: typeof row.totalStakeWon === "bigint" ? row.totalStakeWon : BigInt(row.totalStakeWon ?? 0),
-        totalStakeLost: typeof row.totalStakeLost === "bigint" ? row.totalStakeLost : BigInt(row.totalStakeLost ?? 0),
+        totalStakeWon:
+          typeof row.totalStakeWon === "bigint"
+            ? row.totalStakeWon
+            : BigInt(row.totalStakeWon ?? 0),
+        totalStakeLost:
+          typeof row.totalStakeLost === "bigint"
+            ? row.totalStakeLost
+            : BigInt(row.totalStakeLost ?? 0),
         profileName: row.profileName,
         winRate: Number(row.winRate),
       }));
@@ -280,9 +321,12 @@ export function registerLeaderboardRoutes(app: ApiApp) {
         .limit(limit)
         .offset(offset);
 
-      const result = items.map(item => ({
+      const result = items.map((item) => ({
         ...item,
-        winRate: item.totalSettledVotes > 0 ? item.totalWins / item.totalSettledVotes : 0,
+        winRate:
+          item.totalSettledVotes > 0
+            ? item.totalWins / item.totalSettledVotes
+            : 0,
       }));
 
       return jsonBig(c, {
@@ -313,9 +357,12 @@ export function registerLeaderboardRoutes(app: ApiApp) {
       .limit(limit)
       .offset(offset);
 
-    const result = items.map(item => ({
+    const result = items.map((item) => ({
       ...item,
-      winRate: item.totalSettledVotes > 0 ? item.totalWins / item.totalSettledVotes : 0,
+      winRate:
+        item.totalSettledVotes > 0
+          ? item.totalWins / item.totalSettledVotes
+          : 0,
     }));
 
     return jsonBig(c, {

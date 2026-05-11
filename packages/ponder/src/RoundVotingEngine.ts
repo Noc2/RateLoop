@@ -1,6 +1,9 @@
 import { ponder } from "ponder:registry";
-import { eq, and } from "ponder";
-import { DEFAULT_ROUND_CONFIG, ROUND_STATE } from "@rateloop/contracts/protocol";
+import { asc, eq, and } from "ponder";
+import {
+  DEFAULT_ROUND_CONFIG,
+  ROUND_STATE,
+} from "@rateloop/contracts/protocol";
 import {
   round,
   vote,
@@ -14,13 +17,14 @@ import {
   dailyVoteActivity,
   voterStreak,
 } from "ponder:schema";
-import { formatUtcDateKey, getPreviousUtcDateKey, normalizeUtcDateKey } from "./streak-utils.js";
+import {
+  formatUtcDateKey,
+  getPreviousUtcDateKey,
+  normalizeUtcDateKey,
+} from "./streak-utils.js";
 
-const PREDICTION_FULL_CREDIT_TOLERANCE_BPS = 100;
-const PREDICTION_ZERO_CREDIT_TOLERANCE_BPS = 8_900;
-const PREDICTION_SCORE_SCALE_BPS = 10_000;
-const MIN_RATING_BPS = 1_000;
-const MAX_RATING_BPS = 9_900;
+const RBTS_SCORE_SCALE_BPS = 10_000;
+const RBTS_SCORE_SCALE = 10_000n;
 
 function defaultRoundConfigFields() {
   return {
@@ -31,17 +35,21 @@ function defaultRoundConfigFields() {
   };
 }
 
-function computeVoteEpochIndex(committedAt: bigint, roundStartTime: bigint, epochDurationSeconds: number): number {
+function computeVoteEpochIndex(
+  committedAt: bigint,
+  roundStartTime: bigint,
+  epochDurationSeconds: number,
+): number {
   const epochDuration = Math.trunc(epochDurationSeconds);
-  if (!Number.isFinite(epochDuration) || epochDuration <= 0 || committedAt <= roundStartTime) {
+  if (
+    !Number.isFinite(epochDuration) ||
+    epochDuration <= 0 ||
+    committedAt <= roundStartTime
+  ) {
     return 0;
   }
 
   return committedAt - roundStartTime < BigInt(epochDuration) ? 0 : 1;
-}
-
-function derivePredictionDirection(opinionRatingBps: number, referenceRatingBps: number): boolean {
-  return opinionRatingBps >= referenceRatingBps;
 }
 
 function roundReferenceFields(referenceRatingBps: number) {
@@ -52,65 +60,53 @@ function roundReferenceFields(referenceRatingBps: number) {
   };
 }
 
-function clampRatingBps(ratingBps: number) {
-  if (!Number.isFinite(ratingBps)) return 0;
-  return Math.min(MAX_RATING_BPS, Math.max(MIN_RATING_BPS, Math.trunc(ratingBps)));
+function shadowPredictionBps(
+  referencePredictionBps: number,
+  signalIsUp: boolean,
+): number {
+  const delta = Math.min(
+    referencePredictionBps,
+    RBTS_SCORE_SCALE_BPS - referencePredictionBps,
+  );
+  return signalIsUp
+    ? referencePredictionBps + delta
+    : referencePredictionBps - delta;
 }
 
-function weightedAverageRatingBps(weightedRatingSum: bigint, totalWeight: bigint) {
-  if (totalWeight <= 0n) return 0;
-  const rating = Number((weightedRatingSum + totalWeight / 2n) / totalWeight);
-  return clampRatingBps(rating);
-}
-
-function leaveOneOutRatingBps(
-  totalWeightedRating: bigint,
-  totalWeight: bigint,
-  ownOpinionRatingBps: number,
-  ownWeight: bigint,
-) {
-  if (ownWeight > totalWeight) return weightedAverageRatingBps(totalWeightedRating, totalWeight);
-  const ownContribution = BigInt(ownOpinionRatingBps) * ownWeight;
-  if (ownContribution > totalWeightedRating) return weightedAverageRatingBps(totalWeightedRating, totalWeight);
-  const peerWeight = totalWeight - ownWeight;
-  if (peerWeight === 0n) return weightedAverageRatingBps(totalWeightedRating, totalWeight);
-  return weightedAverageRatingBps(totalWeightedRating - ownContribution, peerWeight);
-}
-
-function accuracyScoreBps(predictionBps: number, peerRatingBps: number) {
-  const errorBps = Math.abs(clampRatingBps(predictionBps) - clampRatingBps(peerRatingBps));
-  if (errorBps <= PREDICTION_FULL_CREDIT_TOLERANCE_BPS) return PREDICTION_SCORE_SCALE_BPS;
-  if (errorBps >= PREDICTION_ZERO_CREDIT_TOLERANCE_BPS) return 0;
-
-  const toleranceRange = PREDICTION_ZERO_CREDIT_TOLERANCE_BPS - PREDICTION_FULL_CREDIT_TOLERANCE_BPS;
-  const excessError = errorBps - PREDICTION_FULL_CREDIT_TOLERANCE_BPS;
-  return PREDICTION_SCORE_SCALE_BPS - Math.trunc((PREDICTION_SCORE_SCALE_BPS * excessError) / toleranceRange);
-}
-
-function scorePredictionVote(
-  roundVote: {
-    opinionRatingBps?: number | null;
-    predictedCrowdRatingBps?: number | null;
-    predictedRatingBps?: number | null;
-    predictionWeight?: bigint | null;
-    stake: bigint;
-  },
-  totalWeightedRating: bigint,
-  totalWeight: bigint,
-) {
-  const ownWeight = roundVote.predictionWeight ?? 0n;
-  const ownOpinion = roundVote.opinionRatingBps;
-  const ownPrediction = roundVote.predictedCrowdRatingBps ?? roundVote.predictedRatingBps;
-  if (ownWeight <= 0n || ownOpinion === null || ownOpinion === undefined || ownPrediction === null || ownPrediction === undefined) {
-    return null;
+function quadraticScoreBps(predictionBps: number, actualIsUp: boolean): number {
+  const y = Math.max(
+    0,
+    Math.min(RBTS_SCORE_SCALE_BPS, Math.trunc(predictionBps)),
+  );
+  const ySquared = y * y;
+  if (actualIsUp) {
+    return Math.floor(
+      (2 * RBTS_SCORE_SCALE_BPS * y - ySquared) / RBTS_SCORE_SCALE_BPS,
+    );
   }
+  return Math.floor(RBTS_SCORE_SCALE_BPS - ySquared / RBTS_SCORE_SCALE_BPS);
+}
 
-  const peerRatingBps = leaveOneOutRatingBps(totalWeightedRating, totalWeight, Number(ownOpinion), ownWeight);
-  const scoreBps = accuracyScoreBps(Number(ownPrediction), peerRatingBps);
-  const scoreWeight = (ownWeight * BigInt(scoreBps)) / BigInt(PREDICTION_SCORE_SCALE_BPS);
-  const stakeReturned = (roundVote.stake * BigInt(scoreBps)) / BigInt(PREDICTION_SCORE_SCALE_BPS);
-  const forfeitedStake = roundVote.stake - stakeReturned;
-  return { scoreBps, scoreWeight, stakeReturned, forfeitedStake };
+function rbtsScoreBps({
+  ownSignalIsUp,
+  ownPredictionBps,
+  referencePredictionBps,
+  peerSignalIsUp,
+}: {
+  ownSignalIsUp: boolean;
+  ownPredictionBps: number;
+  referencePredictionBps: number;
+  peerSignalIsUp: boolean;
+}) {
+  const shadow = shadowPredictionBps(referencePredictionBps, ownSignalIsUp);
+  const informationScore = quadraticScoreBps(shadow, peerSignalIsUp);
+  const predictionScore = quadraticScoreBps(ownPredictionBps, peerSignalIsUp);
+  return Math.floor((informationScore + predictionScore) / 2);
+}
+
+function weightByRbtsScore(amount: bigint, scoreBps: number): bigint {
+  if (scoreBps <= 0 || amount <= 0n) return 0n;
+  return (amount * BigInt(scoreBps)) / RBTS_SCORE_SCALE;
 }
 
 async function recordVoteReveal({
@@ -119,10 +115,8 @@ async function recordVoteReveal({
   roundId,
   voter,
   isUp,
-  opinionRatingBps = null,
-  predictedCrowdRatingBps = null,
-  predictedRatingBps = null,
-  predictionWeight = null,
+  predictedUpBps = null,
+  rbtsWeight = null,
   revealedAt,
 }: {
   context: any;
@@ -130,23 +124,20 @@ async function recordVoteReveal({
   roundId: bigint;
   voter: `0x${string}`;
   isUp: boolean;
-  opinionRatingBps?: number | null;
-  predictedCrowdRatingBps?: number | null;
-  predictedRatingBps?: number | null;
-  predictionWeight?: bigint | null;
+  predictedUpBps?: number | null;
+  rbtsWeight?: bigint | null;
   revealedAt: bigint;
 }) {
   const roundKey = `${contentId}-${roundId}`;
   const voteKey = `${contentId}-${roundId}-${voter}`;
   const existingVote = await context.db.find(vote, { id: voteKey });
+  const shouldCountReveal = existingVote?.revealed !== true;
 
   if (existingVote) {
     await context.db.update(vote, { id: voteKey }).set({
       isUp,
-      opinionRatingBps,
-      predictedCrowdRatingBps,
-      predictedRatingBps,
-      predictionWeight,
+      predictedUpBps,
+      rbtsWeight,
       revealed: true,
       revealedAt,
       // epochIndex is not available from reveal events; keep existing
@@ -154,106 +145,127 @@ async function recordVoteReveal({
   }
 
   const existingRound = await context.db.find(round, { id: roundKey });
-  if (existingRound) {
+  if (existingRound && shouldCountReveal) {
     await context.db.update(round, { id: roundKey }).set((row) => ({
       revealedCount: row.revealedCount + 1,
       upPool: isUp ? row.upPool + (existingVote?.stake ?? 0n) : row.upPool,
-      downPool: isUp ? row.downPool : row.downPool + (existingVote?.stake ?? 0n),
+      downPool: isUp
+        ? row.downPool
+        : row.downPool + (existingVote?.stake ?? 0n),
       upCount: isUp ? row.upCount + 1 : row.upCount,
       downCount: isUp ? row.downCount : row.downCount + 1,
-      predictionWeightedRatingSum:
-        opinionRatingBps === null || predictionWeight === null
-          ? row.predictionWeightedRatingSum
-          : (row.predictionWeightedRatingSum ?? 0n) + BigInt(opinionRatingBps) * predictionWeight,
-      totalPredictionWeight:
-        predictionWeight === null ? row.totalPredictionWeight : (row.totalPredictionWeight ?? 0n) + predictionWeight,
     }));
   }
 }
 
-ponder.on("RoundVotingEngine:RoundConfigSnapshotted", async ({ event, context }) => {
-  const { contentId, roundId, epochDuration, maxDuration, minVoters, maxVoters } = event.args;
-  const roundKey = `${contentId}-${roundId}`;
-  const contentRecord = await context.db.find(content, { id: contentId });
-  const referenceRatingBps = contentRecord
-    ? (contentRecord.ratingBps > 0 ? contentRecord.ratingBps : contentRecord.rating * 100)
-    : 5000;
-  const roundConfigFields = {
-    epochDuration: Number(epochDuration),
-    maxDuration: Number(maxDuration),
-    minVoters: Number(minVoters),
-    maxVoters: Number(maxVoters),
-  };
+ponder.on(
+  "RoundVotingEngine:RoundConfigSnapshotted",
+  async ({ event, context }) => {
+    const {
+      contentId,
+      roundId,
+      epochDuration,
+      maxDuration,
+      minVoters,
+      maxVoters,
+    } = event.args;
+    const roundKey = `${contentId}-${roundId}`;
+    const contentRecord = await context.db.find(content, { id: contentId });
+    const referenceRatingBps = contentRecord
+      ? contentRecord.ratingBps > 0
+        ? contentRecord.ratingBps
+        : contentRecord.rating * 100
+      : 5000;
+    const roundConfigFields = {
+      epochDuration: Number(epochDuration),
+      maxDuration: Number(maxDuration),
+      minVoters: Number(minVoters),
+      maxVoters: Number(maxVoters),
+    };
 
-  const existingRound = await context.db.find(round, { id: roundKey });
-  if (existingRound) {
-    await context.db.update(round, { id: roundKey }).set(roundConfigFields);
-    return;
-  }
+    const existingRound = await context.db.find(round, { id: roundKey });
+    if (existingRound) {
+      await context.db.update(round, { id: roundKey }).set(roundConfigFields);
+      return;
+    }
 
-  await context.db.insert(round).values({
-    id: roundKey,
-    contentId,
-    roundId,
-    state: ROUND_STATE.Open,
-    voteCount: 0,
-    revealedCount: 0,
-    totalStake: 0n,
-    upPool: 0n,
-    downPool: 0n,
-    upCount: 0,
-    downCount: 0,
-    referenceRatingBps,
-    ratingBps: referenceRatingBps,
-    conservativeRatingBps: referenceRatingBps,
-    confidenceMass: 0n,
-    effectiveEvidence: 0n,
-    settledRounds: 0,
-    lowSince: 0n,
-    startTime: event.block.timestamp,
-    ...roundConfigFields,
-  });
-});
+    await context.db.insert(round).values({
+      id: roundKey,
+      contentId,
+      roundId,
+      state: ROUND_STATE.Open,
+      voteCount: 0,
+      revealedCount: 0,
+      totalStake: 0n,
+      upPool: 0n,
+      downPool: 0n,
+      upCount: 0,
+      downCount: 0,
+      referenceRatingBps,
+      ratingBps: referenceRatingBps,
+      conservativeRatingBps: referenceRatingBps,
+      confidenceMass: 0n,
+      effectiveEvidence: 0n,
+      settledRounds: 0,
+      lowSince: 0n,
+      startTime: event.block.timestamp,
+      ...roundConfigFields,
+    });
+  },
+);
 
-ponder.on("RoundVotingEngine:RoundReferenceSnapshotted", async ({ event, context }) => {
-  const { contentId, roundId, roundReferenceRatingBps } = event.args as {
-    contentId: bigint;
-    roundId: bigint;
-    roundReferenceRatingBps: number;
-  };
-  const roundKey = `${contentId}-${roundId}`;
-  const referenceRatingBps = Number(roundReferenceRatingBps);
-  const existingRound = await context.db.find(round, { id: roundKey });
-  if (existingRound) {
-    await context.db.update(round, { id: roundKey }).set(roundReferenceFields(referenceRatingBps));
-    return;
-  }
+ponder.on(
+  "RoundVotingEngine:RoundReferenceSnapshotted",
+  async ({ event, context }) => {
+    const { contentId, roundId, roundReferenceRatingBps } = event.args as {
+      contentId: bigint;
+      roundId: bigint;
+      roundReferenceRatingBps: number;
+    };
+    const roundKey = `${contentId}-${roundId}`;
+    const referenceRatingBps = Number(roundReferenceRatingBps);
+    const existingRound = await context.db.find(round, { id: roundKey });
+    if (existingRound) {
+      await context.db
+        .update(round, { id: roundKey })
+        .set(roundReferenceFields(referenceRatingBps));
+      return;
+    }
 
-  await context.db.insert(round).values({
-    id: roundKey,
-    contentId,
-    roundId,
-    state: ROUND_STATE.Open,
-    voteCount: 0,
-    revealedCount: 0,
-    totalStake: 0n,
-    upPool: 0n,
-    downPool: 0n,
-    upCount: 0,
-    downCount: 0,
-    ...roundReferenceFields(referenceRatingBps),
-    confidenceMass: 0n,
-    effectiveEvidence: 0n,
-    settledRounds: 0,
-    lowSince: 0n,
-    startTime: event.block.timestamp,
-    ...defaultRoundConfigFields(),
-  });
-});
+    await context.db.insert(round).values({
+      id: roundKey,
+      contentId,
+      roundId,
+      state: ROUND_STATE.Open,
+      voteCount: 0,
+      revealedCount: 0,
+      totalStake: 0n,
+      upPool: 0n,
+      downPool: 0n,
+      upCount: 0,
+      downCount: 0,
+      ...roundReferenceFields(referenceRatingBps),
+      confidenceMass: 0n,
+      effectiveEvidence: 0n,
+      settledRounds: 0,
+      lowSince: 0n,
+      startTime: event.block.timestamp,
+      ...defaultRoundConfigFields(),
+    });
+  },
+);
 
 ponder.on("RoundVotingEngine:VoteCommitted", async ({ event, context }) => {
-  const { contentId, roundId, voter, commitHash, roundReferenceRatingBps, targetRound, drandChainHash, stake } =
-    event.args as {
+  const {
+    contentId,
+    roundId,
+    voter,
+    commitHash,
+    roundReferenceRatingBps,
+    targetRound,
+    drandChainHash,
+    stake,
+  } = event.args as {
     contentId: bigint;
     roundId: bigint;
     voter: `0x${string}`;
@@ -318,10 +330,12 @@ ponder.on("RoundVotingEngine:VoteCommitted", async ({ event, context }) => {
       targetRound,
       drandChainHash,
       isUp: null,
-      opinionRatingBps: null,
-      predictedCrowdRatingBps: null,
-      predictedRatingBps: null,
-      predictionWeight: null,
+      predictedUpBps: null,
+      rbtsWeight: null,
+      rbtsScoreBps: null,
+      rbtsRewardWeight: null,
+      rbtsStakeReturned: null,
+      rbtsForfeitedStake: null,
       stake,
       epochIndex,
       revealed: false,
@@ -333,16 +347,16 @@ ponder.on("RoundVotingEngine:VoteCommitted", async ({ event, context }) => {
   // Update content aggregate and lastActivityAt
   const contentRecord = await context.db.find(content, { id: contentId });
   if (contentRecord) {
-    await context.db
-      .update(content, { id: contentId })
-      .set((row) => ({
-        totalVotes: row.totalVotes + 1,
-        lastActivityAt: event.block.timestamp,
-      }));
+    await context.db.update(content, { id: contentId }).set((row) => ({
+      totalVotes: row.totalVotes + 1,
+      lastActivityAt: event.block.timestamp,
+    }));
 
     // Update category aggregate
     if (contentRecord.categoryId > 0n) {
-      const existingCategory = await context.db.find(category, { id: contentRecord.categoryId });
+      const existingCategory = await context.db.find(category, {
+        id: contentRecord.categoryId,
+      });
       if (existingCategory) {
         await context.db
           .update(category, { id: contentRecord.categoryId })
@@ -415,7 +429,10 @@ ponder.on("RoundVotingEngine:VoteCommitted", async ({ event, context }) => {
         lastActiveDate: dateStr,
       });
     }
-  } else if (yesterdayStr !== null && normalizeUtcDateKey(existingStreak.lastActiveDate) === yesterdayStr) {
+  } else if (
+    yesterdayStr !== null &&
+    normalizeUtcDateKey(existingStreak.lastActiveDate) === yesterdayStr
+  ) {
     // Consecutive day — increment streak
     const newStreak = existingStreak.currentDailyStreak + 1;
     await context.db.update(voterStreak, { voter }).set({
@@ -435,38 +452,22 @@ ponder.on("RoundVotingEngine:VoteCommitted", async ({ event, context }) => {
   }
 });
 
-ponder.on("RoundVotingEngine:VoteRevealed", async ({ event, context }) => {
-  const { contentId, roundId, voter, isUp } = event.args;
-  await recordVoteReveal({
-    context,
-    contentId,
-    roundId,
-    voter,
-    isUp,
-    revealedAt: event.block.timestamp,
-  });
-});
-
-ponder.on("RoundVotingEngine:PredictionRevealed", async ({ event, context }) => {
+ponder.on("RoundVotingEngine:RbtsVoteRevealed", async ({ event, context }) => {
   const {
     contentId,
     roundId,
     voter,
-    opinionRatingBps,
-    predictedCrowdRatingBps,
+    isUp,
+    predictedUpBps,
     effectiveWeight = null,
   } = event.args as {
     contentId: bigint;
     roundId: bigint;
     voter: `0x${string}`;
-    opinionRatingBps: number;
-    predictedCrowdRatingBps: number;
+    isUp: boolean;
+    predictedUpBps: number;
     effectiveWeight?: bigint | null;
   };
-  const roundKey = `${contentId}-${roundId}`;
-  const existingRound = await context.db.find(round, { id: roundKey });
-  const referenceRatingBps = existingRound?.referenceRatingBps ?? 5000;
-  const isUp = derivePredictionDirection(Number(opinionRatingBps), referenceRatingBps);
 
   await recordVoteReveal({
     context,
@@ -474,34 +475,21 @@ ponder.on("RoundVotingEngine:PredictionRevealed", async ({ event, context }) => 
     roundId,
     voter,
     isUp,
-    opinionRatingBps: Number(opinionRatingBps),
-    predictedCrowdRatingBps: Number(predictedCrowdRatingBps),
-    predictedRatingBps: Number(predictedCrowdRatingBps),
-    predictionWeight: effectiveWeight,
+    predictedUpBps: Number(predictedUpBps),
+    rbtsWeight: effectiveWeight,
     revealedAt: event.block.timestamp,
   });
 });
 
-ponder.on("RoundVotingEngine:PredictionRoundSettled", async ({ event, context }) => {
-  const { contentId, roundId, finalRatingBps, totalPredictionWeight } = event.args as {
-    contentId: bigint;
-    roundId: bigint;
-    finalRatingBps: number;
-    totalPredictionWeight: bigint;
-  };
-  const roundKey = `${contentId}-${roundId}`;
-
-  const existingRound = await context.db.find(round, { id: roundKey });
-  if (existingRound) {
-    await context.db.update(round, { id: roundKey }).set({
-      finalPredictionRatingBps: Number(finalRatingBps),
-      totalPredictionWeight,
-    });
-  }
-});
-
-ponder.on("RoundVotingEngine:PredictionRewardsScored", async ({ event, context }) => {
-  const { contentId, roundId, rewardWeight, rewardClaimants, forfeitedPool, forfeitClaimants } = event.args as {
+ponder.on("RoundVotingEngine:RbtsRewardsScored", async ({ event, context }) => {
+  const {
+    contentId,
+    roundId,
+    rewardWeight,
+    rewardClaimants,
+    forfeitedPool,
+    forfeitClaimants,
+  } = event.args as {
     contentId: bigint;
     roundId: bigint;
     rewardWeight: bigint;
@@ -514,28 +502,53 @@ ponder.on("RoundVotingEngine:PredictionRewardsScored", async ({ event, context }
   const existingRound = await context.db.find(round, { id: roundKey });
   if (existingRound) {
     await context.db.update(round, { id: roundKey }).set({
-      predictionRewardWeight: rewardWeight,
-      predictionRewardClaimants: Number(rewardClaimants),
-      predictionForfeitedPool: forfeitedPool,
-      predictionForfeitClaimants: Number(forfeitClaimants),
+      rbtsRewardWeight: rewardWeight,
+      rbtsRewardClaimants: Number(rewardClaimants),
+      rbtsForfeitedPool: forfeitedPool,
+      rbtsForfeitClaimants: Number(forfeitClaimants),
     });
 
     const roundVotes = await context.db.sql
       .select()
       .from(vote)
-      .where(and(eq(vote.contentId, contentId), eq(vote.roundId, roundId), eq(vote.revealed, true)));
-    const totalWeightedRating = existingRound.predictionWeightedRatingSum ?? 0n;
-    const totalWeight = existingRound.totalPredictionWeight ?? 0n;
+      .where(
+        and(
+          eq(vote.contentId, contentId),
+          eq(vote.roundId, roundId),
+          eq(vote.revealed, true),
+        ),
+      )
+      .orderBy(asc(vote.committedAt), asc(vote.id));
 
-    for (const roundVote of roundVotes) {
-      const score = scorePredictionVote(roundVote, totalWeightedRating, totalWeight);
-      if (!score) continue;
+    if (roundVotes.length < 3) return;
+
+    for (let index = 0; index < roundVotes.length; index += 1) {
+      const roundVote = roundVotes[index];
+      const referenceVote = roundVotes[(index + 1) % roundVotes.length];
+      const peerVote = roundVotes[(index + 2) % roundVotes.length];
+      if (
+        roundVote.isUp === null ||
+        referenceVote.predictedUpBps === null ||
+        peerVote.isUp === null ||
+        roundVote.predictedUpBps === null ||
+        roundVote.rbtsWeight === null
+      ) {
+        continue;
+      }
+
+      const scoreBps = rbtsScoreBps({
+        ownSignalIsUp: roundVote.isUp,
+        ownPredictionBps: roundVote.predictedUpBps,
+        referencePredictionBps: referenceVote.predictedUpBps,
+        peerSignalIsUp: peerVote.isUp,
+      });
 
       await context.db.update(vote, { id: roundVote.id }).set({
-        predictionScoreBps: score.scoreBps,
-        predictionRewardWeight: score.scoreWeight,
-        predictionStakeReturned: score.stakeReturned,
-        predictionForfeitedStake: score.forfeitedStake,
+        rbtsScoreBps: scoreBps,
+        rbtsRewardWeight: weightByRbtsScore(roundVote.rbtsWeight, scoreBps),
+        rbtsStakeReturned: weightByRbtsScore(roundVote.stake, scoreBps),
+        rbtsForfeitedStake:
+          roundVote.stake - weightByRbtsScore(roundVote.stake, scoreBps),
       });
     }
   }
@@ -607,29 +620,37 @@ ponder.on("RoundVotingEngine:RoundSettled", async ({ event, context }) => {
   const roundVotes = await context.db.sql
     .select()
     .from(vote)
-    .where(and(eq(vote.contentId, contentId), eq(vote.roundId, roundId), eq(vote.revealed, true)));
-  const predictionRound =
+    .where(
+      and(
+        eq(vote.contentId, contentId),
+        eq(vote.roundId, roundId),
+        eq(vote.revealed, true),
+      ),
+    );
+  const rbtsRound =
     roundVotes.length >= 3 &&
-    (existingRound?.totalPredictionWeight ?? 0n) > 0n &&
     roundVotes.every(
       (v) =>
-        (v.predictionWeight ?? 0n) > 0n &&
-        v.opinionRatingBps !== null &&
-        v.opinionRatingBps !== undefined &&
-        (v.predictedCrowdRatingBps ?? v.predictedRatingBps) !== null &&
-        (v.predictedCrowdRatingBps ?? v.predictedRatingBps) !== undefined,
+        (v.rbtsWeight ?? 0n) > 0n &&
+        v.predictedUpBps !== null &&
+        v.predictedUpBps !== undefined,
     );
-  const totalWeightedRating = existingRound?.predictionWeightedRatingSum ?? 0n;
-  const totalWeight = existingRound?.totalPredictionWeight ?? 0n;
 
   const categoryId = contentRecord?.categoryId ?? 0n;
 
   for (const v of roundVotes) {
     if (v.isUp === null) continue; // skip unrevealed
-    const predictionScore = predictionRound ? scorePredictionVote(v, totalWeightedRating, totalWeight) : null;
-    const won = predictionScore ? predictionScore.scoreWeight > 0n : v.isUp === upWins;
-    const stakeWon = predictionScore ? predictionScore.stakeReturned : won ? v.stake : 0n;
-    const stakeLost = predictionScore ? predictionScore.forfeitedStake : won ? 0n : v.stake;
+    const won = rbtsRound ? (v.rbtsRewardWeight ?? 0n) > 0n : v.isUp === upWins;
+    const stakeWon = rbtsRound
+      ? (v.rbtsStakeReturned ?? 0n)
+      : won
+        ? v.stake
+        : 0n;
+    const stakeLost = rbtsRound
+      ? (v.rbtsForfeitedStake ?? v.stake)
+      : won
+        ? 0n
+        : v.stake;
 
     await context.db
       .insert(voterStats)
@@ -645,8 +666,12 @@ ponder.on("RoundVotingEngine:RoundSettled", async ({ event, context }) => {
       })
       .onConflictDoUpdate((row) => {
         const newStreak = won
-          ? (row.currentStreak > 0 ? row.currentStreak + 1 : 1)
-          : (row.currentStreak < 0 ? row.currentStreak - 1 : -1);
+          ? row.currentStreak > 0
+            ? row.currentStreak + 1
+            : 1
+          : row.currentStreak < 0
+            ? row.currentStreak - 1
+            : -1;
         return {
           totalSettledVotes: row.totalSettledVotes + 1,
           totalWins: row.totalWins + (won ? 1 : 0),
@@ -691,9 +716,11 @@ ponder.on("RoundVotingEngine:RoundCancelled", async ({ event, context }) => {
   if (existingRound) {
     await context.db.update(round, { id: roundKey }).set((row) => ({
       state: ROUND_STATE.Cancelled,
-      referenceRatingBps: row.referenceRatingBps > 0 ? row.referenceRatingBps : 5000,
+      referenceRatingBps:
+        row.referenceRatingBps > 0 ? row.referenceRatingBps : 5000,
       ratingBps: row.ratingBps > 0 ? row.ratingBps : 5000,
-      conservativeRatingBps: row.conservativeRatingBps > 0 ? row.conservativeRatingBps : 5000,
+      conservativeRatingBps:
+        row.conservativeRatingBps > 0 ? row.conservativeRatingBps : 5000,
     }));
   } else {
     await context.db.insert(round).values({
@@ -727,9 +754,11 @@ ponder.on("RoundVotingEngine:RoundTied", async ({ event, context }) => {
   if (existingRound) {
     await context.db.update(round, { id: roundKey }).set((row) => ({
       state: ROUND_STATE.Tied,
-      referenceRatingBps: row.referenceRatingBps > 0 ? row.referenceRatingBps : 5000,
+      referenceRatingBps:
+        row.referenceRatingBps > 0 ? row.referenceRatingBps : 5000,
       ratingBps: row.ratingBps > 0 ? row.ratingBps : 5000,
-      conservativeRatingBps: row.conservativeRatingBps > 0 ? row.conservativeRatingBps : 5000,
+      conservativeRatingBps:
+        row.conservativeRatingBps > 0 ? row.conservativeRatingBps : 5000,
     }));
   } else {
     await context.db.insert(round).values({
@@ -763,9 +792,11 @@ ponder.on("RoundVotingEngine:RoundRevealFailed", async ({ event, context }) => {
   if (existingRound) {
     await context.db.update(round, { id: roundKey }).set((row) => ({
       state: ROUND_STATE.RevealFailed,
-      referenceRatingBps: row.referenceRatingBps > 0 ? row.referenceRatingBps : 5000,
+      referenceRatingBps:
+        row.referenceRatingBps > 0 ? row.referenceRatingBps : 5000,
       ratingBps: row.ratingBps > 0 ? row.ratingBps : 5000,
-      conservativeRatingBps: row.conservativeRatingBps > 0 ? row.conservativeRatingBps : 5000,
+      conservativeRatingBps:
+        row.conservativeRatingBps > 0 ? row.conservativeRatingBps : 5000,
     }));
   } else {
     await context.db.insert(round).values({
@@ -791,24 +822,27 @@ ponder.on("RoundVotingEngine:RoundRevealFailed", async ({ event, context }) => {
   }
 });
 
-ponder.on("RoundVotingEngine:CancelledRoundRefundClaimed", async ({ event, context }) => {
-  const { contentId, roundId, voter, amount } = event.args;
+ponder.on(
+  "RoundVotingEngine:CancelledRoundRefundClaimed",
+  async ({ event, context }) => {
+    const { contentId, roundId, voter, amount } = event.args;
 
-  // Record refund as a reward claim with source "refund". The cancelled-round refund pays
-  // the original `commit.voter`, so voter and stakePayer collapse to the same address here.
-  await context.db
-    .insert(rewardClaim)
-    .values({
-      id: `refund-${contentId}-${roundId}-${voter}`,
-      contentId,
-      roundId,
-      epochId: null,
-      source: "refund",
-      voter,
-      stakePayer: voter,
-      stakeReturned: amount,
-      hrepReward: 0n,
-      claimedAt: event.block.timestamp,
-    })
-    .onConflictDoNothing();
-});
+    // Record refund as a reward claim with source "refund". The cancelled-round refund pays
+    // the original `commit.voter`, so voter and stakePayer collapse to the same address here.
+    await context.db
+      .insert(rewardClaim)
+      .values({
+        id: `refund-${contentId}-${roundId}-${voter}`,
+        contentId,
+        roundId,
+        epochId: null,
+        source: "refund",
+        voter,
+        stakePayer: voter,
+        stakeReturned: amount,
+        hrepReward: 0n,
+        claimedAt: event.block.timestamp,
+      })
+      .onConflictDoNothing();
+  },
+);
