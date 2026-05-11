@@ -1,5 +1,6 @@
 import { ponder } from "ponder:registry";
 import { asc, eq, and } from "ponder";
+import { encodePacked, keccak256 } from "viem";
 import {
   DEFAULT_ROUND_CONFIG,
   ROUND_STATE,
@@ -25,6 +26,7 @@ import {
 
 const RBTS_SCORE_SCALE_BPS = 10_000;
 const RBTS_SCORE_SCALE = 10_000n;
+const ZERO_SCORE_SEED = `0x${"00".repeat(32)}` as `0x${string}`;
 
 function defaultRoundConfigFields() {
   return {
@@ -107,6 +109,66 @@ function rbtsScoreBps({
 function weightByRbtsScore(amount: bigint, scoreBps: number): bigint {
   if (scoreBps <= 0 || amount <= 0n) return 0n;
   return (amount * BigInt(scoreBps)) / RBTS_SCORE_SCALE;
+}
+
+function rbtsCommitKey(voter: `0x${string}`, commitHash: `0x${string}`) {
+  return keccak256(encodePacked(["address", "bytes32"], [voter, commitHash]));
+}
+
+function rbtsOtherIndex({
+  scoreSeed,
+  commitKey,
+  ownIndex,
+  count,
+  domain,
+}: {
+  scoreSeed: `0x${string}`;
+  commitKey: `0x${string}`;
+  ownIndex: number;
+  count: number;
+  domain: number;
+}) {
+  const drawn =
+    BigInt(
+      keccak256(
+        encodePacked(
+          ["bytes32", "bytes32", "uint256", "uint8"],
+          [scoreSeed, commitKey, BigInt(ownIndex), domain],
+        ),
+      ),
+    ) % BigInt(count - 1);
+  const drawnNumber = Number(drawn);
+  return drawnNumber >= ownIndex ? drawnNumber + 1 : drawnNumber;
+}
+
+function rbtsPeerIndex({
+  scoreSeed,
+  commitKey,
+  ownIndex,
+  referenceIndex,
+  count,
+}: {
+  scoreSeed: `0x${string}`;
+  commitKey: `0x${string}`;
+  ownIndex: number;
+  referenceIndex: number;
+  count: number;
+}) {
+  const drawn =
+    BigInt(
+      keccak256(
+        encodePacked(
+          ["bytes32", "bytes32", "uint256", "uint8"],
+          [scoreSeed, commitKey, BigInt(ownIndex), 2],
+        ),
+      ),
+    ) % BigInt(count - 2);
+  let index = Number(drawn);
+  const firstExcluded = Math.min(ownIndex, referenceIndex);
+  const secondExcluded = Math.max(ownIndex, referenceIndex);
+  if (index >= firstExcluded) index += 1;
+  if (index >= secondExcluded) index += 1;
+  return index;
 }
 
 async function recordVoteReveal({
@@ -340,6 +402,8 @@ ponder.on("RoundVotingEngine:VoteCommitted", async ({ event, context }) => {
       epochIndex,
       revealed: false,
       committedAt: event.block.timestamp,
+      commitBlockNumber: event.block.number,
+      commitLogIndex: Number(event.log?.logIndex ?? 0),
       revealedAt: null,
     })
     .onConflictDoNothing();
@@ -487,6 +551,7 @@ ponder.on("RoundVotingEngine:RbtsRewardsScored", async ({ event, context }) => {
     roundId,
     rewardWeight,
     rewardClaimants,
+    scoreSeed = ZERO_SCORE_SEED,
     forfeitedPool,
     forfeitClaimants,
   } = event.args as {
@@ -494,6 +559,7 @@ ponder.on("RoundVotingEngine:RbtsRewardsScored", async ({ event, context }) => {
     roundId: bigint;
     rewardWeight: bigint;
     rewardClaimants: bigint;
+    scoreSeed?: `0x${string}`;
     forfeitedPool: bigint;
     forfeitClaimants: bigint;
   };
@@ -504,6 +570,7 @@ ponder.on("RoundVotingEngine:RbtsRewardsScored", async ({ event, context }) => {
     await context.db.update(round, { id: roundKey }).set({
       rbtsRewardWeight: rewardWeight,
       rbtsRewardClaimants: Number(rewardClaimants),
+      rbtsScoreSeed: scoreSeed,
       rbtsForfeitedPool: forfeitedPool,
       rbtsForfeitClaimants: Number(forfeitClaimants),
     });
@@ -518,21 +585,58 @@ ponder.on("RoundVotingEngine:RbtsRewardsScored", async ({ event, context }) => {
           eq(vote.revealed, true),
         ),
       )
-      .orderBy(asc(vote.committedAt), asc(vote.id));
+      .orderBy(
+        asc(vote.commitBlockNumber),
+        asc(vote.commitLogIndex),
+        asc(vote.id),
+      );
 
-    if (roundVotes.length < 3) return;
+    const scoreableVotes = roundVotes.filter(
+      (roundVote) => (roundVote.rbtsWeight ?? 0n) > 0n,
+    );
 
-    for (let index = 0; index < roundVotes.length; index += 1) {
-      const roundVote = roundVotes[index];
-      const referenceVote = roundVotes[(index + 1) % roundVotes.length];
-      const peerVote = roundVotes[(index + 2) % roundVotes.length];
+    if (scoreableVotes.length < 3) {
+      for (const roundVote of scoreableVotes) {
+        await context.db.update(vote, { id: roundVote.id }).set({
+          rbtsScoreBps: 0,
+          rbtsRewardWeight: 0n,
+          rbtsStakeReturned: roundVote.stake,
+          rbtsForfeitedStake: 0n,
+        });
+      }
+      return;
+    }
+
+    for (let index = 0; index < scoreableVotes.length; index += 1) {
+      const roundVote = scoreableVotes[index];
       if (
         roundVote.isUp === null ||
-        referenceVote.predictedUpBps === null ||
-        peerVote.isUp === null ||
         roundVote.predictedUpBps === null ||
-        roundVote.rbtsWeight === null
+        roundVote.rbtsWeight === null ||
+        roundVote.commitHash === null ||
+        roundVote.voter === null
       ) {
+        continue;
+      }
+
+      const commitKey = rbtsCommitKey(roundVote.voter, roundVote.commitHash);
+      const referenceIndex = rbtsOtherIndex({
+        scoreSeed,
+        commitKey,
+        ownIndex: index,
+        count: scoreableVotes.length,
+        domain: 1,
+      });
+      const peerIndex = rbtsPeerIndex({
+        scoreSeed,
+        commitKey,
+        ownIndex: index,
+        referenceIndex,
+        count: scoreableVotes.length,
+      });
+      const referenceVote = scoreableVotes[referenceIndex];
+      const peerVote = scoreableVotes[peerIndex];
+      if (referenceVote.predictedUpBps === null || peerVote.isUp === null) {
         continue;
       }
 
@@ -627,14 +731,13 @@ ponder.on("RoundVotingEngine:RoundSettled", async ({ event, context }) => {
         eq(vote.revealed, true),
       ),
     );
-  const rbtsRound =
-    roundVotes.length >= 3 &&
-    roundVotes.every(
-      (v) =>
-        (v.rbtsWeight ?? 0n) > 0n &&
-        v.predictedUpBps !== null &&
-        v.predictedUpBps !== undefined,
-    );
+  const rbtsRound = roundVotes.some(
+    (v) =>
+      v.rbtsScoreBps !== null ||
+      v.rbtsRewardWeight !== null ||
+      v.rbtsStakeReturned !== null ||
+      v.rbtsForfeitedStake !== null,
+  );
 
   const categoryId = contentRecord?.categoryId ?? 0n;
 

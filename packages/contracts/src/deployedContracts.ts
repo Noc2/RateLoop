@@ -10117,6 +10117,54 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "roundRbtsParticipationClaimants",
+          inputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "roundRbtsParticipationWeight",
+          inputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "roundRbtsRewardClaimants",
           inputs: [
             {
@@ -10800,6 +10848,12 @@ const deployedContracts: GenericContractsDeclaration = {
               type: "uint256",
               indexed: true,
               internalType: "uint256",
+            },
+            {
+              name: "scoreSeed",
+              type: "bytes32",
+              indexed: false,
+              internalType: "bytes32",
             },
             {
               name: "rewardWeight",

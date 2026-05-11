@@ -126,6 +126,7 @@ export const round = onchainTable(
     losingPool: t.bigint(),
     rbtsRewardWeight: t.bigint(),
     rbtsRewardClaimants: t.integer(),
+    rbtsScoreSeed: t.hex(),
     rbtsForfeitedPool: t.bigint(),
     rbtsForfeitClaimants: t.integer(),
     startTime: t.bigint(),
@@ -172,6 +173,8 @@ export const vote = onchainTable(
     epochIndex: t.integer().notNull(), // 0=epoch-1 (100% weight), 1=epoch-2+ (25% weight)
     revealed: t.boolean().notNull().default(false),
     committedAt: t.bigint().notNull(),
+    commitBlockNumber: t.bigint(),
+    commitLogIndex: t.integer(),
     revealedAt: t.bigint(), // null until revealed
   }),
   (table) => ({

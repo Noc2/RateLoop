@@ -4,6 +4,7 @@ type RegisteredHandler = (args: {
   event: {
     args: Record<string, unknown>;
     block: { number: bigint; timestamp: bigint };
+    log?: { logIndex: number };
   };
   context: Record<string, any>;
 }) => Promise<void>;
@@ -57,9 +58,11 @@ vi.mock("@rateloop/contracts/protocol", () => ({
 function createDb({
   existingRound = null,
   existingVote = null,
+  roundVotes = [],
 }: {
   existingRound?: Record<string, unknown> | null;
   existingVote?: Record<string, unknown> | null;
+  roundVotes?: Record<string, unknown>[];
 } = {}) {
   const insertCalls: Array<{ table: string; values: Record<string, unknown> }> =
     [];
@@ -151,7 +154,7 @@ function createDb({
         select: vi.fn(() => ({
           from: vi.fn(() => ({
             where: vi.fn(() => ({
-              orderBy: vi.fn(async () => []),
+              orderBy: vi.fn(async () => roundVotes),
             })),
           })),
         })),
@@ -334,6 +337,9 @@ describe("RoundVotingEngine ponder handlers", () => {
           number: 43n,
           timestamp: 1_601n,
         },
+        log: {
+          logIndex: 9,
+        },
       },
       context: { db },
     });
@@ -344,6 +350,8 @@ describe("RoundVotingEngine ponder handlers", () => {
         id: `7-2-${voter}`,
         epochIndex: 1,
         committedAt: 1_601n,
+        commitBlockNumber: 43n,
+        commitLogIndex: 9,
       }),
     });
   });
@@ -435,6 +443,7 @@ describe("RoundVotingEngine ponder handlers", () => {
         args: {
           contentId: 7n,
           roundId: 2n,
+          scoreSeed: `0x${"11".repeat(32)}`,
           rewardWeight: 50n,
           rewardClaimants: 2n,
           forfeitedPool: 5n,
@@ -454,6 +463,7 @@ describe("RoundVotingEngine ponder handlers", () => {
       values: {
         rbtsRewardWeight: 50n,
         rbtsRewardClaimants: 2,
+        rbtsScoreSeed: `0x${"11".repeat(32)}`,
         rbtsForfeitedPool: 5n,
         rbtsForfeitClaimants: 1,
       },
