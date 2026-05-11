@@ -53,6 +53,8 @@ ponder.on("RaterDeclarationRegistry:DeclarationSubmitted", async ({ event, conte
     rater,
     operator,
     version,
+    effectiveEpoch,
+    expiresAtEpoch,
     tier,
     behaviorChanged,
     probePending,
@@ -70,6 +72,8 @@ ponder.on("RaterDeclarationRegistry:DeclarationSubmitted", async ({ event, conte
     rater,
     operator,
     version: Number(version),
+    effectiveEpoch,
+    expiresAtEpoch,
     tier: Number(tier),
     behaviorChanged,
     probePending,
@@ -209,6 +213,7 @@ ponder.on("RaterDeclarationRegistry:ChallengeOpened", async ({ event, context })
 
 ponder.on("RaterDeclarationRegistry:ChallengeResolved", async ({ event, context }) => {
   const { challengeId, status, operatorSlash, challengerReward, resolutionHash } = event.args;
+  const challenge = await context.db.find(aiRaterDeclarationChallenge, { challengeId });
 
   await context.db.update(aiRaterDeclarationChallenge, { challengeId }).set({
     status: Number(status),
@@ -217,4 +222,17 @@ ponder.on("RaterDeclarationRegistry:ChallengeResolved", async ({ event, context 
     resolutionHash,
     resolvedAt: event.block.timestamp,
   });
+
+  if (Number(status) === 2 && challenge) {
+    const historyId = declarationHistoryId(challenge.rater, challenge.declarationVersion);
+    const update = {
+      tier: 0,
+      probePending: false,
+      retiredAt: event.block.timestamp,
+      updatedAt: event.block.timestamp,
+    };
+
+    await context.db.update(aiRaterDeclaration, { rater: challenge.rater }).set(update);
+    await context.db.update(aiRaterDeclarationHistory, { id: historyId }).set(update);
+  }
 });

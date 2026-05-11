@@ -9,7 +9,7 @@ import { expect, test } from "@playwright/test";
  *
  * Uses direct contract calls (no browser/UI) to test edge cases with commitVote:
  * 1. Commit with stake below MIN_STAKE (1 HREP) → InvalidStake
- * 2. Commit with stake above MAX_STAKE (100 HREP) → InvalidStake
+ * 2. Commit with stake above MAX_STAKE (10 LREP) → InvalidStake
  * 3. Self-vote (submitter commits on own content) → SelfVote
  * 4. Double commit in same round → AlreadyCommitted
  *
@@ -37,9 +37,9 @@ test.describe("Contract boundary conditions", () => {
     expect(result.success, "Commit with below-MIN_STAKE should revert").toBe(false);
   });
 
-  test("commit with stake above MAX_STAKE (100 HREP) reverts", async () => {
+  test("commit with stake above MAX_STAKE (10 LREP) reverts", async () => {
     const voter = ANVIL_ACCOUNTS.account3;
-    const aboveMaxStake = BigInt(101e6); // 101 HREP (MAX_STAKE = 100 HREP)
+    const aboveMaxStake = BigInt(11e6); // 11 LREP (MAX_STAKE = 10 LREP)
 
     // Approve the large amount
     await approveHREP(VOTING_ENGINE, aboveMaxStake, voter.address, HREP_TOKEN);

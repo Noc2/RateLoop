@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import { Test } from "forge-std/Test.sol";
+import { Test, stdStorage, StdStorage } from "forge-std/Test.sol";
 import { LaunchDistributionPool } from "../contracts/LaunchDistributionPool.sol";
 import { LoopReputation } from "../contracts/LoopReputation.sol";
 import { RaterRegistry } from "../contracts/RaterRegistry.sol";
@@ -9,6 +9,8 @@ import { ILaunchDistributionPool } from "../contracts/interfaces/ILaunchDistribu
 import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
 
 contract LaunchDistributionPoolTest is Test {
+    using stdStorage for StdStorage;
+
     LoopReputation internal lrep;
     RaterRegistry internal registry;
     MockWorldIDRouter internal worldIdRouter;
@@ -82,8 +84,8 @@ contract LaunchDistributionPoolTest is Test {
 
         assertEq(_recordLaunchRewardWithScore(alice, 1, bytes32("anchor-a"), 9_000), 0);
         uint256 firstReward = _recordLaunchRewardWithScore(alice, 2, bytes32("anchor-b"), 9_000);
-        assertEq(firstReward, 3e6);
-        assertEq(pool.raterLaunchPaid(alice), 3e6);
+        assertEq(firstReward, 2_500_000);
+        assertEq(pool.raterLaunchPaid(alice), 2_500_000);
     }
 
     function test_RecordEarnedRaterRewardPaysAfterFiveQualifiedRatings() public {
@@ -95,8 +97,8 @@ contract LaunchDistributionPoolTest is Test {
         assertEq(pool.qualifyingRatingCount(alice), 4);
 
         uint256 firstReward = _recordLaunchReward(alice, 5, bytes32("anchor-a"));
-        assertEq(firstReward, 1_200_000);
-        assertEq(pool.raterLaunchCap(alice), 12e6);
+        assertEq(firstReward, 1e6);
+        assertEq(pool.raterLaunchCap(alice), 10e6);
         assertEq(pool.eligibleRaterCount(), 1);
         assertEq(lrep.balanceOf(alice), firstReward);
 
@@ -105,11 +107,40 @@ contract LaunchDistributionPoolTest is Test {
             pool.recordEarnedRaterReward(alice, 1, 6 + i, _commitKey(6 + i), 8_000, 3, true, _singleAnchor(anchorId));
         }
         assertEq(pool.rewardedRatingCount(alice), 10);
-        assertEq(pool.raterLaunchPaid(alice), 12e6);
-        assertEq(lrep.balanceOf(alice), 12e6);
+        assertEq(pool.raterLaunchPaid(alice), 10e6);
+        assertEq(lrep.balanceOf(alice), 10e6);
 
         assertEq(_recordLaunchReward(alice, 15, bytes32("anchor-a")), 0);
-        assertEq(lrep.balanceOf(alice), 12e6);
+        assertEq(lrep.balanceOf(alice), 10e6);
+    }
+
+    function test_CurrentRaterLaunchCapUsesTenPointCurve() public {
+        _setEligibleRaterCount(0);
+        assertEq(pool.currentRaterLaunchCap(), 10e6);
+
+        _setEligibleRaterCount(99_999);
+        assertEq(pool.currentRaterLaunchCap(), 10e6);
+
+        _setEligibleRaterCount(100_000);
+        assertEq(pool.currentRaterLaunchCap(), 5e6);
+
+        _setEligibleRaterCount(999_999);
+        assertEq(pool.currentRaterLaunchCap(), 5e6);
+
+        _setEligibleRaterCount(1_000_000);
+        assertEq(pool.currentRaterLaunchCap(), 2_500_000);
+
+        _setEligibleRaterCount(4_999_999);
+        assertEq(pool.currentRaterLaunchCap(), 2_500_000);
+
+        _setEligibleRaterCount(5_000_000);
+        assertEq(pool.currentRaterLaunchCap(), 1_250_000);
+
+        _setEligibleRaterCount(14_999_999);
+        assertEq(pool.currentRaterLaunchCap(), 1_250_000);
+
+        _setEligibleRaterCount(15_000_000);
+        assertEq(pool.currentRaterLaunchCap(), 500_000);
     }
 
     function test_RecordEarnedRaterRewardIgnoresLowScoresAndUnauthorizedCallers() public {
@@ -153,7 +184,7 @@ contract LaunchDistributionPoolTest is Test {
         assertEq(lrep.balanceOf(alice), 0);
 
         uint256 firstReward = _recordLaunchReward(alice, 6, bytes32("anchor-b"));
-        assertEq(firstReward, 1_200_000);
+        assertEq(firstReward, 1e6);
         assertEq(pool.raterDistinctVerifiedAnchorCount(alice), 2);
         assertEq(lrep.balanceOf(alice), firstReward);
     }
@@ -242,5 +273,9 @@ contract LaunchDistributionPoolTest is Test {
         uint256[8] memory proof;
         vm.prank(account);
         registry.attestSelfCredentialWithProof(1, uint256(nullifier), proof);
+    }
+
+    function _setEligibleRaterCount(uint256 count) internal {
+        stdstore.target(address(pool)).sig("eligibleRaterCount()").checked_write(count);
     }
 }

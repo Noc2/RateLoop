@@ -16,6 +16,14 @@ import { HumanReputation } from "../contracts/HumanReputation.sol";
 import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
 import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
 
+contract MockRaterDeclarationWeightsForRewards {
+    mapping(address => uint16) public tierMultiplierBps;
+
+    function setTierMultiplierBps(address rater, uint16 multiplierBps) external {
+        tierMultiplierBps[rater] = multiplierBps;
+    }
+}
+
 /// @title RoundRewardDistributor branch coverage tests (tlock commit-reveal)
 contract RoundRewardDistributorBranchesTest is VotingTestBase {
     HumanReputation public hrepToken;
@@ -363,6 +371,25 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
 
     function test_ClaimReward_DoesNotRecordLaunchCreditWithoutIndependentVerifiedAnchor() public {
         _verifyHuman(voter1, bytes32("claimant-voter-1"));
+        (uint256 contentId, uint256 roundId) = _setupSettledPredictionRound();
+
+        vm.prank(voter1);
+        rewardDistributor.claimReward(contentId, roundId);
+
+        assertEq(launchPool.qualifyingRatingCount(voter1), 0);
+        assertEq(launchPool.raterDistinctVerifiedAnchorCount(voter1), 0);
+        assertEq(launchPool.raterDistinctAnchorRoundCount(voter1), 0);
+        assertEq(lrepToken.balanceOf(voter1), 0);
+    }
+
+    function test_ClaimReward_VerifiedAgentDeclarationDoesNotAnchorLaunchCredit() public {
+        _verifyHuman(voter2, bytes32("anchor-voter-2"));
+        MockRaterDeclarationWeightsForRewards declarationWeights = new MockRaterDeclarationWeightsForRewards();
+        declarationWeights.setTierMultiplierBps(voter2, 11_500);
+        ProtocolConfig config = ProtocolConfig(address(votingEngine.protocolConfig()));
+        vm.prank(owner);
+        config.setRaterDeclarationRegistry(address(declarationWeights));
+
         (uint256 contentId, uint256 roundId) = _setupSettledPredictionRound();
 
         vm.prank(voter1);

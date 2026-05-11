@@ -244,8 +244,8 @@ export function useVoterIdStake(contentId?: bigint, epochId?: bigint, tokenId?: 
     refetchRemaining();
   };
 
-  // Default to full capacity (100 LREP) when query is disabled (no active round yet)
-  const MAX_STAKE = 100_000_000n; // 100e6 — matches VoterIdNFT.MAX_STAKE_PER_VOTER
+  // Default to full capacity (10 LREP) when query is disabled (no active round yet)
+  const MAX_STAKE = 10_000_000n; // 10e6 — matches VoterIdNFT.MAX_STAKE_PER_VOTER
   return {
     stakedAmount: stakedAmount ?? 0n,
     remainingCapacity: remainingCapacity ?? MAX_STAKE,

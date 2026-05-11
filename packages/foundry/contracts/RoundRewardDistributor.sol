@@ -14,6 +14,7 @@ import {RaterRegistry} from "./RaterRegistry.sol";
 import {IFrontendRegistry} from "./interfaces/IFrontendRegistry.sol";
 import {IParticipationPool} from "./interfaces/IParticipationPool.sol";
 import {ILaunchDistributionPool} from "./interfaces/ILaunchDistributionPool.sol";
+import {IRaterDeclarationWeights} from "./interfaces/IRaterDeclarationWeights.sol";
 import {IVoterIdNFT} from "./interfaces/IVoterIdNFT.sol";
 import {RoundLib} from "./libraries/RoundLib.sol";
 import {RewardMath} from "./libraries/RewardMath.sol";
@@ -893,6 +894,7 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         if (raterRegistryAddress == address(0) || voteCount == 0) return new bytes32[](0);
 
         RaterRegistry raterRegistry = RaterRegistry(raterRegistryAddress);
+        address raterDeclarationRegistry = config.raterDeclarationRegistry();
         address submitterIdentity = registry.getSubmitterIdentity(contentId);
         address voterIdNftAddress = _roundVoterIdNftAddress(contentId, roundId);
         bytes32[] memory candidates = new bytes32[](voteCount);
@@ -906,6 +908,7 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
             address anchorAccount =
                 _launchRewardAnchorAccount(voterIdNftAddress, contentId, roundId, roundCommitKey, commit.voter);
             if (anchorAccount == rewardRecipient || anchorAccount == submitterIdentity) continue;
+            if (_hasActiveAiDeclaration(raterDeclarationRegistry, anchorAccount)) continue;
 
             bytes32 anchorId = _launchRewardAnchorId(raterRegistry, anchorAccount);
             if (anchorId == bytes32(0) || _launchRewardAnchorSeen(candidates, anchorCount, anchorId)) continue;
@@ -933,6 +936,15 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
 
         address rewardRecipient = _currentVoterIdRewardRecipient(IVoterIdNFT(voterIdNftAddress), voterId);
         return rewardRecipient == address(0) ? fallbackAccount : rewardRecipient;
+    }
+
+    function _hasActiveAiDeclaration(address raterDeclarationRegistry, address account) internal view returns (bool) {
+        if (raterDeclarationRegistry == address(0) || account == address(0)) return false;
+        try IRaterDeclarationWeights(raterDeclarationRegistry).tierMultiplierBps(account) returns (uint16 multiplierBps) {
+            return multiplierBps > 10_000;
+        } catch {
+            return false;
+        }
     }
 
     function _launchRewardAnchorId(RaterRegistry raterRegistry, address account) internal view returns (bytes32) {

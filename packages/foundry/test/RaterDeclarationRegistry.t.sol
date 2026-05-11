@@ -157,6 +157,40 @@ contract RaterDeclarationRegistryTest is Test {
         assertTrue(result.passed);
     }
 
+    function test_TierMultiplierRequiresEffectiveDeclarationWindow() public {
+        RaterDeclarationRegistry.RaterDeclaration memory declaration = _declaration(1, 0, PROMPT_HASH);
+        declaration.effectiveEpoch = uint64(block.timestamp + 1 days);
+        bytes memory signature = _signature(declaration);
+
+        vm.prank(rater);
+        registry.submitDeclaration(declaration, signature, MIN_BOND, false);
+
+        assertEq(registry.tierMultiplierBps(rater), 10_000);
+
+        vm.warp(declaration.effectiveEpoch);
+
+        assertEq(registry.tierMultiplierBps(rater), 10_500);
+    }
+
+    function test_TierMultiplierExpiresDeclarationWindow() public {
+        RaterDeclarationRegistry.RaterDeclaration memory declaration = _declaration(1, 0, PROMPT_HASH);
+        declaration.effectiveEpoch = uint64(block.timestamp);
+        declaration.expiresAtEpoch = uint64(block.timestamp + 1 days);
+        bytes memory signature = _signature(declaration);
+
+        vm.prank(rater);
+        registry.submitDeclaration(declaration, signature, MIN_BOND, true);
+
+        vm.prank(admin);
+        registry.recordProbeResult(rater, 1, PROBE_LIBRARY_HASH, 8_500, true, PROBE_RESULT_HASH);
+
+        assertEq(registry.tierMultiplierBps(rater), registry.MAX_TIER_MULTIPLIER_BPS());
+
+        vm.warp(declaration.expiresAtEpoch);
+
+        assertEq(registry.tierMultiplierBps(rater), 10_000);
+    }
+
     function test_FlagBehavioralDriftDemotesVerifiedRater() public {
         _submitDefaultDeclaration(true);
 

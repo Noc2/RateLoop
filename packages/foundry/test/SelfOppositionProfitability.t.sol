@@ -208,9 +208,9 @@ contract SelfOppositionProfitabilityTest is VotingTestBase {
     ///         participation rewards, making the self-opposition attack unprofitable.
     function test_LosingSide_ParticipationBlocked() public {
         uint256 cid = _submit();
-        _vote(attackerA, cid, true, 100e6);
+        _vote(attackerA, cid, true, 10e6);
         _vote(attackerB, cid, false, 1e6);
-        _vote(honest, cid, true, 50e6);
+        _vote(honest, cid, true, 5e6);
         _forceSettle(cid);
 
         uint256 rid = RoundEngineReadHelpers.activeRoundId(engine, cid);
@@ -235,9 +235,9 @@ contract SelfOppositionProfitabilityTest is VotingTestBase {
         uint256 startA = hrepToken.balanceOf(attackerA);
         uint256 startB = hrepToken.balanceOf(attackerB);
 
-        _vote(attackerA, cid, true, 100e6);
+        _vote(attackerA, cid, true, 10e6);
         _vote(attackerB, cid, false, 1e6);
-        _vote(honest, cid, true, 50e6);
+        _vote(honest, cid, true, 5e6);
         _forceSettle(cid);
 
         // Claim voter reward for winner
@@ -251,7 +251,7 @@ contract SelfOppositionProfitabilityTest is VotingTestBase {
         uint256 endA = hrepToken.balanceOf(attackerA);
         uint256 endB = hrepToken.balanceOf(attackerB);
 
-        // WalletA gains: voter pool share + participation (90% of 100 HREP = 90 HREP)
+        // WalletA gains: voter pool share + participation (90% of 10 LREP = 9 LREP)
         // WalletB loses: 1 HREP stake (forfeited)
         // Without walletB participation (was 0.9 HREP), net is still positive due to walletA participation.
         // BUT the attacker's profit is now just participation on the winning side minus lost stake.
@@ -285,9 +285,9 @@ contract SelfOppositionProfitabilityTest is VotingTestBase {
         uint256 cidA = _submit();
         uint256 startA = hrepToken.balanceOf(attackerA) + hrepToken.balanceOf(attackerB);
 
-        _vote(attackerA, cidA, true, 100e6);
+        _vote(attackerA, cidA, true, 10e6);
         _vote(attackerB, cidA, false, 1e6);
-        _vote(honest, cidA, true, 50e6);
+        _vote(honest, cidA, true, 5e6);
         _forceSettle(cidA);
 
         vm.prank(attackerA);
@@ -305,10 +305,10 @@ contract SelfOppositionProfitabilityTest is VotingTestBase {
         uint256 cidB = _submit();
         uint256 startB = hrepToken.balanceOf(attackerA);
 
-        _vote(attackerA, cidB, true, 100e6);
+        _vote(attackerA, cidB, true, 10e6);
         // Need another DOWN voter to make it non-unanimous and have a losing pool
         _vote(attackerB, cidB, false, 1e6);
-        _vote(honest, cidB, true, 50e6);
+        _vote(honest, cidB, true, 5e6);
         _forceSettle(cidB);
 
         vm.prank(attackerA);
@@ -329,9 +329,9 @@ contract SelfOppositionProfitabilityTest is VotingTestBase {
     function test_UnanimousRound_AllVotersGetParticipation() public {
         uint256 cid = _submit();
 
-        _vote(attackerA, cid, true, 50e6);
-        _vote(attackerB, cid, true, 50e6);
-        _vote(honest, cid, true, 50e6);
+        _vote(attackerA, cid, true, 5e6);
+        _vote(attackerB, cid, true, 5e6);
+        _vote(honest, cid, true, 5e6);
         _forceSettle(cid);
 
         // All voters on winning side — all can claim participation
@@ -351,15 +351,15 @@ contract SelfOppositionProfitabilityTest is VotingTestBase {
     ///         The attacker gains nothing from the opposing vote that they wouldn't
     ///         get from just voting honestly on the winning side.
     function test_Summary_SelfOppositionAlwaysLoses() public pure {
-        uint256 stakeWin = 100e6;
+        uint256 stakeWin = 10e6;
         uint256 stakeLose = 1e6;
 
         // With the fix, losing-side participation = 0
         // The only "gain" from opposition: voter pool share of the losing pool
         // voter pool = 80% of stakeLose
-        // attacker's share = stakeWin / (stakeWin + 50e6) * voterPool (assuming 50 honest)
+        // attacker's share = stakeWin / (stakeWin + 5e6) * voterPool (assuming 50 honest)
         uint256 voterPool = stakeLose * 8000 / 10000;
-        uint256 attackerShare = voterPool * stakeWin / (stakeWin + 50e6);
+        uint256 attackerShare = voterPool * stakeWin / (stakeWin + 5e6);
 
         // Net from opposition = attackerShare - stakeLose
         // attackerShare < stakeLose because voterPool = 80% of stakeLose < stakeLose
@@ -377,9 +377,9 @@ contract SelfOppositionProfitabilityTest is VotingTestBase {
         _resetParticipationPool(distributed);
 
         uint256 cid = _submit();
-        _vote(attackerA, cid, true, 100e6);
+        _vote(attackerA, cid, true, 10e6);
         _vote(attackerB, cid, false, 1e6);
-        _vote(honest, cid, true, 50e6);
+        _vote(honest, cid, true, 5e6);
         _forceSettle(cid);
 
         // Each content has its own round counter starting at 1

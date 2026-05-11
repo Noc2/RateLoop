@@ -171,11 +171,11 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
     function test_HonestVoting_3Up2Down_WinnersProfit() public {
         uint256 cid = _submit();
 
-        _vote(v[0], cid, true, 50e6);
-        _vote(v[1], cid, true, 50e6);
-        _vote(v[2], cid, true, 50e6);
-        _vote(v[3], cid, false, 50e6);
-        _vote(v[4], cid, false, 50e6);
+        _vote(v[0], cid, true, 5e6);
+        _vote(v[1], cid, true, 5e6);
+        _vote(v[2], cid, true, 5e6);
+        _vote(v[3], cid, false, 5e6);
+        _vote(v[4], cid, false, 5e6);
 
         uint256 rid = RoundEngineReadHelpers.activeRoundId(engine, cid);
 
@@ -189,13 +189,13 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
         uint256 winnerPayout = hrepToken.balanceOf(v[0]) - bal0;
 
         // Directional check: honest winner profits
-        assertGt(winnerPayout, 50e6, "Honest voting is profitable (payout > stake)");
+        assertGt(winnerPayout, 5e6, "Honest voting is profitable (payout > stake)");
 
         // Loser gets the fixed 5% rebate
         uint256 bal3 = hrepToken.balanceOf(v[3]);
         vm.prank(v[3]);
         distributor.claimReward(cid, rid);
-        assertEq(hrepToken.balanceOf(v[3]) - bal3, 2_500_000, "Loser gets 5% rebate");
+        assertEq(hrepToken.balanceOf(v[3]) - bal3, 250_000, "Loser gets 5% rebate");
     }
 
     // ==================== Test 2: Proportional Rewards ====================
@@ -207,18 +207,18 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
     function test_HonestVoting_LargePool_7Up3Down() public {
         uint256 cid = _submit();
 
-        // UP voters with increasing stakes (10, 20, 30, 40, 50, 60, 70)
-        _vote(v[0], cid, true, 10e6);
-        _vote(v[1], cid, true, 20e6);
-        _vote(v[2], cid, true, 30e6);
-        _vote(v[3], cid, true, 40e6);
-        _vote(v[4], cid, true, 50e6);
-        _vote(v[5], cid, true, 60e6);
-        _vote(v[6], cid, true, 70e6);
+        // UP voters with increasing stakes (1, 2, 3, 4, 5, 6, 7)
+        _vote(v[0], cid, true, 1e6);
+        _vote(v[1], cid, true, 2e6);
+        _vote(v[2], cid, true, 3e6);
+        _vote(v[3], cid, true, 4e6);
+        _vote(v[4], cid, true, 5e6);
+        _vote(v[5], cid, true, 6e6);
+        _vote(v[6], cid, true, 7e6);
         // DOWN voters
-        _vote(v[7], cid, false, 80e6);
-        _vote(v[8], cid, false, 90e6);
-        _vote(v[9], cid, false, 100e6);
+        _vote(v[7], cid, false, 8e6);
+        _vote(v[8], cid, false, 9e6);
+        _vote(v[9], cid, false, 10e6);
 
         uint256 rid = RoundEngineReadHelpers.activeRoundId(engine, cid);
 
@@ -238,15 +238,15 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
 
     // ==================== Test 3: Stake-Weight Determines Outcome ====================
 
-    /// @notice 4 UP (10 each = 40 total) vs 1 DOWN (100). DOWN wins because stake > voter count.
+    /// @notice 4 UP (1 each = 4 total) vs 1 DOWN (10). DOWN wins because stake > voter count.
     function test_StakeWeight_DeterminesOutcome() public {
         uint256 cid = _submit();
 
-        _vote(v[0], cid, true, 10e6);
-        _vote(v[1], cid, true, 10e6);
-        _vote(v[2], cid, true, 10e6);
-        _vote(v[3], cid, true, 10e6);
-        _vote(v[4], cid, false, 100e6);
+        _vote(v[0], cid, true, 1e6);
+        _vote(v[1], cid, true, 1e6);
+        _vote(v[2], cid, true, 1e6);
+        _vote(v[3], cid, true, 1e6);
+        _vote(v[4], cid, false, 10e6);
 
         uint256 rid = RoundEngineReadHelpers.activeRoundId(engine, cid);
 
@@ -255,11 +255,11 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, cid, rid);
         assertFalse(round.upWins, "DOWN wins - stake weight, not voter count, decides outcome");
 
-        // Whale gets stake + reward from 40e6 losing pool
+        // Whale gets stake + reward from 4e6 losing pool
         uint256 bal = hrepToken.balanceOf(v[4]);
         vm.prank(v[4]);
         distributor.claimReward(cid, rid);
-        assertGt(hrepToken.balanceOf(v[4]) - bal, 100e6, "Whale wins back stake + reward");
+        assertGt(hrepToken.balanceOf(v[4]) - bal, 10e6, "Whale wins back stake + reward");
     }
 
     // ==================== Test 4: Collusion at Threshold - Negligible Profit ====================
@@ -268,10 +268,10 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
     function test_Threshold_CollusionNegligibleProfit() public {
         uint256 cid = _submit();
 
-        _vote(v[0], cid, true, 100e6);
-        _vote(v[1], cid, true, 100e6);
-        _vote(v[2], cid, true, 100e6);
-        _vote(v[3], cid, true, 100e6);
+        _vote(v[0], cid, true, 10e6);
+        _vote(v[1], cid, true, 10e6);
+        _vote(v[2], cid, true, 10e6);
+        _vote(v[3], cid, true, 10e6);
         _vote(v[4], cid, false, 1e6); // innocent victim
 
         uint256 rid = RoundEngineReadHelpers.activeRoundId(engine, cid);
@@ -285,7 +285,7 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
             vm.prank(v[i]);
             distributor.claimReward(cid, rid);
             uint256 payout = hrepToken.balanceOf(v[i]) - bal;
-            totalProfit += payout - 100e6; // profit = payout - original stake
+            totalProfit += payout - 10e6; // profit = payout - original stake
         }
 
         assertLt(totalProfit, 1e6, "Total colluder profit < 1 HREP - negligible");
@@ -299,19 +299,19 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
         uint256 reserveBefore = engine.consensusReserve();
         uint256 submitterBefore = hrepToken.balanceOf(submitter);
 
-        _vote(v[0], cid, true, 50e6);
-        _vote(v[1], cid, true, 50e6);
-        _vote(v[2], cid, true, 50e6);
-        _vote(v[3], cid, true, 50e6);
-        _vote(v[4], cid, true, 50e6);
+        _vote(v[0], cid, true, 5e6);
+        _vote(v[1], cid, true, 5e6);
+        _vote(v[2], cid, true, 5e6);
+        _vote(v[3], cid, true, 5e6);
+        _vote(v[4], cid, true, 5e6);
 
         uint256 rid = RoundEngineReadHelpers.activeRoundId(engine, cid);
 
         // Consensus settlement after maxEpochBlocks
         _forceSettle(cid);
 
-        // totalStake=250e6, subsidy = 250e6 * 5% = 12_500_000
-        uint256 expectedSubsidy = 12_500_000;
+        // totalStake=25e6, subsidy = 25e6 * 5% = 1_250_000
+        uint256 expectedSubsidy = 1_250_000;
         assertEq(engine.consensusReserve(), reserveBefore - expectedSubsidy, "Reserve decremented by subsidy");
 
         // Voter gets stake + proportional subsidy reward
@@ -319,32 +319,32 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
         vm.prank(v[0]);
         distributor.claimReward(cid, rid);
         uint256 payout = hrepToken.balanceOf(v[0]) - bal;
-        assertGt(payout, 50e6, "Voter gets stake + subsidy reward");
+        assertGt(payout, 5e6, "Voter gets stake + subsidy reward");
 
         assertEq(hrepToken.balanceOf(submitter), submitterBefore, "Submitter receives no consensus subsidy");
     }
 
     // ==================== Test 6: Share-Proportional ROI (Early Voter Advantage) ====================
 
-    /// @notice 1 whale UP (100) + 4 minnows UP (1 each) vs 5 DOWN (10 each).
+    /// @notice 1 whale UP (10) + 4 minnows UP (1 each) vs 5 DOWN (1 each).
     /// @dev In tlock epoch-weighted proportional rewards, all epoch-1 voters receive rewards
-    ///      proportional to their weighted stake. Whale's absolute reward is 100x minnow's
-    ///      because stake is 100x. ROI% is equal (same epoch weight, proportional distribution).
+    ///      proportional to their weighted stake. Whale's absolute reward is 10x minnow's
+    ///      because stake is 10x. ROI% is equal (same epoch weight, proportional distribution).
     function test_StakeAsymmetry_ShareProportionalROI() public {
         uint256 cid = _submit();
 
         // UP side: whale first, then minnows (all in epoch-1)
-        _vote(v[0], cid, true, 100e6); // whale
+        _vote(v[0], cid, true, 10e6); // whale
         _vote(v[1], cid, true, 1e6); // minnow 1
         _vote(v[2], cid, true, 1e6); // minnow 2
         _vote(v[3], cid, true, 1e6); // minnow 3
         _vote(v[4], cid, true, 1e6); // minnow 4
         // DOWN side
-        _vote(v[5], cid, false, 10e6);
-        _vote(v[6], cid, false, 10e6);
-        _vote(v[7], cid, false, 10e6);
-        _vote(v[8], cid, false, 10e6);
-        _vote(v[9], cid, false, 10e6);
+        _vote(v[5], cid, false, 1e6);
+        _vote(v[6], cid, false, 1e6);
+        _vote(v[7], cid, false, 1e6);
+        _vote(v[8], cid, false, 1e6);
+        _vote(v[9], cid, false, 1e6);
 
         uint256 rid = RoundEngineReadHelpers.activeRoundId(engine, cid);
 
@@ -355,7 +355,7 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
         vm.prank(v[0]);
         distributor.claimReward(cid, rid);
         uint256 whalePayout = hrepToken.balanceOf(v[0]) - wBal;
-        uint256 whaleReward = whalePayout - 100e6; // reward only (excl. stake return)
+        uint256 whaleReward = whalePayout - 10e6; // reward only (excl. stake return)
 
         // Minnow claim
         uint256 mBal = hrepToken.balanceOf(v[4]);
@@ -368,13 +368,13 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
         assertGt(whaleReward, 0, "Whale profits");
         assertGt(minnowReward, 0, "Minnow profits");
 
-        // Whale absolute reward is proportional to stake (100x minnow's stake -> 100x absolute reward)
-        // Proportional: whaleReward / 100e6 == minnowReward / 1e6 (within rounding)
+        // Whale absolute reward is proportional to stake (10x minnow's stake -> 10x absolute reward)
+        // Proportional: whaleReward / 10e6 == minnowReward / 1e6 (within rounding)
         // We verify whale's absolute reward > minnow's absolute reward
-        assertGt(whaleReward, minnowReward, "Whale has higher absolute reward than minnow (100x stake)");
+        assertGt(whaleReward, minnowReward, "Whale has higher absolute reward than minnow (10x stake)");
 
         // Both get same ROI% (proportional system: reward/stake is constant within epoch)
-        uint256 whaleROIPct = (whaleReward * 10000) / 100e6; // basis points
+        uint256 whaleROIPct = (whaleReward * 10000) / 10e6; // basis points
         uint256 minnowROIPct = (minnowReward * 10000) / 1e6; // basis points
         // In proportional reward system, ROI% is equal (within 1 bps rounding)
         assertApproxEqAbs(whaleROIPct, minnowROIPct, 1, "Proportional reward: whale and minnow get same ROI%");
@@ -386,7 +386,7 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
     function test_StakeAsymmetry_WhaleThinMarket() public {
         uint256 cid = _submit();
 
-        _vote(v[0], cid, true, 100e6); // whale
+        _vote(v[0], cid, true, 10e6); // whale
         _vote(v[1], cid, false, 1e6);
         _vote(v[2], cid, false, 1e6);
         _vote(v[3], cid, false, 1e6);
@@ -402,7 +402,7 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
         vm.prank(v[0]);
         distributor.claimReward(cid, rid);
         uint256 payout = hrepToken.balanceOf(v[0]) - bal;
-        uint256 profit = payout - 100e6;
+        uint256 profit = payout - 10e6;
 
         assertLt(profit, 5e6, "Whale ROI < 5% in thin market");
         assertGt(profit, 0, "Whale still profits");
@@ -414,16 +414,16 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
     function test_StakeAsymmetry_MinnowsDefeatWhale() public {
         uint256 cid = _submit();
 
-        _vote(v[0], cid, false, 100e6); // whale DOWN
-        _vote(v[1], cid, true, 50e6);
-        _vote(v[2], cid, true, 50e6);
-        _vote(v[3], cid, true, 50e6);
-        _vote(v[4], cid, true, 50e6);
-        _vote(v[5], cid, true, 50e6);
-        _vote(v[6], cid, true, 50e6);
-        _vote(v[7], cid, true, 50e6);
-        _vote(v[8], cid, true, 50e6);
-        _vote(v[9], cid, true, 50e6);
+        _vote(v[0], cid, false, 10e6); // whale DOWN
+        _vote(v[1], cid, true, 5e6);
+        _vote(v[2], cid, true, 5e6);
+        _vote(v[3], cid, true, 5e6);
+        _vote(v[4], cid, true, 5e6);
+        _vote(v[5], cid, true, 5e6);
+        _vote(v[6], cid, true, 5e6);
+        _vote(v[7], cid, true, 5e6);
+        _vote(v[8], cid, true, 5e6);
+        _vote(v[9], cid, true, 5e6);
 
         uint256 rid = RoundEngineReadHelpers.activeRoundId(engine, cid);
 
@@ -436,7 +436,7 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
         uint256 bal = hrepToken.balanceOf(v[0]);
         vm.prank(v[0]);
         distributor.claimReward(cid, rid);
-        assertEq(hrepToken.balanceOf(v[0]) - bal, 5e6, "Whale gets only the 5% loser rebate");
+        assertEq(hrepToken.balanceOf(v[0]) - bal, 500_000, "Whale gets only the 5% loser rebate");
     }
 
     // ==================== Test 9: Manufactured Dissent Unprofitable ====================
@@ -449,11 +449,11 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
         uint256 attackerStartA = hrepToken.balanceOf(v[0]);
         uint256 attackerStartB = hrepToken.balanceOf(v[1]);
 
-        _vote(v[0], cid, true, 100e6); // attacker UP
-        _vote(v[1], cid, false, 50e6); // attacker DOWN (manufactured dissent)
-        _vote(v[2], cid, true, 50e6); // honest
-        _vote(v[3], cid, true, 50e6); // honest
-        _vote(v[4], cid, true, 50e6); // honest
+        _vote(v[0], cid, true, 10e6); // attacker UP
+        _vote(v[1], cid, false, 5e6); // attacker DOWN (manufactured dissent)
+        _vote(v[2], cid, true, 5e6); // honest
+        _vote(v[3], cid, true, 5e6); // honest
+        _vote(v[4], cid, true, 5e6); // honest
 
         uint256 rid = RoundEngineReadHelpers.activeRoundId(engine, cid);
 
@@ -472,11 +472,11 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
         uint256 totalEnd = attackerEndA + attackerEndB;
 
         assertLt(totalEnd, totalStart, "Manufactured dissent is a net loss for the attacker");
-        // Attacker staked 150e6, the DOWN side (50e6) is the losing pool which funds rewards.
-        // Attacker's wallet B loses 50e6 entirely. Wallet A gets stake + share of voterPool.
-        // The attacker only captures a fraction of the lost 50e6, so the strategy remains materially lossy.
+        // Attacker staked 15 LREP across two wallets; the DOWN side (5 LREP) is the losing pool which funds rewards.
+        // Attacker's wallet B loses 5e6 entirely. Wallet A gets stake + share of voterPool.
+        // The attacker only captures a fraction of the lost 5e6, so the strategy remains materially lossy.
         uint256 loss = totalStart - totalEnd;
-        assertGt(loss, 29e6, "Attacker loses > 29 HREP");
+        assertGt(loss, 2_900_000, "Attacker loses > 2.9 LREP");
     }
 
     // ==================== Test 10: Consensus Reserve Drain - 10 Rounds ====================
@@ -489,7 +489,7 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
             uint256 cid = _submit();
 
             for (uint256 i = 0; i < 5; i++) {
-                _vote(v[i], cid, true, 100e6);
+                _vote(v[i], cid, true, 10e6);
             }
 
             // Capture round ID before settlement (getActiveRoundId returns 0 after settling)
@@ -511,8 +511,8 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
             vm.warp(block.timestamp + 24 hours + 1);
         }
 
-        // Each round: totalStake=500e6, subsidy=25e6. 10 rounds -> 250e6 drained.
-        assertEq(engine.consensusReserve(), reserveBefore - 250e6, "Reserve drained by 250 HREP");
+        // Each round: totalStake=50e6, subsidy=2_500_000. 10 rounds -> 25e6 drained.
+        assertEq(engine.consensusReserve(), reserveBefore - 25e6, "Reserve drained by 25 LREP");
     }
 
     // ==================== Test 11: Consensus Reserve Replenishment ====================
@@ -521,33 +521,33 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
     function test_ConsensusSubsidyReplenishment() public {
         uint256 reserve = engine.consensusReserve(); // 100_000e6
 
-        // Round 1: contested (3 UP vs 2 DOWN, 50e6 each) -> +4.75e6 to reserve
+        // Round 1: contested (3 UP vs 2 DOWN, 5e6 each) -> +0.475 LREP to reserve
         {
             uint256 cid = _submit();
-            _vote(v[0], cid, true, 50e6);
-            _vote(v[1], cid, true, 50e6);
-            _vote(v[2], cid, true, 50e6);
-            _vote(v[3], cid, false, 50e6);
-            _vote(v[4], cid, false, 50e6);
+            _vote(v[0], cid, true, 5e6);
+            _vote(v[1], cid, true, 5e6);
+            _vote(v[2], cid, true, 5e6);
+            _vote(v[3], cid, false, 5e6);
+            _vote(v[4], cid, false, 5e6);
             _forceSettle(cid);
         }
-        reserve += 4_750_000; // 5% of the 95e6 net losing pool after loser rebates
-        assertEq(engine.consensusReserve(), reserve, "Reserve +4.75 HREP after contested round");
+        reserve += 475_000; // 5% of the 9.5e6 net losing pool after loser rebates
+        assertEq(engine.consensusReserve(), reserve, "Reserve +0.475 LREP after contested round");
 
-        // Round 2: unanimous (5 UP, 100e6 each) -> -25e6 from reserve
+        // Round 2: unanimous (5 UP, 10e6 each) -> -2_500_000 from reserve
         {
             vm.warp(block.timestamp + 24 hours + 1); // cooldown for voters
             uint256 cid = _submit();
             for (uint256 i = 0; i < 5; i++) {
-                _vote(v[i], cid, true, 100e6);
+                _vote(v[i], cid, true, 10e6);
             }
             _forceSettle(cid);
         }
-        reserve -= 25_000_000; // 5% of 500e6 total stake
-        assertEq(engine.consensusReserve(), reserve, "Reserve -25 HREP after unanimous round");
+        reserve -= 2_500_000; // 5% of 50e6 total stake
+        assertEq(engine.consensusReserve(), reserve, "Reserve -2.5 LREP after unanimous round");
 
-        // Net after 1 contested + 1 unanimous = -20.25 HREP
-        assertEq(reserve, 100_000e6 - 20_250_000, "Net drain = 20.25 HREP");
+        // Net after 1 contested + 1 unanimous = -2.025 LREP
+        assertEq(reserve, 100_000e6 - 2_025_000, "Net drain = 2.025 LREP");
     }
 
     // ==================== Test 12: Settlement After Reveals ====================
@@ -556,11 +556,11 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
     function test_Settlement_SucceedsAfterReveals() public {
         uint256 cid = _submit();
 
-        _vote(v[0], cid, true, 50e6);
-        _vote(v[1], cid, true, 50e6);
-        _vote(v[2], cid, true, 50e6);
-        _vote(v[3], cid, false, 50e6);
-        _vote(v[4], cid, false, 50e6);
+        _vote(v[0], cid, true, 5e6);
+        _vote(v[1], cid, true, 5e6);
+        _vote(v[2], cid, true, 5e6);
+        _vote(v[3], cid, false, 5e6);
+        _vote(v[4], cid, false, 5e6);
 
         uint256 rid = RoundEngineReadHelpers.activeRoundId(engine, cid);
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, cid, rid);
@@ -587,7 +587,7 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
     function test_SettlementRequiresMinVoterReveals() public {
         uint256 cid = _submit();
 
-        (bytes32 ck1, bytes32 s1) = _vote(v[0], cid, true, 50e6);
+        (bytes32 ck1, bytes32 s1) = _vote(v[0], cid, true, 5e6);
         // Only 1 voter — minVoters=2 not reached
 
         uint256 rid = RoundEngineReadHelpers.activeRoundId(engine, cid);
@@ -614,16 +614,16 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
             startBals[i] = hrepToken.balanceOf(v[i]);
         }
 
-        _vote(v[0], cid, true, 50e6);
-        _vote(v[1], cid, true, 50e6);
-        _vote(v[2], cid, true, 50e6);
-        _vote(v[3], cid, true, 50e6);
-        _vote(v[4], cid, true, 50e6);
-        _vote(v[5], cid, false, 50e6);
-        _vote(v[6], cid, false, 50e6);
-        _vote(v[7], cid, false, 50e6);
-        _vote(v[8], cid, false, 50e6);
-        _vote(v[9], cid, false, 50e6);
+        _vote(v[0], cid, true, 5e6);
+        _vote(v[1], cid, true, 5e6);
+        _vote(v[2], cid, true, 5e6);
+        _vote(v[3], cid, true, 5e6);
+        _vote(v[4], cid, true, 5e6);
+        _vote(v[5], cid, false, 5e6);
+        _vote(v[6], cid, false, 5e6);
+        _vote(v[7], cid, false, 5e6);
+        _vote(v[8], cid, false, 5e6);
+        _vote(v[9], cid, false, 5e6);
 
         uint256 rid = RoundEngineReadHelpers.activeRoundId(engine, cid);
 

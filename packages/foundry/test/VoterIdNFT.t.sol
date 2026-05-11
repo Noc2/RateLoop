@@ -58,7 +58,7 @@ contract VoterIdNFTTest is Test {
     function test_Initialization() public view {
         assertEq(voterIdNFT.name(), "Curyo Voter ID");
         assertEq(voterIdNFT.symbol(), "CVID");
-        assertEq(voterIdNFT.MAX_STAKE_PER_VOTER(), 100e6);
+        assertEq(voterIdNFT.MAX_STAKE_PER_VOTER(), 10e6);
         assertEq(voterIdNFT.owner(), admin);
         assertTrue(voterIdNFT.authorizedMinters(minterAddr));
         assertEq(voterIdNFT.stakeRecorder(), recorderAddr);
@@ -304,9 +304,9 @@ contract VoterIdNFTTest is Test {
         voterIdNFT.mint(user1, NULLIFIER_1);
 
         vm.prank(recorderAddr);
-        voterIdNFT.recordStake(1, 100, 1, 50e6);
+        voterIdNFT.recordStake(1, 100, 1, 5e6);
 
-        assertEq(voterIdNFT.getEpochContentStake(1, 100, 1), 50e6);
+        assertEq(voterIdNFT.getEpochContentStake(1, 100, 1), 5e6);
     }
 
     function test_RecordStake_Cumulative() public {
@@ -314,17 +314,17 @@ contract VoterIdNFTTest is Test {
         voterIdNFT.mint(user1, NULLIFIER_1);
 
         vm.startPrank(recorderAddr);
-        voterIdNFT.recordStake(1, 100, 1, 30e6);
-        voterIdNFT.recordStake(1, 100, 1, 20e6);
+        voterIdNFT.recordStake(1, 100, 1, 3e6);
+        voterIdNFT.recordStake(1, 100, 1, 2e6);
         vm.stopPrank();
 
-        assertEq(voterIdNFT.getEpochContentStake(1, 100, 1), 50e6);
+        assertEq(voterIdNFT.getEpochContentStake(1, 100, 1), 5e6);
     }
 
     function test_RecordStake_RevertNotStakeRecorder() public {
         vm.prank(user1);
         vm.expectRevert(VoterIdNFT.OnlyStakeRecorder.selector);
-        voterIdNFT.recordStake(1, 100, 1, 50e6);
+        voterIdNFT.recordStake(1, 100, 1, 5e6);
     }
 
     function test_RecordStake_EmitsStakeRecorded() public {
@@ -333,8 +333,8 @@ contract VoterIdNFTTest is Test {
 
         vm.prank(recorderAddr);
         vm.expectEmit(true, true, true, true);
-        emit VoterIdNFT.StakeRecorded(1, 100, 1, 50e6);
-        voterIdNFT.recordStake(1, 100, 1, 50e6);
+        emit VoterIdNFT.StakeRecorded(1, 100, 1, 5e6);
+        voterIdNFT.recordStake(1, 100, 1, 5e6);
     }
 
     function test_GetRemainingStakeCapacity() public {
@@ -342,12 +342,12 @@ contract VoterIdNFTTest is Test {
         voterIdNFT.mint(user1, NULLIFIER_1);
 
         // Before any staking, capacity is MAX_STAKE_PER_VOTER
-        assertEq(voterIdNFT.getRemainingStakeCapacity(1, 100, 1), 100e6);
+        assertEq(voterIdNFT.getRemainingStakeCapacity(1, 100, 1), 10e6);
 
-        // After staking 60, remaining is 40
+        // After staking 6, remaining is 4
         vm.prank(recorderAddr);
-        voterIdNFT.recordStake(1, 100, 1, 60e6);
-        assertEq(voterIdNFT.getRemainingStakeCapacity(1, 100, 1), 40e6);
+        voterIdNFT.recordStake(1, 100, 1, 6e6);
+        assertEq(voterIdNFT.getRemainingStakeCapacity(1, 100, 1), 4e6);
     }
 
     function test_GetRemainingStakeCapacity_AtMax() public {
@@ -355,7 +355,7 @@ contract VoterIdNFTTest is Test {
         voterIdNFT.mint(user1, NULLIFIER_1);
 
         vm.prank(recorderAddr);
-        voterIdNFT.recordStake(1, 100, 1, 100e6);
+        voterIdNFT.recordStake(1, 100, 1, 10e6);
 
         assertEq(voterIdNFT.getRemainingStakeCapacity(1, 100, 1), 0);
     }
@@ -367,12 +367,12 @@ contract VoterIdNFTTest is Test {
         // recordStake now enforces MAX_STAKE_PER_VOTER defense-in-depth; a second call that
         // would push past the cap reverts rather than silently exceeding the tracked value.
         vm.startPrank(recorderAddr);
-        voterIdNFT.recordStake(1, 100, 1, 80e6);
+        voterIdNFT.recordStake(1, 100, 1, 8e6);
         vm.expectRevert(bytes("Stake cap exceeded"));
-        voterIdNFT.recordStake(1, 100, 1, 40e6); // Would total 120e6, over MAX_STAKE_PER_VOTER.
+        voterIdNFT.recordStake(1, 100, 1, 4e6); // Would total 12e6, over MAX_STAKE_PER_VOTER.
         vm.stopPrank();
 
-        assertEq(voterIdNFT.getRemainingStakeCapacity(1, 100, 1), uint256(20e6));
+        assertEq(voterIdNFT.getRemainingStakeCapacity(1, 100, 1), uint256(2e6));
     }
 
     function test_StakeIndependentPerContentAndEpoch() public {
@@ -380,14 +380,14 @@ contract VoterIdNFTTest is Test {
         voterIdNFT.mint(user1, NULLIFIER_1);
 
         vm.startPrank(recorderAddr);
-        voterIdNFT.recordStake(1, 100, 1, 50e6); // content 1, epoch 100
-        voterIdNFT.recordStake(2, 100, 1, 70e6); // content 2, epoch 100
-        voterIdNFT.recordStake(1, 101, 1, 30e6); // content 1, epoch 101
+        voterIdNFT.recordStake(1, 100, 1, 5e6); // content 1, epoch 100
+        voterIdNFT.recordStake(2, 100, 1, 7e6); // content 2, epoch 100
+        voterIdNFT.recordStake(1, 101, 1, 3e6); // content 1, epoch 101
         vm.stopPrank();
 
-        assertEq(voterIdNFT.getEpochContentStake(1, 100, 1), 50e6);
-        assertEq(voterIdNFT.getEpochContentStake(2, 100, 1), 70e6);
-        assertEq(voterIdNFT.getEpochContentStake(1, 101, 1), 30e6);
+        assertEq(voterIdNFT.getEpochContentStake(1, 100, 1), 5e6);
+        assertEq(voterIdNFT.getEpochContentStake(2, 100, 1), 7e6);
+        assertEq(voterIdNFT.getEpochContentStake(1, 101, 1), 3e6);
     }
 
     // ====================================================
@@ -924,7 +924,7 @@ contract VoterIdNFTTest is Test {
         voterIdNFT.mint(user1, NULLIFIER_1);
 
         vm.prank(recorderAddr);
-        voterIdNFT.recordStake(1, 100, 1, 100e6);
+        voterIdNFT.recordStake(1, 100, 1, 10e6);
 
         vm.prank(admin);
         voterIdNFT.revokeVoterId(user1);
@@ -936,7 +936,7 @@ contract VoterIdNFTTest is Test {
         uint256 newTokenId = voterIdNFT.mint(user2, NULLIFIER_1);
 
         assertEq(newTokenId, 2);
-        assertEq(voterIdNFT.getEpochContentStake(1, 100, newTokenId), 100e6);
+        assertEq(voterIdNFT.getEpochContentStake(1, 100, newTokenId), 10e6);
         assertEq(voterIdNFT.getRemainingStakeCapacity(1, 100, newTokenId), 0);
     }
 
@@ -954,11 +954,11 @@ contract VoterIdNFTTest is Test {
         uint256 newTokenId = voterIdNFT.mint(user2, NULLIFIER_1);
 
         vm.prank(recorderAddr);
-        voterIdNFT.recordStake(1, 100, newTokenId, 50e6);
+        voterIdNFT.recordStake(1, 100, newTokenId, 5e6);
 
         assertEq(voterIdNFT.getNullifier(1), NULLIFIER_1);
-        assertEq(voterIdNFT.getEpochContentStake(1, 100, 1), 50e6);
-        assertEq(voterIdNFT.getEpochContentStake(1, 100, newTokenId), 50e6);
+        assertEq(voterIdNFT.getEpochContentStake(1, 100, 1), 5e6);
+        assertEq(voterIdNFT.getEpochContentStake(1, 100, newTokenId), 5e6);
     }
 
     function test_ResetNullifier_RevertNotOwner() public {

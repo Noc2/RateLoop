@@ -67,6 +67,86 @@ test("getProfiles joins addresses into the expected batch query", async () => {
   );
 });
 
+test("getRaterRewardStatus requests the typed reward-status route", async () => {
+  let requestedUrl = "";
+  const read = createCuryoReadClient({
+    apiBaseUrl: "https://api.curyo.xyz",
+    fetchImpl: async (input: URL | RequestInfo) => {
+      requestedUrl = String(input);
+      return new Response(
+        JSON.stringify({
+          rater: "0x1111111111111111111111111111111111111111",
+          raterType: 2,
+          raterTypeName: "AI",
+          selfCredential: {
+            verified: false,
+            legacy: false,
+            revoked: false,
+            status: "missing",
+            verifiedAt: null,
+            expiresAt: null,
+            multiplierBps: 10000,
+            evidenceHash: null,
+          },
+          aiDeclaration: {
+            declared: true,
+            operator: "0x2222222222222222222222222222222222222222",
+            version: 1,
+            effectiveEpoch: "1",
+            expiresAtEpoch: "0",
+            tier: 2,
+            tierName: "A1Verified",
+            tierMultiplierBps: 11500,
+            behaviorChanged: false,
+            probePending: false,
+            probeStatus: "passed",
+            declarationHash: null,
+            modelClass: 1,
+            modelId: null,
+            provider: null,
+            promptTemplateHash: null,
+            retrievalConfigHash: null,
+            toolingHash: null,
+            disclosure: 1,
+            declaredAt: "1000",
+            retiredAt: null,
+            lastProbeResultHash: null,
+            latestProbe: null,
+          },
+          challengeStatus: {
+            openCount: 0,
+            latestChallengeId: null,
+            latestStatus: 0,
+            latestResolvedAt: null,
+            latestOperatorSlash: "0",
+            latestChallengerReward: "0",
+          },
+          rewardPolicy: {
+            baseMultiplierBps: 10000,
+            humanCredentialMultiplierBps: 10000,
+            agentTierMultiplierBps: 11500,
+            combinedMultiplierBps: 11500,
+            combinedMultiplierCapBps: 12500,
+            verifiedAgentsCanAnchorLaunchRewards: false,
+            verifiedAgentSignupBonusEligible: false,
+          },
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        },
+      );
+    },
+    timeoutMs: 5_000,
+  });
+
+  const response = await read.getRaterRewardStatus("0x1111111111111111111111111111111111111111");
+
+  assert.match(requestedUrl, /\/rater-reward-status\/0x1111111111111111111111111111111111111111$/);
+  assert.equal(response.aiDeclaration.tierName, "A1Verified");
+  assert.equal(response.rewardPolicy.verifiedAgentsCanAnchorLaunchRewards, false);
+});
+
 test("read client surfaces API errors with status codes", async () => {
   const read = createCuryoReadClient({
     apiBaseUrl: "https://api.curyo.xyz",

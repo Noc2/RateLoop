@@ -28,7 +28,7 @@ interface StakeSelectorProps {
   onCancel: () => void;
 }
 
-const PRESET_AMOUNTS = [0, 1, 5, 25, 50, 100];
+const PRESET_AMOUNTS = [0, 1, 2.5, 5, 10];
 const MIN_RATING = 1;
 const MAX_RATING = 9.9;
 
@@ -130,7 +130,7 @@ export function StakeSelector({
     Math.abs(predictionDelta) < 0.05 ? "text-base-content/70" : predictionDelta > 0 ? "text-success" : "text-error";
 
   const balanceFormatted = hrepBalance ? Number(hrepBalance) / 1e6 : 0;
-  const capacityFormatted = remainingCapacity != null ? Number(remainingCapacity) / 1e6 : 100;
+  const capacityFormatted = remainingCapacity != null ? Number(remainingCapacity) / 1e6 : 10;
   const maxByBalance = Math.floor(balanceFormatted);
   const maxByCapacity = Math.floor(capacityFormatted);
   const maxStake = Math.min(maxByBalance, maxByCapacity);
@@ -315,6 +315,7 @@ export function StakeSelector({
                 type="range"
                 min={0}
                 max={sliderMax}
+                step={0.5}
                 value={amount > 0 ? Math.min(amount, sliderMax) : 0}
                 onChange={e => setAmount(Number(e.target.value))}
                 className={sliderClassName}
@@ -329,14 +330,16 @@ export function StakeSelector({
             </div>
 
             <div className="my-5 text-center">
-              <span className="text-4xl font-bold tabular-nums">{amount}</span>
+              <span className="text-4xl font-bold tabular-nums">
+                {amount.toLocaleString(undefined, { maximumFractionDigits: 1 })}
+              </span>
               <span className="ml-2 text-base text-base-content/60">{symbol}</span>
               {isCapacityLimited && (
                 <span
                   className="tooltip tooltip-top ml-2 inline-block cursor-help align-middle"
-                  data-tip={`Max per ${contentLabel}: ${maxByCapacity} ${symbol} remaining (100 limit per round)`}
+                  data-tip={`Max per ${contentLabel}: ${maxByCapacity} ${symbol} remaining (10 limit per round)`}
                   role="img"
-                  aria-label={`Max per ${contentLabel}: ${maxByCapacity} ${symbol} remaining (100 limit per round)`}
+                  aria-label={`Max per ${contentLabel}: ${maxByCapacity} ${symbol} remaining (10 limit per round)`}
                 >
                   <svg
                     width="16"

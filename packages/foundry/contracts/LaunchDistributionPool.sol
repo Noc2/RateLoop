@@ -280,10 +280,10 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
 
     function currentRaterLaunchCap() public view returns (uint256) {
         uint256 count = eligibleRaterCount;
-        if (count < 100_000) return 12e6;
-        if (count < 1_000_000) return 6e6;
-        if (count < 5_000_000) return 3e6;
-        if (count < 15_000_000) return 1_500_000;
+        if (count < 100_000) return 10e6;
+        if (count < 1_000_000) return 5e6;
+        if (count < 5_000_000) return 2_500_000;
+        if (count < 15_000_000) return 1_250_000;
         return 500_000;
     }
 

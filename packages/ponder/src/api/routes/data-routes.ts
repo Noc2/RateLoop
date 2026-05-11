@@ -16,6 +16,11 @@ import {
   questionRewardPool,
   questionRewardPoolClaim,
   questionRewardPoolRound,
+  aiRaterDeclaration,
+  aiRaterDeclarationChallenge,
+  aiRaterProbeResult,
+  raterProfile,
+  raterSelfCredential,
   rewardClaim,
   round,
   tokenTransfer,
@@ -37,12 +42,75 @@ import { isValidAddress, safeBigInt, safeLimit, safeOffset } from "../utils.js";
 import { deriveEffectiveVoterStreak } from "../../streak-utils.js";
 
 const VOTE_COOLDOWN_SECONDS = 24 * 60 * 60;
+const VERIFIED_AGENT_MULTIPLIER_BPS = 11_500;
+const UNVERIFIED_AGENT_MULTIPLIER_BPS = 10_500;
+const BASE_RATER_MULTIPLIER_BPS = 10_000;
+const MAX_COMBINED_RATER_WEIGHT_BPS = 12_500;
+const OPEN_CHALLENGE_STATUS = 1;
 
 const STREAK_MILESTONES = [
   { days: 7, baseBonus: 10 },
   { days: 30, baseBonus: 50 },
   { days: 90, baseBonus: 200 },
 ];
+
+const AI_RATER_TIERS = ["A0", "A1Unverified", "A1Verified"] as const;
+const RATER_TYPES = ["Unknown", "Human", "AI", "Team", "Hybrid"] as const;
+
+function aiTierName(tier: number | null | undefined) {
+  return AI_RATER_TIERS[tier ?? 0] ?? "A0";
+}
+
+function aiTierMultiplierBps(tier: number | null | undefined) {
+  if (tier === 2) return VERIFIED_AGENT_MULTIPLIER_BPS;
+  if (tier === 1) return UNVERIFIED_AGENT_MULTIPLIER_BPS;
+  return BASE_RATER_MULTIPLIER_BPS;
+}
+
+function raterTypeName(raterType: number | null | undefined) {
+  return RATER_TYPES[raterType ?? 0] ?? "Unknown";
+}
+
+function credentialStatus(
+  credential:
+    | {
+        verified: boolean;
+        revoked: boolean;
+        expiresAt: bigint;
+      }
+    | undefined,
+  nowSeconds: bigint,
+) {
+  if (!credential?.verified) return "missing";
+  if (credential.revoked) return "revoked";
+  if (credential.expiresAt !== 0n && credential.expiresAt <= nowSeconds) return "expired";
+  return "verified";
+}
+
+function probeStatus(
+  declaration: { probePending: boolean } | undefined,
+  latestProbe: { passed: boolean } | undefined,
+) {
+  if (!declaration) return "none";
+  if (declaration.probePending) return "pending";
+  if (!latestProbe) return "none";
+  return latestProbe.passed ? "passed" : "failed";
+}
+
+function declarationIsActive(
+  declaration:
+    | {
+        retiredAt: bigint | null;
+        effectiveEpoch: bigint;
+        expiresAtEpoch: bigint;
+      }
+    | undefined,
+  nowSeconds: bigint,
+) {
+  if (!declaration || declaration.retiredAt != null) return false;
+  if (declaration.effectiveEpoch > nowSeconds) return false;
+  return declaration.expiresAtEpoch === 0n || nowSeconds < declaration.expiresAtEpoch;
+}
 
 export function registerDataRoutes(app: ApiApp) {
   app.get("/question-bundles/:id", async (c) => {
@@ -253,6 +321,180 @@ export function registerDataRoutes(app: ApiApp) {
     }));
 
     return jsonBig(c, { stats: statsWithRate, categories });
+  });
+
+  app.get("/rater-reward-status/:address", async (c) => {
+    const address = c.req.param("address").toLowerCase() as `0x${string}`;
+    if (!isValidAddress(address)) {
+      return c.json({ error: "Invalid address" }, 400);
+    }
+
+    const [[profile], [selfCredential], [declaration]] = await Promise.all([
+      db
+        .select()
+        .from(raterProfile)
+        .where(eq(raterProfile.address, address))
+        .limit(1),
+      db
+        .select()
+        .from(raterSelfCredential)
+        .where(eq(raterSelfCredential.rater, address))
+        .limit(1),
+      db
+        .select()
+        .from(aiRaterDeclaration)
+        .where(eq(aiRaterDeclaration.rater, address))
+        .limit(1),
+    ]);
+
+    const nowSeconds = BigInt(Math.floor(Date.now() / 1000));
+    const currentDeclarationVersion = declarationIsActive(declaration, nowSeconds) ? declaration?.version : null;
+    const [[latestProbe], [challengeStats], [latestChallenge]] = currentDeclarationVersion
+      ? await Promise.all([
+          db
+            .select()
+            .from(aiRaterProbeResult)
+            .where(
+              and(
+                eq(aiRaterProbeResult.rater, address),
+                eq(aiRaterProbeResult.version, currentDeclarationVersion),
+              ),
+            )
+            .orderBy(desc(aiRaterProbeResult.recordedAt))
+            .limit(1),
+          db
+            .select({
+              openCount: sql<number>`count(*)`,
+            })
+            .from(aiRaterDeclarationChallenge)
+            .where(
+              and(
+                eq(aiRaterDeclarationChallenge.rater, address),
+                eq(aiRaterDeclarationChallenge.declarationVersion, currentDeclarationVersion),
+                eq(aiRaterDeclarationChallenge.status, OPEN_CHALLENGE_STATUS),
+              ),
+            ),
+          db
+            .select()
+            .from(aiRaterDeclarationChallenge)
+            .where(
+              and(
+                eq(aiRaterDeclarationChallenge.rater, address),
+                eq(aiRaterDeclarationChallenge.declarationVersion, currentDeclarationVersion),
+              ),
+            )
+            .orderBy(desc(aiRaterDeclarationChallenge.openedAt))
+            .limit(1),
+        ])
+      : [
+          [],
+          [{ openCount: 0 }],
+          [],
+        ];
+
+    const humanCredentialStatus = credentialStatus(selfCredential, nowSeconds);
+    const humanMultiplierBps =
+      humanCredentialStatus === "verified"
+        ? selfCredential?.multiplierBps ?? BASE_RATER_MULTIPLIER_BPS
+        : BASE_RATER_MULTIPLIER_BPS;
+    const activeDeclarationTier = declarationIsActive(declaration, nowSeconds) ? declaration?.tier : 0;
+    const agentTierMultiplierBps = aiTierMultiplierBps(activeDeclarationTier);
+    const combinedMultiplierBps = Math.min(
+      Math.floor((humanMultiplierBps * agentTierMultiplierBps) / BASE_RATER_MULTIPLIER_BPS),
+      MAX_COMBINED_RATER_WEIGHT_BPS,
+    );
+
+    return jsonBig(c, {
+      rater: address,
+      raterType: profile?.raterType ?? 0,
+      raterTypeName: raterTypeName(profile?.raterType),
+      selfCredential: {
+        verified: selfCredential?.verified ?? false,
+        legacy: selfCredential?.legacy ?? false,
+        revoked: selfCredential?.revoked ?? false,
+        status: humanCredentialStatus,
+        verifiedAt: selfCredential?.verifiedAt ?? null,
+        expiresAt: selfCredential?.expiresAt ?? null,
+        multiplierBps: humanMultiplierBps,
+        evidenceHash: selfCredential?.evidenceHash ?? null,
+      },
+      aiDeclaration: declaration
+        ? {
+            declared: true,
+            operator: declaration.operator,
+            version: declaration.version,
+            effectiveEpoch: declaration.effectiveEpoch,
+            expiresAtEpoch: declaration.expiresAtEpoch,
+            tier: activeDeclarationTier,
+            tierName: aiTierName(activeDeclarationTier),
+            tierMultiplierBps: agentTierMultiplierBps,
+            behaviorChanged: declaration.behaviorChanged,
+            probePending: declaration.probePending,
+            probeStatus: probeStatus(declaration, latestProbe),
+            declarationHash: declaration.declarationHash,
+            modelClass: declaration.modelClass,
+            modelId: declaration.modelId,
+            provider: declaration.provider,
+            promptTemplateHash: declaration.promptTemplateHash,
+            retrievalConfigHash: declaration.retrievalConfigHash,
+            toolingHash: declaration.toolingHash,
+            disclosure: declaration.disclosure,
+            declaredAt: declaration.declaredAt,
+            retiredAt: declaration.retiredAt ?? null,
+            lastProbeResultHash: declaration.lastProbeResultHash ?? null,
+            latestProbe: latestProbe
+              ? {
+                  passed: latestProbe.passed,
+                  confidenceBps: latestProbe.confidenceBps,
+                  probeLibraryHash: latestProbe.probeLibraryHash,
+                  resultHash: latestProbe.resultHash,
+                  recordedAt: latestProbe.recordedAt,
+                }
+              : null,
+          }
+        : {
+            declared: false,
+            operator: null,
+            version: 0,
+            effectiveEpoch: null,
+            expiresAtEpoch: null,
+            tier: 0,
+            tierName: "A0",
+            tierMultiplierBps: BASE_RATER_MULTIPLIER_BPS,
+            behaviorChanged: false,
+            probePending: false,
+            probeStatus: "none",
+            declarationHash: null,
+            modelClass: null,
+            modelId: null,
+            provider: null,
+            promptTemplateHash: null,
+            retrievalConfigHash: null,
+            toolingHash: null,
+            disclosure: null,
+            declaredAt: null,
+            retiredAt: null,
+            lastProbeResultHash: null,
+            latestProbe: null,
+          },
+      challengeStatus: {
+        openCount: Number(challengeStats?.openCount ?? 0),
+        latestChallengeId: latestChallenge?.challengeId ?? null,
+        latestStatus: latestChallenge?.status ?? 0,
+        latestResolvedAt: latestChallenge?.resolvedAt ?? null,
+        latestOperatorSlash: latestChallenge?.operatorSlash ?? 0n,
+        latestChallengerReward: latestChallenge?.challengerReward ?? 0n,
+      },
+      rewardPolicy: {
+        baseMultiplierBps: BASE_RATER_MULTIPLIER_BPS,
+        humanCredentialMultiplierBps: humanMultiplierBps,
+        agentTierMultiplierBps,
+        combinedMultiplierBps,
+        combinedMultiplierCapBps: MAX_COMBINED_RATER_WEIGHT_BPS,
+        verifiedAgentsCanAnchorLaunchRewards: false,
+        verifiedAgentSignupBonusEligible: false,
+      },
+    });
   });
 
   app.get("/avatar/:address", async (c) => {

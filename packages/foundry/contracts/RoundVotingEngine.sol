@@ -25,6 +25,7 @@ import { IVoterIdNFT } from "./interfaces/IVoterIdNFT.sol";
 import { IRoundVotingEngine } from "./interfaces/IRoundVotingEngine.sol";
 import { IParticipationPool } from "./interfaces/IParticipationPool.sol";
 import { IRaterRegistryWeights } from "./interfaces/IRaterRegistryWeights.sol";
+import { IRaterDeclarationWeights } from "./interfaces/IRaterDeclarationWeights.sol";
 
 interface IQuestionBundleRoundObserver {
     function recordBundleQuestionTerminal(uint256 contentId, uint256 roundId, bool settled) external;
@@ -96,7 +97,7 @@ contract RoundVotingEngine is
 
     // --- Constants ---
     uint256 internal constant MIN_STAKE = 0; // zero-LREP ratings bootstrap new raters
-    uint256 internal constant MAX_STAKE = 100e6; // 100 HREP (6 decimals)
+    uint256 internal constant MAX_STAKE = 10e6; // 10 LREP (6 decimals)
     uint256 internal constant VOTE_COOLDOWN = 24 hours; // Time-based cooldown per content per voter
     uint256 internal constant MAX_CIPHERTEXT_SIZE = 2_048; // 2 KB max ciphertext to prevent storage bloat
     uint16 internal constant MIN_LOO_VALID_PARTICIPANTS = 3;
@@ -104,6 +105,7 @@ contract RoundVotingEngine is
     uint16 internal constant PREDICTION_ZERO_CREDIT_TOLERANCE_BPS = 8_900;
     uint16 internal constant PREDICTION_SCORE_SCALE_BPS = 10_000;
     uint16 internal constant WEIGHT_BPS = 10_000;
+    uint16 internal constant MAX_COMBINED_RATER_WEIGHT_BPS = 12_500;
 
     // --- State ---
     IERC20 internal hrepToken;
@@ -347,7 +349,7 @@ contract RoundVotingEngine is
     /// @param drandChainHash drand chain hash bound into the commitment.
     /// @param commitHash keccak256(abi.encodePacked(isUp, salt, voter, contentId, roundId, roundReferenceRatingBps, targetRound, drandChainHash, keccak256(ciphertext))).
     /// @param ciphertext Tlock-encrypted payload (decryptable after epoch end via drand).
-    /// @param stakeAmount Amount of HREP tokens to stake (1-100).
+    /// @param stakeAmount Amount of LREP tokens to stake (0-10).
     /// @param frontend Address of frontend operator for fee distribution.
     function commitVote(
         uint256 contentId,
@@ -1145,21 +1147,30 @@ contract RoundVotingEngine is
     function _currentRaterWeightBps(address voter) internal view returns (uint16) {
         uint256 weightBps = WEIGHT_BPS;
         address configuredRaterRegistry = protocolConfig.raterRegistry();
-        if (configuredRaterRegistry == address(0)) return WEIGHT_BPS;
+        if (configuredRaterRegistry != address(0)) {
+            IRaterRegistryWeights registryWeights = IRaterRegistryWeights(configuredRaterRegistry);
+            try registryWeights.getClusterScore(voter) returns (bytes32, uint16 discountBps, uint64, uint64 updatedAt) {
+                if (updatedAt != 0) {
+                    if (discountBps >= WEIGHT_BPS) return 0;
+                    weightBps = (weightBps * (WEIGHT_BPS - discountBps)) / WEIGHT_BPS;
+                }
+            } catch { }
 
-        IRaterRegistryWeights registryWeights = IRaterRegistryWeights(configuredRaterRegistry);
-        try registryWeights.getClusterScore(voter) returns (bytes32, uint16 discountBps, uint64, uint64 updatedAt) {
-            if (updatedAt != 0) {
-                if (discountBps >= WEIGHT_BPS) return 0;
-                weightBps = (weightBps * (WEIGHT_BPS - discountBps)) / WEIGHT_BPS;
-            }
-        } catch { }
+            try registryWeights.credentialMultiplierBps(voter) returns (uint16 multiplierBps) {
+                if (multiplierBps > WEIGHT_BPS) weightBps = (weightBps * multiplierBps) / WEIGHT_BPS;
+            } catch { }
+        }
 
-        try registryWeights.credentialMultiplierBps(voter) returns (uint16 multiplierBps) {
-            if (multiplierBps > WEIGHT_BPS) weightBps = (weightBps * multiplierBps) / WEIGHT_BPS;
-        } catch { }
+        address configuredRaterDeclarationRegistry = protocolConfig.raterDeclarationRegistry();
+        if (configuredRaterDeclarationRegistry != address(0)) {
+            IRaterDeclarationWeights declarationWeights =
+                IRaterDeclarationWeights(configuredRaterDeclarationRegistry);
+            try declarationWeights.tierMultiplierBps(voter) returns (uint16 multiplierBps) {
+                if (multiplierBps > WEIGHT_BPS) weightBps = (weightBps * multiplierBps) / WEIGHT_BPS;
+            } catch { }
+        }
 
-        if (weightBps > type(uint16).max) return type(uint16).max;
+        if (weightBps > MAX_COMBINED_RATER_WEIGHT_BPS) return MAX_COMBINED_RATER_WEIGHT_BPS;
         return uint16(weightBps);
     }
 

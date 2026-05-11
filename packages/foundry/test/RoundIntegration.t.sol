@@ -2103,7 +2103,7 @@ contract RoundIntegrationTest is VotingTestBase {
         dirs[0] = false;
         dirs[1] = false;
 
-        _settleRoundWith(voters, contentId, dirs, 100e6);
+        _settleRoundWith(voters, contentId, dirs, 10e6);
 
         (,,,,,,,, uint256 rating,) = registry.contents(contentId);
         RatingLib.RatingState memory ratingState = registry.getRatingState(contentId);
@@ -2133,7 +2133,7 @@ contract RoundIntegrationTest is VotingTestBase {
         dirs[0] = true;
         dirs[1] = true;
 
-        _settleRoundWith(voters, contentId, dirs, 100e6);
+        _settleRoundWith(voters, contentId, dirs, 10e6);
 
         (,,,,,,,, uint256 rating,) = registry.contents(contentId);
         assertGe(rating, 25, "round should not be slashable");
@@ -2402,12 +2402,12 @@ contract RoundIntegrationTest is VotingTestBase {
         );
         vm.stopPrank();
 
-        // Above maximum (100 HREP)
+        // Above maximum (10 LREP)
         bytes32 salt2 = keccak256(abi.encodePacked(voter1, contentId, true, uint256(1)));
         bytes32 ch2 = _commitHash(true, salt2, voter2, contentId);
 
         vm.startPrank(voter1);
-        hrepToken.approve(address(votingEngine), 101e6);
+        hrepToken.approve(address(votingEngine), 11e6);
         uint256 cachedRoundContext48 = _roundContext(votingEngine.previewCommitRoundId(contentId), referenceRatingBps);
         vm.expectRevert(RoundVotingEngine.InvalidStake.selector);
         votingEngine.commitVote(
@@ -2417,7 +2417,7 @@ contract RoundIntegrationTest is VotingTestBase {
             _tlockDrandChainHash(),
             ch2,
             _testCiphertext(true, salt2, contentId),
-            101e6,
+            11e6,
             address(0)
         );
         vm.stopPrank();

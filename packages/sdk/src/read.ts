@@ -206,6 +206,76 @@ export interface CuryoGlobalStats {
   [key: string]: unknown;
 }
 
+export type CuryoRaterTypeName = "Unknown" | "Human" | "AI" | "Team" | "Hybrid";
+export type CuryoSelfCredentialStatus = "missing" | "verified" | "expired" | "revoked";
+export type CuryoAiDeclarationTierName = "A0" | "A1Unverified" | "A1Verified";
+export type CuryoAiProbeStatus = "none" | "pending" | "passed" | "failed";
+
+export interface CuryoRaterRewardStatusResponse {
+  rater: `0x${string}`;
+  raterType: number;
+  raterTypeName: CuryoRaterTypeName;
+  selfCredential: {
+    verified: boolean;
+    legacy: boolean;
+    revoked: boolean;
+    status: CuryoSelfCredentialStatus;
+    verifiedAt: string | null;
+    expiresAt: string | null;
+    multiplierBps: number;
+    evidenceHash: string | null;
+  };
+  aiDeclaration: {
+    declared: boolean;
+    operator: `0x${string}` | null;
+    version: number;
+    effectiveEpoch: string | null;
+    expiresAtEpoch: string | null;
+    tier: number;
+    tierName: CuryoAiDeclarationTierName;
+    tierMultiplierBps: number;
+    behaviorChanged: boolean;
+    probePending: boolean;
+    probeStatus: CuryoAiProbeStatus;
+    declarationHash: string | null;
+    modelClass: number | null;
+    modelId: string | null;
+    provider: string | null;
+    promptTemplateHash: string | null;
+    retrievalConfigHash: string | null;
+    toolingHash: string | null;
+    disclosure: number | null;
+    declaredAt: string | null;
+    retiredAt: string | null;
+    lastProbeResultHash: string | null;
+    latestProbe: {
+      passed: boolean;
+      confidenceBps: number;
+      probeLibraryHash: string;
+      resultHash: string;
+      recordedAt: string;
+    } | null;
+  };
+  challengeStatus: {
+    openCount: number;
+    latestChallengeId: string | null;
+    latestStatus: number;
+    latestResolvedAt: string | null;
+    latestOperatorSlash: string;
+    latestChallengerReward: string;
+  };
+  rewardPolicy: {
+    baseMultiplierBps: number;
+    humanCredentialMultiplierBps: number;
+    agentTierMultiplierBps: number;
+    combinedMultiplierBps: number;
+    combinedMultiplierCapBps: number;
+    verifiedAgentsCanAnchorLaunchRewards: boolean;
+    verifiedAgentSignupBonusEligible: boolean;
+  };
+  [key: string]: unknown;
+}
+
 export interface CuryoPaginatedResponse<T> {
   items: T[];
   total?: number | null;
@@ -280,6 +350,7 @@ export interface CuryoReadClient {
   getProfile(address: string): Promise<CuryoProfileResponse>;
   getProfiles(addresses: string[]): Promise<Record<string, CuryoProfileItem>>;
   getVoterAccuracy(address: string): Promise<JsonRecord>;
+  getRaterRewardStatus(address: string): Promise<CuryoRaterRewardStatusResponse>;
   getStats(): Promise<CuryoGlobalStats>;
   searchVotes(params?: SearchVotesParams): Promise<CuryoPaginatedResponse<CuryoVoteItem>>;
   searchRounds(params?: SearchRoundsParams): Promise<CuryoPaginatedResponse<CuryoRoundItem>>;
@@ -296,6 +367,7 @@ export function createCuryoReadClient(config: Pick<CuryoClientConfig, "apiBaseUr
     getProfile: address => request<CuryoProfileResponse>(config, `/profile/${address}`),
     getProfiles: addresses => request<Record<string, CuryoProfileItem>>(config, "/profiles", { addresses: addresses.join(",") }),
     getVoterAccuracy: address => request<JsonRecord>(config, `/voter-accuracy/${address}`),
+    getRaterRewardStatus: address => request<CuryoRaterRewardStatusResponse>(config, `/rater-reward-status/${address}`),
     getStats: () => request<CuryoGlobalStats>(config, "/stats"),
     searchVotes: params => request<CuryoPaginatedResponse<CuryoVoteItem>>(config, "/votes", params),
     searchRounds: params => request<CuryoPaginatedResponse<CuryoRoundItem>>(config, "/rounds", params),

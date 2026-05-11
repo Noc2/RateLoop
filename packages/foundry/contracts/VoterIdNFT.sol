@@ -13,8 +13,8 @@ contract VoterIdNFT is ERC721, Ownable, IVoterIdNFT {
     // Constants
     // ====================================================
 
-    /// @notice Maximum stake per Voter ID per content per epoch (100 HREP with 6 decimals)
-    uint256 public constant MAX_STAKE_PER_VOTER = 100e6;
+    /// @notice Maximum stake per Voter ID per content per epoch (10 LREP with 6 decimals)
+    uint256 public constant MAX_STAKE_PER_VOTER = 10e6;
 
     /// @notice Maximum supply of Voter IDs.
     uint256 public constant MAX_SUPPLY = 41_110_000;

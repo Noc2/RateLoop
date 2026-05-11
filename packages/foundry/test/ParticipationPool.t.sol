@@ -130,10 +130,10 @@ contract ParticipationPoolTest is Test {
 
     // --- Vote Reward Tests (proportional to stake) ---
 
-    function test_RewardVote_Tier0_Stake100() public {
-        uint256 stakeAmount = 100e6; // 100 HREP
-        uint256 expectedReward = stakeAmount * INITIAL_RATE_BPS / 10000; // 90 HREP
-        assertEq(expectedReward, 90e6);
+    function test_RewardVote_Tier0_Stake10() public {
+        uint256 stakeAmount = 10e6; // 10 LREP
+        uint256 expectedReward = stakeAmount * INITIAL_RATE_BPS / 10000; // 9 LREP
+        assertEq(expectedReward, 9e6);
 
         uint256 balanceBefore = hrepToken.balanceOf(user1);
 
@@ -155,41 +155,41 @@ contract ParticipationPoolTest is Test {
         assertEq(pool.totalDistributed(), expectedReward);
     }
 
-    function test_RewardVote_Tier0_Stake50() public {
-        uint256 stakeAmount = 50e6;
-        uint256 expectedReward = stakeAmount * INITIAL_RATE_BPS / 10000; // 45 HREP
+    function test_RewardVote_Tier0_Stake5() public {
+        uint256 stakeAmount = 5e6;
+        uint256 expectedReward = stakeAmount * INITIAL_RATE_BPS / 10000; // 4.5 LREP
 
         _distributeStakeReward(votingEngine, user1, stakeAmount);
 
         assertEq(hrepToken.balanceOf(user1), expectedReward);
     }
 
-    function test_RewardVote_Tier1_Stake100() public {
+    function test_RewardVote_Tier1_Stake10() public {
         _setTotalDistributed(INITIAL_TIER_AMOUNT); // Enter tier 1 (rate = 4500)
 
-        uint256 stakeAmount = 100e6;
-        uint256 expectedReward = stakeAmount * 4500 / 10000; // 45 HREP
+        uint256 stakeAmount = 10e6;
+        uint256 expectedReward = stakeAmount * 4500 / 10000; // 4.5 LREP
 
         _distributeStakeReward(votingEngine, user1, stakeAmount);
 
         assertEq(hrepToken.balanceOf(user1), expectedReward);
     }
 
-    function test_RewardVote_AtFloor_Stake100() public {
+    function test_RewardVote_AtFloor_Stake10() public {
         _setTotalDistributed(190_500_000e6); // At floor rate (100 BPS = 1%)
 
-        uint256 stakeAmount = 100e6;
-        uint256 expectedReward = stakeAmount * MIN_RATE_BPS / 10000; // 1 HREP
+        uint256 stakeAmount = 10e6;
+        uint256 expectedReward = stakeAmount * MIN_RATE_BPS / 10000; // 0.1 LREP
 
         _distributeStakeReward(votingEngine, user1, stakeAmount);
 
         assertEq(hrepToken.balanceOf(user1), expectedReward);
-        assertEq(expectedReward, 1e6);
+        assertEq(expectedReward, 100_000);
     }
 
     function test_RewardVote_EmitsEvent() public {
-        uint256 stakeAmount = 100e6;
-        uint256 expectedReward = 90e6;
+        uint256 stakeAmount = 10e6;
+        uint256 expectedReward = 9e6;
 
         vm.expectEmit(true, false, false, true);
         emit ParticipationPool.ParticipationReward(user1, expectedReward, expectedReward);
@@ -251,15 +251,15 @@ contract ParticipationPoolTest is Test {
 
     function test_PoolDepletion_CapsAtRemaining() public {
         // Set the tracked pool balance low without relying on a privileged sweep path.
-        _setPoolBalance(50e6);
-        assertEq(pool.poolBalance(), 50e6);
+        _setPoolBalance(5e6);
+        assertEq(pool.poolBalance(), 5e6);
 
-        // Stake 100, reward would be 90 HREP but only 50 left — cap at 50
-        _distributeStakeReward(votingEngine, user1, 100e6);
+        // Stake 10, reward would be 9 LREP but only 5 left — cap at 5
+        _distributeStakeReward(votingEngine, user1, 10e6);
 
-        assertEq(hrepToken.balanceOf(user1), 50e6);
+        assertEq(hrepToken.balanceOf(user1), 5e6);
         assertEq(pool.poolBalance(), 0);
-        assertEq(pool.totalDistributed(), 50e6);
+        assertEq(pool.totalDistributed(), 5e6);
     }
 
     function test_PoolDepletion_ZeroRewardWhenEmpty() public {
@@ -270,7 +270,7 @@ contract ParticipationPoolTest is Test {
         uint256 balanceBefore = hrepToken.balanceOf(user1);
 
         // Should silently do nothing
-        _distributeStakeReward(votingEngine, user1, 100e6);
+        _distributeStakeReward(votingEngine, user1, 10e6);
 
         assertEq(hrepToken.balanceOf(user1), balanceBefore);
         // totalDistributed should NOT change when reward is 0
@@ -290,7 +290,7 @@ contract ParticipationPoolTest is Test {
     // --- Reward Always Below Stake ---
 
     function test_RewardAlwaysBelowStake() public pure {
-        uint256 stakeAmount = 100e6;
+        uint256 stakeAmount = 10e6;
         uint256 reward = stakeAmount * INITIAL_RATE_BPS / 10000;
         assertTrue(reward < stakeAmount, "Reward must be less than stake");
     }
@@ -304,7 +304,7 @@ contract ParticipationPoolTest is Test {
         tiers[3] = 10_500_000e6; // 10.5M
         tiers[4] = 22_500_000e6; // 22.5M
 
-        uint256 stakeAmount = 100e6;
+        uint256 stakeAmount = 10e6;
 
         for (uint256 i = 0; i < tiers.length; i++) {
             _setTotalDistributed(tiers[i]);
@@ -317,19 +317,19 @@ contract ParticipationPoolTest is Test {
     // --- Distribution Accumulation ---
 
     function test_TotalDistributedAccumulatesRewardAmounts() public {
-        // Two votes with stake 100 → each distributes 90 HREP
-        _distributeStakeReward(votingEngine, user1, 100e6);
-        _distributeStakeReward(votingEngine, user2, 100e6);
+        // Two votes with stake 10 → each distributes 9 LREP
+        _distributeStakeReward(votingEngine, user1, 10e6);
+        _distributeStakeReward(votingEngine, user2, 10e6);
 
-        assertEq(pool.totalDistributed(), 180e6); // 90 + 90 = 180 HREP
+        assertEq(pool.totalDistributed(), 18e6); // 9 + 9 = 18 LREP
     }
 
     function test_TotalDistributedAccumulatesDifferentStakes() public {
-        // Vote with stake 1 → distributes 0.9, vote with stake 100 → distributes 90
+        // Vote with stake 1 → distributes 0.9, vote with stake 10 → distributes 9
         _distributeStakeReward(votingEngine, user1, 1e6);
-        _distributeStakeReward(votingEngine, user2, 100e6);
+        _distributeStakeReward(votingEngine, user2, 10e6);
 
-        assertEq(pool.totalDistributed(), 900_000 + 90e6);
+        assertEq(pool.totalDistributed(), 900_000 + 9e6);
     }
 
     // --- Zero Stake Edge Case ---
@@ -538,19 +538,19 @@ contract ParticipationPoolTest is Test {
     // --- Mixed Actions Test ---
 
     function test_MixedVotesAndSubmissions() public {
-        // 3 votes (stake 100 each) + 2 submissions (stake 10 each)
-        _distributeStakeReward(votingEngine, user1, 100e6);
-        _distributeStakeReward(votingEngine, user1, 100e6);
-        _distributeStakeReward(votingEngine, user2, 100e6);
+        // 3 votes (stake 10 each) + 2 submissions (stake 10 each)
+        _distributeStakeReward(votingEngine, user1, 10e6);
+        _distributeStakeReward(votingEngine, user1, 10e6);
+        _distributeStakeReward(votingEngine, user2, 10e6);
         _distributeStakeReward(contentRegistry, user1, 10e6);
         _distributeStakeReward(contentRegistry, user2, 10e6);
 
-        uint256 voteReward = 100e6 * INITIAL_RATE_BPS / 10000; // 90 HREP
+        uint256 voteReward = 10e6 * INITIAL_RATE_BPS / 10000; // 9 LREP
         uint256 submitReward = 10e6 * INITIAL_RATE_BPS / 10000; // 9 HREP
 
-        // user1: 2 votes (90 each) + 1 submission (9) = 189 HREP
+        // user1: 2 votes (9 each) + 1 submission (9) = 27 LREP
         assertEq(hrepToken.balanceOf(user1), voteReward * 2 + submitReward);
-        // user2: 1 vote (90) + 1 submission (9) = 99 HREP
+        // user2: 1 vote (9) + 1 submission (9) = 18 LREP
         assertEq(hrepToken.balanceOf(user2), voteReward + submitReward);
 
         uint256 totalDistributed = voteReward * 3 + submitReward * 2;
@@ -591,8 +591,8 @@ contract ParticipationPoolTest is Test {
     // --- Reentrancy Guard Tests (L-2) ---
 
     function test_RewardVote_FunctionalWithNonReentrant() public {
-        _distributeStakeReward(votingEngine, user1, 100e6);
-        assertEq(hrepToken.balanceOf(user1), 90e6);
+        _distributeStakeReward(votingEngine, user1, 10e6);
+        assertEq(hrepToken.balanceOf(user1), 9e6);
     }
 
     function test_RewardSubmission_FunctionalWithNonReentrant() public {

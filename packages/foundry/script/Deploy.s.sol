@@ -227,6 +227,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         protocolConfig.setCategoryRegistry(address(categoryRegistry));
         protocolConfig.setVoterIdNFT(address(optionalIdentity));
         protocolConfig.setRaterRegistry(address(raterRegistry));
+        protocolConfig.setRaterDeclarationRegistry(address(raterDeclarationRegistry));
 
         registry.setVoterIdNFT(address(optionalIdentity));
         frontendRegistry.setVoterIdNFT(address(optionalIdentity));

@@ -12405,6 +12405,19 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "raterDeclarationRegistry",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "raterRegistry",
           inputs: [],
           outputs: [
@@ -12756,6 +12769,19 @@ const deployedContracts: GenericContractsDeclaration = {
         {
           type: "function",
           name: "setParticipationPool",
+          inputs: [
+            {
+              name: "value",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "setRaterDeclarationRegistry",
           inputs: [
             {
               name: "value",
@@ -13254,6 +13280,19 @@ const deployedContracts: GenericContractsDeclaration = {
           inputs: [
             {
               name: "participationPool",
+              type: "address",
+              indexed: false,
+              internalType: "address",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "RaterDeclarationRegistryUpdated",
+          inputs: [
+            {
+              name: "raterDeclarationRegistry",
               type: "address",
               indexed: false,
               internalType: "address",
@@ -20231,6 +20270,18 @@ const deployedContracts: GenericContractsDeclaration = {
               type: "uint32",
               indexed: true,
               internalType: "uint32",
+            },
+            {
+              name: "effectiveEpoch",
+              type: "uint64",
+              indexed: false,
+              internalType: "uint64",
+            },
+            {
+              name: "expiresAtEpoch",
+              type: "uint64",
+              indexed: false,
+              internalType: "uint64",
             },
             {
               name: "tier",

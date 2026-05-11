@@ -166,25 +166,25 @@ contract GameTheoryImprovementsTest is VotingTestBase {
     // TEST 1: EpochWeightWinCondition
     // =========================================================================
 
-    /// @notice DOWN wins despite raw UP majority (300 vs 100) because epoch weighting
+    /// @notice DOWN wins despite raw UP majority (30 vs 10) because epoch weighting
     ///         gives epoch-1 votes 100% weight and epoch-2+ votes only 25% weight.
     ///
-    ///   Alice: DOWN, 100 HREP, epoch-1 → effectiveStake = 100 HREP (weight = 10000 BPS)
-    ///   Bob, Carol, Dave: UP, 100 HREP each, epoch-2 → effectiveStake = 25 HREP each
+    ///   Alice: DOWN, 10 LREP, epoch-1 -> effectiveStake = 10 LREP (weight = 10000 BPS)
+    ///   Bob, Carol, Dave: UP, 10 LREP each, epoch-2 -> effectiveStake = 2.5 LREP each
     ///
-    ///   weightedDownPool = 100, weightedUpPool = 75 → DOWN wins.
+    ///   weightedDownPool = 10, weightedUpPool = 7.5 -> DOWN wins.
     function test_EpochWeightWinCondition() public {
         uint256 cid = _submit();
         uint256 roundStart = block.timestamp;
 
         // --- Epoch-1 commits (blind, at round start) ---
-        _commit(alice, cid, false, 100e6); // DOWN, epoch-1
+        _commit(alice, cid, false, 10e6); // DOWN, epoch-1
 
         // --- Epoch-2 commits (informed, after epoch-1 ends) ---
         _warpPastTlockRevealTime(roundStart + EPOCH_DURATION);
-        _commit(bob, cid, true, 100e6); // UP, epoch-2
-        _commit(carol, cid, true, 100e6); // UP, epoch-2
-        _commit(dave, cid, true, 100e6); // UP, epoch-2
+        _commit(bob, cid, true, 10e6); // UP, epoch-2
+        _commit(carol, cid, true, 10e6); // UP, epoch-2
+        _commit(dave, cid, true, 10e6); // UP, epoch-2
 
         uint256 roundId = engine.currentRoundId(cid);
 
@@ -202,10 +202,10 @@ contract GameTheoryImprovementsTest is VotingTestBase {
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, cid, roundId);
         assertEq(round.revealedCount, 4, "All 4 votes revealed");
 
-        // weightedDownPool = 100e6 * 10000 / 10000 = 100e6
-        // weightedUpPool = 3 * (100e6 * 2500 / 10000) = 3 * 25e6 = 75e6
-        assertEq(round.weightedDownPool, 100e6, "weighted DOWN pool = 100 HREP (epoch-1 full weight)");
-        assertEq(round.weightedUpPool, 75e6, "weighted UP pool = 75 HREP (3x epoch-2 at 25% each)");
+        // weightedDownPool = 10e6 * 10000 / 10000 = 10e6
+        // weightedUpPool = 3 * (10e6 * 2500 / 10000) = 3 * 2_500_000 = 7_500_000
+        assertEq(round.weightedDownPool, 10e6, "weighted DOWN pool = 10 LREP (epoch-1 full weight)");
+        assertEq(round.weightedUpPool, 7_500_000, "weighted UP pool = 7.5 LREP (3x epoch-2 at 25% each)");
 
         // thresholdReachedAt was set when 3rd vote was revealed (minVoters = 3)
         assertGt(round.thresholdReachedAt, 0, "threshold reached");
@@ -222,30 +222,30 @@ contract GameTheoryImprovementsTest is VotingTestBase {
         uint256 cid = _submit();
         uint256 roundStart = block.timestamp;
 
-        _commit(alice, cid, true, 100e6);
-        _commit(bob, cid, false, 75e6);
+        _commit(alice, cid, true, 10e6);
+        _commit(bob, cid, false, 7_500_000);
 
         uint256 roundId = engine.currentRoundId(cid);
         _warpPastTlockRevealTime(roundStart + EPOCH_DURATION);
         _reveal(alice, cid, roundId, true);
         _reveal(bob, cid, roundId, false);
 
-        _commit(carol, cid, false, 100e6);
+        _commit(carol, cid, false, 10e6);
         _warpPastTlockRevealTime(roundStart + 2 * EPOCH_DURATION);
         _reveal(carol, cid, roundId, false);
 
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, cid, roundId);
-        assertEq(round.weightedUpPool, 100e6, "epoch-1 UP weight");
-        assertEq(round.weightedDownPool, 100e6, "epoch-1 plus late DOWN equalizes weight");
-        assertEq(round.upPool, 100e6, "raw UP pool");
-        assertEq(round.downPool, 175e6, "raw DOWN pool");
+        assertEq(round.weightedUpPool, 10e6, "epoch-1 UP weight");
+        assertEq(round.weightedDownPool, 10e6, "epoch-1 plus late DOWN equalizes weight");
+        assertEq(round.upPool, 10e6, "raw UP pool");
+        assertEq(round.downPool, 17_500_000, "raw DOWN pool");
 
         _settle(cid, roundId);
 
         RoundLib.Round memory settled = RoundEngineReadHelpers.round(engine, cid, roundId);
         assertEq(uint256(settled.state), uint256(RoundLib.RoundState.Settled), "weighted-only tie settles");
         assertTrue(settled.upWins, "earlier higher-weight side wins weighted-only tie");
-        assertEq(engine.roundWinningStake(cid, roundId), 100e6, "winning weighted stake");
+        assertEq(engine.roundWinningStake(cid, roundId), 10e6, "winning weighted stake");
 
         vm.prank(carol);
         vm.expectRevert(RoundVotingEngine.RoundNotCancelledOrTied.selector);
@@ -256,26 +256,26 @@ contract GameTheoryImprovementsTest is VotingTestBase {
     // TEST 2: EpochWeightRewards (4:1 ratio)
     // =========================================================================
 
-    /// @notice Epoch-1 voters earn 4x rewards per HREP vs epoch-2 voters.
+    /// @notice Epoch-1 voters earn 4x rewards per LREP vs epoch-2 voters.
     ///
-    ///   Alice: UP, 100 HREP, epoch-1 → effectiveStake = 100 HREP
-    ///   Bob:   DOWN, 100 HREP, epoch-1 → effectiveStake = 100 HREP
-    ///   Carol: UP, 100 HREP, epoch-2 → effectiveStake = 25 HREP
+    ///   Alice: UP, 10 LREP, epoch-1 -> effectiveStake = 10 LREP
+    ///   Bob:   DOWN, 10 LREP, epoch-1 -> effectiveStake = 10 LREP
+    ///   Carol: UP, 10 LREP, epoch-2 -> effectiveStake = 2.5 LREP
     ///
-    ///   UP wins. weightedUpPool = 100 + 25 = 125 HREP.
-    ///   Alice share = 100/125 of voterPool, Carol share = 25/125 of voterPool.
+    ///   UP wins. weightedUpPool = 10 + 2.5 = 12.5 LREP.
+    ///   Alice share = 10/12.5 of voterPool, Carol share = 2.5/12.5 of voterPool.
     ///   So Alice earns 4x the reward Carol earns (per HREP staked).
     function test_EpochWeightRewards() public {
         uint256 cid = _submit();
         uint256 roundStart = block.timestamp;
 
         // --- Epoch-1 commits ---
-        _commit(alice, cid, true, 100e6); // UP, epoch-1
-        _commit(bob, cid, false, 100e6); // DOWN, epoch-1
+        _commit(alice, cid, true, 10e6); // UP, epoch-1
+        _commit(bob, cid, false, 10e6); // DOWN, epoch-1
 
         // --- Epoch-2 commit ---
         _warpPastTlockRevealTime(roundStart + EPOCH_DURATION);
-        _commit(carol, cid, true, 100e6); // UP, epoch-2
+        _commit(carol, cid, true, 10e6); // UP, epoch-2
 
         uint256 roundId = engine.currentRoundId(cid);
 
@@ -289,10 +289,10 @@ contract GameTheoryImprovementsTest is VotingTestBase {
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, cid, roundId);
         assertGt(round.thresholdReachedAt, 0, "threshold reached after 3 reveals");
 
-        // weightedUpPool = 100e6 + 25e6 = 125e6
-        // weightedDownPool = 100e6
-        assertEq(round.weightedUpPool, 125e6, "weighted UP pool = 125 HREP");
-        assertEq(round.weightedDownPool, 100e6, "weighted DOWN pool = 100 HREP");
+        // weightedUpPool = 10e6 + 2_500_000 = 12_500_000
+        // weightedDownPool = 10e6
+        assertEq(round.weightedUpPool, 12_500_000, "weighted UP pool = 12.5 LREP");
+        assertEq(round.weightedDownPool, 10e6, "weighted DOWN pool = 10 LREP");
 
         // Record balances before settlement + claims
         uint256 aliceBefore = hrepToken.balanceOf(alice);
@@ -317,24 +317,24 @@ contract GameTheoryImprovementsTest is VotingTestBase {
         uint256 aliceGain = hrepToken.balanceOf(alice) - aliceBefore;
         uint256 carolGain = hrepToken.balanceOf(carol) - carolBefore;
 
-        // Alice received her stake back (100e6) + her share of voterPool
-        // Carol received her stake back (100e6) + her share of voterPool
+        // Alice received her stake back (10e6) + her share of voterPool
+        // Carol received her stake back (10e6) + her share of voterPool
         // Net reward over returned stake:
-        //   Alice reward = (100e6 / weightedWinningStake) * voterPool
-        //   Carol reward = (25e6 / weightedWinningStake) * voterPool
+        //   Alice reward = (10e6 / weightedWinningStake) * voterPool
+        //   Carol reward = (2_500_000 / weightedWinningStake) * voterPool
         // ratio = 4:1
         assertGt(aliceGain, carolGain, "Alice earns more than Carol");
 
         // Verify the 4:1 ratio by computing rewards excluding the returned stake
-        uint256 aliceReward = aliceGain - 100e6; // strip stake return
-        uint256 carolReward = carolGain - 100e6; // strip stake return
+        uint256 aliceReward = aliceGain - 10e6; // strip stake return
+        uint256 carolReward = carolGain - 10e6; // strip stake return
 
         // Allow ±1 token rounding. Use voterPool and weightedWinningStake for exact check.
-        uint256 aliceExpected = (100e6 * voterPool) / weightedWinningStake;
-        uint256 carolExpected = (25e6 * voterPool) / weightedWinningStake;
+        uint256 aliceExpected = (10e6 * voterPool) / weightedWinningStake;
+        uint256 carolExpected = (2_500_000 * voterPool) / weightedWinningStake;
 
-        assertApproxEqAbs(aliceReward, aliceExpected, 1, "Alice reward proportional to effective stake 100");
-        assertApproxEqAbs(carolReward, carolExpected, 1, "Carol reward proportional to effective stake 25");
+        assertApproxEqAbs(aliceReward, aliceExpected, 1, "Alice reward proportional to effective stake 10");
+        assertApproxEqAbs(carolReward, carolExpected, 1, "Carol reward proportional to effective stake 2.5");
 
         // The 4:1 ratio check (within 1 token)
         assertApproxEqAbs(aliceReward, 4 * carolReward, 4, "Alice reward ~4x Carol reward");
@@ -351,9 +351,9 @@ contract GameTheoryImprovementsTest is VotingTestBase {
         uint256 roundStart = block.timestamp;
 
         // 3 voters commit in epoch-1: 2 UP, 1 DOWN
-        _commit(alice, cid, true, 50e6);
-        _commit(bob, cid, true, 50e6);
-        _commit(carol, cid, false, 50e6);
+        _commit(alice, cid, true, 5e6);
+        _commit(bob, cid, true, 5e6);
+        _commit(carol, cid, false, 5e6);
 
         uint256 roundId = engine.currentRoundId(cid);
 
@@ -386,8 +386,8 @@ contract GameTheoryImprovementsTest is VotingTestBase {
         uint256 roundStart = block.timestamp;
 
         // Only alice and bob commit - not enough to reach minVoters=3
-        _commit(alice, cid, true, 50e6);
-        _commit(bob, cid, false, 50e6);
+        _commit(alice, cid, true, 5e6);
+        _commit(bob, cid, false, 5e6);
 
         uint256 roundId = engine.currentRoundId(cid);
 
@@ -411,8 +411,8 @@ contract GameTheoryImprovementsTest is VotingTestBase {
         vm.prank(bob);
         engine.claimCancelledRoundRefund(cid, roundId);
 
-        assertEq(hrepToken.balanceOf(alice) - aliceBefore, 50e6, "Alice refunded full stake");
-        assertEq(hrepToken.balanceOf(bob) - bobBefore, 50e6, "Bob refunded full stake");
+        assertEq(hrepToken.balanceOf(alice) - aliceBefore, 5e6, "Alice refunded full stake");
+        assertEq(hrepToken.balanceOf(bob) - bobBefore, 5e6, "Bob refunded full stake");
     }
 
     // =========================================================================
@@ -429,9 +429,9 @@ contract GameTheoryImprovementsTest is VotingTestBase {
         uint256 reserveBefore = engine.consensusReserve();
 
         // 3 unanimous UP voters (epoch-1)
-        _commit(alice, cid, true, 100e6);
-        _commit(bob, cid, true, 100e6);
-        _commit(carol, cid, true, 100e6);
+        _commit(alice, cid, true, 10e6);
+        _commit(bob, cid, true, 10e6);
+        _commit(carol, cid, true, 10e6);
 
         uint256 roundId = engine.currentRoundId(cid);
 
@@ -470,7 +470,7 @@ contract GameTheoryImprovementsTest is VotingTestBase {
         distributor.claimReward(cid, roundId);
         uint256 aliceAfter = hrepToken.balanceOf(alice);
         assertGt(aliceAfter, aliceBefore, "Alice received tokens back");
-        // Alice gets her 100 HREP stake returned at minimum
-        assertGe(aliceAfter - aliceBefore, 100e6, "Alice gets at least her full stake back");
+        // Alice gets her 10 LREP stake returned at minimum
+        assertGe(aliceAfter - aliceBefore, 10e6, "Alice gets at least her full stake back");
     }
 }

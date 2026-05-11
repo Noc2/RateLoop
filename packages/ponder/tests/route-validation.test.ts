@@ -98,6 +98,60 @@ function mockPonderModules<T>(result: T) {
     globalStats: {
       id: "globalStats.id",
     },
+    aiRaterDeclaration: {
+      behaviorChanged: "aiRaterDeclaration.behaviorChanged",
+      declarationHash: "aiRaterDeclaration.declarationHash",
+      declaredAt: "aiRaterDeclaration.declaredAt",
+      disclosure: "aiRaterDeclaration.disclosure",
+      effectiveEpoch: "aiRaterDeclaration.effectiveEpoch",
+      expiresAtEpoch: "aiRaterDeclaration.expiresAtEpoch",
+      lastProbeResultHash: "aiRaterDeclaration.lastProbeResultHash",
+      modelClass: "aiRaterDeclaration.modelClass",
+      modelId: "aiRaterDeclaration.modelId",
+      operator: "aiRaterDeclaration.operator",
+      probePending: "aiRaterDeclaration.probePending",
+      promptTemplateHash: "aiRaterDeclaration.promptTemplateHash",
+      provider: "aiRaterDeclaration.provider",
+      rater: "aiRaterDeclaration.rater",
+      retrievalConfigHash: "aiRaterDeclaration.retrievalConfigHash",
+      retiredAt: "aiRaterDeclaration.retiredAt",
+      tier: "aiRaterDeclaration.tier",
+      toolingHash: "aiRaterDeclaration.toolingHash",
+      version: "aiRaterDeclaration.version",
+    },
+    aiRaterDeclarationChallenge: {
+      challengeId: "aiRaterDeclarationChallenge.challengeId",
+      challengerReward: "aiRaterDeclarationChallenge.challengerReward",
+      declarationVersion: "aiRaterDeclarationChallenge.declarationVersion",
+      openedAt: "aiRaterDeclarationChallenge.openedAt",
+      operatorSlash: "aiRaterDeclarationChallenge.operatorSlash",
+      rater: "aiRaterDeclarationChallenge.rater",
+      resolvedAt: "aiRaterDeclarationChallenge.resolvedAt",
+      status: "aiRaterDeclarationChallenge.status",
+    },
+    aiRaterProbeResult: {
+      confidenceBps: "aiRaterProbeResult.confidenceBps",
+      passed: "aiRaterProbeResult.passed",
+      probeLibraryHash: "aiRaterProbeResult.probeLibraryHash",
+      rater: "aiRaterProbeResult.rater",
+      recordedAt: "aiRaterProbeResult.recordedAt",
+      resultHash: "aiRaterProbeResult.resultHash",
+      version: "aiRaterProbeResult.version",
+    },
+    raterProfile: {
+      address: "raterProfile.address",
+      raterType: "raterProfile.raterType",
+    },
+    raterSelfCredential: {
+      evidenceHash: "raterSelfCredential.evidenceHash",
+      expiresAt: "raterSelfCredential.expiresAt",
+      legacy: "raterSelfCredential.legacy",
+      multiplierBps: "raterSelfCredential.multiplierBps",
+      rater: "raterSelfCredential.rater",
+      revoked: "raterSelfCredential.revoked",
+      verified: "raterSelfCredential.verified",
+      verifiedAt: "raterSelfCredential.verifiedAt",
+    },
     profile: {
       address: "profile.address",
       name: "profile.name",
@@ -689,6 +743,181 @@ describe("registerLeaderboardRoutes", () => {
 });
 
 describe("registerDataRoutes", () => {
+  it("rejects invalid rater reward status addresses before querying the database", async () => {
+    const { db } = mockPonderModules([]);
+    const { registerDataRoutes } = await import(
+      "../src/api/routes/data-routes.js"
+    );
+
+    const app = new Hono();
+    registerDataRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/rater-reward-status/not-an-address",
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "Invalid address" });
+    expect(db.select).not.toHaveBeenCalled();
+  });
+
+  it("returns verified-agent reward status with capped combined multiplier", async () => {
+    const zeroHash =
+      "0x0000000000000000000000000000000000000000000000000000000000000000";
+    const { db } = mockPonderModules([
+      {
+        raterType: 2,
+        verified: true,
+        legacy: false,
+        revoked: false,
+        verifiedAt: 1_000n,
+        expiresAt: 9_999_999_999n,
+        multiplierBps: 12_000,
+        evidenceHash: zeroHash,
+        operator: "0x00000000000000000000000000000000000000bb",
+        version: 3,
+        effectiveEpoch: 1n,
+        expiresAtEpoch: 0n,
+        tier: 2,
+        behaviorChanged: false,
+        probePending: false,
+        declarationHash: zeroHash,
+        modelClass: 1,
+        modelId: zeroHash,
+        provider: zeroHash,
+        promptTemplateHash: zeroHash,
+        retrievalConfigHash: zeroHash,
+        toolingHash: zeroHash,
+        disclosure: 1,
+        declaredAt: 2_000n,
+        retiredAt: null,
+        lastProbeResultHash: zeroHash,
+        passed: true,
+        confidenceBps: 9_400,
+        probeLibraryHash: zeroHash,
+        resultHash: zeroHash,
+        recordedAt: 3_000n,
+        openCount: 1,
+        challengeId: 7n,
+        status: 1,
+        resolvedAt: null,
+        operatorSlash: 0n,
+        challengerReward: 0n,
+      },
+    ]);
+    const { registerDataRoutes } = await import(
+      "../src/api/routes/data-routes.js"
+    );
+
+    const app = new Hono();
+    registerDataRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/rater-reward-status/0x00000000000000000000000000000000000000aa",
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(db.select).toHaveBeenCalledTimes(6);
+    expect(body).toMatchObject({
+      rater: "0x00000000000000000000000000000000000000aa",
+      raterTypeName: "AI",
+      selfCredential: {
+        status: "verified",
+        multiplierBps: 12_000,
+      },
+      aiDeclaration: {
+        declared: true,
+        tierName: "A1Verified",
+        tierMultiplierBps: 11_500,
+        probeStatus: "passed",
+      },
+      challengeStatus: {
+        openCount: 1,
+        latestChallengeId: "7",
+        latestStatus: 1,
+      },
+      rewardPolicy: {
+        combinedMultiplierBps: 12_500,
+        combinedMultiplierCapBps: 12_500,
+        verifiedAgentsCanAnchorLaunchRewards: false,
+        verifiedAgentSignupBonusEligible: false,
+      },
+    });
+  });
+
+  it("treats retired AI declarations as A0 for reward status", async () => {
+    const zeroHash =
+      "0x0000000000000000000000000000000000000000000000000000000000000000";
+    mockPonderModules([
+      {
+        raterType: 2,
+        verified: false,
+        legacy: false,
+        revoked: false,
+        verifiedAt: null,
+        expiresAt: null,
+        multiplierBps: 10_000,
+        evidenceHash: null,
+        operator: "0x00000000000000000000000000000000000000bb",
+        version: 3,
+        effectiveEpoch: 1n,
+        expiresAtEpoch: 0n,
+        tier: 2,
+        behaviorChanged: false,
+        probePending: false,
+        declarationHash: zeroHash,
+        modelClass: 1,
+        modelId: zeroHash,
+        provider: zeroHash,
+        promptTemplateHash: zeroHash,
+        retrievalConfigHash: zeroHash,
+        toolingHash: zeroHash,
+        disclosure: 1,
+        declaredAt: 2_000n,
+        retiredAt: 4_000n,
+        lastProbeResultHash: zeroHash,
+        passed: true,
+        confidenceBps: 9_400,
+        probeLibraryHash: zeroHash,
+        resultHash: zeroHash,
+        recordedAt: 3_000n,
+        openCount: 0,
+        challengeId: 7n,
+        status: 2,
+        resolvedAt: 4_000n,
+        operatorSlash: 100n,
+        challengerReward: 50n,
+      },
+    ]);
+    const { registerDataRoutes } = await import(
+      "../src/api/routes/data-routes.js"
+    );
+
+    const app = new Hono();
+    registerDataRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/rater-reward-status/0x00000000000000000000000000000000000000aa",
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      aiDeclaration: {
+        declared: true,
+        tier: 0,
+        tierName: "A0",
+        tierMultiplierBps: 10_000,
+        retiredAt: "4000",
+      },
+      rewardPolicy: {
+        agentTierMultiplierBps: 10_000,
+        combinedMultiplierBps: 10_000,
+      },
+    });
+  });
+
   it("includes bounty payouts in global stats", async () => {
     mockPonderModules([
       {

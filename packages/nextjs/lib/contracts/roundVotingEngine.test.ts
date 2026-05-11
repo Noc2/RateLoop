@@ -71,17 +71,17 @@ test("deriveRoundSnapshot marks rounds ready once the revealed threshold is met"
 
 test("isOptimisticRoundDeltaReflected detects when live round data includes an optimistic vote", () => {
   const optimisticDelta = {
-    baseTotalStake: 100_000_000n,
+    baseTotalStake: 10_000_000n,
     baseVoteCount: 1n,
     roundId: 7n,
-    stake: 100_000_000n,
+    stake: 10_000_000n,
     voteCount: 1,
   };
 
   assert.equal(
     isOptimisticRoundDeltaReflected({
       optimisticDelta,
-      round: makeRound({ totalStake: 100_000_000n, voteCount: 1n }),
+      round: makeRound({ totalStake: 10_000_000n, voteCount: 1n }),
       roundId: 7n,
     }),
     false,
@@ -89,7 +89,7 @@ test("isOptimisticRoundDeltaReflected detects when live round data includes an o
   assert.equal(
     isOptimisticRoundDeltaReflected({
       optimisticDelta,
-      round: makeRound({ totalStake: 200_000_000n, voteCount: 2n }),
+      round: makeRound({ totalStake: 20_000_000n, voteCount: 2n }),
       roundId: 7n,
     }),
     true,
@@ -127,8 +127,8 @@ test("mergeRoundDataWithFallback keeps the higher feed vote totals for the same 
       roundId: 7n,
       voteCount: 1,
       revealedCount: 0,
-      totalStake: 100_000_000n,
-      upPool: 100_000_000n,
+      totalStake: 10_000_000n,
+      upPool: 10_000_000n,
       downPool: 0n,
       upCount: 1,
       downCount: 0,
@@ -139,8 +139,8 @@ test("mergeRoundDataWithFallback keeps the higher feed vote totals for the same 
   assert.equal(merged.roundId, 7n);
   assert.ok(merged.round);
   assert.equal(merged.round.voteCount, 1n);
-  assert.equal(merged.round.totalStake, 100_000_000n);
-  assert.equal(merged.round.upPool, 100_000_000n);
+  assert.equal(merged.round.totalStake, 10_000_000n);
+  assert.equal(merged.round.upPool, 10_000_000n);
   assert.equal(merged.round.upCount, 1n);
 });
 
@@ -181,8 +181,8 @@ test("mergeRoundDataWithFallback ignores feed data from a different round", () =
       roundId: 8n,
       voteCount: 1,
       revealedCount: 0,
-      totalStake: 100_000_000n,
-      upPool: 100_000_000n,
+      totalStake: 10_000_000n,
+      upPool: 10_000_000n,
       downPool: 0n,
       startTime: 1_000n,
     },

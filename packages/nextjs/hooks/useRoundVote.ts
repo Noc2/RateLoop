@@ -35,7 +35,7 @@ interface RoundVoteParams {
   contentId: bigint;
   opinionRating: number;
   predictedCrowdRating: number;
-  stakeAmount: number; // In whole tokens (e.g., 5 = 5 LREP)
+  stakeAmount: number; // In display tokens (e.g., 2.5 = 2.5 LREP)
   frontendCode?: `0x${string}`; // Optional frontend operator address for fee distribution
   isOwnContent?: boolean;
   roundConfig?: VotingConfig | null;

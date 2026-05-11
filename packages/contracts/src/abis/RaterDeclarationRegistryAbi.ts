@@ -1356,6 +1356,18 @@ export const RaterDeclarationRegistryAbi = [
         "internalType": "uint32"
       },
       {
+        "name": "effectiveEpoch",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
+      },
+      {
+        "name": "expiresAtEpoch",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
+      },
+      {
         "name": "tier",
         "type": "uint8",
         "indexed": false,

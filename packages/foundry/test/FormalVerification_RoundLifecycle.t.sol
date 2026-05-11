@@ -291,7 +291,7 @@ contract FormalVerification_RoundLifecycleTest is VotingTestBase {
 
         assertEq(uint256(r1.state), uint256(RoundLib.RoundState.Open), "cid1 still Open");
         assertEq(uint256(r2.state), uint256(RoundLib.RoundState.Open), "cid2 still Open");
-        // cid3 should be Settled (UP wins 2 vs 1 weighted: both in epoch1 -> 20e6 up vs 10e6 down)
+        // cid3 should be Settled (UP wins 2 vs 1 weighted: both in epoch1 -> 2e6 up vs 10e6 down)
         assertEq(uint256(r3.state), uint256(RoundLib.RoundState.Settled), "cid3 Settled");
     }
 
@@ -305,8 +305,8 @@ contract FormalVerification_RoundLifecycleTest is VotingTestBase {
 
         // Same voter votes on all 3 content items
         (bytes32 ck1,) = _vote(v[0], cid1, true, 10e6);
-        (bytes32 ck2,) = _vote(v[0], cid2, false, 20e6);
-        (bytes32 ck3,) = _vote(v[0], cid3, true, 30e6);
+        (bytes32 ck2,) = _vote(v[0], cid2, false, 2e6);
+        (bytes32 ck3,) = _vote(v[0], cid3, true, 3e6);
 
         uint256 rid1 = RoundEngineReadHelpers.activeRoundId(engine, cid1);
         uint256 rid2 = RoundEngineReadHelpers.activeRoundId(engine, cid2);
@@ -321,8 +321,8 @@ contract FormalVerification_RoundLifecycleTest is VotingTestBase {
         assertEq(c2.voter, v[0], "v[0] committed on cid2");
         assertEq(c3.voter, v[0], "v[0] committed on cid3");
         assertEq(c1.stakeAmount, 10e6, "cid1 stake correct");
-        assertEq(c2.stakeAmount, 20e6, "cid2 stake correct");
-        assertEq(c3.stakeAmount, 30e6, "cid3 stake correct");
+        assertEq(c2.stakeAmount, 2e6, "cid2 stake correct");
+        assertEq(c3.stakeAmount, 3e6, "cid3 stake correct");
     }
 
     // ==================== Test 7: Settlement Requires Epoch End and Min Voters ====================
@@ -333,7 +333,7 @@ contract FormalVerification_RoundLifecycleTest is VotingTestBase {
         uint256 cid = _submit();
 
         // Two-sided votes
-        (bytes32 ck0, bytes32 s0) = _vote(v[0], cid, true, 50e6);
+        (bytes32 ck0, bytes32 s0) = _vote(v[0], cid, true, 5e6);
         (bytes32 ck1, bytes32 s1) = _vote(v[1], cid, false, 10e6);
 
         uint256 rid = RoundEngineReadHelpers.activeRoundId(engine, cid);
@@ -367,8 +367,8 @@ contract FormalVerification_RoundLifecycleTest is VotingTestBase {
 
         // Only UP votes (one-sided)
         (bytes32 ck0, bytes32 s0) = _vote(v[0], cid, true, 10e6);
-        (bytes32 ck1, bytes32 s1) = _vote(v[1], cid, true, 20e6);
-        (bytes32 ck2, bytes32 s2) = _vote(v[2], cid, true, 30e6);
+        (bytes32 ck1, bytes32 s1) = _vote(v[1], cid, true, 2e6);
+        (bytes32 ck2, bytes32 s2) = _vote(v[2], cid, true, 3e6);
 
         uint256 rid = RoundEngineReadHelpers.activeRoundId(engine, cid);
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, cid, rid);
@@ -397,8 +397,8 @@ contract FormalVerification_RoundLifecycleTest is VotingTestBase {
         uint256 cid = _submit();
 
         // Equal stakes on both sides (same epoch = same weight)
-        (bytes32 ck0, bytes32 s0) = _vote(v[0], cid, true, 50e6);
-        (bytes32 ck1, bytes32 s1) = _vote(v[1], cid, false, 50e6);
+        (bytes32 ck0, bytes32 s0) = _vote(v[0], cid, true, 5e6);
+        (bytes32 ck1, bytes32 s1) = _vote(v[1], cid, false, 5e6);
 
         uint256 rid = RoundEngineReadHelpers.activeRoundId(engine, cid);
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, cid, rid);
@@ -424,8 +424,8 @@ contract FormalVerification_RoundLifecycleTest is VotingTestBase {
     function test_LateVotePlacement_BeforeMaxDuration_StaysInExistingRound() public {
         uint256 cid = _submit();
 
-        _vote(v[0], cid, true, 50e6);
-        _vote(v[1], cid, false, 50e6);
+        _vote(v[0], cid, true, 5e6);
+        _vote(v[1], cid, false, 5e6);
 
         uint256 rid1 = RoundEngineReadHelpers.activeRoundId(engine, cid);
         RoundLib.Round memory round1 = RoundEngineReadHelpers.round(engine, cid, rid1);
@@ -433,7 +433,7 @@ contract FormalVerification_RoundLifecycleTest is VotingTestBase {
         // Long after the old commits became revealable, but still before maxDuration:
         // the round should remain open so additional voters can still rescue it.
         vm.warp(round1.startTime + MAX_DURATION - 1);
-        _vote(v[2], cid, true, 50e6);
+        _vote(v[2], cid, true, 5e6);
 
         uint256 rid2 = RoundEngineReadHelpers.activeRoundId(engine, cid);
         assertEq(rid2, rid1, "Late vote should stay in the same round");
@@ -455,8 +455,8 @@ contract FormalVerification_RoundLifecycleTest is VotingTestBase {
         uint256 cid = _submit();
 
         (bytes32 ck0, bytes32 s0) = _vote(v[0], cid, true, 10e6);
-        _vote(v[1], cid, false, 20e6);
-        _vote(v[2], cid, true, 30e6);
+        _vote(v[1], cid, false, 2e6);
+        _vote(v[2], cid, true, 3e6);
 
         uint256 rid = RoundEngineReadHelpers.activeRoundId(engine, cid);
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, cid, rid);
@@ -487,7 +487,7 @@ contract FormalVerification_RoundLifecycleTest is VotingTestBase {
         uint256 cid = _submit();
 
         // Round 1: two-sided votes
-        _vote(v[0], cid, true, 50e6);
+        _vote(v[0], cid, true, 5e6);
         _vote(v[1], cid, false, 10e6);
 
         uint256 rid1 = RoundEngineReadHelpers.activeRoundId(engine, cid);
@@ -528,8 +528,8 @@ contract FormalVerification_RoundLifecycleTest is VotingTestBase {
 
         // 3 voters stake different amounts
         _vote(v[0], cid, true, 10e6);
-        _vote(v[1], cid, false, 20e6);
-        _vote(v[2], cid, true, 30e6);
+        _vote(v[1], cid, false, 2e6);
+        _vote(v[2], cid, true, 3e6);
 
         uint256 rid = RoundEngineReadHelpers.activeRoundId(engine, cid);
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, cid, rid);
@@ -548,11 +548,11 @@ contract FormalVerification_RoundLifecycleTest is VotingTestBase {
 
         vm.prank(v[1]);
         engine.claimCancelledRoundRefund(cid, rid);
-        assertEq(hrepToken.balanceOf(v[1]), bal1Before, "v[1] refunded 20e6");
+        assertEq(hrepToken.balanceOf(v[1]), bal1Before, "v[1] refunded 2e6");
 
         vm.prank(v[2]);
         engine.claimCancelledRoundRefund(cid, rid);
-        assertEq(hrepToken.balanceOf(v[2]), bal2Before, "v[2] refunded 30e6");
+        assertEq(hrepToken.balanceOf(v[2]), bal2Before, "v[2] refunded 3e6");
 
         // Double claim should revert
         vm.prank(v[0]);

@@ -103,7 +103,7 @@ contract ParticipationPoolBranchesTest is Test {
         _setPoolBalance(2e6);
 
         uint256 balBefore = hrepToken.balanceOf(user1);
-        _distributeStakeReward(authorizedCaller, user1, 100e6);
+        _distributeStakeReward(authorizedCaller, user1, 10e6);
 
         uint256 balAfter = hrepToken.balanceOf(user1);
         assertEq(balAfter - balBefore, 2e6); // capped

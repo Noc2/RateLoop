@@ -98,31 +98,31 @@ contract FormalVerification_ParticipationPoolTest is Test {
 
     // ==================== Test 5: Drainage Model - 1000 Votes/Day at Tier 0 ====================
 
-    /// @notice Tier 0 (90%) lasts ~33 days at 1000 votes/day with 50 HREP avg stake.
+    /// @notice Tier 0 (90%) lasts ~333 days at 1000 votes/day with 5 LREP avg stake.
     function test_DrainageModel_1000VotesPerDay_Tier0() public pure {
-        // Each vote: stake=50e6, reward=50e6 * 9000 / 10000 = 45e6
-        uint256 rewardPerVote = 50e6 * INITIAL_RATE / 10000;
-        assertEq(rewardPerVote, 45e6, "Each vote drains 45 HREP at tier 0");
+        // Each vote: stake=5e6, reward=5e6 * 9000 / 10000 = 4.5e6
+        uint256 rewardPerVote = 5e6 * INITIAL_RATE / 10000;
+        assertEq(rewardPerVote, 4_500_000, "Each vote drains 4.5 LREP at tier 0");
 
-        // Daily drain: 1000 * 45e6 = 45_000e6
+        // Daily drain: 1000 * 4.5e6 = 4_500e6
         uint256 dailyDrain = 1000 * rewardPerVote;
-        assertEq(dailyDrain, 45_000e6, "Daily drain = 45K HREP");
+        assertEq(dailyDrain, 4_500e6, "Daily drain = 4.5K LREP");
 
         // Tier 0 capacity: 1.5M HREP
         uint256 daysToExhaust = TIER0_BOUNDARY / dailyDrain;
-        assertEq(daysToExhaust, 33, "Tier 0 survives ~33 days");
+        assertEq(daysToExhaust, 333, "Tier 0 survives ~333 days");
 
-        // Remaining after 33 full days: 1.5M - 33*45K = 1.5M - 1.485M = 15K
+        // Remaining after 333 full days: 1.5M - 333*4.5K = 1.5M - 1.4985M = 1.5K
         uint256 remaining = TIER0_BOUNDARY - (daysToExhaust * dailyDrain);
-        assertEq(remaining, 15_000e6, "15K HREP remainder before tier transition");
+        assertEq(remaining, 1_500e6, "1.5K LREP remainder before tier transition");
     }
 
     // ==================== Test 6: Full Lifecycle Drainage Model ====================
 
     /// @notice Pool survives > 900K votes total across all funded tiers.
     function test_DrainageModel_FullLifecycle() public pure {
-        // Model: 1000 votes/day at 50 HREP avg stake across all tiers
-        uint256 avgStake = 50e6;
+        // Model: 1000 votes/day at 5 LREP avg stake across all tiers
+        uint256 avgStake = 5e6;
         uint256 votesPerDay = 1000;
 
         // Tier capacities and rates
@@ -150,8 +150,8 @@ contract FormalVerification_ParticipationPoolTest is Test {
             totalDays += daysInTier;
         }
 
-        // Assert pool survives >900K votes across funded tiers
-        assertGt(totalVotes, 900_000, "Pool supports >900K votes across funded tiers");
+        // Assert pool survives >9M votes across funded tiers
+        assertGt(totalVotes, 9_000_000, "Pool supports >9M votes across funded tiers");
         // Assert pool lasts > 1 year (365 days)
         assertGt(totalDays, 365, "Pool lasts > 1 year at 1000 votes/day");
     }
@@ -160,24 +160,24 @@ contract FormalVerification_ParticipationPoolTest is Test {
 
     /// @notice 200 max-stake voters per round at tier 0: exhausted in ~83 rounds.
     function test_WorstCase_AllMaxStake() public pure {
-        // 200 voters x 100 HREP x 90% = 18,000 HREP per round
-        uint256 maxStake = 100e6;
+        // 200 voters x 10 LREP x 90% = 1,800 LREP per round
+        uint256 maxStake = 10e6;
         uint256 maxVoters = 200;
         uint256 rewardPerRound = maxVoters * (maxStake * INITIAL_RATE / 10000);
-        assertEq(rewardPerRound, 18_000e6, "18K HREP drained per worst-case round");
+        assertEq(rewardPerRound, 1_800e6, "1.8K LREP drained per worst-case round");
 
         uint256 roundsToExhaust = TIER0_BOUNDARY / rewardPerRound;
-        assertEq(roundsToExhaust, 83, "Tier 0 survives ~83 max-load rounds");
+        assertEq(roundsToExhaust, 833, "Tier 0 survives ~833 max-load rounds");
 
-        // Even at worst case, tier 0 requires 83 rounds of 200 max-stake voters
-        assertGt(roundsToExhaust, 80, "Tier 0 withstands > 80 worst-case rounds");
+        // Even at worst case, tier 0 requires hundreds of 200 max-stake voter rounds.
+        assertGt(roundsToExhaust, 800, "Tier 0 withstands > 800 worst-case rounds");
     }
 
     // ==================== Test 8: Conservation Invariant (Fuzz) ====================
 
     /// @notice Pool never over-distributes: totalDistributed + poolBalance <= initial deposit.
     function testFuzz_Conservation_NeverOverDistributes(uint256 stakeAmount, uint256 numRewards) public {
-        stakeAmount = bound(stakeAmount, 1e6, 100e6);
+        stakeAmount = bound(stakeAmount, 1e6, 10e6);
         numRewards = bound(numRewards, 1, 50);
 
         uint256 initialPool = pool.poolBalance();
@@ -197,18 +197,18 @@ contract FormalVerification_ParticipationPoolTest is Test {
 
     /// @notice Reward at tier boundary uses pre-transition rate; tier transitions after.
     function test_CrossTierReward_BoundaryTransaction() public {
-        // Set totalDistributed to 1.5M - 50 HREP (just before tier boundary)
-        _setTotalDistributed(TIER0_BOUNDARY - 50e6);
+        // Set totalDistributed to 1.5M - 5 LREP (just before tier boundary)
+        _setTotalDistributed(TIER0_BOUNDARY - 5e6);
 
         assertEq(pool.getCurrentRateBps(), 9000, "Still tier 0 before reward");
 
-        // Reward with 100 HREP stake -> reward = 90 HREP at 90% rate
-        _distributeStakeReward(user, 100e6);
+        // Reward with 10 LREP stake -> reward = 9 LREP at 90% rate
+        _distributeStakeReward(user, 10e6);
 
-        assertEq(hrepToken.balanceOf(user), 90e6, "Full 90 HREP reward at tier 0 rate");
+        assertEq(hrepToken.balanceOf(user), 9e6, "Full 9 LREP reward at tier 0 rate");
 
-        // After: totalDistributed = 1.5M - 50e6 + 90e6 = 1.5M + 40e6 (past boundary)
-        assertEq(pool.totalDistributed(), TIER0_BOUNDARY + 40e6, "Past tier 0 boundary");
+        // After: totalDistributed = 1.5M - 5e6 + 9e6 = 1.5M + 4e6 (past boundary)
+        assertEq(pool.totalDistributed(), TIER0_BOUNDARY + 4e6, "Past tier 0 boundary");
         assertEq(pool.getCurrentRateBps(), 4500, "Transitioned to tier 1 after reward");
     }
 
@@ -223,7 +223,7 @@ contract FormalVerification_ParticipationPoolTest is Test {
         uint256 balBefore = hrepToken.balanceOf(user);
 
         // Reward attempt should silently do nothing
-        _distributeStakeReward(user, 100e6);
+        _distributeStakeReward(user, 10e6);
 
         assertEq(hrepToken.balanceOf(user), balBefore, "No tokens transferred");
         assertEq(pool.totalDistributed(), 0, "totalDistributed unchanged");

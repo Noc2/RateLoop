@@ -851,6 +851,75 @@ export interface PonderVoterStreak {
 
 export type PonderVoterStatsBatch = Record<string, PonderVoterStats>;
 
+export type PonderRaterTypeName = "Unknown" | "Human" | "AI" | "Team" | "Hybrid";
+export type PonderSelfCredentialStatus = "missing" | "verified" | "expired" | "revoked";
+export type PonderAiDeclarationTierName = "A0" | "A1Unverified" | "A1Verified";
+export type PonderAiProbeStatus = "none" | "pending" | "passed" | "failed";
+
+export interface PonderRaterRewardStatusResponse {
+  rater: string;
+  raterType: number;
+  raterTypeName: PonderRaterTypeName;
+  selfCredential: {
+    verified: boolean;
+    legacy: boolean;
+    revoked: boolean;
+    status: PonderSelfCredentialStatus;
+    verifiedAt: string | null;
+    expiresAt: string | null;
+    multiplierBps: number;
+    evidenceHash: string | null;
+  };
+  aiDeclaration: {
+    declared: boolean;
+    operator: string | null;
+    version: number;
+    effectiveEpoch: string | null;
+    expiresAtEpoch: string | null;
+    tier: number;
+    tierName: PonderAiDeclarationTierName;
+    tierMultiplierBps: number;
+    behaviorChanged: boolean;
+    probePending: boolean;
+    probeStatus: PonderAiProbeStatus;
+    declarationHash: string | null;
+    modelClass: number | null;
+    modelId: string | null;
+    provider: string | null;
+    promptTemplateHash: string | null;
+    retrievalConfigHash: string | null;
+    toolingHash: string | null;
+    disclosure: number | null;
+    declaredAt: string | null;
+    retiredAt: string | null;
+    lastProbeResultHash: string | null;
+    latestProbe: {
+      passed: boolean;
+      confidenceBps: number;
+      probeLibraryHash: string;
+      resultHash: string;
+      recordedAt: string;
+    } | null;
+  };
+  challengeStatus: {
+    openCount: number;
+    latestChallengeId: string | null;
+    latestStatus: number;
+    latestResolvedAt: string | null;
+    latestOperatorSlash: string;
+    latestChallengerReward: string;
+  };
+  rewardPolicy: {
+    baseMultiplierBps: number;
+    humanCredentialMultiplierBps: number;
+    agentTierMultiplierBps: number;
+    combinedMultiplierBps: number;
+    combinedMultiplierCapBps: number;
+    verifiedAgentsCanAnchorLaunchRewards: boolean;
+    verifiedAgentSignupBonusEligible: boolean;
+  };
+}
+
 const PONDER_PAGE_LIMIT = 200;
 
 async function getAllPages<TItem>(
@@ -1077,6 +1146,10 @@ export const ponderApi = {
     return ponderGet<PonderVoterStatsBatch>("/voter-stats-batch", {
       voters: voters.join(","),
     });
+  },
+
+  getRaterRewardStatus(address: string) {
+    return ponderGet<PonderRaterRewardStatusResponse>(`/rater-reward-status/${address}`);
   },
 
   getVotes(params?: {

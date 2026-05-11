@@ -12,6 +12,10 @@ type RegisteredHandler = (args: {
 
 const handlers = new Map<string, RegisteredHandler>();
 
+function findKey(table: string, key: Record<string, unknown>) {
+  return `${table}:${JSON.stringify(key, (_name, value) => (typeof value === "bigint" ? value.toString() : value))}`;
+}
+
 vi.mock("ponder:registry", () => ({
   ponder: {
     on: vi.fn((name: string, handler: RegisteredHandler) => {
@@ -29,12 +33,13 @@ vi.mock("ponder:schema", () => ({
   aiRaterProbeResult: "aiRaterProbeResult",
 }));
 
-function createDb() {
+function createDb(findResults: Record<string, unknown> = {}) {
   const inserts: Array<{ table: string; values: Record<string, unknown>; mode: string; update?: unknown }> = [];
   const updates: Array<{ table: string; key: Record<string, unknown>; update: Record<string, unknown> }> = [];
 
   return {
     db: {
+      find: vi.fn(async (table: string, key: Record<string, unknown>) => findResults[findKey(table, key)]),
       insert: vi.fn((table: string) => ({
         values: vi.fn((values: Record<string, unknown>) => ({
           onConflictDoNothing: vi.fn(async () => {
@@ -89,6 +94,8 @@ describe("RaterDeclarationRegistry ponder handlers", () => {
           rater: "0x0000000000000000000000000000000000001234",
           operator: "0x000000000000000000000000000000000000abcd",
           version: 1,
+          effectiveEpoch: 100n,
+          expiresAtEpoch: 0n,
           tier: 1,
           behaviorChanged: true,
           probePending: true,
@@ -113,6 +120,8 @@ describe("RaterDeclarationRegistry ponder handlers", () => {
         rater: "0x0000000000000000000000000000000000001234",
         operator: "0x000000000000000000000000000000000000abcd",
         version: 1,
+        effectiveEpoch: 100n,
+        expiresAtEpoch: 0n,
         probePending: true,
         modelId: `0x${"22".repeat(32)}`,
       }),
@@ -204,5 +213,57 @@ describe("RaterDeclarationRegistry ponder handlers", () => {
         challengerReward: 0n,
       }),
     });
+  });
+
+  it("marks the current declaration inactive when a challenge is sustained", async () => {
+    const challengeId = 1n;
+    const rater = "0x0000000000000000000000000000000000001234";
+    const { db, updates } = createDb({
+      [findKey("aiRaterDeclarationChallenge", { challengeId })]: {
+        rater,
+        declarationVersion: 3,
+      },
+    });
+    const registeredHandlers = await loadHandlers();
+    const handler = registeredHandlers.get("RaterDeclarationRegistry:ChallengeResolved");
+
+    expect(handler).toBeDefined();
+
+    await handler!({
+      event: {
+        ...baseEvent,
+        args: {
+          challengeId,
+          status: 2,
+          operatorSlash: 50n,
+          challengerReward: 25n,
+          resolutionHash: `0x${"aa".repeat(32)}`,
+        },
+      },
+      context: { db },
+    });
+
+    expect(updates).toEqual(
+      expect.arrayContaining([
+        {
+          table: "aiRaterDeclaration",
+          key: { rater },
+          update: expect.objectContaining({
+            tier: 0,
+            probePending: false,
+            retiredAt: 123n,
+          }),
+        },
+        {
+          table: "aiRaterDeclarationHistory",
+          key: { id: `${rater}-3` },
+          update: expect.objectContaining({
+            tier: 0,
+            probePending: false,
+            retiredAt: 123n,
+          }),
+        },
+      ]),
+    );
   });
 });

@@ -25,7 +25,7 @@ contract VotingHandler is VotingTestBase {
 
     // --- Constants ---
     uint256 public constant MIN_STAKE = 1e6;
-    uint256 public constant MAX_STAKE = 100e6;
+    uint256 public constant MAX_STAKE = 10e6;
     uint256 public constant EPOCH_DURATION = 10 minutes;
 
     // --- Ghost variables (token flow accounting) ---

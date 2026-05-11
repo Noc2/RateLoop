@@ -19,6 +19,14 @@ import {MockVoterIdNFT} from "./mocks/MockVoterIdNFT.sol";
 import {VotingTestBase} from "./helpers/VotingTestHelpers.sol";
 import {MockCategoryRegistry} from "../contracts/mocks/MockCategoryRegistry.sol";
 
+contract MockRaterDeclarationWeights {
+    mapping(address => uint16) public tierMultiplierBps;
+
+    function setTierMultiplierBps(address rater, uint16 multiplierBps) external {
+        tierMultiplierBps[rater] = multiplierBps;
+    }
+}
+
 // =========================================================================
 // TEST CONTRACT
 // =========================================================================
@@ -218,6 +226,12 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         raterRegistry = new RaterRegistry(owner, owner, address(0x1234), bytes32("rate-loop"), 1, 365 days);
         vm.prank(owner);
         ProtocolConfig(protocolConfigAddress).setRaterRegistry(address(raterRegistry));
+    }
+
+    function _installRaterDeclarationWeights() internal returns (MockRaterDeclarationWeights declarationWeights) {
+        declarationWeights = new MockRaterDeclarationWeights();
+        vm.prank(owner);
+        ProtocolConfig(protocolConfigAddress).setRaterDeclarationRegistry(address(declarationWeights));
     }
 
     function _commitPrediction(address voter, uint256 contentId, uint16 predictedRatingBps, uint256 stake)
@@ -435,9 +449,9 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         raterRegistry.setClusterScore(voter1, keccak256("shared-cluster"), 7_500, 1);
 
         uint256 contentId = _submitContent();
-        (bytes32 ck1, bytes32 s1) = _commit(voter1, contentId, true, 40e6);
-        (bytes32 ck2, bytes32 s2) = _commit(voter2, contentId, false, 40e6);
-        (bytes32 ck3, bytes32 s3) = _commit(voter3, contentId, true, 40e6);
+        (bytes32 ck1, bytes32 s1) = _commit(voter1, contentId, true, 4e6);
+        (bytes32 ck2, bytes32 s2) = _commit(voter2, contentId, false, 4e6);
+        (bytes32 ck3, bytes32 s3) = _commit(voter3, contentId, true, 4e6);
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
         RoundLib.Round memory r0 = RoundEngineReadHelpers.round(engine, contentId, roundId);
         _warpPastTlockRevealTime(uint256(r0.startTime) + EPOCH);
@@ -449,16 +463,62 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertEq(engine.commitRaterWeightBps(contentId, roundId, ck1), 2_500, "discounted weight");
         assertEq(engine.commitRaterWeightBps(contentId, roundId, ck2), 10_000, "default weight");
-        assertEq(round.weightedUpPool, 50e6, "up pool includes discounted voter");
-        assertEq(round.weightedDownPool, 40e6, "down pool remains full weight");
+        assertEq(round.weightedUpPool, 5e6, "up pool includes discounted voter");
+        assertEq(round.weightedDownPool, 4e6, "down pool remains full weight");
+    }
+
+    function test_RevealUsesVerifiedAgentDeclarationWeight() public {
+        MockRaterDeclarationWeights declarationWeights = _installRaterDeclarationWeights();
+        declarationWeights.setTierMultiplierBps(voter1, 11_500);
+
+        uint256 contentId = _submitContent();
+        (bytes32 ck1, bytes32 s1) = _commit(voter1, contentId, true, 4e6);
+        (bytes32 ck2, bytes32 s2) = _commit(voter2, contentId, false, 4e6);
+        (bytes32 ck3, bytes32 s3) = _commit(voter3, contentId, true, 4e6);
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        RoundLib.Round memory r0 = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        _warpPastTlockRevealTime(uint256(r0.startTime) + EPOCH);
+
+        _reveal(contentId, roundId, ck1, true, s1);
+        _reveal(contentId, roundId, ck2, false, s2);
+        _reveal(contentId, roundId, ck3, true, s3);
+
+        RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        assertEq(engine.commitRaterWeightBps(contentId, roundId, ck1), 11_500, "verified agent weight");
+        assertEq(engine.commitRaterWeightBps(contentId, roundId, ck2), 10_000, "default weight");
+        assertEq(round.weightedUpPool, 8_600_000, "up pool includes verified-agent uplift");
+        assertEq(round.weightedDownPool, 4e6, "down pool remains default");
+    }
+
+    function test_RevealCapsCombinedCredentialAndAgentWeight() public {
+        RaterRegistry raterRegistry = _installRaterRegistry();
+        MockRaterDeclarationWeights declarationWeights = _installRaterDeclarationWeights();
+
+        vm.prank(owner);
+        raterRegistry.seedLegacySelfCredential(voter1, uint64(block.timestamp + 30 days), 12_000, 0, bytes32("seed"), keccak256("legacy"));
+        declarationWeights.setTierMultiplierBps(voter1, 11_500);
+
+        uint256 contentId = _submitContent();
+        (bytes32 ck1, bytes32 s1) = _commit(voter1, contentId, true, 4e6);
+        (bytes32 ck2, bytes32 s2) = _commit(voter2, contentId, false, 4e6);
+        (bytes32 ck3, bytes32 s3) = _commit(voter3, contentId, true, 4e6);
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        RoundLib.Round memory r0 = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        _warpPastTlockRevealTime(uint256(r0.startTime) + EPOCH);
+
+        _reveal(contentId, roundId, ck1, true, s1);
+        _reveal(contentId, roundId, ck2, false, s2);
+        _reveal(contentId, roundId, ck3, true, s3);
+
+        assertEq(engine.commitRaterWeightBps(contentId, roundId, ck1), 12_500, "combined weight is capped");
     }
 
     function test_PredictionLifecycle_SettlesWeightedMedianFinalRating() public {
         uint256 contentId = _submitContent();
 
-        (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, 8_000, 30e6);
-        (bytes32 ck2, bytes32 s2) = _commitPrediction(voter2, contentId, 5_000, 10e6);
-        (bytes32 ck3, bytes32 s3) = _commitPrediction(voter3, contentId, 6_500, 10e6);
+        (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, 8_000, 10e6);
+        (bytes32 ck2, bytes32 s2) = _commitPrediction(voter2, contentId, 5_000, 3e6);
+        (bytes32 ck3, bytes32 s3) = _commitPrediction(voter3, contentId, 6_500, 3e6);
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
         RoundLib.Round memory r0 = RoundEngineReadHelpers.round(engine, contentId, roundId);
@@ -470,8 +530,8 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
         (uint256 weightedRatingSum, uint256 totalPredictionWeight, uint16 finalRatingBps) =
             engine.roundPredictionStats(contentId, roundId);
-        assertEq(weightedRatingSum, 355_000e6, "weighted rating sum");
-        assertEq(totalPredictionWeight, 50e6, "prediction weight");
+        assertEq(weightedRatingSum, 114_500e6, "weighted rating sum");
+        assertEq(totalPredictionWeight, 16e6, "prediction weight");
         assertEq(finalRatingBps, 0, "final rating is only stored after settle");
 
         engine.settleRound(contentId, roundId);
@@ -1636,9 +1696,9 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
     function test_ProcessUnrevealed_CleanupIncentiveCapAppliesAcrossBatches() public {
         uint256 contentId = _submitContent();
-        uint256 highStake = 100e6;
+        uint256 highStake = 10e6;
 
-        address[] memory unrevealedVoters = new address[](6);
+        address[] memory unrevealedVoters = new address[](60);
         for (uint256 i = 0; i < unrevealedVoters.length; ++i) {
             unrevealedVoters[i] = address(uint160(1_000 + i));
             mockVoterIdNFT.setHolder(unrevealedVoters[i]);
@@ -1667,7 +1727,11 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         }
 
         assertEq(hrepToken.balanceOf(keeper) - keeperBefore, 5e6, "round cleanup incentive is capped");
-        assertEq(engine.consensusReserve() - reserveBefore, highStake * 6 - 5e6, "remaining stake stays reserved");
+        assertEq(
+            engine.consensusReserve() - reserveBefore,
+            highStake * unrevealedVoters.length - 5e6,
+            "remaining stake stays reserved"
+        );
         assertEq(engine.roundUnrevealedCleanupRemaining(contentId, roundId), 0, "cleanup queue clears");
     }
 
@@ -1875,7 +1939,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         bytes memory ciphertext = _testCiphertext(true, salt, contentId);
 
         vm.prank(voter1);
-        hrepToken.approve(address(engine), 101e6);
+        hrepToken.approve(address(engine), 11e6);
         uint256 cachedRoundContext8 =
             _roundContext(engine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());
         vm.prank(voter1);
@@ -1887,7 +1951,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
             _tlockDrandChainHash(),
             commitHash,
             ciphertext,
-            101e6,
+            11e6,
             address(0)
         );
     }

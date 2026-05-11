@@ -41,6 +41,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     mapping(address => address) public rewardDistributorVotingEngine;
     mapping(address => address) public rewardDistributorForVotingEngine;
     address public raterRegistry;
+    address public raterDeclarationRegistry;
     bytes32 public scorerMetadataHash;
     address public launchDistributionPool;
 
@@ -56,7 +57,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     }
 
     /// @dev Reserved storage gap for future proxy-safe upgrades.
-    uint256[26] private __gap;
+    uint256[25] private __gap;
 
     event RewardDistributorUpdated(address rewardDistributor);
     event RewardDistributorAuthorizationUpdated(address rewardDistributor, bool authorized);
@@ -67,6 +68,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     event VoterIdNFTUpdated(address voterIdNFT);
     event ParticipationPoolUpdated(address participationPool);
     event RaterRegistryUpdated(address raterRegistry);
+    event RaterDeclarationRegistryUpdated(address raterDeclarationRegistry);
     event ScorerMetadataHashUpdated(bytes32 scorerMetadataHash);
     event LaunchDistributionPoolUpdated(address launchDistributionPool);
     event ConfigUpdated(uint256 epochDuration, uint256 maxDuration, uint256 minVoters, uint256 maxVoters);
@@ -214,6 +216,11 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     function setRaterRegistry(address value) external onlyRole(CONFIG_ROLE) {
         raterRegistry = value;
         emit RaterRegistryUpdated(value);
+    }
+
+    function setRaterDeclarationRegistry(address value) external onlyRole(CONFIG_ROLE) {
+        raterDeclarationRegistry = value;
+        emit RaterDeclarationRegistryUpdated(value);
     }
 
     function setLaunchDistributionPool(address value) external onlyRole(CONFIG_ROLE) {

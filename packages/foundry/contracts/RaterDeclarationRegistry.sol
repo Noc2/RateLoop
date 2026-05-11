@@ -110,6 +110,8 @@ contract RaterDeclarationRegistry is AccessControl, EIP712 {
         address indexed rater,
         address indexed operator,
         uint32 indexed version,
+        uint64 effectiveEpoch,
+        uint64 expiresAtEpoch,
         RaterTier tier,
         bool behaviorChanged,
         bool probePending,
@@ -282,6 +284,8 @@ contract RaterDeclarationRegistry is AccessControl, EIP712 {
             declaration.rater,
             declaration.operator,
             declaration.version,
+            declaration.effectiveEpoch,
+            declaration.expiresAtEpoch,
             RaterTier.A1Unverified,
             behaviorChanged,
             requestProbe && behaviorChanged,
@@ -475,7 +479,9 @@ contract RaterDeclarationRegistry is AccessControl, EIP712 {
     }
 
     function tierMultiplierBps(address rater) external view returns (uint16) {
-        RaterTier tier = _declarations[rater].tier;
+        StoredDeclaration storage stored = _declarations[rater];
+        RaterTier tier = stored.tier;
+        if (!_declarationIsActive(stored.declaration)) return BPS_DENOMINATOR;
         if (tier == RaterTier.A1Verified) {
             return MAX_TIER_MULTIPLIER_BPS;
         }
@@ -494,5 +500,11 @@ contract RaterDeclarationRegistry is AccessControl, EIP712 {
         return previous.modelClass != next.modelClass || previous.modelId != next.modelId
             || previous.provider != next.provider || previous.promptTemplateHash != next.promptTemplateHash
             || previous.retrievalConfigHash != next.retrievalConfigHash || previous.toolingHash != next.toolingHash;
+    }
+
+    function _declarationIsActive(RaterDeclaration memory declaration) internal view returns (bool) {
+        if (declaration.rater == address(0)) return false;
+        if (declaration.effectiveEpoch > block.timestamp) return false;
+        return declaration.expiresAtEpoch == 0 || block.timestamp < declaration.expiresAtEpoch;
     }
 }
