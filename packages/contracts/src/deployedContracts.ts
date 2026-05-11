@@ -16850,6 +16850,26 @@ const deployedContracts: GenericContractsDeclaration = {
               type: "address",
               internalType: "address",
             },
+            {
+              name: "_worldIdRouter",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "_worldIdScope",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "_worldIdExternalNullifierHash",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "_worldIdCredentialTtl",
+              type: "uint64",
+              internalType: "uint64",
+            },
           ],
           stateMutability: "nonpayable",
         },
@@ -16972,50 +16992,48 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "SELF_ATTESTOR_ROLE",
+          name: "WORLD_ID_GROUP_ID",
           inputs: [],
           outputs: [
             {
               name: "",
-              type: "bytes32",
-              internalType: "bytes32",
+              type: "uint256",
+              internalType: "uint256",
             },
           ],
           stateMutability: "view",
         },
         {
           type: "function",
-          name: "attestSelfCredential",
-          inputs: [
+          name: "WORLD_ID_MULTIPLIER_BPS",
+          inputs: [],
+          outputs: [
             {
-              name: "rater",
-              type: "address",
-              internalType: "address",
-            },
-            {
-              name: "nullifierHash",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-            {
-              name: "scope",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-            {
-              name: "expiresAt",
-              type: "uint64",
-              internalType: "uint64",
-            },
-            {
-              name: "multiplierBps",
+              name: "",
               type: "uint16",
               internalType: "uint16",
             },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "attestSelfCredentialWithProof",
+          inputs: [
             {
-              name: "evidenceHash",
-              type: "bytes32",
-              internalType: "bytes32",
+              name: "root",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "nullifierHash",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "proof",
+              type: "uint256[8]",
+              internalType: "uint256[8]",
             },
           ],
           outputs: [],
@@ -17735,6 +17753,25 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "hashToField",
+          inputs: [
+            {
+              name: "value",
+              type: "bytes",
+              internalType: "bytes",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "pure",
+        },
+        {
+          type: "function",
           name: "nextClusterScoreChallengeId",
           inputs: [],
           outputs: [
@@ -18173,6 +18210,77 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "bytes32",
               internalType: "bytes32",
+            },
+          ],
+          stateMutability: "pure",
+        },
+        {
+          type: "function",
+          name: "worldIdCredentialTtl",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint64",
+              internalType: "uint64",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "worldIdExternalNullifierHash",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "worldIdRouter",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "contract IWorldIDRouter",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "worldIdScope",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "worldIdSignalHash",
+          inputs: [
+            {
+              name: "rater",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
             },
           ],
           stateMutability: "pure",

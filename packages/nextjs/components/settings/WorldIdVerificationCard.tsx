@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
-import { CredentialRequest, IDKitRequestWidget, type IDKitResult, type RpContext } from "@worldcoin/idkit";
+import { IDKitRequestWidget, type IDKitResult, type RpContext, orbLegacy } from "@worldcoin/idkit";
 import { formatUnits, zeroAddress } from "viem";
 import { useAccount } from "wagmi";
 import {
@@ -20,20 +20,11 @@ import {
   storeReferralAttributionFromValue,
 } from "~~/lib/referrals/referralAttribution";
 import { getWorldIdClientConfig } from "~~/lib/world-id/config";
+import { parseWorldIdLegacyProof } from "~~/lib/world-id/onchainProof";
 import { notification } from "~~/utils/scaffold-eth";
 
 const LREP_DECIMALS = 6;
 const REFERRAL_BONUS_BPS = 5_000n;
-
-type WorldIdVerifyResponse = {
-  error?: string;
-  nullifier?: string | null;
-  verifiedAt?: string;
-  attestation?: {
-    status: "attested" | "already_active";
-    transactionHash: string | null;
-  };
-};
 
 type RpContextResponse = {
   action: string;
@@ -51,11 +42,7 @@ function formatWorldIdError(errorCode: string) {
   return errorCode.replace(/_/g, " ");
 }
 
-function getWorldIdSignal(configuredSignal: string | undefined, address: string | undefined) {
-  if (configuredSignal) {
-    return configuredSignal;
-  }
-
+function getWorldIdSignal(address: string | undefined) {
   return address?.toLowerCase() ?? "";
 }
 
@@ -82,9 +69,9 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
   const referralHintId = useId();
   const { copyToClipboard, isCopiedToClipboard } = useCopyToClipboard({ successDurationMs: 1_600 });
   const appId = config.appId?.startsWith("app_") ? (config.appId as `app_${string}`) : null;
-  const signal = getWorldIdSignal(config.signal, address);
+  const signal = getWorldIdSignal(address);
   const walletAddress = address as `0x${string}` | undefined;
-  const constraints = useMemo(() => CredentialRequest("proof_of_human", { signal }), [signal]);
+  const preset = useMemo(() => orbLegacy({ signal }), [signal]);
   const isConfigured = Boolean(appId && config.enabled);
   const canVerify = Boolean(isConfigured && address);
   const { data: hasActiveCredential, refetch: refetchHasActiveCredential } = useScaffoldReadContract({
@@ -111,6 +98,9 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
   });
   const { writeContractAsync: claimVerifiedBonus, isPending: isClaimPending } = useScaffoldWriteContract({
     contractName: "LaunchDistributionPool",
+  });
+  const { writeContractAsync: attestWorldIdCredential, isMining: isAttestingCredential } = useScaffoldWriteContract({
+    contractName: "RaterRegistry",
   });
   const referralInputState = useMemo(
     () => getLaunchReferralInputState({ connectedAddress: address, inputValue: referralInput }),
@@ -235,28 +225,40 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
         throw new Error(message);
       }
 
-      const response = await fetch("/api/world-id/verify", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          idkitResponse,
-          signal,
-          walletAddress: address,
-          chainId: chain.id,
-          requireOnChainAttestation: true,
-        }),
-      });
-      const body = (await response.json().catch(() => ({}))) as WorldIdVerifyResponse;
+      if (!rpContextResponse) {
+        const message = "World ID is not ready for this deployment.";
+        setVerificationState({ status: "error", message });
+        throw new Error(message);
+      }
 
-      if (!response.ok) {
-        const message = body.error ?? "World ID verification failed.";
+      try {
+        const parsedProof = parseWorldIdLegacyProof(idkitResponse, {
+          expectedAction: rpContextResponse.action,
+          expectedSignal: signal,
+        });
+
+        const transactionHash = await attestWorldIdCredential(
+          {
+            functionName: "attestSelfCredentialWithProof",
+            args: [parsedProof.root, parsedProof.nullifierHash, parsedProof.proof],
+          },
+          {
+            action: "attest World ID credential",
+            suppressSuccessToast: true,
+          },
+        );
+        if (!transactionHash) {
+          throw new Error("World ID credential transaction was not submitted.");
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "World ID credential attestation failed.";
         setVerificationState({ status: "error", message });
         throw new Error(message);
       }
 
       await refreshLaunchReads();
     },
-    [address, chain?.id, refreshLaunchReads, signal],
+    [address, attestWorldIdCredential, chain?.id, refreshLaunchReads, rpContextResponse, signal],
   );
 
   const handleClaimVerifiedBonus = useCallback(async () => {
@@ -345,7 +347,7 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
             onClick={() => void handleStart()}
           >
             <ShieldCheckIcon className="h-5 w-5" />
-            {verificationState.status === "loading" ? "Preparing..." : "Verify with World ID"}
+            {verificationState.status === "loading" || isAttestingCredential ? "Verifying..." : "Verify with World ID"}
           </button>
           {!isConfigured ? (
             <p className="text-sm leading-relaxed text-base-content/55">
@@ -503,8 +505,8 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
           app_id={appId}
           action={rpContextResponse.action}
           rp_context={rpContextResponse.rpContext}
-          allow_legacy_proofs={false}
-          constraints={constraints}
+          allow_legacy_proofs={true}
+          preset={preset}
           environment={rpContextResponse.environment}
           handleVerify={handleVerify}
           onError={errorCode => {
