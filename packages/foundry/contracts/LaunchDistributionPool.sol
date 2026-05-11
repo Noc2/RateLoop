@@ -409,8 +409,14 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
     function _validateLaunchRewardPolicy(LaunchRewardPolicy memory policy) internal pure {
         if (
             policy.minQualifyingScoreBps > 10_000 || policy.minVoters == 0
-                || policy.minVerifiedHumans > policy.minVoters || policy.eligibilityRatingCount == 0
-                || policy.rewardingRatingCount == 0 || policy.minDistinctVerifiedAnchors > policy.eligibilityRatingCount
+                || policy.minVoters < MIN_EARNED_REWARD_VOTERS
+                || policy.minVerifiedHumans < MIN_EARNED_REWARD_VERIFIED_HUMANS
+                || policy.minVerifiedHumans > policy.minVoters
+                || policy.minDistinctVerifiedAnchors < MIN_EARNED_REWARD_DISTINCT_VERIFIED_ANCHORS
+                || policy.minDistinctAnchorRounds < MIN_EARNED_REWARD_DISTINCT_ANCHOR_ROUNDS
+                || policy.eligibilityRatingCount < ELIGIBILITY_RATING_COUNT
+                || policy.rewardingRatingCount < REWARDING_RATING_COUNT
+                || policy.minDistinctVerifiedAnchors > policy.eligibilityRatingCount
                 || policy.minDistinctAnchorRounds > policy.eligibilityRatingCount
                 || (policy.minVerifiedHumans == 0 && policy.minDistinctVerifiedAnchors > 0)
         ) {

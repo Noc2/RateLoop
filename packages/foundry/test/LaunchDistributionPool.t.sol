@@ -66,26 +66,54 @@ contract LaunchDistributionPoolTest is Test {
     }
 
     function test_SetLaunchRewardPolicyUpdatesRewardMath() public {
-        pool.setLaunchRewardPolicy(
-            ILaunchDistributionPool.LaunchRewardPolicy({
-                minQualifyingScoreBps: 8_500,
-                minVoters: 3,
-                minVerifiedHumans: 1,
-                minDistinctVerifiedAnchors: 2,
-                minDistinctAnchorRounds: 2,
-                eligibilityRatingCount: 2,
-                rewardingRatingCount: 4,
-                requireNoPendingCleanup: true
-            })
-        );
+        ILaunchDistributionPool.LaunchRewardPolicy memory policy = _defaultPolicy();
+        policy.minQualifyingScoreBps = 8_500;
+        pool.setLaunchRewardPolicy(policy);
 
         assertEq(_recordLaunchRewardWithScore(alice, 1, bytes32("anchor-a"), 8_499), 0);
         assertEq(pool.qualifyingRatingCount(alice), 0);
 
-        assertEq(_recordLaunchRewardWithScore(alice, 1, bytes32("anchor-a"), 9_000), 0);
-        uint256 firstReward = _recordLaunchRewardWithScore(alice, 2, bytes32("anchor-b"), 9_000);
-        assertEq(firstReward, 2_500_000);
-        assertEq(pool.raterLaunchPaid(alice), 2_500_000);
+        for (uint256 i = 0; i < 4; i++) {
+            bytes32 anchorId = i % 2 == 0 ? bytes32("anchor-a") : bytes32("anchor-b");
+            assertEq(_recordLaunchRewardWithScore(alice, i + 1, anchorId, 9_000), 0);
+        }
+
+        uint256 firstReward = _recordLaunchRewardWithScore(alice, 5, bytes32("anchor-a"), 9_000);
+        assertEq(firstReward, 1e6);
+        assertEq(pool.raterLaunchPaid(alice), 1e6);
+    }
+
+    function test_SetLaunchRewardPolicyRejectsUnsafeAntiFarmFloors() public {
+        ILaunchDistributionPool.LaunchRewardPolicy memory policy = _defaultPolicy();
+
+        policy.minVoters = pool.MIN_EARNED_REWARD_VOTERS() - 1;
+        vm.expectRevert(LaunchDistributionPool.InvalidPolicy.selector);
+        pool.setLaunchRewardPolicy(policy);
+
+        policy = _defaultPolicy();
+        policy.minVerifiedHumans = pool.MIN_EARNED_REWARD_VERIFIED_HUMANS() - 1;
+        vm.expectRevert(LaunchDistributionPool.InvalidPolicy.selector);
+        pool.setLaunchRewardPolicy(policy);
+
+        policy = _defaultPolicy();
+        policy.minDistinctVerifiedAnchors = pool.MIN_EARNED_REWARD_DISTINCT_VERIFIED_ANCHORS() - 1;
+        vm.expectRevert(LaunchDistributionPool.InvalidPolicy.selector);
+        pool.setLaunchRewardPolicy(policy);
+
+        policy = _defaultPolicy();
+        policy.minDistinctAnchorRounds = pool.MIN_EARNED_REWARD_DISTINCT_ANCHOR_ROUNDS() - 1;
+        vm.expectRevert(LaunchDistributionPool.InvalidPolicy.selector);
+        pool.setLaunchRewardPolicy(policy);
+
+        policy = _defaultPolicy();
+        policy.eligibilityRatingCount = pool.ELIGIBILITY_RATING_COUNT() - 1;
+        vm.expectRevert(LaunchDistributionPool.InvalidPolicy.selector);
+        pool.setLaunchRewardPolicy(policy);
+
+        policy = _defaultPolicy();
+        policy.rewardingRatingCount = pool.REWARDING_RATING_COUNT() - 1;
+        vm.expectRevert(LaunchDistributionPool.InvalidPolicy.selector);
+        pool.setLaunchRewardPolicy(policy);
     }
 
     function test_RecordEarnedRaterRewardPaysAfterFiveQualifiedRatings() public {
@@ -263,6 +291,19 @@ contract LaunchDistributionPoolTest is Test {
     function _singleAnchor(bytes32 anchorId) internal pure returns (bytes32[] memory anchors) {
         anchors = new bytes32[](1);
         anchors[0] = anchorId;
+    }
+
+    function _defaultPolicy() internal view returns (ILaunchDistributionPool.LaunchRewardPolicy memory policy) {
+        policy = ILaunchDistributionPool.LaunchRewardPolicy({
+            minQualifyingScoreBps: pool.MIN_QUALIFYING_SCORE_BPS(),
+            minVoters: pool.MIN_EARNED_REWARD_VOTERS(),
+            minVerifiedHumans: pool.MIN_EARNED_REWARD_VERIFIED_HUMANS(),
+            minDistinctVerifiedAnchors: pool.MIN_EARNED_REWARD_DISTINCT_VERIFIED_ANCHORS(),
+            minDistinctAnchorRounds: pool.MIN_EARNED_REWARD_DISTINCT_ANCHOR_ROUNDS(),
+            eligibilityRatingCount: pool.ELIGIBILITY_RATING_COUNT(),
+            rewardingRatingCount: pool.REWARDING_RATING_COUNT(),
+            requireNoPendingCleanup: true
+        });
     }
 
     function _commitKey(uint256 roundId) internal pure returns (bytes32) {
