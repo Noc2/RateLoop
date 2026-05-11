@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildStakeAmountWei,
-  buildCommitPredictionParams,
+  buildCommitVoteParams,
   generateVoteSalt,
   resolveFrontendCode,
 } from "./vote";
@@ -11,18 +11,24 @@ test("vote helpers normalize stake amounts and frontend defaults", () => {
   assert.equal(buildStakeAmountWei(2.5), 2_500_000n);
   assert.equal(buildStakeAmountWei(0), 0n);
   assert.equal(
-    resolveFrontendCode(undefined, "0x1111111111111111111111111111111111111111"),
+    resolveFrontendCode(
+      undefined,
+      "0x1111111111111111111111111111111111111111",
+    ),
     "0x1111111111111111111111111111111111111111",
   );
-  assert.equal(resolveFrontendCode(undefined, undefined), "0x0000000000000000000000000000000000000000");
+  assert.equal(
+    resolveFrontendCode(undefined, undefined),
+    "0x0000000000000000000000000000000000000000",
+  );
 });
 
 test("generateVoteSalt accepts an injected random source", () => {
-  const salt = generateVoteSalt(bytes => bytes.fill(0xab));
+  const salt = generateVoteSalt((bytes) => bytes.fill(0xab));
   assert.equal(salt, `0x${"ab".repeat(32)}`);
 });
 
-test("buildCommitPredictionParams returns opinion and crowd prediction commit metadata", async () => {
+test("buildCommitVoteParams returns binary RBTS commit metadata", async () => {
   const runtime = {
     client: {
       chain: () => ({
@@ -34,16 +40,14 @@ test("buildCommitPredictionParams returns opinion and crowd prediction commit me
       }),
     } as any,
     now: () => 1677685200 * 1000,
-    encryptFn: async () => "FAKE-PREDICTION-ARMORED-AGE-STRING",
+    encryptFn: async () => "FAKE-RBTS-ARMORED-AGE-STRING",
   };
 
-  const result = await buildCommitPredictionParams({
+  const result = await buildCommitVoteParams({
     voter: "0x1111111111111111111111111111111111111111",
-    chainId: 31337n,
-    engineAddress: "0x2222222222222222222222222222222222222222",
     contentId: 42n,
-    opinionRating: 7.25,
-    predictedCrowdRating: 6.9,
+    isUp: true,
+    predictedUpPercent: 69,
     stakeAmount: 2.5,
     epochDuration: 1200,
     roundId: 1n,
@@ -51,11 +55,9 @@ test("buildCommitPredictionParams returns opinion and crowd prediction commit me
     runtime,
   });
 
-  assert.equal(result.opinionRatingBps, 7_250);
-  assert.equal(result.predictedCrowdRatingBps, 6_900);
-  assert.equal(result.predictedRatingBps, 6_900);
-  assert.equal(result.rating, 7.25);
-  assert.equal(result.crowdRating, 6.9);
+  assert.equal(result.isUp, true);
+  assert.equal(result.predictedUpBps, 6_900);
+  assert.equal(result.predictedUpPercent, 69);
   assert.equal(result.targetRound > 0n, true);
   assert.equal(result.roundId, 1n);
   assert.equal(result.drandChainHash, `0x${"ab".repeat(32)}`);

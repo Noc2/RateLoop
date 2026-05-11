@@ -185,65 +185,7 @@ export const RoundVotingEngineAbi = [
   },
   {
     "type": "function",
-    "name": "commitPredictionForfeitedStake",
-    "inputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "commitPredictionRewardWeight",
-    "inputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "commitPredictionScoreBps",
+    "name": "commitPredictedUpBps",
     "inputs": [
       {
         "name": "",
@@ -266,35 +208,6 @@ export const RoundVotingEngineAbi = [
         "name": "",
         "type": "uint16",
         "internalType": "uint16"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "commitPredictionStakeReturned",
-    "inputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -324,6 +237,122 @@ export const RoundVotingEngineAbi = [
         "name": "",
         "type": "uint16",
         "internalType": "uint16"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "commitRbtsForfeitedStake",
+    "inputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "commitRbtsRewardWeight",
+    "inputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "commitRbtsScoreBps",
+    "inputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint16",
+        "internalType": "uint16"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "commitRbtsStakeReturned",
+    "inputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -759,25 +788,6 @@ export const RoundVotingEngineAbi = [
   },
   {
     "type": "function",
-    "name": "previewCommitScorerMetadataHash",
-    "inputs": [
-      {
-        "name": "contentId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "processUnrevealedVotes",
     "inputs": [
       {
@@ -844,44 +854,6 @@ export const RoundVotingEngineAbi = [
   },
   {
     "type": "function",
-    "name": "revealPredictionByCommitKey",
-    "inputs": [
-      {
-        "name": "contentId",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "roundId",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "commitKey",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      },
-      {
-        "name": "opinionRatingBps",
-        "type": "uint16",
-        "internalType": "uint16"
-      },
-      {
-        "name": "predictedCrowdRatingBps",
-        "type": "uint16",
-        "internalType": "uint16"
-      },
-      {
-        "name": "salt",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
     "name": "revealVoteByCommitKey",
     "inputs": [
       {
@@ -903,6 +875,11 @@ export const RoundVotingEngineAbi = [
         "name": "isUp",
         "type": "bool",
         "internalType": "bool"
+      },
+      {
+        "name": "predictedUpBps",
+        "type": "uint16",
+        "internalType": "uint16"
       },
       {
         "name": "salt",
@@ -996,30 +973,6 @@ export const RoundVotingEngineAbi = [
   },
   {
     "type": "function",
-    "name": "roundFinalPredictionRatingBps",
-    "inputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint16",
-        "internalType": "uint16"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "roundFrontendPool",
     "inputs": [
       {
@@ -1097,7 +1050,7 @@ export const RoundVotingEngineAbi = [
   },
   {
     "type": "function",
-    "name": "roundPredictionForfeitClaimants",
+    "name": "roundRbtsForfeitClaimants",
     "inputs": [
       {
         "name": "",
@@ -1121,7 +1074,7 @@ export const RoundVotingEngineAbi = [
   },
   {
     "type": "function",
-    "name": "roundPredictionForfeitedPool",
+    "name": "roundRbtsForfeitedPool",
     "inputs": [
       {
         "name": "",
@@ -1145,7 +1098,7 @@ export const RoundVotingEngineAbi = [
   },
   {
     "type": "function",
-    "name": "roundPredictionRewardClaimants",
+    "name": "roundRbtsRewardClaimants",
     "inputs": [
       {
         "name": "",
@@ -1169,7 +1122,7 @@ export const RoundVotingEngineAbi = [
   },
   {
     "type": "function",
-    "name": "roundPredictionRewardWeight",
+    "name": "roundRbtsRewardWeight",
     "inputs": [
       {
         "name": "",
@@ -1193,7 +1146,31 @@ export const RoundVotingEngineAbi = [
   },
   {
     "type": "function",
-    "name": "roundPredictionStats",
+    "name": "roundRbtsScored",
+    "inputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "roundRbtsStats",
     "inputs": [
       {
         "name": "contentId",
@@ -1208,19 +1185,19 @@ export const RoundVotingEngineAbi = [
     ],
     "outputs": [
       {
-        "name": "weightedRatingSum",
+        "name": "scored",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "rewardWeight",
         "type": "uint256",
         "internalType": "uint256"
       },
       {
-        "name": "totalPredictionWeight",
+        "name": "forfeitedPool",
         "type": "uint256",
         "internalType": "uint256"
-      },
-      {
-        "name": "finalRatingBps",
-        "type": "uint16",
-        "internalType": "uint16"
       }
     ],
     "stateMutability": "view"
@@ -1791,50 +1768,7 @@ export const RoundVotingEngineAbi = [
   },
   {
     "type": "event",
-    "name": "PredictionRevealed",
-    "inputs": [
-      {
-        "name": "contentId",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
-      },
-      {
-        "name": "roundId",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
-      },
-      {
-        "name": "voter",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "opinionRatingBps",
-        "type": "uint16",
-        "indexed": false,
-        "internalType": "uint16"
-      },
-      {
-        "name": "predictedCrowdRatingBps",
-        "type": "uint16",
-        "indexed": false,
-        "internalType": "uint16"
-      },
-      {
-        "name": "effectiveWeight",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "PredictionRewardsScored",
+    "name": "RbtsRewardsScored",
     "inputs": [
       {
         "name": "contentId",
@@ -1877,7 +1811,7 @@ export const RoundVotingEngineAbi = [
   },
   {
     "type": "event",
-    "name": "PredictionRoundSettled",
+    "name": "RbtsVoteRevealed",
     "inputs": [
       {
         "name": "contentId",
@@ -1892,22 +1826,28 @@ export const RoundVotingEngineAbi = [
         "internalType": "uint256"
       },
       {
-        "name": "finalRatingBps",
+        "name": "voter",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "isUp",
+        "type": "bool",
+        "indexed": false,
+        "internalType": "bool"
+      },
+      {
+        "name": "predictedUpBps",
         "type": "uint16",
         "indexed": false,
         "internalType": "uint16"
       },
       {
-        "name": "totalPredictionWeight",
+        "name": "effectiveWeight",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
-      },
-      {
-        "name": "revealedCount",
-        "type": "uint16",
-        "indexed": false,
-        "internalType": "uint16"
       }
     ],
     "anonymous": false
@@ -2405,22 +2345,12 @@ export const RoundVotingEngineAbi = [
   },
   {
     "type": "error",
-    "name": "InvalidOwnWeight",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "InvalidRating",
+    "name": "InvalidPrediction",
     "inputs": []
   },
   {
     "type": "error",
     "name": "InvalidStake",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "InvalidTolerance",
     "inputs": []
   },
   {

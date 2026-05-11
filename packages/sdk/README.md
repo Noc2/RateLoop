@@ -13,7 +13,7 @@ Framework-agnostic frontend SDK foundations for integrating RateLoop into existi
 
 - `createCuryoClient(...)` for shared configuration
 - typed read helpers for indexed/hosted data
-- prediction/frontend helpers for building transaction parameters, including the redeployed tlock metadata bindings
+- RBTS vote/frontend helpers for building transaction parameters, including the redeployed tlock metadata bindings
 - small, wallet-agnostic write helpers
 
 Framework-specific hooks and UI components should live in a follow-up package rather than this core SDK.
@@ -30,7 +30,7 @@ Framework-specific hooks and UI components should live in a follow-up package ra
 
 ```ts
 import { createCuryoClient } from "@rateloop/sdk";
-import { buildCommitPredictionParams } from "@rateloop/sdk/vote";
+import { buildCommitVoteParams } from "@rateloop/sdk/vote";
 
 const curyo = createCuryoClient({
   apiBaseUrl: "https://api.rateloop.xyz",
@@ -38,15 +38,16 @@ const curyo = createCuryoClient({
 });
 
 const { content } = await curyo.read.getContent("42");
-const rewardStatus = await curyo.read.getRaterRewardStatus("0xAgentOrRaterWallet");
+const rewardStatus = await curyo.read.getRaterRewardStatus(
+  "0xAgentOrRaterWallet",
+);
 
-const commit = await buildCommitPredictionParams({
+const commit = await buildCommitVoteParams({
   voter: "0xYourWalletAddress",
-  chainId: 480n,
-  engineAddress: "0xRoundVotingEngine",
   contentId: 42n,
   roundId: BigInt(content.openRound?.roundId ?? 1),
-  predictedRating: 7.4,
+  isUp: true,
+  predictedUpPercent: 68,
   stakeAmount: 2.5,
   epochDuration: 20 * 60,
   roundReferenceRatingBps:
@@ -72,7 +73,10 @@ The SDK stays wallet-agnostic on purpose. Host apps approve `stakeWei` of LREP t
 ## Agent Helpers
 
 ```ts
-import { createCuryoAgentClient, buildWebhookVerifier } from "@rateloop/sdk/agent";
+import {
+  createCuryoAgentClient,
+  buildWebhookVerifier,
+} from "@rateloop/sdk/agent";
 
 const agent = createCuryoAgentClient({
   apiBaseUrl: "https://curyo.example",

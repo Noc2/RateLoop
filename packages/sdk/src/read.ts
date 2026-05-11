@@ -112,13 +112,12 @@ export interface CuryoVoteItem {
   targetRound: string;
   drandChainHash: `0x${string}`;
   isUp: boolean | null;
-  opinionRatingBps?: number | null;
-  predictedCrowdRatingBps?: number | null;
-  predictedRatingBps?: number | null;
-  predictionScoreBps?: number | null;
-  predictionRewardWeight?: string | null;
-  predictionStakeReturned?: string | null;
-  predictionForfeitedStake?: string | null;
+  predictedUpBps?: number | null;
+  rbtsWeight?: string | null;
+  rbtsScoreBps?: number | null;
+  rbtsRewardWeight?: string | null;
+  rbtsStakeReturned?: string | null;
+  rbtsForfeitedStake?: string | null;
   stake: string;
   epochIndex: number;
   revealed: boolean;
@@ -127,11 +126,10 @@ export interface CuryoVoteItem {
   roundStartTime: string | null;
   roundState: number | null;
   roundUpWins: boolean | null;
-  roundFinalPredictionRatingBps?: number | null;
-  roundPredictionRewardWeight?: string | null;
-  roundPredictionRewardClaimants?: number | null;
-  roundPredictionForfeitedPool?: string | null;
-  roundPredictionForfeitClaimants?: number | null;
+  roundRbtsRewardWeight?: string | null;
+  roundRbtsRewardClaimants?: number | null;
+  roundRbtsForfeitedPool?: string | null;
+  roundRbtsForfeitClaimants?: number | null;
   [key: string]: unknown;
 }
 

@@ -1,12 +1,19 @@
 import { Buffer } from "buffer";
-import { decodeAbiParameters, encodeAbiParameters, hexToString, keccak256, encodePacked, stringToHex, type Address } from "viem";
+import {
+  decodeAbiParameters,
+  encodeAbiParameters,
+  hexToString,
+  keccak256,
+  encodePacked,
+  stringToHex,
+  type Address,
+} from "viem";
 
 export type VoteSalt = `0x${string}`;
 export type VoteCiphertext = `0x${string}`;
 export type VoteCommitHash = `0x${string}`;
 export type VoteDrandChainHash = `0x${string}`;
-export type VoteScorerMetadataHash = `0x${string}`;
-export type PredictionCommitHash = VoteCommitHash;
+export type RbtsCommitHash = VoteCommitHash;
 export interface VoteCommitMetadata {
   targetRound: bigint;
   drandChainHash: VoteDrandChainHash;
@@ -22,8 +29,15 @@ type TlockClient = {
     info: () => Promise<TlockChainInfo>;
   };
 };
-type TlockEncryptFn = (targetRound: number, payload: Uint8Array, client: unknown) => Promise<string>;
-type TlockDecryptFn = (ciphertext: string, client: unknown) => Promise<Uint8Array>;
+type TlockEncryptFn = (
+  targetRound: number,
+  payload: Uint8Array,
+  client: unknown,
+) => Promise<string>;
+type TlockDecryptFn = (
+  ciphertext: string,
+  client: unknown,
+) => Promise<Uint8Array>;
 type TlockModule = {
   mainnetClient: () => TlockClient;
   timelockEncrypt: TlockEncryptFn;
@@ -48,8 +62,8 @@ export interface VoteTransferPayload {
   drandChainHash: VoteDrandChainHash;
   frontend: Address;
 }
-export interface PredictionTransferPayload extends VoteTransferPayload {
-  commitHash: PredictionCommitHash;
+export interface RbtsTransferPayload extends VoteTransferPayload {
+  commitHash: RbtsCommitHash;
 }
 export type VoteTlockRuntime = {
   client?: TlockClient;
@@ -81,49 +95,60 @@ const AGE_MAC_LENGTH = 32;
 const MIN_TLOCK_STANZA_BODY_LENGTH = 80;
 const MIN_ENCRYPTED_BODY_LENGTH = 65;
 const ROUND_REFERENCE_RATING_MASK = 0xffffn;
-export const MIN_PREDICTED_RATING_BPS = 1_000;
-export const MAX_PREDICTED_RATING_BPS = 9_900;
-export const RATING_SCALE_MAX = 10;
-export const DEFAULT_SCORER_METADATA_HASH =
-  "0x0000000000000000000000000000000000000000000000000000000000000000" as const;
-const PREDICTION_PLAINTEXT_VERSION = 1;
+export const MIN_PREDICTED_UP_BPS = 0;
+export const MAX_PREDICTED_UP_BPS = 10_000;
+const RBTS_PLAINTEXT_VERSION = 2;
 
-export function normalizePredictedRatingBps(predictedRatingBps: number): number {
+export function normalizePredictedUpBps(predictedUpBps: number): number {
   if (
-    !Number.isInteger(predictedRatingBps) ||
-    predictedRatingBps < MIN_PREDICTED_RATING_BPS ||
-    predictedRatingBps > MAX_PREDICTED_RATING_BPS
+    !Number.isInteger(predictedUpBps) ||
+    predictedUpBps < MIN_PREDICTED_UP_BPS ||
+    predictedUpBps > MAX_PREDICTED_UP_BPS
   ) {
-    throw new Error("predictedRatingBps must be an integer from 1000 to 9900");
+    throw new Error("predictedUpBps must be an integer from 0 to 10000");
   }
 
-  return predictedRatingBps;
+  return predictedUpBps;
 }
 
-export function ratingToBps(rating: number): number {
-  if (!Number.isFinite(rating) || rating < MIN_PREDICTED_RATING_BPS / 1_000 || rating > MAX_PREDICTED_RATING_BPS / 1_000) {
-    throw new Error("rating must be from 1 to 9.9");
+export function predictionPercentToBps(predictedUpPercent: number): number {
+  if (
+    !Number.isFinite(predictedUpPercent) ||
+    predictedUpPercent < 0 ||
+    predictedUpPercent > 100
+  ) {
+    throw new Error("predicted up percentage must be from 0 to 100");
   }
 
-  return normalizePredictedRatingBps(Math.round(rating * 1_000));
+  return normalizePredictedUpBps(Math.round(predictedUpPercent * 100));
 }
 
-export function bpsToRating(predictedRatingBps: number): number {
-  return normalizePredictedRatingBps(predictedRatingBps) / 1_000;
+export function bpsToPredictionPercent(predictedUpBps: number): number {
+  return normalizePredictedUpBps(predictedUpBps) / 100;
 }
 
-export function packVoteRoundContext(roundId: bigint, roundReferenceRatingBps: number): bigint {
+export function packVoteRoundContext(
+  roundId: bigint,
+  roundReferenceRatingBps: number,
+): bigint {
   if (roundId <= 0n) {
     throw new Error("roundId must be positive");
   }
-  if (!Number.isInteger(roundReferenceRatingBps) || roundReferenceRatingBps < 0 || roundReferenceRatingBps > 65_535) {
+  if (
+    !Number.isInteger(roundReferenceRatingBps) ||
+    roundReferenceRatingBps < 0 ||
+    roundReferenceRatingBps > 65_535
+  ) {
     throw new Error("roundReferenceRatingBps must fit uint16");
   }
 
   return (roundId << 16n) | BigInt(roundReferenceRatingBps);
 }
 
-export function unpackVoteRoundContext(roundContext: bigint): { roundId: bigint; roundReferenceRatingBps: number } {
+export function unpackVoteRoundContext(roundContext: bigint): {
+  roundId: bigint;
+  roundReferenceRatingBps: number;
+} {
   return {
     roundId: roundContext >> 16n,
     roundReferenceRatingBps: Number(roundContext & ROUND_REFERENCE_RATING_MASK),
@@ -131,7 +156,7 @@ export function unpackVoteRoundContext(roundContext: bigint): { roundId: bigint;
 }
 
 async function loadTlockModule(): Promise<TlockModule> {
-  tlockModulePromise ??= import("tlock-js").then(module => ({
+  tlockModulePromise ??= import("tlock-js").then((module) => ({
     mainnetClient: module.mainnetClient as TlockModule["mainnetClient"],
     timelockEncrypt: module.timelockEncrypt as TlockModule["timelockEncrypt"],
     timelockDecrypt: module.timelockDecrypt as TlockModule["timelockDecrypt"],
@@ -140,7 +165,9 @@ async function loadTlockModule(): Promise<TlockModule> {
   return tlockModulePromise;
 }
 
-export async function getVoteTlockChainInfo(runtime: VoteTlockRuntime = {}): Promise<VoteTlockChainInfo> {
+export async function getVoteTlockChainInfo(
+  runtime: VoteTlockRuntime = {},
+): Promise<VoteTlockChainInfo> {
   const { mainnetClient } = await loadTlockModule();
   const client = runtime.client ?? mainnetClient();
   const chainInfo = await client.chain().info();
@@ -160,7 +187,9 @@ export function deriveVoteTlockRevealAvailableAtSeconds(
     return 0n;
   }
 
-  return chainInfo.genesisTimeSeconds + (targetRound - 1n) * chainInfo.periodSeconds;
+  return (
+    chainInfo.genesisTimeSeconds + (targetRound - 1n) * chainInfo.periodSeconds
+  );
 }
 
 function saltToBytes(salt: VoteSalt): Uint8Array {
@@ -176,76 +205,52 @@ function saltToBytes(salt: VoteSalt): Uint8Array {
 
 function bytesToHex(bytes: Uint8Array): `0x${string}` {
   return `0x${Array.from(bytes)
-    .map(byte => byte.toString(16).padStart(2, "0"))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
     .join("")}` as `0x${string}`;
 }
 
-export function encodeVotePlaintext(isUp: boolean, salt: VoteSalt): Uint8Array {
-  const plaintext = new Uint8Array(33);
-  plaintext[0] = isUp ? 1 : 0;
-  plaintext.set(saltToBytes(salt), 1);
-  return plaintext;
-}
-
-export function decodeVotePlaintext(plaintext: Uint8Array): { isUp: boolean; salt: VoteSalt } | null {
-  if (plaintext.length !== 33) return null;
-
-  return {
-    isUp: plaintext[0] === 1,
-    salt: bytesToHex(plaintext.slice(1, 33)),
-  };
-}
-
-export function encodePredictionPlaintext(
-  opinionRatingBps: number,
-  predictedCrowdRatingBps: number,
+export function encodeRbtsVotePlaintext(
+  isUp: boolean,
+  predictedUpBps: number,
   salt: VoteSalt,
 ): Uint8Array {
-  const normalizedOpinion = normalizePredictedRatingBps(opinionRatingBps);
-  const normalizedCrowdPrediction = normalizePredictedRatingBps(predictedCrowdRatingBps);
-  const plaintext = new Uint8Array(37);
-  plaintext[0] = PREDICTION_PLAINTEXT_VERSION;
-  plaintext[1] = normalizedOpinion >> 8;
-  plaintext[2] = normalizedOpinion & 0xff;
-  plaintext[3] = normalizedCrowdPrediction >> 8;
-  plaintext[4] = normalizedCrowdPrediction & 0xff;
-  plaintext.set(saltToBytes(salt), 5);
+  const normalizedPrediction = normalizePredictedUpBps(predictedUpBps);
+  const plaintext = new Uint8Array(36);
+  plaintext[0] = RBTS_PLAINTEXT_VERSION;
+  plaintext[1] = isUp ? 1 : 0;
+  plaintext[2] = normalizedPrediction >> 8;
+  plaintext[3] = normalizedPrediction & 0xff;
+  plaintext.set(saltToBytes(salt), 4);
   return plaintext;
 }
 
-export function decodePredictionPlaintext(
-  plaintext: Uint8Array,
-): {
-  opinionRatingBps: number;
-  predictedCrowdRatingBps: number;
-  predictedRatingBps: number;
-  rating: number;
-  crowdRating: number;
+export function decodeRbtsVotePlaintext(plaintext: Uint8Array): {
+  isUp: boolean;
+  predictedUpBps: number;
+  predictedUpPercent: number;
   salt: VoteSalt;
 } | null {
-  if (plaintext.length !== 37 || plaintext[0] !== PREDICTION_PLAINTEXT_VERSION) return null;
+  if (plaintext.length !== 36 || plaintext[0] !== RBTS_PLAINTEXT_VERSION)
+    return null;
+  if (plaintext[1] !== 0 && plaintext[1] !== 1) return null;
 
-  const opinionRatingBps = (plaintext[1] << 8) | plaintext[2];
-  const predictedCrowdRatingBps = (plaintext[3] << 8) | plaintext[4];
-  if (opinionRatingBps < MIN_PREDICTED_RATING_BPS || opinionRatingBps > MAX_PREDICTED_RATING_BPS) return null;
+  const predictedUpBps = (plaintext[2] << 8) | plaintext[3];
   if (
-    predictedCrowdRatingBps < MIN_PREDICTED_RATING_BPS ||
-    predictedCrowdRatingBps > MAX_PREDICTED_RATING_BPS
+    predictedUpBps < MIN_PREDICTED_UP_BPS ||
+    predictedUpBps > MAX_PREDICTED_UP_BPS
   )
     return null;
-
   return {
-    opinionRatingBps,
-    predictedCrowdRatingBps,
-    predictedRatingBps: predictedCrowdRatingBps,
-    rating: bpsToRating(opinionRatingBps),
-    crowdRating: bpsToRating(predictedCrowdRatingBps),
-    salt: bytesToHex(plaintext.slice(5, 37)),
+    isUp: plaintext[1] === 1,
+    predictedUpBps,
+    predictedUpPercent: bpsToPredictionPercent(predictedUpBps),
+    salt: bytesToHex(plaintext.slice(4, 36)),
   };
 }
 
 export function buildCommitHash(
   isUp: boolean,
+  predictedUpBps: number,
   salt: VoteSalt,
   voter: Address,
   contentId: bigint,
@@ -257,19 +262,37 @@ export function buildCommitHash(
 ): VoteCommitHash {
   return keccak256(
     encodePacked(
-      ["bool", "bytes32", "address", "uint256", "uint256", "uint16", "uint64", "bytes32", "bytes32"],
-      [isUp, salt, voter, contentId, roundId, roundReferenceRatingBps, targetRound, drandChainHash, keccak256(ciphertext)],
+      [
+        "bool",
+        "uint16",
+        "bytes32",
+        "address",
+        "uint256",
+        "uint256",
+        "uint16",
+        "uint64",
+        "bytes32",
+        "bytes32",
+      ],
+      [
+        isUp,
+        normalizePredictedUpBps(predictedUpBps),
+        salt,
+        voter,
+        contentId,
+        roundId,
+        roundReferenceRatingBps,
+        targetRound,
+        drandChainHash,
+        keccak256(ciphertext),
+      ],
     ),
   );
 }
 
-export function buildPredictionCommitHash(
-  chainId: bigint | number,
-  engine: Address,
-  stakeAmount: bigint,
-  scorerMetadataHash: VoteScorerMetadataHash,
-  opinionRatingBps: number,
-  predictedCrowdRatingBps: number,
+export function buildRbtsCommitHash(
+  isUp: boolean,
+  predictedUpBps: number,
   salt: VoteSalt,
   voter: Address,
   contentId: bigint,
@@ -278,51 +301,35 @@ export function buildPredictionCommitHash(
   targetRound: bigint,
   drandChainHash: VoteDrandChainHash,
   ciphertext: VoteCiphertext,
-): PredictionCommitHash {
-  return keccak256(
-    encodePacked(
-      [
-        "uint256",
-        "address",
-        "uint256",
-        "uint256",
-        "address",
-        "uint16",
-        "uint16",
-        "uint256",
-        "bytes32",
-        "uint16",
-        "uint64",
-        "bytes32",
-        "bytes32",
-        "bytes32",
-      ],
-      [
-        BigInt(chainId),
-        engine,
-        contentId,
-        roundId,
-        voter,
-        normalizePredictedRatingBps(opinionRatingBps),
-        normalizePredictedRatingBps(predictedCrowdRatingBps),
-        stakeAmount,
-        scorerMetadataHash,
-        roundReferenceRatingBps,
-        targetRound,
-        drandChainHash,
-        keccak256(ciphertext),
-        salt,
-      ],
-    ),
+): RbtsCommitHash {
+  return buildCommitHash(
+    isUp,
+    predictedUpBps,
+    salt,
+    voter,
+    contentId,
+    roundId,
+    roundReferenceRatingBps,
+    targetRound,
+    drandChainHash,
+    ciphertext,
   );
 }
 
-export function buildCommitKey(voter: Address, commitHash: `0x${string}`): `0x${string}` {
+export function buildCommitKey(
+  voter: Address,
+  commitHash: `0x${string}`,
+): `0x${string}` {
   return keccak256(encodePacked(["address", "bytes32"], [voter, commitHash]));
 }
 
-export function encodeVoteTransferPayload(payload: VoteTransferPayload): `0x${string}` {
-  const roundContext = packVoteRoundContext(payload.roundId, payload.roundReferenceRatingBps);
+export function encodeVoteTransferPayload(
+  payload: VoteTransferPayload,
+): `0x${string}` {
+  const roundContext = packVoteRoundContext(
+    payload.roundId,
+    payload.roundReferenceRatingBps,
+  );
   return encodeAbiParameters(voteTransferPayloadParams, [
     payload.contentId,
     roundContext,
@@ -334,13 +341,21 @@ export function encodeVoteTransferPayload(payload: VoteTransferPayload): `0x${st
   ]);
 }
 
-export function decodeVoteTransferPayload(data: `0x${string}`): VoteTransferPayload {
+export function decodeVoteTransferPayload(
+  data: `0x${string}`,
+): VoteTransferPayload {
   try {
-    const [contentId, roundContext, commitHash, ciphertext, frontend, targetRound, drandChainHash] = decodeAbiParameters(
-      voteTransferPayloadParams,
-      data,
-    );
-    const { roundId, roundReferenceRatingBps } = unpackVoteRoundContext(roundContext);
+    const [
+      contentId,
+      roundContext,
+      commitHash,
+      ciphertext,
+      frontend,
+      targetRound,
+      drandChainHash,
+    ] = decodeAbiParameters(voteTransferPayloadParams, data);
+    const { roundId, roundReferenceRatingBps } =
+      unpackVoteRoundContext(roundContext);
     const reencoded = encodeAbiParameters(voteTransferPayloadParams, [
       contentId,
       roundContext,
@@ -371,16 +386,24 @@ export function decodeVoteTransferPayload(data: `0x${string}`): VoteTransferPayl
 
 function decodeAgeArmor(armored: string): Buffer | null {
   const trimmed = armored.trim();
-  if (!trimmed.startsWith(AGE_ARMOR_HEADER) || !trimmed.endsWith(AGE_ARMOR_FOOTER)) {
+  if (
+    !trimmed.startsWith(AGE_ARMOR_HEADER) ||
+    !trimmed.endsWith(AGE_ARMOR_FOOTER)
+  ) {
     return null;
   }
 
-  const payload = trimmed.slice(AGE_ARMOR_HEADER.length, trimmed.length - AGE_ARMOR_FOOTER.length);
+  const payload = trimmed.slice(
+    AGE_ARMOR_HEADER.length,
+    trimmed.length - AGE_ARMOR_FOOTER.length,
+  );
   const lines = payload.split(/\r?\n/);
-  if (lines.some(line => line.length > AGE_ARMOR_LINE_CHUNK_SIZE)) {
+  if (lines.some((line) => line.length > AGE_ARMOR_LINE_CHUNK_SIZE)) {
     return null;
   }
-  if (lines.some(line => line.length > 0 && !/^[A-Za-z0-9+/=]+$/.test(line))) {
+  if (
+    lines.some((line) => line.length > 0 && !/^[A-Za-z0-9+/=]+$/.test(line))
+  ) {
     return null;
   }
 
@@ -392,11 +415,18 @@ function decodeAgeArmor(armored: string): Buffer | null {
   return Buffer.from(payload, "base64");
 }
 
-function readAsciiLine(payload: Buffer, cursor: number): { line: string; nextCursor: number } | null {
+function readAsciiLine(
+  payload: Buffer,
+  cursor: number,
+): { line: string; nextCursor: number } | null {
   if (cursor >= payload.length) return null;
 
   let end = cursor;
-  while (end < payload.length && payload[end] !== 0x0a && payload[end] !== 0x0d) {
+  while (
+    end < payload.length &&
+    payload[end] !== 0x0a &&
+    payload[end] !== 0x0d
+  ) {
     end++;
   }
   if (end >= payload.length) {
@@ -404,7 +434,11 @@ function readAsciiLine(payload: Buffer, cursor: number): { line: string; nextCur
   }
 
   let nextCursor = end + 1;
-  if (payload[end] === 0x0d && nextCursor < payload.length && payload[nextCursor] === 0x0a) {
+  if (
+    payload[end] === 0x0d &&
+    nextCursor < payload.length &&
+    payload[nextCursor] === 0x0a
+  ) {
     nextCursor++;
   }
 
@@ -415,7 +449,11 @@ function readAsciiLine(payload: Buffer, cursor: number): { line: string; nextCur
 }
 
 function isValidUnpaddedBase64Line(line: string): boolean {
-  return line.length > 0 && line.length <= AGE_ARMOR_LINE_CHUNK_SIZE && UNPADDED_BASE64_LINE.test(line);
+  return (
+    line.length > 0 &&
+    line.length <= AGE_ARMOR_LINE_CHUNK_SIZE &&
+    UNPADDED_BASE64_LINE.test(line)
+  );
 }
 
 function unpaddedBase64DecodedLength(charLength: number): number | null {
@@ -424,7 +462,9 @@ function unpaddedBase64DecodedLength(charLength: number): number | null {
   return Math.floor(charLength / 4) * 3 + (remainder === 0 ? 0 : remainder - 1);
 }
 
-export function parseTlockCiphertextMetadata(ciphertext: VoteCiphertext): TlockCiphertextMetadata | null {
+export function parseTlockCiphertextMetadata(
+  ciphertext: VoteCiphertext,
+): TlockCiphertextMetadata | null {
   try {
     const armored = hexToString(ciphertext);
     const agePayload = decodeAgeArmor(armored);
@@ -440,7 +480,9 @@ export function parseTlockCiphertextMetadata(ciphertext: VoteCiphertext): TlockC
       return null;
     }
 
-    const recipientMatch = /^-> tlock ([0-9]+) ([0-9a-fA-F]{64})$/.exec(stanzaLine.line);
+    const recipientMatch = /^-> tlock ([0-9]+) ([0-9a-fA-F]{64})$/.exec(
+      stanzaLine.line,
+    );
     if (!recipientMatch) {
       return null;
     }
@@ -453,7 +495,10 @@ export function parseTlockCiphertextMetadata(ciphertext: VoteCiphertext): TlockC
       if (bodyLine.line.startsWith(AGE_MAC_PREFIX)) {
         break;
       }
-      if (bodyLine.line.startsWith(AGE_RECIPIENT_PREFIX) || !isValidUnpaddedBase64Line(bodyLine.line)) {
+      if (
+        bodyLine.line.startsWith(AGE_RECIPIENT_PREFIX) ||
+        !isValidUnpaddedBase64Line(bodyLine.line)
+      ) {
         return null;
       }
 
@@ -461,8 +506,12 @@ export function parseTlockCiphertextMetadata(ciphertext: VoteCiphertext): TlockC
       cursor = bodyLine.nextCursor;
     }
 
-    const decodedStanzaBodyLength = unpaddedBase64DecodedLength(stanzaBodyCharLength);
-    if (decodedStanzaBodyLength == null || decodedStanzaBodyLength < MIN_TLOCK_STANZA_BODY_LENGTH) {
+    const decodedStanzaBodyLength =
+      unpaddedBase64DecodedLength(stanzaBodyCharLength);
+    if (
+      decodedStanzaBodyLength == null ||
+      decodedStanzaBodyLength < MIN_TLOCK_STANZA_BODY_LENGTH
+    ) {
       return null;
     }
 
@@ -473,7 +522,10 @@ export function parseTlockCiphertextMetadata(ciphertext: VoteCiphertext): TlockC
 
     const mac = macLine.line.slice(AGE_MAC_PREFIX.length);
     const decodedMacLength = unpaddedBase64DecodedLength(mac.length);
-    if (!isValidUnpaddedBase64Line(mac) || decodedMacLength !== AGE_MAC_LENGTH) {
+    if (
+      !isValidUnpaddedBase64Line(mac) ||
+      decodedMacLength !== AGE_MAC_LENGTH
+    ) {
       return null;
     }
 
@@ -493,34 +545,15 @@ export function parseTlockCiphertextMetadata(ciphertext: VoteCiphertext): TlockC
 
 async function createTlockVoteArtifacts(
   isUp: boolean,
+  predictedUpBps: number,
   salt: VoteSalt,
   epochDurationSeconds: number,
   runtime: VoteTlockRuntime = {},
-): Promise<{ ciphertext: VoteCiphertext; targetRound: bigint; drandChainHash: VoteDrandChainHash }> {
-  const { mainnetClient, timelockEncrypt } = await loadTlockModule();
-  const client = runtime.client ?? mainnetClient();
-  const now = runtime.now ?? Date.now;
-  const encryptFn = runtime.encryptFn ?? timelockEncrypt;
-  const chainInfo = await client.chain().info();
-  const targetRound =
-    runtime.targetRound != null
-      ? normalizeTlockTargetRound(runtime.targetRound)
-      : roundAtOrAfter(now() + epochDurationSeconds * 1000, chainInfo);
-  const armored = await encryptFn(targetRound, Buffer.from(encodeVotePlaintext(isUp, salt)), client);
-  return {
-    ciphertext: stringToHex(armored) as VoteCiphertext,
-    targetRound: BigInt(targetRound),
-    drandChainHash: `0x${chainInfo.hash}` as VoteDrandChainHash,
-  };
-}
-
-async function createTlockPredictionArtifacts(
-  opinionRatingBps: number,
-  predictedCrowdRatingBps: number,
-  salt: VoteSalt,
-  epochDurationSeconds: number,
-  runtime: VoteTlockRuntime = {},
-): Promise<{ ciphertext: VoteCiphertext; targetRound: bigint; drandChainHash: VoteDrandChainHash }> {
+): Promise<{
+  ciphertext: VoteCiphertext;
+  targetRound: bigint;
+  drandChainHash: VoteDrandChainHash;
+}> {
   const { mainnetClient, timelockEncrypt } = await loadTlockModule();
   const client = runtime.client ?? mainnetClient();
   const now = runtime.now ?? Date.now;
@@ -532,7 +565,7 @@ async function createTlockPredictionArtifacts(
       : roundAtOrAfter(now() + epochDurationSeconds * 1000, chainInfo);
   const armored = await encryptFn(
     targetRound,
-    Buffer.from(encodePredictionPlaintext(opinionRatingBps, predictedCrowdRatingBps, salt)),
+    Buffer.from(encodeRbtsVotePlaintext(isUp, predictedUpBps, salt)),
     client,
   );
   return {
@@ -542,14 +575,21 @@ async function createTlockPredictionArtifacts(
   };
 }
 
-function roundAtOrAfter(targetTimeMs: number, chainInfo: TlockChainInfo): number {
+function roundAtOrAfter(
+  targetTimeMs: number,
+  chainInfo: TlockChainInfo,
+): number {
   if (!Number.isFinite(targetTimeMs)) {
     throw new Error("Cannot use Infinity or NaN as a beacon time");
   }
 
   const genesisTimeMs = chainInfo.genesis_time * 1000;
   const periodMs = chainInfo.period * 1000;
-  if (!Number.isFinite(genesisTimeMs) || !Number.isFinite(periodMs) || periodMs <= 0) {
+  if (
+    !Number.isFinite(genesisTimeMs) ||
+    !Number.isFinite(periodMs) ||
+    periodMs <= 0
+  ) {
     throw new Error("Invalid tlock chain timing");
   }
   if (targetTimeMs < genesisTimeMs) {
@@ -576,35 +616,28 @@ function normalizeTlockTargetRound(targetRound: bigint | number): number {
 
 export async function tlockEncryptVote(
   isUp: boolean,
+  predictedUpBps: number,
   salt: VoteSalt,
   epochDurationSeconds: number,
   runtime: VoteTlockRuntime = {},
 ): Promise<VoteCiphertext> {
-  const { ciphertext } = await createTlockVoteArtifacts(isUp, salt, epochDurationSeconds, runtime);
+  const { ciphertext } = await createTlockVoteArtifacts(
+    isUp,
+    predictedUpBps,
+    salt,
+    epochDurationSeconds,
+    runtime,
+  );
   return ciphertext;
 }
 
-export async function decryptTlockCiphertext(
-  ciphertext: VoteCiphertext,
-  runtime: VoteTlockRuntime = {},
-): Promise<{ isUp: boolean; salt: VoteSalt } | null> {
-  const { mainnetClient, timelockDecrypt } = await loadTlockModule();
-  const client = runtime.client ?? mainnetClient();
-  const decryptFn = runtime.decryptFn ?? timelockDecrypt;
-  const armored = hexToString(ciphertext);
-  const plaintext = await decryptFn(armored, client);
-  return decodeVotePlaintext(plaintext);
-}
-
-export async function decryptTlockPredictionCiphertext(
+export async function decryptTlockVoteCiphertext(
   ciphertext: VoteCiphertext,
   runtime: VoteTlockRuntime = {},
 ): Promise<{
-  opinionRatingBps: number;
-  predictedCrowdRatingBps: number;
-  predictedRatingBps: number;
-  rating: number;
-  crowdRating: number;
+  isUp: boolean;
+  predictedUpBps: number;
+  predictedUpPercent: number;
   salt: VoteSalt;
 } | null> {
   const { mainnetClient, timelockDecrypt } = await loadTlockModule();
@@ -612,18 +645,22 @@ export async function decryptTlockPredictionCiphertext(
   const decryptFn = runtime.decryptFn ?? timelockDecrypt;
   const armored = hexToString(ciphertext);
   const plaintext = await decryptFn(armored, client);
-  return decodePredictionPlaintext(plaintext);
+  return decodeRbtsVotePlaintext(plaintext);
 }
 
-export async function createTlockVoteCommit(params: {
-  voter: Address;
-  isUp: boolean;
-  salt: VoteSalt;
-  contentId: bigint;
-  roundId: bigint;
-  roundReferenceRatingBps: number;
-  epochDurationSeconds: number;
-}, runtime: VoteTlockRuntime = {}): Promise<{
+export async function createTlockVoteCommit(
+  params: {
+    voter: Address;
+    isUp: boolean;
+    predictedUpBps: number;
+    salt: VoteSalt;
+    contentId: bigint;
+    roundId: bigint;
+    roundReferenceRatingBps: number;
+    epochDurationSeconds: number;
+  },
+  runtime: VoteTlockRuntime = {},
+): Promise<{
   ciphertext: VoteCiphertext;
   commitHash: `0x${string}`;
   targetRound: bigint;
@@ -631,14 +668,17 @@ export async function createTlockVoteCommit(params: {
   roundReferenceRatingBps: number;
   commitKey: `0x${string}`;
 }> {
-  const { ciphertext, targetRound, drandChainHash } = await createTlockVoteArtifacts(
-    params.isUp,
-    params.salt,
-    params.epochDurationSeconds,
-    runtime,
-  );
+  const { ciphertext, targetRound, drandChainHash } =
+    await createTlockVoteArtifacts(
+      params.isUp,
+      params.predictedUpBps,
+      params.salt,
+      params.epochDurationSeconds,
+      runtime,
+    );
   const commitHash = buildCommitHash(
     params.isUp,
+    params.predictedUpBps,
     params.salt,
     params.voter,
     params.contentId,
@@ -659,46 +699,41 @@ export async function createTlockVoteCommit(params: {
   };
 }
 
-export async function createTlockPredictionCommit(params: {
-  chainId: bigint | number;
-  engine: Address;
-  voter: Address;
-  stakeAmount: bigint;
-  scorerMetadataHash?: VoteScorerMetadataHash;
-  opinionRatingBps: number;
-  predictedCrowdRatingBps: number;
-  salt: VoteSalt;
-  contentId: bigint;
-  roundId: bigint;
-  roundReferenceRatingBps: number;
-  epochDurationSeconds: number;
-}, runtime: VoteTlockRuntime = {}): Promise<{
+export async function createTlockRbtsVoteCommit(
+  params: {
+    voter: Address;
+    isUp: boolean;
+    predictedUpBps: number;
+    salt: VoteSalt;
+    contentId: bigint;
+    roundId: bigint;
+    roundReferenceRatingBps: number;
+    epochDurationSeconds: number;
+  },
+  runtime: VoteTlockRuntime = {},
+): Promise<{
   ciphertext: VoteCiphertext;
-  commitHash: PredictionCommitHash;
+  commitHash: RbtsCommitHash;
   targetRound: bigint;
   drandChainHash: VoteDrandChainHash;
   roundReferenceRatingBps: number;
-  opinionRatingBps: number;
-  predictedCrowdRatingBps: number;
-  predictedRatingBps: number;
+  isUp: boolean;
+  predictedUpBps: number;
+  predictedUpPercent: number;
   commitKey: `0x${string}`;
 }> {
-  const opinionRatingBps = normalizePredictedRatingBps(params.opinionRatingBps);
-  const predictedCrowdRatingBps = normalizePredictedRatingBps(params.predictedCrowdRatingBps);
-  const { ciphertext, targetRound, drandChainHash } = await createTlockPredictionArtifacts(
-    opinionRatingBps,
-    predictedCrowdRatingBps,
-    params.salt,
-    params.epochDurationSeconds,
-    runtime,
-  );
-  const commitHash = buildPredictionCommitHash(
-    params.chainId,
-    params.engine,
-    params.stakeAmount,
-    params.scorerMetadataHash ?? DEFAULT_SCORER_METADATA_HASH,
-    opinionRatingBps,
-    predictedCrowdRatingBps,
+  const predictedUpBps = normalizePredictedUpBps(params.predictedUpBps);
+  const { ciphertext, targetRound, drandChainHash } =
+    await createTlockVoteArtifacts(
+      params.isUp,
+      predictedUpBps,
+      params.salt,
+      params.epochDurationSeconds,
+      runtime,
+    );
+  const commitHash = buildRbtsCommitHash(
+    params.isUp,
+    predictedUpBps,
     params.salt,
     params.voter,
     params.contentId,
@@ -715,9 +750,9 @@ export async function createTlockPredictionCommit(params: {
     targetRound,
     drandChainHash,
     roundReferenceRatingBps: params.roundReferenceRatingBps,
-    opinionRatingBps,
-    predictedCrowdRatingBps,
-    predictedRatingBps: predictedCrowdRatingBps,
+    isUp: params.isUp,
+    predictedUpBps,
+    predictedUpPercent: bpsToPredictionPercent(predictedUpBps),
     commitKey: buildCommitKey(params.voter, commitHash),
   };
 }
