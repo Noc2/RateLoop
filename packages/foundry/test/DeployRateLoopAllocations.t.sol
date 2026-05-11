@@ -31,7 +31,7 @@ contract DeployRateLoopAllocationsTest is Test {
             deployScript.LAUNCH_DISTRIBUTION_AMOUNT(),
             "launch pool split should equal 64M"
         );
-        assertEq(deployScript.PARTICIPATION_POOL_AMOUNT(), 0, "bootstrap pool should have no launch allocation");
+        assertEq(deployScript.PARTICIPATION_POOL_AMOUNT(), 0, "participation pool should have no launch allocation");
         assertEq(deployScript.TREASURY_AMOUNT(), 32_000_000 * 1e6, "treasury should be 32M");
         assertEq(deployScript.CONSENSUS_POOL_AMOUNT(), 4_000_000 * 1e6, "consensus reserve should be 4M");
     }

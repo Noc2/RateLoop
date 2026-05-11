@@ -548,15 +548,17 @@ design:
   - off-chain wallet-to-wallet follows, currently useful for discovery and
     notifications but not protocol trust.
 
-The current launch allocation in `packages/foundry/script/DeployCuryo.s.sol` is:
+The current launch allocation in `packages/foundry/script/Deploy.s.sol` is:
 
-- 4M HREP consensus reserve.
-- 32M HREP treasury.
-- 12M HREP participation pool.
-- 52M HREP Self.xyz faucet.
+- 4M LREP consensus reserve.
+- 32M LREP treasury.
+- 64M LREP Launch Distribution Pool, split into 35M verified + referral
+  rewards, 25M earned rater rewards, and 4M legacy users.
+- No funded Bootstrap Pool allocation; the previous 12M bucket is folded into
+  launch distribution.
 
-The redeploy can remove the faucet allocation and reshape the token economy
-around earned reputation rather than early identity claims.
+The redeploy removes the faucet and fixed bootstrap allocations and reshapes the
+token economy around earned reputation rather than early identity claims.
 
 ## Recommended Protocol Model
 
@@ -929,13 +931,12 @@ voting engine. In the new model:
 
 ### Rework `ParticipationPool.sol`
 
-The current 12M HREP bootstrap pool should become one of:
+`ParticipationPool.sol` is no longer a funded launch allocation. The former
+12M bootstrap bucket is folded into the Launch Distribution Pool: 10M LREP moves
+to verified + referral rewards, and 2M LREP moves to legacy users. Earned rater
+rewards now route through `LaunchDistributionPool` and `RoundRewardDistributor`.
 
-1. Removed entirely, with reputation minted directly by `RoundRewardDistributor`.
-2. Repurposed as a bounded `ReputationEmissionController`.
-3. Kept only for display/accounting, not as a token-holding pool.
-
-The strongest option is `ReputationEmissionController`:
+The strongest follow-on option remains a bounded `ReputationEmissionController`:
 
 ```text
 epochEmissionBudget

@@ -88,12 +88,14 @@ const SmartContracts: NextPage = () => {
             </tr>
             <tr>
               <td className="font-mono text-primary">ParticipationPool</td>
-              <td>Halving-tier LREP Bootstrap Pool rewards used by voter reward claims</td>
+              <td>Optional governance-funded participation rewards used by voter reward claims</td>
               <td>No</td>
             </tr>
             <tr>
               <td className="font-mono text-primary">LaunchDistributionPool</td>
-              <td>52M LREP launch rewards: 25M verified/referral, 25M earned rater, and 2M legacy users</td>
+              <td>
+                64M LREP launch rewards: 35M verified/referral, 25M anchor-gated earned rater, and 4M legacy users
+              </td>
               <td>No</td>
             </tr>
             <tr>
@@ -190,9 +192,9 @@ const SmartContracts: NextPage = () => {
       </p>
       <h3>Sybil Resistance</h3>
       <p>
-        VoterIdNFT is required for voting, registering frontends, creating profiles, and creating categories.
-        USDC-funded question submission is permissionless and does not require a Voter ID; LREP-funded identity paths
-        stay gated where the contracts require them. VoterIdNFT also enforces a per-Voter-ID stake cap of{" "}
+        VoterIdNFT is optional for the core rating path, but gives the protocol a stable identity handle when configured
+        for delegated voting and identity-gated flows. USDC-funded question submission is permissionless and does not
+        require a Voter ID. Where VoterIdNFT is active, it also enforces a per-Voter-ID stake cap of{" "}
         <strong>100 LREP per content per round</strong>, preventing a single identity from dominating any vote.
       </p>
       <h3>Key Functions</h3>
@@ -321,7 +323,7 @@ const SmartContracts: NextPage = () => {
       </ul>
       <h3>Submission Economics</h3>
       <p>
-        Question submissions no longer carry refundable creator deposits or creator-side bootstrap rewards. The attached
+        Question submissions no longer carry refundable creator deposits or creator-side launch rewards. The attached
         bounty is non-refundable and routes to eligible voters plus the eligible frontend operator.
       </p>
 
@@ -457,8 +459,8 @@ const SmartContracts: NextPage = () => {
           Bonus USDC to treasury.
         </li>
         <li>
-          <code>RoundRewardDistributor.claimParticipationReward(contentId, roundId)</code> &mdash; Voters claim
-          bootstrap rewards (rate snapshotted at settlement time for fairness). Pull-based.
+          <code>RoundRewardDistributor.claimParticipationReward(contentId, roundId)</code> &mdash; Voters claim optional
+          participation rewards (rate snapshotted at settlement time for fairness). Pull-based.
         </li>
         <li>
           <code>cancelExpiredRound(contentId, roundId)</code> &mdash; Cancel a round that exceeded maxDuration (
@@ -516,8 +518,8 @@ const SmartContracts: NextPage = () => {
           plus winnings; revealed losers receive a fixed {protocolDocFacts.revealedLoserRefundPercentLabel} rebate.
         </li>
         <li>
-          <code>claimParticipationReward(contentId, roundId)</code> &mdash; Claim the LREP bootstrap reward for eligible
-          winning revealed voters, using the rate snapshotted at settlement.
+          <code>claimParticipationReward(contentId, roundId)</code> &mdash; Claim the optional LREP participation reward
+          for eligible winning revealed voters, using the rate snapshotted at settlement.
         </li>
         <li>
           <code>sweepStrandedHrepToTreasury()</code> &mdash; Governance-only recovery path for any LREP mistakenly sent
@@ -645,14 +647,14 @@ const SmartContracts: NextPage = () => {
 
       <h2>ParticipationPool</h2>
       <p>
-        Implements the user-facing Bootstrap Pool for voters. Voter rewards are claimed after round settlement using the
-        rate snapshotted at settlement time. Funded with 12M LREP. Uses a halving schedule: starting at 90% reward rate,
-        halving each time a tier threshold is reached (1.5M, 4.5M, 10.5M cumulative, then the tail to 12M), with a 1%
-        floor rate.
+        Implements optional participation rewards for voters when governance funds and configures a participation
+        program. Voter rewards are claimed after round settlement using the rate snapshotted at settlement time. The
+        launch deployment does not allocate LREP to this pool; the previous 12M LREP Bootstrap Pool allocation is folded
+        into the LaunchDistributionPool.
       </p>
       <p>
-        Privileged sweeps of accounted bootstrap rewards are disabled; only reward accounting and surplus recovery move
-        funds.
+        Privileged sweeps of accounted participation rewards are disabled; only reward accounting and surplus recovery
+        move funds.
       </p>
 
       <hr />
@@ -698,9 +700,10 @@ const SmartContracts: NextPage = () => {
           and governance participation also applies a 7-day LREP transfer lock.
         </li>
         <li>
-          <strong>Sybil Resistance:</strong> VoterIdNFT (soulbound) remains required for voting and other identity-gated
-          actions. Per-identity stake cap of 100 LREP per content per round, plus question-first submission guardrails
-          and claim gating. Question submission is the same for humans, bots, and delegated agents.
+          <strong>Sybil Resistance:</strong> Core rating remains open, while earned launch rewards require
+          verified-human anchored rounds and cross-round anchor diversity before payout. Per-identity stake caps,
+          question-first submission guardrails, and claim gating apply around the reward surfaces. Question submission
+          is the same for humans, bots, and delegated agents.
         </li>
         <li>
           <strong>Governance Lock:</strong> Tokens are transfer-locked for 7 days when proposing or voting on

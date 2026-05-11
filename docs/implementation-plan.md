@@ -19,7 +19,7 @@ RateLoop should be a fresh deployment of the protocol, not a legacy-compatible
 contract migration. The product name, repository, and token should move back to
 RateLoop, with visual identity based on the Hawig hero animation and logo from
 `https://github.com/Noc2/Hawig` / `https://www.hawig.xyz/`. It should also reserve
-`2M LREP` for the small previous-user set because those holders helped develop
+`4M LREP` for the small previous-user set because those holders helped develop
 the original protocol.
 The product direction is:
 
@@ -28,18 +28,18 @@ The product direction is:
 - No mandatory Self.xyz or proof-of-personhood dependency in the rating,
   payout, or governance path. Self.xyz may return later as an optional identity
   signal or badge.
-- Day-one decentralized governance using a broad launch distribution: `25M LREP`
-  verified + referral rewards, `25M LREP` earned rater rewards, and `2M LREP`
+- Day-one decentralized governance using a broad launch distribution: `35M LREP`
+  verified + referral rewards, `25M LREP` earned rater rewards, and `4M LREP`
   for the small previous-user set.
 - Continue on Celo for now, with World Chain Sepolia as the testnet path.
 - Transferable capped Loop Reputation token (`LREP`) for governance,
   prediction locks, frontend staking, and long-term protocol ownership.
 - Use `LREP` as the working implementation label unless governance changes
   naming before deployment.
-- Reuse HREP tokenomics for LREP: `100,000,000` max supply split into the
-  existing `52M / 12M / 32M / 4M` launch pools.
-- The `52M` Launch Distribution Pool should not be a large legacy airdrop.
-  Old users receive `2M LREP`; the remaining `50M LREP` is split evenly between
+- Reuse HREP tokenomics for LREP: `100,000,000` max supply split into
+  `64M / 32M / 4M` launch pools.
+- The `64M` Launch Distribution Pool should not be a large legacy airdrop.
+  Old users receive `4M LREP`; the remaining `60M LREP` is split between
   earned rater rewards and verified/referral onboarding.
 - Users submit a split rating report instead of a binary up/down vote: their
   own opinion rating plus their expected crowd rating.
@@ -209,9 +209,9 @@ Implementation implications:
 - Brand: RateLoop name, Hawig-derived animated hero, Hawig-derived logo mark,
   and `@rateloop/*` package scopes.
 - Repository: `https://github.com/Noc2/RateLoop`.
-- Launch distribution: use the `52M LREP` Launch Distribution Pool as
-  `25M LREP` verified + referral rewards, `25M LREP` earned rater rewards, and
-  `2M LREP` for the small set of previous users.
+- Launch distribution: use the `64M LREP` Launch Distribution Pool as
+  `35M LREP` verified + referral rewards, `25M LREP` earned rater rewards, and
+  `4M LREP` for the small set of previous users.
 - Rating scale: `1.0-9.9`, stored as `1000-9900` BPS.
 - Governance launch parameters: reuse the previous Curyo durations, threshold,
   dynamic quorum, proposal cooldown, and 7-day governance locks.
@@ -328,8 +328,9 @@ modules, and keep all core tests passing with identity disabled.
   removed from required rating, earning, and governance flows. Keep or re-add
   them only inside an optional identity module.
 - `HumanFaucet.sol` and any legacy faucet/migration allocations. The old
-  52M faucet-sized pool becomes the Launch Distribution Pool: `25M LREP`
-  verified + referral rewards, `25M LREP` earned rater rewards, and `2M LREP`
+  faucet-sized pool plus the prior Bootstrap Pool allocation become the Launch
+  Distribution Pool: `35M LREP` verified + referral rewards, `25M LREP`
+  earned rater rewards, and `4M LREP`
   legacy users.
 - `HumanSignInButton`, `SelfVerifyButton`, `useVoterIdNFT`, and the gating copy
   that says identity verification is required to vote. If Self returns, use new
@@ -350,7 +351,7 @@ modules, and keep all core tests passing with identity disabled.
 | `packages/foundry/contracts/ContentRegistry.sol` | Keep content lifecycle, categories, duplicate protection, and rating state; remove required Self/nullifier submission identity snapshots. |
 | `packages/foundry/contracts/ProtocolConfig.sol` | Keep central config/address book; rename and add prediction, reputation, calibration, and cluster parameters. |
 | `packages/foundry/contracts/VoterIdNFT.sol` | Do not keep as a required voter credential. Mine delegation/profile lessons for `RaterRegistry` and optional identity attestations. |
-| `packages/foundry/contracts/HumanFaucet.sol` | Delete; replace the old 52M faucet allocation with the Launch Distribution Pool. |
+| `packages/foundry/contracts/HumanFaucet.sol` | Delete; replace the old faucet allocation and prior Bootstrap Pool allocation with the Launch Distribution Pool. |
 | `packages/foundry/script/DeployRateLoop.s.sol` | Refactor in place; remove faucet and migration tiers from the core deployment; add Launch Distribution Pool funding, LREP launch pools, Governor, Timelock, Celo constants, Timelock ownership from launch, and optionally deploy identity adapters only when enabled. |
 | `packages/ponder/ponder.schema.ts` | Keep content/profile/feed tables; replace vote/voter/reward tables with prediction/reputation/payout tables. |
 | `packages/ponder/src/RoundVotingEngine.ts` | Refactor event handlers for prediction events and weighted final ratings. |
@@ -479,11 +480,11 @@ Recommended token properties:
   delegation.
 - 6 decimals to preserve compatibility with the old HREP mental model.
 - Hard `MAX_SUPPLY`; no uncapped inflation.
-- Launch distribution from the `52M LREP` pool: `25M LREP` verified + referral
-  rewards, `25M LREP` earned rater rewards, and `2M LREP` legacy users.
+- Launch distribution from the `64M LREP` pool: `35M LREP` verified + referral
+  rewards, `25M LREP` earned rater rewards, and `4M LREP` legacy users.
 - Full cap allocated at deployment into auditable protocol pools.
-- Bootstrap rewards and consensus subsidies distribute from fixed pre-funded
-  pools instead of open-ended minting.
+- Launch rewards and consensus subsidies distribute from fixed pre-funded pools
+  instead of open-ended minting.
 - Governance/timelock controls pool parameters and treasury usage, not
   discretionary uncapped supply creation.
 - Rating influence uses locked token balance through a square-root curve.
@@ -510,9 +511,9 @@ immediately farm bounties.
 
 ### Loop Reputation (LREP) Tokenomics And Launch Distribution
 
-Loop Reputation (`LREP`) should keep the `100M` max supply and the
-`52M / 12M / 32M / 4M` pool structure, but the purpose of the `52M` bucket
-changes from a broad legacy snapshot into a Launch Distribution Pool.
+Loop Reputation (`LREP`) should keep the `100M` max supply and use a
+`64M / 32M / 4M` pool structure. The prior Bootstrap Pool allocation is folded
+into the Launch Distribution Pool rather than kept as a separate launch bucket.
 The deployment should mint or allocate the full capped supply into auditable
 contracts at launch.
 
@@ -521,18 +522,17 @@ Launch allocation:
 ```text
 MAX_SUPPLY = 100,000,000 LREP
 
-52,000,000 LREP  Launch Distribution Pool
-  ├─ 25,000,000 LREP  Verified + referral rewards
+64,000,000 LREP  Launch Distribution Pool
+  ├─ 35,000,000 LREP  Verified + referral rewards
   ├─ 25,000,000 LREP  Earned rater rewards
-  └─  2,000,000 LREP  Legacy users
-12,000,000 LREP  Bootstrap / calibrated participation pool
+  └─  4,000,000 LREP  Legacy users
 32,000,000 LREP  DAO treasury
  4,000,000 LREP  Consensus subsidy / reserve pool
 ```
 
 Launch Distribution Pool rule:
 
-- Allocate `2,000,000 LREP` to the previous user set. There are only nine old
+- Allocate `4,000,000 LREP` to the previous user set. There are only nine old
   users, so the legacy claim should recognize history without consuming the pool
   intended to onboard the new network.
 - Put `25,000,000 LREP` behind earned rater rewards. A new rater can
@@ -540,8 +540,15 @@ Launch Distribution Pool rule:
   those predictions are useful.
 - Make earned rater rewards count-based and stricter over time. Early raters get
   higher per-account caps; each larger cohort receives a lower cap, similar to a
-  halving schedule but keyed to verified participation counts instead of time.
-- Use `25,000,000 LREP` for one-time verified-user bonuses plus bounded referral
+  halving schedule but keyed to useful qualifying participation counts instead
+  of time.
+- Anchor earned rater rewards to verified-human participation without making
+  the whole rating protocol human-only. The initial launch policy is `3`
+  revealed raters per qualifying round, `1` active verified human anchor in that
+  round, and `2` distinct verified-human anchors across at least `2` qualifying
+  rounds before a rater receives the first earned launch payout. Governance can
+  raise these thresholds if farming pressure appears.
+- Use `35,000,000 LREP` for one-time verified-user bonuses plus bounded referral
   rewards. The verification bonus decays by the number of already verified users
   and can be claimed only once per uniqueness credential. After that, verified
   users earn under the same rules as everyone else.
@@ -551,17 +558,18 @@ Launch Distribution Pool rule:
 - Keep verification acceleration, appeals, security responses, grants, and
   governance programs in the DAO treasury, not the Launch Distribution Pool.
 - The claim UI should explain each rail separately: earned rater rewards, one-time
-  verification bonus, referral bonus, and tiny legacy claim.
+  verification bonus, referral bonus, and legacy claim.
 
-Bootstrap pool:
+Detailed implementation plan: [Earned Launch Rewards Anti-Farm Plan](./launch-earned-rewards-anti-farm-plan.md).
 
-- Keep the fixed `12,000,000 LREP` Bootstrap Pool separate from the Launch
+Prior Bootstrap Pool:
+
+- Fold the prior fixed `12,000,000 LREP` Bootstrap Pool into the Launch
   Distribution Pool.
-- Bootstrap rewards are not automatic faucet claims. They are paid only after
-  valid, revealed, calibrated participation or governance-approved programs.
-- Because LREP is transferable and capped, bootstrap rewards should be
-  conservative after USDC payouts launch; the main ongoing cash incentive should
-  come from funded USDC bounties.
+- Allocate `10,000,000 LREP` of that moved supply to verified + referral rewards
+  and `2,000,000 LREP` to legacy users.
+- Keep any future participation-reward program governance-funded and optional;
+  the main ongoing cash incentive should come from funded USDC bounties.
 
 Consensus reserve:
 
@@ -770,10 +778,9 @@ Purpose:
 - Governance clock compatible with the previous Curyo launch parameters on
   Celo.
 - Seven-day governance locks for proposal and voting power, reused from RateLoop.
-- Launch Distribution Pool allocation: `25M LREP` verified + referral rewards,
-  `25M LREP` earned rater rewards, and `2M LREP` legacy users.
-- Fixed launch pools for launch distribution, bootstrap rewards, treasury, and
-  consensus reserve.
+- Launch Distribution Pool allocation: `35M LREP` verified + referral rewards,
+  `25M LREP` earned rater rewards, and `4M LREP` legacy users.
+- Fixed launch pools for launch distribution, treasury, and consensus reserve.
 
 Reuse:
 
@@ -1069,8 +1076,8 @@ Launch requirements:
 
 - Deploy `RateLoopGovernor`, `TimelockController`, `LoopReputation`, and
   core protocol contracts together.
-- Timelock owns ProxyAdmins, treasury roles, config roles, bootstrap pool roles,
-  reserve roles, and protocol upgrade authority from launch.
+- Timelock owns ProxyAdmins, treasury roles, config roles, optional participation
+  reward roles, reserve roles, and protocol upgrade authority from launch.
 - Governor is the timelock proposer/canceller.
 - Executor should be open to `address(0)` after setup so anyone can execute
   queued successful proposals.
@@ -1093,8 +1100,8 @@ Recommended initial parameters:
   below the bootstrap floor.
 - Quorum: `max(4% of circulating LREP, 100,000 LREP)`.
 - Circulating supply for quorum excludes protocol-controlled holders, including
-  the launch distribution pool, bootstrap pool, consensus reserve, DAO treasury,
-  voting engine, content registry, frontend registry, and protocol-owned
+  the launch distribution pool, consensus reserve, DAO treasury, voting engine,
+  content registry, frontend registry, and protocol-owned
   distributor/escrow contracts.
 - Max proposal threshold: `100,000 LREP`.
 - Proposal cooldown: `1 day` between proposals per proposer.
@@ -1372,7 +1379,7 @@ Keep `packages/agents`, but make it a first-class RateLoop package:
 5. Update root package metadata, scripts, environment examples, and generated
    package exports only where they reference removed Self/faucet/chain state.
 6. Delete legacy deployment artifacts from the canonical branch.
-7. Configure the `25M / 25M / 2M` Launch Distribution Pool and document any
+7. Configure the `35M / 25M / 4M` Launch Distribution Pool and document any
    legacy-user claim provenance.
 8. Keep chain defaults and environment examples on Celo/World Chain Sepolia.
 9. Keep old Curyo commit history if practical, but do not keep old deployment
@@ -1411,8 +1418,9 @@ Exit criteria:
 ### Phase 2: Contract MVP
 
 1. Implement `LoopReputation`.
-2. Implement the Launch Distribution Pool: earned rater rewards, one-time
-   decaying verified bonuses, bounded referrals, and a tiny legacy Merkle claim.
+2. Implement the Launch Distribution Pool: earned rater rewards with
+   governance-tunable verified-human anchor diversity, one-time decaying
+   verified bonuses, bounded referrals, and a tiny legacy Merkle claim.
 3. Implement `RateLoopGovernor` and `TimelockController` ownership wiring.
 4. Implement `RaterRegistry`.
 5. Implement `RaterDeclarationRegistry` for bonded AI metadata, probes, drift,
@@ -1534,7 +1542,7 @@ Exit criteria:
 
 1. `repo-bootstrap`: point the repo at `https://github.com/Noc2/RateLoop`,
    import old Curyo code, copy the Hawig hero/logo assets, configure the
-   `25M / 25M / 2M` Launch Distribution Pool, keep World Chain defaults, rename live package metadata
+   `35M / 25M / 4M` Launch Distribution Pool, keep World Chain defaults, rename live package metadata
    toward `@rateloop/*`, and keep the app running.
 2. `optional-identity-remove-faucet`: remove faucet paths and make Self optional
    rather than required in packages, UI, routes, and deploy wiring.
@@ -1568,10 +1576,10 @@ These are launch defaults, not permanent constants:
 - Token name/symbol: Loop Reputation (`LREP`).
 - Reputation token: transferable ERC20Votes, 6 decimals.
 - Reputation max supply: `100,000,000 LREP`, matching the old HREP cap.
-- LREP tokenomics: `52M` Launch Distribution Pool, `12M` bootstrap pool, `32M`
-  DAO treasury, `4M` consensus reserve.
-- Launch Distribution Pool split: `25M LREP` verified + referral rewards,
-  `25M LREP` earned rater rewards, `2M LREP` legacy users.
+- LREP tokenomics: `64M` Launch Distribution Pool, `32M` DAO treasury, `4M`
+  consensus reserve.
+- Launch Distribution Pool split: `35M LREP` verified + referral rewards,
+  `25M LREP` earned rater rewards, `4M LREP` legacy users.
 - Legacy claim window: 12 months, with unclaimed LREP swept by governance rule.
 - Bounty scope: one sealed commit window plus reveal window, exactly one
   settlement attempt per bounty.
@@ -1626,6 +1634,10 @@ Mitigations:
 - Public cluster/payout explanations in Ponder.
 - Keep the work stipend smaller than the accuracy pool so splitting accounts to
   collect base pay is less attractive than producing accurate signal.
+- For the fixed earned-rater launch pool, require verified-human anchored
+  rounds plus cross-round anchor diversity before payout. This is intentionally
+  simpler than full cluster scoring at launch and can be tightened by
+  governance.
 
 ### Majority Capture
 
@@ -1745,10 +1757,10 @@ The MVP is done when:
 - Each bounty funds exactly one private prediction round.
 - Users can fund an explicit challenge/re-rate bounty against a prior result.
 - Loop Reputation is transferable, capped, checkpointed, and distributed through
-  a published launch pool that gives the small legacy user set only `2M LREP`.
-- LREP tokenomics use a `52M / 12M / 32M / 4M` pool structure; the `52M`
-  Launch Distribution Pool is split into `25M` verified + referral rewards,
-  `25M` earned rater rewards, and `2M` legacy users.
+  a published launch pool that gives the small legacy user set `4M LREP`.
+- LREP tokenomics use a `64M / 32M / 4M` pool structure; the `64M`
+  Launch Distribution Pool is split into `35M` verified + referral rewards,
+  `25M` earned rater rewards, and `4M` legacy users.
 - LREP rating-report locks redistribute inaccurate crowd predictions and
   unrevealed locks to accurate raters, eligible frontends, treasury, and reserve
   without increasing supply.

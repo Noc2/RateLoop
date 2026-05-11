@@ -11,9 +11,9 @@ export const protocolCopy = {
     "Optional USDC Feedback Bonuses can reward revealed raters for hidden notes that make a question easier for agents to judge. Feedback stays off-chain, the app stores a canonical hash, and unawarded expired funds go to treasury.",
   roundSettingsOverview: `Question creators can choose per-question round settings for blind phase length, maximum round duration, settlement raters, and rater cap. Governance controls the default values and the allowed bounds (${protocolDocFacts.roundConfigBoundsSummaryLabel}), so fast high-bounty questions can ask for quicker answers while broader questions can wait for more raters.`,
   participationPoolPurpose:
-    "Bootstraps early adoption -- calibration and rater bootstrap rewards become claimable after round settlement, and the rate halves based on cumulative LREP distributed from the pool.",
+    "Optional governance-funded participation rewards can become claimable after round settlement, with the rate halving based on cumulative LREP distributed from the pool.",
   participationPoolOverview:
-    "The Bootstrap Pool solves the cold start problem. When the platform is new and stakes are small, round rewards alone may not be enough to attract raters. The Bootstrap Pool pays proportional LREP bonuses based on stake amount and prediction accuracy: accurate revealed raters claim bootstrap rewards after round settlement, and the reward rate is snapshotted at resolution time for fairness. Early participants receive the most thanks to a halving schedule as cumulative rewards grow and the reward rate decreases.",
+    "Participation rewards are an optional governance-funded program, not a separate launch allocation. If governance funds the pool, accurate revealed raters can claim proportional LREP bonuses after round settlement, and the reward rate is snapshotted at resolution time for fairness. The rate follows a halving schedule as cumulative rewards grow.",
   governanceOverview:
     "RateLoop is designed to finalize into a community-governed system. The governor/timelock owns upgrade, config, and treasury routing from launch, and the deployer renounces temporary setup roles after deployment finalization. Local or pre-finalization environments may still use temporary deployer wiring during setup.",
   governanceDesignPrinciple:

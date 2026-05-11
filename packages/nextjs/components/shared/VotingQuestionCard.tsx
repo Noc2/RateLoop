@@ -105,10 +105,10 @@ function LiveRoundActivity({
   const { ratePercent, calculateBonus } = useParticipationRate();
   const progress = getRoundProgressMessaging(snapshot, ratePercent);
   const exampleBonus = calculateBonus(5);
-  const blindDetail =
-    exampleBonus != null
-      ? `+${exampleBonus.toLocaleString(undefined, { maximumFractionDigits: 1 })} LREP bonus on 5 LREP`
-      : "Blind-phase bonus loading";
+  const hasParticipationBonus = exampleBonus != null;
+  const blindDetail = hasParticipationBonus
+    ? `+${exampleBonus.toLocaleString(undefined, { maximumFractionDigits: 1 })} LREP bonus on 5 LREP`
+    : "Full blind reward weight";
   const detailCopy =
     snapshot.phase !== "voting"
       ? snapshot.hasRound
@@ -117,7 +117,9 @@ function LiveRoundActivity({
       : snapshot.isEpoch1
         ? condensed
           ? blindDetail
-          : `Example bonus: ${blindDetail}.`
+          : hasParticipationBonus
+            ? `Example bonus: ${blindDetail}.`
+            : "Blind predictions keep full reward weight."
         : condensed
           ? (progress?.detailLabel ?? `${formatHrepAmount(snapshot.totalStake, 0)} LREP active`)
           : describeOpenRoundActivity(snapshot);

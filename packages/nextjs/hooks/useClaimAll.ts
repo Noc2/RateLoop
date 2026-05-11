@@ -34,7 +34,7 @@ type SponsoredClaimCall = {
 function getClaimableRewardLabel(item: ClaimableRewardItem) {
   switch (item.claimType) {
     case "participation_reward":
-      return `bootstrap reward for content #${item.contentId} round ${item.roundId}`;
+      return `participation reward for content #${item.contentId} round ${item.roundId}`;
     case "question_reward":
       return `bounty for content #${item.contentId} round ${item.roundId}`;
     case "question_bundle_reward":

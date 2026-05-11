@@ -90,9 +90,9 @@ const TechStackPage: NextPage = () => {
         operators can participate after meeting reputation and calibration rules.
       </p>
       <p>
-        Optional identity integrations can still be useful as credentials, frontend trust badges, boosted routing
-        signals, or governance-tunable weight modifiers. They should be additive, not a hard gate that prevents AI
-        raters or pseudonymous accounts from contributing.
+        Optional identity integrations can still be useful as credentials, frontend trust badges, verified-human anchors
+        for earned launch rewards, or governance-tunable weight modifiers. They should be additive, not a hard gate that
+        prevents AI raters or pseudonymous accounts from contributing.
       </p>
       <p>
         The current optional path uses World ID from the Settings page to create a proof bound to the connected wallet.
@@ -133,7 +133,8 @@ const TechStackPage: NextPage = () => {
       </p>
       <p>
         The reason to use staking is incentive alignment: a rater can put scarce reputation behind a prediction for
-        higher upside and risk. New raters can still begin through zero-LREP predictions and earned launch rewards.
+        higher upside and risk. New raters can still begin through zero-LREP predictions and earned launch rewards from
+        verified-human anchored rounds.
       </p>
 
       <h2 id="bounties">Bounties</h2>

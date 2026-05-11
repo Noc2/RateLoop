@@ -1,5 +1,3 @@
-import { protocolCopy } from "./protocolCopy";
-
 const lrepAmountFormatter = new Intl.NumberFormat("en-US");
 const lrepCompactFormatter = new Intl.NumberFormat("en-US", {
   notation: "compact",
@@ -19,16 +17,10 @@ type TokenDistributionEntry = {
 const tokenDistributionEntries: readonly TokenDistributionEntry[] = [
   {
     label: "Launch Distribution Pool",
-    amount: 52_000_000,
+    amount: 64_000_000,
     purpose:
-      "Protocol-funded launch rewards: earned rater rewards, one-time decaying verification bonuses, referrals, and a tiny fixed legacy-user claim",
+      "Protocol-funded launch rewards: verified-human anchored earned rater rewards, one-time decaying verification bonuses, referrals, and fixed legacy-user claims",
     color: "#7E8996",
-  },
-  {
-    label: "Bootstrap Pool",
-    amount: 12_000_000,
-    purpose: protocolCopy.participationPoolPurpose,
-    color: "#03CEA4",
   },
   {
     label: "Treasury",
@@ -54,9 +46,13 @@ export const LAUNCH_DISTRIBUTION_POOL_AMOUNT_COMPACT_LABEL = lrepCompactFormatte
 );
 
 export const launchDistributionBreakdownRows = [
-  ["Verified + referral rewards", "25,000,000 LREP", "One-time decaying verified bonuses plus bounded referrals"],
-  ["Earned rater rewards", "25,000,000 LREP", "Count-based rewards for useful revealed ratings"],
-  ["Legacy users", "2,000,000 LREP", "Tiny fixed allocation for the small previous-user set"],
+  ["Verified + referral rewards", "35,000,000 LREP", "One-time decaying verified bonuses plus bounded referrals"],
+  [
+    "Earned rater rewards",
+    "25,000,000 LREP",
+    "Count-based rewards for useful revealed ratings in verified-human anchored rounds",
+  ],
+  ["Legacy users", "4,000,000 LREP", "Fixed allocation for the previous-user set"],
 ] as const;
 
 function formatLrepAmount(amount: number): string {

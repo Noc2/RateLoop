@@ -58,8 +58,8 @@ contracts/
 ├── FrontendRegistry.sol         # Frontend operator fee tracking
 ├── VoterIdNFT.sol               # Optional soulbound credential for verified raters
 ├── LoopReputation.sol           # LREP token (governance and reputation)
-├── ParticipationPool.sol        # Halving-tier LREP Bootstrap Pool rewards
-├── LaunchDistributionPool.sol   # Earned rater, verification, referral, and legacy launch rewards
+├── ParticipationPool.sol        # Optional governance-funded participation rewards
+├── LaunchDistributionPool.sol   # Anchor-gated earned rater, verification, referral, and legacy launch rewards
 ├── QuestionRewardPoolEscrow.sol     # Bounty custody and claims
 ├── governance/                  # Governor contracts
 ├── interfaces/                  # Contract interfaces

@@ -28,14 +28,14 @@ async function creditLaunchReward(context: any, recipient: `0x${string}`, amount
 }
 
 ponder.on("LaunchDistributionPool:EarnedRaterRewardPaid", async ({ event, context }) => {
-  const { rater, amount } = event.args;
+  const { rater, contentId, roundId, amount } = event.args;
 
   await context.db
     .insert(rewardClaim)
     .values({
       id: `${event.transaction.hash}-${event.log.logIndex}`,
-      contentId: 0n,
-      roundId: 0n,
+      contentId,
+      roundId,
       source: "launch",
       voter: rater,
       stakeReturned: 0n,

@@ -9,7 +9,7 @@ interface IParticipationPool {
     function getCurrentRateBps() external view returns (uint256);
 
     /// @notice Distribute a pre-computed reward amount to a voter.
-    /// @dev Called by RoundVotingEngine for pull-based bootstrap reward claims.
+    /// @dev Called by RoundVotingEngine for pull-based participation reward claims.
     /// @param voter The address to reward.
     /// @param amount The pre-computed reward amount.
     /// @return paidAmount The actual amount distributed (can be less than requested if pool is depleted).

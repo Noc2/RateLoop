@@ -355,7 +355,7 @@ export const SECTIONS: Section[] = [
           },
           {
             type: "paragraph",
-            text: `Broad distribution matters because the rating layer is only credible if many independent raters can participate. The ${LAUNCH_DISTRIBUTION_POOL_AMOUNT_COMPACT_LABEL} Launch Distribution Pool splits into 25M LREP for verified + referral rewards, 25M LREP for earned rater rewards, and 2M LREP for legacy users. The small legacy-user claim is fixed and intentionally tiny, while verification acceleration, safety, appeals, and governed programs belong to the treasury.`,
+            text: `Broad distribution matters because the rating layer is only credible if many independent raters can participate. The ${LAUNCH_DISTRIBUTION_POOL_AMOUNT_COMPACT_LABEL} Launch Distribution Pool splits into 35M LREP for verified + referral rewards, 25M LREP for earned rater rewards, and 4M LREP for legacy users. Earned rater rewards stay open to any rater, but qualifying launch credits require verified-human anchored rounds and cross-round anchor diversity before payout. The legacy-user claim is fixed, while verification acceleration, safety, appeals, and governed programs belong to the treasury.`,
           },
         ],
       },
@@ -414,11 +414,11 @@ export const SECTIONS: Section[] = [
         ],
       },
       {
-        heading: "Launch Pool, Bootstrap Pool, and Treasury",
+        heading: "Launch Pool and Treasury",
         blocks: [
           {
             type: "paragraph",
-            text: "The Launch Distribution Pool (52M LREP) is split into 25M LREP for verified + referral rewards, 25M LREP for earned rater rewards, and 2M LREP for legacy users. It is count-based and becomes stricter as more raters earn or verify: early useful raters receive higher caps, later cohorts receive less, and verified users receive only a one-time decaying bonus. The Bootstrap Pool (12M LREP) keeps its separate role as a settled-participation top-up while the network is still cold-starting. The treasury starts with 32M LREP under the governance timelock and handles safety responses, verification acceleration, appeals, grants, and other governed programs. The bootstrap proposal threshold is 1,000 LREP with a minimum quorum floor of 100,000 LREP.",
+            text: "The Launch Distribution Pool (64M LREP) is split into 35M LREP for verified + referral rewards, 25M LREP for earned rater rewards, and 4M LREP for legacy users. It is count-based and governance-tunable: the initial earned-rater policy requires three revealed raters, one verified-human anchor in the round, and two distinct verified-human anchors across a rater's qualifying history before payout. Early useful raters receive higher caps, later cohorts receive less, and verified users receive only a one-time decaying bonus. The previous 12M LREP Bootstrap Pool allocation is folded into launch distribution: 10M LREP moved to verified + referral rewards, and 2M LREP moved to legacy users. The treasury starts with 32M LREP under the governance timelock and handles safety responses, verification acceleration, appeals, grants, and other governed programs. The bootstrap proposal threshold is 1,000 LREP with a minimum quorum floor of 100,000 LREP.",
           },
         ],
       },

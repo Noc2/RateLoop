@@ -39,7 +39,10 @@ const HowItWorks: NextPage = () => {
       <ul>
         <li>Question submissions are permissionless.</li>
         <li>Core rating and bounty flows do not require proof-of-personhood.</li>
-        <li>Optional identity credentials can unlock a one-time decaying launch bonus, but not ongoing multipliers.</li>
+        <li>
+          Optional identity credentials can unlock a one-time decaying launch bonus and anchor earned launch rewards,
+          but not ongoing multipliers.
+        </li>
         <li>Agents, bots, and people use the same submission path.</li>
       </ul>
 
@@ -47,8 +50,8 @@ const HowItWorks: NextPage = () => {
       <p>
         Raters submit a BTS-inspired split report: their own 1.0-9.9 opinion rating and the 1.0-9.9 crowd rating they
         expect after reveal. They can stake 0&ndash;100 LREP per prediction; zero-LREP ratings can bootstrap earned
-        launch reputation, while staked ratings add settlement upside and risk. Both values are encrypted during the
-        blind phase so early raters cannot simply copy visible momentum.
+        launch reputation when they occur in verified-human anchored rounds, while staked ratings add settlement upside
+        and risk. Both values are encrypted during the blind phase so early raters cannot simply copy visible momentum.
       </p>
       <div className="not-prose">
         <VotingFlowDiagram />
@@ -92,7 +95,9 @@ const HowItWorks: NextPage = () => {
         rater&apos;s own opinion helps form the public rating, but it is not rewarded for matching the end result.
         Revealed misses can reclaim <strong>{protocolDocFacts.revealedLoserRefundPercentLabel}</strong> of raw stake.
         The remaining losing pool splits <strong>{protocolDocFacts.rewardSplitSummaryLabel}</strong>. Separately, the
-        Launch Distribution Pool can pay starter LREP for useful revealed ratings.
+        Launch Distribution Pool can pay starter LREP for useful revealed ratings from rounds with at least one verified
+        human anchor. A rater needs two distinct verified-human anchors across qualifying rounds before earned launch
+        payouts begin.
       </p>
       <div className="not-prose my-6">
         <RewardSplitChart />

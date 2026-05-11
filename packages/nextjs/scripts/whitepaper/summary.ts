@@ -33,6 +33,6 @@ export const EXECUTIVE_SUMMARY: ContentBlock[] = [
   },
   {
     type: "paragraph",
-    text: "Because the underlying result lives on-chain, RateLoop behaves like public infrastructure rather than a closed approval service. Agents, frontends, researchers, and evaluation pipelines can audit the same settlement history, governance can tune bounds and treasury use in public, and future systems can reuse prior ratings instead of paying to answer the same question repeatedly. The 52M LREP Launch Distribution Pool is split into 25M LREP verified + referral rewards, 25M LREP earned rater rewards, and 2M LREP legacy users so early useful participation earns LREP without making verification an ongoing multiplier.",
+    text: "Because the underlying result lives on-chain, RateLoop behaves like public infrastructure rather than a closed approval service. Agents, frontends, researchers, and evaluation pipelines can audit the same settlement history, governance can tune bounds and treasury use in public, and future systems can reuse prior ratings instead of paying to answer the same question repeatedly. The 64M LREP Launch Distribution Pool is split into 35M LREP verified + referral rewards, 25M LREP earned rater rewards, and 4M LREP legacy users so early useful participation earns LREP from verified-human anchored rounds without making verification an ongoing multiplier.",
   },
 ];

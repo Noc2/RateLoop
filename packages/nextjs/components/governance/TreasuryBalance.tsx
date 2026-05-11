@@ -65,8 +65,8 @@ export const TreasuryBalance = () => {
     functionName: "consensusReserve",
   });
 
-  const { data: participationPoolBalance, isLoading: participationPoolLoading } = useScaffoldReadContract({
-    contractName: "ParticipationPool",
+  const { data: launchDistributionBalance, isLoading: launchDistributionLoading } = useScaffoldReadContract({
+    contractName: "LaunchDistributionPool",
     functionName: "poolBalance",
   });
 
@@ -103,10 +103,10 @@ export const TreasuryBalance = () => {
           Icon={ShieldCheckIcon}
         />
         <PoolStat
-          title="Bootstrap Pool"
-          tooltip="Internal remaining-balance accounting held by ParticipationPool, shown as the Bootstrap Pool in the product."
-          value={participationPoolBalance}
-          isLoading={participationPoolLoading}
+          title="Launch Distribution"
+          tooltip="Remaining LREP held by the LaunchDistributionPool for earned rater, verified/referral, and legacy-user rewards."
+          value={launchDistributionBalance}
+          isLoading={launchDistributionLoading}
           Icon={UserGroupIcon}
         />
         <PoolStat

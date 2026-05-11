@@ -1,6 +1,5 @@
 import { DocsTitle } from "~~/components/docs/DocsTitle";
 import { TokenAllocationChart } from "~~/components/docs/TokenAllocationChart";
-import { protocolCopy } from "~~/lib/docs/protocolCopy";
 import { protocolDocFacts } from "~~/lib/docs/protocolFacts";
 import {
   LREP_MAX_SUPPLY_LABEL,
@@ -90,14 +89,20 @@ const Tokenomics = () => {
 
       <h3>Launch Distribution Pool</h3>
       <p>
-        The 52M LREP Launch Distribution Pool is the protocol&apos;s onboarding engine. It is not a large airdrop to the
-        nine legacy users. The split is <strong>25M LREP</strong> for verified + referral rewards,{" "}
-        <strong>25M LREP</strong> for earned rater rewards, and <strong>2M LREP</strong> for legacy users.
+        The 64M LREP Launch Distribution Pool is the protocol&apos;s onboarding engine. It is not a large airdrop to the
+        previous user set. The split is <strong>35M LREP</strong> for verified + referral rewards,{" "}
+        <strong>25M LREP</strong> for earned rater rewards, and <strong>4M LREP</strong> for legacy users.
       </p>
       <p>
         New users can start with a zero-LREP prediction path and earn initial LREP when their ratings are useful.
         Staking LREP remains available for raters who want more upside from normal winner/loser settlement, but owning
         LREP is not intended to be the first barrier to participation.
+      </p>
+      <p>
+        Earned rater rewards are open to any rater, including agents, but the launch pool only counts ratings from
+        verified-human anchored rounds. The initial policy requires three revealed raters, one verified human in the
+        round, and two distinct verified-human anchors across a rater&apos;s qualifying history before payouts begin.
+        Governance can tighten these thresholds over time.
       </p>
       <div className="not-prose overflow-x-auto my-6 rounded-xl bg-base-200">
         <table className="table table-zebra [&_th]:text-base [&_td]:text-base [&_.badge]:text-base [&_th]:bg-base-300">
@@ -132,9 +137,9 @@ const Tokenomics = () => {
           <tbody>
             <tr>
               <td>Earned rater rewards</td>
-              <td>Accounts that complete qualifying revealed ratings</td>
+              <td>Accounts that complete qualifying revealed ratings in verified-human anchored rounds</td>
               <td className="font-mono">Count-based, decaying cohorts</td>
-              <td>Earlier useful raters earn more; later cohorts receive lower per-user caps</td>
+              <td>Starts with one verified human per round and two distinct anchors before payout</td>
             </tr>
             <tr>
               <td>Verified bonus</td>
@@ -151,7 +156,7 @@ const Tokenomics = () => {
             <tr>
               <td>Legacy claim</td>
               <td>The small set of previous protocol users</td>
-              <td className="font-mono">Tiny fixed allocation</td>
+              <td className="font-mono">Fixed allocation</td>
               <td>Recognizes early history without consuming the launch pool&apos;s growth budget</td>
             </tr>
           </tbody>
@@ -159,77 +164,20 @@ const Tokenomics = () => {
       </div>
       <p>
         Verification acceleration, safety responses, appeals, and governance programs are treasury responsibilities.
-        They do not draw from the Launch Distribution Pool. The Bootstrap Pool and Consensus Subsidy Reserve also keep
-        their separate purposes: the Bootstrap Pool tops up early settled participation, and the Consensus Subsidy
-        Reserve supports high-agreement rounds with little losing stake.
+        They do not draw from the Launch Distribution Pool. The previous 12M Bootstrap Pool allocation is folded into
+        launch distribution: 10M LREP moved to verified + referral rewards, and 2M LREP moved to legacy users. The
+        Consensus Subsidy Reserve keeps its separate purpose: supporting high-agreement rounds with little losing stake.
       </p>
-      <h3>Bootstrap Rewards</h3>
-      <p>{protocolCopy.participationPoolOverview}</p>
-      <p>
-        Reward formula: <code>reward = stakeAmount &times; currentRate</code>. The rate starts at <strong>90%</strong>{" "}
-        and halves based on cumulative LREP distributed from the pool &mdash; making the pool&apos;s lifetime
-        predictable regardless of individual stake sizes. Rewards are always less than the staked amount, ensuring
-        bootstrap rewards are a bonus, not a primary incentive.
-      </p>
-      <div className="not-prose overflow-x-auto my-6 rounded-xl bg-base-200">
-        <table className="table table-zebra [&_th]:text-base [&_td]:text-base [&_.badge]:text-base [&_th]:bg-base-300">
-          <thead>
-            <tr>
-              <th>Tier</th>
-              <th>LREP distributed</th>
-              <th>Cumulative</th>
-              <th>Rate</th>
-              <th>Stake 10 LREP</th>
-              <th>Stake 100 LREP</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>0</td>
-              <td className="font-mono">1,500,000</td>
-              <td className="font-mono">1,500,000</td>
-              <td className="font-mono">90%</td>
-              <td className="font-mono">9 LREP</td>
-              <td className="font-mono">90 LREP</td>
-            </tr>
-            <tr>
-              <td>1</td>
-              <td className="font-mono">3,000,000</td>
-              <td className="font-mono">4,500,000</td>
-              <td className="font-mono">45%</td>
-              <td className="font-mono">4.5 LREP</td>
-              <td className="font-mono">45 LREP</td>
-            </tr>
-            <tr>
-              <td>2</td>
-              <td className="font-mono">6,000,000</td>
-              <td className="font-mono">10,500,000</td>
-              <td className="font-mono">22.5%</td>
-              <td className="font-mono">2.25 LREP</td>
-              <td className="font-mono">22.5 LREP</td>
-            </tr>
-            <tr>
-              <td>Tail</td>
-              <td className="font-mono">1,500,000</td>
-              <td className="font-mono">12,000,000</td>
-              <td className="font-mono">11.25%</td>
-              <td className="font-mono">1.125 LREP</td>
-              <td className="font-mono">11.25 LREP</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <p>Bootstrap rewards are paid only after a round resolves successfully.</p>
 
       <h3 id="bounties">Bounties</h3>
       <p>
-        Bounties are separate from LREP bootstrap rewards. They are attached at submission, funded in LREP or World
-        Chain USDC, scoped to one question or a question bundle, and split across eligible revealed raters in each
-        qualified bounty round after a 3% frontend-operator share. Accurate crowd predictions earn more, while near
-        misses can receive a smaller payout for useful participation. Bundle bounties can require multiple settlement
-        round sets; each set requires every bundled question to settle once and is claimed independently. If the
-        commit-attributed frontend is not payable, that share stays with the rater claim. Bounty required-rater terms
-        cannot exceed the question&apos;s selected rater cap.
+        Bounties are separate from LREP launch rewards. They are attached at submission, funded in LREP or World Chain
+        USDC, scoped to one question or a question bundle, and split across eligible revealed raters in each qualified
+        bounty round after a 3% frontend-operator share. Accurate crowd predictions earn more, while near misses can
+        receive a smaller payout for useful participation. Bundle bounties can require multiple settlement round sets;
+        each set requires every bundled question to settle once and is claimed independently. If the commit-attributed
+        frontend is not payable, that share stays with the rater claim. Bounty required-rater terms cannot exceed the
+        question&apos;s selected rater cap.
       </p>
       <h3 id="feedback-bonuses">Feedback Bonuses</h3>
       <p>

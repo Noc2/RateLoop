@@ -114,7 +114,7 @@ export function StakeSelector({
   }, [currentRating, isConfirming, isOpen, onCancel]);
 
   const symbol = tokenSymbol ?? "LREP";
-  const { calculateBonus } = useParticipationRate();
+  const { calculateBonus, hasActiveParticipationRewards } = useParticipationRate();
   const voteBonus = calculateBonus(amount);
   const normalizedCurrentRating = normalizeStakeSelectorRating(currentRating);
   const predictionDelta = opinionRating - normalizedCurrentRating;
@@ -147,15 +147,13 @@ export function StakeSelector({
   const weightPercent = Math.round(
     (effectiveIsBlind ? EPOCH_WEIGHT_BPS.blind : EPOCH_WEIGHT_BPS.informed) / 100,
   ).toLocaleString();
-  const participationBonusMicro = voteBonus !== undefined ? BigInt(Math.round(voteBonus * 1e6)) : null;
-  const openPhaseGrossReturnMicro =
-    participationBonusMicro !== null ? voteEstimate.estimatedGrossReturnMicro + participationBonusMicro : null;
-  const openPhaseRevealedRefundMicro =
-    participationBonusMicro !== null ? voteEstimate.revealedLoserRefundMicro + participationBonusMicro : null;
+  const participationBonusMicro = voteBonus !== undefined ? BigInt(Math.round(voteBonus * 1e6)) : 0n;
+  const openPhaseGrossReturnMicro = voteEstimate.estimatedGrossReturnMicro + participationBonusMicro;
+  const openPhaseRevealedRefundMicro = voteEstimate.revealedLoserRefundMicro + participationBonusMicro;
   const openPhaseParticipationTooltip =
     voteBonus !== undefined
       ? `Includes the current participation bonus of +${voteBonus.toLocaleString(undefined, { maximumFractionDigits: 1 })} ${symbol}.`
-      : "Includes the current participation bonus once it finishes loading.";
+      : "No participation bonus is funded for this deployment.";
 
   return (
     <AnimatePresence>
@@ -380,14 +378,21 @@ export function StakeSelector({
                     </>
                   ) : (
                     <>
-                      <div className="flex items-center justify-between gap-3">
-                        <span>Participation bonus</span>
-                        <span className="font-semibold tabular-nums">
-                          {voteBonus !== undefined
-                            ? `+${voteBonus.toLocaleString(undefined, { maximumFractionDigits: 1 })} ${symbol}`
-                            : "Loading"}
-                        </span>
-                      </div>
+                      {hasActiveParticipationRewards ? (
+                        <div className="flex items-center justify-between gap-3">
+                          <span>Participation bonus</span>
+                          <span className="font-semibold tabular-nums">
+                            {voteBonus !== undefined
+                              ? `+${voteBonus.toLocaleString(undefined, { maximumFractionDigits: 1 })} ${symbol}`
+                              : "Loading"}
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between gap-3">
+                          <span>Launch rewards</span>
+                          <span className="font-semibold tabular-nums">Accuracy based</span>
+                        </div>
+                      )}
                       <div className="flex items-center justify-between gap-3">
                         <span>Reward weight</span>
                         <span className="font-semibold tabular-nums">{weightPercent}% (4x vs open)</span>
@@ -399,17 +404,13 @@ export function StakeSelector({
                     <div className="flex items-center justify-between gap-3">
                       <span>Est. return if accurate</span>
                       <span className="font-semibold tabular-nums">
-                        {openPhaseGrossReturnMicro !== null
-                          ? `${formatHrepAmount(openPhaseGrossReturnMicro)} ${symbol}`
-                          : "Loading"}
+                        {formatHrepAmount(openPhaseGrossReturnMicro)} {symbol}
                       </span>
                     </div>
                     <div className="flex items-center justify-between gap-3">
                       <span>If missed but revealed</span>
                       <span className="font-semibold tabular-nums">
-                        {openPhaseRevealedRefundMicro !== null
-                          ? `${formatHrepAmount(openPhaseRevealedRefundMicro)} ${symbol}`
-                          : "Loading"}
+                        {formatHrepAmount(openPhaseRevealedRefundMicro)} {symbol}
                       </span>
                     </div>
                     <div className="flex items-center justify-between gap-3">

@@ -5,7 +5,7 @@ import { Test } from "forge-std/Test.sol";
 import { ParticipationPool } from "../contracts/ParticipationPool.sol";
 import { HumanReputation } from "../contracts/HumanReputation.sol";
 
-/// @title Formal Verification: Bootstrap Pool Sustainability
+/// @title Formal Verification: Participation Pool Sustainability
 /// @notice 10 scenarios stress-testing tier transitions, drainage rates, conservation,
 ///         cross-tier rewards, and graceful pool depletion.
 contract FormalVerification_ParticipationPoolTest is Test {

@@ -11,7 +11,7 @@ export function useParticipationRate() {
   const isPageVisible = usePageVisibility();
   const {
     data: currentRateBps,
-    isLoading,
+    isLoading: rateLoading,
     refetch,
   } = useScaffoldReadContract({
     contractName: "ParticipationPool" as any,
@@ -21,8 +21,17 @@ export function useParticipationRate() {
       refetchInterval: isPageVisible ? 60_000 : false,
     },
   } as any);
+  const { data: poolBalance, isLoading: balanceLoading } = useScaffoldReadContract({
+    contractName: "ParticipationPool" as any,
+    functionName: "poolBalance",
+    query: {
+      staleTime: 30_000,
+      refetchInterval: isPageVisible ? 60_000 : false,
+    },
+  } as any);
 
-  const rateBps = currentRateBps ? Number(currentRateBps) : undefined;
+  const hasActiveParticipationRewards = typeof poolBalance === "bigint" && poolBalance > 0n;
+  const rateBps = hasActiveParticipationRewards && currentRateBps ? Number(currentRateBps) : undefined;
   const ratePercent = rateBps !== undefined ? rateBps / 100 : undefined;
 
   const calculateBonus = (stakeAmount: number): number | undefined => {
@@ -34,7 +43,8 @@ export function useParticipationRate() {
     rateBps,
     ratePercent,
     calculateBonus,
-    isLoading,
+    hasActiveParticipationRewards,
+    isLoading: rateLoading || balanceLoading,
     refetch,
   };
 }
