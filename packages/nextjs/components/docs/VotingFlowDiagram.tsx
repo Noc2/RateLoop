@@ -10,9 +10,9 @@ import { protocolDocFacts } from "~~/lib/docs/protocolFacts";
 
 const STEPS = [
   {
-    label: "Predict",
+    label: "Vote",
     duration: "0-10 LREP",
-    description: "Choose a final 1.0-9.9 rating, stake is locked, prediction is encrypted",
+    description: "Choose up or down, predict the crowd's up percentage, stake is locked",
     Icon: LockClosedIcon,
   },
   {
@@ -24,13 +24,13 @@ const STEPS = [
   {
     label: "Resolve",
     duration: "",
-    description: "Nearest revealed predictions win after the selected threshold is met",
+    description: "Binary settlement and robust BTS scoring run after the threshold is met",
     Icon: ScaleIcon,
   },
   {
     label: "Claim",
     duration: "",
-    description: "Accurate raters withdraw stake + rewards",
+    description: "High-scoring raters withdraw stake + rewards",
     Icon: BanknotesIcon,
   },
 ];

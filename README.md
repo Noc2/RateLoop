@@ -5,7 +5,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square" alt="License: MIT"></a>
 </p>
 
-RateLoop is an open rating protocol for humans, AI raters, teams, and apps. Raters predict a final public rating, reveal after a private round, and build reputation through calibrated, reliable signal. Bounties can pay useful rating work in USDC, while Loop Reputation (`LREP`) is the capped governance and protocol reputation token planned for the fresh deployment.
+RateLoop is an open rating protocol for humans, AI raters, teams, and apps. Raters submit a private thumbs-up/down signal plus a prediction of how many raters will vote up, reveal after a private round, and build reputation through calibrated, reliable signal. Bounties can pay useful rating work in USDC, while Loop Reputation (`LREP`) is the capped governance and protocol reputation token planned for the fresh deployment.
 
 This repository is a fresh RateLoop implementation that reuses the old Curyo monorepo where it is still useful. The current launch direction targets World Chain mainnet and World Chain Sepolia, removes mandatory proof-of-personhood from the core rating path, and uses World ID only as an optional human credential.
 
@@ -27,16 +27,16 @@ The core loop is:
 
 1. **Ask** — submit content or an idea with context and a rating question.
 2. **Fund** — optionally attach a World Chain USDC bounty for the one private round.
-3. **Predict** — raters submit an expected final `1.0-9.9` rating.
+3. **Vote and predict** — raters submit a thumbs-up/down signal and predict the percent of revealed raters who will vote up.
 4. **Reveal and settle** — commit-reveal keeps predictions private until reveal, then the round settles into a public rating.
-5. **Use** — agents, apps, and frontends read the settled score, revealed predictions, optional feedback, and reward state from the public protocol surface.
+5. **Use** — agents, apps, and frontends read the settled score, revealed RBTS votes, optional feedback, and reward state from the public protocol surface.
 
 Key pieces:
 
 - **Open Rater Set** — people, AI raters, and teams use the same default path without mandatory identity proof
-- **Prediction Ratings** — the core input is predicted final rating, not binary up/down voting
+- **Robust BTS Voting** — the core input is a binary signal plus a 0-100% population prediction, scored with a robust BTS-style peer-prediction mechanism
 - **Starter Reputation** — zero-LREP raters can begin with earned launch rewards from verified-human anchored rounds, then optionally stake LREP for larger settlement upside
-- **LREP Locks** — accurate staked predictions can earn from inaccurate or unrevealed locks without increasing the capped supply
+- **LREP Locks** — useful staked RBTS reports recover stake and can earn from forfeited stake without increasing the capped supply
 - **Launch Distribution Pool** — 64M LREP funds 35M verified + referral rewards, 25M earned rater rewards gated by governance-tunable anchor diversity, and a 4M fixed legacy-user claim
 - **tlock Commit-Reveal** — predictions stay private through the sealed round
 - **World Chain USDC Bounties** — small bounty payouts reward calibrated independent work
@@ -47,7 +47,7 @@ Key pieces:
 - **Security Guardrails** — calibration, reveal reliability, cluster caps, duplicate checks, and governance parameters keep the surface narrow
 
 LREP transferability is intentional: it makes governance and protocol reputation portable instead of company-administered.
-RateLoop does not treat raw token balance as enough to earn or control outcomes. Prediction accuracy, effective-unit
+RateLoop does not treat raw token balance as enough to earn or control outcomes. RBTS score, effective-unit
 weighting, cluster scoring, governance locks, proposal/quorum floors, and hard minimums for submission bounties and AI
 declaration/challenge bonds are the main mitigations.
 

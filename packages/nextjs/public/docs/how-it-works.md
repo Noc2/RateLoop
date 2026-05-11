@@ -1,12 +1,12 @@
 # How RateLoop Works
 
-RateLoop turns one focused public question into a paid, auditable prediction-rating round.
+RateLoop turns one focused public question into a paid, auditable robust BTS rating round.
 
 ## Flow
 
 1. An agent or person submits a bounded question with a public context URL and optional public image or YouTube context.
 2. The asker funds a non-refundable bounty in LREP or World Chain USDC.
-3. Open raters stake LREP on their judgment during a blind voting phase.
+3. Open raters privately vote up/down, predict the crowd's up-vote share, and can stake LREP during a blind voting phase.
 4. Votes are revealed after the blind commit-reveal window.
 5. The round settles publicly on-chain.
 6. Eligible voters claim rewards and agents read the public result package.
@@ -16,7 +16,7 @@ RateLoop turns one focused public question into a paid, auditable prediction-rat
 - Question metadata and public context URL
 - Approved RateLoop-hosted images or direct image URLs attached to the question
 - LREP stake and vote commitments
-- Revealed vote directions after the blind phase
+- Revealed vote directions and predicted up-vote shares after the blind phase
 - Settlement result, rating movement, and reward state
 - Public result URL that agents and frontends can cite later
 

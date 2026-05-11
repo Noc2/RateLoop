@@ -2,9 +2,15 @@ import { type Hex, keccak256, stringToHex } from "viem";
 
 export const DEFAULT_AGENT_TEMPLATE_ID = "generic_rating";
 export const DEFAULT_AGENT_TEMPLATE_VERSION = 1;
-export const PREDICTED_RATING_SYSTEM = "rateloop.predicted_final_rating.v1";
+export const PREDICTED_RATING_SYSTEM = "rateloop.robust_bts_binary.v1";
 
-type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | JsonValue[]
+  | { [key: string]: JsonValue };
 
 export type AgentQuestionRoundConfig = {
   epochDuration: bigint | number | string;
@@ -53,7 +59,7 @@ function stableJson(value: JsonValue): string {
 
   return `{${Object.keys(value)
     .sort()
-    .map(key => `${JSON.stringify(key)}:${stableJson(value[key])}`)
+    .map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`)
     .join(",")}}`;
 }
 
@@ -70,13 +76,16 @@ export function hashCanonicalJson(value: JsonValue): Hex {
   return keccak256(stringToHex(stableJson(value)));
 }
 
-export function buildQuestionMetadata(input: AgentQuestionSpecInput): JsonValue {
+export function buildQuestionMetadata(
+  input: AgentQuestionSpecInput,
+): JsonValue {
   return {
     bounty: input.bounty
       ? {
           amount: input.bounty.amount.toString(),
           asset: input.bounty.asset,
-          requiredSettledRounds: input.bounty.requiredSettledRounds?.toString() ?? null,
+          requiredSettledRounds:
+            input.bounty.requiredSettledRounds?.toString() ?? null,
           requiredVoters: input.bounty.requiredVoters?.toString() ?? null,
         }
       : null,
@@ -84,7 +93,9 @@ export function buildQuestionMetadata(input: AgentQuestionSpecInput): JsonValue 
     contextUrl: input.contextUrl,
     description: input.description ?? "",
     imageUrls: [...input.imageUrls],
-    roundConfig: input.roundConfig ? serializeRoundConfig(input.roundConfig) : null,
+    roundConfig: input.roundConfig
+      ? serializeRoundConfig(input.roundConfig)
+      : null,
     schemaVersion: "curyo.question.v1",
     study: input.study ?? null,
     targetAudience: input.targetAudience ?? null,
@@ -101,25 +112,27 @@ export function buildDefaultResultSpec(
   templateId = DEFAULT_AGENT_TEMPLATE_ID,
   templateVersion = DEFAULT_AGENT_TEMPLATE_VERSION,
   voteSemantics: AgentQuestionSpecInput["voteSemantics"] = {
-    down: "lower final rating for the submitted question",
-    up: "higher final rating for the submitted question",
+    down: "lower support for the submitted question",
+    up: "higher support for the submitted question",
   },
 ): JsonValue {
   return {
     confidenceInputs: [
       "revealedCount",
       "totalStake",
-      "predictedRatingDistribution",
+      "predictedUpDistribution",
+      "upPool",
+      "downPool",
       "ratingBps",
       "conservativeRatingBps",
       "confidenceMass",
       "effectiveEvidence",
     ],
     predictionScale: {
-      display: "1.0-9.9",
-      maxBps: 9900,
-      minBps: 1000,
-      unit: "predicted final rating",
+      display: "0-100% up",
+      maxBps: 10000,
+      minBps: 0,
+      unit: "predicted share of up votes",
     },
     ratingSystem: PREDICTED_RATING_SYSTEM,
     schemaVersion: "curyo.result_spec.v1",
@@ -131,7 +144,11 @@ export function buildDefaultResultSpec(
 
 export function buildQuestionSpecHashes(input: AgentQuestionSpecInput) {
   const questionMetadata = buildQuestionMetadata(input);
-  const resultSpec = buildDefaultResultSpec(input.templateId, input.templateVersion, input.voteSemantics);
+  const resultSpec = buildDefaultResultSpec(
+    input.templateId,
+    input.templateVersion,
+    input.voteSemantics,
+  );
 
   return {
     questionMetadata,

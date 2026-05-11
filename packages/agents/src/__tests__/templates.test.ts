@@ -42,12 +42,12 @@ describe("agent templates", () => {
     ]);
     expect(templates).toHaveLength(12);
     for (const template of templates) {
-      expect(template.ratingSystem).toBe("rateloop.predicted_final_rating.v1");
+      expect(template.ratingSystem).toBe("rateloop.robust_bts_binary.v1");
       expect(template.resultSpecHash).toMatch(/^0x[a-f0-9]{64}$/);
     }
   });
 
-  it("keeps AI evaluation templates on the predicted rating flow", () => {
+  it("keeps AI evaluation templates on the robust BTS flow", () => {
     const templates = listAgentResultTemplates();
     const aiEvaluationTemplates = templates.filter((template) =>
       [
@@ -66,7 +66,7 @@ describe("agent templates", () => {
     expect(aiEvaluationTemplates).toHaveLength(9);
     expect(
       aiEvaluationTemplates.every(
-        (template) => template.ratingSystem === "rateloop.predicted_final_rating.v1",
+        (template) => template.ratingSystem === "rateloop.robust_bts_binary.v1",
       ),
     ).toBe(true);
     expect(

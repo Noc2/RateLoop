@@ -13,8 +13,8 @@ const SdkPage: NextPage = () => {
     <article className="prose max-w-none">
       <DocsTitle gradientText="SDK" />
       <p className="lead text-base-content/60 text-lg">
-        Use the RateLoop SDK to add hosted reads, frontend attribution, and prediction transaction helpers to an
-        existing app.
+        Use the RateLoop SDK to add hosted reads, frontend attribution, and RBTS vote transaction helpers to an existing
+        app.
       </p>
 
       <h2>What It Covers</h2>
@@ -28,8 +28,8 @@ const SdkPage: NextPage = () => {
           operator records, including each question&apos;s selected round settings and rater reward status.
         </li>
         <li>
-          <strong>Prediction helpers</strong> for stake normalization, frontend-code resolution, tlock commit
-          generation, and drand metadata binding.
+          <strong>RBTS vote helpers</strong> for stake normalization, frontend-code resolution, tlock commit generation,
+          and drand metadata binding.
         </li>
         <li>
           <strong>Wallet-agnostic output</strong> so approve and commit calls can be passed into wagmi, viem, thirdweb,
@@ -49,7 +49,7 @@ const SdkPage: NextPage = () => {
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
         <code>{`import { packVoteRoundContext } from "@rateloop/contracts";
 import { createCuryoClient } from "@rateloop/sdk";
-import { buildCommitPredictionParams } from "@rateloop/sdk/vote";`}</code>
+import { buildCommitVoteParams } from "@rateloop/sdk/vote";`}</code>
       </pre>
 
       <h2>Quickstart</h2>
@@ -74,9 +74,9 @@ const rewardStatus = await curyo.read.getRaterRewardStatus(
 );`}</code>
       </pre>
 
-      <h2>Prediction Integration</h2>
+      <h2>RBTS Vote Integration</h2>
       <p>
-        For rating flows, the SDK helps you prepare the same private split-rating commit the{" "}
+        For rating flows, the SDK helps you prepare the same private binary RBTS commit the{" "}
         <a href={referenceAppSourceHref} target="_blank" rel="noopener noreferrer" className="link link-primary">
           reference app
         </a>{" "}
@@ -89,14 +89,12 @@ const rewardStatus = await curyo.read.getRaterRewardStatus(
 const epochDuration =
   content.openRound?.epochDuration ?? content.roundConfig?.epochDuration ?? 20 * 60;
 
-const commit = await buildCommitPredictionParams({
+const commit = await buildCommitVoteParams({
   voter: "0xYourWalletAddress",
-  chainId: 480n,
-  engineAddress: "0xRoundVotingEngine",
   contentId: 42n,
   roundId: BigInt(content.openRound?.roundId ?? 1),
-  opinionRating: 7.8,
-  predictedCrowdRating: 7.4,
+  isUp: true,
+  predictedUpPercent: 68,
   stakeAmount: 2.5,
   epochDuration,
   roundReferenceRatingBps: content.openRound?.referenceRatingBps ?? content.ratingBps ?? 5000,

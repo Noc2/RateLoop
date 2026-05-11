@@ -48,10 +48,10 @@ const HowItWorks: NextPage = () => {
 
       <h2 id="commit-reveal-voting">2. Predict</h2>
       <p>
-        Raters submit a <Link href="/docs/tech-stack#bayesian-truth-serum">BTS-inspired split report</Link>: their own
-        1.0-9.9 opinion rating and the 1.0-9.9 crowd rating they expect after reveal. They can stake 0&ndash;10 LREP per
-        prediction; zero-LREP ratings can bootstrap earned launch reputation when they occur in verified-human anchored
-        rounds, while staked ratings add settlement upside and risk. Both values are encrypted during the blind phase so
+        Raters submit a <Link href="/docs/tech-stack#bayesian-truth-serum">robust BTS report</Link>: a thumbs-up/down
+        signal and a 0-100% prediction of how many revealed raters will vote up. They can stake 0&ndash;10 LREP per
+        report; zero-LREP votes can bootstrap earned launch reputation when they occur in verified-human anchored
+        rounds, while staked votes add settlement upside and risk. Both values are encrypted during the blind phase so
         early raters cannot simply copy visible momentum.
       </p>
       <div className="not-prose">
@@ -59,8 +59,8 @@ const HowItWorks: NextPage = () => {
       </div>
       <ol>
         <li>
-          <strong>Commit:</strong> choose an opinion rating, expected crowd rating, and optional stake. The app submits
-          one encrypted rating report.
+          <strong>Commit:</strong> choose up or down, estimate the crowd&apos;s up-vote percentage, and optionally
+          stake. The app submits one encrypted RBTS report.
         </li>
         <li>
           <strong>Reveal:</strong> after the blind phase, the keeper normally reveals eligible predictions. Users can
@@ -78,8 +78,8 @@ const HowItWorks: NextPage = () => {
         <strong>{protocolDocFacts.openPhaseWeightLabel}</strong> reward weight.
       </p>
       <p>
-        Split rating reports stay hidden through the commit-reveal flow until the blind phase ends. The keeper normally
-        derives the reveal data after the epoch closes; users can self-reveal if the automatic path is delayed.
+        RBTS reports stay hidden through the commit-reveal flow until the blind phase ends. The keeper normally derives
+        the reveal data after the epoch closes; users can self-reveal if the automatic path is delayed.
       </p>
 
       <h3>Voting Rules</h3>
@@ -92,14 +92,15 @@ const HowItWorks: NextPage = () => {
       <h2 id="on-chain-settlement">3. Settle Rewards</h2>
       <h3 id="lrep-stake-settlement">LREP stake settlement</h3>
       <p>
-        The most accurate revealed staked crowd predictions recover stake and share the LREP rater pool. The
-        rater&apos;s own opinion helps form the public rating, but it is not rewarded for matching the end result.
-        Revealed misses can reclaim <strong>{protocolDocFacts.revealedLoserRefundPercentLabel}</strong> of raw stake.
-        The remaining losing pool splits <strong>{protocolDocFacts.rewardSplitSummaryLabel}</strong>. Separately, the
-        Launch Distribution Pool can pay starter LREP for useful revealed ratings from rounds with at least one verified
-        human anchor. A rater needs two distinct verified-human anchors across qualifying rounds before earned launch
-        payouts begin. Verified agent declarations can improve reward weight through a separate, capped model
-        accountability rail, but they do not count as human anchors.
+        Revealed staked RBTS reports recover stake and share the LREP rater pool according to robust BTS score. A report
+        can earn through both the binary signal and the accuracy of its population prediction, while low-scoring stake
+        becomes the forfeited pool. Revealed forfeits can reclaim{" "}
+        <strong>{protocolDocFacts.revealedLoserRefundPercentLabel}</strong> of raw forfeited stake. The remaining pool
+        splits <strong>{protocolDocFacts.rewardSplitSummaryLabel}</strong>. Separately, the Launch Distribution Pool can
+        pay starter LREP for useful revealed ratings from rounds with at least one verified human anchor. A rater needs
+        two distinct verified-human anchors across qualifying rounds before earned launch payouts begin. Verified agent
+        declarations can improve reward weight through a separate, capped model accountability rail, but they do not
+        count as human anchors.
       </p>
       <div className="not-prose my-6">
         <RewardSplitChart />
@@ -107,7 +108,7 @@ const HowItWorks: NextPage = () => {
       <h3 id="stablecoin-bounties">Stablecoin bounties</h3>
       <p>
         Bounties are separate from LREP stake settlement. They are scoped to the question or bundle, paid in the funding
-        asset, and can reward eligible revealed raters. Accurate crowd predictions earn more, while near misses can
+        asset, and can reward eligible revealed raters. Higher RBTS reward weight earns more, while near misses can
         still earn a smaller payout for doing the work. A bundle payout is claimed per round set, so a rater must reveal
         on every bundled question in that set.
       </p>
@@ -124,9 +125,9 @@ const HowItWorks: NextPage = () => {
 
       <h2 id="content-rating">4. Read the Result</h2>
       <p>
-        Content starts at 5.0 on the 1.0-9.9 scale. When a round opens, it snapshots the current score as the reference.
-        Settlement updates the rating from revealed, epoch-weighted opinion ratings rather than asking for a separate
-        up/down signal. Crowd predictions are kept separate and used for calibration and reward scoring.
+        Content starts at 5.0 on the public rating scale. When a round opens, it snapshots the current score as the
+        reference. Settlement uses revealed up/down stake to move the public rating up or down, while the population
+        prediction remains separate and is used for robust BTS reward scoring.
       </p>
       <p>
         Optional feedback stays hidden while the round is active and unlocks after settlement or another terminal round

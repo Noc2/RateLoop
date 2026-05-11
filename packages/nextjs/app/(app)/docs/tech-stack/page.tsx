@@ -19,7 +19,7 @@ const circleWorldChainUsdcHref = "https://www.circle.com/multi-chain-usdc/worldc
 export const metadata = {
   title: "Tech Stack | RateLoop Docs",
   description:
-    "The protocol terms behind RateLoop: x402 agent payments, MCP and WebMCP tools, World ID proof-of-human credentials, AI rater verification, BTS-style split reports, LREP staking, and World Chain USDC settlement.",
+    "The protocol terms behind RateLoop: x402 agent payments, MCP and WebMCP tools, World ID proof-of-human credentials, AI rater verification, robust BTS reports, LREP staking, and World Chain USDC settlement.",
 } satisfies Metadata;
 
 const TechStackPage: NextPage = () => {
@@ -141,8 +141,8 @@ const TechStackPage: NextPage = () => {
       <h2 id="commit-reveal-voting">Commit-Reveal Voting</h2>
       <p>
         A rating report starts as a commitment: the contract stores a hash, stake, ciphertext, and reveal metadata while
-        the opinion rating and expected crowd rating remain hidden. After the blind phase, a keeper normally reveals the
-        plaintext report; users can self-reveal if needed. Settlement uses only revealed reports.
+        the up/down signal and expected up-vote percentage remain hidden. After the blind phase, a keeper normally
+        reveals the plaintext report; users can self-reveal if needed. Settlement uses only revealed reports.
       </p>
       <p>
         This is why RateLoop calls rating work &quot;honest&quot; rather than just &quot;popular.&quot; Early raters
@@ -161,18 +161,18 @@ const TechStackPage: NextPage = () => {
         crowd distribution makes independent information measurable even when the final score is a public judgment.
       </p>
       <p>
-        RateLoop uses a simpler one-round BTS-inspired design. Each sealed report contains the rater&apos;s own 1.0-9.9
-        opinion and the 1.0-9.9 crowd rating they expect after reveal. Opinions drive the public rating; expected-crowd
-        predictions drive calibration and rewards. This keeps rounds quick because the protocol can collect independent
-        reports once, reveal them, and settle without a visible iterative polling phase.
+        RateLoop uses a binary robust BTS design. Each sealed report contains the rater&apos;s own thumbs-up/down signal
+        and a 0-100% prediction of how many revealed raters will vote up. The binary signal drives settlement while the
+        peer prediction scores stake return and rewards. This keeps rounds quick because the protocol can collect
+        independent reports once, reveal them, and settle without a visible iterative polling phase.
       </p>
 
       <h2 id="lrep-staking">LREP Staking</h2>
       <p>
         LREP is the optional reputation stake used in rating and the governance token used for protocol control. Raters
-        submit a split report: their own 1.0-9.9 opinion and the 1.0-9.9 crowd rating they expect. They can stake 0-10
-        LREP on that prediction; accurate revealed staked crowd predictions recover stake and share rewards, revealed
-        misses recover only a small refund, and unrevealed staked reports can forfeit.
+        submit a binary RBTS report: thumbs up/down plus the expected percentage of up votes. They can stake 0-10 LREP
+        on that report; high-scoring revealed reports recover more stake and share rewards, low-scoring reports recover
+        less, and unrevealed staked reports can forfeit.
       </p>
       <p>
         The reason to use staking is incentive alignment: a rater can put scarce reputation behind a prediction for

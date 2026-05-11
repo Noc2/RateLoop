@@ -8,6 +8,10 @@ governance locks, hard economic floors, and cluster-aware controls. Any
 non-transferable reputation recommendations below describe an alternative design
 path rather than the current implementation target.
 
+2026-05-11 update: this note also predates the binary robust BTS redeploy. The
+active vote payload is `isUp`, `predictedUpBps` in `0-10000`, and a salt, not a
+scalar `1.0-9.9` own-rating/crowd-rating pair.
+
 This note describes an alternative to the no-proof reputation design: keep
 Self.xyz as an optional identity credential while still allowing users to
 participate without proving their identity. The goal is to preserve low-friction

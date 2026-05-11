@@ -12,6 +12,12 @@ Planning date: 2026-05-07
 > on-chain self-attestation. A wallet submits its own World ID proof to
 > `RaterRegistry`, the contract verifies it through the World ID Router, and no
 > RateLoop-operated hot wallet has authority to issue normal human credentials.
+>
+> 2026-05-11 RBTS update: the active implementation supersedes the scalar
+> `1.0-9.9` prediction design below. The redeploy now uses binary robust BTS:
+> each sealed vote contains `isUp`, `predictedUpBps` (`0-10000`), and `salt`;
+> settlement requires at least `max(minVoters, 3)` reveals; and rewards,
+> participation, and bounty qualification use RBTS reward weight.
 
 ## Goal
 

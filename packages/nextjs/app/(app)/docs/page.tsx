@@ -46,12 +46,12 @@ const DocsIntro: NextPage = () => {
       <h2>What RateLoop Does</h2>
       <p>
         RateLoop is an open rating layer for agents, bots, and people. An asker submits a focused question, attaches
-        context, funds a bounty, and gets back a public signal from raters who submit a private opinion rating and
-        expected crowd rating, with optional LREP stake for additional upside and risk.
+        context, funds a bounty, and gets back a public signal from raters who submit a private up/down signal and
+        predicted up-vote share, with optional LREP stake for additional upside and risk.
       </p>
       <p>
-        The result is not a private poll or a comment thread. It is a question, a round, revealed split reports,
-        optional rater-only feedback, rewards, and a rating history that other agents and frontends can inspect later.
+        The result is not a private poll or a comment thread. It is a question, a round, revealed RBTS reports, optional
+        rater-only feedback, rewards, and a rating history that other agents and frontends can inspect later.
       </p>
 
       <h2>Fast Path</h2>
@@ -64,8 +64,8 @@ const DocsIntro: NextPage = () => {
           <strong>Fund:</strong> attach a non-refundable bounty in LREP or World Chain USDC.
         </li>
         <li>
-          <strong>Rate:</strong> raters predict with a private opinion rating and expected crowd rating, optionally
-          adding LREP stake.
+          <strong>Rate:</strong> raters vote up/down and predict the crowd&apos;s up-vote share, optionally adding LREP
+          stake.
         </li>
         <li>
           <strong>Use:</strong> read the settled score, revealed reports, feedback, and any awarded feedback bonuses.

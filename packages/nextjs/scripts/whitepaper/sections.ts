@@ -22,7 +22,7 @@ export const SECTIONS: Section[] = [
         blocks: [
           {
             type: "paragraph",
-            text: "RateLoop exists for the moment an agent should ask instead of guess. It gives agents, AI product teams, and people an open-rater path to publish one bounded question, attach source context and funding, and receive a public, stake-backed predicted rating that other agents can inspect later.",
+            text: "RateLoop exists for the moment an agent should ask instead of guess. It gives agents, AI product teams, and people an open-rater path to publish one bounded question, attach source context and funding, and receive a public, stake-backed rating signal that other agents can inspect later.",
           },
         ],
       },
@@ -56,7 +56,7 @@ export const SECTIONS: Section[] = [
         blocks: [
           {
             type: "paragraph",
-            text: "RateLoop returns a rating package, not just a raw score. Agents can read the settled 1.0-9.9 rating, prediction distribution, answer, confidence, rationale summary, dissenting view, optional feedback after unlock, payout metadata, and a public result URL that can be cited in later decisions. The result is a public rating signal, not proof of universal truth.",
+            text: "RateLoop returns a rating package, not just a raw score. Agents can read the settled rating, up/down distribution, predicted-up distribution, answer, confidence, rationale summary, dissenting view, optional feedback after unlock, payout metadata, and a public result URL that can be cited in later decisions. The result is a public rating signal, not proof of universal truth.",
           },
         ],
       },
@@ -125,7 +125,7 @@ export const SECTIONS: Section[] = [
             items: [
               "Detect uncertainty, disagreement, or a high-cost action.",
               "Quote the ask, choose budget and timing, and submit a short question with context.",
-              "Let open raters predict the final rating during the blind phase.",
+              "Let open raters vote up/down and predict the crowd's up-vote share during the blind phase.",
               "Read the settled answer, confidence, rating signal, objections, and limitations.",
               "Act, revise, escalate, or stop while storing the public result URL in the agent audit trail.",
             ],
@@ -146,7 +146,7 @@ export const SECTIONS: Section[] = [
             items: [
               "Ask: submit one question-first ask with a required context URL and optional preview media.",
               "Fund: attach a non-refundable bounty in LREP or USDC on World Chain; agent asks spend from user-authorized wallets, scoped agent wallets, x402 authorization, or ordered wallet calls.",
-              "Predict: raters predict the final 1.0-9.9 rating, can add LREP stake, and may add hidden feedback.",
+              "Vote: raters submit an up/down signal, predict the crowd's up-vote share, can add LREP stake, and may add hidden feedback.",
               "Settle: the round resolves once the configured reveal and participation conditions are met.",
               "Reuse: any later agent can inspect the same settled result instead of paying to rediscover the same judgment.",
             ],
@@ -172,8 +172,8 @@ export const SECTIONS: Section[] = [
               rows: [
                 ["Submitted", "Question, context, bounty, and round settings are recorded", "Immediate"],
                 [
-                  "Blind prediction",
-                  "Open raters commit encrypted final-rating predictions with 0-10 LREP stake",
+                  "Blind RBTS vote",
+                  "Open raters commit encrypted up/down signals and predicted-up percentages with 0-10 LREP stake",
                   `First ${protocolDocFacts.blindPhaseDurationLabel} epoch by default`,
                 ],
                 [
@@ -196,7 +196,7 @@ export const SECTIONS: Section[] = [
           },
           {
             type: "paragraph",
-            text: "RateLoop uses tlock commit-reveal so predicted ratings stay hidden until the selected epoch ends. That gives the protocol a blind phase without requiring every rater to reveal manually under normal conditions. Creator-selected round settings stay bounded by governance so asks can be faster or broader without becoming arbitrary.",
+            text: "RateLoop uses tlock commit-reveal so votes and predicted-up percentages stay hidden until the selected epoch ends. That gives the protocol a blind phase without requiring every rater to reveal manually under normal conditions. Creator-selected round settings stay bounded by governance so asks can be faster or broader without becoming arbitrary.",
           },
         ],
       },
@@ -205,7 +205,7 @@ export const SECTIONS: Section[] = [
         blocks: [
           {
             type: "paragraph",
-            text: "Each round snapshots a canonical reference rating on-chain. Raters predict the final 1.0-9.9 score directly, and settlement updates the next score using epoch-weighted revealed predictions. The same settlement also powers structured result templates so an agent can read a machine-usable answer, not only a raw market state.",
+            text: "Each round snapshots a canonical reference rating on-chain. Raters submit a binary signal, and settlement moves the public score using epoch-weighted revealed up/down stake. The predicted-up percentage is kept separate for robust BTS reward scoring. The same settlement also powers structured result templates so an agent can read a machine-usable answer, not only a raw market state.",
           },
           {
             type: "bullets",
@@ -298,7 +298,7 @@ export const SECTIONS: Section[] = [
         blocks: [
           {
             type: "paragraph",
-            text: `Predictions are encrypted with tlock against the drand beacon, so early raters cannot see the rating distribution they are contributing to. Once epoch-1 results are visible, later predictions still count, but they earn only ${protocolDocFacts.openPhaseWeightLabel} reward weight compared with ${protocolDocFacts.blindPhaseWeightLabel} in the blind epoch. That ${protocolDocFacts.earlyVoterAdvantageLabel} ratio makes copying late less attractive than judging early.`,
+            text: `RBTS reports are encrypted with tlock against the drand beacon, so early raters cannot see the up/down distribution they are contributing to. Once epoch-1 results are visible, later reports still count, but they earn only ${protocolDocFacts.openPhaseWeightLabel} reward weight compared with ${protocolDocFacts.blindPhaseWeightLabel} in the blind epoch. That ${protocolDocFacts.earlyVoterAdvantageLabel} ratio makes copying late less attractive than judging early.`,
           },
         ],
       },
@@ -349,7 +349,7 @@ export const SECTIONS: Section[] = [
                 ["Symbol", "LREP"],
                 ["Max supply", LREP_MAX_SUPPLY_LABEL],
                 ["Decimals", "6"],
-                ["Primary role", "Stake-backed predicted ratings and governance participation"],
+                ["Primary role", "Stake-backed robust BTS reports and governance participation"],
               ],
             },
           },
@@ -374,7 +374,7 @@ export const SECTIONS: Section[] = [
           },
           {
             type: "paragraph",
-            text: `Accurate predictions recover their original stake plus a share of the losing pool, while revealed misses reclaim ${protocolDocFacts.revealedLoserRefundPercentLabel} of raw stake. Tier-1 raters carry full blind-epoch weight and later raters carry ${protocolDocFacts.openPhaseWeightLabel} weight, so the same anti-herding logic shapes both outcome and payout.`,
+            text: `High-scoring RBTS reports recover more stake plus a share of the rater pool, while revealed forfeited stake can reclaim ${protocolDocFacts.revealedLoserRefundPercentLabel}. Tier-1 raters carry full blind-epoch weight and later raters carry ${protocolDocFacts.openPhaseWeightLabel} weight, so the same anti-herding logic shapes both outcome and payout.`,
           },
         ],
       },
@@ -431,7 +431,7 @@ export const SECTIONS: Section[] = [
               headers: ["Action", "Requirement", "Notes"],
               rows: [
                 [
-                  "Predict a final rating",
+                  "Vote up/down and predict crowd share",
                   "0-10 LREP",
                   "Per prediction, per round; stake is optional for starter participation",
                 ],
@@ -522,8 +522,8 @@ export const SECTIONS: Section[] = [
           {
             type: "bullets",
             items: [
-              "`generic_rating` turns the predicted final rating system into a general support signal.",
-              "`go_no_go` maps high final ratings to proceed and low final ratings to stop or revise for action review flows.",
+              "`generic_rating` turns binary robust BTS reports into a general support signal.",
+              "`go_no_go` maps up/down settlement to proceed, stop, or revise for action review flows.",
               "`ranked_option_member` lets an agent ask one question per option and compare settled outputs without inventing a new scoring system.",
               "`llm_answer_quality`, `rag_grounding_check`, `claim_verification`, and `source_credibility_check` cover answer quality, grounding, factual support, and evidence reliability.",
               "`agent_action_go_no_go`, `feature_acceptance_test`, `agent_trace_review`, and `proposal_review` cover action gates, public preview testing, trajectory/tool-call review, and proposal readiness.",

@@ -55,9 +55,9 @@ const Tokenomics = () => {
       </p>
       <p>
         Transferable LREP is intentional because the protocol needs portable ownership and reputation, but token balance
-        is only one input. Prediction accuracy, effective-unit scoring, cluster controls, calibration, reveal
-        reliability, governance locks, and hard floors on proposal thresholds, submission bounties, and AI declaration
-        bonds limit the damage from bought or rented balance.
+        is only one input. RBTS score, effective-unit scoring, cluster controls, calibration, reveal reliability,
+        governance locks, and hard floors on proposal thresholds, submission bounties, and AI declaration bonds limit
+        the damage from bought or rented balance.
       </p>
 
       <hr />
@@ -232,11 +232,9 @@ const Tokenomics = () => {
           </thead>
           <tbody>
             <tr>
-              <td>Predict a final rating</td>
+              <td>Submit an RBTS vote</td>
               <td className="font-mono">0&ndash;10 LREP</td>
-              <td>
-                Zero-LREP predictions can bootstrap reputation; larger stakes add normal settlement upside and risk
-              </td>
+              <td>Zero-LREP votes can bootstrap reputation; larger stakes add normal settlement upside and risk</td>
             </tr>
             <tr>
               <td>Ask a question</td>

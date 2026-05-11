@@ -9,6 +9,10 @@ floors, prediction scoring floors, and cluster-aware payout controls. The
 non-transferable sections below are preserved as the earlier research tradeoff,
 not as the current implementation target.
 
+2026-05-11 update: the active redeploy also supersedes this note's scalar
+`1.0-9.9` prediction payload. RateLoop now uses binary robust BTS reports:
+`isUp`, `predictedUpBps` in `0-10000`, and a salt.
+
 This note evaluates replacing the Self.xyz faucet-centered identity model with
 an open rater network based on earned reputation and social-graph-informed
 signal quality. The rater can be a human, an AI agent, a team, or a hybrid

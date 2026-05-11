@@ -171,8 +171,8 @@ const SmartContracts: NextPage = () => {
           <strong>Supply cap:</strong> Distribution and reward recycling stay bounded by <code>MAX_SUPPLY</code>.
         </li>
         <li>
-          <strong>Prediction staking:</strong> The production UI can approve optional LREP stake and submits a private
-          opinion rating plus expected crowd rating through <code>commitVote()</code>.
+          <strong>RBTS staking:</strong> The production UI can approve optional LREP stake and submits a private up/down
+          signal plus expected up-vote percentage through <code>commitVote()</code>.
         </li>
       </ul>
       <h3>Key Functions</h3>
@@ -408,8 +408,8 @@ const SmartContracts: NextPage = () => {
             RoundVotingEngine.commitVote(contentId, roundContext, targetRound, drandChainHash, commitHash, ciphertext,
             stakeAmount, frontend)
           </code>{" "}
-          &mdash; Default split-rating flow. Locks LREP and records the tlock-encrypted opinion rating plus expected
-          crowd rating. The report is hidden until the epoch ends. The redeployed contract rejects malformed or
+          &mdash; Default robust BTS flow. Locks LREP and records the tlock-encrypted up/down signal plus expected
+          up-vote percentage. The report is hidden until the epoch ends. The redeployed contract rejects malformed or
           non-armored ciphertexts, binds the canonical round reference score into the round context, and binds the
           reveal-target metadata on-chain.
         </li>
@@ -425,24 +425,22 @@ const SmartContracts: NextPage = () => {
           settings users rated against.
         </li>
         <li>
-          <code>
-            revealPredictionByCommitKey(contentId, roundId, commitKey, opinionRatingBps, predictedCrowdRatingBps, salt)
-          </code>{" "}
-          &mdash; Reveal a previously committed split report after the epoch ends. This remains the
-          keeper-assisted/self-reveal path: the keeper normally performs off-chain drand/tlock decryption after
-          validating the stored stanza metadata and submits the reveal, but any caller that knows the plaintext{" "}
-          <code>(opinionRatingBps, predictedCrowdRatingBps, salt)</code> can submit it. The production UI keeps this
-          mostly hidden, but connected users also have a small manual fallback link if an auto-reveal appears delayed.
-          The chain binds the reveal to the exact submitted ciphertext via <code>keccak256(ciphertext)</code> and now
-          rejects malformed/non-armored commits on-chain, but it still does not prove on-chain that the ciphertext was
-          honestly decryptable. A future hardening path here would be zk-based reveal proofs.
+          <code>revealVoteByCommitKey(contentId, roundId, commitKey, isUp, predictedUpBps, salt)</code> &mdash; Reveal a
+          previously committed RBTS report after the epoch ends. This remains the keeper-assisted/self-reveal path: the
+          keeper normally performs off-chain drand/tlock decryption after validating the stored stanza metadata and
+          submits the reveal, but any caller that knows the plaintext <code>(isUp, predictedUpBps, salt)</code> can
+          submit it. The production UI keeps this mostly hidden, but connected users also have a small manual fallback
+          link if an auto-reveal appears delayed. The chain binds the reveal to the exact submitted ciphertext via{" "}
+          <code>keccak256(ciphertext)</code> and now rejects malformed/non-armored commits on-chain, but it still does
+          not prove on-chain that the ciphertext was honestly decryptable. A future hardening path here would be
+          zk-based reveal proofs.
         </li>
         <li>
           <code>settleRound(contentId, roundId)</code> &mdash; Settle the current round once at least{" "}
-          <code>minVoters</code> votes from the round snapshot are revealed and all past-epoch votes have been revealed
-          (or their {protocolDocFacts.revealGracePeriodLabel} reveal grace period has expired). Determines winners based
-          on epoch-weighted stakes, splits bounties, and updates content rating from the round reference score using the
-          governed score-relative rating model.
+          <code>max(minVoters, 3)</code> votes from the round snapshot are revealed and all past-epoch votes have been
+          revealed (or their {protocolDocFacts.revealGracePeriodLabel} reveal grace period has expired). Determines
+          winners based on epoch-weighted stakes, splits bounties, and updates content rating from the round reference
+          score using the governed score-relative rating model.
         </li>
         <li>
           <code>RoundRewardDistributor.claimFrontendFee(contentId, roundId, frontend)</code> &mdash; Frontend operators
