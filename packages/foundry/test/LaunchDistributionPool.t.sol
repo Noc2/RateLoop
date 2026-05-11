@@ -113,8 +113,6 @@ contract LaunchDistributionPoolTest is Test {
     }
 
     function test_RecordEarnedRaterRewardIgnoresLowScoresAndUnauthorizedCallers() public {
-        assertEq(pool.recordEarnedRaterReward(alice, 6_999), 0);
-        assertEq(pool.recordEarnedRaterReward(alice, 8_000), 0);
         assertEq(_recordLaunchRewardWithScore(alice, 1, bytes32("anchor-a"), 6_999), 0);
         assertEq(pool.qualifyingRatingCount(alice), 0);
 

@@ -10,6 +10,7 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {RoundVotingEngine} from "./RoundVotingEngine.sol";
 import {ContentRegistry} from "./ContentRegistry.sol";
 import {ProtocolConfig} from "./ProtocolConfig.sol";
+import {RaterRegistry} from "./RaterRegistry.sol";
 import {IFrontendRegistry} from "./interfaces/IFrontendRegistry.sol";
 import {IParticipationPool} from "./interfaces/IParticipationPool.sol";
 import {ILaunchDistributionPool} from "./interfaces/ILaunchDistributionPool.sol";
@@ -385,13 +386,25 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
     function _claimLaunchRaterReward(uint256 contentId, uint256 roundId, bytes32 commitKey, address rewardRecipient)
         internal
     {
-        address launchPool = ProtocolConfig(votingEngine.protocolConfig()).launchDistributionPool();
+        ProtocolConfig config = ProtocolConfig(votingEngine.protocolConfig());
+        address launchPool = config.launchDistributionPool();
         if (launchPool == address(0)) return;
         uint16 scoreBps = votingEngine.commitPredictionScoreBps(contentId, roundId, commitKey);
         if (scoreBps == 0) return;
+        RoundLib.Round memory round = _readRound(contentId, roundId);
+        bytes32[] memory verifiedAnchorIds =
+            _collectLaunchRewardAnchorIds(config, contentId, roundId, rewardRecipient, round.voteCount);
 
-        try ILaunchDistributionPool(launchPool).recordEarnedRaterReward(rewardRecipient, scoreBps) returns (uint256) {}
-        catch {}
+        try ILaunchDistributionPool(launchPool).recordEarnedRaterReward(
+            rewardRecipient,
+            contentId,
+            roundId,
+            commitKey,
+            scoreBps,
+            round.revealedCount,
+            votingEngine.roundUnrevealedCleanupRemaining(contentId, roundId) == 0,
+            verifiedAnchorIds
+        ) returns (uint256) {} catch {}
     }
 
     // --- Frontend Fee Claims ---
@@ -867,6 +880,85 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         address snapshot = votingEngine.roundVoterIdNFTSnapshot(contentId, roundId);
         if (snapshot != address(0)) return snapshot;
         return votingEngine.protocolConfig().voterIdNFT();
+    }
+
+    function _collectLaunchRewardAnchorIds(
+        ProtocolConfig config,
+        uint256 contentId,
+        uint256 roundId,
+        address rewardRecipient,
+        uint256 voteCount
+    ) internal view returns (bytes32[] memory anchorIds) {
+        address raterRegistryAddress = config.raterRegistry();
+        if (raterRegistryAddress == address(0) || voteCount == 0) return new bytes32[](0);
+
+        RaterRegistry raterRegistry = RaterRegistry(raterRegistryAddress);
+        address submitterIdentity = registry.getSubmitterIdentity(contentId);
+        address voterIdNftAddress = _roundVoterIdNftAddress(contentId, roundId);
+        bytes32[] memory candidates = new bytes32[](voteCount);
+        uint256 anchorCount;
+
+        for (uint256 i = 0; i < voteCount; i++) {
+            bytes32 roundCommitKey = votingEngine.getRoundCommitKey(contentId, roundId, i);
+            RoundLib.Commit memory commit = _readCommit(contentId, roundId, roundCommitKey);
+            if (!commit.revealed) continue;
+
+            address anchorAccount =
+                _launchRewardAnchorAccount(voterIdNftAddress, contentId, roundId, roundCommitKey, commit.voter);
+            if (anchorAccount == rewardRecipient || anchorAccount == submitterIdentity) continue;
+
+            bytes32 anchorId = _launchRewardAnchorId(raterRegistry, anchorAccount);
+            if (anchorId == bytes32(0) || _launchRewardAnchorSeen(candidates, anchorCount, anchorId)) continue;
+
+            candidates[anchorCount] = anchorId;
+            anchorCount += 1;
+        }
+
+        anchorIds = new bytes32[](anchorCount);
+        for (uint256 i = 0; i < anchorCount; i++) {
+            anchorIds[i] = candidates[i];
+        }
+    }
+
+    function _launchRewardAnchorAccount(
+        address voterIdNftAddress,
+        uint256 contentId,
+        uint256 roundId,
+        bytes32 commitKey,
+        address fallbackAccount
+    ) internal view returns (address) {
+        if (voterIdNftAddress == address(0)) return fallbackAccount;
+        uint256 voterId = votingEngine.commitVoterId(contentId, roundId, commitKey);
+        if (voterId == 0) return fallbackAccount;
+
+        address rewardRecipient = _currentVoterIdRewardRecipient(IVoterIdNFT(voterIdNftAddress), voterId);
+        return rewardRecipient == address(0) ? fallbackAccount : rewardRecipient;
+    }
+
+    function _launchRewardAnchorId(RaterRegistry raterRegistry, address account) internal view returns (bytes32) {
+        if (account == address(0)) return bytes32(0);
+        try raterRegistry.getSelfCredential(account) returns (RaterRegistry.SelfCredential memory credential) {
+            if (
+                !credential.verified || credential.legacy || credential.revoked || credential.expiresAt <= block.timestamp
+                    || credential.nullifierHash == bytes32(0)
+            ) {
+                return bytes32(0);
+            }
+            return credential.nullifierHash;
+        } catch {
+            return bytes32(0);
+        }
+    }
+
+    function _launchRewardAnchorSeen(bytes32[] memory anchors, uint256 anchorCount, bytes32 anchorId)
+        internal
+        pure
+        returns (bool)
+    {
+        for (uint256 i = 0; i < anchorCount; i++) {
+            if (anchors[i] == anchorId) return true;
+        }
+        return false;
     }
 
     function _readRound(uint256 contentId, uint256 roundId) internal view returns (RoundLib.Round memory round) {

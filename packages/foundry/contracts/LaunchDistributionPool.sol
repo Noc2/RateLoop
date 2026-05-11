@@ -201,17 +201,6 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
         paidAmount += referralBonus;
     }
 
-    function recordEarnedRaterReward(address rater, uint16 scoreBps)
-        external
-        onlyAuthorized
-        nonReentrant
-        returns (uint256 paidAmount)
-    {
-        rater;
-        scoreBps;
-        return 0;
-    }
-
     function recordEarnedRaterReward(
         address rater,
         uint256 contentId,

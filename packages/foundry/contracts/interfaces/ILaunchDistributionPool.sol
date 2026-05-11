@@ -13,8 +13,6 @@ interface ILaunchDistributionPool {
         bool requireNoPendingCleanup;
     }
 
-    function recordEarnedRaterReward(address rater, uint16 scoreBps) external returns (uint256 paidAmount);
-
     function recordEarnedRaterReward(
         address rater,
         uint256 contentId,
