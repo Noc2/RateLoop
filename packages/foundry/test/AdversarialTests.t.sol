@@ -657,11 +657,11 @@ contract AdversarialTests is VotingTestBase {
     // 6. SELF-OPPOSITION (Sybil with 2 addresses)
     // =========================================================================
 
-    /// @notice Attacker voting both sides with equal stakes should not profit
-    function test_SelfOpposition_EqualStakes_NeverProfitable() public {
+    /// @notice Two-address self-opposition cannot satisfy the three-voter RBTS quorum.
+    function test_SelfOpposition_TwoAddressQuorumRejected() public {
         uint256 contentId = _submitContent();
 
-        // Attacker controls both accounts, stakes equal amount on both sides
+        // Attacker controls both accounts, but two reveals are not enough for RBTS settlement.
         address sybil = address(0xBEEF);
         vm.prank(owner);
         hrepToken.mint(sybil, 100_000e6);
@@ -673,33 +673,15 @@ contract AdversarialTests is VotingTestBase {
         bytes32[] memory cks = new bytes32[](2);
         cks[0] = ckAttack;
         cks[1] = ckSybil;
-        _settleRound(contentId, roundId, cks);
 
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
-
-        // With equal stakes, it's a tie — no winner
-        if (round.state == RoundLib.RoundState.Tied) {
-            // Tied: both get refunds only, no profit
-            vm.prank(attacker);
-            engine.claimCancelledRoundRefund(contentId, roundId);
-            vm.prank(sybil);
-            engine.claimCancelledRoundRefund(contentId, roundId);
-
-            // Total returned = 10e6 = original stakes, no profit
-            return;
+        _warpPastTlockRevealTime(uint256(round.startTime) + EPOCH_DURATION);
+        for (uint256 i = 0; i < cks.length; i++) {
+            _reveal(contentId, roundId, cks[i]);
         }
 
-        // If settled (shouldn't happen with equal stakes but check anyway):
-        uint256 winnerBal = hrepToken.balanceOf(round.upWins ? attacker : sybil);
-        vm.prank(round.upWins ? attacker : sybil);
-        distributor.claimReward(contentId, roundId);
-        uint256 winnerGain = hrepToken.balanceOf(round.upWins ? attacker : sybil) - winnerBal;
-
-        // Winner gets stake + reward, loser loses stake
-        // Net = winnerGain - 5e6 (lost stake) - 5e6 (winner's original stake) = reward - loser stake
-        // Due to fees (80% to voters, 20% to protocol), net is always negative
-        uint256 totalReturned = winnerGain; // winner's stake + reward
-        assertLe(totalReturned, 10e6, "Self-opposition should not be profitable");
+        vm.expectRevert(RoundVotingEngine.NotEnoughVotes.selector);
+        engine.settleRound(contentId, roundId);
     }
 
     /// @notice Attacker with asymmetric stakes loses more on the losing side

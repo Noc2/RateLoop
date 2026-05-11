@@ -247,12 +247,14 @@ contract SelfOppositionProfitabilityTest is VotingTestBase {
         // Claim participation for winner only (loser is blocked)
         vm.prank(attackerA);
         distributor.claimParticipationReward(cid, 1);
+        vm.prank(attackerB);
+        distributor.claimReward(cid, 1);
 
         uint256 endA = hrepToken.balanceOf(attackerA);
         uint256 endB = hrepToken.balanceOf(attackerB);
 
         // WalletA gains: voter pool share + participation (90% of 10 LREP = 9 LREP)
-        // WalletB loses: 1 HREP stake (forfeited)
+        // WalletB loses most of the 1 HREP stake, reclaiming only the revealed-loser rebate.
         // Without walletB participation (was 0.9 HREP), net is still positive due to walletA participation.
         // BUT the attacker's profit is now just participation on the winning side minus lost stake.
         // This is equivalent to just voting honestly on the winning side — no advantage from opposition.
@@ -265,62 +267,38 @@ contract SelfOppositionProfitabilityTest is VotingTestBase {
         // The 1 HREP lost stake is pure deadweight loss with no compensating participation.
         // Honest strategy (vote 101 HREP UP, no opposition) would yield more.
 
-        // Net from opposition = voter pool share of 1 HREP losing pool - 1 HREP lost stake
-        // voter pool share = 80% * 1 * (100/150) = ~0.533 HREP
-        // Net from opposition alone = 0.533 - 1 = -0.467 HREP (LOSS)
+        // Net from opposition is bounded by the 91% voter-pool share plus the 5% revealed-loser rebate,
+        // so at least 4% of the opposed stake is still burned into protocol buckets.
         // The self-opposition is ALWAYS a net loss now.
         // (Participation is earned regardless of whether you also vote the other side)
 
-        // Verify the opposition itself was unprofitable by comparing to honest-only scenario
-        // The attacker spent 1 HREP on the losing side and got back ~0.547 from voter pool
-        // That's a guaranteed loss on the opposition component
         assertTrue(totalEnd > totalStart, "Winner still profits overall from legitimate winning vote");
     }
 
-    // ==================== Test 3: Honest-only strategy dominates ====================
+    // ==================== Test 3: RBTS forfeiture split withholds protocol share ====================
 
-    /// @notice Shows that voting 101 HREP honestly beats the 100/1 self-opposition strategy.
-    function test_HonestStrategy_Dominates() public {
-        // Scenario A: Self-opposition (100 UP + 1 DOWN)
-        uint256 cidA = _submit();
-        uint256 startA = hrepToken.balanceOf(attackerA) + hrepToken.balanceOf(attackerB);
+    /// @notice RBTS rewards are stochastic, so compare bucket accounting rather than cross-round profits.
+    function test_RbtsForfeitureBuckets_WithholdProtocolShare() public {
+        uint256 cid = _submit();
 
-        _vote(attackerA, cidA, true, 10e6);
-        _vote(attackerB, cidA, false, 1e6);
-        _vote(honest, cidA, true, 5e6);
-        _forceSettle(cidA);
+        _vote(attackerA, cid, true, 10e6);
+        _vote(attackerB, cid, false, 1e6);
+        _vote(honest, cid, true, 5e6);
+        _forceSettle(cid);
 
-        vm.prank(attackerA);
-        distributor.claimReward(cidA, 1);
-        vm.prank(attackerA);
-        distributor.claimParticipationReward(cidA, 1);
-        // walletB cannot claim participation (NotWinningSide)
+        uint256 forfeitedPool = engine.roundRbtsForfeitedPool(cid, 1);
+        uint256 loserRefundPool = RewardMath.calculateRevealedLoserRefund(forfeitedPool);
+        (uint256 voterPool, uint256 platformShare,,) = RewardMath.splitPool(forfeitedPool - loserRefundPool);
+        uint256 observedVoterPool = engine.roundVoterPool(cid, 1);
 
-        uint256 endA = hrepToken.balanceOf(attackerA) + hrepToken.balanceOf(attackerB);
-        int256 profitOpposition = int256(endA) - int256(startA);
-
-        vm.warp(block.timestamp + 24 hours + 1);
-
-        // Scenario B: Honest vote (100 UP only, no opposition)
-        uint256 cidB = _submit();
-        uint256 startB = hrepToken.balanceOf(attackerA);
-
-        _vote(attackerA, cidB, true, 10e6);
-        // Need another DOWN voter to make it non-unanimous and have a losing pool
-        _vote(attackerB, cidB, false, 1e6);
-        _vote(honest, cidB, true, 5e6);
-        _forceSettle(cidB);
-
-        vm.prank(attackerA);
-        distributor.claimReward(cidB, 1);
-        vm.prank(attackerA);
-        distributor.claimParticipationReward(cidB, 1);
-
-        uint256 endB_honest = hrepToken.balanceOf(attackerA);
-        int256 profitHonest = int256(endB_honest) - int256(startB);
-
-        // Honest strategy yields strictly more because it doesn't waste 1 HREP on losing side
-        assertGt(profitHonest, profitOpposition, "Honest strategy strictly dominates self-opposition");
+        assertGt(forfeitedPool, 0, "RBTS scoring should create a forfeiture pool in this fixture");
+        assertTrue(
+            observedVoterPool == voterPool || observedVoterPool == voterPool + platformShare,
+            "Voter pool should follow RewardMath split plus optional frontend fallback"
+        );
+        assertLt(
+            observedVoterPool + loserRefundPool, forfeitedPool, "Protocol buckets should retain part of forfeitures"
+        );
     }
 
     // ==================== Test 4: Unanimous rounds still pay all voters ====================
@@ -355,16 +333,15 @@ contract SelfOppositionProfitabilityTest is VotingTestBase {
         uint256 stakeLose = 1e6;
 
         // With the fix, losing-side participation = 0
-        // The only "gain" from opposition: voter pool share of the losing pool
-        // voter pool = 80% of stakeLose
-        // attacker's share = stakeWin / (stakeWin + 5e6) * voterPool (assuming 50 honest)
-        uint256 voterPool = stakeLose * 8000 / 10000;
+        uint256 loserRebate = RewardMath.calculateRevealedLoserRefund(stakeLose);
+        // Best-case recovery from the losing leg: attacker captures the whole voter pool
+        // and also claims the revealed-loser rebate. The protocol still withholds part of the remainder.
+        (uint256 voterPool,,,) = RewardMath.splitPool(stakeLose - loserRebate);
+        uint256 maxRecovered = voterPool + loserRebate;
         uint256 attackerShare = voterPool * stakeWin / (stakeWin + 5e6);
 
-        // Net from opposition = attackerShare - stakeLose
-        // attackerShare < stakeLose because voterPool = 80% of stakeLose < stakeLose
-        // Even if attacker had 100% of voter pool: 0.80 HREP < 1 HREP = loss
-        assert(voterPool < stakeLose); // 0.80 < 1.0 — ALWAYS a loss
+        // Even if attacker had 100% of the voter pool, the forfeiture split cannot return the full stake.
+        assert(maxRecovered < stakeLose);
 
         // The opposition component is guaranteed unprofitable regardless of tier
         assert(attackerShare < stakeLose);
