@@ -22,18 +22,9 @@ import {MockVoterIdNFT} from "./mocks/MockVoterIdNFT.sol";
 
 contract MockRaterDeclarationStatusForEscrow {
     mapping(address => bool) public hasActiveAiDeclaration;
-    mapping(address => bytes32) public clusterKeys;
 
     function setActiveAiDeclaration(address rater, bool active) external {
         hasActiveAiDeclaration[rater] = active;
-    }
-
-    function setClusterOperator(address rater, address operator) external {
-        clusterKeys[rater] = keccak256(abi.encodePacked("rateloop:operator-cluster", operator));
-    }
-
-    function clusterKey(address rater) external view returns (bytes32) {
-        return hasActiveAiDeclaration[rater] ? clusterKeys[rater] : bytes32(0);
     }
 }
 
@@ -71,7 +62,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     uint256 internal constant CATEGORY_ID = 1;
     uint8 internal constant REWARD_ASSET_HREP = 0;
     uint8 internal constant REWARD_ASSET_USDC = 1;
-    uint256 internal constant MIN_LOCO_VALID_EFFECTIVE_UNITS = 3;
+    uint256 internal constant MIN_REWARD_POOL_PARTICIPANTS = 3;
     uint256 internal constant HIGH_VALUE_REWARD_POOL_THRESHOLD = 1_000e6;
     uint256 internal constant MIN_HIGH_VALUE_PARTICIPANTS = 5;
     uint256 internal constant MAX_FRONTEND_FEE_BPS = 500;
@@ -306,7 +297,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         predictions[2] = 9_900;
         uint256 roundId = _settlePredictionRoundWith(voters, contentId, predictions);
 
-        assertEq(MIN_LOCO_VALID_EFFECTIVE_UNITS, 3);
+        assertEq(MIN_REWARD_POOL_PARTICIPANTS, 3);
         assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter1), 0);
         assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter2), 0);
         assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter3), 0);
@@ -316,12 +307,10 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
     }
 
-    function testQuestionRewardsFailLocoWhenOneOperatorDominatesEligibleUnits() public {
+    function testQuestionRewardsDoNotUseAiClustersForQualification() public {
         MockRaterDeclarationStatusForEscrow declarationStatus = _installRaterDeclarationStatus();
         declarationStatus.setActiveAiDeclaration(voter1, true);
         declarationStatus.setActiveAiDeclaration(voter2, true);
-        declarationStatus.setClusterOperator(voter1, owner);
-        declarationStatus.setClusterOperator(voter2, owner);
 
         uint256 contentId = _submitQuestion("");
         uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
@@ -333,21 +322,15 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         predictions[2] = 6_500;
         uint256 roundId = _settlePredictionRoundWith(voters, contentId, predictions);
 
-        assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter1), 0);
-        assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter2), 0);
-        assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter3), 0);
-
-        vm.prank(voter1);
-        vm.expectRevert("Too few eligible voters");
-        rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
+        assertGt(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter1), 0);
+        assertGt(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter2), 0);
+        assertGt(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter3), 0);
     }
 
-    function testQuestionRewardsSnapshotClusterStatsForIndependentPass() public {
+    function testQuestionRewardsSnapshotParticipationUnitsForIndependentPass() public {
         MockRaterDeclarationStatusForEscrow declarationStatus = _installRaterDeclarationStatus();
         declarationStatus.setActiveAiDeclaration(voter1, true);
         declarationStatus.setActiveAiDeclaration(voter2, true);
-        declarationStatus.setClusterOperator(voter1, owner);
-        declarationStatus.setClusterOperator(voter2, owner);
 
         uint256 contentId = _submitQuestion("");
         uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
@@ -366,9 +349,6 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertTrue(snapshot.qualified);
         assertEq(snapshot.rawEligibleVoters, 4);
         assertEq(snapshot.eligibleVoters, 40_000);
-        assertEq(snapshot.clusterCount, 3);
-        assertEq(snapshot.largestClusterEffectiveUnits, 20_000);
-        assertEq(snapshot.locoEffectiveParticipantUnits, 20_000);
     }
 
     function testHighValueRewardPoolRequiresHigherParticipantFloor() public {

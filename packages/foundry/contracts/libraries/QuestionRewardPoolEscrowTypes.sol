@@ -35,9 +35,6 @@ struct RoundSnapshot {
     bool qualified;
     uint32 eligibleVoters;
     uint32 rawEligibleVoters;
-    uint32 clusterCount;
-    uint32 largestClusterEffectiveUnits;
-    uint32 locoEffectiveParticipantUnits;
     uint256 allocation;
     uint32 claimedCount;
     uint256 frontendFeeAllocation;

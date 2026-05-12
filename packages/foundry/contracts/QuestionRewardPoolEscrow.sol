@@ -44,7 +44,7 @@ contract QuestionRewardPoolEscrow is
     uint256 internal constant MIN_REQUIRED_SETTLED_ROUNDS = 1;
     uint256 internal constant MAX_REQUIRED_SETTLED_ROUNDS = 16;
     uint256 internal constant MAX_REWARD_POOL_ROUND_VOTERS = 200;
-    uint256 internal constant MIN_LOCO_VALID_EFFECTIVE_UNITS = 3;
+    uint256 internal constant MIN_REWARD_POOL_PARTICIPANTS = 3;
     uint256 internal constant HIGH_VALUE_REWARD_POOL_THRESHOLD = 1_000e6;
     uint256 internal constant MIN_HIGH_VALUE_PARTICIPANTS = 5;
     uint256 internal constant BPS_SCALE = 10_000;
@@ -122,14 +122,6 @@ contract QuestionRewardPoolEscrow is
         uint256 rawEligibleVoters,
         uint256 effectiveParticipantUnits,
         uint256 totalClaimWeight
-    );
-    event RewardPoolRoundClusterStats(
-        uint256 indexed rewardPoolId,
-        uint256 indexed contentId,
-        uint256 indexed roundId,
-        uint256 clusterCount,
-        uint256 largestClusterEffectiveUnits,
-        uint256 locoEffectiveParticipantUnits
     );
     event RewardPoolCursorAdvanced(
         uint256 indexed rewardPoolId, uint256 indexed contentId, uint256 fromRoundId, uint256 toRoundId, uint256 skipped
@@ -1004,7 +996,7 @@ contract QuestionRewardPoolEscrow is
     }
 
     function _requiredParticipantFloorForAmount(uint256 amount) internal pure returns (uint256) {
-        return amount >= HIGH_VALUE_REWARD_POOL_THRESHOLD ? MIN_HIGH_VALUE_PARTICIPANTS : MIN_LOCO_VALID_EFFECTIVE_UNITS;
+        return amount >= HIGH_VALUE_REWARD_POOL_THRESHOLD ? MIN_HIGH_VALUE_PARTICIPANTS : MIN_REWARD_POOL_PARTICIPANTS;
     }
 
     function _requireFutureBountyWindow(uint256 bountyClosesAt) internal view {
@@ -1279,10 +1271,7 @@ contract QuestionRewardPoolEscrow is
             uint256 effectiveParticipantUnits,
             uint256 frontendFeeAllocation,
             uint256 rawEligibleVoters,
-            uint256 totalClaimWeight,
-            uint256 clusterCount,
-            uint256 largestClusterEffectiveUnits,
-            uint256 locoEffectiveParticipantUnits
+            uint256 totalClaimWeight
         ) = QuestionRewardPoolEscrowQualificationLib.qualifyRound(
             roundSnapshots,
             rewardPoolPayerIdentity,
@@ -1301,14 +1290,6 @@ contract QuestionRewardPoolEscrow is
         );
         emit RewardPoolRoundEffectiveUnits(
             rewardPoolId, rewardPool.contentId, roundId, rawEligibleVoters, effectiveParticipantUnits, totalClaimWeight
-        );
-        emit RewardPoolRoundClusterStats(
-            rewardPoolId,
-            rewardPool.contentId,
-            roundId,
-            clusterCount,
-            largestClusterEffectiveUnits,
-            locoEffectiveParticipantUnits
         );
     }
 
