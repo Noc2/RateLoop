@@ -13,7 +13,7 @@ const WhitepaperPage: NextPage = () => {
 
       <div className="not-prose my-8">
         <a
-          href="/curyo-whitepaper.pdf"
+          href="/rateloop-whitepaper.pdf"
           download="RateLoop-Whitepaper.pdf"
           className="btn btn-lg btn-primary gap-2 border-none no-underline"
         >

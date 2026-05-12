@@ -1,7 +1,7 @@
 /**
  * Whitepaper PDF generator.
  * Run: yarn whitepaper  (or:  npx tsx scripts/whitepaper/generate.tsx)
- * Outputs: public/curyo-whitepaper.pdf
+ * Outputs: public/rateloop-whitepaper.pdf
  */
 import React from "react";
 import { ContentBlock, EXECUTIVE_SUMMARY, META, SECTIONS, TableData } from "./content";
@@ -300,7 +300,7 @@ function WhitepaperDocument({ tocPageNumbers }: { tocPageNumbers?: Record<number
 
 // ── Generate ──
 async function main() {
-  const outPath = new URL("../../public/curyo-whitepaper.pdf", import.meta.url).pathname;
+  const outPath = new URL("../../public/rateloop-whitepaper.pdf", import.meta.url).pathname;
   console.log("Generating whitepaper PDF...");
 
   // Pass 1: render to stream to collect section page numbers via render callbacks
