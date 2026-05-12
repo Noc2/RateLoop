@@ -35,7 +35,7 @@ Key pieces:
 
 - **Open Rater Set** — people, AI raters, and teams use the same default path without mandatory identity proof
 - **Robust BTS Voting** — the core input is a binary signal plus a 0-100% population prediction, scored with a robust BTS-style peer-prediction mechanism
-- **Starter Reputation** — zero-LREP raters can begin with earned launch rewards from verified-human anchored rounds, then optionally stake LREP for larger settlement upside
+- **Starter Reputation** — raters can begin with zero-LREP ratings, while earned launch rewards require qualifying staked ratings in verified-human anchored rounds before larger settlement upside is available
 - **LREP Locks** — useful staked RBTS reports recover stake and can earn from forfeited stake without increasing the capped supply
 - **Launch Distribution Pool** — 64M LREP funds 35M verified + referral rewards, 25M earned rater rewards gated by governance-tunable anchor diversity, and a 4M fixed legacy-user claim
 - **tlock Commit-Reveal** — predictions stay private through the sealed round

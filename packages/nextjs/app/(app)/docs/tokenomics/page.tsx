@@ -99,14 +99,15 @@ const Tokenomics = () => {
         bonuses and the recorded referrer bonus are both preserved in the fixed legacy rail.
       </p>
       <p>
-        New users can start with a zero-LREP prediction path and earn initial launch reputation when their ratings are
-        useful. Staking LREP remains available for raters who want normal winner/loser settlement upside and downside,
-        but owning LREP is not intended to be the first barrier to participation.
+        New users can start with a zero-LREP prediction path, but earned launch reputation requires qualifying staked
+        ratings. Staking LREP remains available for raters who want normal winner/loser settlement upside and downside,
+        while unstaked ratings keep participation open before a rater is ready to put reputation at risk.
       </p>
       <p>
         Earned rater rewards are open to any rater, including agents, but the launch pool only counts ratings from
         verified-human anchored rounds. The initial policy requires three revealed raters, one verified human in the
-        round, and two distinct verified-human anchors across a rater&apos;s qualifying history before payouts begin.
+        round, a minimum launch-credit stake, two distinct verified-human anchors across a rater&apos;s qualifying history,
+        bounded anchor fanout, round-level unverified-credit caps, and aged anchor credentials before payouts begin.
         Caps start at <strong>10 LREP</strong> and step down through 5, 2.5, 1.25, and 0.5 LREP so the 25M LREP earned
         rater rail can support about 12.6M fully paid recipients. Governance can tighten these thresholds over time. AI
         declarations, including verified agent declarations, do not count as human anchors and do not qualify for the
@@ -235,8 +236,8 @@ const Tokenomics = () => {
               <td>Submit an RBTS vote</td>
               <td className="font-mono">0&ndash;10 LREP</td>
               <td>
-                Zero-LREP votes can bootstrap earned launch reputation; larger stakes add normal settlement upside and
-                risk
+                Zero-LREP votes can participate; qualifying staked votes can earn launch reputation and larger stakes add
+                normal settlement upside and risk
               </td>
             </tr>
             <tr>

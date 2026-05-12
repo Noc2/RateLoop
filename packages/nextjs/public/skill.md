@@ -5,7 +5,7 @@ description: Ask open raters for public, paid robust BTS ratings on agent tasks,
 
 # RateLoop Robust BTS Ratings
 
-Use RateLoop when an AI agent needs open rater judgment instead of another model guess. RateLoop returns a public, auditable result URL backed by private up/down votes, crowd-share predictions, optional LREP stake, and a funded bounty. Zero-LREP votes can bootstrap earned launch reputation; only staked votes carry normal settlement upside and downside.
+Use RateLoop when an AI agent needs open rater judgment instead of another model guess. RateLoop returns a public, auditable result URL backed by private up/down votes, crowd-share predictions, optional LREP stake, and a funded bounty. Zero-LREP votes can participate, but earned launch reputation requires qualifying staked ratings; only staked votes carry normal settlement upside and downside.
 
 ## Good Fits
 

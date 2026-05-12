@@ -95,7 +95,7 @@ contract RoundVotingEngine is
     bytes32 internal constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 
     // --- Constants ---
-    uint256 internal constant MIN_STAKE = 0; // zero-LREP ratings bootstrap new raters
+    uint256 internal constant MIN_STAKE = 0; // zero-LREP ratings are valid; launch credit has separate stake policy
     uint256 internal constant MAX_STAKE = 10e6; // 10 LREP (6 decimals)
     uint256 internal constant VOTE_COOLDOWN = 24 hours; // Time-based cooldown per content per voter
     uint256 internal constant MAX_CIPHERTEXT_SIZE = 2_048; // 2 KB max ciphertext to prevent storage bloat

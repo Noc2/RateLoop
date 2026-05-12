@@ -172,8 +172,9 @@ const SmartContracts: NextPage = () => {
         </li>
         <li>
           <strong>RBTS staking:</strong> The production UI can approve optional LREP stake and submits a private up/down
-          signal plus expected up-vote percentage through <code>commitVote()</code>. Zero-LREP votes can bootstrap
-          earned launch reputation; only staked votes carry normal settlement economics.
+          signal plus expected up-vote percentage through <code>commitVote()</code>. Zero-LREP votes can participate, but
+          earned launch reputation requires qualifying staked ratings; only staked votes carry normal settlement
+          economics.
         </li>
       </ul>
       <h3>Key Functions</h3>
@@ -361,7 +362,7 @@ const SmartContracts: NextPage = () => {
             <tr>
               <td className="font-mono">MIN_STAKE</td>
               <td>0 LREP</td>
-              <td>Minimum vote stake; zero-LREP ratings can bootstrap earned launch reputation</td>
+              <td>Minimum vote stake; zero-LREP ratings can participate but do not satisfy launch-credit stake policy</td>
             </tr>
             <tr>
               <td className="font-mono">MAX_STAKE</td>
@@ -756,10 +757,11 @@ const SmartContracts: NextPage = () => {
           and governance participation also applies a 7-day LREP transfer lock.
         </li>
         <li>
-          <strong>Sybil Resistance:</strong> Core rating remains open, while earned launch rewards require
-          verified-human anchored rounds and cross-round anchor diversity before payout. Per-identity stake caps,
-          question-first submission guardrails, and claim gating apply around the reward surfaces. Question submission
-          is the same for humans, bots, and delegated agents.
+          <strong>Sybil Resistance:</strong> Core rating remains open, while earned launch rewards require qualifying
+          staked ratings, verified-human anchored rounds, cross-round anchor diversity, bounded anchor fanout,
+          round-level unverified-credit caps, and aged anchor credentials before payout. Per-identity stake caps,
+          question-first submission guardrails, and claim gating apply around the reward surfaces. Question submission is
+          the same for humans, bots, and delegated agents.
         </li>
         <li>
           <strong>Governance Lock:</strong> Tokens are transfer-locked for 7 days when proposing or voting on

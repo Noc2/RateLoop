@@ -176,8 +176,8 @@ const TechStackPage: NextPage = () => {
       </p>
       <p>
         The reason to use staking is incentive alignment: a rater can put scarce reputation behind a prediction for
-        normal settlement upside and downside. New raters can still begin through zero-LREP predictions and earned
-        launch rewards from verified-human anchored rounds.
+        normal settlement upside and downside. New raters can still begin through zero-LREP predictions, while earned
+        launch rewards require qualifying staked ratings from verified-human anchored rounds.
       </p>
 
       <h2 id="bounties">Bounties</h2>
