@@ -26,10 +26,7 @@ import {
   getServerTargetNetworkById,
 } from "~~/lib/env/server";
 import { buildFreeTransactionOperationKey } from "~~/lib/thirdweb/freeTransactionOperation";
-import {
-  buildVerifiedFreeTransactionFallbackSummary,
-  isFreeTransactionStoreUnavailableError,
-} from "~~/lib/thirdweb/freeTransactionStoreFallback";
+import { isFreeTransactionStoreUnavailableError } from "~~/lib/thirdweb/freeTransactionStoreFallback";
 
 type DeployedContractsMap = Record<
   number,
@@ -110,7 +107,8 @@ export type FreeTransactionAllowanceDecision =
         | "unsupported_operation"
         | "invalid_operation_key"
         | "missing_voter_id"
-        | "free_tx_exhausted";
+        | "free_tx_exhausted"
+        | "quota_store_unavailable";
     };
 
 const DEFAULT_DENY_REASON = "Transaction not sponsored.";
@@ -953,22 +951,14 @@ export async function getFreeTransactionAllowanceSummary(params: { address: stri
       walletAddress,
     });
 
-    return (
-      summary ??
-      buildVerifiedFreeTransactionFallbackSummary({
-        address: walletAddress,
-        chainId: params.chainId,
-        voterIdTokenId,
-      })
-    );
+    if (!summary) {
+      throw new Error("Failed to read free transaction quota summary.");
+    }
+
+    return summary;
   } catch (error) {
     if (isFreeTransactionStoreUnavailableError(error)) {
-      console.warn("[thirdweb-free-tx] quota store unavailable during summary lookup; failing open.", {
-        address: walletAddress,
-        chainId: params.chainId,
-        voterIdTokenId,
-      });
-      return buildVerifiedFreeTransactionFallbackSummary({
+      console.warn("[thirdweb-free-tx] quota store unavailable during summary lookup; using self-funded fallback.", {
         address: walletAddress,
         chainId: params.chainId,
         voterIdTokenId,
@@ -1200,19 +1190,15 @@ export async function evaluateFreeTransactionAllowance(
     });
   } catch (error) {
     if (isFreeTransactionStoreUnavailableError(error)) {
-      console.warn("[thirdweb-free-tx] quota store unavailable during verifier check; failing open.", {
+      console.warn("[thirdweb-free-tx] quota store unavailable during verifier check; failing closed.", {
         chainId: body.chainId,
         sender: walletAddress,
         voterIdTokenId,
       });
       return {
-        isAllowed: true,
-        debugCode: "store_unavailable_fail_open",
-        summary: buildVerifiedFreeTransactionFallbackSummary({
-          address: walletAddress,
-          chainId: body.chainId,
-          voterIdTokenId,
-        }),
+        isAllowed: false,
+        debugCode: "quota_store_unavailable",
+        reason: DEFAULT_DENY_REASON,
       };
     }
 
@@ -1328,12 +1314,12 @@ export async function confirmFreeTransactionReservation(params: {
     });
   } catch (error) {
     if (isFreeTransactionStoreUnavailableError(error)) {
-      console.warn("[thirdweb-free-tx] quota store unavailable during confirmation; failing open.", {
+      console.warn("[thirdweb-free-tx] quota store unavailable during confirmation; failing closed.", {
         address: walletAddress,
         chainId: params.chainId,
         operationKey: params.operationKey,
       });
-      return;
+      throw error;
     }
 
     throw error;

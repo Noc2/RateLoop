@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isFreeTransactionStoreUnavailableError } from "../session/fallback";
 import { confirmFreeTransactionReservation } from "~~/lib/thirdweb/freeTransactions";
 import { checkRateLimit } from "~~/utils/rateLimit";
 
@@ -38,6 +39,10 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ ok: true });
   } catch (error) {
+    if (isFreeTransactionStoreUnavailableError(error)) {
+      return NextResponse.json({ error: "Free transaction quota store unavailable" }, { status: 503 });
+    }
+
     const message =
       error instanceof Error && error.message.trim() ? error.message : "Failed to confirm free transaction usage";
     return NextResponse.json({ error: message }, { status: 400 });

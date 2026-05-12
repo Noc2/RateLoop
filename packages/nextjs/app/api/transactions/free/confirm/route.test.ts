@@ -143,7 +143,7 @@ test("free transaction confirm route fails open when the rate limit store is una
   assert.deepEqual(await response.json(), { ok: true });
 });
 
-test("free transaction confirm route fails open when the quota store is unavailable", async () => {
+test("free transaction confirm route fails closed when the quota store is unavailable", async () => {
   dbModule.__setDatabaseResourcesForTests(createStoreUnavailableResources(memoryResources));
 
   try {
@@ -156,8 +156,8 @@ test("free transaction confirm route fails open when the quota store is unavaila
       }),
     );
 
-    assert.equal(response.status, 200);
-    assert.deepEqual(await response.json(), { ok: true });
+    assert.equal(response.status, 503);
+    assert.deepEqual(await response.json(), { error: "Free transaction quota store unavailable" });
   } finally {
     dbModule.__setDatabaseResourcesForTests(memoryResources);
   }
