@@ -308,6 +308,83 @@ export interface CuryoPaginatedResponse<T> {
   hasMore?: boolean;
 }
 
+export interface CuryoAiRaterDeclarationItem {
+  rater: `0x${string}`;
+  operator: `0x${string}`;
+  version: number;
+  effectiveEpoch: string;
+  expiresAtEpoch: string;
+  tier: number;
+  behaviorChanged: boolean;
+  probePending: boolean;
+  declarationHash: `0x${string}`;
+  modelClass: number;
+  modelId: `0x${string}`;
+  provider: `0x${string}`;
+  promptTemplateHash: `0x${string}`;
+  retrievalConfigHash: `0x${string}`;
+  toolingHash: `0x${string}`;
+  disclosure: number;
+  declaredAt: string;
+  retiredAt: string | null;
+  lastProbeResultHash: `0x${string}` | null;
+  updatedAt: string;
+  [key: string]: unknown;
+}
+
+export interface CuryoAiRaterDeclarationHistoryItem
+  extends CuryoAiRaterDeclarationItem {
+  id: string;
+}
+
+export interface CuryoAiRaterProbeResultItem {
+  id: string;
+  rater: `0x${string}`;
+  operator: `0x${string}`;
+  version: number;
+  passed: boolean;
+  confidenceBps: number;
+  probeLibraryHash: `0x${string}`;
+  resultHash: `0x${string}`;
+  recordedAt: string;
+  [key: string]: unknown;
+}
+
+export interface CuryoAiRaterDriftFlagItem {
+  id: string;
+  rater: `0x${string}`;
+  operator: `0x${string}`;
+  version: number;
+  driftScoreBps: number;
+  evidenceHash: `0x${string}`;
+  flaggedAt: string;
+  [key: string]: unknown;
+}
+
+export interface CuryoAiRaterDeclarationChallengeItem {
+  challengeId: string;
+  challenger: `0x${string}`;
+  rater: `0x${string}`;
+  operator: `0x${string}`;
+  declarationVersion: number;
+  evidenceHash: `0x${string}`;
+  resolutionHash: `0x${string}` | null;
+  bondAmount: string;
+  status: number;
+  operatorSlash: string;
+  challengerReward: string;
+  openedAt: string;
+  resolvedAt: string | null;
+  [key: string]: unknown;
+}
+
+export interface CuryoAiRaterOperatorBond {
+  operator: `0x${string}`;
+  totalBond: string;
+  updatedAt: string | null;
+  [key: string]: unknown;
+}
+
 export interface CuryoContentDetailsResponse {
   audienceContext: CuryoSelfReportedAudienceContext;
   content: CuryoContentItem;
@@ -377,6 +454,40 @@ export interface ListCategoriesParams {
   offset?: number;
 }
 
+export interface ListAiRaterDeclarationsParams {
+  operator?: string;
+  tier?: number;
+  probePending?: boolean;
+  limit?: number;
+  offset?: number;
+}
+
+export interface AiRaterDeclarationHistoryParams {
+  version?: number;
+  limit?: number;
+  offset?: number;
+}
+
+export interface AiRaterProbeResultsParams {
+  version?: number;
+  passed?: boolean;
+  limit?: number;
+  offset?: number;
+}
+
+export interface AiRaterDriftFlagsParams {
+  version?: number;
+  limit?: number;
+  offset?: number;
+}
+
+export interface AiRaterDeclarationChallengesParams {
+  version?: number;
+  status?: number;
+  limit?: number;
+  offset?: number;
+}
+
 export interface CuryoReadClient {
   searchContent(
     params?: SearchContentParams,
@@ -392,6 +503,31 @@ export interface CuryoReadClient {
   getRaterRewardStatus(
     address: string,
   ): Promise<CuryoRaterRewardStatusResponse>;
+  listAiRaterDeclarations(
+    params?: ListAiRaterDeclarationsParams,
+  ): Promise<CuryoPaginatedResponse<CuryoAiRaterDeclarationItem>>;
+  getAiRaterDeclaration(
+    address: string,
+  ): Promise<{ declaration: CuryoAiRaterDeclarationItem | null }>;
+  getAiRaterDeclarationHistory(
+    address: string,
+    params?: AiRaterDeclarationHistoryParams,
+  ): Promise<CuryoPaginatedResponse<CuryoAiRaterDeclarationHistoryItem>>;
+  getAiRaterProbeResults(
+    address: string,
+    params?: AiRaterProbeResultsParams,
+  ): Promise<CuryoPaginatedResponse<CuryoAiRaterProbeResultItem>>;
+  getAiRaterDriftFlags(
+    address: string,
+    params?: AiRaterDriftFlagsParams,
+  ): Promise<CuryoPaginatedResponse<CuryoAiRaterDriftFlagItem>>;
+  getAiRaterDeclarationChallenges(
+    address: string,
+    params?: AiRaterDeclarationChallengesParams,
+  ): Promise<CuryoPaginatedResponse<CuryoAiRaterDeclarationChallengeItem>>;
+  getAiRaterOperatorBond(
+    address: string,
+  ): Promise<{ bond: CuryoAiRaterOperatorBond }>;
   getStats(): Promise<CuryoGlobalStats>;
   searchVotes(
     params?: SearchVotesParams,
@@ -433,6 +569,46 @@ export function createCuryoReadClient(
       request<CuryoRaterRewardStatusResponse>(
         config,
         `/rater-reward-status/${address}`,
+      ),
+    listAiRaterDeclarations: (params) =>
+      request<CuryoPaginatedResponse<CuryoAiRaterDeclarationItem>>(
+        config,
+        "/ai-rater-declarations",
+        params,
+      ),
+    getAiRaterDeclaration: (address) =>
+      request<{ declaration: CuryoAiRaterDeclarationItem | null }>(
+        config,
+        `/ai-rater-declarations/${address}`,
+      ),
+    getAiRaterDeclarationHistory: (address, params) =>
+      request<CuryoPaginatedResponse<CuryoAiRaterDeclarationHistoryItem>>(
+        config,
+        `/ai-rater-declarations/${address}/history`,
+        params,
+      ),
+    getAiRaterProbeResults: (address, params) =>
+      request<CuryoPaginatedResponse<CuryoAiRaterProbeResultItem>>(
+        config,
+        `/ai-rater-declarations/${address}/probes`,
+        params,
+      ),
+    getAiRaterDriftFlags: (address, params) =>
+      request<CuryoPaginatedResponse<CuryoAiRaterDriftFlagItem>>(
+        config,
+        `/ai-rater-declarations/${address}/drift-flags`,
+        params,
+      ),
+    getAiRaterDeclarationChallenges: (address, params) =>
+      request<CuryoPaginatedResponse<CuryoAiRaterDeclarationChallengeItem>>(
+        config,
+        `/ai-rater-declarations/${address}/challenges`,
+        params,
+      ),
+    getAiRaterOperatorBond: (address) =>
+      request<{ bond: CuryoAiRaterOperatorBond }>(
+        config,
+        `/ai-rater-operators/${address}/bond`,
       ),
     getStats: () => request<CuryoGlobalStats>(config, "/stats"),
     searchVotes: (params) =>

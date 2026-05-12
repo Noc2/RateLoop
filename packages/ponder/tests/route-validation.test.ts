@@ -117,21 +117,65 @@ function mockPonderModules<T>(result: T) {
       retiredAt: "aiRaterDeclaration.retiredAt",
       tier: "aiRaterDeclaration.tier",
       toolingHash: "aiRaterDeclaration.toolingHash",
+      updatedAt: "aiRaterDeclaration.updatedAt",
       version: "aiRaterDeclaration.version",
     },
     aiRaterDeclarationChallenge: {
+      bondAmount: "aiRaterDeclarationChallenge.bondAmount",
       challengeId: "aiRaterDeclarationChallenge.challengeId",
+      challenger: "aiRaterDeclarationChallenge.challenger",
       challengerReward: "aiRaterDeclarationChallenge.challengerReward",
       declarationVersion: "aiRaterDeclarationChallenge.declarationVersion",
+      evidenceHash: "aiRaterDeclarationChallenge.evidenceHash",
       openedAt: "aiRaterDeclarationChallenge.openedAt",
+      operator: "aiRaterDeclarationChallenge.operator",
       operatorSlash: "aiRaterDeclarationChallenge.operatorSlash",
       rater: "aiRaterDeclarationChallenge.rater",
       resolvedAt: "aiRaterDeclarationChallenge.resolvedAt",
+      resolutionHash: "aiRaterDeclarationChallenge.resolutionHash",
       status: "aiRaterDeclarationChallenge.status",
+    },
+    aiRaterDeclarationHistory: {
+      behaviorChanged: "aiRaterDeclarationHistory.behaviorChanged",
+      declarationHash: "aiRaterDeclarationHistory.declarationHash",
+      declaredAt: "aiRaterDeclarationHistory.declaredAt",
+      disclosure: "aiRaterDeclarationHistory.disclosure",
+      effectiveEpoch: "aiRaterDeclarationHistory.effectiveEpoch",
+      expiresAtEpoch: "aiRaterDeclarationHistory.expiresAtEpoch",
+      id: "aiRaterDeclarationHistory.id",
+      lastProbeResultHash: "aiRaterDeclarationHistory.lastProbeResultHash",
+      modelClass: "aiRaterDeclarationHistory.modelClass",
+      modelId: "aiRaterDeclarationHistory.modelId",
+      operator: "aiRaterDeclarationHistory.operator",
+      probePending: "aiRaterDeclarationHistory.probePending",
+      promptTemplateHash: "aiRaterDeclarationHistory.promptTemplateHash",
+      provider: "aiRaterDeclarationHistory.provider",
+      rater: "aiRaterDeclarationHistory.rater",
+      retrievalConfigHash: "aiRaterDeclarationHistory.retrievalConfigHash",
+      retiredAt: "aiRaterDeclarationHistory.retiredAt",
+      tier: "aiRaterDeclarationHistory.tier",
+      toolingHash: "aiRaterDeclarationHistory.toolingHash",
+      updatedAt: "aiRaterDeclarationHistory.updatedAt",
+      version: "aiRaterDeclarationHistory.version",
+    },
+    aiRaterDriftFlag: {
+      driftScoreBps: "aiRaterDriftFlag.driftScoreBps",
+      evidenceHash: "aiRaterDriftFlag.evidenceHash",
+      flaggedAt: "aiRaterDriftFlag.flaggedAt",
+      id: "aiRaterDriftFlag.id",
+      operator: "aiRaterDriftFlag.operator",
+      rater: "aiRaterDriftFlag.rater",
+      version: "aiRaterDriftFlag.version",
+    },
+    aiRaterOperatorBond: {
+      operator: "aiRaterOperatorBond.operator",
+      totalBond: "aiRaterOperatorBond.totalBond",
+      updatedAt: "aiRaterOperatorBond.updatedAt",
     },
     aiRaterProbeResult: {
       confidenceBps: "aiRaterProbeResult.confidenceBps",
       id: "aiRaterProbeResult.id",
+      operator: "aiRaterProbeResult.operator",
       passed: "aiRaterProbeResult.passed",
       probeLibraryHash: "aiRaterProbeResult.probeLibraryHash",
       rater: "aiRaterProbeResult.rater",
@@ -1047,8 +1091,8 @@ describe("registerDataRoutes", () => {
     });
   });
 
-  it("evaluates rater reward status against indexed chain time", async () => {
-    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(20_000_000);
+  it("expires rater reward status against wall-clock time", async () => {
+    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(40_000_000);
     const zeroHash =
       "0x0000000000000000000000000000000000000000000000000000000000000000";
     mockPonderModules([
@@ -1109,19 +1153,141 @@ describe("registerDataRoutes", () => {
     expect(body).toMatchObject({
       asOf: {
         chainTimestamp: "5000",
-        wallTimestamp: "20000",
+        wallTimestamp: "40000",
         indexedBlockNumber: null,
       },
+      selfCredential: {
+        status: "expired",
+        multiplierBps: 10_000,
+      },
       aiDeclaration: {
-        active: true,
-        inactiveReason: "none",
+        active: false,
+        inactiveReason: "expired",
         declaredTierName: "A1Verified",
-        effectiveTierName: "A1Verified",
-        tierMultiplierBps: 11_500,
+        effectiveTierName: "A0",
+        tierMultiplierBps: 10_000,
+      },
+      rewardPolicy: {
+        agentTierMultiplierBps: 10_000,
+        combinedMultiplierBps: 10_000,
       },
     });
 
     nowSpy.mockRestore();
+  });
+
+  it("rejects invalid AI rater read addresses before querying the database", async () => {
+    const { db } = mockPonderModules([]);
+    const { registerDataRoutes } = await import(
+      "../src/api/routes/data-routes.js"
+    );
+
+    const app = new Hono();
+    registerDataRoutes(app);
+
+    const historyResponse = await app.request(
+      "http://localhost/ai-rater-declarations/not-an-address/history",
+    );
+    const bondResponse = await app.request(
+      "http://localhost/ai-rater-operators/not-an-address/bond",
+    );
+
+    expect(historyResponse.status).toBe(400);
+    expect(await historyResponse.json()).toEqual({ error: "Invalid address" });
+    expect(bondResponse.status).toBe(400);
+    expect(await bondResponse.json()).toEqual({ error: "Invalid address" });
+    expect(db.select).not.toHaveBeenCalled();
+  });
+
+  it("returns paginated AI rater declaration history", async () => {
+    const zeroHash =
+      "0x0000000000000000000000000000000000000000000000000000000000000000";
+    const { queryBuilder } = mockPonderModules([
+      {
+        id: "0x00000000000000000000000000000000000000aa-3",
+        rater: "0x00000000000000000000000000000000000000aa",
+        operator: "0x00000000000000000000000000000000000000bb",
+        version: 3,
+        effectiveEpoch: 1n,
+        expiresAtEpoch: 0n,
+        tier: 2,
+        behaviorChanged: false,
+        probePending: false,
+        declarationHash: zeroHash,
+        modelClass: 1,
+        modelId: zeroHash,
+        provider: zeroHash,
+        promptTemplateHash: zeroHash,
+        retrievalConfigHash: zeroHash,
+        toolingHash: zeroHash,
+        disclosure: 1,
+        declaredAt: 2_000n,
+        retiredAt: null,
+        lastProbeResultHash: zeroHash,
+        updatedAt: 2_000n,
+      },
+    ]);
+    const { registerDataRoutes } = await import(
+      "../src/api/routes/data-routes.js"
+    );
+
+    const app = new Hono();
+    registerDataRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/ai-rater-declarations/0x00000000000000000000000000000000000000AA/history?version=3&limit=25&offset=5",
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      items: [
+        {
+          id: "0x00000000000000000000000000000000000000aa-3",
+          rater: "0x00000000000000000000000000000000000000aa",
+          version: 3,
+          effectiveEpoch: "1",
+          declaredAt: "2000",
+        },
+      ],
+      limit: 25,
+      offset: 5,
+    });
+    expect(queryBuilder.limit).toHaveBeenCalledWith(25);
+    expect(queryBuilder.offset).toHaveBeenCalledWith(5);
+
+    const serializedWhere = serializeExpression(
+      queryBuilder.where.mock.calls[0]?.[0],
+    );
+    expect(serializedWhere).toContain("aiRaterDeclarationHistory.rater");
+    expect(serializedWhere).toContain(
+      "0x00000000000000000000000000000000000000aa",
+    );
+    expect(serializedWhere).toContain("aiRaterDeclarationHistory.version");
+  });
+
+  it("returns a zero operator bond when no indexed bond exists", async () => {
+    const { db } = mockPonderModules([]);
+    const { registerDataRoutes } = await import(
+      "../src/api/routes/data-routes.js"
+    );
+
+    const app = new Hono();
+    registerDataRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/ai-rater-operators/0x00000000000000000000000000000000000000BB/bond",
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      bond: {
+        operator: "0x00000000000000000000000000000000000000bb",
+        totalBond: "0",
+        updatedAt: null,
+      },
+    });
+    expect(db.select).toHaveBeenCalledTimes(1);
   });
 
   it("includes bounty payouts in global stats", async () => {

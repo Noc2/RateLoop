@@ -98,6 +98,8 @@ ponder.on("RaterDeclarationRegistry:DeclarationSubmitted", async ({ event, conte
     toolingHash,
     disclosure: Number(disclosure),
     declaredAt: event.block.timestamp,
+    expiredAt: null,
+    bondReleasedAt: null,
     retiredAt: null,
     lastProbeResultHash: null,
     updatedAt: event.block.timestamp,
@@ -127,6 +129,28 @@ ponder.on("RaterDeclarationRegistry:DeclarationRetired", async ({ event, context
   };
 
   await updateCurrentDeclarationIfVersionMatches(context, rater, numericVersion, update);
+
+  await context.db.update(aiRaterDeclarationHistory, { id: historyId }).set(update);
+});
+
+ponder.on("RaterDeclarationRegistry:DeclarationExpired", async ({ event, context }) => {
+  const { rater, version } = event.args;
+  const numericVersion = Number(version);
+  const historyId = declarationHistoryId(rater, numericVersion);
+
+  const update = {
+    tier: 0,
+    probePending: false,
+    expiredAt: event.block.timestamp,
+    updatedAt: event.block.timestamp,
+  };
+
+  await updateCurrentDeclarationIfVersionMatches(
+    context,
+    rater,
+    numericVersion,
+    update,
+  );
 
   await context.db.update(aiRaterDeclarationHistory, { id: historyId }).set(update);
 });
@@ -259,4 +283,22 @@ ponder.on("RaterDeclarationRegistry:ChallengeResolved", async ({ event, context 
     await updateCurrentDeclarationIfVersionMatches(context, challenge.rater, challenge.declarationVersion, update);
     await context.db.update(aiRaterDeclarationHistory, { id: historyId }).set(update);
   }
+});
+
+ponder.on("RaterDeclarationRegistry:DeclarationBondReleased", async ({ event, context }) => {
+  const { rater, operator } = event.args;
+  const current = await context.db.find(aiRaterDeclaration, { rater });
+  if (!current || current.operator !== operator) return;
+
+  const update = {
+    bondReleasedAt: event.block.timestamp,
+    updatedAt: event.block.timestamp,
+  };
+
+  await context.db.update(aiRaterDeclaration, { rater }).set(update);
+  await context.db
+    .update(aiRaterDeclarationHistory, {
+      id: declarationHistoryId(rater, current.version),
+    })
+    .set(update);
 });

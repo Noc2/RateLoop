@@ -171,6 +171,105 @@ test("getRaterRewardStatus requests the typed reward-status route", async () => 
   );
 });
 
+test("AI rater read helpers request declaration productization routes", async () => {
+  const requestedUrls: string[] = [];
+  const read = createCuryoReadClient({
+    apiBaseUrl: "https://api.curyo.xyz",
+    fetchImpl: async (input: URL | RequestInfo) => {
+      requestedUrls.push(String(input));
+      return new Response(JSON.stringify({ items: [], limit: 10, offset: 0 }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    },
+    timeoutMs: 5_000,
+  });
+
+  await read.listAiRaterDeclarations({
+    operator: "0x2222222222222222222222222222222222222222",
+    tier: 2,
+    probePending: false,
+    limit: 10,
+  });
+  await read.getAiRaterDeclaration(
+    "0x1111111111111111111111111111111111111111",
+  );
+  await read.getAiRaterDeclarationHistory(
+    "0x1111111111111111111111111111111111111111",
+    { version: 3, limit: 5, offset: 10 },
+  );
+  await read.getAiRaterProbeResults(
+    "0x1111111111111111111111111111111111111111",
+    { passed: true },
+  );
+  await read.getAiRaterDriftFlags(
+    "0x1111111111111111111111111111111111111111",
+  );
+  await read.getAiRaterDeclarationChallenges(
+    "0x1111111111111111111111111111111111111111",
+    { status: 1 },
+  );
+
+  assert.match(
+    requestedUrls[0] ?? "",
+    /\/ai-rater-declarations\?operator=0x2222222222222222222222222222222222222222&tier=2&probePending=false&limit=10$/,
+  );
+  assert.match(
+    requestedUrls[1] ?? "",
+    /\/ai-rater-declarations\/0x1111111111111111111111111111111111111111$/,
+  );
+  assert.match(
+    requestedUrls[2] ?? "",
+    /\/ai-rater-declarations\/0x1111111111111111111111111111111111111111\/history\?version=3&limit=5&offset=10$/,
+  );
+  assert.match(
+    requestedUrls[3] ?? "",
+    /\/ai-rater-declarations\/0x1111111111111111111111111111111111111111\/probes\?passed=true$/,
+  );
+  assert.match(
+    requestedUrls[4] ?? "",
+    /\/ai-rater-declarations\/0x1111111111111111111111111111111111111111\/drift-flags$/,
+  );
+  assert.match(
+    requestedUrls[5] ?? "",
+    /\/ai-rater-declarations\/0x1111111111111111111111111111111111111111\/challenges\?status=1$/,
+  );
+});
+
+test("getAiRaterOperatorBond requests the operator bond route", async () => {
+  let requestedUrl = "";
+  const read = createCuryoReadClient({
+    apiBaseUrl: "https://api.curyo.xyz",
+    fetchImpl: async (input: URL | RequestInfo) => {
+      requestedUrl = String(input);
+      return new Response(
+        JSON.stringify({
+          bond: {
+            operator: "0x2222222222222222222222222222222222222222",
+            totalBond: "0",
+            updatedAt: null,
+          },
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        },
+      );
+    },
+    timeoutMs: 5_000,
+  });
+
+  const response = await read.getAiRaterOperatorBond(
+    "0x2222222222222222222222222222222222222222",
+  );
+
+  assert.match(
+    requestedUrl,
+    /\/ai-rater-operators\/0x2222222222222222222222222222222222222222\/bond$/,
+  );
+  assert.equal(response.bond.totalBond, "0");
+});
+
 test("read client surfaces API errors with status codes", async () => {
   const read = createCuryoReadClient({
     apiBaseUrl: "https://api.curyo.xyz",

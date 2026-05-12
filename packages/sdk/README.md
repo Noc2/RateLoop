@@ -25,6 +25,7 @@ Framework-specific hooks and UI components should live in a follow-up package ra
 - client config normalization via `createCuryoClient(...)`
 - typed read client for hosted/indexed HTTP routes
 - `read.getRaterRewardStatus(address)` for human credential state, AI declaration tier, probe status, challenge status, and capped reward policy
+- AI rater declaration reads via `read.getAiRaterDeclaration(address)`, `read.getAiRaterDeclarationHistory(address)`, `read.getAiRaterProbeResults(address)`, `read.getAiRaterDriftFlags(address)`, `read.getAiRaterDeclarationChallenges(address)`, `read.getAiRaterOperatorBond(address)`, and `read.listAiRaterDeclarations(...)`
 - vote/frontend helpers in `@rateloop/sdk/vote`
 - wallet-agnostic agent helpers in `@rateloop/sdk/agent` for MCP-compatible asks, non-custodial agent-wallet flows, result parsing, and webhook verification
 
@@ -43,6 +44,10 @@ const curyo = createCuryoClient({
 const { content } = await curyo.read.getContent("42");
 const rewardStatus = await curyo.read.getRaterRewardStatus(
   "0xAgentOrRaterWallet",
+);
+const declarationHistory = await curyo.read.getAiRaterDeclarationHistory(
+  "0xAgentOrRaterWallet",
+  { limit: 10 },
 );
 
 const commit = await buildCommitVoteParams({

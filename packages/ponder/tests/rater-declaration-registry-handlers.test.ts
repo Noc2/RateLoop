@@ -123,6 +123,8 @@ describe("RaterDeclarationRegistry ponder handlers", () => {
         effectiveEpoch: 100n,
         expiresAtEpoch: 0n,
         probePending: true,
+        expiredAt: null,
+        bondReleasedAt: null,
         modelId: `0x${"22".repeat(32)}`,
       }),
     });
@@ -220,6 +222,135 @@ describe("RaterDeclarationRegistry ponder handlers", () => {
         update: expect.objectContaining({
           tier: 2,
           lastProbeResultHash: `0x${"88".repeat(32)}`,
+        }),
+      },
+    ]);
+  });
+
+  it("indexes declaration expiry without retiring the declaration history row", async () => {
+    const rater = "0x0000000000000000000000000000000000001234";
+    const { db, updates } = createDb({
+      [findKey("aiRaterDeclaration", { rater })]: {
+        rater,
+        operator: "0x000000000000000000000000000000000000abcd",
+        version: 3,
+      },
+    });
+    const registeredHandlers = await loadHandlers();
+    const handler = registeredHandlers.get("RaterDeclarationRegistry:DeclarationExpired");
+
+    expect(handler).toBeDefined();
+
+    await handler!({
+      event: {
+        ...baseEvent,
+        args: {
+          rater,
+          operator: "0x000000000000000000000000000000000000abcd",
+          version: 3,
+        },
+      },
+      context: { db },
+    });
+
+    expect(updates).toEqual(
+      expect.arrayContaining([
+        {
+          table: "aiRaterDeclaration",
+          key: { rater },
+          update: expect.objectContaining({
+            tier: 0,
+            probePending: false,
+            expiredAt: 123n,
+          }),
+        },
+        {
+          table: "aiRaterDeclarationHistory",
+          key: { id: `${rater}-3` },
+          update: expect.objectContaining({
+            tier: 0,
+            probePending: false,
+            expiredAt: 123n,
+          }),
+        },
+      ]),
+    );
+  });
+
+  it("does not let stale expiry events mutate the current declaration row", async () => {
+    const rater = "0x0000000000000000000000000000000000001234";
+    const { db, updates } = createDb({
+      [findKey("aiRaterDeclaration", { rater })]: {
+        rater,
+        version: 4,
+      },
+    });
+    const registeredHandlers = await loadHandlers();
+    const handler = registeredHandlers.get("RaterDeclarationRegistry:DeclarationExpired");
+
+    await handler!({
+      event: {
+        ...baseEvent,
+        args: {
+          rater,
+          operator: "0x000000000000000000000000000000000000abcd",
+          version: 3,
+        },
+      },
+      context: { db },
+    });
+
+    expect(updates).toEqual([
+      {
+        table: "aiRaterDeclarationHistory",
+        key: { id: `${rater}-3` },
+        update: expect.objectContaining({
+          tier: 0,
+          expiredAt: 123n,
+        }),
+      },
+    ]);
+  });
+
+  it("indexes declaration bond release for the active operator version", async () => {
+    const rater = "0x0000000000000000000000000000000000001234";
+    const operator = "0x000000000000000000000000000000000000abcd";
+    const { db, updates } = createDb({
+      [findKey("aiRaterDeclaration", { rater })]: {
+        rater,
+        operator,
+        version: 6,
+      },
+    });
+    const registeredHandlers = await loadHandlers();
+    const handler = registeredHandlers.get("RaterDeclarationRegistry:DeclarationBondReleased");
+
+    expect(handler).toBeDefined();
+
+    await handler!({
+      event: {
+        ...baseEvent,
+        args: {
+          rater,
+          operator,
+        },
+      },
+      context: { db },
+    });
+
+    expect(updates).toEqual([
+      {
+        table: "aiRaterDeclaration",
+        key: { rater },
+        update: expect.objectContaining({
+          bondReleasedAt: 123n,
+        }),
+      },
+      {
+        table: "aiRaterDeclarationHistory",
+        key: { id: `${rater}-6` },
+        update: expect.objectContaining({
+          bondReleasedAt: 123n,
         }),
       },
     ]);

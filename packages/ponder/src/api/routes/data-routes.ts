@@ -18,6 +18,9 @@ import {
   questionRewardPoolRound,
   aiRaterDeclaration,
   aiRaterDeclarationChallenge,
+  aiRaterDeclarationHistory,
+  aiRaterDriftFlag,
+  aiRaterOperatorBond,
   aiRaterProbeResult,
   raterProfile,
   raterSelfCredential,
@@ -146,6 +149,21 @@ function declarationInactiveReason(
     return "expired";
   if (openChallengeCount > 0) return "challenged";
   return "none";
+}
+
+function parseOptionalInteger(value: string | undefined) {
+  if (value === undefined) return undefined;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0) return null;
+  return parsed;
+}
+
+function parseOptionalBoolean(value: string | undefined) {
+  if (value === undefined) return undefined;
+  const normalized = value.toLowerCase();
+  if (normalized === "true" || normalized === "1") return true;
+  if (normalized === "false" || normalized === "0") return false;
+  return null;
 }
 
 export function registerDataRoutes(app: ApiApp) {
@@ -437,7 +455,7 @@ export function registerDataRoutes(app: ApiApp) {
           ])
         : [[], [{ openCount: 0 }], []];
 
-    const nowSeconds =
+    const indexedChainTimestamp =
       maxBigInt([
         profile?.updatedAt,
         selfCredential?.updatedAt,
@@ -446,8 +464,13 @@ export function registerDataRoutes(app: ApiApp) {
         latestProbe?.recordedAt,
         latestChallenge?.openedAt,
         latestChallenge?.resolvedAt,
-      ]) ?? wallSeconds;
-    const humanCredentialStatus = credentialStatus(selfCredential, nowSeconds);
+      ]) ?? null;
+    const statusTimestamp =
+      maxBigInt([indexedChainTimestamp, wallSeconds]) ?? wallSeconds;
+    const humanCredentialStatus = credentialStatus(
+      selfCredential,
+      statusTimestamp,
+    );
     const humanMultiplierBps =
       humanCredentialStatus === "verified"
         ? (selfCredential?.multiplierBps ?? BASE_RATER_MULTIPLIER_BPS)
@@ -455,7 +478,7 @@ export function registerDataRoutes(app: ApiApp) {
     const openChallengeCount = Number(challengeStats?.openCount ?? 0);
     const aiDeclarationInactiveReason = declarationInactiveReason(
       declaration,
-      nowSeconds,
+      statusTimestamp,
       openChallengeCount,
     );
     const declaredDeclarationTier = declaration?.tier ?? 0;
@@ -474,7 +497,7 @@ export function registerDataRoutes(app: ApiApp) {
 
     return jsonBig(c, {
       asOf: {
-        chainTimestamp: nowSeconds,
+        chainTimestamp: indexedChainTimestamp ?? wallSeconds,
         wallTimestamp: wallSeconds,
         indexedBlockNumber: null,
       },
@@ -586,6 +609,206 @@ export function registerDataRoutes(app: ApiApp) {
         verifiedAgentsCanAnchorLaunchRewards: false,
         verifiedAgentSignupBonusEligible: false,
       },
+    });
+  });
+
+  app.get("/ai-rater-declarations", async (c) => {
+    const operatorRaw = c.req.query("operator");
+    const tier = parseOptionalInteger(c.req.query("tier"));
+    const probePending = parseOptionalBoolean(c.req.query("probePending"));
+    const limit = safeLimit(c.req.query("limit"), 50, 200);
+    const offset = safeOffset(c.req.query("offset"));
+    if (Number.isNaN(offset)) return c.json({ error: "Invalid offset" }, 400);
+    if (tier === null) return c.json({ error: "Invalid tier" }, 400);
+    if (probePending === null) {
+      return c.json({ error: "Invalid probePending filter" }, 400);
+    }
+
+    const conditions = [];
+    if (operatorRaw) {
+      if (!isValidAddress(operatorRaw)) {
+        return c.json({ error: "Invalid operator address" }, 400);
+      }
+      conditions.push(
+        eq(aiRaterDeclaration.operator, operatorRaw.toLowerCase() as `0x${string}`),
+      );
+    }
+    if (tier !== undefined) conditions.push(eq(aiRaterDeclaration.tier, tier));
+    if (probePending !== undefined) {
+      conditions.push(eq(aiRaterDeclaration.probePending, probePending));
+    }
+    const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const items = await db
+      .select()
+      .from(aiRaterDeclaration)
+      .where(where)
+      .orderBy(desc(aiRaterDeclaration.declaredAt), desc(aiRaterDeclaration.version))
+      .limit(limit)
+      .offset(offset);
+
+    return jsonBig(c, { items, limit, offset });
+  });
+
+  app.get("/ai-rater-declarations/:address", async (c) => {
+    const address = c.req.param("address").toLowerCase() as `0x${string}`;
+    if (!isValidAddress(address)) {
+      return c.json({ error: "Invalid address" }, 400);
+    }
+
+    const [declaration] = await db
+      .select()
+      .from(aiRaterDeclaration)
+      .where(eq(aiRaterDeclaration.rater, address))
+      .limit(1);
+
+    return jsonBig(c, { declaration: declaration ?? null });
+  });
+
+  app.get("/ai-rater-declarations/:address/history", async (c) => {
+    const address = c.req.param("address").toLowerCase() as `0x${string}`;
+    if (!isValidAddress(address)) {
+      return c.json({ error: "Invalid address" }, 400);
+    }
+
+    const version = parseOptionalInteger(c.req.query("version"));
+    const limit = safeLimit(c.req.query("limit"), 50, 200);
+    const offset = safeOffset(c.req.query("offset"));
+    if (Number.isNaN(offset)) return c.json({ error: "Invalid offset" }, 400);
+    if (version === null) return c.json({ error: "Invalid version" }, 400);
+
+    const conditions = [eq(aiRaterDeclarationHistory.rater, address)];
+    if (version !== undefined) {
+      conditions.push(eq(aiRaterDeclarationHistory.version, version));
+    }
+
+    const items = await db
+      .select()
+      .from(aiRaterDeclarationHistory)
+      .where(and(...conditions))
+      .orderBy(
+        desc(aiRaterDeclarationHistory.version),
+        desc(aiRaterDeclarationHistory.declaredAt),
+      )
+      .limit(limit)
+      .offset(offset);
+
+    return jsonBig(c, { items, limit, offset });
+  });
+
+  app.get("/ai-rater-declarations/:address/probes", async (c) => {
+    const address = c.req.param("address").toLowerCase() as `0x${string}`;
+    if (!isValidAddress(address)) {
+      return c.json({ error: "Invalid address" }, 400);
+    }
+
+    const version = parseOptionalInteger(c.req.query("version"));
+    const passed = parseOptionalBoolean(c.req.query("passed"));
+    const limit = safeLimit(c.req.query("limit"), 50, 200);
+    const offset = safeOffset(c.req.query("offset"));
+    if (Number.isNaN(offset)) return c.json({ error: "Invalid offset" }, 400);
+    if (version === null) return c.json({ error: "Invalid version" }, 400);
+    if (passed === null) return c.json({ error: "Invalid passed filter" }, 400);
+
+    const conditions = [eq(aiRaterProbeResult.rater, address)];
+    if (version !== undefined) {
+      conditions.push(eq(aiRaterProbeResult.version, version));
+    }
+    if (passed !== undefined) {
+      conditions.push(eq(aiRaterProbeResult.passed, passed));
+    }
+
+    const items = await db
+      .select()
+      .from(aiRaterProbeResult)
+      .where(and(...conditions))
+      .orderBy(desc(aiRaterProbeResult.recordedAt), desc(aiRaterProbeResult.id))
+      .limit(limit)
+      .offset(offset);
+
+    return jsonBig(c, { items, limit, offset });
+  });
+
+  app.get("/ai-rater-declarations/:address/drift-flags", async (c) => {
+    const address = c.req.param("address").toLowerCase() as `0x${string}`;
+    if (!isValidAddress(address)) {
+      return c.json({ error: "Invalid address" }, 400);
+    }
+
+    const version = parseOptionalInteger(c.req.query("version"));
+    const limit = safeLimit(c.req.query("limit"), 50, 200);
+    const offset = safeOffset(c.req.query("offset"));
+    if (Number.isNaN(offset)) return c.json({ error: "Invalid offset" }, 400);
+    if (version === null) return c.json({ error: "Invalid version" }, 400);
+
+    const conditions = [eq(aiRaterDriftFlag.rater, address)];
+    if (version !== undefined) {
+      conditions.push(eq(aiRaterDriftFlag.version, version));
+    }
+
+    const items = await db
+      .select()
+      .from(aiRaterDriftFlag)
+      .where(and(...conditions))
+      .orderBy(desc(aiRaterDriftFlag.flaggedAt), desc(aiRaterDriftFlag.id))
+      .limit(limit)
+      .offset(offset);
+
+    return jsonBig(c, { items, limit, offset });
+  });
+
+  app.get("/ai-rater-declarations/:address/challenges", async (c) => {
+    const address = c.req.param("address").toLowerCase() as `0x${string}`;
+    if (!isValidAddress(address)) {
+      return c.json({ error: "Invalid address" }, 400);
+    }
+
+    const version = parseOptionalInteger(c.req.query("version"));
+    const status = parseOptionalInteger(c.req.query("status"));
+    const limit = safeLimit(c.req.query("limit"), 50, 200);
+    const offset = safeOffset(c.req.query("offset"));
+    if (Number.isNaN(offset)) return c.json({ error: "Invalid offset" }, 400);
+    if (version === null) return c.json({ error: "Invalid version" }, 400);
+    if (status === null) return c.json({ error: "Invalid status filter" }, 400);
+
+    const conditions = [eq(aiRaterDeclarationChallenge.rater, address)];
+    if (version !== undefined) {
+      conditions.push(
+        eq(aiRaterDeclarationChallenge.declarationVersion, version),
+      );
+    }
+    if (status !== undefined) {
+      conditions.push(eq(aiRaterDeclarationChallenge.status, status));
+    }
+
+    const items = await db
+      .select()
+      .from(aiRaterDeclarationChallenge)
+      .where(and(...conditions))
+      .orderBy(
+        desc(aiRaterDeclarationChallenge.openedAt),
+        desc(aiRaterDeclarationChallenge.challengeId),
+      )
+      .limit(limit)
+      .offset(offset);
+
+    return jsonBig(c, { items, limit, offset });
+  });
+
+  app.get("/ai-rater-operators/:address/bond", async (c) => {
+    const address = c.req.param("address").toLowerCase() as `0x${string}`;
+    if (!isValidAddress(address)) {
+      return c.json({ error: "Invalid address" }, 400);
+    }
+
+    const [bond] = await db
+      .select()
+      .from(aiRaterOperatorBond)
+      .where(eq(aiRaterOperatorBond.operator, address))
+      .limit(1);
+
+    return jsonBig(c, {
+      bond: bond ?? { operator: address, totalBond: 0n, updatedAt: null },
     });
   });
 

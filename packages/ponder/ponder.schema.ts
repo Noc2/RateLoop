@@ -695,6 +695,73 @@ export const raterTrustAttestation = onchainTable(
   }),
 );
 
+export const raterFollow = onchainTable(
+  "rater_follow",
+  (t) => ({
+    id: t.text().primaryKey(), // `${follower}-${target}`
+    follower: t.hex().notNull(),
+    target: t.hex().notNull(),
+    active: t.boolean().notNull(),
+    createdAt: t.bigint().notNull(),
+    unfollowedAt: t.bigint(),
+    updatedAt: t.bigint().notNull(),
+  }),
+  (table) => ({
+    followerIdx: index().on(table.follower),
+    targetIdx: index().on(table.target),
+    activeIdx: index().on(table.active),
+    followerActiveIdx: index().on(table.follower, table.active),
+    targetActiveIdx: index().on(table.target, table.active),
+  }),
+);
+
+export const launchRewardPolicyState = onchainTable(
+  "launch_reward_policy_state",
+  (t) => ({
+    id: t.text().primaryKey(),
+    minQualifyingScoreBps: t.integer().notNull(),
+    minVoters: t.integer().notNull(),
+    minVerifiedHumans: t.integer().notNull(),
+    minDistinctVerifiedAnchors: t.integer().notNull(),
+    minDistinctAnchorRounds: t.integer().notNull(),
+    eligibilityRatingCount: t.integer().notNull(),
+    rewardingRatingCount: t.integer().notNull(),
+    requireNoPendingCleanup: t.boolean().notNull(),
+    updatedAt: t.bigint().notNull(),
+  }),
+  (table) => ({
+    updatedAtIdx: index().on(table.updatedAt),
+  }),
+);
+
+export const launchRaterRewardProgress = onchainTable(
+  "launch_rater_reward_progress",
+  (t) => ({
+    rater: t.hex().primaryKey(),
+    qualifyingRatingCount: t.integer().notNull(),
+    rewardedRatingCount: t.integer().notNull(),
+    distinctVerifiedAnchorCount: t.integer().notNull(),
+    distinctAnchorRoundCount: t.integer().notNull(),
+    payoutEligible: t.boolean().notNull(),
+    launchCap: t.bigint().notNull(),
+    launchPaid: t.bigint().notNull(),
+    cohortIndex: t.bigint(),
+    lastQualifiedContentId: t.bigint(),
+    lastQualifiedRoundId: t.bigint(),
+    lastCommitKey: t.hex(),
+    lastScoreBps: t.integer(),
+    eligibleAt: t.bigint(),
+    latestCreditedAt: t.bigint(),
+    latestPaidAt: t.bigint(),
+    updatedAt: t.bigint().notNull(),
+  }),
+  (table) => ({
+    payoutEligibleIdx: index().on(table.payoutEligible),
+    latestCreditedAtIdx: index().on(table.latestCreditedAt),
+    latestPaidAtIdx: index().on(table.latestPaidAt),
+  }),
+);
+
 export const aiRaterDeclaration = onchainTable(
   "ai_rater_declaration",
   (t) => ({
@@ -715,6 +782,8 @@ export const aiRaterDeclaration = onchainTable(
     toolingHash: t.hex().notNull(),
     disclosure: t.integer().notNull(),
     declaredAt: t.bigint().notNull(),
+    expiredAt: t.bigint(),
+    bondReleasedAt: t.bigint(),
     retiredAt: t.bigint(),
     lastProbeResultHash: t.hex(),
     updatedAt: t.bigint().notNull(),
@@ -725,6 +794,7 @@ export const aiRaterDeclaration = onchainTable(
     modelIdx: index().on(table.modelId),
     promptIdx: index().on(table.promptTemplateHash),
     probePendingIdx: index().on(table.probePending),
+    expiredAtIdx: index().on(table.expiredAt),
   }),
 );
 
@@ -749,6 +819,8 @@ export const aiRaterDeclarationHistory = onchainTable(
     toolingHash: t.hex().notNull(),
     disclosure: t.integer().notNull(),
     declaredAt: t.bigint().notNull(),
+    expiredAt: t.bigint(),
+    bondReleasedAt: t.bigint(),
     retiredAt: t.bigint(),
     lastProbeResultHash: t.hex(),
     updatedAt: t.bigint().notNull(),
@@ -758,6 +830,7 @@ export const aiRaterDeclarationHistory = onchainTable(
     operatorIdx: index().on(table.operator),
     versionIdx: index().on(table.rater, table.version),
     tierIdx: index().on(table.tier),
+    expiredAtIdx: index().on(table.rater, table.expiredAt),
   }),
 );
 

@@ -255,3 +255,68 @@ test("ponderApi.getAllSubmitterSettledRounds paginates a dedicated submitter end
     ponderApi.getSubmitterSettledRounds = originalGetSubmitterSettledRounds;
   }
 });
+
+test("ponderApi AI rater helpers target the declaration productization routes", async () => {
+  const originalFetch = globalThis.fetch;
+  const requestedUrls: string[] = [];
+
+  globalThis.fetch = (async input => {
+    const url = typeof input === "string" ? input : input.url;
+    requestedUrls.push(url);
+    return new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    await ponderApi.getAiRaterDeclarations({
+      operator: "0x2222222222222222222222222222222222222222",
+      tier: "2",
+      probePending: "false",
+      limit: "10",
+    });
+    await ponderApi.getAiRaterDeclaration("0x1111111111111111111111111111111111111111");
+    await ponderApi.getAiRaterDeclarationHistory("0x1111111111111111111111111111111111111111", {
+      version: "3",
+      limit: "5",
+      offset: "10",
+    });
+    await ponderApi.getAiRaterProbeResults("0x1111111111111111111111111111111111111111", {
+      passed: "true",
+    });
+    await ponderApi.getAiRaterDriftFlags("0x1111111111111111111111111111111111111111");
+    await ponderApi.getAiRaterDeclarationChallenges("0x1111111111111111111111111111111111111111", {
+      status: "1",
+    });
+    await ponderApi.getAiRaterOperatorBond("0x2222222222222222222222222222222222222222");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assert.match(
+    requestedUrls[0] ?? "",
+    /\/ai-rater-declarations\?operator=0x2222222222222222222222222222222222222222&tier=2&probePending=false&limit=10$/,
+  );
+  assert.match(requestedUrls[1] ?? "", /\/ai-rater-declarations\/0x1111111111111111111111111111111111111111$/);
+  assert.match(
+    requestedUrls[2] ?? "",
+    /\/ai-rater-declarations\/0x1111111111111111111111111111111111111111\/history\?version=3&limit=5&offset=10$/,
+  );
+  assert.match(
+    requestedUrls[3] ?? "",
+    /\/ai-rater-declarations\/0x1111111111111111111111111111111111111111\/probes\?passed=true$/,
+  );
+  assert.match(
+    requestedUrls[4] ?? "",
+    /\/ai-rater-declarations\/0x1111111111111111111111111111111111111111\/drift-flags$/,
+  );
+  assert.match(
+    requestedUrls[5] ?? "",
+    /\/ai-rater-declarations\/0x1111111111111111111111111111111111111111\/challenges\?status=1$/,
+  );
+  assert.match(
+    requestedUrls[6] ?? "",
+    /\/ai-rater-operators\/0x2222222222222222222222222222222222222222\/bond$/,
+  );
+});
