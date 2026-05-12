@@ -591,40 +591,30 @@ ponder.on("RoundVotingEngine:RbtsRewardsScored", async ({ event, context }) => {
         asc(vote.id),
       );
 
-    const scoreableVotes = roundVotes.filter(
+    const economicVotes = roundVotes.filter(
       (roundVote) => (roundVote.rbtsWeight ?? 0n) > 0n,
     );
 
-    if (scoreableVotes.length < 3) {
-      for (const roundVote of scoreableVotes) {
-        await context.db.update(vote, { id: roundVote.id }).set({
-          rbtsScoreBps: 0,
-          rbtsRewardWeight: 0n,
-          rbtsStakeReturned: roundVote.stake,
-          rbtsForfeitedStake: 0n,
-        });
-      }
-      return;
-    }
-
-    for (let index = 0; index < scoreableVotes.length; index += 1) {
-      const roundVote = scoreableVotes[index];
+    for (let index = 0; index < roundVotes.length; index += 1) {
+      const roundVote = roundVotes[index];
       if (
         roundVote.isUp === null ||
         roundVote.predictedUpBps === null ||
-        roundVote.rbtsWeight === null ||
         roundVote.commitHash === null ||
         roundVote.voter === null
       ) {
         continue;
       }
 
+      const ownWeight = roundVote.rbtsWeight ?? 0n;
+      const stake = roundVote.stake ?? 0n;
+
       const commitKey = rbtsCommitKey(roundVote.voter, roundVote.commitHash);
       const referenceIndex = rbtsOtherIndex({
         scoreSeed,
         commitKey,
         ownIndex: index,
-        count: scoreableVotes.length,
+        count: roundVotes.length,
         domain: 1,
       });
       const peerIndex = rbtsPeerIndex({
@@ -632,10 +622,10 @@ ponder.on("RoundVotingEngine:RbtsRewardsScored", async ({ event, context }) => {
         commitKey,
         ownIndex: index,
         referenceIndex,
-        count: scoreableVotes.length,
+        count: roundVotes.length,
       });
-      const referenceVote = scoreableVotes[referenceIndex];
-      const peerVote = scoreableVotes[peerIndex];
+      const referenceVote = roundVotes[referenceIndex];
+      const peerVote = roundVotes[peerIndex];
       if (referenceVote.predictedUpBps === null || peerVote.isUp === null) {
         continue;
       }
@@ -647,12 +637,21 @@ ponder.on("RoundVotingEngine:RbtsRewardsScored", async ({ event, context }) => {
         peerSignalIsUp: peerVote.isUp,
       });
 
+      if (ownWeight === 0n || economicVotes.length < 3) {
+        await context.db.update(vote, { id: roundVote.id }).set({
+          rbtsScoreBps: scoreBps,
+          rbtsRewardWeight: 0n,
+          rbtsStakeReturned: ownWeight > 0n ? stake : 0n,
+          rbtsForfeitedStake: 0n,
+        });
+        continue;
+      }
+
       await context.db.update(vote, { id: roundVote.id }).set({
         rbtsScoreBps: scoreBps,
-        rbtsRewardWeight: weightByRbtsScore(roundVote.rbtsWeight, scoreBps),
-        rbtsStakeReturned: weightByRbtsScore(roundVote.stake, scoreBps),
-        rbtsForfeitedStake:
-          roundVote.stake - weightByRbtsScore(roundVote.stake, scoreBps),
+        rbtsRewardWeight: weightByRbtsScore(ownWeight, scoreBps),
+        rbtsStakeReturned: weightByRbtsScore(stake, scoreBps),
+        rbtsForfeitedStake: stake - weightByRbtsScore(stake, scoreBps),
       });
     }
   }
