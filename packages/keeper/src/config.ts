@@ -222,6 +222,10 @@ function loadConfig() {
     errors.push("KEYSTORE_ACCOUNT or KEEPER_PRIVATE_KEY is required");
   }
 
+  if (keystoreAccount && !privateKey && !readEnv("KEYSTORE_PASSWORD")) {
+    errors.push("KEYSTORE_PASSWORD is required when KEYSTORE_ACCOUNT is configured without KEEPER_PRIVATE_KEY");
+  }
+
   const frontendFeeContracts =
     frontendFeeEnabled && chainId > 0
       ? {
@@ -284,7 +288,7 @@ function loadConfig() {
     // Monitoring
     metricsPort: readPositiveIntEnv("METRICS_PORT", "9090", errors),
     metricsBindAddress: readEnv("METRICS_BIND_ADDRESS") || "127.0.0.1",
-    metricsEnabled: process.env.METRICS_ENABLED !== "false",
+    metricsEnabled: parseBooleanEnv(readEnv("METRICS_ENABLED"), true, "METRICS_ENABLED"),
 
     // Logging
     logFormat: (process.env.LOG_FORMAT || "json") as "json" | "text",

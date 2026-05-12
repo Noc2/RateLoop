@@ -70,6 +70,33 @@ describe("keeper config", () => {
     expect(config.keystoreAccount).toBeUndefined();
   });
 
+  it("requires a keystore password when using a keystore account without a private key", async () => {
+    await expect(
+      loadKeeperConfig(
+        {
+          KEYSTORE_ACCOUNT: "keeper",
+          KEEPER_PRIVATE_KEY: "",
+        },
+        ["KEYSTORE_PASSWORD"],
+      ),
+    ).rejects.toThrow("KEYSTORE_PASSWORD is required when KEYSTORE_ACCOUNT is configured without KEEPER_PRIVATE_KEY");
+  });
+
+  it("allows a private key to override an incomplete keystore account", async () => {
+    const privateKey = `0x${"22".repeat(32)}`;
+    const { config } = await loadKeeperConfig(
+      {
+        KEYSTORE_ACCOUNT: "keeper",
+        KEEPER_PRIVATE_KEY: privateKey,
+      },
+      ["KEYSTORE_PASSWORD"],
+    );
+
+    expect(config.privateKey).toBe(privateKey);
+    expect(config.keystoreAccount).toBe("keeper");
+    expect(config.keystorePassword).toBe("");
+  });
+
   it("requires either a keystore account or private key", async () => {
     await expect(
       loadKeeperConfig({
@@ -122,6 +149,31 @@ describe("keeper config", () => {
 
     expect(config.startupJitterMs).toBe(0);
     expect(config.minGasBalanceWei).toBe("0");
+  });
+
+  it.each([
+    ["true", true],
+    ["1", true],
+    ["yes", true],
+    ["on", true],
+    ["false", false],
+    ["0", false],
+    ["no", false],
+    ["off", false],
+  ])("parses METRICS_ENABLED=%s", async (value, expected) => {
+    const { config } = await loadKeeperConfig({
+      METRICS_ENABLED: value,
+    });
+
+    expect(config.metricsEnabled).toBe(expected);
+  });
+
+  it("rejects invalid METRICS_ENABLED values", async () => {
+    await expect(
+      loadKeeperConfig({
+        METRICS_ENABLED: "disabled",
+      }),
+    ).rejects.toThrow("METRICS_ENABLED must be a boolean-like value");
   });
 
   it("derives local contract addresses from shared deployment artifacts", async () => {
