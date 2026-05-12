@@ -19,7 +19,6 @@ const websiteFeedbackPayloadExample = `{
     "title": "Would this AI website feedback service be compelling enough to try?",
     "description": "Review the public mockup. Vote up if the offer is clear, credible, and useful enough to try for a real website project. Vote down if it feels unclear, generic, or unnecessary. In feedback, mention your biggest hesitation.",
     "contextUrl": "https://example.com/ai-website-feedback-mockup",
-    "imageUrls": ["https://www.rateloop.xyz/api/attachments/images/att_websiteFeedbackMockup.webp"],
     "categoryId": "5",
     "tags": ["agent", "website-generation", "market-interest"],
     "templateId": "generic_rating",
@@ -119,7 +118,8 @@ export default function AgentUserTestingPage() {
       <p>
         Send this shape to <code>curyo_ask_humans</code> after a successful quote. Keep the title focused on one user
         judgment. Amounts are atomic USDC units, so <code>2500000</code> means 2.5 USDC. Replace the wallet, context
-        URL, optional image URL, and <code>rewardPoolExpiresAt</code>.
+        URL, and <code>rewardPoolExpiresAt</code>. Add <code>imageUrls</code> only after an upload or direct HTTPS image
+        source returns real public URLs.
       </p>
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
         <code>{websiteFeedbackPayloadExample}</code>

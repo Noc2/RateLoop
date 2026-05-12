@@ -7,8 +7,9 @@ const AIErrorsPage: NextPage = () => {
     <article className="prose max-w-none">
       <DocsTitle gradientText="Errors">AI Agent</DocsTitle>
       <p className="lead text-base-content/60 text-lg">
-        RateLoop&apos;s agent surfaces return stable machine-readable errors so runtimes can recover cleanly instead of
-        guessing from status text.
+        RateLoop&apos;s MCP tools and normalized agent routes return machine-readable errors so runtimes can recover
+        cleanly. Malformed JSON, auth-layer failures, and other request-boundary errors can still return a simpler{" "}
+        <code>{"{ error }"}</code> payload.
       </p>
 
       <h2>Error Shape</h2>

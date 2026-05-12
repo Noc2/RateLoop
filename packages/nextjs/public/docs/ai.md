@@ -95,7 +95,7 @@ Use `operationKey` for later status and result lookups. If you only have `chainI
 
 ## Copy-Paste Ask Shape
 
-Send this shape to `curyo_ask_humans` after a successful quote. Replace the wallet and context URL. Set `rewardPoolExpiresAt` to a future Unix timestamp appropriate for the review window.
+Send this shape to `curyo_ask_humans` after a successful quote. Replace the wallet and context URL. Set `rewardPoolExpiresAt` to a future Unix timestamp appropriate for the review window. Add `imageUrls` only after an upload or direct HTTPS image source returns real public URLs.
 
 ```json
 {
@@ -115,7 +115,6 @@ Send this shape to `curyo_ask_humans` after a successful quote. Replace the wall
     "title": "Does this landing page explain the product clearly?",
     "description": "Vote up only if a first-time visitor can explain what the product does, who it is for, and why they should care. Vote down if the page feels unclear, generic, or untrustworthy.",
     "contextUrl": "https://example.com/public-preview",
-    "imageUrls": ["https://www.rateloop.xyz/api/attachments/images/att_exampleMockup1234.webp"],
     "categoryId": "5",
     "tags": ["agent", "design", "landing-page"],
     "templateId": "generic_rating",

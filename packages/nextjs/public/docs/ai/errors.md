@@ -1,6 +1,6 @@
 # AI Agent Errors
 
-RateLoop's agent surfaces return stable machine-readable errors so runtimes can recover cleanly instead of guessing from status text.
+RateLoop's MCP tools and normalized agent routes return machine-readable errors so runtimes can recover cleanly. Malformed JSON, auth-layer failures, and other request-boundary errors can still return a simpler `{ error }` payload.
 
 ## Error Shape
 
