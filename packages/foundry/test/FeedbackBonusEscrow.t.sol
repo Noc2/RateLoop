@@ -471,6 +471,28 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         feedbackBonusEscrow.awardFeedbackBonus(poolId, voter4, FEEDBACK_HASH, 10e6);
     }
 
+    function testAwardNoVoterIdRecipientUsesDirectCommitKey() public {
+        uint256 contentId = _submitQuestion("");
+        uint256 poolId = _createFeedbackBonusPool(contentId);
+
+        voterIdNFT.revokeVoterId(voter1);
+        uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+        bytes32 commitHash = votingEngine.voterCommitHash(contentId, roundId, voter1);
+        bytes32 commitKey = _commitKey(voter1, commitHash);
+        (address committedVoter,,,, bool revealed,,) = votingEngine.commitCore(contentId, roundId, commitKey);
+
+        assertEq(committedVoter, voter1);
+        assertTrue(revealed);
+
+        uint256 voterBalanceBefore = usdc.balanceOf(voter1);
+
+        vm.prank(funder);
+        uint256 recipientAmount = feedbackBonusEscrow.awardFeedbackBonus(poolId, voter1, FEEDBACK_HASH, 10e6);
+
+        assertEq(recipientAmount, 10e6);
+        assertEq(usdc.balanceOf(voter1), voterBalanceBefore + recipientAmount);
+    }
+
     function testAwardPaysVoterIdHolderWhenNewDelegateIsRecipient() public {
         address newDelegate = address(0xD1E);
         uint256 contentId = _submitQuestion("");
