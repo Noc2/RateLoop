@@ -40,29 +40,29 @@ test("successful collection writes also issue read access for reloads", async ()
   const response = await signedCollectionRoute.maybeIssueSignedCollectionWriteSession(NextResponse.json({ ok: true }), {
     hasWriteSession: false,
     walletAddress: WALLET,
-    scope: "profile_follows",
+    scope: "watchlist",
   });
 
-  const readCookie = response.cookies.get(signedReadSessions.PROFILE_FOLLOWS_SIGNED_READ_SESSION_COOKIE_NAME);
-  const writeCookie = response.cookies.get(signedWriteSessions.PROFILE_FOLLOWS_SIGNED_WRITE_SESSION_COOKIE_NAME);
+  const readCookie = response.cookies.get(signedReadSessions.WATCHLIST_SIGNED_READ_SESSION_COOKIE_NAME);
+  const writeCookie = response.cookies.get(signedWriteSessions.WATCHLIST_SIGNED_WRITE_SESSION_COOKIE_NAME);
 
   assert.ok(readCookie?.value, "read session cookie should be set after a successful write");
   assert.ok(writeCookie?.value, "write session cookie should still be set for signed writes");
-  assert.equal(await signedReadSessions.verifySignedReadSession(readCookie.value, WALLET, "profile_follows"), true);
-  assert.equal(await signedWriteSessions.verifySignedWriteSession(writeCookie.value, WALLET, "profile_follows"), true);
+  assert.equal(await signedReadSessions.verifySignedReadSession(readCookie.value, WALLET, "watchlist"), true);
+  assert.equal(await signedWriteSessions.verifySignedWriteSession(writeCookie.value, WALLET, "watchlist"), true);
 });
 
 test("existing write sessions still refresh read access", async () => {
   const response = await signedCollectionRoute.maybeIssueSignedCollectionWriteSession(NextResponse.json({ ok: true }), {
     hasWriteSession: true,
     walletAddress: WALLET,
-    scope: "profile_follows",
+    scope: "watchlist",
   });
 
-  const readCookie = response.cookies.get(signedReadSessions.PROFILE_FOLLOWS_SIGNED_READ_SESSION_COOKIE_NAME);
-  const writeCookie = response.cookies.get(signedWriteSessions.PROFILE_FOLLOWS_SIGNED_WRITE_SESSION_COOKIE_NAME);
+  const readCookie = response.cookies.get(signedReadSessions.WATCHLIST_SIGNED_READ_SESSION_COOKIE_NAME);
+  const writeCookie = response.cookies.get(signedWriteSessions.WATCHLIST_SIGNED_WRITE_SESSION_COOKIE_NAME);
 
   assert.ok(readCookie?.value, "read session cookie should be refreshed after a session write");
   assert.equal(writeCookie, undefined);
-  assert.equal(await signedReadSessions.verifySignedReadSession(readCookie.value, WALLET, "profile_follows"), true);
+  assert.equal(await signedReadSessions.verifySignedReadSession(readCookie.value, WALLET, "watchlist"), true);
 });

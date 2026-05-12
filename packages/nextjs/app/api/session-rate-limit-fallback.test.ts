@@ -121,13 +121,14 @@ test("watchlist session route fails open when the rate limit store is unavailabl
   });
 });
 
-test("profile follows session route fails open when the rate limit store is unavailable", async () => {
+test("profile follows session route reports deprecation even when the rate limit store is unavailable", async () => {
   const response = await followsSessionRoute.GET(
     makeRequest(`/api/follows/profiles/session?address=${encodeURIComponent(TEST_ADDRESS)}`),
   );
 
-  assert.equal(response.status, 200);
+  assert.equal(response.status, 410);
   assert.deepEqual(await response.json(), {
+    error: "Profile follows are public and no longer use signed read or write sessions.",
     hasSession: false,
     hasReadSession: false,
     hasWriteSession: false,

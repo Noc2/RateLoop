@@ -48,7 +48,6 @@ export function useDiscoverSignals(address?: string, options?: UseDiscoverSignal
 
       return ponderApi.getDiscoverSignals(address, {
         watched: watchedParam || undefined,
-        followed: followedParam,
       });
     },
     rpcFn: async () => EMPTY_DISCOVER_SIGNALS,

@@ -4,7 +4,6 @@ import { RATE_ROUTE } from "~~/constants/routes";
 import { db, dbClient } from "~~/lib/db";
 import { notificationEmailDeliveries, notificationEmailSubscriptions, watchedContent } from "~~/lib/db/schema";
 import { getNotificationDeliverySecret, getOptionalAppUrl } from "~~/lib/env/server";
-import { getFollowedWalletAddresses } from "~~/lib/follows/profileFollow";
 import { buildCuryoEmailHtml } from "~~/lib/notifications/emailTemplate";
 import { buildNotificationEmailUnsubscribeUrl } from "~~/lib/notifications/emailUrls";
 import { isResendConfigured, sendResendEmail } from "~~/lib/notifications/resend";
@@ -164,10 +163,8 @@ async function getWatchedContentIds(walletAddress: string) {
 
 async function getNotificationEvents(walletAddress: string): Promise<NotificationEventResponse> {
   const watchedIds = await getWatchedContentIds(walletAddress);
-  const followedWallets = await getFollowedWalletAddresses(walletAddress as `0x${string}`);
   return ponderGet<NotificationEventResponse>(`/notification-events/${walletAddress}`, {
     watched: watchedIds.join(","),
-    followed: followedWallets.join(","),
   });
 }
 

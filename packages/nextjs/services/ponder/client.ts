@@ -1268,6 +1268,41 @@ export const ponderApi = {
     return ponderGet<PonderFollowResponse>(`/follows/${address}`, params);
   },
 
+  async getAllFollows(address: string) {
+    const firstPage = await this.getFollows(address, {
+      limit: String(PONDER_PAGE_LIMIT),
+      offset: "0",
+    });
+
+    if (firstPage.items.length >= firstPage.count) {
+      return firstPage;
+    }
+
+    const items = [...firstPage.items];
+    let offset = firstPage.items.length;
+
+    while (offset < firstPage.count) {
+      const page = await this.getFollows(address, {
+        limit: String(PONDER_PAGE_LIMIT),
+        offset: String(offset),
+      });
+
+      if (page.items.length === 0) {
+        break;
+      }
+
+      items.push(...page.items);
+      offset += page.items.length;
+    }
+
+    return {
+      ...firstPage,
+      items,
+      limit: items.length,
+      offset: 0,
+    };
+  },
+
   getFollowers(address: string, params?: { limit?: string; offset?: string }) {
     return ponderGet<PonderFollowResponse>(`/followers/${address}`, params);
   },

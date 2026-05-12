@@ -81,13 +81,6 @@ CREATE TABLE "notification_preferences" (
 	"updated_at" timestamp with time zone NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "profile_follows" (
-	"id" serial PRIMARY KEY NOT NULL,
-	"follower_address" text NOT NULL,
-	"target_address" text NOT NULL,
-	"created_at" timestamp with time zone NOT NULL
-);
---> statement-breakpoint
 CREATE TABLE "signed_action_challenges" (
 	"id" text PRIMARY KEY NOT NULL,
 	"wallet_address" text NOT NULL,
@@ -130,9 +123,6 @@ CREATE INDEX "free_transaction_reservations_wallet_status_updated_idx" ON "free_
 CREATE UNIQUE INDEX "notification_email_deliveries_event_key_unique" ON "notification_email_deliveries" USING btree ("event_key");--> statement-breakpoint
 CREATE UNIQUE INDEX "notification_email_subscriptions_email_unique" ON "notification_email_subscriptions" USING btree ("email");--> statement-breakpoint
 CREATE UNIQUE INDEX "notification_email_subscriptions_token_unique" ON "notification_email_subscriptions" USING btree ("verification_token");--> statement-breakpoint
-CREATE UNIQUE INDEX "profile_follows_follower_target_unique" ON "profile_follows" USING btree ("follower_address","target_address");--> statement-breakpoint
-CREATE INDEX "profile_follows_follower_created_at_idx" ON "profile_follows" USING btree ("follower_address","created_at");--> statement-breakpoint
-CREATE INDEX "profile_follows_target_created_at_idx" ON "profile_follows" USING btree ("target_address","created_at");--> statement-breakpoint
 CREATE INDEX "signed_action_challenges_expires_at_idx" ON "signed_action_challenges" USING btree ("expires_at");--> statement-breakpoint
 CREATE INDEX "signed_action_challenges_wallet_action_idx" ON "signed_action_challenges" USING btree ("wallet_address","action");--> statement-breakpoint
 CREATE INDEX "signed_read_sessions_wallet_scope_expires_idx" ON "signed_read_sessions" USING btree ("wallet_address","scope","expires_at");--> statement-breakpoint

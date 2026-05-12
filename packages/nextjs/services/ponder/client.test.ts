@@ -361,6 +361,66 @@ test("ponderApi follow helpers target the public follow routes", async () => {
   assert.match(requestedUrls[1] ?? "", /\/followers\/0x1111111111111111111111111111111111111111\?limit=10&offset=5$/);
 });
 
+test("ponderApi.getAllFollows paginates the full public follow set", async () => {
+  const originalFetch = globalThis.fetch;
+  const requestedUrls: string[] = [];
+
+  globalThis.fetch = (async input => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    requestedUrls.push(url);
+
+    if (url.includes("offset=0")) {
+      return new Response(
+        JSON.stringify({
+          items: Array.from({ length: 200 }, (_, index) => ({
+            walletAddress: `0x${(index + 1).toString(16).padStart(40, "0")}`,
+            createdAt: `2026-01-01T00:00:${String(index).padStart(2, "0")}Z`,
+          })),
+          count: 205,
+          followerCount: 9,
+          followingCount: 205,
+          limit: 200,
+          offset: 0,
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        },
+      );
+    }
+
+    return new Response(
+      JSON.stringify({
+        items: Array.from({ length: 5 }, (_, index) => ({
+          walletAddress: `0x${(index + 201).toString(16).padStart(40, "0")}`,
+          createdAt: `2026-01-01T00:03:${String(index).padStart(2, "0")}Z`,
+        })),
+        count: 205,
+        followerCount: 9,
+        followingCount: 205,
+        limit: 200,
+        offset: 200,
+      }),
+      {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      },
+    );
+  }) as typeof fetch;
+
+  try {
+    const follows = await ponderApi.getAllFollows("0x1111111111111111111111111111111111111111");
+    assert.equal(follows.items.length, 205);
+    assert.equal(follows.followingCount, 205);
+    assert.equal(follows.offset, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assert.match(requestedUrls[0] ?? "", /\/follows\/0x1111111111111111111111111111111111111111\?limit=200&offset=0$/);
+  assert.match(requestedUrls[1] ?? "", /\/follows\/0x1111111111111111111111111111111111111111\?limit=200&offset=200$/);
+});
+
 test("ponderApi.getAccuracyLeaderboard forwards includeReputation", async () => {
   const originalFetch = globalThis.fetch;
   let requestedUrl = "";

@@ -117,24 +117,6 @@ export const contentFeedback = pgTable(
 export type ContentFeedback = typeof contentFeedback.$inferSelect;
 export type NewContentFeedback = typeof contentFeedback.$inferInsert;
 
-export const profileFollows = pgTable(
-  "profile_follows",
-  {
-    id: serial("id").primaryKey(),
-    followerAddress: text("follower_address").notNull(),
-    targetAddress: text("target_address").notNull(),
-    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull(),
-  },
-  table => ({
-    followerTargetUnique: uniqueIndex("profile_follows_follower_target_unique").on(
-      table.followerAddress,
-      table.targetAddress,
-    ),
-    followerCreatedAtIdx: index("profile_follows_follower_created_at_idx").on(table.followerAddress, table.createdAt),
-    targetCreatedAtIdx: index("profile_follows_target_created_at_idx").on(table.targetAddress, table.createdAt),
-  }),
-);
-
 export const notificationPreferences = pgTable("notification_preferences", {
   walletAddress: text("wallet_address").primaryKey(),
   roundResolved: boolean("round_resolved").notNull(),

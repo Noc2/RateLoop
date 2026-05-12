@@ -3,16 +3,14 @@ import "server-only";
 import { createSignedSessionStore } from "~~/lib/auth/signedSessionStore";
 
 export const WATCHLIST_SIGNED_WRITE_SESSION_COOKIE_NAME = "curyo_watchlist_write_session";
-export const PROFILE_FOLLOWS_SIGNED_WRITE_SESSION_COOKIE_NAME = "curyo_profile_follows_write_session";
 const SIGNED_WRITE_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
-export const SIGNED_WRITE_SESSION_SCOPES = ["watchlist", "profile_follows"] as const;
+export const SIGNED_WRITE_SESSION_SCOPES = ["watchlist"] as const;
 
 export type SignedWriteSessionScope = (typeof SIGNED_WRITE_SESSION_SCOPES)[number];
 
 export const SIGNED_WRITE_SESSION_COOKIE_NAMES: Record<SignedWriteSessionScope, string> = {
   watchlist: WATCHLIST_SIGNED_WRITE_SESSION_COOKIE_NAME,
-  profile_follows: PROFILE_FOLLOWS_SIGNED_WRITE_SESSION_COOKIE_NAME,
 };
 
 const signedWriteSessionStore = createSignedSessionStore<SignedWriteSessionScope>({

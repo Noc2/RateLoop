@@ -1,195 +1,92 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-  FOLLOW_PROFILE_ACTION,
-  type NormalizedProfileFollowPayload,
-  READ_PROFILE_FOLLOWS_ACTION,
-  UNFOLLOW_PROFILE_ACTION,
-  buildProfileFollowChallengeMessage,
-  buildProfileFollowReadChallengeMessage,
-  hashProfileFollowPayload,
-  hashProfileFollowReadPayload,
-  normalizeProfileFollowChallengeInput,
-  normalizeProfileFollowReadInput,
-} from "~~/lib/auth/profileFollowChallenge";
-import {
-  createSignedCollectionReadResponse,
-  hasSignedCollectionReadSession,
-  maybeIssueSignedCollectionWriteSession,
-  verifySignedCollectionChallenge,
-  verifySignedCollectionWriteAccess,
-} from "~~/lib/auth/signedCollectionRoute";
-import { PROFILE_FOLLOWS_SIGNED_READ_SESSION_COOKIE_NAME } from "~~/lib/auth/signedReadSessions";
-import { PROFILE_FOLLOWS_SIGNED_WRITE_SESSION_COOKIE_NAME } from "~~/lib/auth/signedWriteSessions";
-import { addFollowedProfile, listFollowedProfiles, removeFollowedProfile } from "~~/lib/follows/profileFollow";
+import { isAddress } from "viem";
+import { ponderApi } from "~~/services/ponder/client";
 import { checkRateLimit } from "~~/utils/rateLimit";
 
 const READ_RATE_LIMIT = { limit: 60, windowMs: 60_000 };
-const WRITE_RATE_LIMIT = { limit: 20, windowMs: 60_000 };
+const MUTATION_RATE_LIMIT = { limit: 20, windowMs: 60_000 };
+const ONCHAIN_FOLLOW_ERROR =
+  "Profile follows are public and on-chain. Read them here and submit follow transactions through RaterRegistry.";
 
-type ProfileFollowWriteBody = {
-  address?: string;
-  targetAddress?: string;
-  signature?: `0x${string}`;
-  challengeId?: string;
-};
+function parseLimit(value: string | null, fallback: number, max: number) {
+  const parsed = Number.parseInt(value ?? "", 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(Math.max(parsed, 1), max);
+}
 
-async function handleProfileFollowWrite(
-  request: NextRequest,
-  params: {
-    action: typeof FOLLOW_PROFILE_ACTION | typeof UNFOLLOW_PROFILE_ACTION;
-    following: boolean;
-    logMessage: string;
-    responseError: string;
-    mutate: (payload: NormalizedProfileFollowPayload) => Promise<void>;
-  },
-) {
-  try {
-    const body = (await request.json()) as ProfileFollowWriteBody;
-    const limited = await checkRateLimit(request, WRITE_RATE_LIMIT, {
-      extraKeyParts: [typeof body.address === "string" ? body.address : undefined],
-    });
-    if (limited) return limited;
+function parseOffset(value: string | null) {
+  const parsed = Number.parseInt(value ?? "", 10);
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.max(parsed, 0);
+}
 
-    const normalized = normalizeProfileFollowChallengeInput(body);
-    if (!normalized.ok) {
-      return NextResponse.json({ error: normalized.error }, { status: 400 });
-    }
-
-    const payload = normalized.payload;
-    const payloadHash = hashProfileFollowPayload(payload);
-    const writeAccess = await verifySignedCollectionWriteAccess(request, {
-      cookieName: PROFILE_FOLLOWS_SIGNED_WRITE_SESSION_COOKIE_NAME,
-      walletAddress: payload.normalizedAddress,
-      scope: "profile_follows",
-      signature: body.signature,
-      challengeId: body.challengeId,
-      action: params.action,
-      payloadHash,
-      buildMessage: ({ nonce, expiresAt }) =>
-        buildProfileFollowChallengeMessage({
-          action: params.action,
-          address: payload.normalizedAddress,
-          payloadHash,
-          nonce,
-          expiresAt,
-        }),
-    });
-    if (!writeAccess.ok) {
-      return writeAccess.response;
-    }
-
-    await params.mutate(payload);
-    return maybeIssueSignedCollectionWriteSession(
-      NextResponse.json({ ok: true, following: params.following, targetAddress: payload.normalizedTargetAddress }),
-      {
-        hasWriteSession: writeAccess.hasWriteSession,
-        walletAddress: payload.normalizedAddress,
-        scope: "profile_follows",
-      },
-    );
-  } catch (error) {
-    console.error(params.logMessage, error);
-    return NextResponse.json({ error: params.responseError }, { status: 500 });
-  }
+function buildOnchainFollowResponse() {
+  return NextResponse.json(
+    {
+      error: ONCHAIN_FOLLOW_ERROR,
+      followAction: "RaterRegistry.followProfile(address)",
+      unfollowAction: "RaterRegistry.unfollowProfile(address)",
+    },
+    { status: 410 },
+  );
 }
 
 export async function GET(request: NextRequest) {
   const address = request.nextUrl.searchParams.get("address");
   const limited = await checkRateLimit(request, READ_RATE_LIMIT, {
+    allowOnStoreUnavailable: true,
     extraKeyParts: [typeof address === "string" ? address : undefined],
   });
   if (limited) return limited;
 
+  if (typeof address !== "string" || !isAddress(address)) {
+    return NextResponse.json({ error: "Valid address is required" }, { status: 400 });
+  }
+  const normalizedAddress = address.toLowerCase() as `0x${string}`;
+
+  const limit = parseLimit(request.nextUrl.searchParams.get("limit"), 200, 500);
+  const offset = parseOffset(request.nextUrl.searchParams.get("offset"));
+
   try {
-    const normalized = normalizeProfileFollowReadInput({ address: typeof address === "string" ? address : undefined });
-    if (!normalized.ok) {
-      return NextResponse.json({ error: normalized.error }, { status: 400 });
-    }
-
-    const hasSession = await hasSignedCollectionReadSession(
-      request,
-      PROFILE_FOLLOWS_SIGNED_READ_SESSION_COOKIE_NAME,
-      normalized.payload.normalizedAddress,
-      "profile_follows",
-    );
-    if (!hasSession) {
-      return NextResponse.json({ error: "Signed read required" }, { status: 401 });
-    }
-
-    const items = await listFollowedProfiles(normalized.payload.normalizedAddress);
-    return NextResponse.json({ items, count: items.length });
+    const follows = await ponderApi.getFollows(normalizedAddress, {
+      limit: String(limit),
+      offset: String(offset),
+    });
+    return NextResponse.json(follows);
   } catch (error) {
-    console.error("Error fetching followed profiles:", error);
-    return NextResponse.json({ error: "Failed to fetch follows" }, { status: 500 });
+    console.error("Failed to fetch public follows:", error);
+    return NextResponse.json(
+      {
+        error: "Failed to fetch public follows from the configured indexer",
+      },
+      { status: 503 },
+    );
   }
 }
 
 export async function POST(request: NextRequest) {
-  const limited = await checkRateLimit(request, READ_RATE_LIMIT);
+  const limited = await checkRateLimit(request, MUTATION_RATE_LIMIT, {
+    allowOnStoreUnavailable: true,
+  });
   if (limited) return limited;
 
-  try {
-    const { address, signature, challengeId } = (await request.json()) as Record<string, unknown> & {
-      signature?: `0x${string}`;
-      challengeId?: string;
-    };
-
-    if (!signature || !challengeId) {
-      return NextResponse.json({ error: "Missing or invalid fields" }, { status: 400 });
-    }
-
-    const normalized = normalizeProfileFollowReadInput({ address: typeof address === "string" ? address : undefined });
-    if (!normalized.ok) {
-      return NextResponse.json({ error: normalized.error }, { status: 400 });
-    }
-
-    const payload = normalized.payload;
-    const payloadHash = hashProfileFollowReadPayload(payload);
-    const challengeFailure = await verifySignedCollectionChallenge({
-      challengeId: String(challengeId),
-      action: READ_PROFILE_FOLLOWS_ACTION,
-      walletAddress: payload.normalizedAddress,
-      payloadHash,
-      signature: signature as `0x${string}`,
-      buildMessage: ({ nonce, expiresAt }) =>
-        buildProfileFollowReadChallengeMessage({
-          address: payload.normalizedAddress,
-          payloadHash,
-          nonce,
-          expiresAt,
-        }),
-    });
-    if (challengeFailure) {
-      return challengeFailure;
-    }
-
-    const items = await listFollowedProfiles(payload.normalizedAddress);
-    return createSignedCollectionReadResponse(payload.normalizedAddress, "profile_follows", {
-      items,
-      count: items.length,
-    });
-  } catch (error) {
-    console.error("Error fetching followed profiles:", error);
-    return NextResponse.json({ error: "Failed to fetch follows" }, { status: 500 });
-  }
+  return buildOnchainFollowResponse();
 }
 
 export async function PUT(request: NextRequest) {
-  return handleProfileFollowWrite(request, {
-    action: FOLLOW_PROFILE_ACTION,
-    following: true,
-    logMessage: "Error following profile:",
-    responseError: "Failed to follow profile",
-    mutate: payload => addFollowedProfile(payload.normalizedAddress, payload.normalizedTargetAddress),
+  const limited = await checkRateLimit(request, MUTATION_RATE_LIMIT, {
+    allowOnStoreUnavailable: true,
   });
+  if (limited) return limited;
+
+  return buildOnchainFollowResponse();
 }
 
 export async function DELETE(request: NextRequest) {
-  return handleProfileFollowWrite(request, {
-    action: UNFOLLOW_PROFILE_ACTION,
-    following: false,
-    logMessage: "Error unfollowing profile:",
-    responseError: "Failed to unfollow profile",
-    mutate: payload => removeFollowedProfile(payload.normalizedAddress, payload.normalizedTargetAddress),
+  const limited = await checkRateLimit(request, MUTATION_RATE_LIMIT, {
+    allowOnStoreUnavailable: true,
   });
+  if (limited) return limited;
+
+  return buildOnchainFollowResponse();
 }

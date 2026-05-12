@@ -1,19 +1,17 @@
 "use client";
 
-import { useSignMessage } from "wagmi";
-import {
-  type SignedCollectionReadAccessResult,
-  type SignedCollectionResponse,
-  type SignedCollectionToggleResult,
-  useSignedCollection,
-} from "~~/hooks/useSignedCollection";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { isAddress } from "viem";
+import { useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
+import type { SignedCollectionReadAccessResult, SignedCollectionToggleResult } from "~~/hooks/useSignedCollection";
+import { type PonderFollowResponse, ponderApi } from "~~/services/ponder/client";
+import { isSignatureRejected } from "~~/utils/signatureErrors";
 
 export interface FollowedProfileItem {
   walletAddress: string;
   createdAt: string;
 }
-
-type FollowedProfilesResponse = SignedCollectionResponse<FollowedProfileItem>;
 
 interface ToggleFollowResult extends SignedCollectionToggleResult<"self_follow"> {
   following?: boolean;
@@ -23,67 +21,227 @@ interface UseFollowedProfilesOptions {
   autoRead?: boolean;
 }
 
-const EMPTY_FOLLOWED_RESPONSE: FollowedProfilesResponse = { items: [], count: 0 };
+const EMPTY_FOLLOWED_RESPONSE: PonderFollowResponse = {
+  items: [],
+  count: 0,
+  followerCount: 0,
+  followingCount: 0,
+  limit: 0,
+  offset: 0,
+};
+
+function normalizeWalletAddress(walletAddress: string) {
+  return walletAddress.toLowerCase();
+}
+
+function normalizeFollowItems(items: FollowedProfileItem[]) {
+  return items.map(item => ({
+    ...item,
+    walletAddress: normalizeWalletAddress(item.walletAddress),
+  }));
+}
 
 export function useFollowedProfiles(address?: string, options?: UseFollowedProfilesOptions) {
-  const { signMessageAsync } = useSignMessage();
-  const autoRead = options?.autoRead ?? false;
+  void options;
   const normalizedAddress = address?.toLowerCase();
-  const { items, itemKeys, isLoading, hasReadSession, toggleItem, requestReadAccess, isPending } = useSignedCollection<
-    FollowedProfileItem,
-    string,
-    "self_follow"
-  >({
-    address: normalizedAddress,
-    autoRead,
-    queryKey: ["followedProfiles", normalizedAddress],
-    emptyResponse: EMPTY_FOLLOWED_RESPONSE,
-    sessionPath: "/api/follows/profiles/session",
-    collectionPath: "/api/follows/profiles",
-    challengePath: "/api/follows/profiles/challenge",
-    signMessageAsync,
-    getItemKey: item => item.walletAddress.toLowerCase(),
-    normalizeId: targetAddress => targetAddress.toLowerCase(),
-    createOptimisticItem: walletAddress => ({ walletAddress, createdAt: new Date().toISOString() }),
-    buildReadChallengeRequest: walletAddress => ({ address: walletAddress, intent: "read" }),
-    buildSignedReadRequest: (walletAddress, challengeId, signature) => ({
-      address: walletAddress,
-      signature,
-      challengeId,
-    }),
-    buildWriteChallengeRequest: (walletAddress, targetAddress, currentlySelected) => ({
-      address: walletAddress,
-      targetAddress,
-      action: currentlySelected ? "unfollow" : "follow",
-    }),
-    buildSignedWriteRequest: (walletAddress, targetAddress, _currentlySelected, challengeId, signature) => ({
-      address: walletAddress,
-      targetAddress,
-      signature,
-      challengeId,
-    }),
-    buildSessionWriteRequest: (walletAddress, targetAddress) => ({
-      address: walletAddress,
-      targetAddress,
-    }),
-    validateToggle: (targetAddress, walletAddress) => (targetAddress === walletAddress ? "self_follow" : null),
+  const queryClient = useQueryClient();
+  const { writeContractAsync } = useScaffoldWriteContract({
+    contractName: "RaterRegistry",
+  });
+  const queryKey = useMemo(() => ["followedProfiles", normalizedAddress ?? "anonymous"] as const, [normalizedAddress]);
+  const [pendingWallets, setPendingWallets] = useState<Set<string>>(() => new Set());
+  const [optimisticFollows, setOptimisticFollows] = useState<Map<string, FollowedProfileItem | null>>(() => new Map());
+
+  useEffect(() => {
+    setPendingWallets(new Set());
+    setOptimisticFollows(new Map());
+  }, [normalizedAddress]);
+
+  const followQuery = useQuery({
+    queryKey,
+    queryFn: async () => {
+      if (!normalizedAddress) return EMPTY_FOLLOWED_RESPONSE;
+      return ponderApi.getAllFollows(normalizedAddress);
+    },
+    enabled: Boolean(normalizedAddress),
+    staleTime: 15_000,
+    retry: false,
   });
 
-  return {
-    followedItems: items,
-    followedWallets: itemKeys,
-    isLoading,
-    hasReadSession,
-    requestReadAccess: async (): Promise<SignedCollectionReadAccessResult> => requestReadAccess(),
-    toggleFollow: async (targetAddress: string): Promise<ToggleFollowResult> => {
-      const result = await toggleItem(targetAddress);
-      return {
-        ok: result.ok,
-        following: result.selected,
-        reason: result.reason,
-        error: result.error,
-      };
+  const baseItems = useMemo(
+    () => normalizeFollowItems(followQuery.data?.items ?? EMPTY_FOLLOWED_RESPONSE.items),
+    [followQuery.data?.items],
+  );
+
+  useEffect(() => {
+    const baseKeys = new Set(baseItems.map(item => item.walletAddress));
+    setOptimisticFollows(current => {
+      let changed = false;
+      const next = new Map(current);
+      for (const [walletAddress, item] of current.entries()) {
+        const existsInBase = baseKeys.has(walletAddress);
+        if ((item === null && !existsInBase) || (item !== null && existsInBase)) {
+          next.delete(walletAddress);
+          changed = true;
+        }
+      }
+      return changed ? next : current;
+    });
+  }, [baseItems]);
+
+  const followedItems = useMemo(() => {
+    const merged = new Map(baseItems.map(item => [item.walletAddress, item] as const));
+    for (const [walletAddress, item] of optimisticFollows.entries()) {
+      if (item === null) {
+        merged.delete(walletAddress);
+      } else {
+        merged.set(walletAddress, item);
+      }
+    }
+    return Array.from(merged.values()).sort((left, right) => {
+      if (left.createdAt === right.createdAt) {
+        return left.walletAddress.localeCompare(right.walletAddress);
+      }
+      return right.createdAt.localeCompare(left.createdAt);
+    });
+  }, [baseItems, optimisticFollows]);
+
+  const followedWallets = useMemo(
+    () => new Set(followedItems.map(item => normalizeWalletAddress(item.walletAddress))),
+    [followedItems],
+  );
+
+  const refreshFollowState = useCallback(
+    async (targetWalletAddress?: string) => {
+      const invalidations: Promise<unknown>[] = [
+        queryClient.invalidateQueries({ queryKey }),
+        queryClient.invalidateQueries({ queryKey: ["ponder-fallback", "discoverSignals"] }),
+      ];
+
+      if (normalizedAddress) {
+        invalidations.push(
+          queryClient.invalidateQueries({ queryKey: ["ponder-fallback", "publicProfile", normalizedAddress] }),
+        );
+      }
+
+      if (targetWalletAddress) {
+        invalidations.push(
+          queryClient.invalidateQueries({ queryKey: ["ponder-fallback", "publicProfile", targetWalletAddress] }),
+        );
+      }
+
+      await Promise.all(invalidations);
     },
-    isPending,
+    [normalizedAddress, queryClient, queryKey],
+  );
+
+  const requestReadAccess = useCallback(async (): Promise<SignedCollectionReadAccessResult> => {
+    if (!normalizedAddress) {
+      return { ok: false, reason: "not_connected" };
+    }
+
+    try {
+      const result = await followQuery.refetch();
+      if (result.error) {
+        throw result.error;
+      }
+      return { ok: true };
+    } catch (error) {
+      return {
+        ok: false,
+        reason: "request_failed",
+        error: error instanceof Error ? error.message : "Failed to load follows",
+      };
+    }
+  }, [followQuery, normalizedAddress]);
+
+  const toggleFollow = useCallback(
+    async (targetAddress: string): Promise<ToggleFollowResult> => {
+      if (!normalizedAddress) {
+        return { ok: false, reason: "not_connected" };
+      }
+      if (!isAddress(targetAddress)) {
+        return { ok: false, reason: "request_failed", error: "Invalid profile address" };
+      }
+
+      const normalizedTargetAddress = normalizeWalletAddress(targetAddress);
+      if (normalizedTargetAddress === normalizedAddress) {
+        return { ok: false, reason: "self_follow" };
+      }
+      if (pendingWallets.has(normalizedTargetAddress)) {
+        return {
+          ok: true,
+          following: followedWallets.has(normalizedTargetAddress),
+          selected: followedWallets.has(normalizedTargetAddress),
+        };
+      }
+
+      const currentlyFollowing = followedWallets.has(normalizedTargetAddress);
+      const nextFollowing = !currentlyFollowing;
+      const previousOptimisticEntry = optimisticFollows.get(normalizedTargetAddress);
+      const optimisticItem = nextFollowing
+        ? { walletAddress: normalizedTargetAddress, createdAt: new Date().toISOString() }
+        : null;
+
+      setPendingWallets(current => new Set(current).add(normalizedTargetAddress));
+      setOptimisticFollows(current => {
+        const next = new Map(current);
+        next.set(normalizedTargetAddress, optimisticItem);
+        return next;
+      });
+
+      try {
+        const txHash = await writeContractAsync({
+          functionName: currentlyFollowing ? "unfollowProfile" : "followProfile",
+          args: [normalizedTargetAddress as `0x${string}`],
+        });
+        if (!txHash) {
+          throw new Error("Follow transaction was not submitted");
+        }
+        await refreshFollowState(normalizedTargetAddress);
+        return {
+          ok: true,
+          following: nextFollowing,
+          selected: nextFollowing,
+        };
+      } catch (error) {
+        setOptimisticFollows(current => {
+          const next = new Map(current);
+          if (previousOptimisticEntry === undefined) {
+            next.delete(normalizedTargetAddress);
+          } else {
+            next.set(normalizedTargetAddress, previousOptimisticEntry);
+          }
+          return next;
+        });
+
+        if (isSignatureRejected(error)) {
+          return { ok: false, reason: "rejected" };
+        }
+
+        return {
+          ok: false,
+          reason: "request_failed",
+          error: error instanceof Error ? error.message : "Failed to update follows",
+        };
+      } finally {
+        setPendingWallets(current => {
+          const next = new Set(current);
+          next.delete(normalizedTargetAddress);
+          return next;
+        });
+      }
+    },
+    [followedWallets, normalizedAddress, optimisticFollows, pendingWallets, refreshFollowState, writeContractAsync],
+  );
+
+  return {
+    followedItems,
+    followedWallets,
+    isLoading: Boolean(normalizedAddress) && followQuery.isLoading,
+    hasReadSession: Boolean(normalizedAddress),
+    requestReadAccess,
+    toggleFollow,
+    isPending: (targetAddress: string) => pendingWallets.has(normalizeWalletAddress(targetAddress)),
   };
 }
