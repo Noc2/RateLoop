@@ -114,6 +114,14 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         uint256 stakeReturned,
         uint256 reward
     );
+    event LaunchRaterRewardCreditFailed(
+        uint256 indexed contentId,
+        uint256 indexed roundId,
+        bytes32 indexed commitKey,
+        address rater,
+        address launchPool,
+        bytes reason
+    );
     event LoserNotified(uint256 indexed contentId, uint256 indexed roundId, address indexed voter);
     event FrontendFeeClaimed(
         uint256 indexed contentId, uint256 indexed roundId, address indexed frontend, uint256 amount
@@ -338,10 +346,12 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
                 round.revealedCount,
                 votingEngine.roundUnrevealedCleanupRemaining(contentId, roundId) == 0,
                 verifiedAnchorIds
-            ) returns (
-            uint256
-        ) { }
-            catch { }
+            ) returns (uint256) { }
+            catch (bytes memory reason) {
+                emit LaunchRaterRewardCreditFailed(
+                    contentId, roundId, commitKey, rewardRecipient, launchPool, reason
+                );
+            }
     }
 
     // --- Frontend Fee Claims ---

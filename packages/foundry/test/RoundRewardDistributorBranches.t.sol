@@ -25,6 +25,23 @@ contract MockRaterDeclarationStatusForRewards {
     }
 }
 
+contract MockRevertingLaunchDistributionPool {
+    error LaunchCreditRejected();
+
+    function recordEarnedRaterReward(
+        address,
+        uint256,
+        uint256,
+        bytes32,
+        uint16,
+        uint16,
+        bool,
+        bytes32[] calldata
+    ) external pure returns (uint256) {
+        revert LaunchCreditRejected();
+    }
+}
+
 /// @title RoundRewardDistributor branch coverage tests (tlock commit-reveal)
 contract RoundRewardDistributorBranchesTest is VotingTestBase {
     HumanReputation public hrepToken;
@@ -47,6 +64,15 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
     uint256 public constant T0 = 1000;
     uint256 public constant STAKE = 5e6;
     uint256 public constant EPOCH_DURATION = 5 minutes;
+
+    event LaunchRaterRewardCreditFailed(
+        uint256 indexed contentId,
+        uint256 indexed roundId,
+        bytes32 indexed commitKey,
+        address rater,
+        address launchPool,
+        bytes reason
+    );
 
     function setUp() public {
         vm.warp(T0);
@@ -390,6 +416,25 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         assertEq(launchPool.qualifyingRatingCount(voter1), 1);
         assertEq(launchPool.raterDistinctVerifiedAnchorCount(voter1), 1);
         assertEq(launchPool.raterDistinctAnchorRoundCount(voter1), 1);
+    }
+
+    function test_ClaimReward_EmitsLaunchCreditFailureWithoutBlockingClaim() public {
+        (uint256 contentId, uint256 roundId) = _setupSettledPredictionRound();
+        bytes32 voter1CommitKey =
+            keccak256(abi.encodePacked(voter1, votingEngine.voterCommitHash(contentId, roundId, voter1)));
+        MockRevertingLaunchDistributionPool revertingLaunchPool = new MockRevertingLaunchDistributionPool();
+
+        ProtocolConfig config = ProtocolConfig(address(votingEngine.protocolConfig()));
+        vm.prank(owner);
+        config.setLaunchDistributionPool(address(revertingLaunchPool));
+
+        vm.expectEmit(true, true, true, false, address(rewardDistributor));
+        emit LaunchRaterRewardCreditFailed(
+            contentId, roundId, voter1CommitKey, voter1, address(revertingLaunchPool), ""
+        );
+
+        vm.prank(voter1);
+        rewardDistributor.claimReward(contentId, roundId);
     }
 
     function test_ClaimReward_DoesNotRecordLaunchCreditWithoutIndependentVerifiedAnchor() public {

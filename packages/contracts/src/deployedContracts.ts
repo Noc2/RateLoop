@@ -8783,6 +8783,49 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "event",
+          name: "LaunchRaterRewardCreditFailed",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "commitKey",
+              type: "bytes32",
+              indexed: true,
+              internalType: "bytes32",
+            },
+            {
+              name: "rater",
+              type: "address",
+              indexed: false,
+              internalType: "address",
+            },
+            {
+              name: "launchPool",
+              type: "address",
+              indexed: false,
+              internalType: "address",
+            },
+            {
+              name: "reason",
+              type: "bytes",
+              indexed: false,
+              internalType: "bytes",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
           name: "RewardClaimed",
           inputs: [
             {
