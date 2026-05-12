@@ -304,6 +304,10 @@ function mockPonderModules<T>(result: T) {
       revealed: "vote.revealed",
       roundId: "vote.roundId",
       stake: "vote.stake",
+      rbtsForfeitedStake: "vote.rbtsForfeitedStake",
+      rbtsRewardWeight: "vote.rbtsRewardWeight",
+      rbtsScoreBps: "vote.rbtsScoreBps",
+      rbtsStakeReturned: "vote.rbtsStakeReturned",
       voter: "vote.voter",
     },
     voterCategoryStats: {
@@ -723,6 +727,48 @@ describe("registerLeaderboardRoutes", () => {
     expect(queryBuilder.limit).toHaveBeenCalledWith(50);
     expect(queryBuilder.offset).toHaveBeenCalledWith(25);
     expect(queryBuilder.limit).not.toHaveBeenCalledWith(1000);
+  });
+
+  it("accepts signal-score accuracy leaderboards without stake-based ordering", async () => {
+    const { queryBuilder } = mockPonderModules([]);
+    const { registerLeaderboardRoutes } = await import(
+      "../src/api/routes/leaderboard-routes.js"
+    );
+
+    const app = new Hono();
+    registerLeaderboardRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/accuracy-leaderboard?sortBy=signalScore&minVotes=5&minSignalVotes=5",
+    );
+
+    expect(response.status).toBe(200);
+    const orderArgs = queryBuilder.orderBy.mock.calls[0] ?? [];
+    const serialized = serializeExpression(orderArgs);
+    expect(serialized).toContain("rbtsScoreBps");
+    expect(serialized).toContain("count(*)");
+    expect(serialized).toContain("vote.voter");
+    expect(serialized).not.toContain("totalStakeWon");
+  });
+
+  it("rejects invalid signal-score vote minimums", async () => {
+    const { db } = mockPonderModules([]);
+    const { registerLeaderboardRoutes } = await import(
+      "../src/api/routes/leaderboard-routes.js"
+    );
+
+    const app = new Hono();
+    registerLeaderboardRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/accuracy-leaderboard?sortBy=signalScore&minSignalVotes=-1",
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error: "Invalid minSignalVotes",
+    });
+    expect(db.select).not.toHaveBeenCalled();
   });
 
   it("rejects oversized offsets before querying the database", async () => {

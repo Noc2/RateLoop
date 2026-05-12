@@ -758,6 +758,9 @@ export interface PonderAccuracyLeaderboardItem {
   totalLosses: number;
   totalStakeWon: string;
   totalStakeLost: string;
+  scoredVotes?: number;
+  signalScoreBps?: number;
+  signalScore?: number;
   currentStreak?: number;
   bestWinStreak?: number;
   profileName: string | null;
@@ -1143,6 +1146,7 @@ export const ponderApi = {
     sortBy?: string;
     window?: string;
     minVotes?: string;
+    minSignalVotes?: string;
     limit?: string;
     offset?: string;
   }) {

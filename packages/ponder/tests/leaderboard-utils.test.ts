@@ -64,6 +64,8 @@ describe("sortAccuracyLeaderboardItems", () => {
       totalWins: 8,
       totalStakeWon: 20n,
       winRate: 0.8,
+      scoredVotes: 10,
+      signalScoreBps: 7_000,
     },
     {
       voter: "0xaaa",
@@ -71,6 +73,8 @@ describe("sortAccuracyLeaderboardItems", () => {
       totalWins: 8,
       totalStakeWon: 10n,
       winRate: 8 / 12,
+      scoredVotes: 12,
+      signalScoreBps: 6_500,
     },
     {
       voter: "0xccc",
@@ -78,6 +82,8 @@ describe("sortAccuracyLeaderboardItems", () => {
       totalWins: 7,
       totalStakeWon: 8n,
       winRate: 1,
+      scoredVotes: 1,
+      signalScoreBps: 5_800,
     },
   ];
 
@@ -102,6 +108,44 @@ describe("sortAccuracyLeaderboardItems", () => {
       "0xbbb",
       "0xaaa",
       "0xccc",
+    ]);
+  });
+
+  it("sorts signal score before sample size without using stake as a tie-breaker", () => {
+    const signalItems = [
+      {
+        voter: "0xddd",
+        totalSettledVotes: 20,
+        totalWins: 10,
+        totalStakeWon: 100n,
+        winRate: 0.5,
+        scoredVotes: 20,
+        signalScoreBps: 6_000,
+      },
+      {
+        voter: "0xeee",
+        totalSettledVotes: 4,
+        totalWins: 4,
+        totalStakeWon: 1_000n,
+        winRate: 1,
+        scoredVotes: 4,
+        signalScoreBps: 6_200,
+      },
+      {
+        voter: "0xaaa",
+        totalSettledVotes: 30,
+        totalWins: 12,
+        totalStakeWon: 1n,
+        winRate: 0.4,
+        scoredVotes: 30,
+        signalScoreBps: 6_000,
+      },
+    ];
+
+    expect(sortAccuracyLeaderboardItems(signalItems, "signalScore").map(item => item.voter)).toEqual([
+      "0xeee",
+      "0xaaa",
+      "0xddd",
     ]);
   });
 });

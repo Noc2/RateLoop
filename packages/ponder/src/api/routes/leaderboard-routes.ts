@@ -11,6 +11,8 @@ import {
   voterStats,
 } from "ponder:schema";
 import {
+  SIGNAL_SCORE_PRIOR_BPS,
+  SIGNAL_SCORE_PRIOR_WEIGHT,
   resolveAccuracyLeaderboardWindow,
   type AccuracyLeaderboardSortBy,
 } from "../leaderboard-utils.js";
@@ -26,6 +28,8 @@ function getAccuracyLeaderboardOrderByExpressions(
     totalSettledVotes: OrderableExpression;
     totalWins: OrderableExpression;
     totalStakeWon: OrderableExpression;
+    scoredVotes?: OrderableExpression;
+    signalScoreBps?: OrderableExpression;
     winRate: OrderableExpression;
     voter: OrderableExpression;
   },
@@ -33,6 +37,16 @@ function getAccuracyLeaderboardOrderByExpressions(
   const orderByExpressions = [];
 
   switch (sortBy) {
+    case "signalScore":
+      if (metrics.signalScoreBps) {
+        orderByExpressions.push(desc(metrics.signalScoreBps));
+      }
+      if (metrics.scoredVotes) {
+        orderByExpressions.push(desc(metrics.scoredVotes));
+      }
+      orderByExpressions.push(desc(metrics.totalSettledVotes));
+      orderByExpressions.push(asc(metrics.voter));
+      return orderByExpressions;
     case "settledVotes":
       orderByExpressions.push(desc(metrics.totalSettledVotes));
       break;
@@ -144,8 +158,9 @@ export function registerLeaderboardRoutes(app: ApiApp) {
 
   app.get("/accuracy-leaderboard", async (c) => {
     const categoryIdParam = c.req.query("categoryId");
-    const sortByRaw = c.req.query("sortBy") ?? "winRate";
+    const sortByRaw = c.req.query("sortBy") ?? "signalScore";
     const sortBy =
+      sortByRaw === "signalScore" ||
       sortByRaw === "winRate" ||
       sortByRaw === "wins" ||
       sortByRaw === "stakeWon" ||
@@ -159,7 +174,11 @@ export function registerLeaderboardRoutes(app: ApiApp) {
     );
     if (windowBounds === null) return c.json({ error: "Invalid window" }, 400);
 
-    const minVotesParam = c.req.query("minVotes") ?? "3";
+    const minVotesParam =
+      c.req.query("minVotes") ?? (sortBy === "signalScore" ? "5" : "3");
+    const minSignalVotesParam =
+      c.req.query("minSignalVotes") ??
+      (sortBy === "signalScore" ? minVotesParam : "0");
     const limit = safeLimit(c.req.query("limit"), 20, 100);
     const offset = safeOffset(c.req.query("offset"));
     if (Number.isNaN(offset)) return c.json({ error: "Invalid offset" }, 400);
@@ -167,10 +186,151 @@ export function registerLeaderboardRoutes(app: ApiApp) {
     const minVotes = parseInt(minVotesParam);
     if (isNaN(minVotes) || minVotes < 1)
       return c.json({ error: "Invalid minVotes" }, 400);
+    const minSignalVotes = parseInt(minSignalVotesParam);
+    if (isNaN(minSignalVotes) || minSignalVotes < 0)
+      return c.json({ error: "Invalid minSignalVotes" }, 400);
 
     const categoryId = categoryIdParam ? safeBigInt(categoryIdParam) : null;
     if (categoryIdParam && categoryId === null)
       return c.json({ error: "Invalid categoryId" }, 400);
+
+    if (sortBy === "signalScore") {
+      const aggregateTotalSettledVotes = sql<number>`count(*)`;
+      const aggregateTotalWins = sql<number>`sum(case when ${vote.rbtsRewardWeight} is not null then case when coalesce(${vote.rbtsRewardWeight}, 0) > 0 then 1 else 0 end else case when ${vote.isUp} = ${round.upWins} then 1 else 0 end end)`;
+      const aggregateTotalLosses = sql<number>`sum(case when ${vote.rbtsRewardWeight} is not null then case when coalesce(${vote.rbtsRewardWeight}, 0) > 0 then 0 else 1 end else case when ${vote.isUp} = ${round.upWins} then 0 else 1 end end)`;
+      const aggregateTotalStakeWon = sql<bigint>`coalesce(sum(case when ${vote.rbtsStakeReturned} is not null then coalesce(${vote.rbtsStakeReturned}, 0) else case when ${vote.isUp} = ${round.upWins} then ${vote.stake} else 0 end end), 0)`;
+      const aggregateTotalStakeLost = sql<bigint>`coalesce(sum(case when ${vote.rbtsForfeitedStake} is not null then coalesce(${vote.rbtsForfeitedStake}, ${vote.stake}) else case when ${vote.isUp} = ${round.upWins} then 0 else ${vote.stake} end end), 0)`;
+      const aggregateScoredVotes = sql<number>`sum(case when ${vote.rbtsScoreBps} is not null then 1 else 0 end)`;
+      const aggregateSignalScoreBps = sql<number>`CAST((coalesce(sum(${vote.rbtsScoreBps}), 0) + ${SIGNAL_SCORE_PRIOR_BPS * SIGNAL_SCORE_PRIOR_WEIGHT}) AS FLOAT) / (${aggregateScoredVotes} + ${SIGNAL_SCORE_PRIOR_WEIGHT})`;
+      const aggregateWinRate = sql<number>`CAST(${aggregateTotalWins} AS FLOAT) / ${aggregateTotalSettledVotes}`;
+      const aggregateSelection = {
+        voter: vote.voter,
+        totalSettledVotes: aggregateTotalSettledVotes,
+        totalWins: aggregateTotalWins,
+        totalLosses: aggregateTotalLosses,
+        totalStakeWon: aggregateTotalStakeWon,
+        totalStakeLost: aggregateTotalStakeLost,
+        scoredVotes: aggregateScoredVotes,
+        signalScoreBps: aggregateSignalScoreBps,
+        winRate: aggregateWinRate,
+        currentStreak: voterStats.currentStreak,
+        bestWinStreak: voterStats.bestWinStreak,
+        profileName: profile.name,
+      };
+      const signalOrderByExprs = getAccuracyLeaderboardOrderByExpressions(
+        sortBy,
+        {
+          totalSettledVotes: aggregateTotalSettledVotes,
+          totalWins: aggregateTotalWins,
+          totalStakeWon: aggregateTotalStakeWon,
+          scoredVotes: aggregateScoredVotes,
+          signalScoreBps: aggregateSignalScoreBps,
+          winRate: aggregateWinRate,
+          voter: vote.voter,
+        },
+      );
+      const baseConditions = [
+        eq(vote.revealed, true),
+        eq(round.state, ROUND_STATE.Settled),
+      ];
+      if (
+        windowBounds.window !== "all" &&
+        windowBounds.startsAt !== null &&
+        windowBounds.endsAt !== null
+      ) {
+        baseConditions.push(
+          gte(round.settledAt, windowBounds.startsAt),
+          lt(round.settledAt, windowBounds.endsAt),
+        );
+      }
+
+      const rows =
+        categoryId !== null
+          ? await db
+              .select(aggregateSelection)
+              .from(vote)
+              .innerJoin(
+                round,
+                and(
+                  eq(vote.contentId, round.contentId),
+                  eq(vote.roundId, round.roundId),
+                ),
+              )
+              .innerJoin(content, eq(vote.contentId, content.id))
+              .leftJoin(profile, eq(vote.voter, profile.address))
+              .leftJoin(voterStats, eq(vote.voter, voterStats.voter))
+              .where(and(...baseConditions, eq(content.categoryId, categoryId)))
+              .groupBy(
+                vote.voter,
+                profile.name,
+                voterStats.currentStreak,
+                voterStats.bestWinStreak,
+              )
+              .having(
+                sql`count(*) >= ${minVotes} and ${aggregateScoredVotes} >= ${minSignalVotes}`,
+              )
+              .orderBy(...signalOrderByExprs)
+              .limit(limit)
+              .offset(offset)
+          : await db
+              .select(aggregateSelection)
+              .from(vote)
+              .innerJoin(
+                round,
+                and(
+                  eq(vote.contentId, round.contentId),
+                  eq(vote.roundId, round.roundId),
+                ),
+              )
+              .leftJoin(profile, eq(vote.voter, profile.address))
+              .leftJoin(voterStats, eq(vote.voter, voterStats.voter))
+              .where(and(...baseConditions))
+              .groupBy(
+                vote.voter,
+                profile.name,
+                voterStats.currentStreak,
+                voterStats.bestWinStreak,
+              )
+              .having(
+                sql`count(*) >= ${minVotes} and ${aggregateScoredVotes} >= ${minSignalVotes}`,
+              )
+              .orderBy(...signalOrderByExprs)
+              .limit(limit)
+              .offset(offset);
+
+      const items = rows.map((row) => {
+        const signalScoreBps = Number(row.signalScoreBps);
+        return {
+          voter: row.voter,
+          totalSettledVotes: Number(row.totalSettledVotes),
+          totalWins: Number(row.totalWins),
+          totalLosses: Number(row.totalLosses),
+          totalStakeWon:
+            typeof row.totalStakeWon === "bigint"
+              ? row.totalStakeWon
+              : BigInt(row.totalStakeWon ?? 0),
+          totalStakeLost:
+            typeof row.totalStakeLost === "bigint"
+              ? row.totalStakeLost
+              : BigInt(row.totalStakeLost ?? 0),
+          scoredVotes: Number(row.scoredVotes ?? 0),
+          signalScoreBps,
+          signalScore: signalScoreBps / 10_000,
+          currentStreak: row.currentStreak,
+          bestWinStreak: row.bestWinStreak,
+          profileName: row.profileName,
+          winRate: Number(row.winRate),
+        };
+      });
+
+      return jsonBig(c, {
+        items,
+        categoryId: categoryIdParam,
+        window: windowBounds.window,
+        startsAt: windowBounds.startsAt,
+        endsAt: windowBounds.endsAt,
+      });
+    }
 
     const categoryWinRateExpr = sql<number>`CAST(${voterCategoryStats.totalWins} AS FLOAT) / ${voterCategoryStats.totalSettledVotes}`;
     const categoryOrderByExprs = getAccuracyLeaderboardOrderByExpressions(

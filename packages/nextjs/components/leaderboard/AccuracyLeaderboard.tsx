@@ -15,8 +15,8 @@ import { PonderAccuracyLeaderboardItem, PonderAccuracyLeaderboardWindow, ponderA
 import { getReputationAvatarUrl } from "~~/utils/profileImage";
 import { notification } from "~~/utils/scaffold-eth";
 
-type SortOption = "winRate" | "wins" | "stakeWon" | "settledVotes";
-type MinVotesOption = "1" | "3" | "5" | "10";
+type SortOption = "signalScore" | "winRate" | "wins" | "stakeWon" | "settledVotes";
+type MinVotesOption = "3" | "5" | "10";
 type WindowOption = PonderAccuracyLeaderboardWindow;
 
 export function AccuracyLeaderboard() {
@@ -36,9 +36,9 @@ export function AccuracyLeaderboard() {
   const [items, setItems] = useState<PonderAccuracyLeaderboardItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [fetchError, setFetchError] = useState(false);
-  const [sortBy, setSortBy] = useState<SortOption>("wins");
-  const [minVotes, setMinVotes] = useState<MinVotesOption>("1");
-  const [window, setWindow] = useState<WindowOption>("all");
+  const [sortBy, setSortBy] = useState<SortOption>("signalScore");
+  const [minVotes, setMinVotes] = useState<MinVotesOption>("5");
+  const [window, setWindow] = useState<WindowOption>("30d");
   const [categoryId, setCategoryId] = useState<string>("");
   const [scope, setScope] = useState<"all" | "following">("all");
 
@@ -54,6 +54,7 @@ export function AccuracyLeaderboard() {
           minVotes,
           limit: "50",
         };
+        if (sortBy === "signalScore") params.minSignalVotes = minVotes;
         if (categoryId) params.categoryId = categoryId;
         const data = await ponderApi.getAccuracyLeaderboard(params);
         if (!cancelled) setItems(data.items);
@@ -75,6 +76,15 @@ export function AccuracyLeaderboard() {
 
   const truncateAddress = (addr: string) => `${addr.slice(0, 6)}...${addr.slice(-4)}`;
   const formatRate = (rate: number) => `${(rate * 100).toFixed(1)}%`;
+  const formatSignalScore = (entry: PonderAccuracyLeaderboardItem) => {
+    const signalScore =
+      typeof entry.signalScore === "number"
+        ? entry.signalScore
+        : typeof entry.signalScoreBps === "number"
+          ? entry.signalScoreBps / 10_000
+          : entry.winRate;
+    return formatRate(signalScore);
+  };
   const formatStake = (s: string) => {
     const num = Number(s) / 1e6;
     return num.toLocaleString(undefined, { maximumFractionDigits: 0 });
@@ -189,6 +199,7 @@ export function AccuracyLeaderboard() {
           aria-label="Sort by"
           onChange={e => setSortBy(e.target.value as SortOption)}
         >
+          <option value="signalScore">Signal Score</option>
           <option value="winRate">Win Rate</option>
           <option value="wins">Wins</option>
           <option value="stakeWon">Stake Won</option>
@@ -202,7 +213,6 @@ export function AccuracyLeaderboard() {
           value={minVotes}
           onChange={e => setMinVotes(e.target.value as MinVotesOption)}
         >
-          <option value="1">Min 1 vote</option>
           <option value="3">Min 3 votes</option>
           <option value="5">Min 5 votes</option>
           <option value="10">Min 10 votes</option>
@@ -233,6 +243,7 @@ export function AccuracyLeaderboard() {
               <tr className="text-base-content/60">
                 <th className="w-16 text-center">Rank</th>
                 <th>User</th>
+                <th className="text-right">Signal Score</th>
                 <th className="text-right">Win Rate</th>
                 <th className="text-right">W / L</th>
                 {showStreakColumn && <th className="text-right">Streak</th>}
@@ -304,6 +315,7 @@ export function AccuracyLeaderboard() {
                         ) : null}
                       </div>
                     </td>
+                    <td className="text-right font-mono">{formatSignalScore(entry)}</td>
                     <td className="text-right font-mono">{formatRate(entry.winRate)}</td>
                     <td className="text-right font-mono">
                       {entry.totalWins} / {entry.totalLosses}
