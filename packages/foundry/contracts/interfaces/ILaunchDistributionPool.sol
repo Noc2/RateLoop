@@ -8,6 +8,7 @@ interface ILaunchDistributionPool {
         uint16 minVerifiedHumans;
         uint16 minDistinctVerifiedAnchors;
         uint16 minDistinctAnchorRounds;
+        uint64 minLaunchCreditStake;
         uint32 eligibilityRatingCount;
         uint32 rewardingRatingCount;
         bool requireNoPendingCleanup;
@@ -21,6 +22,7 @@ interface ILaunchDistributionPool {
         uint16 scoreBps,
         uint16 revealedRaterCount,
         bool noPendingCleanup,
+        uint256 stakeAmount,
         bytes32[] calldata verifiedAnchorIds
     ) external returns (uint256 paidAmount);
 }

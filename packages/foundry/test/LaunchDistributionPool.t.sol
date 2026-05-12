@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {Test, stdStorage, StdStorage} from "forge-std/Test.sol";
-import {LaunchDistributionPool} from "../contracts/LaunchDistributionPool.sol";
-import {LoopReputation} from "../contracts/LoopReputation.sol";
-import {RaterRegistry} from "../contracts/RaterRegistry.sol";
-import {ILaunchDistributionPool} from "../contracts/interfaces/ILaunchDistributionPool.sol";
-import {MockWorldIDRouter} from "../contracts/mocks/MockWorldIDRouter.sol";
+import { Test, stdStorage, StdStorage } from "forge-std/Test.sol";
+import { LaunchDistributionPool } from "../contracts/LaunchDistributionPool.sol";
+import { LoopReputation } from "../contracts/LoopReputation.sol";
+import { RaterRegistry } from "../contracts/RaterRegistry.sol";
+import { ILaunchDistributionPool } from "../contracts/interfaces/ILaunchDistributionPool.sol";
+import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
 
 contract LaunchDistributionPoolTest is Test {
     using stdStorage for StdStorage;
@@ -62,6 +62,7 @@ contract LaunchDistributionPoolTest is Test {
             uint16 minVerifiedHumans,
             uint16 minDistinctVerifiedAnchors,
             uint16 minDistinctAnchorRounds,
+            uint64 minLaunchCreditStake,
             uint32 eligibilityRatingCount,
             uint32 rewardingRatingCount,
             bool requireNoPendingCleanup
@@ -72,6 +73,7 @@ contract LaunchDistributionPoolTest is Test {
         assertEq(minVerifiedHumans, 1);
         assertEq(minDistinctVerifiedAnchors, 2);
         assertEq(minDistinctAnchorRounds, 2);
+        assertEq(minLaunchCreditStake, 1e6);
         assertEq(eligibilityRatingCount, 5);
         assertEq(rewardingRatingCount, 10);
         assertTrue(requireNoPendingCleanup);
@@ -118,6 +120,11 @@ contract LaunchDistributionPoolTest is Test {
         pool.setLaunchRewardPolicy(policy);
 
         policy = _defaultPolicy();
+        policy.minLaunchCreditStake = pool.MIN_LAUNCH_CREDIT_STAKE() - 1;
+        vm.expectRevert(LaunchDistributionPool.InvalidPolicy.selector);
+        pool.setLaunchRewardPolicy(policy);
+
+        policy = _defaultPolicy();
         policy.eligibilityRatingCount = pool.ELIGIBILITY_RATING_COUNT() - 1;
         vm.expectRevert(LaunchDistributionPool.InvalidPolicy.selector);
         pool.setLaunchRewardPolicy(policy);
@@ -144,7 +151,17 @@ contract LaunchDistributionPoolTest is Test {
 
         for (uint256 i = 0; i < 9; i++) {
             bytes32 anchorId = i % 2 == 0 ? bytes32("anchor-b") : bytes32("anchor-a");
-            pool.recordEarnedRaterReward(alice, 1, 6 + i, _commitKey(6 + i), 8_000, 3, true, _singleAnchor(anchorId));
+            pool.recordEarnedRaterReward(
+                alice,
+                1,
+                6 + i,
+                _commitKey(6 + i),
+                8_000,
+                3,
+                true,
+                pool.MIN_LAUNCH_CREDIT_STAKE(),
+                _singleAnchor(anchorId)
+            );
         }
         assertEq(pool.rewardedRatingCount(alice), 10);
         assertEq(pool.raterLaunchPaid(alice), 10e6);
@@ -159,21 +176,47 @@ contract LaunchDistributionPoolTest is Test {
         emit EarnedRaterRewardCreditRecorded(alice, 1, 1, _commitKey(1), 8_000, 1, 1, 1, false);
         assertEq(
             pool.recordEarnedRaterReward(
-                alice, 1, 1, _commitKey(1), 8_000, 3, true, _singleAnchor(bytes32("anchor-a"))
+                alice,
+                1,
+                1,
+                _commitKey(1),
+                8_000,
+                3,
+                true,
+                pool.MIN_LAUNCH_CREDIT_STAKE(),
+                _singleAnchor(bytes32("anchor-a"))
             ),
             0
         );
 
         for (uint256 i = 0; i < 3; i++) {
             bytes32 anchorId = i % 2 == 0 ? bytes32("anchor-b") : bytes32("anchor-a");
-            pool.recordEarnedRaterReward(alice, 1, 2 + i, _commitKey(2 + i), 8_000, 3, true, _singleAnchor(anchorId));
+            pool.recordEarnedRaterReward(
+                alice,
+                1,
+                2 + i,
+                _commitKey(2 + i),
+                8_000,
+                3,
+                true,
+                pool.MIN_LAUNCH_CREDIT_STAKE(),
+                _singleAnchor(anchorId)
+            );
         }
 
         vm.expectEmit(true, true, true, true);
         emit EarnedRaterRewardCreditRecorded(alice, 1, 5, _commitKey(5), 8_000, 5, 2, 5, true);
         assertEq(
             pool.recordEarnedRaterReward(
-                alice, 1, 5, _commitKey(5), 8_000, 3, true, _singleAnchor(bytes32("anchor-a"))
+                alice,
+                1,
+                5,
+                _commitKey(5),
+                8_000,
+                3,
+                true,
+                pool.MIN_LAUNCH_CREDIT_STAKE(),
+                _singleAnchor(bytes32("anchor-a"))
             ),
             1e6
         );
@@ -215,20 +258,41 @@ contract LaunchDistributionPoolTest is Test {
         bytes32[] memory anchors = _singleAnchor(bytes32("anchor-a"));
         vm.prank(bob);
         vm.expectRevert(LaunchDistributionPool.InvalidAddress.selector);
-        pool.recordEarnedRaterReward(alice, 1, 1, _commitKey(1), 8_000, 3, true, anchors);
+        pool.recordEarnedRaterReward(alice, 1, 1, _commitKey(1), 8_000, 3, true, 1e6, anchors);
     }
 
     function test_RecordEarnedRaterRewardRequiresRoundContext() public {
         assertEq(
             pool.recordEarnedRaterReward(
-                alice, 1, 1, _commitKey(1), 8_000, 2, true, _singleAnchor(bytes32("anchor-a"))
+                alice,
+                1,
+                1,
+                _commitKey(1),
+                8_000,
+                2,
+                true,
+                pool.MIN_LAUNCH_CREDIT_STAKE(),
+                _singleAnchor(bytes32("anchor-a"))
             ),
             0
         );
-        assertEq(pool.recordEarnedRaterReward(alice, 1, 2, _commitKey(2), 8_000, 3, true, new bytes32[](0)), 0);
         assertEq(
             pool.recordEarnedRaterReward(
-                alice, 1, 3, _commitKey(3), 8_000, 3, false, _singleAnchor(bytes32("anchor-a"))
+                alice, 1, 2, _commitKey(2), 8_000, 3, true, pool.MIN_LAUNCH_CREDIT_STAKE(), new bytes32[](0)
+            ),
+            0
+        );
+        assertEq(
+            pool.recordEarnedRaterReward(
+                alice,
+                1,
+                3,
+                _commitKey(3),
+                8_000,
+                3,
+                false,
+                pool.MIN_LAUNCH_CREDIT_STAKE(),
+                _singleAnchor(bytes32("anchor-a"))
             ),
             0
         );
@@ -236,6 +300,29 @@ contract LaunchDistributionPoolTest is Test {
         assertEq(pool.qualifyingRatingCount(alice), 0);
         assertEq(pool.raterDistinctVerifiedAnchorCount(alice), 0);
         assertEq(pool.raterDistinctAnchorRoundCount(alice), 0);
+    }
+
+    function test_RecordEarnedRaterRewardRequiresMinimumLaunchCreditStake() public {
+        assertEq(
+            pool.recordEarnedRaterReward(
+                alice,
+                1,
+                1,
+                _commitKey(1),
+                8_000,
+                3,
+                true,
+                pool.MIN_LAUNCH_CREDIT_STAKE() - 1,
+                _singleAnchor(bytes32("anchor-a"))
+            ),
+            0
+        );
+        assertFalse(pool.earnedRewardCreditRecorded(1, 1, _commitKey(1)));
+        assertEq(pool.qualifyingRatingCount(alice), 0);
+
+        assertEq(_recordLaunchReward(alice, 1, bytes32("anchor-a")), 0);
+        assertTrue(pool.earnedRewardCreditRecorded(1, 1, _commitKey(1)));
+        assertEq(pool.qualifyingRatingCount(alice), 1);
     }
 
     function test_RecordEarnedRaterRewardRequiresDistinctAnchorsAcrossRounds() public {
@@ -260,8 +347,18 @@ contract LaunchDistributionPoolTest is Test {
         anchors[1] = bytes32("anchor-a");
         bytes32 commitKey = _commitKey(1);
 
-        assertEq(pool.recordEarnedRaterReward(alice, 1, 1, commitKey, 8_000, 3, true, anchors), 0);
-        assertEq(pool.recordEarnedRaterReward(alice, 1, 1, commitKey, 8_000, 3, true, anchors), 0);
+        assertEq(
+            pool.recordEarnedRaterReward(
+                alice, 1, 1, commitKey, 8_000, 3, true, pool.MIN_LAUNCH_CREDIT_STAKE(), anchors
+            ),
+            0
+        );
+        assertEq(
+            pool.recordEarnedRaterReward(
+                alice, 1, 1, commitKey, 8_000, 3, true, pool.MIN_LAUNCH_CREDIT_STAKE(), anchors
+            ),
+            0
+        );
 
         assertTrue(pool.earnedRewardCreditRecorded(1, 1, commitKey));
         assertEq(pool.qualifyingRatingCount(alice), 1);
@@ -323,7 +420,15 @@ contract LaunchDistributionPoolTest is Test {
         returns (uint256)
     {
         return pool.recordEarnedRaterReward(
-            rater, 1, roundId, _commitKey(roundId), scoreBps, 3, true, _singleAnchor(anchorId)
+            rater,
+            1,
+            roundId,
+            _commitKey(roundId),
+            scoreBps,
+            3,
+            true,
+            pool.MIN_LAUNCH_CREDIT_STAKE(),
+            _singleAnchor(anchorId)
         );
     }
 
@@ -339,6 +444,7 @@ contract LaunchDistributionPoolTest is Test {
             minVerifiedHumans: pool.MIN_EARNED_REWARD_VERIFIED_HUMANS(),
             minDistinctVerifiedAnchors: pool.MIN_EARNED_REWARD_DISTINCT_VERIFIED_ANCHORS(),
             minDistinctAnchorRounds: pool.MIN_EARNED_REWARD_DISTINCT_ANCHOR_ROUNDS(),
+            minLaunchCreditStake: pool.MIN_LAUNCH_CREDIT_STAKE(),
             eligibilityRatingCount: pool.ELIGIBILITY_RATING_COUNT(),
             rewardingRatingCount: pool.REWARDING_RATING_COUNT(),
             requireNoPendingCleanup: true

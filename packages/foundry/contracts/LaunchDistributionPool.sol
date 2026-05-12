@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {MerkleProof} from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
-import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
-import {RaterRegistry} from "./RaterRegistry.sol";
-import {ILaunchDistributionPool} from "./interfaces/ILaunchDistributionPool.sol";
+import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { MerkleProof } from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
+import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
+import { RaterRegistry } from "./RaterRegistry.sol";
+import { ILaunchDistributionPool } from "./interfaces/ILaunchDistributionPool.sol";
 
 /// @title LaunchDistributionPool
 /// @notice Holds the 64M LREP launch allocation and releases it through earned, verified, and legacy paths.
@@ -35,6 +35,7 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
     uint16 public constant MIN_EARNED_REWARD_VERIFIED_HUMANS = 1;
     uint16 public constant MIN_EARNED_REWARD_DISTINCT_VERIFIED_ANCHORS = 2;
     uint16 public constant MIN_EARNED_REWARD_DISTINCT_ANCHOR_ROUNDS = 2;
+    uint64 public constant MIN_LAUNCH_CREDIT_STAKE = 1e6;
 
     uint256 public constant REFERRAL_BONUS_BPS = 5_000;
     uint256 public constant MAX_REFERRAL_REWARD_PER_REFERRER = 10_000e6;
@@ -219,12 +220,20 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
         uint16 scoreBps,
         uint16 revealedRaterCount,
         bool noPendingCleanup,
+        uint256 stakeAmount,
         bytes32[] calldata verifiedAnchorIds
     ) external onlyAuthorized nonReentrant returns (uint256 paidAmount) {
         LaunchRewardPolicy memory policy = launchRewardPolicy;
         uint16 distinctRoundAnchors = _countDistinctAnchors(verifiedAnchorIds);
         if (!_passesLaunchRewardContext(
-                policy, rater, commitKey, scoreBps, revealedRaterCount, noPendingCleanup, distinctRoundAnchors
+                policy,
+                rater,
+                commitKey,
+                scoreBps,
+                revealedRaterCount,
+                noPendingCleanup,
+                stakeAmount,
+                distinctRoundAnchors
             )) {
             return 0;
         }
@@ -365,12 +374,14 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
         uint16 scoreBps,
         uint16 revealedRaterCount,
         bool noPendingCleanup,
+        uint256 stakeAmount,
         uint16 distinctRoundAnchors
     ) internal pure returns (bool) {
         if (rater == address(0) || commitKey == bytes32(0)) return false;
         if (scoreBps < policy.minQualifyingScoreBps) return false;
         if (revealedRaterCount < policy.minVoters) return false;
         if (policy.requireNoPendingCleanup && !noPendingCleanup) return false;
+        if (stakeAmount < policy.minLaunchCreditStake) return false;
         if (distinctRoundAnchors < policy.minVerifiedHumans) return false;
         return true;
     }
@@ -417,6 +428,7 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
             minVerifiedHumans: MIN_EARNED_REWARD_VERIFIED_HUMANS,
             minDistinctVerifiedAnchors: MIN_EARNED_REWARD_DISTINCT_VERIFIED_ANCHORS,
             minDistinctAnchorRounds: MIN_EARNED_REWARD_DISTINCT_ANCHOR_ROUNDS,
+            minLaunchCreditStake: MIN_LAUNCH_CREDIT_STAKE,
             eligibilityRatingCount: ELIGIBILITY_RATING_COUNT,
             rewardingRatingCount: REWARDING_RATING_COUNT,
             requireNoPendingCleanup: true
@@ -437,6 +449,7 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
                 || policy.minVerifiedHumans > policy.minVoters
                 || policy.minDistinctVerifiedAnchors < MIN_EARNED_REWARD_DISTINCT_VERIFIED_ANCHORS
                 || policy.minDistinctAnchorRounds < MIN_EARNED_REWARD_DISTINCT_ANCHOR_ROUNDS
+                || policy.minLaunchCreditStake < MIN_LAUNCH_CREDIT_STAKE
                 || policy.eligibilityRatingCount < ELIGIBILITY_RATING_COUNT
                 || policy.rewardingRatingCount < REWARDING_RATING_COUNT
                 || policy.minDistinctVerifiedAnchors > policy.eligibilityRatingCount

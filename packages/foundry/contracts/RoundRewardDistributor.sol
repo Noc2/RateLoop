@@ -319,13 +319,17 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
             votingEngine.transferReward(rewardRecipient, reward);
         }
 
-        _claimLaunchRaterReward(contentId, roundId, commitKey, rewardRecipient);
+        _claimLaunchRaterReward(contentId, roundId, commitKey, rewardRecipient, commit.stakeAmount);
         emit RewardClaimed(contentId, roundId, rewardRecipient, commit.voter, returnedStake, reward);
     }
 
-    function _claimLaunchRaterReward(uint256 contentId, uint256 roundId, bytes32 commitKey, address rewardRecipient)
-        internal
-    {
+    function _claimLaunchRaterReward(
+        uint256 contentId,
+        uint256 roundId,
+        bytes32 commitKey,
+        address rewardRecipient,
+        uint256 stakeAmount
+    ) internal {
         ProtocolConfig config = ProtocolConfig(votingEngine.protocolConfig());
         address launchPool = config.launchDistributionPool();
         if (launchPool == address(0)) return;
@@ -345,13 +349,14 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
                 scoreBps,
                 round.revealedCount,
                 votingEngine.roundUnrevealedCleanupRemaining(contentId, roundId) == 0,
+                stakeAmount,
                 verifiedAnchorIds
-            ) returns (uint256) { }
-            catch (bytes memory reason) {
-                emit LaunchRaterRewardCreditFailed(
-                    contentId, roundId, commitKey, rewardRecipient, launchPool, reason
-                );
-            }
+            ) returns (
+            uint256
+        ) { }
+        catch (bytes memory reason) {
+            emit LaunchRaterRewardCreditFailed(contentId, roundId, commitKey, rewardRecipient, launchPool, reason);
+        }
     }
 
     // --- Frontend Fee Claims ---

@@ -1,21 +1,21 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {VotingTestBase} from "./helpers/VotingTestHelpers.sol";
-import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import {ContentRegistry} from "../contracts/ContentRegistry.sol";
-import {LaunchDistributionPool} from "../contracts/LaunchDistributionPool.sol";
-import {LoopReputation} from "../contracts/LoopReputation.sol";
-import {RoundVotingEngine} from "../contracts/RoundVotingEngine.sol";
-import {ProtocolConfig} from "../contracts/ProtocolConfig.sol";
-import {RaterRegistry} from "../contracts/RaterRegistry.sol";
-import {RoundRewardDistributor} from "../contracts/RoundRewardDistributor.sol";
-import {RoundLib} from "../contracts/libraries/RoundLib.sol";
-import {RoundEngineReadHelpers} from "./helpers/RoundEngineReadHelpers.sol";
-import {TlockVoteLib} from "../contracts/libraries/TlockVoteLib.sol";
-import {HumanReputation} from "../contracts/HumanReputation.sol";
-import {MockCategoryRegistry} from "../contracts/mocks/MockCategoryRegistry.sol";
-import {MockWorldIDRouter} from "../contracts/mocks/MockWorldIDRouter.sol";
+import { VotingTestBase } from "./helpers/VotingTestHelpers.sol";
+import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import { ContentRegistry } from "../contracts/ContentRegistry.sol";
+import { LaunchDistributionPool } from "../contracts/LaunchDistributionPool.sol";
+import { LoopReputation } from "../contracts/LoopReputation.sol";
+import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
+import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
+import { RaterRegistry } from "../contracts/RaterRegistry.sol";
+import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
+import { RoundLib } from "../contracts/libraries/RoundLib.sol";
+import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
+import { TlockVoteLib } from "../contracts/libraries/TlockVoteLib.sol";
+import { HumanReputation } from "../contracts/HumanReputation.sol";
+import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
+import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
 
 contract MockRaterDeclarationStatusForRewards {
     mapping(address => bool) public hasActiveAiDeclaration;
@@ -36,6 +36,7 @@ contract MockRevertingLaunchDistributionPool {
         uint16,
         uint16,
         bool,
+        uint256,
         bytes32[] calldata
     ) external pure returns (uint256) {
         revert LaunchCreditRejected();
@@ -223,7 +224,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
             RoundLib.Commit memory c = RoundEngineReadHelpers.commit(votingEngine, contentId, roundId, keys[i]);
             if (!c.revealed && c.stakeAmount > 0) {
                 (bool isUp, bytes32 salt) = _decodeTestCiphertext(c.ciphertext);
-                try votingEngine.revealVoteByCommitKey(contentId, roundId, keys[i], isUp, 5_000, salt) {} catch {}
+                try votingEngine.revealVoteByCommitKey(contentId, roundId, keys[i], isUp, 5_000, salt) { } catch { }
             }
         }
     }
@@ -238,7 +239,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
 
         RoundLib.Round memory r2 = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
         if (r2.thresholdReachedAt > 0) {
-            try votingEngine.settleRound(contentId, roundId) {} catch {}
+            try votingEngine.settleRound(contentId, roundId) { } catch { }
         }
     }
 
@@ -391,7 +392,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         assertEq(lrepToken.balanceOf(voter1), 0);
     }
 
-    function test_ClaimReward_ZeroStakeVoteCanRecordLaunchCredit() public {
+    function test_ClaimReward_ZeroStakeVoteDoesNotRecordLaunchCredit() public {
         _verifyHuman(voter2, bytes32("anchor-voter-2"));
         (uint256 contentId, uint256 roundId) = _setupSettledPredictionRoundWithStakes(0, STAKE, STAKE);
         bytes32 voter1CommitKey =
@@ -412,10 +413,10 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         assertEq(votingEngine.commitRbtsForfeitedStake(contentId, roundId, voter1CommitKey), 0);
         assertEq(hrepToken.balanceOf(voter1), hrepBefore, "zero-stake claim has no HREP payout");
         assertEq(lrepToken.balanceOf(voter1), lrepBefore, "single launch credit does not pay yet");
-        assertTrue(launchPool.earnedRewardCreditRecorded(contentId, roundId, voter1CommitKey));
-        assertEq(launchPool.qualifyingRatingCount(voter1), 1);
-        assertEq(launchPool.raterDistinctVerifiedAnchorCount(voter1), 1);
-        assertEq(launchPool.raterDistinctAnchorRoundCount(voter1), 1);
+        assertFalse(launchPool.earnedRewardCreditRecorded(contentId, roundId, voter1CommitKey));
+        assertEq(launchPool.qualifyingRatingCount(voter1), 0);
+        assertEq(launchPool.raterDistinctVerifiedAnchorCount(voter1), 0);
+        assertEq(launchPool.raterDistinctAnchorRoundCount(voter1), 0);
     }
 
     function test_ClaimReward_EmitsLaunchCreditFailureWithoutBlockingClaim() public {
