@@ -51,23 +51,3 @@ export function buildUnavailableFreeTransactionSummary(params: { address: string
     voterIdTokenId: null,
   };
 }
-
-export function buildVerifiedFreeTransactionFallbackSummary(params: {
-  address: string;
-  chainId: number;
-  voterIdTokenId: string;
-}) {
-  const limit = getFreeTransactionLimit();
-
-  return {
-    chainId: params.chainId,
-    environment: getServerEnvironmentScope(),
-    limit,
-    used: 0,
-    remaining: limit,
-    verified: true,
-    exhausted: false,
-    walletAddress: normalizeWalletAddress(params.address),
-    voterIdTokenId: params.voterIdTokenId,
-  };
-}

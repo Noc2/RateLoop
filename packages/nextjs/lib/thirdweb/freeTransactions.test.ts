@@ -592,7 +592,7 @@ test("confirm leaves the reservation pending when receipt verification fails", a
   assert.equal(reservationRows.rows[0]?.status, "pending");
 });
 
-test("confirm fails open when the quota store is unavailable after receipts verify", async () => {
+test("confirm fails closed when the quota store is unavailable after receipts verify", async () => {
   const calls = [voteCall("0x0d")];
   const initialDecision = await freeTransactions.evaluateFreeTransactionAllowance(buildRequest(calls) as never);
   assert.equal(initialDecision.isAllowed, true);
@@ -600,12 +600,15 @@ test("confirm fails open when the quota store is unavailable after receipts veri
   dbModule.__setDatabaseResourcesForTests(createStoreUnavailableResources(memoryResources));
 
   try {
-    await freeTransactions.confirmFreeTransactionReservation({
-      address: WALLET,
-      chainId: CHAIN_ID,
-      operationKey: buildOperationKey(calls),
-      transactionHashes: [SUCCESS_HASH],
-    });
+    await assert.rejects(
+      freeTransactions.confirmFreeTransactionReservation({
+        address: WALLET,
+        chainId: CHAIN_ID,
+        operationKey: buildOperationKey(calls),
+        transactionHashes: [SUCCESS_HASH],
+      }),
+      /database offline/i,
+    );
   } finally {
     dbModule.__setDatabaseResourcesForTests(memoryResources);
   }
@@ -617,51 +620,33 @@ test("confirm fails open when the quota store is unavailable after receipts veri
   assert.equal(reservationRows.rows[0]?.status, "pending");
 });
 
-test("summary fails open for verified voters when the quota store is unavailable", async () => {
+test("summary fails closed for verified voters when the quota store is unavailable", async () => {
   dbModule.__setDatabaseResourcesForTests(createStoreUnavailableResources(memoryResources));
 
   try {
-    const summary = await freeTransactions.getFreeTransactionAllowanceSummary({
-      address: WALLET,
-      chainId: CHAIN_ID,
-    });
-
-    assert.deepEqual(summary, {
-      chainId: CHAIN_ID,
-      environment: "test",
-      limit: 2,
-      used: 0,
-      remaining: 2,
-      verified: true,
-      exhausted: false,
-      walletAddress: "0x1234567890AbcdEF1234567890aBcdef12345678",
-      voterIdTokenId: "42",
-    });
+    await assert.rejects(
+      freeTransactions.getFreeTransactionAllowanceSummary({
+        address: WALLET,
+        chainId: CHAIN_ID,
+      }),
+      /database offline/i,
+    );
   } finally {
     dbModule.__setDatabaseResourcesForTests(memoryResources);
   }
 });
 
-test("verifier fails open for verified voters when the quota store is unavailable", async () => {
+test("verifier fails closed for verified voters when the quota store is unavailable", async () => {
   dbModule.__setDatabaseResourcesForTests(createStoreUnavailableResources(memoryResources));
 
   try {
     const decision = await freeTransactions.evaluateFreeTransactionAllowance(buildRequest([voteCall("0x09")]) as never);
 
-    assert.equal(decision.isAllowed, true);
-    if (!decision.isAllowed) return;
-    assert.equal(decision.debugCode, "store_unavailable_fail_open");
-    assert.deepEqual(decision.summary, {
-      chainId: CHAIN_ID,
-      environment: "test",
-      limit: 2,
-      used: 0,
-      remaining: 2,
-      verified: true,
-      exhausted: false,
-      walletAddress: "0x1234567890AbcdEF1234567890aBcdef12345678",
-      voterIdTokenId: "42",
-    });
+    assert.equal(decision.isAllowed, false);
+    if (decision.isAllowed) return;
+    assert.equal(decision.debugCode, "quota_store_unavailable");
+    assert.equal(decision.reason, "Transaction not sponsored.");
+    assert.equal(decision.summary, undefined);
   } finally {
     dbModule.__setDatabaseResourcesForTests(memoryResources);
   }
