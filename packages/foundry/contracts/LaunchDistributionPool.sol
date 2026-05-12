@@ -37,6 +37,7 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
     uint16 public constant MIN_EARNED_REWARD_DISTINCT_ANCHOR_ROUNDS = 2;
     uint64 public constant MIN_LAUNCH_CREDIT_STAKE = 1e6;
     uint16 public constant MAX_DISTINCT_RATERS_PER_VERIFIED_ANCHOR = 25;
+    uint16 public constant MAX_UNVERIFIED_LAUNCH_CREDITS_PER_ROUND = 3;
 
     uint256 public constant REFERRAL_BONUS_BPS = 5_000;
     uint256 public constant MAX_REFERRAL_REWARD_PER_REFERRER = 10_000e6;
@@ -69,6 +70,7 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
     mapping(address => uint32) public raterDistinctAnchorRoundCount;
     mapping(bytes32 => mapping(address => bool)) public verifiedAnchorRaterSeen;
     mapping(bytes32 => uint32) public verifiedAnchorDistinctRaterCount;
+    mapping(uint256 => mapping(uint256 => uint16)) public roundUnverifiedLaunchCreditCount;
     LaunchRewardPolicy public launchRewardPolicy;
 
     event PoolDeposit(uint256 amount);
@@ -242,7 +244,18 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
         }
 
         if (earnedRewardCreditRecorded[contentId][roundId][commitKey]) return 0;
+        bool raterVerified = _hasActiveHumanCredential(rater);
+        if (
+            !raterVerified
+                && roundUnverifiedLaunchCreditCount[contentId][roundId] >= policy.maxUnverifiedCreditsPerRound
+        ) {
+            return 0;
+        }
+
         earnedRewardCreditRecorded[contentId][roundId][commitKey] = true;
+        if (!raterVerified) {
+            roundUnverifiedLaunchCreditCount[contentId][roundId] += 1;
+        }
         _recordAnchorRound(rater, contentId, roundId);
         _recordVerifiedAnchors(policy, rater, verifiedAnchorIds);
 
@@ -436,6 +449,11 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
         }
     }
 
+    function _hasActiveHumanCredential(address rater) internal view returns (bool) {
+        RaterRegistry.HumanCredential memory credential = raterRegistry.getHumanCredential(rater);
+        return credential.verified && !credential.revoked && credential.expiresAt > block.timestamp;
+    }
+
     function _isDuplicateAnchor(bytes32[] calldata verifiedAnchorIds, uint256 index) internal pure returns (bool) {
         bytes32 anchorId = verifiedAnchorIds[index];
         for (uint256 i = 0; i < index; i++) {
@@ -453,6 +471,7 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
             minDistinctAnchorRounds: MIN_EARNED_REWARD_DISTINCT_ANCHOR_ROUNDS,
             minLaunchCreditStake: MIN_LAUNCH_CREDIT_STAKE,
             maxDistinctRatersPerVerifiedAnchor: MAX_DISTINCT_RATERS_PER_VERIFIED_ANCHOR,
+            maxUnverifiedCreditsPerRound: MAX_UNVERIFIED_LAUNCH_CREDITS_PER_ROUND,
             eligibilityRatingCount: ELIGIBILITY_RATING_COUNT,
             rewardingRatingCount: REWARDING_RATING_COUNT,
             requireNoPendingCleanup: true
@@ -476,6 +495,7 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
                 || policy.minLaunchCreditStake < MIN_LAUNCH_CREDIT_STAKE
                 || policy.maxDistinctRatersPerVerifiedAnchor == 0
                 || policy.maxDistinctRatersPerVerifiedAnchor > MAX_DISTINCT_RATERS_PER_VERIFIED_ANCHOR
+                || policy.maxUnverifiedCreditsPerRound > MAX_UNVERIFIED_LAUNCH_CREDITS_PER_ROUND
                 || policy.eligibilityRatingCount < ELIGIBILITY_RATING_COUNT
                 || policy.rewardingRatingCount < REWARDING_RATING_COUNT
                 || policy.minDistinctVerifiedAnchors > policy.eligibilityRatingCount

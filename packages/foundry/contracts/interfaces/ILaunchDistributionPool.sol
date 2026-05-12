@@ -10,6 +10,7 @@ interface ILaunchDistributionPool {
         uint16 minDistinctAnchorRounds;
         uint64 minLaunchCreditStake;
         uint16 maxDistinctRatersPerVerifiedAnchor;
+        uint16 maxUnverifiedCreditsPerRound;
         uint32 eligibilityRatingCount;
         uint32 rewardingRatingCount;
         bool requireNoPendingCleanup;
