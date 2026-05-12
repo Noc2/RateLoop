@@ -197,8 +197,8 @@ const SmartContracts: NextPage = () => {
 
       <h2>VoterIdNFT</h2>
       <p>
-        Soulbound (non-transferable) ERC-721 representing an open rater identity. Minted by governance-approved identity
-        issuers. Token ID 0 is reserved (indicates no Voter ID).
+        Soulbound (non-transferable) ERC-721 representing an optional open rater identity handle. It can be wired to
+        delegated or identity-aware flows when configured; token ID 0 is reserved (indicates no Voter ID).
       </p>
       <h3>Sybil Resistance</h3>
       <p>
@@ -598,7 +598,7 @@ const SmartContracts: NextPage = () => {
       <h3>Key Functions</h3>
       <ul>
         <li>
-          <code>register()</code> &mdash; Register as frontend operator (fixed 1,000 LREP stake). Requires Voter ID.
+          <code>register()</code> &mdash; Register as frontend operator with the fixed 1,000 LREP stake.
         </li>
         <li>
           <code>requestDeregister()</code> / <code>completeDeregister()</code> &mdash; Start voluntary exit, then
@@ -636,7 +636,8 @@ const SmartContracts: NextPage = () => {
       <h2>ProfileRegistry</h2>
       <p>
         On-chain user profiles with unique names (3&ndash;20 characters) and optional public self-reported audience
-        context. Profile settings also support an on-chain generated avatar color override. Requires Voter ID.
+        context. Profile settings also support an on-chain generated avatar color override. Voter ID is optional profile
+        continuity metadata when the identity rail is configured.
       </p>
       <h3>Key Functions</h3>
       <ul>
