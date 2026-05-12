@@ -36,6 +36,7 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
     uint16 public constant MIN_EARNED_REWARD_DISTINCT_VERIFIED_ANCHORS = 2;
     uint16 public constant MIN_EARNED_REWARD_DISTINCT_ANCHOR_ROUNDS = 2;
     uint64 public constant MIN_LAUNCH_CREDIT_STAKE = 1e6;
+    uint16 public constant MAX_DISTINCT_RATERS_PER_VERIFIED_ANCHOR = 25;
 
     uint256 public constant REFERRAL_BONUS_BPS = 5_000;
     uint256 public constant MAX_REFERRAL_REWARD_PER_REFERRER = 10_000e6;
@@ -66,6 +67,8 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
     mapping(address => uint32) public raterDistinctVerifiedAnchorCount;
     mapping(address => mapping(bytes32 => bool)) public raterAnchorRoundSeen;
     mapping(address => uint32) public raterDistinctAnchorRoundCount;
+    mapping(bytes32 => mapping(address => bool)) public verifiedAnchorRaterSeen;
+    mapping(bytes32 => uint32) public verifiedAnchorDistinctRaterCount;
     LaunchRewardPolicy public launchRewardPolicy;
 
     event PoolDeposit(uint256 amount);
@@ -224,7 +227,7 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
         bytes32[] calldata verifiedAnchorIds
     ) external onlyAuthorized nonReentrant returns (uint256 paidAmount) {
         LaunchRewardPolicy memory policy = launchRewardPolicy;
-        uint16 distinctRoundAnchors = _countDistinctAnchors(verifiedAnchorIds);
+        uint16 distinctRoundAnchors = _countDistinctAvailableAnchors(policy, rater, verifiedAnchorIds);
         if (!_passesLaunchRewardContext(
                 policy,
                 rater,
@@ -241,7 +244,7 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
         if (earnedRewardCreditRecorded[contentId][roundId][commitKey]) return 0;
         earnedRewardCreditRecorded[contentId][roundId][commitKey] = true;
         _recordAnchorRound(rater, contentId, roundId);
-        _recordVerifiedAnchors(rater, verifiedAnchorIds);
+        _recordVerifiedAnchors(policy, rater, verifiedAnchorIds);
 
         return _recordEarnedRaterReward(rater, contentId, roundId, commitKey, scoreBps, policy);
     }
@@ -393,22 +396,42 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
         raterDistinctAnchorRoundCount[rater] += 1;
     }
 
-    function _recordVerifiedAnchors(address rater, bytes32[] calldata verifiedAnchorIds) internal {
+    function _recordVerifiedAnchors(
+        LaunchRewardPolicy memory policy,
+        address rater,
+        bytes32[] calldata verifiedAnchorIds
+    ) internal {
         uint256 anchorCount = verifiedAnchorIds.length;
         for (uint256 i = 0; i < anchorCount; i++) {
             bytes32 anchorId = verifiedAnchorIds[i];
             if (anchorId == bytes32(0) || _isDuplicateAnchor(verifiedAnchorIds, i)) continue;
             if (raterVerifiedAnchorSeen[rater][anchorId]) continue;
+            if (verifiedAnchorDistinctRaterCount[anchorId] >= policy.maxDistinctRatersPerVerifiedAnchor) continue;
 
             raterVerifiedAnchorSeen[rater][anchorId] = true;
+            if (!verifiedAnchorRaterSeen[anchorId][rater]) {
+                verifiedAnchorRaterSeen[anchorId][rater] = true;
+                verifiedAnchorDistinctRaterCount[anchorId] += 1;
+            }
             raterDistinctVerifiedAnchorCount[rater] += 1;
         }
     }
 
-    function _countDistinctAnchors(bytes32[] calldata verifiedAnchorIds) internal pure returns (uint16 distinctCount) {
+    function _countDistinctAvailableAnchors(
+        LaunchRewardPolicy memory policy,
+        address rater,
+        bytes32[] calldata verifiedAnchorIds
+    ) internal view returns (uint16 distinctCount) {
         uint256 anchorCount = verifiedAnchorIds.length;
         for (uint256 i = 0; i < anchorCount; i++) {
-            if (verifiedAnchorIds[i] == bytes32(0) || _isDuplicateAnchor(verifiedAnchorIds, i)) continue;
+            bytes32 anchorId = verifiedAnchorIds[i];
+            if (anchorId == bytes32(0) || _isDuplicateAnchor(verifiedAnchorIds, i)) continue;
+            if (
+                !raterVerifiedAnchorSeen[rater][anchorId]
+                    && verifiedAnchorDistinctRaterCount[anchorId] >= policy.maxDistinctRatersPerVerifiedAnchor
+            ) {
+                continue;
+            }
             distinctCount += 1;
         }
     }
@@ -429,6 +452,7 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
             minDistinctVerifiedAnchors: MIN_EARNED_REWARD_DISTINCT_VERIFIED_ANCHORS,
             minDistinctAnchorRounds: MIN_EARNED_REWARD_DISTINCT_ANCHOR_ROUNDS,
             minLaunchCreditStake: MIN_LAUNCH_CREDIT_STAKE,
+            maxDistinctRatersPerVerifiedAnchor: MAX_DISTINCT_RATERS_PER_VERIFIED_ANCHOR,
             eligibilityRatingCount: ELIGIBILITY_RATING_COUNT,
             rewardingRatingCount: REWARDING_RATING_COUNT,
             requireNoPendingCleanup: true
@@ -450,6 +474,8 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
                 || policy.minDistinctVerifiedAnchors < MIN_EARNED_REWARD_DISTINCT_VERIFIED_ANCHORS
                 || policy.minDistinctAnchorRounds < MIN_EARNED_REWARD_DISTINCT_ANCHOR_ROUNDS
                 || policy.minLaunchCreditStake < MIN_LAUNCH_CREDIT_STAKE
+                || policy.maxDistinctRatersPerVerifiedAnchor == 0
+                || policy.maxDistinctRatersPerVerifiedAnchor > MAX_DISTINCT_RATERS_PER_VERIFIED_ANCHOR
                 || policy.eligibilityRatingCount < ELIGIBILITY_RATING_COUNT
                 || policy.rewardingRatingCount < REWARDING_RATING_COUNT
                 || policy.minDistinctVerifiedAnchors > policy.eligibilityRatingCount

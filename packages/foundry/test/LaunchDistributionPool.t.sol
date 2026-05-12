@@ -63,6 +63,7 @@ contract LaunchDistributionPoolTest is Test {
             uint16 minDistinctVerifiedAnchors,
             uint16 minDistinctAnchorRounds,
             uint64 minLaunchCreditStake,
+            uint16 maxDistinctRatersPerVerifiedAnchor,
             uint32 eligibilityRatingCount,
             uint32 rewardingRatingCount,
             bool requireNoPendingCleanup
@@ -74,6 +75,7 @@ contract LaunchDistributionPoolTest is Test {
         assertEq(minDistinctVerifiedAnchors, 2);
         assertEq(minDistinctAnchorRounds, 2);
         assertEq(minLaunchCreditStake, 1e6);
+        assertEq(maxDistinctRatersPerVerifiedAnchor, 25);
         assertEq(eligibilityRatingCount, 5);
         assertEq(rewardingRatingCount, 10);
         assertTrue(requireNoPendingCleanup);
@@ -121,6 +123,16 @@ contract LaunchDistributionPoolTest is Test {
 
         policy = _defaultPolicy();
         policy.minLaunchCreditStake = pool.MIN_LAUNCH_CREDIT_STAKE() - 1;
+        vm.expectRevert(LaunchDistributionPool.InvalidPolicy.selector);
+        pool.setLaunchRewardPolicy(policy);
+
+        policy = _defaultPolicy();
+        policy.maxDistinctRatersPerVerifiedAnchor = 0;
+        vm.expectRevert(LaunchDistributionPool.InvalidPolicy.selector);
+        pool.setLaunchRewardPolicy(policy);
+
+        policy = _defaultPolicy();
+        policy.maxDistinctRatersPerVerifiedAnchor = pool.MAX_DISTINCT_RATERS_PER_VERIFIED_ANCHOR() + 1;
         vm.expectRevert(LaunchDistributionPool.InvalidPolicy.selector);
         pool.setLaunchRewardPolicy(policy);
 
@@ -341,6 +353,96 @@ contract LaunchDistributionPoolTest is Test {
         assertEq(lrep.balanceOf(alice), firstReward);
     }
 
+    function test_RecordEarnedRaterRewardLimitsAnchorFanoutAcrossDistinctRaters() public {
+        bytes32 anchorId = bytes32("anchor-a");
+        uint256 maxFanout = pool.MAX_DISTINCT_RATERS_PER_VERIFIED_ANCHOR();
+
+        for (uint256 i = 0; i < maxFanout; i++) {
+            address rater = address(uint160(0x1000 + i));
+            pool.recordEarnedRaterReward(
+                rater,
+                10 + i,
+                1,
+                _commitKey(10 + i),
+                8_000,
+                3,
+                true,
+                pool.MIN_LAUNCH_CREDIT_STAKE(),
+                _singleAnchor(anchorId)
+            );
+            assertEq(pool.qualifyingRatingCount(rater), 1);
+            assertEq(pool.verifiedAnchorDistinctRaterCount(anchorId), i + 1);
+        }
+
+        address overLimitRater = address(0xCAFE);
+        bytes32 blockedCommitKey = _commitKey(10_000);
+        pool.recordEarnedRaterReward(
+            overLimitRater,
+            10_000,
+            1,
+            blockedCommitKey,
+            8_000,
+            3,
+            true,
+            pool.MIN_LAUNCH_CREDIT_STAKE(),
+            _singleAnchor(anchorId)
+        );
+
+        assertFalse(pool.earnedRewardCreditRecorded(10_000, 1, blockedCommitKey));
+        assertEq(pool.qualifyingRatingCount(overLimitRater), 0);
+        assertEq(pool.verifiedAnchorDistinctRaterCount(anchorId), maxFanout);
+    }
+
+    function test_RecordEarnedRaterRewardDoesNotBurnFanoutForSameRaterOrDuplicateAnchors() public {
+        bytes32 anchorId = bytes32("anchor-a");
+        bytes32[] memory duplicatedAnchors = new bytes32[](2);
+        duplicatedAnchors[0] = anchorId;
+        duplicatedAnchors[1] = anchorId;
+
+        pool.recordEarnedRaterReward(
+            alice, 1, 1, _commitKey(1), 8_000, 3, true, pool.MIN_LAUNCH_CREDIT_STAKE(), duplicatedAnchors
+        );
+        pool.recordEarnedRaterReward(
+            alice, 1, 2, _commitKey(2), 8_000, 3, true, pool.MIN_LAUNCH_CREDIT_STAKE(), _singleAnchor(anchorId)
+        );
+
+        assertEq(pool.qualifyingRatingCount(alice), 2);
+        assertEq(pool.raterDistinctVerifiedAnchorCount(alice), 1);
+        assertEq(pool.verifiedAnchorDistinctRaterCount(anchorId), 1);
+    }
+
+    function test_RecordEarnedRaterRewardUsesAvailableAnchorWhenAnotherAnchorIsOverFanout() public {
+        bytes32 exhaustedAnchor = bytes32("anchor-a");
+        bytes32 availableAnchor = bytes32("anchor-b");
+        uint256 maxFanout = pool.MAX_DISTINCT_RATERS_PER_VERIFIED_ANCHOR();
+
+        for (uint256 i = 0; i < maxFanout; i++) {
+            address rater = address(uint160(0x2000 + i));
+            pool.recordEarnedRaterReward(
+                rater,
+                20 + i,
+                1,
+                _commitKey(20 + i),
+                8_000,
+                3,
+                true,
+                pool.MIN_LAUNCH_CREDIT_STAKE(),
+                _singleAnchor(exhaustedAnchor)
+            );
+        }
+
+        bytes32[] memory mixedAnchors = _twoAnchors(exhaustedAnchor, availableAnchor);
+        pool.recordEarnedRaterReward(
+            alice, 2, 1, _commitKey(2), 8_000, 3, true, pool.MIN_LAUNCH_CREDIT_STAKE(), mixedAnchors
+        );
+
+        assertEq(pool.qualifyingRatingCount(alice), 1);
+        assertFalse(pool.raterVerifiedAnchorSeen(alice, exhaustedAnchor));
+        assertTrue(pool.raterVerifiedAnchorSeen(alice, availableAnchor));
+        assertEq(pool.verifiedAnchorDistinctRaterCount(exhaustedAnchor), maxFanout);
+        assertEq(pool.verifiedAnchorDistinctRaterCount(availableAnchor), 1);
+    }
+
     function test_RecordEarnedRaterRewardDeduplicatesCommitKeysAndAnchors() public {
         bytes32[] memory anchors = new bytes32[](2);
         anchors[0] = bytes32("anchor-a");
@@ -437,6 +539,12 @@ contract LaunchDistributionPoolTest is Test {
         anchors[0] = anchorId;
     }
 
+    function _twoAnchors(bytes32 anchorA, bytes32 anchorB) internal pure returns (bytes32[] memory anchors) {
+        anchors = new bytes32[](2);
+        anchors[0] = anchorA;
+        anchors[1] = anchorB;
+    }
+
     function _defaultPolicy() internal view returns (ILaunchDistributionPool.LaunchRewardPolicy memory policy) {
         policy = ILaunchDistributionPool.LaunchRewardPolicy({
             minQualifyingScoreBps: pool.MIN_QUALIFYING_SCORE_BPS(),
@@ -445,6 +553,7 @@ contract LaunchDistributionPoolTest is Test {
             minDistinctVerifiedAnchors: pool.MIN_EARNED_REWARD_DISTINCT_VERIFIED_ANCHORS(),
             minDistinctAnchorRounds: pool.MIN_EARNED_REWARD_DISTINCT_ANCHOR_ROUNDS(),
             minLaunchCreditStake: pool.MIN_LAUNCH_CREDIT_STAKE(),
+            maxDistinctRatersPerVerifiedAnchor: pool.MAX_DISTINCT_RATERS_PER_VERIFIED_ANCHOR(),
             eligibilityRatingCount: pool.ELIGIBILITY_RATING_COUNT(),
             rewardingRatingCount: pool.REWARDING_RATING_COUNT(),
             requireNoPendingCleanup: true
