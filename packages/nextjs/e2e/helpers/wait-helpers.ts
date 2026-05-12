@@ -3,6 +3,7 @@ import type { Locator, Page } from "@playwright/test";
 
 const VOTE_UP_BUTTON_NAME = /^Vote up\b/i;
 const VOTE_DOWN_BUTTON_NAME = /^Vote down\b/i;
+const PREDICT_BUTTON_NAME = /^(?:Predict final rating|Predict)\b/i;
 export const FEED_EMPTY_STATE_RE =
   /No questions have been asked yet|No content found|No content is trending right now|No recent questions are available right now|No live rounds look meaningfully contested right now|No funded USD bounties are available right now|No open rounds look close to settlement right now/i;
 
@@ -172,6 +173,7 @@ export async function waitForFeedLoaded(page: Page, timeout = 15_000): Promise<v
     page
       .getByRole("button", { name: VOTE_UP_BUTTON_NAME })
       .or(page.getByRole("button", { name: VOTE_DOWN_BUTTON_NAME }))
+      .or(page.getByRole("button", { name: PREDICT_BUTTON_NAME }))
       .or(page.getByText(/Voted(?: hidden| Up| Down)?/i))
       .or(page.getByText("Your question"))
       .or(page.getByText(/Cooldown/))
