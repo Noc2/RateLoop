@@ -58,6 +58,8 @@ const UNVERIFIED_AGENT_MULTIPLIER_BPS = 10_500;
 const BASE_RATER_MULTIPLIER_BPS = 10_000;
 const MAX_COMBINED_RATER_WEIGHT_BPS = 12_500;
 const OPEN_CHALLENGE_STATUS = 1;
+const AI_RATER_BOND_ASSET = "USDC";
+const AI_RATER_BOND_DECIMALS = 6;
 
 const STREAK_MILESTONES = [
   { days: 7, baseBonus: 10 },
@@ -1104,7 +1106,15 @@ export function registerDataRoutes(app: ApiApp) {
       .limit(limit)
       .offset(offset);
 
-    return jsonBig(c, { items, limit, offset });
+    return jsonBig(c, {
+      items: items.map((item) => ({
+        ...item,
+        bondAsset: AI_RATER_BOND_ASSET,
+        bondDecimals: AI_RATER_BOND_DECIMALS,
+      })),
+      limit,
+      offset,
+    });
   });
 
   app.get("/ai-rater-operators/:address/bond", async (c) => {
@@ -1120,7 +1130,11 @@ export function registerDataRoutes(app: ApiApp) {
       .limit(1);
 
     return jsonBig(c, {
-      bond: bond ?? { operator: address, totalBond: 0n, updatedAt: null },
+      bond: {
+        ...(bond ?? { operator: address, totalBond: 0n, updatedAt: null }),
+        bondAsset: AI_RATER_BOND_ASSET,
+        bondDecimals: AI_RATER_BOND_DECIMALS,
+      },
     });
   });
 

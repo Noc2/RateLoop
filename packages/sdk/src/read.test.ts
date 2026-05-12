@@ -396,9 +396,7 @@ test("AI rater read helpers request declaration productization routes", async ()
     "0x1111111111111111111111111111111111111111",
     { passed: true },
   );
-  await read.getAiRaterDriftFlags(
-    "0x1111111111111111111111111111111111111111",
-  );
+  await read.getAiRaterDriftFlags("0x1111111111111111111111111111111111111111");
   await read.getAiRaterDeclarationChallenges(
     "0x1111111111111111111111111111111111111111",
     { status: 1 },
@@ -441,6 +439,8 @@ test("getAiRaterOperatorBond requests the operator bond route", async () => {
           bond: {
             operator: "0x2222222222222222222222222222222222222222",
             totalBond: "0",
+            bondAsset: "USDC",
+            bondDecimals: 6,
             updatedAt: null,
           },
         }),
@@ -462,6 +462,8 @@ test("getAiRaterOperatorBond requests the operator bond route", async () => {
     /\/ai-rater-operators\/0x2222222222222222222222222222222222222222\/bond$/,
   );
   assert.equal(response.bond.totalBond, "0");
+  assert.equal(response.bond.bondAsset, "USDC");
+  assert.equal(response.bond.bondDecimals, 6);
 });
 
 test("read client surfaces API errors with status codes", async () => {

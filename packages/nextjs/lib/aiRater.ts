@@ -40,11 +40,7 @@ export function hashAiRaterField(value: string) {
   return normalized ? keccak256(stringToHex(normalized)) : zeroHash;
 }
 
-export function buildAiChallengeEvidenceHash(input: {
-  summary: string;
-  sourceUrl?: string;
-  details?: string;
-}) {
+export function buildAiChallengeEvidenceHash(input: { summary: string; sourceUrl?: string; details?: string }) {
   const normalized = JSON.stringify({
     summary: input.summary.trim(),
     sourceUrl: input.sourceUrl?.trim() ?? "",
@@ -112,9 +108,10 @@ export function computeBondReleaseAt(input: {
   retiredAt?: bigint | number | string | null;
   retiredBondLockSeconds?: bigint | number | string | null;
 }) {
-  const lockSeconds = input.retiredBondLockSeconds === null || input.retiredBondLockSeconds === undefined
-    ? 0n
-    : BigInt(input.retiredBondLockSeconds);
+  const lockSeconds =
+    input.retiredBondLockSeconds === null || input.retiredBondLockSeconds === undefined
+      ? 0n
+      : BigInt(input.retiredBondLockSeconds);
 
   if (lockSeconds === 0n) return null;
 
@@ -129,6 +126,9 @@ export function computeBondReleaseAt(input: {
   return null;
 }
 
-export function computeChallengeExpiresAt(openedAt: bigint | number | string, resolutionWindow: bigint | number | string) {
+export function computeChallengeExpiresAt(
+  openedAt: bigint | number | string,
+  resolutionWindow: bigint | number | string,
+) {
   return BigInt(openedAt) + BigInt(resolutionWindow);
 }

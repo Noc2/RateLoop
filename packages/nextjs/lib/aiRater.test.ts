@@ -1,21 +1,18 @@
-import assert from "node:assert/strict";
-import { test } from "node:test";
 import {
   buildAiChallengeEvidenceHash,
   computeBondReleaseAt,
   computeChallengeExpiresAt,
   hashAiRaterField,
 } from "./aiRater";
+import assert from "node:assert/strict";
+import { test } from "node:test";
 
 test("hashAiRaterField hashes trimmed field values and zeroes empty input", () => {
   assert.equal(
     hashAiRaterField("  openai/gpt-4o-mini  "),
     "0xd2022248140c1b806f69a864f09a5ced8d2646bf7a404d3f016b3b97d8bc20f2",
   );
-  assert.equal(
-    hashAiRaterField(""),
-    "0x0000000000000000000000000000000000000000000000000000000000000000",
-  );
+  assert.equal(hashAiRaterField(""), "0x0000000000000000000000000000000000000000000000000000000000000000");
 });
 
 test("buildAiChallengeEvidenceHash stays stable for normalized evidence payloads", () => {

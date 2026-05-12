@@ -2,21 +2,21 @@
 
 import { type ReactNode, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useAccount } from "wagmi";
+import { erc20Abi } from "viem";
+import { useAccount, useReadContract, useWriteContract } from "wagmi";
+import { useDeployedContractInfo, useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
+import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
+import { useCuryoSwitchNetwork } from "~~/hooks/useCuryoSwitchNetwork";
 import {
   buildAiChallengeEvidenceHash,
   computeChallengeExpiresAt,
   formatAiChallengeStatus,
   formatAiProbeStatus,
   formatAiRaterTierName,
-  formatLrepAmount,
   formatUnixTimestamp,
   truncateHash,
 } from "~~/lib/aiRater";
-import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
-import { useDeployedContractInfo, useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
-import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
-import { useCuryoSwitchNetwork } from "~~/hooks/useCuryoSwitchNetwork";
+import { formatSubmissionRewardAmount, getDefaultUsdcAddress } from "~~/lib/questionRewardPools";
 import {
   type PonderAiRaterDeclarationChallenge,
   type PonderAiRaterDriftFlag,
@@ -61,6 +61,7 @@ export function AiRaterTrustSection({ address, ownProfile = false }: { address: 
   const { targetNetwork } = useTargetNetwork();
   const { data: registryInfo } = useDeployedContractInfo({ contractName: "RaterDeclarationRegistry" });
   const registryAddress = registryInfo?.address as `0x${string}` | undefined;
+  const usdcAddress = getDefaultUsdcAddress(targetNetwork.id);
   const [challengeSummary, setChallengeSummary] = useState("");
   const [challengeSourceUrl, setChallengeSourceUrl] = useState("");
   const [challengeDetails, setChallengeDetails] = useState("");
@@ -95,29 +96,29 @@ export function AiRaterTrustSection({ address, ownProfile = false }: { address: 
   const driftFlags = driftFlagsQuery.data?.items ?? [];
   const challenges = challengesQuery.data?.items ?? [];
 
-  const { data: challengeBondLrep, refetch: refetchChallengeBondLrep } = useScaffoldReadContract({
+  const { data: challengeBondUsdc, refetch: refetchChallengeBondUsdc } = useScaffoldReadContract({
     contractName: "RaterDeclarationRegistry",
-    functionName: "challengeBondLrep",
+    functionName: "challengeBondUsdc",
   });
   const { data: challengeResolutionWindow, refetch: refetchChallengeResolutionWindow } = useScaffoldReadContract({
     contractName: "RaterDeclarationRegistry",
     functionName: "challengeResolutionWindow",
   });
-  const { data: lrepBalance, refetch: refetchLrepBalance } = useScaffoldReadContract({
-    contractName: REPUTATION_CONTRACT_NAME,
+  const { data: usdcBalance, refetch: refetchUsdcBalance } = useReadContract({
+    address: usdcAddress,
+    abi: erc20Abi,
     functionName: "balanceOf",
-    args: [connectedAddress],
-    query: { enabled: Boolean(connectedAddress) },
+    args: connectedAddress ? [connectedAddress] : undefined,
+    query: { enabled: Boolean(connectedAddress && usdcAddress) },
   });
-  const { data: lrepAllowance, refetch: refetchLrepAllowance } = useScaffoldReadContract({
-    contractName: REPUTATION_CONTRACT_NAME,
+  const { data: usdcAllowance, refetch: refetchUsdcAllowance } = useReadContract({
+    address: usdcAddress,
+    abi: erc20Abi,
     functionName: "allowance",
-    args: [connectedAddress, registryAddress],
-    query: { enabled: Boolean(connectedAddress && registryAddress) },
+    args: connectedAddress && registryAddress ? [connectedAddress, registryAddress] : undefined,
+    query: { enabled: Boolean(connectedAddress && registryAddress && usdcAddress) },
   });
-  const { writeContractAsync: writeLrep } = useScaffoldWriteContract({
-    contractName: REPUTATION_CONTRACT_NAME,
-  });
+  const { writeContractAsync: writeUsdc } = useWriteContract();
   const { writeContractAsync: writeRegistry } = useScaffoldWriteContract({
     contractName: "RaterDeclarationRegistry",
   });
@@ -140,10 +141,10 @@ export function AiRaterTrustSection({ address, ownProfile = false }: { address: 
       probeResultsQuery.refetch(),
       driftFlagsQuery.refetch(),
       challengesQuery.refetch(),
-      refetchChallengeBondLrep(),
+      refetchChallengeBondUsdc(),
       refetchChallengeResolutionWindow(),
-      refetchLrepBalance(),
-      refetchLrepAllowance(),
+      refetchUsdcBalance(),
+      refetchUsdcAllowance(),
     ]);
   };
 
@@ -165,8 +166,12 @@ export function AiRaterTrustSection({ address, ownProfile = false }: { address: 
       notification.error("Add a challenge summary before posting the bond.");
       return;
     }
-    if ((lrepBalance ?? 0n) < (challengeBondLrep ?? 0n)) {
-      notification.error("Not enough LREP to open this challenge.");
+    if (!usdcAddress) {
+      notification.error("USDC is not configured for this network.");
+      return;
+    }
+    if ((usdcBalance ?? 0n) < (challengeBondUsdc ?? 0n)) {
+      notification.error("Not enough USDC to open this challenge.");
       return;
     }
 
@@ -174,10 +179,12 @@ export function AiRaterTrustSection({ address, ownProfile = false }: { address: 
     try {
       await ensureTargetChain();
 
-      if ((challengeBondLrep ?? 0n) > 0n && (lrepAllowance ?? 0n) < (challengeBondLrep ?? 0n)) {
-        await writeLrep({
+      if ((challengeBondUsdc ?? 0n) > 0n && (usdcAllowance ?? 0n) < (challengeBondUsdc ?? 0n)) {
+        await writeUsdc({
+          address: usdcAddress,
+          abi: erc20Abi,
           functionName: "approve",
-          args: [registryAddress, challengeBondLrep ?? 0n],
+          args: [registryAddress, challengeBondUsdc ?? 0n],
         });
       }
 
@@ -230,7 +237,9 @@ export function AiRaterTrustSection({ address, ownProfile = false }: { address: 
         </div>
         {aiDeclaration ? (
           <div className="rounded-full bg-base-content/[0.05] px-4 py-2 text-sm font-medium text-base-content/70">
-            {aiDeclaration.active ? formatAiRaterTierName(aiDeclaration.tier) : `Inactive: ${aiDeclaration.inactiveReason}`}
+            {aiDeclaration.active
+              ? formatAiRaterTierName(aiDeclaration.tier)
+              : `Inactive: ${aiDeclaration.inactiveReason}`}
           </div>
         ) : null}
       </div>
@@ -270,7 +279,11 @@ export function AiRaterTrustSection({ address, ownProfile = false }: { address: 
             />
             <HistoryItem
               label="Reward multiplier"
-              meta={ownProfile ? "Applies to future rated rounds only." : "This is an accountability signal, not proof of identity."}
+              meta={
+                ownProfile
+                  ? "Applies to future rated rounds only."
+                  : "This is an accountability signal, not proof of identity."
+              }
               value={`${((rewardStatus?.rewardPolicy.agentTierMultiplierBps ?? 10_000) / 100).toFixed(2)}%`}
             />
           </div>
@@ -326,15 +339,13 @@ export function AiRaterTrustSection({ address, ownProfile = false }: { address: 
                         ? computeChallengeExpiresAt(item.openedAt, challengeResolutionWindow)
                         : null;
                     const canExpire =
-                      item.status === 1 &&
-                      expiresAt !== null &&
-                      expiresAt <= BigInt(Math.floor(Date.now() / 1000));
+                      item.status === 1 && expiresAt !== null && expiresAt <= BigInt(Math.floor(Date.now() / 1000));
 
                     return (
                       <HistoryItem
                         key={item.challengeId}
                         label={`#${item.challengeId} • ${formatAiChallengeStatus(item.status)}`}
-                        meta={`${formatLrepAmount(item.bondAmount)} LREP • opened ${formatUnixTimestamp(item.openedAt)}`}
+                        meta={`${formatSubmissionRewardAmount(item.bondAmount, "usdc")} • opened ${formatUnixTimestamp(item.openedAt)}`}
                         value={truncateHash(item.evidenceHash)}
                       >
                         {canExpire ? (
@@ -364,72 +375,72 @@ export function AiRaterTrustSection({ address, ownProfile = false }: { address: 
               <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                 <div>
                   <h3 className="text-lg font-semibold text-base-content">Challenge this declaration</h3>
-                <p className="mt-2 max-w-3xl text-sm leading-6 text-base-content/60">
-                  Post the challenge bond, hash your evidence locally, and open a public declaration challenge.
-                </p>
+                  <p className="mt-2 max-w-3xl text-sm leading-6 text-base-content/60">
+                    Post the challenge bond, hash your evidence locally, and open a public declaration challenge.
+                  </p>
+                </div>
+                <div className="rounded-full bg-base-100 px-4 py-2 text-sm text-base-content/65">
+                  Bond {formatSubmissionRewardAmount(challengeBondUsdc, "usdc")}
+                </div>
               </div>
-              <div className="rounded-full bg-base-100 px-4 py-2 text-sm text-base-content/65">
-                Bond {formatLrepAmount(challengeBondLrep)} LREP
+
+              <div className="mt-5 grid gap-4 lg:grid-cols-2">
+                <label className="form-control lg:col-span-2">
+                  <span className="label-text text-base-content/65">Challenge summary</span>
+                  <input
+                    className="input input-bordered mt-2 w-full bg-base-100"
+                    placeholder="Declared provider and observed provider do not match."
+                    value={challengeSummary}
+                    onChange={event => setChallengeSummary(event.target.value)}
+                  />
+                </label>
+
+                <label className="form-control lg:col-span-2">
+                  <span className="label-text text-base-content/65">Evidence source URL</span>
+                  <input
+                    className="input input-bordered mt-2 w-full bg-base-100"
+                    placeholder="https://example.com/transcript"
+                    value={challengeSourceUrl}
+                    onChange={event => setChallengeSourceUrl(event.target.value)}
+                  />
+                </label>
+
+                <label className="form-control lg:col-span-2">
+                  <span className="label-text text-base-content/65">Supporting details</span>
+                  <textarea
+                    className="textarea textarea-bordered mt-2 min-h-28 w-full bg-base-100"
+                    placeholder="What changed, how you observed it, and why the declaration looks stale or false."
+                    value={challengeDetails}
+                    onChange={event => setChallengeDetails(event.target.value)}
+                  />
+                </label>
               </div>
-            </div>
 
-            <div className="mt-5 grid gap-4 lg:grid-cols-2">
-              <label className="form-control lg:col-span-2">
-                <span className="label-text text-base-content/65">Challenge summary</span>
-                <input
-                  className="input input-bordered mt-2 w-full bg-base-100"
-                  placeholder="Declared provider and observed provider do not match."
-                  value={challengeSummary}
-                  onChange={event => setChallengeSummary(event.target.value)}
-                />
-              </label>
-
-              <label className="form-control lg:col-span-2">
-                <span className="label-text text-base-content/65">Evidence source URL</span>
-                <input
-                  className="input input-bordered mt-2 w-full bg-base-100"
-                  placeholder="https://example.com/transcript"
-                  value={challengeSourceUrl}
-                  onChange={event => setChallengeSourceUrl(event.target.value)}
-                />
-              </label>
-
-              <label className="form-control lg:col-span-2">
-                <span className="label-text text-base-content/65">Supporting details</span>
-                <textarea
-                  className="textarea textarea-bordered mt-2 min-h-28 w-full bg-base-100"
-                  placeholder="What changed, how you observed it, and why the declaration looks stale or false."
-                  value={challengeDetails}
-                  onChange={event => setChallengeDetails(event.target.value)}
-                />
-              </label>
-            </div>
-
-            <div className="mt-4 text-sm text-base-content/55">
-              Evidence hash {challengeEvidenceHash ? truncateHash(challengeEvidenceHash, 14, 10) : "—"} • allowance{" "}
-              {formatLrepAmount(lrepAllowance)} LREP
-            </div>
-
-            {openChallengeCount > 0 ? (
-              <div className="mt-3 text-sm text-base-content/60">
-                A challenge is already open for this declaration version.
+              <div className="mt-4 text-sm text-base-content/55">
+                Evidence hash {challengeEvidenceHash ? truncateHash(challengeEvidenceHash, 14, 10) : "—"} • allowance{" "}
+                {formatSubmissionRewardAmount(usdcAllowance, "usdc")}
               </div>
-            ) : null}
-            {!connectedAddress ? (
-              <div className="mt-3 text-sm text-base-content/60">Connect a wallet to post the challenge bond.</div>
-            ) : null}
+
+              {openChallengeCount > 0 ? (
+                <div className="mt-3 text-sm text-base-content/60">
+                  A challenge is already open for this declaration version.
+                </div>
+              ) : null}
+              {!connectedAddress ? (
+                <div className="mt-3 text-sm text-base-content/60">Connect a wallet to post the challenge bond.</div>
+              ) : null}
 
               <div className="mt-5 flex flex-wrap items-center gap-3">
                 <button
                   type="button"
-                className="btn btn-submit"
-                disabled={!aiDeclaration.active || isOpeningChallenge || openChallengeCount > 0}
-                onClick={() => void handleOpenChallenge()}
-              >
-                {isOpeningChallenge ? "Opening..." : "Open challenge"}
-              </button>
+                  className="btn btn-submit"
+                  disabled={!aiDeclaration.active || isOpeningChallenge || openChallengeCount > 0}
+                  onClick={() => void handleOpenChallenge()}
+                >
+                  {isOpeningChallenge ? "Opening..." : "Open challenge"}
+                </button>
                 <span className="text-sm text-base-content/55">
-                  Connected balance {formatLrepAmount(lrepBalance)} LREP
+                  Connected balance {formatSubmissionRewardAmount(usdcBalance, "usdc")}
                 </span>
               </div>
             </div>

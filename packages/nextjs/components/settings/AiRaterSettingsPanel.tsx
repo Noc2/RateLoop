@@ -2,8 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { formatUnits } from "viem";
-import { useAccount, useSignTypedData } from "wagmi";
+import { erc20Abi, formatUnits } from "viem";
+import { useAccount, useReadContract, useSignTypedData, useWriteContract } from "wagmi";
+import { AiRaterTrustSection } from "~~/components/profile/AiRaterTrustSection";
+import { useDeployedContractInfo, useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
+import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
+import { useCuryoSwitchNetwork } from "~~/hooks/useCuryoSwitchNetwork";
 import {
   AI_RATER_DECLARATION_DOMAIN,
   AI_RATER_DECLARATION_TYPES,
@@ -11,17 +15,15 @@ import {
   AI_RATER_MODEL_CLASS_OPTIONS,
   computeBondReleaseAt,
   formatAiRaterTierName,
-  formatLrepAmount,
   formatUnixTimestamp,
   hashAiRaterField,
-  parseLrepInput,
   truncateHash,
 } from "~~/lib/aiRater";
-import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
-import { AiRaterTrustSection } from "~~/components/profile/AiRaterTrustSection";
-import { useDeployedContractInfo, useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
-import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
-import { useCuryoSwitchNetwork } from "~~/hooks/useCuryoSwitchNetwork";
+import {
+  formatSubmissionRewardAmount,
+  getDefaultUsdcAddress,
+  parseSubmissionRewardAmount,
+} from "~~/lib/questionRewardPools";
 import { type PonderRaterRewardStatusResponse, ponderApi } from "~~/services/ponder/client";
 import { notification } from "~~/utils/scaffold-eth";
 
@@ -44,6 +46,14 @@ function toBigIntValue(value: bigint | number | string | null | undefined) {
   return value === null || value === undefined ? 0n : BigInt(value);
 }
 
+function parseOptionalUsdcAmount(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return 0n;
+  const normalized = trimmed.includes(",") ? trimmed.replace(/,/g, "") : trimmed;
+  if (/^0+(?:\.0{0,6})?$/.test(normalized)) return 0n;
+  return parseSubmissionRewardAmount(value);
+}
+
 export function AiRaterSettingsPanel({ address }: { address?: string }) {
   const normalizedAddress = address as `0x${string}` | undefined;
   const { address: connectedAddress, chain } = useAccount();
@@ -52,10 +62,11 @@ export function AiRaterSettingsPanel({ address }: { address?: string }) {
   const { targetNetwork } = useTargetNetwork();
   const { data: registryInfo } = useDeployedContractInfo({ contractName: "RaterDeclarationRegistry" });
   const registryAddress = registryInfo?.address as `0x${string}` | undefined;
+  const usdcAddress = getDefaultUsdcAddress(targetNetwork.id);
 
   const [modelClass, setModelClass] = useState("0");
-  const [modelIdInput, setModelIdInput] = useState("");
-  const [providerInput, setProviderInput] = useState("");
+  const [modelIdInput, setModelIdInput] = useState("openai/gpt-5.5");
+  const [providerInput, setProviderInput] = useState("openai");
   const [endpointHintInput, setEndpointHintInput] = useState("");
   const [promptTemplateInput, setPromptTemplateInput] = useState("");
   const [retrievalConfigInput, setRetrievalConfigInput] = useState("");
@@ -84,9 +95,9 @@ export function AiRaterSettingsPanel({ address }: { address?: string }) {
     args: [normalizedAddress],
     query: { enabled: Boolean(normalizedAddress) },
   });
-  const { data: minDeclarationBondLrep, refetch: refetchMinDeclarationBondLrep } = useScaffoldReadContract({
+  const { data: minDeclarationBondUsdc, refetch: refetchMinDeclarationBondUsdc } = useScaffoldReadContract({
     contractName: "RaterDeclarationRegistry",
-    functionName: "minDeclarationBondLrep",
+    functionName: "minDeclarationBondUsdc",
   });
   const { data: retiredBondLock, refetch: refetchRetiredBondLock } = useScaffoldReadContract({
     contractName: "RaterDeclarationRegistry",
@@ -116,28 +127,29 @@ export function AiRaterSettingsPanel({ address }: { address?: string }) {
     args: [normalizedAddress],
     query: { enabled: Boolean(normalizedAddress) },
   });
-  const { data: retiredDeclarationBondReleaseAt, refetch: refetchRetiredDeclarationBondReleaseAt } = useScaffoldReadContract({
-    contractName: "RaterDeclarationRegistry",
-    functionName: "retiredDeclarationBondReleaseAt",
-    args: [normalizedAddress],
-    query: { enabled: Boolean(normalizedAddress) },
-  });
-  const { data: lrepBalance, refetch: refetchLrepBalance } = useScaffoldReadContract({
-    contractName: REPUTATION_CONTRACT_NAME,
+  const { data: retiredDeclarationBondReleaseAt, refetch: refetchRetiredDeclarationBondReleaseAt } =
+    useScaffoldReadContract({
+      contractName: "RaterDeclarationRegistry",
+      functionName: "retiredDeclarationBondReleaseAt",
+      args: [normalizedAddress],
+      query: { enabled: Boolean(normalizedAddress) },
+    });
+  const { data: usdcBalance, refetch: refetchUsdcBalance } = useReadContract({
+    address: usdcAddress,
+    abi: erc20Abi,
     functionName: "balanceOf",
-    args: [normalizedAddress],
-    query: { enabled: Boolean(normalizedAddress) },
+    args: normalizedAddress ? [normalizedAddress] : undefined,
+    query: { enabled: Boolean(normalizedAddress && usdcAddress) },
   });
-  const { data: lrepAllowance, refetch: refetchLrepAllowance } = useScaffoldReadContract({
-    contractName: REPUTATION_CONTRACT_NAME,
+  const { data: usdcAllowance, refetch: refetchUsdcAllowance } = useReadContract({
+    address: usdcAddress,
+    abi: erc20Abi,
     functionName: "allowance",
-    args: [normalizedAddress, registryAddress],
-    query: { enabled: Boolean(normalizedAddress && registryAddress) },
+    args: normalizedAddress && registryAddress ? [normalizedAddress, registryAddress] : undefined,
+    query: { enabled: Boolean(normalizedAddress && registryAddress && usdcAddress) },
   });
 
-  const { writeContractAsync: writeLrep } = useScaffoldWriteContract({
-    contractName: REPUTATION_CONTRACT_NAME,
-  });
+  const { writeContractAsync: writeUsdc } = useWriteContract();
   const { writeContractAsync: writeRegistry } = useScaffoldWriteContract({
     contractName: "RaterDeclarationRegistry",
   });
@@ -149,7 +161,7 @@ export function AiRaterSettingsPanel({ address }: { address?: string }) {
   const currentBond = toBigIntValue(operatorBond);
   const currentReservedBond = toBigIntValue(operatorBondReserved);
   const availableBond = currentBond > currentReservedBond ? currentBond - currentReservedBond : 0n;
-  const minDeclarationBond = toBigIntValue(minDeclarationBondLrep);
+  const minDeclarationBond = toBigIntValue(minDeclarationBondUsdc);
   const requiredTopUp = currentBond >= minDeclarationBond ? 0n : minDeclarationBond - currentBond;
   const nextVersion = (aiDeclaration?.version ?? 0) + 1;
   const releaseAt = computeBondReleaseAt({
@@ -189,15 +201,15 @@ export function AiRaterSettingsPanel({ address }: { address?: string }) {
     await Promise.all([
       rewardStatusQuery.refetch(),
       refetchNonce(),
-      refetchMinDeclarationBondLrep(),
+      refetchMinDeclarationBondUsdc(),
       refetchRetiredBondLock(),
       refetchOperatorBond(),
       refetchOperatorBondReserved(),
       refetchActiveOperatorDeclarations(),
       refetchOpenOperatorChallenges(),
       refetchRetiredDeclarationBondReleaseAt(),
-      refetchLrepBalance(),
-      refetchLrepAllowance(),
+      refetchUsdcBalance(),
+      refetchUsdcAllowance(),
     ]);
   };
 
@@ -220,13 +232,22 @@ export function AiRaterSettingsPanel({ address }: { address?: string }) {
       return;
     }
 
-    const bondAmount = parseLrepInput(bondAmountInput);
-    if (bondAmount < requiredTopUp) {
-      notification.error(`Bond top-up must be at least ${formatLrepAmount(requiredTopUp)} LREP.`);
+    if (!usdcAddress) {
+      notification.error("USDC is not configured for this network.");
       return;
     }
-    if ((lrepBalance ?? 0n) < bondAmount) {
-      notification.error("Not enough LREP to post this bond.");
+
+    const bondAmount = parseOptionalUsdcAmount(bondAmountInput);
+    if (bondAmount === null) {
+      notification.error("Enter a valid USDC bond amount with up to 6 decimals.");
+      return;
+    }
+    if (bondAmount < requiredTopUp) {
+      notification.error(`Bond top-up must be at least ${formatSubmissionRewardAmount(requiredTopUp, "usdc")}.`);
+      return;
+    }
+    if ((usdcBalance ?? 0n) < bondAmount) {
+      notification.error("Not enough USDC to post this bond.");
       return;
     }
 
@@ -261,8 +282,10 @@ export function AiRaterSettingsPanel({ address }: { address?: string }) {
     try {
       await ensureTargetChain();
 
-      if (bondAmount > 0n && (lrepAllowance ?? 0n) < bondAmount) {
-        await writeLrep({
+      if (bondAmount > 0n && (usdcAllowance ?? 0n) < bondAmount) {
+        await writeUsdc({
+          address: usdcAddress,
+          abi: erc20Abi,
           functionName: "approve",
           args: [registryAddress, bondAmount],
         });
@@ -330,7 +353,11 @@ export function AiRaterSettingsPanel({ address }: { address?: string }) {
   };
 
   const handleWithdrawBond = async () => {
-    const amount = parseLrepInput(withdrawAmountInput);
+    const amount = parseOptionalUsdcAmount(withdrawAmountInput);
+    if (amount === null) {
+      notification.error("Enter a valid USDC bond amount with up to 6 decimals.");
+      return;
+    }
     if (amount <= 0n) {
       notification.error("Enter a bond amount to withdraw.");
       return;
@@ -371,12 +398,14 @@ export function AiRaterSettingsPanel({ address }: { address?: string }) {
           <div>
             <h2 className="text-xl font-semibold text-base-content">AI rater controls</h2>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-base-content/60">
-              Publish a bonded declaration, request a probe when behavior changes, retire stale declarations, and
-              manage the operator bond that backs this wallet.
+              Publish a bonded declaration, request a probe when behavior changes, retire stale declarations, and manage
+              the operator bond that backs this wallet.
             </p>
           </div>
           <div className="rounded-full bg-base-content/[0.05] px-4 py-2 text-sm font-medium text-base-content/70">
-            {aiDeclaration?.declared ? `${aiDeclaration.active ? "Active" : `Inactive: ${aiDeclaration.inactiveReason}`}` : "No declaration"}
+            {aiDeclaration?.declared
+              ? `${aiDeclaration.active ? "Active" : `Inactive: ${aiDeclaration.inactiveReason}`}`
+              : "No declaration"}
           </div>
         </div>
 
@@ -389,8 +418,8 @@ export function AiRaterSettingsPanel({ address }: { address?: string }) {
         <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <DetailCard label="Current tier" value={formatAiRaterTierName(aiDeclaration?.tier)} />
           <DetailCard label="Next version" value={`#${nextVersion}`} />
-          <DetailCard label="Operator bond" value={`${formatLrepAmount(currentBond)} LREP`} />
-          <DetailCard label="Unreserved bond" value={`${formatLrepAmount(availableBond)} LREP`} />
+          <DetailCard label="Operator bond" value={formatSubmissionRewardAmount(currentBond, "usdc")} />
+          <DetailCard label="Unreserved bond" value={formatSubmissionRewardAmount(availableBond, "usdc")} />
         </div>
       </div>
 
@@ -499,7 +528,7 @@ export function AiRaterSettingsPanel({ address }: { address?: string }) {
           </label>
 
           <label className="form-control">
-            <span className="label-text text-base-content/65">Bond top-up (LREP)</span>
+            <span className="label-text text-base-content/65">Bond top-up (USDC)</span>
             <input
               className="input input-bordered mt-2 w-full bg-base-100"
               inputMode="decimal"
@@ -508,7 +537,8 @@ export function AiRaterSettingsPanel({ address }: { address?: string }) {
               onChange={event => setBondAmountInput(event.target.value)}
             />
             <span className="mt-2 text-xs text-base-content/50">
-              Required now: {formatLrepAmount(requiredTopUp)} LREP. Balance: {formatLrepAmount(lrepBalance)} LREP.
+              Required now: {formatSubmissionRewardAmount(requiredTopUp, "usdc")}. Balance:{" "}
+              {formatSubmissionRewardAmount(usdcBalance, "usdc")}.
             </span>
           </label>
         </div>
@@ -524,11 +554,16 @@ export function AiRaterSettingsPanel({ address }: { address?: string }) {
         </label>
 
         <div className="mt-6 flex flex-wrap items-center gap-3">
-          <button type="button" className="btn btn-submit" disabled={isBusy || !registryAddress} onClick={() => void handleSubmitDeclaration()}>
+          <button
+            type="button"
+            className="btn btn-submit"
+            disabled={isBusy || !registryAddress}
+            onClick={() => void handleSubmitDeclaration()}
+          >
             {isBusy ? "Submitting..." : "Sign and submit declaration"}
           </button>
           <div className="text-sm text-base-content/55">
-            Nonce {nonce?.toString() ?? "—"} • allowance {formatLrepAmount(lrepAllowance)} LREP
+            Nonce {nonce?.toString() ?? "—"} • allowance {formatSubmissionRewardAmount(usdcAllowance, "usdc")}
           </div>
         </div>
       </div>
@@ -541,10 +576,7 @@ export function AiRaterSettingsPanel({ address }: { address?: string }) {
               label="Declared at"
               value={aiDeclaration?.declaredAt ? formatUnixTimestamp(aiDeclaration.declaredAt) : "—"}
             />
-            <DetailCard
-              label="Release window"
-              value={releaseAt ? formatUnixTimestamp(releaseAt) : "Not scheduled"}
-            />
+            <DetailCard label="Release window" value={releaseAt ? formatUnixTimestamp(releaseAt) : "Not scheduled"} />
           </div>
 
           <div className="mt-5 flex flex-wrap gap-3">
@@ -570,14 +602,14 @@ export function AiRaterSettingsPanel({ address }: { address?: string }) {
         <div className="surface-card rounded-2xl p-6">
           <h3 className="text-lg font-semibold text-base-content">Operator bond</h3>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <DetailCard label="Total bond" value={`${formatLrepAmount(currentBond)} LREP`} />
-            <DetailCard label="Reserved bond" value={`${formatLrepAmount(currentReservedBond)} LREP`} />
+            <DetailCard label="Total bond" value={formatSubmissionRewardAmount(currentBond, "usdc")} />
+            <DetailCard label="Reserved bond" value={formatSubmissionRewardAmount(currentReservedBond, "usdc")} />
             <DetailCard label="Active declarations" value={(activeOperatorDeclarations ?? 0n).toString()} />
             <DetailCard label="Open challenges" value={(openOperatorChallenges ?? 0n).toString()} />
           </div>
 
           <label className="form-control mt-5">
-            <span className="label-text text-base-content/65">Withdraw unreserved bond (LREP)</span>
+            <span className="label-text text-base-content/65">Withdraw unreserved bond (USDC)</span>
             <input
               className="input input-bordered mt-2 w-full bg-base-100"
               inputMode="decimal"
@@ -602,7 +634,7 @@ export function AiRaterSettingsPanel({ address }: { address?: string }) {
               {isWithdrawingBond ? "Withdrawing..." : "Withdraw operator bond"}
             </button>
             <span className="text-sm text-base-content/55">
-              Available now: {formatLrepAmount(availableBond)} LREP
+              Available now: {formatSubmissionRewardAmount(availableBond, "usdc")}
             </span>
           </div>
         </div>

@@ -1089,6 +1089,8 @@ export interface PonderAiRaterDeclarationChallenge {
   evidenceHash: string;
   resolutionHash: string | null;
   bondAmount: string;
+  bondAsset?: string;
+  bondDecimals?: number;
   status: number;
   operatorSlash: string;
   challengerReward: string;
@@ -1099,6 +1101,8 @@ export interface PonderAiRaterDeclarationChallenge {
 export interface PonderAiRaterOperatorBond {
   operator: string;
   totalBond: string;
+  bondAsset?: string;
+  bondDecimals?: number;
   updatedAt: string | null;
 }
 

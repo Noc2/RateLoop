@@ -485,6 +485,8 @@ export interface CuryoAiRaterDeclarationChallengeItem {
   evidenceHash: `0x${string}`;
   resolutionHash: `0x${string}` | null;
   bondAmount: string;
+  bondAsset?: string;
+  bondDecimals?: number;
   status: number;
   operatorSlash: string;
   challengerReward: string;
@@ -496,6 +498,8 @@ export interface CuryoAiRaterDeclarationChallengeItem {
 export interface CuryoAiRaterOperatorBond {
   operator: `0x${string}`;
   totalBond: string;
+  bondAsset?: string;
+  bondDecimals?: number;
   updatedAt: string | null;
   [key: string]: unknown;
 }

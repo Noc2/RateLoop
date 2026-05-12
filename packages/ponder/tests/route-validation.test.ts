@@ -1680,6 +1680,8 @@ describe("registerDataRoutes", () => {
       bond: {
         operator: "0x00000000000000000000000000000000000000bb",
         totalBond: "0",
+        bondAsset: "USDC",
+        bondDecimals: 6,
         updatedAt: null,
       },
     });
