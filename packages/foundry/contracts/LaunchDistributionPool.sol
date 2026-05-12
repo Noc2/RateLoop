@@ -76,6 +76,17 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
     event LaunchRewardPolicyUpdated(LaunchRewardPolicy policy);
     event LegacyClaimed(address indexed account, uint256 amount);
     event RaterLaunchCapAssigned(address indexed rater, uint256 cap, uint256 cohortIndex);
+    event EarnedRaterRewardCreditRecorded(
+        address indexed rater,
+        uint256 indexed contentId,
+        uint256 indexed roundId,
+        bytes32 commitKey,
+        uint16 scoreBps,
+        uint32 qualifyingRatingCount,
+        uint32 distinctVerifiedAnchorCount,
+        uint32 distinctAnchorRoundCount,
+        bool payoutEligible
+    );
     event EarnedRaterRewardPaid(
         address indexed rater,
         uint256 indexed contentId,
@@ -237,9 +248,23 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
     ) internal returns (uint256 paidAmount) {
         uint32 qualifyingCount = qualifyingRatingCount[rater] + 1;
         qualifyingRatingCount[rater] = qualifyingCount;
-        if (qualifyingCount < policy.eligibilityRatingCount) return 0;
-        if (raterDistinctVerifiedAnchorCount[rater] < policy.minDistinctVerifiedAnchors) return 0;
-        if (raterDistinctAnchorRoundCount[rater] < policy.minDistinctAnchorRounds) return 0;
+        bool payoutEligible = qualifyingCount >= policy.eligibilityRatingCount
+            && raterDistinctVerifiedAnchorCount[rater] >= policy.minDistinctVerifiedAnchors
+            && raterDistinctAnchorRoundCount[rater] >= policy.minDistinctAnchorRounds;
+
+        emit EarnedRaterRewardCreditRecorded(
+            rater,
+            contentId,
+            roundId,
+            commitKey,
+            scoreBps,
+            qualifyingCount,
+            raterDistinctVerifiedAnchorCount[rater],
+            raterDistinctAnchorRoundCount[rater],
+            payoutEligible
+        );
+
+        if (!payoutEligible) return 0;
 
         uint256 cap = raterLaunchCap[rater];
         if (cap == 0) {

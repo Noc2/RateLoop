@@ -27,6 +27,9 @@ contract RaterRegistryTest is Test {
     uint256 internal constant WORLD_ID_EXTERNAL_NULLIFIER_HASH = 12_345;
     uint64 internal constant WORLD_ID_CREDENTIAL_TTL = 365 days;
 
+    event ProfileFollowed(address indexed follower, address indexed target, uint64 followedAt);
+    event ProfileUnfollowed(address indexed follower, address indexed target, uint64 unfollowedAt);
+
     function setUp() public {
         worldIdRouter = new MockWorldIDRouter();
         registry = new RaterRegistry(
@@ -61,6 +64,61 @@ contract RaterRegistryTest is Test {
         assertEq(uint256(profile.raterType), uint256(RaterRegistry.RaterType.AI));
         assertEq(profile.metadataHash, METADATA_HASH);
         assertEq(profile.updatedAt, uint64(block.timestamp));
+    }
+
+    function test_FollowProfileStoresPublicRelationshipAndCounts() public {
+        vm.prank(rater);
+        vm.expectEmit(true, true, false, true);
+        emit ProfileFollowed(rater, subject, uint64(block.timestamp));
+        registry.followProfile(subject);
+
+        assertTrue(registry.isFollowing(rater, subject));
+        assertEq(registry.followingCount(rater), 1);
+        assertEq(registry.followerCount(subject), 1);
+
+        vm.prank(rater);
+        registry.followProfile(subject);
+
+        assertEq(registry.followingCount(rater), 1);
+        assertEq(registry.followerCount(subject), 1);
+    }
+
+    function test_UnfollowProfileClearsPublicRelationshipAndCounts() public {
+        vm.prank(rater);
+        registry.followProfile(subject);
+
+        vm.prank(rater);
+        vm.expectEmit(true, true, false, true);
+        emit ProfileUnfollowed(rater, subject, uint64(block.timestamp));
+        registry.unfollowProfile(subject);
+
+        assertFalse(registry.isFollowing(rater, subject));
+        assertEq(registry.followingCount(rater), 0);
+        assertEq(registry.followerCount(subject), 0);
+
+        vm.prank(rater);
+        registry.unfollowProfile(subject);
+
+        assertEq(registry.followingCount(rater), 0);
+        assertEq(registry.followerCount(subject), 0);
+    }
+
+    function test_FollowProfileRejectsInvalidTargets() public {
+        vm.startPrank(rater);
+
+        vm.expectRevert(RaterRegistry.InvalidAddress.selector);
+        registry.followProfile(address(0));
+
+        vm.expectRevert(RaterRegistry.InvalidAddress.selector);
+        registry.followProfile(rater);
+
+        vm.expectRevert(RaterRegistry.InvalidAddress.selector);
+        registry.unfollowProfile(address(0));
+
+        vm.expectRevert(RaterRegistry.InvalidAddress.selector);
+        registry.unfollowProfile(rater);
+
+        vm.stopPrank();
     }
 
     function test_AttestSelfCredentialWithProofStoresUniquenessCredentialForSender() public {

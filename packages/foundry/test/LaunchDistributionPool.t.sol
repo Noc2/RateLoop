@@ -11,6 +11,18 @@ import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
 contract LaunchDistributionPoolTest is Test {
     using stdStorage for StdStorage;
 
+    event EarnedRaterRewardCreditRecorded(
+        address indexed rater,
+        uint256 indexed contentId,
+        uint256 indexed roundId,
+        bytes32 commitKey,
+        uint16 scoreBps,
+        uint32 qualifyingRatingCount,
+        uint32 distinctVerifiedAnchorCount,
+        uint32 distinctAnchorRoundCount,
+        bool payoutEligible
+    );
+
     LoopReputation internal lrep;
     RaterRegistry internal registry;
     MockWorldIDRouter internal worldIdRouter;
@@ -140,6 +152,31 @@ contract LaunchDistributionPoolTest is Test {
 
         assertEq(_recordLaunchReward(alice, 15, bytes32("anchor-a")), 0);
         assertEq(lrep.balanceOf(alice), 10e6);
+    }
+
+    function test_RecordEarnedRaterRewardEmitsCreditProgressBeforeAndAtEligibility() public {
+        vm.expectEmit(true, true, true, true);
+        emit EarnedRaterRewardCreditRecorded(alice, 1, 1, _commitKey(1), 8_000, 1, 1, 1, false);
+        assertEq(
+            pool.recordEarnedRaterReward(
+                alice, 1, 1, _commitKey(1), 8_000, 3, true, _singleAnchor(bytes32("anchor-a"))
+            ),
+            0
+        );
+
+        for (uint256 i = 0; i < 3; i++) {
+            bytes32 anchorId = i % 2 == 0 ? bytes32("anchor-b") : bytes32("anchor-a");
+            pool.recordEarnedRaterReward(alice, 1, 2 + i, _commitKey(2 + i), 8_000, 3, true, _singleAnchor(anchorId));
+        }
+
+        vm.expectEmit(true, true, true, true);
+        emit EarnedRaterRewardCreditRecorded(alice, 1, 5, _commitKey(5), 8_000, 5, 2, 5, true);
+        assertEq(
+            pool.recordEarnedRaterReward(
+                alice, 1, 5, _commitKey(5), 8_000, 3, true, _singleAnchor(bytes32("anchor-a"))
+            ),
+            1e6
+        );
     }
 
     function test_CurrentRaterLaunchCapUsesTenPointCurve() public {

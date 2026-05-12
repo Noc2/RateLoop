@@ -125,6 +125,9 @@ contract RaterRegistry is AccessControl {
     mapping(bytes32 => VersionedClusterScore) private _clusterScoreHistory;
     mapping(uint256 => ClusterScoreChallenge) private _clusterScoreChallenges;
     mapping(bytes32 => TrustAttestation) private _trustAttestations;
+    mapping(address => mapping(address => bool)) public isFollowing;
+    mapping(address => uint256) public followingCount;
+    mapping(address => uint256) public followerCount;
 
     uint256 public nextClusterScoreChallengeId = 1;
     IWorldIDRouter public immutable worldIdRouter;
@@ -191,6 +194,8 @@ contract RaterRegistry is AccessControl {
         bytes32 metadataHash
     );
     event TrustAttestationRevoked(bytes32 indexed attestationId, address indexed issuer, address indexed subject);
+    event ProfileFollowed(address indexed follower, address indexed target, uint64 followedAt);
+    event ProfileUnfollowed(address indexed follower, address indexed target, uint64 unfollowedAt);
 
     error InvalidAddress();
     error InvalidCredential();
@@ -241,6 +246,30 @@ contract RaterRegistry is AccessControl {
             RaterProfile({raterType: raterType, metadataHash: metadataHash, updatedAt: uint64(block.timestamp)});
 
         emit RaterProfileUpdated(msg.sender, raterType, metadataHash, uint64(block.timestamp));
+    }
+
+    /// @notice Publicly follow another profile as an on-chain curation signal.
+    function followProfile(address target) external {
+        if (target == address(0) || target == msg.sender) revert InvalidAddress();
+        if (isFollowing[msg.sender][target]) return;
+
+        isFollowing[msg.sender][target] = true;
+        followingCount[msg.sender] += 1;
+        followerCount[target] += 1;
+
+        emit ProfileFollowed(msg.sender, target, uint64(block.timestamp));
+    }
+
+    /// @notice Remove a public profile follow.
+    function unfollowProfile(address target) external {
+        if (target == address(0) || target == msg.sender) revert InvalidAddress();
+        if (!isFollowing[msg.sender][target]) return;
+
+        isFollowing[msg.sender][target] = false;
+        followingCount[msg.sender] -= 1;
+        followerCount[target] -= 1;
+
+        emit ProfileUnfollowed(msg.sender, target, uint64(block.timestamp));
     }
 
     /// @notice Attach a fresh World ID uniqueness credential to the calling wallet.
