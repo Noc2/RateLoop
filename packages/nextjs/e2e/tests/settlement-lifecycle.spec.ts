@@ -15,7 +15,7 @@ import { newE2EContext } from "../helpers/browser-context";
 import { CONTRACT_ADDRESSES } from "../helpers/contracts";
 import { gotoWithRetry } from "../helpers/wait-helpers";
 import { setupWallet } from "../helpers/wallet-session";
-import { getContentById, getContentList } from "../helpers/ponder-api";
+import { getContentById, getContentList, ponderGet } from "../helpers/ponder-api";
 import { expect, test } from "@playwright/test";
 
 /**
@@ -159,14 +159,28 @@ test.describe("Settlement lifecycle", () => {
 
     const context = await newE2EContext(browser);
     const page = await context.newPage();
-    await setupWallet(page, ANVIL_ACCOUNTS.account3.privateKey);
+    const voter = ANVIL_ACCOUNTS.account3;
+    await setupWallet(page, voter.privateKey);
+
+    const voteIndexed = await waitForPonderIndexed(
+      async () => {
+        const data = await ponderGet(`/profile/${voter.address.toLowerCase()}`);
+        return data.recentVotes?.some((vote: { contentId: string }) => vote.contentId === newContentId);
+      },
+      45_000,
+      2_000,
+      "settlement-lifecycle:profileVotes",
+    );
+    expect(voteIndexed, "Ponder did not index the profile vote history").toBe(true);
 
     await gotoWithRetry(page, "/governance#profile", { ensureWalletConnected: true });
 
     const main = page.locator("main");
     await expect(main.getByText("Voting performance")).toBeVisible({ timeout: 15_000 });
-    await expect(main.getByText("Recent votes")).toBeVisible({ timeout: 10_000 });
-    await expect(main.getByRole("link", { name: `Content #${newContentId}` })).toBeVisible({ timeout: 15_000 });
+    await expect(main.getByText("Recent votes").first()).toBeVisible({ timeout: 10_000 });
+    await expect(main.getByRole("link", { name: `Content #${newContentId}` }).first()).toBeVisible({
+      timeout: 45_000,
+    });
 
     await context.close();
   });

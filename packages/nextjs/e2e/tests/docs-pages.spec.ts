@@ -58,7 +58,9 @@ test.describe("Documentation pages", () => {
     await expect(startHereLink).toBeVisible({ timeout: 10_000 });
     await startHereLink.click();
     await page.waitForURL(/\/docs$/);
-    await expect(page.getByRole("heading", { name: /^Introduction$/i }).first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("heading", { name: /RateLoop\s+Introduction|Introduction/i }).first()).toBeVisible({
+      timeout: 10_000,
+    });
 
     const protocolLink = page.getByRole("link", { name: /^Protocol$/i });
     await expect(protocolLink).toBeVisible({ timeout: 10_000 });

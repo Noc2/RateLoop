@@ -8,7 +8,7 @@ import { expect, test } from "@playwright/test";
  * Contract boundary tests — verifies on-chain reverts for invalid operations.
  *
  * Uses direct contract calls (no browser/UI) to test edge cases with commitVote:
- * 1. Commit with stake below MIN_STAKE (1 HREP) → InvalidStake
+ * 1. Commit with fractional stake below 1 LREP → succeeds under zero/minimal-stake RBTS participation
  * 2. Commit with stake above MAX_STAKE (10 LREP) → InvalidStake
  * 3. Self-vote (submitter commits on own content) → SelfVote
  * 4. Double commit in same round → AlreadyCommitted
@@ -25,16 +25,15 @@ test.describe("Contract boundary conditions", () => {
   const CONTENT_REGISTRY = CONTRACT_ADDRESSES.ContentRegistry;
   const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
-  test("commit with stake below MIN_STAKE (1 HREP) reverts", async () => {
+  test("commit with fractional stake below 1 LREP succeeds", async () => {
     const voter = ANVIL_ACCOUNTS.account3;
-    const belowMinStake = BigInt(500_000); // 0.5 HREP (MIN_STAKE = 1 HREP = 1e6)
+    const fractionalStake = BigInt(500_000); // 0.5 LREP
 
-    // Approve the tiny amount
-    await approveHREP(VOTING_ENGINE, belowMinStake, voter.address, HREP_TOKEN);
+    await approveHREP(VOTING_ENGINE, fractionalStake, voter.address, HREP_TOKEN);
 
     // Use seeded content #1 (submitted by account #2)
-    const result = await commitVoteDirect(BigInt(1), true, belowMinStake, ZERO_ADDRESS, voter.address, VOTING_ENGINE);
-    expect(result.success, "Commit with below-MIN_STAKE should revert").toBe(false);
+    const result = await commitVoteDirect(BigInt(1), true, fractionalStake, ZERO_ADDRESS, voter.address, VOTING_ENGINE);
+    expect(result.success, "Fractional-stake RBTS commit should succeed").toBe(true);
   });
 
   test("commit with stake above MAX_STAKE (10 LREP) reverts", async () => {

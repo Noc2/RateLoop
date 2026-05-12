@@ -17,22 +17,11 @@ import { getContentById } from "../helpers/ponder-api";
 import { expect, test } from "@playwright/test";
 
 /**
- * Unanimous settlement — consensus reserve subsidy (tlock commit-reveal).
+ * Unanimous settlement — all raters submit the same binary signal.
  *
- * When all voters agree (losingPool == 0), there's no losing pool to
- * redistribute. Instead, the consensus reserve subsidizes the round:
- *   subsidy = 5% of totalStake (capped by reserve balance)
- *   100% -> voter pool
- *
- * This test verifies:
- * 1. Consensus reserve decreases after unanimous settlement
- * 2. Round settles correctly with all votes on one side
- * 3. Rating updates despite no losers
- * 4. Submission bounty is attached without submitter upside
- *
- * Account allocation (exclusive to this file):
- * - Account #10 — submits fresh content
- * - Accounts #3, #4, #5 — all vote UP (unanimous)
+ * Under RBTS, unanimous rounds may be funded by prediction forfeitures before
+ * touching the consensus reserve, so the reserve no longer has to decrease for
+ * a unanimous settlement to be valid.
  */
 test.describe("Unanimous settlement (consensus reserve)", () => {
   test.describe.configure({ mode: "serial" });
@@ -157,21 +146,12 @@ test.describe("Unanimous settlement (consensus reserve)", () => {
     expect(settledIndexed, "Ponder did not index settlement").toBe(true);
   });
 
-  test("consensus reserve decreased after unanimous settlement", async () => {
+  test("consensus reserve remains bounded after unanimous RBTS settlement", async () => {
     test.skip(!contentId || roundId === 0n, "No content or round from previous test");
 
     const reserveAfter = await readUint256("consensusReserve", VOTING_ENGINE);
-
-    // Reserve should have decreased by the subsidy amount
-    // subsidy = 5% of totalStake = 5% of (3 * 10e6) = 5% of 30e6 = 1.5e6
-    // (capped by reserve balance, which was >0)
-    expect(reserveAfter).toBeLessThan(reserveBefore);
-
-    const subsidyUsed = reserveBefore - reserveAfter;
-    // Expected subsidy: 5% of totalStake (30 HREP) = 1.5 HREP = 1_500_000
-    // Allow some tolerance for rounding
-    expect(subsidyUsed).toBeGreaterThan(0n);
-    expect(subsidyUsed).toBeLessThanOrEqual(BigInt(30e6)); // Cannot exceed totalStake
+    expect(reserveAfter).toBeGreaterThanOrEqual(0n);
+    expect(reserveAfter).toBeLessThanOrEqual(reserveBefore + STAKE * 3n);
   });
 
   test("round settled as unanimous with correct data", async () => {

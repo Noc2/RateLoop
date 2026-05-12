@@ -1,7 +1,7 @@
 import { type Page, expect, test } from "../fixtures/wallet";
 import { expectNoHorizontalOverflow, expectNoNextErrorOverlay } from "../helpers/layout";
 import { ensureVoteableContent } from "../helpers/voteable-content";
-import { gotoWithRetry, waitForFeedLoaded } from "../helpers/wait-helpers";
+import { FEED_EMPTY_STATE_RE, gotoWithRetry, waitForFeedLoaded } from "../helpers/wait-helpers";
 
 const VIEWPORTS = [
   { name: "small phone", width: 360, height: 640 },
@@ -42,7 +42,7 @@ async function expectRouteControls(page: Page, path: string, width: number): Pro
       page
         .getByRole("button", { name: VOTE_UP_BUTTON })
         .or(page.getByRole("button", { name: VOTE_DOWN_BUTTON }))
-        .or(page.getByText(/No questions have been asked yet|No content found/i))
+        .or(page.getByText(FEED_EMPTY_STATE_RE))
         .first(),
       "Vote route should keep its primary feed state visible",
     ).toBeVisible({ timeout: 15_000 });
@@ -51,7 +51,7 @@ async function expectRouteControls(page: Page, path: string, width: number): Pro
 
   if (path === "/") {
     await expectNavigationForViewport(page, width);
-    await expect(main.getByRole("heading", { name: /AI Asks,\s*Humans Earn/i }).first()).toBeVisible({
+    await expect(main.getByRole("heading", { name: /Level Up Your\s+Agent/i }).first()).toBeVisible({
       timeout: 15_000,
     });
     return;
@@ -77,7 +77,9 @@ async function expectRouteControls(page: Page, path: string, width: number): Pro
   }
 
   if (path === "/docs") {
-    await expect(main.getByRole("heading", { name: /^Introduction$/i }).first()).toBeVisible({ timeout: 15_000 });
+    await expect(main.getByRole("heading", { name: /RateLoop\s+Introduction|Introduction/i }).first()).toBeVisible({
+      timeout: 15_000,
+    });
     return;
   }
 

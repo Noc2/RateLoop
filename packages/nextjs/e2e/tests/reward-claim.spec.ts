@@ -33,7 +33,7 @@ import { expect, test } from "@playwright/test";
  * Account allocation (exclusive to this file for voting):
  * - Account #2 — submits fresh content
  * - Accounts #3, #4 — vote UP (winning side)
- * - Account #7 — votes DOWN (losing side, tests 5% rebate claims)
+ * - Account #7 — votes DOWN (losing side, tests RBTS stake-return claims)
  * - Account #1 (keeper) — reveals votes and settles
  *
  * Tests run serially: submit → commit+reveal+settle → verify → claim.
@@ -46,7 +46,6 @@ test.describe("Reward claim lifecycle", () => {
   const HREP_TOKEN = CONTRACT_ADDRESSES.HumanReputation;
   const CONTENT_REGISTRY = CONTRACT_ADDRESSES.ContentRegistry;
   const STAKE = BigInt(10e6); // 10 HREP (above MIN_STAKE_FOR_RATING threshold)
-  const LOSER_REBATE = STAKE / 20n; // 5%
   const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
   const EPOCH_DURATION = 300; // 5 min — contract minimum is 5 minutes
 
@@ -215,7 +214,7 @@ test.describe("Reward claim lifecycle", () => {
     expect(success, "Voter reward claim should succeed for winning voter").toBe(true);
   });
 
-  test("losing voter claims the fixed rebate for the settled round", async () => {
+  test("losing voter claims their RBTS stake return for the settled round", async () => {
     test.skip(!settledContentId || roundId === 0n, "No settled content from previous test");
     test.setTimeout(60_000);
 
@@ -224,7 +223,7 @@ test.describe("Reward claim lifecycle", () => {
     const loserAddress = loser.address.toLowerCase();
 
     const success = await claimVoterReward(BigInt(settledContentId!), roundId, loser.address, REWARD_DISTRIBUTOR);
-    expect(success, "Revealed losing voter should be able to claim the 5% rebate").toBe(true);
+    expect(success, "Revealed losing voter should be able to claim their RBTS stake return").toBe(true);
 
     const data = await ponderGet(`/content/${settledContentId}`);
     const settledRound = data.rounds?.find((r: { state: number }) => r.state === 1);
@@ -253,8 +252,11 @@ test.describe("Reward claim lifecycle", () => {
         r.contentId === settledContentId && r.roundId === settledRound.roundId,
     );
     expect(loserReward).toBeTruthy();
-    expect(loserReward.stakeReturned).toBe(LOSER_REBATE.toString());
-    expect(loserReward.hrepReward).toBe("0");
+    const stakeReturned = BigInt(loserReward.stakeReturned);
+    const hrepReward = BigInt(loserReward.hrepReward);
+    expect(stakeReturned).toBeGreaterThanOrEqual(0n);
+    expect(stakeReturned).toBeLessThanOrEqual(STAKE);
+    expect(hrepReward).toBeGreaterThanOrEqual(0n);
   });
 
   test("winning voter claims participation reward, double claim reverts", async () => {

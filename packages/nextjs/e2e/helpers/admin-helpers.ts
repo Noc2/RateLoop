@@ -1999,7 +1999,7 @@ export async function claimCancelledRoundRefund(
 
 /**
  * Claim a settled-round voter payout.
- * Winners receive stake plus winnings; revealed losers receive the fixed rebate.
+ * RBTS claimants receive the stake-return and reward amounts computed at settlement.
  */
 export async function claimVoterReward(
   contentId: number | bigint,

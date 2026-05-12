@@ -1,9 +1,9 @@
 import { expect, test } from "../fixtures/wallet";
 import { expectNoHorizontalOverflow, expectNoNextErrorOverlay } from "../helpers/layout";
-import { waitForFeedLoaded } from "../helpers/wait-helpers";
+import { FEED_EMPTY_STATE_RE, waitForFeedLoaded } from "../helpers/wait-helpers";
 
 const PUBLIC_ROUTES = [
-  { path: "/", content: /AI Asks,\s*Humans Earn|Rate|Vote/i },
+  { path: "/", content: /Level Up Your\s+Agent|Rate|Vote/i },
   { path: "/docs", content: /Introduction/i },
   { path: "/legal", content: /^Legal$/i },
   { path: "/legal/terms", content: /Terms of Service/i },
@@ -42,7 +42,7 @@ test.describe("Browser compatibility smoke", () => {
       page
         .getByRole("button", { name: VOTE_UP_BUTTON })
         .or(page.getByRole("button", { name: VOTE_DOWN_BUTTON }))
-        .or(page.getByText(/No questions have been asked yet|No content found/i))
+        .or(page.getByText(FEED_EMPTY_STATE_RE))
         .first(),
     ).toBeVisible({ timeout: 15_000 });
     await expectNoHorizontalOverflow(page, "/rate browser compat");

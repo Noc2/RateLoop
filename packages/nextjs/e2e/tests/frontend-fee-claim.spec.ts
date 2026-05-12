@@ -69,7 +69,7 @@ test.describe("Frontend fee claim lifecycle", () => {
       }),
     });
 
-    const minted = await mintVoterId(frontendAddress, nullifier, ANVIL_ACCOUNTS.account0.address, VOTER_ID_NFT);
+    const minted = await mintVoterId(frontendAddress, nullifier, DEPLOYER.address, VOTER_ID_NFT);
     expect(minted, `Failed to mint Voter ID for ${frontendAddress}`).toBe(true);
 
     const funded = await transferHREP(frontendAddress, FRONTEND_STAKE, DEPLOYER.address, HREP_TOKEN);

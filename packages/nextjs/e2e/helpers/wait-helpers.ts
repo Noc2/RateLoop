@@ -3,6 +3,8 @@ import type { Locator, Page } from "@playwright/test";
 
 const VOTE_UP_BUTTON_NAME = /^Vote up\b/i;
 const VOTE_DOWN_BUTTON_NAME = /^Vote down\b/i;
+export const FEED_EMPTY_STATE_RE =
+  /No questions have been asked yet|No content found|No content is trending right now|No recent questions are available right now|No live rounds look meaningfully contested right now|No funded USD bounties are available right now|No open rounds look close to settlement right now/i;
 
 const RETRIABLE_GOTO_ERROR_PATTERNS = [
   /ERR_ABORTED/i,
@@ -174,8 +176,7 @@ export async function waitForFeedLoaded(page: Page, timeout = 15_000): Promise<v
       .or(page.getByText("Your question"))
       .or(page.getByText(/Cooldown/))
       .or(page.getByText("Round full"))
-      .or(page.getByText("No questions have been asked yet"))
-      .or(page.getByText(/No content found/i));
+      .or(page.getByText(FEED_EMPTY_STATE_RE));
   const connectButton = getVisibleAuthConnectButton(page);
 
   let lastError: unknown;

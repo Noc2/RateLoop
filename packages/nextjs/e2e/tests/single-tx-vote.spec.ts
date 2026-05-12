@@ -2,9 +2,10 @@ import {
   commitVoteWithTransferAndCallDirect,
   getActiveRoundId,
   submitContentDirect,
+  transferHREP,
   waitForPonderIndexed,
 } from "../helpers/admin-helpers";
-import { ANVIL_ACCOUNTS } from "../helpers/anvil-accounts";
+import { ANVIL_ACCOUNTS, DEPLOYER } from "../helpers/anvil-accounts";
 import { CONTRACT_ADDRESSES } from "../helpers/contracts";
 import { getContentList } from "../helpers/ponder-api";
 import { expect, test } from "@playwright/test";
@@ -20,7 +21,7 @@ test.describe("Single-transaction vote flow", () => {
     test.setTimeout(60_000);
 
     const submitter = ANVIL_ACCOUNTS.account10;
-    const voter = ANVIL_ACCOUNTS.account4;
+    const voter = ANVIL_ACCOUNTS.account1;
 
     const uniqueId = Date.now();
     const submitted = await submitContentDirect(
@@ -46,6 +47,9 @@ test.describe("Single-transaction vote flow", () => {
     }, 60_000);
     expect(indexed, "Content was not indexed by Ponder").toBe(true);
     expect(contentId).toBeTruthy();
+
+    const funded = await transferHREP(voter.address, STAKE, DEPLOYER.address, HREP_TOKEN);
+    expect(funded, "Single-transaction voter funding failed").toBe(true);
 
     const commit = await commitVoteWithTransferAndCallDirect(
       BigInt(contentId!),

@@ -1,5 +1,6 @@
 import { ANVIL_ACCOUNTS } from "../helpers/anvil-accounts";
 import {
+  FEED_EMPTY_STATE_RE,
   getVisibleAuthConnectButton,
   gotoWithRetry,
   waitForFeedLoaded,
@@ -23,13 +24,13 @@ test.describe("Smoke tests", () => {
     // After feed loads, check for wallet connection indicators.
     // If the feed is empty ("No questions have been asked yet"), the sort dropdown still renders,
     // proving the wallet connected and the page loaded (just no content in Ponder yet).
-    const predictButton = page.getByRole("button", { name: "Predict final rating" });
+    const voteButton = page.getByRole("button", { name: /^Vote (up|down)\b/i });
     const votedStatus = page.getByText(/Voted(?: hidden| Up| Down)?/i);
     const ownContent = page.getByText("Your question");
-    const emptyFeed = page.getByText("No questions have been asked yet");
+    const emptyFeed = page.getByText(FEED_EMPTY_STATE_RE);
     const sortDropdown = page.locator("select").first();
 
-    const connectedIndicator = predictButton.or(votedStatus).or(ownContent).or(emptyFeed).or(sortDropdown);
+    const connectedIndicator = voteButton.or(votedStatus).or(ownContent).or(emptyFeed).or(sortDropdown);
     // Use .first() to avoid strict mode violation when multiple indicators match
     await connectedIndicator.first().waitFor({ state: "visible", timeout: 15_000 });
 
