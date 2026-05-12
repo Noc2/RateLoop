@@ -24,12 +24,12 @@ interface WalletDisplaySummaryInput {
   frontendStakedMicro: bigint;
 }
 
-export function getWalletDisplaySummaryQueryKey(address: string) {
-  return ["wallet-display-summary", address.toLowerCase()] as const;
+export function getWalletDisplaySummaryQueryKey(address: string, chainId?: number) {
+  return ["wallet-display-summary", chainId ?? null, address.toLowerCase()] as const;
 }
 
-function getStorageKey(address: string) {
-  return `${STORAGE_KEY_PREFIX}${address.toLowerCase()}`;
+function getStorageKey(address: string, chainId?: number) {
+  return `${STORAGE_KEY_PREFIX}${chainId ?? "unknown"}:${address.toLowerCase()}`;
 }
 
 function isSnapshotFresh(snapshot: WalletDisplaySummary, now = Date.now()) {
@@ -118,15 +118,16 @@ function deserializeSnapshot(raw: string): WalletDisplaySummary | null {
   }
 }
 
-function readPersistedWalletDisplaySummary(address: string | undefined, now = Date.now()) {
+function readPersistedWalletDisplaySummary(address: string | undefined, chainId?: number, now = Date.now()) {
   if (!address || typeof window === "undefined") return null;
 
   try {
-    const raw = window.sessionStorage.getItem(getStorageKey(address));
+    const key = getStorageKey(address, chainId);
+    const raw = window.sessionStorage.getItem(key);
     if (!raw) return null;
     const snapshot = deserializeSnapshot(raw);
     if (!snapshot || !isSnapshotFresh(snapshot, now)) {
-      window.sessionStorage.removeItem(getStorageKey(address));
+      window.sessionStorage.removeItem(key);
       return null;
     }
     return snapshot;
@@ -137,12 +138,13 @@ function readPersistedWalletDisplaySummary(address: string | undefined, now = Da
 
 export function persistWalletDisplaySummarySnapshot(
   address: string | undefined,
+  chainId: number | undefined,
   snapshot: WalletDisplaySummary | null,
 ) {
   if (!address || !snapshot || typeof window === "undefined") return;
 
   try {
-    window.sessionStorage.setItem(getStorageKey(address), serializeSnapshot(snapshot));
+    window.sessionStorage.setItem(getStorageKey(address, chainId), serializeSnapshot(snapshot));
   } catch {
     // Ignore storage failures and continue rendering from in-memory cache.
   }
@@ -184,18 +186,27 @@ export function getWalletDisplayLiquidMicro(
   return summary?.liquidMicro ?? fallbackLiquidMicro;
 }
 
-export function useWalletDisplaySummary(address: string | undefined, input: WalletDisplaySummaryInput | null) {
+export function useWalletDisplaySummary(
+  address: string | undefined,
+  input: WalletDisplaySummaryInput | null,
+  chainId?: number,
+) {
   const queryClient = useQueryClient();
   const normalizedAddress = address?.toLowerCase();
 
-  const persistedSnapshot = useMemo(() => readPersistedWalletDisplaySummary(normalizedAddress), [normalizedAddress]);
+  const persistedSnapshot = useMemo(
+    () => readPersistedWalletDisplaySummary(normalizedAddress, chainId),
+    [chainId, normalizedAddress],
+  );
 
   const rawSnapshot = useMemo(() => {
     if (!normalizedAddress || !input) return null;
     return buildWalletDisplaySummary(input);
   }, [normalizedAddress, input]);
 
-  const queryKey = normalizedAddress ? getWalletDisplaySummaryQueryKey(normalizedAddress) : ["wallet-display-summary"];
+  const queryKey = normalizedAddress
+    ? getWalletDisplaySummaryQueryKey(normalizedAddress, chainId)
+    : ["wallet-display-summary", chainId ?? null];
 
   const { data } = useQuery({
     queryKey,
@@ -214,13 +225,13 @@ export function useWalletDisplaySummary(address: string | undefined, input: Wall
   useEffect(() => {
     if (!normalizedAddress || !resolvedSnapshot) return;
 
-    const key = getWalletDisplaySummaryQueryKey(normalizedAddress);
+    const key = getWalletDisplaySummaryQueryKey(normalizedAddress, chainId);
     const current = queryClient.getQueryData<WalletDisplaySummary>(key);
     if (!current || !snapshotsEqual(current, resolvedSnapshot)) {
       queryClient.setQueryData(key, resolvedSnapshot);
     }
-    persistWalletDisplaySummarySnapshot(normalizedAddress, resolvedSnapshot);
-  }, [normalizedAddress, queryClient, resolvedSnapshot]);
+    persistWalletDisplaySummarySnapshot(normalizedAddress, chainId, resolvedSnapshot);
+  }, [chainId, normalizedAddress, queryClient, resolvedSnapshot]);
 
   return resolvedSnapshot as WalletDisplaySummary | null;
 }

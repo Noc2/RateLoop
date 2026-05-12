@@ -1,6 +1,7 @@
 import {
   buildWalletDisplaySummary,
   getWalletDisplayLiquidMicro,
+  getWalletDisplaySummaryQueryKey,
   reconcileWalletDisplaySummary,
 } from "./useWalletDisplaySummary";
 import assert from "node:assert/strict";
@@ -23,6 +24,17 @@ test("buildWalletDisplaySummary initializes pending stake to zero", () => {
   assert.equal(snapshot.totalStakedMicro, 300n * MICRO);
   assert.equal(snapshot.totalMicro, 1000n * MICRO);
   assert.equal(snapshot.updatedAt, 123);
+});
+
+test("getWalletDisplaySummaryQueryKey partitions cache entries by chain", () => {
+  const address = "0x00000000000000000000000000000000000000AA";
+
+  assert.deepEqual(getWalletDisplaySummaryQueryKey(address, 480), [
+    "wallet-display-summary",
+    480,
+    "0x00000000000000000000000000000000000000aa",
+  ]);
+  assert.notDeepEqual(getWalletDisplaySummaryQueryKey(address, 480), getWalletDisplaySummaryQueryKey(address, 31337));
 });
 
 test("reconcileWalletDisplaySummary preserves the last coherent total while stake indexing catches up", () => {

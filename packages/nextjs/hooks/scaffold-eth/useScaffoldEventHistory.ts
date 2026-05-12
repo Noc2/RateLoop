@@ -123,6 +123,24 @@ export const useScaffoldEventHistory = <
             ? Number(deployedContractData.deployedOnBlock) || 0
             : 0,
         );
+  const fromBlockKey = fromBlockValue?.toString();
+  const toBlockKey = toBlock?.toString();
+  const filtersKey = JSON.stringify(filters, replacer);
+
+  useEffect(() => {
+    setLiveEvents([]);
+    setLastFetchedBlock(null);
+    setIsPollingActive(false);
+  }, [
+    selectedNetwork.id,
+    deployedContractData?.address,
+    contractName,
+    eventName,
+    fromBlockKey,
+    toBlockKey,
+    filtersKey,
+    blocksBatchSize,
+  ]);
 
   const query = useInfiniteQuery({
     queryKey: [
@@ -131,10 +149,10 @@ export const useScaffoldEventHistory = <
         contractName,
         address: deployedContractData?.address,
         eventName,
-        fromBlock: fromBlockValue?.toString(),
-        toBlock: toBlock?.toString(),
+        fromBlock: fromBlockKey,
+        toBlock: toBlockKey,
         chainId: selectedNetwork.id,
-        filters: JSON.stringify(filters, replacer),
+        filters: filtersKey,
         blocksBatchSize: blocksBatchSize.toString(),
       },
     ],
@@ -204,7 +222,21 @@ export const useScaffoldEventHistory = <
 
   // Poll for new events when watch mode is enabled
   useQuery({
-    queryKey: ["liveEvents", contractName, eventName, blockNumber?.toString(), lastFetchedBlock?.toString()],
+    queryKey: [
+      "liveEvents",
+      selectedNetwork.id,
+      deployedContractData?.address,
+      contractName,
+      eventName,
+      fromBlockKey,
+      toBlockKey,
+      filtersKey,
+      blockData ?? false,
+      transactionData ?? false,
+      receiptData ?? false,
+      blockNumber?.toString(),
+      lastFetchedBlock?.toString(),
+    ],
     enabled: Boolean(
       watch && enabled && isContractAddressAndClientReady && blockNumber && (shouldStartPolling() || isPollingActive),
     ),

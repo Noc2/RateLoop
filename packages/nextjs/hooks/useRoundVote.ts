@@ -49,7 +49,7 @@ interface RoundVoteParams {
  * Binary signals and predicted up-share are tlock-encrypted to the current epoch's drand round.
  */
 export function useRoundVote() {
-  const { address } = useAccount();
+  const { address, chain } = useAccount();
   const { addOptimisticVote } = useOptimisticVote();
   const { targetNetwork } = useTargetNetwork();
   const { hasVoterId, tokenId } = useVoterIdNFT(address);
@@ -79,7 +79,7 @@ export function useRoundVote() {
   const { data: hrepInfo, isLoading: isHrepLoading } = useDeployedContractInfo({
     contractName: REPUTATION_CONTRACT_NAME,
   });
-  const publicClient = usePublicClient();
+  const publicClient = usePublicClient({ chainId: targetNetwork.id });
   const clearError = useCallback(() => setError(null), []);
 
   const commitVote = async ({
@@ -97,6 +97,16 @@ export function useRoundVote() {
 
     if (!address) {
       setError("Please connect your wallet");
+      return false;
+    }
+
+    if (!chain?.id) {
+      setError("Please connect your wallet");
+      return false;
+    }
+
+    if (chain.id !== targetNetwork.id) {
+      setError(`Wallet is connected to the wrong network. Please switch to ${targetNetwork.name}.`);
       return false;
     }
 
@@ -217,12 +227,14 @@ export function useRoundVote() {
       const approveRequest: any = {
         abi: LoopReputationAbi,
         address: hrepInfo.address,
+        chainId: targetNetwork.id,
         functionName: "approve",
         args: [votingEngineInfo.address, stakeWei] as const,
       };
       const commitVoteRequest: any = {
         abi: RoundVotingEngineAbi,
         address: votingEngineInfo.address,
+        chainId: targetNetwork.id,
         functionName: "commitVote",
         args: commitVoteArgs,
       };
@@ -305,7 +317,7 @@ export function useRoundVote() {
       void queryClient.invalidateQueries({ queryKey: FREE_TRANSACTION_ALLOWANCE_QUERY_KEY });
 
       queryClient.setQueryData<WalletDisplaySummary | undefined>(
-        getWalletDisplaySummaryQueryKey(address.toLowerCase()),
+        getWalletDisplaySummaryQueryKey(address.toLowerCase(), targetNetwork.id),
         current => {
           if (!current || current.liquidMicro < stakeWei) return current;
           const nextSnapshot: WalletDisplaySummary = {
@@ -316,7 +328,7 @@ export function useRoundVote() {
             totalMicro: current.totalMicro,
             updatedAt: Date.now(),
           };
-          persistWalletDisplaySummarySnapshot(address.toLowerCase(), nextSnapshot);
+          persistWalletDisplaySummarySnapshot(address.toLowerCase(), targetNetwork.id, nextSnapshot);
           return nextSnapshot;
         },
       );

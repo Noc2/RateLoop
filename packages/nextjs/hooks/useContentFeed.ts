@@ -14,6 +14,7 @@ import {
   sortRpcFeed,
 } from "~~/hooks/contentFeed/shared";
 import { useScaffoldEventHistory } from "~~/hooks/scaffold-eth";
+import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import { useContentFeedMetadata } from "~~/hooks/useContentFeedMetadata";
 import { usePageVisibility } from "~~/hooks/usePageVisibility";
 import { usePonderAvailability } from "~~/hooks/usePonderAvailability";
@@ -29,6 +30,7 @@ export type { ContentItem } from "~~/hooks/contentFeed/shared";
  * Uses Ponder API when available, falls back to on-chain event scanning.
  */
 export function useContentFeed(voterAddress?: string, options: UseContentFeedOptions = {}) {
+  const { targetNetwork } = useTargetNetwork();
   const rpcFallbackEnabled = publicEnv.rpcFallbackEnabled;
   const ponderAvailable = usePonderAvailability(rpcFallbackEnabled);
   const rpcFallbackActive = rpcFallbackEnabled && ponderAvailable === false;
@@ -165,6 +167,7 @@ export function useContentFeed(voterAddress?: string, options: UseContentFeedOpt
   const { data: result, isLoading: ponderLoading } = usePonderQuery({
     queryKey: [
       "contentFeed",
+      targetNetwork.id,
       voterAddress,
       ownSubmitterAddressesKey,
       sortBy,

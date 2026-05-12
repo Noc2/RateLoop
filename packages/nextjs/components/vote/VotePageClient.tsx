@@ -1638,7 +1638,10 @@ const HomeInner = () => {
   useEffect(() => {
     const applyHash = () => {
       const hash = window.location.hash.replace(/^#/, "");
-      if (!hash) return;
+      if (!hash) {
+        setActiveCategory(ALL_FILTER);
+        return;
+      }
       const match = categories.find(c => slugify(c) === hash);
       if (match) setActiveCategory(match);
     };

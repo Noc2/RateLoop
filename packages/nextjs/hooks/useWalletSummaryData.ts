@@ -2,6 +2,7 @@
 
 import { Address } from "viem";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
+import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import { useActiveVotesWithDeadlines } from "~~/hooks/useActiveVotesWithDeadlines";
 import { usePageVisibility } from "~~/hooks/usePageVisibility";
 import { useSubmissionStakes } from "~~/hooks/useSubmissionStakes";
@@ -14,6 +15,7 @@ function toMicroUnits(value: number) {
 }
 
 export function useWalletSummaryData(address?: Address) {
+  const { targetNetwork } = useTargetNetwork();
   const isPageVisible = usePageVisibility();
   const { totalSubmissionStake } = useSubmissionStakes(address);
   const { activeStaked: votingStaked } = useVotingStakes(address);
@@ -58,6 +60,7 @@ export function useWalletSummaryData(address?: Address) {
           submissionStakedMicro: toMicroUnits(totalSubmissionStake),
           frontendStakedMicro: frontendInfo?.[1] ?? 0n,
         },
+    targetNetwork.id,
   );
 
   return {
