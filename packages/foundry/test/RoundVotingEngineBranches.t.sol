@@ -648,11 +648,50 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertEq(engine.commitRbtsStakeReturned(contentId, roundId, ck1), STAKE, "staked voter gets stake back");
         assertEq(engine.commitRbtsStakeReturned(contentId, roundId, ck2), STAKE, "staked voter gets stake back");
         assertEq(engine.commitRbtsStakeReturned(contentId, roundId, ck3), 0, "zero stake has no return");
+        assertEq(engine.commitRbtsForfeitedStake(contentId, roundId, ck3), 0, "zero stake has no forfeit");
 
         uint256 voter1BalanceBefore = hrepToken.balanceOf(voter1);
         vm.prank(voter1);
         rewardDistributor.claimReward(contentId, roundId);
         assertEq(hrepToken.balanceOf(voter1), voter1BalanceBefore + STAKE, "claim returns stake only");
+
+        uint256 voter3BalanceBefore = hrepToken.balanceOf(voter3);
+        vm.prank(voter3);
+        rewardDistributor.claimReward(contentId, roundId);
+        assertEq(hrepToken.balanceOf(voter3), voter3BalanceBefore, "zero-stake claim has no payout");
+    }
+
+    function test_RbtsZeroWeightPositiveStakeReturnsPrincipal() public {
+        RaterRegistry raterRegistry = _installRaterRegistry();
+        vm.prank(owner);
+        raterRegistry.setClusterScore(voter1, keccak256("full-discount"), 10_000, 1);
+
+        uint256 contentId = _submitContent();
+
+        (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, false, 2_000, STAKE);
+        (bytes32 ck2, bytes32 s2) = _commitPrediction(voter2, contentId, true, 8_000, STAKE);
+        (bytes32 ck3, bytes32 s3) = _commitPrediction(voter3, contentId, true, 7_000, STAKE);
+        (bytes32 ck4, bytes32 s4) = _commitPrediction(voter4, contentId, true, 6_000, STAKE);
+
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        RoundLib.Round memory r0 = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        _warpPastTlockRevealTime(uint256(r0.startTime) + EPOCH);
+
+        engine.revealVoteByCommitKey(contentId, roundId, ck1, false, 2_000, s1);
+        engine.revealVoteByCommitKey(contentId, roundId, ck2, true, 8_000, s2);
+        engine.revealVoteByCommitKey(contentId, roundId, ck3, true, 7_000, s3);
+        engine.revealVoteByCommitKey(contentId, roundId, ck4, true, 6_000, s4);
+        engine.settleRound(contentId, roundId);
+
+        assertEq(engine.commitRaterWeightBps(contentId, roundId, ck1), 0, "cluster discount zeroes weight");
+        assertEq(engine.commitRbtsRewardWeight(contentId, roundId, ck1), 0, "zero-weight rater gets no reward weight");
+        assertEq(engine.commitRbtsStakeReturned(contentId, roundId, ck1), STAKE, "principal is returned");
+        assertEq(engine.commitRbtsForfeitedStake(contentId, roundId, ck1), 0, "zero-weight rater is not slashed");
+
+        uint256 voter1BalanceBefore = hrepToken.balanceOf(voter1);
+        vm.prank(voter1);
+        rewardDistributor.claimReward(contentId, roundId);
+        assertEq(hrepToken.balanceOf(voter1), voter1BalanceBefore + STAKE, "claim returns zero-weight stake");
     }
 
     function test_RbtsSettlementRequiresThreeReveals() public {

@@ -1210,12 +1210,15 @@ contract RoundVotingEngine is
         uint256 scoreableCount;
         for (uint256 i = 0; i < commitKeys.length;) {
             bytes32 commitKey = commitKeys[i];
-            if (commits[contentId][roundId][commitKey].revealed) {
+            RoundLib.Commit storage revealedCommit = commits[contentId][roundId][commitKey];
+            if (revealedCommit.revealed) {
                 if (commitRbtsWeight[contentId][roundId][commitKey] > 0) {
                     scoreableKeys[scoreableCount] = commitKey;
                     unchecked {
                         ++scoreableCount;
                     }
+                } else if (revealedCommit.stakeAmount > 0) {
+                    commitRbtsStakeReturned[contentId][roundId][commitKey] = revealedCommit.stakeAmount;
                 }
                 unchecked {
                     ++revealedIndex;
