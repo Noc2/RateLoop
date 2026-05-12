@@ -30,6 +30,8 @@ import {
   safeOffset,
 } from "../utils.js";
 
+type SqlCondition = ReturnType<typeof sql>;
+
 function createContentSearchVector() {
   return sql`(
     setweight(to_tsvector('simple', coalesce(${content.title}, '')), 'A') ||
@@ -362,7 +364,7 @@ export function registerContentRoutes(app: ApiApp) {
       });
     }
 
-    const conditions = [
+    const conditions: SqlCondition[] = [
       buildAllowedContentCondition({
         canonicalUrl: content.canonicalUrl,
         description: content.description,
@@ -420,12 +422,11 @@ export function registerContentRoutes(app: ApiApp) {
         ? buildContentSearchExpressions(search)
         : null;
     if (urlSearchCandidates) {
-      conditions.push(
-        or(
-          inArray(content.canonicalUrl, urlSearchCandidates),
-          inArray(content.url, urlSearchCandidates),
-        ),
+      const urlSearchCondition = or(
+        inArray(content.canonicalUrl, urlSearchCandidates),
+        inArray(content.url, urlSearchCandidates),
       );
+      if (urlSearchCondition) conditions.push(urlSearchCondition);
     } else if (search) {
       conditions.push(searchExpressions!.condition);
     }
@@ -921,7 +922,6 @@ export function registerContentRoutes(app: ApiApp) {
         roundRbtsRewardClaimants: round.rbtsRewardClaimants,
         roundRbtsForfeitedPool: round.rbtsForfeitedPool,
         roundRbtsForfeitClaimants: round.rbtsForfeitClaimants,
-        roundPredictionForfeitClaimants: round.predictionForfeitClaimants,
       })
       .from(vote)
       .leftJoin(

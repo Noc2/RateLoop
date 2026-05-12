@@ -5,9 +5,17 @@
     "moduleResolution": "Bundler",
     "esModuleInterop": true,
     "strict": true,
-    "rootDir": ".",
-    "composite": true
+    "skipLibCheck": true,
+    "types": ["node"],
+    "allowImportingTsExtensions": true,
+    "rootDir": "."
   },
-  "include": ["./**/*.ts"],
+  "include": [
+    "ponder-env.d.ts",
+    "ponder.schema.ts",
+    "src/api/**/*.ts",
+    "src/streak-utils.ts",
+    "src/urlCanonicalization.ts"
+  ],
   "exclude": ["node_modules"]
 }

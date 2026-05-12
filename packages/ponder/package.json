@@ -10,6 +10,7 @@
     "start": "ponder start",
     "codegen": "ponder codegen",
     "serve": "ponder serve",
+    "check-types": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -21,6 +22,7 @@
     "viem": "2.39.0"
   },
   "devDependencies": {
+    "@types/node": "^20.10.7",
     "typescript": "~5.8.2",
     "vitest": "^4.0.18"
   },

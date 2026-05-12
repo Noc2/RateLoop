@@ -64,6 +64,7 @@
     "ponder:dev:ui": "yarn workspace @rateloop/ponder dev:ui",
     "ponder:start": "yarn workspace @rateloop/ponder start",
     "ponder:codegen": "yarn workspace @rateloop/ponder codegen",
+    "ponder:check-types": "yarn workspace @rateloop/ponder check-types",
     "agents:ask": "yarn workspace @rateloop/agents ask",
     "agents:lint": "yarn workspace @rateloop/agents lint:questions",
     "agents:quote": "yarn workspace @rateloop/agents quote",
@@ -78,7 +79,7 @@
     "e2e": "yarn workspace @rateloop/nextjs e2e",
     "e2e:ci:full": "yarn workspace @rateloop/nextjs e2e:ci:full",
     "e2e:ui": "yarn workspace @rateloop/nextjs e2e:ui",
-    "test:ts": "yarn contracts:check-types && yarn node-utils:check-types && yarn sdk:check-types && yarn contracts:test && yarn sdk:test && yarn next:test && yarn workspace @rateloop/keeper test && yarn workspace @rateloop/agents test && yarn workspace @rateloop/ponder test"
+    "test:ts": "yarn contracts:check-types && yarn node-utils:check-types && yarn sdk:check-types && yarn ponder:check-types && yarn contracts:test && yarn sdk:test && yarn next:test && yarn workspace @rateloop/keeper test && yarn workspace @rateloop/agents test && yarn workspace @rateloop/ponder test"
   },
   "devDependencies": {
     "husky": "~9.1.6",
