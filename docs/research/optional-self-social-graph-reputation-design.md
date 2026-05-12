@@ -130,7 +130,7 @@ Limits:
 - lower USDC caps than verified users;
 - stronger cluster discounts;
 - longer warmup before governance;
-- lower maximum outgoing trust budget.
+- lower maximum attestation influence.
 
 ### Tier 2: Self-Verified Account
 
@@ -161,9 +161,10 @@ A trusted attestor is an account with aged reputation, strong reveal
 reliability, category-specific credibility, and either Self verification or a
 long independent history.
 
-Trusted attestors can allocate a bounded trust budget to other accounts. This
-should help honest newcomers start participating without forcing everyone
-through Self, but it should never bypass calibration or payout caps entirely.
+Trusted attestors can publish bounded, revocable attestations for other
+accounts. This should help honest newcomers start participating without forcing
+everyone through Self, but it should never bypass calibration or payout caps
+entirely.
 
 ## Effective Voting Power
 
@@ -208,7 +209,6 @@ TrustAttestation
   issuer
   subject
   categoryId
-  trustBudget
   maxBoostBps
   expiresAt
   stakeAtRisk
@@ -219,9 +219,9 @@ TrustAttestation
 
 Rules:
 
-- Every issuer has a limited outgoing trust budget.
-- Trust budget scales sublinearly with the issuer's aged reputation.
-- Self-verified issuers can have a higher trust budget, but still capped.
+- Every issuer has limited outgoing attestation influence.
+- Attestation influence scales sublinearly with the issuer's aged reputation.
+- Self-verified issuers can have higher influence, but still capped.
 - Trust expires and must be refreshed.
 - Trust is category-specific by default.
 - Reciprocal trust loops are discounted.
@@ -230,11 +230,10 @@ Rules:
 - High-value trust attestations can put issuer reputation at risk.
 
 The attestation should not say "use my votes." It should say "I am willing to
-spend part of my trust budget to reduce this account's warmup and cluster-risk
-discount."
+sponsor this account's warmup and cluster-risk review within protocol caps."
 
 This distinction matters. Delegating raw voting power creates a liquid influence
-market. Bounded trust budgets create accountable sponsorship.
+market. Bounded attestation influence creates accountable sponsorship.
 
 ## Transferability Of Reputation
 
@@ -402,7 +401,6 @@ Add or update tables:
 - `identity_credential`
 - `self_verification`
 - `trust_attestation`
-- `trust_budget`
 - `identity_rebind`
 - `reputation_score`
 - `category_reputation_score`
@@ -426,8 +424,8 @@ Self should be presented as optional:
 - "Verify to increase trust and raise caps," not "verify to participate."
 - Unverified users should see a clear path through calibration.
 - Verified users should see their cap and warmup benefits.
-- Trust attestors should see remaining trust budget, active attestations,
-  expiry, and reputation at risk.
+- Trust attestors should see active attestations, expiry, capped influence, and
+  reputation at risk.
 - Payout explanations should separate prediction error, calibration status,
   identity status, cluster cap, trust cap, and epoch cap.
 
@@ -440,7 +438,7 @@ The label should be closer to "verified uniqueness signal" than "trusted human."
 | --- | --- | --- |
 | Identity exclusion | Self may exclude users without supported documents or users unwilling to verify. | Keep unverified participation open; use Self for caps and warmup, not access. |
 | Verified account rental | A verified wallet can be rented or operated by a third party. | Keep Self multipliers modest; monitor behavior drift; require fresh signatures for high-value actions; delay large payouts. |
-| Sponsor markets | Trusted users may sell attestations. | Limit outgoing trust budgets, require expiry, discount reciprocal loops, put issuer reputation at risk for high-strength attestations. |
+| Sponsor markets | Trusted users may sell attestations. | Cap outgoing attestation influence, require expiry, discount reciprocal loops, put issuer reputation at risk for high-strength attestations. |
 | Trust-ring capture | A group can mutually attest and amplify itself. | Apply graph clustering, leave-one-cluster-out scoring, reciprocal-edge discounts, and cluster payout caps. |
 | Passport-weighted governance | Verified users could dominate unverified but valuable contributors. | Use aged earned reputation as the base; Self only raises caps slowly. |
 | Reputation sale via account sale | Non-transferable reputation can still move through wallet sale. | Keep reputation non-transferable, add rebind cooldowns, behavior drift detection, high-value claim delays, and decay. |

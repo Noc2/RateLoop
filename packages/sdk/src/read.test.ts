@@ -303,7 +303,6 @@ test("getRaterRewardStatus requests the typed reward-status route", async () => 
           trust: {
             activeSeed: null,
             activeInboundAttestationCount: 4,
-            activeInboundTrustBudgetTotal: "400",
             latestInboundAttestations: [],
           },
           launchRewards: {
@@ -356,7 +355,7 @@ test("getRaterRewardStatus requests the typed reward-status route", async () => 
   );
   assert.equal(response.aiDeclaration.tierName, "A1Verified");
   assert.equal(response.independence.latestChallengeStatusName, "open");
-  assert.equal(response.trust.activeInboundTrustBudgetTotal, "400");
+  assert.equal(response.trust.activeInboundAttestationCount, 4);
   assert.equal(response.launchRewards.remainingLaunchCap, "75");
   assert.equal(
     response.rewardPolicy.verifiedAgentsCanAnchorLaunchRewards,

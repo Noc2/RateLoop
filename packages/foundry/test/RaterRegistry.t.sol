@@ -198,7 +198,7 @@ contract RaterRegistryTest is Test {
         uint64 sunsetAt = uint64(block.timestamp + 180 days);
 
         vm.prank(admin);
-        registry.seedLegacySelfCredential(rater, sunsetAt, 10_750, 2_500, SEED_ROOT, EVIDENCE_HASH);
+        registry.seedLegacySelfCredential(rater, sunsetAt, 10_750, SEED_ROOT, EVIDENCE_HASH);
 
         RaterRegistry.SelfCredential memory credential = registry.getSelfCredential(rater);
         assertTrue(credential.verified);
@@ -210,7 +210,6 @@ contract RaterRegistryTest is Test {
         assertTrue(seed.active);
         assertEq(seed.seededAt, uint64(block.timestamp));
         assertEq(seed.sunsetAt, sunsetAt);
-        assertEq(seed.trustBudgetBps, 2_500);
         assertEq(seed.seedRoot, SEED_ROOT);
         assertTrue(registry.hasActiveTrustSeed(rater));
     }
@@ -219,7 +218,7 @@ contract RaterRegistryTest is Test {
         uint64 sunsetAt = uint64(block.timestamp + 7 days);
 
         vm.prank(admin);
-        registry.seedLegacySelfCredential(rater, sunsetAt, 10_500, 1_000, SEED_ROOT, EVIDENCE_HASH);
+        registry.seedLegacySelfCredential(rater, sunsetAt, 10_500, SEED_ROOT, EVIDENCE_HASH);
 
         vm.warp(sunsetAt + 1);
 
@@ -228,18 +227,17 @@ contract RaterRegistryTest is Test {
         assertEq(registry.credentialMultiplierBps(rater), registry.BASE_MULTIPLIER_BPS());
     }
 
-    function test_TrustAttestationIsBoundedAndRevocable() public {
+    function test_TrustAttestationIsRevocable() public {
         uint64 expiresAt = uint64(block.timestamp + 30 days);
 
         vm.prank(rater);
-        bytes32 attestationId = registry.setTrustAttestation(subject, 1, 100e6, 11_500, expiresAt, METADATA_HASH);
+        bytes32 attestationId = registry.setTrustAttestation(subject, 1, 11_500, expiresAt, METADATA_HASH);
 
         assertEq(attestationId, registry.trustAttestationId(rater, subject, 1));
         RaterRegistry.TrustAttestation memory attestation = registry.getTrustAttestation(attestationId);
         assertEq(attestation.issuer, rater);
         assertEq(attestation.subject, subject);
         assertEq(attestation.categoryId, 1);
-        assertEq(attestation.trustBudget, 100e6);
         assertEq(attestation.maxBoostBps, 11_500);
         assertEq(attestation.expiresAt, expiresAt);
         assertEq(attestation.metadataHash, METADATA_HASH);
@@ -256,10 +254,10 @@ contract RaterRegistryTest is Test {
         vm.startPrank(rater);
 
         vm.expectRevert(RaterRegistry.InvalidMultiplier.selector);
-        registry.setTrustAttestation(subject, 1, 100e6, 20_000, uint64(block.timestamp + 30 days), METADATA_HASH);
+        registry.setTrustAttestation(subject, 1, 20_000, uint64(block.timestamp + 30 days), METADATA_HASH);
 
         vm.expectRevert(RaterRegistry.InvalidTrustAttestation.selector);
-        registry.setTrustAttestation(rater, 1, 100e6, 11_000, uint64(block.timestamp + 30 days), METADATA_HASH);
+        registry.setTrustAttestation(rater, 1, 11_000, uint64(block.timestamp + 30 days), METADATA_HASH);
 
         vm.stopPrank();
     }

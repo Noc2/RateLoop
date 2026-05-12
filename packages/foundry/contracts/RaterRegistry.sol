@@ -48,7 +48,6 @@ contract RaterRegistry is AccessControl {
         bool active;
         uint64 seededAt;
         uint64 sunsetAt;
-        uint16 trustBudgetBps;
         bytes32 seedRoot;
     }
 
@@ -56,7 +55,6 @@ contract RaterRegistry is AccessControl {
         address issuer;
         address subject;
         uint256 categoryId;
-        uint96 trustBudget;
         uint16 maxBoostBps;
         uint64 expiresAt;
         bytes32 metadataHash;
@@ -93,7 +91,7 @@ contract RaterRegistry is AccessControl {
     );
     event SelfCredentialRevoked(address indexed rater, bytes32 indexed nullifierHash);
     event TrustSeedSet(
-        address indexed rater, uint64 indexed seededAt, uint64 indexed sunsetAt, uint16 trustBudgetBps, bytes32 seedRoot
+        address indexed rater, uint64 indexed seededAt, uint64 indexed sunsetAt, bytes32 seedRoot
     );
     event TrustSeedRevoked(address indexed rater);
     event TrustAttestationSet(
@@ -101,7 +99,6 @@ contract RaterRegistry is AccessControl {
         address indexed issuer,
         address indexed subject,
         uint256 categoryId,
-        uint96 trustBudget,
         uint16 maxBoostBps,
         uint64 expiresAt,
         bytes32 metadataHash
@@ -217,13 +214,12 @@ contract RaterRegistry is AccessControl {
         address rater,
         uint64 sunsetAt,
         uint16 multiplierBps,
-        uint16 trustBudgetBps,
         bytes32 seedRoot,
         bytes32 evidenceHash
     ) external onlyRole(SEEDER_ROLE) {
         if (sunsetAt <= block.timestamp) revert InvalidCredential();
         _attestSelfCredential(rater, bytes32(0), bytes32(0), sunsetAt, multiplierBps, evidenceHash, true);
-        _setTrustSeed(rater, sunsetAt, trustBudgetBps, seedRoot);
+        _setTrustSeed(rater, sunsetAt, seedRoot);
     }
 
     function revokeSelfCredential(address rater) external onlyRole(SEEDER_ROLE) {
@@ -240,11 +236,8 @@ contract RaterRegistry is AccessControl {
         emit SelfCredentialRevoked(rater, nullifierHash);
     }
 
-    function setTrustSeed(address rater, uint64 sunsetAt, uint16 trustBudgetBps, bytes32 seedRoot)
-        external
-        onlyRole(SEEDER_ROLE)
-    {
-        _setTrustSeed(rater, sunsetAt, trustBudgetBps, seedRoot);
+    function setTrustSeed(address rater, uint64 sunsetAt, bytes32 seedRoot) external onlyRole(SEEDER_ROLE) {
+        _setTrustSeed(rater, sunsetAt, seedRoot);
     }
 
     function revokeTrustSeed(address rater) external onlyRole(SEEDER_ROLE) {
@@ -258,13 +251,12 @@ contract RaterRegistry is AccessControl {
     function setTrustAttestation(
         address subject,
         uint256 categoryId,
-        uint96 trustBudget,
         uint16 maxBoostBps,
         uint64 expiresAt,
         bytes32 metadataHash
     ) external returns (bytes32 attestationId) {
         if (subject == address(0) || subject == msg.sender) revert InvalidTrustAttestation();
-        if (trustBudget == 0 || expiresAt <= block.timestamp) revert InvalidTrustAttestation();
+        if (expiresAt <= block.timestamp) revert InvalidTrustAttestation();
         if (maxBoostBps < BASE_MULTIPLIER_BPS || maxBoostBps > MAX_TRUST_BOOST_BPS) revert InvalidMultiplier();
 
         attestationId = trustAttestationId(msg.sender, subject, categoryId);
@@ -272,7 +264,6 @@ contract RaterRegistry is AccessControl {
             issuer: msg.sender,
             subject: subject,
             categoryId: categoryId,
-            trustBudget: trustBudget,
             maxBoostBps: maxBoostBps,
             expiresAt: expiresAt,
             metadataHash: metadataHash,
@@ -280,9 +271,7 @@ contract RaterRegistry is AccessControl {
             revoked: false
         });
 
-        emit TrustAttestationSet(
-            attestationId, msg.sender, subject, categoryId, trustBudget, maxBoostBps, expiresAt, metadataHash
-        );
+        emit TrustAttestationSet(attestationId, msg.sender, subject, categoryId, maxBoostBps, expiresAt, metadataHash);
     }
 
     function revokeTrustAttestation(address subject, uint256 categoryId) external {
@@ -386,7 +375,7 @@ contract RaterRegistry is AccessControl {
         );
     }
 
-    function _setTrustSeed(address rater, uint64 sunsetAt, uint16 trustBudgetBps, bytes32 seedRoot) internal {
+    function _setTrustSeed(address rater, uint64 sunsetAt, bytes32 seedRoot) internal {
         if (rater == address(0)) revert InvalidAddress();
         if (sunsetAt <= block.timestamp) revert InvalidCredential();
 
@@ -394,10 +383,9 @@ contract RaterRegistry is AccessControl {
             active: true,
             seededAt: uint64(block.timestamp),
             sunsetAt: sunsetAt,
-            trustBudgetBps: trustBudgetBps,
             seedRoot: seedRoot
         });
 
-        emit TrustSeedSet(rater, uint64(block.timestamp), sunsetAt, trustBudgetBps, seedRoot);
+        emit TrustSeedSet(rater, uint64(block.timestamp), sunsetAt, seedRoot);
     }
 }

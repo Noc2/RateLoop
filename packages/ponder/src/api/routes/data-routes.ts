@@ -663,7 +663,6 @@ export function registerDataRoutes(app: ApiApp) {
         db
           .select({
             count: sql<number>`count(*)`,
-            totalBudget: sql<bigint>`coalesce(sum(${raterTrustAttestation.trustBudget}), 0)`,
           })
           .from(raterTrustAttestation)
           .where(
@@ -872,19 +871,15 @@ export function registerDataRoutes(app: ApiApp) {
                 trustSeed.active && trustSeed.sunsetAt > statusTimestamp,
               seededAt: trustSeed.seededAt,
               sunsetAt: trustSeed.sunsetAt,
-              trustBudgetBps: trustSeed.trustBudgetBps,
               seedRoot: trustSeed.seedRoot,
             }
           : null,
         activeInboundAttestationCount: Number(
           activeTrustAttestationStats?.count ?? 0,
         ),
-        activeInboundTrustBudgetTotal:
-          activeTrustAttestationStats?.totalBudget ?? 0n,
         latestInboundAttestations: inboundTrustAttestations.map((attestation) => ({
           issuer: attestation.issuer,
           categoryId: attestation.categoryId,
-          trustBudget: attestation.trustBudget,
           maxBoostBps: attestation.maxBoostBps,
           expiresAt: attestation.expiresAt,
           metadataHash: attestation.metadataHash,

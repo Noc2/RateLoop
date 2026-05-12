@@ -609,7 +609,6 @@ test("ponderApi.getRaterRewardStatus exposes expanded reputation blocks", async 
         trust: {
           activeSeed: null,
           activeInboundAttestationCount: 4,
-          activeInboundTrustBudgetTotal: "400",
           latestInboundAttestations: [],
         },
         launchRewards: {
@@ -653,7 +652,7 @@ test("ponderApi.getRaterRewardStatus exposes expanded reputation blocks", async 
     const response = await ponderApi.getRaterRewardStatus("0x1111111111111111111111111111111111111111");
 
     assert.equal(response.independence.latestChallengeStatusName, "open");
-    assert.equal(response.trust.activeInboundTrustBudgetTotal, "400");
+    assert.equal(response.trust.activeInboundAttestationCount, 4);
     assert.equal(response.launchRewards.remainingLaunchCap, "75");
     assert.equal(response.rewardPolicy.effectiveRewardWeightBps, 9000);
   } finally {

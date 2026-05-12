@@ -291,7 +291,7 @@ contract LaunchDistributionPoolTest is Test {
     }
 
     function test_ClaimVerifiedBonusRejectsLegacyCredentials() public {
-        registry.seedLegacySelfCredential(alice, uint64(block.timestamp + 30 days), 10_000, 10_000, bytes32("root"), 0);
+        registry.seedLegacySelfCredential(alice, uint64(block.timestamp + 30 days), 10_000, bytes32("root"), 0);
 
         vm.prank(alice);
         vm.expectRevert(LaunchDistributionPool.NotVerified.selector);

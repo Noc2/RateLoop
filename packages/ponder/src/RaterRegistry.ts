@@ -135,7 +135,7 @@ ponder.on("RaterRegistry:SelfCredentialRevoked", async ({ event, context }) => {
 });
 
 ponder.on("RaterRegistry:TrustSeedSet", async ({ event, context }) => {
-  const { rater, seededAt, sunsetAt, trustBudgetBps, seedRoot } = event.args;
+  const { rater, seededAt, sunsetAt, seedRoot } = event.args;
 
   await context.db
     .insert(raterTrustSeed)
@@ -144,7 +144,6 @@ ponder.on("RaterRegistry:TrustSeedSet", async ({ event, context }) => {
       active: true,
       seededAt,
       sunsetAt,
-      trustBudgetBps: Number(trustBudgetBps),
       seedRoot,
       updatedAt: event.block.timestamp,
     })
@@ -152,7 +151,6 @@ ponder.on("RaterRegistry:TrustSeedSet", async ({ event, context }) => {
       active: true,
       seededAt,
       sunsetAt,
-      trustBudgetBps: Number(trustBudgetBps),
       seedRoot,
       updatedAt: event.block.timestamp,
     });
@@ -168,7 +166,6 @@ ponder.on("RaterRegistry:TrustSeedRevoked", async ({ event, context }) => {
       active: false,
       seededAt: event.block.timestamp,
       sunsetAt: event.block.timestamp,
-      trustBudgetBps: 0,
       seedRoot: ZERO_HASH,
       updatedAt: event.block.timestamp,
     })
@@ -179,8 +176,7 @@ ponder.on("RaterRegistry:TrustSeedRevoked", async ({ event, context }) => {
 });
 
 ponder.on("RaterRegistry:TrustAttestationSet", async ({ event, context }) => {
-  const { attestationId, issuer, subject, categoryId, trustBudget, maxBoostBps, expiresAt, metadataHash } =
-    event.args;
+  const { attestationId, issuer, subject, categoryId, maxBoostBps, expiresAt, metadataHash } = event.args;
 
   await context.db
     .insert(raterTrustAttestation)
@@ -189,7 +185,6 @@ ponder.on("RaterRegistry:TrustAttestationSet", async ({ event, context }) => {
       issuer,
       subject,
       categoryId,
-      trustBudget,
       maxBoostBps: Number(maxBoostBps),
       expiresAt,
       metadataHash,
@@ -201,7 +196,6 @@ ponder.on("RaterRegistry:TrustAttestationSet", async ({ event, context }) => {
       issuer,
       subject,
       categoryId,
-      trustBudget,
       maxBoostBps: Number(maxBoostBps),
       expiresAt,
       metadataHash,
@@ -220,7 +214,6 @@ ponder.on("RaterRegistry:TrustAttestationRevoked", async ({ event, context }) =>
       issuer,
       subject,
       categoryId: 0n,
-      trustBudget: 0n,
       maxBoostBps: 10_000,
       expiresAt: event.block.timestamp,
       metadataHash: ZERO_HASH,

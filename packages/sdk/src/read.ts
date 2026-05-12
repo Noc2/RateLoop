@@ -367,15 +367,12 @@ export interface CuryoRaterRewardStatusResponse {
       active: boolean;
       seededAt: string;
       sunsetAt: string;
-      trustBudgetBps: number;
       seedRoot: string;
     } | null;
     activeInboundAttestationCount: number;
-    activeInboundTrustBudgetTotal: string;
     latestInboundAttestations: Array<{
       issuer: `0x${string}`;
       categoryId: string;
-      trustBudget: string;
       maxBoostBps: number;
       expiresAt: string;
       metadataHash: `0x${string}`;

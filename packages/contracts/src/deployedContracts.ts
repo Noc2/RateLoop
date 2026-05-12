@@ -15605,11 +15605,6 @@ const deployedContracts: GenericContractsDeclaration = {
                   internalType: "uint256",
                 },
                 {
-                  name: "trustBudget",
-                  type: "uint96",
-                  internalType: "uint96",
-                },
-                {
                   name: "maxBoostBps",
                   type: "uint16",
                   internalType: "uint16",
@@ -15669,11 +15664,6 @@ const deployedContracts: GenericContractsDeclaration = {
                   name: "sunsetAt",
                   type: "uint64",
                   internalType: "uint64",
-                },
-                {
-                  name: "trustBudgetBps",
-                  type: "uint16",
-                  internalType: "uint16",
                 },
                 {
                   name: "seedRoot",
@@ -15908,11 +15898,6 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "uint16",
             },
             {
-              name: "trustBudgetBps",
-              type: "uint16",
-              internalType: "uint16",
-            },
-            {
               name: "seedRoot",
               type: "bytes32",
               internalType: "bytes32",
@@ -15978,11 +15963,6 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "uint256",
             },
             {
-              name: "trustBudget",
-              type: "uint96",
-              internalType: "uint96",
-            },
-            {
               name: "maxBoostBps",
               type: "uint16",
               internalType: "uint16",
@@ -16020,11 +16000,6 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "sunsetAt",
               type: "uint64",
               internalType: "uint64",
-            },
-            {
-              name: "trustBudgetBps",
-              type: "uint16",
-              internalType: "uint16",
             },
             {
               name: "seedRoot",
@@ -16451,12 +16426,6 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "uint256",
             },
             {
-              name: "trustBudget",
-              type: "uint96",
-              indexed: false,
-              internalType: "uint96",
-            },
-            {
               name: "maxBoostBps",
               type: "uint16",
               indexed: false,
@@ -16511,12 +16480,6 @@ const deployedContracts: GenericContractsDeclaration = {
               type: "uint64",
               indexed: true,
               internalType: "uint64",
-            },
-            {
-              name: "trustBudgetBps",
-              type: "uint16",
-              indexed: false,
-              internalType: "uint16",
             },
             {
               name: "seedRoot",

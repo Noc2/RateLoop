@@ -453,7 +453,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
         vm.prank(owner);
         raterRegistry.seedLegacySelfCredential(
-            voter1, uint64(block.timestamp + 30 days), 12_000, 0, bytes32("seed"), keccak256("legacy")
+            voter1, uint64(block.timestamp + 30 days), 12_000, bytes32("seed"), keccak256("legacy")
         );
         declarationWeights.setActiveAiDeclaration(voter1, true);
         declarationWeights.setTierMultiplierBps(voter1, 11_500);

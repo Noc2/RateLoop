@@ -985,15 +985,12 @@ export interface PonderRaterRewardStatusResponse {
       active: boolean;
       seededAt: string;
       sunsetAt: string;
-      trustBudgetBps: number;
       seedRoot: string;
     } | null;
     activeInboundAttestationCount: number;
-    activeInboundTrustBudgetTotal: string;
     latestInboundAttestations: Array<{
       issuer: string;
       categoryId: string;
-      trustBudget: string;
       maxBoostBps: number;
       expiresAt: string;
       metadataHash: string;

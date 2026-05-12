@@ -203,7 +203,7 @@ describe("RaterRegistry ponder handlers", () => {
     ]);
   });
 
-  it("indexes bounded trust attestations", async () => {
+  it("indexes revocable trust attestations", async () => {
     const { db, upserts } = createDb();
     const registeredHandlers = await loadHandlers();
     const handler = registeredHandlers.get("RaterRegistry:TrustAttestationSet");
@@ -217,7 +217,6 @@ describe("RaterRegistry ponder handlers", () => {
           issuer: "0x0000000000000000000000000000000000001111",
           subject: "0x0000000000000000000000000000000000002222",
           categoryId: 3n,
-          trustBudget: 100n,
           maxBoostBps: 11_500,
           expiresAt: 300n,
           metadataHash: `0x${"55".repeat(32)}`,
@@ -234,7 +233,6 @@ describe("RaterRegistry ponder handlers", () => {
         issuer: "0x0000000000000000000000000000000000001111",
         subject: "0x0000000000000000000000000000000000002222",
         categoryId: 3n,
-        trustBudget: 100n,
         maxBoostBps: 11_500,
         expiresAt: 300n,
         metadataHash: `0x${"55".repeat(32)}`,

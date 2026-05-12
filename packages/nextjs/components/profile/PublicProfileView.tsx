@@ -1180,9 +1180,7 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
                   <div className="mt-1 text-xl font-semibold">
                     {rewardStatus.trust.activeInboundAttestationCount.toLocaleString()}
                   </div>
-                  <div className="mt-1 text-sm text-base-content/55">
-                    Active inbound budget {rewardStatus.trust.activeInboundTrustBudgetTotal}
-                  </div>
+                  <div className="mt-1 text-sm text-base-content/55">Active inbound attestations</div>
                 </div>
 
                 <div className="rounded-2xl bg-base-content/[0.04] px-4 py-3">
@@ -1220,9 +1218,7 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
 
                 <div className="rounded-2xl border border-base-content/10 px-4 py-3 text-sm text-base-content/70">
                   <div className="font-medium text-base-content/85">
-                    {rewardStatus.trust.activeSeed
-                      ? `Trust seed ${formatBpsPercent(rewardStatus.trust.activeSeed.trustBudgetBps)}`
-                      : "No active trust seed"}
+                    {rewardStatus.trust.activeSeed ? "Active trust seed" : "No active trust seed"}
                   </div>
                   <div className="mt-2">
                     {rewardStatus.trust.activeSeed

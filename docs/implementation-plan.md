@@ -253,8 +253,8 @@ Self.xyz can still be useful as an optional feature:
 - Frontends can display the credential as context, but should describe it as a
   risk/uniqueness signal rather than proof that the prediction is correct.
 - Governance may decide whether optional identity signals affect caps, warmup,
-  sybil-cluster heuristics, trust-attestation budgets, sponsorship quotas, or
-  high-value bounty eligibility.
+  sybil-cluster heuristics, capped trust-attestation influence, sponsorship quotas,
+  or high-value bounty eligibility.
 - Optional identity must not be enough by itself to bypass calibration,
   reputation locks, reveal reliability, cluster caps, or USDC payout limits.
 - Optional identity should not be required for governance voting power because
@@ -863,7 +863,7 @@ Possible events:
 event RaterRegistered(address indexed account, uint8 raterType, bytes32 metadataHash);
 event RaterMetadataUpdated(address indexed account, uint8 raterType, bytes32 metadataHash);
 event SelfCredentialAttested(address indexed rater, bytes32 indexed nullifierHash, bytes32 evidenceHash);
-event TrustSeedSet(address indexed rater, uint64 sunsetAt, uint16 trustBudgetBps, bytes32 seedRoot);
+event TrustSeedSet(address indexed rater, uint64 sunsetAt, bytes32 seedRoot);
 event TrustAttestationSet(bytes32 indexed attestationId, address indexed issuer, address indexed subject);
 event RaterClusterUpdated(address indexed account, bytes32 indexed clusterId, uint16 discountBps);
 ```
