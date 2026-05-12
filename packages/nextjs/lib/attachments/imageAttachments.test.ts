@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
 import {
+  createPendingImageAttachment,
   getAttachmentImageUrl,
   getImageAttachmentSubmissionValidationError,
   parseAttachmentIdFromImageUrl,
@@ -30,6 +31,23 @@ test("parses Curyo attachment ids from public image URLs", () => {
     "att_abcdefghijklmnop",
   );
   assert.equal(parseAttachmentIdFromImageUrl("https://www.curyo.xyz/api/attachments/images/nope.png"), null);
+});
+
+test("rejects reused pending image attachment ids", async () => {
+  const params = {
+    attachmentId: "att_uniqueuploadid01",
+    filename: "mockup.png",
+    mimeType: "image/png",
+    sha256: "a".repeat(64),
+    sizeBytes: 1024,
+    uploader: {
+      kind: "wallet" as const,
+      ownerWalletAddress: "0x00000000000000000000000000000000000000aa" as const,
+    },
+  };
+
+  await createPendingImageAttachment(params);
+  await assert.rejects(() => createPendingImageAttachment(params), /Image attachment already exists/);
 });
 
 test("validates approved Curyo-hosted image ownership before submission", async () => {

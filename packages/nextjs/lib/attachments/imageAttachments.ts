@@ -114,7 +114,7 @@ export async function getImageAttachment(id: string): Promise<QuestionImageAttac
 
 export async function createPendingImageAttachment(params: CreatePendingImageAttachmentParams) {
   const createdAt = nowDate();
-  await db
+  const [created] = await db
     .insert(questionImageAttachments)
     .values({
       id: params.attachmentId,
@@ -131,7 +131,12 @@ export async function createPendingImageAttachment(params: CreatePendingImageAtt
       createdAt,
       updatedAt: createdAt,
     })
-    .onConflictDoNothing();
+    .onConflictDoNothing()
+    .returning({ id: questionImageAttachments.id });
+
+  if (!created) {
+    throw new Error("Image attachment already exists.");
+  }
 }
 
 async function readBlobBuffer(pathname: string) {
@@ -213,7 +218,7 @@ export async function processCompletedImageUpload(params: {
   contentType: string;
 }) {
   const processingAt = nowDate();
-  await db
+  const [attachment] = await db
     .update(questionImageAttachments)
     .set({
       originalBlobPathname: params.blobPathname,
@@ -222,14 +227,22 @@ export async function processCompletedImageUpload(params: {
       status: "processing",
       updatedAt: processingAt,
     })
-    .where(eq(questionImageAttachments.id, params.attachmentId));
+    .where(and(eq(questionImageAttachments.id, params.attachmentId), eq(questionImageAttachments.status, "uploading")))
+    .returning({
+      id: questionImageAttachments.id,
+      sha256: questionImageAttachments.sha256,
+    });
+
+  if (!attachment) {
+    await del(params.blobPathname).catch(() => undefined);
+    throw new Error("Image attachment is no longer accepting uploads.");
+  }
 
   try {
     const { buffer } = await readBlobBuffer(params.blobPathname);
     assertSupportedImageSignature(buffer, params.contentType);
 
     const actualSha256 = createHash("sha256").update(buffer).digest("hex");
-    const attachment = await getImageAttachment(params.attachmentId);
     if (attachment?.sha256 && attachment.sha256 !== actualSha256) {
       throw new Error("Image hash does not match the signed upload challenge.");
     }
@@ -279,7 +292,13 @@ export async function processCompletedImageUpload(params: {
         error: error instanceof Error ? error.message : "Image processing failed.",
         updatedAt: failedAt,
       })
-      .where(eq(questionImageAttachments.id, params.attachmentId));
+      .where(
+        and(
+          eq(questionImageAttachments.id, params.attachmentId),
+          eq(questionImageAttachments.status, "processing"),
+          eq(questionImageAttachments.originalBlobPathname, params.blobPathname),
+        ),
+      );
   }
 }
 
