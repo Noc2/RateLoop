@@ -1,24 +1,24 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import { Test } from "forge-std/Test.sol";
-import { Base64 } from "@openzeppelin/contracts/utils/Base64.sol";
-import { Strings } from "@openzeppelin/contracts/utils/Strings.sol";
-import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import { ContentRegistry } from "../contracts/ContentRegistry.sol";
-import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
-import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
-import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
-import { RoundLib } from "../contracts/libraries/RoundLib.sol";
-import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
-import { TlockVoteLib } from "../contracts/libraries/TlockVoteLib.sol";
-import { HumanReputation } from "../contracts/HumanReputation.sol";
-import { ParticipationPool } from "../contracts/ParticipationPool.sol";
-import { FrontendRegistry } from "../contracts/FrontendRegistry.sol";
-import { RaterRegistry } from "../contracts/RaterRegistry.sol";
-import { MockVoterIdNFT } from "./mocks/MockVoterIdNFT.sol";
-import { VotingTestBase } from "./helpers/VotingTestHelpers.sol";
-import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
+import {Test} from "forge-std/Test.sol";
+import {Base64} from "@openzeppelin/contracts/utils/Base64.sol";
+import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {ContentRegistry} from "../contracts/ContentRegistry.sol";
+import {RoundVotingEngine} from "../contracts/RoundVotingEngine.sol";
+import {ProtocolConfig} from "../contracts/ProtocolConfig.sol";
+import {RoundRewardDistributor} from "../contracts/RoundRewardDistributor.sol";
+import {RoundLib} from "../contracts/libraries/RoundLib.sol";
+import {RoundEngineReadHelpers} from "./helpers/RoundEngineReadHelpers.sol";
+import {TlockVoteLib} from "../contracts/libraries/TlockVoteLib.sol";
+import {HumanReputation} from "../contracts/HumanReputation.sol";
+import {ParticipationPool} from "../contracts/ParticipationPool.sol";
+import {FrontendRegistry} from "../contracts/FrontendRegistry.sol";
+import {RaterRegistry} from "../contracts/RaterRegistry.sol";
+import {MockVoterIdNFT} from "./mocks/MockVoterIdNFT.sol";
+import {VotingTestBase} from "./helpers/VotingTestHelpers.sol";
+import {MockCategoryRegistry} from "../contracts/mocks/MockCategoryRegistry.sol";
 
 contract MockRaterDeclarationWeights {
     mapping(address => uint16) public tierMultiplierBps;
@@ -256,13 +256,10 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         return _commitPrediction(voter, contentId, predictedRatingBps >= 5_000, predictedRatingBps, stake);
     }
 
-    function _commitPrediction(
-        address voter,
-        uint256 contentId,
-        bool isUp,
-        uint16 predictedUpBps,
-        uint256 stake
-    ) internal returns (bytes32 commitKey, bytes32 salt) {
+    function _commitPrediction(address voter, uint256 contentId, bool isUp, uint16 predictedUpBps, uint256 stake)
+        internal
+        returns (bytes32 commitKey, bytes32 salt)
+    {
         salt = keccak256(abi.encodePacked(voter, isUp, predictedUpBps, block.timestamp));
         uint256 roundId = engine.previewCommitRoundId(contentId);
         uint16 referenceRatingBps = engine.previewCommitReferenceRatingBps(contentId);
@@ -452,8 +449,8 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         MockRaterDeclarationWeights declarationWeights = _installRaterDeclarationWeights();
 
         vm.prank(owner);
-        raterRegistry.seedLegacySelfCredential(
-            voter1, uint64(block.timestamp + 30 days), 12_000, bytes32("seed"), keccak256("legacy")
+        raterRegistry.seedHumanCredential(
+            voter1, uint64(block.timestamp + 30 days), keccak256("curyo-voter-1"), keccak256("curyo-evidence")
         );
         declarationWeights.setActiveAiDeclaration(voter1, true);
         declarationWeights.setTierMultiplierBps(voter1, 11_500);

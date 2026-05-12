@@ -13,10 +13,9 @@ contract RaterRegistry is AccessControl {
     bytes32 public constant SEEDER_ROLE = keccak256("SEEDER_ROLE");
 
     uint16 public constant BASE_MULTIPLIER_BPS = 10_000;
-    uint16 public constant WORLD_ID_MULTIPLIER_BPS = 10_000;
-    uint16 public constant MAX_CREDENTIAL_MULTIPLIER_BPS = 12_000;
     uint16 public constant MAX_TRUST_BOOST_BPS = 12_000;
     uint256 public constant WORLD_ID_GROUP_ID = 1;
+    bytes32 public constant CURYO_SELF_VERIFIED_SCOPE = keccak256("rateloop-curyo-self-verified-v1");
 
     enum RaterType {
         Unknown,
@@ -32,15 +31,20 @@ contract RaterRegistry is AccessControl {
         uint64 updatedAt;
     }
 
-    struct SelfCredential {
+    enum HumanCredentialProvider {
+        None,
+        WorldId,
+        CuryoSelfVerifiedSeed
+    }
+
+    struct HumanCredential {
         bool verified;
-        bool legacy;
         bool revoked;
+        HumanCredentialProvider provider;
         bytes32 nullifierHash;
         bytes32 scope;
         uint64 verifiedAt;
         uint64 expiresAt;
-        uint16 multiplierBps;
         bytes32 evidenceHash;
     }
 
@@ -63,8 +67,8 @@ contract RaterRegistry is AccessControl {
     }
 
     mapping(address => RaterProfile) private _profiles;
-    mapping(address => SelfCredential) private _selfCredentials;
-    mapping(bytes32 => address) public selfNullifierOwner;
+    mapping(address => HumanCredential) private _humanCredentials;
+    mapping(bytes32 => address) public humanNullifierOwner;
     mapping(address => TrustSeed) private _trustSeeds;
     mapping(bytes32 => TrustAttestation) private _trustAttestations;
     mapping(address => mapping(address => bool)) public isFollowing;
@@ -79,20 +83,17 @@ contract RaterRegistry is AccessControl {
     event RaterProfileUpdated(
         address indexed rater, RaterType indexed raterType, bytes32 indexed metadataHash, uint64 updatedAt
     );
-    event SelfCredentialAttested(
+    event HumanCredentialVerified(
         address indexed rater,
         bytes32 indexed nullifierHash,
         bytes32 indexed scope,
-        bool legacy,
+        HumanCredentialProvider provider,
         uint64 verifiedAt,
         uint64 expiresAt,
-        uint16 multiplierBps,
         bytes32 evidenceHash
     );
-    event SelfCredentialRevoked(address indexed rater, bytes32 indexed nullifierHash);
-    event TrustSeedSet(
-        address indexed rater, uint64 indexed seededAt, uint64 indexed sunsetAt, bytes32 seedRoot
-    );
+    event HumanCredentialRevoked(address indexed rater, bytes32 indexed nullifierHash);
+    event TrustSeedSet(address indexed rater, uint64 indexed seededAt, uint64 indexed sunsetAt, bytes32 seedRoot);
     event TrustSeedRevoked(address indexed rater);
     event TrustAttestationSet(
         bytes32 indexed attestationId,
@@ -176,21 +177,21 @@ contract RaterRegistry is AccessControl {
         emit ProfileUnfollowed(msg.sender, target, uint64(block.timestamp));
     }
 
-    /// @notice Attach a fresh World ID uniqueness credential to the calling wallet.
+    /// @notice Attach a fresh World ID verified-human unit to the calling wallet.
     /// @dev The World ID signal is derived from msg.sender, so wallet ownership is proven by the transaction sender.
-    function attestSelfCredentialWithProof(uint256 root, uint256 nullifierHash, uint256[8] calldata proof) external {
+    function attestHumanCredentialWithProof(uint256 root, uint256 nullifierHash, uint256[8] calldata proof) external {
         if (nullifierHash == 0) revert InvalidCredential();
 
         bytes32 storedNullifier = bytes32(nullifierHash);
-        SelfCredential storage previous = _selfCredentials[msg.sender];
+        HumanCredential storage previous = _humanCredentials[msg.sender];
         if (
-            previous.verified && !previous.legacy && !previous.revoked && previous.expiresAt > block.timestamp
+            previous.verified && !previous.revoked && previous.expiresAt > block.timestamp
                 && previous.nullifierHash != storedNullifier
         ) {
             revert InvalidCredential();
         }
 
-        address currentOwner = selfNullifierOwner[storedNullifier];
+        address currentOwner = humanNullifierOwner[storedNullifier];
         if (currentOwner != address(0) && currentOwner != msg.sender) revert NullifierAlreadyAssigned();
 
         uint256 signalHash = worldIdSignalHash(msg.sender);
@@ -203,37 +204,39 @@ contract RaterRegistry is AccessControl {
 
         bytes32 evidenceHash =
             keccak256(abi.encodePacked("world-id-v3", block.chainid, address(worldIdRouter), root, signalHash));
-        _attestSelfCredential(
-            msg.sender, storedNullifier, worldIdScope, uint64(expiresAt), WORLD_ID_MULTIPLIER_BPS, evidenceHash, false
+        _attestHumanCredential(
+            msg.sender, storedNullifier, worldIdScope, uint64(expiresAt), HumanCredentialProvider.WorldId, evidenceHash
         );
     }
 
-    /// @notice Seed a previous Curyo Self-verified account as a temporary graph anchor.
-    /// @dev Legacy credentials may omit a nullifier when only the historical address snapshot is available.
-    function seedLegacySelfCredential(
-        address rater,
-        uint64 sunsetAt,
-        uint16 multiplierBps,
-        bytes32 seedRoot,
-        bytes32 evidenceHash
-    ) external onlyRole(SEEDER_ROLE) {
-        if (sunsetAt <= block.timestamp) revert InvalidCredential();
-        _attestSelfCredential(rater, bytes32(0), bytes32(0), sunsetAt, multiplierBps, evidenceHash, true);
-        _setTrustSeed(rater, sunsetAt, seedRoot);
+    /// @notice Seed a previous Curyo Self.xyz verified account as the same verified-human unit used by World ID.
+    /// @dev Provider provenance is internal metadata; consumers should show this as a generic verified human.
+    function seedHumanCredential(address rater, uint64 expiresAt, bytes32 anchorId, bytes32 evidenceHash)
+        external
+        onlyRole(SEEDER_ROLE)
+    {
+        _attestHumanCredential(
+            rater,
+            anchorId,
+            CURYO_SELF_VERIFIED_SCOPE,
+            expiresAt,
+            HumanCredentialProvider.CuryoSelfVerifiedSeed,
+            evidenceHash
+        );
     }
 
-    function revokeSelfCredential(address rater) external onlyRole(SEEDER_ROLE) {
+    function revokeHumanCredential(address rater) external onlyRole(SEEDER_ROLE) {
         if (rater == address(0)) revert InvalidAddress();
-        SelfCredential storage credential = _selfCredentials[rater];
+        HumanCredential storage credential = _humanCredentials[rater];
         if (!credential.verified || credential.revoked) revert InvalidCredential();
 
         credential.revoked = true;
         bytes32 nullifierHash = credential.nullifierHash;
-        if (nullifierHash != bytes32(0) && selfNullifierOwner[nullifierHash] == rater) {
-            delete selfNullifierOwner[nullifierHash];
+        if (nullifierHash != bytes32(0) && humanNullifierOwner[nullifierHash] == rater) {
+            delete humanNullifierOwner[nullifierHash];
         }
 
-        emit SelfCredentialRevoked(rater, nullifierHash);
+        emit HumanCredentialRevoked(rater, nullifierHash);
     }
 
     function setTrustSeed(address rater, uint64 sunsetAt, bytes32 seedRoot) external onlyRole(SEEDER_ROLE) {
@@ -286,8 +289,8 @@ contract RaterRegistry is AccessControl {
         return _profiles[rater];
     }
 
-    function getSelfCredential(address rater) external view returns (SelfCredential memory) {
-        return _selfCredentials[rater];
+    function getHumanCredential(address rater) external view returns (HumanCredential memory) {
+        return _humanCredentials[rater];
     }
 
     function getTrustSeed(address rater) external view returns (TrustSeed memory) {
@@ -310,8 +313,8 @@ contract RaterRegistry is AccessControl {
         return uint256(keccak256(value)) >> 8;
     }
 
-    function hasActiveSelfCredential(address rater) public view returns (bool) {
-        SelfCredential storage credential = _selfCredentials[rater];
+    function hasActiveHumanCredential(address rater) public view returns (bool) {
+        HumanCredential storage credential = _humanCredentials[rater];
         return credential.verified && !credential.revoked && credential.expiresAt > block.timestamp;
     }
 
@@ -320,58 +323,43 @@ contract RaterRegistry is AccessControl {
         return seed.active && seed.sunsetAt > block.timestamp;
     }
 
-    function credentialMultiplierBps(address rater) public view returns (uint16) {
-        if (!hasActiveSelfCredential(rater)) {
-            return BASE_MULTIPLIER_BPS;
-        }
-
-        uint16 multiplier = _selfCredentials[rater].multiplierBps;
-        return multiplier > BASE_MULTIPLIER_BPS ? multiplier : BASE_MULTIPLIER_BPS;
-    }
-
-    function _attestSelfCredential(
+    function _attestHumanCredential(
         address rater,
         bytes32 nullifierHash,
         bytes32 scope,
         uint64 expiresAt,
-        uint16 multiplierBps,
-        bytes32 evidenceHash,
-        bool legacy
+        HumanCredentialProvider provider,
+        bytes32 evidenceHash
     ) internal {
         if (rater == address(0)) revert InvalidAddress();
         if (expiresAt <= block.timestamp) revert InvalidCredential();
-        if (multiplierBps < BASE_MULTIPLIER_BPS || multiplierBps > MAX_CREDENTIAL_MULTIPLIER_BPS) {
-            revert InvalidMultiplier();
-        }
-        if (!legacy && (nullifierHash == bytes32(0) || scope == bytes32(0))) revert InvalidCredential();
+        if (provider == HumanCredentialProvider.None) revert InvalidCredential();
+        if (nullifierHash == bytes32(0) || scope == bytes32(0)) revert InvalidCredential();
 
-        SelfCredential storage previous = _selfCredentials[rater];
+        HumanCredential storage previous = _humanCredentials[rater];
         if (previous.nullifierHash != bytes32(0) && previous.nullifierHash != nullifierHash) {
-            if (selfNullifierOwner[previous.nullifierHash] == rater) {
-                delete selfNullifierOwner[previous.nullifierHash];
+            if (humanNullifierOwner[previous.nullifierHash] == rater) {
+                delete humanNullifierOwner[previous.nullifierHash];
             }
         }
 
-        if (nullifierHash != bytes32(0)) {
-            address currentOwner = selfNullifierOwner[nullifierHash];
-            if (currentOwner != address(0) && currentOwner != rater) revert NullifierAlreadyAssigned();
-            selfNullifierOwner[nullifierHash] = rater;
-        }
+        address currentOwner = humanNullifierOwner[nullifierHash];
+        if (currentOwner != address(0) && currentOwner != rater) revert NullifierAlreadyAssigned();
+        humanNullifierOwner[nullifierHash] = rater;
 
-        _selfCredentials[rater] = SelfCredential({
+        _humanCredentials[rater] = HumanCredential({
             verified: true,
-            legacy: legacy,
             revoked: false,
+            provider: provider,
             nullifierHash: nullifierHash,
             scope: scope,
             verifiedAt: uint64(block.timestamp),
             expiresAt: expiresAt,
-            multiplierBps: multiplierBps,
             evidenceHash: evidenceHash
         });
 
-        emit SelfCredentialAttested(
-            rater, nullifierHash, scope, legacy, uint64(block.timestamp), expiresAt, multiplierBps, evidenceHash
+        emit HumanCredentialVerified(
+            rater, nullifierHash, scope, provider, uint64(block.timestamp), expiresAt, evidenceHash
         );
     }
 
@@ -379,12 +367,8 @@ contract RaterRegistry is AccessControl {
         if (rater == address(0)) revert InvalidAddress();
         if (sunsetAt <= block.timestamp) revert InvalidCredential();
 
-        _trustSeeds[rater] = TrustSeed({
-            active: true,
-            seededAt: uint64(block.timestamp),
-            sunsetAt: sunsetAt,
-            seedRoot: seedRoot
-        });
+        _trustSeeds[rater] =
+            TrustSeed({active: true, seededAt: uint64(block.timestamp), sunsetAt: sunsetAt, seedRoot: seedRoot});
 
         emit TrustSeedSet(rater, uint64(block.timestamp), sunsetAt, seedRoot);
     }

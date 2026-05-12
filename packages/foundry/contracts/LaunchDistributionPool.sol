@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
-import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import { MerkleProof } from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
-import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
-import { RaterRegistry } from "./RaterRegistry.sol";
-import { ILaunchDistributionPool } from "./interfaces/ILaunchDistributionPool.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {MerkleProof} from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
+import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
+import {RaterRegistry} from "./RaterRegistry.sol";
+import {ILaunchDistributionPool} from "./interfaces/ILaunchDistributionPool.sol";
 
 /// @title LaunchDistributionPool
 /// @notice Holds the 64M LREP launch allocation and releases it through earned, verified, and legacy paths.
@@ -187,9 +187,8 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
     }
 
     function claimVerifiedBonus(address referrer) external nonReentrant returns (uint256 paidAmount) {
-        RaterRegistry.SelfCredential memory credential = raterRegistry.getSelfCredential(msg.sender);
-        if (!credential.verified || credential.revoked || credential.legacy || credential.expiresAt <= block.timestamp)
-        {
+        RaterRegistry.HumanCredential memory credential = raterRegistry.getHumanCredential(msg.sender);
+        if (!credential.verified || credential.revoked || credential.expiresAt <= block.timestamp) {
             revert NotVerified();
         }
         if (credential.nullifierHash == bytes32(0)) revert NotVerified();
@@ -337,9 +336,8 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
         returns (uint256 referralBonus)
     {
         if (referrer == address(0) || referrer == referee) return 0;
-        RaterRegistry.SelfCredential memory credential = raterRegistry.getSelfCredential(referrer);
-        if (!credential.verified || credential.revoked || credential.legacy || credential.expiresAt <= block.timestamp)
-        {
+        RaterRegistry.HumanCredential memory credential = raterRegistry.getHumanCredential(referrer);
+        if (!credential.verified || credential.revoked || credential.expiresAt <= block.timestamp) {
             return 0;
         }
 

@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import { ContentRegistry } from "../ContentRegistry.sol";
-import { ProtocolConfig } from "../ProtocolConfig.sol";
-import { RaterRegistry } from "../RaterRegistry.sol";
-import { RoundVotingEngine } from "../RoundVotingEngine.sol";
-import { IVoterIdNFT } from "../interfaces/IVoterIdNFT.sol";
+import {ContentRegistry} from "../ContentRegistry.sol";
+import {ProtocolConfig} from "../ProtocolConfig.sol";
+import {RaterRegistry} from "../RaterRegistry.sol";
+import {RoundVotingEngine} from "../RoundVotingEngine.sol";
+import {IVoterIdNFT} from "../interfaces/IVoterIdNFT.sol";
 
 /// @notice Linked helper for launch-distribution rater reward qualification.
 library LaunchRaterRewardLib {
@@ -96,10 +96,10 @@ library LaunchRaterRewardLib {
 
     function launchRewardAnchorId(RaterRegistry raterRegistry, address account) internal view returns (bytes32) {
         if (account == address(0)) return bytes32(0);
-        try raterRegistry.getSelfCredential(account) returns (RaterRegistry.SelfCredential memory credential) {
+        try raterRegistry.getHumanCredential(account) returns (RaterRegistry.HumanCredential memory credential) {
             if (
-                !credential.verified || credential.legacy || credential.revoked
-                    || credential.expiresAt <= block.timestamp || credential.nullifierHash == bytes32(0)
+                !credential.verified || credential.revoked || credential.expiresAt <= block.timestamp
+                    || credential.nullifierHash == bytes32(0)
             ) {
                 return bytes32(0);
             }
