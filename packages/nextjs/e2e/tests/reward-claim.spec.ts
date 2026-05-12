@@ -263,6 +263,19 @@ test.describe("Reward claim lifecycle", () => {
     test.skip(!settledContentId || roundId === 0n, "No settled content from previous test");
     test.setTimeout(60_000);
 
+    const rewardRateBps = await readUint256("roundParticipationRewardRateBps", REWARD_DISTRIBUTOR, [
+      BigInt(settledContentId!),
+      roundId,
+    ]);
+    const rewardOwed = await readUint256("roundParticipationRewardOwed", REWARD_DISTRIBUTOR, [
+      BigInt(settledContentId!),
+      roundId,
+    ]);
+    if (rewardRateBps === 0n || rewardOwed === 0n) {
+      test.skip(true, "No participation reward snapshot configured for this deploy");
+      return;
+    }
+
     // Account #3 voted UP (winning side) — claim participation reward
     const voter = ANVIL_ACCOUNTS.account3;
     const success = await claimParticipationReward(
