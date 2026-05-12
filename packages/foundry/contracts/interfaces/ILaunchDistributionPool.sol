@@ -11,10 +11,13 @@ interface ILaunchDistributionPool {
         uint64 minLaunchCreditStake;
         uint16 maxDistinctRatersPerVerifiedAnchor;
         uint16 maxUnverifiedCreditsPerRound;
+        uint32 minAnchorCredentialAgeSeconds;
         uint32 eligibilityRatingCount;
         uint32 rewardingRatingCount;
         bool requireNoPendingCleanup;
     }
+
+    function launchAnchorCredentialAgeSeconds() external view returns (uint32);
 
     function recordEarnedRaterReward(
         address rater,

@@ -336,8 +336,17 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         uint16 scoreBps = votingEngine.commitRbtsScoreBps(contentId, roundId, commitKey);
         if (scoreBps == 0) return;
         RoundLib.Round memory round = _readRound(contentId, roundId);
+        uint32 minAnchorCredentialAgeSeconds = _launchAnchorCredentialAgeSeconds(launchPool);
         bytes32[] memory verifiedAnchorIds = LaunchRaterRewardLib.collectAnchorIds(
-            config, votingEngine, registry, contentId, roundId, rewardRecipient, round.voteCount
+            config,
+            votingEngine,
+            registry,
+            contentId,
+            roundId,
+            rewardRecipient,
+            round.voteCount,
+            round.startTime,
+            minAnchorCredentialAgeSeconds
         );
 
         try ILaunchDistributionPool(launchPool)
@@ -356,6 +365,14 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         ) { }
         catch (bytes memory reason) {
             emit LaunchRaterRewardCreditFailed(contentId, roundId, commitKey, rewardRecipient, launchPool, reason);
+        }
+    }
+
+    function _launchAnchorCredentialAgeSeconds(address launchPool) internal view returns (uint32) {
+        try ILaunchDistributionPool(launchPool).launchAnchorCredentialAgeSeconds() returns (uint32 minAgeSeconds) {
+            return minAgeSeconds;
+        } catch {
+            return 0;
         }
     }
 

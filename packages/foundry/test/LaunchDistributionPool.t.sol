@@ -65,6 +65,7 @@ contract LaunchDistributionPoolTest is Test {
             uint64 minLaunchCreditStake,
             uint16 maxDistinctRatersPerVerifiedAnchor,
             uint16 maxUnverifiedCreditsPerRound,
+            uint32 minAnchorCredentialAgeSeconds,
             uint32 eligibilityRatingCount,
             uint32 rewardingRatingCount,
             bool requireNoPendingCleanup
@@ -78,6 +79,8 @@ contract LaunchDistributionPoolTest is Test {
         assertEq(minLaunchCreditStake, 1e6);
         assertEq(maxDistinctRatersPerVerifiedAnchor, 25);
         assertEq(maxUnverifiedCreditsPerRound, 3);
+        assertEq(minAnchorCredentialAgeSeconds, 7 days);
+        assertEq(pool.launchAnchorCredentialAgeSeconds(), 7 days);
         assertEq(eligibilityRatingCount, 5);
         assertEq(rewardingRatingCount, 10);
         assertTrue(requireNoPendingCleanup);
@@ -140,6 +143,11 @@ contract LaunchDistributionPoolTest is Test {
 
         policy = _defaultPolicy();
         policy.maxUnverifiedCreditsPerRound = pool.MAX_UNVERIFIED_LAUNCH_CREDITS_PER_ROUND() + 1;
+        vm.expectRevert(LaunchDistributionPool.InvalidPolicy.selector);
+        pool.setLaunchRewardPolicy(policy);
+
+        policy = _defaultPolicy();
+        policy.minAnchorCredentialAgeSeconds = pool.MIN_ANCHOR_CREDENTIAL_AGE_SECONDS() - 1;
         vm.expectRevert(LaunchDistributionPool.InvalidPolicy.selector);
         pool.setLaunchRewardPolicy(policy);
 
@@ -642,6 +650,7 @@ contract LaunchDistributionPoolTest is Test {
             minLaunchCreditStake: pool.MIN_LAUNCH_CREDIT_STAKE(),
             maxDistinctRatersPerVerifiedAnchor: pool.MAX_DISTINCT_RATERS_PER_VERIFIED_ANCHOR(),
             maxUnverifiedCreditsPerRound: pool.MAX_UNVERIFIED_LAUNCH_CREDITS_PER_ROUND(),
+            minAnchorCredentialAgeSeconds: pool.MIN_ANCHOR_CREDENTIAL_AGE_SECONDS(),
             eligibilityRatingCount: pool.ELIGIBILITY_RATING_COUNT(),
             rewardingRatingCount: pool.REWARDING_RATING_COUNT(),
             requireNoPendingCleanup: true

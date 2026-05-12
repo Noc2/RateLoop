@@ -16,7 +16,9 @@ library LaunchRaterRewardLib {
         uint256 contentId,
         uint256 roundId,
         address rewardRecipient,
-        uint256 voteCount
+        uint256 voteCount,
+        uint48 roundStartTime,
+        uint32 minAnchorCredentialAgeSeconds
     ) external view returns (bytes32[] memory anchorIds) {
         address raterRegistryAddress = config.raterRegistry();
         if (raterRegistryAddress == address(0) || voteCount == 0) return new bytes32[](0);
@@ -37,7 +39,9 @@ library LaunchRaterRewardLib {
             if (anchorAccount == rewardRecipient || anchorAccount == submitterIdentity) continue;
             if (votingEngine.commitHadActiveAiDeclaration(contentId, roundId, roundCommitKey)) continue;
 
-            bytes32 anchorId = launchRewardAnchorId(raterRegistry, anchorAccount);
+            bytes32 anchorId = launchRewardAnchorId(
+                raterRegistry, anchorAccount, roundStartTime, minAnchorCredentialAgeSeconds
+            );
             if (anchorId == bytes32(0) || launchRewardAnchorSeen(candidates, anchorCount, anchorId)) continue;
 
             candidates[anchorCount] = anchorId;
@@ -94,12 +98,21 @@ library LaunchRaterRewardLib {
         return voterIdNft.getHolder(currentVoterId);
     }
 
-    function launchRewardAnchorId(RaterRegistry raterRegistry, address account) internal view returns (bytes32) {
+    function launchRewardAnchorId(
+        RaterRegistry raterRegistry,
+        address account,
+        uint48 roundStartTime,
+        uint32 minAnchorCredentialAgeSeconds
+    ) internal view returns (bytes32) {
         if (account == address(0)) return bytes32(0);
         try raterRegistry.getHumanCredential(account) returns (RaterRegistry.HumanCredential memory credential) {
             if (
                 !credential.verified || credential.revoked || credential.expiresAt <= block.timestamp
                     || credential.nullifierHash == bytes32(0)
+                    || (
+                        minAnchorCredentialAgeSeconds > 0
+                            && uint256(credential.verifiedAt) + minAnchorCredentialAgeSeconds > roundStartTime
+                    )
             ) {
                 return bytes32(0);
             }

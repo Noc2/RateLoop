@@ -287,16 +287,30 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
     }
 
     function _verifyHuman(address account, bytes32 nullifier) internal {
+        _verifyHumanFresh(account, nullifier);
+        _ageLaunchAnchorCredential();
+    }
+
+    function _verifyHumanFresh(address account, bytes32 nullifier) internal {
         uint256[8] memory proof;
         vm.prank(account);
         raterRegistry.attestHumanCredentialWithProof(1, uint256(nullifier), proof);
     }
 
     function _seedCuryoHuman(address account, bytes32 anchorId) internal {
+        _seedCuryoHumanFresh(account, anchorId);
+        _ageLaunchAnchorCredential();
+    }
+
+    function _seedCuryoHumanFresh(address account, bytes32 anchorId) internal {
         vm.prank(owner);
         raterRegistry.seedHumanCredential(
             account, uint64(block.timestamp + 365 days), anchorId, keccak256("curyo-seed")
         );
+    }
+
+    function _ageLaunchAnchorCredential() internal {
+        vm.warp(block.timestamp + launchPool.MIN_ANCHOR_CREDENTIAL_AGE_SECONDS());
     }
 
     // =========================================================================
@@ -379,6 +393,19 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         assertEq(lrepToken.balanceOf(voter1), 0);
     }
 
+    function test_ClaimReward_DoesNotRecordLaunchCreditWithFreshVerifiedHumanAnchor() public {
+        _verifyHumanFresh(voter2, bytes32("fresh-anchor-voter-2"));
+        (uint256 contentId, uint256 roundId) = _setupSettledPredictionRound();
+
+        vm.prank(voter1);
+        rewardDistributor.claimReward(contentId, roundId);
+
+        assertEq(launchPool.qualifyingRatingCount(voter1), 0);
+        assertEq(launchPool.raterDistinctVerifiedAnchorCount(voter1), 0);
+        assertEq(launchPool.raterDistinctAnchorRoundCount(voter1), 0);
+        assertEq(lrepToken.balanceOf(voter1), 0);
+    }
+
     function test_ClaimReward_RecordsLaunchCreditWithCuryoSeededHumanAnchor() public {
         _seedCuryoHuman(voter2, bytes32("curyo-anchor-voter-2"));
         (uint256 contentId, uint256 roundId) = _setupSettledPredictionRound();
@@ -389,6 +416,19 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         assertEq(launchPool.qualifyingRatingCount(voter1), 1);
         assertEq(launchPool.raterDistinctVerifiedAnchorCount(voter1), 1);
         assertEq(launchPool.raterDistinctAnchorRoundCount(voter1), 1);
+        assertEq(lrepToken.balanceOf(voter1), 0);
+    }
+
+    function test_ClaimReward_DoesNotRecordLaunchCreditWithFreshCuryoSeededHumanAnchor() public {
+        _seedCuryoHumanFresh(voter2, bytes32("fresh-curyo-anchor-voter-2"));
+        (uint256 contentId, uint256 roundId) = _setupSettledPredictionRound();
+
+        vm.prank(voter1);
+        rewardDistributor.claimReward(contentId, roundId);
+
+        assertEq(launchPool.qualifyingRatingCount(voter1), 0);
+        assertEq(launchPool.raterDistinctVerifiedAnchorCount(voter1), 0);
+        assertEq(launchPool.raterDistinctAnchorRoundCount(voter1), 0);
         assertEq(lrepToken.balanceOf(voter1), 0);
     }
 

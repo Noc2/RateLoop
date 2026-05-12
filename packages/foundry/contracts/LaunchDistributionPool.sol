@@ -38,6 +38,7 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
     uint64 public constant MIN_LAUNCH_CREDIT_STAKE = 1e6;
     uint16 public constant MAX_DISTINCT_RATERS_PER_VERIFIED_ANCHOR = 25;
     uint16 public constant MAX_UNVERIFIED_LAUNCH_CREDITS_PER_ROUND = 3;
+    uint32 public constant MIN_ANCHOR_CREDENTIAL_AGE_SECONDS = 7 days;
 
     uint256 public constant REFERRAL_BONUS_BPS = 5_000;
     uint256 public constant MAX_REFERRAL_REWARD_PER_REFERRER = 10_000e6;
@@ -344,6 +345,10 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
         return 1e6;
     }
 
+    function launchAnchorCredentialAgeSeconds() external view returns (uint32) {
+        return launchRewardPolicy.minAnchorCredentialAgeSeconds;
+    }
+
     function remainingLegacyPool() external view returns (uint256) {
         return _remainingLegacyPool();
     }
@@ -472,6 +477,7 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
             minLaunchCreditStake: MIN_LAUNCH_CREDIT_STAKE,
             maxDistinctRatersPerVerifiedAnchor: MAX_DISTINCT_RATERS_PER_VERIFIED_ANCHOR,
             maxUnverifiedCreditsPerRound: MAX_UNVERIFIED_LAUNCH_CREDITS_PER_ROUND,
+            minAnchorCredentialAgeSeconds: MIN_ANCHOR_CREDENTIAL_AGE_SECONDS,
             eligibilityRatingCount: ELIGIBILITY_RATING_COUNT,
             rewardingRatingCount: REWARDING_RATING_COUNT,
             requireNoPendingCleanup: true
@@ -496,6 +502,7 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
                 || policy.maxDistinctRatersPerVerifiedAnchor == 0
                 || policy.maxDistinctRatersPerVerifiedAnchor > MAX_DISTINCT_RATERS_PER_VERIFIED_ANCHOR
                 || policy.maxUnverifiedCreditsPerRound > MAX_UNVERIFIED_LAUNCH_CREDITS_PER_ROUND
+                || policy.minAnchorCredentialAgeSeconds < MIN_ANCHOR_CREDENTIAL_AGE_SECONDS
                 || policy.eligibilityRatingCount < ELIGIBILITY_RATING_COUNT
                 || policy.rewardingRatingCount < REWARDING_RATING_COUNT
                 || policy.minDistinctVerifiedAnchors > policy.eligibilityRatingCount
