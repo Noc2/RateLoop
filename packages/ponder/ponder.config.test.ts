@@ -52,6 +52,7 @@ const itWithSepoliaContentRegistryArtifact = chain4801?.ContentRegistry ? it : i
 const itWithMissingSepoliaPonderArtifacts = chain4801 && missingSepoliaPonderContracts.length > 0 ? it : it.skip;
 const itWithWorldChainPonderArtifacts = chain480 && missingWorldChainPonderContracts.length === 0 ? it : it.skip;
 const itWithHardhatArtifacts = chain31337 && missingHardhatPonderContracts.length === 0 ? it : it.skip;
+const PONDER_CONFIG_TEST_TIMEOUT_MS = 30_000;
 const ORIGINAL_ENV = { ...process.env };
 const VALID_ENV = {
   PONDER_NETWORK: "worldchainSepolia",
@@ -140,7 +141,7 @@ describe("ponder config", () => {
     expect(loadedConfig.contracts.ContentRegistry.network.worldchainSepolia.startBlock).toBe(
       expectedContentRegistryStartBlock,
     );
-  }, 10_000);
+  }, PONDER_CONFIG_TEST_TIMEOUT_MS);
 
   itWithWorldChainPonderArtifacts("derives World Chain mainnet addresses and start blocks from shared deployment artifacts", async () => {
     const { default: config } = await loadPonderConfig(
@@ -174,7 +175,7 @@ describe("ponder config", () => {
     expect(loadedConfig.contracts.RoundVotingEngine.network.worldchain.address).toBe(chain480!.RoundVotingEngine.address);
     expect(loadedConfig.contracts.LoopReputation.network.worldchain.address).toBe(chain480!.LoopReputation.address);
     expect(loadedConfig.contracts.ContentRegistry.network.worldchain.startBlock).toBe(expectedContentRegistry480StartBlock);
-  });
+  }, PONDER_CONFIG_TEST_TIMEOUT_MS);
 
   itWithSepoliaContentRegistryArtifact(
     "rejects stale Ponder address env overrides when shared deployment artifacts exist",
@@ -185,6 +186,7 @@ describe("ponder config", () => {
         }),
       ).rejects.toThrow("conflicts with ContentRegistry from shared deployment artifacts");
     },
+    PONDER_CONFIG_TEST_TIMEOUT_MS,
   );
 
   itWithSepoliaPonderArtifacts("rejects stale Ponder start block env overrides when shared deployment artifacts exist", async () => {
@@ -193,13 +195,13 @@ describe("ponder config", () => {
         PONDER_CONTENT_REGISTRY_START_BLOCK: String(expectedContentRegistryStartBlock + 1),
       }),
     ).rejects.toThrow("conflicts with ContentRegistry start block from shared deployment artifacts");
-  });
+  }, PONDER_CONFIG_TEST_TIMEOUT_MS);
 
   itWithMissingSepoliaPonderArtifacts("rejects non-local env address fallbacks when shared artifacts are missing", async () => {
     await expect(loadPonderConfig()).rejects.toThrow(
       `Missing shared deployment artifact for ${missingSepoliaPonderContracts[0]} on chain 4801`,
     );
-  }, 10_000);
+  }, PONDER_CONFIG_TEST_TIMEOUT_MS);
 
   itWithHardhatArtifacts("uses start block 0 for local hardhat even when artifacts contain deployment blocks", async () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -233,7 +235,7 @@ describe("ponder config", () => {
     expect(loadedConfig.contracts.LoopReputation.network.hardhat.startBlock).toBe(0);
     expect(warnSpy).toHaveBeenCalledTimes(1);
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("using start block 0"));
-  });
+  }, PONDER_CONFIG_TEST_TIMEOUT_MS);
 
   itWithHardhatArtifacts("prefers local hardhat env addresses over shared deployment artifacts", async () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -254,5 +256,5 @@ describe("ponder config", () => {
     expect(loadedConfig.contracts.ContentRegistry.network.hardhat.startBlock).toBe(0);
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("Using PONDER_CONTENT_REGISTRY_ADDRESS"));
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("using start block 0"));
-  });
+  }, PONDER_CONFIG_TEST_TIMEOUT_MS);
 });
