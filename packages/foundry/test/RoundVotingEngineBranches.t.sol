@@ -592,6 +592,39 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertGt(engine.roundRbtsRewardWeight(contentId, roundId), 0, "adjusted RBTS weights accumulated");
     }
 
+    function test_SettlementRatingUsesClusterAdjustedPools() public {
+        RaterRegistry raterRegistry = _installRaterRegistry();
+        vm.prank(owner);
+        raterRegistry.setClusterScore(voter1, keccak256("full-discount"), 10_000, 1);
+
+        uint256 contentId = _submitContent();
+
+        (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, true, 8_000, 10e6);
+        (bytes32 ck2, bytes32 s2) = _commitPrediction(voter2, contentId, false, 3_000, 3e6);
+        (bytes32 ck3, bytes32 s3) = _commitPrediction(voter3, contentId, false, 3_000, 3e6);
+        (bytes32 ck4, bytes32 s4) = _commitPrediction(voter4, contentId, false, 3_000, 3e6);
+
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        RoundLib.Round memory r0 = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        _warpPastTlockRevealTime(uint256(r0.startTime) + EPOCH);
+
+        engine.revealVoteByCommitKey(contentId, roundId, ck1, true, 8_000, s1);
+        engine.revealVoteByCommitKey(contentId, roundId, ck2, false, 3_000, s2);
+        engine.revealVoteByCommitKey(contentId, roundId, ck3, false, 3_000, s3);
+        engine.revealVoteByCommitKey(contentId, roundId, ck4, false, 3_000, s4);
+
+        RoundLib.Round memory revealed = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        assertEq(engine.commitRaterWeightBps(contentId, roundId, ck1), 0, "discounted voter has zero weight");
+        assertEq(revealed.upPool, 10e6, "raw UP pool would win");
+        assertEq(revealed.downPool, 9e6, "raw DOWN pool is smaller");
+        assertEq(revealed.weightedUpPool, 0, "zero-weight UP does not add evidence");
+        assertEq(revealed.weightedDownPool, 9e6, "weighted DOWN evidence remains");
+
+        engine.settleRound(contentId, roundId);
+
+        assertLt(registry.getRating(contentId), 5_000, "rating follows weighted DOWN evidence");
+    }
+
     function test_RbtsZeroStakeRevealDoesNotCreateEconomicRewards() public {
         uint256 contentId = _submitContent();
 

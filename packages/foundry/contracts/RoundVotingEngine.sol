@@ -776,7 +776,7 @@ contract RoundVotingEngine is
 
     /// @notice Settle a round after ≥minVoters votes have been revealed. Permissionless.
     /// @dev Win condition uses epoch-weighted pools to prevent late-voter herding.
-    ///      Rating update uses raw revealed pools for accurate crowd opinion representation.
+    ///      Rating update uses the same weighted pools so discounted raters cannot move public ratings.
     function settleRound(uint256 contentId, uint256 roundId) external nonReentrant {
         RoundLib.Round storage round = rounds[contentId][roundId];
 
@@ -861,8 +861,8 @@ contract RoundVotingEngine is
             roundId,
             _getRoundReferenceRatingBps(contentId, roundId),
             roundRbtsParticipationWeight[contentId][roundId],
-            round.upPool,
-            round.downPool
+            round.weightedUpPool,
+            round.weightedDownPool
         );
         emit RbtsRewardsScored(
             contentId,

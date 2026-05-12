@@ -136,7 +136,7 @@ contract InvariantRating is VotingTestBase {
         }
     }
 
-    /// @notice UP-majority rounds should produce rating >= 50.
+    /// @notice Weighted UP-majority rounds should produce rating >= 50.
     function invariant_UpMajorityRatingGe50() public view {
         uint256 recordCount = handler.getRoundRecordCount();
         for (uint256 i = 0; i < recordCount; i++) {
@@ -144,11 +144,11 @@ contract InvariantRating is VotingTestBase {
             if (!rec.settled) continue;
 
             RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, rec.contentId, rec.roundId);
-            // Only check rounds where UP side had strictly more raw stake
-            if (round.upPool <= round.downPool) continue;
+            // Only check rounds where UP side had strictly more weighted stake
+            if (round.weightedUpPool <= round.weightedDownPool) continue;
 
             (,,,,,,,, uint256 rating,) = registry.contents(rec.contentId);
-            assertGe(rating, 50, "UP-majority round produced rating < 50");
+            assertGe(rating, 50, "weighted UP-majority round produced rating < 50");
         }
     }
 }

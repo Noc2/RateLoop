@@ -30,8 +30,8 @@ library RoundSettlementSideEffectsLib {
         uint256 roundId,
         uint16 referenceRatingBps,
         uint256 weightedWinningStake,
-        uint64 upPool,
-        uint64 downPool
+        uint64 weightedUpPool,
+        uint64 weightedDownPool
     ) external {
         // The two rating-state precondition reads share the SettlementSideEffectFailed/RatingStateUpdate
         // stage with the eventual update call: any failure along this chain means "the rating state was
@@ -74,8 +74,9 @@ library RoundSettlementSideEffectsLib {
         }
 
         if (ratingUpdatePossible) {
-            RatingLib.RatingState memory nextState =
-                _applyBinarySettlement(referenceRatingBps, upPool, downPool, previousState, ratingConfig, slashConfig);
+            RatingLib.RatingState memory nextState = _applyBinarySettlement(
+                referenceRatingBps, weightedUpPool, weightedDownPool, previousState, ratingConfig, slashConfig
+            );
             try registry.updateRatingState(contentId, roundId, referenceRatingBps, nextState) { }
             catch {
                 emit SettlementSideEffectFailed(
