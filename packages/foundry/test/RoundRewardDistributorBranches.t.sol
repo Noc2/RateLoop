@@ -237,15 +237,22 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
     }
 
     function _setupSettledPredictionRound() internal returns (uint256 contentId, uint256 roundId) {
+        return _setupSettledPredictionRoundWithStakes(STAKE, STAKE, STAKE);
+    }
+
+    function _setupSettledPredictionRoundWithStakes(uint256 voter1Stake, uint256 voter2Stake, uint256 voter3Stake)
+        internal
+        returns (uint256 contentId, uint256 roundId)
+    {
         vm.startPrank(submitter);
         hrepToken.approve(address(registry), 10e6);
         _submitContentWithReservation(registry, "https://example.com/prediction", "goal", "goal", "tags", 0);
         vm.stopPrank();
         contentId = 1;
 
-        (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, 8_000, STAKE);
-        (bytes32 ck2, bytes32 s2) = _commitPrediction(voter2, contentId, 8_000, STAKE);
-        (bytes32 ck3, bytes32 s3) = _commitPrediction(voter3, contentId, 7_000, STAKE);
+        (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, 8_000, voter1Stake);
+        (bytes32 ck2, bytes32 s2) = _commitPrediction(voter2, contentId, 8_000, voter2Stake);
+        (bytes32 ck3, bytes32 s3) = _commitPrediction(voter3, contentId, 7_000, voter3Stake);
 
         roundId = RoundEngineReadHelpers.activeRoundId(votingEngine, contentId);
         RoundLib.Round memory r0 = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
@@ -341,6 +348,33 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         assertEq(launchPool.raterDistinctVerifiedAnchorCount(voter1), 1);
         assertEq(launchPool.raterDistinctAnchorRoundCount(voter1), 1);
         assertEq(lrepToken.balanceOf(voter1), 0);
+    }
+
+    function test_ClaimReward_ZeroStakeVoteCanRecordLaunchCredit() public {
+        _verifyHuman(voter2, bytes32("anchor-voter-2"));
+        (uint256 contentId, uint256 roundId) = _setupSettledPredictionRoundWithStakes(0, STAKE, STAKE);
+        bytes32 voter1CommitKey =
+            keccak256(abi.encodePacked(voter1, votingEngine.voterCommitHash(contentId, roundId, voter1)));
+
+        uint256 hrepBefore = hrepToken.balanceOf(voter1);
+        uint256 lrepBefore = lrepToken.balanceOf(voter1);
+        vm.prank(voter1);
+        rewardDistributor.claimReward(contentId, roundId);
+
+        assertGe(
+            votingEngine.commitRbtsScoreBps(contentId, roundId, voter1CommitKey),
+            launchPool.MIN_QUALIFYING_SCORE_BPS(),
+            "zero-stake vote has qualifying RBTS score"
+        );
+        assertEq(votingEngine.commitRbtsRewardWeight(contentId, roundId, voter1CommitKey), 0);
+        assertEq(votingEngine.commitRbtsStakeReturned(contentId, roundId, voter1CommitKey), 0);
+        assertEq(votingEngine.commitRbtsForfeitedStake(contentId, roundId, voter1CommitKey), 0);
+        assertEq(hrepToken.balanceOf(voter1), hrepBefore, "zero-stake claim has no HREP payout");
+        assertEq(lrepToken.balanceOf(voter1), lrepBefore, "single launch credit does not pay yet");
+        assertTrue(launchPool.earnedRewardCreditRecorded(contentId, roundId, voter1CommitKey));
+        assertEq(launchPool.qualifyingRatingCount(voter1), 1);
+        assertEq(launchPool.raterDistinctVerifiedAnchorCount(voter1), 1);
+        assertEq(launchPool.raterDistinctAnchorRoundCount(voter1), 1);
     }
 
     function test_ClaimReward_DoesNotRecordLaunchCreditWithoutIndependentVerifiedAnchor() public {

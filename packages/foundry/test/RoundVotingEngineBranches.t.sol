@@ -543,9 +543,14 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         engine.settleRound(contentId, roundId);
 
         assertTrue(engine.roundRbtsScored(contentId, roundId), "round settles and is marked scored");
+        assertGt(engine.commitRbtsScoreBps(contentId, roundId, ck3), 0, "zero-stake vote still gets RBTS score");
+        assertEq(engine.commitRbtsRewardWeight(contentId, roundId, ck3), 0, "zero stake has no reward weight");
         assertEq(engine.roundRbtsRewardWeight(contentId, roundId), 0, "no RBTS reward weight below 3 staked voters");
         assertEq(engine.roundRbtsForfeitedPool(contentId, roundId), 0, "no stake is slashed below 3 staked voters");
         assertEq(engine.roundVoterPool(contentId, roundId), 0, "no consensus subsidy or voter reward pool");
+        assertGt(engine.commitRbtsScoreBps(contentId, roundId, ck1), 0, "staked voter still gets signal score");
+        assertGt(engine.commitRbtsScoreBps(contentId, roundId, ck2), 0, "second staked voter still gets signal score");
+        assertGt(engine.commitRbtsScoreBps(contentId, roundId, ck3), 0, "zero-stake voter gets signal score");
         assertEq(engine.commitRbtsStakeReturned(contentId, roundId, ck1), STAKE, "staked voter gets stake back");
         assertEq(engine.commitRbtsStakeReturned(contentId, roundId, ck2), STAKE, "staked voter gets stake back");
         assertEq(engine.commitRbtsStakeReturned(contentId, roundId, ck3), 0, "zero stake has no return");
@@ -560,6 +565,37 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         vm.prank(voter3);
         rewardDistributor.claimReward(contentId, roundId);
         assertEq(hrepToken.balanceOf(voter3), voter3BalanceBefore, "zero-stake claim has no payout");
+
+        vm.prank(voter3);
+        vm.expectRevert(RoundRewardDistributor.NoStake.selector);
+        rewardDistributor.claimParticipationReward(contentId, roundId);
+    }
+
+    function test_RbtsZeroStakeVotesDoNotDisableEconomicRewardsWhenThreeStakedVotersExist() public {
+        uint256 contentId = _submitContent();
+
+        (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, true, 8_000, STAKE);
+        (bytes32 ck2, bytes32 s2) = _commitPrediction(voter2, contentId, true, 7_000, STAKE);
+        (bytes32 ck3, bytes32 s3) = _commitPrediction(voter3, contentId, false, 3_000, STAKE);
+        (bytes32 ck4, bytes32 s4) = _commitPrediction(voter4, contentId, true, 6_500, 0);
+
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        RoundLib.Round memory r0 = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        _warpPastTlockRevealTime(uint256(r0.startTime) + EPOCH);
+
+        engine.revealVoteByCommitKey(contentId, roundId, ck1, true, 8_000, s1);
+        engine.revealVoteByCommitKey(contentId, roundId, ck2, true, 7_000, s2);
+        engine.revealVoteByCommitKey(contentId, roundId, ck3, false, 3_000, s3);
+        engine.revealVoteByCommitKey(contentId, roundId, ck4, true, 6_500, s4);
+        engine.settleRound(contentId, roundId);
+
+        assertTrue(engine.roundRbtsScored(contentId, roundId), "round settles and is marked scored");
+        assertGt(engine.roundRbtsRewardWeight(contentId, roundId), 0, "three staked voters still create RBTS rewards");
+        assertGt(engine.roundRbtsForfeitedPool(contentId, roundId), 0, "three staked voters can still forfeit stake");
+        assertGt(engine.commitRbtsScoreBps(contentId, roundId, ck4), 0, "zero-stake voter gets signal score");
+        assertEq(engine.commitRbtsRewardWeight(contentId, roundId, ck4), 0, "zero-stake voter gets no reward weight");
+        assertEq(engine.commitRbtsStakeReturned(contentId, roundId, ck4), 0, "zero-stake voter gets no stake return");
+        assertEq(engine.commitRbtsForfeitedStake(contentId, roundId, ck4), 0, "zero-stake voter gets no forfeiture");
     }
 
     function test_RbtsSettlementRequiresThreeReveals() public {
