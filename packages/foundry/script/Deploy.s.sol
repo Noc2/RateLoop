@@ -311,7 +311,6 @@ contract DeployRateLoop is ScaffoldETHDeploy {
             categoryRegistry.renounceRole(categoryRegistry.ADMIN_ROLE(), deployer);
             raterRegistry.renounceRole(raterRegistry.ADMIN_ROLE(), deployer);
             raterRegistry.renounceRole(raterRegistry.SEEDER_ROLE(), deployer);
-            raterRegistry.renounceRole(raterRegistry.SCORER_ROLE(), deployer);
             raterDeclarationRegistry.renounceRole(raterDeclarationRegistry.CONFIG_ROLE(), deployer);
             raterDeclarationRegistry.renounceRole(raterDeclarationRegistry.PROBE_ROLE(), deployer);
             raterDeclarationRegistry.renounceRole(raterDeclarationRegistry.CHALLENGE_RESOLVER_ROLE(), deployer);

@@ -502,21 +502,18 @@ contract ProtocolConfigBranchesTest is Test {
         config.setRoundConfigBounds(5 minutes, 60 minutes, 1 hours, 30 days + 1, 3, 100, 3, 1_000);
     }
 
-    function test_SetRaterRegistryAndScorerMetadataHash() public {
+    function test_SetRaterRegistryAndDeclarationRegistry() public {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
         address raterRegistry = address(0xBEEF);
         address raterDeclarationRegistry = address(0xA1A1);
-        bytes32 scorerMetadataHash = keccak256("scorer-root-v1");
 
         config.setRaterRegistry(raterRegistry);
         vm.expectEmit(true, false, false, true, address(config));
         emit RaterDeclarationRegistryUpdated(raterDeclarationRegistry);
         config.setRaterDeclarationRegistry(raterDeclarationRegistry);
-        config.setScorerMetadataHash(scorerMetadataHash);
 
         assertEq(config.raterRegistry(), raterRegistry);
         assertEq(config.raterDeclarationRegistry(), raterDeclarationRegistry);
-        assertEq(config.scorerMetadataHash(), scorerMetadataHash);
     }
 
     function test_SetRaterDeclarationRegistry_AllowsZeroAddressToDisableWeighting() public {

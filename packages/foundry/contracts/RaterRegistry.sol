@@ -5,19 +5,16 @@ import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {IWorldIDRouter} from "./interfaces/IWorldIDRouter.sol";
 
 /// @title RaterRegistry
-/// @notice Optional rater metadata, human credentials, trust anchors, and scorer labels for RateLoop.
+/// @notice Optional rater metadata, human credentials, trust anchors, and social follows for RateLoop.
 /// @dev This registry is intentionally non-gating: rating contracts may read it, but base participation
 ///      must keep working when no profile, credential, or trust signal exists.
 contract RaterRegistry is AccessControl {
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
     bytes32 public constant SEEDER_ROLE = keccak256("SEEDER_ROLE");
-    bytes32 public constant SCORER_ROLE = keccak256("SCORER_ROLE");
-    bytes32 public constant CLUSTER_CHALLENGE_RESOLVER_ROLE = keccak256("CLUSTER_CHALLENGE_RESOLVER_ROLE");
 
     uint16 public constant BASE_MULTIPLIER_BPS = 10_000;
     uint16 public constant WORLD_ID_MULTIPLIER_BPS = 10_000;
     uint16 public constant MAX_CREDENTIAL_MULTIPLIER_BPS = 12_000;
-    uint16 public constant MAX_CLUSTER_DISCOUNT_BPS = 10_000;
     uint16 public constant MAX_TRUST_BOOST_BPS = 12_000;
     uint256 public constant WORLD_ID_GROUP_ID = 1;
 
@@ -27,13 +24,6 @@ contract RaterRegistry is AccessControl {
         AI,
         Team,
         Hybrid
-    }
-
-    enum ClusterScoreChallengeStatus {
-        None,
-        Open,
-        Sustained,
-        Rejected
     }
 
     struct RaterProfile {
@@ -62,48 +52,6 @@ contract RaterRegistry is AccessControl {
         bytes32 seedRoot;
     }
 
-    struct ClusterScore {
-        bytes32 clusterId;
-        uint16 discountBps;
-        uint64 scorerEpoch;
-        uint64 updatedAt;
-    }
-
-    struct ClusterScoreMetadata {
-        bytes32 algorithmHash;
-        bytes32 modelVersionHash;
-        bytes32 scoreRoot;
-        bytes32 evidenceHash;
-        uint64 challengeWindowEndsAt;
-    }
-
-    struct VersionedClusterScore {
-        bytes32 clusterId;
-        uint16 discountBps;
-        uint64 scorerEpoch;
-        uint64 updatedAt;
-        bytes32 algorithmHash;
-        bytes32 modelVersionHash;
-        bytes32 scoreRoot;
-        bytes32 evidenceHash;
-        uint64 challengeWindowEndsAt;
-        bytes32 scoreKey;
-    }
-
-    struct ClusterScoreChallenge {
-        address challenger;
-        address rater;
-        uint64 scorerEpoch;
-        bytes32 algorithmHash;
-        bytes32 modelVersionHash;
-        bytes32 scoreKey;
-        bytes32 evidenceHash;
-        bytes32 resolutionHash;
-        uint64 openedAt;
-        uint64 resolvedAt;
-        ClusterScoreChallengeStatus status;
-    }
-
     struct TrustAttestation {
         address issuer;
         address subject;
@@ -120,16 +68,11 @@ contract RaterRegistry is AccessControl {
     mapping(address => SelfCredential) private _selfCredentials;
     mapping(bytes32 => address) public selfNullifierOwner;
     mapping(address => TrustSeed) private _trustSeeds;
-    mapping(address => ClusterScore) private _clusterScores;
-    mapping(address => VersionedClusterScore) private _currentVersionedClusterScores;
-    mapping(bytes32 => VersionedClusterScore) private _clusterScoreHistory;
-    mapping(uint256 => ClusterScoreChallenge) private _clusterScoreChallenges;
     mapping(bytes32 => TrustAttestation) private _trustAttestations;
     mapping(address => mapping(address => bool)) public isFollowing;
     mapping(address => uint256) public followingCount;
     mapping(address => uint256) public followerCount;
 
-    uint256 public nextClusterScoreChallengeId = 1;
     IWorldIDRouter public immutable worldIdRouter;
     bytes32 public immutable worldIdScope;
     uint256 public immutable worldIdExternalNullifierHash;
@@ -153,36 +96,6 @@ contract RaterRegistry is AccessControl {
         address indexed rater, uint64 indexed seededAt, uint64 indexed sunsetAt, uint16 trustBudgetBps, bytes32 seedRoot
     );
     event TrustSeedRevoked(address indexed rater);
-    event ClusterScoreUpdated(
-        address indexed rater, bytes32 indexed clusterId, uint16 discountBps, uint64 scorerEpoch, uint64 updatedAt
-    );
-    event VersionedClusterScorePublished(
-        address indexed rater,
-        uint64 indexed scorerEpoch,
-        bytes32 indexed modelVersionHash,
-        bytes32 clusterId,
-        uint16 discountBps,
-        bytes32 algorithmHash,
-        bytes32 scoreRoot,
-        bytes32 evidenceHash,
-        uint64 challengeWindowEndsAt,
-        uint64 updatedAt,
-        bytes32 scoreKey
-    );
-    event ClusterScoreChallengeOpened(
-        uint256 indexed challengeId,
-        address indexed challenger,
-        bytes32 indexed scoreKey,
-        address rater,
-        uint64 scorerEpoch,
-        bytes32 algorithmHash,
-        bytes32 modelVersionHash,
-        bytes32 evidenceHash,
-        uint64 openedAt
-    );
-    event ClusterScoreChallengeResolved(
-        uint256 indexed challengeId, ClusterScoreChallengeStatus status, bytes32 resolutionHash, uint64 resolvedAt
-    );
     event TrustAttestationSet(
         bytes32 indexed attestationId,
         address indexed issuer,
@@ -201,8 +114,6 @@ contract RaterRegistry is AccessControl {
     error InvalidCredential();
     error InvalidMultiplier();
     error InvalidTrustAttestation();
-    error InvalidClusterScore();
-    error InvalidChallenge();
     error NullifierAlreadyAssigned();
 
     constructor(
@@ -228,14 +139,10 @@ contract RaterRegistry is AccessControl {
         _grantRole(DEFAULT_ADMIN_ROLE, governance);
         _grantRole(ADMIN_ROLE, governance);
         _grantRole(SEEDER_ROLE, governance);
-        _grantRole(SCORER_ROLE, governance);
-        _grantRole(CLUSTER_CHALLENGE_RESOLVER_ROLE, governance);
 
         if (admin != governance) {
             _grantRole(ADMIN_ROLE, admin);
             _grantRole(SEEDER_ROLE, admin);
-            _grantRole(SCORER_ROLE, admin);
-            _grantRole(CLUSTER_CHALLENGE_RESOLVER_ROLE, admin);
         }
     }
 
@@ -348,80 +255,6 @@ contract RaterRegistry is AccessControl {
         emit TrustSeedRevoked(rater);
     }
 
-    function setClusterScore(address rater, bytes32 clusterId, uint16 discountBps, uint64 scorerEpoch)
-        external
-        onlyRole(SCORER_ROLE)
-    {
-        ClusterScoreMetadata memory metadata;
-        _storeClusterScore(rater, clusterId, discountBps, scorerEpoch, metadata, false);
-    }
-
-    function publishClusterScore(
-        address rater,
-        bytes32 clusterId,
-        uint16 discountBps,
-        uint64 scorerEpoch,
-        ClusterScoreMetadata calldata metadata
-    ) external onlyRole(SCORER_ROLE) returns (bytes32 scoreKey) {
-        scoreKey = _storeClusterScore(rater, clusterId, discountBps, scorerEpoch, metadata, true);
-    }
-
-    function openClusterScoreChallenge(
-        address rater,
-        uint64 scorerEpoch,
-        bytes32 algorithmHash,
-        bytes32 modelVersionHash,
-        bytes32 evidenceHash
-    ) external returns (uint256 challengeId) {
-        if (evidenceHash == bytes32(0)) revert InvalidChallenge();
-
-        bytes32 scoreKey = clusterScoreKey(rater, scorerEpoch, algorithmHash, modelVersionHash);
-        VersionedClusterScore storage score = _clusterScoreHistory[scoreKey];
-        if (score.updatedAt == 0 || score.challengeWindowEndsAt < block.timestamp) revert InvalidChallenge();
-
-        challengeId = nextClusterScoreChallengeId++;
-        _clusterScoreChallenges[challengeId] = ClusterScoreChallenge({
-            challenger: msg.sender,
-            rater: rater,
-            scorerEpoch: scorerEpoch,
-            algorithmHash: algorithmHash,
-            modelVersionHash: modelVersionHash,
-            scoreKey: scoreKey,
-            evidenceHash: evidenceHash,
-            resolutionHash: bytes32(0),
-            openedAt: uint64(block.timestamp),
-            resolvedAt: 0,
-            status: ClusterScoreChallengeStatus.Open
-        });
-
-        emit ClusterScoreChallengeOpened(
-            challengeId,
-            msg.sender,
-            scoreKey,
-            rater,
-            scorerEpoch,
-            algorithmHash,
-            modelVersionHash,
-            evidenceHash,
-            uint64(block.timestamp)
-        );
-    }
-
-    function resolveClusterScoreChallenge(uint256 challengeId, bool sustained, bytes32 resolutionHash)
-        external
-        onlyRole(CLUSTER_CHALLENGE_RESOLVER_ROLE)
-    {
-        if (resolutionHash == bytes32(0)) revert InvalidChallenge();
-        ClusterScoreChallenge storage challenge = _clusterScoreChallenges[challengeId];
-        if (challenge.status != ClusterScoreChallengeStatus.Open) revert InvalidChallenge();
-
-        challenge.status = sustained ? ClusterScoreChallengeStatus.Sustained : ClusterScoreChallengeStatus.Rejected;
-        challenge.resolutionHash = resolutionHash;
-        challenge.resolvedAt = uint64(block.timestamp);
-
-        emit ClusterScoreChallengeResolved(challengeId, challenge.status, resolutionHash, uint64(block.timestamp));
-    }
-
     function setTrustAttestation(
         address subject,
         uint256 categoryId,
@@ -472,44 +305,12 @@ contract RaterRegistry is AccessControl {
         return _trustSeeds[rater];
     }
 
-    function getClusterScore(address rater) external view returns (ClusterScore memory) {
-        return _clusterScores[rater];
-    }
-
-    function getVersionedClusterScore(address rater) external view returns (VersionedClusterScore memory) {
-        return _currentVersionedClusterScores[rater];
-    }
-
-    function getClusterScoreAt(address rater, uint64 scorerEpoch, bytes32 algorithmHash, bytes32 modelVersionHash)
-        external
-        view
-        returns (VersionedClusterScore memory)
-    {
-        return _clusterScoreHistory[clusterScoreKey(rater, scorerEpoch, algorithmHash, modelVersionHash)];
-    }
-
-    function getClusterScoreByKey(bytes32 scoreKey) external view returns (VersionedClusterScore memory) {
-        return _clusterScoreHistory[scoreKey];
-    }
-
-    function getClusterScoreChallenge(uint256 challengeId) external view returns (ClusterScoreChallenge memory) {
-        return _clusterScoreChallenges[challengeId];
-    }
-
     function getTrustAttestation(bytes32 attestationId) external view returns (TrustAttestation memory) {
         return _trustAttestations[attestationId];
     }
 
     function trustAttestationId(address issuer, address subject, uint256 categoryId) public pure returns (bytes32) {
         return keccak256(abi.encode(issuer, subject, categoryId));
-    }
-
-    function clusterScoreKey(address rater, uint64 scorerEpoch, bytes32 algorithmHash, bytes32 modelVersionHash)
-        public
-        pure
-        returns (bytes32)
-    {
-        return keccak256(abi.encode(rater, scorerEpoch, algorithmHash, modelVersionHash));
     }
 
     function worldIdSignalHash(address rater) public pure returns (uint256) {
@@ -583,66 +384,6 @@ contract RaterRegistry is AccessControl {
         emit SelfCredentialAttested(
             rater, nullifierHash, scope, legacy, uint64(block.timestamp), expiresAt, multiplierBps, evidenceHash
         );
-    }
-
-    function _storeClusterScore(
-        address rater,
-        bytes32 clusterId,
-        uint16 discountBps,
-        uint64 scorerEpoch,
-        ClusterScoreMetadata memory metadata,
-        bool requireMetadata
-    ) internal returns (bytes32 scoreKey) {
-        if (rater == address(0)) revert InvalidAddress();
-        if (discountBps > MAX_CLUSTER_DISCOUNT_BPS) revert InvalidMultiplier();
-        if (requireMetadata) {
-            if (metadata.algorithmHash == bytes32(0) || metadata.modelVersionHash == bytes32(0)) {
-                revert InvalidClusterScore();
-            }
-            if (metadata.scoreRoot == bytes32(0) && metadata.evidenceHash == bytes32(0)) {
-                revert InvalidClusterScore();
-            }
-            if (metadata.challengeWindowEndsAt <= block.timestamp) revert InvalidClusterScore();
-        }
-
-        uint64 updatedAt = uint64(block.timestamp);
-        scoreKey = clusterScoreKey(rater, scorerEpoch, metadata.algorithmHash, metadata.modelVersionHash);
-        VersionedClusterScore memory versionedScore = VersionedClusterScore({
-            clusterId: clusterId,
-            discountBps: discountBps,
-            scorerEpoch: scorerEpoch,
-            updatedAt: updatedAt,
-            algorithmHash: metadata.algorithmHash,
-            modelVersionHash: metadata.modelVersionHash,
-            scoreRoot: metadata.scoreRoot,
-            evidenceHash: metadata.evidenceHash,
-            challengeWindowEndsAt: metadata.challengeWindowEndsAt,
-            scoreKey: scoreKey
-        });
-
-        _clusterScores[rater] = ClusterScore({
-            clusterId: clusterId, discountBps: discountBps, scorerEpoch: scorerEpoch, updatedAt: updatedAt
-        });
-        _currentVersionedClusterScores[rater] = versionedScore;
-        _clusterScoreHistory[scoreKey] = versionedScore;
-
-        emit ClusterScoreUpdated(rater, clusterId, discountBps, scorerEpoch, updatedAt);
-
-        if (requireMetadata) {
-            emit VersionedClusterScorePublished(
-                rater,
-                scorerEpoch,
-                metadata.modelVersionHash,
-                clusterId,
-                discountBps,
-                metadata.algorithmHash,
-                metadata.scoreRoot,
-                metadata.evidenceHash,
-                metadata.challengeWindowEndsAt,
-                updatedAt,
-                scoreKey
-            );
-        }
     }
 
     function _setTrustSeed(address rater, uint64 sunsetAt, uint16 trustBudgetBps, bytes32 seedRoot) internal {

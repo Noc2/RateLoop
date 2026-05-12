@@ -25,16 +25,6 @@ library RaterWeightLib {
         address configuredRaterRegistry = protocolConfig.raterRegistry();
         if (configuredRaterRegistry != address(0)) {
             IRaterRegistryWeights registryWeights = IRaterRegistryWeights(configuredRaterRegistry);
-            try registryWeights.getClusterScore(voter) returns (bytes32, uint16 discountBps, uint64, uint64 updatedAt) {
-                if (updatedAt != 0) {
-                    if (discountBps >= WEIGHT_BPS) {
-                        weightBps = 0;
-                    } else {
-                        weightBps = (weightBps * (WEIGHT_BPS - discountBps)) / WEIGHT_BPS;
-                    }
-                }
-            } catch { }
-
             try registryWeights.credentialMultiplierBps(voter) returns (uint16 multiplierBps) {
                 if (multiplierBps > WEIGHT_BPS) weightBps = (weightBps * multiplierBps) / WEIGHT_BPS;
             } catch { }

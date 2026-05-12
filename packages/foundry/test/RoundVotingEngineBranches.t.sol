@@ -408,30 +408,6 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertGt(round.settledAt, 0);
     }
 
-    function test_RevealUsesClusterAdjustedWeight() public {
-        RaterRegistry raterRegistry = _installRaterRegistry();
-        vm.prank(owner);
-        raterRegistry.setClusterScore(voter1, keccak256("shared-cluster"), 7_500, 1);
-
-        uint256 contentId = _submitContent();
-        (bytes32 ck1, bytes32 s1) = _commit(voter1, contentId, true, 4e6);
-        (bytes32 ck2, bytes32 s2) = _commit(voter2, contentId, false, 4e6);
-        (bytes32 ck3, bytes32 s3) = _commit(voter3, contentId, true, 4e6);
-        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
-        RoundLib.Round memory r0 = RoundEngineReadHelpers.round(engine, contentId, roundId);
-        _warpPastTlockRevealTime(uint256(r0.startTime) + EPOCH);
-
-        _reveal(contentId, roundId, ck1, true, s1);
-        _reveal(contentId, roundId, ck2, false, s2);
-        _reveal(contentId, roundId, ck3, true, s3);
-
-        RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
-        assertEq(engine.commitRaterWeightBps(contentId, roundId, ck1), 2_500, "discounted weight");
-        assertEq(engine.commitRaterWeightBps(contentId, roundId, ck2), 10_000, "default weight");
-        assertEq(round.weightedUpPool, 5e6, "up pool includes discounted voter");
-        assertEq(round.weightedDownPool, 4e6, "down pool remains full weight");
-    }
-
     function test_RevealUsesVerifiedAgentDeclarationWeight() public {
         MockRaterDeclarationWeights declarationWeights = _installRaterDeclarationWeights();
         declarationWeights.setActiveAiDeclaration(voter1, true);
@@ -483,22 +459,6 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
         assertEq(engine.commitRaterWeightBps(contentId, roundId, ck1), 12_500, "combined weight is capped");
         assertTrue(engine.commitHadActiveAiDeclaration(contentId, roundId, ck1), "agent flag survives cap");
-    }
-
-    function test_CommitAiSnapshotSurvivesFullClusterDiscount() public {
-        RaterRegistry raterRegistry = _installRaterRegistry();
-        MockRaterDeclarationWeights declarationWeights = _installRaterDeclarationWeights();
-        vm.prank(owner);
-        raterRegistry.setClusterScore(voter1, keccak256("shared-cluster"), 10_000, 1);
-        declarationWeights.setActiveAiDeclaration(voter1, true);
-        declarationWeights.setTierMultiplierBps(voter1, 11_500);
-
-        uint256 contentId = _submitContent();
-        (bytes32 ck1,) = _commit(voter1, contentId, true, 4e6);
-        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
-
-        assertEq(engine.commitRaterWeightBps(contentId, roundId, ck1), 0, "cluster discount still freezes weight");
-        assertTrue(engine.commitHadActiveAiDeclaration(contentId, roundId, ck1), "agent flag survives discount");
     }
 
     function test_CommitAiSnapshotUsesActiveStatusWhenMultiplierBase() public {
@@ -566,65 +526,6 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertGt(engine.commitRbtsScoreBps(contentId, roundId, ck1), 0, "ck1 scored");
     }
 
-    function test_RbtsWeightsUseClusterAdjustedStake() public {
-        RaterRegistry raterRegistry = _installRaterRegistry();
-        vm.prank(owner);
-        raterRegistry.setClusterScore(voter1, keccak256("shared-cluster"), 7_500, 1);
-
-        uint256 contentId = _submitContent();
-
-        (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, true, 8_000, STAKE);
-        (bytes32 ck2, bytes32 s2) = _commitPrediction(voter2, contentId, true, 5_000, STAKE);
-        (bytes32 ck3, bytes32 s3) = _commitPrediction(voter3, contentId, true, 6_500, STAKE);
-
-        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
-        RoundLib.Round memory r0 = RoundEngineReadHelpers.round(engine, contentId, roundId);
-        _warpPastTlockRevealTime(uint256(r0.startTime) + EPOCH);
-
-        engine.revealVoteByCommitKey(contentId, roundId, ck1, true, 8_000, s1);
-        engine.revealVoteByCommitKey(contentId, roundId, ck2, true, 5_000, s2);
-        engine.revealVoteByCommitKey(contentId, roundId, ck3, true, 6_500, s3);
-
-        engine.settleRound(contentId, roundId);
-
-        assertEq(engine.commitRaterWeightBps(contentId, roundId, ck1), 2_500, "discounted weight");
-        assertTrue(engine.roundRbtsScored(contentId, roundId), "RBTS scored");
-        assertGt(engine.roundRbtsRewardWeight(contentId, roundId), 0, "adjusted RBTS weights accumulated");
-    }
-
-    function test_SettlementRatingUsesClusterAdjustedPools() public {
-        RaterRegistry raterRegistry = _installRaterRegistry();
-        vm.prank(owner);
-        raterRegistry.setClusterScore(voter1, keccak256("full-discount"), 10_000, 1);
-
-        uint256 contentId = _submitContent();
-
-        (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, true, 8_000, 10e6);
-        (bytes32 ck2, bytes32 s2) = _commitPrediction(voter2, contentId, false, 3_000, 3e6);
-        (bytes32 ck3, bytes32 s3) = _commitPrediction(voter3, contentId, false, 3_000, 3e6);
-        (bytes32 ck4, bytes32 s4) = _commitPrediction(voter4, contentId, false, 3_000, 3e6);
-
-        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
-        RoundLib.Round memory r0 = RoundEngineReadHelpers.round(engine, contentId, roundId);
-        _warpPastTlockRevealTime(uint256(r0.startTime) + EPOCH);
-
-        engine.revealVoteByCommitKey(contentId, roundId, ck1, true, 8_000, s1);
-        engine.revealVoteByCommitKey(contentId, roundId, ck2, false, 3_000, s2);
-        engine.revealVoteByCommitKey(contentId, roundId, ck3, false, 3_000, s3);
-        engine.revealVoteByCommitKey(contentId, roundId, ck4, false, 3_000, s4);
-
-        RoundLib.Round memory revealed = RoundEngineReadHelpers.round(engine, contentId, roundId);
-        assertEq(engine.commitRaterWeightBps(contentId, roundId, ck1), 0, "discounted voter has zero weight");
-        assertEq(revealed.upPool, 10e6, "raw UP pool would win");
-        assertEq(revealed.downPool, 9e6, "raw DOWN pool is smaller");
-        assertEq(revealed.weightedUpPool, 0, "zero-weight UP does not add evidence");
-        assertEq(revealed.weightedDownPool, 9e6, "weighted DOWN evidence remains");
-
-        engine.settleRound(contentId, roundId);
-
-        assertLt(registry.getRating(contentId), 5_000, "rating follows weighted DOWN evidence");
-    }
-
     function test_RbtsZeroStakeRevealDoesNotCreateEconomicRewards() public {
         uint256 contentId = _submitContent();
 
@@ -659,39 +560,6 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         vm.prank(voter3);
         rewardDistributor.claimReward(contentId, roundId);
         assertEq(hrepToken.balanceOf(voter3), voter3BalanceBefore, "zero-stake claim has no payout");
-    }
-
-    function test_RbtsZeroWeightPositiveStakeReturnsPrincipal() public {
-        RaterRegistry raterRegistry = _installRaterRegistry();
-        vm.prank(owner);
-        raterRegistry.setClusterScore(voter1, keccak256("full-discount"), 10_000, 1);
-
-        uint256 contentId = _submitContent();
-
-        (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, false, 2_000, STAKE);
-        (bytes32 ck2, bytes32 s2) = _commitPrediction(voter2, contentId, true, 8_000, STAKE);
-        (bytes32 ck3, bytes32 s3) = _commitPrediction(voter3, contentId, true, 7_000, STAKE);
-        (bytes32 ck4, bytes32 s4) = _commitPrediction(voter4, contentId, true, 6_000, STAKE);
-
-        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
-        RoundLib.Round memory r0 = RoundEngineReadHelpers.round(engine, contentId, roundId);
-        _warpPastTlockRevealTime(uint256(r0.startTime) + EPOCH);
-
-        engine.revealVoteByCommitKey(contentId, roundId, ck1, false, 2_000, s1);
-        engine.revealVoteByCommitKey(contentId, roundId, ck2, true, 8_000, s2);
-        engine.revealVoteByCommitKey(contentId, roundId, ck3, true, 7_000, s3);
-        engine.revealVoteByCommitKey(contentId, roundId, ck4, true, 6_000, s4);
-        engine.settleRound(contentId, roundId);
-
-        assertEq(engine.commitRaterWeightBps(contentId, roundId, ck1), 0, "cluster discount zeroes weight");
-        assertEq(engine.commitRbtsRewardWeight(contentId, roundId, ck1), 0, "zero-weight rater gets no reward weight");
-        assertEq(engine.commitRbtsStakeReturned(contentId, roundId, ck1), STAKE, "principal is returned");
-        assertEq(engine.commitRbtsForfeitedStake(contentId, roundId, ck1), 0, "zero-weight rater is not slashed");
-
-        uint256 voter1BalanceBefore = hrepToken.balanceOf(voter1);
-        vm.prank(voter1);
-        rewardDistributor.claimReward(contentId, roundId);
-        assertEq(hrepToken.balanceOf(voter1), voter1BalanceBefore + STAKE, "claim returns zero-weight stake");
     }
 
     function test_RbtsSettlementRequiresThreeReveals() public {
