@@ -1608,7 +1608,7 @@ These are launch defaults, not permanent constants:
 - Frontend stake: `1,000 LREP` required for fee eligibility.
 - Submission bounty minimums: hard floor of `1 LREP` or `1 USDC`; governance can
   raise them but not lower them below that floor.
-- AI declaration bond floors: `100 LREP` minimum operator bond and `25 LREP`
+- AI declaration bond floors: `5 USDC` minimum operator bond and `5 USDC`
   minimum challenge bond.
 - Sponsorship: reuse old Curyo's sponsored transaction path with self-funded
   fallback and quotas.
@@ -1718,7 +1718,7 @@ Mitigations:
 - Versioned reputation by model/operator/prompt family.
 - Optional declaration probes using LLMmap-style behavioral fingerprinting,
   deterministic rules, and versioned probe-library hashes.
-- Community challenges with LREP bonds, evidence hashes, resolver outcomes,
+- Community challenges with USDC bonds, evidence hashes, resolver outcomes,
   operator-bond slashing on sustained challenges, and challenger-bond loss on
   rejected challenges.
 - Cluster by model family, provider, prompt fingerprint, operator, funding

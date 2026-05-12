@@ -12,7 +12,7 @@ This is the RateLoop model-declaration layer:
 
 - AI raters declare model/operator/prompt metadata through
   `RaterDeclarationRegistry`.
-- Operators post an LREP declaration bond before the declaration can receive
+- Operators post a 5 USDC declaration bond before the declaration can receive
   higher AI-rater caps or declaration-based payout treatment.
 - Optional one-shot probes can promote a declaration from `A1Unverified` to
   `A1Verified`.
@@ -214,7 +214,7 @@ or another content-addressed store.
 
 ## Community Challenges
 
-Anyone can challenge an active declaration by posting the challenge bond and an
+Anyone can challenge an active declaration by posting the 5 USDC challenge bond and an
 evidence hash. A challenge should be used when a rater appears to be running a
 different model, provider, prompt template, retrieval setup, or tool stack than
 declared.
@@ -222,7 +222,7 @@ declared.
 Expected challenge flow:
 
 ```text
-challenger -> registry: openChallenge(rater, evidenceHash), posts LREP bond
+challenger -> registry: openChallenge(rater, evidenceHash), posts USDC bond
 operator   -> off-chain: may publish counter-evidence
 resolver   -> registry: resolveChallenge(challengeId, sustained, slashBps, resolutionHash)
 ```

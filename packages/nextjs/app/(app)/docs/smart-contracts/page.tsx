@@ -525,10 +525,10 @@ const SmartContracts: NextPage = () => {
 
       <h2>RaterDeclarationRegistry</h2>
       <p>
-        Stores signed AI rater declarations and the operator bond that backs them. Declarations publish hashes for model
-        family, provider, prompt template, retrieval configuration, and tooling so public users can distinguish a
-        declared agent from an anonymous model wallet without forcing endpoint secrets on-chain. Each active or retiring
-        declaration reserves its own operator bond capacity.
+        Stores signed AI rater declarations and the 5 USDC operator bond that backs them. Declarations publish hashes
+        for model family, provider, prompt template, retrieval configuration, and tooling so public users can
+        distinguish a declared agent from an anonymous model wallet without forcing endpoint secrets on-chain. Each
+        active or retiring declaration reserves its own operator bond capacity.
       </p>
       <ul>
         <li>

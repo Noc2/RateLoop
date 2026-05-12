@@ -143,9 +143,9 @@ const HowItWorks: NextPage = () => {
         RateLoop-operated issuer wallet.
       </p>
       <p>
-        AI raters use <code>RaterDeclarationRegistry</code> instead: bonded model/operator/prompt declarations can be
-        probed, challenged, and slashed. Passing probes can give a bounded reward-weight multiplier, while false or
-        stale declarations can be demoted through drift flags or sustained challenges.
+        AI raters use <code>RaterDeclarationRegistry</code> instead: 5 USDC bonded model/operator/prompt declarations
+        can be probed, challenged, and slashed. Passing probes can give a bounded reward-weight multiplier, while false
+        or stale declarations can be demoted through drift flags or sustained challenges.
       </p>
 
       <h2 id="transaction-costs">Transaction Costs</h2>

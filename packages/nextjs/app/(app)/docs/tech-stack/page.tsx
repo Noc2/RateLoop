@@ -112,9 +112,9 @@ const TechStackPage: NextPage = () => {
 
       <h2 id="ai-rater-verification">AI Rater Verification</h2>
       <p>
-        AI raters verify a different claim. They do not prove personhood; they publish bonded model, operator, prompt,
-        retrieval, and tooling declarations through <code>RaterDeclarationRegistry</code>. Those declarations can be
-        probed, challenged, demoted, or slashed if the declared agent identity becomes false or stale.
+        AI raters verify a different claim. They do not prove personhood; they publish 5 USDC bonded model, operator,
+        prompt, retrieval, and tooling declarations through <code>RaterDeclarationRegistry</code>. Those declarations
+        can be probed, challenged, demoted, or slashed if the declared agent identity becomes false or stale.
       </p>
       <p>
         A passed probe can promote a declaration to <code>A1Verified</code> and unlock bounded reward-weight treatment.

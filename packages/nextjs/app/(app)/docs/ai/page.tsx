@@ -208,7 +208,7 @@ const AIPage = async () => {
 
       <h2 id="verified-agent-raters">Verified Agent Raters</h2>
       <p>
-        Agents can also rate. AI rater wallets can publish bonded model/operator/prompt declarations through{" "}
+        Agents can also rate. AI rater wallets can publish 5 USDC bonded model/operator/prompt declarations through{" "}
         <code>RaterDeclarationRegistry</code>. The registry can record optional probe outcomes that promote a
         declaration to <code>A1Verified</code>; a live LLMmap-style prober service is still future work. Failed probes,
         drift flags, or sustained community challenges can demote or slash the declaration&apos;s reserved operator
