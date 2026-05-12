@@ -14,13 +14,14 @@ import {
   profileSelfReportHasValues,
   serializeProfileSelfReport,
 } from "@rateloop/node-utils/profileSelfReport";
+import { useQuery } from "@tanstack/react-query";
 import { useAccount } from "wagmi";
 import { ArrowLeftIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { BalanceHistory } from "~~/components/leaderboard/BalanceHistory";
 import { CategoryBars } from "~~/components/leaderboard/CategoryBars";
-import { AiRaterTrustSection } from "~~/components/profile/AiRaterTrustSection";
 import { StakeBreakdown } from "~~/components/leaderboard/StakeBreakdown";
 import { WinRateRing } from "~~/components/leaderboard/WinRateRing";
+import { AiRaterTrustSection } from "~~/components/profile/AiRaterTrustSection";
 import { FollowProfileButton } from "~~/components/shared/FollowProfileButton";
 import { ProfileImageLightbox } from "~~/components/shared/ProfileImageLightbox";
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
@@ -54,7 +55,12 @@ import {
 import { MAX_PROFILE_SELF_REPORT_LENGTH } from "~~/lib/profile/profileValidation";
 import { AVATAR_WIN_RATE_TOOLTIP } from "~~/lib/profile/winRateTooltip";
 import { formatRatingScoreOutOfTen } from "~~/lib/ui/ratingDisplay";
-import { type PonderProfileDetailResponse, type PonderVoteItem, ponderApi } from "~~/services/ponder/client";
+import {
+  type PonderProfileDetailResponse,
+  type PonderRaterRewardStatusResponse,
+  type PonderVoteItem,
+  ponderApi,
+} from "~~/services/ponder/client";
 import { getReputationAvatarUrl } from "~~/utils/profileImage";
 import { notification } from "~~/utils/scaffold-eth";
 
@@ -81,6 +87,20 @@ function formatTimestamp(timestamp: string) {
     day: "numeric",
     year: "numeric",
   });
+}
+
+function formatBpsPercent(value: number) {
+  return `${(value / 100).toFixed(2)}%`;
+}
+
+function formatLaunchEligibility(rewardStatus: PonderRaterRewardStatusResponse["launchRewards"]) {
+  if (rewardStatus.eligible) {
+    return `${rewardStatus.rewardedRatingCount}/${rewardStatus.qualifyingRatingCount} launch rewards paid`;
+  }
+  if (rewardStatus.qualifyingRatingCount > 0) {
+    return `${rewardStatus.qualifyingRatingCount} qualifying ratings recorded`;
+  }
+  return "No launch reward credits recorded yet";
 }
 
 function getUrlHost(url: string) {
@@ -421,13 +441,7 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
   const { targetNetwork } = useTargetNetwork();
   const { address: connectedAddress } = useAccount();
   const { openConnectModal } = useCuryoConnectModal();
-  const {
-    followedWallets,
-    toggleFollow,
-    isPending: isFollowPending,
-  } = useFollowedProfiles(connectedAddress, {
-    autoRead: true,
-  });
+  const { followedWallets, toggleFollow, isPending: isFollowPending } = useFollowedProfiles(connectedAddress);
   const { stats, categories } = useVoterAccuracy(normalizedAddress);
   const { hasVoterId, tokenId, isLoading: voterIdLoading } = useVoterIdNFT(normalizedAddress);
   const {
@@ -458,6 +472,10 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
         totalContent: 0,
         totalRewardsClaimed: "0",
       },
+      social: {
+        followerCount: 0,
+        followingCount: 0,
+      },
       recentVotes: [],
       recentRewards: [],
       recentSubmissions: [],
@@ -466,9 +484,16 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
     staleTime: 30_000,
     refetchInterval: isPageVisible ? 60_000 : false,
   });
+  const rewardStatusQuery = useQuery({
+    queryKey: ["profile-reward-status", normalizedAddress],
+    queryFn: () => ponderApi.getRaterRewardStatus(normalizedAddress),
+    staleTime: 15_000,
+  });
 
   const profileDetail = profileResult?.data ?? null;
   const summary = profileDetail?.profile ?? null;
+  const social = profileDetail?.social ?? { followerCount: 0, followingCount: 0 };
+  const rewardStatus = rewardStatusQuery.data;
   const dailyStreak = useVoterStreak(normalizedAddress);
   const recentVotes = profileDetail?.recentVotes ?? [];
   const recentSubmissions = profileDetail?.recentSubmissions ?? [];
@@ -889,6 +914,10 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
                 <span className="text-base-content/60">&bull;</span>
                 <span>{resolvedVotesLabel} resolved</span>
                 <span className="text-base-content/60">&bull;</span>
+                <span>{social.followerCount.toLocaleString()} followers</span>
+                <span className="text-base-content/60">&bull;</span>
+                <span>{social.followingCount.toLocaleString()} following</span>
+                <span className="text-base-content/60">&bull;</span>
                 <span>
                   {voterIdLoading
                     ? "Loading credential..."
@@ -1085,6 +1114,124 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
             <div className="mt-6 rounded-2xl border border-dashed border-base-content/15 px-5 py-4">
               <AudienceContextHeading />
             </div>
+          ) : null}
+        </div>
+
+        <div className="surface-card rounded-3xl p-6">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <h2 className="text-xl font-semibold text-base-content">Reputation context</h2>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-base-content/60">
+                Public follows, trust attestations, and independence discounts are all visible here. Reward weight is
+                shown in the same order the contracts apply it.
+              </p>
+            </div>
+            <div className="rounded-full bg-base-content/[0.05] px-4 py-2 text-sm font-medium text-base-content/70">
+              {rewardStatus ? rewardStatus.raterTypeName : "Loading"}
+            </div>
+          </div>
+
+          {rewardStatusQuery.isLoading ? (
+            <div className="mt-6 flex items-center gap-3 text-base-content/55">
+              <span className="loading loading-spinner loading-sm text-primary" />
+              <span>Loading public reputation context...</span>
+            </div>
+          ) : rewardStatusQuery.error ? (
+            <div className="mt-6 rounded-2xl bg-error/10 px-4 py-3 text-sm text-error">
+              {rewardStatusQuery.error instanceof Error
+                ? rewardStatusQuery.error.message
+                : "Failed to load reputation context."}
+            </div>
+          ) : rewardStatus ? (
+            <>
+              <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                <div className="rounded-2xl bg-base-content/[0.04] px-4 py-3">
+                  <div className="text-sm text-base-content/60">Effective reward weight</div>
+                  <div className="mt-1 text-xl font-semibold">
+                    {formatBpsPercent(rewardStatus.rewardPolicy.effectiveRewardWeightBps)}
+                  </div>
+                  <div className="mt-1 text-sm text-base-content/55">
+                    Credential {formatBpsPercent(rewardStatus.rewardPolicy.humanCredentialMultiplierBps)} • AI{" "}
+                    {formatBpsPercent(rewardStatus.rewardPolicy.agentTierMultiplierBps)}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl bg-base-content/[0.04] px-4 py-3">
+                  <div className="text-sm text-base-content/60">Independence</div>
+                  <div className="mt-1 text-xl font-semibold">
+                    {formatBpsPercent(rewardStatus.independence.independenceMultiplierBps)}
+                  </div>
+                  <div className="mt-1 text-sm text-base-content/55">
+                    Cluster discount {formatBpsPercent(rewardStatus.independence.discountBps)} •{" "}
+                    {rewardStatus.independence.clusterId ?? "No cluster"}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl bg-base-content/[0.04] px-4 py-3">
+                  <div className="text-sm text-base-content/60">Public follows</div>
+                  <div className="mt-1 text-xl font-semibold">
+                    {social.followerCount.toLocaleString()} / {social.followingCount.toLocaleString()}
+                  </div>
+                  <div className="mt-1 text-sm text-base-content/55">Followers / following</div>
+                </div>
+
+                <div className="rounded-2xl bg-base-content/[0.04] px-4 py-3">
+                  <div className="text-sm text-base-content/60">Trust attestations</div>
+                  <div className="mt-1 text-xl font-semibold">
+                    {rewardStatus.trust.activeInboundAttestationCount.toLocaleString()}
+                  </div>
+                  <div className="mt-1 text-sm text-base-content/55">
+                    Active inbound budget {rewardStatus.trust.activeInboundTrustBudgetTotal}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl bg-base-content/[0.04] px-4 py-3">
+                  <div className="text-sm text-base-content/60">Cluster challenge state</div>
+                  <div className="mt-1 text-xl font-semibold capitalize">
+                    {rewardStatus.independence.latestChallengeStatusName}
+                  </div>
+                  <div className="mt-1 text-sm text-base-content/55">
+                    {rewardStatus.independence.openChallengeCount.toLocaleString()} open challenge
+                    {rewardStatus.independence.openChallengeCount === 1 ? "" : "s"}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl bg-base-content/[0.04] px-4 py-3">
+                  <div className="text-sm text-base-content/60">Launch reward progress</div>
+                  <div className="mt-1 text-xl font-semibold">
+                    {rewardStatus.launchRewards.remainingRewardSlots.toLocaleString()} slots left
+                  </div>
+                  <div className="mt-1 text-sm text-base-content/55">
+                    {formatLaunchEligibility(rewardStatus.launchRewards)}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-6 grid gap-3 lg:grid-cols-2">
+                <div className="rounded-2xl border border-base-content/10 px-4 py-3 text-sm text-base-content/70">
+                  <div className="font-medium text-base-content/85">
+                    Credential {rewardStatus.selfCredential.status} • AI {rewardStatus.aiDeclaration.effectiveTierName}
+                  </div>
+                  <div className="mt-2">
+                    Score epoch {rewardStatus.independence.scorerEpoch ?? "—"} • updated{" "}
+                    {rewardStatus.independence.updatedAt ? formatTimestamp(rewardStatus.independence.updatedAt) : "—"}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-base-content/10 px-4 py-3 text-sm text-base-content/70">
+                  <div className="font-medium text-base-content/85">
+                    {rewardStatus.trust.activeSeed
+                      ? `Trust seed ${formatBpsPercent(rewardStatus.trust.activeSeed.trustBudgetBps)}`
+                      : "No active trust seed"}
+                  </div>
+                  <div className="mt-2">
+                    {rewardStatus.trust.activeSeed
+                      ? `Sunsets ${formatTimestamp(rewardStatus.trust.activeSeed.sunsetAt)}`
+                      : "Public trust context currently comes from inbound attestations only."}
+                  </div>
+                </div>
+              </div>
+            </>
           ) : null}
         </div>
 

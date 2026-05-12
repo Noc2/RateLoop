@@ -19,19 +19,16 @@ type SortOption = "signalScore" | "winRate" | "wins" | "stakeWon" | "settledVote
 type MinVotesOption = "3" | "5" | "10";
 type WindowOption = PonderAccuracyLeaderboardWindow;
 
+function formatBpsPercent(value: number) {
+  return `${(value / 100).toFixed(2)}%`;
+}
+
 export function AccuracyLeaderboard() {
   const { address: connectedAddress } = useAccount();
   const { targetNetwork } = useTargetNetwork();
   const { openConnectModal } = useCuryoConnectModal();
   const { categories } = useCategoryRegistry();
-  const {
-    followedWallets,
-    toggleFollow,
-    requestReadAccess,
-    isPending: isFollowPending,
-  } = useFollowedProfiles(connectedAddress, {
-    autoRead: true,
-  });
+  const { followedWallets, toggleFollow, isPending: isFollowPending } = useFollowedProfiles(connectedAddress);
 
   const [items, setItems] = useState<PonderAccuracyLeaderboardItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -53,6 +50,7 @@ export function AccuracyLeaderboard() {
           window,
           minVotes,
           limit: "50",
+          includeReputation: "1",
         };
         if (sortBy === "signalScore") params.minSignalVotes = minVotes;
         if (categoryId) params.categoryId = categoryId;
@@ -137,23 +135,15 @@ export function AccuracyLeaderboard() {
         return;
       }
 
-      const result = await requestReadAccess();
-      if (!result.ok) {
-        if (result.reason === "not_connected") {
-          notification.info("Sign in to filter by curators you follow.");
-          void openConnectModal();
-          return;
-        }
-
-        if (result.reason !== "rejected") {
-          notification.error(result.error || "Failed to load your follow list");
-        }
+      if (!connectedAddress) {
+        notification.info("Sign in to filter by curators you follow.");
+        void openConnectModal();
         return;
       }
 
       setScope("following");
     },
-    [openConnectModal, requestReadAccess],
+    [connectedAddress, openConnectModal],
   );
 
   return (
@@ -301,6 +291,27 @@ export function AccuracyLeaderboard() {
                               </span>
                             )}
                             {isCurrentUser && <span className="text-base text-primary">(You)</span>}
+                            {entry.reputation ? (
+                              <div className="mt-1 flex flex-wrap gap-1.5 text-xs text-base-content/60">
+                                <span className="rounded-full bg-base-content/[0.06] px-2 py-0.5">
+                                  {entry.reputation.raterTypeName}
+                                </span>
+                                <span className="rounded-full bg-base-content/[0.06] px-2 py-0.5">
+                                  {entry.reputation.credentialStatus}
+                                </span>
+                                <span className="rounded-full bg-base-content/[0.06] px-2 py-0.5">
+                                  {entry.reputation.activeTrustAttestationCount} trust
+                                </span>
+                                <span className="rounded-full bg-base-content/[0.06] px-2 py-0.5">
+                                  {entry.reputation.clusterChallengeStatusCode === 1
+                                    ? "Open cluster challenge"
+                                    : `${formatBpsPercent(entry.reputation.independenceMultiplierBps)} independent`}
+                                </span>
+                                <span className="rounded-full bg-base-content/[0.06] px-2 py-0.5">
+                                  {entry.reputation.followerCount} followers
+                                </span>
+                              </div>
+                            ) : null}
                           </div>
                         </Link>
                         {!isCurrentUser ? (

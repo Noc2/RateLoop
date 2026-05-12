@@ -294,9 +294,8 @@ const HomeInner = () => {
     followedWallets,
     isLoading: followedProfilesLoading,
     toggleFollow,
-    requestReadAccess: requestFollowReadAccess,
     isPending: isFollowPending,
-  } = useFollowedProfiles(address, { autoRead: true });
+  } = useFollowedProfiles(address);
   const { discoverSignals, isLoading: discoverSignalsLoading } = useDiscoverSignals(address, {
     watchedItems,
     followedItems,
@@ -1474,17 +1473,9 @@ const HomeInner = () => {
         return;
       }
 
-      const result = await requestFollowReadAccess();
-      if (!result.ok) {
-        if (result.reason === "not_connected") {
-          notification.info("Sign in to view curators you follow.");
-          void openConnectModal();
-          return;
-        }
-
-        if (result.reason !== "rejected") {
-          notification.error(result.error || "Failed to load your follow list");
-        }
+      if (!address) {
+        notification.info("Sign in to view curators you follow.");
+        void openConnectModal();
         return;
       }
 
@@ -1492,13 +1483,7 @@ const HomeInner = () => {
       clearActiveContentPin();
       setView("followed_curators");
     },
-    [
-      clearActiveContentPin,
-      openConnectModal,
-      requestFollowReadAccess,
-      requestWatchReadAccess,
-      setIsMobileHeaderVisible,
-    ],
+    [address, clearActiveContentPin, openConnectModal, requestWatchReadAccess, setIsMobileHeaderVisible],
   );
 
   // Count broken URLs for the filter pill

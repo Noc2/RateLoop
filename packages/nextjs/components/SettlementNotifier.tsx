@@ -174,7 +174,7 @@ export function SettlementNotifier() {
   }, [watchedContentIds]);
 
   const followedSinceByAddress = useMemo(
-    () => new Map(followedItems.map(item => [item.walletAddress.toLowerCase(), item.createdAt])),
+    () => new Map<string, string>(followedItems.map(item => [item.walletAddress.toLowerCase(), item.createdAt])),
     [followedItems],
   );
 
