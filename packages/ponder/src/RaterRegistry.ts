@@ -1,8 +1,8 @@
 import { ponder } from "ponder:registry";
 import {
   raterFollow,
+  raterHumanCredential,
   raterProfile,
-  raterSelfCredential,
   raterTrustAttestation,
   raterTrustSeed,
 } from "ponder:schema";
@@ -78,53 +78,50 @@ ponder.on("RaterRegistry:ProfileUnfollowed", async ({ event, context }) => {
     });
 });
 
-ponder.on("RaterRegistry:SelfCredentialAttested", async ({ event, context }) => {
-  const { rater, nullifierHash, scope, legacy, verifiedAt, expiresAt, multiplierBps, evidenceHash } = event.args;
+ponder.on("RaterRegistry:HumanCredentialVerified", async ({ event, context }) => {
+  const { rater, nullifierHash, scope, provider, verifiedAt, expiresAt, evidenceHash } = event.args;
 
   await context.db
-    .insert(raterSelfCredential)
+    .insert(raterHumanCredential)
     .values({
       rater,
       verified: true,
-      legacy,
       revoked: false,
+      provider: Number(provider),
       nullifierHash,
       scope,
       verifiedAt,
       expiresAt,
-      multiplierBps: Number(multiplierBps),
       evidenceHash,
       updatedAt: event.block.timestamp,
     })
     .onConflictDoUpdate({
       verified: true,
-      legacy,
       revoked: false,
+      provider: Number(provider),
       nullifierHash,
       scope,
       verifiedAt,
       expiresAt,
-      multiplierBps: Number(multiplierBps),
       evidenceHash,
       updatedAt: event.block.timestamp,
     });
 });
 
-ponder.on("RaterRegistry:SelfCredentialRevoked", async ({ event, context }) => {
+ponder.on("RaterRegistry:HumanCredentialRevoked", async ({ event, context }) => {
   const { rater } = event.args;
 
   await context.db
-    .insert(raterSelfCredential)
+    .insert(raterHumanCredential)
     .values({
       rater,
       verified: false,
-      legacy: false,
       revoked: true,
+      provider: 0,
       nullifierHash: event.args.nullifierHash,
       scope: ZERO_HASH,
       verifiedAt: event.block.timestamp,
       expiresAt: event.block.timestamp,
-      multiplierBps: 10_000,
       evidenceHash: ZERO_HASH,
       updatedAt: event.block.timestamp,
     })

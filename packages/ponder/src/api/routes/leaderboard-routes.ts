@@ -5,10 +5,8 @@ import {
   aiRaterDeclaration,
   content,
   profile,
-  raterClusterScore,
-  raterClusterScoreChallenge,
+  raterHumanCredential,
   raterProfile,
-  raterSelfCredential,
   raterTrustAttestation,
   round,
   tokenHolder,
@@ -30,10 +28,8 @@ import {
 } from "../profile-aggregate-expressions.js";
 import {
   aiTierName,
-  clusterChallengeStatusName,
   credentialStatus,
   declarationInactiveReason,
-  independenceMultiplierBps,
   raterTypeName,
 } from "../reputation-utils.js";
 import type { ApiApp } from "../shared.js";
@@ -52,10 +48,8 @@ async function attachAccuracyLeaderboardReputation<T extends { voter: `0x${strin
 
   const [
     raterProfiles,
-    selfCredentials,
-    clusterScores,
+    humanCredentials,
     trustCounts,
-    clusterChallenges,
     aiDeclarations,
     followStats,
   ] = await Promise.all([
@@ -65,12 +59,8 @@ async function attachAccuracyLeaderboardReputation<T extends { voter: `0x${strin
       .where(inArray(raterProfile.address, addresses)),
     db
       .select()
-      .from(raterSelfCredential)
-      .where(inArray(raterSelfCredential.rater, addresses)),
-    db
-      .select()
-      .from(raterClusterScore)
-      .where(inArray(raterClusterScore.rater, addresses)),
+      .from(raterHumanCredential)
+      .where(inArray(raterHumanCredential.rater, addresses)),
     db
       .select({
         rater: raterTrustAttestation.subject,
@@ -87,55 +77,24 @@ async function attachAccuracyLeaderboardReputation<T extends { voter: `0x${strin
       .groupBy(raterTrustAttestation.subject),
     db
       .select()
-      .from(raterClusterScoreChallenge)
-      .where(inArray(raterClusterScoreChallenge.rater, addresses))
-      .orderBy(
-        desc(raterClusterScoreChallenge.openedAt),
-        desc(raterClusterScoreChallenge.challengeId),
-      ),
-    db
-      .select()
       .from(aiRaterDeclaration)
       .where(inArray(aiRaterDeclaration.rater, addresses)),
     getFollowStatsMap(addresses),
   ]);
 
   const raterProfileMap = new Map(raterProfiles.map((row) => [row.address, row]));
-  const selfCredentialMap = new Map(selfCredentials.map((row) => [row.rater, row]));
-  const clusterScoreMap = new Map(clusterScores.map((row) => [row.rater, row]));
+  const humanCredentialMap = new Map(humanCredentials.map((row) => [row.rater, row]));
   const trustCountMap = new Map(
     trustCounts.map((row) => [row.rater as `0x${string}`, Number(row.count ?? 0)]),
   );
   const aiDeclarationMap = new Map(aiDeclarations.map((row) => [row.rater, row]));
-  const latestClusterChallengeMap = new Map<
-    `0x${string}`,
-    (typeof clusterChallenges)[number]
-  >();
-  const openClusterChallengeCounts = new Map<`0x${string}`, number>();
-
-  for (const challenge of clusterChallenges) {
-    const key = challenge.rater as `0x${string}`;
-    if (!latestClusterChallengeMap.has(key)) {
-      latestClusterChallengeMap.set(key, challenge);
-    }
-    if (challenge.status === 1) {
-      openClusterChallengeCounts.set(
-        key,
-        (openClusterChallengeCounts.get(key) ?? 0) + 1,
-      );
-    }
-  }
 
   return items.map((item) => {
-    const credential = selfCredentialMap.get(item.voter);
-    const cluster = clusterScoreMap.get(item.voter);
+    const credential = humanCredentialMap.get(item.voter);
     const follow = followStats.get(item.voter) ?? {
       followerCount: 0,
       followingCount: 0,
     };
-    const latestClusterChallenge = latestClusterChallengeMap.get(item.voter);
-    const openClusterChallengeCount =
-      openClusterChallengeCounts.get(item.voter) ?? 0;
     const declaration = aiDeclarationMap.get(item.voter);
     const aiInactiveReason = declarationInactiveReason(
       declaration,
@@ -144,31 +103,28 @@ async function attachAccuracyLeaderboardReputation<T extends { voter: `0x${strin
     );
     const effectiveAiTier =
       aiInactiveReason === "none" ? declaration?.tier ?? 0 : 0;
+    const humanCredentialStatus = credentialStatus(credential, nowSeconds);
+    const aiDeclared = aiInactiveReason === "none";
+    const participationLane =
+      humanCredentialStatus === "verified"
+        ? "verified_human"
+        : aiDeclared
+          ? "ai_declared"
+          : "open";
 
     return {
       ...item,
       reputation: {
         raterType: raterProfileMap.get(item.voter)?.raterType ?? 0,
         raterTypeName: raterTypeName(raterProfileMap.get(item.voter)?.raterType),
-        credentialStatus: credentialStatus(credential, nowSeconds),
-        clusterId: cluster?.clusterId ?? null,
-        discountBps: cluster?.discountBps ?? 0,
-        independenceMultiplierBps: independenceMultiplierBps(
-          cluster?.discountBps ?? 0,
-        ),
-        clusterChallengeStatus:
-          openClusterChallengeCount > 0
-            ? "open"
-            : clusterChallengeStatusName(latestClusterChallenge?.status),
-        clusterChallengeStatusCode:
-          openClusterChallengeCount > 0
-            ? 1
-            : latestClusterChallenge?.status ?? 0,
+        humanCredentialStatus,
+        participationLane,
         activeTrustAttestationCount: trustCountMap.get(item.voter) ?? 0,
         followerCount: follow.followerCount,
         followingCount: follow.followingCount,
         aiTier: effectiveAiTier,
         aiTierName: aiTierName(effectiveAiTier),
+        aiDeclared,
       },
     };
   });

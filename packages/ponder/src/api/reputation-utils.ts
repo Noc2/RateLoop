@@ -1,31 +1,11 @@
-const VERIFIED_AGENT_MULTIPLIER_BPS = 11_500;
-const UNVERIFIED_AGENT_MULTIPLIER_BPS = 10_500;
-
 export const BASE_RATER_MULTIPLIER_BPS = 10_000;
-export const MAX_COMBINED_RATER_WEIGHT_BPS = 12_500;
 export const OPEN_CHALLENGE_STATUS = 1;
 
 const AI_RATER_TIERS = ["A0", "A1Unverified", "A1Verified"] as const;
 const RATER_TYPES = ["Unknown", "Human", "AI", "Team", "Hybrid"] as const;
-const CLUSTER_CHALLENGE_STATUSES = [
-  "none",
-  "open",
-  "sustained",
-  "rejected",
-] as const;
 
 export function aiTierName(tier: number | null | undefined) {
   return AI_RATER_TIERS[tier ?? 0] ?? "A0";
-}
-
-export function aiTierMultiplierBps(tier: number | null | undefined) {
-  if (tier === 2) return VERIFIED_AGENT_MULTIPLIER_BPS;
-  if (tier === 1) return UNVERIFIED_AGENT_MULTIPLIER_BPS;
-  return BASE_RATER_MULTIPLIER_BPS;
-}
-
-export function clusterChallengeStatusName(status: number | null | undefined) {
-  return CLUSTER_CHALLENGE_STATUSES[status ?? 0] ?? "none";
 }
 
 export function maxBigInt(values: Array<bigint | number | null | undefined>) {
@@ -104,25 +84,4 @@ export function declarationInactiveReason(
   }
   if (openChallengeCount > 0) return "challenged";
   return "none";
-}
-
-export function independenceMultiplierBps(discountBps: number | null | undefined) {
-  const boundedDiscount = Math.min(Math.max(discountBps ?? 0, 0), BASE_RATER_MULTIPLIER_BPS);
-  return BASE_RATER_MULTIPLIER_BPS - boundedDiscount;
-}
-
-export function computeRewardWeightBps(params: {
-  clusterDiscountBps?: number | null;
-  humanCredentialMultiplierBps?: number | null;
-  agentTierMultiplierBps?: number | null;
-}) {
-  const discountBps = Math.min(Math.max(params.clusterDiscountBps ?? 0, 0), BASE_RATER_MULTIPLIER_BPS);
-  const humanMultiplierBps = params.humanCredentialMultiplierBps ?? BASE_RATER_MULTIPLIER_BPS;
-  const agentMultiplierBps = params.agentTierMultiplierBps ?? BASE_RATER_MULTIPLIER_BPS;
-
-  let weightBps = BASE_RATER_MULTIPLIER_BPS - discountBps;
-  weightBps = Math.floor((weightBps * humanMultiplierBps) / BASE_RATER_MULTIPLIER_BPS);
-  weightBps = Math.floor((weightBps * agentMultiplierBps) / BASE_RATER_MULTIPLIER_BPS);
-
-  return Math.min(weightBps, MAX_COMBINED_RATER_WEIGHT_BPS);
 }
