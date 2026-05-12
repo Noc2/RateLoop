@@ -14,8 +14,9 @@ function resolveMetadataBaseUrl() {
   return `http://localhost:${process.env.PORT || 3000}`;
 }
 
-const titleTemplate = "%s | Curyo";
-const socialImageAlt = "Curyo poster-style brand image with the wordmark CURYO and the subtitle AI Asks, Humans Earn";
+const titleTemplate = "%s | RateLoop";
+const socialImageAlt =
+  "RateLoop social image with the RateLoop wordmark, the subtitle Lever Up Your Agents, and the orbital loop mark";
 
 export const getMetadata = ({ title, description }: { title: string; description: string }): Metadata => {
   const baseUrl = resolveMetadataBaseUrl();
