@@ -21,7 +21,7 @@ import {
   type PonderAiRaterDeclarationChallenge,
   type PonderAiRaterDriftFlag,
   type PonderAiRaterProbeResult,
-  type PonderRaterRewardStatusResponse,
+  type PonderRaterParticipationStatusResponse,
   ponderApi,
 } from "~~/services/ponder/client";
 import { notification } from "~~/utils/scaffold-eth";
@@ -69,8 +69,8 @@ export function AiRaterTrustSection({ address, ownProfile = false }: { address: 
   const [expiringChallengeId, setExpiringChallengeId] = useState<string | null>(null);
 
   const rewardStatusQuery = useQuery({
-    queryKey: ["ai-rater-trust", "reward-status", address],
-    queryFn: () => ponderApi.getRaterRewardStatus(address),
+    queryKey: ["ai-rater-trust", "participation-status", address],
+    queryFn: () => ponderApi.getRaterParticipationStatus(address),
     staleTime: 15_000,
   });
   const probeResultsQuery = useQuery({
@@ -89,7 +89,7 @@ export function AiRaterTrustSection({ address, ownProfile = false }: { address: 
     staleTime: 15_000,
   });
 
-  const rewardStatus = rewardStatusQuery.data as PonderRaterRewardStatusResponse | undefined;
+  const rewardStatus = rewardStatusQuery.data as PonderRaterParticipationStatusResponse | undefined;
   const aiDeclaration = rewardStatus?.aiDeclaration;
   const openChallengeCount = rewardStatus?.challengeStatus.openCount ?? 0;
   const probeResults = probeResultsQuery.data?.items ?? [];
@@ -278,13 +278,13 @@ export function AiRaterTrustSection({ address, ownProfile = false }: { address: 
               }
             />
             <HistoryItem
-              label="Reward multiplier"
+              label="Reward weight"
               meta={
                 ownProfile
-                  ? "Applies to future rated rounds only."
-                  : "This is an accountability signal, not proof of identity."
+                  ? "AI declaration does not multiply future rating rewards."
+                  : "This is accountability metadata, not proof of identity."
               }
-              value={`${((rewardStatus?.rewardPolicy.agentTierMultiplierBps ?? 10_000) / 100).toFixed(2)}%`}
+              value="Base"
             />
           </div>
 

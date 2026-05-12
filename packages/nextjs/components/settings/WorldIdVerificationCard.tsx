@@ -76,7 +76,7 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
   const canVerify = Boolean(isConfigured && address);
   const { data: hasActiveCredential, refetch: refetchHasActiveCredential } = useScaffoldReadContract({
     contractName: "RaterRegistry",
-    functionName: "hasActiveSelfCredential",
+    functionName: "hasActiveHumanCredential",
     args: [walletAddress],
     query: { enabled: Boolean(walletAddress) },
   });
@@ -109,7 +109,7 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
   const referralAddress = referralInputState.canUseReferrer ? referralInputState.normalizedReferrer : undefined;
   const { data: referrerHasActiveCredential } = useScaffoldReadContract({
     contractName: "RaterRegistry",
-    functionName: "hasActiveSelfCredential",
+    functionName: "hasActiveHumanCredential",
     args: [referralAddress],
     query: { enabled: Boolean(referralAddress) },
   });
@@ -239,7 +239,7 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
 
         const transactionHash = await attestWorldIdCredential(
           {
-            functionName: "attestSelfCredentialWithProof",
+            functionName: "attestHumanCredentialWithProof",
             args: [parsedProof.root, parsedProof.nullifierHash, parsedProof.proof],
           },
           {
@@ -335,7 +335,7 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
           </div>
           <h3 className="mt-3 text-2xl font-semibold text-base-content">Human credential</h3>
           <p className="mt-3 max-w-2xl text-base leading-relaxed text-base-content/65">
-            Add an optional World ID proof to this wallet. Rating, rewards, and governance stay open without it.
+            Add an optional World ID proof to this wallet. Rating and LREP participation stay open without it.
           </p>
         </div>
 

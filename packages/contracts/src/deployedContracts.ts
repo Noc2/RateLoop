@@ -1030,21 +1030,6 @@ const deployedContracts: GenericContractsDeclaration = {
                   internalType: "uint32",
                 },
                 {
-                  name: "clusterCount",
-                  type: "uint32",
-                  internalType: "uint32",
-                },
-                {
-                  name: "largestClusterEffectiveUnits",
-                  type: "uint32",
-                  internalType: "uint32",
-                },
-                {
-                  name: "locoEffectiveParticipantUnits",
-                  type: "uint32",
-                  internalType: "uint32",
-                },
-                {
                   name: "allocation",
                   type: "uint256",
                   internalType: "uint256",
@@ -1934,49 +1919,6 @@ const deployedContracts: GenericContractsDeclaration = {
             },
             {
               name: "amount",
-              type: "uint256",
-              indexed: false,
-              internalType: "uint256",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "RewardPoolRoundClusterStats",
-          inputs: [
-            {
-              name: "rewardPoolId",
-              type: "uint256",
-              indexed: true,
-              internalType: "uint256",
-            },
-            {
-              name: "contentId",
-              type: "uint256",
-              indexed: true,
-              internalType: "uint256",
-            },
-            {
-              name: "roundId",
-              type: "uint256",
-              indexed: true,
-              internalType: "uint256",
-            },
-            {
-              name: "clusterCount",
-              type: "uint256",
-              indexed: false,
-              internalType: "uint256",
-            },
-            {
-              name: "largestClusterEffectiveUnits",
-              type: "uint256",
-              indexed: false,
-              internalType: "uint256",
-            },
-            {
-              name: "locoEffectiveParticipantUnits",
               type: "uint256",
               indexed: false,
               internalType: "uint256",
@@ -9311,35 +9253,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "commitClusterKey",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
           name: "commitCore",
           inputs: [
             {
@@ -9429,35 +9342,6 @@ const deployedContracts: GenericContractsDeclaration = {
         {
           type: "function",
           name: "commitPredictedUpBps",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint16",
-              internalType: "uint16",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "commitRaterWeightBps",
           inputs: [
             {
               name: "",
@@ -10902,37 +10786,6 @@ const deployedContracts: GenericContractsDeclaration = {
               type: "uint256",
               indexed: false,
               internalType: "uint256",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "CommitClusterSnapshotted",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              indexed: true,
-              internalType: "uint256",
-            },
-            {
-              name: "roundId",
-              type: "uint256",
-              indexed: true,
-              internalType: "uint256",
-            },
-            {
-              name: "commitKey",
-              type: "bytes32",
-              indexed: true,
-              internalType: "bytes32",
-            },
-            {
-              name: "clusterKey",
-              type: "bytes32",
-              indexed: false,
-              internalType: "bytes32",
             },
           ],
           anonymous: false,
@@ -15283,7 +15136,7 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "DEFAULT_ADMIN_ROLE",
+          name: "CURYO_SELF_VERIFIED_SCOPE",
           inputs: [],
           outputs: [
             {
@@ -15296,13 +15149,13 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "MAX_CREDENTIAL_MULTIPLIER_BPS",
+          name: "DEFAULT_ADMIN_ROLE",
           inputs: [],
           outputs: [
             {
               name: "",
-              type: "uint16",
-              internalType: "uint16",
+              type: "bytes32",
+              internalType: "bytes32",
             },
           ],
           stateMutability: "view",
@@ -15348,20 +15201,7 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "WORLD_ID_MULTIPLIER_BPS",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "uint16",
-              internalType: "uint16",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "attestSelfCredentialWithProof",
+          name: "attestHumanCredentialWithProof",
           inputs: [
             {
               name: "root",
@@ -15381,25 +15221,6 @@ const deployedContracts: GenericContractsDeclaration = {
           ],
           outputs: [],
           stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "credentialMultiplierBps",
-          inputs: [
-            {
-              name: "rater",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint16",
-              internalType: "uint16",
-            },
-          ],
-          stateMutability: "view",
         },
         {
           type: "function",
@@ -15448,6 +15269,67 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "uint256",
               internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "getHumanCredential",
+          inputs: [
+            {
+              name: "rater",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "tuple",
+              internalType: "struct RaterRegistry.HumanCredential",
+              components: [
+                {
+                  name: "verified",
+                  type: "bool",
+                  internalType: "bool",
+                },
+                {
+                  name: "revoked",
+                  type: "bool",
+                  internalType: "bool",
+                },
+                {
+                  name: "provider",
+                  type: "uint8",
+                  internalType: "enum RaterRegistry.HumanCredentialProvider",
+                },
+                {
+                  name: "nullifierHash",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+                {
+                  name: "scope",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+                {
+                  name: "verifiedAt",
+                  type: "uint64",
+                  internalType: "uint64",
+                },
+                {
+                  name: "expiresAt",
+                  type: "uint64",
+                  internalType: "uint64",
+                },
+                {
+                  name: "evidenceHash",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+              ],
             },
           ],
           stateMutability: "view",
@@ -15503,72 +15385,6 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "bytes32",
               internalType: "bytes32",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "getSelfCredential",
-          inputs: [
-            {
-              name: "rater",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "tuple",
-              internalType: "struct RaterRegistry.SelfCredential",
-              components: [
-                {
-                  name: "verified",
-                  type: "bool",
-                  internalType: "bool",
-                },
-                {
-                  name: "legacy",
-                  type: "bool",
-                  internalType: "bool",
-                },
-                {
-                  name: "revoked",
-                  type: "bool",
-                  internalType: "bool",
-                },
-                {
-                  name: "nullifierHash",
-                  type: "bytes32",
-                  internalType: "bytes32",
-                },
-                {
-                  name: "scope",
-                  type: "bytes32",
-                  internalType: "bytes32",
-                },
-                {
-                  name: "verifiedAt",
-                  type: "uint64",
-                  internalType: "uint64",
-                },
-                {
-                  name: "expiresAt",
-                  type: "uint64",
-                  internalType: "uint64",
-                },
-                {
-                  name: "multiplierBps",
-                  type: "uint16",
-                  internalType: "uint16",
-                },
-                {
-                  name: "evidenceHash",
-                  type: "bytes32",
-                  internalType: "bytes32",
-                },
-              ],
             },
           ],
           stateMutability: "view",
@@ -15695,7 +15511,7 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "hasActiveSelfCredential",
+          name: "hasActiveHumanCredential",
           inputs: [
             {
               name: "rater",
@@ -15776,6 +15592,25 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "humanNullifierOwner",
+          inputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "isFollowing",
           inputs: [
             {
@@ -15818,15 +15653,10 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "revokeRole",
+          name: "revokeHumanCredential",
           inputs: [
             {
-              name: "role",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-            {
-              name: "account",
+              name: "rater",
               type: "address",
               internalType: "address",
             },
@@ -15836,10 +15666,15 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "revokeSelfCredential",
+          name: "revokeRole",
           inputs: [
             {
-              name: "rater",
+              name: "role",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "account",
               type: "address",
               internalType: "address",
             },
@@ -15880,7 +15715,7 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "seedLegacySelfCredential",
+          name: "seedHumanCredential",
           inputs: [
             {
               name: "rater",
@@ -15888,17 +15723,12 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "address",
             },
             {
-              name: "sunsetAt",
+              name: "expiresAt",
               type: "uint64",
               internalType: "uint64",
             },
             {
-              name: "multiplierBps",
-              type: "uint16",
-              internalType: "uint16",
-            },
-            {
-              name: "seedRoot",
+              name: "anchorId",
               type: "bytes32",
               internalType: "bytes32",
             },
@@ -15910,25 +15740,6 @@ const deployedContracts: GenericContractsDeclaration = {
           ],
           outputs: [],
           stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "selfNullifierOwner",
-          inputs: [
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          stateMutability: "view",
         },
         {
           type: "function",
@@ -16144,6 +15955,74 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "event",
+          name: "HumanCredentialRevoked",
+          inputs: [
+            {
+              name: "rater",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "nullifierHash",
+              type: "bytes32",
+              indexed: true,
+              internalType: "bytes32",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "HumanCredentialVerified",
+          inputs: [
+            {
+              name: "rater",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "nullifierHash",
+              type: "bytes32",
+              indexed: true,
+              internalType: "bytes32",
+            },
+            {
+              name: "scope",
+              type: "bytes32",
+              indexed: true,
+              internalType: "bytes32",
+            },
+            {
+              name: "provider",
+              type: "uint8",
+              indexed: false,
+              internalType: "enum RaterRegistry.HumanCredentialProvider",
+            },
+            {
+              name: "verifiedAt",
+              type: "uint64",
+              indexed: false,
+              internalType: "uint64",
+            },
+            {
+              name: "expiresAt",
+              type: "uint64",
+              indexed: false,
+              internalType: "uint64",
+            },
+            {
+              name: "evidenceHash",
+              type: "bytes32",
+              indexed: false,
+              internalType: "bytes32",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
           name: "ProfileFollowed",
           inputs: [
             {
@@ -16294,80 +16173,6 @@ const deployedContracts: GenericContractsDeclaration = {
               type: "address",
               indexed: true,
               internalType: "address",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "SelfCredentialAttested",
-          inputs: [
-            {
-              name: "rater",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "nullifierHash",
-              type: "bytes32",
-              indexed: true,
-              internalType: "bytes32",
-            },
-            {
-              name: "scope",
-              type: "bytes32",
-              indexed: true,
-              internalType: "bytes32",
-            },
-            {
-              name: "legacy",
-              type: "bool",
-              indexed: false,
-              internalType: "bool",
-            },
-            {
-              name: "verifiedAt",
-              type: "uint64",
-              indexed: false,
-              internalType: "uint64",
-            },
-            {
-              name: "expiresAt",
-              type: "uint64",
-              indexed: false,
-              internalType: "uint64",
-            },
-            {
-              name: "multiplierBps",
-              type: "uint16",
-              indexed: false,
-              internalType: "uint16",
-            },
-            {
-              name: "evidenceHash",
-              type: "bytes32",
-              indexed: false,
-              internalType: "bytes32",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "SelfCredentialRevoked",
-          inputs: [
-            {
-              name: "rater",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "nullifierHash",
-              type: "bytes32",
-              indexed: true,
-              internalType: "bytes32",
             },
           ],
           anonymous: false,
@@ -20895,19 +20700,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "MAX_TIER_MULTIPLIER_BPS",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "uint16",
-              internalType: "uint16",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
           name: "MIN_CHALLENGE_BOND_USDC_FLOOR",
           inputs: [],
           outputs: [
@@ -21070,25 +20862,6 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "uint16",
               internalType: "uint16",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "clusterKey",
-          inputs: [
-            {
-              name: "rater",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
             },
           ],
           stateMutability: "view",
@@ -22179,25 +21952,6 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "bool",
               internalType: "bool",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "tierMultiplierBps",
-          inputs: [
-            {
-              name: "rater",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint16",
-              internalType: "uint16",
             },
           ],
           stateMutability: "view",

@@ -221,27 +221,6 @@ function mockPonderModules<T>(result: T) {
       rewardingRatingCount: "launchRewardPolicyState.rewardingRatingCount",
       updatedAt: "launchRewardPolicyState.updatedAt",
     },
-    raterClusterScore: {
-      algorithmHash: "raterClusterScore.algorithmHash",
-      challengeWindowEndsAt: "raterClusterScore.challengeWindowEndsAt",
-      clusterId: "raterClusterScore.clusterId",
-      discountBps: "raterClusterScore.discountBps",
-      evidenceHash: "raterClusterScore.evidenceHash",
-      modelVersionHash: "raterClusterScore.modelVersionHash",
-      rater: "raterClusterScore.rater",
-      scoreKey: "raterClusterScore.scoreKey",
-      scoreRoot: "raterClusterScore.scoreRoot",
-      scorerEpoch: "raterClusterScore.scorerEpoch",
-      updatedAt: "raterClusterScore.updatedAt",
-    },
-    raterClusterScoreChallenge: {
-      challengeId: "raterClusterScoreChallenge.challengeId",
-      openedAt: "raterClusterScoreChallenge.openedAt",
-      rater: "raterClusterScoreChallenge.rater",
-      resolutionHash: "raterClusterScoreChallenge.resolutionHash",
-      resolvedAt: "raterClusterScoreChallenge.resolvedAt",
-      status: "raterClusterScoreChallenge.status",
-    },
     raterFollow: {
       active: "raterFollow.active",
       createdAt: "raterFollow.createdAt",
@@ -255,15 +234,17 @@ function mockPonderModules<T>(result: T) {
       address: "raterProfile.address",
       raterType: "raterProfile.raterType",
     },
-    raterSelfCredential: {
-      evidenceHash: "raterSelfCredential.evidenceHash",
-      expiresAt: "raterSelfCredential.expiresAt",
-      legacy: "raterSelfCredential.legacy",
-      multiplierBps: "raterSelfCredential.multiplierBps",
-      rater: "raterSelfCredential.rater",
-      revoked: "raterSelfCredential.revoked",
-      verified: "raterSelfCredential.verified",
-      verifiedAt: "raterSelfCredential.verifiedAt",
+    raterHumanCredential: {
+      evidenceHash: "raterHumanCredential.evidenceHash",
+      expiresAt: "raterHumanCredential.expiresAt",
+      nullifierHash: "raterHumanCredential.nullifierHash",
+      provider: "raterHumanCredential.provider",
+      rater: "raterHumanCredential.rater",
+      revoked: "raterHumanCredential.revoked",
+      scope: "raterHumanCredential.scope",
+      updatedAt: "raterHumanCredential.updatedAt",
+      verified: "raterHumanCredential.verified",
+      verifiedAt: "raterHumanCredential.verifiedAt",
     },
     raterTrustAttestation: {
       categoryId: "raterTrustAttestation.categoryId",
@@ -965,8 +946,6 @@ describe("registerLeaderboardRoutes", () => {
   });
 
   it("attaches public reputation context when requested", async () => {
-    const zeroHash =
-      "0x0000000000000000000000000000000000000000000000000000000000000000";
     mockPonderModules([
       {
         voter: "0x00000000000000000000000000000000000000aa",
@@ -984,10 +963,6 @@ describe("registerLeaderboardRoutes", () => {
         verified: true,
         revoked: false,
         expiresAt: 9_999_999_999n,
-        clusterId: zeroHash,
-        discountBps: 2_500,
-        challengeId: 9n,
-        status: 1,
         tier: 2,
         retiredAt: null,
         effectiveEpoch: 1n,
@@ -1009,14 +984,13 @@ describe("registerLeaderboardRoutes", () => {
 
     expect(response.status).toBe(200);
     expect(body.items[0].reputation).toMatchObject({
-      credentialStatus: "verified",
+      humanCredentialStatus: "verified",
+      participationLane: "verified_human",
       followerCount: 3,
       followingCount: 2,
-      clusterChallengeStatus: "open",
       aiTier: 2,
       aiTierName: "A1Verified",
-      discountBps: 2_500,
-      independenceMultiplierBps: 7_500,
+      aiDeclared: true,
       activeTrustAttestationCount: 4,
     });
   });
@@ -1061,7 +1035,7 @@ describe("registerLeaderboardRoutes", () => {
 });
 
 describe("registerDataRoutes", () => {
-  it("rejects invalid rater reward status addresses before querying the database", async () => {
+  it("rejects invalid rater participation status addresses before querying the database", async () => {
     const { db } = mockPonderModules([]);
     const { registerDataRoutes } = await import(
       "../src/api/routes/data-routes.js"
@@ -1071,7 +1045,7 @@ describe("registerDataRoutes", () => {
     registerDataRoutes(app);
 
     const response = await app.request(
-      "http://localhost/rater-reward-status/not-an-address",
+      "http://localhost/rater-participation-status/not-an-address",
     );
 
     expect(response.status).toBe(400);
@@ -1171,18 +1145,16 @@ describe("registerDataRoutes", () => {
     });
   });
 
-  it("returns challenged-agent reward status with cluster and launch context", async () => {
+  it("returns challenged-agent participation status with launch context", async () => {
     const zeroHash =
       "0x0000000000000000000000000000000000000000000000000000000000000000";
     const { db } = mockPonderModules([
       {
         raterType: 2,
         verified: true,
-        legacy: false,
         revoked: false,
         verifiedAt: 1_000n,
         expiresAt: 9_999_999_999n,
-        multiplierBps: 12_000,
         evidenceHash: zeroHash,
         operator: "0x00000000000000000000000000000000000000bb",
         version: 3,
@@ -1214,14 +1186,6 @@ describe("registerDataRoutes", () => {
         resolutionHash: zeroHash,
         operatorSlash: 0n,
         challengerReward: 0n,
-        clusterId: zeroHash,
-        discountBps: 2_500,
-        scorerEpoch: 42n,
-        algorithmHash: zeroHash,
-        modelVersionHash: zeroHash,
-        scoreRoot: zeroHash,
-        challengeWindowEndsAt: 99_999n,
-        scoreKey: zeroHash,
         active: true,
         seededAt: 500n,
         sunsetAt: 9_999_999_999n,
@@ -1259,18 +1223,18 @@ describe("registerDataRoutes", () => {
     registerDataRoutes(app);
 
     const response = await app.request(
-      "http://localhost/rater-reward-status/0x00000000000000000000000000000000000000aa",
+      "http://localhost/rater-participation-status/0x00000000000000000000000000000000000000aa",
     );
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(db.select).toHaveBeenCalledTimes(14);
+    expect(db.select).toHaveBeenCalled();
     expect(body).toMatchObject({
       rater: "0x00000000000000000000000000000000000000aa",
       raterTypeName: "AI",
-      selfCredential: {
+      participationLane: "verified_human",
+      humanCredential: {
         status: "verified",
-        multiplierBps: 12_000,
       },
       aiDeclaration: {
         declared: true,
@@ -1279,19 +1243,12 @@ describe("registerDataRoutes", () => {
         declaredTierName: "A1Verified",
         effectiveTierName: "A0",
         tierName: "A0",
-        tierMultiplierBps: 10_000,
         probeStatus: "passed",
       },
       challengeStatus: {
         openCount: 1,
         latestChallengeId: "7",
         latestStatus: 1,
-      },
-      independence: {
-        discountBps: 2_500,
-        independenceMultiplierBps: 7_500,
-        scorerEpoch: "42",
-        latestChallengeStatusName: "open",
       },
       trust: {
         activeInboundAttestationCount: 4,
@@ -1307,30 +1264,26 @@ describe("registerDataRoutes", () => {
           minDistinctVerifiedAnchors: 2,
         },
       },
-      rewardPolicy: {
-        clusterDiscountBps: 2_500,
-        independenceMultiplierBps: 7_500,
-        effectiveRewardWeightBps: 9_000,
-        combinedMultiplierBps: 9_000,
-        combinedMultiplierCapBps: 12_500,
-        verifiedAgentsCanAnchorLaunchRewards: false,
-        verifiedAgentSignupBonusEligible: false,
+      participationPolicy: {
+        baseRewardWeightBps: 10_000,
+        humanVerificationAffectsRewardWeight: false,
+        aiDeclarationAffectsRewardWeight: false,
+        verifiedHumanCountsAsLaunchAnchor: true,
+        aiDeclarationCanAnchorLaunchRewards: false,
       },
     });
   });
 
-  it("treats retired AI declarations as A0 for reward status", async () => {
+  it("treats retired AI declarations as A0 for participation status", async () => {
     const zeroHash =
       "0x0000000000000000000000000000000000000000000000000000000000000000";
     mockPonderModules([
       {
         raterType: 2,
         verified: false,
-        legacy: false,
         revoked: false,
         verifiedAt: null,
         expiresAt: null,
-        multiplierBps: 10_000,
         evidenceHash: null,
         operator: "0x00000000000000000000000000000000000000bb",
         version: 3,
@@ -1362,14 +1315,6 @@ describe("registerDataRoutes", () => {
         resolutionHash: zeroHash,
         operatorSlash: 100n,
         challengerReward: 50n,
-        clusterId: zeroHash,
-        discountBps: 0,
-        scorerEpoch: 42n,
-        algorithmHash: zeroHash,
-        modelVersionHash: zeroHash,
-        scoreRoot: zeroHash,
-        challengeWindowEndsAt: 50_000n,
-        scoreKey: zeroHash,
         active: false,
         seededAt: 0n,
         sunsetAt: 0n,
@@ -1403,12 +1348,13 @@ describe("registerDataRoutes", () => {
     registerDataRoutes(app);
 
     const response = await app.request(
-      "http://localhost/rater-reward-status/0x00000000000000000000000000000000000000aa",
+      "http://localhost/rater-participation-status/0x00000000000000000000000000000000000000aa",
     );
     const body = await response.json();
 
     expect(response.status).toBe(200);
     expect(body).toMatchObject({
+      participationLane: "open",
       aiDeclaration: {
         declared: true,
         active: false,
@@ -1419,7 +1365,6 @@ describe("registerDataRoutes", () => {
         effectiveTierName: "A0",
         tier: 0,
         tierName: "A0",
-        tierMultiplierBps: 10_000,
         retiredAt: "4000",
         probeStatus: "passed",
       },
@@ -1428,19 +1373,18 @@ describe("registerDataRoutes", () => {
         latestStatus: 2,
         latestResolvedAt: "4000",
       },
-      rewardPolicy: {
-        agentTierMultiplierBps: 10_000,
-        combinedMultiplierBps: 10_000,
-      },
       launchRewards: {
         eligible: false,
         remainingLaunchCap: "0",
         remainingRewardSlots: 10,
       },
+      participationPolicy: {
+        baseRewardWeightBps: 10_000,
+      },
     });
   });
 
-  it("expires rater reward status against wall-clock time", async () => {
+  it("expires rater participation status against wall-clock time", async () => {
     const nowSpy = vi.spyOn(Date, "now").mockReturnValue(40_000_000);
     const zeroHash =
       "0x0000000000000000000000000000000000000000000000000000000000000000";
@@ -1449,11 +1393,9 @@ describe("registerDataRoutes", () => {
         raterType: 2,
         updatedAt: 5_000n,
         verified: true,
-        legacy: false,
         revoked: false,
         verifiedAt: 1_000n,
         expiresAt: 30_000n,
-        multiplierBps: 10_000,
         evidenceHash: zeroHash,
         operator: "0x00000000000000000000000000000000000000bb",
         version: 1,
@@ -1485,14 +1427,6 @@ describe("registerDataRoutes", () => {
         resolutionHash: zeroHash,
         operatorSlash: 0n,
         challengerReward: 0n,
-        clusterId: zeroHash,
-        discountBps: 0,
-        scorerEpoch: 42n,
-        algorithmHash: zeroHash,
-        modelVersionHash: zeroHash,
-        scoreRoot: zeroHash,
-        challengeWindowEndsAt: 50_000n,
-        scoreKey: zeroHash,
         active: false,
         seededAt: 0n,
         sunsetAt: 0n,
@@ -1526,7 +1460,7 @@ describe("registerDataRoutes", () => {
     registerDataRoutes(app);
 
     const response = await app.request(
-      "http://localhost/rater-reward-status/0x00000000000000000000000000000000000000aa",
+      "http://localhost/rater-participation-status/0x00000000000000000000000000000000000000aa",
     );
     const body = await response.json();
 
@@ -1537,25 +1471,23 @@ describe("registerDataRoutes", () => {
         wallTimestamp: "40000",
         indexedBlockNumber: null,
       },
-      selfCredential: {
+      participationLane: "open",
+      humanCredential: {
         status: "expired",
-        multiplierBps: 10_000,
       },
       aiDeclaration: {
         active: false,
         inactiveReason: "expired",
         declaredTierName: "A1Verified",
         effectiveTierName: "A0",
-        tierMultiplierBps: 10_000,
-      },
-      rewardPolicy: {
-        agentTierMultiplierBps: 10_000,
-        combinedMultiplierBps: 10_000,
       },
       launchRewards: {
         eligible: false,
         remainingLaunchCap: "50",
         remainingRewardSlots: 10,
+      },
+      participationPolicy: {
+        baseRewardWeightBps: 10_000,
       },
     });
 
@@ -1721,10 +1653,10 @@ describe("registerDataRoutes", () => {
     });
     const verifiedHumanWhere = queryBuilder.where.mock.calls
       .map(([value]) => serializeExpression(value))
-      .find((value) => value.includes("raterSelfCredential.expiresAt"));
-    expect(verifiedHumanWhere ?? "").toContain("raterSelfCredential.verified");
-    expect(verifiedHumanWhere ?? "").toContain("raterSelfCredential.revoked");
-    expect(verifiedHumanWhere ?? "").toContain("raterSelfCredential.expiresAt");
+      .find((value) => value.includes("raterHumanCredential.expiresAt"));
+    expect(verifiedHumanWhere ?? "").toContain("raterHumanCredential.verified");
+    expect(verifiedHumanWhere ?? "").toContain("raterHumanCredential.revoked");
+    expect(verifiedHumanWhere ?? "").toContain("raterHumanCredential.expiresAt");
   });
 
   it("rejects vote cooldown requests without valid voters before querying the database", async () => {

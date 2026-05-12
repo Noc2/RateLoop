@@ -1314,7 +1314,7 @@ contract QuestionRewardPoolEscrow is
         )
     {
         (
-            roundSettled, canQualify, rawEligibleVoters, effectiveParticipantUnits, totalClaimWeight,,,, settledAt
+            roundSettled, canQualify, rawEligibleVoters, effectiveParticipantUnits, totalClaimWeight, settledAt
         ) =
             QuestionRewardPoolEscrowQualificationLib.previewRoundQualification(
                 QuestionRewardPoolEscrowQualificationLib.QualificationContext({

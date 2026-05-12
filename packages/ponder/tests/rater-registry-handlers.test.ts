@@ -20,8 +20,8 @@ vi.mock("ponder:registry", () => ({
 
 vi.mock("ponder:schema", () => ({
   raterFollow: "raterFollow",
+  raterHumanCredential: "raterHumanCredential",
   raterProfile: "raterProfile",
-  raterSelfCredential: "raterSelfCredential",
   raterTrustAttestation: "raterTrustAttestation",
   raterTrustSeed: "raterTrustSeed",
 }));
@@ -158,11 +158,11 @@ describe("RaterRegistry ponder handlers", () => {
     ]);
   });
 
-  it("indexes optional Self credentials", async () => {
+  it("indexes optional human credentials", async () => {
     const { db, upserts } = createDb();
     const registeredHandlers = await loadHandlers();
     const handler = registeredHandlers.get(
-      "RaterRegistry:SelfCredentialAttested",
+      "RaterRegistry:HumanCredentialVerified",
     );
 
     expect(handler).toBeDefined();
@@ -173,10 +173,9 @@ describe("RaterRegistry ponder handlers", () => {
           rater: "0x0000000000000000000000000000000000001234",
           nullifierHash: `0x${"11".repeat(32)}`,
           scope: `0x${"22".repeat(32)}`,
-          legacy: false,
+          provider: 1,
           verifiedAt: 100n,
           expiresAt: 200n,
-          multiplierBps: 11_000,
           evidenceHash: `0x${"33".repeat(32)}`,
         },
         block: { timestamp: 100n },
@@ -186,17 +185,17 @@ describe("RaterRegistry ponder handlers", () => {
 
     expect(upserts).toEqual([
       {
-        table: "raterSelfCredential",
+        table: "raterHumanCredential",
         values: expect.objectContaining({
           rater: "0x0000000000000000000000000000000000001234",
           verified: true,
-          legacy: false,
           revoked: false,
-          multiplierBps: 11_000,
+          provider: 1,
         }),
         update: expect.objectContaining({
           verified: true,
           revoked: false,
+          provider: 1,
           updatedAt: 100n,
         }),
       },

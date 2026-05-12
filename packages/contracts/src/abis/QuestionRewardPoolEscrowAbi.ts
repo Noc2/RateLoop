@@ -481,21 +481,6 @@ export const QuestionRewardPoolEscrowAbi = [
             "internalType": "uint32"
           },
           {
-            "name": "clusterCount",
-            "type": "uint32",
-            "internalType": "uint32"
-          },
-          {
-            "name": "largestClusterEffectiveUnits",
-            "type": "uint32",
-            "internalType": "uint32"
-          },
-          {
-            "name": "locoEffectiveParticipantUnits",
-            "type": "uint32",
-            "internalType": "uint32"
-          },
-          {
             "name": "allocation",
             "type": "uint256",
             "internalType": "uint256"
@@ -1385,49 +1370,6 @@ export const QuestionRewardPoolEscrowAbi = [
       },
       {
         "name": "amount",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "RewardPoolRoundClusterStats",
-    "inputs": [
-      {
-        "name": "rewardPoolId",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
-      },
-      {
-        "name": "contentId",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
-      },
-      {
-        "name": "roundId",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
-      },
-      {
-        "name": "clusterCount",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "largestClusterEffectiveUnits",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "locoEffectiveParticipantUnits",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"

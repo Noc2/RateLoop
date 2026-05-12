@@ -136,17 +136,14 @@ test("getAccuracyLeaderboard can include reputation blocks", async () => {
               reputation: {
                 raterType: 1,
                 raterTypeName: "Human",
-                credentialStatus: "verified",
-                clusterId: "cluster-1",
-                discountBps: 2500,
-                independenceMultiplierBps: 7500,
-                clusterChallengeStatus: "open",
-                clusterChallengeStatusCode: 1,
+                humanCredentialStatus: "verified",
+                participationLane: "verified_human",
                 activeTrustAttestationCount: 4,
                 followerCount: 3,
                 followingCount: 2,
                 aiTier: 0,
                 aiTierName: "A0",
+                aiDeclared: false,
               },
             },
           ],
@@ -213,7 +210,7 @@ test("getProfile exposes social counts from profile detail", async () => {
   });
 });
 
-test("getRaterRewardStatus requests the typed reward-status route", async () => {
+test("getRaterParticipationStatus requests the typed participation-status route", async () => {
   let requestedUrl = "";
   const read = createCuryoReadClient({
     apiBaseUrl: "https://api.curyo.xyz",
@@ -229,14 +226,13 @@ test("getRaterRewardStatus requests the typed reward-status route", async () => 
           rater: "0x1111111111111111111111111111111111111111",
           raterType: 2,
           raterTypeName: "AI",
-          selfCredential: {
+          participationLane: "ai_declared",
+          humanCredential: {
             verified: false,
-            legacy: false,
             revoked: false,
             status: "missing",
             verifiedAt: null,
             expiresAt: null,
-            multiplierBps: 10000,
             evidenceHash: null,
           },
           aiDeclaration: {
@@ -255,7 +251,6 @@ test("getRaterRewardStatus requests the typed reward-status route", async () => 
             effectiveTierName: "A1Verified",
             tier: 2,
             tierName: "A1Verified",
-            tierMultiplierBps: 11500,
             behaviorChanged: false,
             probePending: false,
             probeStatus: "passed",
@@ -280,26 +275,6 @@ test("getRaterRewardStatus requests the typed reward-status route", async () => 
             latestOperatorSlash: "0",
             latestChallengerReward: "0",
           },
-          independence: {
-            clusterId: "cluster-1",
-            discountBps: 2500,
-            independenceMultiplierBps: 7500,
-            scorerEpoch: "42",
-            updatedAt: "1000",
-            algorithmHash: null,
-            modelVersionHash: null,
-            scoreRoot: null,
-            evidenceHash: null,
-            challengeWindowEndsAt: null,
-            scoreKey: null,
-            openChallengeCount: 1,
-            latestChallengeId: "7",
-            latestChallengeStatus: 1,
-            latestChallengeStatusName: "open",
-            latestChallengeOpenedAt: "1000",
-            latestChallengeResolvedAt: null,
-            latestChallengeResolutionHash: null,
-          },
           trust: {
             activeSeed: null,
             activeInboundAttestationCount: 4,
@@ -323,17 +298,12 @@ test("getRaterRewardStatus requests the typed reward-status route", async () => 
               minDistinctVerifiedAnchors: 2,
             },
           },
-          rewardPolicy: {
-            baseMultiplierBps: 10000,
-            clusterDiscountBps: 2500,
-            independenceMultiplierBps: 7500,
-            humanCredentialMultiplierBps: 10000,
-            agentTierMultiplierBps: 11500,
-            effectiveRewardWeightBps: 9000,
-            combinedMultiplierBps: 11500,
-            combinedMultiplierCapBps: 12500,
-            verifiedAgentsCanAnchorLaunchRewards: false,
-            verifiedAgentSignupBonusEligible: false,
+          participationPolicy: {
+            baseRewardWeightBps: 10000,
+            humanVerificationAffectsRewardWeight: false,
+            aiDeclarationAffectsRewardWeight: false,
+            verifiedHumanCountsAsLaunchAnchor: true,
+            aiDeclarationCanAnchorLaunchRewards: false,
           },
         }),
         {
@@ -345,23 +315,24 @@ test("getRaterRewardStatus requests the typed reward-status route", async () => 
     timeoutMs: 5_000,
   });
 
-  const response = await read.getRaterRewardStatus(
+  const response = await read.getRaterParticipationStatus(
     "0x1111111111111111111111111111111111111111",
   );
 
   assert.match(
     requestedUrl,
-    /\/rater-reward-status\/0x1111111111111111111111111111111111111111$/,
+    /\/rater-participation-status\/0x1111111111111111111111111111111111111111$/,
   );
+  assert.equal(response.participationLane, "ai_declared");
+  assert.equal(response.humanCredential.status, "missing");
   assert.equal(response.aiDeclaration.tierName, "A1Verified");
-  assert.equal(response.independence.latestChallengeStatusName, "open");
   assert.equal(response.trust.activeInboundAttestationCount, 4);
   assert.equal(response.launchRewards.remainingLaunchCap, "75");
   assert.equal(
-    response.rewardPolicy.verifiedAgentsCanAnchorLaunchRewards,
+    response.participationPolicy.aiDeclarationCanAnchorLaunchRewards,
     false,
   );
-  assert.equal(response.rewardPolicy.effectiveRewardWeightBps, 9000);
+  assert.equal(response.participationPolicy.baseRewardWeightBps, 10000);
 });
 
 test("AI rater read helpers request declaration productization routes", async () => {

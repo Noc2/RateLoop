@@ -19,10 +19,6 @@ type SortOption = "signalScore" | "winRate" | "wins" | "stakeWon" | "settledVote
 type MinVotesOption = "3" | "5" | "10";
 type WindowOption = PonderAccuracyLeaderboardWindow;
 
-function formatBpsPercent(value: number) {
-  return `${(value / 100).toFixed(2)}%`;
-}
-
 export function AccuracyLeaderboard() {
   const { address: connectedAddress } = useAccount();
   const { targetNetwork } = useTargetNetwork();
@@ -297,15 +293,19 @@ export function AccuracyLeaderboard() {
                                   {entry.reputation.raterTypeName}
                                 </span>
                                 <span className="rounded-full bg-base-content/[0.06] px-2 py-0.5">
-                                  {entry.reputation.credentialStatus}
+                                  {entry.reputation.humanCredentialStatus === "verified"
+                                    ? "Verified human"
+                                    : entry.reputation.aiDeclared
+                                      ? "AI declared"
+                                      : "Open capped"}
                                 </span>
                                 <span className="rounded-full bg-base-content/[0.06] px-2 py-0.5">
                                   {entry.reputation.activeTrustAttestationCount} trust
                                 </span>
                                 <span className="rounded-full bg-base-content/[0.06] px-2 py-0.5">
-                                  {entry.reputation.clusterChallengeStatusCode === 1
-                                    ? "Open cluster challenge"
-                                    : `${formatBpsPercent(entry.reputation.independenceMultiplierBps)} independent`}
+                                  {entry.reputation.participationLane === "verified_human"
+                                    ? "Launch anchor"
+                                    : "Participation open"}
                                 </span>
                                 <span className="rounded-full bg-base-content/[0.06] px-2 py-0.5">
                                   {entry.reputation.followerCount} followers

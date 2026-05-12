@@ -115,19 +115,6 @@ export const RaterDeclarationRegistryAbi = [
   },
   {
     "type": "function",
-    "name": "MAX_TIER_MULTIPLIER_BPS",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint16",
-        "internalType": "uint16"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "MIN_CHALLENGE_BOND_USDC_FLOOR",
     "inputs": [],
     "outputs": [
@@ -290,25 +277,6 @@ export const RaterDeclarationRegistryAbi = [
         "name": "",
         "type": "uint16",
         "internalType": "uint16"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "clusterKey",
-    "inputs": [
-      {
-        "name": "rater",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
       }
     ],
     "stateMutability": "view"
@@ -1398,25 +1366,6 @@ export const RaterDeclarationRegistryAbi = [
         "name": "",
         "type": "bool",
         "internalType": "bool"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "tierMultiplierBps",
-    "inputs": [
-      {
-        "name": "rater",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint16",
-        "internalType": "uint16"
       }
     ],
     "stateMutability": "view"

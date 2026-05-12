@@ -776,17 +776,14 @@ export interface PonderAccuracyLeaderboardItem {
 export interface PonderAccuracyLeaderboardReputation {
   raterType: number;
   raterTypeName: PonderRaterTypeName;
-  credentialStatus: PonderSelfCredentialStatus;
-  clusterId: string | null;
-  discountBps: number;
-  independenceMultiplierBps: number;
-  clusterChallengeStatus: string;
-  clusterChallengeStatusCode: number;
+  humanCredentialStatus: PonderHumanCredentialStatus;
+  participationLane: PonderParticipationLane;
   activeTrustAttestationCount: number;
   followerCount: number;
   followingCount: number;
   aiTier: number;
   aiTierName: PonderAiDeclarationTierName | "A0";
+  aiDeclared: boolean;
   [key: string]: unknown;
 }
 
@@ -889,12 +886,13 @@ export interface PonderVoterStreak {
 export type PonderVoterStatsBatch = Record<string, PonderVoterStats>;
 
 export type PonderRaterTypeName = "Unknown" | "Human" | "AI" | "Team" | "Hybrid";
-export type PonderSelfCredentialStatus = "missing" | "verified" | "expired" | "revoked";
+export type PonderHumanCredentialStatus = "missing" | "verified" | "expired" | "revoked";
+export type PonderParticipationLane = "verified_human" | "ai_declared" | "open";
 export type PonderAiDeclarationTierName = "A0" | "A1Unverified" | "A1Verified";
 export type PonderAiProbeStatus = "none" | "pending" | "passed" | "failed";
 export type PonderAiDeclarationInactiveReason = "none" | "missing" | "retired" | "future" | "expired" | "challenged";
 
-export interface PonderRaterRewardStatusResponse {
+export interface PonderRaterParticipationStatusResponse {
   asOf: {
     chainTimestamp: string;
     wallTimestamp: string;
@@ -903,14 +901,13 @@ export interface PonderRaterRewardStatusResponse {
   rater: string;
   raterType: number;
   raterTypeName: PonderRaterTypeName;
-  selfCredential: {
+  participationLane: PonderParticipationLane;
+  humanCredential: {
     verified: boolean;
-    legacy: boolean;
     revoked: boolean;
-    status: PonderSelfCredentialStatus;
+    status: PonderHumanCredentialStatus;
     verifiedAt: string | null;
     expiresAt: string | null;
-    multiplierBps: number;
     evidenceHash: string | null;
   };
   aiDeclaration: {
@@ -929,7 +926,6 @@ export interface PonderRaterRewardStatusResponse {
     effectiveTierName: PonderAiDeclarationTierName;
     tier: number;
     tierName: PonderAiDeclarationTierName;
-    tierMultiplierBps: number;
     behaviorChanged: boolean;
     probePending: boolean;
     probeStatus: PonderAiProbeStatus;
@@ -959,26 +955,6 @@ export interface PonderRaterRewardStatusResponse {
     latestResolvedAt: string | null;
     latestOperatorSlash: string;
     latestChallengerReward: string;
-  };
-  independence: {
-    clusterId: string | null;
-    discountBps: number;
-    independenceMultiplierBps: number;
-    scorerEpoch: string | null;
-    updatedAt: string | null;
-    algorithmHash: string | null;
-    modelVersionHash: string | null;
-    scoreRoot: string | null;
-    evidenceHash: string | null;
-    challengeWindowEndsAt: string | null;
-    scoreKey: string | null;
-    openChallengeCount: number;
-    latestChallengeId: string | null;
-    latestChallengeStatus: number;
-    latestChallengeStatusName: string;
-    latestChallengeOpenedAt: string | null;
-    latestChallengeResolvedAt: string | null;
-    latestChallengeResolutionHash: string | null;
   };
   trust: {
     activeSeed: {
@@ -1014,17 +990,12 @@ export interface PonderRaterRewardStatusResponse {
       [key: string]: unknown;
     };
   };
-  rewardPolicy: {
-    baseMultiplierBps: number;
-    clusterDiscountBps: number;
-    independenceMultiplierBps: number;
-    humanCredentialMultiplierBps: number;
-    agentTierMultiplierBps: number;
-    effectiveRewardWeightBps: number;
-    combinedMultiplierBps: number;
-    combinedMultiplierCapBps: number;
-    verifiedAgentsCanAnchorLaunchRewards: boolean;
-    verifiedAgentSignupBonusEligible: boolean;
+  participationPolicy: {
+    baseRewardWeightBps: number;
+    humanVerificationAffectsRewardWeight: boolean;
+    aiDeclarationAffectsRewardWeight: boolean;
+    verifiedHumanCountsAsLaunchAnchor: boolean;
+    aiDeclarationCanAnchorLaunchRewards: boolean;
   };
 }
 
@@ -1407,8 +1378,8 @@ export const ponderApi = {
     });
   },
 
-  getRaterRewardStatus(address: string) {
-    return ponderGet<PonderRaterRewardStatusResponse>(`/rater-reward-status/${address}`);
+  getRaterParticipationStatus(address: string) {
+    return ponderGet<PonderRaterParticipationStatusResponse>(`/rater-participation-status/${address}`);
   },
 
   getAiRaterDeclarations(params?: PonderAiRaterListParams) {

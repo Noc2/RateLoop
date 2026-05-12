@@ -24,7 +24,7 @@ import {
   getDefaultUsdcAddress,
   parseSubmissionRewardAmount,
 } from "~~/lib/questionRewardPools";
-import { type PonderRaterRewardStatusResponse, ponderApi } from "~~/services/ponder/client";
+import { type PonderRaterParticipationStatusResponse, ponderApi } from "~~/services/ponder/client";
 import { notification } from "~~/utils/scaffold-eth";
 
 const SECONDS_PER_DAY = 86_400;
@@ -81,12 +81,12 @@ export function AiRaterSettingsPanel({ address }: { address?: string }) {
   const [isWithdrawingBond, setIsWithdrawingBond] = useState(false);
 
   const rewardStatusQuery = useQuery({
-    queryKey: ["ai-rater-settings", "reward-status", normalizedAddress],
-    queryFn: () => ponderApi.getRaterRewardStatus(normalizedAddress!),
+    queryKey: ["ai-rater-settings", "participation-status", normalizedAddress],
+    queryFn: () => ponderApi.getRaterParticipationStatus(normalizedAddress!),
     enabled: Boolean(normalizedAddress),
     staleTime: 15_000,
   });
-  const rewardStatus = rewardStatusQuery.data as PonderRaterRewardStatusResponse | undefined;
+  const rewardStatus = rewardStatusQuery.data as PonderRaterParticipationStatusResponse | undefined;
   const aiDeclaration = rewardStatus?.aiDeclaration;
 
   const { data: nonce, refetch: refetchNonce } = useScaffoldReadContract({

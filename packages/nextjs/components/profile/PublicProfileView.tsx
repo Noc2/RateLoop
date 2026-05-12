@@ -57,7 +57,7 @@ import { AVATAR_WIN_RATE_TOOLTIP } from "~~/lib/profile/winRateTooltip";
 import { formatRatingScoreOutOfTen } from "~~/lib/ui/ratingDisplay";
 import {
   type PonderProfileDetailResponse,
-  type PonderRaterRewardStatusResponse,
+  type PonderRaterParticipationStatusResponse,
   type PonderVoteItem,
   ponderApi,
 } from "~~/services/ponder/client";
@@ -93,7 +93,7 @@ function formatBpsPercent(value: number) {
   return `${(value / 100).toFixed(2)}%`;
 }
 
-function formatLaunchEligibility(rewardStatus: PonderRaterRewardStatusResponse["launchRewards"]) {
+function formatLaunchEligibility(rewardStatus: PonderRaterParticipationStatusResponse["launchRewards"]) {
   if (rewardStatus.eligible) {
     return `${rewardStatus.rewardedRatingCount}/${rewardStatus.qualifyingRatingCount} launch rewards paid`;
   }
@@ -101,6 +101,12 @@ function formatLaunchEligibility(rewardStatus: PonderRaterRewardStatusResponse["
     return `${rewardStatus.qualifyingRatingCount} qualifying ratings recorded`;
   }
   return "No launch reward credits recorded yet";
+}
+
+function formatParticipationLane(lane: PonderRaterParticipationStatusResponse["participationLane"]) {
+  if (lane === "verified_human") return "Verified human";
+  if (lane === "ai_declared") return "AI declared";
+  return "Open capped";
 }
 
 function getUrlHost(url: string) {
@@ -485,8 +491,8 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
     refetchInterval: isPageVisible ? 60_000 : false,
   });
   const rewardStatusQuery = useQuery({
-    queryKey: ["profile-reward-status", normalizedAddress],
-    queryFn: () => ponderApi.getRaterRewardStatus(normalizedAddress),
+    queryKey: ["profile-participation-status", normalizedAddress],
+    queryFn: () => ponderApi.getRaterParticipationStatus(normalizedAddress),
     staleTime: 15_000,
   });
 
@@ -1122,8 +1128,8 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
             <div>
               <h2 className="text-xl font-semibold text-base-content">Reputation context</h2>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-base-content/60">
-                Public follows, trust attestations, and independence discounts are all visible here. Reward weight is
-                shown in the same order the contracts apply it.
+                Public follows, trust attestations, AI declaration status, and verified-human launch progress are
+                visible here. Verified-human status does not boost rating reward weight.
               </p>
             </div>
             <div className="rounded-full bg-base-content/[0.05] px-4 py-2 text-sm font-medium text-base-content/70">
@@ -1146,25 +1152,19 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
             <>
               <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                 <div className="rounded-2xl bg-base-content/[0.04] px-4 py-3">
-                  <div className="text-sm text-base-content/60">Effective reward weight</div>
+                  <div className="text-sm text-base-content/60">Participation lane</div>
                   <div className="mt-1 text-xl font-semibold">
-                    {formatBpsPercent(rewardStatus.rewardPolicy.effectiveRewardWeightBps)}
+                    {formatParticipationLane(rewardStatus.participationLane)}
                   </div>
                   <div className="mt-1 text-sm text-base-content/55">
-                    Credential {formatBpsPercent(rewardStatus.rewardPolicy.humanCredentialMultiplierBps)} • AI{" "}
-                    {formatBpsPercent(rewardStatus.rewardPolicy.agentTierMultiplierBps)}
+                    Base reward weight {formatBpsPercent(rewardStatus.participationPolicy.baseRewardWeightBps)}
                   </div>
                 </div>
 
                 <div className="rounded-2xl bg-base-content/[0.04] px-4 py-3">
-                  <div className="text-sm text-base-content/60">Independence</div>
-                  <div className="mt-1 text-xl font-semibold">
-                    {formatBpsPercent(rewardStatus.independence.independenceMultiplierBps)}
-                  </div>
-                  <div className="mt-1 text-sm text-base-content/55">
-                    Cluster discount {formatBpsPercent(rewardStatus.independence.discountBps)} •{" "}
-                    {rewardStatus.independence.clusterId ?? "No cluster"}
-                  </div>
+                  <div className="text-sm text-base-content/60">Verified human</div>
+                  <div className="mt-1 text-xl font-semibold capitalize">{rewardStatus.humanCredential.status}</div>
+                  <div className="mt-1 text-sm text-base-content/55">Counts as a launch anchor when active</div>
                 </div>
 
                 <div className="rounded-2xl bg-base-content/[0.04] px-4 py-3">
@@ -1184,13 +1184,12 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
                 </div>
 
                 <div className="rounded-2xl bg-base-content/[0.04] px-4 py-3">
-                  <div className="text-sm text-base-content/60">Cluster challenge state</div>
+                  <div className="text-sm text-base-content/60">AI declaration</div>
                   <div className="mt-1 text-xl font-semibold capitalize">
-                    {rewardStatus.independence.latestChallengeStatusName}
+                    {rewardStatus.aiDeclaration.active ? "Active" : rewardStatus.aiDeclaration.inactiveReason}
                   </div>
                   <div className="mt-1 text-sm text-base-content/55">
-                    {rewardStatus.independence.openChallengeCount.toLocaleString()} open challenge
-                    {rewardStatus.independence.openChallengeCount === 1 ? "" : "s"}
+                    AI declarations never count as verified-human anchors
                   </div>
                 </div>
 
@@ -1208,11 +1207,11 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
               <div className="mt-6 grid gap-3 lg:grid-cols-2">
                 <div className="rounded-2xl border border-base-content/10 px-4 py-3 text-sm text-base-content/70">
                   <div className="font-medium text-base-content/85">
-                    Credential {rewardStatus.selfCredential.status} • AI {rewardStatus.aiDeclaration.effectiveTierName}
+                    Verified human {rewardStatus.humanCredential.status} • AI{" "}
+                    {rewardStatus.aiDeclaration.effectiveTierName}
                   </div>
                   <div className="mt-2">
-                    Score epoch {rewardStatus.independence.scorerEpoch ?? "—"} • updated{" "}
-                    {rewardStatus.independence.updatedAt ? formatTimestamp(rewardStatus.independence.updatedAt) : "—"}
+                    Reward weight is stake, timing, and RBTS score. Identity status does not multiply it.
                   </div>
                 </div>
 

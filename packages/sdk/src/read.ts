@@ -211,11 +211,12 @@ export interface CuryoGlobalStats {
 }
 
 export type CuryoRaterTypeName = "Unknown" | "Human" | "AI" | "Team" | "Hybrid";
-export type CuryoSelfCredentialStatus =
+export type CuryoHumanCredentialStatus =
   | "missing"
   | "verified"
   | "expired"
   | "revoked";
+export type CuryoParticipationLane = "verified_human" | "ai_declared" | "open";
 export type CuryoAiDeclarationTierName = "A0" | "A1Unverified" | "A1Verified";
 export type CuryoAiProbeStatus = "none" | "pending" | "passed" | "failed";
 export type CuryoAiDeclarationInactiveReason =
@@ -229,17 +230,14 @@ export type CuryoAiDeclarationInactiveReason =
 export interface CuryoAccuracyLeaderboardReputation {
   raterType: number;
   raterTypeName: CuryoRaterTypeName;
-  credentialStatus: CuryoSelfCredentialStatus;
-  clusterId: string | null;
-  discountBps: number;
-  independenceMultiplierBps: number;
-  clusterChallengeStatus: string;
-  clusterChallengeStatusCode: number;
+  humanCredentialStatus: CuryoHumanCredentialStatus;
+  participationLane: CuryoParticipationLane;
   activeTrustAttestationCount: number;
   followerCount: number;
   followingCount: number;
   aiTier: number;
   aiTierName: CuryoAiDeclarationTierName | "A0";
+  aiDeclared: boolean;
   [key: string]: unknown;
 }
 
@@ -276,7 +274,7 @@ export interface CuryoAccuracyLeaderboardResponse {
   endsAt: string | null;
 }
 
-export interface CuryoRaterRewardStatusResponse {
+export interface CuryoRaterParticipationStatusResponse {
   asOf: {
     chainTimestamp: string;
     wallTimestamp: string;
@@ -285,14 +283,13 @@ export interface CuryoRaterRewardStatusResponse {
   rater: `0x${string}`;
   raterType: number;
   raterTypeName: CuryoRaterTypeName;
-  selfCredential: {
+  participationLane: CuryoParticipationLane;
+  humanCredential: {
     verified: boolean;
-    legacy: boolean;
     revoked: boolean;
-    status: CuryoSelfCredentialStatus;
+    status: CuryoHumanCredentialStatus;
     verifiedAt: string | null;
     expiresAt: string | null;
-    multiplierBps: number;
     evidenceHash: string | null;
   };
   aiDeclaration: {
@@ -311,7 +308,6 @@ export interface CuryoRaterRewardStatusResponse {
     effectiveTierName: CuryoAiDeclarationTierName;
     tier: number;
     tierName: CuryoAiDeclarationTierName;
-    tierMultiplierBps: number;
     behaviorChanged: boolean;
     probePending: boolean;
     probeStatus: CuryoAiProbeStatus;
@@ -341,26 +337,6 @@ export interface CuryoRaterRewardStatusResponse {
     latestResolvedAt: string | null;
     latestOperatorSlash: string;
     latestChallengerReward: string;
-  };
-  independence: {
-    clusterId: string | null;
-    discountBps: number;
-    independenceMultiplierBps: number;
-    scorerEpoch: string | null;
-    updatedAt: string | null;
-    algorithmHash: string | null;
-    modelVersionHash: string | null;
-    scoreRoot: string | null;
-    evidenceHash: string | null;
-    challengeWindowEndsAt: string | null;
-    scoreKey: string | null;
-    openChallengeCount: number;
-    latestChallengeId: string | null;
-    latestChallengeStatus: number;
-    latestChallengeStatusName: string;
-    latestChallengeOpenedAt: string | null;
-    latestChallengeResolvedAt: string | null;
-    latestChallengeResolutionHash: string | null;
   };
   trust: {
     activeSeed: {
@@ -396,17 +372,12 @@ export interface CuryoRaterRewardStatusResponse {
       [key: string]: unknown;
     };
   };
-  rewardPolicy: {
-    baseMultiplierBps: number;
-    clusterDiscountBps: number;
-    independenceMultiplierBps: number;
-    humanCredentialMultiplierBps: number;
-    agentTierMultiplierBps: number;
-    effectiveRewardWeightBps: number;
-    combinedMultiplierBps: number;
-    combinedMultiplierCapBps: number;
-    verifiedAgentsCanAnchorLaunchRewards: boolean;
-    verifiedAgentSignupBonusEligible: boolean;
+  participationPolicy: {
+    baseRewardWeightBps: number;
+    humanVerificationAffectsRewardWeight: boolean;
+    aiDeclarationAffectsRewardWeight: boolean;
+    verifiedHumanCountsAsLaunchAnchor: boolean;
+    aiDeclarationCanAnchorLaunchRewards: boolean;
   };
   [key: string]: unknown;
 }
@@ -657,9 +628,9 @@ export interface CuryoReadClient {
     params?: GetAccuracyLeaderboardParams,
   ): Promise<CuryoAccuracyLeaderboardResponse>;
   getVoterAccuracy(address: string): Promise<JsonRecord>;
-  getRaterRewardStatus(
+  getRaterParticipationStatus(
     address: string,
-  ): Promise<CuryoRaterRewardStatusResponse>;
+  ): Promise<CuryoRaterParticipationStatusResponse>;
   listAiRaterDeclarations(
     params?: ListAiRaterDeclarationsParams,
   ): Promise<CuryoPaginatedResponse<CuryoAiRaterDeclarationItem>>;
@@ -732,10 +703,10 @@ export function createCuryoReadClient(
       ),
     getVoterAccuracy: (address) =>
       request<JsonRecord>(config, `/voter-accuracy/${address}`),
-    getRaterRewardStatus: (address) =>
-      request<CuryoRaterRewardStatusResponse>(
+    getRaterParticipationStatus: (address) =>
+      request<CuryoRaterParticipationStatusResponse>(
         config,
-        `/rater-reward-status/${address}`,
+        `/rater-participation-status/${address}`,
       ),
     listAiRaterDeclarations: (params) =>
       request<CuryoPaginatedResponse<CuryoAiRaterDeclarationItem>>(
