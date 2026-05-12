@@ -216,7 +216,7 @@ contract QuestionRewardPoolEscrow is
         votingEngine = RoundVotingEngine(votingEngine_);
         voterIdNFT = IVoterIdNFT(voterIdNFT_);
         nextRewardPoolId = 1;
-        defaultFrontendFeeBps = DEFAULT_FRONTEND_FEE_BPS.toUint16();
+        defaultFrontendFeeBps = uint16(DEFAULT_FRONTEND_FEE_BPS);
     }
 
     function createRewardPool(
@@ -488,7 +488,7 @@ contract QuestionRewardPoolEscrow is
             startRoundId: startRoundId.toUint64(),
             nextRoundToEvaluate: startRoundId.toUint64(),
             challengedRoundId: 0,
-            bountyOpensAt: block.timestamp.toUint64(),
+            bountyOpensAt: uint64(block.timestamp),
             bountyClosesAt: bountyClosesAt.toUint64(),
             claimDeadline: bountyClosesAt.toUint64(),
             funder: funder,
@@ -695,7 +695,7 @@ contract QuestionRewardPoolEscrow is
     ///      sweeping funds.
     function syncBundleQuestionTerminal(uint256 contentId, uint256 roundId) external {
         // Existing bundles keep using this escrow's snapshotted engine after registry rotation.
-        (RoundLib.RoundState state, uint48 settledAt,) = _roundTerminalState(contentId, roundId);
+        (RoundLib.RoundState state, uint48 settledAt) = _roundTerminalState(contentId, roundId);
         require(settledAt != 0, "Round not terminal");
         _recordBundleQuestionTerminal(contentId, roundId, state == RoundLib.RoundState.Settled);
         uint256 bundleId = contentBundleId[contentId];
@@ -731,7 +731,7 @@ contract QuestionRewardPoolEscrow is
             }
         }
 
-        if (!settled || !_bundleRoundSettledWithinWindow(bundle, contentId, roundId)) return;
+        if (!settled) return;
 
         bundleRoundIds[bundleId][bundleIndex][roundSetIndex] = uint64(roundId);
         bundleQuestionRecordedRounds[bundleId][bundleIndex] = uint32(roundSetIndex + 1);
@@ -847,7 +847,7 @@ contract QuestionRewardPoolEscrow is
         if (bundle.completedRoundSets != 0) {
             _requireBundleCleanupComplete(bundleId, bundle.completedRoundSets);
             if (bundle.bountyOpensAt == 0) {
-                bundle.bountyOpensAt = (block.timestamp + BUNDLE_CLAIM_GRACE).toUint64();
+                bundle.bountyOpensAt = uint64(block.timestamp + BUNDLE_CLAIM_GRACE);
                 return 0;
             }
             require(block.timestamp > bundle.bountyOpensAt, "Grace");
@@ -1063,21 +1063,12 @@ contract QuestionRewardPoolEscrow is
         );
     }
 
-    function _bundleRoundSettledWithinWindow(BundleReward storage, uint256 contentId, uint256 roundId)
-        internal
-        view
-        returns (bool)
-    {
-        (RoundLib.RoundState state, uint48 settledAt,) = _roundTerminalState(contentId, roundId);
-        return state == RoundLib.RoundState.Settled && settledAt != 0;
-    }
-
     function _roundTerminalState(uint256 contentId, uint256 roundId)
         internal
         view
-        returns (RoundLib.RoundState state, uint48 settledAt, uint48 thresholdReachedAt)
+        returns (RoundLib.RoundState state, uint48 settledAt)
     {
-        (, state,,,,,,,,, settledAt, thresholdReachedAt,,) = votingEngine.rounds(contentId, roundId);
+        (, state,,,,,,,,, settledAt,,,) = votingEngine.rounds(contentId, roundId);
     }
 
     function _requireCompletedBundleRoundSet(uint256 bundleId, uint256 roundSetIndex, address account)
