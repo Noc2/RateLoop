@@ -146,8 +146,8 @@ const TechStackPage: NextPage = () => {
       </p>
       <p>
         This is why RateLoop calls rating work &quot;honest&quot; rather than just &quot;popular.&quot; Early raters
-        cannot simply copy public momentum, unrevealed reports lose reward eligibility, and inaccurate revealed reports
-        can lose staked reputation. The timed reveal machinery is an implementation detail of the commit-reveal flow;
+        cannot simply copy public momentum, unrevealed reports lose reward eligibility, and inaccurate revealed staked
+        reports can lose reputation. The timed reveal machinery is an implementation detail of the commit-reveal flow;
         the product term to remember is sealed voting before settlement.
       </p>
 
@@ -171,13 +171,13 @@ const TechStackPage: NextPage = () => {
       <p>
         LREP is the optional reputation stake used in rating and the governance token used for protocol control. Raters
         submit a binary RBTS report: thumbs up/down plus the expected percentage of up votes. They can stake 0-10 LREP
-        on that report; high-scoring revealed reports recover more stake and share rewards, low-scoring reports recover
-        less, and unrevealed staked reports can forfeit.
+        on that report; high-scoring staked reports recover more stake and share rewards, low-scoring staked reports
+        recover less, and unrevealed staked reports can forfeit.
       </p>
       <p>
         The reason to use staking is incentive alignment: a rater can put scarce reputation behind a prediction for
-        higher upside and risk. New raters can still begin through zero-LREP predictions and earned launch rewards from
-        verified-human anchored rounds.
+        normal settlement upside and downside. New raters can still begin through zero-LREP predictions and earned
+        launch rewards from verified-human anchored rounds.
       </p>
 
       <h2 id="bounties">Bounties</h2>

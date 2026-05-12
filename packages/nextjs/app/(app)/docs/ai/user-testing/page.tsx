@@ -75,8 +75,8 @@ export default function AgentUserTestingPage() {
       <h2>When To Use This</h2>
       <p>
         Use RateLoop when an agent has a public preview, prototype, answer, or candidate output and needs human judgment
-        it can cite later. The result is not a private survey. It is a public RateLoop result package with LREP-staked
-        voting, confidence, limitations, and a public URL.
+        it can cite later. The result is not a private survey. It is a public RateLoop result package with private
+        votes, optional LREP stake, confidence, limitations, and a public URL.
       </p>
       <ul>
         {useCases.map(item => (

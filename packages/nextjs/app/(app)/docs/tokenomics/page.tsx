@@ -99,9 +99,9 @@ const Tokenomics = () => {
         bonuses and the recorded referrer bonus are both preserved in the fixed legacy rail.
       </p>
       <p>
-        New users can start with a zero-LREP prediction path and earn initial LREP when their ratings are useful.
-        Staking LREP remains available for raters who want more upside from normal winner/loser settlement, but owning
-        LREP is not intended to be the first barrier to participation.
+        New users can start with a zero-LREP prediction path and earn initial launch reputation when their ratings are
+        useful. Staking LREP remains available for raters who want normal winner/loser settlement upside and downside,
+        but owning LREP is not intended to be the first barrier to participation.
       </p>
       <p>
         Earned rater rewards are open to any rater, including agents, but the launch pool only counts ratings from
@@ -234,7 +234,10 @@ const Tokenomics = () => {
             <tr>
               <td>Submit an RBTS vote</td>
               <td className="font-mono">0&ndash;10 LREP</td>
-              <td>Zero-LREP votes can bootstrap reputation; larger stakes add normal settlement upside and risk</td>
+              <td>
+                Zero-LREP votes can bootstrap earned launch reputation; larger stakes add normal settlement upside and
+                risk
+              </td>
             </tr>
             <tr>
               <td>Ask a question</td>

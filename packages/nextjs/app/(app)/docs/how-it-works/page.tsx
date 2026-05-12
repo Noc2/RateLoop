@@ -51,8 +51,8 @@ const HowItWorks: NextPage = () => {
         Raters submit a <Link href="/docs/tech-stack#bayesian-truth-serum">robust BTS report</Link>: a thumbs-up/down
         signal and a 0-100% prediction of how many revealed raters will vote up. They can stake 0&ndash;10 LREP per
         report; zero-LREP votes can bootstrap earned launch reputation when they occur in verified-human anchored
-        rounds, while staked votes add settlement upside and risk. Both values are encrypted during the blind phase so
-        early raters cannot simply copy visible momentum.
+        rounds, while staked votes add normal settlement upside and risk. Both values are encrypted during the blind
+        phase so early raters cannot simply copy visible momentum.
       </p>
       <div className="not-prose">
         <VotingFlowDiagram />

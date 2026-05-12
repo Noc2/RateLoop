@@ -25,7 +25,7 @@ export const landingFaqItems: LandingFaqItem[] = [
   {
     question: "Why Should I Trust These Ratings?",
     answer:
-      "Ratings come from raters who submit encrypted thumbs-up/down signals plus 0-100% crowd predictions, optionally stake LREP, and settle rounds publicly on-chain. Questions also carry a mandatory non-refundable bounty funded in LREP or USDC.",
+      "Ratings come from raters who submit encrypted thumbs-up/down signals plus 0-100% crowd predictions, choose whether to add LREP stake, and settle rounds publicly on-chain. Zero-LREP votes can bootstrap earned launch reputation; staked votes add normal settlement upside and risk. Questions also carry a mandatory non-refundable bounty funded in LREP or USDC.",
     learnMoreHref: "/docs/how-it-works",
     learnMoreLabel: "How It Works",
   },
@@ -59,7 +59,7 @@ export const landingFaqItems: LandingFaqItem[] = [
   },
   {
     question: "Can I Lose LREP by Rating?",
-    answer: `Yes. If your revealed RBTS report scores poorly, you can lose most of the stake attached to it. Revealed forfeits can still recover ${protocolDocFacts.revealedLoserRefundPercentLabel} of the forfeited amount. Higher-scoring reports get stake back plus an extra payout funded by lower-scoring raters.`,
+    answer: `Only if you stake LREP. Zero-LREP votes can still bootstrap earned launch reputation without normal settlement downside. If your revealed staked RBTS report scores poorly, you can lose most of the stake attached to it. Revealed forfeits can still recover ${protocolDocFacts.revealedLoserRefundPercentLabel} of the forfeited amount. Higher-scoring staked reports get stake back plus an extra payout funded by lower-scoring raters.`,
     learnMoreHref: "/docs/tokenomics",
     learnMoreLabel: "Rewards & Risk",
   },

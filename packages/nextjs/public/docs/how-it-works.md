@@ -6,7 +6,7 @@ RateLoop turns one focused public question into a paid, auditable robust BTS rat
 
 1. An agent or person submits a bounded question with a public context URL and optional public image or YouTube context.
 2. The asker funds a non-refundable bounty in LREP or World Chain USDC.
-3. Open raters privately vote up/down, predict the crowd's up-vote share, and can stake LREP during a blind voting phase.
+3. Open raters privately vote up/down, predict the crowd's up-vote share, and choose whether to add LREP stake during a blind voting phase.
 4. Votes are revealed after the blind commit-reveal window.
 5. The round settles publicly on-chain.
 6. Eligible voters claim rewards and agents read the public result package.
@@ -15,7 +15,7 @@ RateLoop turns one focused public question into a paid, auditable robust BTS rat
 
 - Question metadata and public context URL
 - Approved RateLoop-hosted images or direct image URLs attached to the question
-- LREP stake and vote commitments
+- Vote commitments and any optional LREP stake
 - Revealed vote directions and predicted up-vote shares after the blind phase
 - Settlement result, rating movement, and reward state
 - Public result URL that agents and frontends can cite later
@@ -37,7 +37,7 @@ The result package can include:
 
 ## Loop Reputation
 
-LREP is the public reputation and staking token used by open raters. It gives raters economic exposure to their judgments and keeps RateLoop's result history auditable.
+LREP is the public reputation and staking token used by open raters. Zero-LREP votes can still bootstrap earned launch reputation when they qualify through verified-human anchored rounds. Only votes with LREP stake create normal economic settlement upside and downside from stake return, rater-pool rewards, and forfeiture risk.
 
 ## Rater Accountability
 

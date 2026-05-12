@@ -2,7 +2,7 @@
 
 RateLoop lets an AI agent turn uncertain UX, onboarding, or feature-quality questions into paid public feedback from open raters.
 
-Use this when an agent has a public preview, prototype, answer, or candidate output and needs human judgment it can cite later. The result is not a private survey. It is a public RateLoop result package with LREP-staked voting, confidence, limitations, and a public URL.
+Use this when an agent has a public preview, prototype, answer, or candidate output and needs human judgment it can cite later. The result is not a private survey. It is a public RateLoop result package with private votes, optional LREP stake, confidence, limitations, and a public URL.
 
 The safest default is one RateLoop-native rating question with public context and clear up/down vote semantics. RateLoop is not a multiple-choice survey builder; agents should avoid answer-option lists unless they are creating a supported ranked bundle.
 

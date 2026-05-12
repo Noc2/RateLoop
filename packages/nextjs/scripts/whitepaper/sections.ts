@@ -22,7 +22,7 @@ export const SECTIONS: Section[] = [
         blocks: [
           {
             type: "paragraph",
-            text: "RateLoop exists for the moment an agent should ask instead of guess. It gives agents, AI product teams, and people an open-rater path to publish one bounded question, attach source context and funding, and receive a public, stake-backed rating signal that other agents can inspect later.",
+            text: "RateLoop exists for the moment an agent should ask instead of guess. It gives agents, AI product teams, and people an open-rater path to publish one bounded question, attach source context and funding, and receive a public rating signal with optional LREP-backed stake that other agents can inspect later.",
           },
         ],
       },
@@ -44,7 +44,7 @@ export const SECTIONS: Section[] = [
               "Bounded asks -- one question, one context URL, optional preview media, and explicit round terms.",
               "Paid attention -- every ask carries a non-refundable bounty funded in LREP or World Chain USDC.",
               "Open participation -- people, bots, and AI raters use the same rating primitive after reputation and calibration rules are met.",
-              "Skin in the game -- predictions can be backed by LREP stake, while zero-LREP raters can still bootstrap through earned launch rewards.",
+              "Skin in the game -- predictions can be backed by LREP stake for normal settlement upside and downside, while zero-LREP raters can still bootstrap through earned launch rewards.",
               "Agent-native access -- public MCP, direct JSON routes, SDK helpers, browser signing, and local signer flows all feed the same protocol record.",
               "Reusable output -- settled results stay public so later agents can inspect them instead of repeating the same ask.",
             ],
@@ -99,7 +99,7 @@ export const SECTIONS: Section[] = [
         blocks: [
           {
             type: "paragraph",
-            text: "The current AI focus is broader than generic feedback. RateLoop is designed to support LLM answer quality review, RAG grounding, claim verification, source credibility screening, autonomous action gates, feature acceptance tests, agent trace review, proposal review, and output preference comparisons while keeping the same staked predicted-rating primitive.",
+            text: "The current AI focus is broader than generic feedback. RateLoop is designed to support LLM answer quality review, RAG grounding, claim verification, source credibility screening, autonomous action gates, feature acceptance tests, agent trace review, proposal review, and output preference comparisons while keeping the same predicted-rating primitive with optional LREP stake.",
           },
         ],
       },
@@ -109,7 +109,7 @@ export const SECTIONS: Section[] = [
           {
             type: "bullets",
             items: [
-              "Not a truth oracle -- it returns public stake-backed ratings with visible disagreement and limitations.",
+              "Not a truth oracle -- it returns public ratings with optional LREP-backed stake, visible disagreement, and limitations.",
               "Not a generic approval button -- it is designed for bounded questions that many raters can evaluate.",
               "Not a private labeler marketplace -- the current design assumes public context URLs and public settled result pages.",
               "Not a replacement for policy, law, or domain experts -- agents should use the result as one auditable input in a larger decision.",
@@ -173,7 +173,7 @@ export const SECTIONS: Section[] = [
                 ["Submitted", "Question, context, bounty, and round settings are recorded", "Immediate"],
                 [
                   "Blind RBTS vote",
-                  "Open raters commit encrypted up/down signals and predicted-up percentages with 0-10 LREP stake",
+                  "Open raters commit encrypted up/down signals and predicted-up percentages with optional 0-10 LREP stake",
                   `First ${protocolDocFacts.blindPhaseDurationLabel} epoch by default`,
                 ],
                 [
@@ -228,14 +228,14 @@ export const SECTIONS: Section[] = [
         blocks: [
           {
             type: "paragraph",
-            text: "The landing experience now leads with the concrete loop: AI Asks, Open Raters Predict. The visual system uses the warm RateLoop AI-sphere mark and the project hero animation, then explains the product through three steps: agents ask with context and bounty, raters stake predictions during blind rounds, and raters earn while agents use the public rating signal.",
+            text: "The landing experience now leads with the concrete loop: AI Asks, Open Raters Predict. The visual system uses the warm RateLoop AI-sphere mark and the project hero animation, then explains the product through three steps: agents ask with context and bounty, raters predict during blind rounds with optional stake, and raters earn while agents use the public rating signal.",
           },
           {
             type: "bullets",
             items: [
               "Primary routes point people to earn USDC or learn how agents integrate.",
               "The product benefit cards map directly to the technical rails: x402 and MCP for agents, optional identity for credentials, commit-reveal for honest rating, bounties and Feedback Bonuses for paid work, and on-chain settlement for transparency.",
-              "The brand copy now frames RateLoop as staked public prediction ratings for AI agents rather than a generic content curation app.",
+              "The brand copy now frames RateLoop as public prediction ratings with optional LREP-backed stake for AI agents rather than a generic content curation app.",
             ],
           },
         ],
@@ -433,7 +433,7 @@ export const SECTIONS: Section[] = [
                 [
                   "Vote up/down and predict crowd share",
                   "0-10 LREP",
-                  "Per prediction, per round; stake is optional for starter participation",
+                  "Per prediction, per round; zero-LREP votes can bootstrap earned launch reputation, while staked votes add normal settlement upside and downside",
                 ],
                 [
                   "Ask a question",

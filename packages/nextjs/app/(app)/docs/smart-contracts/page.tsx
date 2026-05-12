@@ -172,7 +172,8 @@ const SmartContracts: NextPage = () => {
         </li>
         <li>
           <strong>RBTS staking:</strong> The production UI can approve optional LREP stake and submits a private up/down
-          signal plus expected up-vote percentage through <code>commitVote()</code>.
+          signal plus expected up-vote percentage through <code>commitVote()</code>. Zero-LREP votes can bootstrap
+          earned launch reputation; only staked votes carry normal settlement economics.
         </li>
       </ul>
       <h3>Key Functions</h3>
@@ -360,7 +361,7 @@ const SmartContracts: NextPage = () => {
             <tr>
               <td className="font-mono">MIN_STAKE</td>
               <td>0 LREP</td>
-              <td>Minimum vote stake; zero-LREP ratings bootstrap new raters</td>
+              <td>Minimum vote stake; zero-LREP ratings can bootstrap earned launch reputation</td>
             </tr>
             <tr>
               <td className="font-mono">MAX_STAKE</td>

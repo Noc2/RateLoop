@@ -12,7 +12,7 @@ const STEPS = [
   {
     label: "Vote",
     duration: "0-10 LREP",
-    description: "Choose up or down, predict the crowd's up percentage, stake is locked",
+    description: "Choose up or down, predict the crowd's up percentage, optional stake locks",
     Icon: LockClosedIcon,
   },
   {
@@ -30,7 +30,7 @@ const STEPS = [
   {
     label: "Claim",
     duration: "",
-    description: "High-scoring raters withdraw stake + rewards",
+    description: "High-scoring staked raters withdraw stake + rewards",
     Icon: BanknotesIcon,
   },
 ];

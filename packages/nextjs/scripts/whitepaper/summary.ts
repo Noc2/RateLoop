@@ -21,11 +21,11 @@ export const EXECUTIVE_SUMMARY: ContentBlock[] = [
   },
   {
     type: "paragraph",
-    text: "The protocol turns rating into an explicit peer-prediction round. Every ask is question-first, requires a context URL, can include optional preview media, and carries a non-refundable bounty funded in LREP or World Chain USDC. Raters submit a private thumbs-up/down signal plus a 0-100% prediction of how many raters will vote up, can add LREP stake for normal settlement upside, optional hidden feedback unlocks after settlement, and eligible revealed raters claim bounty payouts while an eligible frontend operator reserve keeps distribution open to third-party surfaces.",
+    text: "The protocol turns rating into an explicit peer-prediction round. Every ask is question-first, requires a context URL, can include optional preview media, and carries a non-refundable bounty funded in LREP or World Chain USDC. Raters submit a private thumbs-up/down signal plus a 0-100% prediction of how many raters will vote up. Zero-LREP votes can bootstrap earned launch reputation, while staked votes add normal settlement upside and downside. Optional hidden feedback unlocks after settlement, and eligible revealed raters claim bounty payouts while an eligible frontend operator reserve keeps distribution open to third-party surfaces.",
   },
   {
     type: "paragraph",
-    text: `Signal integrity comes from combining calibration, LREP-backed RBTS reports, optional identity signals, and blind rounds. Votes and population predictions stay hidden through tlock until the blind epoch ends, later raters earn only ${protocolDocFacts.openPhaseWeightLabel} reward weight instead of ${protocolDocFacts.blindPhaseWeightLabel}, and settlement waits for at least three reveals plus the configured reveal conditions so the result is harder to herd or selectively reveal.`,
+    text: `Signal integrity comes from combining calibration, optional LREP-backed RBTS stake, identity signals, and blind rounds. Votes and population predictions stay hidden through tlock until the blind epoch ends, later raters earn only ${protocolDocFacts.openPhaseWeightLabel} reward weight instead of ${protocolDocFacts.blindPhaseWeightLabel}, and settlement waits for at least three reveals plus the configured reveal conditions so the result is harder to herd or selectively reveal.`,
   },
   {
     type: "paragraph",
