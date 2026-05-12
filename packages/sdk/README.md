@@ -29,6 +29,7 @@ Framework-specific hooks and UI components should live in a follow-up package ra
 ## Quick Example
 
 ```ts
+import { packVoteRoundContext } from "@rateloop/contracts";
 import { createCuryoClient } from "@rateloop/sdk";
 import { buildCommitVoteParams } from "@rateloop/sdk/vote";
 
@@ -57,12 +58,11 @@ const commit = await buildCommitVoteParams({
 
 const commitVoteArgs = [
   42n,
-  commit.roundId,
-  commit.roundReferenceRatingBps,
-  commit.commitHash,
-  commit.ciphertext,
+  packVoteRoundContext(commit.roundId, commit.roundReferenceRatingBps),
   commit.targetRound,
   commit.drandChainHash,
+  commit.commitHash,
+  commit.ciphertext,
   commit.stakeWei,
   commit.frontend,
 ] as const;
@@ -106,6 +106,7 @@ const quote = await agent.quoteQuestion({
 });
 
 const ask = await agent.askHumans({
+  chainId: 480,
   clientRequestId: "launch-check-1",
   maxPaymentAmount: quote.payment?.amount ?? "1000000",
   bounty: {
