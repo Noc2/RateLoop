@@ -110,6 +110,31 @@ test("leaseDueAgentCallbackEvents leases pending rows and complete marks deliver
   assert.equal(completed?.leaseOwner, null);
 });
 
+test("leaseDueAgentCallbackEvents does not re-lease rows already taken by another worker", async () => {
+  await registerSubscription();
+  await events.enqueueAgentCallbackEvent({
+    agentId: "agent-a",
+    eventId: "event-a",
+    eventType: "question.submitted",
+    now: new Date("2026-04-23T12:00:00.000Z"),
+    payload: { contentId: "42" },
+  });
+
+  const firstLease = await delivery.leaseDueAgentCallbackEvents({
+    leaseMs: 30_000,
+    now: new Date("2026-04-23T12:00:01.000Z"),
+    workerId: "worker-a",
+  });
+  const secondLease = await delivery.leaseDueAgentCallbackEvents({
+    leaseMs: 30_000,
+    now: new Date("2026-04-23T12:00:01.000Z"),
+    workerId: "worker-b",
+  });
+
+  assert.equal(firstLease.length, 1);
+  assert.equal(secondLease.length, 0);
+});
+
 test("failAgentCallbackDelivery schedules retries and dead letters after max attempts", async () => {
   await registerSubscription();
   await events.enqueueAgentCallbackEvent({

@@ -43,6 +43,10 @@ function retryDelayMs(attemptCount: number, baseDelayMs: number, maxDelayMs: num
   return Math.min(maxDelayMs, baseDelayMs * 2 ** Math.max(0, attemptCount - 1));
 }
 
+function getLeaseCandidateLockClause() {
+  return process.env.DATABASE_URL === "memory:" ? "" : "FOR UPDATE SKIP LOCKED";
+}
+
 export async function leaseDueAgentCallbackEvents(input: LeaseAgentCallbackEventsInput) {
   const now = input.now ?? new Date();
   const leaseMs = input.leaseMs ?? 30_000;
@@ -50,7 +54,7 @@ export async function leaseDueAgentCallbackEvents(input: LeaseAgentCallbackEvent
   const leaseExpiresAt = new Date(now.getTime() + leaseMs);
 
   const result = await dbClient.execute({
-    args: [input.workerId, leaseExpiresAt, now, now, now, now, limit],
+    args: [input.workerId, leaseExpiresAt, now, now, now, now, limit, now, now],
     sql: `
       UPDATE agent_callback_events
       SET
@@ -68,7 +72,11 @@ export async function leaseDueAgentCallbackEvents(input: LeaseAgentCallbackEvent
           AND (lease_expires_at IS NULL OR lease_expires_at <= ?)
         ORDER BY next_attempt_at ASC, id ASC
         LIMIT ?
+        ${getLeaseCandidateLockClause()}
       )
+        AND status IN ('pending', 'retrying')
+        AND next_attempt_at <= ?
+        AND (lease_expires_at IS NULL OR lease_expires_at <= ?)
       RETURNING *
     `,
   });
