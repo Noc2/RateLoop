@@ -644,8 +644,8 @@ grossLosingPool = inaccurateLockLosses + missedRevealForfeits
 revealedLoserRefund = 5% of revealed inaccurate lock losses
 netLosingPool = grossLosingPool - revealedLoserRefund
 
-90% netLosingPool -> accurate revealed raters
- 4% netLosingPool -> eligible registered frontends
+91% netLosingPool -> accurate revealed raters
+ 3% netLosingPool -> eligible registered frontends
  1% netLosingPool -> DAO treasury
  5% netLosingPool -> consensus reserve
 ```
@@ -1012,8 +1012,8 @@ Reuse:
 Key changes:
 
 - Replace binary HREP winner/loser claims with predicted-rating error claims.
-- Preserve the old split defaults for LREP losses: 5% revealed loser refund,
-  then 90% to accurate raters, 4% to eligible frontends, 1% to treasury, and 5%
+- Preserve the current split defaults for LREP losses: 5% revealed loser refund,
+  then 91% to accurate raters, 3% to eligible frontends, 1% to treasury, and 5%
   to consensus reserve.
 - Pay USDC from bounty pools.
 - Keep USDC payout accounting separate from LREP lock redistribution.
@@ -1620,7 +1620,7 @@ These are launch defaults, not permanent constants:
 - Prediction lock: min `1 LREP`, default `5 LREP`, max `10 LREP`.
 - LREP lock settlement: full winner band `0.25` rating points, loss cutoff
   `1.00` rating point, revealed loser refund `5%`.
-- LREP losing-pool split after refund: 90% accurate raters, 4% frontends, 1%
+- LREP losing-pool split after refund: 91% accurate raters, 3% frontends, 1%
   DAO treasury, 5% consensus reserve.
 - USDC payout split: 25% work stipend, 75% accuracy pool.
 - USDC near-miss cutoff: `1.50` rating points.
