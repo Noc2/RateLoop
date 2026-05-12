@@ -8,6 +8,8 @@ import {
   feedbackBonusPool,
   frontend,
   globalStats,
+  launchRaterRewardProgress,
+  launchRewardPolicyState,
   questionBundleClaim,
   questionBundleQuestion,
   questionBundleRound,
@@ -22,8 +24,13 @@ import {
   aiRaterDriftFlag,
   aiRaterOperatorBond,
   aiRaterProbeResult,
+  raterClusterScore,
+  raterClusterScoreChallenge,
+  raterFollow,
   raterProfile,
   raterSelfCredential,
+  raterTrustAttestation,
+  raterTrustSeed,
   rewardClaim,
   round,
   tokenTransfer,
@@ -41,6 +48,7 @@ import {
   parseAddressList,
   parseBigIntList,
 } from "../shared.js";
+import { getFollowStatsMap } from "../follow-utils.js";
 import { isValidAddress, safeBigInt, safeLimit, safeOffset } from "../utils.js";
 import { deriveEffectiveVoterStreak } from "../../streak-utils.js";
 
@@ -59,6 +67,12 @@ const STREAK_MILESTONES = [
 
 const AI_RATER_TIERS = ["A0", "A1Unverified", "A1Verified"] as const;
 const RATER_TYPES = ["Unknown", "Human", "AI", "Team", "Hybrid"] as const;
+const CLUSTER_CHALLENGE_STATUS_NAMES = [
+  "none",
+  "open",
+  "sustained",
+  "rejected",
+] as const;
 
 function aiTierName(tier: number | null | undefined) {
   return AI_RATER_TIERS[tier ?? 0] ?? "A0";
@@ -164,6 +178,43 @@ function parseOptionalBoolean(value: string | undefined) {
   if (normalized === "true" || normalized === "1") return true;
   if (normalized === "false" || normalized === "0") return false;
   return null;
+}
+
+function clusterChallengeStatusName(status: number | null | undefined) {
+  return CLUSTER_CHALLENGE_STATUS_NAMES[status ?? 0] ?? "none";
+}
+
+function independenceMultiplierBps(discountBps: number | null | undefined) {
+  const boundedDiscount = Math.min(
+    Math.max(discountBps ?? 0, 0),
+    BASE_RATER_MULTIPLIER_BPS,
+  );
+  return BASE_RATER_MULTIPLIER_BPS - boundedDiscount;
+}
+
+function computeRewardWeightBps(params: {
+  clusterDiscountBps?: number | null;
+  humanCredentialMultiplierBps?: number | null;
+  agentTierMultiplierBps?: number | null;
+}) {
+  const discountBps = Math.min(
+    Math.max(params.clusterDiscountBps ?? 0, 0),
+    BASE_RATER_MULTIPLIER_BPS,
+  );
+  const humanMultiplierBps =
+    params.humanCredentialMultiplierBps ?? BASE_RATER_MULTIPLIER_BPS;
+  const agentMultiplierBps =
+    params.agentTierMultiplierBps ?? BASE_RATER_MULTIPLIER_BPS;
+
+  let weightBps = BASE_RATER_MULTIPLIER_BPS - discountBps;
+  weightBps = Math.floor(
+    (weightBps * humanMultiplierBps) / BASE_RATER_MULTIPLIER_BPS,
+  );
+  weightBps = Math.floor(
+    (weightBps * agentMultiplierBps) / BASE_RATER_MULTIPLIER_BPS,
+  );
+
+  return Math.min(weightBps, MAX_COMBINED_RATER_WEIGHT_BPS);
 }
 
 export function registerDataRoutes(app: ApiApp) {
@@ -331,6 +382,84 @@ export function registerDataRoutes(app: ApiApp) {
     });
   });
 
+  app.get("/follows/:address", async (c) => {
+    const address = c.req.param("address").toLowerCase() as `0x${string}`;
+    if (!isValidAddress(address)) {
+      return c.json({ error: "Invalid address" }, 400);
+    }
+
+    const limit = safeLimit(c.req.query("limit"), 200, 500);
+    const offset = safeOffset(c.req.query("offset"));
+    if (Number.isNaN(offset)) return c.json({ error: "Invalid offset" }, 400);
+
+    const [items, stats] = await Promise.all([
+      db
+        .select({
+          walletAddress: raterFollow.target,
+          createdAt: raterFollow.createdAt,
+        })
+        .from(raterFollow)
+        .where(and(eq(raterFollow.follower, address), eq(raterFollow.active, true)))
+        .orderBy(desc(raterFollow.createdAt), asc(raterFollow.target))
+        .limit(limit)
+        .offset(offset),
+      getFollowStatsMap([address]),
+    ]);
+
+    const followStats = stats.get(address) ?? {
+      followerCount: 0,
+      followingCount: 0,
+    };
+
+    return jsonBig(c, {
+      items,
+      count: followStats.followingCount,
+      followerCount: followStats.followerCount,
+      followingCount: followStats.followingCount,
+      limit,
+      offset,
+    });
+  });
+
+  app.get("/followers/:address", async (c) => {
+    const address = c.req.param("address").toLowerCase() as `0x${string}`;
+    if (!isValidAddress(address)) {
+      return c.json({ error: "Invalid address" }, 400);
+    }
+
+    const limit = safeLimit(c.req.query("limit"), 200, 500);
+    const offset = safeOffset(c.req.query("offset"));
+    if (Number.isNaN(offset)) return c.json({ error: "Invalid offset" }, 400);
+
+    const [items, stats] = await Promise.all([
+      db
+        .select({
+          walletAddress: raterFollow.follower,
+          createdAt: raterFollow.createdAt,
+        })
+        .from(raterFollow)
+        .where(and(eq(raterFollow.target, address), eq(raterFollow.active, true)))
+        .orderBy(desc(raterFollow.createdAt), asc(raterFollow.follower))
+        .limit(limit)
+        .offset(offset),
+      getFollowStatsMap([address]),
+    ]);
+
+    const followStats = stats.get(address) ?? {
+      followerCount: 0,
+      followingCount: 0,
+    };
+
+    return jsonBig(c, {
+      items,
+      count: followStats.followerCount,
+      followerCount: followStats.followerCount,
+      followingCount: followStats.followingCount,
+      limit,
+      offset,
+    });
+  });
+
   app.get("/voter-accuracy/:address", async (c) => {
     const address = c.req.param("address").toLowerCase() as `0x${string}`;
     if (!isValidAddress(address))
@@ -383,7 +512,15 @@ export function registerDataRoutes(app: ApiApp) {
       return c.json({ error: "Invalid address" }, 400);
     }
 
-    const [[profile], [selfCredential], [declaration]] = await Promise.all([
+    const [
+      [profile],
+      [selfCredential],
+      [declaration],
+      [trustSeed],
+      [clusterScore],
+      [launchProgress],
+      [launchPolicy],
+    ] = await Promise.all([
       db
         .select()
         .from(raterProfile)
@@ -398,6 +535,26 @@ export function registerDataRoutes(app: ApiApp) {
         .select()
         .from(aiRaterDeclaration)
         .where(eq(aiRaterDeclaration.rater, address))
+        .limit(1),
+      db
+        .select()
+        .from(raterTrustSeed)
+        .where(eq(raterTrustSeed.rater, address))
+        .limit(1),
+      db
+        .select()
+        .from(raterClusterScore)
+        .where(eq(raterClusterScore.rater, address))
+        .limit(1),
+      db
+        .select()
+        .from(launchRaterRewardProgress)
+        .where(eq(launchRaterRewardProgress.rater, address))
+        .limit(1),
+      db
+        .select()
+        .from(launchRewardPolicyState)
+        .where(eq(launchRewardPolicyState.id, "current"))
         .limit(1),
     ]);
 
@@ -455,18 +612,82 @@ export function registerDataRoutes(app: ApiApp) {
           ])
         : [[], [{ openCount: 0 }], []];
 
+    const [[clusterChallengeStats], [latestClusterChallenge]] = await Promise.all(
+      [
+        db
+          .select({
+            openCount: sql<number>`count(*)`,
+          })
+          .from(raterClusterScoreChallenge)
+          .where(
+            and(
+              eq(raterClusterScoreChallenge.rater, address),
+              eq(raterClusterScoreChallenge.status, OPEN_CHALLENGE_STATUS),
+            ),
+          ),
+        db
+          .select()
+          .from(raterClusterScoreChallenge)
+          .where(eq(raterClusterScoreChallenge.rater, address))
+          .orderBy(
+            desc(raterClusterScoreChallenge.openedAt),
+            desc(raterClusterScoreChallenge.challengeId),
+          )
+          .limit(1),
+      ] as const,
+    );
+
     const indexedChainTimestamp =
       maxBigInt([
         profile?.updatedAt,
         selfCredential?.updatedAt,
         declaration?.updatedAt,
         declaration?.declaredAt,
+        trustSeed?.updatedAt,
+        clusterScore?.updatedAt,
+        launchProgress?.updatedAt,
+        launchPolicy?.updatedAt,
         latestProbe?.recordedAt,
         latestChallenge?.openedAt,
         latestChallenge?.resolvedAt,
+        latestClusterChallenge?.openedAt,
+        latestClusterChallenge?.resolvedAt,
       ]) ?? null;
     const statusTimestamp =
       maxBigInt([indexedChainTimestamp, wallSeconds]) ?? wallSeconds;
+
+    const [[activeTrustAttestationStats], inboundTrustAttestations] =
+      await Promise.all([
+        db
+          .select({
+            count: sql<number>`count(*)`,
+            totalBudget: sql<bigint>`coalesce(sum(${raterTrustAttestation.trustBudget}), 0)`,
+          })
+          .from(raterTrustAttestation)
+          .where(
+            and(
+              eq(raterTrustAttestation.subject, address),
+              eq(raterTrustAttestation.revoked, false),
+              sql`${raterTrustAttestation.expiresAt} > ${statusTimestamp}`,
+            ),
+          ),
+        db
+          .select()
+          .from(raterTrustAttestation)
+          .where(
+            and(
+              eq(raterTrustAttestation.subject, address),
+              eq(raterTrustAttestation.revoked, false),
+              sql`${raterTrustAttestation.expiresAt} > ${statusTimestamp}`,
+            ),
+          )
+          .orderBy(
+            desc(raterTrustAttestation.issuedAt),
+            desc(raterTrustAttestation.id),
+          )
+          .limit(5),
+      ]);
+
     const humanCredentialStatus = credentialStatus(
       selfCredential,
       statusTimestamp,
@@ -487,13 +708,32 @@ export function registerDataRoutes(app: ApiApp) {
     const agentTierMultiplierBps = aiTierMultiplierBps(
       effectiveDeclarationTier,
     );
-    const combinedMultiplierBps = Math.min(
-      Math.floor(
-        (humanMultiplierBps * agentTierMultiplierBps) /
-          BASE_RATER_MULTIPLIER_BPS,
-      ),
-      MAX_COMBINED_RATER_WEIGHT_BPS,
+    const clusterDiscountBps = clusterScore?.discountBps ?? 0;
+    const effectiveIndependenceMultiplierBps =
+      independenceMultiplierBps(clusterDiscountBps);
+    const combinedMultiplierBps = computeRewardWeightBps({
+      clusterDiscountBps,
+      humanCredentialMultiplierBps: humanMultiplierBps,
+      agentTierMultiplierBps,
+    });
+    const clusterOpenChallengeCount = Number(
+      clusterChallengeStats?.openCount ?? 0,
     );
+    const currentLaunchPolicy = {
+      minQualifyingScoreBps: launchPolicy?.minQualifyingScoreBps ?? 7_000,
+      minVoters: launchPolicy?.minVoters ?? 3,
+      minVerifiedHumans: launchPolicy?.minVerifiedHumans ?? 1,
+      minDistinctVerifiedAnchors:
+        launchPolicy?.minDistinctVerifiedAnchors ?? 2,
+      minDistinctAnchorRounds: launchPolicy?.minDistinctAnchorRounds ?? 2,
+      eligibilityRatingCount: launchPolicy?.eligibilityRatingCount ?? 5,
+      rewardingRatingCount: launchPolicy?.rewardingRatingCount ?? 10,
+      requireNoPendingCleanup: launchPolicy?.requireNoPendingCleanup ?? true,
+    };
+    const launchPaid = launchProgress?.launchPaid ?? 0n;
+    const launchCap = launchProgress?.launchCap ?? 0n;
+    const launchRewardedCount = launchProgress?.rewardedRatingCount ?? 0;
+    const launchEligible = launchProgress?.payoutEligible ?? false;
 
     return jsonBig(c, {
       asOf: {
@@ -600,10 +840,82 @@ export function registerDataRoutes(app: ApiApp) {
         latestOperatorSlash: latestChallenge?.operatorSlash ?? 0n,
         latestChallengerReward: latestChallenge?.challengerReward ?? 0n,
       },
+      independence: {
+        clusterId: clusterScore?.clusterId ?? null,
+        discountBps: clusterDiscountBps,
+        independenceMultiplierBps: effectiveIndependenceMultiplierBps,
+        scorerEpoch: clusterScore?.scorerEpoch ?? null,
+        updatedAt: clusterScore?.updatedAt ?? null,
+        algorithmHash: clusterScore?.algorithmHash ?? null,
+        modelVersionHash: clusterScore?.modelVersionHash ?? null,
+        scoreRoot: clusterScore?.scoreRoot ?? null,
+        evidenceHash: clusterScore?.evidenceHash ?? null,
+        challengeWindowEndsAt: clusterScore?.challengeWindowEndsAt ?? null,
+        scoreKey: clusterScore?.scoreKey ?? null,
+        openChallengeCount: clusterOpenChallengeCount,
+        latestChallengeId: latestClusterChallenge?.challengeId ?? null,
+        latestChallengeStatus: latestClusterChallenge?.status ?? 0,
+        latestChallengeStatusName: clusterChallengeStatusName(
+          latestClusterChallenge?.status ?? 0,
+        ),
+        latestChallengeOpenedAt: latestClusterChallenge?.openedAt ?? null,
+        latestChallengeResolvedAt: latestClusterChallenge?.resolvedAt ?? null,
+        latestChallengeResolutionHash:
+          latestClusterChallenge?.resolutionHash ?? null,
+      },
+      trust: {
+        activeSeed: trustSeed
+          ? {
+              active:
+                trustSeed.active && trustSeed.sunsetAt > statusTimestamp,
+              seededAt: trustSeed.seededAt,
+              sunsetAt: trustSeed.sunsetAt,
+              trustBudgetBps: trustSeed.trustBudgetBps,
+              seedRoot: trustSeed.seedRoot,
+            }
+          : null,
+        activeInboundAttestationCount: Number(
+          activeTrustAttestationStats?.count ?? 0,
+        ),
+        activeInboundTrustBudgetTotal:
+          activeTrustAttestationStats?.totalBudget ?? 0n,
+        latestInboundAttestations: inboundTrustAttestations.map((attestation) => ({
+          issuer: attestation.issuer,
+          categoryId: attestation.categoryId,
+          trustBudget: attestation.trustBudget,
+          maxBoostBps: attestation.maxBoostBps,
+          expiresAt: attestation.expiresAt,
+          metadataHash: attestation.metadataHash,
+          issuedAt: attestation.issuedAt,
+        })),
+      },
+      launchRewards: {
+        eligible: launchEligible,
+        qualifyingRatingCount: launchProgress?.qualifyingRatingCount ?? 0,
+        rewardedRatingCount: launchRewardedCount,
+        distinctVerifiedAnchorCount:
+          launchProgress?.distinctVerifiedAnchorCount ?? 0,
+        distinctAnchorRoundCount:
+          launchProgress?.distinctAnchorRoundCount ?? 0,
+        launchCap,
+        launchPaid,
+        remainingLaunchCap: launchCap > launchPaid ? launchCap - launchPaid : 0n,
+        remainingRewardSlots: Math.max(
+          currentLaunchPolicy.rewardingRatingCount - launchRewardedCount,
+          0,
+        ),
+        cohortIndex: launchProgress?.cohortIndex ?? null,
+        latestCreditedAt: launchProgress?.latestCreditedAt ?? null,
+        latestPaidAt: launchProgress?.latestPaidAt ?? null,
+        policy: currentLaunchPolicy,
+      },
       rewardPolicy: {
         baseMultiplierBps: BASE_RATER_MULTIPLIER_BPS,
+        clusterDiscountBps,
+        independenceMultiplierBps: effectiveIndependenceMultiplierBps,
         humanCredentialMultiplierBps: humanMultiplierBps,
         agentTierMultiplierBps,
+        effectiveRewardWeightBps: combinedMultiplierBps,
         combinedMultiplierBps,
         combinedMultiplierCapBps: MAX_COMBINED_RATER_WEIGHT_BPS,
         verifiedAgentsCanAnchorLaunchRewards: false,

@@ -2,6 +2,7 @@ import { ROUND_STATE } from "@rateloop/contracts/protocol";
 import { and, asc, desc, eq, gte, inArray, or, sql } from "ponder";
 import { db } from "ponder:api";
 import { content, profile, round, vote } from "ponder:schema";
+import { listActiveFollowedAddresses } from "../follow-utils.js";
 import { buildAllowedContentCondition } from "../moderation.js";
 import type { ApiApp } from "../shared.js";
 import {
@@ -11,7 +12,6 @@ import {
   getDiscoverResolutionOutcome,
   getEstimatedSettlementTime,
   jsonBig,
-  parseAddressList,
   parseBigIntList,
 } from "../shared.js";
 import { isValidAddress, safeLimit } from "../utils.js";
@@ -32,7 +32,7 @@ export function registerDiscoveryRoutes(app: ApiApp) {
       return c.json({ error: "Invalid address" }, 400);
 
     const watchedContentIds = parseBigIntList(c.req.query("watched"), 100);
-    const followedAddresses = parseAddressList(c.req.query("followed"), 200);
+    const followedAddresses = await listActiveFollowedAddresses(address);
 
     const votedOpenRounds = await db
       .select({
@@ -257,7 +257,7 @@ export function registerDiscoveryRoutes(app: ApiApp) {
       return c.json({ error: "Invalid address" }, 400);
 
     const watchedContentIds = parseBigIntList(c.req.query("watched"), 200);
-    const followedAddresses = parseAddressList(c.req.query("followed"), 200);
+    const followedAddresses = await listActiveFollowedAddresses(address);
     const nowSeconds = BigInt(Math.floor(Date.now() / 1000));
     const settlingSoonCutoff =
       nowSeconds + BigInt(SETTLING_SOON_WINDOW_SECONDS);

@@ -22,6 +22,7 @@ vi.mock("ponder:schema", () => ({
   raterClusterScore: "raterClusterScore",
   raterClusterScoreChallenge: "raterClusterScoreChallenge",
   raterClusterScoreHistory: "raterClusterScoreHistory",
+  raterFollow: "raterFollow",
   raterProfile: "raterProfile",
   raterSelfCredential: "raterSelfCredential",
   raterTrustAttestation: "raterTrustAttestation",
@@ -84,6 +85,82 @@ afterEach(() => {
 });
 
 describe("RaterRegistry ponder handlers", () => {
+  it("indexes public follow edges and deactivations", async () => {
+    const { db, upserts } = createDb();
+    const registeredHandlers = await loadHandlers();
+    const followedHandler = registeredHandlers.get("RaterRegistry:ProfileFollowed");
+    const unfollowedHandler = registeredHandlers.get("RaterRegistry:ProfileUnfollowed");
+
+    expect(followedHandler).toBeDefined();
+    expect(unfollowedHandler).toBeDefined();
+
+    await followedHandler!({
+      event: {
+        args: {
+          follower: "0x0000000000000000000000000000000000001234",
+          target: "0x0000000000000000000000000000000000009999",
+          followedAt: 100n,
+        },
+        block: { timestamp: 100n },
+      },
+      context: { db },
+    });
+
+    await unfollowedHandler!({
+      event: {
+        args: {
+          follower: "0x0000000000000000000000000000000000001234",
+          target: "0x0000000000000000000000000000000000009999",
+          unfollowedAt: 120n,
+        },
+        block: { timestamp: 120n },
+      },
+      context: { db },
+    });
+
+    expect(upserts).toEqual([
+      {
+        table: "raterFollow",
+        values: {
+          id: "0x0000000000000000000000000000000000001234-0x0000000000000000000000000000000000009999",
+          follower: "0x0000000000000000000000000000000000001234",
+          target: "0x0000000000000000000000000000000000009999",
+          active: true,
+          createdAt: 100n,
+          unfollowedAt: null,
+          updatedAt: 100n,
+        },
+        update: {
+          follower: "0x0000000000000000000000000000000000001234",
+          target: "0x0000000000000000000000000000000000009999",
+          active: true,
+          createdAt: 100n,
+          unfollowedAt: null,
+          updatedAt: 100n,
+        },
+      },
+      {
+        table: "raterFollow",
+        values: {
+          id: "0x0000000000000000000000000000000000001234-0x0000000000000000000000000000000000009999",
+          follower: "0x0000000000000000000000000000000000001234",
+          target: "0x0000000000000000000000000000000000009999",
+          active: false,
+          createdAt: 120n,
+          unfollowedAt: 120n,
+          updatedAt: 120n,
+        },
+        update: {
+          follower: "0x0000000000000000000000000000000000001234",
+          target: "0x0000000000000000000000000000000000009999",
+          active: false,
+          unfollowedAt: 120n,
+          updatedAt: 120n,
+        },
+      },
+    ]);
+  });
+
   it("indexes optional Self credentials", async () => {
     const { db, upserts } = createDb();
     const registeredHandlers = await loadHandlers();

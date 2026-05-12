@@ -1,5 +1,35 @@
 import { ponder } from "ponder:registry";
-import { globalStats, profile, rewardClaim } from "ponder:schema";
+import {
+  globalStats,
+  launchRaterRewardProgress,
+  launchRewardPolicyState,
+  profile,
+  rewardClaim,
+} from "ponder:schema";
+
+const CURRENT_LAUNCH_REWARD_POLICY_ID = "current";
+
+function buildLaunchProgressDefaults(rater: `0x${string}`, timestamp: bigint) {
+  return {
+    rater,
+    qualifyingRatingCount: 0,
+    rewardedRatingCount: 0,
+    distinctVerifiedAnchorCount: 0,
+    distinctAnchorRoundCount: 0,
+    payoutEligible: false,
+    launchCap: 0n,
+    launchPaid: 0n,
+    cohortIndex: null,
+    lastQualifiedContentId: null,
+    lastQualifiedRoundId: null,
+    lastCommitKey: null,
+    lastScoreBps: null,
+    eligibleAt: null,
+    latestCreditedAt: null,
+    latestPaidAt: null,
+    updatedAt: timestamp,
+  };
+}
 
 async function creditLaunchReward(context: any, recipient: `0x${string}`, amount: bigint) {
   const existingProfile = await context.db.find(profile, { address: recipient });
@@ -45,6 +75,134 @@ ponder.on("LaunchDistributionPool:EarnedRaterRewardPaid", async ({ event, contex
     .onConflictDoNothing();
 
   await creditLaunchReward(context, rater, amount);
+
+  await context.db
+    .insert(launchRaterRewardProgress)
+    .values({
+      ...buildLaunchProgressDefaults(rater, event.block.timestamp),
+      qualifyingRatingCount: Number(event.args.qualifyingRatingCount),
+      rewardedRatingCount: Number(event.args.rewardedRatingCount),
+      distinctVerifiedAnchorCount: Number(event.args.distinctVerifiedAnchorCount),
+      distinctAnchorRoundCount: Number(event.args.distinctAnchorRoundCount),
+      payoutEligible: true,
+      launchPaid: amount,
+      lastQualifiedContentId: contentId,
+      lastQualifiedRoundId: roundId,
+      lastCommitKey: event.args.commitKey,
+      lastScoreBps: Number(event.args.scoreBps),
+      eligibleAt: event.block.timestamp,
+      latestCreditedAt: event.block.timestamp,
+      latestPaidAt: event.block.timestamp,
+      updatedAt: event.block.timestamp,
+    })
+    .onConflictDoUpdate((row: any) => ({
+      qualifyingRatingCount: Number(event.args.qualifyingRatingCount),
+      rewardedRatingCount: Number(event.args.rewardedRatingCount),
+      distinctVerifiedAnchorCount: Number(event.args.distinctVerifiedAnchorCount),
+      distinctAnchorRoundCount: Number(event.args.distinctAnchorRoundCount),
+      payoutEligible: true,
+      launchPaid: row.launchPaid + amount,
+      lastQualifiedContentId: contentId,
+      lastQualifiedRoundId: roundId,
+      lastCommitKey: event.args.commitKey,
+      lastScoreBps: Number(event.args.scoreBps),
+      eligibleAt: event.block.timestamp,
+      latestCreditedAt: event.block.timestamp,
+      latestPaidAt: event.block.timestamp,
+      updatedAt: event.block.timestamp,
+    }));
+});
+
+ponder.on("LaunchDistributionPool:LaunchRewardPolicyUpdated", async ({ event, context }) => {
+  const { policy } = event.args;
+
+  await context.db
+    .insert(launchRewardPolicyState)
+    .values({
+      id: CURRENT_LAUNCH_REWARD_POLICY_ID,
+      minQualifyingScoreBps: Number(policy.minQualifyingScoreBps),
+      minVoters: Number(policy.minVoters),
+      minVerifiedHumans: Number(policy.minVerifiedHumans),
+      minDistinctVerifiedAnchors: Number(policy.minDistinctVerifiedAnchors),
+      minDistinctAnchorRounds: Number(policy.minDistinctAnchorRounds),
+      eligibilityRatingCount: Number(policy.eligibilityRatingCount),
+      rewardingRatingCount: Number(policy.rewardingRatingCount),
+      requireNoPendingCleanup: policy.requireNoPendingCleanup,
+      updatedAt: event.block.timestamp,
+    })
+    .onConflictDoUpdate({
+      minQualifyingScoreBps: Number(policy.minQualifyingScoreBps),
+      minVoters: Number(policy.minVoters),
+      minVerifiedHumans: Number(policy.minVerifiedHumans),
+      minDistinctVerifiedAnchors: Number(policy.minDistinctVerifiedAnchors),
+      minDistinctAnchorRounds: Number(policy.minDistinctAnchorRounds),
+      eligibilityRatingCount: Number(policy.eligibilityRatingCount),
+      rewardingRatingCount: Number(policy.rewardingRatingCount),
+      requireNoPendingCleanup: policy.requireNoPendingCleanup,
+      updatedAt: event.block.timestamp,
+    });
+});
+
+ponder.on("LaunchDistributionPool:RaterLaunchCapAssigned", async ({ event, context }) => {
+  const { rater, cap, cohortIndex } = event.args;
+
+  await context.db
+    .insert(launchRaterRewardProgress)
+    .values({
+      ...buildLaunchProgressDefaults(rater, event.block.timestamp),
+      launchCap: cap,
+      cohortIndex,
+      updatedAt: event.block.timestamp,
+    })
+    .onConflictDoUpdate({
+      launchCap: cap,
+      cohortIndex,
+      updatedAt: event.block.timestamp,
+    });
+});
+
+ponder.on("LaunchDistributionPool:EarnedRaterRewardCreditRecorded", async ({ event, context }) => {
+  const {
+    rater,
+    contentId,
+    roundId,
+    commitKey,
+    scoreBps,
+    qualifyingRatingCount,
+    distinctVerifiedAnchorCount,
+    distinctAnchorRoundCount,
+    payoutEligible,
+  } = event.args;
+
+  await context.db
+    .insert(launchRaterRewardProgress)
+    .values({
+      ...buildLaunchProgressDefaults(rater, event.block.timestamp),
+      qualifyingRatingCount: Number(qualifyingRatingCount),
+      distinctVerifiedAnchorCount: Number(distinctVerifiedAnchorCount),
+      distinctAnchorRoundCount: Number(distinctAnchorRoundCount),
+      payoutEligible,
+      lastQualifiedContentId: contentId,
+      lastQualifiedRoundId: roundId,
+      lastCommitKey: commitKey,
+      lastScoreBps: Number(scoreBps),
+      eligibleAt: payoutEligible ? event.block.timestamp : null,
+      latestCreditedAt: event.block.timestamp,
+      updatedAt: event.block.timestamp,
+    })
+    .onConflictDoUpdate((row: any) => ({
+      qualifyingRatingCount: Number(qualifyingRatingCount),
+      distinctVerifiedAnchorCount: Number(distinctVerifiedAnchorCount),
+      distinctAnchorRoundCount: Number(distinctAnchorRoundCount),
+      payoutEligible,
+      lastQualifiedContentId: contentId,
+      lastQualifiedRoundId: roundId,
+      lastCommitKey: commitKey,
+      lastScoreBps: Number(scoreBps),
+      eligibleAt: payoutEligible ? event.block.timestamp : row.eligibleAt,
+      latestCreditedAt: event.block.timestamp,
+      updatedAt: event.block.timestamp,
+    }));
 });
 
 ponder.on("LaunchDistributionPool:VerifiedBonusClaimed", async ({ event, context }) => {

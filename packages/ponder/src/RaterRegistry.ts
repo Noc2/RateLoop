@@ -1,5 +1,6 @@
 import { ponder } from "ponder:registry";
 import {
+  raterFollow,
   raterClusterScoreChallenge,
   raterClusterScoreHistory,
   raterClusterScore,
@@ -10,6 +11,10 @@ import {
 } from "ponder:schema";
 
 const ZERO_HASH = "0x0000000000000000000000000000000000000000000000000000000000000000";
+
+function followId(follower: `0x${string}`, target: `0x${string}`) {
+  return `${follower}-${target}`;
+}
 
 ponder.on("RaterRegistry:RaterProfileUpdated", async ({ event, context }) => {
   const { rater, raterType, metadataHash, updatedAt } = event.args;
@@ -26,6 +31,53 @@ ponder.on("RaterRegistry:RaterProfileUpdated", async ({ event, context }) => {
       raterType: Number(raterType),
       metadataHash,
       updatedAt,
+    });
+});
+
+ponder.on("RaterRegistry:ProfileFollowed", async ({ event, context }) => {
+  const { follower, target, followedAt } = event.args;
+
+  await context.db
+    .insert(raterFollow)
+    .values({
+      id: followId(follower, target),
+      follower,
+      target,
+      active: true,
+      createdAt: followedAt,
+      unfollowedAt: null,
+      updatedAt: event.block.timestamp,
+    })
+    .onConflictDoUpdate({
+      follower,
+      target,
+      active: true,
+      createdAt: followedAt,
+      unfollowedAt: null,
+      updatedAt: event.block.timestamp,
+    });
+});
+
+ponder.on("RaterRegistry:ProfileUnfollowed", async ({ event, context }) => {
+  const { follower, target, unfollowedAt } = event.args;
+
+  await context.db
+    .insert(raterFollow)
+    .values({
+      id: followId(follower, target),
+      follower,
+      target,
+      active: false,
+      createdAt: unfollowedAt,
+      unfollowedAt,
+      updatedAt: event.block.timestamp,
+    })
+    .onConflictDoUpdate({
+      follower,
+      target,
+      active: false,
+      unfollowedAt,
+      updatedAt: event.block.timestamp,
     });
 });
 

@@ -1,15 +1,22 @@
 import { ROUND_STATE } from "@rateloop/contracts/protocol";
-import { and, asc, desc, eq, gte, lt, notInArray, sql } from "ponder";
+import { and, asc, desc, eq, gte, inArray, lt, notInArray, sql } from "ponder";
 import { db } from "ponder:api";
 import {
+  aiRaterDeclaration,
   content,
   profile,
+  raterClusterScore,
+  raterClusterScoreChallenge,
+  raterProfile,
+  raterSelfCredential,
+  raterTrustAttestation,
   round,
   tokenHolder,
   vote,
   voterCategoryStats,
   voterStats,
 } from "ponder:schema";
+import { getFollowStatsMap } from "../follow-utils.js";
 import {
   SIGNAL_SCORE_PRIOR_BPS,
   SIGNAL_SCORE_PRIOR_WEIGHT,
@@ -21,11 +28,151 @@ import {
   profileTotalRewardsClaimedExpr,
   profileTotalVotesExpr,
 } from "../profile-aggregate-expressions.js";
+import {
+  aiTierName,
+  clusterChallengeStatusName,
+  credentialStatus,
+  declarationInactiveReason,
+  independenceMultiplierBps,
+  raterTypeName,
+} from "../reputation-utils.js";
 import type { ApiApp } from "../shared.js";
 import { jsonBig } from "../shared.js";
 import { safeBigInt, safeLimit, safeOffset } from "../utils.js";
 
 type OrderableExpression = Parameters<typeof desc>[0];
+
+async function attachAccuracyLeaderboardReputation<T extends { voter: `0x${string}` }>(
+  items: T[],
+) {
+  if (items.length === 0) return items;
+
+  const addresses = [...new Set(items.map((item) => item.voter.toLowerCase() as `0x${string}`))];
+  const nowSeconds = BigInt(Math.floor(Date.now() / 1000));
+
+  const [
+    raterProfiles,
+    selfCredentials,
+    clusterScores,
+    trustCounts,
+    clusterChallenges,
+    aiDeclarations,
+    followStats,
+  ] = await Promise.all([
+    db
+      .select()
+      .from(raterProfile)
+      .where(inArray(raterProfile.address, addresses)),
+    db
+      .select()
+      .from(raterSelfCredential)
+      .where(inArray(raterSelfCredential.rater, addresses)),
+    db
+      .select()
+      .from(raterClusterScore)
+      .where(inArray(raterClusterScore.rater, addresses)),
+    db
+      .select({
+        rater: raterTrustAttestation.subject,
+        count: sql<number>`count(*)`,
+      })
+      .from(raterTrustAttestation)
+      .where(
+        and(
+          inArray(raterTrustAttestation.subject, addresses),
+          eq(raterTrustAttestation.revoked, false),
+          sql`${raterTrustAttestation.expiresAt} > ${nowSeconds}`,
+        ),
+      )
+      .groupBy(raterTrustAttestation.subject),
+    db
+      .select()
+      .from(raterClusterScoreChallenge)
+      .where(inArray(raterClusterScoreChallenge.rater, addresses))
+      .orderBy(
+        desc(raterClusterScoreChallenge.openedAt),
+        desc(raterClusterScoreChallenge.challengeId),
+      ),
+    db
+      .select()
+      .from(aiRaterDeclaration)
+      .where(inArray(aiRaterDeclaration.rater, addresses)),
+    getFollowStatsMap(addresses),
+  ]);
+
+  const raterProfileMap = new Map(raterProfiles.map((row) => [row.address, row]));
+  const selfCredentialMap = new Map(selfCredentials.map((row) => [row.rater, row]));
+  const clusterScoreMap = new Map(clusterScores.map((row) => [row.rater, row]));
+  const trustCountMap = new Map(
+    trustCounts.map((row) => [row.rater as `0x${string}`, Number(row.count ?? 0)]),
+  );
+  const aiDeclarationMap = new Map(aiDeclarations.map((row) => [row.rater, row]));
+  const latestClusterChallengeMap = new Map<
+    `0x${string}`,
+    (typeof clusterChallenges)[number]
+  >();
+  const openClusterChallengeCounts = new Map<`0x${string}`, number>();
+
+  for (const challenge of clusterChallenges) {
+    const key = challenge.rater as `0x${string}`;
+    if (!latestClusterChallengeMap.has(key)) {
+      latestClusterChallengeMap.set(key, challenge);
+    }
+    if (challenge.status === 1) {
+      openClusterChallengeCounts.set(
+        key,
+        (openClusterChallengeCounts.get(key) ?? 0) + 1,
+      );
+    }
+  }
+
+  return items.map((item) => {
+    const credential = selfCredentialMap.get(item.voter);
+    const cluster = clusterScoreMap.get(item.voter);
+    const follow = followStats.get(item.voter) ?? {
+      followerCount: 0,
+      followingCount: 0,
+    };
+    const latestClusterChallenge = latestClusterChallengeMap.get(item.voter);
+    const openClusterChallengeCount =
+      openClusterChallengeCounts.get(item.voter) ?? 0;
+    const declaration = aiDeclarationMap.get(item.voter);
+    const aiInactiveReason = declarationInactiveReason(
+      declaration,
+      nowSeconds,
+      0,
+    );
+    const effectiveAiTier =
+      aiInactiveReason === "none" ? declaration?.tier ?? 0 : 0;
+
+    return {
+      ...item,
+      reputation: {
+        raterType: raterProfileMap.get(item.voter)?.raterType ?? 0,
+        raterTypeName: raterTypeName(raterProfileMap.get(item.voter)?.raterType),
+        credentialStatus: credentialStatus(credential, nowSeconds),
+        clusterId: cluster?.clusterId ?? null,
+        discountBps: cluster?.discountBps ?? 0,
+        independenceMultiplierBps: independenceMultiplierBps(
+          cluster?.discountBps ?? 0,
+        ),
+        clusterChallengeStatus:
+          openClusterChallengeCount > 0
+            ? "open"
+            : clusterChallengeStatusName(latestClusterChallenge?.status),
+        clusterChallengeStatusCode:
+          openClusterChallengeCount > 0
+            ? 1
+            : latestClusterChallenge?.status ?? 0,
+        activeTrustAttestationCount: trustCountMap.get(item.voter) ?? 0,
+        followerCount: follow.followerCount,
+        followingCount: follow.followingCount,
+        aiTier: effectiveAiTier,
+        aiTierName: aiTierName(effectiveAiTier),
+      },
+    };
+  });
+}
 
 function getAccuracyLeaderboardOrderByExpressions(
   sortBy: AccuracyLeaderboardSortBy,
@@ -177,6 +324,9 @@ export function registerLeaderboardRoutes(app: ApiApp) {
 
   app.get("/accuracy-leaderboard", async (c) => {
     const categoryIdParam = c.req.query("categoryId");
+    const includeReputation = ["1", "true"].includes(
+      (c.req.query("includeReputation") ?? "").toLowerCase(),
+    );
     const sortByRaw = c.req.query("sortBy") ?? "signalScore";
     const sortBy =
       sortByRaw === "signalScore" ||
@@ -343,7 +493,9 @@ export function registerLeaderboardRoutes(app: ApiApp) {
       });
 
       return jsonBig(c, {
-        items,
+        items: includeReputation
+          ? await attachAccuracyLeaderboardReputation(items)
+          : items,
         categoryId: categoryIdParam,
         window: windowBounds.window,
         startsAt: windowBounds.startsAt,
@@ -469,7 +621,9 @@ export function registerLeaderboardRoutes(app: ApiApp) {
       }));
 
       return jsonBig(c, {
-        items,
+        items: includeReputation
+          ? await attachAccuracyLeaderboardReputation(items)
+          : items,
         categoryId: categoryIdParam,
         window: windowBounds.window,
         startsAt: windowBounds.startsAt,
@@ -509,7 +663,9 @@ export function registerLeaderboardRoutes(app: ApiApp) {
       }));
 
       return jsonBig(c, {
-        items: result,
+        items: includeReputation
+          ? await attachAccuracyLeaderboardReputation(result)
+          : result,
         categoryId: categoryIdParam,
         window: windowBounds.window,
         startsAt: null,
@@ -545,7 +701,9 @@ export function registerLeaderboardRoutes(app: ApiApp) {
     }));
 
     return jsonBig(c, {
-      items: result,
+      items: includeReputation
+        ? await attachAccuracyLeaderboardReputation(result)
+        : result,
       window: windowBounds.window,
       startsAt: null,
       endsAt: null,

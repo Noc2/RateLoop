@@ -24,6 +24,7 @@ import {
   profileTotalRewardsClaimedExpr,
   profileTotalVotesExpr,
 } from "../profile-aggregate-expressions.js";
+import { getFollowStatsMap } from "../follow-utils.js";
 import type { ApiApp } from "../shared.js";
 import { attachOpenRoundSummary, jsonBig, parseBigIntList } from "../shared.js";
 import {
@@ -917,6 +918,11 @@ export function registerContentRoutes(app: ApiApp) {
         or(eq(rewardClaim.voter, address), eq(rewardClaim.stakePayer, address)),
       );
 
+    const followStats = (await getFollowStatsMap([address])).get(address) ?? {
+      followerCount: 0,
+      followingCount: 0,
+    };
+
     const recentVotes = await db
       .select({
         id: vote.id,
@@ -1004,6 +1010,7 @@ export function registerContentRoutes(app: ApiApp) {
         totalRewardsClaimed:
           rewardSummary?.total ?? item?.totalRewardsClaimed ?? 0n,
       },
+      social: followStats,
       recentVotes,
       recentRewards,
       recentSubmissions,

@@ -183,6 +183,74 @@ function mockPonderModules<T>(result: T) {
       resultHash: "aiRaterProbeResult.resultHash",
       version: "aiRaterProbeResult.version",
     },
+    launchRaterRewardProgress: {
+      cohortIndex: "launchRaterRewardProgress.cohortIndex",
+      distinctAnchorRoundCount: "launchRaterRewardProgress.distinctAnchorRoundCount",
+      distinctVerifiedAnchorCount:
+        "launchRaterRewardProgress.distinctVerifiedAnchorCount",
+      eligibleAt: "launchRaterRewardProgress.eligibleAt",
+      lastCommitKey: "launchRaterRewardProgress.lastCommitKey",
+      lastQualifiedContentId:
+        "launchRaterRewardProgress.lastQualifiedContentId",
+      lastQualifiedRoundId: "launchRaterRewardProgress.lastQualifiedRoundId",
+      lastScoreBps: "launchRaterRewardProgress.lastScoreBps",
+      latestCreditedAt: "launchRaterRewardProgress.latestCreditedAt",
+      latestPaidAt: "launchRaterRewardProgress.latestPaidAt",
+      launchCap: "launchRaterRewardProgress.launchCap",
+      launchPaid: "launchRaterRewardProgress.launchPaid",
+      payoutEligible: "launchRaterRewardProgress.payoutEligible",
+      qualifyingRatingCount:
+        "launchRaterRewardProgress.qualifyingRatingCount",
+      rater: "launchRaterRewardProgress.rater",
+      rewardedRatingCount: "launchRaterRewardProgress.rewardedRatingCount",
+      updatedAt: "launchRaterRewardProgress.updatedAt",
+    },
+    launchRewardPolicyState: {
+      eligibilityRatingCount: "launchRewardPolicyState.eligibilityRatingCount",
+      id: "launchRewardPolicyState.id",
+      minDistinctAnchorRounds:
+        "launchRewardPolicyState.minDistinctAnchorRounds",
+      minDistinctVerifiedAnchors:
+        "launchRewardPolicyState.minDistinctVerifiedAnchors",
+      minQualifyingScoreBps:
+        "launchRewardPolicyState.minQualifyingScoreBps",
+      minVerifiedHumans: "launchRewardPolicyState.minVerifiedHumans",
+      minVoters: "launchRewardPolicyState.minVoters",
+      requireNoPendingCleanup:
+        "launchRewardPolicyState.requireNoPendingCleanup",
+      rewardingRatingCount: "launchRewardPolicyState.rewardingRatingCount",
+      updatedAt: "launchRewardPolicyState.updatedAt",
+    },
+    raterClusterScore: {
+      algorithmHash: "raterClusterScore.algorithmHash",
+      challengeWindowEndsAt: "raterClusterScore.challengeWindowEndsAt",
+      clusterId: "raterClusterScore.clusterId",
+      discountBps: "raterClusterScore.discountBps",
+      evidenceHash: "raterClusterScore.evidenceHash",
+      modelVersionHash: "raterClusterScore.modelVersionHash",
+      rater: "raterClusterScore.rater",
+      scoreKey: "raterClusterScore.scoreKey",
+      scoreRoot: "raterClusterScore.scoreRoot",
+      scorerEpoch: "raterClusterScore.scorerEpoch",
+      updatedAt: "raterClusterScore.updatedAt",
+    },
+    raterClusterScoreChallenge: {
+      challengeId: "raterClusterScoreChallenge.challengeId",
+      openedAt: "raterClusterScoreChallenge.openedAt",
+      rater: "raterClusterScoreChallenge.rater",
+      resolutionHash: "raterClusterScoreChallenge.resolutionHash",
+      resolvedAt: "raterClusterScoreChallenge.resolvedAt",
+      status: "raterClusterScoreChallenge.status",
+    },
+    raterFollow: {
+      active: "raterFollow.active",
+      createdAt: "raterFollow.createdAt",
+      follower: "raterFollow.follower",
+      id: "raterFollow.id",
+      target: "raterFollow.target",
+      unfollowedAt: "raterFollow.unfollowedAt",
+      updatedAt: "raterFollow.updatedAt",
+    },
     raterProfile: {
       address: "raterProfile.address",
       raterType: "raterProfile.raterType",
@@ -196,6 +264,27 @@ function mockPonderModules<T>(result: T) {
       revoked: "raterSelfCredential.revoked",
       verified: "raterSelfCredential.verified",
       verifiedAt: "raterSelfCredential.verifiedAt",
+    },
+    raterTrustAttestation: {
+      categoryId: "raterTrustAttestation.categoryId",
+      expiresAt: "raterTrustAttestation.expiresAt",
+      id: "raterTrustAttestation.id",
+      issuedAt: "raterTrustAttestation.issuedAt",
+      issuer: "raterTrustAttestation.issuer",
+      maxBoostBps: "raterTrustAttestation.maxBoostBps",
+      metadataHash: "raterTrustAttestation.metadataHash",
+      revoked: "raterTrustAttestation.revoked",
+      subject: "raterTrustAttestation.subject",
+      trustBudget: "raterTrustAttestation.trustBudget",
+    },
+    raterTrustSeed: {
+      active: "raterTrustSeed.active",
+      rater: "raterTrustSeed.rater",
+      seededAt: "raterTrustSeed.seededAt",
+      seedRoot: "raterTrustSeed.seedRoot",
+      sunsetAt: "raterTrustSeed.sunsetAt",
+      trustBudgetBps: "raterTrustSeed.trustBudgetBps",
+      updatedAt: "raterTrustSeed.updatedAt",
     },
     profile: {
       address: "profile.address",
@@ -379,6 +468,19 @@ function mockPonderModules<T>(result: T) {
       totalWins: "voterStats.totalWins",
       voter: "voterStats.voter",
     },
+  }));
+  vi.doMock("../src/api/follow-utils.js", () => ({
+    getFollowStatsMap: vi.fn(async (addresses: readonly `0x${string}`[]) => {
+      return new Map(
+        addresses.map((address) => [
+          address,
+          { followerCount: 3, followingCount: 2 },
+        ]),
+      );
+    }),
+    listActiveFollowedAddresses: vi.fn(async () => [
+      "0x0000000000000000000000000000000000000002",
+    ]),
   }));
 
   return { db, queryBuilder };
@@ -788,6 +890,10 @@ describe("registerContentRoutes", () => {
       totalContent: 7,
       totalRewardsClaimed: "42",
     });
+    expect(body.social).toEqual({
+      followerCount: 3,
+      followingCount: 2,
+    });
   });
 });
 
@@ -860,6 +966,63 @@ describe("registerLeaderboardRoutes", () => {
     expect(serialized).not.toContain("totalStakeWon");
   });
 
+  it("attaches public reputation context when requested", async () => {
+    const zeroHash =
+      "0x0000000000000000000000000000000000000000000000000000000000000000";
+    mockPonderModules([
+      {
+        voter: "0x00000000000000000000000000000000000000aa",
+        rater: "0x00000000000000000000000000000000000000aa",
+        totalSettledVotes: 10,
+        totalWins: 7,
+        totalLosses: 3,
+        totalStakeWon: 100n,
+        totalStakeLost: 25n,
+        currentStreak: 2,
+        bestWinStreak: 5,
+        profileName: "Rep",
+        count: 4,
+        raterType: 1,
+        verified: true,
+        revoked: false,
+        expiresAt: 9_999_999_999n,
+        clusterId: zeroHash,
+        discountBps: 2_500,
+        challengeId: 9n,
+        status: 1,
+        tier: 2,
+        retiredAt: null,
+        effectiveEpoch: 1n,
+        expiresAtEpoch: 0n,
+        probePending: false,
+      },
+    ]);
+    const { registerLeaderboardRoutes } = await import(
+      "../src/api/routes/leaderboard-routes.js"
+    );
+
+    const app = new Hono();
+    registerLeaderboardRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/accuracy-leaderboard?includeReputation=1",
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.items[0].reputation).toMatchObject({
+      credentialStatus: "verified",
+      followerCount: 3,
+      followingCount: 2,
+      clusterChallengeStatus: "open",
+      aiTier: 2,
+      aiTierName: "A1Verified",
+      discountBps: 2_500,
+      independenceMultiplierBps: 7_500,
+      activeTrustAttestationCount: 4,
+    });
+  });
+
   it("rejects invalid signal-score vote minimums", async () => {
     const { db } = mockPonderModules([]);
     const { registerLeaderboardRoutes } = await import(
@@ -918,7 +1081,99 @@ describe("registerDataRoutes", () => {
     expect(db.select).not.toHaveBeenCalled();
   });
 
-  it("returns verified-agent reward status with capped combined multiplier", async () => {
+  it("lists public follows with counts", async () => {
+    const { queryBuilder } = mockPonderModules([
+      {
+        walletAddress: "0x00000000000000000000000000000000000000bb",
+        createdAt: 123n,
+      },
+    ]);
+    const { registerDataRoutes } = await import(
+      "../src/api/routes/data-routes.js"
+    );
+
+    const app = new Hono();
+    registerDataRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/follows/0x00000000000000000000000000000000000000aa?limit=5&offset=2",
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(queryBuilder.limit).toHaveBeenCalledWith(5);
+    expect(queryBuilder.offset).toHaveBeenCalledWith(2);
+    expect(body).toEqual({
+      items: [
+        {
+          walletAddress: "0x00000000000000000000000000000000000000bb",
+          createdAt: "123",
+        },
+      ],
+      count: 2,
+      followerCount: 3,
+      followingCount: 2,
+      limit: 5,
+      offset: 2,
+    });
+  });
+
+  it("rejects invalid follower pagination offsets", async () => {
+    const { db } = mockPonderModules([]);
+    const { registerDataRoutes } = await import(
+      "../src/api/routes/data-routes.js"
+    );
+
+    const app = new Hono();
+    registerDataRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/followers/0x00000000000000000000000000000000000000aa?offset=50001",
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "Invalid offset" });
+    expect(db.select).not.toHaveBeenCalled();
+  });
+
+  it("lists public followers with counts", async () => {
+    const { queryBuilder } = mockPonderModules([
+      {
+        walletAddress: "0x00000000000000000000000000000000000000bb",
+        createdAt: 456n,
+      },
+    ]);
+    const { registerDataRoutes } = await import(
+      "../src/api/routes/data-routes.js"
+    );
+
+    const app = new Hono();
+    registerDataRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/followers/0x00000000000000000000000000000000000000aa?limit=4&offset=1",
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(queryBuilder.limit).toHaveBeenCalledWith(4);
+    expect(queryBuilder.offset).toHaveBeenCalledWith(1);
+    expect(body).toEqual({
+      items: [
+        {
+          walletAddress: "0x00000000000000000000000000000000000000bb",
+          createdAt: "456",
+        },
+      ],
+      count: 3,
+      followerCount: 3,
+      followingCount: 2,
+      limit: 4,
+      offset: 1,
+    });
+  });
+
+  it("returns challenged-agent reward status with cluster and launch context", async () => {
     const zeroHash =
       "0x0000000000000000000000000000000000000000000000000000000000000000";
     const { db } = mockPonderModules([
@@ -958,8 +1213,47 @@ describe("registerDataRoutes", () => {
         challengeId: 7n,
         status: 1,
         resolvedAt: null,
+        resolutionHash: zeroHash,
         operatorSlash: 0n,
         challengerReward: 0n,
+        clusterId: zeroHash,
+        discountBps: 2_500,
+        scorerEpoch: 42n,
+        algorithmHash: zeroHash,
+        modelVersionHash: zeroHash,
+        scoreRoot: zeroHash,
+        challengeWindowEndsAt: 99_999n,
+        scoreKey: zeroHash,
+        active: true,
+        seededAt: 500n,
+        sunsetAt: 9_999_999_999n,
+        trustBudgetBps: 1_000,
+        seedRoot: zeroHash,
+        count: 4,
+        totalBudget: 400n,
+        issuer: "0x00000000000000000000000000000000000000cc",
+        categoryId: 3n,
+        trustBudget: 100n,
+        maxBoostBps: 11_500,
+        issuedAt: 2_500n,
+        qualifyingRatingCount: 6,
+        rewardedRatingCount: 4,
+        distinctVerifiedAnchorCount: 2,
+        distinctAnchorRoundCount: 6,
+        payoutEligible: true,
+        launchCap: 100n,
+        launchPaid: 25n,
+        cohortIndex: 2,
+        latestCreditedAt: 3_200n,
+        latestPaidAt: 3_300n,
+        minQualifyingScoreBps: 7_000,
+        minVoters: 3,
+        minVerifiedHumans: 1,
+        minDistinctVerifiedAnchors: 2,
+        minDistinctAnchorRounds: 2,
+        eligibilityRatingCount: 5,
+        rewardingRatingCount: 10,
+        requireNoPendingCleanup: true,
       },
     ]);
     const { registerDataRoutes } = await import(
@@ -975,7 +1269,7 @@ describe("registerDataRoutes", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(db.select).toHaveBeenCalledTimes(6);
+    expect(db.select).toHaveBeenCalledTimes(14);
     expect(body).toMatchObject({
       rater: "0x00000000000000000000000000000000000000aa",
       raterTypeName: "AI",
@@ -998,8 +1292,32 @@ describe("registerDataRoutes", () => {
         latestChallengeId: "7",
         latestStatus: 1,
       },
+      independence: {
+        discountBps: 2_500,
+        independenceMultiplierBps: 7_500,
+        scorerEpoch: "42",
+        latestChallengeStatusName: "open",
+      },
+      trust: {
+        activeInboundAttestationCount: 4,
+        activeInboundTrustBudgetTotal: "400",
+      },
+      launchRewards: {
+        eligible: true,
+        qualifyingRatingCount: 6,
+        rewardedRatingCount: 4,
+        remainingLaunchCap: "75",
+        remainingRewardSlots: 6,
+        policy: {
+          minQualifyingScoreBps: 7_000,
+          minDistinctVerifiedAnchors: 2,
+        },
+      },
       rewardPolicy: {
-        combinedMultiplierBps: 12_000,
+        clusterDiscountBps: 2_500,
+        independenceMultiplierBps: 7_500,
+        effectiveRewardWeightBps: 9_000,
+        combinedMultiplierBps: 9_000,
         combinedMultiplierCapBps: 12_500,
         verifiedAgentsCanAnchorLaunchRewards: false,
         verifiedAgentSignupBonusEligible: false,
@@ -1047,8 +1365,42 @@ describe("registerDataRoutes", () => {
         challengeId: 7n,
         status: 2,
         resolvedAt: 4_000n,
+        resolutionHash: zeroHash,
         operatorSlash: 100n,
         challengerReward: 50n,
+        clusterId: zeroHash,
+        discountBps: 0,
+        scorerEpoch: 42n,
+        algorithmHash: zeroHash,
+        modelVersionHash: zeroHash,
+        scoreRoot: zeroHash,
+        challengeWindowEndsAt: 50_000n,
+        scoreKey: zeroHash,
+        active: false,
+        seededAt: 0n,
+        sunsetAt: 0n,
+        trustBudgetBps: 0,
+        seedRoot: zeroHash,
+        count: 0,
+        totalBudget: 0n,
+        qualifyingRatingCount: 0,
+        rewardedRatingCount: 0,
+        distinctVerifiedAnchorCount: 0,
+        distinctAnchorRoundCount: 0,
+        payoutEligible: false,
+        launchCap: 0n,
+        launchPaid: 0n,
+        cohortIndex: null,
+        latestCreditedAt: null,
+        latestPaidAt: null,
+        minQualifyingScoreBps: 7_000,
+        minVoters: 3,
+        minVerifiedHumans: 1,
+        minDistinctVerifiedAnchors: 2,
+        minDistinctAnchorRounds: 2,
+        eligibilityRatingCount: 5,
+        rewardingRatingCount: 10,
+        requireNoPendingCleanup: true,
       },
     ]);
     const { registerDataRoutes } = await import(
@@ -1087,6 +1439,11 @@ describe("registerDataRoutes", () => {
       rewardPolicy: {
         agentTierMultiplierBps: 10_000,
         combinedMultiplierBps: 10_000,
+      },
+      launchRewards: {
+        eligible: false,
+        remainingLaunchCap: "0",
+        remainingRewardSlots: 10,
       },
     });
   });
@@ -1133,8 +1490,42 @@ describe("registerDataRoutes", () => {
         challengeId: null,
         status: null,
         resolvedAt: null,
+        resolutionHash: zeroHash,
         operatorSlash: 0n,
         challengerReward: 0n,
+        clusterId: zeroHash,
+        discountBps: 0,
+        scorerEpoch: 42n,
+        algorithmHash: zeroHash,
+        modelVersionHash: zeroHash,
+        scoreRoot: zeroHash,
+        challengeWindowEndsAt: 50_000n,
+        scoreKey: zeroHash,
+        active: false,
+        seededAt: 0n,
+        sunsetAt: 0n,
+        trustBudgetBps: 0,
+        seedRoot: zeroHash,
+        count: 0,
+        totalBudget: 0n,
+        qualifyingRatingCount: 1,
+        rewardedRatingCount: 0,
+        distinctVerifiedAnchorCount: 1,
+        distinctAnchorRoundCount: 1,
+        payoutEligible: false,
+        launchCap: 50n,
+        launchPaid: 0n,
+        cohortIndex: null,
+        latestCreditedAt: 5_000n,
+        latestPaidAt: null,
+        minQualifyingScoreBps: 7_000,
+        minVoters: 3,
+        minVerifiedHumans: 1,
+        minDistinctVerifiedAnchors: 2,
+        minDistinctAnchorRounds: 2,
+        eligibilityRatingCount: 5,
+        rewardingRatingCount: 10,
+        requireNoPendingCleanup: true,
       },
     ]);
     const { registerDataRoutes } = await import(
@@ -1170,6 +1561,11 @@ describe("registerDataRoutes", () => {
       rewardPolicy: {
         agentTierMultiplierBps: 10_000,
         combinedMultiplierBps: 10_000,
+      },
+      launchRewards: {
+        eligible: false,
+        remainingLaunchCap: "50",
+        remainingRewardSlots: 10,
       },
     });
 
