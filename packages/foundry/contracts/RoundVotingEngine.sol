@@ -1251,44 +1251,41 @@ contract RoundVotingEngine is
         for (uint256 i = 0; i < scoreableCount;) {
             bytes32 commitKey = scoreableKeys[i];
             uint256 ownWeight = commitRbtsWeight[contentId][roundId][commitKey];
-            if (ownWeight > 0) {
-                uint256 referenceIndex = _rbtsOtherIndex(scoreSeed, commitKey, i, scoreableCount, 1);
-                bytes32 referenceKey = scoreableKeys[referenceIndex];
-                bytes32 peerKey =
-                    scoreableKeys[_rbtsPeerIndex(scoreSeed, commitKey, i, referenceIndex, scoreableCount)];
-                uint16 scoreBps = RobustBtsMath.scoreBps(
-                    commits[contentId][roundId][commitKey].isUp,
-                    commitPredictedUpBps[contentId][roundId][commitKey],
-                    commitPredictedUpBps[contentId][roundId][referenceKey],
-                    commits[contentId][roundId][peerKey].isUp
-                );
-                uint256 scoreWeight = (ownWeight * scoreBps) / RBTS_SCORE_SCALE_BPS;
-                uint256 stakeAmount = commits[contentId][roundId][commitKey].stakeAmount;
-                uint256 stakeReturned = (stakeAmount * scoreBps) / RBTS_SCORE_SCALE_BPS;
-                uint256 forfeitedStake = stakeAmount - stakeReturned;
+            uint256 referenceIndex = _rbtsOtherIndex(scoreSeed, commitKey, i, scoreableCount, 1);
+            bytes32 referenceKey = scoreableKeys[referenceIndex];
+            bytes32 peerKey = scoreableKeys[_rbtsPeerIndex(scoreSeed, commitKey, i, referenceIndex, scoreableCount)];
+            uint16 scoreBps = RobustBtsMath.scoreBps(
+                commits[contentId][roundId][commitKey].isUp,
+                commitPredictedUpBps[contentId][roundId][commitKey],
+                commitPredictedUpBps[contentId][roundId][referenceKey],
+                commits[contentId][roundId][peerKey].isUp
+            );
+            uint256 scoreWeight = (ownWeight * scoreBps) / RBTS_SCORE_SCALE_BPS;
+            uint256 stakeAmount = commits[contentId][roundId][commitKey].stakeAmount;
+            uint256 stakeReturned = (stakeAmount * scoreBps) / RBTS_SCORE_SCALE_BPS;
+            uint256 forfeitedStake = stakeAmount - stakeReturned;
 
-                commitRbtsScoreBps[contentId][roundId][commitKey] = scoreBps;
-                commitRbtsRewardWeight[contentId][roundId][commitKey] = scoreWeight;
-                commitRbtsStakeReturned[contentId][roundId][commitKey] = stakeReturned;
-                commitRbtsForfeitedStake[contentId][roundId][commitKey] = forfeitedStake;
+            commitRbtsScoreBps[contentId][roundId][commitKey] = scoreBps;
+            commitRbtsRewardWeight[contentId][roundId][commitKey] = scoreWeight;
+            commitRbtsStakeReturned[contentId][roundId][commitKey] = stakeReturned;
+            commitRbtsForfeitedStake[contentId][roundId][commitKey] = forfeitedStake;
 
-                rewardWeight += scoreWeight;
-                forfeitedPool += forfeitedStake;
-                if (scoreWeight > 0) {
-                    if (commits[contentId][roundId][commitKey].isUp == upWins) {
-                        participationWeight += scoreWeight;
-                        unchecked {
-                            ++participationClaimants;
-                        }
-                    }
+            rewardWeight += scoreWeight;
+            forfeitedPool += forfeitedStake;
+            if (scoreWeight > 0) {
+                if (commits[contentId][roundId][commitKey].isUp == upWins) {
+                    participationWeight += scoreWeight;
                     unchecked {
-                        ++rewardClaimants;
+                        ++participationClaimants;
                     }
                 }
-                if (forfeitedStake > 0) {
-                    unchecked {
-                        ++forfeitClaimants;
-                    }
+                unchecked {
+                    ++rewardClaimants;
+                }
+            }
+            if (forfeitedStake > 0) {
+                unchecked {
+                    ++forfeitClaimants;
                 }
             }
             unchecked {
