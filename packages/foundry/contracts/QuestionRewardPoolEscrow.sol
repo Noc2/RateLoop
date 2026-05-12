@@ -123,6 +123,14 @@ contract QuestionRewardPoolEscrow is
         uint256 effectiveParticipantUnits,
         uint256 totalClaimWeight
     );
+    event RewardPoolRoundClusterStats(
+        uint256 indexed rewardPoolId,
+        uint256 indexed contentId,
+        uint256 indexed roundId,
+        uint256 clusterCount,
+        uint256 largestClusterEffectiveUnits,
+        uint256 locoEffectiveParticipantUnits
+    );
     event RewardPoolCursorAdvanced(
         uint256 indexed rewardPoolId, uint256 indexed contentId, uint256 fromRoundId, uint256 toRoundId, uint256 skipped
     );
@@ -959,6 +967,10 @@ contract QuestionRewardPoolEscrow is
         );
     }
 
+    function getRoundSnapshot(uint256 rewardPoolId, uint256 roundId) external view returns (RoundSnapshot memory) {
+        return roundSnapshots[rewardPoolId][roundId];
+    }
+
     function pause() external onlyRole(PAUSER_ROLE) {
         _pause();
     }
@@ -1267,7 +1279,10 @@ contract QuestionRewardPoolEscrow is
             uint256 effectiveParticipantUnits,
             uint256 frontendFeeAllocation,
             uint256 rawEligibleVoters,
-            uint256 totalClaimWeight
+            uint256 totalClaimWeight,
+            uint256 clusterCount,
+            uint256 largestClusterEffectiveUnits,
+            uint256 locoEffectiveParticipantUnits
         ) = QuestionRewardPoolEscrowQualificationLib.qualifyRound(
             roundSnapshots,
             rewardPoolPayerIdentity,
@@ -1286,6 +1301,14 @@ contract QuestionRewardPoolEscrow is
         );
         emit RewardPoolRoundEffectiveUnits(
             rewardPoolId, rewardPool.contentId, roundId, rawEligibleVoters, effectiveParticipantUnits, totalClaimWeight
+        );
+        emit RewardPoolRoundClusterStats(
+            rewardPoolId,
+            rewardPool.contentId,
+            roundId,
+            clusterCount,
+            largestClusterEffectiveUnits,
+            locoEffectiveParticipantUnits
         );
     }
 
@@ -1309,7 +1332,17 @@ contract QuestionRewardPoolEscrow is
             uint48 settledAt
         )
     {
-        return QuestionRewardPoolEscrowQualificationLib.previewRoundQualification(
+        (
+            roundSettled,
+            canQualify,
+            rawEligibleVoters,
+            effectiveParticipantUnits,
+            totalClaimWeight,
+            ,
+            ,
+            ,
+            settledAt
+        ) = QuestionRewardPoolEscrowQualificationLib.previewRoundQualification(
             QuestionRewardPoolEscrowQualificationLib.QualificationContext({
                 votingEngine: votingEngine,
                 voterIdNft: _roundVoterIdNft(rewardPool.contentId, roundId),

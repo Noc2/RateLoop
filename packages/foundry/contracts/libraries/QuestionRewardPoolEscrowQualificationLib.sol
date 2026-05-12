@@ -39,21 +39,32 @@ library QuestionRewardPoolEscrowQualificationLib {
             uint256 rawEligibleVoters,
             uint256 effectiveParticipantUnits,
             uint256 totalClaimWeight,
+            uint256 clusterCount,
+            uint256 largestClusterEffectiveUnits,
+            uint256 locoEffectiveParticipantUnits,
             uint48 settledAt
         )
     {
         (, RoundLib.RoundState state,,,,,,,,, uint48 roundSettledAt,,,) =
             ctx.votingEngine.rounds(ctx.contentId, ctx.roundId);
-        if (state != RoundLib.RoundState.Settled || roundSettledAt == 0) return (false, false, 0, 0, 0, 0);
+        if (state != RoundLib.RoundState.Settled || roundSettledAt == 0) return (false, false, 0, 0, 0, 0, 0, 0, 0);
         settledAt = roundSettledAt;
 
         roundSettled = true;
-        (rawEligibleVoters, effectiveParticipantUnits, totalClaimWeight) = _countEligibleRevealedVoters(ctx);
+        (
+            rawEligibleVoters,
+            effectiveParticipantUnits,
+            totalClaimWeight,
+            clusterCount,
+            largestClusterEffectiveUnits,
+            locoEffectiveParticipantUnits
+        ) = _countEligibleRevealedVoters(ctx);
         uint256 minEffectiveUnits =
             ctx.requiredVoters > MIN_EFFECTIVE_PARTICIPANT_UNITS ? ctx.requiredVoters : MIN_EFFECTIVE_PARTICIPANT_UNITS;
         uint256 effectiveFloor = minEffectiveUnits * BPS_SCALE;
+        uint256 locoFloor = effectiveFloor - BPS_SCALE;
         canQualify = rawEligibleVoters >= ctx.requiredVoters && effectiveParticipantUnits >= effectiveFloor
-            && totalClaimWeight > 0;
+            && locoEffectiveParticipantUnits >= locoFloor && totalClaimWeight > 0;
     }
 
     function requireNoPendingFinishedRound(
@@ -87,7 +98,10 @@ library QuestionRewardPoolEscrowQualificationLib {
             uint256 effectiveParticipantUnits,
             uint256 frontendFeeAllocation,
             uint256 rawEligibleVoters,
-            uint256 totalClaimWeight
+            uint256 totalClaimWeight,
+            uint256 clusterCount,
+            uint256 largestClusterEffectiveUnits,
+            uint256 locoEffectiveParticipantUnits
         )
     {
         require(roundId >= rewardPool.startRoundId, "Round too early");
@@ -100,6 +114,9 @@ library QuestionRewardPoolEscrowQualificationLib {
             uint256 rawEligible,
             uint256 effectiveUnits,
             uint256 totalWeight,
+            uint256 qualifiedClusterCount,
+            uint256 qualifiedLargestClusterEffectiveUnits,
+            uint256 qualifiedLocoEffectiveParticipantUnits,
             uint48 settledAt
         ) = previewRoundQualification(
             QualificationContext({
@@ -139,6 +156,9 @@ library QuestionRewardPoolEscrowQualificationLib {
             qualified: true,
             eligibleVoters: effectiveUnits.toUint32(),
             rawEligibleVoters: rawEligible.toUint32(),
+            clusterCount: qualifiedClusterCount.toUint32(),
+            largestClusterEffectiveUnits: qualifiedLargestClusterEffectiveUnits.toUint32(),
+            locoEffectiveParticipantUnits: qualifiedLocoEffectiveParticipantUnits.toUint32(),
             allocation: allocation,
             claimedCount: 0,
             frontendFeeAllocation: frontendFeeAllocation,
@@ -151,6 +171,9 @@ library QuestionRewardPoolEscrowQualificationLib {
         effectiveParticipantUnits = effectiveUnits;
         rawEligibleVoters = rawEligible;
         totalClaimWeight = totalWeight;
+        clusterCount = qualifiedClusterCount;
+        largestClusterEffectiveUnits = qualifiedLargestClusterEffectiveUnits;
+        locoEffectiveParticipantUnits = qualifiedLocoEffectiveParticipantUnits;
     }
 
     function isExcludedVoter(
@@ -198,9 +221,18 @@ library QuestionRewardPoolEscrowQualificationLib {
     function _countEligibleRevealedVoters(QualificationContext memory ctx)
         private
         view
-        returns (uint256 rawEligibleVoters, uint256 effectiveParticipantUnits, uint256 totalClaimWeight)
+        returns (
+            uint256 rawEligibleVoters,
+            uint256 effectiveParticipantUnits,
+            uint256 totalClaimWeight,
+            uint256 clusterCount,
+            uint256 largestClusterEffectiveUnits,
+            uint256 locoEffectiveParticipantUnits
+        )
     {
         (,, uint16 commitCount,,,,,,,,,,,) = ctx.votingEngine.rounds(ctx.contentId, ctx.roundId);
+        bytes32[] memory distinctClusterKeys = new bytes32[](commitCount);
+        uint256[] memory clusterEffectiveUnits = new uint256[](commitCount);
         for (uint256 i = 0; i < commitCount;) {
             bytes32 commitKey = ctx.votingEngine.getRoundCommitKey(ctx.contentId, ctx.roundId, i);
             (address voter,,, uint48 revealedAt, bool revealed,,) =
@@ -220,10 +252,45 @@ library QuestionRewardPoolEscrowQualificationLib {
                     uint256 claimWeight = _claimWeight(ctx.votingEngine, ctx.contentId, ctx.roundId, commitKey);
                     if (claimWeight > 0) {
                         totalClaimWeight += claimWeight;
-                        effectiveParticipantUnits += ctx.votingEngine
-                        .commitRaterWeightBps(ctx.contentId, ctx.roundId, commitKey);
+                        uint256 participantUnits =
+                            ctx.votingEngine.commitRaterWeightBps(ctx.contentId, ctx.roundId, commitKey);
+                        effectiveParticipantUnits += participantUnits;
+
+                        bytes32 clusterKey = ctx.votingEngine.commitClusterKey(ctx.contentId, ctx.roundId, commitKey);
+                        if (clusterKey == bytes32(0)) {
+                            clusterKey = keccak256(abi.encodePacked("rateloop:wallet-cluster", voter));
+                        }
+                        (uint256 clusterIndex, bool found) = _clusterIndex(distinctClusterKeys, clusterCount, clusterKey);
+                        if (!found) {
+                            distinctClusterKeys[clusterCount] = clusterKey;
+                            clusterIndex = clusterCount;
+                            clusterCount++;
+                        }
+                        clusterEffectiveUnits[clusterIndex] += participantUnits;
+                        if (clusterEffectiveUnits[clusterIndex] > largestClusterEffectiveUnits) {
+                            largestClusterEffectiveUnits = clusterEffectiveUnits[clusterIndex];
+                        }
                     }
                 }
+            }
+            unchecked {
+                ++i;
+            }
+        }
+        locoEffectiveParticipantUnits =
+            effectiveParticipantUnits > largestClusterEffectiveUnits
+                ? effectiveParticipantUnits - largestClusterEffectiveUnits
+                : 0;
+    }
+
+    function _clusterIndex(bytes32[] memory clusterKeys, uint256 clusterCount, bytes32 clusterKey)
+        private
+        pure
+        returns (uint256 clusterIndex, bool found)
+    {
+        for (uint256 i = 0; i < clusterCount;) {
+            if (clusterKeys[i] == clusterKey) {
+                return (i, true);
             }
             unchecked {
                 ++i;

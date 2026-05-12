@@ -609,6 +609,17 @@ contract RaterDeclarationRegistry is AccessControl, EIP712 {
         return stored.tier != RaterTier.A0 && _declarationIsActive(stored.declaration);
     }
 
+    function clusterKey(address rater) external view returns (bytes32) {
+        StoredDeclaration storage stored = _declarations[rater];
+        if (stored.tier == RaterTier.A0 || !_declarationIsActive(stored.declaration)) {
+            return bytes32(0);
+        }
+        if (openDeclarationChallenges[_declarationKey(rater, stored.declaration.version)] != 0) {
+            return bytes32(0);
+        }
+        return keccak256(abi.encodePacked("rateloop:operator-cluster", stored.declaration.operator));
+    }
+
     function _behaviorChanged(RaterDeclaration memory previous, RaterDeclaration calldata next)
         internal
         pure

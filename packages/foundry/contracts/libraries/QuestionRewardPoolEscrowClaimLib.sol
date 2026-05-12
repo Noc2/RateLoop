@@ -312,7 +312,17 @@ library QuestionRewardPoolEscrowClaimLib {
             uint48 settledAt
         )
     {
-        return QuestionRewardPoolEscrowQualificationLib.previewRoundQualification(
+        (
+            roundSettled,
+            canQualify,
+            rawEligibleVoters,
+            effectiveParticipantUnits,
+            totalClaimWeight,
+            ,
+            ,
+            ,
+            settledAt
+        ) = QuestionRewardPoolEscrowQualificationLib.previewRoundQualification(
             QuestionRewardPoolEscrowQualificationLib.QualificationContext({
                 votingEngine: votingEngine,
                 voterIdNft: _roundVoterIdNft(votingEngine, voterIdNFT, rewardPool.contentId, roundId),

@@ -220,6 +220,25 @@ contract RaterDeclarationRegistryTest is Test {
         assertFalse(registry.hasActiveAiDeclaration(rater));
     }
 
+    function test_ClusterKeyRequiresActiveUnchallengedDeclaration() public {
+        _submitDefaultDeclaration(false);
+
+        bytes32 expectedClusterKey = keccak256(abi.encodePacked("rateloop:operator-cluster", operator));
+        assertEq(registry.clusterKey(rater), expectedClusterKey);
+
+        vm.prank(challenger);
+        uint256 challengeId = registry.openChallenge(rater, EVIDENCE_HASH);
+        assertEq(registry.clusterKey(rater), bytes32(0));
+
+        vm.prank(admin);
+        registry.resolveChallenge(challengeId, false, 0, RESOLUTION_HASH);
+        assertEq(registry.clusterKey(rater), expectedClusterKey);
+
+        vm.prank(rater);
+        registry.retireDeclaration();
+        assertEq(registry.clusterKey(rater), bytes32(0));
+    }
+
     function test_FlagBehavioralDriftDemotesVerifiedRater() public {
         _submitDefaultDeclaration(true);
 

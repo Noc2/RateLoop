@@ -23,6 +23,7 @@ import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.so
 contract MockRaterDeclarationWeights {
     mapping(address => uint16) public tierMultiplierBps;
     mapping(address => bool) public hasActiveAiDeclaration;
+    mapping(address => bytes32) public clusterKeys;
 
     function setTierMultiplierBps(address rater, uint16 multiplierBps) external {
         tierMultiplierBps[rater] = multiplierBps;
@@ -30,6 +31,14 @@ contract MockRaterDeclarationWeights {
 
     function setActiveAiDeclaration(address rater, bool active) external {
         hasActiveAiDeclaration[rater] = active;
+    }
+
+    function setClusterOperator(address rater, address operator) external {
+        clusterKeys[rater] = keccak256(abi.encodePacked("rateloop:operator-cluster", operator));
+    }
+
+    function clusterKey(address rater) external view returns (bytes32) {
+        return hasActiveAiDeclaration[rater] ? clusterKeys[rater] : bytes32(0);
     }
 }
 
@@ -369,6 +378,10 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         vm.stopPrank();
     }
 
+    function _operatorCluster(address operatorAddress) internal pure returns (bytes32) {
+        return keccak256(abi.encodePacked("rateloop:operator-cluster", operatorAddress));
+    }
+
     /// @dev Full 3-voter round lifecycle: commit all epoch-1, warp past epoch, then reveal all.
     function _setupThreeVoterRound(bool v1Up, bool v2Up, bool v3Up)
         internal
@@ -494,6 +507,67 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
         assertEq(engine.commitRaterWeightBps(contentId, roundId, ck1), 10_000, "delegate keeps own weight");
         assertTrue(engine.commitHadActiveAiDeclaration(contentId, roundId, ck1), "holder agent flag is snapshotted");
+    }
+
+    function test_CommitClusterSnapshotFallsBackToWalletWithoutIdentitySignals() public {
+        uint256 contentId = _submitContent();
+        (bytes32 commitKey,) = _commit(voter1, contentId, true, 4e6);
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+
+        assertEq(
+            engine.commitClusterKey(contentId, roundId, commitKey),
+            keccak256(abi.encodePacked("rateloop:wallet-cluster", voter1))
+        );
+    }
+
+    function test_CommitClusterSnapshotUsesNullifierWhenVoterIdExists() public {
+        vm.startPrank(owner);
+        registry.setVoterIdNFT(address(mockVoterIdNFT));
+        ProtocolConfig(protocolConfigAddress).setVoterIdNFT(address(mockVoterIdNFT));
+        mockVoterIdNFT.setHolder(voter1);
+        vm.stopPrank();
+
+        uint256 contentId = _submitContent();
+        (bytes32 commitKey,) = _commit(voter1, contentId, true, 4e6);
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+
+        assertEq(
+            engine.commitClusterKey(contentId, roundId, commitKey),
+            keccak256(abi.encodePacked("rateloop:nullifier-cluster", uint256(uint160(voter1))))
+        );
+    }
+
+    function test_CommitClusterSnapshotUsesOperatorForActiveAiRater() public {
+        MockRaterDeclarationWeights declarationWeights = _installRaterDeclarationWeights();
+        declarationWeights.setActiveAiDeclaration(voter1, true);
+        declarationWeights.setClusterOperator(voter1, owner);
+
+        uint256 contentId = _submitContent();
+        (bytes32 commitKey,) = _commit(voter1, contentId, true, 4e6);
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+
+        assertEq(engine.commitClusterKey(contentId, roundId, commitKey), _operatorCluster(owner));
+    }
+
+    function test_CommitClusterSnapshotUsesHolderOperatorForDelegateVotes() public {
+        MockRaterDeclarationWeights declarationWeights = _installRaterDeclarationWeights();
+        declarationWeights.setActiveAiDeclaration(voter1, true);
+        declarationWeights.setClusterOperator(voter1, owner);
+
+        vm.startPrank(owner);
+        registry.setVoterIdNFT(address(mockVoterIdNFT));
+        ProtocolConfig(protocolConfigAddress).setVoterIdNFT(address(mockVoterIdNFT));
+        mockVoterIdNFT.setHolder(voter1);
+        vm.stopPrank();
+
+        vm.prank(voter1);
+        mockVoterIdNFT.setDelegate(delegate1);
+
+        uint256 contentId = _submitContent();
+        (bytes32 commitKey,) = _commit(delegate1, contentId, true, 4e6);
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+
+        assertEq(engine.commitClusterKey(contentId, roundId, commitKey), _operatorCluster(owner));
     }
 
     function test_RbtsLifecycle_SettlesBinaryRatingAndScoresRewards() public {

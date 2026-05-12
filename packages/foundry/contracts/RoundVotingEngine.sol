@@ -22,6 +22,7 @@ import { RobustBtsMath } from "./libraries/RobustBtsMath.sol";
 import { RaterWeightLib } from "./libraries/RaterWeightLib.sol";
 import { IFrontendRegistry } from "./interfaces/IFrontendRegistry.sol";
 import { ICategoryRegistry } from "./interfaces/ICategoryRegistry.sol";
+import { IRaterDeclarationClusterView } from "./interfaces/IRaterDeclarationClusterView.sol";
 import { IVoterIdNFT } from "./interfaces/IVoterIdNFT.sol";
 import { IRoundVotingEngine } from "./interfaces/IRoundVotingEngine.sol";
 import { IParticipationPool } from "./interfaces/IParticipationPool.sol";
@@ -193,6 +194,9 @@ contract RoundVotingEngine is
         uint64 targetRound,
         bytes32 drandChainHash,
         uint256 stake
+    );
+    event CommitClusterSnapshotted(
+        uint256 indexed contentId, uint256 indexed roundId, bytes32 indexed commitKey, bytes32 clusterKey
     );
     event RoundReferenceSnapshotted(uint256 indexed contentId, uint256 indexed roundId, uint16 roundReferenceRatingBps);
     event RoundConfigSnapshotted(
@@ -474,10 +478,13 @@ contract RoundVotingEngine is
         );
         commitRaterWeightBps[contentId][roundId][commitKey] = raterWeightBps;
         commitHadActiveAiDeclaration[contentId][roundId][commitKey] = hadActiveAiDeclaration;
+        commitClusterKey[contentId][roundId][commitKey] =
+            _resolveCommitClusterKey(roundVoterIdNft, voter, voterId, useTokenIdentity);
         _recordCommitAccounting(
             round, roundVoterIdNft, contentId, roundId, voter, voterId, useTokenIdentity, stakeAmount64, stakeAmount
         );
 
+        emit CommitClusterSnapshotted(contentId, roundId, commitKey, commitClusterKey[contentId][roundId][commitKey]);
         emit VoteCommitted(
             contentId, roundId, voter, commitHash, expectedReferenceRatingBps, targetRound, drandChainHash, stakeAmount
         );
@@ -1395,6 +1402,51 @@ contract RoundVotingEngine is
         return minVoters < MIN_RBTS_PARTICIPANTS ? MIN_RBTS_PARTICIPANTS : minVoters;
     }
 
+    function _resolveCommitClusterKey(IVoterIdNFT roundVoterIdNft, address voter, uint256 voterId, bool useTokenIdentity)
+        internal
+        view
+        returns (bytes32)
+    {
+        bytes32 declarationCluster = _declarationClusterKey(voter);
+        if (declarationCluster != bytes32(0)) return declarationCluster;
+
+        if (useTokenIdentity) {
+            address resolvedHolder = roundVoterIdNft.resolveHolder(voter);
+            if (resolvedHolder != address(0) && resolvedHolder != voter) {
+                declarationCluster = _declarationClusterKey(resolvedHolder);
+                if (declarationCluster != bytes32(0)) return declarationCluster;
+            }
+
+            if (voterId != 0) {
+                uint256 nullifier = roundVoterIdNft.getNullifier(voterId);
+                if (nullifier != 0) {
+                    return keccak256(abi.encodePacked("rateloop:nullifier-cluster", nullifier));
+                }
+            }
+
+            if (resolvedHolder != address(0)) {
+                return keccak256(abi.encodePacked("rateloop:holder-cluster", resolvedHolder));
+            }
+        }
+
+        return keccak256(abi.encodePacked("rateloop:wallet-cluster", voter));
+    }
+
+    function _declarationClusterKey(address rater) internal view returns (bytes32) {
+        address configuredRaterDeclarationRegistry = protocolConfig.raterDeclarationRegistry();
+        if (configuredRaterDeclarationRegistry == address(0) || rater == address(0)) {
+            return bytes32(0);
+        }
+
+        try IRaterDeclarationClusterView(configuredRaterDeclarationRegistry).clusterKey(rater) returns (
+            bytes32 clusterKey
+        ) {
+            return clusterKey;
+        } catch {
+            return bytes32(0);
+        }
+    }
+
     // Note: computeCurrentEpochEnd removed to fit size limit.
     // Use config().epochDuration plus rounds(contentId, roundId).startTime to compute off-chain.
     // previewCommitRoundId / previewCommitReferenceRatingBps are public above (their internal
@@ -1475,6 +1527,9 @@ contract RoundVotingEngine is
     // Commit-time AI declaration snapshot, used to keep launch anchors human-only at claim time.
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) public commitHadActiveAiDeclaration;
 
+    // Commit-time cluster snapshot for trustless leave-one-cluster-out reward gating.
+    mapping(uint256 => mapping(uint256 => mapping(bytes32 => bytes32))) public commitClusterKey;
+
     // --- Storage gap reserved for future upgrades ---
-    uint256[29] private __gap;
+    uint256[28] private __gap;
 }

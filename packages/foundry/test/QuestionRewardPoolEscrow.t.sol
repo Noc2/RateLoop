@@ -14,10 +14,32 @@ import {RoundRewardDistributor} from "../contracts/RoundRewardDistributor.sol";
 import {RoundVotingEngine} from "../contracts/RoundVotingEngine.sol";
 import {RoundEngineReadHelpers} from "./helpers/RoundEngineReadHelpers.sol";
 import {RoundLib} from "../contracts/libraries/RoundLib.sol";
+import {RoundSnapshot} from "../contracts/libraries/QuestionRewardPoolEscrowTypes.sol";
 import {TlockVoteLib} from "../contracts/libraries/TlockVoteLib.sol";
 import {Eip3009Authorization, X402QuestionSubmitter} from "../contracts/X402QuestionSubmitter.sol";
 import {MockQuestionRewardPoolEscrow} from "./mocks/MockQuestionRewardPoolEscrow.sol";
 import {MockVoterIdNFT} from "./mocks/MockVoterIdNFT.sol";
+
+contract MockRaterDeclarationWeightsForEscrow {
+    mapping(address => bool) public hasActiveAiDeclaration;
+    mapping(address => bytes32) public clusterKeys;
+
+    function setActiveAiDeclaration(address rater, bool active) external {
+        hasActiveAiDeclaration[rater] = active;
+    }
+
+    function setClusterOperator(address rater, address operator) external {
+        clusterKeys[rater] = keccak256(abi.encodePacked("rateloop:operator-cluster", operator));
+    }
+
+    function tierMultiplierBps(address) external pure returns (uint16) {
+        return 10_000;
+    }
+
+    function clusterKey(address rater) external view returns (bytes32) {
+        return hasActiveAiDeclaration[rater] ? clusterKeys[rater] : bytes32(0);
+    }
+}
 
 contract QuestionRewardPoolEscrowTest is VotingTestBase {
     HumanReputation public hrepToken;
@@ -296,6 +318,61 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.prank(voter1);
         vm.expectRevert("Too few eligible voters");
         rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
+    }
+
+    function testQuestionRewardsFailLocoWhenOneOperatorDominatesEligibleUnits() public {
+        MockRaterDeclarationWeightsForEscrow declarationWeights = _installRaterDeclarationWeights();
+        declarationWeights.setActiveAiDeclaration(voter1, true);
+        declarationWeights.setActiveAiDeclaration(voter2, true);
+        declarationWeights.setClusterOperator(voter1, owner);
+        declarationWeights.setClusterOperator(voter2, owner);
+
+        uint256 contentId = _submitQuestion("");
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+
+        address[] memory voters = _threeVoters();
+        uint16[] memory predictions = new uint16[](3);
+        predictions[0] = 8_000;
+        predictions[1] = 5_000;
+        predictions[2] = 6_500;
+        uint256 roundId = _settlePredictionRoundWith(voters, contentId, predictions);
+
+        assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter1), 0);
+        assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter2), 0);
+        assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter3), 0);
+
+        vm.prank(voter1);
+        vm.expectRevert("Too few eligible voters");
+        rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
+    }
+
+    function testQuestionRewardsSnapshotClusterStatsForIndependentPass() public {
+        MockRaterDeclarationWeightsForEscrow declarationWeights = _installRaterDeclarationWeights();
+        declarationWeights.setActiveAiDeclaration(voter1, true);
+        declarationWeights.setActiveAiDeclaration(voter2, true);
+        declarationWeights.setClusterOperator(voter1, owner);
+        declarationWeights.setClusterOperator(voter2, owner);
+
+        uint256 contentId = _submitQuestion("");
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+
+        address[] memory voters = _fourVoters();
+        uint16[] memory predictions = new uint16[](4);
+        predictions[0] = 8_000;
+        predictions[1] = 5_000;
+        predictions[2] = 6_500;
+        predictions[3] = 7_000;
+        uint256 roundId = _settlePredictionRoundWith(voters, contentId, predictions);
+
+        rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
+
+        RoundSnapshot memory snapshot = rewardPoolEscrow.getRoundSnapshot(rewardPoolId, roundId);
+        assertTrue(snapshot.qualified);
+        assertEq(snapshot.rawEligibleVoters, 4);
+        assertEq(snapshot.eligibleVoters, 40_000);
+        assertEq(snapshot.clusterCount, 3);
+        assertEq(snapshot.largestClusterEffectiveUnits, 20_000);
+        assertEq(snapshot.locoEffectiveParticipantUnits, 20_000);
     }
 
     function testHighValueRewardPoolRequiresHigherParticipantFloor() public {
@@ -3195,6 +3272,13 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         rewardPoolId =
             rewardPoolEscrow.createRewardPool(contentId, amount, requiredVoters, requiredSettledRounds, expiresAt, 0);
         vm.stopPrank();
+    }
+
+    function _installRaterDeclarationWeights() internal returns (MockRaterDeclarationWeightsForEscrow declarationWeights)
+    {
+        declarationWeights = new MockRaterDeclarationWeightsForEscrow();
+        vm.prank(owner);
+        protocolConfig.setRaterDeclarationRegistry(address(declarationWeights));
     }
 
     function _settleRoundWith(address[] memory voters, uint256 contentId, bool[] memory directions)
