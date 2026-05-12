@@ -206,7 +206,7 @@ const HeaderBrand = ({
           compact ? "truncate text-[1.35rem]" : "text-[1.2rem]"
         }`}
       >
-        Rate<span className="rateloop-text-gradient inline-block">Loop</span>
+        RateLoop
       </span>
       <span
         className={`whitespace-nowrap ${compact ? "truncate" : ""} text-base-content/75`}
