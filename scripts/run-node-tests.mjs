@@ -1,12 +1,49 @@
 import { readdirSync, statSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { dirname, join, resolve, relative } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { createRequire } from "node:module";
 
 const TEST_FILE_RE = /\.(test|spec)\.(ts|tsx)$/;
 const IGNORED_DIRS = new Set(["node_modules", ".next"]);
 const scriptDir = dirname(fileURLToPath(import.meta.url));
+const repoRoot = dirname(scriptDir);
 const preloadModule = join(scriptDir, "register-node-test-env.mjs");
+
+function findPackageJson(start) {
+  const absoluteStart = resolve(start);
+  let current = statSync(absoluteStart).isDirectory() ? absoluteStart : dirname(absoluteStart);
+  while (current.startsWith(repoRoot)) {
+    const candidate = join(current, "package.json");
+    try {
+      if (statSync(candidate).isFile()) return candidate;
+    } catch {
+      // Keep walking up to the repo root.
+    }
+    const parent = dirname(current);
+    if (parent === current) break;
+    current = parent;
+  }
+  return null;
+}
+
+function resolveImportModule(name, files = []) {
+  const packageJsonCandidates = [
+    ...files.map(file => findPackageJson(file)).filter(Boolean),
+    join(process.cwd(), "package.json"),
+    join(repoRoot, "package.json"),
+  ];
+
+  for (const packageJson of new Set(packageJsonCandidates)) {
+    try {
+      return pathToFileURL(createRequire(packageJson).resolve(name)).href;
+    } catch {
+      // Try the next workspace/root package.json.
+    }
+  }
+
+  return name;
+}
 
 function collectTests(root, results) {
   const stats = statSync(root);
@@ -55,7 +92,7 @@ if (files.length === 0) {
 
 const result = spawnSync(
   process.execPath,
-  ["--import", preloadModule, "--import", "tsx", "--test", ...files],
+  ["--import", preloadModule, "--import", resolveImportModule("tsx", files), "--test", ...files],
   {
     stdio: "inherit",
     cwd: process.cwd(),
