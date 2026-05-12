@@ -830,19 +830,6 @@ export const ProtocolConfigAbi = [
   },
   {
     "type": "function",
-    "name": "scorerMetadataHash",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "setCategoryRegistry",
     "inputs": [
       {
@@ -1112,19 +1099,6 @@ export const ProtocolConfigAbi = [
         "name": "maxVoterCap",
         "type": "uint256",
         "internalType": "uint256"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "setScorerMetadataHash",
-    "inputs": [
-      {
-        "name": "value",
-        "type": "bytes32",
-        "internalType": "bytes32"
       }
     ],
     "outputs": [],
@@ -1734,19 +1708,6 @@ export const ProtocolConfigAbi = [
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "ScorerMetadataHashUpdated",
-    "inputs": [
-      {
-        "name": "scorerMetadataHash",
-        "type": "bytes32",
-        "indexed": false,
-        "internalType": "bytes32"
       }
     ],
     "anonymous": false

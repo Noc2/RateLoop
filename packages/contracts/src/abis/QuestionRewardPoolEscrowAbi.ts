@@ -446,6 +446,97 @@ export const QuestionRewardPoolEscrowAbi = [
   },
   {
     "type": "function",
+    "name": "getRoundSnapshot",
+    "inputs": [
+      {
+        "name": "rewardPoolId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "roundId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple",
+        "internalType": "struct RoundSnapshot",
+        "components": [
+          {
+            "name": "qualified",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "eligibleVoters",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "rawEligibleVoters",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "clusterCount",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "largestClusterEffectiveUnits",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "locoEffectiveParticipantUnits",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "allocation",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "claimedCount",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "frontendFeeAllocation",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "totalClaimWeight",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "claimedWeight",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "claimedAmount",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "frontendFeeClaimedAmount",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "grantRole",
     "inputs": [
       {
@@ -1294,6 +1385,49 @@ export const QuestionRewardPoolEscrowAbi = [
       },
       {
         "name": "amount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "RewardPoolRoundClusterStats",
+    "inputs": [
+      {
+        "name": "rewardPoolId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "contentId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "roundId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "clusterCount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "largestClusterEffectiveUnits",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "locoEffectiveParticipantUnits",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
