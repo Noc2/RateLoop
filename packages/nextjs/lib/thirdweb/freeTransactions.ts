@@ -1062,7 +1062,8 @@ export async function evaluateFreeTransactionAllowance(
         .select()
         .from(freeTransactionQuotas)
         .where(eq(freeTransactionQuotas.identityKey, identityKey))
-        .limit(1);
+        .limit(1)
+        .for("update");
 
       const normalizedQuotaRow = normalizeQuotaRow(quotaRow);
       if (!normalizedQuotaRow) {
