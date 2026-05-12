@@ -233,7 +233,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.stopPrank();
     }
 
-    function testMediaQuestionCanReceiveRewardPoolAndPayRevealedVotersEqually() public {
+    function testMediaQuestionCanReceiveRewardPoolAndPayWeightedRevealedVoters() public {
         uint256 contentId = _submitQuestion("");
         uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
 
@@ -241,15 +241,10 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         bool[] memory directions = _directions(true, true, false);
         uint256 roundId = _settleRoundWith(voters, contentId, directions);
 
-        vm.prank(voter1);
-        uint256 reward1 = rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
-        vm.prank(voter2);
-        uint256 reward2 = rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
-        vm.prank(voter3);
-        uint256 reward3 = rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
+        uint256 reward1 = _claimQuestionRewardAndAssert(voter1, rewardPoolId, roundId);
+        uint256 reward2 = _claimQuestionRewardAndAssert(voter2, rewardPoolId, roundId);
+        uint256 reward3 = _claimQuestionRewardAndAssert(voter3, rewardPoolId, roundId);
 
-        assertEq(reward1, REWARD_POOL_AMOUNT / 3);
-        assertEq(reward2, REWARD_POOL_AMOUNT / 3);
         assertEq(reward1 + reward2 + reward3, REWARD_POOL_AMOUNT);
         assertEq(usdc.balanceOf(voter1), 1_000e6 + reward1);
         assertEq(usdc.balanceOf(address(rewardPoolEscrow)), 0);
@@ -270,18 +265,17 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         uint256 claimable2 = rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter2);
         uint256 claimable3 = rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter3);
 
-        assertEq(claimable1, claimable2);
-        assertGt(claimable3, claimable1);
+        assertGt(claimable1, 0);
+        assertGt(claimable2, 0);
+        assertGt(claimable3, 0);
+        assertTrue(claimable1 != claimable2 || claimable2 != claimable3);
 
-        vm.prank(voter1);
-        uint256 reward1 = rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
-        vm.prank(voter2);
-        uint256 reward2 = rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
-        vm.prank(voter3);
-        uint256 reward3 = rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
+        uint256 reward1 = _claimQuestionRewardAndAssert(voter1, rewardPoolId, roundId);
+        uint256 reward2 = _claimQuestionRewardAndAssert(voter2, rewardPoolId, roundId);
+        uint256 reward3 = _claimQuestionRewardAndAssert(voter3, rewardPoolId, roundId);
 
         assertEq(reward1, claimable1);
-        assertEq(reward1, reward2);
+        assertEq(reward2, claimable2);
         assertEq(reward1 + reward2 + reward3, REWARD_POOL_AMOUNT);
         assertEq(usdc.balanceOf(address(rewardPoolEscrow)), 0);
     }
@@ -291,11 +285,15 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
 
         address[] memory voters = _threeVoters();
+        uint256[] memory stakes = new uint256[](3);
+        stakes[0] = STAKE;
+        stakes[1] = STAKE;
+        stakes[2] = 0;
         uint16[] memory predictions = new uint16[](3);
-        predictions[0] = 1_000;
+        predictions[0] = 9_900;
         predictions[1] = 9_900;
-        predictions[2] = 9_900;
-        uint256 roundId = _settlePredictionRoundWith(voters, contentId, predictions);
+        predictions[2] = 1_000;
+        uint256 roundId = _settlePredictionRoundWithStakes(voters, contentId, predictions, stakes);
 
         assertEq(MIN_REWARD_POOL_PARTICIPANTS, 3);
         assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter1), 0);
@@ -388,12 +386,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         voters[2] = openVoter3;
         uint256 roundId = _settleRoundWith(voters, contentId, _directions(true, true, false));
 
-        assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, openVoter1), REWARD_POOL_AMOUNT / 3);
-
-        vm.prank(openVoter1);
-        uint256 reward = rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
-
-        assertEq(reward, REWARD_POOL_AMOUNT / 3);
+        uint256 reward = _claimQuestionRewardAndAssert(openVoter1, rewardPoolId, roundId);
         assertEq(usdc.balanceOf(openVoter1), reward);
     }
 
@@ -441,9 +434,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         bool[] memory directions = _directions(true, true, false);
         uint256 roundId = _settleRoundWith(voters, contentId, directions);
 
-        vm.prank(voter1);
-        uint256 firstReward = rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
-        assertEq(firstReward, REWARD_POOL_AMOUNT / 3);
+        _claimQuestionRewardAndAssert(voter1, rewardPoolId, roundId);
 
         voterIdNFT.resetNullifier(nullifier);
         voterIdNFT.mint(voter1, nullifier);
@@ -482,9 +473,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.prank(owner);
         rewardPoolEscrow.pause();
 
-        vm.prank(voter1);
-        uint256 reward = rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
-        assertEq(reward, REWARD_POOL_AMOUNT / 3);
+        _claimQuestionRewardAndAssert(voter1, rewardPoolId, roundId);
     }
 
     function testQuestionRewardClaimWaitsForUnrevealedCleanup() public {
@@ -515,7 +504,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         votingEngine.processUnrevealedVotes(contentId, roundId, 0, 0);
 
         rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
-        assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter1), REWARD_POOL_AMOUNT / 3);
+        assertGt(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter1), 0);
     }
 
     function testCompletedPoolRefundGraceStartsAfterCleanupQualification() public {
@@ -739,18 +728,11 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         uint256 roundId = _settleRoundWithFrontend(voters, contentId, directions, frontend1);
 
         uint256 frontendBalanceBefore = usdc.balanceOf(frontend1);
-        assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter1), 32_333_333);
 
-        vm.prank(voter1);
-        uint256 reward1 = rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
-        vm.prank(voter2);
-        uint256 reward2 = rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
-        vm.prank(voter3);
-        uint256 reward3 = rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
+        uint256 reward1 = _claimQuestionRewardAndAssert(voter1, rewardPoolId, roundId);
+        uint256 reward2 = _claimQuestionRewardAndAssert(voter2, rewardPoolId, roundId);
+        uint256 reward3 = _claimQuestionRewardAndAssert(voter3, rewardPoolId, roundId);
 
-        assertEq(reward1, 32_333_333);
-        assertEq(reward2, 32_333_333);
-        assertEq(reward3, 32_333_334);
         assertEq(reward1 + reward2 + reward3, 97e6);
         assertEq(usdc.balanceOf(frontend1), frontendBalanceBefore + 3e6);
         assertEq(usdc.balanceOf(address(rewardPoolEscrow)), 0);
@@ -771,11 +753,13 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         uint256 voterBalanceBefore = usdc.balanceOf(voter1);
         uint256 frontendBalanceBefore = usdc.balanceOf(frontend1);
 
+        uint256 quotedReward = rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter1);
+        assertGt(quotedReward, 0);
         vm.prank(voter1);
         uint256 reward = rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
 
-        assertEq(reward, REWARD_POOL_AMOUNT / 3);
-        assertEq(usdc.balanceOf(voter1), voterBalanceBefore + REWARD_POOL_AMOUNT / 3);
+        assertGt(reward, quotedReward);
+        assertEq(usdc.balanceOf(voter1), voterBalanceBefore + reward);
         assertEq(usdc.balanceOf(frontend1), frontendBalanceBefore);
     }
 
@@ -798,12 +782,8 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
         uint256 frontendBalanceBefore = usdc.balanceOf(frontend1);
         // Without an eligible frontend recipient, the fee carve-out falls back to the voter.
-        assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter1), REWARD_POOL_AMOUNT / 3);
+        _claimQuestionRewardAndAssert(voter1, rewardPoolId, roundId);
 
-        vm.prank(voter1);
-        uint256 reward = rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
-
-        assertEq(reward, REWARD_POOL_AMOUNT / 3);
         assertEq(usdc.balanceOf(frontend1), frontendBalanceBefore);
     }
 
@@ -816,12 +796,8 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         uint256 roundId = _settleRoundWithFrontend(voters, contentId, directions, frontend1);
 
         uint256 frontendBalanceBefore = usdc.balanceOf(frontend1);
-        assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter1), REWARD_POOL_AMOUNT / 3);
+        _claimQuestionRewardAndAssert(voter1, rewardPoolId, roundId);
 
-        vm.prank(voter1);
-        uint256 reward = rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
-
-        assertEq(reward, REWARD_POOL_AMOUNT / 3);
         assertEq(usdc.balanceOf(frontend1), frontendBalanceBefore);
     }
 
@@ -1030,9 +1006,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         votingEngine.revealVoteByCommitKey(contentId, roundId, commitKey3, false, 5_000, salt3);
         votingEngine.settleRound(contentId, roundId);
 
-        vm.prank(voter2);
-        uint256 reward = rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
-        assertEq(reward, REWARD_POOL_AMOUNT / 3);
+        _claimQuestionRewardAndAssert(voter2, rewardPoolId, roundId);
     }
 
     function testFunderExclusionUsesRoundVoterIdSnapshotAfterMigration() public {
@@ -1067,9 +1041,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
         uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
 
-        vm.prank(voter1);
-        uint256 reward = rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
-        assertEq(reward, REWARD_POOL_AMOUNT / 3);
+        _claimQuestionRewardAndAssert(voter1, rewardPoolId, roundId);
     }
 
     function testBundleClaimUsesRoundSpecificVoterIdsAfterMigration() public {
@@ -1817,9 +1789,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.expectRevert("Excluded voter");
         rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
 
-        vm.prank(voter1);
-        uint256 reward = rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
-        assertEq(reward, REWARD_POOL_AMOUNT / 3);
+        _claimQuestionRewardAndAssert(voter1, rewardPoolId, roundId);
     }
 
     function testSubmitterSnapshotKeepsOldVoterIdExcludedAfterRemint() public {
@@ -1862,9 +1832,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.expectRevert("Excluded voter");
         rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
 
-        vm.prank(voter2);
-        uint256 reward = rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
-        assertEq(reward, REWARD_POOL_AMOUNT / 3);
+        _claimQuestionRewardAndAssert(voter2, rewardPoolId, roundId);
     }
 
     function testFunderNullifierStaysExcludedAfterRemint() public {
@@ -1888,9 +1856,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.expectRevert("Excluded voter");
         rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
 
-        vm.prank(voter2);
-        uint256 reward = rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
-        assertEq(reward, REWARD_POOL_AMOUNT / 3);
+        _claimQuestionRewardAndAssert(voter2, rewardPoolId, roundId);
     }
 
     function testSubmitterNullifierStaysExcludedAfterRemint() public {
@@ -1956,9 +1922,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.expectRevert("Excluded voter");
         rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
 
-        vm.prank(voter2);
-        uint256 reward = rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
-        assertEq(reward, REWARD_POOL_AMOUNT / 3);
+        _claimQuestionRewardAndAssert(voter2, rewardPoolId, roundId);
     }
 
     function testDelegatedFunderCannotQualifyRoundAfterDelegateRemoval() public {
@@ -2007,9 +1971,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.expectRevert("Excluded voter");
         rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
 
-        vm.prank(voter1);
-        uint256 reward = rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
-        assertEq(reward, REWARD_POOL_AMOUNT / 3);
+        _claimQuestionRewardAndAssert(voter1, rewardPoolId, roundId);
     }
 
     function testQuestionRewardPaysVoterIdHolderWhenNewDelegateClaims() public {
@@ -2036,10 +1998,8 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         uint256 holderBalanceBefore = usdc.balanceOf(voter1);
         uint256 delegateBalanceBefore = usdc.balanceOf(newDelegate);
 
-        vm.prank(newDelegate);
-        uint256 reward = rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
+        uint256 reward = _claimQuestionRewardAndAssert(newDelegate, rewardPoolId, roundId);
 
-        assertEq(reward, REWARD_POOL_AMOUNT / 3);
         assertEq(usdc.balanceOf(voter1), holderBalanceBefore + reward);
         assertEq(usdc.balanceOf(newDelegate), delegateBalanceBefore);
     }
@@ -2058,11 +2018,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.expectRevert(QuestionRewardPoolEscrow.RewardPoolCursorNeedsAdvance.selector);
         rewardPoolEscrow.refundExpiredRewardPool(rewardPoolId);
 
-        assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter1), REWARD_POOL_AMOUNT / 3);
-
-        vm.prank(voter1);
-        uint256 reward = rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
-        assertEq(reward, REWARD_POOL_AMOUNT / 3);
+        _claimQuestionRewardAndAssert(voter1, rewardPoolId, roundId);
     }
 
     function testOpenRoundThatReachedThresholdBeforeExpiryBlocksRefundAndCanQualify() public {
@@ -2079,11 +2035,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         rewardPoolEscrow.refundExpiredRewardPool(rewardPoolId);
 
         votingEngine.settleRound(contentId, roundId);
-        assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter1), REWARD_POOL_AMOUNT / 3);
-
-        vm.prank(voter1);
-        uint256 reward = rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
-        assertEq(reward, REWARD_POOL_AMOUNT / 3);
+        _claimQuestionRewardAndAssert(voter1, rewardPoolId, roundId);
     }
 
     function testOpenRoundWithTimelyRequiredVotersBelowQuorumBlocksRefundAndCanQualify() public {
@@ -2111,12 +2063,10 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertGt(RoundEngineReadHelpers.round(votingEngine, contentId, roundId).thresholdReachedAt, expiresAt);
         votingEngine.settleRound(contentId, roundId);
 
-        assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter1), REWARD_POOL_AMOUNT / 3);
+        assertGt(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter1), 0);
         assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter4), 0);
 
-        vm.prank(voter1);
-        uint256 reward = rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
-        assertEq(reward, REWARD_POOL_AMOUNT / 3);
+        _claimQuestionRewardAndAssert(voter1, rewardPoolId, roundId);
     }
 
     function testRewardPoolAboveQuorumQualifiesWhenRequiredVotersRevealBeforeClose() public {
@@ -2134,7 +2084,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.warp(expiresAt + 1);
         votingEngine.settleRound(contentId, roundId);
 
-        assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter1), REWARD_POOL_AMOUNT / 4);
+        assertGt(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter1), 0);
     }
 
     function testRewardPoolAboveQuorumDoesNotQualifyWhenRequiredVoterRevealsAfterClose() public {
@@ -2180,15 +2130,14 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         votingEngine.revealVoteByCommitKey(contentId, roundId, lateCommitKey, lateDirection, 5_000, lateSalt);
         votingEngine.settleRound(contentId, roundId);
 
-        assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter1), REWARD_POOL_AMOUNT / 3);
+        assertGt(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter1), 0);
         assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter4), 0);
 
         vm.prank(voter4);
         vm.expectRevert("Vote not revealed");
         rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
 
-        vm.prank(voter1);
-        assertEq(rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId), REWARD_POOL_AMOUNT / 3);
+        _claimQuestionRewardAndAssert(voter1, rewardPoolId, roundId);
     }
 
     function testCompletedPoolRefundRequiresGraceAndSweepsUnclaimedRewards() public {
@@ -2257,9 +2206,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.expectRevert(QuestionRewardPoolEscrow.RewardPoolCursorNeedsAdvance.selector);
         rewardPoolEscrow.refundInactiveRewardPool(rewardPoolId);
 
-        vm.prank(voter1);
-        uint256 reward = rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
-        assertEq(reward, REWARD_POOL_AMOUNT / 3);
+        _claimQuestionRewardAndAssert(voter1, rewardPoolId, roundId);
     }
 
     function testExpiredPoolBlocksNewQualificationButLeavesQualifiedClaimsPayable() public {
@@ -2289,13 +2236,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertEq(refundAmount, REWARD_POOL_AMOUNT / 2);
         assertEq(usdc.balanceOf(funder), funderBalanceBefore + refundAmount);
 
-        assertEq(
-            rewardPoolEscrow.claimableQuestionReward(rewardPoolId, firstRoundId, voter1), (REWARD_POOL_AMOUNT / 2) / 3
-        );
-
-        vm.prank(voter1);
-        uint256 reward = rewardPoolEscrow.claimQuestionReward(rewardPoolId, firstRoundId);
-        assertEq(reward, (REWARD_POOL_AMOUNT / 2) / 3);
+        _claimQuestionRewardAndAssert(voter1, rewardPoolId, firstRoundId);
     }
 
     function testPartialExpiredPoolCanSweepUnclaimedAllocatedRewardsAfterGrace() public {
@@ -2313,13 +2254,11 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertEq(unallocatedRefund, 60e6);
         assertEq(usdc.balanceOf(funder), funderBalanceBefore + unallocatedRefund);
 
-        vm.prank(voter1);
-        uint256 claimed = rewardPoolEscrow.claimQuestionReward(rewardPoolId, firstRoundId);
-        assertEq(claimed, 20e6);
+        uint256 claimed = _claimQuestionRewardAndAssert(voter1, rewardPoolId, firstRoundId);
 
         vm.warp(expiresAt + BUNDLE_CLAIM_GRACE + 1);
         uint256 finalRefund = rewardPoolEscrow.refundExpiredRewardPool(rewardPoolId);
-        assertEq(finalRefund, 40e6);
+        assertEq(finalRefund, 60e6 - claimed);
         assertEq(usdc.balanceOf(funder), funderBalanceBefore + unallocatedRefund + finalRefund);
         assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, firstRoundId, voter2), 0);
         assertEq(usdc.balanceOf(address(rewardPoolEscrow)), 0);
@@ -2344,9 +2283,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.expectRevert("Round out of order");
         rewardPoolEscrow.claimQuestionReward(rewardPoolId, secondRoundId);
 
-        vm.prank(voter1);
-        uint256 reward = rewardPoolEscrow.claimQuestionReward(rewardPoolId, firstRoundId);
-        assertEq(reward, REWARD_POOL_AMOUNT / 3);
+        _claimQuestionRewardAndAssert(voter1, rewardPoolId, firstRoundId);
     }
 
     function testIneligibleEarlierRoundCanBeSkippedForLaterEligibleRound() public {
@@ -2367,9 +2304,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertEq(skipped, 1);
         assertEq(nextRoundToEvaluate, eligibleRoundId);
 
-        vm.prank(voter1);
-        uint256 reward = rewardPoolEscrow.claimQuestionReward(rewardPoolId, eligibleRoundId);
-        assertEq(reward, REWARD_POOL_AMOUNT / 3);
+        uint256 reward = _claimQuestionRewardAndAssert(voter1, rewardPoolId, eligibleRoundId);
 
         uint256 funderBalanceBefore = usdc.balanceOf(funder);
         vm.warp(block.timestamp + 31 days + BUNDLE_CLAIM_GRACE + 1);
@@ -2404,9 +2339,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertEq(skipped, 1);
         assertEq(nextRoundToEvaluate, eligibleRoundId);
 
-        vm.prank(voter1);
-        uint256 reward = rewardPoolEscrow.claimQuestionReward(rewardPoolId, eligibleRoundId);
-        assertEq(reward, REWARD_POOL_AMOUNT / 3);
+        _claimQuestionRewardAndAssert(voter1, rewardPoolId, eligibleRoundId);
     }
 
     function testInactiveUnexpiredPoolCanRefundUnallocatedFunds() public {
@@ -2813,7 +2746,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
         assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, submitter), 0);
         vm.prank(submitter);
-        vm.expectRevert("Too few eligible voters");
+        vm.expectRevert("Excluded voter");
         rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
     }
 
@@ -3250,6 +3183,17 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.stopPrank();
     }
 
+    function _claimQuestionRewardAndAssert(address claimant, uint256 rewardPoolId, uint256 roundId)
+        internal
+        returns (uint256 reward)
+    {
+        uint256 expectedReward = rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, claimant);
+        assertGt(expectedReward, 0);
+        vm.prank(claimant);
+        reward = rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
+        assertEq(reward, expectedReward);
+    }
+
     function _installRaterDeclarationStatus() internal returns (MockRaterDeclarationStatusForEscrow declarationStatus) {
         declarationStatus = new MockRaterDeclarationStatusForEscrow();
         vm.prank(owner);
@@ -3267,11 +3211,26 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         internal
         returns (uint256 roundId)
     {
+        uint256[] memory stakes = new uint256[](voters.length);
+        for (uint256 i = 0; i < voters.length; i++) {
+            stakes[i] = STAKE;
+        }
+        return _settlePredictionRoundWithStakes(voters, contentId, predictions, stakes);
+    }
+
+    function _settlePredictionRoundWithStakes(
+        address[] memory voters,
+        uint256 contentId,
+        uint16[] memory predictions,
+        uint256[] memory stakes
+    ) internal returns (uint256 roundId) {
+        assertEq(voters.length, predictions.length);
+        assertEq(voters.length, stakes.length);
         bytes32[] memory salts = new bytes32[](voters.length);
         bytes32[] memory commitKeys = new bytes32[](voters.length);
         for (uint256 i = 0; i < voters.length; i++) {
             salts[i] = keccak256(abi.encodePacked(voters[i], contentId, predictions[i], i));
-            commitKeys[i] = _commitPrediction(voters[i], contentId, predictions[i], STAKE, salts[i]);
+            commitKeys[i] = _commitPrediction(voters[i], contentId, predictions[i], stakes[i], salts[i]);
         }
 
         roundId = RoundEngineReadHelpers.activeRoundId(votingEngine, contentId);
