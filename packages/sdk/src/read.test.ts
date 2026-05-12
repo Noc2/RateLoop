@@ -70,6 +70,149 @@ test("getProfiles joins addresses into the expected batch query", async () => {
   );
 });
 
+test("getFollows and getFollowers request the public follow routes", async () => {
+  const requestedUrls: string[] = [];
+  const read = createCuryoReadClient({
+    apiBaseUrl: "https://api.curyo.xyz",
+    fetchImpl: async (input: URL | RequestInfo) => {
+      requestedUrls.push(String(input));
+      return new Response(
+        JSON.stringify({
+          items: [],
+          count: 0,
+          followerCount: 3,
+          followingCount: 2,
+          limit: 10,
+          offset: 5,
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        },
+      );
+    },
+    timeoutMs: 5_000,
+  });
+
+  const follows = await read.getFollows(
+    "0x1111111111111111111111111111111111111111",
+    { limit: 10, offset: 5 },
+  );
+  const followers = await read.getFollowers(
+    "0x1111111111111111111111111111111111111111",
+    { limit: 10, offset: 5 },
+  );
+
+  assert.equal(follows.followingCount, 2);
+  assert.equal(followers.followerCount, 3);
+  assert.match(
+    requestedUrls[0] ?? "",
+    /\/follows\/0x1111111111111111111111111111111111111111\?limit=10&offset=5$/,
+  );
+  assert.match(
+    requestedUrls[1] ?? "",
+    /\/followers\/0x1111111111111111111111111111111111111111\?limit=10&offset=5$/,
+  );
+});
+
+test("getAccuracyLeaderboard can include reputation blocks", async () => {
+  let requestedUrl = "";
+  const read = createCuryoReadClient({
+    apiBaseUrl: "https://api.curyo.xyz",
+    fetchImpl: async (input: URL | RequestInfo) => {
+      requestedUrl = String(input);
+      return new Response(
+        JSON.stringify({
+          items: [
+            {
+              voter: "0x1111111111111111111111111111111111111111",
+              totalSettledVotes: 10,
+              totalWins: 7,
+              totalLosses: 3,
+              totalStakeWon: "12",
+              totalStakeLost: "4",
+              profileName: "Ada",
+              winRate: 0.7,
+              reputation: {
+                raterType: 1,
+                raterTypeName: "Human",
+                credentialStatus: "verified",
+                clusterId: "cluster-1",
+                discountBps: 2500,
+                independenceMultiplierBps: 7500,
+                clusterChallengeStatus: "open",
+                clusterChallengeStatusCode: 1,
+                activeTrustAttestationCount: 4,
+                followerCount: 3,
+                followingCount: 2,
+                aiTier: 0,
+                aiTierName: "A0",
+              },
+            },
+          ],
+          window: "all",
+          startsAt: null,
+          endsAt: null,
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        },
+      );
+    },
+    timeoutMs: 5_000,
+  });
+
+  const response = await read.getAccuracyLeaderboard({
+    includeReputation: true,
+    minSignalVotes: 5,
+  });
+
+  assert.equal(response.items[0]?.reputation?.followerCount, 3);
+  assert.equal(response.items[0]?.reputation?.aiTierName, "A0");
+  assert.match(requestedUrl, /\/accuracy-leaderboard\?/);
+  assert.match(requestedUrl, /includeReputation=true/);
+  assert.match(requestedUrl, /minSignalVotes=5/);
+});
+
+test("getProfile exposes social counts from profile detail", async () => {
+  const read = createCuryoReadClient({
+    apiBaseUrl: "https://api.curyo.xyz",
+    fetchImpl: async () =>
+      new Response(
+        JSON.stringify({
+          profile: null,
+          summary: {
+            totalVotes: 7,
+            totalContent: 5,
+            totalRewardsClaimed: "42",
+          },
+          social: {
+            followerCount: 3,
+            followingCount: 2,
+          },
+          recentVotes: [],
+          recentRewards: [],
+          recentSubmissions: [],
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        },
+      ),
+    timeoutMs: 5_000,
+  });
+
+  const response = await read.getProfile(
+    "0x1111111111111111111111111111111111111111",
+  );
+
+  assert.deepEqual(response.social, {
+    followerCount: 3,
+    followingCount: 2,
+  });
+});
+
 test("getRaterRewardStatus requests the typed reward-status route", async () => {
   let requestedUrl = "";
   const read = createCuryoReadClient({
@@ -137,10 +280,57 @@ test("getRaterRewardStatus requests the typed reward-status route", async () => 
             latestOperatorSlash: "0",
             latestChallengerReward: "0",
           },
+          independence: {
+            clusterId: "cluster-1",
+            discountBps: 2500,
+            independenceMultiplierBps: 7500,
+            scorerEpoch: "42",
+            updatedAt: "1000",
+            algorithmHash: null,
+            modelVersionHash: null,
+            scoreRoot: null,
+            evidenceHash: null,
+            challengeWindowEndsAt: null,
+            scoreKey: null,
+            openChallengeCount: 1,
+            latestChallengeId: "7",
+            latestChallengeStatus: 1,
+            latestChallengeStatusName: "open",
+            latestChallengeOpenedAt: "1000",
+            latestChallengeResolvedAt: null,
+            latestChallengeResolutionHash: null,
+          },
+          trust: {
+            activeSeed: null,
+            activeInboundAttestationCount: 4,
+            activeInboundTrustBudgetTotal: "400",
+            latestInboundAttestations: [],
+          },
+          launchRewards: {
+            eligible: true,
+            qualifyingRatingCount: 6,
+            rewardedRatingCount: 4,
+            distinctVerifiedAnchorCount: 2,
+            distinctAnchorRoundCount: 3,
+            launchCap: "100",
+            launchPaid: "25",
+            remainingLaunchCap: "75",
+            remainingRewardSlots: 6,
+            cohortIndex: 1,
+            latestCreditedAt: "1000",
+            latestPaidAt: "1001",
+            policy: {
+              minQualifyingScoreBps: 7000,
+              minDistinctVerifiedAnchors: 2,
+            },
+          },
           rewardPolicy: {
             baseMultiplierBps: 10000,
+            clusterDiscountBps: 2500,
+            independenceMultiplierBps: 7500,
             humanCredentialMultiplierBps: 10000,
             agentTierMultiplierBps: 11500,
+            effectiveRewardWeightBps: 9000,
             combinedMultiplierBps: 11500,
             combinedMultiplierCapBps: 12500,
             verifiedAgentsCanAnchorLaunchRewards: false,
@@ -165,10 +355,14 @@ test("getRaterRewardStatus requests the typed reward-status route", async () => 
     /\/rater-reward-status\/0x1111111111111111111111111111111111111111$/,
   );
   assert.equal(response.aiDeclaration.tierName, "A1Verified");
+  assert.equal(response.independence.latestChallengeStatusName, "open");
+  assert.equal(response.trust.activeInboundTrustBudgetTotal, "400");
+  assert.equal(response.launchRewards.remainingLaunchCap, "75");
   assert.equal(
     response.rewardPolicy.verifiedAgentsCanAnchorLaunchRewards,
     false,
   );
+  assert.equal(response.rewardPolicy.effectiveRewardWeightBps, 9000);
 });
 
 test("AI rater read helpers request declaration productization routes", async () => {

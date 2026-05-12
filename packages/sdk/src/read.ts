@@ -191,6 +191,11 @@ export interface CuryoProfileItem {
   [key: string]: unknown;
 }
 
+export interface CuryoProfileSocialCounts {
+  followerCount: number;
+  followingCount: number;
+}
+
 export interface CuryoGlobalStats {
   totalContent?: number;
   totalVotes?: number;
@@ -220,6 +225,56 @@ export type CuryoAiDeclarationInactiveReason =
   | "future"
   | "expired"
   | "challenged";
+
+export interface CuryoAccuracyLeaderboardReputation {
+  raterType: number;
+  raterTypeName: CuryoRaterTypeName;
+  credentialStatus: CuryoSelfCredentialStatus;
+  clusterId: string | null;
+  discountBps: number;
+  independenceMultiplierBps: number;
+  clusterChallengeStatus: string;
+  clusterChallengeStatusCode: number;
+  activeTrustAttestationCount: number;
+  followerCount: number;
+  followingCount: number;
+  aiTier: number;
+  aiTierName: CuryoAiDeclarationTierName | "A0";
+  [key: string]: unknown;
+}
+
+export interface CuryoAccuracyLeaderboardItem {
+  voter: `0x${string}`;
+  totalSettledVotes: number;
+  totalWins: number;
+  totalLosses: number;
+  totalStakeWon: string;
+  totalStakeLost: string;
+  scoredVotes?: number;
+  signalScoreBps?: number;
+  signalScore?: number;
+  currentStreak?: number;
+  bestWinStreak?: number;
+  profileName: string | null;
+  reputation?: CuryoAccuracyLeaderboardReputation;
+  winRate: number;
+  [key: string]: unknown;
+}
+
+export type CuryoAccuracyLeaderboardWindow =
+  | "all"
+  | "7d"
+  | "30d"
+  | "365d"
+  | "season";
+
+export interface CuryoAccuracyLeaderboardResponse {
+  items: CuryoAccuracyLeaderboardItem[];
+  categoryId?: string;
+  window: CuryoAccuracyLeaderboardWindow;
+  startsAt: string | null;
+  endsAt: string | null;
+}
 
 export interface CuryoRaterRewardStatusResponse {
   asOf: {
@@ -287,10 +342,70 @@ export interface CuryoRaterRewardStatusResponse {
     latestOperatorSlash: string;
     latestChallengerReward: string;
   };
+  independence: {
+    clusterId: string | null;
+    discountBps: number;
+    independenceMultiplierBps: number;
+    scorerEpoch: string | null;
+    updatedAt: string | null;
+    algorithmHash: string | null;
+    modelVersionHash: string | null;
+    scoreRoot: string | null;
+    evidenceHash: string | null;
+    challengeWindowEndsAt: string | null;
+    scoreKey: string | null;
+    openChallengeCount: number;
+    latestChallengeId: string | null;
+    latestChallengeStatus: number;
+    latestChallengeStatusName: string;
+    latestChallengeOpenedAt: string | null;
+    latestChallengeResolvedAt: string | null;
+    latestChallengeResolutionHash: string | null;
+  };
+  trust: {
+    activeSeed: {
+      active: boolean;
+      seededAt: string;
+      sunsetAt: string;
+      trustBudgetBps: number;
+      seedRoot: string;
+    } | null;
+    activeInboundAttestationCount: number;
+    activeInboundTrustBudgetTotal: string;
+    latestInboundAttestations: Array<{
+      issuer: `0x${string}`;
+      categoryId: string;
+      trustBudget: string;
+      maxBoostBps: number;
+      expiresAt: string;
+      metadataHash: `0x${string}`;
+      issuedAt: string;
+    }>;
+  };
+  launchRewards: {
+    eligible: boolean;
+    qualifyingRatingCount: number;
+    rewardedRatingCount: number;
+    distinctVerifiedAnchorCount: number;
+    distinctAnchorRoundCount: number;
+    launchCap: string;
+    launchPaid: string;
+    remainingLaunchCap: string;
+    remainingRewardSlots: number;
+    cohortIndex: number | null;
+    latestCreditedAt: string | null;
+    latestPaidAt: string | null;
+    policy: {
+      [key: string]: unknown;
+    };
+  };
   rewardPolicy: {
     baseMultiplierBps: number;
+    clusterDiscountBps: number;
+    independenceMultiplierBps: number;
     humanCredentialMultiplierBps: number;
     agentTierMultiplierBps: number;
+    effectiveRewardWeightBps: number;
     combinedMultiplierBps: number;
     combinedMultiplierCapBps: number;
     verifiedAgentsCanAnchorLaunchRewards: boolean;
@@ -400,9 +515,23 @@ export interface CuryoProfileResponse {
     totalContent: number;
     totalRewardsClaimed: string | number;
   };
+  social: CuryoProfileSocialCounts;
   recentVotes: CuryoVoteItem[];
   recentRewards: JsonRecord[];
   recentSubmissions: CuryoProfileSubmissionItem[];
+}
+
+export interface CuryoFollowItem {
+  walletAddress: `0x${string}`;
+  createdAt: string;
+  [key: string]: unknown;
+}
+
+export interface CuryoFollowResponse extends CuryoProfileSocialCounts {
+  items: CuryoFollowItem[];
+  count: number;
+  limit: number;
+  offset: number;
 }
 
 export interface SearchContentParams {
@@ -488,6 +617,22 @@ export interface AiRaterDeclarationChallengesParams {
   offset?: number;
 }
 
+export interface GetFollowsParams {
+  limit?: number;
+  offset?: number;
+}
+
+export interface GetAccuracyLeaderboardParams {
+  categoryId?: string;
+  sortBy?: string;
+  window?: CuryoAccuracyLeaderboardWindow;
+  minVotes?: number;
+  minSignalVotes?: number;
+  includeReputation?: boolean;
+  limit?: number;
+  offset?: number;
+}
+
 export interface CuryoReadClient {
   searchContent(
     params?: SearchContentParams,
@@ -499,6 +644,17 @@ export interface CuryoReadClient {
   ): Promise<{ items: CuryoCategoryItem[] }>;
   getProfile(address: string): Promise<CuryoProfileResponse>;
   getProfiles(addresses: string[]): Promise<Record<string, CuryoProfileItem>>;
+  getFollows(
+    address: string,
+    params?: GetFollowsParams,
+  ): Promise<CuryoFollowResponse>;
+  getFollowers(
+    address: string,
+    params?: GetFollowsParams,
+  ): Promise<CuryoFollowResponse>;
+  getAccuracyLeaderboard(
+    params?: GetAccuracyLeaderboardParams,
+  ): Promise<CuryoAccuracyLeaderboardResponse>;
   getVoterAccuracy(address: string): Promise<JsonRecord>;
   getRaterRewardStatus(
     address: string,
@@ -563,6 +719,16 @@ export function createCuryoReadClient(
       request<Record<string, CuryoProfileItem>>(config, "/profiles", {
         addresses: addresses.join(","),
       }),
+    getFollows: (address, params) =>
+      request<CuryoFollowResponse>(config, `/follows/${address}`, params),
+    getFollowers: (address, params) =>
+      request<CuryoFollowResponse>(config, `/followers/${address}`, params),
+    getAccuracyLeaderboard: (params) =>
+      request<CuryoAccuracyLeaderboardResponse>(
+        config,
+        "/accuracy-leaderboard",
+        params,
+      ),
     getVoterAccuracy: (address) =>
       request<JsonRecord>(config, `/voter-accuracy/${address}`),
     getRaterRewardStatus: (address) =>

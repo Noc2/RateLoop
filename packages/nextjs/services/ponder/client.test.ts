@@ -261,12 +261,7 @@ test("ponderApi AI rater helpers target the declaration productization routes", 
   const requestedUrls: string[] = [];
 
   globalThis.fetch = (async input => {
-    const url =
-      typeof input === "string"
-        ? input
-        : input instanceof URL
-          ? input.toString()
-          : input.url;
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
     requestedUrls.push(url);
     return new Response(JSON.stringify({ ok: true }), {
       status: 200,
@@ -320,8 +315,288 @@ test("ponderApi AI rater helpers target the declaration productization routes", 
     requestedUrls[5] ?? "",
     /\/ai-rater-declarations\/0x1111111111111111111111111111111111111111\/challenges\?status=1$/,
   );
-  assert.match(
-    requestedUrls[6] ?? "",
-    /\/ai-rater-operators\/0x2222222222222222222222222222222222222222\/bond$/,
-  );
+  assert.match(requestedUrls[6] ?? "", /\/ai-rater-operators\/0x2222222222222222222222222222222222222222\/bond$/);
+});
+
+test("ponderApi follow helpers target the public follow routes", async () => {
+  const originalFetch = globalThis.fetch;
+  const requestedUrls: string[] = [];
+
+  globalThis.fetch = (async input => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    requestedUrls.push(url);
+    return new Response(
+      JSON.stringify({
+        items: [],
+        count: 0,
+        followerCount: 3,
+        followingCount: 2,
+        limit: 10,
+        offset: 5,
+      }),
+      {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      },
+    );
+  }) as typeof fetch;
+
+  try {
+    const follows = await ponderApi.getFollows("0x1111111111111111111111111111111111111111", {
+      limit: "10",
+      offset: "5",
+    });
+    const followers = await ponderApi.getFollowers("0x1111111111111111111111111111111111111111", {
+      limit: "10",
+      offset: "5",
+    });
+
+    assert.equal(follows.followingCount, 2);
+    assert.equal(followers.followerCount, 3);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assert.match(requestedUrls[0] ?? "", /\/follows\/0x1111111111111111111111111111111111111111\?limit=10&offset=5$/);
+  assert.match(requestedUrls[1] ?? "", /\/followers\/0x1111111111111111111111111111111111111111\?limit=10&offset=5$/);
+});
+
+test("ponderApi.getAccuracyLeaderboard forwards includeReputation", async () => {
+  const originalFetch = globalThis.fetch;
+  let requestedUrl = "";
+
+  globalThis.fetch = (async input => {
+    requestedUrl = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    return new Response(
+      JSON.stringify({
+        items: [
+          {
+            voter: "0x1111111111111111111111111111111111111111",
+            totalSettledVotes: 10,
+            totalWins: 7,
+            totalLosses: 3,
+            totalStakeWon: "12",
+            totalStakeLost: "4",
+            profileName: "Ada",
+            winRate: 0.7,
+            reputation: {
+              raterType: 1,
+              raterTypeName: "Human",
+              credentialStatus: "verified",
+              clusterId: "cluster-1",
+              discountBps: 2500,
+              independenceMultiplierBps: 7500,
+              clusterChallengeStatus: "open",
+              clusterChallengeStatusCode: 1,
+              activeTrustAttestationCount: 4,
+              followerCount: 3,
+              followingCount: 2,
+              aiTier: 0,
+              aiTierName: "A0",
+            },
+          },
+        ],
+        window: "all",
+        startsAt: null,
+        endsAt: null,
+      }),
+      {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      },
+    );
+  }) as typeof fetch;
+
+  try {
+    const response = await ponderApi.getAccuracyLeaderboard({
+      includeReputation: "1",
+      minSignalVotes: "5",
+    });
+
+    assert.equal(response.items[0]?.reputation?.followerCount, 3);
+    assert.equal(response.items[0]?.reputation?.aiTierName, "A0");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assert.match(requestedUrl, /\/accuracy-leaderboard\?/);
+  assert.match(requestedUrl, /includeReputation=1/);
+  assert.match(requestedUrl, /minSignalVotes=5/);
+});
+
+test("ponderApi.getProfile exposes social counts from profile detail", async () => {
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = (async () =>
+    new Response(
+      JSON.stringify({
+        profile: null,
+        summary: {
+          totalVotes: 7,
+          totalContent: 5,
+          totalRewardsClaimed: "42",
+        },
+        social: {
+          followerCount: 3,
+          followingCount: 2,
+        },
+        recentVotes: [],
+        recentRewards: [],
+        recentSubmissions: [],
+      }),
+      {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      },
+    )) as typeof fetch;
+
+  try {
+    const response = await ponderApi.getProfile("0x1111111111111111111111111111111111111111");
+    assert.deepEqual(response.social, {
+      followerCount: 3,
+      followingCount: 2,
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("ponderApi.getRaterRewardStatus exposes expanded reputation blocks", async () => {
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = (async () =>
+    new Response(
+      JSON.stringify({
+        asOf: {
+          chainTimestamp: "1000",
+          wallTimestamp: "1000",
+          indexedBlockNumber: null,
+        },
+        rater: "0x1111111111111111111111111111111111111111",
+        raterType: 2,
+        raterTypeName: "AI",
+        selfCredential: {
+          verified: false,
+          legacy: false,
+          revoked: false,
+          status: "missing",
+          verifiedAt: null,
+          expiresAt: null,
+          multiplierBps: 10000,
+          evidenceHash: null,
+        },
+        aiDeclaration: {
+          declared: true,
+          active: true,
+          inactiveReason: "none",
+          operator: "0x2222222222222222222222222222222222222222",
+          version: 1,
+          effectiveEpoch: "1",
+          expiresAtEpoch: "0",
+          effectiveAt: "1",
+          expiresAt: null,
+          declaredTier: 2,
+          declaredTierName: "A1Verified",
+          effectiveTier: 2,
+          effectiveTierName: "A1Verified",
+          tier: 2,
+          tierName: "A1Verified",
+          tierMultiplierBps: 11500,
+          behaviorChanged: false,
+          probePending: false,
+          probeStatus: "passed",
+          declarationHash: null,
+          modelClass: 1,
+          modelId: null,
+          provider: null,
+          promptTemplateHash: null,
+          retrievalConfigHash: null,
+          toolingHash: null,
+          disclosure: 1,
+          declaredAt: "1000",
+          retiredAt: null,
+          lastProbeResultHash: null,
+          latestProbe: null,
+        },
+        challengeStatus: {
+          openCount: 0,
+          latestChallengeId: null,
+          latestStatus: 0,
+          latestResolvedAt: null,
+          latestOperatorSlash: "0",
+          latestChallengerReward: "0",
+        },
+        independence: {
+          clusterId: "cluster-1",
+          discountBps: 2500,
+          independenceMultiplierBps: 7500,
+          scorerEpoch: "42",
+          updatedAt: "1000",
+          algorithmHash: null,
+          modelVersionHash: null,
+          scoreRoot: null,
+          evidenceHash: null,
+          challengeWindowEndsAt: null,
+          scoreKey: null,
+          openChallengeCount: 1,
+          latestChallengeId: "7",
+          latestChallengeStatus: 1,
+          latestChallengeStatusName: "open",
+          latestChallengeOpenedAt: "1000",
+          latestChallengeResolvedAt: null,
+          latestChallengeResolutionHash: null,
+        },
+        trust: {
+          activeSeed: null,
+          activeInboundAttestationCount: 4,
+          activeInboundTrustBudgetTotal: "400",
+          latestInboundAttestations: [],
+        },
+        launchRewards: {
+          eligible: true,
+          qualifyingRatingCount: 6,
+          rewardedRatingCount: 4,
+          distinctVerifiedAnchorCount: 2,
+          distinctAnchorRoundCount: 3,
+          launchCap: "100",
+          launchPaid: "25",
+          remainingLaunchCap: "75",
+          remainingRewardSlots: 6,
+          cohortIndex: 1,
+          latestCreditedAt: "1000",
+          latestPaidAt: "1001",
+          policy: {
+            minQualifyingScoreBps: 7000,
+            minDistinctVerifiedAnchors: 2,
+          },
+        },
+        rewardPolicy: {
+          baseMultiplierBps: 10000,
+          clusterDiscountBps: 2500,
+          independenceMultiplierBps: 7500,
+          humanCredentialMultiplierBps: 10000,
+          agentTierMultiplierBps: 11500,
+          effectiveRewardWeightBps: 9000,
+          combinedMultiplierBps: 9000,
+          combinedMultiplierCapBps: 12500,
+          verifiedAgentsCanAnchorLaunchRewards: false,
+          verifiedAgentSignupBonusEligible: false,
+        },
+      }),
+      {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      },
+    )) as typeof fetch;
+
+  try {
+    const response = await ponderApi.getRaterRewardStatus("0x1111111111111111111111111111111111111111");
+
+    assert.equal(response.independence.latestChallengeStatusName, "open");
+    assert.equal(response.trust.activeInboundTrustBudgetTotal, "400");
+    assert.equal(response.launchRewards.remainingLaunchCap, "75");
+    assert.equal(response.rewardPolicy.effectiveRewardWeightBps, 9000);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });

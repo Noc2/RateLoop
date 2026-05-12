@@ -593,6 +593,11 @@ export interface PonderProfileSummary {
   totalRewardsClaimed: string;
 }
 
+export interface PonderProfileSocialCounts {
+  followerCount: number;
+  followingCount: number;
+}
+
 export interface PonderProfileSubmissionItem {
   id: string;
   submitter: string;
@@ -764,7 +769,25 @@ export interface PonderAccuracyLeaderboardItem {
   currentStreak?: number;
   bestWinStreak?: number;
   profileName: string | null;
+  reputation?: PonderAccuracyLeaderboardReputation;
   winRate: number;
+}
+
+export interface PonderAccuracyLeaderboardReputation {
+  raterType: number;
+  raterTypeName: PonderRaterTypeName;
+  credentialStatus: PonderSelfCredentialStatus;
+  clusterId: string | null;
+  discountBps: number;
+  independenceMultiplierBps: number;
+  clusterChallengeStatus: string;
+  clusterChallengeStatusCode: number;
+  activeTrustAttestationCount: number;
+  followerCount: number;
+  followingCount: number;
+  aiTier: number;
+  aiTierName: PonderAiDeclarationTierName | "A0";
+  [key: string]: unknown;
 }
 
 export type PonderAccuracyLeaderboardWindow = "all" | "7d" | "30d" | "365d" | "season";
@@ -831,9 +854,22 @@ export interface PonderVoteCooldownsResponse {
 export interface PonderProfileDetailResponse {
   profile: PonderProfile | null;
   summary: PonderProfileSummary;
+  social: PonderProfileSocialCounts;
   recentVotes: PonderVoteItem[];
   recentRewards: PonderRewardClaim[];
   recentSubmissions: PonderProfileSubmissionItem[];
+}
+
+export interface PonderFollowItem {
+  walletAddress: string;
+  createdAt: string;
+}
+
+export interface PonderFollowResponse extends PonderProfileSocialCounts {
+  items: PonderFollowItem[];
+  count: number;
+  limit: number;
+  offset: number;
 }
 
 export interface PonderVoterStreak {
@@ -924,10 +960,70 @@ export interface PonderRaterRewardStatusResponse {
     latestOperatorSlash: string;
     latestChallengerReward: string;
   };
+  independence: {
+    clusterId: string | null;
+    discountBps: number;
+    independenceMultiplierBps: number;
+    scorerEpoch: string | null;
+    updatedAt: string | null;
+    algorithmHash: string | null;
+    modelVersionHash: string | null;
+    scoreRoot: string | null;
+    evidenceHash: string | null;
+    challengeWindowEndsAt: string | null;
+    scoreKey: string | null;
+    openChallengeCount: number;
+    latestChallengeId: string | null;
+    latestChallengeStatus: number;
+    latestChallengeStatusName: string;
+    latestChallengeOpenedAt: string | null;
+    latestChallengeResolvedAt: string | null;
+    latestChallengeResolutionHash: string | null;
+  };
+  trust: {
+    activeSeed: {
+      active: boolean;
+      seededAt: string;
+      sunsetAt: string;
+      trustBudgetBps: number;
+      seedRoot: string;
+    } | null;
+    activeInboundAttestationCount: number;
+    activeInboundTrustBudgetTotal: string;
+    latestInboundAttestations: Array<{
+      issuer: string;
+      categoryId: string;
+      trustBudget: string;
+      maxBoostBps: number;
+      expiresAt: string;
+      metadataHash: string;
+      issuedAt: string;
+    }>;
+  };
+  launchRewards: {
+    eligible: boolean;
+    qualifyingRatingCount: number;
+    rewardedRatingCount: number;
+    distinctVerifiedAnchorCount: number;
+    distinctAnchorRoundCount: number;
+    launchCap: string;
+    launchPaid: string;
+    remainingLaunchCap: string;
+    remainingRewardSlots: number;
+    cohortIndex: number | null;
+    latestCreditedAt: string | null;
+    latestPaidAt: string | null;
+    policy: {
+      [key: string]: unknown;
+    };
+  };
   rewardPolicy: {
     baseMultiplierBps: number;
+    clusterDiscountBps: number;
+    independenceMultiplierBps: number;
     humanCredentialMultiplierBps: number;
     agentTierMultiplierBps: number;
+    effectiveRewardWeightBps: number;
     combinedMultiplierBps: number;
     combinedMultiplierCapBps: number;
     verifiedAgentsCanAnchorLaunchRewards: boolean;
@@ -1168,6 +1264,14 @@ export const ponderApi = {
     return ponderGet<PonderProfileDetailResponse>(`/profile/${address}`);
   },
 
+  getFollows(address: string, params?: { limit?: string; offset?: string }) {
+    return ponderGet<PonderFollowResponse>(`/follows/${address}`, params);
+  },
+
+  getFollowers(address: string, params?: { limit?: string; offset?: string }) {
+    return ponderGet<PonderFollowResponse>(`/followers/${address}`, params);
+  },
+
   getDiscoverSignals(address: string, params?: { watched?: string; followed?: string }) {
     return ponderGet<PonderDiscoverSignalsResponse>(`/discover-signals/${address}`, params);
   },
@@ -1248,6 +1352,7 @@ export const ponderApi = {
     window?: string;
     minVotes?: string;
     minSignalVotes?: string;
+    includeReputation?: string;
     limit?: string;
     offset?: string;
   }) {
@@ -1286,10 +1391,7 @@ export const ponderApi = {
   },
 
   getAiRaterProbeResults(address: string, params?: PonderAiRaterProbePageParams) {
-    return ponderGet<PonderAiRaterPage<PonderAiRaterProbeResult>>(
-      `/ai-rater-declarations/${address}/probes`,
-      params,
-    );
+    return ponderGet<PonderAiRaterPage<PonderAiRaterProbeResult>>(`/ai-rater-declarations/${address}/probes`, params);
   },
 
   getAiRaterDriftFlags(address: string, params?: PonderAiRaterVersionedPageParams) {
