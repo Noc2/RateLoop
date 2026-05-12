@@ -19,6 +19,11 @@ import {
   buildAllowedCategoryCondition,
   buildAllowedContentCondition,
 } from "../moderation.js";
+import {
+  profileTotalContentExpr,
+  profileTotalRewardsClaimedExpr,
+  profileTotalVotesExpr,
+} from "../profile-aggregate-expressions.js";
 import type { ApiApp } from "../shared.js";
 import { attachOpenRoundSummary, jsonBig, parseBigIntList } from "../shared.js";
 import {
@@ -31,6 +36,23 @@ import {
 } from "../utils.js";
 
 type SqlCondition = ReturnType<typeof sql>;
+
+function profileSelection() {
+  const totalVotes = profileTotalVotesExpr(profile.address);
+  const totalContent = profileTotalContentExpr(profile.address);
+  const totalRewardsClaimed = profileTotalRewardsClaimedExpr(profile.address);
+
+  return {
+    address: profile.address,
+    name: profile.name,
+    selfReport: profile.selfReport,
+    createdAt: profile.createdAt,
+    updatedAt: profile.updatedAt,
+    totalVotes,
+    totalContent,
+    totalRewardsClaimed,
+  };
+}
 
 function createContentSearchVector() {
   return sql`(
@@ -849,7 +871,7 @@ export function registerContentRoutes(app: ApiApp) {
       .filter((address) => isValidAddress(address));
 
     const items = await db
-      .select()
+      .select(profileSelection())
       .from(profile)
       .where(inArray(profile.address, addresses));
 
@@ -868,7 +890,7 @@ export function registerContentRoutes(app: ApiApp) {
     }
 
     const [item] = await db
-      .select()
+      .select(profileSelection())
       .from(profile)
       .where(eq(profile.address, address))
       .limit(1);
@@ -885,10 +907,15 @@ export function registerContentRoutes(app: ApiApp) {
 
     const [rewardSummary] = await db
       .select({
-        total: sql<bigint>`coalesce(sum(${rewardClaim.hrepReward}), 0)`,
+        total: sql<bigint>`coalesce(sum(
+          case when ${rewardClaim.voter} = ${address} then ${rewardClaim.hrepReward} else 0 end +
+          case when ${rewardClaim.stakePayer} = ${address} then ${rewardClaim.stakeReturned} else 0 end
+        ), 0)`,
       })
       .from(rewardClaim)
-      .where(eq(rewardClaim.voter, address));
+      .where(
+        or(eq(rewardClaim.voter, address), eq(rewardClaim.stakePayer, address)),
+      );
 
     const recentVotes = await db
       .select({
@@ -972,10 +999,10 @@ export function registerContentRoutes(app: ApiApp) {
     return jsonBig(c, {
       profile: item ?? null,
       summary: {
-        totalVotes: item?.totalVotes ?? voteSummary?.count ?? 0,
-        totalContent: item?.totalContent ?? contentSummary?.count ?? 0,
+        totalVotes: voteSummary?.count ?? item?.totalVotes ?? 0,
+        totalContent: contentSummary?.count ?? item?.totalContent ?? 0,
         totalRewardsClaimed:
-          item?.totalRewardsClaimed ?? rewardSummary?.total ?? 0n,
+          rewardSummary?.total ?? item?.totalRewardsClaimed ?? 0n,
       },
       recentVotes,
       recentRewards,

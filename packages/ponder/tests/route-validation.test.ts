@@ -155,11 +155,13 @@ function mockPonderModules<T>(result: T) {
     },
     profile: {
       address: "profile.address",
+      createdAt: "profile.createdAt",
       name: "profile.name",
       selfReport: "profile.selfReport",
       totalContent: "profile.totalContent",
       totalRewardsClaimed: "profile.totalRewardsClaimed",
       totalVotes: "profile.totalVotes",
+      updatedAt: "profile.updatedAt",
     },
     feedbackBonusAward: {
       frontendFee: "feedbackBonusAward.frontendFee",
@@ -272,6 +274,10 @@ function mockPonderModules<T>(result: T) {
     },
     rewardClaim: {
       claimedAt: "rewardClaim.claimedAt",
+      hrepReward: "rewardClaim.hrepReward",
+      stakePayer: "rewardClaim.stakePayer",
+      stakeReturned: "rewardClaim.stakeReturned",
+      voter: "rewardClaim.voter",
     },
     round: {
       confidenceMass: "round.confidenceMass",
@@ -706,9 +712,68 @@ describe("registerContentRoutes", () => {
     expect(serialized).toContain("0x0000000000000000000000000000000000000001");
     expect(serialized).toContain("round.state");
   });
+
+  it("uses live profile aggregates instead of cached profile counters", async () => {
+    mockPonderModules([
+      {
+        address: "0x00000000000000000000000000000000000000aa",
+        name: "Late profile",
+        selfReport: "",
+        totalVotes: 0,
+        totalContent: 0,
+        totalRewardsClaimed: 0n,
+        count: 7,
+        total: 42n,
+      },
+    ]);
+    const { registerContentRoutes } = await import(
+      "../src/api/routes/content-routes.js"
+    );
+
+    const app = new Hono();
+    registerContentRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/profile/0x00000000000000000000000000000000000000aa",
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.summary).toEqual({
+      totalVotes: 7,
+      totalContent: 7,
+      totalRewardsClaimed: "42",
+    });
+  });
 });
 
 describe("registerLeaderboardRoutes", () => {
+  it("orders profile leaderboards by live source aggregates", async () => {
+    const { db, queryBuilder } = mockPonderModules([]);
+    const { registerLeaderboardRoutes } = await import(
+      "../src/api/routes/leaderboard-routes.js"
+    );
+
+    const app = new Hono();
+    registerLeaderboardRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/leaderboard?type=voters",
+    );
+
+    expect(response.status).toBe(200);
+    const selection = serializeExpression(db.select.mock.calls[0]?.[0]);
+    expect(selection).toContain("vote.voter");
+    expect(selection).toContain("content.submitter");
+    expect(selection).toContain("rewardClaim.hrepReward");
+    expect(selection).not.toContain("profile.totalVotes");
+
+    const orderArg = queryBuilder.orderBy.mock.calls[0]?.[0];
+    const serializedOrder = serializeExpression(orderArg);
+    expect(serializedOrder).toContain("vote.voter");
+    expect(serializedOrder).not.toContain("profile.totalVotes");
+  });
+
   it("pages bounded-window accuracy leaderboards at the database layer", async () => {
     const { queryBuilder } = mockPonderModules([]);
     const { registerLeaderboardRoutes } = await import(
