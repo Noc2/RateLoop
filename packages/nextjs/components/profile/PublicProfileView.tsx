@@ -18,6 +18,7 @@ import { useAccount } from "wagmi";
 import { ArrowLeftIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { BalanceHistory } from "~~/components/leaderboard/BalanceHistory";
 import { CategoryBars } from "~~/components/leaderboard/CategoryBars";
+import { AiRaterTrustSection } from "~~/components/profile/AiRaterTrustSection";
 import { StakeBreakdown } from "~~/components/leaderboard/StakeBreakdown";
 import { WinRateRing } from "~~/components/leaderboard/WinRateRing";
 import { FollowProfileButton } from "~~/components/shared/FollowProfileButton";
@@ -1086,6 +1087,8 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
             </div>
           ) : null}
         </div>
+
+        <AiRaterTrustSection address={normalizedAddress} ownProfile={ownProfile} />
 
         {ownProfile ? (
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,1fr)]">

@@ -261,7 +261,12 @@ test("ponderApi AI rater helpers target the declaration productization routes", 
   const requestedUrls: string[] = [];
 
   globalThis.fetch = (async input => {
-    const url = typeof input === "string" ? input : input.url;
+    const url =
+      typeof input === "string"
+        ? input
+        : input instanceof URL
+          ? input.toString()
+          : input.url;
     requestedUrls.push(url);
     return new Response(JSON.stringify({ ok: true }), {
       status: 200,

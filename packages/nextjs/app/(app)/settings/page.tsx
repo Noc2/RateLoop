@@ -7,14 +7,28 @@ import { useAccount } from "wagmi";
 import { CuryoConnectButton } from "~~/components/scaffold-eth";
 import { NotificationSettingsPanel } from "~~/components/settings/NotificationSettingsPanel";
 import { AppPageShell } from "~~/components/shared/AppPageShell";
-import { SETTINGS_FRONTEND_HASH, SETTINGS_ROUTE } from "~~/constants/routes";
+import { SETTINGS_AI_RATER_HASH, SETTINGS_FRONTEND_HASH, SETTINGS_ROUTE } from "~~/constants/routes";
 import { replaceUrlPreservingHistoryState } from "~~/lib/ui/browserHistory";
 
-type SettingsTab = "delegation" | "identity" | "notifications" | "wallet" | typeof SETTINGS_FRONTEND_HASH;
+type SettingsTab =
+  | "delegation"
+  | "identity"
+  | "notifications"
+  | "wallet"
+  | typeof SETTINGS_AI_RATER_HASH
+  | typeof SETTINGS_FRONTEND_HASH;
 
-const settingsTabs: SettingsTab[] = ["wallet", "identity", "notifications", "delegation", SETTINGS_FRONTEND_HASH];
+const settingsTabs: SettingsTab[] = [
+  "wallet",
+  "identity",
+  SETTINGS_AI_RATER_HASH,
+  "notifications",
+  "delegation",
+  SETTINGS_FRONTEND_HASH,
+];
 
 const SETTINGS_TAB_LABELS: Record<SettingsTab, string> = {
+  "ai-rater": "AI rater",
   delegation: "Delegation",
   frontend: "Frontend",
   identity: "Identity",
@@ -47,6 +61,10 @@ const WalletSettingsPanel = dynamic(
 );
 const WorldIdVerificationCard = dynamic(
   () => import("~~/components/settings/WorldIdVerificationCard").then(mod => mod.WorldIdVerificationCard),
+  { loading: SettingsSectionLoading },
+);
+const AiRaterSettingsPanel = dynamic(
+  () => import("~~/components/settings/AiRaterSettingsPanel").then(mod => mod.AiRaterSettingsPanel),
   { loading: SettingsSectionLoading },
 );
 
@@ -130,6 +148,7 @@ function SettingsPageInner() {
 
       {activeTab === "delegation" && <DelegationSection />}
       {activeTab === SETTINGS_FRONTEND_HASH && <FrontendRegistration />}
+      {activeTab === SETTINGS_AI_RATER_HASH && <AiRaterSettingsPanel address={address} />}
       {activeTab === "identity" && <WorldIdVerificationCard address={address} />}
       {activeTab === "notifications" && <NotificationSettingsPanel address={address} />}
       {activeTab === "wallet" && <WalletSettingsPanel address={address} />}
