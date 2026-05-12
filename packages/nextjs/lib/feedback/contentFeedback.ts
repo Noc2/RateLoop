@@ -88,6 +88,25 @@ function isContentFeedbackStorageUnavailableError(error: unknown, depth = 0): bo
   return depth < 3 && cause !== undefined ? isContentFeedbackStorageUnavailableError(cause, depth + 1) : false;
 }
 
+function isContentFeedbackDuplicateStorageError(error: unknown, depth = 0): boolean {
+  if (!error || typeof error !== "object") return false;
+  const maybeError = error as { code?: unknown; constraint?: unknown; message?: unknown };
+  if (maybeError.code === "23505") {
+    const constraint = typeof maybeError.constraint === "string" ? maybeError.constraint : "";
+    const message = typeof maybeError.message === "string" ? maybeError.message : "";
+    return (
+      constraint === "content_feedback_feedback_hash_unique" ||
+      constraint === "content_feedback_active_author_round_unique" ||
+      message.includes("content_feedback_feedback_hash_unique") ||
+      message.includes("content_feedback_active_author_round_unique") ||
+      message.includes("duplicate key value")
+    );
+  }
+
+  const cause = (error as { cause?: unknown }).cause;
+  return depth < 3 && cause !== undefined ? isContentFeedbackDuplicateStorageError(cause, depth + 1) : false;
+}
+
 function isContentFeedbackType(value: string): value is ContentFeedbackType {
   return CONTENT_FEEDBACK_TYPES.includes(value as ContentFeedbackType);
 }
@@ -443,6 +462,9 @@ export async function addContentFeedback(
       })
       .returning();
   } catch (error) {
+    if (isContentFeedbackDuplicateStorageError(error)) {
+      throw new ContentFeedbackDuplicateError();
+    }
     if (isContentFeedbackStorageUnavailableError(error)) {
       throw new ContentFeedbackStorageUnavailableError();
     }

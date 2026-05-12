@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   bigint,
   boolean,
@@ -107,6 +108,9 @@ export const contentFeedback = pgTable(
     contentRoundIdx: index("content_feedback_content_round_idx").on(table.contentId, table.roundId),
     authorCreatedAtIdx: index("content_feedback_author_created_at_idx").on(table.authorAddress, table.createdAt),
     feedbackHashUnique: uniqueIndex("content_feedback_feedback_hash_unique").on(table.feedbackHash),
+    activeAuthorRoundUnique: uniqueIndex("content_feedback_active_author_round_unique")
+      .on(table.contentId, table.roundId, table.authorAddress)
+      .where(sql`${table.deletedAt} IS NULL`),
   }),
 );
 
