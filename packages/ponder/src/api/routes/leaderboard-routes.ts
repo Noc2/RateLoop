@@ -16,6 +16,11 @@ import {
   resolveAccuracyLeaderboardWindow,
   type AccuracyLeaderboardSortBy,
 } from "../leaderboard-utils.js";
+import {
+  profileTotalContentExpr,
+  profileTotalRewardsClaimedExpr,
+  profileTotalVotesExpr,
+} from "../profile-aggregate-expressions.js";
 import type { ApiApp } from "../shared.js";
 import { jsonBig } from "../shared.js";
 import { safeBigInt, safeLimit, safeOffset } from "../utils.js";
@@ -83,21 +88,35 @@ export function registerLeaderboardRoutes(app: ApiApp) {
     const limit = safeLimit(c.req.query("limit"), 20, 100);
 
     let orderBy;
+    const totalVotes = profileTotalVotesExpr(profile.address);
+    const totalContent = profileTotalContentExpr(profile.address);
+    const totalRewardsClaimed = profileTotalRewardsClaimedExpr(
+      profile.address,
+    );
     switch (type) {
       case "creators":
-        orderBy = desc(profile.totalContent);
+        orderBy = desc(totalContent);
         break;
       case "earners":
-        orderBy = desc(profile.totalRewardsClaimed);
+        orderBy = desc(totalRewardsClaimed);
         break;
       case "voters":
       default:
-        orderBy = desc(profile.totalVotes);
+        orderBy = desc(totalVotes);
         break;
     }
 
     const profileItems = await db
-      .select()
+      .select({
+        address: profile.address,
+        name: profile.name,
+        selfReport: profile.selfReport,
+        createdAt: profile.createdAt,
+        updatedAt: profile.updatedAt,
+        totalVotes,
+        totalContent,
+        totalRewardsClaimed,
+      })
       .from(profile)
       .orderBy(orderBy)
       .limit(limit);
