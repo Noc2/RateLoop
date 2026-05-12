@@ -13,7 +13,7 @@ export const RaterDeclarationRegistryAbi = [
         "internalType": "address"
       },
       {
-        "name": "lrepToken_",
+        "name": "bondToken_",
         "type": "address",
         "internalType": "contract IERC20"
       },
@@ -23,12 +23,12 @@ export const RaterDeclarationRegistryAbi = [
         "internalType": "address"
       },
       {
-        "name": "minDeclarationBondLrep_",
+        "name": "minDeclarationBondUsdc_",
         "type": "uint256",
         "internalType": "uint256"
       },
       {
-        "name": "challengeBondLrep_",
+        "name": "challengeBondUsdc_",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -128,7 +128,7 @@ export const RaterDeclarationRegistryAbi = [
   },
   {
     "type": "function",
-    "name": "MIN_CHALLENGE_BOND_LREP_FLOOR",
+    "name": "MIN_CHALLENGE_BOND_USDC_FLOOR",
     "inputs": [],
     "outputs": [
       {
@@ -154,7 +154,7 @@ export const RaterDeclarationRegistryAbi = [
   },
   {
     "type": "function",
-    "name": "MIN_DECLARATION_BOND_LREP_FLOOR",
+    "name": "MIN_DECLARATION_BOND_USDC_FLOOR",
     "inputs": [],
     "outputs": [
       {
@@ -225,7 +225,20 @@ export const RaterDeclarationRegistryAbi = [
   },
   {
     "type": "function",
-    "name": "challengeBondLrep",
+    "name": "bondToken",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract IERC20"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "challengeBondUsdc",
     "inputs": [],
     "outputs": [
       {
@@ -926,20 +939,7 @@ export const RaterDeclarationRegistryAbi = [
   },
   {
     "type": "function",
-    "name": "lrepToken",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "contract IERC20"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "minDeclarationBondLrep",
+    "name": "minDeclarationBondUsdc",
     "inputs": [],
     "outputs": [
       {
@@ -1254,12 +1254,12 @@ export const RaterDeclarationRegistryAbi = [
     "name": "setDeclarationParameters",
     "inputs": [
       {
-        "name": "minDeclarationBondLrep_",
+        "name": "minDeclarationBondUsdc_",
         "type": "uint256",
         "internalType": "uint256"
       },
       {
-        "name": "challengeBondLrep_",
+        "name": "challengeBondUsdc_",
         "type": "uint256",
         "internalType": "uint256"
       },
@@ -1632,13 +1632,13 @@ export const RaterDeclarationRegistryAbi = [
     "name": "DeclarationParametersUpdated",
     "inputs": [
       {
-        "name": "minDeclarationBondLrep",
+        "name": "minDeclarationBondUsdc",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
       },
       {
-        "name": "challengeBondLrep",
+        "name": "challengeBondUsdc",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"

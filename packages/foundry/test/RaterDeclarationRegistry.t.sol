@@ -7,7 +7,7 @@ import {RaterDeclarationRegistry} from "../contracts/RaterDeclarationRegistry.so
 
 contract RaterDeclarationRegistryTest is Test {
     RaterDeclarationRegistry internal registry;
-    MockERC20 internal lrep;
+    MockERC20 internal usdc;
 
     uint256 internal operatorPk = 0xA11CE;
     address internal operator;
@@ -18,8 +18,8 @@ contract RaterDeclarationRegistryTest is Test {
     address internal rater2 = address(0x5678);
     address internal challenger = address(0x8888);
 
-    uint256 internal constant MIN_BOND = 100e6;
-    uint256 internal constant CHALLENGE_BOND = 25e6;
+    uint256 internal constant MIN_BOND = 5e6;
+    uint256 internal constant CHALLENGE_BOND = 5e6;
     bytes32 internal constant MODEL_ID = keccak256("anthropic/claude-4.7");
     bytes32 internal constant PROVIDER = keccak256("anthropic");
     bytes32 internal constant ENDPOINT_HINT = keccak256("https://operator.example/hidden");
@@ -33,25 +33,25 @@ contract RaterDeclarationRegistryTest is Test {
 
     function setUp() public {
         operator = vm.addr(operatorPk);
-        lrep = new MockERC20("Loop Reputation", "LREP", 6);
-        registry = new RaterDeclarationRegistry(admin, governance, lrep, treasury, MIN_BOND, CHALLENGE_BOND);
+        usdc = new MockERC20("USD Coin", "USDC", 6);
+        registry = new RaterDeclarationRegistry(admin, governance, usdc, treasury, MIN_BOND, CHALLENGE_BOND);
 
-        lrep.mint(rater, 1_000e6);
-        lrep.mint(rater2, 1_000e6);
-        lrep.mint(challenger, 1_000e6);
+        usdc.mint(rater, 1_000e6);
+        usdc.mint(rater2, 1_000e6);
+        usdc.mint(challenger, 1_000e6);
 
         vm.prank(rater);
-        lrep.approve(address(registry), type(uint256).max);
+        usdc.approve(address(registry), type(uint256).max);
         vm.prank(rater2);
-        lrep.approve(address(registry), type(uint256).max);
+        usdc.approve(address(registry), type(uint256).max);
         vm.prank(challenger);
-        lrep.approve(address(registry), type(uint256).max);
+        usdc.approve(address(registry), type(uint256).max);
     }
 
     function test_ConstructorStoresParametersAndRoles() public view {
-        assertEq(address(registry.lrepToken()), address(lrep));
-        assertEq(registry.minDeclarationBondLrep(), MIN_BOND);
-        assertEq(registry.challengeBondLrep(), CHALLENGE_BOND);
+        assertEq(address(registry.bondToken()), address(usdc));
+        assertEq(registry.minDeclarationBondUsdc(), MIN_BOND);
+        assertEq(registry.challengeBondUsdc(), CHALLENGE_BOND);
         assertEq(registry.challengerRewardBps(), 5_000);
         assertEq(registry.challengeResolutionWindow(), registry.DEFAULT_CHALLENGE_RESOLUTION_WINDOW());
         assertEq(registry.treasury(), treasury);
@@ -68,19 +68,19 @@ contract RaterDeclarationRegistryTest is Test {
     }
 
     function test_ConstructorRejectsBondsBelowHardFloors() public {
-        uint256 minDeclarationBondFloor = registry.MIN_DECLARATION_BOND_LREP_FLOOR();
-        uint256 challengeBondFloor = registry.MIN_CHALLENGE_BOND_LREP_FLOOR();
+        uint256 minDeclarationBondFloor = registry.MIN_DECLARATION_BOND_USDC_FLOOR();
+        uint256 challengeBondFloor = registry.MIN_CHALLENGE_BOND_USDC_FLOOR();
 
         vm.expectRevert(RaterDeclarationRegistry.InvalidConfig.selector);
-        new RaterDeclarationRegistry(admin, governance, lrep, treasury, minDeclarationBondFloor - 1, challengeBondFloor);
+        new RaterDeclarationRegistry(admin, governance, usdc, treasury, minDeclarationBondFloor - 1, challengeBondFloor);
 
         vm.expectRevert(RaterDeclarationRegistry.InvalidConfig.selector);
-        new RaterDeclarationRegistry(admin, governance, lrep, treasury, minDeclarationBondFloor, challengeBondFloor - 1);
+        new RaterDeclarationRegistry(admin, governance, usdc, treasury, minDeclarationBondFloor, challengeBondFloor - 1);
     }
 
     function test_SetDeclarationParametersRejectsBondsBelowHardFloors() public {
-        uint256 minDeclarationBondFloor = registry.MIN_DECLARATION_BOND_LREP_FLOOR();
-        uint256 challengeBondFloor = registry.MIN_CHALLENGE_BOND_LREP_FLOOR();
+        uint256 minDeclarationBondFloor = registry.MIN_DECLARATION_BOND_USDC_FLOOR();
+        uint256 challengeBondFloor = registry.MIN_CHALLENGE_BOND_USDC_FLOOR();
 
         vm.startPrank(admin);
 
@@ -94,14 +94,14 @@ contract RaterDeclarationRegistryTest is Test {
     }
 
     function test_SetDeclarationParametersAllowsValuesAtOrAboveHardFloors() public {
-        uint256 nextMinBond = registry.MIN_DECLARATION_BOND_LREP_FLOOR() + 50e6;
-        uint256 nextChallengeBond = registry.MIN_CHALLENGE_BOND_LREP_FLOOR() + 10e6;
+        uint256 nextMinBond = registry.MIN_DECLARATION_BOND_USDC_FLOOR() + 50e6;
+        uint256 nextChallengeBond = registry.MIN_CHALLENGE_BOND_USDC_FLOOR() + 10e6;
 
         vm.prank(admin);
         registry.setDeclarationParameters(nextMinBond, nextChallengeBond, 4_000, treasury);
 
-        assertEq(registry.minDeclarationBondLrep(), nextMinBond);
-        assertEq(registry.challengeBondLrep(), nextChallengeBond);
+        assertEq(registry.minDeclarationBondUsdc(), nextMinBond);
+        assertEq(registry.challengeBondUsdc(), nextChallengeBond);
         assertEq(registry.challengerRewardBps(), 4_000);
     }
 
@@ -307,7 +307,9 @@ contract RaterDeclarationRegistryTest is Test {
 
         assertEq(registry.activeOperatorDeclarations(operator), 1);
         assertEq(registry.operatorBondReserved(operator), MIN_BOND);
-        assertEq(registry.retiredDeclarationBondReleaseAt(rater), block.timestamp + registry.RETIRED_DECLARATION_BOND_LOCK());
+        assertEq(
+            registry.retiredDeclarationBondReleaseAt(rater), block.timestamp + registry.RETIRED_DECLARATION_BOND_LOCK()
+        );
         RaterDeclarationRegistry.StoredDeclaration memory stored = registry.getDeclaration(rater);
         assertEq(uint256(stored.tier), uint256(RaterDeclarationRegistry.RaterTier.A0));
 
@@ -326,12 +328,12 @@ contract RaterDeclarationRegistryTest is Test {
         assertEq(registry.declarationBondOperator(rater), address(0));
         assertEq(registry.declarationBondAmount(rater), 0);
 
-        uint256 operatorBalanceBefore = lrep.balanceOf(operator);
+        uint256 operatorBalanceBefore = usdc.balanceOf(operator);
         vm.prank(operator);
         registry.withdrawRetiredOperatorBond(MIN_BOND);
 
         assertEq(registry.operatorBond(operator), 0);
-        assertEq(lrep.balanceOf(operator), operatorBalanceBefore + MIN_BOND);
+        assertEq(usdc.balanceOf(operator), operatorBalanceBefore + MIN_BOND);
     }
 
     function test_ExpiredDeclarationBondCanBeReleasedAfterGracePeriod() public {
@@ -352,10 +354,10 @@ contract RaterDeclarationRegistryTest is Test {
         assertEq(uint256(registry.getDeclaration(rater).tier), uint256(RaterDeclarationRegistry.RaterTier.A0));
         assertFalse(registry.hasActiveAiDeclaration(rater));
 
-        uint256 operatorBalanceBefore = lrep.balanceOf(operator);
+        uint256 operatorBalanceBefore = usdc.balanceOf(operator);
         vm.prank(operator);
         registry.withdrawRetiredOperatorBond(MIN_BOND);
-        assertEq(lrep.balanceOf(operator), operatorBalanceBefore + MIN_BOND);
+        assertEq(usdc.balanceOf(operator), operatorBalanceBefore + MIN_BOND);
     }
 
     function test_ExpiredDeclarationBondReleaseBeforeGracePeriodReverts() public {
@@ -399,8 +401,8 @@ contract RaterDeclarationRegistryTest is Test {
         vm.prank(challenger);
         uint256 challengeId = registry.openChallenge(rater, EVIDENCE_HASH);
 
-        uint256 challengerBefore = lrep.balanceOf(challenger);
-        uint256 treasuryBefore = lrep.balanceOf(treasury);
+        uint256 challengerBefore = usdc.balanceOf(challenger);
+        uint256 treasuryBefore = usdc.balanceOf(treasury);
 
         vm.prank(admin);
         registry.resolveChallenge(challengeId, true, 5_000, RESOLUTION_HASH);
@@ -409,8 +411,8 @@ contract RaterDeclarationRegistryTest is Test {
         assertEq(uint256(challenge.status), uint256(RaterDeclarationRegistry.ChallengeStatus.Sustained));
         assertEq(registry.operatorBond(operator), MIN_BOND / 2);
         assertEq(registry.operatorBondReserved(operator), 0);
-        assertEq(lrep.balanceOf(challenger), challengerBefore + CHALLENGE_BOND + 25e6);
-        assertEq(lrep.balanceOf(treasury), treasuryBefore + 25e6);
+        assertEq(usdc.balanceOf(challenger), challengerBefore + CHALLENGE_BOND + (MIN_BOND / 4));
+        assertEq(usdc.balanceOf(treasury), treasuryBefore + (MIN_BOND / 4));
         assertEq(registry.activeOperatorDeclarations(operator), 0);
 
         RaterDeclarationRegistry.StoredDeclaration memory stored = registry.getDeclaration(rater);
@@ -423,7 +425,7 @@ contract RaterDeclarationRegistryTest is Test {
         vm.prank(challenger);
         uint256 challengeId = registry.openChallenge(rater, EVIDENCE_HASH);
 
-        uint256 treasuryBefore = lrep.balanceOf(treasury);
+        uint256 treasuryBefore = usdc.balanceOf(treasury);
 
         vm.prank(admin);
         registry.resolveChallenge(challengeId, false, 0, RESOLUTION_HASH);
@@ -431,7 +433,7 @@ contract RaterDeclarationRegistryTest is Test {
         RaterDeclarationRegistry.Challenge memory challenge = registry.getChallenge(challengeId);
         assertEq(uint256(challenge.status), uint256(RaterDeclarationRegistry.ChallengeStatus.Rejected));
         assertEq(registry.operatorBond(operator), MIN_BOND);
-        assertEq(lrep.balanceOf(treasury), treasuryBefore + CHALLENGE_BOND);
+        assertEq(usdc.balanceOf(treasury), treasuryBefore + CHALLENGE_BOND);
         assertEq(registry.tierMultiplierBps(rater), 10_500);
         assertEq(registry.openOperatorChallenges(operator), 0);
         assertEq(registry.openDeclarationChallenges(_declarationKey(rater, 1)), 0);
@@ -492,14 +494,14 @@ contract RaterDeclarationRegistryTest is Test {
 
         vm.prank(challenger);
         uint256 challengeId = registry.openChallenge(rater, EVIDENCE_HASH);
-        uint256 treasuryBefore = lrep.balanceOf(treasury);
+        uint256 treasuryBefore = usdc.balanceOf(treasury);
 
         vm.warp(registry.getChallenge(challengeId).expiresAt);
         registry.expireChallenge(challengeId);
 
         RaterDeclarationRegistry.Challenge memory challenge = registry.getChallenge(challengeId);
         assertEq(uint256(challenge.status), uint256(RaterDeclarationRegistry.ChallengeStatus.Expired));
-        assertEq(lrep.balanceOf(treasury), treasuryBefore + CHALLENGE_BOND);
+        assertEq(usdc.balanceOf(treasury), treasuryBefore + CHALLENGE_BOND);
         assertEq(registry.openOperatorChallenges(operator), 0);
         assertEq(registry.openDeclarationChallenges(_declarationKey(rater, 1)), 0);
         assertEq(registry.tierMultiplierBps(rater), 10_500);
@@ -571,7 +573,9 @@ contract RaterDeclarationRegistryTest is Test {
         assertEq(registry.operatorBondReserved(operator), MIN_BOND);
         assertEq(registry.activeOperatorDeclarations(operator), 1);
         assertEq(uint256(registry.getDeclaration(rater).tier), uint256(RaterDeclarationRegistry.RaterTier.A0));
-        assertEq(uint256(registry.getDeclaration(rater2).tier), uint256(RaterDeclarationRegistry.RaterTier.A1Unverified));
+        assertEq(
+            uint256(registry.getDeclaration(rater2).tier), uint256(RaterDeclarationRegistry.RaterTier.A1Unverified)
+        );
     }
 
     function _submitDefaultDeclaration(bool requestProbe) internal {

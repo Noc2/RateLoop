@@ -6,6 +6,7 @@ import {console} from "forge-std/console.sol";
 import {TransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import {TimelockController} from "@openzeppelin/contracts/governance/TimelockController.sol";
 import {IVotes} from "@openzeppelin/contracts/governance/utils/IVotes.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {LoopReputation} from "../contracts/LoopReputation.sol";
 import {ContentRegistry} from "../contracts/ContentRegistry.sol";
 import {RoundVotingEngine} from "../contracts/RoundVotingEngine.sol";
@@ -38,8 +39,8 @@ contract DeployRateLoop is ScaffoldETHDeploy {
     uint256 public constant TREASURY_AMOUNT = 32_000_000 * 1e6;
     uint256 public constant PARTICIPATION_POOL_AMOUNT = 0;
     uint256 public constant LAUNCH_DISTRIBUTION_AMOUNT = TOTAL_SUPPLY_CAP - CONSENSUS_POOL_AMOUNT - TREASURY_AMOUNT;
-    uint256 public constant MIN_AI_DECLARATION_BOND = 100 * 1e6;
-    uint256 public constant AI_DECLARATION_CHALLENGE_BOND = 25 * 1e6;
+    uint256 public constant MIN_AI_DECLARATION_BOND_USDC = 5 * 1e6;
+    uint256 public constant AI_DECLARATION_CHALLENGE_BOND_USDC = 5 * 1e6;
 
     address internal constant WORLD_CHAIN_MAINNET_USDC = 0x79A02482A880bCE3F13e09Da970dC34db4CD24d1;
     address internal constant WORLD_CHAIN_SEPOLIA_USDC = 0x66145f38cBAC35Ca6F1Dfb4914dF98F1614aeA88;
@@ -159,21 +160,6 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         uint256 worldIdExternalNullifierHash = _resolveWorldIdExternalNullifierHash(isLocalDev, worldIdAction);
         bytes32 worldIdScope = keccak256(bytes(worldIdAction));
 
-        CategoryRegistry categoryRegistry = new CategoryRegistry(deployer, governance);
-        RaterRegistry raterRegistry = new RaterRegistry(
-            deployer,
-            governance,
-            worldIdRouterAddress,
-            worldIdScope,
-            worldIdExternalNullifierHash,
-            WORLD_ID_CREDENTIAL_TTL_SECONDS
-        );
-        RaterDeclarationRegistry raterDeclarationRegistry = new RaterDeclarationRegistry(
-            deployer, governance, lrepToken, governance, MIN_AI_DECLARATION_BOND, AI_DECLARATION_CHALLENGE_BOND
-        );
-        VoterIdNFT optionalIdentity = new VoterIdNFT(deployer, governance);
-        optionalIdentity.setStakeRecorder(address(votingEngine));
-
         address usdcTokenAddress;
         MockERC20 localUsdcToken;
         if (isLocalDev) {
@@ -184,6 +170,26 @@ contract DeployRateLoop is ScaffoldETHDeploy {
             usdcTokenAddress = _resolveWorldChainUsdcAddress();
             console.log("Circle USDC resolved at:", usdcTokenAddress);
         }
+
+        CategoryRegistry categoryRegistry = new CategoryRegistry(deployer, governance);
+        RaterRegistry raterRegistry = new RaterRegistry(
+            deployer,
+            governance,
+            worldIdRouterAddress,
+            worldIdScope,
+            worldIdExternalNullifierHash,
+            WORLD_ID_CREDENTIAL_TTL_SECONDS
+        );
+        RaterDeclarationRegistry raterDeclarationRegistry = new RaterDeclarationRegistry(
+            deployer,
+            governance,
+            IERC20(usdcTokenAddress),
+            governance,
+            MIN_AI_DECLARATION_BOND_USDC,
+            AI_DECLARATION_CHALLENGE_BOND_USDC
+        );
+        VoterIdNFT optionalIdentity = new VoterIdNFT(deployer, governance);
+        optionalIdentity.setStakeRecorder(address(votingEngine));
 
         TransparentUpgradeableProxy questionRewardPoolEscrowProxy = new TransparentUpgradeableProxy(
             address(questionRewardPoolEscrowImpl),

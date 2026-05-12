@@ -1,7 +1,7 @@
 import { getParsedError } from "./getParsedError";
 import { AllowedChainIds } from "./networks";
 import { notification } from "./notification";
-import { RoundVotingEngineAbi } from "@rateloop/contracts/abis";
+import { RaterDeclarationRegistryAbi, RoundVotingEngineAbi } from "@rateloop/contracts/abis";
 import deployedContractsData from "@rateloop/contracts/deployedContracts";
 import { MutateOptions } from "@tanstack/react-query";
 import {
@@ -50,13 +50,25 @@ function withCurrentAbiOverrides<TContracts extends GenericContractsDeclaration>
   const normalized = { ...declarations } as GenericContractsDeclaration;
 
   for (const [chainId, contractsForChain] of Object.entries(declarations)) {
-    if (contractsForChain.RoundVotingEngine) {
+    if (contractsForChain.RaterDeclarationRegistry || contractsForChain.RoundVotingEngine) {
       normalized[Number(chainId)] = {
         ...contractsForChain,
-        RoundVotingEngine: {
-          ...contractsForChain.RoundVotingEngine,
-          abi: RoundVotingEngineAbi as Abi,
-        },
+        ...(contractsForChain.RaterDeclarationRegistry
+          ? {
+              RaterDeclarationRegistry: {
+                ...contractsForChain.RaterDeclarationRegistry,
+                abi: RaterDeclarationRegistryAbi as Abi,
+              },
+            }
+          : {}),
+        ...(contractsForChain.RoundVotingEngine
+          ? {
+              RoundVotingEngine: {
+                ...contractsForChain.RoundVotingEngine,
+                abi: RoundVotingEngineAbi as Abi,
+              },
+            }
+          : {}),
       };
     }
   }
