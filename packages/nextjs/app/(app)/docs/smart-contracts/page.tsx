@@ -135,7 +135,7 @@ const SmartContracts: NextPage = () => {
             </tr>
             <tr>
               <td className="font-mono text-primary">RewardMath</td>
-              <td>Library: pool split (90/5/4/1) and reward calculations</td>
+              <td>Library: 5% revealed-loser rebate, 91/3/1/5 remaining-pool split, and reward calculations</td>
               <td>&mdash;</td>
             </tr>
             <tr>

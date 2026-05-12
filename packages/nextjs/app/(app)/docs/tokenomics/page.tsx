@@ -185,7 +185,7 @@ const Tokenomics = () => {
         receive a smaller payout for useful participation. Bundle bounties can require multiple settlement round sets;
         each set requires every bundled question to settle once and is claimed independently. If the commit-attributed
         frontend is not payable, that share stays with the rater claim. Bounty required-rater terms cannot exceed the
-        question&apos;s selected rater cap.
+        question&apos;s selected rater cap, and bounty-paying questions currently keep that cap at 200 or lower.
       </p>
       <h3 id="feedback-bonuses">Feedback Bonuses</h3>
       <p>

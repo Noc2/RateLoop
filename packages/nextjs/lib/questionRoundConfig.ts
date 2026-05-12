@@ -43,7 +43,7 @@ export const DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS: QuestionRoundConfigBounds = {
   minSettlementVoters: 3,
   maxSettlementVoters: 100,
   minVoterCap: 3,
-  maxVoterCap: 10_000,
+  maxVoterCap: 1_000,
 };
 
 export function serializeQuestionRoundConfig(config: QuestionRoundConfig): SerializedQuestionRoundConfig {

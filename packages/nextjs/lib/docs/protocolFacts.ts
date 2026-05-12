@@ -47,7 +47,7 @@ const ROUND_CONFIG_BOUNDS = {
   minSettlementVoters: 3,
   maxSettlementVoters: 100,
   minVoterCap: 3,
-  maxVoterCap: 10_000,
+  maxVoterCap: 1_000,
 } as const;
 
 function effectiveRawSharePercent(bucketBps: number): number {
@@ -178,7 +178,7 @@ export const whitepaperSettlementConfigRows: string[][] = [
   [
     "maxVoters",
     `${protocolDocFacts.maxVotersLabel} default`,
-    "Creator-selected cap on raters for the question and upper bound for bounty required-rater terms",
+    "Creator-selected cap on raters for the question; bounty-paying questions must keep this cap at 200 or lower",
   ],
   [
     "revealGracePeriod",
