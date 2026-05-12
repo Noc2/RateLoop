@@ -1359,18 +1359,20 @@ contract RoundVotingEngine is
             epochUnrevealedCount[contentId][roundId],
             frontendEligibleAtCommit[contentId][roundId],
             roundPerFrontendStake[contentId][roundId],
-            roundStakeWithEligibleFrontend[contentId][roundId],
-            roundEligibleFrontendCount[contentId][roundId],
-            contentId,
-            roundId,
-            commitKey,
-            isUp,
-            predictedUpBps,
-            salt,
-            _getRoundReferenceRatingBps(contentId, roundId),
-            _rbtsRevealQuorum(roundCfg.minVoters),
-            targetRoundRevealableAt,
-            commitRaterWeightBps[contentId][roundId][commitKey]
+            RoundRevealLib.RevealRbtsParams({
+                currentEligibleFrontendStake: roundStakeWithEligibleFrontend[contentId][roundId],
+                currentEligibleFrontendCount: roundEligibleFrontendCount[contentId][roundId],
+                contentId: contentId,
+                roundId: roundId,
+                commitKey: commitKey,
+                isUp: isUp,
+                predictedUpBps: predictedUpBps,
+                salt: salt,
+                roundReferenceRatingBps: _getRoundReferenceRatingBps(contentId, roundId),
+                minVoters: _rbtsRevealQuorum(roundCfg.minVoters),
+                targetRoundRevealableAt: targetRoundRevealableAt,
+                raterWeightBps: commitRaterWeightBps[contentId][roundId][commitKey]
+            })
         );
         roundStakeWithEligibleFrontend[contentId][roundId] = eligibleFrontendStake;
         roundEligibleFrontendCount[contentId][roundId] = eligibleFrontendCount;

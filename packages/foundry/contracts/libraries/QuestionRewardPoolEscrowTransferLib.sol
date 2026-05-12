@@ -11,6 +11,7 @@ library QuestionRewardPoolEscrowTransferLib {
 
     function pullExactToken(IERC20 token, address funder, uint256 amount) external returns (uint256 receivedAmount) {
         uint256 balanceBefore = token.balanceOf(address(this));
+        // aderyn-fp-next-line(arbitrary-transfer-from)
         token.safeTransferFrom(funder, address(this), amount);
         receivedAmount = token.balanceOf(address(this)) - balanceBefore;
         require(receivedAmount == amount, "Bad token");

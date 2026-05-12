@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import { IVoterIdNFT } from "../interfaces/IVoterIdNFT.sol";
 import { ContentRegistry } from "../ContentRegistry.sol";
 import { RoundVotingEngine } from "../RoundVotingEngine.sol";
@@ -8,6 +9,8 @@ import { RoundLib } from "./RoundLib.sol";
 import { RewardPool, RoundSnapshot } from "./QuestionRewardPoolEscrowTypes.sol";
 
 library QuestionRewardPoolEscrowQualificationLib {
+    using SafeCast for uint256;
+
     uint256 internal constant MIN_EFFECTIVE_PARTICIPANT_UNITS = 3;
     uint256 internal constant BPS_SCALE = 10_000;
 
@@ -127,15 +130,15 @@ library QuestionRewardPoolEscrowQualificationLib {
         }
         uint256 claimDeadline = block.timestamp > settledAt ? block.timestamp : settledAt;
         if (claimDeadline > rewardPool.claimDeadline) {
-            rewardPool.claimDeadline = uint64(claimDeadline);
+            rewardPool.claimDeadline = claimDeadline.toUint64();
         }
-        rewardPool.nextRoundToEvaluate = uint64(roundId + 1);
+        rewardPool.nextRoundToEvaluate = (roundId + 1).toUint64();
         rewardPool.unallocatedAmount -= allocation;
 
         roundSnapshots[rewardPoolId][roundId] = RoundSnapshot({
             qualified: true,
-            eligibleVoters: uint32(effectiveUnits),
-            rawEligibleVoters: uint32(rawEligible),
+            eligibleVoters: effectiveUnits.toUint32(),
+            rawEligibleVoters: rawEligible.toUint32(),
             allocation: allocation,
             claimedCount: 0,
             frontendFeeAllocation: frontendFeeAllocation,
