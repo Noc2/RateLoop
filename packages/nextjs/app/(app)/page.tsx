@@ -102,7 +102,7 @@ const FALLBACK_SOCIAL_PROOF_STATS = {
 function SectionHeading({ number, title, gradientText }: { number: string; title: string; gradientText: string }) {
   return (
     <div className="mb-12 sm:mb-16">
-      <span className="mb-6 block font-mono text-sm tracking-widest text-base-content/40">{number}</span>
+      <span className="mb-6 block font-mono text-sm tracking-widest text-base-content/70">{number}</span>
       <h2 className="display-section text-[2.35rem] text-base-content sm:text-[3.25rem] lg:text-[3.9rem] xl:text-[4.15rem]">
         {title} <span className="rateloop-text-gradient">{gradientText}</span>
       </h2>

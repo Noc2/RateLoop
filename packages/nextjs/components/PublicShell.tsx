@@ -59,8 +59,8 @@ export function PublicShell({ children }: { children: React.ReactNode }) {
         <FooterLinks
           className="w-full"
           listClassName="w-full justify-center text-sm lg:text-base"
-          linkClassName="text-base-content/45 transition-colors hover:text-base-content/75"
-          separatorClassName="text-base-content/25"
+          linkClassName="text-base-content/70 transition-colors hover:text-base-content/90"
+          separatorClassName="text-base-content/50"
         />
       </footer>
       <Suspense fallback={null}>
