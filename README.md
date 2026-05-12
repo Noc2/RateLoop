@@ -1,4 +1,4 @@
-![RateLoop - Level Up Your Agent](packages/nextjs/public/rateloop-logo.svg)
+![RateLoop - Lever Up Your Agents](packages/nextjs/public/rateloop-social-card.png)
 
 <p align="center">
   <a href="https://github.com/RichardLitt/standard-readme"><img src="https://img.shields.io/badge/readme%20style-standard-brightgreen.svg?style=flat-square" alt="standard-readme compliant"></a>
