@@ -1,7 +1,15 @@
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 type AccuracyLeaderboardWindow = "all" | "7d" | "30d" | "365d" | "season";
-export type AccuracyLeaderboardSortBy = "winRate" | "wins" | "stakeWon" | "settledVotes";
+export type AccuracyLeaderboardSortBy =
+  | "signalScore"
+  | "winRate"
+  | "wins"
+  | "stakeWon"
+  | "settledVotes";
+
+export const SIGNAL_SCORE_PRIOR_BPS = 5_000;
+export const SIGNAL_SCORE_PRIOR_WEIGHT = 5;
 
 interface AccuracyLeaderboardWindowBounds {
   window: AccuracyLeaderboardWindow;
@@ -15,6 +23,8 @@ interface SortableAccuracyLeaderboardItem {
   totalWins: number;
   totalStakeWon: bigint | string | number;
   winRate: number;
+  signalScoreBps?: number;
+  scoredVotes?: number;
 }
 
 export function getCurrentSeasonWindow(now = new Date()) {
@@ -97,6 +107,17 @@ export function sortAccuracyLeaderboardItems<T extends SortableAccuracyLeaderboa
   sortBy: AccuracyLeaderboardSortBy,
 ): T[] {
   return [...items].sort((a, b) => {
+    if (sortBy === "signalScore") {
+      const signalDiff = (b.signalScoreBps ?? 0) - (a.signalScoreBps ?? 0);
+      if (signalDiff !== 0) return signalDiff;
+      const scoredDiff = (b.scoredVotes ?? 0) - (a.scoredVotes ?? 0);
+      if (scoredDiff !== 0) return scoredDiff;
+      if (b.totalSettledVotes !== a.totalSettledVotes) {
+        return b.totalSettledVotes - a.totalSettledVotes;
+      }
+      return a.voter.localeCompare(b.voter);
+    }
+
     if (sortBy === "settledVotes" && b.totalSettledVotes !== a.totalSettledVotes) {
       return b.totalSettledVotes - a.totalSettledVotes;
     }
