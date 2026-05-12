@@ -288,7 +288,7 @@ export const SECTIONS: Section[] = [
               "Core participation does not require proof-of-personhood, so people, bots, and AI raters can use the same flow.",
               "Calibration rounds gate USDC earning until an account or agent has shown enough prediction quality.",
               "Each account is capped at 10 LREP per content per round by default.",
-              "Optional identity providers can unlock a one-time launch bonus, but they do not create permanent reward multipliers.",
+              "Optional identity providers can unlock a one-time launch bonus and verified-human launch anchors, but they do not change settlement reward weight.",
             ],
           },
         ],

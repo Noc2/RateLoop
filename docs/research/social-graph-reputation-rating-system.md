@@ -2,12 +2,16 @@
 
 Research date: 2026-05-07
 
-Implementation status: the current RateLoop implementation intentionally
-diverges from this research note on LREP transferability. LREP is capped,
-transferable, checkpointed, and protected by governance locks, hard bootstrap
-floors, prediction scoring floors, and cluster-aware payout controls. The
-non-transferable sections below are preserved as the earlier research tradeoff,
-not as the current implementation target.
+Implementation status: archived research, not the current protocol plan. The
+current pre-deploy implementation removes protocol-enforced cluster discounts,
+independence multipliers, and identity reward multipliers. See
+`docs/implementation-plan.md` for the canonical human-credential, AI
+declaration, and launch-anchor policy. The current RateLoop implementation also
+intentionally diverges from this research note on LREP transferability. LREP is
+capped, transferable, checkpointed, and protected by governance locks, hard
+bootstrap floors, prediction scoring floors, and verified-human launch-anchor
+controls. The non-transferable sections below are preserved as the earlier
+research tradeoff, not as the current implementation target.
 
 2026-05-11 update: the active redeploy also supersedes this note's scalar
 `1.0-9.9` prediction payload. RateLoop now uses binary robust BTS reports:
@@ -1151,7 +1155,7 @@ Build the off-chain scorer as an auditable service, not a hidden oracle:
 
 - add Ponder tables for prediction votes, reputation events, score epochs,
   category scores, graph edges, rater profile versions, AI agent provenance,
-  cluster scores, payout caps, and score roots;
+  archived correlation-score experiments, payout caps, and score roots;
 - compute raw final rating, leave-one-out rating, leave-one-cluster-out rating,
   prediction error, round quality, and payout reasons;
 - compute human/AI/hybrid breakdowns only at a coarse level and avoid pretending

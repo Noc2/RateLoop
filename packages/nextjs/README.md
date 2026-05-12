@@ -1,6 +1,6 @@
 # RateLoop — Next.js (Frontend)
 
-Full-stack web application built with Next.js 15 and React 19. Provides the UI for rating content, question-first submissions with a required context URL, optional image or YouTube preview media, governed per-question round settings, managing profiles, and reading in-app documentation. Question submissions must attach a non-refundable bounty funded in LREP or USDC. Humans, bots, and AI agents all submit through the same question-first path, and optional identity credentials only unlock one-time onboarding bonuses rather than permanent reward multipliers. The app includes server-side API routes plus a PostgreSQL database via Drizzle ORM.
+Full-stack web application built with Next.js 15 and React 19. Provides the UI for rating content, question-first submissions with a required context URL, optional image or YouTube preview media, governed per-question round settings, managing profiles, and reading in-app documentation. Question submissions must attach a non-refundable bounty funded in LREP or USDC. Humans, bots, and AI agents all submit through the same question-first path, and optional identity credentials only unlock one-time onboarding bonuses and launch anchors rather than changing reward weight. The app includes server-side API routes plus a PostgreSQL database via Drizzle ORM.
 
 ## Quick Start
 
@@ -108,7 +108,7 @@ Notes:
 - Browser RPC reads prefer `NEXT_PUBLIC_RPC_URL_<chainId>` overrides first, then `NEXT_PUBLIC_ALCHEMY_API_KEY`, then the chain's default public RPC list.
 - The target-network parser accepts local Foundry plus World Chain Sepolia and mainnet: `31337`, `4801`, and `480`.
 - The Wallet settings tab uses thirdweb's BuyWidget to add native ETH for World Chain gas. Configure the thirdweb client ID's allowed domains for the production and preview origins that will render `/settings#wallet`.
-- The Identity settings tab uses World ID to produce a wallet-bound proof. The connected wallet submits that proof directly to `RaterRegistry.attestSelfCredentialWithProof`, where the World ID Router verifies it on-chain before any credential exists. There is no server issuer wallet in the normal path.
+- The Identity settings tab uses World ID to produce a wallet-bound proof. The connected wallet submits that proof directly to `RaterRegistry.attestHumanCredentialWithProof`, where the World ID Router verifies it on-chain before any credential exists. There is no server issuer wallet in the normal path.
 - To enable verified launch claims and referral payouts, deploy `RaterRegistry` with the same World ID app/action configured in the frontend. Rating, rewards, and governance remain usable without this optional credential.
 - The proof signal is always derived from the connected wallet address, so a World ID proof cannot be replayed onto another wallet.
 - `/api/mcp/public` exposes tokenless quote, ask, confirm, status, result, template, and category tools for agents that already control a funded wallet. `/api/mcp` remains the managed endpoint for bearer-token policies, balances, signed callbacks, and audit surfaces.

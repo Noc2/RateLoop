@@ -58,7 +58,7 @@ const SmartContracts: NextPage = () => {
             </tr>
             <tr>
               <td className="font-mono text-primary">RaterRegistry</td>
-              <td>Optional human credentials, rater profiles, trust seeds, and cluster-score discounts</td>
+              <td>Optional human credentials, rater profiles, trust seeds, and verified-human anchor reads</td>
               <td>No</td>
             </tr>
             <tr>
@@ -344,8 +344,8 @@ const SmartContracts: NextPage = () => {
       <p>
         Manages per-content voting rounds with tlock commit-reveal voting, explicit drand metadata binding,
         epoch-weighted rewards, and deterministic settlement. One-sided rounds (consensus) receive a subsidy from the
-        consensus subsidy reserve. Rater weight can use optional human credentials, cluster discounts, and bonded AI
-        declaration tiers, with the combined positive multiplier capped at 12,500 bps.
+        consensus subsidy reserve. Commit-time reward weight is stake times the epoch timing weight; human credentials
+        and AI declaration tiers do not multiply settlement rewards.
       </p>
       <h3>Configuration</h3>
       <div className="not-prose overflow-x-auto my-6 rounded-xl bg-base-200">
@@ -516,8 +516,8 @@ const SmartContracts: NextPage = () => {
         </li>
         <li>
           <code>setRaterRegistry(...)</code> and <code>setRaterDeclarationRegistry(...)</code> &mdash; Configure the
-          optional human credential/cluster registry and the AI declaration registry used for rater-weight treatment.
-          Setting the declaration registry to zero disables declaration weighting.
+          optional human credential registry and the AI declaration registry used for launch-anchor policy. Setting the
+          declaration registry to zero disables AI-declaration launch-anchor exclusion.
         </li>
       </ul>
 
@@ -551,21 +551,14 @@ const SmartContracts: NextPage = () => {
           boosted commits and open challenge exposure cannot be escaped immediately.
         </li>
         <li>
-          <code>tierMultiplierBps(rater)</code> &mdash; Read the declaration multiplier consumed by RoundVotingEngine:
-          10,000 bps for <code>A0</code>, 10,500 bps for <code>A1Unverified</code>, and 11,500 bps for{" "}
-          <code>A1Verified</code>, falling back to 10,000 bps when the declaration is not yet effective, expired,
-          retired, or locked by an open challenge.
-        </li>
-        <li>
           <code>hasActiveAiDeclaration(rater)</code> &mdash; Read the active AI declaration status used for human-anchor
-          exclusion without conflating it with the reward multiplier.
+          exclusion without changing the reward weight.
         </li>
       </ul>
       <p>
-        Verified agent declarations are model-accountability signals, not proof-of-personhood. They can receive bounded
-        reward-weight treatment, but they do not count as verified-human anchors for earned launch rewards or the
-        one-time human verification bonus. Launch-anchor exclusion is based on each commit&apos;s AI declaration
-        snapshot.
+        Verified agent declarations are model-accountability signals, not proof-of-personhood. They do not count as
+        verified-human anchors for earned launch rewards or the one-time human verification bonus. Launch-anchor
+        exclusion is based on each commit&apos;s AI declaration snapshot.
       </p>
 
       <hr />

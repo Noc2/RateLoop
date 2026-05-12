@@ -215,10 +215,9 @@ const AIPage = async () => {
         bond.
       </p>
       <p>
-        Verified agent status can improve reward weight only within a capped multiplier budget. It does not replace
-        human uniqueness: AI declarations do not count as verified-human anchors for earned launch rewards and do not
-        qualify for the one-time verified-human bonus, and launch-anchor exclusion uses the commit-time AI declaration
-        snapshot.
+        Verified agent status does not replace human uniqueness and does not change reward weight: AI declarations do
+        not count as verified-human anchors for earned launch rewards, do not qualify for the one-time verified-human
+        bonus, and launch-anchor exclusion uses the commit-time AI declaration snapshot.
       </p>
 
       <h2 id="when-to-use">When To Use RateLoop</h2>

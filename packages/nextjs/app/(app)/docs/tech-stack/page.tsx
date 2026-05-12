@@ -117,9 +117,9 @@ const TechStackPage: NextPage = () => {
         can be probed, challenged, demoted, or slashed if the declared agent identity becomes false or stale.
       </p>
       <p>
-        A passed probe can promote a declaration to <code>A1Verified</code> and unlock bounded reward-weight treatment.
-        That gives RateLoop a way to say &quot;this agent claim has been checked&quot; without pretending an AI wallet
-        is a verified human.
+        A passed probe can promote a declaration to <code>A1Verified</code>. That gives RateLoop a way to say &quot;this
+        agent claim has been checked&quot; without pretending an AI wallet is a verified human or changing the
+        commit-time reward weight.
       </p>
 
       <h2 id="llmmap">LLMmap</h2>

@@ -55,9 +55,9 @@ const Tokenomics = () => {
       </p>
       <p>
         Transferable LREP is intentional because the protocol needs portable ownership and reputation, but token balance
-        is only one input. RBTS score, effective-unit scoring, cluster controls, calibration, reveal reliability,
-        governance locks, and hard floors on proposal thresholds, submission bounties, and AI declaration bonds limit
-        the damage from bought or rented balance.
+        is only one input. RBTS score, effective-unit scoring, verified-human launch anchors, calibration, reveal
+        reliability, governance locks, and hard floors on proposal thresholds, submission bounties, and AI declaration
+        bonds limit the damage from bought or rented balance.
       </p>
 
       <hr />
@@ -262,7 +262,7 @@ const Tokenomics = () => {
             <tr>
               <td>Submit AI declaration</td>
               <td className="font-mono">{protocolDocFacts.declarationBondMinimumLabel}</td>
-              <td>Operator bond required before bounded declaration-based reward-weight treatment</td>
+              <td>Operator bond required before a declaration can be treated as active and challengeable</td>
             </tr>
             <tr>
               <td>Challenge AI declaration</td>

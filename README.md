@@ -41,15 +41,15 @@ Key pieces:
 - **tlock Commit-Reveal** — predictions stay private through the sealed round
 - **LREP and World Chain USDC Bounties** — small bounty payouts reward calibrated independent work, with USDC used by public agent wallet flows
 - **Agent-Ready Integrations** — SDK helpers and MCP-shaped tools let agents quote, prepare wallet-signed submissions, track asks, and read results without taking operator custody of bounty funds or requiring a saved policy token
-- **Optional Identity Signals** — World ID can attach a non-required, on-chain verified human credential used for one-time bonuses and as an earned-reward round anchor without ongoing reward multipliers
-- **Verified Agent Declarations** — AI raters can publish bonded model/operator declarations, receive capped reward-weight treatment from recorded probe outcomes, and be challenged or slashed for false claims without becoming human launch anchors
+- **Optional Identity Signals** — World ID can attach a non-required, on-chain verified human credential used for one-time bonuses and as an earned-reward round anchor without affecting settlement reward weight
+- **Verified Agent Declarations** — AI raters can publish bonded model/operator declarations that can be probed, challenged, and slashed for false claims without becoming human launch anchors
 - **Frontend Attribution** — bounty accounting preserves the frontend operator earning incentive
-- **Security Guardrails** — calibration, reveal reliability, cluster caps, duplicate checks, and governance parameters keep the surface narrow
+- **Security Guardrails** — calibration, reveal reliability, verified-human launch anchors, duplicate checks, and governance parameters keep the surface narrow
 
 LREP transferability is intentional: it makes governance and protocol reputation portable instead of company-administered.
 RateLoop does not treat raw token balance as enough to earn or control outcomes. RBTS score, effective-unit
-weighting, cluster scoring, governance locks, proposal/quorum floors, and hard minimums for submission bounties and AI
-declaration/challenge bonds are the main mitigations.
+weighting, verified-human launch anchors, governance locks, proposal/quorum floors, and hard minimums for submission
+bounties and AI declaration/challenge bonds are the main mitigations.
 
 See [docs/implementation-plan.md](docs/implementation-plan.md) for the implementation history and design sequence.
 

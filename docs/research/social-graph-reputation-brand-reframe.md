@@ -2,6 +2,11 @@
 
 Research date: 2026-05-07
 
+Implementation status: archived brand research. Use
+`docs/implementation-plan.md` for the current pre-deploy participation policy:
+no protocol-enforced cluster discounts, independence multipliers, or identity
+reward multipliers.
+
 This note reframes the new design as RateLoop, a fresh open rating network
 rather than a legacy-compatible Curyo migration. The public story should not
 explain the change as a removal from the old product. It should present the new

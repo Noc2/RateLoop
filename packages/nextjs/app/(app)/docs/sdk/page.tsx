@@ -73,7 +73,7 @@ const { items: contentItems } = await curyo.read.searchContent({
 const { frontend } = await curyo.read.getFrontend(
   "0x1234567890123456789012345678901234567890",
 );
-const rewardStatus = await curyo.read.getRaterRewardStatus(
+const participationStatus = await curyo.read.getRaterParticipationStatus(
   "0xAgentOrRaterWallet",
 );`}</code>
       </pre>

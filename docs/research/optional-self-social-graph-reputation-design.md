@@ -2,10 +2,14 @@
 
 Research date: 2026-05-07
 
-Implementation status: this is an optional-design research note. The current
-RateLoop implementation intentionally uses capped transferable LREP, with
-governance locks, hard economic floors, and cluster-aware controls. Any
-non-transferable reputation recommendations below describe an alternative design
+Implementation status: archived optional-design research, not the current
+protocol plan. The current pre-deploy implementation removes protocol-enforced
+cluster discounts, independence multipliers, and identity reward multipliers.
+See `docs/implementation-plan.md` for the canonical human-credential, AI
+declaration, and launch-anchor policy. RateLoop also intentionally uses capped
+transferable LREP, with governance locks, hard economic floors, and
+verified-human launch-anchor controls. Any non-transferable reputation
+recommendations below describe an alternative design
 path rather than the current implementation target.
 
 2026-05-11 update: this note also predates the binary robust BTS redeploy. The

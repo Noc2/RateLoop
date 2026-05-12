@@ -94,9 +94,9 @@ const GovernanceDocs: NextPage = () => {
       </div>
       <p>
         Transferable LREP is an explicit launch choice, not an accidental cash-vote shortcut. Rating and payout
-        influence are mitigated by prediction-accuracy scoring, effective-unit weighting, cluster controls, calibration
-        and reveal reliability, while governance uses timelocks, voting locks, a quorum floor, and a proposal-threshold
-        floor.
+        influence are mitigated by prediction-accuracy scoring, effective-unit weighting, verified-human launch anchors,
+        calibration and reveal reliability, while governance uses timelocks, voting locks, a quorum floor, and a
+        proposal-threshold floor.
       </p>
 
       <h2 id="round-settings-bounds">Round Settings Bounds</h2>
