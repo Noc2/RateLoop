@@ -139,8 +139,8 @@ test.describe("Tied round lifecycle", () => {
     // Trigger the keeper to reveal votes via its API.
     // The keeper reads committed votes on-chain and calls revealVoteByCommitKey.
     // In E2E, we trigger a keeper run by calling its endpoint or just fast-forward
-    // and let the keeper poll loop handle it. Since UI votes use transferAndCall(),
-    // the keeper's _revealCommits will decode the mock ciphertext and reveal.
+    // and let the keeper poll loop handle it. UI votes are commitVote writes,
+    // and the keeper decodes the mock ciphertext before revealing.
     //
     // Wait a bit for the keeper to pick up the reveals
     await waitForPonderSync();
