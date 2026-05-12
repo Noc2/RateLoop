@@ -65,6 +65,14 @@ const STREAK_MILESTONES = [
 const AI_RATER_TIERS = ["A0", "A1Unverified", "A1Verified"] as const;
 const RATER_TYPES = ["Unknown", "Human", "AI", "Team", "Hybrid"] as const;
 
+function voteMatchesVoter(address: `0x${string}`) {
+  return or(eq(vote.voter, address), eq(vote.identityVoter, address));
+}
+
+function voteMatchesAnyVoter(addresses: `0x${string}`[]) {
+  return or(inArray(vote.voter, addresses), inArray(vote.identityVoter, addresses));
+}
+
 function aiTierName(tier: number | null | undefined) {
   return AI_RATER_TIERS[tier ?? 0] ?? "A0";
 }
@@ -276,7 +284,7 @@ export function registerDataRoutes(app: ApiApp) {
         and(
           eq(vote.contentId, questionBundleRound.contentId),
           eq(vote.roundId, questionBundleRound.roundId),
-          inArray(vote.voter, voterAddrs),
+          voteMatchesAnyVoter(voterAddrs),
           eq(vote.revealed, true),
         ),
       )
@@ -1068,7 +1076,7 @@ export function registerDataRoutes(app: ApiApp) {
       .leftJoin(category, eq(content.categoryId, category.id))
       .where(
         and(
-          eq(vote.voter, address),
+          voteMatchesVoter(address),
           eq(vote.revealed, true),
           eq(round.state, ROUND_STATE.Settled),
           gte(round.settledAt, categoryCutoff),
@@ -1182,7 +1190,7 @@ export function registerDataRoutes(app: ApiApp) {
     if (voterRaw) {
       if (!isValidAddress(voterRaw))
         return c.json({ error: "Invalid voter address" }, 400);
-      conditions.push(eq(vote.voter, voterRaw.toLowerCase() as `0x${string}`));
+      conditions.push(voteMatchesVoter(voterRaw.toLowerCase() as `0x${string}`));
     }
     if (contentId) {
       const parsed = safeBigInt(contentId);
@@ -1208,6 +1216,8 @@ export function registerDataRoutes(app: ApiApp) {
         contentId: vote.contentId,
         roundId: vote.roundId,
         voter: vote.voter,
+        identityVoter: vote.identityVoter,
+        voterId: vote.voterId,
         commitHash: vote.commitHash,
         targetRound: vote.targetRound,
         drandChainHash: vote.drandChainHash,
@@ -1294,7 +1304,7 @@ export function registerDataRoutes(app: ApiApp) {
       .from(vote)
       .where(
         and(
-          inArray(vote.voter, voters),
+          voteMatchesAnyVoter(voters),
           inArray(vote.contentId, contentIds),
           gte(vote.committedAt, activeCooldownCutoff),
         ),
@@ -1359,7 +1369,7 @@ export function registerDataRoutes(app: ApiApp) {
       )
       .where(
         and(
-          inArray(vote.voter, voterAddrs),
+          voteMatchesAnyVoter(voterAddrs),
           eq(vote.revealed, true),
           eq(round.state, ROUND_STATE.Settled),
           sql`${vote.roundId} >= ${questionRewardPool.startRoundId}`,

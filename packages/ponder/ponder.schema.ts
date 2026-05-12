@@ -155,10 +155,12 @@ export const roundRelations = relations(round, ({ many, one }) => ({
 export const vote = onchainTable(
   "vote",
   (t) => ({
-    id: t.text().primaryKey(), // `${contentId}-${roundId}-${voter}`
+    id: t.text().primaryKey(), // `${contentId}-${roundId}-${voter}` where voter is the raw commit address
     contentId: t.bigint().notNull(),
     roundId: t.bigint().notNull(),
-    voter: t.hex().notNull(),
+    voter: t.hex().notNull(), // raw commit/stake-payer address
+    identityVoter: t.hex(), // resolved Voter ID holder at commit time, or voter when no Voter ID is used
+    voterId: t.bigint(), // resolved Voter ID token at commit time, when available
     commitHash: t.hex().notNull(),
     targetRound: t.bigint().notNull(),
     drandChainHash: t.hex().notNull(),
@@ -179,6 +181,7 @@ export const vote = onchainTable(
   }),
   (table) => ({
     voterIdx: index().on(table.voter),
+    identityVoterIdx: index().on(table.identityVoter),
     contentIdx: index().on(table.contentId),
     roundIdx: index().on(table.roundId),
     contentRoundIdx: index().on(table.contentId, table.roundId),

@@ -1,6 +1,10 @@
 import { ponder } from "ponder:registry";
 import { asc, eq, and } from "ponder";
-import { encodePacked, keccak256 } from "viem";
+import { encodePacked, isAddress, keccak256, zeroAddress } from "viem";
+import {
+  RoundVotingEngineAbi,
+  VoterIdNFTAbi,
+} from "@rateloop/contracts/abis";
 import {
   DEFAULT_ROUND_CONFIG,
   ROUND_STATE,
@@ -27,6 +31,86 @@ import {
 const RBTS_SCORE_SCALE_BPS = 10_000;
 const RBTS_SCORE_SCALE = 10_000n;
 const ZERO_SCORE_SEED = `0x${"00".repeat(32)}` as `0x${string}`;
+
+function normalizeAddress(address: string | null | undefined): `0x${string}` | null {
+  if (!address || !isAddress(address)) return null;
+  return address.toLowerCase() as `0x${string}`;
+}
+
+function firstContractAddress(address: unknown): `0x${string}` | null {
+  const value = Array.isArray(address) ? address[0] : address;
+  return typeof value === "string" ? normalizeAddress(value) : null;
+}
+
+async function readRoundVoterIdNFTAddress(
+  context: any,
+  contentId: bigint,
+  roundId: bigint,
+) {
+  const fallbackAddress = firstContractAddress(context.contracts?.VoterIdNFT?.address);
+  const engineAddress = firstContractAddress(context.contracts?.RoundVotingEngine?.address);
+  if (!context.client?.readContract || !engineAddress) return fallbackAddress;
+
+  try {
+    const snapshot = await context.client.readContract({
+      abi: RoundVotingEngineAbi,
+      address: engineAddress,
+      functionName: "roundVoterIdNFTSnapshot",
+      args: [contentId, roundId],
+    });
+    const snapshotAddress = normalizeAddress(String(snapshot));
+    if (snapshotAddress && snapshotAddress !== zeroAddress) return snapshotAddress;
+  } catch {
+    // Older/local test contexts may not expose readContract. Fall back to the configured NFT.
+  }
+
+  return fallbackAddress;
+}
+
+async function resolveVoteIdentityAtCommit(params: {
+  context: any;
+  contentId: bigint;
+  roundId: bigint;
+  voter: `0x${string}`;
+}) {
+  const rawVoter = normalizeAddress(params.voter) ?? params.voter;
+  const voterIdNFTAddress = await readRoundVoterIdNFTAddress(
+    params.context,
+    params.contentId,
+    params.roundId,
+  );
+  if (!params.context.client?.readContract || !voterIdNFTAddress) {
+    return { identityVoter: rawVoter, voterId: null as bigint | null };
+  }
+
+  try {
+    const voterId = await params.context.client.readContract({
+      abi: VoterIdNFTAbi,
+      address: voterIdNFTAddress,
+      functionName: "getTokenId",
+      args: [rawVoter],
+    }) as bigint;
+    if (voterId === 0n) return { identityVoter: rawVoter, voterId: null };
+
+    const holder = await params.context.client.readContract({
+      abi: VoterIdNFTAbi,
+      address: voterIdNFTAddress,
+      functionName: "getHolder",
+      args: [voterId],
+    });
+    const holderAddress = normalizeAddress(String(holder));
+    return {
+      identityVoter: holderAddress && holderAddress !== zeroAddress ? holderAddress : rawVoter,
+      voterId,
+    };
+  } catch {
+    return { identityVoter: rawVoter, voterId: null };
+  }
+}
+
+function voteIdentity(voteRow: { voter: `0x${string}`; identityVoter?: `0x${string}` | null }) {
+  return voteRow.identityVoter ?? voteRow.voter;
+}
 
 function defaultRoundConfigFields() {
   return {
@@ -338,7 +422,14 @@ ponder.on("RoundVotingEngine:VoteCommitted", async ({ event, context }) => {
     stake: bigint;
   };
   const roundKey = `${contentId}-${roundId}`;
-  const voteKey = `${contentId}-${roundId}-${voter}`;
+  const rawVoter = normalizeAddress(voter) ?? voter;
+  const { identityVoter, voterId } = await resolveVoteIdentityAtCommit({
+    context,
+    contentId,
+    roundId,
+    voter: rawVoter,
+  });
+  const voteKey = `${contentId}-${roundId}-${rawVoter}`;
   const referenceRatingBps = Number(roundReferenceRatingBps);
 
   // Upsert round record — VoteCommitted is the first event for a new round
@@ -387,7 +478,9 @@ ponder.on("RoundVotingEngine:VoteCommitted", async ({ event, context }) => {
       id: voteKey,
       contentId,
       roundId,
-      voter,
+      voter: rawVoter,
+      identityVoter,
+      voterId,
       commitHash,
       targetRound,
       drandChainHash,
@@ -430,10 +523,10 @@ ponder.on("RoundVotingEngine:VoteCommitted", async ({ event, context }) => {
   }
 
   // Update voter profile aggregate
-  const existingProfile = await context.db.find(profile, { address: voter });
+  const existingProfile = await context.db.find(profile, { address: identityVoter });
   if (existingProfile) {
     await context.db
-      .update(profile, { address: voter })
+      .update(profile, { address: identityVoter })
       .set((row) => ({ totalVotes: row.totalVotes + 1 }));
   }
 
@@ -456,14 +549,14 @@ ponder.on("RoundVotingEngine:VoteCommitted", async ({ event, context }) => {
   // --- Daily streak tracking ---
   const date = new Date(Number(event.block.timestamp) * 1000);
   const dateStr = formatUtcDateKey(date);
-  const activityKey = `${voter}-${dateStr}`;
+  const activityKey = `${identityVoter}-${dateStr}`;
 
   // Upsert daily activity
   await context.db
     .insert(dailyVoteActivity)
     .values({
       id: activityKey,
-      voter,
+      voter: identityVoter,
       date: dateStr,
       voteCount: 1,
       firstVoteAt: event.block.timestamp,
@@ -476,10 +569,10 @@ ponder.on("RoundVotingEngine:VoteCommitted", async ({ event, context }) => {
   const yesterdayStr = getPreviousUtcDateKey(dateStr);
 
   // Upsert voter streak
-  const existingStreak = await context.db.find(voterStreak, { voter });
+  const existingStreak = await context.db.find(voterStreak, { voter: identityVoter });
   if (!existingStreak) {
     await context.db.insert(voterStreak).values({
-      voter,
+      voter: identityVoter,
       currentDailyStreak: 1,
       bestDailyStreak: 1,
       lastActiveDate: dateStr,
@@ -489,7 +582,7 @@ ponder.on("RoundVotingEngine:VoteCommitted", async ({ event, context }) => {
   } else if (normalizeUtcDateKey(existingStreak.lastActiveDate) === dateStr) {
     // Already active today — no streak change
     if (existingStreak.lastActiveDate !== dateStr) {
-      await context.db.update(voterStreak, { voter }).set({
+      await context.db.update(voterStreak, { voter: identityVoter }).set({
         lastActiveDate: dateStr,
       });
     }
@@ -499,7 +592,7 @@ ponder.on("RoundVotingEngine:VoteCommitted", async ({ event, context }) => {
   ) {
     // Consecutive day — increment streak
     const newStreak = existingStreak.currentDailyStreak + 1;
-    await context.db.update(voterStreak, { voter }).set({
+    await context.db.update(voterStreak, { voter: identityVoter }).set({
       currentDailyStreak: newStreak,
       bestDailyStreak: Math.max(existingStreak.bestDailyStreak, newStreak),
       lastActiveDate: dateStr,
@@ -507,7 +600,7 @@ ponder.on("RoundVotingEngine:VoteCommitted", async ({ event, context }) => {
     });
   } else {
     // Gap — reset streak to 1 (also reset milestones to match on-chain)
-    await context.db.update(voterStreak, { voter }).set({
+    await context.db.update(voterStreak, { voter: identityVoter }).set({
       currentDailyStreak: 1,
       lastActiveDate: dateStr,
       totalActiveDays: existingStreak.totalActiveDays + 1,
@@ -754,10 +847,12 @@ ponder.on("RoundVotingEngine:RoundSettled", async ({ event, context }) => {
         ? 0n
         : v.stake;
 
+    const identityVoter = voteIdentity(v);
+
     await context.db
       .insert(voterStats)
       .values({
-        voter: v.voter,
+        voter: identityVoter,
         totalSettledVotes: 1,
         totalWins: won ? 1 : 0,
         totalLosses: won ? 0 : 1,
@@ -786,12 +881,12 @@ ponder.on("RoundVotingEngine:RoundSettled", async ({ event, context }) => {
       });
 
     if (categoryId > 0n) {
-      const catStatsId = `${v.voter}-${categoryId}`;
+      const catStatsId = `${identityVoter}-${categoryId}`;
       await context.db
         .insert(voterCategoryStats)
         .values({
           id: catStatsId,
-          voter: v.voter,
+          voter: identityVoter,
           categoryId,
           totalSettledVotes: 1,
           totalWins: won ? 1 : 0,

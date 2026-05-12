@@ -38,6 +38,10 @@ import {
 
 type SqlCondition = ReturnType<typeof sql>;
 
+function voteMatchesVoter(address: `0x${string}`) {
+  return or(eq(vote.voter, address), eq(vote.identityVoter, address));
+}
+
 function profileSelection() {
   const totalVotes = profileTotalVotesExpr(profile.address);
   const totalContent = profileTotalContentExpr(profile.address);
@@ -815,7 +819,7 @@ export function registerContentRoutes(app: ApiApp) {
           eq(vote.roundId, round.roundId),
         ),
       )
-      .where(and(eq(vote.voter, voterAddr), eq(round.state, ROUND_STATE.Open)));
+      .where(and(voteMatchesVoter(voterAddr), eq(round.state, ROUND_STATE.Open)));
 
     return jsonBig(c, {
       activeStake: activeResult?.total ?? "0",
@@ -899,7 +903,7 @@ export function registerContentRoutes(app: ApiApp) {
     const [voteSummary] = await db
       .select({ count: sql<number>`count(*)` })
       .from(vote)
-      .where(eq(vote.voter, address));
+      .where(voteMatchesVoter(address));
 
     const [contentSummary] = await db
       .select({ count: sql<number>`count(*)` })
@@ -929,6 +933,8 @@ export function registerContentRoutes(app: ApiApp) {
         contentId: vote.contentId,
         roundId: vote.roundId,
         voter: vote.voter,
+        identityVoter: vote.identityVoter,
+        voterId: vote.voterId,
         commitHash: vote.commitHash,
         targetRound: vote.targetRound,
         drandChainHash: vote.drandChainHash,
@@ -964,7 +970,7 @@ export function registerContentRoutes(app: ApiApp) {
           eq(vote.roundId, round.roundId),
         ),
       )
-      .where(eq(vote.voter, address))
+      .where(voteMatchesVoter(address))
       .orderBy(desc(vote.committedAt))
       .limit(20);
 

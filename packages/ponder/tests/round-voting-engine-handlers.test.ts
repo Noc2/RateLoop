@@ -356,6 +356,84 @@ describe("RoundVotingEngine ponder handlers", () => {
     });
   });
 
+  it("attributes delegated Voter ID commits to the holder identity", async () => {
+    const delegate = "0x0000000000000000000000000000000000000001";
+    const holder = "0x0000000000000000000000000000000000000002";
+    const voterIdNft = "0x0000000000000000000000000000000000000777";
+    const readContract = vi.fn(async ({ functionName }: { functionName: string }) => {
+      if (functionName === "roundVoterIdNFTSnapshot") return "0x0000000000000000000000000000000000000000";
+      if (functionName === "getTokenId") return 42n;
+      if (functionName === "getHolder") return holder;
+      return null;
+    });
+    const { db, insertCalls } = createDb({
+      existingRound: {
+        id: "7-2",
+        startTime: 1_000n,
+        epochDuration: 600,
+        voteCount: 1,
+        totalStake: 10n,
+      },
+    });
+    const registeredHandlers = await loadHandlers();
+    const handler = registeredHandlers.get("RoundVotingEngine:VoteCommitted");
+
+    expect(handler).toBeDefined();
+
+    await handler!({
+      event: {
+        args: {
+          contentId: 7n,
+          roundId: 2n,
+          voter: delegate,
+          commitHash: `0x${"11".repeat(32)}`,
+          roundReferenceRatingBps: 7200,
+          targetRound: 123n,
+          drandChainHash: `0x${"22".repeat(32)}`,
+          stake: 10n,
+        },
+        block: {
+          number: 43n,
+          timestamp: 1_601n,
+        },
+        log: {
+          logIndex: 9,
+        },
+      },
+      context: {
+        db,
+        client: { readContract },
+        contracts: {
+          RoundVotingEngine: { address: "0x0000000000000000000000000000000000000666" },
+          VoterIdNFT: { address: voterIdNft },
+        },
+      },
+    });
+
+    expect(insertCalls).toContainEqual({
+      table: "vote",
+      values: expect.objectContaining({
+        id: `7-2-${delegate}`,
+        voter: delegate,
+        identityVoter: holder,
+        voterId: 42n,
+      }),
+    });
+    expect(insertCalls).toContainEqual({
+      table: "dailyVoteActivity",
+      values: expect.objectContaining({
+        id: `${holder}-1970-01-01`,
+        voter: holder,
+      }),
+    });
+    expect(insertCalls).toContainEqual({
+      table: "voterStreak",
+      values: expect.objectContaining({
+        voter: holder,
+      }),
+    });
+  });
+
   it("stores revealed RBTS votes and updates compatibility pools", async () => {
     const voter = "0x0000000000000000000000000000000000000001";
     const { db, updateCalls } = createDb({

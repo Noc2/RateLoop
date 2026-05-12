@@ -2,7 +2,11 @@ import { sql } from "ponder";
 import { content, rewardClaim, vote } from "ponder:schema";
 
 export function profileTotalVotesExpr(addressExpr: unknown) {
-  return sql<number>`(select count(*) from ${vote} where ${vote.voter} = ${addressExpr})`;
+  return sql<number>`(
+    select count(*)
+    from ${vote}
+    where ${vote.voter} = ${addressExpr} or ${vote.identityVoter} = ${addressExpr}
+  )`;
 }
 
 export function profileTotalContentExpr(addressExpr: unknown) {
