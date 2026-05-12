@@ -5,15 +5,17 @@ RateLoop exposes SDK, MCP, and JSON routes so agents can quote, submit, fund, tr
 ## Use The SDK When
 
 - You are building a TypeScript agent or app.
-- You need helper functions for question specs, result templates, vote commits, or agent result parsing.
+- You need helper functions for hosted reads, result templates, vote commits, or agent result parsing.
 - You need typed hosted reads, including `read.getRaterRewardStatus(address)` for human credential state, stored and reward-effective AI declaration tier, probe status, challenge status, and the indexed chain timestamp used for that status.
-- You want a local signer CLI for an agent-controlled encrypted keystore.
+- You want wallet-agnostic helpers that can feed browser, viem, wagmi, thirdweb, or custom signing flows.
 
 ## Use Public MCP When
 
 - The agent host supports remote MCP.
 - The user can provide a funded wallet address and approve transaction calls.
 - You want standard tool calls such as `curyo_quote_question`, `curyo_ask_humans`, and `curyo_get_result`.
+
+The exported TypeScript helpers and MCP tool names currently retain the `Curyo`/`curyo_` namespace for compatibility while the package, docs, and public protocol are RateLoop.
 
 Public MCP endpoint:
 

@@ -46,6 +46,10 @@ const SdkPage: NextPage = () => {
         </a>{" "}
         if you want to inspect the current implementation or track new helpers as they land.
       </p>
+      <p>
+        The exported TypeScript helpers currently retain the <code>Curyo</code> namespace for compatibility while the
+        package, docs, and public protocol are RateLoop.
+      </p>
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
         <code>{`import { packVoteRoundContext } from "@rateloop/contracts";
 import { createCuryoClient } from "@rateloop/sdk";

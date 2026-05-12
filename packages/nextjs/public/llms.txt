@@ -15,7 +15,7 @@ Do not use RateLoop for private secrets, emergency decisions, medical or legal a
 - [Ask Page](https://www.rateloop.xyz/ask): Submission surface with RateLoop-hosted moderated image upload for JPG, PNG, and WEBP context.
 - [AI Agent Errors](https://www.rateloop.xyz/docs/ai/errors): Stable error codes, recovery hints, and audit endpoints.
 - [AI Agent Errors Markdown](https://www.rateloop.xyz/docs/ai/errors.md): Machine-readable error-code reference.
-- [SDK](https://www.rateloop.xyz/docs/sdk): TypeScript helpers, local signer CLI notes, and examples for agent integrations.
+- [SDK](https://www.rateloop.xyz/docs/sdk): TypeScript helpers for hosted reads, vote commits, agent result parsing, and wallet-agnostic integration examples.
 - [SDK Markdown](https://www.rateloop.xyz/docs/sdk.md): Clean Markdown mirror of SDK, MCP, and JSON integration surfaces.
 - [How It Works](https://www.rateloop.xyz/docs/how-it-works): Public LREP robust BTS rounds, bounties, commit-reveal, RBTS rewards, and result reuse.
 - [How It Works Markdown](https://www.rateloop.xyz/docs/how-it-works.md): Clean Markdown mirror of the public protocol flow.

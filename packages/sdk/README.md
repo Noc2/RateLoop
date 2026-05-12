@@ -16,6 +16,8 @@ Framework-agnostic frontend SDK foundations for integrating RateLoop into existi
 - RBTS vote/frontend helpers for building transaction parameters, including the redeployed tlock metadata bindings
 - small, wallet-agnostic write helpers
 
+The exported helper names currently retain the Curyo namespace for compatibility while the package, docs, and public protocol are RateLoop.
+
 Framework-specific hooks and UI components should live in a follow-up package rather than this core SDK.
 
 ## Available Today
