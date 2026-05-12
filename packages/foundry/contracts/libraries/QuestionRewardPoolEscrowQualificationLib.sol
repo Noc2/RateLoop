@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
-import { IVoterIdNFT } from "../interfaces/IVoterIdNFT.sol";
-import { ContentRegistry } from "../ContentRegistry.sol";
-import { RoundVotingEngine } from "../RoundVotingEngine.sol";
-import { RoundLib } from "./RoundLib.sol";
-import { RewardPool, RoundSnapshot } from "./QuestionRewardPoolEscrowTypes.sol";
+import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import {IVoterIdNFT} from "../interfaces/IVoterIdNFT.sol";
+import {ContentRegistry} from "../ContentRegistry.sol";
+import {RoundVotingEngine} from "../RoundVotingEngine.sol";
+import {RoundLib} from "./RoundLib.sol";
+import {RewardPool, RoundSnapshot} from "./QuestionRewardPoolEscrowTypes.sol";
 
 library QuestionRewardPoolEscrowQualificationLib {
     using SafeCast for uint256;
@@ -252,15 +252,15 @@ library QuestionRewardPoolEscrowQualificationLib {
                     uint256 claimWeight = _claimWeight(ctx.votingEngine, ctx.contentId, ctx.roundId, commitKey);
                     if (claimWeight > 0) {
                         totalClaimWeight += claimWeight;
-                        uint256 participantUnits =
-                            ctx.votingEngine.commitRaterWeightBps(ctx.contentId, ctx.roundId, commitKey);
+                        uint256 participantUnits = BPS_SCALE;
                         effectiveParticipantUnits += participantUnits;
 
                         bytes32 clusterKey = ctx.votingEngine.commitClusterKey(ctx.contentId, ctx.roundId, commitKey);
                         if (clusterKey == bytes32(0)) {
                             clusterKey = keccak256(abi.encodePacked("rateloop:wallet-cluster", voter));
                         }
-                        (uint256 clusterIndex, bool found) = _clusterIndex(distinctClusterKeys, clusterCount, clusterKey);
+                        (uint256 clusterIndex, bool found) =
+                            _clusterIndex(distinctClusterKeys, clusterCount, clusterKey);
                         if (!found) {
                             distinctClusterKeys[clusterCount] = clusterKey;
                             clusterIndex = clusterCount;
@@ -277,10 +277,9 @@ library QuestionRewardPoolEscrowQualificationLib {
                 ++i;
             }
         }
-        locoEffectiveParticipantUnits =
-            effectiveParticipantUnits > largestClusterEffectiveUnits
-                ? effectiveParticipantUnits - largestClusterEffectiveUnits
-                : 0;
+        locoEffectiveParticipantUnits = effectiveParticipantUnits > largestClusterEffectiveUnits
+            ? effectiveParticipantUnits - largestClusterEffectiveUnits
+            : 0;
     }
 
     function _clusterIndex(bytes32[] memory clusterKeys, uint256 clusterCount, bytes32 clusterKey)
@@ -304,7 +303,7 @@ library QuestionRewardPoolEscrowQualificationLib {
         returns (uint256)
     {
         if (!votingEngine.roundRbtsScored(contentId, roundId)) {
-            return votingEngine.commitRaterWeightBps(contentId, roundId, commitKey);
+            return BPS_SCALE;
         }
         return votingEngine.commitRbtsRewardWeight(contentId, roundId, commitKey);
     }

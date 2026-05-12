@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
-import { RobustBtsMath } from "./RobustBtsMath.sol";
-import { RoundLib } from "./RoundLib.sol";
-import { TlockVoteLib } from "./TlockVoteLib.sol";
+import {RobustBtsMath} from "./RobustBtsMath.sol";
+import {RoundLib} from "./RoundLib.sol";
+import {TlockVoteLib} from "./TlockVoteLib.sol";
 
 /// @title RoundRevealLib
 /// @notice Shared reveal accounting extracted from RoundVotingEngine to reduce runtime size.
@@ -30,7 +30,6 @@ library RoundRevealLib {
         uint16 roundReferenceRatingBps;
         uint16 minVoters;
         uint256 targetRoundRevealableAt;
-        uint16 raterWeightBps;
     }
 
     function revealRbtsVote(
@@ -89,7 +88,7 @@ library RoundRevealLib {
             round.downCount++;
         }
 
-        effectiveStake = _effectiveStake(commit.stakeAmount, commit.epochIndex, params.raterWeightBps);
+        effectiveStake = _effectiveStake(commit.stakeAmount, commit.epochIndex);
         if (params.isUp) {
             round.weightedUpPool += effectiveStake;
         } else {
@@ -113,9 +112,9 @@ library RoundRevealLib {
         voter = commit.voter;
     }
 
-    function _effectiveStake(uint64 stakeAmount, uint8 epochIndex, uint16 raterWeightBps) private pure returns (uint64) {
+    function _effectiveStake(uint64 stakeAmount, uint8 epochIndex) private pure returns (uint64) {
         if (stakeAmount == 0) return 0;
         uint256 epochWeightBps = RoundLib.epochWeightBps(epochIndex);
-        return ((uint256(stakeAmount) * epochWeightBps * uint256(raterWeightBps)) / 100_000_000).toUint64();
+        return ((uint256(stakeAmount) * epochWeightBps) / 10_000).toUint64();
     }
 }

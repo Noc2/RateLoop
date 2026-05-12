@@ -1,14 +1,16 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import { IFrontendRegistry } from "../interfaces/IFrontendRegistry.sol";
-import { IVoterIdNFT } from "../interfaces/IVoterIdNFT.sol";
-import { RoundVotingEngine } from "../RoundVotingEngine.sol";
-import { RewardPool, RoundSnapshot } from "./QuestionRewardPoolEscrowTypes.sol";
-import { QuestionRewardPoolEscrowQualificationLib } from "./QuestionRewardPoolEscrowQualificationLib.sol";
-import { QuestionRewardPoolEscrowVoterLib } from "./QuestionRewardPoolEscrowVoterLib.sol";
+import {IFrontendRegistry} from "../interfaces/IFrontendRegistry.sol";
+import {IVoterIdNFT} from "../interfaces/IVoterIdNFT.sol";
+import {RoundVotingEngine} from "../RoundVotingEngine.sol";
+import {RewardPool, RoundSnapshot} from "./QuestionRewardPoolEscrowTypes.sol";
+import {QuestionRewardPoolEscrowQualificationLib} from "./QuestionRewardPoolEscrowQualificationLib.sol";
+import {QuestionRewardPoolEscrowVoterLib} from "./QuestionRewardPoolEscrowVoterLib.sol";
 
 library QuestionRewardPoolEscrowClaimLib {
+    uint256 private constant BASE_PARTICIPATION_WEIGHT_BPS = 10_000;
+
     function nextEqualShare(uint256 totalAmount, uint256 eligibleVoters, uint256 claimedCount)
         external
         pure
@@ -43,9 +45,8 @@ library QuestionRewardPoolEscrowClaimLib {
     ) external view returns (uint256 grossAmount, uint256 voterReward, uint256 frontendFee, address frontendRecipient) {
         grossAmount = _nextEqualShare(allocation, eligibleVoters, claimedCount);
         uint256 reservedFrontendFee = _nextEqualShare(frontendFeeAllocation, eligibleVoters, claimedCount);
-        (voterReward, frontendFee, frontendRecipient) = _computeClaimSplit(
-            votingEngine, contentId, roundId, commitKey, frontend, grossAmount, reservedFrontendFee
-        );
+        (voterReward, frontendFee, frontendRecipient) =
+            _computeClaimSplit(votingEngine, contentId, roundId, commitKey, frontend, grossAmount, reservedFrontendFee);
     }
 
     function computeWeightedClaimSplit(
@@ -76,9 +77,8 @@ library QuestionRewardPoolEscrowClaimLib {
         reservedFrontendFee = _nextWeightedShare(
             frontendFeeAllocation, totalClaimWeight, claimWeight, claimedWeight, frontendFeeClaimedAmount
         );
-        (voterReward, frontendFee, frontendRecipient) = _computeClaimSplit(
-            votingEngine, contentId, roundId, commitKey, frontend, grossAmount, reservedFrontendFee
-        );
+        (voterReward, frontendFee, frontendRecipient) =
+            _computeClaimSplit(votingEngine, contentId, roundId, commitKey, frontend, grossAmount, reservedFrontendFee);
     }
 
     function claimableQuestionReward(
@@ -313,30 +313,23 @@ library QuestionRewardPoolEscrowClaimLib {
         )
     {
         (
-            roundSettled,
-            canQualify,
-            rawEligibleVoters,
-            effectiveParticipantUnits,
-            totalClaimWeight,
-            ,
-            ,
-            ,
-            settledAt
-        ) = QuestionRewardPoolEscrowQualificationLib.previewRoundQualification(
-            QuestionRewardPoolEscrowQualificationLib.QualificationContext({
-                votingEngine: votingEngine,
-                voterIdNft: _roundVoterIdNft(votingEngine, voterIdNFT, rewardPool.contentId, roundId),
-                contentId: rewardPool.contentId,
-                roundId: roundId,
-                bountyClosesAt: rewardPool.bountyClosesAt,
-                requiredVoters: rewardPool.requiredVoters,
-                funder: rewardPool.funder,
-                funderIdentity: rewardPoolPayerIdentity[rewardPool.id],
-                funderNullifier: rewardPoolPayerNullifier[rewardPool.id],
-                submitterIdentity: rewardPool.submitterIdentity,
-                submitterNullifier: rewardPoolSubmitterNullifier[rewardPool.id]
-            })
-        );
+            roundSettled, canQualify, rawEligibleVoters, effectiveParticipantUnits, totalClaimWeight,,,, settledAt
+        ) =
+            QuestionRewardPoolEscrowQualificationLib.previewRoundQualification(
+                QuestionRewardPoolEscrowQualificationLib.QualificationContext({
+                    votingEngine: votingEngine,
+                    voterIdNft: _roundVoterIdNft(votingEngine, voterIdNFT, rewardPool.contentId, roundId),
+                    contentId: rewardPool.contentId,
+                    roundId: roundId,
+                    bountyClosesAt: rewardPool.bountyClosesAt,
+                    requiredVoters: rewardPool.requiredVoters,
+                    funder: rewardPool.funder,
+                    funderIdentity: rewardPoolPayerIdentity[rewardPool.id],
+                    funderNullifier: rewardPoolPayerNullifier[rewardPool.id],
+                    submitterIdentity: rewardPool.submitterIdentity,
+                    submitterNullifier: rewardPoolSubmitterNullifier[rewardPool.id]
+                })
+            );
     }
 
     function _previewRoundAllocation(RewardPool storage rewardPool) private view returns (uint256 allocation) {
@@ -354,7 +347,7 @@ library QuestionRewardPoolEscrowClaimLib {
         returns (uint256)
     {
         if (!votingEngine.roundRbtsScored(contentId, roundId)) {
-            return votingEngine.commitRaterWeightBps(contentId, roundId, commitKey);
+            return BASE_PARTICIPATION_WEIGHT_BPS;
         }
         return votingEngine.commitRbtsRewardWeight(contentId, roundId, commitKey);
     }

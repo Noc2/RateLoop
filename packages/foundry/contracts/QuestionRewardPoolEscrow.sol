@@ -1,22 +1,22 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
-import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
+import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
-import { ContentRegistry } from "./ContentRegistry.sol";
-import { RoundVotingEngine } from "./RoundVotingEngine.sol";
-import { ProtocolConfig } from "./ProtocolConfig.sol";
-import { IVoterIdNFT } from "./interfaces/IVoterIdNFT.sol";
-import { RoundLib } from "./libraries/RoundLib.sol";
-import { QuestionRewardPoolEscrowBundleLib } from "./libraries/QuestionRewardPoolEscrowBundleLib.sol";
-import { QuestionRewardPoolEscrowClaimLib } from "./libraries/QuestionRewardPoolEscrowClaimLib.sol";
-import { QuestionRewardPoolEscrowQualificationLib } from "./libraries/QuestionRewardPoolEscrowQualificationLib.sol";
-import { QuestionRewardPoolEscrowTransferLib } from "./libraries/QuestionRewardPoolEscrowTransferLib.sol";
+import {ContentRegistry} from "./ContentRegistry.sol";
+import {RoundVotingEngine} from "./RoundVotingEngine.sol";
+import {ProtocolConfig} from "./ProtocolConfig.sol";
+import {IVoterIdNFT} from "./interfaces/IVoterIdNFT.sol";
+import {RoundLib} from "./libraries/RoundLib.sol";
+import {QuestionRewardPoolEscrowBundleLib} from "./libraries/QuestionRewardPoolEscrowBundleLib.sol";
+import {QuestionRewardPoolEscrowClaimLib} from "./libraries/QuestionRewardPoolEscrowClaimLib.sol";
+import {QuestionRewardPoolEscrowQualificationLib} from "./libraries/QuestionRewardPoolEscrowQualificationLib.sol";
+import {QuestionRewardPoolEscrowTransferLib} from "./libraries/QuestionRewardPoolEscrowTransferLib.sol";
 import {
     RewardPool,
     RoundSnapshot,
@@ -24,7 +24,7 @@ import {
     BundleQuestion,
     BundleRoundSetSnapshot
 } from "./libraries/QuestionRewardPoolEscrowTypes.sol";
-import { QuestionRewardPoolEscrowVoterLib } from "./libraries/QuestionRewardPoolEscrowVoterLib.sol";
+import {QuestionRewardPoolEscrowVoterLib} from "./libraries/QuestionRewardPoolEscrowVoterLib.sol";
 
 /// @title QuestionRewardPoolEscrow
 /// @notice Holds per-question USDC bounties and pays equal per-round rewards to revealed voters.
@@ -395,7 +395,7 @@ contract QuestionRewardPoolEscrow is
             uint256 submitterNullifier =
                 QuestionRewardPoolEscrowQualificationLib.resolveSubmitterNullifier(registry, voterIdNFT, contentId);
             bundleQuestions[bundleId].push(
-                BundleQuestion({ contentId: contentId, submitterNullifier: submitterNullifier })
+                BundleQuestion({contentId: contentId, submitterNullifier: submitterNullifier})
             );
             unchecked {
                 ++i;
@@ -1333,32 +1333,25 @@ contract QuestionRewardPoolEscrow is
         )
     {
         (
-            roundSettled,
-            canQualify,
-            rawEligibleVoters,
-            effectiveParticipantUnits,
-            totalClaimWeight,
-            ,
-            ,
-            ,
-            settledAt
-        ) = QuestionRewardPoolEscrowQualificationLib.previewRoundQualification(
-            QuestionRewardPoolEscrowQualificationLib.QualificationContext({
-                votingEngine: votingEngine,
-                voterIdNft: _roundVoterIdNft(rewardPool.contentId, roundId),
-                contentId: rewardPool.contentId,
-                roundId: roundId,
-                bountyClosesAt: rewardPool.bountyClosesAt,
-                requiredVoters: rewardPool.requiredVoters,
-                funder: rewardPool.funder,
-                // Use payer identity for exclusion checks so gateway-mediated payments
-                // (e.g. X402) correctly exclude the actual human payer, not the gateway contract.
-                funderIdentity: rewardPoolPayerIdentity[rewardPool.id],
-                funderNullifier: rewardPoolPayerNullifier[rewardPool.id],
-                submitterIdentity: rewardPool.submitterIdentity,
-                submitterNullifier: rewardPoolSubmitterNullifier[rewardPool.id]
-            })
-        );
+            roundSettled, canQualify, rawEligibleVoters, effectiveParticipantUnits, totalClaimWeight,,,, settledAt
+        ) =
+            QuestionRewardPoolEscrowQualificationLib.previewRoundQualification(
+                QuestionRewardPoolEscrowQualificationLib.QualificationContext({
+                    votingEngine: votingEngine,
+                    voterIdNft: _roundVoterIdNft(rewardPool.contentId, roundId),
+                    contentId: rewardPool.contentId,
+                    roundId: roundId,
+                    bountyClosesAt: rewardPool.bountyClosesAt,
+                    requiredVoters: rewardPool.requiredVoters,
+                    funder: rewardPool.funder,
+                    // Use payer identity for exclusion checks so gateway-mediated payments
+                    // (e.g. X402) correctly exclude the actual human payer, not the gateway contract.
+                    funderIdentity: rewardPoolPayerIdentity[rewardPool.id],
+                    funderNullifier: rewardPoolPayerNullifier[rewardPool.id],
+                    submitterIdentity: rewardPool.submitterIdentity,
+                    submitterNullifier: rewardPoolSubmitterNullifier[rewardPool.id]
+                })
+            );
     }
 
     function _roundQualificationStatus(RewardPool storage rewardPool, uint256 roundId)
@@ -1404,7 +1397,7 @@ contract QuestionRewardPoolEscrow is
 
     function _roundClaimWeight(uint256 contentId, uint256 roundId, bytes32 commitKey) internal view returns (uint256) {
         if (!votingEngine.roundRbtsScored(contentId, roundId)) {
-            return votingEngine.commitRaterWeightBps(contentId, roundId, commitKey);
+            return BPS_SCALE;
         }
         return votingEngine.commitRbtsRewardWeight(contentId, roundId, commitKey);
     }

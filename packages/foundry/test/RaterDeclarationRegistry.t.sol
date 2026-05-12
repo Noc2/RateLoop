@@ -143,7 +143,7 @@ contract RaterDeclarationRegistryTest is Test {
         assertEq(registry.declarationBondOperator(rater), operator);
         assertEq(registry.declarationBondAmount(rater), MIN_BOND);
         assertEq(registry.nonces(rater), 1);
-        assertEq(registry.tierMultiplierBps(rater), 10_500);
+        assertTrue(registry.hasActiveAiDeclaration(rater));
     }
 
     function test_SubmitDeclarationRejectsInvalidOperatorSignature() public {
@@ -174,7 +174,7 @@ contract RaterDeclarationRegistryTest is Test {
         assertEq(uint256(stored.tier), uint256(RaterDeclarationRegistry.RaterTier.A1Verified));
         assertFalse(stored.probePending);
         assertEq(stored.lastProbeResultHash, PROBE_RESULT_HASH);
-        assertEq(registry.tierMultiplierBps(rater), registry.MAX_TIER_MULTIPLIER_BPS());
+        assertTrue(registry.hasActiveAiDeclaration(rater));
 
         RaterDeclarationRegistry.ProbeResult memory result = registry.getLatestProbeResult(rater);
         assertEq(result.probeLibraryHash, PROBE_LIBRARY_HASH);
@@ -183,7 +183,7 @@ contract RaterDeclarationRegistryTest is Test {
         assertTrue(result.passed);
     }
 
-    function test_TierMultiplierRequiresEffectiveDeclarationWindow() public {
+    function test_AiDeclarationStatusRequiresEffectiveDeclarationWindow() public {
         RaterDeclarationRegistry.RaterDeclaration memory declaration = _declaration(1, 0, PROMPT_HASH);
         declaration.effectiveEpoch = uint64(block.timestamp + 1 days);
         bytes memory signature = _signature(declaration);
@@ -191,16 +191,14 @@ contract RaterDeclarationRegistryTest is Test {
         vm.prank(rater);
         registry.submitDeclaration(declaration, signature, MIN_BOND, false);
 
-        assertEq(registry.tierMultiplierBps(rater), 10_000);
         assertFalse(registry.hasActiveAiDeclaration(rater));
 
         vm.warp(declaration.effectiveEpoch);
 
-        assertEq(registry.tierMultiplierBps(rater), 10_500);
         assertTrue(registry.hasActiveAiDeclaration(rater));
     }
 
-    function test_TierMultiplierExpiresDeclarationWindow() public {
+    function test_AiDeclarationStatusExpiresWithDeclarationWindow() public {
         RaterDeclarationRegistry.RaterDeclaration memory declaration = _declaration(1, 0, PROMPT_HASH);
         declaration.effectiveEpoch = uint64(block.timestamp);
         declaration.expiresAtEpoch = uint64(block.timestamp + 1 days);
@@ -212,11 +210,10 @@ contract RaterDeclarationRegistryTest is Test {
         vm.prank(admin);
         registry.recordProbeResult(rater, 1, PROBE_LIBRARY_HASH, 8_500, true, PROBE_RESULT_HASH);
 
-        assertEq(registry.tierMultiplierBps(rater), registry.MAX_TIER_MULTIPLIER_BPS());
+        assertTrue(registry.hasActiveAiDeclaration(rater));
 
         vm.warp(declaration.expiresAtEpoch);
 
-        assertEq(registry.tierMultiplierBps(rater), 10_000);
         assertFalse(registry.hasActiveAiDeclaration(rater));
     }
 
@@ -249,7 +246,7 @@ contract RaterDeclarationRegistryTest is Test {
 
         RaterDeclarationRegistry.StoredDeclaration memory stored = registry.getDeclaration(rater);
         assertEq(uint256(stored.tier), uint256(RaterDeclarationRegistry.RaterTier.A1Unverified));
-        assertEq(registry.tierMultiplierBps(rater), 10_500);
+        assertTrue(registry.hasActiveAiDeclaration(rater));
     }
 
     function test_RedeclarationOnlyRequestsProbeForBehaviorChanges() public {
@@ -434,7 +431,7 @@ contract RaterDeclarationRegistryTest is Test {
         assertEq(uint256(challenge.status), uint256(RaterDeclarationRegistry.ChallengeStatus.Rejected));
         assertEq(registry.operatorBond(operator), MIN_BOND);
         assertEq(usdc.balanceOf(treasury), treasuryBefore + CHALLENGE_BOND);
-        assertEq(registry.tierMultiplierBps(rater), 10_500);
+        assertTrue(registry.hasActiveAiDeclaration(rater));
         assertEq(registry.openOperatorChallenges(operator), 0);
         assertEq(registry.openDeclarationChallenges(_declarationKey(rater, 1)), 0);
     }
@@ -445,7 +442,6 @@ contract RaterDeclarationRegistryTest is Test {
         vm.prank(challenger);
         registry.openChallenge(rater, EVIDENCE_HASH);
 
-        assertEq(registry.tierMultiplierBps(rater), 10_000);
         assertTrue(registry.hasActiveAiDeclaration(rater));
 
         RaterDeclarationRegistry.RaterDeclaration memory nextDeclaration = _declaration(2, 1, PROMPT_HASH);
@@ -504,7 +500,7 @@ contract RaterDeclarationRegistryTest is Test {
         assertEq(usdc.balanceOf(treasury), treasuryBefore + CHALLENGE_BOND);
         assertEq(registry.openOperatorChallenges(operator), 0);
         assertEq(registry.openDeclarationChallenges(_declarationKey(rater, 1)), 0);
-        assertEq(registry.tierMultiplierBps(rater), 10_500);
+        assertTrue(registry.hasActiveAiDeclaration(rater));
 
         RaterDeclarationRegistry.RaterDeclaration memory nextDeclaration = _declaration(2, 1, PROMPT_HASH);
         bytes memory nextSignature = _signature(nextDeclaration);
@@ -549,7 +545,6 @@ contract RaterDeclarationRegistryTest is Test {
         vm.prank(rater);
         registry.retireDeclaration();
 
-        assertEq(registry.tierMultiplierBps(rater), 10_000);
         assertFalse(registry.hasActiveAiDeclaration(rater));
     }
 

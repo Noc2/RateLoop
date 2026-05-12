@@ -20,7 +20,7 @@ import {Eip3009Authorization, X402QuestionSubmitter} from "../contracts/X402Ques
 import {MockQuestionRewardPoolEscrow} from "./mocks/MockQuestionRewardPoolEscrow.sol";
 import {MockVoterIdNFT} from "./mocks/MockVoterIdNFT.sol";
 
-contract MockRaterDeclarationWeightsForEscrow {
+contract MockRaterDeclarationStatusForEscrow {
     mapping(address => bool) public hasActiveAiDeclaration;
     mapping(address => bytes32) public clusterKeys;
 
@@ -30,10 +30,6 @@ contract MockRaterDeclarationWeightsForEscrow {
 
     function setClusterOperator(address rater, address operator) external {
         clusterKeys[rater] = keccak256(abi.encodePacked("rateloop:operator-cluster", operator));
-    }
-
-    function tierMultiplierBps(address) external pure returns (uint16) {
-        return 10_000;
     }
 
     function clusterKey(address rater) external view returns (bytes32) {
@@ -321,11 +317,11 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     }
 
     function testQuestionRewardsFailLocoWhenOneOperatorDominatesEligibleUnits() public {
-        MockRaterDeclarationWeightsForEscrow declarationWeights = _installRaterDeclarationWeights();
-        declarationWeights.setActiveAiDeclaration(voter1, true);
-        declarationWeights.setActiveAiDeclaration(voter2, true);
-        declarationWeights.setClusterOperator(voter1, owner);
-        declarationWeights.setClusterOperator(voter2, owner);
+        MockRaterDeclarationStatusForEscrow declarationStatus = _installRaterDeclarationStatus();
+        declarationStatus.setActiveAiDeclaration(voter1, true);
+        declarationStatus.setActiveAiDeclaration(voter2, true);
+        declarationStatus.setClusterOperator(voter1, owner);
+        declarationStatus.setClusterOperator(voter2, owner);
 
         uint256 contentId = _submitQuestion("");
         uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
@@ -347,11 +343,11 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     }
 
     function testQuestionRewardsSnapshotClusterStatsForIndependentPass() public {
-        MockRaterDeclarationWeightsForEscrow declarationWeights = _installRaterDeclarationWeights();
-        declarationWeights.setActiveAiDeclaration(voter1, true);
-        declarationWeights.setActiveAiDeclaration(voter2, true);
-        declarationWeights.setClusterOperator(voter1, owner);
-        declarationWeights.setClusterOperator(voter2, owner);
+        MockRaterDeclarationStatusForEscrow declarationStatus = _installRaterDeclarationStatus();
+        declarationStatus.setActiveAiDeclaration(voter1, true);
+        declarationStatus.setActiveAiDeclaration(voter2, true);
+        declarationStatus.setClusterOperator(voter1, owner);
+        declarationStatus.setClusterOperator(voter2, owner);
 
         uint256 contentId = _submitQuestion("");
         uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
@@ -3274,11 +3270,10 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.stopPrank();
     }
 
-    function _installRaterDeclarationWeights() internal returns (MockRaterDeclarationWeightsForEscrow declarationWeights)
-    {
-        declarationWeights = new MockRaterDeclarationWeightsForEscrow();
+    function _installRaterDeclarationStatus() internal returns (MockRaterDeclarationStatusForEscrow declarationStatus) {
+        declarationStatus = new MockRaterDeclarationStatusForEscrow();
         vm.prank(owner);
-        protocolConfig.setRaterDeclarationRegistry(address(declarationWeights));
+        protocolConfig.setRaterDeclarationRegistry(address(declarationStatus));
     }
 
     function _settleRoundWith(address[] memory voters, uint256 contentId, bool[] memory directions)

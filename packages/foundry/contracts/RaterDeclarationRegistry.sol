@@ -9,8 +9,8 @@ import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 
 /// @title RaterDeclarationRegistry
 /// @notice Bonded AI rater declarations, optional one-shot probes, drift flags, and community challenges.
-/// @dev Declarations are not proof of model identity. They create accountable metadata and a capped
-///      tier signal that cluster scoring, payout caps, and frontends can use.
+/// @dev Declarations are not proof of model identity. They create accountable metadata for challenges,
+///      probes, UI labeling, and launch policies that must exclude AI from verified-human anchors.
 contract RaterDeclarationRegistry is AccessControl, EIP712 {
     using SafeERC20 for IERC20;
 
@@ -19,7 +19,6 @@ contract RaterDeclarationRegistry is AccessControl, EIP712 {
     bytes32 public constant CHALLENGE_RESOLVER_ROLE = keccak256("CHALLENGE_RESOLVER_ROLE");
 
     uint16 public constant BPS_DENOMINATOR = 10_000;
-    uint16 public constant MAX_TIER_MULTIPLIER_BPS = 11_500;
     uint256 public constant MIN_DECLARATION_BOND_USDC_FLOOR = 5e6;
     uint256 public constant MIN_CHALLENGE_BOND_USDC_FLOOR = 5e6;
     uint64 public constant MIN_CHALLENGE_RESOLUTION_WINDOW = 1 days;
@@ -586,22 +585,6 @@ contract RaterDeclarationRegistry is AccessControl, EIP712 {
                 declaration.nonce
             )
         );
-    }
-
-    function tierMultiplierBps(address rater) external view returns (uint16) {
-        StoredDeclaration storage stored = _declarations[rater];
-        RaterTier tier = stored.tier;
-        if (!_declarationIsActive(stored.declaration)) return BPS_DENOMINATOR;
-        if (openDeclarationChallenges[_declarationKey(rater, stored.declaration.version)] != 0) {
-            return BPS_DENOMINATOR;
-        }
-        if (tier == RaterTier.A1Verified) {
-            return MAX_TIER_MULTIPLIER_BPS;
-        }
-        if (tier == RaterTier.A1Unverified) {
-            return 10_500;
-        }
-        return BPS_DENOMINATOR;
     }
 
     function hasActiveAiDeclaration(address rater) external view returns (bool) {

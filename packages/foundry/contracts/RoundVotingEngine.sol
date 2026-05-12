@@ -1,31 +1,31 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
-import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
+import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
-import { ContentRegistry } from "./ContentRegistry.sol";
-import { ProtocolConfig } from "./ProtocolConfig.sol";
-import { RoundLib } from "./libraries/RoundLib.sol";
-import { RatingLib } from "./libraries/RatingLib.sol";
-import { RoundSettlementSideEffectsLib } from "./libraries/RoundSettlementSideEffectsLib.sol";
-import { RoundSettlementDistributionLib } from "./libraries/RoundSettlementDistributionLib.sol";
-import { RoundCleanupLib } from "./libraries/RoundCleanupLib.sol";
-import { RoundRevealLib } from "./libraries/RoundRevealLib.sol";
-import { VotePreflightLib } from "./libraries/VotePreflightLib.sol";
-import { RobustBtsMath } from "./libraries/RobustBtsMath.sol";
-import { RaterWeightLib } from "./libraries/RaterWeightLib.sol";
-import { IFrontendRegistry } from "./interfaces/IFrontendRegistry.sol";
-import { ICategoryRegistry } from "./interfaces/ICategoryRegistry.sol";
-import { IRaterDeclarationClusterView } from "./interfaces/IRaterDeclarationClusterView.sol";
-import { IVoterIdNFT } from "./interfaces/IVoterIdNFT.sol";
-import { IRoundVotingEngine } from "./interfaces/IRoundVotingEngine.sol";
-import { IParticipationPool } from "./interfaces/IParticipationPool.sol";
+import {ContentRegistry} from "./ContentRegistry.sol";
+import {ProtocolConfig} from "./ProtocolConfig.sol";
+import {RoundLib} from "./libraries/RoundLib.sol";
+import {RatingLib} from "./libraries/RatingLib.sol";
+import {RoundSettlementSideEffectsLib} from "./libraries/RoundSettlementSideEffectsLib.sol";
+import {RoundSettlementDistributionLib} from "./libraries/RoundSettlementDistributionLib.sol";
+import {RoundCleanupLib} from "./libraries/RoundCleanupLib.sol";
+import {RoundRevealLib} from "./libraries/RoundRevealLib.sol";
+import {VotePreflightLib} from "./libraries/VotePreflightLib.sol";
+import {RobustBtsMath} from "./libraries/RobustBtsMath.sol";
+import {IFrontendRegistry} from "./interfaces/IFrontendRegistry.sol";
+import {ICategoryRegistry} from "./interfaces/ICategoryRegistry.sol";
+import {IRaterDeclarationStatus} from "./interfaces/IRaterDeclarationStatus.sol";
+import {IRaterDeclarationClusterView} from "./interfaces/IRaterDeclarationClusterView.sol";
+import {IVoterIdNFT} from "./interfaces/IVoterIdNFT.sol";
+import {IRoundVotingEngine} from "./interfaces/IRoundVotingEngine.sol";
+import {IParticipationPool} from "./interfaces/IParticipationPool.sol";
 
 interface IQuestionBundleRoundObserver {
     function recordBundleQuestionTerminal(uint256 contentId, uint256 roundId, bool settled) external;
@@ -447,8 +447,7 @@ contract RoundVotingEngine is
         _validateCommitTlockData(
             contentId, roundId, ciphertext, targetRound, drandChainHash, epochEnd, roundCfg.epochDuration
         );
-        (uint16 raterWeightBps, bool hadActiveAiDeclaration) =
-            RaterWeightLib.currentRaterWeightAndAiStatus(protocolConfig, voter);
+        bool hadActiveAiDeclaration = _hasActiveAiDeclaration(voter);
         if (!hadActiveAiDeclaration && useTokenIdentity) {
             hadActiveAiDeclaration = _resolvedVoterIdHolderHasActiveAiDeclaration(roundVoterIdNft, voter);
         }
@@ -476,7 +475,6 @@ contract RoundVotingEngine is
             roundVoterIdNft,
             useTokenIdentity
         );
-        commitRaterWeightBps[contentId][roundId][commitKey] = raterWeightBps;
         commitHadActiveAiDeclaration[contentId][roundId][commitKey] = hadActiveAiDeclaration;
         commitClusterKey[contentId][roundId][commitKey] =
             _resolveCommitClusterKey(roundVoterIdNft, voter, voterId, useTokenIdentity);
@@ -731,8 +729,8 @@ contract RoundVotingEngine is
         address bundleEscrow = registry.questionRewardPoolEscrow();
         if (bundleEscrow == address(0)) return;
 
-        try IQuestionBundleRoundObserver(bundleEscrow).recordBundleQuestionTerminal(contentId, roundId, settled) { }
-            catch { }
+        try IQuestionBundleRoundObserver(bundleEscrow).recordBundleQuestionTerminal(contentId, roundId, settled) {}
+            catch {}
     }
 
     // =========================================================================
@@ -1117,7 +1115,18 @@ contract RoundVotingEngine is
 
         try voterIdNft.resolveHolder(voter) returns (address resolvedHolder) {
             if (resolvedHolder == address(0) || resolvedHolder == voter) return false;
-            return RaterWeightLib.hasActiveAiDeclaration(protocolConfig, resolvedHolder);
+            return _hasActiveAiDeclaration(resolvedHolder);
+        } catch {
+            return false;
+        }
+    }
+
+    function _hasActiveAiDeclaration(address rater) internal view returns (bool) {
+        address declarationRegistry = protocolConfig.raterDeclarationRegistry();
+        if (declarationRegistry == address(0)) return false;
+
+        try IRaterDeclarationStatus(declarationRegistry).hasActiveAiDeclaration(rater) returns (bool active) {
+            return active;
         } catch {
             return false;
         }
@@ -1264,7 +1273,7 @@ contract RoundVotingEngine is
             if (ownWeight == 0 || economicCount < MIN_RBTS_PARTICIPANTS) {
                 if (ownWeight > 0) {
                     commitRbtsStakeReturned[contentId][roundId][commitKey] =
-                        commits[contentId][roundId][commitKey].stakeAmount;
+                    commits[contentId][roundId][commitKey].stakeAmount;
                 }
                 unchecked {
                     ++i;
@@ -1381,8 +1390,7 @@ contract RoundVotingEngine is
                 salt: salt,
                 roundReferenceRatingBps: _getRoundReferenceRatingBps(contentId, roundId),
                 minVoters: _rbtsRevealQuorum(roundCfg.minVoters),
-                targetRoundRevealableAt: targetRoundRevealableAt,
-                raterWeightBps: commitRaterWeightBps[contentId][roundId][commitKey]
+                targetRoundRevealableAt: targetRoundRevealableAt
             })
         );
         roundStakeWithEligibleFrontend[contentId][roundId] = eligibleFrontendStake;
@@ -1402,11 +1410,12 @@ contract RoundVotingEngine is
         return minVoters < MIN_RBTS_PARTICIPANTS ? MIN_RBTS_PARTICIPANTS : minVoters;
     }
 
-    function _resolveCommitClusterKey(IVoterIdNFT roundVoterIdNft, address voter, uint256 voterId, bool useTokenIdentity)
-        internal
-        view
-        returns (bytes32)
-    {
+    function _resolveCommitClusterKey(
+        IVoterIdNFT roundVoterIdNft,
+        address voter,
+        uint256 voterId,
+        bool useTokenIdentity
+    ) internal view returns (bytes32) {
         bytes32 declarationCluster = _declarationClusterKey(voter);
         if (declarationCluster != bytes32(0)) return declarationCluster;
 
@@ -1521,9 +1530,6 @@ contract RoundVotingEngine is
     // Cumulative cleanup incentive paid per round.
     mapping(uint256 => mapping(uint256 => uint256)) internal roundCleanupIncentivePaid;
 
-    // Commit-time social graph weight snapshot, in BPS. Used for rating weight and bounty units.
-    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint16))) public commitRaterWeightBps;
-
     // Commit-time AI declaration snapshot, used to keep launch anchors human-only at claim time.
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) public commitHadActiveAiDeclaration;
 
@@ -1531,5 +1537,5 @@ contract RoundVotingEngine is
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => bytes32))) public commitClusterKey;
 
     // --- Storage gap reserved for future upgrades ---
-    uint256[28] private __gap;
+    uint256[29] private __gap;
 }

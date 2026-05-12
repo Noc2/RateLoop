@@ -17,13 +17,8 @@ import {HumanReputation} from "../contracts/HumanReputation.sol";
 import {MockCategoryRegistry} from "../contracts/mocks/MockCategoryRegistry.sol";
 import {MockWorldIDRouter} from "../contracts/mocks/MockWorldIDRouter.sol";
 
-contract MockRaterDeclarationWeightsForRewards {
-    mapping(address => uint16) public tierMultiplierBps;
+contract MockRaterDeclarationStatusForRewards {
     mapping(address => bool) public hasActiveAiDeclaration;
-
-    function setTierMultiplierBps(address rater, uint16 multiplierBps) external {
-        tierMultiplierBps[rater] = multiplierBps;
-    }
 
     function setActiveAiDeclaration(address rater, bool active) external {
         hasActiveAiDeclaration[rater] = active;
@@ -392,20 +387,18 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
 
     function test_ClaimReward_AgentDeclarationSnapshotDoesNotAnchorLaunchCreditAfterRetirement() public {
         _verifyHuman(voter2, bytes32("anchor-voter-2"));
-        MockRaterDeclarationWeightsForRewards declarationWeights = new MockRaterDeclarationWeightsForRewards();
-        declarationWeights.setActiveAiDeclaration(voter2, true);
-        declarationWeights.setTierMultiplierBps(voter2, 11_500);
+        MockRaterDeclarationStatusForRewards declarationStatus = new MockRaterDeclarationStatusForRewards();
+        declarationStatus.setActiveAiDeclaration(voter2, true);
         ProtocolConfig config = ProtocolConfig(address(votingEngine.protocolConfig()));
         vm.prank(owner);
-        config.setRaterDeclarationRegistry(address(declarationWeights));
+        config.setRaterDeclarationRegistry(address(declarationStatus));
 
         (uint256 contentId, uint256 roundId) = _setupSettledPredictionRound();
         bytes32 voter2CommitKey =
             keccak256(abi.encodePacked(voter2, votingEngine.voterCommitHash(contentId, roundId, voter2)));
         assertTrue(votingEngine.commitHadActiveAiDeclaration(contentId, roundId, voter2CommitKey));
 
-        declarationWeights.setActiveAiDeclaration(voter2, false);
-        declarationWeights.setTierMultiplierBps(voter2, 10_000);
+        declarationStatus.setActiveAiDeclaration(voter2, false);
 
         vm.prank(voter1);
         rewardDistributor.claimReward(contentId, roundId);
@@ -416,14 +409,13 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         assertEq(lrepToken.balanceOf(voter1), 0);
     }
 
-    function test_ClaimReward_AgentDeclarationWithBaseMultiplierDoesNotAnchorLaunchCredit() public {
+    function test_ClaimReward_AgentDeclarationDoesNotAnchorLaunchCredit() public {
         _verifyHuman(voter2, bytes32("anchor-voter-2"));
-        MockRaterDeclarationWeightsForRewards declarationWeights = new MockRaterDeclarationWeightsForRewards();
-        declarationWeights.setActiveAiDeclaration(voter2, true);
-        declarationWeights.setTierMultiplierBps(voter2, 10_000);
+        MockRaterDeclarationStatusForRewards declarationStatus = new MockRaterDeclarationStatusForRewards();
+        declarationStatus.setActiveAiDeclaration(voter2, true);
         ProtocolConfig config = ProtocolConfig(address(votingEngine.protocolConfig()));
         vm.prank(owner);
-        config.setRaterDeclarationRegistry(address(declarationWeights));
+        config.setRaterDeclarationRegistry(address(declarationStatus));
 
         (uint256 contentId, uint256 roundId) = _setupSettledPredictionRound();
         bytes32 voter2CommitKey =
