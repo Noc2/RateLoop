@@ -265,6 +265,13 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         raterRegistry.attestHumanCredentialWithProof(1, uint256(nullifier), proof);
     }
 
+    function _seedCuryoHuman(address account, bytes32 anchorId) internal {
+        vm.prank(owner);
+        raterRegistry.seedHumanCredential(
+            account, uint64(block.timestamp + 365 days), anchorId, keccak256("curyo-seed")
+        );
+    }
+
     // =========================================================================
     // claimReward BRANCHES
     // =========================================================================
@@ -334,6 +341,19 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
 
     function test_ClaimReward_RecordsLaunchCreditWithVerifiedHumanAnchor() public {
         _verifyHuman(voter2, bytes32("anchor-voter-2"));
+        (uint256 contentId, uint256 roundId) = _setupSettledPredictionRound();
+
+        vm.prank(voter1);
+        rewardDistributor.claimReward(contentId, roundId);
+
+        assertEq(launchPool.qualifyingRatingCount(voter1), 1);
+        assertEq(launchPool.raterDistinctVerifiedAnchorCount(voter1), 1);
+        assertEq(launchPool.raterDistinctAnchorRoundCount(voter1), 1);
+        assertEq(lrepToken.balanceOf(voter1), 0);
+    }
+
+    function test_ClaimReward_RecordsLaunchCreditWithCuryoSeededHumanAnchor() public {
+        _seedCuryoHuman(voter2, bytes32("curyo-anchor-voter-2"));
         (uint256 contentId, uint256 roundId) = _setupSettledPredictionRound();
 
         vm.prank(voter1);
