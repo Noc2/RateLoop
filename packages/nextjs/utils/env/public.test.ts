@@ -56,5 +56,5 @@ test("default required deployment list fails closed for core app contracts", () 
     },
   });
 
-  assert.deepEqual(missingContracts, ["480:LoopReputation"]);
+  assert.deepEqual(missingContracts, ["480:LoopReputation", "480:AdvisoryVoteRecorder"]);
 });
