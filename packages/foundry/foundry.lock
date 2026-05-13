@@ -2,31 +2,31 @@
   "lib/forge-std": {
     "tag": {
       "name": "v1.14.0",
-      "rev": "1801b0541f4fda118a10798fd3486bb7051c5dd6"
+      "rev": "96abd708f045daa0d40827b27fb06fb3021b2d8c"
     }
   },
   "lib/openzeppelin-contracts": {
     "tag": {
       "name": "v5.5.0",
-      "rev": "fcbae5394ae8ad52d8e580a3477db99814b9d565"
+      "rev": "9fa6e3b8213a5d272cae7d8b3cc6fbe8b77513b8"
     }
   },
   "lib/openzeppelin-contracts-upgradeable": {
     "tag": {
       "name": "v5.5.0",
-      "rev": "aa677e9d28ed78fc427ec47ba2baef2030c58e7c"
+      "rev": "e6b2eef272aeb841e55bbb98ffc5c5c4bce517d1"
     }
   },
   "lib/prb-math": {
     "tag": {
       "name": "v4.1.0",
-      "rev": "280fc5f77e1b21b9c54013aac51966be33f4a410"
+      "rev": "b21433de7519fe021b176fa0b99dd3b360f28f70"
     }
   },
   "lib/solidity-bytes-utils": {
     "tag": {
       "name": "v0.8.4",
-      "rev": "f4413cd6137b78403e3a1156bee6aceab46b46fa"
+      "rev": "fc502455bb2a7e26a743378df042612dd50d1eb9"
     }
   }
 }
