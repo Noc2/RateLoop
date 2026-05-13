@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {ContentRegistry} from "../ContentRegistry.sol";
-import {ProtocolConfig} from "../ProtocolConfig.sol";
-import {RaterRegistry} from "../RaterRegistry.sol";
-import {RoundVotingEngine} from "../RoundVotingEngine.sol";
-import {IVoterIdNFT} from "../interfaces/IVoterIdNFT.sol";
+import { ContentRegistry } from "../ContentRegistry.sol";
+import { ProtocolConfig } from "../ProtocolConfig.sol";
+import { RaterRegistry } from "../RaterRegistry.sol";
+import { RoundVotingEngine } from "../RoundVotingEngine.sol";
+import { IVoterIdNFT } from "../interfaces/IVoterIdNFT.sol";
 
 /// @notice Linked helper for launch-distribution rater reward qualification.
 library LaunchRaterRewardLib {
@@ -38,9 +38,8 @@ library LaunchRaterRewardLib {
                 launchRewardAnchorAccount(votingEngine, voterIdNftAddress, contentId, roundId, roundCommitKey, voter);
             if (anchorAccount == rewardRecipient || anchorAccount == submitterIdentity) continue;
 
-            bytes32 anchorId = launchRewardAnchorId(
-                raterRegistry, anchorAccount, roundStartTime, minAnchorCredentialAgeSeconds
-            );
+            bytes32 anchorId =
+                launchRewardAnchorId(raterRegistry, anchorAccount, roundStartTime, minAnchorCredentialAgeSeconds);
             if (anchorId == bytes32(0) || launchRewardAnchorSeen(candidates, anchorCount, anchorId)) continue;
 
             candidates[anchorCount] = anchorId;
@@ -106,12 +105,10 @@ library LaunchRaterRewardLib {
         if (account == address(0)) return bytes32(0);
         try raterRegistry.getHumanCredential(account) returns (RaterRegistry.HumanCredential memory credential) {
             if (
-                !credential.verified || credential.revoked || credential.expiresAt <= block.timestamp
+                !credential.verified || credential.revoked || credential.expiresAt <= roundStartTime
                     || credential.nullifierHash == bytes32(0)
-                    || (
-                        minAnchorCredentialAgeSeconds > 0
-                            && uint256(credential.verifiedAt) + minAnchorCredentialAgeSeconds > roundStartTime
-                    )
+                    || (minAnchorCredentialAgeSeconds > 0
+                        && uint256(credential.verifiedAt) + minAnchorCredentialAgeSeconds > roundStartTime)
             ) {
                 return bytes32(0);
             }

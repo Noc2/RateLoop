@@ -301,6 +301,13 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         );
     }
 
+    function _seedCuryoHumanExpiringAfterMinAge(address account, bytes32 anchorId) internal returns (uint64 expiresAt) {
+        expiresAt = uint64(block.timestamp + launchPool.MIN_ANCHOR_CREDENTIAL_AGE_SECONDS() + 1 minutes);
+        vm.prank(owner);
+        raterRegistry.seedHumanCredential(account, expiresAt, anchorId, keccak256("curyo-seed-expiring"));
+        _ageLaunchAnchorCredential();
+    }
+
     function _ageLaunchAnchorCredential() internal {
         vm.warp(block.timestamp + launchPool.MIN_ANCHOR_CREDENTIAL_AGE_SECONDS());
     }
@@ -401,6 +408,23 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
     function test_ClaimReward_RecordsLaunchCreditWithCuryoSeededHumanAnchor() public {
         _seedCuryoHuman(voter2, bytes32("curyo-anchor-voter-2"));
         (uint256 contentId, uint256 roundId) = _setupSettledPredictionRound();
+
+        vm.prank(voter1);
+        rewardDistributor.claimReward(contentId, roundId);
+
+        assertEq(launchPool.qualifyingRatingCount(voter1), 1);
+        assertEq(launchPool.raterDistinctVerifiedAnchorCount(voter1), 1);
+        assertEq(launchPool.raterDistinctAnchorRoundCount(voter1), 1);
+        assertEq(lrepToken.balanceOf(voter1), 0);
+    }
+
+    function test_ClaimReward_RecordsLaunchCreditWhenAnchorExpiresAfterRoundStartBeforeClaim() public {
+        uint64 expiresAt = _seedCuryoHumanExpiringAfterMinAge(voter2, bytes32("expiring-curyo-anchor"));
+        (uint256 contentId, uint256 roundId) = _setupSettledPredictionRound();
+        RoundLib.Round memory round = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
+
+        assertGt(expiresAt, round.startTime, "credential valid at round start");
+        assertLt(expiresAt, block.timestamp, "credential expired before claim");
 
         vm.prank(voter1);
         rewardDistributor.claimReward(contentId, roundId);
