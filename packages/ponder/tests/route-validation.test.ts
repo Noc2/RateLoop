@@ -57,6 +57,14 @@ function mockPonderModules<T>(result: T) {
     }),
   }));
   vi.doMock("ponder:schema", () => ({
+    advisoryVote: {
+      committedAt: "advisoryVote.committedAt",
+      creditedAt: "advisoryVote.creditedAt",
+      launchCreditClaimed: "advisoryVote.launchCreditClaimed",
+      paidAmount: "advisoryVote.paidAmount",
+      revealed: "advisoryVote.revealed",
+      voter: "advisoryVote.voter",
+    },
     category: {
       id: "category.id",
       name: "category.name",
