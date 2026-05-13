@@ -666,7 +666,6 @@ const HomeInner = () => {
   // Voting state
   const [stakeModal, setStakeModal] = useState<{
     isOpen: boolean;
-    initialIsUp: boolean;
     contentId: bigint;
     categoryId: bigint;
     currentRating: number;
@@ -674,7 +673,6 @@ const HomeInner = () => {
     openRound?: ContentItem["openRound"] | null;
   }>({
     isOpen: false,
-    initialIsUp: true,
     contentId: 0n,
     categoryId: 0n,
     currentRating: 5,
@@ -1100,7 +1098,7 @@ const HomeInner = () => {
   }, [primaryItem?.id, stakeModal.contentId, voteError]);
 
   const handleButtonVote = useCallback(
-    (item: ContentItem, isUp: boolean) => {
+    (item: ContentItem) => {
       if (!address) {
         notification.info("Sign in to predict.");
         void openConnectModal();
@@ -1131,10 +1129,9 @@ const HomeInner = () => {
 
       clearVoteError();
       markPrimaryInteraction(item.id);
-      recordRecommendationSignal(item, "vote_intent", { selected: true, isUp });
+      recordRecommendationSignal(item, "vote_intent", { selected: true });
       setStakeModal({
         isOpen: true,
-        initialIsUp: isUp,
         contentId: item.id,
         categoryId: item.categoryId,
         currentRating: getStakeModalCurrentRating(item),
@@ -1843,7 +1840,7 @@ const HomeInner = () => {
                 currentRating={primaryItem.rating}
                 openRound={primaryItem.openRound}
                 roundConfig={primaryItem.roundConfig}
-                onVote={isUp => handleButtonVote(primaryItem, isUp)}
+                onVote={() => handleButtonVote(primaryItem)}
                 isCommitting={isCommitting}
                 address={address}
                 error={voteError}
@@ -1931,7 +1928,6 @@ const HomeInner = () => {
           contentId={stakeModal.contentId}
           categoryId={stakeModal.categoryId}
           currentRating={stakeModal.currentRating}
-          initialIsUp={stakeModal.initialIsUp}
           openRound={stakeModal.openRound}
           roundConfig={stakeModal.roundConfig}
           cooldownSecondsRemaining={stakeModalCooldownSeconds}

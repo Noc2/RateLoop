@@ -17,7 +17,7 @@ interface VoteSignalRailProps {
   cooldownSecondsRemaining: number;
   isVoteEligibilityPending?: boolean;
   attentionToken?: number | null;
-  onVote: (item: ContentItem, isUp: boolean) => void;
+  onVote: (item: ContentItem) => void;
 }
 
 export function VoteSignalRail({
@@ -59,7 +59,7 @@ export function VoteSignalRail({
             currentRating={primaryItem.rating}
             openRound={primaryItem.openRound}
             roundConfig={primaryItem.roundConfig}
-            onVote={isUp => onVote(primaryItem, isUp)}
+            onVote={() => onVote(primaryItem)}
             isCommitting={isCommitting}
             address={address}
             error={voteError}
