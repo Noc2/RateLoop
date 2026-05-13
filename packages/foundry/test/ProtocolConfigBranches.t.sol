@@ -41,7 +41,6 @@ contract ProtocolConfigBranchesTest is Test {
         uint16 slashThresholdBps, uint16 minSlashSettledRounds, uint48 minSlashLowDuration, uint256 minSlashEvidence
     );
     event SubmissionRewardMinimumsUpdated(uint256 minHrepPool, uint256 minUsdcPool);
-    event RaterDeclarationRegistryUpdated(address raterDeclarationRegistry);
     event RoundConfigBoundsUpdated(
         uint256 minEpochDuration,
         uint256 maxEpochDuration,
@@ -502,26 +501,12 @@ contract ProtocolConfigBranchesTest is Test {
         config.setRoundConfigBounds(5 minutes, 60 minutes, 1 hours, 30 days + 1, 3, 100, 3, 1_000);
     }
 
-    function test_SetRaterRegistryAndDeclarationRegistry() public {
+    function test_SetRaterRegistry() public {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
         address raterRegistry = address(0xBEEF);
-        address raterDeclarationRegistry = address(0xA1A1);
 
         config.setRaterRegistry(raterRegistry);
-        vm.expectEmit(true, false, false, true, address(config));
-        emit RaterDeclarationRegistryUpdated(raterDeclarationRegistry);
-        config.setRaterDeclarationRegistry(raterDeclarationRegistry);
 
         assertEq(config.raterRegistry(), raterRegistry);
-        assertEq(config.raterDeclarationRegistry(), raterDeclarationRegistry);
-    }
-
-    function test_SetRaterDeclarationRegistry_AllowsZeroAddressToDisableWeighting() public {
-        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
-
-        config.setRaterDeclarationRegistry(address(0xA1A1));
-        config.setRaterDeclarationRegistry(address(0));
-
-        assertEq(config.raterDeclarationRegistry(), address(0));
     }
 }

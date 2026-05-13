@@ -21,7 +21,6 @@ import {VotePreflightLib} from "./libraries/VotePreflightLib.sol";
 import {RobustBtsMath} from "./libraries/RobustBtsMath.sol";
 import {IFrontendRegistry} from "./interfaces/IFrontendRegistry.sol";
 import {ICategoryRegistry} from "./interfaces/ICategoryRegistry.sol";
-import {IRaterDeclarationStatus} from "./interfaces/IRaterDeclarationStatus.sol";
 import {IVoterIdNFT} from "./interfaces/IVoterIdNFT.sol";
 import {IRoundVotingEngine} from "./interfaces/IRoundVotingEngine.sol";
 import {IParticipationPool} from "./interfaces/IParticipationPool.sol";
@@ -443,11 +442,6 @@ contract RoundVotingEngine is
         _validateCommitTlockData(
             contentId, roundId, ciphertext, targetRound, drandChainHash, epochEnd, roundCfg.epochDuration
         );
-        bool hadActiveAiDeclaration = _hasActiveAiDeclaration(voter);
-        if (!hadActiveAiDeclaration && useTokenIdentity) {
-            hadActiveAiDeclaration = _resolvedVoterIdHolderHasActiveAiDeclaration(roundVoterIdNft, voter);
-        }
-
         // Transfer HREP stake after all lightweight validation passes.
         if (!stakeAlreadyTransferred) {
             hrepToken.safeTransferFrom(voter, address(this), stakeAmount);
@@ -471,7 +465,6 @@ contract RoundVotingEngine is
             roundVoterIdNft,
             useTokenIdentity
         );
-        commitHadActiveAiDeclaration[contentId][roundId][commitKey] = hadActiveAiDeclaration;
         _recordCommitAccounting(
             round, roundVoterIdNft, contentId, roundId, voter, voterId, useTokenIdentity, stakeAmount64, stakeAmount
         );
@@ -1099,32 +1092,6 @@ contract RoundVotingEngine is
         return IParticipationPool(protocolConfig.participationPool());
     }
 
-    function _resolvedVoterIdHolderHasActiveAiDeclaration(IVoterIdNFT voterIdNft, address voter)
-        internal
-        view
-        returns (bool)
-    {
-        if (address(voterIdNft) == address(0)) return false;
-
-        try voterIdNft.resolveHolder(voter) returns (address resolvedHolder) {
-            if (resolvedHolder == address(0) || resolvedHolder == voter) return false;
-            return _hasActiveAiDeclaration(resolvedHolder);
-        } catch {
-            return false;
-        }
-    }
-
-    function _hasActiveAiDeclaration(address rater) internal view returns (bool) {
-        address declarationRegistry = protocolConfig.raterDeclarationRegistry();
-        if (declarationRegistry == address(0)) return false;
-
-        try IRaterDeclarationStatus(declarationRegistry).hasActiveAiDeclaration(rater) returns (bool active) {
-            return active;
-        } catch {
-            return false;
-        }
-    }
-
     function _resolveClaimCommit(uint256 contentId, uint256 roundId, address account)
         internal
         view
@@ -1476,9 +1443,6 @@ contract RoundVotingEngine is
 
     // Cumulative cleanup incentive paid per round.
     mapping(uint256 => mapping(uint256 => uint256)) internal roundCleanupIncentivePaid;
-
-    // Commit-time AI declaration snapshot, used to keep launch anchors human-only at claim time.
-    mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) public commitHadActiveAiDeclaration;
 
     // --- Storage gap reserved for future upgrades ---
     uint256[30] private __gap;

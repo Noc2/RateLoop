@@ -17,14 +17,6 @@ import { HumanReputation } from "../contracts/HumanReputation.sol";
 import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
 import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
 
-contract MockRaterDeclarationStatusForRewards {
-    mapping(address => bool) public hasActiveAiDeclaration;
-
-    function setActiveAiDeclaration(address rater, bool active) external {
-        hasActiveAiDeclaration[rater] = active;
-    }
-}
-
 contract MockRevertingLaunchDistributionPool {
     error LaunchCreditRejected();
 
@@ -481,52 +473,6 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
     function test_ClaimReward_DoesNotRecordLaunchCreditWithoutIndependentVerifiedAnchor() public {
         _verifyHuman(voter1, bytes32("claimant-voter-1"));
         (uint256 contentId, uint256 roundId) = _setupSettledPredictionRound();
-
-        vm.prank(voter1);
-        rewardDistributor.claimReward(contentId, roundId);
-
-        assertEq(launchPool.qualifyingRatingCount(voter1), 0);
-        assertEq(launchPool.raterDistinctVerifiedAnchorCount(voter1), 0);
-        assertEq(launchPool.raterDistinctAnchorRoundCount(voter1), 0);
-        assertEq(lrepToken.balanceOf(voter1), 0);
-    }
-
-    function test_ClaimReward_AgentDeclarationSnapshotDoesNotAnchorLaunchCreditAfterRetirement() public {
-        _verifyHuman(voter2, bytes32("anchor-voter-2"));
-        MockRaterDeclarationStatusForRewards declarationStatus = new MockRaterDeclarationStatusForRewards();
-        declarationStatus.setActiveAiDeclaration(voter2, true);
-        ProtocolConfig config = ProtocolConfig(address(votingEngine.protocolConfig()));
-        vm.prank(owner);
-        config.setRaterDeclarationRegistry(address(declarationStatus));
-
-        (uint256 contentId, uint256 roundId) = _setupSettledPredictionRound();
-        bytes32 voter2CommitKey =
-            keccak256(abi.encodePacked(voter2, votingEngine.voterCommitHash(contentId, roundId, voter2)));
-        assertTrue(votingEngine.commitHadActiveAiDeclaration(contentId, roundId, voter2CommitKey));
-
-        declarationStatus.setActiveAiDeclaration(voter2, false);
-
-        vm.prank(voter1);
-        rewardDistributor.claimReward(contentId, roundId);
-
-        assertEq(launchPool.qualifyingRatingCount(voter1), 0);
-        assertEq(launchPool.raterDistinctVerifiedAnchorCount(voter1), 0);
-        assertEq(launchPool.raterDistinctAnchorRoundCount(voter1), 0);
-        assertEq(lrepToken.balanceOf(voter1), 0);
-    }
-
-    function test_ClaimReward_AgentDeclarationDoesNotAnchorLaunchCredit() public {
-        _verifyHuman(voter2, bytes32("anchor-voter-2"));
-        MockRaterDeclarationStatusForRewards declarationStatus = new MockRaterDeclarationStatusForRewards();
-        declarationStatus.setActiveAiDeclaration(voter2, true);
-        ProtocolConfig config = ProtocolConfig(address(votingEngine.protocolConfig()));
-        vm.prank(owner);
-        config.setRaterDeclarationRegistry(address(declarationStatus));
-
-        (uint256 contentId, uint256 roundId) = _setupSettledPredictionRound();
-        bytes32 voter2CommitKey =
-            keccak256(abi.encodePacked(voter2, votingEngine.voterCommitHash(contentId, roundId, voter2)));
-        assertTrue(votingEngine.commitHadActiveAiDeclaration(contentId, roundId, voter2CommitKey));
 
         vm.prank(voter1);
         rewardDistributor.claimReward(contentId, roundId);

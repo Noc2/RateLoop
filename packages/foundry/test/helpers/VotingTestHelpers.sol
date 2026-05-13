@@ -210,8 +210,7 @@ abstract contract ContentSubmissionTestBase {
                 requiredSettledRounds: DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
                 bountyClosesAt: DEFAULT_SUBMISSION_REWARD_BOUNTY_CLOSES_AT,
                 feedbackClosesAt: DEFAULT_SUBMISSION_REWARD_FEEDBACK_CLOSES_AT,
-                bountyEligibility: 0,
-                eligibleAiDeclarationIds: new bytes32[](0)
+                bountyEligibility: 0
             });
         return _questionRevealCommitment(
             submissionKey,
@@ -248,8 +247,7 @@ abstract contract ContentSubmissionTestBase {
             requiredSettledRounds: DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
             bountyClosesAt: DEFAULT_SUBMISSION_REWARD_BOUNTY_CLOSES_AT,
             feedbackClosesAt: DEFAULT_SUBMISSION_REWARD_FEEDBACK_CLOSES_AT,
-            bountyEligibility: 0,
-            eligibleAiDeclarationIds: new bytes32[](0)
+            bountyEligibility: 0
         });
         return _questionRevealCommitment(
             submissionKey,
@@ -394,8 +392,7 @@ abstract contract ContentSubmissionTestBase {
             requiredSettledRounds: DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
             bountyClosesAt: DEFAULT_SUBMISSION_REWARD_BOUNTY_CLOSES_AT,
             feedbackClosesAt: DEFAULT_SUBMISSION_REWARD_FEEDBACK_CLOSES_AT,
-            bountyEligibility: 0,
-            eligibleAiDeclarationIds: new bytes32[](0)
+            bountyEligibility: 0
         });
     }
 
@@ -412,8 +409,7 @@ abstract contract ContentSubmissionTestBase {
                 rewardTerms.requiredSettledRounds,
                 rewardTerms.bountyClosesAt,
                 rewardTerms.feedbackClosesAt,
-                rewardTerms.bountyEligibility,
-                keccak256(abi.encodePacked(rewardTerms.eligibleAiDeclarationIds))
+                rewardTerms.bountyEligibility
             )
         );
     }

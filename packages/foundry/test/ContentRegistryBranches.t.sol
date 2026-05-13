@@ -265,8 +265,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             requiredSettledRounds: requiredSettledRounds,
             bountyClosesAt: rewardPoolExpiresAt,
             feedbackClosesAt: rewardPoolExpiresAt,
-            bountyEligibility: 0,
-            eligibleAiDeclarationIds: new bytes32[](0)
+            bountyEligibility: 0
         });
         reservation.roundConfig =
             RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 7 days, minVoters: 3, maxVoters: 200 });
@@ -315,8 +314,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             requiredSettledRounds: requiredSettledRounds,
             bountyClosesAt: rewardPoolExpiresAt,
             feedbackClosesAt: rewardPoolExpiresAt,
-            bountyEligibility: 0,
-            eligibleAiDeclarationIds: new bytes32[](0)
+            bountyEligibility: 0
         });
     }
 
@@ -825,8 +823,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             requiredSettledRounds: 2,
             bountyClosesAt: block.timestamp + 14 days,
             feedbackClosesAt: block.timestamp + 14 days,
-            bountyEligibility: 0,
-            eligibleAiDeclarationIds: new bytes32[](0)
+            bountyEligibility: 0
         });
         RoundLib.RoundConfig memory roundConfig =
             RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 2 hours, minVoters: 4, maxVoters: 5 });
@@ -883,8 +880,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             requiredSettledRounds: 1,
             bountyClosesAt: block.timestamp + 14 days,
             feedbackClosesAt: block.timestamp + 14 days,
-            bountyEligibility: 0,
-            eligibleAiDeclarationIds: new bytes32[](0)
+            bountyEligibility: 0
         });
         RoundLib.RoundConfig memory roundConfig =
             RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 2 hours, minVoters: 3, maxVoters: 4 });
@@ -927,8 +923,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             requiredSettledRounds: DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
             bountyClosesAt: DEFAULT_SUBMISSION_REWARD_EXPIRES_AT,
             feedbackClosesAt: DEFAULT_SUBMISSION_REWARD_EXPIRES_AT,
-            bountyEligibility: 0,
-            eligibleAiDeclarationIds: new bytes32[](0)
+            bountyEligibility: 0
         });
         RoundLib.RoundConfig memory reservedConfig =
             RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 2 hours, minVoters: 3, maxVoters: 4 });

@@ -3,9 +3,6 @@ pragma solidity ^0.8.24;
 
 uint8 constant BOUNTY_ELIGIBILITY_OPEN = 0;
 uint8 constant BOUNTY_ELIGIBILITY_VERIFIED_HUMAN = 1;
-uint8 constant BOUNTY_ELIGIBILITY_ACTIVE_AI = 2;
-uint8 constant BOUNTY_ELIGIBILITY_VERIFIED_HUMAN_OR_ACTIVE_AI = 3;
-uint8 constant BOUNTY_ELIGIBILITY_SPECIFIC_AI_DECLARATIONS = 4;
 
 struct RewardPool {
     uint64 id;

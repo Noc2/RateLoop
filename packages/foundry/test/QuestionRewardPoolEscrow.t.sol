@@ -20,21 +20,6 @@ import { Eip3009Authorization, X402QuestionSubmitter } from "../contracts/X402Qu
 import { MockQuestionRewardPoolEscrow } from "./mocks/MockQuestionRewardPoolEscrow.sol";
 import { MockVoterIdNFT } from "./mocks/MockVoterIdNFT.sol";
 
-contract MockRaterDeclarationStatusForEscrow {
-    mapping(address => bool) public hasActiveAiDeclaration;
-    mapping(address => bytes32) public activeAiDeclarationHash;
-
-    function setActiveAiDeclaration(address rater, bool active) external {
-        hasActiveAiDeclaration[rater] = active;
-        activeAiDeclarationHash[rater] = active ? keccak256(abi.encodePacked("ai-declaration", rater)) : bytes32(0);
-    }
-
-    function setActiveAiDeclarationHash(address rater, bytes32 declarationHash) external {
-        hasActiveAiDeclaration[rater] = declarationHash != bytes32(0);
-        activeAiDeclarationHash[rater] = declarationHash;
-    }
-}
-
 contract MockRaterRegistryStatusForEscrow {
     mapping(address => bool) public hasActiveHumanCredential;
 
@@ -84,7 +69,6 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     uint256 internal constant BUNDLE_CLAIM_GRACE = 7 days;
     uint256 internal constant BUNDLE_REFUND_GRACE = 98 days;
     uint8 internal constant BOUNTY_ELIGIBILITY_VERIFIED_HUMAN = 1;
-    uint8 internal constant BOUNTY_ELIGIBILITY_SPECIFIC_AI_DECLARATIONS = 4;
 
     mapping(uint256 => mapping(uint256 => uint256)) internal mockedRoundCommitCount;
 
@@ -324,50 +308,6 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
     }
 
-    function testQuestionRewardsDoNotUseAiClustersForQualification() public {
-        MockRaterDeclarationStatusForEscrow declarationStatus = _installRaterDeclarationStatus();
-        declarationStatus.setActiveAiDeclaration(voter1, true);
-        declarationStatus.setActiveAiDeclaration(voter2, true);
-
-        uint256 contentId = _submitQuestion("");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
-
-        address[] memory voters = _threeVoters();
-        uint16[] memory predictions = new uint16[](3);
-        predictions[0] = 8_000;
-        predictions[1] = 5_000;
-        predictions[2] = 6_500;
-        uint256 roundId = _settlePredictionRoundWith(voters, contentId, predictions);
-
-        assertGt(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter1), 0);
-        assertGt(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter2), 0);
-        assertGt(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter3), 0);
-    }
-
-    function testQuestionRewardsSnapshotParticipationUnitsForIndependentPass() public {
-        MockRaterDeclarationStatusForEscrow declarationStatus = _installRaterDeclarationStatus();
-        declarationStatus.setActiveAiDeclaration(voter1, true);
-        declarationStatus.setActiveAiDeclaration(voter2, true);
-
-        uint256 contentId = _submitQuestion("");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
-
-        address[] memory voters = _fourVoters();
-        uint16[] memory predictions = new uint16[](4);
-        predictions[0] = 8_000;
-        predictions[1] = 5_000;
-        predictions[2] = 6_500;
-        predictions[3] = 7_000;
-        uint256 roundId = _settlePredictionRoundWith(voters, contentId, predictions);
-
-        rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
-
-        RoundSnapshot memory snapshot = rewardPoolEscrow.getRoundSnapshot(rewardPoolId, roundId);
-        assertTrue(snapshot.qualified);
-        assertEq(snapshot.rawEligibleVoters, 4);
-        assertEq(snapshot.eligibleVoters, 40_000);
-    }
-
     function testVerifiedHumanBountyCountsOnlyVerifiedHumansWhileVotingStaysOpen() public {
         MockRaterRegistryStatusForEscrow raterStatus = _installRaterRegistryStatus();
         raterStatus.setActiveHumanCredential(voter1, true);
@@ -375,9 +315,8 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         raterStatus.setActiveHumanCredential(voter3, true);
 
         uint256 contentId = _submitQuestion("");
-        bytes32[] memory allowedAiDeclarationIds = new bytes32[](0);
         uint256 rewardPoolId = _createRewardPoolWithEligibility(
-            contentId, REWARD_POOL_AMOUNT, 3, 1, BOUNTY_ELIGIBILITY_VERIFIED_HUMAN, allowedAiDeclarationIds
+            contentId, REWARD_POOL_AMOUNT, 3, 1, BOUNTY_ELIGIBILITY_VERIFIED_HUMAN
         );
 
         uint256 roundId = _settleRoundWith(_fourVoters(), contentId, _directions(true, true, false, true));
@@ -391,35 +330,6 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.prank(voter4);
         vm.expectRevert("Not bounty eligible");
         rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
-    }
-
-    function testSpecificAiBountyRequiresAllowedActiveDeclarationHash() public {
-        MockRaterDeclarationStatusForEscrow declarationStatus = _installRaterDeclarationStatus();
-        bytes32 voter1Declaration = keccak256("voter1-ai-model");
-        bytes32 voter2Declaration = keccak256("voter2-ai-model");
-        bytes32 voter3Declaration = keccak256("voter3-ai-model");
-        declarationStatus.setActiveAiDeclarationHash(voter1, voter1Declaration);
-        declarationStatus.setActiveAiDeclarationHash(voter2, voter2Declaration);
-        declarationStatus.setActiveAiDeclarationHash(voter3, voter3Declaration);
-        declarationStatus.setActiveAiDeclarationHash(voter4, keccak256("unlisted-ai-model"));
-
-        bytes32[] memory allowedAiDeclarationIds = new bytes32[](3);
-        allowedAiDeclarationIds[0] = voter1Declaration;
-        allowedAiDeclarationIds[1] = voter2Declaration;
-        allowedAiDeclarationIds[2] = voter3Declaration;
-
-        uint256 contentId = _submitQuestion("");
-        uint256 rewardPoolId = _createRewardPoolWithEligibility(
-            contentId, REWARD_POOL_AMOUNT, 3, 1, BOUNTY_ELIGIBILITY_SPECIFIC_AI_DECLARATIONS, allowedAiDeclarationIds
-        );
-
-        uint256 roundId = _settleRoundWith(_fourVoters(), contentId, _directions(true, true, false, true));
-        rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
-
-        RoundSnapshot memory snapshot = rewardPoolEscrow.getRoundSnapshot(rewardPoolId, roundId);
-        assertEq(snapshot.rawEligibleVoters, 3);
-        assertGt(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter1), 0);
-        assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter4), 0);
     }
 
     function testHighValueRewardPoolRequiresHigherParticipantFloor() public {
@@ -2524,8 +2434,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             requiredSettledRounds: 1,
             bountyClosesAt: block.timestamp + 30 days,
             feedbackClosesAt: block.timestamp + 30 days,
-            bountyEligibility: 0,
-            eligibleAiDeclarationIds: new bytes32[](0)
+            bountyEligibility: 0
         });
         bytes32 salt = keccak256("agent-wallet-usdc-submission-bounty");
         activeTlockContentRegistry = registry;
@@ -3014,8 +2923,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
                 requiredSettledRounds: DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
                 bountyClosesAt: DEFAULT_SUBMISSION_REWARD_EXPIRES_AT,
                 feedbackClosesAt: DEFAULT_SUBMISSION_REWARD_EXPIRES_AT,
-                bountyEligibility: 0,
-                eligibleAiDeclarationIds: new bytes32[](0)
+                bountyEligibility: 0
             }),
             roundConfig
         );
@@ -3057,8 +2965,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             requiredSettledRounds: 1,
             bountyClosesAt: block.timestamp + 30 days,
             feedbackClosesAt: block.timestamp + 30 days,
-            bountyEligibility: 0,
-            eligibleAiDeclarationIds: new bytes32[](0)
+            bountyEligibility: 0
         });
         question.spec = ContentRegistry.QuestionSpecCommitment({
             questionMetadataHash: keccak256("x402-question-metadata"), resultSpecHash: keccak256("x402-result-spec")
@@ -3154,8 +3061,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             requiredSettledRounds: 1,
             bountyClosesAt: block.timestamp + 30 days,
             feedbackClosesAt: block.timestamp + 30 days,
-            bountyEligibility: 0,
-            eligibleAiDeclarationIds: new bytes32[](0)
+            bountyEligibility: 0
         });
         bytes32 salt = keccak256(abi.encodePacked(path, agentWallet));
         activeTlockContentRegistry = registry;
@@ -3280,8 +3186,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         uint256 amount,
         uint256 requiredVoters,
         uint256 requiredSettledRounds,
-        uint8 bountyEligibility,
-        bytes32[] memory allowedAiDeclarationIds
+        uint8 bountyEligibility
     ) internal returns (uint256 rewardPoolId) {
         vm.startPrank(funder);
         usdc.approve(address(rewardPoolEscrow), amount);
@@ -3292,16 +3197,9 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             requiredSettledRounds,
             block.timestamp + 30 days,
             0,
-            bountyEligibility,
-            allowedAiDeclarationIds
+            bountyEligibility
         );
         vm.stopPrank();
-    }
-
-    function _installRaterDeclarationStatus() internal returns (MockRaterDeclarationStatusForEscrow declarationStatus) {
-        declarationStatus = new MockRaterDeclarationStatusForEscrow();
-        vm.prank(owner);
-        protocolConfig.setRaterDeclarationRegistry(address(declarationStatus));
     }
 
     function _installRaterRegistryStatus() internal returns (MockRaterRegistryStatusForEscrow raterStatus) {

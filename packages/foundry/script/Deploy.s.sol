@@ -6,7 +6,6 @@ import {console} from "forge-std/console.sol";
 import {TransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import {TimelockController} from "@openzeppelin/contracts/governance/TimelockController.sol";
 import {IVotes} from "@openzeppelin/contracts/governance/utils/IVotes.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {LoopReputation} from "../contracts/LoopReputation.sol";
 import {ContentRegistry} from "../contracts/ContentRegistry.sol";
 import {RoundVotingEngine} from "../contracts/RoundVotingEngine.sol";
@@ -17,7 +16,6 @@ import {FeedbackBonusEscrow} from "../contracts/FeedbackBonusEscrow.sol";
 import {ProfileRegistry} from "../contracts/ProfileRegistry.sol";
 import {ProtocolConfig} from "../contracts/ProtocolConfig.sol";
 import {QuestionRewardPoolEscrow} from "../contracts/QuestionRewardPoolEscrow.sol";
-import {RaterDeclarationRegistry} from "../contracts/RaterDeclarationRegistry.sol";
 import {RaterRegistry} from "../contracts/RaterRegistry.sol";
 import {X402QuestionSubmitter} from "../contracts/X402QuestionSubmitter.sol";
 import {VoterIdNFT} from "../contracts/VoterIdNFT.sol";
@@ -39,8 +37,6 @@ contract DeployRateLoop is ScaffoldETHDeploy {
     uint256 public constant TREASURY_AMOUNT = 32_000_000 * 1e6;
     uint256 public constant PARTICIPATION_POOL_AMOUNT = 0;
     uint256 public constant LAUNCH_DISTRIBUTION_AMOUNT = TOTAL_SUPPLY_CAP - CONSENSUS_POOL_AMOUNT - TREASURY_AMOUNT;
-    uint256 public constant MIN_AI_DECLARATION_BOND_USDC = 5 * 1e6;
-    uint256 public constant AI_DECLARATION_CHALLENGE_BOND_USDC = 5 * 1e6;
 
     address internal constant WORLD_CHAIN_MAINNET_USDC = 0x79A02482A880bCE3F13e09Da970dC34db4CD24d1;
     address internal constant WORLD_CHAIN_SEPOLIA_USDC = 0x66145f38cBAC35Ca6F1Dfb4914dF98F1614aeA88;
@@ -183,14 +179,6 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         );
         _seedCuryoSelfVerifiedHumans(raterRegistry);
         console.log("Seeded 9 Curyo Self.xyz verified humans");
-        RaterDeclarationRegistry raterDeclarationRegistry = new RaterDeclarationRegistry(
-            deployer,
-            governance,
-            IERC20(usdcTokenAddress),
-            governance,
-            MIN_AI_DECLARATION_BOND_USDC,
-            AI_DECLARATION_CHALLENGE_BOND_USDC
-        );
         VoterIdNFT optionalIdentity = new VoterIdNFT(deployer, governance);
         optionalIdentity.setStakeRecorder(address(votingEngine));
 
@@ -236,7 +224,6 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         protocolConfig.setCategoryRegistry(address(categoryRegistry));
         protocolConfig.setVoterIdNFT(address(optionalIdentity));
         protocolConfig.setRaterRegistry(address(raterRegistry));
-        protocolConfig.setRaterDeclarationRegistry(address(raterDeclarationRegistry));
 
         registry.setVoterIdNFT(address(optionalIdentity));
         frontendRegistry.setVoterIdNFT(address(optionalIdentity));
@@ -304,7 +291,6 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         deployments.push(Deployment("CategoryRegistry", address(categoryRegistry)));
         deployments.push(Deployment("RaterRegistry", address(raterRegistry)));
         if (isLocalDev) deployments.push(Deployment("MockWorldIDRouter", address(localWorldIdRouter)));
-        deployments.push(Deployment("RaterDeclarationRegistry", address(raterDeclarationRegistry)));
         deployments.push(Deployment("VoterIdNFT", address(optionalIdentity)));
         deployments.push(Deployment("ParticipationPool", address(participationPool)));
         deployments.push(Deployment("LaunchDistributionPool", address(launchDistributionPool)));
@@ -320,9 +306,6 @@ contract DeployRateLoop is ScaffoldETHDeploy {
             categoryRegistry.renounceRole(categoryRegistry.ADMIN_ROLE(), deployer);
             raterRegistry.renounceRole(raterRegistry.ADMIN_ROLE(), deployer);
             raterRegistry.renounceRole(raterRegistry.SEEDER_ROLE(), deployer);
-            raterDeclarationRegistry.renounceRole(raterDeclarationRegistry.CONFIG_ROLE(), deployer);
-            raterDeclarationRegistry.renounceRole(raterDeclarationRegistry.PROBE_ROLE(), deployer);
-            raterDeclarationRegistry.renounceRole(raterDeclarationRegistry.CHALLENGE_RESOLVER_ROLE(), deployer);
             optionalIdentity.transferOwnership(governance);
 
             TimelockController tc = TimelockController(payable(governance));
@@ -349,7 +332,6 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         console.log("RaterRegistry:", address(raterRegistry));
         console.log("World ID Router:", worldIdRouterAddress);
         console.log("World ID External Nullifier Hash:", worldIdExternalNullifierHash);
-        console.log("RaterDeclarationRegistry:", address(raterDeclarationRegistry));
         console.log("Optional identity NFT:", address(optionalIdentity));
         console.log("ParticipationPool:", address(participationPool));
         console.log("LaunchDistributionPool:", address(launchDistributionPool));

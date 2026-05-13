@@ -20,14 +20,6 @@ import {MockVoterIdNFT} from "./mocks/MockVoterIdNFT.sol";
 import {VotingTestBase} from "./helpers/VotingTestHelpers.sol";
 import {MockCategoryRegistry} from "../contracts/mocks/MockCategoryRegistry.sol";
 
-contract MockRaterDeclarationStatus {
-    mapping(address => bool) public hasActiveAiDeclaration;
-
-    function setActiveAiDeclaration(address rater, bool active) external {
-        hasActiveAiDeclaration[rater] = active;
-    }
-}
-
 // =========================================================================
 // TEST CONTRACT
 // =========================================================================
@@ -229,12 +221,6 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         ProtocolConfig(protocolConfigAddress).setRaterRegistry(address(raterRegistry));
     }
 
-    function _installRaterDeclarationStatus() internal returns (MockRaterDeclarationStatus declarationStatus) {
-        declarationStatus = new MockRaterDeclarationStatus();
-        vm.prank(owner);
-        ProtocolConfig(protocolConfigAddress).setRaterDeclarationRegistry(address(declarationStatus));
-    }
-
     function _commitPrediction(address voter, uint256 contentId, uint16 predictedRatingBps, uint256 stake)
         internal
         returns (bytes32 commitKey, bytes32 salt)
@@ -400,38 +386,13 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertGt(round.settledAt, 0);
     }
 
-    function test_RevealUsesBaseStakeForDeclaredAiRater() public {
-        MockRaterDeclarationStatus declarationStatus = _installRaterDeclarationStatus();
-        declarationStatus.setActiveAiDeclaration(voter1, true);
-
-        uint256 contentId = _submitContent();
-        (bytes32 ck1, bytes32 s1) = _commit(voter1, contentId, true, 4e6);
-        (bytes32 ck2, bytes32 s2) = _commit(voter2, contentId, false, 4e6);
-        (bytes32 ck3, bytes32 s3) = _commit(voter3, contentId, true, 4e6);
-        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
-        RoundLib.Round memory r0 = RoundEngineReadHelpers.round(engine, contentId, roundId);
-        _warpPastTlockRevealTime(uint256(r0.startTime) + EPOCH);
-
-        _reveal(contentId, roundId, ck1, true, s1);
-        _reveal(contentId, roundId, ck2, false, s2);
-        _reveal(contentId, roundId, ck3, true, s3);
-
-        RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
-        assertTrue(engine.commitHadActiveAiDeclaration(contentId, roundId, ck1), "agent flag snapshotted");
-        assertFalse(engine.commitHadActiveAiDeclaration(contentId, roundId, ck2), "human flag snapshotted");
-        assertEq(round.weightedUpPool, 8e6, "identity does not boost stake weight");
-        assertEq(round.weightedDownPool, 4e6, "down pool remains default");
-    }
-
-    function test_VerifiedHumanAndAiDeclarationDoNotBoostStakeWeight() public {
+    function test_VerifiedHumanDoesNotBoostStakeWeight() public {
         RaterRegistry raterRegistry = _installRaterRegistry();
-        MockRaterDeclarationStatus declarationStatus = _installRaterDeclarationStatus();
 
         vm.prank(owner);
         raterRegistry.seedHumanCredential(
             voter1, uint64(block.timestamp + 30 days), keccak256("curyo-voter-1"), keccak256("curyo-evidence")
         );
-        declarationStatus.setActiveAiDeclaration(voter1, true);
 
         uint256 contentId = _submitContent();
         (bytes32 ck1, bytes32 s1) = _commit(voter1, contentId, true, 4e6);
@@ -446,39 +407,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         _reveal(contentId, roundId, ck3, true, s3);
 
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
-        assertEq(round.weightedUpPool, 8e6, "verified human status and AI declaration do not boost weight");
-        assertTrue(engine.commitHadActiveAiDeclaration(contentId, roundId, ck1), "agent flag survives cap");
-    }
-
-    function test_CommitAiSnapshotUsesActiveStatus() public {
-        MockRaterDeclarationStatus declarationStatus = _installRaterDeclarationStatus();
-        declarationStatus.setActiveAiDeclaration(voter1, true);
-
-        uint256 contentId = _submitContent();
-        (bytes32 ck1,) = _commit(voter1, contentId, true, 4e6);
-        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
-
-        assertTrue(engine.commitHadActiveAiDeclaration(contentId, roundId, ck1), "agent flag does not depend on uplift");
-    }
-
-    function test_CommitAiSnapshotIncludesResolvedVoterIdHolder() public {
-        MockRaterDeclarationStatus declarationStatus = _installRaterDeclarationStatus();
-        declarationStatus.setActiveAiDeclaration(voter1, true);
-
-        vm.startPrank(owner);
-        registry.setVoterIdNFT(address(mockVoterIdNFT));
-        ProtocolConfig(protocolConfigAddress).setVoterIdNFT(address(mockVoterIdNFT));
-        mockVoterIdNFT.setHolder(voter1);
-        vm.stopPrank();
-
-        vm.prank(voter1);
-        mockVoterIdNFT.setDelegate(delegate1);
-
-        uint256 contentId = _submitContent();
-        (bytes32 ck1,) = _commit(delegate1, contentId, true, 4e6);
-        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
-
-        assertTrue(engine.commitHadActiveAiDeclaration(contentId, roundId, ck1), "holder agent flag is snapshotted");
+        assertEq(round.weightedUpPool, 8e6, "verified human status does not boost weight");
     }
 
     function test_RbtsLifecycle_SettlesBinaryRatingAndScoresRewards() public {

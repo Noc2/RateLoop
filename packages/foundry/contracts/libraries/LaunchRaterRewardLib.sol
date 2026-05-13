@@ -37,7 +37,6 @@ library LaunchRaterRewardLib {
             address anchorAccount =
                 launchRewardAnchorAccount(votingEngine, voterIdNftAddress, contentId, roundId, roundCommitKey, voter);
             if (anchorAccount == rewardRecipient || anchorAccount == submitterIdentity) continue;
-            if (votingEngine.commitHadActiveAiDeclaration(contentId, roundId, roundCommitKey)) continue;
 
             bytes32 anchorId = launchRewardAnchorId(
                 raterRegistry, anchorAccount, roundStartTime, minAnchorCredentialAgeSeconds

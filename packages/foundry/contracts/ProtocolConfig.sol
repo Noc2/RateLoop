@@ -41,7 +41,6 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     mapping(address => address) public rewardDistributorVotingEngine;
     mapping(address => address) public rewardDistributorForVotingEngine;
     address public raterRegistry;
-    address public raterDeclarationRegistry;
     address public launchDistributionPool;
 
     struct RoundConfigBounds {
@@ -67,7 +66,6 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     event VoterIdNFTUpdated(address voterIdNFT);
     event ParticipationPoolUpdated(address participationPool);
     event RaterRegistryUpdated(address raterRegistry);
-    event RaterDeclarationRegistryUpdated(address raterDeclarationRegistry);
     event LaunchDistributionPoolUpdated(address launchDistributionPool);
     event ConfigUpdated(uint256 epochDuration, uint256 maxDuration, uint256 minVoters, uint256 maxVoters);
     event DrandConfigUpdated(bytes32 drandChainHash, uint64 genesisTime, uint64 period);
@@ -214,11 +212,6 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     function setRaterRegistry(address value) external onlyRole(CONFIG_ROLE) {
         raterRegistry = value;
         emit RaterRegistryUpdated(value);
-    }
-
-    function setRaterDeclarationRegistry(address value) external onlyRole(CONFIG_ROLE) {
-        raterDeclarationRegistry = value;
-        emit RaterDeclarationRegistryUpdated(value);
     }
 
     function setLaunchDistributionPool(address value) external onlyRole(CONFIG_ROLE) {

@@ -24,8 +24,7 @@ import {
     BundleReward,
     BundleQuestion,
     BundleRoundSetSnapshot,
-    BOUNTY_ELIGIBILITY_OPEN,
-    BOUNTY_ELIGIBILITY_SPECIFIC_AI_DECLARATIONS
+    BOUNTY_ELIGIBILITY_OPEN
 } from "./libraries/QuestionRewardPoolEscrowTypes.sol";
 import { QuestionRewardPoolEscrowVoterLib } from "./libraries/QuestionRewardPoolEscrowVoterLib.sol";
 
@@ -74,16 +73,12 @@ contract QuestionRewardPoolEscrow is
     mapping(uint256 => RewardPool) private rewardPools;
     mapping(uint256 => mapping(uint256 => RoundSnapshot)) private roundSnapshots;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) private rewardClaimed;
-    mapping(uint256 => mapping(bytes32 => bool)) private rewardPoolAllowedAiDeclarations;
-    mapping(uint256 => bytes32[]) private rewardPoolAllowedAiDeclarationLists;
     mapping(uint256 => BundleReward) private bundleRewards;
     mapping(uint256 => BundleQuestion[]) private bundleQuestions;
     mapping(uint256 => mapping(uint256 => uint32)) private bundleQuestionRecordedRounds;
     mapping(uint256 => mapping(uint256 => mapping(uint256 => uint64))) private bundleRoundIds;
     mapping(uint256 => mapping(uint256 => BundleRoundSetSnapshot)) private bundleRoundSetSnapshots;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) private bundleRoundSetRewardClaimed;
-    mapping(uint256 => mapping(bytes32 => bool)) private bundleAllowedAiDeclarations;
-    mapping(uint256 => bytes32[]) private bundleAllowedAiDeclarationLists;
     /// @dev Storage placeholder reserving the slot once occupied by the removed
     ///      `rewardPoolFunderNullifier` mapping (slim 2820d934). DO NOT remove or repurpose:
     ///      preserves storage layout for any in-place proxy upgrade from a deployment that
@@ -153,9 +148,7 @@ contract QuestionRewardPoolEscrow is
     event RewardPoolPurposeSet(
         uint256 indexed rewardPoolId, uint8 indexed bountyKind, uint256 indexed challengedRoundId, bytes32 reasonHash
     );
-    event RewardPoolEligibilitySet(
-        uint256 indexed rewardPoolId, uint8 indexed bountyEligibility, bytes32[] allowedAiDeclarationIds
-    );
+    event RewardPoolEligibilitySet(uint256 indexed rewardPoolId, uint8 indexed bountyEligibility);
     event QuestionBundleRewardCreated(
         uint256 indexed bundleId,
         address indexed funder,
@@ -172,9 +165,7 @@ contract QuestionRewardPoolEscrow is
         uint8 bountyEligibility,
         bytes32 bountyEligibilityDataHash
     );
-    event QuestionBundleEligibilitySet(
-        uint256 indexed bundleId, uint8 indexed bountyEligibility, bytes32[] allowedAiDeclarationIds
-    );
+    event QuestionBundleEligibilitySet(uint256 indexed bundleId, uint8 indexed bountyEligibility);
     event QuestionBundleRoundRecorded(
         uint256 indexed bundleId,
         uint256 indexed contentId,
@@ -256,7 +247,6 @@ contract QuestionRewardPoolEscrow is
             bountyClosesAt,
             feedbackClosesAt,
             BOUNTY_ELIGIBILITY_OPEN,
-            _emptyAiDeclarationIds(),
             false
         );
     }
@@ -268,8 +258,7 @@ contract QuestionRewardPoolEscrow is
         uint256 requiredSettledRounds,
         uint256 bountyClosesAt,
         uint256 feedbackClosesAt,
-        uint8 bountyEligibility,
-        bytes32[] calldata allowedAiDeclarationIds
+        uint8 bountyEligibility
     ) external nonReentrant whenNotPaused returns (uint256 rewardPoolId) {
         _requireCurrentRegistryEscrow();
         rewardPoolId = _createRewardPool(
@@ -283,7 +272,6 @@ contract QuestionRewardPoolEscrow is
             bountyClosesAt,
             feedbackClosesAt,
             bountyEligibility,
-            allowedAiDeclarationIds,
             false
         );
     }
@@ -306,8 +294,7 @@ contract QuestionRewardPoolEscrow is
             bountyClosesAt,
             feedbackClosesAt,
             1,
-            BOUNTY_ELIGIBILITY_OPEN,
-            _emptyAiDeclarationIds()
+            BOUNTY_ELIGIBILITY_OPEN
         );
     }
 
@@ -319,8 +306,7 @@ contract QuestionRewardPoolEscrow is
         bytes32 reasonHash,
         uint256 bountyClosesAt,
         uint256 feedbackClosesAt,
-        uint8 bountyEligibility,
-        bytes32[] calldata allowedAiDeclarationIds
+        uint8 bountyEligibility
     ) external nonReentrant whenNotPaused returns (uint256 rewardPoolId) {
         rewardPoolId = _createPurposeRewardPool(
             contentId,
@@ -331,8 +317,7 @@ contract QuestionRewardPoolEscrow is
             bountyClosesAt,
             feedbackClosesAt,
             1,
-            bountyEligibility,
-            allowedAiDeclarationIds
+            bountyEligibility
         );
     }
 
@@ -354,8 +339,7 @@ contract QuestionRewardPoolEscrow is
             bountyClosesAt,
             feedbackClosesAt,
             2,
-            BOUNTY_ELIGIBILITY_OPEN,
-            _emptyAiDeclarationIds()
+            BOUNTY_ELIGIBILITY_OPEN
         );
     }
 
@@ -367,8 +351,7 @@ contract QuestionRewardPoolEscrow is
         bytes32 reasonHash,
         uint256 bountyClosesAt,
         uint256 feedbackClosesAt,
-        uint8 bountyEligibility,
-        bytes32[] calldata allowedAiDeclarationIds
+        uint8 bountyEligibility
     ) external nonReentrant whenNotPaused returns (uint256 rewardPoolId) {
         rewardPoolId = _createPurposeRewardPool(
             contentId,
@@ -379,8 +362,7 @@ contract QuestionRewardPoolEscrow is
             bountyClosesAt,
             feedbackClosesAt,
             2,
-            bountyEligibility,
-            allowedAiDeclarationIds
+            bountyEligibility
         );
     }
 
@@ -393,8 +375,7 @@ contract QuestionRewardPoolEscrow is
         uint256 bountyClosesAt,
         uint256 feedbackClosesAt,
         uint8 bountyKind,
-        uint8 bountyEligibility,
-        bytes32[] memory allowedAiDeclarationIds
+        uint8 bountyEligibility
     ) private returns (uint256 rewardPoolId) {
         _requireCurrentRegistryEscrow();
         rewardPoolId = _createRewardPool(
@@ -408,7 +389,6 @@ contract QuestionRewardPoolEscrow is
             bountyClosesAt,
             feedbackClosesAt,
             bountyEligibility,
-            allowedAiDeclarationIds,
             false
         );
         _setRewardPoolPurpose(rewardPoolId, bountyKind, relatedRoundId, reasonHash);
@@ -439,7 +419,6 @@ contract QuestionRewardPoolEscrow is
             bountyClosesAt,
             feedbackClosesAt,
             BOUNTY_ELIGIBILITY_OPEN,
-            _emptyAiDeclarationIds(),
             true
         );
     }
@@ -454,8 +433,7 @@ contract QuestionRewardPoolEscrow is
         uint256 requiredSettledRounds,
         uint256 bountyClosesAt,
         uint256 feedbackClosesAt,
-        uint8 bountyEligibility,
-        bytes32[] calldata allowedAiDeclarationIds
+        uint8 bountyEligibility
     ) external nonReentrant whenNotPaused returns (uint256 rewardPoolId) {
         require(msg.sender == address(registry), "Only registry");
         _requireRegistryVotingEngine();
@@ -471,7 +449,6 @@ contract QuestionRewardPoolEscrow is
             bountyClosesAt,
             feedbackClosesAt,
             bountyEligibility,
-            allowedAiDeclarationIds,
             true
         );
     }
@@ -497,8 +474,7 @@ contract QuestionRewardPoolEscrow is
             requiredSettledRounds,
             bountyClosesAt,
             feedbackClosesAt,
-            BOUNTY_ELIGIBILITY_OPEN,
-            _emptyAiDeclarationIds()
+            BOUNTY_ELIGIBILITY_OPEN
         );
     }
 
@@ -512,8 +488,7 @@ contract QuestionRewardPoolEscrow is
         uint256 requiredSettledRounds,
         uint256 bountyClosesAt,
         uint256 feedbackClosesAt,
-        uint8 bountyEligibility,
-        bytes32[] calldata allowedAiDeclarationIds
+        uint8 bountyEligibility
     ) external nonReentrant whenNotPaused returns (uint256 rewardPoolId) {
         return _createSubmissionBundleFromRegistry(
             bundleId,
@@ -525,8 +500,7 @@ contract QuestionRewardPoolEscrow is
             requiredSettledRounds,
             bountyClosesAt,
             feedbackClosesAt,
-            bountyEligibility,
-            allowedAiDeclarationIds
+            bountyEligibility
         );
     }
 
@@ -540,8 +514,7 @@ contract QuestionRewardPoolEscrow is
         uint256 requiredSettledRounds,
         uint256 bountyClosesAt,
         uint256 feedbackClosesAt,
-        uint8 bountyEligibility,
-        bytes32[] memory allowedAiDeclarationIds
+        uint8 bountyEligibility
     ) internal returns (uint256 rewardPoolId) {
         require(msg.sender == address(registry), "Only registry");
         _requireRegistryVotingEngine();
@@ -555,7 +528,7 @@ contract QuestionRewardPoolEscrow is
         require(requiredSettledRounds >= MIN_REQUIRED_SETTLED_ROUNDS, "Too few rounds");
         require(requiredSettledRounds <= MAX_REQUIRED_SETTLED_ROUNDS, "Too many rounds");
         require(amount >= requiredCompleters * requiredSettledRounds, "Amount too small");
-        _validateBountyEligibilityPolicy(bountyEligibility, allowedAiDeclarationIds);
+        _validateBountyEligibilityPolicy(bountyEligibility);
         _requireBundleFundingCoversMaxCompleters(contentIds, amount, requiredSettledRounds);
         // Bundles must have a strict future bountyClosesAt. Without this, a bountyClosesAt
         // of 0 would silently pass _requireFutureBountyWindow and render the bundle instantly
@@ -583,8 +556,7 @@ contract QuestionRewardPoolEscrow is
         bundle.funderNullifier = funderNullifier;
         bundle.fundedAmount = fundedAmount;
         bundle.unallocatedAmount = fundedAmount;
-        bundle.bountyEligibilityDataHash =
-            QuestionRewardPoolEscrowEligibilityLib.eligibilityDataHash(allowedAiDeclarationIds);
+        bundle.bountyEligibilityDataHash = QuestionRewardPoolEscrowEligibilityLib.eligibilityDataHash();
         // Registry-initiated submissions carry the mandatory-bounty anti-spam model:
         // unclaimed residue is forfeited to treasury rather than refunded, matching
         // the single-pool path (`createSubmissionRewardPoolFromRegistry`).
@@ -605,10 +577,6 @@ contract QuestionRewardPoolEscrow is
                 ++i;
             }
         }
-        _storeAllowedAiDeclarations(
-            bundleAllowedAiDeclarations, bundleAllowedAiDeclarationLists, bundleId, allowedAiDeclarationIds
-        );
-
         emit QuestionBundleRewardCreated(
             bundleId,
             funder,
@@ -625,7 +593,7 @@ contract QuestionRewardPoolEscrow is
             bountyEligibility,
             bundle.bountyEligibilityDataHash
         );
-        emit QuestionBundleEligibilitySet(bundleId, bountyEligibility, allowedAiDeclarationIds);
+        emit QuestionBundleEligibilitySet(bundleId, bountyEligibility);
         rewardPoolId = bundleId;
     }
 
@@ -640,7 +608,6 @@ contract QuestionRewardPoolEscrow is
         uint256 bountyClosesAt,
         uint256 feedbackClosesAt,
         uint8 bountyEligibility,
-        bytes32[] memory allowedAiDeclarationIds,
         bool nonRefundable
     ) internal returns (uint256 rewardPoolId) {
         uint256 fundedAmount = _pullExactToken(funder, asset, amount);
@@ -656,7 +623,6 @@ contract QuestionRewardPoolEscrow is
             bountyClosesAt,
             feedbackClosesAt,
             bountyEligibility,
-            allowedAiDeclarationIds,
             nonRefundable
         );
     }
@@ -672,13 +638,12 @@ contract QuestionRewardPoolEscrow is
         uint256 bountyClosesAt,
         uint256 feedbackClosesAt,
         uint8 bountyEligibility,
-        bytes32[] memory allowedAiDeclarationIds,
         bool nonRefundable
     ) internal returns (uint256 rewardPoolId) {
         uint256 amount = fundedAmount;
         require(amount > 0, "Amount required");
         require(asset == REWARD_ASSET_HREP || asset == REWARD_ASSET_USDC, "Invalid asset");
-        _validateBountyEligibilityPolicy(bountyEligibility, allowedAiDeclarationIds);
+        _validateBountyEligibilityPolicy(bountyEligibility);
         require(registry.isContentActive(contentId), "Content not active");
         require(requiredVoters >= MIN_REQUIRED_VOTERS, "Too few voters");
         require(requiredVoters >= _requiredParticipantFloorForAmount(amount), "High-value floor");
@@ -735,13 +700,8 @@ contract QuestionRewardPoolEscrow is
             bountyEligibility: bountyEligibility,
             nonRefundable: nonRefundable,
             reasonHash: bytes32(0),
-            bountyEligibilityDataHash: QuestionRewardPoolEscrowEligibilityLib.eligibilityDataHash(
-                allowedAiDeclarationIds
-            )
+            bountyEligibilityDataHash: QuestionRewardPoolEscrowEligibilityLib.eligibilityDataHash()
         });
-        _storeAllowedAiDeclarations(
-            rewardPoolAllowedAiDeclarations, rewardPoolAllowedAiDeclarationLists, rewardPoolId, allowedAiDeclarationIds
-        );
         rewardPoolSubmitterNullifier[rewardPoolId] = submitterNullifier;
         rewardPoolPayerIdentity[rewardPoolId] = payerIdentity;
         rewardPoolPayerNullifier[rewardPoolId] = payerNullifier;
@@ -764,7 +724,7 @@ contract QuestionRewardPoolEscrow is
             rewardPools[rewardPoolId].bountyEligibilityDataHash,
             nonRefundable
         );
-        emit RewardPoolEligibilitySet(rewardPoolId, bountyEligibility, allowedAiDeclarationIds);
+        emit RewardPoolEligibilitySet(rewardPoolId, bountyEligibility);
     }
 
     function _setRewardPoolPurpose(
@@ -1187,7 +1147,6 @@ contract QuestionRewardPoolEscrow is
             rewardPools,
             roundSnapshots,
             rewardClaimed,
-            rewardPoolAllowedAiDeclarations,
             rewardPoolPayerIdentity,
             rewardPoolPayerNullifier,
             rewardPoolSubmitterNullifier,
@@ -1208,23 +1167,19 @@ contract QuestionRewardPoolEscrow is
     function getRewardPoolEligibility(uint256 rewardPoolId)
         external
         view
-        returns (uint8 bountyEligibility, bytes32 bountyEligibilityDataHash, bytes32[] memory allowedAiDeclarationIds)
+        returns (uint8 bountyEligibility, bytes32 bountyEligibilityDataHash)
     {
         RewardPool storage rewardPool = _getExistingRewardPool(rewardPoolId);
-        return (
-            rewardPool.bountyEligibility,
-            rewardPool.bountyEligibilityDataHash,
-            rewardPoolAllowedAiDeclarationLists[rewardPoolId]
-        );
+        return (rewardPool.bountyEligibility, rewardPool.bountyEligibilityDataHash);
     }
 
     function getQuestionBundleEligibility(uint256 bundleId)
         external
         view
-        returns (uint8 bountyEligibility, bytes32 bountyEligibilityDataHash, bytes32[] memory allowedAiDeclarationIds)
+        returns (uint8 bountyEligibility, bytes32 bountyEligibilityDataHash)
     {
         BundleReward storage bundle = _getExistingBundleReward(bundleId);
-        return (bundle.bountyEligibility, bundle.bountyEligibilityDataHash, bundleAllowedAiDeclarationLists[bundleId]);
+        return (bundle.bountyEligibility, bundle.bountyEligibilityDataHash);
     }
 
     function pause() external onlyRole(PAUSER_ROLE) {
@@ -1284,49 +1239,8 @@ contract QuestionRewardPoolEscrow is
         return feedbackClosesAt;
     }
 
-    function _emptyAiDeclarationIds() internal pure returns (bytes32[] memory ids) {
-        ids = new bytes32[](0);
-    }
-
-    function _validateBountyEligibilityPolicy(uint8 bountyEligibility, bytes32[] memory allowedAiDeclarationIds)
-        internal
-        pure
-    {
+    function _validateBountyEligibilityPolicy(uint8 bountyEligibility) internal pure {
         require(QuestionRewardPoolEscrowEligibilityLib.isValidPolicy(bountyEligibility), "Invalid eligibility");
-        if (bountyEligibility == BOUNTY_ELIGIBILITY_SPECIFIC_AI_DECLARATIONS) {
-            require(allowedAiDeclarationIds.length > 0, "Missing declarations");
-        } else {
-            require(allowedAiDeclarationIds.length == 0, "Unexpected declarations");
-        }
-    }
-
-    function _storeAllowedAiDeclarations(
-        mapping(uint256 => mapping(bytes32 => bool)) storage allowedDeclarations,
-        mapping(uint256 => bytes32[]) storage declarationLists,
-        uint256 rewardId,
-        bytes32[] memory allowedAiDeclarationIds
-    ) internal {
-        uint256 existingCount = declarationLists[rewardId].length;
-        for (uint256 i = 0; i < existingCount;) {
-            delete allowedDeclarations[rewardId][declarationLists[rewardId][i]];
-            unchecked {
-                ++i;
-            }
-        }
-        delete declarationLists[rewardId];
-
-        uint256 declarationCount = allowedAiDeclarationIds.length;
-        for (uint256 i = 0; i < declarationCount;) {
-            bytes32 declarationId = allowedAiDeclarationIds[i];
-            require(declarationId != bytes32(0), "Invalid declaration");
-            if (!allowedDeclarations[rewardId][declarationId]) {
-                allowedDeclarations[rewardId][declarationId] = true;
-                declarationLists[rewardId].push(declarationId);
-            }
-            unchecked {
-                ++i;
-            }
-        }
     }
 
     function _rewardToken(uint8 asset) internal view returns (IERC20 token) {
@@ -1575,7 +1489,6 @@ contract QuestionRewardPoolEscrow is
             uint256 totalClaimWeight
         ) = QuestionRewardPoolEscrowQualificationLib.qualifyRound(
             roundSnapshots,
-            rewardPoolAllowedAiDeclarations,
             rewardPoolPayerIdentity,
             rewardPoolPayerNullifier,
             rewardPoolSubmitterNullifier,
@@ -1636,8 +1549,7 @@ contract QuestionRewardPoolEscrow is
                     funderNullifier: rewardPoolPayerNullifier[rewardPool.id],
                     submitterIdentity: rewardPool.submitterIdentity,
                     submitterNullifier: rewardPoolSubmitterNullifier[rewardPool.id]
-                }),
-                rewardPoolAllowedAiDeclarations
+                })
             );
     }
 
@@ -1727,8 +1639,6 @@ contract QuestionRewardPoolEscrow is
         return QuestionRewardPoolEscrowEligibilityLib.isAccountEligibleForBounty(
             votingEngine.protocolConfig(),
             rewardPool.bountyEligibility,
-            rewardPoolAllowedAiDeclarations,
-            rewardPool.id,
             eligibilityAccount
         );
     }
@@ -1743,8 +1653,6 @@ contract QuestionRewardPoolEscrow is
         return QuestionRewardPoolEscrowEligibilityLib.isAccountEligibleForBounty(
             votingEngine.protocolConfig(),
             bundle.bountyEligibility,
-            bundleAllowedAiDeclarations,
-            bundle.id,
             eligibilityAccount
         );
     }

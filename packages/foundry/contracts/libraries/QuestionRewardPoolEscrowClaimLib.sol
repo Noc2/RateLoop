@@ -87,7 +87,6 @@ library QuestionRewardPoolEscrowClaimLib {
         mapping(uint256 => RewardPool) storage rewardPools,
         mapping(uint256 => mapping(uint256 => RoundSnapshot)) storage roundSnapshots,
         mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) storage rewardClaimed,
-        mapping(uint256 => mapping(bytes32 => bool)) storage rewardPoolAllowedAiDeclarations,
         mapping(uint256 => address) storage rewardPoolPayerIdentity,
         mapping(uint256 => uint256) storage rewardPoolPayerNullifier,
         mapping(uint256 => uint256) storage rewardPoolSubmitterNullifier,
@@ -128,8 +127,6 @@ library QuestionRewardPoolEscrowClaimLib {
         if (!QuestionRewardPoolEscrowEligibilityLib.isAccountEligibleForBounty(
                 protocolConfig,
                 rewardPool.bountyEligibility,
-                rewardPoolAllowedAiDeclarations,
-                rewardPool.id,
                 eligibilityAccount
             )) {
             return 0;
@@ -149,7 +146,6 @@ library QuestionRewardPoolEscrowClaimLib {
             if (!_canPreviewNewQualification(rewardPool, roundId)) return 0;
             (, bool canQualify,, uint256 effectiveParticipantUnits, uint256 totalClaimWeight,) = _previewRoundQualification(
                 rewardPool,
-                rewardPoolAllowedAiDeclarations,
                 rewardPoolPayerIdentity,
                 rewardPoolPayerNullifier,
                 rewardPoolSubmitterNullifier,
@@ -313,7 +309,6 @@ library QuestionRewardPoolEscrowClaimLib {
 
     function _previewRoundQualification(
         RewardPool storage rewardPool,
-        mapping(uint256 => mapping(bytes32 => bool)) storage rewardPoolAllowedAiDeclarations,
         mapping(uint256 => address) storage rewardPoolPayerIdentity,
         mapping(uint256 => uint256) storage rewardPoolPayerNullifier,
         mapping(uint256 => uint256) storage rewardPoolSubmitterNullifier,
@@ -352,8 +347,7 @@ library QuestionRewardPoolEscrowClaimLib {
                     funderNullifier: rewardPoolPayerNullifier[rewardPool.id],
                     submitterIdentity: rewardPool.submitterIdentity,
                     submitterNullifier: rewardPoolSubmitterNullifier[rewardPool.id]
-                }),
-                rewardPoolAllowedAiDeclarations
+                })
             );
     }
 

@@ -35,10 +35,7 @@ library QuestionRewardPoolEscrowQualificationLib {
         uint256 submitterNullifier;
     }
 
-    function previewRoundQualification(
-        QualificationContext memory ctx,
-        mapping(uint256 => mapping(bytes32 => bool)) storage allowedAiDeclarationIds
-    )
+    function previewRoundQualification(QualificationContext memory ctx)
         internal
         view
         returns (
@@ -56,8 +53,7 @@ library QuestionRewardPoolEscrowQualificationLib {
         settledAt = roundSettledAt;
 
         roundSettled = true;
-        (rawEligibleVoters, effectiveParticipantUnits, totalClaimWeight) =
-            _countEligibleRevealedVoters(ctx, allowedAiDeclarationIds);
+        (rawEligibleVoters, effectiveParticipantUnits, totalClaimWeight) = _countEligibleRevealedVoters(ctx);
         uint256 minEffectiveUnits =
             ctx.requiredVoters > MIN_EFFECTIVE_PARTICIPANT_UNITS ? ctx.requiredVoters : MIN_EFFECTIVE_PARTICIPANT_UNITS;
         uint256 effectiveFloor = minEffectiveUnits * BPS_SCALE;
@@ -80,7 +76,6 @@ library QuestionRewardPoolEscrowQualificationLib {
 
     function qualifyRound(
         mapping(uint256 => mapping(uint256 => RoundSnapshot)) storage roundSnapshots,
-        mapping(uint256 => mapping(bytes32 => bool)) storage allowedAiDeclarationIds,
         mapping(uint256 => address) storage rewardPoolPayerIdentity,
         mapping(uint256 => uint256) storage rewardPoolPayerNullifier,
         mapping(uint256 => uint256) storage rewardPoolSubmitterNullifier,
@@ -127,8 +122,7 @@ library QuestionRewardPoolEscrowQualificationLib {
                 funderNullifier: rewardPoolPayerNullifier[rewardPool.id],
                 submitterIdentity: rewardPool.submitterIdentity,
                 submitterNullifier: rewardPoolSubmitterNullifier[rewardPool.id]
-            }),
-            allowedAiDeclarationIds
+            })
         );
         require(roundSettled, "Round not settled");
         require(canQualify, "Too few eligible voters");
@@ -209,10 +203,11 @@ library QuestionRewardPoolEscrowQualificationLib {
         return voterNullifier != 0 && (voterNullifier == funderNullifier || voterNullifier == submitterNullifier);
     }
 
-    function _countEligibleRevealedVoters(
-        QualificationContext memory ctx,
-        mapping(uint256 => mapping(bytes32 => bool)) storage allowedAiDeclarationIds
-    ) private view returns (uint256 rawEligibleVoters, uint256 effectiveParticipantUnits, uint256 totalClaimWeight) {
+    function _countEligibleRevealedVoters(QualificationContext memory ctx)
+        private
+        view
+        returns (uint256 rawEligibleVoters, uint256 effectiveParticipantUnits, uint256 totalClaimWeight)
+    {
         (,, uint16 commitCount,,,,,,,,,,,) = ctx.votingEngine.rounds(ctx.contentId, ctx.roundId);
         for (uint256 i = 0; i < commitCount;) {
             bytes32 commitKey = ctx.votingEngine.getRoundCommitKey(ctx.contentId, ctx.roundId, i);
@@ -233,8 +228,6 @@ library QuestionRewardPoolEscrowQualificationLib {
                         && QuestionRewardPoolEscrowEligibilityLib.isAccountEligibleForBounty(
                             ctx.protocolConfig,
                             ctx.bountyEligibility,
-                            allowedAiDeclarationIds,
-                            ctx.rewardId,
                             _bountyEligibilityAccount(ctx.voterIdNft, voterId, voter)
                         )
                 ) {
