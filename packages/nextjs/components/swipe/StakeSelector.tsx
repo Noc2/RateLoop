@@ -132,7 +132,6 @@ export function StakeSelector({
   const cooldownActive = cooldownSecondsRemaining > 0;
   const confirmDisabled = isConfirming || cooldownActive || amount < 0 || (amount > 0 && amount > maxStake);
   const phaseHeadline = effectiveIsBlind ? "Private round" : "Post-epoch reveal";
-  const phaseToneClassName = effectiveIsBlind ? "bg-primary/10" : "bg-warning/10";
   const phaseHeadlineClassName = effectiveIsBlind ? "text-primary" : "text-warning";
   const selectedPresetClassName = "action-orange-control";
   const sliderClassName = "range range-primary range-sm w-full";
@@ -200,7 +199,7 @@ export function StakeSelector({
               </span>
             </h3>
 
-            <div className="mb-5 rounded-2xl bg-base-100/70 px-4 py-4 ring-1 ring-base-content/10">
+            <div className="mb-5 px-1 pt-1">
               <div className="flex items-end justify-between gap-3">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.16em] text-base-content/55">Your vote</p>
@@ -211,7 +210,6 @@ export function StakeSelector({
                   <p className="mt-1 text-lg font-semibold tabular-nums text-base-content/75">
                     {normalizedCurrentRating.toFixed(1)}
                   </p>
-                  <p className="mt-0.5 text-xs font-semibold text-base-content/55">Current score</p>
                 </div>
               </div>
               <div className="mt-4 grid grid-cols-2 gap-2">
@@ -351,7 +349,7 @@ export function StakeSelector({
               )}
             </div>
 
-            <div className={`mb-4 rounded-2xl px-4 py-3 ${phaseToneClassName}`}>
+            <div className="mb-4 border-t border-base-content/10 pt-4">
               <div className="flex items-center gap-1.5">
                 <p className={`text-sm font-semibold ${phaseHeadlineClassName}`}>{phaseHeadline}</p>
                 {!effectiveIsBlind && <InfoTooltip text={openPhaseParticipationTooltip} position="bottom" />}
