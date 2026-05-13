@@ -296,7 +296,12 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
           throw new Error("World ID credential transaction was not submitted.");
         }
 
-        if (!isVerifiedBonusClaimed && currentVerifiedBonus !== undefined && currentVerifiedBonus > 0n && !hasInvalidReferral) {
+        if (
+          !isVerifiedBonusClaimed &&
+          currentVerifiedBonus !== undefined &&
+          currentVerifiedBonus > 0n &&
+          !hasInvalidReferral
+        ) {
           try {
             await claimVerifiedBonus(
               {

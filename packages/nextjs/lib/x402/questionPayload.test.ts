@@ -321,7 +321,7 @@ test("parseX402QuestionRequest rejects unsupported bounty scopes", () => {
           ...VALID_REQUEST.bounty,
           bountyEligibility: "2",
         },
-    }),
+      }),
     /bountyEligibility must be 0 or 1/,
   );
 });
