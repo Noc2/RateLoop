@@ -3,12 +3,13 @@ pragma solidity ^0.8.20;
 
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {IWorldIDRouter} from "./interfaces/IWorldIDRouter.sol";
+import {IRaterIdentityRegistry} from "./interfaces/IRaterIdentityRegistry.sol";
 
 /// @title RaterRegistry
 /// @notice Optional rater metadata, human credentials, trust anchors, and social follows for RateLoop.
 /// @dev This registry is intentionally non-gating: rating contracts may read it, but base participation
 ///      must keep working when no profile, credential, or trust signal exists.
-contract RaterRegistry is AccessControl {
+contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
     bytes32 public constant SEEDER_ROLE = keccak256("SEEDER_ROLE");
 
@@ -74,6 +75,10 @@ contract RaterRegistry is AccessControl {
     mapping(address => mapping(address => bool)) public isFollowing;
     mapping(address => uint256) public followingCount;
     mapping(address => uint256) public followerCount;
+    mapping(address => address) public delegateTo;
+    mapping(address => address) public delegateOf;
+    mapping(address => address) public pendingDelegateTo;
+    mapping(address => address) public pendingDelegateOf;
 
     IWorldIDRouter public immutable worldIdRouter;
     bytes32 public immutable worldIdScope;
@@ -107,12 +112,22 @@ contract RaterRegistry is AccessControl {
     event TrustAttestationRevoked(bytes32 indexed attestationId, address indexed issuer, address indexed subject);
     event ProfileFollowed(address indexed follower, address indexed target, uint64 followedAt);
     event ProfileUnfollowed(address indexed follower, address indexed target, uint64 unfollowedAt);
+    event DelegateRequested(address indexed holder, address indexed delegate);
+    event DelegateSet(address indexed holder, address indexed delegate);
+    event DelegateRemoved(address indexed holder, address indexed previousDelegate);
+    event PendingDelegateRemoved(address indexed holder, address indexed previousPendingDelegate);
 
     error InvalidAddress();
     error InvalidCredential();
     error InvalidMultiplier();
     error InvalidTrustAttestation();
     error NullifierAlreadyAssigned();
+    error CannotDelegateSelf();
+    error CallerIsDelegate();
+    error DelegateIsHolder();
+    error DelegateAlreadyAssigned();
+    error NoDelegateSet();
+    error NoPendingDelegate();
 
     constructor(
         address admin,
@@ -175,6 +190,86 @@ contract RaterRegistry is AccessControl {
         followerCount[target] -= 1;
 
         emit ProfileUnfollowed(msg.sender, target, uint64(block.timestamp));
+    }
+
+    /// @notice Request a delegate address to act for the caller's rater identity.
+    /// @dev Delegation requires explicit acceptance and does not allow chains.
+    function setDelegate(address delegate) external {
+        if (delegate == address(0)) revert InvalidAddress();
+        if (delegate == msg.sender) revert CannotDelegateSelf();
+        if (delegateOf[msg.sender] != address(0)) revert CallerIsDelegate();
+        if (_hasCredentialIdentity(delegate)) revert DelegateIsHolder();
+        if (delegateOf[delegate] != address(0)) revert DelegateAlreadyAssigned();
+        if (pendingDelegateOf[delegate] != address(0)) revert DelegateAlreadyAssigned();
+        if (delegateTo[delegate] != address(0)) revert DelegateAlreadyAssigned();
+
+        _clearPendingDelegateRequest(msg.sender);
+
+        pendingDelegateTo[msg.sender] = delegate;
+        pendingDelegateOf[delegate] = msg.sender;
+
+        emit DelegateRequested(msg.sender, delegate);
+    }
+
+    /// @notice Accept a pending delegation request.
+    function acceptDelegate() external {
+        address holder = pendingDelegateOf[msg.sender];
+        if (holder == address(0)) revert NoPendingDelegate();
+        if (_hasCredentialIdentity(msg.sender)) revert DelegateIsHolder();
+        if (delegateOf[msg.sender] != address(0)) revert DelegateAlreadyAssigned();
+        if (delegateTo[msg.sender] != address(0)) revert DelegateAlreadyAssigned();
+
+        address oldDelegate = delegateTo[holder];
+        if (oldDelegate != address(0)) {
+            delete delegateOf[oldDelegate];
+            emit DelegateRemoved(holder, oldDelegate);
+        }
+
+        delete pendingDelegateTo[holder];
+        delete pendingDelegateOf[msg.sender];
+
+        delegateTo[holder] = msg.sender;
+        delegateOf[msg.sender] = holder;
+
+        emit DelegateSet(holder, msg.sender);
+    }
+
+    /// @notice Remove active or pending delegation involving the caller.
+    function removeDelegate() external {
+        address oldDelegate = delegateTo[msg.sender];
+        address pendingDelegate = pendingDelegateTo[msg.sender];
+        address pendingDelegator = pendingDelegateOf[msg.sender];
+        address activeDelegator = delegateOf[msg.sender];
+        if (
+            oldDelegate == address(0) && pendingDelegate == address(0) && pendingDelegator == address(0)
+                && activeDelegator == address(0)
+        ) {
+            revert NoDelegateSet();
+        }
+
+        if (oldDelegate != address(0)) {
+            delete delegateTo[msg.sender];
+            delete delegateOf[oldDelegate];
+            emit DelegateRemoved(msg.sender, oldDelegate);
+        }
+
+        if (pendingDelegate != address(0)) {
+            delete pendingDelegateTo[msg.sender];
+            delete pendingDelegateOf[pendingDelegate];
+            emit PendingDelegateRemoved(msg.sender, pendingDelegate);
+        }
+
+        if (pendingDelegator != address(0)) {
+            delete pendingDelegateOf[msg.sender];
+            delete pendingDelegateTo[pendingDelegator];
+            emit PendingDelegateRemoved(pendingDelegator, msg.sender);
+        }
+
+        if (activeDelegator != address(0)) {
+            delete delegateOf[msg.sender];
+            delete delegateTo[activeDelegator];
+            emit DelegateRemoved(activeDelegator, msg.sender);
+        }
     }
 
     /// @notice Attach a fresh World ID verified-human unit to the calling wallet.
@@ -301,6 +396,24 @@ contract RaterRegistry is AccessControl {
         return _trustAttestations[attestationId];
     }
 
+    function resolveRater(address actor) public view returns (ResolvedRater memory resolved) {
+        if (actor == address(0)) return resolved;
+
+        address holder = actor;
+        address delegator = delegateOf[actor];
+        bool delegated = delegator != address(0);
+        if (delegated) holder = delegator;
+
+        (bytes32 identityKey, bytes32 humanNullifier, bool hasActiveCredential) = _identityForHolder(holder);
+        return ResolvedRater({
+            holder: holder,
+            identityKey: identityKey,
+            humanNullifier: humanNullifier,
+            hasActiveHumanCredential: hasActiveCredential,
+            delegated: delegated
+        });
+    }
+
     function trustAttestationId(address issuer, address subject, uint256 categoryId) public pure returns (bytes32) {
         return keccak256(abi.encode(issuer, subject, categoryId));
     }
@@ -311,6 +424,11 @@ contract RaterRegistry is AccessControl {
 
     function hashToField(bytes memory value) public pure returns (uint256) {
         return uint256(keccak256(value)) >> 8;
+    }
+
+    function addressIdentityKey(address account) public pure returns (bytes32) {
+        if (account == address(0)) return bytes32(0);
+        return keccak256(abi.encodePacked("rateloop.address-identity-v1", account));
     }
 
     function hasActiveHumanCredential(address rater) public view returns (bool) {
@@ -346,6 +464,7 @@ contract RaterRegistry is AccessControl {
         address currentOwner = humanNullifierOwner[nullifierHash];
         if (currentOwner != address(0) && currentOwner != rater) revert NullifierAlreadyAssigned();
         humanNullifierOwner[nullifierHash] = rater;
+        _clearInboundDelegation(rater);
 
         _humanCredentials[rater] = HumanCredential({
             verified: true,
@@ -361,6 +480,51 @@ contract RaterRegistry is AccessControl {
         emit HumanCredentialVerified(
             rater, nullifierHash, scope, provider, uint64(block.timestamp), expiresAt, evidenceHash
         );
+    }
+
+    function _identityForHolder(address holder)
+        internal
+        view
+        returns (bytes32 identityKey, bytes32 humanNullifier, bool hasActiveCredential)
+    {
+        HumanCredential storage credential = _humanCredentials[holder];
+        if (credential.verified && !credential.revoked && credential.nullifierHash != bytes32(0)) {
+            humanNullifier = credential.nullifierHash;
+            identityKey = humanNullifier;
+            hasActiveCredential = credential.expiresAt > block.timestamp;
+        } else {
+            identityKey = addressIdentityKey(holder);
+        }
+    }
+
+    function _hasCredentialIdentity(address holder) internal view returns (bool) {
+        HumanCredential storage credential = _humanCredentials[holder];
+        return credential.verified && !credential.revoked && credential.nullifierHash != bytes32(0);
+    }
+
+    function _clearPendingDelegateRequest(address holder) internal {
+        address pendingDelegate = pendingDelegateTo[holder];
+        if (pendingDelegate != address(0)) {
+            delete pendingDelegateTo[holder];
+            delete pendingDelegateOf[pendingDelegate];
+            emit PendingDelegateRemoved(holder, pendingDelegate);
+        }
+    }
+
+    function _clearInboundDelegation(address account) internal {
+        address activeDelegator = delegateOf[account];
+        if (activeDelegator != address(0)) {
+            delete delegateOf[account];
+            delete delegateTo[activeDelegator];
+            emit DelegateRemoved(activeDelegator, account);
+        }
+
+        address pendingDelegator = pendingDelegateOf[account];
+        if (pendingDelegator != address(0)) {
+            delete pendingDelegateOf[account];
+            delete pendingDelegateTo[pendingDelegator];
+            emit PendingDelegateRemoved(pendingDelegator, account);
+        }
     }
 
     function _setTrustSeed(address rater, uint64 sunsetAt, bytes32 seedRoot) internal {

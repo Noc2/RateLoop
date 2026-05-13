@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import { Test } from "forge-std/Test.sol";
 import { RaterRegistry } from "../contracts/RaterRegistry.sol";
+import { IRaterIdentityRegistry } from "../contracts/interfaces/IRaterIdentityRegistry.sol";
 import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
 
 contract RaterRegistryTest is Test {
@@ -262,6 +263,90 @@ contract RaterRegistryTest is Test {
         vm.warp(expiresAt + 1);
 
         assertFalse(registry.hasActiveHumanCredential(rater));
+
+        IRaterIdentityRegistry.ResolvedRater memory resolved = registry.resolveRater(rater);
+        assertEq(resolved.holder, rater);
+        assertEq(resolved.identityKey, CURYO_ANCHOR_ID);
+        assertEq(resolved.humanNullifier, CURYO_ANCHOR_ID);
+        assertFalse(resolved.hasActiveHumanCredential);
+        assertFalse(resolved.delegated);
+    }
+
+    function test_ResolveRaterUsesAddressIdentityWithoutCredential() public view {
+        IRaterIdentityRegistry.ResolvedRater memory resolved = registry.resolveRater(rater);
+
+        assertEq(resolved.holder, rater);
+        assertEq(resolved.identityKey, registry.addressIdentityKey(rater));
+        assertEq(resolved.humanNullifier, bytes32(0));
+        assertFalse(resolved.hasActiveHumanCredential);
+        assertFalse(resolved.delegated);
+    }
+
+    function test_ResolveRaterUsesHumanNullifierIdentityWhenCredentialed() public {
+        vm.prank(admin);
+        registry.seedHumanCredential(rater, uint64(block.timestamp + 7 days), CURYO_ANCHOR_ID, EVIDENCE_HASH);
+
+        IRaterIdentityRegistry.ResolvedRater memory resolved = registry.resolveRater(rater);
+
+        assertEq(resolved.holder, rater);
+        assertEq(resolved.identityKey, CURYO_ANCHOR_ID);
+        assertEq(resolved.humanNullifier, CURYO_ANCHOR_ID);
+        assertTrue(resolved.hasActiveHumanCredential);
+        assertFalse(resolved.delegated);
+    }
+
+    function test_DelegationRequiresAcceptanceAndResolvesToHolderIdentity() public {
+        vm.prank(rater);
+        registry.setDelegate(otherRater);
+
+        IRaterIdentityRegistry.ResolvedRater memory pending = registry.resolveRater(otherRater);
+        assertEq(pending.holder, otherRater);
+        assertEq(pending.identityKey, registry.addressIdentityKey(otherRater));
+        assertFalse(pending.delegated);
+
+        vm.prank(otherRater);
+        registry.acceptDelegate();
+
+        IRaterIdentityRegistry.ResolvedRater memory resolved = registry.resolveRater(otherRater);
+        assertEq(resolved.holder, rater);
+        assertEq(resolved.identityKey, registry.addressIdentityKey(rater));
+        assertTrue(resolved.delegated);
+    }
+
+    function test_DelegateCannotChainOrUseOwnCredentialIdentity() public {
+        vm.prank(rater);
+        registry.setDelegate(otherRater);
+        vm.prank(otherRater);
+        registry.acceptDelegate();
+
+        vm.prank(otherRater);
+        vm.expectRevert(RaterRegistry.CallerIsDelegate.selector);
+        registry.setDelegate(subject);
+
+        vm.prank(admin);
+        registry.seedHumanCredential(subject, uint64(block.timestamp + 7 days), CURYO_ANCHOR_ID, EVIDENCE_HASH);
+
+        vm.prank(rater);
+        vm.expectRevert(RaterRegistry.DelegateIsHolder.selector);
+        registry.setDelegate(subject);
+    }
+
+    function test_AttestingCredentialClearsInboundDelegation() public {
+        vm.prank(rater);
+        registry.setDelegate(otherRater);
+        vm.prank(otherRater);
+        registry.acceptDelegate();
+
+        vm.prank(admin);
+        registry.seedHumanCredential(otherRater, uint64(block.timestamp + 7 days), CURYO_ANCHOR_ID, EVIDENCE_HASH);
+
+        assertEq(registry.delegateTo(rater), address(0));
+        assertEq(registry.delegateOf(otherRater), address(0));
+
+        IRaterIdentityRegistry.ResolvedRater memory resolved = registry.resolveRater(otherRater);
+        assertEq(resolved.holder, otherRater);
+        assertEq(resolved.identityKey, CURYO_ANCHOR_ID);
+        assertFalse(resolved.delegated);
     }
 
     function test_TrustAttestationIsRevocable() public {
