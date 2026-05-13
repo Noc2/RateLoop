@@ -3,13 +3,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import {
-  ArrowRightIcon,
-  ChartBarSquareIcon,
-  CheckCircleIcon,
-  ShieldCheckIcon,
-  SparklesIcon,
-} from "@heroicons/react/24/outline";
+import { ArrowRightIcon, ChartBarSquareIcon, CheckCircleIcon, ShieldCheckIcon } from "@heroicons/react/24/outline";
 import { RATE_ROUTE, SETTINGS_ROUTE } from "~~/constants/routes";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 import { type PonderRaterParticipationStatusResponse, ponderApi } from "~~/services/ponder/client";
@@ -123,10 +117,7 @@ export function GetLrepOnboarding({ address }: GetLrepOnboardingProps) {
       <section className="surface-card rounded-3xl p-6 sm:p-8">
         <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(260px,0.45fr)]">
           <div className="max-w-3xl">
-            <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.18em] text-primary/90">
-              <SparklesIcon className="h-4 w-4" />0 LREP
-            </div>
-            <h1 className="mt-4 text-3xl font-semibold text-base-content sm:text-4xl">Start building reputation</h1>
+            <h1 className="text-3xl font-semibold text-base-content sm:text-4xl">Start building reputation</h1>
             <p className="mt-4 text-base leading-7 text-base-content/65">
               You can earn LREP through protocol participation without buying it. The two useful paths for a new wallet
               are a one-time verified-human launch bonus, and zero-LREP ratings that can become earned-rater launch
