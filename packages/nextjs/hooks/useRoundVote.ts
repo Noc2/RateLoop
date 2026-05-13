@@ -230,14 +230,7 @@ export function useRoundVote() {
         return false;
       }
       const advisoryVoteRecorderWriteAddress = advisoryVoteRecorderAddress as `0x${string}`;
-      const advisoryVoteArgs = [
-        contentId,
-        roundContext,
-        targetRound,
-        drandChainHash,
-        commitHash,
-        ciphertext,
-      ] as const;
+      const advisoryVoteArgs = [contentId, roundContext, targetRound, drandChainHash, commitHash, ciphertext] as const;
       const commitVoteArgs = [
         contentId,
         roundContext,
