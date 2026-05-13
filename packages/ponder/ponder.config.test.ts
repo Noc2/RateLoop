@@ -17,6 +17,8 @@ const REQUIRED_PONDER_CONTRACTS = [
   "VoterIdNFT",
   "LoopReputation",
   "ParticipationPool",
+  "LaunchDistributionPool",
+  "AdvisoryVoteRecorder",
   "QuestionRewardPoolEscrow",
   "FeedbackBonusEscrow",
   "RaterRegistry",
@@ -69,6 +71,10 @@ const VALID_ENV = {
   PONDER_LREP_ADDRESS: chain4801?.LoopReputation?.address ?? "0x8888888888888888888888888888888888888888",
   PONDER_PARTICIPATION_POOL_ADDRESS:
     chain4801?.ParticipationPool?.address ?? "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  PONDER_LAUNCH_DISTRIBUTION_POOL_ADDRESS:
+    chain4801?.LaunchDistributionPool?.address ?? "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  PONDER_ADVISORY_VOTE_RECORDER_ADDRESS:
+    chain4801?.AdvisoryVoteRecorder?.address ?? "0xffffffffffffffffffffffffffffffffffffffff",
   PONDER_QUESTION_REWARD_POOL_ESCROW_ADDRESS:
     chain4801?.QuestionRewardPoolEscrow?.address ?? "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
   PONDER_QUESTION_REWARD_POOL_ESCROW_START_BLOCK: String(expectedQuestionRewardPoolEscrowStartBlock),
@@ -114,6 +120,8 @@ describe("ponder config", () => {
         "PONDER_VOTER_ID_NFT_ADDRESS",
         "PONDER_LREP_ADDRESS",
         "PONDER_PARTICIPATION_POOL_ADDRESS",
+        "PONDER_LAUNCH_DISTRIBUTION_POOL_ADDRESS",
+        "PONDER_ADVISORY_VOTE_RECORDER_ADDRESS",
         "PONDER_QUESTION_REWARD_POOL_ESCROW_ADDRESS",
         "PONDER_FEEDBACK_BONUS_ESCROW_ADDRESS",
         "PONDER_RATER_REGISTRY_ADDRESS",
@@ -155,6 +163,8 @@ describe("ponder config", () => {
         "PONDER_VOTER_ID_NFT_ADDRESS",
         "PONDER_LREP_ADDRESS",
         "PONDER_PARTICIPATION_POOL_ADDRESS",
+        "PONDER_LAUNCH_DISTRIBUTION_POOL_ADDRESS",
+        "PONDER_ADVISORY_VOTE_RECORDER_ADDRESS",
         "PONDER_QUESTION_REWARD_POOL_ESCROW_ADDRESS",
         "PONDER_FEEDBACK_BONUS_ESCROW_ADDRESS",
         "PONDER_RATER_REGISTRY_ADDRESS",
@@ -216,6 +226,8 @@ describe("ponder config", () => {
         "PONDER_VOTER_ID_NFT_ADDRESS",
         "PONDER_LREP_ADDRESS",
         "PONDER_PARTICIPATION_POOL_ADDRESS",
+        "PONDER_LAUNCH_DISTRIBUTION_POOL_ADDRESS",
+        "PONDER_ADVISORY_VOTE_RECORDER_ADDRESS",
         "PONDER_QUESTION_REWARD_POOL_ESCROW_ADDRESS",
         "PONDER_FEEDBACK_BONUS_ESCROW_ADDRESS",
         "PONDER_RATER_REGISTRY_ADDRESS",

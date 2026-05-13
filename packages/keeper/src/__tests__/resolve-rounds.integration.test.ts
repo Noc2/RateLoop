@@ -49,6 +49,7 @@ const { mockConfig, timelockDecrypt } = vi.hoisted(() => ({
     contracts: {
       votingEngine: "0x0000000000000000000000000000000000000000",
       contentRegistry: "0x0000000000000000000000000000000000000000",
+      advisoryVoteRecorder: "0x0000000000000000000000000000000000000000",
     },
     dormancyPeriod: 30n * 24n * 60n * 60n,
     cleanupBatchSize: 25,
@@ -101,6 +102,9 @@ const CONTRACTS = {
     "0x0000000000000000000000000000000000000000",
   roundVotingEngine:
     chain31337?.RoundVotingEngine?.address ??
+    "0x0000000000000000000000000000000000000000",
+  advisoryVoteRecorder:
+    chain31337?.AdvisoryVoteRecorder?.address ??
     "0x0000000000000000000000000000000000000000",
 } as const;
 
@@ -275,6 +279,7 @@ describe("resolveRounds integration", () => {
       if (integrationReady) {
         mockConfig.contracts.votingEngine = CONTRACTS.roundVotingEngine;
         mockConfig.contracts.contentRegistry = CONTRACTS.contentRegistry;
+        mockConfig.contracts.advisoryVoteRecorder = CONTRACTS.advisoryVoteRecorder;
         integrationIssue = "";
       } else {
         integrationIssue = `readiness failed: chainId=${chainId}, engine=${engineCode}, registry=${registryCode}`;

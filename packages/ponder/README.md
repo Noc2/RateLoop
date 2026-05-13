@@ -41,6 +41,7 @@ Within the package directory, additional scripts are available:
 | `PONDER_RPC_URL_4801`                      | RPC URL for World Chain Sepolia                                                                  |
 | `PONDER_RPC_URL_480`                       | RPC URL for World Chain mainnet                                                                  |
 | `PONDER_CONTENT_REGISTRY_ADDRESS` etc.     | Local Hardhat address overrides; fallback addresses when the active chain has no shared deployment in `@rateloop/contracts` |
+| `PONDER_ADVISORY_VOTE_RECORDER_ADDRESS`    | Advisory zero-stake vote recorder address; local override only once deployments are refreshed    |
 | `PONDER_CONTENT_REGISTRY_START_BLOCK` etc. | Optional fallback start blocks when the active chain has no shared deployment metadata           |
 | `CORS_ORIGIN`                              | Allowed origins (comma-separated; required in production)                                        |
 | `RATE_LIMIT_TRUSTED_IP_HEADERS`            | Comma-separated proxy IP headers to trust for API rate limiting in production                    |

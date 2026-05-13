@@ -14,6 +14,8 @@ const VALID_ENV = {
   CHAIN_ID: "31337",
   VOTING_ENGINE_ADDRESS: chain31337?.RoundVotingEngine?.address ?? "0x1111111111111111111111111111111111111111",
   CONTENT_REGISTRY_ADDRESS: chain31337?.ContentRegistry?.address ?? "0x2222222222222222222222222222222222222222",
+  ADVISORY_VOTE_RECORDER_ADDRESS:
+    chain31337?.AdvisoryVoteRecorder?.address ?? "0x5555555555555555555555555555555555555555",
   ROUND_REWARD_DISTRIBUTOR_ADDRESS:
     chain31337?.RoundRewardDistributor?.address ?? "0x3333333333333333333333333333333333333333",
   FRONTEND_REGISTRY_ADDRESS: chain31337?.FrontendRegistry?.address ?? "0x4444444444444444444444444444444444444444",
@@ -22,6 +24,8 @@ const VALID_ENV = {
 };
 const LOCAL_VOTING_ENGINE = chain31337?.RoundVotingEngine?.address ?? "0x0000000000000000000000000000000000000000";
 const LOCAL_CONTENT_REGISTRY = chain31337?.ContentRegistry?.address ?? "0x0000000000000000000000000000000000000000";
+const LOCAL_ADVISORY_VOTE_RECORDER =
+  chain31337?.AdvisoryVoteRecorder?.address ?? "0x5555555555555555555555555555555555555555";
 
 async function loadKeeperConfig(
   overrides: Record<string, string | undefined> = {},
@@ -181,11 +185,12 @@ describe("keeper config", () => {
       {
         CHAIN_ID: "31337",
       },
-      ["VOTING_ENGINE_ADDRESS", "CONTENT_REGISTRY_ADDRESS"],
+      ["VOTING_ENGINE_ADDRESS", "CONTENT_REGISTRY_ADDRESS", "ADVISORY_VOTE_RECORDER_ADDRESS"],
     );
 
     expect(config.contracts.votingEngine).toBe(LOCAL_VOTING_ENGINE);
     expect(config.contracts.contentRegistry).toBe(LOCAL_CONTENT_REGISTRY);
+    expect(config.contracts.advisoryVoteRecorder).toBe(LOCAL_ADVISORY_VOTE_RECORDER);
   });
 
   itWithWorldChainArtifacts("derives World Chain mainnet contract addresses from shared deployment artifacts", async () => {
@@ -193,7 +198,7 @@ describe("keeper config", () => {
       {
         CHAIN_ID: "480",
       },
-      ["VOTING_ENGINE_ADDRESS", "CONTENT_REGISTRY_ADDRESS"],
+      ["VOTING_ENGINE_ADDRESS", "CONTENT_REGISTRY_ADDRESS", "ADVISORY_VOTE_RECORDER_ADDRESS"],
     );
 
     expect(config.chainId).toBe(480);
@@ -206,14 +211,17 @@ describe("keeper config", () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const localVotingEngine = "0x196dBCBb54b8ec4958c959D8949EBFE87aC2Aaaf";
     const localContentRegistry = "0x82Dc47734901ee7d4f4232f398752cB9Dd5dACcC";
+    const localAdvisoryVoteRecorder = "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa";
     const { config } = await loadKeeperConfig({
       CHAIN_ID: "31337",
       VOTING_ENGINE_ADDRESS: localVotingEngine,
       CONTENT_REGISTRY_ADDRESS: localContentRegistry,
+      ADVISORY_VOTE_RECORDER_ADDRESS: localAdvisoryVoteRecorder,
     });
 
     expect(config.contracts.votingEngine).toBe(localVotingEngine);
     expect(config.contracts.contentRegistry).toBe(localContentRegistry);
+    expect(config.contracts.advisoryVoteRecorder).toBe(localAdvisoryVoteRecorder);
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("Using VOTING_ENGINE_ADDRESS"));
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("Using CONTENT_REGISTRY_ADDRESS"));
   });
@@ -224,6 +232,7 @@ describe("keeper config", () => {
         CHAIN_ID: "480",
         VOTING_ENGINE_ADDRESS: "0x196dBCBb54b8ec4958c959D8949EBFE87aC2Aaaf",
         CONTENT_REGISTRY_ADDRESS: "0x82Dc47734901ee7d4f4232f398752cB9Dd5dACcC",
+        ADVISORY_VOTE_RECORDER_ADDRESS: "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa",
       }),
     ).rejects.toThrow("conflicts with RoundVotingEngine from shared deployment artifacts");
   });
@@ -234,6 +243,7 @@ describe("keeper config", () => {
         CHAIN_ID: "999999",
         VOTING_ENGINE_ADDRESS: "0x196dBCBb54b8ec4958c959D8949EBFE87aC2Aaaf",
         CONTENT_REGISTRY_ADDRESS: "0x82Dc47734901ee7d4f4232f398752cB9Dd5dACcC",
+        ADVISORY_VOTE_RECORDER_ADDRESS: "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa",
       }),
     ).rejects.toThrow("Missing shared deployment artifact for RoundVotingEngine on chain 999999");
   });

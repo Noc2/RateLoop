@@ -11,6 +11,8 @@ const counters: Record<string, number> = {
   keeper_rounds_cancelled_total: 0,
   keeper_rounds_reveal_failed_finalized_total: 0,
   keeper_votes_revealed_total: 0,
+  keeper_advisory_votes_revealed_total: 0,
+  keeper_advisory_launch_credits_claimed_total: 0,
   keeper_unrevealed_cleanup_batches_total: 0,
   keeper_content_marked_dormant_total: 0,
   keeper_runs_total: 0,
@@ -59,6 +61,8 @@ export function recordRun(result: KeeperResult, durationMs: number) {
   counters.keeper_rounds_cancelled_total += result.roundsCancelled;
   counters.keeper_rounds_reveal_failed_finalized_total += result.roundsRevealFailedFinalized;
   counters.keeper_votes_revealed_total += result.votesRevealed;
+  counters.keeper_advisory_votes_revealed_total += result.advisoryVotesRevealed;
+  counters.keeper_advisory_launch_credits_claimed_total += result.advisoryLaunchCreditsClaimed;
   counters.keeper_unrevealed_cleanup_batches_total += result.cleanupBatchesProcessed;
   counters.keeper_content_marked_dormant_total += result.contentMarkedDormant;
   gauges.keeper_last_run_duration_seconds = durationMs / 1000;
@@ -82,6 +86,8 @@ function renderMetrics(): string {
     keeper_rounds_cancelled_total: "Total rounds cancelled by keeper",
     keeper_rounds_reveal_failed_finalized_total: "Total rounds finalized as RevealFailed by keeper",
     keeper_votes_revealed_total: "Total votes revealed by keeper",
+    keeper_advisory_votes_revealed_total: "Total advisory votes revealed by keeper",
+    keeper_advisory_launch_credits_claimed_total: "Total advisory launch credits claimed by keeper",
     keeper_unrevealed_cleanup_batches_total: "Total unrevealed-vote cleanup batches processed by keeper",
     keeper_content_marked_dormant_total: "Total content items marked dormant",
     keeper_runs_total: "Total keeper run cycles",

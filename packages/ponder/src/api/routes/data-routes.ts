@@ -2,6 +2,7 @@ import { ROUND_STATE } from "@rateloop/contracts/protocol";
 import { and, asc, desc, eq, gte, inArray, or, sql } from "ponder";
 import { db } from "ponder:api";
 import {
+  advisoryVote,
   category,
   content,
   feedbackBonusAward,
@@ -395,6 +396,7 @@ export function registerDataRoutes(app: ApiApp) {
       [trustSeed],
       [launchProgress],
       [launchPolicy],
+      [advisoryStats],
     ] = await Promise.all([
       db
         .select()
@@ -421,6 +423,17 @@ export function registerDataRoutes(app: ApiApp) {
         .from(launchRewardPolicyState)
         .where(eq(launchRewardPolicyState.id, "current"))
         .limit(1),
+      db
+        .select({
+          totalCount: sql<number>`count(*)`,
+          revealedCount: sql<number>`count(*) filter (where ${advisoryVote.revealed} = true)`,
+          creditedCount: sql<number>`count(*) filter (where ${advisoryVote.launchCreditClaimed} = true)`,
+          totalPaid: sql<bigint>`coalesce(sum(${advisoryVote.paidAmount}), 0)`,
+          latestCommittedAt: sql<bigint>`max(${advisoryVote.committedAt})`,
+          latestCreditedAt: sql<bigint>`max(${advisoryVote.creditedAt})`,
+        })
+        .from(advisoryVote)
+        .where(eq(advisoryVote.voter, address)),
     ]);
 
     const wallSeconds = BigInt(Math.floor(Date.now() / 1000));
@@ -431,6 +444,8 @@ export function registerDataRoutes(app: ApiApp) {
         trustSeed?.updatedAt,
         launchProgress?.updatedAt,
         launchPolicy?.updatedAt,
+        advisoryStats?.latestCommittedAt,
+        advisoryStats?.latestCreditedAt,
       ]) ?? null;
     const statusTimestamp =
       maxBigInt([indexedChainTimestamp, wallSeconds]) ?? wallSeconds;
@@ -482,7 +497,7 @@ export function registerDataRoutes(app: ApiApp) {
       eligibilityRatingCount: launchPolicy?.eligibilityRatingCount ?? 5,
       rewardingRatingCount: launchPolicy?.rewardingRatingCount ?? 10,
       unverifiedEarnedRaterCapBps:
-        launchPolicy?.unverifiedEarnedRaterCapBps ?? 10_000,
+        launchPolicy?.unverifiedEarnedRaterCapBps ?? 2_500,
       requireNoPendingCleanup: launchPolicy?.requireNoPendingCleanup ?? true,
     };
     const launchPaid = launchProgress?.launchPaid ?? 0n;
@@ -567,6 +582,14 @@ export function registerDataRoutes(app: ApiApp) {
         latestCreditedAt: launchProgress?.latestCreditedAt ?? null,
         latestPaidAt: launchProgress?.latestPaidAt ?? null,
         policy: currentLaunchPolicy,
+      },
+      advisoryVotes: {
+        totalCount: Number(advisoryStats?.totalCount ?? 0),
+        revealedCount: Number(advisoryStats?.revealedCount ?? 0),
+        creditedCount: Number(advisoryStats?.creditedCount ?? 0),
+        totalPaid: advisoryStats?.totalPaid ?? 0n,
+        latestCommittedAt: advisoryStats?.latestCommittedAt ?? null,
+        latestCreditedAt: advisoryStats?.latestCreditedAt ?? null,
       },
       participationPolicy: {
         baseRewardWeightBps: BASE_RATER_MULTIPLIER_BPS,

@@ -15,6 +15,7 @@ const { mockConfig, timelockDecrypt } = vi.hoisted(() => ({
     contracts: {
       votingEngine: "0x1111111111111111111111111111111111111111",
       contentRegistry: "0x2222222222222222222222222222222222222222",
+      advisoryVoteRecorder: "0x5555555555555555555555555555555555555555",
     },
     dormancyPeriod: 30n * 24n * 60n * 60n,
     cleanupBatchSize: 25,

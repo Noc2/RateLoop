@@ -206,6 +206,38 @@ export const voteRelations = relations(vote, ({ one }) => ({
   }),
 }));
 
+export const advisoryVote = onchainTable(
+  "advisory_vote",
+  (t) => ({
+    id: t.hex().primaryKey(),
+    contentId: t.bigint().notNull(),
+    roundId: t.bigint().notNull(),
+    voter: t.hex().notNull(),
+    commitHash: t.hex().notNull(),
+    targetRound: t.bigint().notNull(),
+    drandChainHash: t.hex().notNull(),
+    roundReferenceRatingBps: t.integer().notNull(),
+    isUp: t.boolean(),
+    predictedUpBps: t.integer(),
+    scoreBps: t.integer(),
+    paidAmount: t.bigint().notNull().default(0n),
+    launchCreditClaimed: t.boolean().notNull().default(false),
+    revealed: t.boolean().notNull().default(false),
+    committedAt: t.bigint().notNull(),
+    revealedAt: t.bigint(),
+    creditedAt: t.bigint(),
+    updatedAt: t.bigint().notNull(),
+  }),
+  (table) => ({
+    voterIdx: index().on(table.voter),
+    contentIdx: index().on(table.contentId),
+    roundIdx: index().on(table.roundId),
+    contentRoundIdx: index().on(table.contentId, table.roundId),
+    revealedIdx: index().on(table.revealed),
+    launchCreditClaimedIdx: index().on(table.launchCreditClaimed),
+  }),
+);
+
 // ============================================================
 // REWARD CLAIMS
 // ============================================================

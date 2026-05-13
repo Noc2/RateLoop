@@ -16,6 +16,8 @@ function makeResult(overrides: Partial<KeeperResult> = {}): KeeperResult {
     roundsCancelled: 0,
     roundsRevealFailedFinalized: 0,
     votesRevealed: 0,
+    advisoryVotesRevealed: 0,
+    advisoryLaunchCreditsClaimed: 0,
     cleanupBatchesProcessed: 0,
     contentMarkedDormant: 0,
     ...overrides,

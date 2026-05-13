@@ -3,6 +3,7 @@ import { isAddress } from "viem";
 import { http } from "viem";
 
 import {
+  AdvisoryVoteRecorderAbi,
   CategoryRegistryAbi,
   ContentRegistryAbi,
   LoopReputationAbi,
@@ -217,6 +218,7 @@ const addresses = {
   loopReputation: resolveAddress("PONDER_LREP_ADDRESS", "LoopReputation"),
   participationPool: resolveAddress("PONDER_PARTICIPATION_POOL_ADDRESS", "ParticipationPool"),
   launchDistributionPool: resolveAddress("PONDER_LAUNCH_DISTRIBUTION_POOL_ADDRESS", "LaunchDistributionPool"),
+  advisoryVoteRecorder: resolveAddress("PONDER_ADVISORY_VOTE_RECORDER_ADDRESS", "AdvisoryVoteRecorder"),
   questionRewardPoolEscrow: resolveAddress("PONDER_QUESTION_REWARD_POOL_ESCROW_ADDRESS", "QuestionRewardPoolEscrow"),
   feedbackBonusEscrow: resolveAddress("PONDER_FEEDBACK_BONUS_ESCROW_ADDRESS", "FeedbackBonusEscrow"),
   raterRegistry: resolveAddress("PONDER_RATER_REGISTRY_ADDRESS", "RaterRegistry"),
@@ -233,6 +235,7 @@ const startBlocks = {
   loopReputation: resolveStartBlock("PONDER_LREP_START_BLOCK", "LoopReputation"),
   participationPool: resolveStartBlock("PONDER_PARTICIPATION_POOL_START_BLOCK", "ParticipationPool"),
   launchDistributionPool: resolveStartBlock("PONDER_LAUNCH_DISTRIBUTION_POOL_START_BLOCK", "LaunchDistributionPool"),
+  advisoryVoteRecorder: resolveStartBlock("PONDER_ADVISORY_VOTE_RECORDER_START_BLOCK", "AdvisoryVoteRecorder"),
   questionRewardPoolEscrow: resolveStartBlock("PONDER_QUESTION_REWARD_POOL_ESCROW_START_BLOCK", "QuestionRewardPoolEscrow"),
   feedbackBonusEscrow: resolveStartBlock("PONDER_FEEDBACK_BONUS_ESCROW_START_BLOCK", "FeedbackBonusEscrow"),
   raterRegistry: resolveStartBlock("PONDER_RATER_REGISTRY_START_BLOCK", "RaterRegistry"),
@@ -296,6 +299,10 @@ export default createConfig({
     LaunchDistributionPool: {
       abi: LaunchDistributionPoolAbi,
       network: contractOnActiveNetwork(addresses.launchDistributionPool, startBlocks.launchDistributionPool),
+    },
+    AdvisoryVoteRecorder: {
+      abi: AdvisoryVoteRecorderAbi,
+      network: contractOnActiveNetwork(addresses.advisoryVoteRecorder, startBlocks.advisoryVoteRecorder),
     },
     QuestionRewardPoolEscrow: {
       abi: QuestionRewardPoolEscrowAbi,

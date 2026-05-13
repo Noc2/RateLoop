@@ -268,6 +268,13 @@ function loadConfig() {
         errors,
         warnings,
       }),
+      advisoryVoteRecorder: resolveContractAddress({
+        chainId,
+        envName: "ADVISORY_VOTE_RECORDER_ADDRESS",
+        contractName: "AdvisoryVoteRecorder",
+        errors,
+        warnings,
+      }),
     },
 
     // Wallet

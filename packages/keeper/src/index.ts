@@ -123,6 +123,8 @@ async function main() {
         result.roundsSettled +
         result.roundsCancelled +
         result.votesRevealed +
+        result.advisoryVotesRevealed +
+        result.advisoryLaunchCreditsClaimed +
         result.contentMarkedDormant;
       if (total > 0) {
         logger.info("Run complete", { ...result, durationMs: duration });

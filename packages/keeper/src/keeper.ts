@@ -19,6 +19,7 @@
 import type { PublicClient, WalletClient, Chain, Account } from "viem";
 import { timelockDecrypt, mainnetClient } from "tlock-js";
 import {
+  AdvisoryVoteRecorderAbi,
   ContentRegistryAbi,
   QuestionRewardPoolEscrowAbi,
   RoundVotingEngineAbi,
@@ -52,6 +53,8 @@ export interface KeeperResult {
   roundsCancelled: number;
   roundsRevealFailedFinalized: number;
   votesRevealed: number;
+  advisoryVotesRevealed: number;
+  advisoryLaunchCreditsClaimed: number;
   cleanupBatchesProcessed: number;
   contentMarkedDormant: number;
 }
@@ -73,6 +76,8 @@ function emptyResult(): KeeperResult {
     roundsCancelled: 0,
     roundsRevealFailedFinalized: 0,
     votesRevealed: 0,
+    advisoryVotesRevealed: 0,
+    advisoryLaunchCreditsClaimed: 0,
     cleanupBatchesProcessed: 0,
     contentMarkedDormant: 0,
   };
@@ -324,6 +329,7 @@ export async function resolveRounds(
 ): Promise<KeeperResult> {
   const engineAddr = config.contracts.votingEngine;
   const registryAddr = config.contracts.contentRegistry;
+  const advisoryAddr = config.contracts.advisoryVoteRecorder;
 
   // Use on-chain block.timestamp — this is what the contract uses for checks.
   let now: bigint;
@@ -382,6 +388,17 @@ export async function resolveRounds(
           now,
         );
         result.votesRevealed += revealedCount;
+        result.advisoryVotesRevealed += await _revealAdvisoryCommits(
+          publicClient,
+          walletClient,
+          chain,
+          account,
+          logger,
+          advisoryAddr,
+          contentId,
+          activeRoundId,
+          now,
+        );
 
         // Re-read round after reveals to get updated state
         let round: RoundData;
@@ -422,6 +439,16 @@ export async function resolveRounds(
             });
             result.roundsSettled++;
             enqueueRoundForCleanup(contentId, activeRoundId);
+            result.advisoryLaunchCreditsClaimed += await _claimAdvisoryLaunchCredits(
+              publicClient,
+              walletClient,
+              chain,
+              account,
+              logger,
+              advisoryAddr,
+              contentId,
+              activeRoundId,
+            );
 
             // Drive bundle qualification (no-op for non-bundled content). Settlement only
             // records the round into the bundle slot; qualification — which iterates voters
@@ -558,6 +585,19 @@ export async function resolveRounds(
           contentId: Number(contentId),
           error: getRevertReason(err),
         });
+      }
+
+      if (latestRoundId > 0n) {
+        result.advisoryLaunchCreditsClaimed += await _claimAdvisoryLaunchCredits(
+          publicClient,
+          walletClient,
+          chain,
+          account,
+          logger,
+          advisoryAddr,
+          contentId,
+          latestRoundId,
+        );
       }
 
       // --- 6. Dormancy sweep ---
@@ -814,6 +854,238 @@ async function _revealCommits(
   }
 
   return revealed;
+}
+
+async function readRoundAdvisoryCommitKeys(
+  publicClient: Pick<PublicClient, "readContract">,
+  advisoryAddr: `0x${string}`,
+  contentId: bigint,
+  roundId: bigint,
+): Promise<readonly `0x${string}`[]> {
+  const count = (await publicClient.readContract({
+    address: advisoryAddr,
+    abi: AdvisoryVoteRecorderAbi,
+    functionName: "roundAdvisoryCommitCount",
+    args: [contentId, roundId],
+  })) as bigint;
+  if (count === 0n) return [];
+
+  const total = Number(count);
+  const results: `0x${string}`[] = [];
+  const batchSize = 50;
+  for (let offset = 0; offset < total; offset += batchSize) {
+    const size = Math.min(batchSize, total - offset);
+    const batch = await Promise.all(
+      Array.from({ length: size }, (_, i) =>
+        publicClient.readContract({
+          address: advisoryAddr,
+          abi: AdvisoryVoteRecorderAbi,
+          functionName: "getRoundAdvisoryCommitKey",
+          args: [contentId, roundId, BigInt(offset + i)],
+        }) as Promise<`0x${string}`>,
+      ),
+    );
+    results.push(...batch);
+  }
+  return results;
+}
+
+async function _revealAdvisoryCommits(
+  publicClient: PublicClient,
+  walletClient: WalletClient,
+  chain: Chain,
+  account: Account,
+  logger: Logger,
+  advisoryAddr: `0x${string}`,
+  contentId: bigint,
+  roundId: bigint,
+  now: bigint,
+): Promise<number> {
+  let revealed = 0;
+  let commitKeys: readonly `0x${string}`[];
+  try {
+    commitKeys = await readRoundAdvisoryCommitKeys(publicClient, advisoryAddr, contentId, roundId);
+  } catch {
+    return 0;
+  }
+
+  for (const commitKey of commitKeys) {
+    try {
+      const rawCommit = await publicClient.readContract({
+        address: advisoryAddr,
+        abi: AdvisoryVoteRecorderAbi,
+        functionName: "advisoryCommitRevealData",
+        args: [commitKey],
+      });
+      const commit = parseCommitData(rawCommit);
+      if (commit.revealed) continue;
+      if (now < commit.revealableAfter) continue;
+
+      const priorFailures = decryptFailureCount.get(commitKey) ?? 0;
+      if (priorFailures >= MAX_DECRYPT_RETRIES) continue;
+
+      const metadataValidation = validateCiphertextMetadata(commit);
+      if (!metadataValidation.ok) {
+        markPermanentDecryptFailure(commitKey);
+        incrementCounter("keeper_decrypt_failures_total");
+        logger.error("advisory tlock ciphertext metadata invalid", {
+          contentId: Number(contentId),
+          roundId: Number(roundId),
+          commitKey,
+          permanent: true,
+          error: metadataValidation.reason,
+        });
+        continue;
+      }
+
+      let decrypted: {
+        isUp: boolean;
+        predictedUpBps: number;
+        predictedUpPercent: number;
+        salt: `0x${string}`;
+      } | null;
+      try {
+        decrypted = await decryptTlockVoteCiphertext(commit.ciphertext as `0x${string}`);
+      } catch (err: unknown) {
+        const decryptError = classifyDecryptError(err);
+        if (decryptError.retryable) {
+          decryptFailureCount.delete(commitKey);
+          logger.debug("advisory tlock ciphertext not decryptable yet", {
+            contentId: Number(contentId),
+            roundId: Number(roundId),
+            commitKey,
+            decryptableAtRound: decryptError.decryptableAtRound,
+            error: decryptError.message,
+          });
+          continue;
+        }
+
+        const count = trackDecryptFailure(commitKey);
+        incrementCounter("keeper_decrypt_failures_total");
+        const logFn = count >= MAX_DECRYPT_RETRIES ? logger.error.bind(logger) : logger.warn.bind(logger);
+        logFn("advisory tlock decryption failed", {
+          contentId: Number(contentId),
+          roundId: Number(roundId),
+          commitKey,
+          attempt: count,
+          permanent: count >= MAX_DECRYPT_RETRIES,
+          error: decryptError.message,
+        });
+        continue;
+      }
+
+      if (!decrypted) {
+        const count = trackDecryptFailure(commitKey);
+        incrementCounter("keeper_decrypt_failures_total");
+        const logFn = count >= MAX_DECRYPT_RETRIES ? logger.error.bind(logger) : logger.warn.bind(logger);
+        logFn("Failed to decode advisory tlock ciphertext", {
+          contentId: Number(contentId),
+          roundId: Number(roundId),
+          commitKey,
+          attempt: count,
+          permanent: count >= MAX_DECRYPT_RETRIES,
+        });
+        continue;
+      }
+
+      decryptFailureCount.delete(commitKey);
+      try {
+        await writeContractAndConfirm(publicClient, walletClient, {
+          chain,
+          account,
+          address: advisoryAddr,
+          abi: AdvisoryVoteRecorderAbi,
+          functionName: "revealAdvisoryVote",
+          args: [commitKey, decrypted.isUp, decrypted.predictedUpBps, decrypted.salt],
+        });
+        logger.info("Revealed advisory vote", {
+          contentId: Number(contentId),
+          roundId: Number(roundId),
+          commitKey,
+        });
+        revealed++;
+      } catch (err: unknown) {
+        const reason = getRevertReason(err);
+        if (!isExpectedRevert(reason)) {
+          logger.warn("Failed to reveal advisory vote", {
+            contentId: Number(contentId),
+            roundId: Number(roundId),
+            commitKey,
+            error: reason,
+          });
+        }
+      }
+    } catch (err: unknown) {
+      logger.debug("Error processing advisory commit", {
+        contentId: Number(contentId),
+        roundId: Number(roundId),
+        commitKey,
+        error: getRevertReason(err),
+      });
+    }
+  }
+
+  return revealed;
+}
+
+async function _claimAdvisoryLaunchCredits(
+  publicClient: PublicClient,
+  walletClient: WalletClient,
+  chain: Chain,
+  account: Account,
+  logger: Logger,
+  advisoryAddr: `0x${string}`,
+  contentId: bigint,
+  roundId: bigint,
+): Promise<number> {
+  let claimed = 0;
+  let commitKeys: readonly `0x${string}`[];
+  try {
+    commitKeys = await readRoundAdvisoryCommitKeys(publicClient, advisoryAddr, contentId, roundId);
+  } catch {
+    return 0;
+  }
+
+  for (const commitKey of commitKeys) {
+    try {
+      const rawCore = (await publicClient.readContract({
+        address: advisoryAddr,
+        abi: AdvisoryVoteRecorderAbi,
+        functionName: "advisoryCommitCore",
+        args: [commitKey],
+      })) as readonly unknown[];
+      const revealed = Boolean(rawCore[5]);
+      const launchCreditClaimed = Boolean(rawCore[8]);
+      if (!revealed || launchCreditClaimed) continue;
+
+      await writeContractAndConfirm(publicClient, walletClient, {
+        chain,
+        account,
+        address: advisoryAddr,
+        abi: AdvisoryVoteRecorderAbi,
+        functionName: "claimAdvisoryLaunchCredit",
+        args: [commitKey],
+      });
+      logger.info("Claimed advisory launch credit", {
+        contentId: Number(contentId),
+        roundId: Number(roundId),
+        commitKey,
+      });
+      claimed++;
+    } catch (err: unknown) {
+      const reason = getRevertReason(err);
+      if (!isExpectedRevert(reason)) {
+        logger.debug("Could not claim advisory launch credit", {
+          contentId: Number(contentId),
+          roundId: Number(roundId),
+          commitKey,
+          error: reason,
+        });
+      }
+    }
+  }
+
+  return claimed;
 }
 
 async function _processQueuedCleanupRounds(
