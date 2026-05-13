@@ -141,9 +141,6 @@ test("getAccuracyLeaderboard can include reputation blocks", async () => {
                 activeTrustAttestationCount: 4,
                 followerCount: 3,
                 followingCount: 2,
-                aiTier: 0,
-                aiTierName: "A0",
-                aiDeclared: false,
               },
             },
           ],
@@ -166,7 +163,6 @@ test("getAccuracyLeaderboard can include reputation blocks", async () => {
   });
 
   assert.equal(response.items[0]?.reputation?.followerCount, 3);
-  assert.equal(response.items[0]?.reputation?.aiTierName, "A0");
   assert.match(requestedUrl, /\/accuracy-leaderboard\?/);
   assert.match(requestedUrl, /includeReputation=true/);
   assert.match(requestedUrl, /minSignalVotes=5/);
@@ -224,56 +220,16 @@ test("getRaterParticipationStatus requests the typed participation-status route"
             indexedBlockNumber: null,
           },
           rater: "0x1111111111111111111111111111111111111111",
-          raterType: 2,
-          raterTypeName: "AI",
-          participationLane: "ai_declared",
+          raterType: 1,
+          raterTypeName: "Human",
+          participationLane: "verified_human",
           humanCredential: {
-            verified: false,
+            verified: true,
             revoked: false,
-            status: "missing",
-            verifiedAt: null,
+            status: "verified",
+            verifiedAt: "999",
             expiresAt: null,
             evidenceHash: null,
-          },
-          aiDeclaration: {
-            declared: true,
-            active: true,
-            inactiveReason: "none",
-            operator: "0x2222222222222222222222222222222222222222",
-            version: 1,
-            effectiveEpoch: "1",
-            expiresAtEpoch: "0",
-            effectiveAt: "1",
-            expiresAt: null,
-            declaredTier: 2,
-            declaredTierName: "A1Verified",
-            effectiveTier: 2,
-            effectiveTierName: "A1Verified",
-            tier: 2,
-            tierName: "A1Verified",
-            behaviorChanged: false,
-            probePending: false,
-            probeStatus: "passed",
-            declarationHash: null,
-            modelClass: 1,
-            modelId: null,
-            provider: null,
-            promptTemplateHash: null,
-            retrievalConfigHash: null,
-            toolingHash: null,
-            disclosure: 1,
-            declaredAt: "1000",
-            retiredAt: null,
-            lastProbeResultHash: null,
-            latestProbe: null,
-          },
-          challengeStatus: {
-            openCount: 0,
-            latestChallengeId: null,
-            latestStatus: 0,
-            latestResolvedAt: null,
-            latestOperatorSlash: "0",
-            latestChallengerReward: "0",
           },
           trust: {
             activeSeed: null,
@@ -301,9 +257,7 @@ test("getRaterParticipationStatus requests the typed participation-status route"
           participationPolicy: {
             baseRewardWeightBps: 10000,
             humanVerificationAffectsRewardWeight: false,
-            aiDeclarationAffectsRewardWeight: false,
             verifiedHumanCountsAsLaunchAnchor: true,
-            aiDeclarationCanAnchorLaunchRewards: false,
           },
         }),
         {
@@ -323,117 +277,11 @@ test("getRaterParticipationStatus requests the typed participation-status route"
     requestedUrl,
     /\/rater-participation-status\/0x1111111111111111111111111111111111111111$/,
   );
-  assert.equal(response.participationLane, "ai_declared");
-  assert.equal(response.humanCredential.status, "missing");
-  assert.equal(response.aiDeclaration.tierName, "A1Verified");
+  assert.equal(response.participationLane, "verified_human");
+  assert.equal(response.humanCredential.status, "verified");
   assert.equal(response.trust.activeInboundAttestationCount, 4);
   assert.equal(response.launchRewards.remainingLaunchCap, "75");
-  assert.equal(
-    response.participationPolicy.aiDeclarationCanAnchorLaunchRewards,
-    false,
-  );
   assert.equal(response.participationPolicy.baseRewardWeightBps, 10000);
-});
-
-test("AI rater read helpers request declaration productization routes", async () => {
-  const requestedUrls: string[] = [];
-  const read = createCuryoReadClient({
-    apiBaseUrl: "https://api.curyo.xyz",
-    fetchImpl: async (input: URL | RequestInfo) => {
-      requestedUrls.push(String(input));
-      return new Response(JSON.stringify({ items: [], limit: 10, offset: 0 }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      });
-    },
-    timeoutMs: 5_000,
-  });
-
-  await read.listAiRaterDeclarations({
-    operator: "0x2222222222222222222222222222222222222222",
-    tier: 2,
-    probePending: false,
-    limit: 10,
-  });
-  await read.getAiRaterDeclaration(
-    "0x1111111111111111111111111111111111111111",
-  );
-  await read.getAiRaterDeclarationHistory(
-    "0x1111111111111111111111111111111111111111",
-    { version: 3, limit: 5, offset: 10 },
-  );
-  await read.getAiRaterProbeResults(
-    "0x1111111111111111111111111111111111111111",
-    { passed: true },
-  );
-  await read.getAiRaterDriftFlags("0x1111111111111111111111111111111111111111");
-  await read.getAiRaterDeclarationChallenges(
-    "0x1111111111111111111111111111111111111111",
-    { status: 1 },
-  );
-
-  assert.match(
-    requestedUrls[0] ?? "",
-    /\/ai-rater-declarations\?operator=0x2222222222222222222222222222222222222222&tier=2&probePending=false&limit=10$/,
-  );
-  assert.match(
-    requestedUrls[1] ?? "",
-    /\/ai-rater-declarations\/0x1111111111111111111111111111111111111111$/,
-  );
-  assert.match(
-    requestedUrls[2] ?? "",
-    /\/ai-rater-declarations\/0x1111111111111111111111111111111111111111\/history\?version=3&limit=5&offset=10$/,
-  );
-  assert.match(
-    requestedUrls[3] ?? "",
-    /\/ai-rater-declarations\/0x1111111111111111111111111111111111111111\/probes\?passed=true$/,
-  );
-  assert.match(
-    requestedUrls[4] ?? "",
-    /\/ai-rater-declarations\/0x1111111111111111111111111111111111111111\/drift-flags$/,
-  );
-  assert.match(
-    requestedUrls[5] ?? "",
-    /\/ai-rater-declarations\/0x1111111111111111111111111111111111111111\/challenges\?status=1$/,
-  );
-});
-
-test("getAiRaterOperatorBond requests the operator bond route", async () => {
-  let requestedUrl = "";
-  const read = createCuryoReadClient({
-    apiBaseUrl: "https://api.curyo.xyz",
-    fetchImpl: async (input: URL | RequestInfo) => {
-      requestedUrl = String(input);
-      return new Response(
-        JSON.stringify({
-          bond: {
-            operator: "0x2222222222222222222222222222222222222222",
-            totalBond: "0",
-            bondAsset: "USDC",
-            bondDecimals: 6,
-            updatedAt: null,
-          },
-        }),
-        {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        },
-      );
-    },
-    timeoutMs: 5_000,
-  });
-
-  const response = await read.getAiRaterOperatorBond(
-    "0x2222222222222222222222222222222222222222",
-  );
-
-  assert.match(
-    requestedUrl,
-    /\/ai-rater-operators\/0x2222222222222222222222222222222222222222\/bond$/,
-  );
-  assert.equal(response.bond.totalBond, "0");
-  assert.equal(response.bond.bondAsset, "USDC");
-  assert.equal(response.bond.bondDecimals, 6);
 });
 
 test("read client surfaces API errors with status codes", async () => {

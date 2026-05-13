@@ -216,16 +216,7 @@ export type CuryoHumanCredentialStatus =
   | "verified"
   | "expired"
   | "revoked";
-export type CuryoParticipationLane = "verified_human" | "ai_declared" | "open";
-export type CuryoAiDeclarationTierName = "A0" | "A1Unverified" | "A1Verified";
-export type CuryoAiProbeStatus = "none" | "pending" | "passed" | "failed";
-export type CuryoAiDeclarationInactiveReason =
-  | "none"
-  | "missing"
-  | "retired"
-  | "future"
-  | "expired"
-  | "challenged";
+export type CuryoParticipationLane = "verified_human" | "open";
 
 export interface CuryoAccuracyLeaderboardReputation {
   raterType: number;
@@ -235,9 +226,6 @@ export interface CuryoAccuracyLeaderboardReputation {
   activeTrustAttestationCount: number;
   followerCount: number;
   followingCount: number;
-  aiTier: number;
-  aiTierName: CuryoAiDeclarationTierName | "A0";
-  aiDeclared: boolean;
   [key: string]: unknown;
 }
 
@@ -292,52 +280,6 @@ export interface CuryoRaterParticipationStatusResponse {
     expiresAt: string | null;
     evidenceHash: string | null;
   };
-  aiDeclaration: {
-    declared: boolean;
-    active: boolean;
-    inactiveReason: CuryoAiDeclarationInactiveReason;
-    operator: `0x${string}` | null;
-    version: number;
-    effectiveEpoch: string | null;
-    expiresAtEpoch: string | null;
-    effectiveAt: string | null;
-    expiresAt: string | null;
-    declaredTier: number;
-    declaredTierName: CuryoAiDeclarationTierName;
-    effectiveTier: number;
-    effectiveTierName: CuryoAiDeclarationTierName;
-    tier: number;
-    tierName: CuryoAiDeclarationTierName;
-    behaviorChanged: boolean;
-    probePending: boolean;
-    probeStatus: CuryoAiProbeStatus;
-    declarationHash: string | null;
-    modelClass: number | null;
-    modelId: string | null;
-    provider: string | null;
-    promptTemplateHash: string | null;
-    retrievalConfigHash: string | null;
-    toolingHash: string | null;
-    disclosure: number | null;
-    declaredAt: string | null;
-    retiredAt: string | null;
-    lastProbeResultHash: string | null;
-    latestProbe: {
-      passed: boolean;
-      confidenceBps: number;
-      probeLibraryHash: string;
-      resultHash: string;
-      recordedAt: string;
-    } | null;
-  };
-  challengeStatus: {
-    openCount: number;
-    latestChallengeId: string | null;
-    latestStatus: number;
-    latestResolvedAt: string | null;
-    latestOperatorSlash: string;
-    latestChallengerReward: string;
-  };
   trust: {
     activeSeed: {
       active: boolean;
@@ -375,9 +317,7 @@ export interface CuryoRaterParticipationStatusResponse {
   participationPolicy: {
     baseRewardWeightBps: number;
     humanVerificationAffectsRewardWeight: boolean;
-    aiDeclarationAffectsRewardWeight: boolean;
     verifiedHumanCountsAsLaunchAnchor: boolean;
-    aiDeclarationCanAnchorLaunchRewards: boolean;
   };
   [key: string]: unknown;
 }
@@ -389,87 +329,6 @@ export interface CuryoPaginatedResponse<T> {
   limit?: number;
   offset?: number;
   hasMore?: boolean;
-}
-
-export interface CuryoAiRaterDeclarationItem {
-  rater: `0x${string}`;
-  operator: `0x${string}`;
-  version: number;
-  effectiveEpoch: string;
-  expiresAtEpoch: string;
-  tier: number;
-  behaviorChanged: boolean;
-  probePending: boolean;
-  declarationHash: `0x${string}`;
-  modelClass: number;
-  modelId: `0x${string}`;
-  provider: `0x${string}`;
-  promptTemplateHash: `0x${string}`;
-  retrievalConfigHash: `0x${string}`;
-  toolingHash: `0x${string}`;
-  disclosure: number;
-  declaredAt: string;
-  retiredAt: string | null;
-  lastProbeResultHash: `0x${string}` | null;
-  updatedAt: string;
-  [key: string]: unknown;
-}
-
-export interface CuryoAiRaterDeclarationHistoryItem
-  extends CuryoAiRaterDeclarationItem {
-  id: string;
-}
-
-export interface CuryoAiRaterProbeResultItem {
-  id: string;
-  rater: `0x${string}`;
-  operator: `0x${string}`;
-  version: number;
-  passed: boolean;
-  confidenceBps: number;
-  probeLibraryHash: `0x${string}`;
-  resultHash: `0x${string}`;
-  recordedAt: string;
-  [key: string]: unknown;
-}
-
-export interface CuryoAiRaterDriftFlagItem {
-  id: string;
-  rater: `0x${string}`;
-  operator: `0x${string}`;
-  version: number;
-  driftScoreBps: number;
-  evidenceHash: `0x${string}`;
-  flaggedAt: string;
-  [key: string]: unknown;
-}
-
-export interface CuryoAiRaterDeclarationChallengeItem {
-  challengeId: string;
-  challenger: `0x${string}`;
-  rater: `0x${string}`;
-  operator: `0x${string}`;
-  declarationVersion: number;
-  evidenceHash: `0x${string}`;
-  resolutionHash: `0x${string}` | null;
-  bondAmount: string;
-  bondAsset?: string;
-  bondDecimals?: number;
-  status: number;
-  operatorSlash: string;
-  challengerReward: string;
-  openedAt: string;
-  resolvedAt: string | null;
-  [key: string]: unknown;
-}
-
-export interface CuryoAiRaterOperatorBond {
-  operator: `0x${string}`;
-  totalBond: string;
-  bondAsset?: string;
-  bondDecimals?: number;
-  updatedAt: string | null;
-  [key: string]: unknown;
 }
 
 export interface CuryoContentDetailsResponse {
@@ -555,40 +414,6 @@ export interface ListCategoriesParams {
   offset?: number;
 }
 
-export interface ListAiRaterDeclarationsParams {
-  operator?: string;
-  tier?: number;
-  probePending?: boolean;
-  limit?: number;
-  offset?: number;
-}
-
-export interface AiRaterDeclarationHistoryParams {
-  version?: number;
-  limit?: number;
-  offset?: number;
-}
-
-export interface AiRaterProbeResultsParams {
-  version?: number;
-  passed?: boolean;
-  limit?: number;
-  offset?: number;
-}
-
-export interface AiRaterDriftFlagsParams {
-  version?: number;
-  limit?: number;
-  offset?: number;
-}
-
-export interface AiRaterDeclarationChallengesParams {
-  version?: number;
-  status?: number;
-  limit?: number;
-  offset?: number;
-}
-
 export interface GetFollowsParams {
   limit?: number;
   offset?: number;
@@ -631,31 +456,6 @@ export interface CuryoReadClient {
   getRaterParticipationStatus(
     address: string,
   ): Promise<CuryoRaterParticipationStatusResponse>;
-  listAiRaterDeclarations(
-    params?: ListAiRaterDeclarationsParams,
-  ): Promise<CuryoPaginatedResponse<CuryoAiRaterDeclarationItem>>;
-  getAiRaterDeclaration(
-    address: string,
-  ): Promise<{ declaration: CuryoAiRaterDeclarationItem | null }>;
-  getAiRaterDeclarationHistory(
-    address: string,
-    params?: AiRaterDeclarationHistoryParams,
-  ): Promise<CuryoPaginatedResponse<CuryoAiRaterDeclarationHistoryItem>>;
-  getAiRaterProbeResults(
-    address: string,
-    params?: AiRaterProbeResultsParams,
-  ): Promise<CuryoPaginatedResponse<CuryoAiRaterProbeResultItem>>;
-  getAiRaterDriftFlags(
-    address: string,
-    params?: AiRaterDriftFlagsParams,
-  ): Promise<CuryoPaginatedResponse<CuryoAiRaterDriftFlagItem>>;
-  getAiRaterDeclarationChallenges(
-    address: string,
-    params?: AiRaterDeclarationChallengesParams,
-  ): Promise<CuryoPaginatedResponse<CuryoAiRaterDeclarationChallengeItem>>;
-  getAiRaterOperatorBond(
-    address: string,
-  ): Promise<{ bond: CuryoAiRaterOperatorBond }>;
   getStats(): Promise<CuryoGlobalStats>;
   searchVotes(
     params?: SearchVotesParams,
@@ -707,46 +507,6 @@ export function createCuryoReadClient(
       request<CuryoRaterParticipationStatusResponse>(
         config,
         `/rater-participation-status/${address}`,
-      ),
-    listAiRaterDeclarations: (params) =>
-      request<CuryoPaginatedResponse<CuryoAiRaterDeclarationItem>>(
-        config,
-        "/ai-rater-declarations",
-        params,
-      ),
-    getAiRaterDeclaration: (address) =>
-      request<{ declaration: CuryoAiRaterDeclarationItem | null }>(
-        config,
-        `/ai-rater-declarations/${address}`,
-      ),
-    getAiRaterDeclarationHistory: (address, params) =>
-      request<CuryoPaginatedResponse<CuryoAiRaterDeclarationHistoryItem>>(
-        config,
-        `/ai-rater-declarations/${address}/history`,
-        params,
-      ),
-    getAiRaterProbeResults: (address, params) =>
-      request<CuryoPaginatedResponse<CuryoAiRaterProbeResultItem>>(
-        config,
-        `/ai-rater-declarations/${address}/probes`,
-        params,
-      ),
-    getAiRaterDriftFlags: (address, params) =>
-      request<CuryoPaginatedResponse<CuryoAiRaterDriftFlagItem>>(
-        config,
-        `/ai-rater-declarations/${address}/drift-flags`,
-        params,
-      ),
-    getAiRaterDeclarationChallenges: (address, params) =>
-      request<CuryoPaginatedResponse<CuryoAiRaterDeclarationChallengeItem>>(
-        config,
-        `/ai-rater-declarations/${address}/challenges`,
-        params,
-      ),
-    getAiRaterOperatorBond: (address) =>
-      request<{ bond: CuryoAiRaterOperatorBond }>(
-        config,
-        `/ai-rater-operators/${address}/bond`,
       ),
     getStats: () => request<CuryoGlobalStats>(config, "/stats"),
     searchVotes: (params) =>

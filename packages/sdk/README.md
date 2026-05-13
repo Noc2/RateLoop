@@ -24,8 +24,7 @@ Framework-specific hooks and UI components should live in a follow-up package ra
 
 - client config normalization via `createCuryoClient(...)`
 - typed read client for hosted/indexed HTTP routes
-- `read.getRaterParticipationStatus(address)` for participation lane, human credential state, AI declaration tier, probe status, challenge status, launch reward progress, and the explicit reward policy flags
-- AI rater declaration reads via `read.getAiRaterDeclaration(address)`, `read.getAiRaterDeclarationHistory(address)`, `read.getAiRaterProbeResults(address)`, `read.getAiRaterDriftFlags(address)`, `read.getAiRaterDeclarationChallenges(address)`, `read.getAiRaterOperatorBond(address)`, and `read.listAiRaterDeclarations(...)`; bond reads include USDC asset metadata
+- `read.getRaterParticipationStatus(address)` for participation lane, human credential state, launch reward progress, and the explicit reward policy flags
 - vote/frontend helpers in `@rateloop/sdk/vote`
 - wallet-agnostic agent helpers in `@rateloop/sdk/agent` for MCP-compatible asks, non-custodial agent-wallet flows, result parsing, and webhook verification
 
@@ -44,10 +43,6 @@ const curyo = createCuryoClient({
 const { content } = await curyo.read.getContent("42");
 const participationStatus = await curyo.read.getRaterParticipationStatus(
   "0xAgentOrRaterWallet",
-);
-const declarationHistory = await curyo.read.getAiRaterDeclarationHistory(
-  "0xAgentOrRaterWallet",
-  { limit: 10 },
 );
 
 const commit = await buildCommitVoteParams({
@@ -101,7 +96,6 @@ const quote = await agent.quoteQuestion({
     requiredVoters: "3",
     requiredSettledRounds: "1",
     bountyEligibility: "0",
-    eligibleAiDeclarationIds: [],
   },
   question: {
     title: "Should the agent proceed with launch?",
@@ -123,7 +117,6 @@ const ask = await agent.askHumans({
     requiredVoters: "3",
     requiredSettledRounds: "1",
     bountyEligibility: "0",
-    eligibleAiDeclarationIds: [],
   },
   question: {
     title: "Should the agent proceed with launch?",
@@ -151,7 +144,7 @@ Question `description` is optional. Submission helpers normalize it to an empty 
 
 For ranked-option bundles, `requiredSettledRounds` is the number of completed bundle round sets to fund. Each round set requires every question in the bundle to settle once, and eligible voters claim each completed set separately.
 
-`bountyEligibility` defaults to `0` for everyone. Everyone can still answer; the field only scopes which revealed answers can qualify for the bounty payout. Use `1` for verified humans, `2` for active AI declarations, `3` for either, or `4` with `eligibleAiDeclarationIds` set to specific AI declaration hashes. Agent results expose both `answerScopes.allAnswers` and `answerScopes.bountyEligibleAnswers`.
+`bountyEligibility` defaults to `0` for everyone. Everyone can still answer; the field only scopes which revealed answers can qualify for the bounty payout. Use `1` for verified humans. Agent results expose both `answerScopes.allAnswers` and `answerScopes.bountyEligibleAnswers`.
 
 For agent flows, treat `quote -> ask -> execute wallet calls -> confirm -> wait -> result` as the safe default. A hosted direct HTTP client only needs `apiBaseUrl` plus a funded `walletAddress`; `mcpAccessToken` is optional and adds managed policy enforcement, callbacks, balance tooling, and audit surfaces. Paid asks return ordered wallet calls from a user-controlled smart wallet or scoped agent wallet; after execution, call `confirmAskTransactions` with the transaction hashes. The SDK stays wallet-agnostic and does not import a signing implementation.
 
@@ -167,7 +160,7 @@ Use them as reference implementations for the same safe default:
 
 1. quote before spending
 2. ask with a stable client request id
-3. choose whether bounty payouts are open to everyone or scoped by verified-human or AI declaration status
+3. choose whether bounty payouts are open to everyone or scoped by verified-human status
 4. wait through a signed callback or poll status
 5. read the structured result
 6. store `publicUrl`, `operationKey`, and the result summary in memory or logs
