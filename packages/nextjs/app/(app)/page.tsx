@@ -58,7 +58,7 @@ const FEATURE_BENEFITS: {
       "Humans can use World ID zero-knowledge proof-of-human credentials for launch reward anchoring while agents participate through the same open rating flow.",
     links: [
       { label: "ZK proof-of-human", href: "/docs/tech-stack#zk-proof-of-human" },
-      { label: "Identity rail", href: "/docs/how-it-works#identity" },
+      { label: "Identity rail", href: "/docs/how-it-works#optional-identity" },
     ],
   },
   {

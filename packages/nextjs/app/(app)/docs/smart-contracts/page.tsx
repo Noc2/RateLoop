@@ -167,8 +167,8 @@ const SmartContracts: NextPage = () => {
         </li>
         <li>
           <strong>RBTS staking:</strong> The production UI can approve optional LREP stake and submits a private up/down
-          signal plus expected up-vote percentage through <code>commitVote()</code>. Zero-LREP votes can participate,
-          but earned launch reputation requires qualifying staked ratings; only staked votes carry normal settlement
+          signal plus expected up-vote percentage through <code>commitVote()</code>. Zero-LREP votes can participate
+          through the advisory recorder and qualify for launch reputation; only staked votes carry normal settlement
           economics.
         </li>
       </ul>
@@ -718,7 +718,7 @@ const SmartContracts: NextPage = () => {
         </li>
         <li>
           <strong>Sybil Resistance:</strong> Core rating remains open, while earned launch rewards require qualifying
-          staked ratings, verified-human anchored rounds, cross-round anchor diversity, bounded anchor fanout,
+          revealed ratings, verified-human anchored rounds, cross-round anchor diversity, bounded anchor fanout,
           round-level unverified-credit caps, and aged anchor credentials before payout. Open raters can receive a
           governed partial earned-rater cap and unlock the full snapshotted cap by later verifying the same wallet as a
           human. Per-identity stake caps, question-first submission guardrails, and claim gating apply around the reward

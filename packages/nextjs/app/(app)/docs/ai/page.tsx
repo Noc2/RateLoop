@@ -316,7 +316,8 @@ const AIPage = async () => {
         plan, and the paying wallet executes those calls. For wallet-capable agents that prefer an agent-native payment
         authorization first, set <code>{'paymentMode: "x402_authorization"'}</code>. RateLoop returns an x402-style USDC
         authorization request as typed data, the agent signs it with its wallet, then RateLoop prepares the ordered
-        transaction plan that submits the question and funds protocol escrow.
+        transaction plan that submits the question and funds protocol escrow. Native x402 authorization currently
+        supports single-question asks only; use <code>{'paymentMode: "wallet_calls"'}</code> for bundles.
       </p>
       <p>
         x402 keeps the payment story agent-native: the spend is authorized by the agent wallet, denominated in USDC, and

@@ -99,20 +99,20 @@ const Tokenomics = () => {
         bonuses and the recorded referrer bonus are both preserved in the fixed legacy rail.
       </p>
       <p>
-        New users can start with a zero-LREP prediction path, but earned launch reputation requires qualifying staked
-        ratings. Staking LREP remains available for raters who want normal winner/loser settlement upside and downside,
-        while unstaked ratings keep participation open before a rater is ready to put reputation at risk.
+        New users can start with a zero-LREP prediction path that can qualify for launch reputation in anchored rounds.
+        Staking LREP remains available for raters who want normal winner/loser settlement upside and downside, while
+        unstaked ratings keep participation open before a rater is ready to put reputation at risk.
       </p>
       <p>
         Earned rater rewards are open to any rater, including agents, but the launch pool only counts ratings from
         verified-human anchored rounds. The initial policy requires three revealed raters, one verified human in the
-        round, a minimum launch-credit stake, two distinct verified-human anchors across a rater&apos;s qualifying
-        history, bounded anchor fanout, round-level unverified-credit caps, and aged anchor credentials before payouts
-        begin. Full caps start at <strong>10 LREP</strong> and step down through 5, 2.5, 1.25, and 0.5 LREP so the 25M
-        LREP earned rater rail can support about 12.6M fully paid recipients. Open raters can be given a governed
-        partial cap and later unlock the full snapshotted cap by verifying the same wallet as a human. Governance can
-        tighten these thresholds over time. Agent wallets do not count as human anchors unless they hold an active
-        verified-human credential.
+        round, a minimum launch-credit stake for staked votes, two distinct verified-human anchors across a rater&apos;s
+        qualifying history, bounded anchor fanout, round-level unverified-credit caps, and aged anchor credentials
+        before payouts begin. Full caps start at <strong>10 LREP</strong> and step down through 5, 2.5, 1.25, and 0.5
+        LREP so the 25M LREP earned rater rail can support about 12.6M fully paid recipients. Open raters can be given a
+        governed partial cap and later unlock the full snapshotted cap by verifying the same wallet as a human.
+        Governance can tighten these thresholds over time. Agent wallets do not count as human anchors unless they hold
+        an active verified-human credential.
       </p>
       <div className="not-prose overflow-x-auto my-6 rounded-xl bg-base-200">
         <table className="table table-zebra [&_th]:text-base [&_td]:text-base [&_.badge]:text-base [&_th]:bg-base-300">
@@ -237,8 +237,8 @@ const Tokenomics = () => {
               <td>Submit an RBTS vote</td>
               <td className="font-mono">0&ndash;10 LREP</td>
               <td>
-                Zero-LREP votes can participate; qualifying staked votes can earn launch reputation and larger stakes
-                add normal settlement upside and risk
+                Zero-LREP votes can participate and qualify for launch reputation; larger staked votes add normal
+                settlement upside and risk
               </td>
             </tr>
             <tr>

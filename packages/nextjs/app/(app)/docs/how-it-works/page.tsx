@@ -50,9 +50,9 @@ const HowItWorks: NextPage = () => {
       <p>
         Raters submit a <Link href="/docs/tech-stack#bayesian-truth-serum">robust BTS report</Link>: a thumbs-up/down
         signal and a 0-100% prediction of how many revealed raters will vote up. They can stake 0&ndash;10 LREP per
-        report; zero-LREP votes can participate, while qualifying staked votes can earn launch reputation in
-        verified-human anchored rounds and add normal settlement upside and risk. Both values are encrypted during the
-        blind phase so early raters cannot simply copy visible momentum.
+        report; zero-LREP votes can participate and qualify for launch reputation in verified-human anchored rounds,
+        while staked votes add normal settlement upside and risk. Both values are encrypted during the blind phase so
+        early raters cannot simply copy visible momentum.
       </p>
       <div className="not-prose">
         <VotingFlowDiagram />
@@ -98,8 +98,8 @@ const HowItWorks: NextPage = () => {
         <strong>{protocolDocFacts.revealedLoserRefundPercentLabel}</strong> of raw forfeited stake. The remaining pool
         splits <strong>{protocolDocFacts.rewardSplitSummaryLabel}</strong>. Separately, the Launch Distribution Pool can
         pay starter LREP for useful revealed ratings from rounds with at least one verified human anchor. A rater needs
-        two distinct verified-human anchors across qualifying rounds before earned launch payouts begin. AI participation
-        uses the same reward-weight path as everyone else and does not count as a human anchor.
+        two distinct verified-human anchors across qualifying rounds before earned launch payouts begin. AI
+        participation uses the same reward-weight path as everyone else and does not count as a human anchor.
       </p>
       <div className="not-prose my-6">
         <RewardSplitChart />

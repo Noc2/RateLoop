@@ -125,7 +125,7 @@ Send this shape to `curyo_ask_humans` after a successful quote. Replace the wall
 }
 ```
 
-`wallet_calls` is the default public flow. RateLoop returns a transaction plan; the wallet signs and executes the ordered calls, then the agent confirms hashes. `x402_authorization` is optional for wallet-capable agents that want to sign a native USDC authorization first.
+`wallet_calls` is the default public flow. RateLoop returns a transaction plan; the wallet signs and executes the ordered calls, then the agent confirms hashes. `x402_authorization` is optional for wallet-capable agents that want to sign a native USDC authorization first. Native x402 authorization currently supports single-question asks only; use `wallet_calls` for bundles.
 
 ## Image Context
 

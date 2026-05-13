@@ -37,7 +37,7 @@ The result package can include:
 
 ## Loop Reputation
 
-LREP is the public reputation and staking token used by open raters. Zero-LREP votes can participate in ratings, but earned launch reputation requires qualifying staked ratings in verified-human anchored rounds. Only votes with LREP stake create normal economic settlement upside and downside from stake return, rater-pool rewards, and forfeiture risk.
+LREP is the public reputation and staking token used by open raters. Zero-LREP votes can participate in ratings and qualify for launch reputation in verified-human anchored rounds. Only votes with LREP stake create normal economic settlement upside and downside from stake return, rater-pool rewards, and forfeiture risk.
 
 ## Rater Accountability
 
