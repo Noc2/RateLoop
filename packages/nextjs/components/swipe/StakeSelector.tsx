@@ -31,6 +31,7 @@ interface StakeSelectorProps {
 }
 
 const PRESET_AMOUNTS = [0, 1, 2.5, 5, 10];
+const MIN_COUNTED_STAKE_AMOUNT = 1;
 const MIN_PREDICTED_UP_PERCENT = 0;
 const MAX_PREDICTED_UP_PERCENT = 100;
 const YOUR_VOTE_TOOLTIP =
@@ -48,6 +49,11 @@ export function normalizeStakeSelectorRating(currentRating: number | undefined) 
   if (currentRating > 100) return clampRating(currentRating / 1000);
   if (currentRating > 10) return clampRating(currentRating / 10);
   return clampRating(currentRating);
+}
+
+export function normalizeStakeSelectorAmount(stakeAmount: number) {
+  if (!Number.isFinite(stakeAmount) || stakeAmount <= 0) return 0;
+  return stakeAmount < MIN_COUNTED_STAKE_AMOUNT ? MIN_COUNTED_STAKE_AMOUNT : stakeAmount;
 }
 
 function getInitialPredictedUpPercent(currentRating: number | undefined) {
@@ -312,7 +318,7 @@ export function StakeSelector({
                 max={sliderMax}
                 step={0.5}
                 value={amount > 0 ? Math.min(amount, sliderMax) : 0}
-                onChange={e => setAmount(Number(e.target.value))}
+                onChange={e => setAmount(normalizeStakeSelectorAmount(Number(e.target.value)))}
                 className={sliderClassName}
                 style={sliderStyle}
                 disabled={isConfirming || maxStake < 1}

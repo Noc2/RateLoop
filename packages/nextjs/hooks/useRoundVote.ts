@@ -219,7 +219,11 @@ export function useRoundVote() {
         commitParams;
 
       const roundContext = packVoteRoundContext(runtime.roundId, roundReferenceRatingBps);
-      const isAdvisoryVote = stakeWei < COUNTED_VOTE_MIN_STAKE_WEI;
+      if (stakeAmount > 0 && stakeWei < COUNTED_VOTE_MIN_STAKE_WEI) {
+        setError("Stake at least 1 LREP or choose 0 for advisory voting.");
+        return false;
+      }
+      const isAdvisoryVote = stakeWei === 0n;
       const advisoryVoteRecorderAddress = advisoryVoteRecorderInfo?.address as `0x${string}` | undefined;
       if (isAdvisoryVote && isAdvisoryVoteRecorderLoading) {
         setError("Preparing vote. Try again in a moment.");
