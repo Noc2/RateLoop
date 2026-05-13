@@ -50,7 +50,7 @@
       <stop offset="1" stop-color="#FFC43D" />
     </linearGradient>
   </defs>
-  <g fill="none" stroke-width="14" stroke-linecap="butt" stroke-linejoin="round">
+  <g fill="none" stroke-width="10" stroke-linecap="butt" stroke-linejoin="round">
     <path d="M64 21 A43 43 0 0 1 85.5 26.761" stroke="url(#seg-0)" />
     <path d="M85.5 26.761 A43 43 0 0 1 101.239 42.5" stroke="url(#seg-1)" />
     <path d="M101.239 42.5 A43 43 0 0 1 107 64" stroke="url(#seg-2)" />
