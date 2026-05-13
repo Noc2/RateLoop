@@ -1,9 +1,20 @@
-import { createPublicClient, encodeAbiParameters, http, keccak256, parseAbi } from "viem";
+import {
+  createPublicClient,
+  encodeAbiParameters,
+  http,
+  keccak256,
+  parseAbi,
+} from "viem";
 
 const args = process.argv.slice(2);
-if (args.length < 9 || args.length === 10 || args.length > 20 || (args.length > 16 && args.length < 20)) {
+if (
+  args.length < 9 ||
+  args.length === 10 ||
+  args.length > 20 ||
+  (args.length > 16 && args.length < 20)
+) {
   console.error(
-    "Usage: node buildSubmissionReservation.js <rpcUrl> <registry> <submitter> <contextUrl> <imageUrlsJson> <videoUrl> <title> <description|empty> <tags> <categoryId> <salt> [rewardAsset] [rewardAmount] [requiredVoters] [requiredSettledRounds] [rewardPoolExpiresAt] [epochDuration maxDuration minVoters maxVoters]",
+    "Usage: node buildSubmissionReservation.js <rpcUrl> <registry> <submitter> <contextUrl> <imageUrlsJson> <videoUrl> <title> <description|empty> <tags> <categoryId> <salt> [rewardAsset] [rewardAmount] [requiredVoters] [requiredSettledRounds] [rewardPoolExpiresAt] [epochDuration maxDuration minVoters maxVoters]"
   );
   process.exit(1);
 }
@@ -14,8 +25,11 @@ const DEFAULT_REWARD_AMOUNT = 1_000_000n;
 const DEFAULT_REQUIRED_VOTERS = 3n;
 const DEFAULT_REQUIRED_SETTLED_ROUNDS = 1n;
 const DEFAULT_REWARD_POOL_EXPIRES_AT = 0n;
-const DEFAULT_QUESTION_METADATA_HASH = "0xed39b36e9ce5c1bfc657909c2f687347be2de998bc871eb8d33df17fdfa0d8cd";
-const DEFAULT_RESULT_SPEC_HASH = "0x8e5f27bc3269c62c92754f76279bd83838462060fc6cd77411b7407027cfa11f";
+const DEFAULT_BOUNTY_ELIGIBILITY = 0n;
+const DEFAULT_QUESTION_METADATA_HASH =
+  "0xed39b36e9ce5c1bfc657909c2f687347be2de998bc871eb8d33df17fdfa0d8cd";
+const DEFAULT_RESULT_SPEC_HASH =
+  "0x8e5f27bc3269c62c92754f76279bd83838462060fc6cd77411b7407027cfa11f";
 const DEFAULT_ROUND_CONFIG = {
   epochDuration: 20 * 60,
   maxDuration: 7 * 24 * 60 * 60,
@@ -24,7 +38,8 @@ const DEFAULT_ROUND_CONFIG = {
 };
 
 const MAX_SUBMISSION_IMAGE_URLS = 4;
-const DIRECT_IMAGE_URL_PATTERN = /^https:\/\/\S+\.(?:avif|gif|jpe?g|png|webp)(?:[?#]\S*)?$/i;
+const DIRECT_IMAGE_URL_PATTERN =
+  /^https:\/\/\S+\.(?:avif|gif|jpe?g|png|webp)(?:[?#]\S*)?$/i;
 
 function isSupportedYouTubeUrl(value) {
   try {
@@ -35,7 +50,10 @@ function isSupportedYouTubeUrl(value) {
       return parsed.pathname.length > 1;
     }
 
-    if (parsed.hostname === "www.youtube.com" && parsed.pathname.startsWith("/embed/")) {
+    if (
+      parsed.hostname === "www.youtube.com" &&
+      parsed.pathname.startsWith("/embed/")
+    ) {
       return parsed.pathname.length > "/embed/".length;
     }
 
@@ -43,7 +61,11 @@ function isSupportedYouTubeUrl(value) {
       parsed.hostname === "youtube.com" ||
       parsed.hostname === "www.youtube.com" ||
       parsed.hostname === "m.youtube.com";
-    return isWatchHost && parsed.pathname === "/watch" && parsed.searchParams.has("v");
+    return (
+      isWatchHost &&
+      parsed.pathname === "/watch" &&
+      parsed.searchParams.has("v")
+    );
   } catch {
     return false;
   }
@@ -52,7 +74,8 @@ function isSupportedYouTubeUrl(value) {
 function assertHttpsUrl(value, label) {
   try {
     const parsed = new URL(value);
-    if (parsed.protocol !== "https:" || /\s/.test(value)) throw new Error("invalid");
+    if (parsed.protocol !== "https:" || /\s/.test(value))
+      throw new Error("invalid");
   } catch {
     console.error(`${label} must be a valid HTTPS URL.`);
     process.exit(1);
@@ -68,7 +91,9 @@ function assertSupportedImageUrls(imageUrls, { allowEmpty = false } = {}) {
     console.error(`Expected at most ${MAX_SUBMISSION_IMAGE_URLS} image URLs.`);
     process.exit(1);
   }
-  const unsupportedImageUrl = imageUrls.find(item => !DIRECT_IMAGE_URL_PATTERN.test(item));
+  const unsupportedImageUrl = imageUrls.find(
+    (item) => !DIRECT_IMAGE_URL_PATTERN.test(item)
+  );
   if (unsupportedImageUrl) {
     console.error(`Unsupported image URL: ${unsupportedImageUrl}`);
     process.exit(1);
@@ -87,7 +112,9 @@ function parseImageUrls(value, { allowEmpty = false } = {}) {
       const parsed = JSON.parse(trimmed);
       if (
         Array.isArray(parsed) &&
-        parsed.every(item => typeof item === "string" && item.trim().length > 0)
+        parsed.every(
+          (item) => typeof item === "string" && item.trim().length > 0
+        )
       ) {
         assertSupportedImageUrls(parsed, { allowEmpty });
         return parsed;
@@ -96,7 +123,9 @@ function parseImageUrls(value, { allowEmpty = false } = {}) {
       // Fall through to the explicit error below.
     }
 
-    console.error("Invalid image URL array JSON. Expected a JSON string array.");
+    console.error(
+      "Invalid image URL array JSON. Expected a JSON string array."
+    );
     process.exit(1);
   }
 
@@ -119,7 +148,17 @@ function toSubmissionMedia(value) {
 
 function parseArgs(rawArgs) {
   if (rawArgs.length === 9) {
-    const [rpcUrl, registry, submitter, mediaUrlOrImageArrayJson, title, description, tags, categoryId, salt] = rawArgs;
+    const [
+      rpcUrl,
+      registry,
+      submitter,
+      mediaUrlOrImageArrayJson,
+      title,
+      description,
+      tags,
+      categoryId,
+      salt,
+    ] = rawArgs;
     const media = toSubmissionMedia(mediaUrlOrImageArrayJson);
     return {
       rpcUrl,
@@ -137,6 +176,7 @@ function parseArgs(rawArgs) {
       requiredVoters: DEFAULT_REQUIRED_VOTERS,
       requiredSettledRounds: DEFAULT_REQUIRED_SETTLED_ROUNDS,
       rewardPoolExpiresAt: DEFAULT_REWARD_POOL_EXPIRES_AT,
+      bountyEligibility: DEFAULT_BOUNTY_ELIGIBILITY,
       roundConfig: null,
     };
   }
@@ -189,6 +229,7 @@ function parseArgs(rawArgs) {
     requiredVoters: BigInt(requiredVoters),
     requiredSettledRounds: BigInt(requiredSettledRounds),
     rewardPoolExpiresAt: BigInt(rewardPoolExpiresAt),
+    bountyEligibility: DEFAULT_BOUNTY_ELIGIBILITY,
     roundConfig:
       epochDuration === undefined
         ? null
@@ -212,13 +253,14 @@ async function resolveDefaultRoundConfig(publicClient, registry) {
     return DEFAULT_ROUND_CONFIG;
   }
 
-  const [epochDuration, maxDuration, minVoters, maxVoters] = await publicClient.readContract({
-    address: protocolConfig,
-    abi: parseAbi([
-      "function config() view returns (uint32 epochDuration, uint32 maxDuration, uint16 minVoters, uint16 maxVoters)",
-    ]),
-    functionName: "config",
-  });
+  const [epochDuration, maxDuration, minVoters, maxVoters] =
+    await publicClient.readContract({
+      address: protocolConfig,
+      abi: parseAbi([
+        "function config() view returns (uint32 epochDuration, uint32 maxDuration, uint16 minVoters, uint16 maxVoters)",
+      ]),
+      functionName: "config",
+    });
 
   return {
     epochDuration: Number(epochDuration),
@@ -244,12 +286,15 @@ const {
   requiredVoters,
   requiredSettledRounds,
   rewardPoolExpiresAt,
+  bountyEligibility,
   roundConfig: roundConfigOverride,
 } = parseArgs(args);
 const publicClient = createPublicClient({
   transport: http(rpcUrl),
 });
-const roundConfig = roundConfigOverride ?? (await resolveDefaultRoundConfig(publicClient, registry));
+const roundConfig =
+  roundConfigOverride ??
+  (await resolveDefaultRoundConfig(publicClient, registry));
 assertHttpsUrl(contextUrl, "Context URL");
 const [, submissionKey] = await publicClient.readContract({
   address: registry,
@@ -257,14 +302,28 @@ const [, submissionKey] = await publicClient.readContract({
     "function previewQuestionSubmissionKey(string contextUrl, string[] imageUrls, string videoUrl, string title, string description, string tags, uint256 categoryId) view returns (uint256 resolvedCategoryId, bytes32 submissionKey)",
   ]),
   functionName: "previewQuestionSubmissionKey",
-  args: [contextUrl, media.imageUrls, media.videoUrl, title, description, tags, BigInt(categoryId)],
+  args: [
+    contextUrl,
+    media.imageUrls,
+    media.videoUrl,
+    title,
+    description,
+    tags,
+    BigInt(categoryId),
+  ],
 });
 
 const mediaHash = keccak256(
-  encodeAbiParameters([{ type: "string[]" }, { type: "string" }], [media.imageUrls, media.videoUrl]),
+  encodeAbiParameters(
+    [{ type: "string[]" }, { type: "string" }],
+    [media.imageUrls, media.videoUrl]
+  )
 );
 const textHash = keccak256(
-  encodeAbiParameters([{ type: "string" }, { type: "string" }, { type: "string" }], [title, description, tags]),
+  encodeAbiParameters(
+    [{ type: "string" }, { type: "string" }, { type: "string" }],
+    [title, description, tags]
+  )
 );
 const rewardTermsHash = keccak256(
   encodeAbiParameters(
@@ -275,6 +334,7 @@ const rewardTermsHash = keccak256(
       { type: "uint256" },
       { type: "uint256" },
       { type: "uint256" },
+      { type: "uint8" },
     ],
     [
       Number(rewardAsset),
@@ -283,14 +343,25 @@ const rewardTermsHash = keccak256(
       requiredSettledRounds,
       rewardPoolExpiresAt,
       rewardPoolExpiresAt,
-    ],
-  ),
+      Number(bountyEligibility),
+    ]
+  )
 );
 const roundConfigHash = keccak256(
   encodeAbiParameters(
-    [{ type: "uint32" }, { type: "uint32" }, { type: "uint16" }, { type: "uint16" }],
-    [roundConfig.epochDuration, roundConfig.maxDuration, roundConfig.minVoters, roundConfig.maxVoters],
-  ),
+    [
+      { type: "uint32" },
+      { type: "uint32" },
+      { type: "uint16" },
+      { type: "uint16" },
+    ],
+    [
+      roundConfig.epochDuration,
+      roundConfig.maxDuration,
+      roundConfig.minVoters,
+      roundConfig.maxVoters,
+    ]
+  )
 );
 const revealCommitment = keccak256(
   encodeAbiParameters(
@@ -319,8 +390,8 @@ const revealCommitment = keccak256(
       roundConfigHash,
       DEFAULT_QUESTION_METADATA_HASH,
       DEFAULT_RESULT_SPEC_HASH,
-    ],
-  ),
+    ]
+  )
 );
 
 console.log(revealCommitment);

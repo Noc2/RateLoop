@@ -12,9 +12,10 @@ const DEFAULT_RESULT_SPEC_HASH =
 const MAX_SUBMISSION_IMAGE_URLS = 4;
 const DIRECT_IMAGE_URL_PATTERN =
   /^https:\/\/\S+\.(?:avif|gif|jpe?g|png|webp)(?:[?#]\S*)?$/i;
+const DEFAULT_BOUNTY_ELIGIBILITY = 0;
 
 const abi = parseAbi([
-  "function submitQuestionBundleWithRewardAndRoundConfig((string contextUrl,string[] imageUrls,string videoUrl,string title,string description,string tags,uint256 categoryId,bytes32 salt,(bytes32 questionMetadataHash,bytes32 resultSpecHash) spec)[] questions,(uint8 asset,uint256 amount,uint256 requiredVoters,uint256 requiredSettledRounds,uint256 bountyClosesAt,uint256 feedbackClosesAt) rewardTerms,(uint32 epochDuration,uint32 maxDuration,uint16 minVoters,uint16 maxVoters) roundConfig)",
+  "function submitQuestionBundleWithRewardAndRoundConfig((string contextUrl,string[] imageUrls,string videoUrl,string title,string description,string tags,uint256 categoryId,bytes32 salt,(bytes32 questionMetadataHash,bytes32 resultSpecHash) spec)[] questions,(uint8 asset,uint256 amount,uint256 requiredVoters,uint256 requiredSettledRounds,uint256 bountyClosesAt,uint256 feedbackClosesAt,uint8 bountyEligibility) rewardTerms,(uint32 epochDuration,uint32 maxDuration,uint16 minVoters,uint16 maxVoters) roundConfig)",
 ]);
 
 function fail(message) {
@@ -183,6 +184,7 @@ function parseArgs(rawArgs) {
       requiredSettledRounds: BigInt(requiredSettledRounds),
       bountyClosesAt: BigInt(bountyClosesAt),
       feedbackClosesAt: BigInt(feedbackClosesAt),
+      bountyEligibility: DEFAULT_BOUNTY_ELIGIBILITY,
     },
     roundConfig: {
       epochDuration: Number(epochDuration),
@@ -263,6 +265,7 @@ function buildQuestionBundleRevealCommitment({
         { type: "uint256" },
         { type: "uint256" },
         { type: "uint256" },
+        { type: "uint8" },
         { type: "uint32" },
         { type: "uint32" },
         { type: "uint16" },
@@ -278,6 +281,7 @@ function buildQuestionBundleRevealCommitment({
         rewardTerms.requiredSettledRounds,
         rewardTerms.bountyClosesAt,
         rewardTerms.feedbackClosesAt,
+        rewardTerms.bountyEligibility,
         roundConfig.epochDuration,
         roundConfig.maxDuration,
         roundConfig.minVoters,
@@ -319,6 +323,7 @@ const calldata = encodeFunctionData({
       rewardTerms.requiredSettledRounds,
       rewardTerms.bountyClosesAt,
       rewardTerms.feedbackClosesAt,
+      rewardTerms.bountyEligibility,
     ],
     [
       roundConfig.epochDuration,
