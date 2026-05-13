@@ -13,10 +13,11 @@ import { RoundVotingEngine } from "./RoundVotingEngine.sol";
 import { ProtocolConfig } from "./ProtocolConfig.sol";
 import { IVoterIdNFT } from "./interfaces/IVoterIdNFT.sol";
 import { RoundLib } from "./libraries/RoundLib.sol";
-import { QuestionRewardPoolEscrowBundleLib } from "./libraries/QuestionRewardPoolEscrowBundleLib.sol";
+import { QuestionRewardPoolEscrowBundleActionsLib } from "./libraries/QuestionRewardPoolEscrowBundleActionsLib.sol";
 import { QuestionRewardPoolEscrowClaimLib } from "./libraries/QuestionRewardPoolEscrowClaimLib.sol";
 import { QuestionRewardPoolEscrowEligibilityLib } from "./libraries/QuestionRewardPoolEscrowEligibilityLib.sol";
 import { QuestionRewardPoolEscrowQualificationLib } from "./libraries/QuestionRewardPoolEscrowQualificationLib.sol";
+import { QuestionRewardPoolEscrowPoolActionsLib } from "./libraries/QuestionRewardPoolEscrowPoolActionsLib.sol";
 import { QuestionRewardPoolEscrowTransferLib } from "./libraries/QuestionRewardPoolEscrowTransferLib.sol";
 import {
     RewardPool,
@@ -42,22 +43,12 @@ contract QuestionRewardPoolEscrow is
     bytes32 internal constant CONFIG_ROLE = keccak256("CONFIG_ROLE");
     bytes32 internal constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 
-    uint256 internal constant MIN_REQUIRED_VOTERS = 3;
     uint256 internal constant MIN_REQUIRED_SETTLED_ROUNDS = 1;
-    uint256 internal constant MAX_REQUIRED_SETTLED_ROUNDS = 16;
-    uint256 internal constant MAX_REWARD_POOL_ROUND_VOTERS = 200;
-    uint256 internal constant MIN_REWARD_POOL_PARTICIPANTS = 3;
-    uint256 internal constant HIGH_VALUE_REWARD_POOL_THRESHOLD = 1_000e6;
-    uint256 internal constant MIN_HIGH_VALUE_PARTICIPANTS = 5;
     uint256 internal constant BPS_SCALE = 10_000;
     uint256 internal constant DEFAULT_FRONTEND_FEE_BPS = 300;
-    uint256 internal constant MAX_FRONTEND_FEE_BPS = 500;
     /// @notice Grace period voters have after bountyClosesAt to claim on a still-claimable bundle
     ///         before a third party can sweep the remainder back to the funder.
     uint256 internal constant BUNDLE_CLAIM_GRACE = 7 days;
-    /// @dev Worst-case settlement delay for a threshold-reached bundle round:
-    ///      2 * absolute max epoch/round duration + max reveal grace + claim grace.
-    uint256 internal constant BUNDLE_REFUND_GRACE = 98 days;
     uint8 internal constant REWARD_ASSET_HREP = 0;
     uint8 internal constant REWARD_ASSET_USDC = 1;
 
@@ -378,7 +369,18 @@ contract QuestionRewardPoolEscrow is
         uint8 bountyEligibility
     ) private returns (uint256 rewardPoolId) {
         _requireCurrentRegistryEscrow();
-        rewardPoolId = _createRewardPool(
+        (rewardPoolId, nextRewardPoolId) = QuestionRewardPoolEscrowPoolActionsLib.createRewardPool(
+            rewardPools,
+            rewardPoolSubmitterNullifier,
+            rewardPoolPayerIdentity,
+            rewardPoolPayerNullifier,
+            registry,
+            votingEngine,
+            voterIdNFT,
+            hrepToken,
+            usdcToken,
+            defaultFrontendFeeBps,
+            nextRewardPoolId,
             contentId,
             msg.sender,
             address(0),
@@ -389,9 +391,11 @@ contract QuestionRewardPoolEscrow is
             bountyClosesAt,
             feedbackClosesAt,
             bountyEligibility,
-            false
+            false,
+            bountyKind,
+            relatedRoundId,
+            reasonHash
         );
-        _setRewardPoolPurpose(rewardPoolId, bountyKind, relatedRoundId, reasonHash);
     }
 
     function createSubmissionRewardPoolFromRegistry(
@@ -518,83 +522,29 @@ contract QuestionRewardPoolEscrow is
     ) internal returns (uint256 rewardPoolId) {
         require(msg.sender == address(registry), "Only registry");
         _requireRegistryVotingEngine();
-        require(bundleId != 0, "Invalid bundle");
-        require(bundleRewards[bundleId].id == 0, "Bundle exists");
-        require(contentIds.length > 0, "No questions");
         require(funder != address(0), "Invalid funder");
-        require(asset == REWARD_ASSET_HREP || asset == REWARD_ASSET_USDC, "Invalid asset");
-        require(requiredCompleters >= MIN_REQUIRED_VOTERS, "Too few voters");
-        require(requiredCompleters >= _requiredParticipantFloorForAmount(amount), "High-value floor");
-        require(requiredSettledRounds >= MIN_REQUIRED_SETTLED_ROUNDS, "Too few rounds");
-        require(requiredSettledRounds <= MAX_REQUIRED_SETTLED_ROUNDS, "Too many rounds");
-        require(amount >= requiredCompleters * requiredSettledRounds, "Amount too small");
-        _validateBountyEligibilityPolicy(bountyEligibility);
-        _requireBundleFundingCoversMaxCompleters(contentIds, amount, requiredSettledRounds);
-        // Bundles must have a strict future bountyClosesAt. Without this, a bountyClosesAt
-        // of 0 would silently pass _requireFutureBountyWindow and render the bundle instantly
-        // refundable through refundQuestionBundleReward (block.timestamp > 0 + BUNDLE_REFUND_GRACE
-        // is trivially true). Today this is shielded by the registry's bountyClosesAt!=0 check,
-        // but this escrow is the trust boundary — keep the constraint local.
-        require(bountyClosesAt > block.timestamp, "Bad close");
-        uint256 normalizedFeedbackClosesAt = _normalizeFeedbackClosesAt(bountyClosesAt, feedbackClosesAt);
 
-        uint256 fundedAmount = _pullExactToken(funder, asset, amount);
-        (uint256 funderVoterId, address funderIdentity, uint256 funderNullifier) = _resolveFunderIdentity(funder);
-
-        BundleReward storage bundle = bundleRewards[bundleId];
-        bundle.id = bundleId.toUint64();
-        bundle.bountyClosesAt = bountyClosesAt.toUint64();
-        bundle.feedbackClosesAt = normalizedFeedbackClosesAt.toUint64();
-        bundle.funder = funder;
-        bundle.funderIdentity = funderIdentity;
-        bundle.asset = asset;
-        bundle.questionCount = uint32(contentIds.length);
-        bundle.requiredCompleters = uint32(requiredCompleters);
-        bundle.requiredSettledRounds = uint32(requiredSettledRounds);
-        bundle.frontendFeeBps = defaultFrontendFeeBps;
-        bundle.bountyEligibility = bountyEligibility;
-        bundle.funderNullifier = funderNullifier;
-        bundle.fundedAmount = fundedAmount;
-        bundle.unallocatedAmount = fundedAmount;
-        bundle.bountyEligibilityDataHash = QuestionRewardPoolEscrowEligibilityLib.eligibilityDataHash();
-        // Registry-initiated submissions carry the mandatory-bounty anti-spam model:
-        // unclaimed residue is forfeited to treasury rather than refunded, matching
-        // the single-pool path (`createSubmissionRewardPoolFromRegistry`).
-        bundle.nonRefundable = true;
-
-        for (uint256 i = 0; i < contentIds.length;) {
-            uint256 contentId = contentIds[i];
-            require(registry.isContentActive(contentId), "Content not active");
-            require(contentBundleId[contentId] == 0, "Bundled");
-            contentBundleId[contentId] = bundleId;
-            contentBundleIndex[contentId] = i;
-            uint256 submitterNullifier =
-                QuestionRewardPoolEscrowQualificationLib.resolveSubmitterNullifier(registry, voterIdNFT, contentId);
-            bundleQuestions[bundleId].push(
-                BundleQuestion({ contentId: contentId, submitterNullifier: submitterNullifier })
-            );
-            unchecked {
-                ++i;
-            }
-        }
-        emit QuestionBundleRewardCreated(
-            bundleId,
-            funder,
-            funderVoterId,
-            fundedAmount,
-            requiredCompleters,
-            contentIds.length,
-            requiredSettledRounds,
-            block.timestamp,
-            bountyClosesAt,
-            normalizedFeedbackClosesAt,
+        rewardPoolId = QuestionRewardPoolEscrowBundleActionsLib.createSubmissionBundleFromRegistry(
+            bundleRewards,
+            bundleQuestions,
+            contentBundleId,
+            contentBundleIndex,
+            registry,
+            voterIdNFT,
+            hrepToken,
+            usdcToken,
             defaultFrontendFeeBps,
+            bundleId,
+            contentIds,
+            funder,
             asset,
-            bountyEligibility,
-            bundle.bountyEligibilityDataHash
+            amount,
+            requiredCompleters,
+            requiredSettledRounds,
+            bountyClosesAt,
+            feedbackClosesAt,
+            bountyEligibility
         );
-        emit QuestionBundleEligibilitySet(bundleId, bountyEligibility);
-        rewardPoolId = bundleId;
     }
 
     function _createRewardPool(
@@ -610,138 +560,33 @@ contract QuestionRewardPoolEscrow is
         uint8 bountyEligibility,
         bool nonRefundable
     ) internal returns (uint256 rewardPoolId) {
-        uint256 fundedAmount = _pullExactToken(funder, asset, amount);
-
-        rewardPoolId = _createRewardPoolFromFundedAmount(
+        (rewardPoolId, nextRewardPoolId) = QuestionRewardPoolEscrowPoolActionsLib.createRewardPool(
+            rewardPools,
+            rewardPoolSubmitterNullifier,
+            rewardPoolPayerIdentity,
+            rewardPoolPayerNullifier,
+            registry,
+            votingEngine,
+            voterIdNFT,
+            hrepToken,
+            usdcToken,
+            defaultFrontendFeeBps,
+            nextRewardPoolId,
             contentId,
             funder,
             payer,
             asset,
-            fundedAmount,
+            amount,
             requiredVoters,
             requiredSettledRounds,
             bountyClosesAt,
             feedbackClosesAt,
             bountyEligibility,
-            nonRefundable
+            nonRefundable,
+            0,
+            0,
+            bytes32(0)
         );
-    }
-
-    function _createRewardPoolFromFundedAmount(
-        uint256 contentId,
-        address funder,
-        address payer,
-        uint8 asset,
-        uint256 fundedAmount,
-        uint256 requiredVoters,
-        uint256 requiredSettledRounds,
-        uint256 bountyClosesAt,
-        uint256 feedbackClosesAt,
-        uint8 bountyEligibility,
-        bool nonRefundable
-    ) internal returns (uint256 rewardPoolId) {
-        uint256 amount = fundedAmount;
-        require(amount > 0, "Amount required");
-        require(asset == REWARD_ASSET_HREP || asset == REWARD_ASSET_USDC, "Invalid asset");
-        _validateBountyEligibilityPolicy(bountyEligibility);
-        require(registry.isContentActive(contentId), "Content not active");
-        require(requiredVoters >= MIN_REQUIRED_VOTERS, "Too few voters");
-        require(requiredVoters >= _requiredParticipantFloorForAmount(amount), "High-value floor");
-        require(requiredSettledRounds >= MIN_REQUIRED_SETTLED_ROUNDS, "Too few rounds");
-        require(requiredSettledRounds <= MAX_REQUIRED_SETTLED_ROUNDS, "Too many rounds");
-        require(amount >= requiredSettledRounds * requiredVoters, "Amount too small");
-        _requireFutureBountyWindow(bountyClosesAt);
-        uint256 normalizedFeedbackClosesAt = _normalizeFeedbackClosesAt(bountyClosesAt, feedbackClosesAt);
-        RoundLib.RoundConfig memory contentCfg = registry.getContentRoundConfig(contentId);
-        require(requiredVoters <= contentCfg.maxVoters, "Voters exceed max");
-        require(contentCfg.maxVoters <= MAX_REWARD_POOL_ROUND_VOTERS, "Voters exceed max");
-        if (!nonRefundable) {
-            require(amount >= requiredSettledRounds * uint256(contentCfg.maxVoters), "Amount too small");
-            require(bountyClosesAt > block.timestamp, "Bad close");
-        }
-
-        uint256 currentRoundId = votingEngine.currentRoundId(contentId);
-        uint256 startRoundId = currentRoundId == 0 ? 1 : currentRoundId + 1;
-        (uint256 funderVoterId, address funderIdentity,) = _resolveFunderIdentity(funder);
-        // For X402 and other gateway-mediated payments, the actual human payer (submitter)
-        // differs from the refund destination (funder/gateway). Resolve the payer's identity
-        // for funder-side voter-eligibility exclusion so the payer cannot vote on their own question.
-        address effectivePayer = payer == address(0) ? funder : payer;
-        (, address payerIdentity, uint256 payerNullifier) = _resolveFunderIdentity(effectivePayer);
-        address submitterIdentity = registry.getSubmitterIdentity(contentId);
-        uint256 submitterNullifier = registry.contentSubmitterNullifier(contentId);
-
-        rewardPoolId = nextRewardPoolId++;
-        rewardPools[rewardPoolId] = RewardPool({
-            id: rewardPoolId.toUint64(),
-            contentId: contentId.toUint64(),
-            startRoundId: startRoundId.toUint64(),
-            nextRoundToEvaluate: startRoundId.toUint64(),
-            challengedRoundId: 0,
-            bountyOpensAt: uint64(block.timestamp),
-            bountyClosesAt: bountyClosesAt.toUint64(),
-            claimDeadline: bountyClosesAt.toUint64(),
-            funder: funder,
-            funderIdentity: funderIdentity,
-            submitterIdentity: submitterIdentity,
-            submitterVoterId: 0,
-            submitterVoterIdNFT: address(0),
-            asset: asset,
-            fundedAmount: fundedAmount,
-            unallocatedAmount: fundedAmount,
-            claimedAmount: 0,
-            requiredVoters: uint32(requiredVoters),
-            requiredSettledRounds: uint32(requiredSettledRounds),
-            qualifiedRounds: 0,
-            refunded: false,
-            unallocatedRefunded: false,
-            frontendFeeBps: defaultFrontendFeeBps,
-            bountyKind: 0,
-            bountyEligibility: bountyEligibility,
-            nonRefundable: nonRefundable,
-            reasonHash: bytes32(0),
-            bountyEligibilityDataHash: QuestionRewardPoolEscrowEligibilityLib.eligibilityDataHash()
-        });
-        rewardPoolSubmitterNullifier[rewardPoolId] = submitterNullifier;
-        rewardPoolPayerIdentity[rewardPoolId] = payerIdentity;
-        rewardPoolPayerNullifier[rewardPoolId] = payerNullifier;
-
-        emit RewardPoolCreated(
-            rewardPoolId,
-            contentId,
-            funder,
-            funderVoterId,
-            fundedAmount,
-            requiredVoters,
-            requiredSettledRounds,
-            startRoundId,
-            block.timestamp,
-            bountyClosesAt,
-            normalizedFeedbackClosesAt,
-            defaultFrontendFeeBps,
-            asset,
-            bountyEligibility,
-            rewardPools[rewardPoolId].bountyEligibilityDataHash,
-            nonRefundable
-        );
-        emit RewardPoolEligibilitySet(rewardPoolId, bountyEligibility);
-    }
-
-    function _setRewardPoolPurpose(
-        uint256 rewardPoolId,
-        uint8 bountyKind,
-        uint256 challengedRoundId,
-        bytes32 reasonHash
-    ) internal {
-        require(bountyKind == 1 || bountyKind == 2, "Invalid bounty kind");
-        require(challengedRoundId != 0, "Invalid round");
-
-        RewardPool storage rewardPool = _getExistingRewardPool(rewardPoolId);
-        rewardPool.bountyKind = bountyKind;
-        rewardPool.challengedRoundId = challengedRoundId.toUint64();
-        rewardPool.reasonHash = reasonHash;
-
-        emit RewardPoolPurposeSet(rewardPoolId, bountyKind, challengedRoundId, reasonHash);
     }
 
     function qualifyRound(uint256 rewardPoolId, uint256 roundId) external {
@@ -876,7 +721,16 @@ contract QuestionRewardPoolEscrow is
         // signal with no retry path, permanently locking bundle claims. Caller is restricted
         // to the voting engine, which is already a trusted state machine.
         require(msg.sender == address(votingEngine), "Only engine");
-        _recordBundleQuestionTerminal(contentId, roundId, settled);
+        QuestionRewardPoolEscrowBundleActionsLib.recordBundleQuestionTerminal(
+            bundleRewards,
+            bundleQuestionRecordedRounds,
+            bundleRoundIds,
+            contentBundleId,
+            contentBundleIndex,
+            contentId,
+            roundId,
+            settled
+        );
     }
 
     /// @notice Mirror a settled or terminal round into its bundle accounting and qualify any
@@ -890,56 +744,20 @@ contract QuestionRewardPoolEscrow is
     ///      call before claiming, and the refund path rechecks complete recorded sets before
     ///      sweeping funds.
     function syncBundleQuestionTerminal(uint256 contentId, uint256 roundId) external {
-        // Existing bundles keep using this escrow's snapshotted engine after registry rotation.
-        (RoundLib.RoundState state, uint48 settledAt) = _roundTerminalState(contentId, roundId);
-        require(settledAt != 0, "Round not terminal");
-        _recordBundleQuestionTerminal(contentId, roundId, state == RoundLib.RoundState.Settled);
-        uint256 bundleId = contentBundleId[contentId];
-        if (bundleId == 0) return;
-        BundleReward storage bundle = bundleRewards[bundleId];
-        if (bundle.refunded) return;
-        _qualifyPendingBundleRoundSet(bundleId, bundle);
-    }
-
-    function _qualifyPendingBundleRoundSet(uint256 bundleId, BundleReward storage bundle) internal {
-        uint256 roundSetIndex = bundle.completedRoundSets;
-        if (roundSetIndex >= bundle.requiredSettledRounds) return;
-        if (bundleRoundSetSnapshots[bundleId][roundSetIndex].qualified) return;
-        if (!_isBundleRoundSetComplete(bundleId, roundSetIndex)) return;
-        _qualifyBundleRoundSet(bundleId, bundle, roundSetIndex);
-    }
-
-    function _recordBundleQuestionTerminal(uint256 contentId, uint256 roundId, bool settled) internal {
-        uint256 bundleId = contentBundleId[contentId];
-        if (bundleId == 0) return;
-
-        BundleReward storage bundle = _getExistingBundleReward(bundleId);
-        if (bundle.refunded) return;
-
-        uint256 bundleIndex = contentBundleIndex[contentId];
-        uint256 roundSetIndex = bundleQuestionRecordedRounds[bundleId][bundleIndex];
-        if (roundSetIndex >= bundle.requiredSettledRounds) return;
-        if (roundSetIndex < bundle.completedRoundSets) return;
-        if (roundId <= bundleRoundIds[bundleId][bundleIndex][roundSetIndex]) return;
-        if (roundSetIndex != 0) {
-            unchecked {
-                if (roundId <= bundleRoundIds[bundleId][bundleIndex][roundSetIndex - 1]) return;
-            }
-        }
-
-        if (!settled) return;
-
-        bundleRoundIds[bundleId][bundleIndex][roundSetIndex] = uint64(roundId);
-        bundleQuestionRecordedRounds[bundleId][bundleIndex] = uint32(roundSetIndex + 1);
-        emit QuestionBundleRoundRecorded(bundleId, contentId, roundId, bundleIndex, roundSetIndex);
-
-        // Qualification is intentionally NOT triggered here. With large bundles + high
-        // per-content `maxVoters`, `_qualifyBundleRoundSet` is O(maxVoters * bundleSize)
-        // and can exceed the settlement-block gas budget. Anyone can call
-        // `syncBundleQuestionTerminal(contentId, roundId)` once the round set is complete
-        // to evaluate eligibility and either qualify the snapshot or reset it for retry.
-        // Indexers can detect round-set completion by counting QuestionBundleRoundRecorded
-        // events for a given (bundleId, roundSetIndex) and matching against bundleQuestions.length.
+        QuestionRewardPoolEscrowBundleActionsLib.syncBundleQuestionTerminal(
+            bundleRewards,
+            bundleQuestions,
+            bundleQuestionRecordedRounds,
+            bundleRoundIds,
+            bundleRoundSetSnapshots,
+            contentBundleId,
+            contentBundleIndex,
+            registry,
+            votingEngine,
+            voterIdNFT,
+            contentId,
+            roundId
+        );
     }
 
     function claimQuestionBundleReward(uint256 bundleId, uint256 roundSetIndex)
@@ -947,59 +765,19 @@ contract QuestionRewardPoolEscrow is
         nonReentrant
         returns (uint256 rewardAmount)
     {
-        BundleReward storage bundle = _getExistingBundleReward(bundleId);
-        require(_isBundleRoundSetClaimOpen(bundle, bundleId, roundSetIndex), "Bundle not claimable");
-
-        require(!_isBundleExcludedVoter(bundle, bundleId, roundSetIndex, msg.sender), "Excluded voter");
-        require(_isBundleBountyEligible(bundle, bundleId, roundSetIndex, msg.sender), "Not bounty eligible");
-
-        (address frontend, bytes32 firstCommitKey) =
-            _requireCompletedBundleRoundSet(bundleId, roundSetIndex, msg.sender);
-        BundleQuestion storage firstQuestion = bundleQuestions[bundleId][0];
-        uint256 firstRoundId = bundleRoundIds[bundleId][0][roundSetIndex];
-        (uint256 voterId, bytes32 resolvedFirstCommitKey, address rewardRecipient) =
-            _resolveRoundRewardClaim(firstQuestion.contentId, firstRoundId, msg.sender);
-        require(resolvedFirstCommitKey == firstCommitKey, "Bundle incomplete");
-        require(!bundleRoundSetRewardClaimed[bundleId][roundSetIndex][firstCommitKey], "Already claimed");
-        BundleRoundSetSnapshot storage snapshot = bundleRoundSetSnapshots[bundleId][roundSetIndex];
-        uint256 grossAmount;
-        uint256 reservedFrontendFee;
-        address frontendRecipient;
-        (grossAmount, rewardAmount, reservedFrontendFee, frontendRecipient) =
-            QuestionRewardPoolEscrowClaimLib.computeEqualShareClaimSplit(
-                votingEngine,
-                firstQuestion.contentId,
-                firstRoundId,
-                firstCommitKey,
-                frontend,
-                snapshot.allocation,
-                snapshot.frontendFeeAllocation,
-                snapshot.eligibleCompleters,
-                snapshot.claimedCount
-            );
-        require(grossAmount > 0, "No reward");
-
-        bundleRoundSetRewardClaimed[bundleId][roundSetIndex][firstCommitKey] = true;
-        unchecked {
-            snapshot.claimedCount++;
-            bundle.claimedCount++;
-        }
-        bundle.claimedAmount += grossAmount;
-
-        (rewardAmount, reservedFrontendFee, frontendRecipient) = _settleClaimPayout(
-            _rewardToken(bundle.asset), rewardRecipient, rewardAmount, frontendRecipient, reservedFrontendFee
-        );
-
-        emit QuestionBundleRewardClaimed(
+        return QuestionRewardPoolEscrowBundleActionsLib.claimQuestionBundleReward(
+            bundleRewards,
+            bundleQuestions,
+            bundleRoundIds,
+            bundleRoundSetSnapshots,
+            bundleRoundSetRewardClaimed,
+            registry,
+            votingEngine,
+            voterIdNFT,
+            hrepToken,
+            usdcToken,
             bundleId,
-            roundSetIndex,
-            rewardRecipient,
-            voterId,
-            rewardAmount,
-            frontend,
-            frontendRecipient,
-            reservedFrontendFee,
-            grossAmount
+            roundSetIndex
         );
     }
 
@@ -1008,66 +786,35 @@ contract QuestionRewardPoolEscrow is
         view
         returns (uint256 claimableAmount)
     {
-        BundleReward storage bundle = bundleRewards[bundleId];
-        if (bundle.id == 0 || !_isBundleRoundSetClaimOpen(bundle, bundleId, roundSetIndex)) return 0;
-
-        if (_isBundleExcludedVoter(bundle, bundleId, roundSetIndex, account)) {
-            return 0;
-        }
-        if (!_isBundleBountyEligible(bundle, bundleId, roundSetIndex, account)) {
-            return 0;
-        }
-        (bool completed, address frontend, bytes32 firstCommitKey) =
-            _completedBundleRoundSetCommit(bundleId, roundSetIndex, account);
-        if (!completed) return 0;
-        if (bundleRoundSetRewardClaimed[bundleId][roundSetIndex][firstCommitKey]) return 0;
-
-        BundleQuestion storage firstQuestion = bundleQuestions[bundleId][0];
-        uint256 firstRoundId = bundleRoundIds[bundleId][0][roundSetIndex];
-        BundleRoundSetSnapshot storage snapshot = bundleRoundSetSnapshots[bundleId][roundSetIndex];
-        (, claimableAmount,,) = QuestionRewardPoolEscrowClaimLib.computeEqualShareClaimSplit(
+        return QuestionRewardPoolEscrowBundleActionsLib.claimableQuestionBundleReward(
+            bundleRewards,
+            bundleQuestions,
+            bundleRoundIds,
+            bundleRoundSetSnapshots,
+            bundleRoundSetRewardClaimed,
+            registry,
             votingEngine,
-            firstQuestion.contentId,
-            firstRoundId,
-            firstCommitKey,
-            frontend,
-            snapshot.allocation,
-            snapshot.frontendFeeAllocation,
-            snapshot.eligibleCompleters,
-            snapshot.claimedCount
+            voterIdNFT,
+            bundleId,
+            roundSetIndex,
+            account
         );
     }
 
     function refundQuestionBundleReward(uint256 bundleId) external nonReentrant returns (uint256 refundAmount) {
-        BundleReward storage bundle = _getExistingBundleReward(bundleId);
-        require(!bundle.refunded, "Already refunded");
-        require(block.timestamp > bundle.bountyClosesAt, "Bundle active");
-        require(block.timestamp > uint256(bundle.bountyClosesAt) + BUNDLE_REFUND_GRACE, "Grace");
-        _qualifyPendingBundleRoundSet(bundleId, bundle);
-        if (bundle.completedRoundSets != 0) {
-            _requireBundleCleanupComplete(bundleId, bundle.completedRoundSets);
-            if (bundle.bountyOpensAt == 0) {
-                bundle.bountyOpensAt = uint64(block.timestamp + BUNDLE_CLAIM_GRACE);
-                return 0;
-            }
-            require(block.timestamp > bundle.bountyOpensAt, "Grace");
-        }
-        refundAmount = bundle.fundedAmount - bundle.claimedAmount;
-        require(refundAmount > 0, "No refund");
-
-        bundle.refunded = true;
-        if (bundle.nonRefundable) {
-            address treasury = _protocolTreasury();
-            QuestionRewardPoolEscrowTransferLib.transferResidue(
-                _rewardToken(bundle.asset), true, bundle.funder, treasury, refundAmount
-            );
-            emit QuestionBundleRewardForfeited(bundleId, treasury, refundAmount);
-        } else {
-            QuestionRewardPoolEscrowTransferLib.transferResidue(
-                _rewardToken(bundle.asset), false, bundle.funder, address(0), refundAmount
-            );
-            emit QuestionBundleRewardRefunded(bundleId, bundle.funder, refundAmount);
-        }
+        return QuestionRewardPoolEscrowBundleActionsLib.refundQuestionBundleReward(
+            bundleRewards,
+            bundleQuestions,
+            bundleQuestionRecordedRounds,
+            bundleRoundIds,
+            bundleRoundSetSnapshots,
+            registry,
+            votingEngine,
+            voterIdNFT,
+            hrepToken,
+            usdcToken,
+            bundleId
+        );
     }
 
     function refundExpiredRewardPool(uint256 rewardPoolId) external nonReentrant returns (uint256 refundAmount) {
@@ -1190,59 +937,6 @@ contract QuestionRewardPoolEscrow is
         _unpause();
     }
 
-    function _resolveFunderIdentity(address funder)
-        internal
-        view
-        returns (uint256 funderVoterId, address funderIdentity, uint256 funderNullifier)
-    {
-        if (address(voterIdNFT) == address(0)) {
-            return (0, funder, 0);
-        }
-        funderVoterId = voterIdNFT.getTokenId(funder);
-        if (funderVoterId == 0) {
-            return (0, funder, 0);
-        }
-
-        funderIdentity = voterIdNFT.getHolder(funderVoterId);
-        if (funderIdentity == address(0)) {
-            funderIdentity = funder;
-        }
-        funderNullifier = voterIdNFT.getNullifier(funderVoterId);
-    }
-
-    function _pullExactToken(address funder, uint8 asset, uint256 amount) internal returns (uint256 receivedAmount) {
-        receivedAmount = QuestionRewardPoolEscrowTransferLib.pullExactToken(_rewardToken(asset), funder, amount);
-    }
-
-    function _requiredParticipantFloorForAmount(uint256 amount) internal pure returns (uint256) {
-        return amount >= HIGH_VALUE_REWARD_POOL_THRESHOLD ? MIN_HIGH_VALUE_PARTICIPANTS : MIN_REWARD_POOL_PARTICIPANTS;
-    }
-
-    function _requireFutureBountyWindow(uint256 bountyClosesAt) internal view {
-        if (bountyClosesAt != 0) {
-            require(bountyClosesAt > block.timestamp, "Bad close");
-        }
-    }
-
-    function _normalizeFeedbackClosesAt(uint256 bountyClosesAt, uint256 feedbackClosesAt)
-        internal
-        view
-        returns (uint256)
-    {
-        if (feedbackClosesAt == 0) {
-            return bountyClosesAt;
-        }
-        require(feedbackClosesAt > block.timestamp, "Bad feedback close");
-        if (bountyClosesAt != 0) {
-            require(feedbackClosesAt <= bountyClosesAt, "Late feedback");
-        }
-        return feedbackClosesAt;
-    }
-
-    function _validateBountyEligibilityPolicy(uint8 bountyEligibility) internal pure {
-        require(QuestionRewardPoolEscrowEligibilityLib.isValidPolicy(bountyEligibility), "Invalid eligibility");
-    }
-
     function _rewardToken(uint8 asset) internal view returns (IERC20 token) {
         return asset == REWARD_ASSET_HREP ? hrepToken : usdcToken;
     }
@@ -1268,194 +962,6 @@ contract QuestionRewardPoolEscrow is
     function _getExistingBundleReward(uint256 bundleId) internal view returns (BundleReward storage bundle) {
         bundle = bundleRewards[bundleId];
         require(bundle.id != 0, "Bundle not found");
-    }
-
-    function _isBundleRoundSetClaimOpen(BundleReward storage bundle, uint256 bundleId, uint256 roundSetIndex)
-        internal
-        view
-        returns (bool)
-    {
-        return QuestionRewardPoolEscrowBundleLib.isRoundSetClaimOpen(
-            bundleRoundSetSnapshots, bundle, bundleId, roundSetIndex
-        );
-    }
-
-    function _requireBundleCleanupComplete(uint256 bundleId, uint256 completedRoundSets) internal view {
-        QuestionRewardPoolEscrowBundleLib.requireCleanupComplete(
-            bundleQuestions, bundleRoundIds, votingEngine, bundleId, completedRoundSets
-        );
-    }
-
-    function _roundTerminalState(uint256 contentId, uint256 roundId)
-        internal
-        view
-        returns (RoundLib.RoundState state, uint48 settledAt)
-    {
-        (, state,,,,,,,,, settledAt,,,) = votingEngine.rounds(contentId, roundId);
-    }
-
-    function _requireCompletedBundleRoundSet(uint256 bundleId, uint256 roundSetIndex, address account)
-        internal
-        view
-        returns (address frontend, bytes32 firstCommitKey)
-    {
-        (bool completed, address completedFrontend, bytes32 completedFirstCommitKey) =
-            _completedBundleRoundSetCommit(bundleId, roundSetIndex, account);
-        require(completed, "Bundle incomplete");
-        return (completedFrontend, completedFirstCommitKey);
-    }
-
-    function _completedBundleRoundSetCommit(uint256 bundleId, uint256 roundSetIndex, address account)
-        internal
-        view
-        returns (bool completed, address frontend, bytes32 firstCommitKey)
-    {
-        return _bundleRoundSetCommitStatus(bundleId, roundSetIndex, account, true, true);
-    }
-
-    function _bundleRoundSetCommitStatus(
-        uint256 bundleId,
-        uint256 roundSetIndex,
-        address account,
-        bool requireCleanupComplete,
-        bool trackFrontend
-    ) internal view returns (bool completed, address frontend, bytes32 firstCommitKey) {
-        return QuestionRewardPoolEscrowBundleLib.bundleRoundSetCommitStatus(
-            bundleQuestions,
-            bundleRoundIds,
-            votingEngine,
-            voterIdNFT,
-            bundleRewards[bundleId].bountyClosesAt,
-            bundleId,
-            roundSetIndex,
-            account,
-            requireCleanupComplete,
-            trackFrontend
-        );
-    }
-
-    function _isBundleRoundSetComplete(uint256 bundleId, uint256 roundSetIndex) internal view returns (bool) {
-        return QuestionRewardPoolEscrowBundleLib.isRoundSetComplete(
-            bundleQuestions, bundleQuestionRecordedRounds, bundleId, roundSetIndex
-        );
-    }
-
-    function _qualifyBundleRoundSet(uint256 bundleId, BundleReward storage bundle, uint256 roundSetIndex) internal {
-        if (bundleRoundSetSnapshots[bundleId][roundSetIndex].qualified) return;
-
-        uint256 completerCount = _bundleRoundSetCompleterCount(bundleId, bundle, roundSetIndex);
-        if (completerCount < bundle.requiredCompleters) {
-            _resetBundleRoundSet(bundleId, roundSetIndex);
-            return;
-        }
-
-        uint256 allocation = _previewBundleRoundSetAllocation(bundle);
-        if (allocation == 0 || allocation < completerCount) {
-            _resetBundleRoundSet(bundleId, roundSetIndex);
-            return;
-        }
-        uint256 frontendFeeAllocation = (allocation * bundle.frontendFeeBps) / BPS_SCALE;
-
-        unchecked {
-            bundle.completedRoundSets++;
-        }
-        if (bundle.bountyOpensAt != 0) bundle.bountyOpensAt = 0;
-        bundle.unallocatedAmount -= allocation;
-
-        bundleRoundSetSnapshots[bundleId][roundSetIndex] = BundleRoundSetSnapshot({
-            qualified: true,
-            claimedCount: 0,
-            eligibleCompleters: uint32(completerCount),
-            allocation: allocation,
-            frontendFeeAllocation: frontendFeeAllocation
-        });
-        emit QuestionBundleRoundSetQualified(bundleId, roundSetIndex, allocation, frontendFeeAllocation);
-    }
-
-    function _requireBundleFundingCoversMaxCompleters(
-        uint256[] calldata contentIds,
-        uint256 amount,
-        uint256 requiredSettledRounds
-    ) internal view {
-        QuestionRewardPoolEscrowBundleLib.requireFundingCoversMaxCompleters(
-            registry, contentIds, amount, requiredSettledRounds
-        );
-    }
-
-    function _bundleRoundSetCompleterCount(uint256 bundleId, BundleReward storage bundle, uint256 roundSetIndex)
-        internal
-        view
-        returns (uint256 completerCount)
-    {
-        BundleQuestion[] storage questions = bundleQuestions[bundleId];
-        if (questions.length == 0) return 0;
-
-        uint256 firstContentId = questions[0].contentId;
-        uint256 firstRoundId = bundleRoundIds[bundleId][0][roundSetIndex];
-        (,, uint16 commitCount,,,,,,,,,,,) = votingEngine.rounds(firstContentId, firstRoundId);
-        for (uint256 i = 0; i < commitCount;) {
-            bytes32 commitKey = votingEngine.getRoundCommitKey(firstContentId, firstRoundId, i);
-            address voter = _bundleCompleterAccount(firstContentId, firstRoundId, commitKey);
-            if (
-                voter != address(0) && !_isBundleExcludedVoter(bundle, bundleId, roundSetIndex, voter)
-                    && _isBundleBountyEligible(bundle, bundleId, roundSetIndex, voter)
-                    && _completedBundleRoundSetCommitIgnoringCleanup(bundleId, roundSetIndex, voter)
-            ) {
-                unchecked {
-                    completerCount++;
-                }
-            }
-            unchecked {
-                ++i;
-            }
-        }
-    }
-
-    function _completedBundleRoundSetCommitIgnoringCleanup(uint256 bundleId, uint256 roundSetIndex, address account)
-        internal
-        view
-        returns (bool completed)
-    {
-        (completed,,) = _bundleRoundSetCommitStatus(bundleId, roundSetIndex, account, false, false);
-    }
-
-    function _bundleCompleterAccount(uint256 contentId, uint256 roundId, bytes32 commitKey)
-        internal
-        view
-        returns (address voter)
-    {
-        return QuestionRewardPoolEscrowVoterLib.bundleCompleterAccount(
-            votingEngine, voterIdNFT, contentId, roundId, commitKey
-        );
-    }
-
-    function _resetBundleRoundSet(uint256 bundleId, uint256 roundSetIndex) internal {
-        QuestionRewardPoolEscrowBundleLib.resetRoundSet(
-            bundleQuestions, bundleQuestionRecordedRounds, bundleRoundIds, bundleId, roundSetIndex
-        );
-    }
-
-    function _previewBundleRoundSetAllocation(BundleReward storage bundle) internal view returns (uint256 allocation) {
-        return QuestionRewardPoolEscrowBundleLib.previewRoundSetAllocation(bundle);
-    }
-
-    function _isBundleExcludedVoter(
-        BundleReward storage bundle,
-        uint256 bundleId,
-        uint256 roundSetIndex,
-        address account
-    ) internal view returns (bool) {
-        return QuestionRewardPoolEscrowBundleLib.isBundleExcludedVoter(
-            bundleQuestions,
-            bundleRoundIds,
-            registry,
-            votingEngine,
-            voterIdNFT,
-            bundle,
-            bundleId,
-            roundSetIndex,
-            account
-        );
     }
 
     function _getIncompleteRewardPoolForQualification(uint256 rewardPoolId)
@@ -1637,37 +1143,8 @@ contract QuestionRewardPoolEscrow is
         address eligibilityAccount =
             _bountyEligibilityAccount(_roundVoterIdNft(rewardPool.contentId, roundId), voterId, account);
         return QuestionRewardPoolEscrowEligibilityLib.isAccountEligibleForBounty(
-            votingEngine.protocolConfig(),
-            rewardPool.bountyEligibility,
-            eligibilityAccount
+            votingEngine.protocolConfig(), rewardPool.bountyEligibility, eligibilityAccount
         );
-    }
-
-    function _isBundleBountyEligible(
-        BundleReward storage bundle,
-        uint256 bundleId,
-        uint256 roundSetIndex,
-        address account
-    ) internal view returns (bool) {
-        address eligibilityAccount = _bundleBountyEligibilityAccount(bundleId, roundSetIndex, account);
-        return QuestionRewardPoolEscrowEligibilityLib.isAccountEligibleForBounty(
-            votingEngine.protocolConfig(),
-            bundle.bountyEligibility,
-            eligibilityAccount
-        );
-    }
-
-    function _bundleBountyEligibilityAccount(uint256 bundleId, uint256 roundSetIndex, address account)
-        internal
-        view
-        returns (address)
-    {
-        if (bundleQuestions[bundleId].length == 0) return account;
-        BundleQuestion storage firstQuestion = bundleQuestions[bundleId][0];
-        uint256 firstRoundId = bundleRoundIds[bundleId][0][roundSetIndex];
-        if (firstRoundId == 0) return account;
-        (uint256 voterId,,) = _resolveRoundRewardClaim(firstQuestion.contentId, firstRoundId, account);
-        return _bountyEligibilityAccount(_roundVoterIdNft(firstQuestion.contentId, firstRoundId), voterId, account);
     }
 
     function _bountyEligibilityAccount(IVoterIdNFT roundVoterIdNft, uint256 voterId, address account)
