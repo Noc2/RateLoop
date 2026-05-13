@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { CategoryRegistryAbi } from "@rateloop/contracts/abis";
 import { useReadContract, useReadContracts } from "wagmi";
-import { HIDDEN_TOP_LEVEL_CATEGORY_SLUGS, getSeededCategorySubcategories } from "~~/constants/categories";
+import { getSeededCategorySubcategories } from "~~/constants/categories";
 import { useDeployedContractInfo } from "~~/hooks/scaffold-eth";
 import { usePonderQuery } from "~~/hooks/usePonderQuery";
 import { ponderApi } from "~~/services/ponder/client";
@@ -14,10 +14,6 @@ export interface Category {
   slug: string;
   subcategories: readonly string[];
   createdAt: bigint;
-}
-
-function isVisibleTopLevelCategory(category: Pick<Category, "slug">): boolean {
-  return !HIDDEN_TOP_LEVEL_CATEGORY_SLUGS.has(category.slug);
 }
 
 /**
@@ -98,8 +94,7 @@ export function useCategoryRegistry() {
           createdAt: cat.createdAt,
         } as Category;
       })
-      .filter((cat): cat is Category => cat !== null)
-      .filter(isVisibleTopLevelCategory);
+      .filter((cat): cat is Category => cat !== null);
   }, [categoriesData]);
 
   // --- Ponder-first with RPC fallback ---
@@ -108,17 +103,15 @@ export function useCategoryRegistry() {
     ponderFn: async () => {
       const response = await ponderApi.getCategories();
       // Ponder doesn't have subcategories; RPC enrichment below fills them when available.
-      return response.items
-        .map(
-          (cat): Category => ({
-            id: BigInt(cat.id),
-            name: cat.name,
-            slug: cat.slug,
-            subcategories: getSeededCategorySubcategories(cat.slug),
-            createdAt: BigInt(cat.createdAt),
-          }),
-        )
-        .filter(isVisibleTopLevelCategory);
+      return response.items.map(
+        (cat): Category => ({
+          id: BigInt(cat.id),
+          name: cat.name,
+          slug: cat.slug,
+          subcategories: getSeededCategorySubcategories(cat.slug),
+          createdAt: BigInt(cat.createdAt),
+        }),
+      );
     },
     rpcFn: async () => rpcCategories,
     staleTime: 300_000,
