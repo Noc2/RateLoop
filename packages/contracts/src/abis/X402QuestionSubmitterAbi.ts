@@ -110,11 +110,6 @@ export const X402QuestionSubmitterAbi = [
             "name": "bountyEligibility",
             "type": "uint8",
             "internalType": "uint8"
-          },
-          {
-            "name": "eligibleAiDeclarationIds",
-            "type": "bytes32[]",
-            "internalType": "bytes32[]"
           }
         ]
       },
@@ -306,11 +301,6 @@ export const X402QuestionSubmitterAbi = [
             "name": "bountyEligibility",
             "type": "uint8",
             "internalType": "uint8"
-          },
-          {
-            "name": "eligibleAiDeclarationIds",
-            "type": "bytes32[]",
-            "internalType": "bytes32[]"
           }
         ]
       },

@@ -1072,11 +1072,6 @@ export const ContentRegistryAbi = [
             "name": "bountyEligibility",
             "type": "uint8",
             "internalType": "uint8"
-          },
-          {
-            "name": "eligibleAiDeclarationIds",
-            "type": "bytes32[]",
-            "internalType": "bytes32[]"
           }
         ]
       },
@@ -1205,11 +1200,6 @@ export const ContentRegistryAbi = [
             "name": "bountyEligibility",
             "type": "uint8",
             "internalType": "uint8"
-          },
-          {
-            "name": "eligibleAiDeclarationIds",
-            "type": "bytes32[]",
-            "internalType": "bytes32[]"
           }
         ]
       },
@@ -1355,11 +1345,6 @@ export const ContentRegistryAbi = [
             "name": "bountyEligibility",
             "type": "uint8",
             "internalType": "uint8"
-          },
-          {
-            "name": "eligibleAiDeclarationIds",
-            "type": "bytes32[]",
-            "internalType": "bytes32[]"
           }
         ]
       },

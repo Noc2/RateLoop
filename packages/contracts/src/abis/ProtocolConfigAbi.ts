@@ -570,19 +570,6 @@ export const ProtocolConfigAbi = [
   },
   {
     "type": "function",
-    "name": "raterDeclarationRegistry",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "raterRegistry",
     "inputs": [],
     "outputs": [
@@ -921,19 +908,6 @@ export const ProtocolConfigAbi = [
   {
     "type": "function",
     "name": "setParticipationPool",
-    "inputs": [
-      {
-        "name": "value",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "setRaterDeclarationRegistry",
     "inputs": [
       {
         "name": "value",
@@ -1419,19 +1393,6 @@ export const ProtocolConfigAbi = [
     "inputs": [
       {
         "name": "participationPool",
-        "type": "address",
-        "indexed": false,
-        "internalType": "address"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "RaterDeclarationRegistryUpdated",
-    "inputs": [
-      {
-        "name": "raterDeclarationRegistry",
         "type": "address",
         "indexed": false,
         "internalType": "address"

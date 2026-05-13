@@ -244,11 +244,6 @@ export const QuestionRewardPoolEscrowAbi = [
         "name": "bountyEligibility",
         "type": "uint8",
         "internalType": "uint8"
-      },
-      {
-        "name": "allowedAiDeclarationIds",
-        "type": "bytes32[]",
-        "internalType": "bytes32[]"
       }
     ],
     "outputs": [
@@ -352,11 +347,6 @@ export const QuestionRewardPoolEscrowAbi = [
         "name": "bountyEligibility",
         "type": "uint8",
         "internalType": "uint8"
-      },
-      {
-        "name": "allowedAiDeclarationIds",
-        "type": "bytes32[]",
-        "internalType": "bytes32[]"
       }
     ],
     "outputs": [
@@ -450,11 +440,6 @@ export const QuestionRewardPoolEscrowAbi = [
         "name": "bountyEligibility",
         "type": "uint8",
         "internalType": "uint8"
-      },
-      {
-        "name": "allowedAiDeclarationIds",
-        "type": "bytes32[]",
-        "internalType": "bytes32[]"
       }
     ],
     "outputs": [
@@ -519,11 +504,6 @@ export const QuestionRewardPoolEscrowAbi = [
         "name": "bountyEligibility",
         "type": "uint8",
         "internalType": "uint8"
-      },
-      {
-        "name": "allowedAiDeclarationIds",
-        "type": "bytes32[]",
-        "internalType": "bytes32[]"
       }
     ],
     "outputs": [
@@ -706,11 +686,6 @@ export const QuestionRewardPoolEscrowAbi = [
         "name": "bountyEligibility",
         "type": "uint8",
         "internalType": "uint8"
-      },
-      {
-        "name": "allowedAiDeclarationIds",
-        "type": "bytes32[]",
-        "internalType": "bytes32[]"
       }
     ],
     "outputs": [
@@ -755,11 +730,6 @@ export const QuestionRewardPoolEscrowAbi = [
         "name": "bountyEligibilityDataHash",
         "type": "bytes32",
         "internalType": "bytes32"
-      },
-      {
-        "name": "allowedAiDeclarationIds",
-        "type": "bytes32[]",
-        "internalType": "bytes32[]"
       }
     ],
     "stateMutability": "view"
@@ -784,11 +754,6 @@ export const QuestionRewardPoolEscrowAbi = [
         "name": "bountyEligibilityDataHash",
         "type": "bytes32",
         "internalType": "bytes32"
-      },
-      {
-        "name": "allowedAiDeclarationIds",
-        "type": "bytes32[]",
-        "internalType": "bytes32[]"
       }
     ],
     "stateMutability": "view"
@@ -1226,12 +1191,6 @@ export const QuestionRewardPoolEscrowAbi = [
         "type": "uint8",
         "indexed": true,
         "internalType": "uint8"
-      },
-      {
-        "name": "allowedAiDeclarationIds",
-        "type": "bytes32[]",
-        "indexed": false,
-        "internalType": "bytes32[]"
       }
     ],
     "anonymous": false
@@ -1728,12 +1687,6 @@ export const QuestionRewardPoolEscrowAbi = [
         "type": "uint8",
         "indexed": true,
         "internalType": "uint8"
-      },
-      {
-        "name": "allowedAiDeclarationIds",
-        "type": "bytes32[]",
-        "indexed": false,
-        "internalType": "bytes32[]"
       }
     ],
     "anonymous": false
