@@ -464,7 +464,7 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
         args: {
           bundleId: 9n,
           roundSetIndex: 1n,
-          claimant: "0x0000000000000000000000000000000000000002",
+          claimant: "0x00000000000000000000000000000000000000A2",
           voterId: 12n,
           amount: 19_400_000n,
           frontend: "0x00000000000000000000000000000000000000f1",
@@ -510,7 +510,7 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
         expect.objectContaining({
           table: "questionBundleClaim",
           values: expect.objectContaining({
-            id: "9-1-12",
+            id: "9-1-0x00000000000000000000000000000000000000a2-12",
             roundSetIndex: 1,
             amount: 19_400_000n,
             frontendFee: 600_000n,

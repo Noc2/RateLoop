@@ -23,6 +23,15 @@ function bundleRoundSetRowId(bundleId: bigint, roundSetIndex: bigint | number) {
   return `${bundleId}-${roundSetIndex}`;
 }
 
+function bundleClaimRowId(
+  bundleId: bigint,
+  roundSetIndex: bigint | number,
+  claimant: string,
+  voterId: bigint,
+) {
+  return `${bundleId}-${roundSetIndex}-${claimant.toLowerCase()}-${voterId}`;
+}
+
 const ZERO_HASH =
   "0x0000000000000000000000000000000000000000000000000000000000000000" as const;
 
@@ -510,7 +519,7 @@ ponder.on(
       frontendFee,
       grossAmount,
     } = event.args;
-    const id = `${bundleId}-${roundSetIndex}-${voterId}`;
+    const id = bundleClaimRowId(bundleId, roundSetIndex, claimant, voterId);
     const existingClaim = await context.db.find(questionBundleClaim, { id });
 
     await context.db
