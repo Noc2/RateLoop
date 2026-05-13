@@ -14,6 +14,10 @@ export function resolveNotificationEmailAppUrl(options: ResolveNotificationEmail
     return configuredAppUrl;
   }
 
+  if (production) {
+    return null;
+  }
+
   return resolveAppUrl(options.requestOrigin ?? undefined, production);
 }
 

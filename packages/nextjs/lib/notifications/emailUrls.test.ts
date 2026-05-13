@@ -31,11 +31,55 @@ test("resolveNotificationEmailAppUrl falls back to the configured app URL when r
   );
 });
 
-test("resolveNotificationEmailAppUrl uses the request origin when no configured app URL is available", () => {
+test("resolveNotificationEmailAppUrl rejects request origins in production without a configured app URL", () => {
   assert.equal(
     resolveNotificationEmailAppUrl({
       requestOrigin: "https://www.curyo.xyz",
       fallbackAppUrl: undefined,
+      production: true,
+    }),
+    null,
+  );
+});
+
+test("resolveNotificationEmailAppUrl uses the request origin in development when the configured URL is invalid", () => {
+  assert.equal(
+    resolveNotificationEmailAppUrl({
+      requestOrigin: "http://localhost:3001",
+      fallbackAppUrl: "not-a-url",
+      production: false,
+    }),
+    "http://localhost:3001",
+  );
+});
+
+test("resolveNotificationEmailAppUrl uses the dev default when no development URL is available", () => {
+  assert.equal(
+    resolveNotificationEmailAppUrl({
+      requestOrigin: undefined,
+      fallbackAppUrl: undefined,
+      production: false,
+    }),
+    "http://localhost:3000",
+  );
+});
+
+test("resolveNotificationEmailAppUrl does not use a malicious request origin in production", () => {
+  assert.equal(
+    resolveNotificationEmailAppUrl({
+      requestOrigin: "https://evil.example",
+      fallbackAppUrl: undefined,
+      production: true,
+    }),
+    null,
+  );
+});
+
+test("resolveNotificationEmailAppUrl still allows configured HTTPS URLs in production", () => {
+  assert.equal(
+    resolveNotificationEmailAppUrl({
+      requestOrigin: "https://evil.example",
+      fallbackAppUrl: "https://www.curyo.xyz",
       production: true,
     }),
     "https://www.curyo.xyz",
