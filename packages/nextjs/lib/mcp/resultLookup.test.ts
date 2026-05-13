@@ -260,6 +260,78 @@ test("curyo_get_result accepts an explicit bundle contentId without bypassing op
   assert.deepEqual(result.operation?.contentIds, ["123", "456"]);
 });
 
+test("curyo_get_result returns schema-shaped pending packages before content exists", async () => {
+  const operationKey = `0x${"8".repeat(64)}` as const;
+  const now = new Date("2026-04-23T12:00:00.000Z");
+
+  await dbClient.execute({
+    args: [
+      operationKey,
+      "pending-result",
+      "payload-hash",
+      480,
+      "0x0000000000000000000000000000000000000001",
+      "1000000",
+      "1000000",
+      1,
+      "awaiting_wallet_signature",
+      null,
+      null,
+      now,
+      now,
+      null,
+    ],
+    sql: `
+      INSERT INTO x402_question_submissions (
+        operation_key,
+        client_request_id,
+        payload_hash,
+        chain_id,
+        payment_asset,
+        payment_amount,
+        bounty_amount,
+        question_count,
+        status,
+        content_id,
+        content_ids,
+        created_at,
+        updated_at,
+        submitted_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `,
+  });
+
+  const result = (await callCuryoMcpTool({
+    agent: AGENT,
+    arguments: {
+      chainId: 480,
+      clientRequestId: "pending-result",
+    },
+    name: "curyo_get_result",
+  })) as {
+    answerScopes?: {
+      allAnswers?: unknown;
+      bountyEligibleAnswers?: {
+        policy?: {
+          mode?: number;
+        };
+      };
+    };
+    cohortSummary?: unknown;
+    methodology?: {
+      ratingSystem?: string;
+    };
+    ready?: boolean;
+  };
+
+  assert.equal(result.ready, false);
+  assert.equal(result.cohortSummary, null);
+  assert.ok(result.answerScopes?.allAnswers);
+  assert.equal(result.answerScopes?.bountyEligibleAnswers?.policy?.mode, 0);
+  assert.equal(result.methodology?.ratingSystem, "rateloop.robust_bts_binary.v1");
+});
+
 test("normalizeToolError preserves category_disallowed for explicit MCP category blocks", () => {
   const normalized = normalizeToolError(new McpToolError("This MCP agent is not allowed to ask in category 6.", 403));
   assert.equal(normalized.code, "category_disallowed");

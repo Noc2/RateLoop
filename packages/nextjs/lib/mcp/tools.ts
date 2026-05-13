@@ -25,7 +25,7 @@ import {
   resultPackageOutputSchema,
   templateListOutputSchema,
 } from "~~/lib/agent/schemas";
-import { listAgentResultTemplates } from "~~/lib/agent/templates";
+import { findAgentResultTemplate, listAgentResultTemplates } from "~~/lib/agent/templates";
 import { attachImagesToOperation } from "~~/lib/attachments/imageAttachments";
 import { buildContentFeedbackRoundContext, listContentFeedback } from "~~/lib/feedback/contentFeedback";
 import { MCP_SCOPES, type McpAgentAuth, type McpScope } from "~~/lib/mcp/auth";
@@ -678,6 +678,106 @@ function isRaterEligibleForBounty(
   return false;
 }
 
+function defaultAgentResultTemplate() {
+  return findAgentResultTemplate("generic_rating") ?? {
+    id: "generic_rating",
+    ratingSystem: "rateloop.robust_bts_binary.v1",
+    version: 1,
+  };
+}
+
+function emptyResultDistribution() {
+  return {
+    conservativeRatingBps: null,
+    down: { count: 0, share: null, stake: "0" },
+    rating: null,
+    ratingBps: null,
+    revealedCount: 0,
+    state: null,
+    stateLabel: null,
+    up: { count: 0, share: null, stake: "0" },
+  };
+}
+
+function buildPendingQuestionResultPackage(params: {
+  failed: boolean;
+  operation: JsonObject | null;
+  status: string;
+}) {
+  const template = defaultAgentResultTemplate();
+  const distribution = emptyResultDistribution();
+  return {
+    answer: params.failed ? "failed" : "pending",
+    answerScopes: {
+      allAnswers: {
+        distribution,
+        label: "All answers",
+        note: "Every revealed answer contributes to the open public result.",
+      },
+      bountyEligibleAnswers: {
+        distribution,
+        label: "Bounty-eligible answers",
+        note: "No scoped bounty result is available until the question is submitted on-chain.",
+        policy: {
+          eligibilityDataHash: null,
+          label: "Everyone",
+          mode: 0,
+        },
+        qualifiedRoundCount: 0,
+        rewardPoolCount: 0,
+      },
+    },
+    cohortSummary: null,
+    confidence: {
+      level: "none",
+      score: 0,
+    },
+    distribution,
+    dissentingView: null,
+    featureTest: null,
+    feedbackQuality: {
+      actionability: "none",
+      objectionCount: 0,
+      publicNoteCount: 0,
+      sourceUrlCount: 0,
+    },
+    liveAskGuidance: null,
+    limitations: ["The question has not reached a public Curyo result page yet."],
+    majorObjections: [],
+    methodology: {
+      ratingSystem: template.ratingSystem,
+      sources: ["curyo.agent_question_submission"],
+      templateId: template.id,
+      templateVersion: template.version,
+    },
+    operation: params.operation,
+    pollAfterMs: params.failed ? null : 5_000,
+    protocolState: {
+      latestRound: null,
+      status: params.status || "not_found",
+    },
+    publicUrl: null,
+    ready: false,
+    result: null,
+    wait: {
+      code: params.failed ? "failed_submission" : "still_settling",
+      recoverWith: params.failed ? "inspect_status_error" : "curyo_get_question_status",
+    },
+    recommendedNextAction: params.failed ? "manual_review" : "wait_for_settlement",
+    rationaleSummary: params.failed
+      ? "The submission failed before a public Curyo result was available."
+      : "The human result is not ready yet.",
+    sourceUrls: [],
+    stakeMass: {
+      down: "0",
+      total: "0",
+      unit: "raw_staked_voting_power",
+      up: "0",
+    },
+    voteCount: 0,
+  };
+}
+
 async function loadBountyEligibleVotes(params: {
   content: PonderContentItem;
   dependencies: McpToolDependencies;
@@ -745,65 +845,11 @@ async function buildQuestionResultForRecord(
   if (!contentId) {
     const status = operation && typeof operation === "object" ? String((operation as JsonObject).status ?? "") : "";
     const failed = status === "failed";
-    return {
-      answer: failed ? "failed" : "pending",
-      confidence: {
-        level: "none",
-        score: 0,
-      },
-      distribution: {
-        conservativeRatingBps: null,
-        down: { count: 0, share: null, stake: "0" },
-        rating: null,
-        ratingBps: null,
-        revealedCount: 0,
-        state: null,
-        stateLabel: null,
-        up: { count: 0, share: null, stake: "0" },
-      },
-      dissentingView: null,
-      featureTest: null,
-      feedbackQuality: {
-        actionability: "none",
-        objectionCount: 0,
-        publicNoteCount: 0,
-        sourceUrlCount: 0,
-      },
-      liveAskGuidance: null,
-      limitations: ["The question has not reached a public Curyo result page yet."],
-      majorObjections: [],
-      methodology: {
-        ratingSystem: "rateloop.predicted_final_rating.v1",
-        sources: ["curyo.agent_question_submission"],
-        templateId: "generic_rating",
-        templateVersion: 1,
-      },
-      operation,
-      pollAfterMs: failed ? null : 5_000,
-      protocolState: {
-        latestRound: null,
-        status: status || "not_found",
-      },
-      publicUrl: null,
-      ready: false,
-      result: null,
-      wait: {
-        code: failed ? "failed_submission" : "still_settling",
-        recoverWith: failed ? "inspect_status_error" : "curyo_get_question_status",
-      },
-      recommendedNextAction: failed ? "manual_review" : "wait_for_settlement",
-      rationaleSummary: failed
-        ? "The submission failed before a public Curyo result was available."
-        : "The human result is not ready yet.",
-      sourceUrls: [],
-      stakeMass: {
-        down: "0",
-        total: "0",
-        unit: "raw_staked_voting_power",
-        up: "0",
-      },
-      voteCount: 0,
-    };
+    return buildPendingQuestionResultPackage({
+      failed,
+      operation: operation && typeof operation === "object" ? (operation as JsonObject) : null,
+      status,
+    });
   }
 
   const response = await dependencies.getContentById(contentId);
