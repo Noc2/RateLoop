@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {Test} from "forge-std/Test.sol";
-import {RaterRegistry} from "../contracts/RaterRegistry.sol";
-import {MockWorldIDRouter} from "../contracts/mocks/MockWorldIDRouter.sol";
+import { Test } from "forge-std/Test.sol";
+import { RaterRegistry } from "../contracts/RaterRegistry.sol";
+import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
 
 contract RaterRegistryTest is Test {
     RaterRegistry internal registry;
@@ -117,6 +117,7 @@ contract RaterRegistryTest is Test {
     function test_AttestHumanCredentialWithProofStoresUniquenessCredentialForSender() public {
         uint256[8] memory proof;
         uint256 nullifierHash = uint256(NULLIFIER_HASH);
+        uint256 signalHash = registry.worldIdSignalHash(rater);
 
         vm.prank(rater);
         registry.attestHumanCredentialWithProof(1, nullifierHash, proof);
@@ -129,9 +130,19 @@ contract RaterRegistryTest is Test {
         assertEq(credential.scope, HUMAN_SCOPE);
         assertEq(credential.verifiedAt, uint64(block.timestamp));
         assertEq(credential.expiresAt, uint64(block.timestamp + WORLD_ID_CREDENTIAL_TTL));
-        assertTrue(credential.evidenceHash != bytes32(0));
+        assertEq(
+            credential.evidenceHash,
+            keccak256(abi.encodePacked("world-id-v3", block.chainid, address(worldIdRouter), uint256(1), signalHash))
+        );
         assertEq(registry.humanNullifierOwner(NULLIFIER_HASH), rater);
         assertTrue(registry.hasActiveHumanCredential(rater));
+    }
+
+    function test_WorldIdSignalHashMatchesStablePackedAddressVector() public view {
+        assertEq(
+            registry.worldIdSignalHash(rater),
+            408645922159002731750469755377061467244027247537768494763546378565345730312
+        );
     }
 
     function test_AttestHumanCredentialWithProofUsesMsgSenderSignal() public {
@@ -143,6 +154,24 @@ contract RaterRegistryTest is Test {
         worldIdRouter.setExpectedExternalNullifierHash(WORLD_ID_EXTERNAL_NULLIFIER_HASH);
 
         vm.prank(rater);
+        registry.attestHumanCredentialWithProof(1, uint256(NULLIFIER_HASH), proof);
+    }
+
+    function test_AttestHumanCredentialWithProofRejectsProofForDifferentSenderSignal() public {
+        uint256[8] memory proof;
+        worldIdRouter.setExpectedSignalHash(registry.worldIdSignalHash(otherRater));
+
+        vm.prank(rater);
+        vm.expectRevert(MockWorldIDRouter.InvalidMockWorldIdProof.selector);
+        registry.attestHumanCredentialWithProof(1, uint256(NULLIFIER_HASH), proof);
+    }
+
+    function test_AttestHumanCredentialWithProofRejectsUnexpectedExternalNullifier() public {
+        uint256[8] memory proof;
+        worldIdRouter.setExpectedExternalNullifierHash(WORLD_ID_EXTERNAL_NULLIFIER_HASH + 1);
+
+        vm.prank(rater);
+        vm.expectRevert(MockWorldIDRouter.InvalidMockWorldIdProof.selector);
         registry.attestHumanCredentialWithProof(1, uint256(NULLIFIER_HASH), proof);
     }
 
