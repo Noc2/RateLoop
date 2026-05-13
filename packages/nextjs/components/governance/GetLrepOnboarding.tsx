@@ -199,21 +199,6 @@ export function GetLrepOnboarding({ address }: GetLrepOnboardingProps) {
           </ul>
         </Link>
       </div>
-
-      <section className="surface-card rounded-3xl p-6">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <h2 className="text-xl font-semibold text-base-content">Other launch rails</h2>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-base-content/60">
-              The launch pool also has fixed legacy claims and referral rewards, but for a fresh 0-LREP wallet the
-              actionable protocol routes are verification and useful zero-LREP rating.
-            </p>
-          </div>
-          <Link href="/docs/tokenomics" className="btn btn-ghost border border-base-content/10">
-            Tokenomics
-          </Link>
-        </div>
-      </section>
     </div>
   );
 }
