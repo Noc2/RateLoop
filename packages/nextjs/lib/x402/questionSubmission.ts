@@ -1750,7 +1750,9 @@ function readStoredNativeX402Authorization(record: X402QuestionSubmissionRecord 
       authorization?: NativeX402PaymentAuthorizationInput;
       mode?: string;
     };
-    return parsed.mode === "native-x402-authorization" ? (parsed.authorization ?? null) : null;
+    return parsed.mode === "native-x402-authorization" || parsed.mode === "permissionless-x402-authorization"
+      ? (parsed.authorization ?? null)
+      : null;
   } catch {
     return null;
   }

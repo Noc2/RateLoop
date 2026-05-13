@@ -713,4 +713,21 @@ test("prepareNativeX402QuestionSubmissionRequest returns an authorization reques
   });
   assert.equal(x402QuestionSubmissionRecordBody(record).clientRequestId, permissionlessPayload.clientRequestId);
   assert.match(record?.paymentReceipt ?? "", /permissionless-x402-authorization/);
+
+  await preparePermissionlessNativeX402QuestionSubmissionRequest({
+    paymentAuthorization: { signature: `0x${"6".repeat(130)}` },
+    payload: permissionlessPayload,
+    walletAddress,
+  });
+
+  const reusedPermissionless = await preparePermissionlessNativeX402QuestionSubmissionRequest({
+    payload: permissionlessPayload,
+    walletAddress,
+  });
+  const reusedPermissionlessBody = reusedPermissionless.body as {
+    nextAction: string;
+    transactionPlan: { calls: unknown[] };
+  };
+  assert.equal(reusedPermissionlessBody.nextAction, "submit_x402_transaction");
+  assert.equal(reusedPermissionlessBody.transactionPlan.calls.length, 2);
 });
