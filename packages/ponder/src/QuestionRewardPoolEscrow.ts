@@ -26,10 +26,6 @@ function bundleRoundSetRowId(bundleId: bigint, roundSetIndex: bigint | number) {
 const ZERO_HASH =
   "0x0000000000000000000000000000000000000000000000000000000000000000" as const;
 
-function serializeDeclarationIds(ids: readonly string[]) {
-  return JSON.stringify(ids.map((id) => id.toLowerCase()));
-}
-
 ponder.on(
   "QuestionRewardPoolEscrow:RewardPoolCreated",
   async ({ event, context }) => {
@@ -64,7 +60,6 @@ ponder.on(
         bountyKind: 0,
         bountyEligibility: Number(bountyEligibility),
         bountyEligibilityDataHash,
-        eligibleAiDeclarationIds: "[]",
         challengedRoundId: 0n,
         reasonHash: ZERO_HASH,
         fundedAmount: amount,
@@ -101,14 +96,10 @@ ponder.on(
 ponder.on(
   "QuestionRewardPoolEscrow:RewardPoolEligibilitySet",
   async ({ event, context }) => {
-    const { rewardPoolId, bountyEligibility, allowedAiDeclarationIds } =
-      event.args;
+    const { rewardPoolId, bountyEligibility } = event.args;
 
     await context.db.update(questionRewardPool, { id: rewardPoolId }).set({
       bountyEligibility: Number(bountyEligibility),
-      eligibleAiDeclarationIds: serializeDeclarationIds(
-        allowedAiDeclarationIds,
-      ),
       updatedAt: event.block.timestamp,
     });
   },
@@ -362,7 +353,6 @@ ponder.on(
         frontendFeeBps: Number(frontendFeeBps),
         bountyEligibility: Number(bountyEligibility),
         bountyEligibilityDataHash,
-        eligibleAiDeclarationIds: "[]",
         bountyOpensAt,
         bountyClosesAt,
         feedbackClosesAt,
@@ -406,14 +396,10 @@ ponder.on(
 ponder.on(
   "QuestionRewardPoolEscrow:QuestionBundleEligibilitySet",
   async ({ event, context }) => {
-    const { bundleId, bountyEligibility, allowedAiDeclarationIds } =
-      event.args;
+    const { bundleId, bountyEligibility } = event.args;
 
     await context.db.update(questionBundleReward, { id: bundleId }).set({
       bountyEligibility: Number(bountyEligibility),
-      eligibleAiDeclarationIds: serializeDeclarationIds(
-        allowedAiDeclarationIds,
-      ),
       updatedAt: event.block.timestamp,
     });
   },

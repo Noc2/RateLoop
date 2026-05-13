@@ -151,7 +151,6 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
         bountyEligibility: 1,
         bountyEligibilityDataHash:
           "0x1111000000000000000000000000000000000000000000000000000000000000",
-        eligibleAiDeclarationIds: "[]",
         challengedRoundId: 0n,
         requiredVoters: 5,
         requiredSettledRounds: 2,
@@ -199,7 +198,7 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
     });
   });
 
-  it("indexes bounty eligibility allowlists", async () => {
+  it("indexes bounty eligibility", async () => {
     const { db, updates } = createDb();
     const registeredHandlers = await loadHandlers();
     const rewardPoolHandler = registeredHandlers.get(
@@ -212,17 +211,11 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
     expect(rewardPoolHandler).toBeDefined();
     expect(bundleHandler).toBeDefined();
 
-    const allowedAiDeclarationIds = [
-      "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-      "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-    ];
-
     await rewardPoolHandler!({
       event: {
         args: {
           rewardPoolId: 7n,
-          bountyEligibility: 4n,
-          allowedAiDeclarationIds,
+          bountyEligibility: 1n,
         },
         block: { number: 12n, timestamp: 1_900n },
       },
@@ -233,8 +226,7 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
       event: {
         args: {
           bundleId: 9n,
-          bountyEligibility: 4n,
-          allowedAiDeclarationIds,
+          bountyEligibility: 1n,
         },
         block: { number: 13n, timestamp: 2_000n },
       },
@@ -245,8 +237,7 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
       table: "questionRewardPool",
       key: { id: 7n },
       values: {
-        bountyEligibility: 4,
-        eligibleAiDeclarationIds: JSON.stringify(allowedAiDeclarationIds),
+        bountyEligibility: 1,
         updatedAt: 1_900n,
       },
     });
@@ -254,8 +245,7 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
       table: "questionBundleReward",
       key: { id: 9n },
       values: {
-        bountyEligibility: 4,
-        eligibleAiDeclarationIds: JSON.stringify(allowedAiDeclarationIds),
+        bountyEligibility: 1,
         updatedAt: 2_000n,
       },
     });

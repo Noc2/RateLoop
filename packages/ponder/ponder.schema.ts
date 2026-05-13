@@ -250,7 +250,6 @@ export const questionRewardPool = onchainTable(
     bountyKind: t.integer().notNull(),
     bountyEligibility: t.integer().notNull(),
     bountyEligibilityDataHash: t.hex().notNull(),
-    eligibleAiDeclarationIds: t.text().notNull(),
     challengedRoundId: t.bigint().notNull(),
     reasonHash: t.hex().notNull(),
     fundedAmount: t.bigint().notNull(),
@@ -358,7 +357,6 @@ export const questionBundleReward = onchainTable(
     frontendFeeBps: t.integer().notNull(),
     bountyEligibility: t.integer().notNull(),
     bountyEligibilityDataHash: t.hex().notNull(),
-    eligibleAiDeclarationIds: t.text().notNull(),
     bountyOpensAt: t.bigint().notNull(),
     bountyClosesAt: t.bigint().notNull(),
     feedbackClosesAt: t.bigint().notNull(),
@@ -692,154 +690,6 @@ export const launchRaterRewardProgress = onchainTable(
     payoutEligibleIdx: index().on(table.payoutEligible),
     latestCreditedAtIdx: index().on(table.latestCreditedAt),
     latestPaidAtIdx: index().on(table.latestPaidAt),
-  }),
-);
-
-export const aiRaterDeclaration = onchainTable(
-  "ai_rater_declaration",
-  (t) => ({
-    rater: t.hex().primaryKey(),
-    operator: t.hex().notNull(),
-    version: t.integer().notNull(),
-    effectiveEpoch: t.bigint().notNull(),
-    expiresAtEpoch: t.bigint().notNull(),
-    tier: t.integer().notNull(),
-    behaviorChanged: t.boolean().notNull(),
-    probePending: t.boolean().notNull(),
-    declarationHash: t.hex().notNull(),
-    modelClass: t.integer().notNull(),
-    modelId: t.hex().notNull(),
-    provider: t.hex().notNull(),
-    promptTemplateHash: t.hex().notNull(),
-    retrievalConfigHash: t.hex().notNull(),
-    toolingHash: t.hex().notNull(),
-    disclosure: t.integer().notNull(),
-    declaredAt: t.bigint().notNull(),
-    expiredAt: t.bigint(),
-    bondReleasedAt: t.bigint(),
-    retiredAt: t.bigint(),
-    lastProbeResultHash: t.hex(),
-    updatedAt: t.bigint().notNull(),
-  }),
-  (table) => ({
-    operatorIdx: index().on(table.operator),
-    tierIdx: index().on(table.tier),
-    modelIdx: index().on(table.modelId),
-    promptIdx: index().on(table.promptTemplateHash),
-    probePendingIdx: index().on(table.probePending),
-    expiredAtIdx: index().on(table.expiredAt),
-  }),
-);
-
-export const aiRaterDeclarationHistory = onchainTable(
-  "ai_rater_declaration_history",
-  (t) => ({
-    id: t.text().primaryKey(), // `${rater}-${version}`
-    rater: t.hex().notNull(),
-    operator: t.hex().notNull(),
-    version: t.integer().notNull(),
-    effectiveEpoch: t.bigint().notNull(),
-    expiresAtEpoch: t.bigint().notNull(),
-    tier: t.integer().notNull(),
-    behaviorChanged: t.boolean().notNull(),
-    probePending: t.boolean().notNull(),
-    declarationHash: t.hex().notNull(),
-    modelClass: t.integer().notNull(),
-    modelId: t.hex().notNull(),
-    provider: t.hex().notNull(),
-    promptTemplateHash: t.hex().notNull(),
-    retrievalConfigHash: t.hex().notNull(),
-    toolingHash: t.hex().notNull(),
-    disclosure: t.integer().notNull(),
-    declaredAt: t.bigint().notNull(),
-    expiredAt: t.bigint(),
-    bondReleasedAt: t.bigint(),
-    retiredAt: t.bigint(),
-    lastProbeResultHash: t.hex(),
-    updatedAt: t.bigint().notNull(),
-  }),
-  (table) => ({
-    raterIdx: index().on(table.rater),
-    operatorIdx: index().on(table.operator),
-    versionIdx: index().on(table.rater, table.version),
-    tierIdx: index().on(table.tier),
-    expiredAtIdx: index().on(table.rater, table.expiredAt),
-  }),
-);
-
-export const aiRaterOperatorBond = onchainTable(
-  "ai_rater_operator_bond",
-  (t) => ({
-    operator: t.hex().primaryKey(),
-    totalBond: t.bigint().notNull(),
-    updatedAt: t.bigint().notNull(),
-  }),
-  (table) => ({
-    totalBondIdx: index().on(table.totalBond),
-  }),
-);
-
-export const aiRaterProbeResult = onchainTable(
-  "ai_rater_probe_result",
-  (t) => ({
-    id: t.text().primaryKey(), // `${rater}-${version}-${txHash}-${logIndex}`
-    rater: t.hex().notNull(),
-    operator: t.hex().notNull(),
-    version: t.integer().notNull(),
-    passed: t.boolean().notNull(),
-    confidenceBps: t.integer().notNull(),
-    probeLibraryHash: t.hex().notNull(),
-    resultHash: t.hex().notNull(),
-    recordedAt: t.bigint().notNull(),
-  }),
-  (table) => ({
-    raterIdx: index().on(table.rater),
-    operatorIdx: index().on(table.operator),
-    versionIdx: index().on(table.rater, table.version),
-    passedIdx: index().on(table.passed),
-  }),
-);
-
-export const aiRaterDriftFlag = onchainTable(
-  "ai_rater_drift_flag",
-  (t) => ({
-    id: t.text().primaryKey(), // `${txHash}-${logIndex}`
-    rater: t.hex().notNull(),
-    operator: t.hex().notNull(),
-    version: t.integer().notNull(),
-    driftScoreBps: t.integer().notNull(),
-    evidenceHash: t.hex().notNull(),
-    flaggedAt: t.bigint().notNull(),
-  }),
-  (table) => ({
-    raterIdx: index().on(table.rater),
-    operatorIdx: index().on(table.operator),
-    versionIdx: index().on(table.rater, table.version),
-  }),
-);
-
-export const aiRaterDeclarationChallenge = onchainTable(
-  "ai_rater_declaration_challenge",
-  (t) => ({
-    challengeId: t.bigint().primaryKey(),
-    challenger: t.hex().notNull(),
-    rater: t.hex().notNull(),
-    operator: t.hex().notNull(),
-    declarationVersion: t.integer().notNull(),
-    evidenceHash: t.hex().notNull(),
-    resolutionHash: t.hex(),
-    bondAmount: t.bigint().notNull(),
-    status: t.integer().notNull(),
-    operatorSlash: t.bigint().notNull(),
-    challengerReward: t.bigint().notNull(),
-    openedAt: t.bigint().notNull(),
-    resolvedAt: t.bigint(),
-  }),
-  (table) => ({
-    challengerIdx: index().on(table.challenger),
-    raterIdx: index().on(table.rater),
-    operatorIdx: index().on(table.operator),
-    statusIdx: index().on(table.status),
   }),
 );
 

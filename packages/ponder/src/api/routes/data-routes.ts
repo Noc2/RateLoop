@@ -18,12 +18,6 @@ import {
   questionRewardPool,
   questionRewardPoolClaim,
   questionRewardPoolRound,
-  aiRaterDeclaration,
-  aiRaterDeclarationChallenge,
-  aiRaterDeclarationHistory,
-  aiRaterDriftFlag,
-  aiRaterOperatorBond,
-  aiRaterProbeResult,
   raterFollow,
   raterHumanCredential,
   raterProfile,
@@ -52,9 +46,6 @@ import { deriveEffectiveVoterStreak } from "../../streak-utils.js";
 
 const VOTE_COOLDOWN_SECONDS = 24 * 60 * 60;
 const BASE_RATER_MULTIPLIER_BPS = 10_000;
-const OPEN_CHALLENGE_STATUS = 1;
-const AI_RATER_BOND_ASSET = "USDC";
-const AI_RATER_BOND_DECIMALS = 6;
 
 const STREAK_MILESTONES = [
   { days: 7, baseBonus: 10 },
@@ -62,7 +53,6 @@ const STREAK_MILESTONES = [
   { days: 90, baseBonus: 200 },
 ];
 
-const AI_RATER_TIERS = ["A0", "A1Unverified", "A1Verified"] as const;
 const RATER_TYPES = ["Unknown", "Human", "AI", "Team", "Hybrid"] as const;
 
 function voteMatchesVoter(address: `0x${string}`) {
@@ -71,10 +61,6 @@ function voteMatchesVoter(address: `0x${string}`) {
 
 function voteMatchesAnyVoter(addresses: `0x${string}`[]) {
   return or(inArray(vote.voter, addresses), inArray(vote.identityVoter, addresses));
-}
-
-function aiTierName(tier: number | null | undefined) {
-  return AI_RATER_TIERS[tier ?? 0] ?? "A0";
 }
 
 function maxBigInt(values: Array<bigint | number | null | undefined>) {
@@ -106,71 +92,6 @@ function credentialStatus(
   if (credential.expiresAt !== 0n && credential.expiresAt <= nowSeconds)
     return "expired";
   return "verified";
-}
-
-function probeStatus(
-  declaration: { probePending: boolean } | undefined,
-  latestProbe: { passed: boolean } | undefined,
-) {
-  if (!declaration) return "none";
-  if (declaration.probePending) return "pending";
-  if (!latestProbe) return "none";
-  return latestProbe.passed ? "passed" : "failed";
-}
-
-function declarationIsActive(
-  declaration:
-    | {
-        retiredAt: bigint | null;
-        effectiveEpoch: bigint;
-        expiresAtEpoch: bigint;
-      }
-    | undefined,
-  nowSeconds: bigint,
-) {
-  if (!declaration || declaration.retiredAt != null) return false;
-  if (declaration.effectiveEpoch > nowSeconds) return false;
-  return (
-    declaration.expiresAtEpoch === 0n || nowSeconds < declaration.expiresAtEpoch
-  );
-}
-
-function declarationInactiveReason(
-  declaration:
-    | {
-        retiredAt: bigint | null;
-        effectiveEpoch: bigint;
-        expiresAtEpoch: bigint;
-      }
-    | undefined,
-  nowSeconds: bigint,
-  openChallengeCount: number,
-) {
-  if (!declaration) return "missing";
-  if (declaration.retiredAt != null) return "retired";
-  if (declaration.effectiveEpoch > nowSeconds) return "future";
-  if (
-    declaration.expiresAtEpoch !== 0n &&
-    nowSeconds >= declaration.expiresAtEpoch
-  )
-    return "expired";
-  if (openChallengeCount > 0) return "challenged";
-  return "none";
-}
-
-function parseOptionalInteger(value: string | undefined) {
-  if (value === undefined) return undefined;
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed < 0) return null;
-  return parsed;
-}
-
-function parseOptionalBoolean(value: string | undefined) {
-  if (value === undefined) return undefined;
-  const normalized = value.toLowerCase();
-  if (normalized === "true" || normalized === "1") return true;
-  if (normalized === "false" || normalized === "0") return false;
-  return null;
 }
 
 export function registerDataRoutes(app: ApiApp) {
@@ -471,7 +392,6 @@ export function registerDataRoutes(app: ApiApp) {
     const [
       [profile],
       [humanCredential],
-      [declaration],
       [trustSeed],
       [launchProgress],
       [launchPolicy],
@@ -485,11 +405,6 @@ export function registerDataRoutes(app: ApiApp) {
         .select()
         .from(raterHumanCredential)
         .where(eq(raterHumanCredential.rater, address))
-        .limit(1),
-      db
-        .select()
-        .from(aiRaterDeclaration)
-        .where(eq(aiRaterDeclaration.rater, address))
         .limit(1),
       db
         .select()
@@ -509,71 +424,13 @@ export function registerDataRoutes(app: ApiApp) {
     ]);
 
     const wallSeconds = BigInt(Math.floor(Date.now() / 1000));
-    const declarationVersion = declaration?.version ?? null;
-    const [[latestProbe], [challengeStats], [latestChallenge]] =
-      declarationVersion
-        ? await Promise.all([
-            db
-              .select()
-              .from(aiRaterProbeResult)
-              .where(
-                and(
-                  eq(aiRaterProbeResult.rater, address),
-                  eq(aiRaterProbeResult.version, declarationVersion),
-                ),
-              )
-              .orderBy(
-                desc(aiRaterProbeResult.recordedAt),
-                desc(aiRaterProbeResult.id),
-              )
-              .limit(1),
-            db
-              .select({
-                openCount: sql<number>`count(*)`,
-              })
-              .from(aiRaterDeclarationChallenge)
-              .where(
-                and(
-                  eq(aiRaterDeclarationChallenge.rater, address),
-                  eq(
-                    aiRaterDeclarationChallenge.declarationVersion,
-                    declarationVersion,
-                  ),
-                  eq(aiRaterDeclarationChallenge.status, OPEN_CHALLENGE_STATUS),
-                ),
-              ),
-            db
-              .select()
-              .from(aiRaterDeclarationChallenge)
-              .where(
-                and(
-                  eq(aiRaterDeclarationChallenge.rater, address),
-                  eq(
-                    aiRaterDeclarationChallenge.declarationVersion,
-                    declarationVersion,
-                  ),
-                ),
-              )
-              .orderBy(
-                desc(aiRaterDeclarationChallenge.openedAt),
-                desc(aiRaterDeclarationChallenge.challengeId),
-              )
-              .limit(1),
-          ])
-        : [[], [{ openCount: 0 }], []];
-
     const indexedChainTimestamp =
       maxBigInt([
         profile?.updatedAt,
         humanCredential?.updatedAt,
-        declaration?.updatedAt,
-        declaration?.declaredAt,
         trustSeed?.updatedAt,
         launchProgress?.updatedAt,
         launchPolicy?.updatedAt,
-        latestProbe?.recordedAt,
-        latestChallenge?.openedAt,
-        latestChallenge?.resolvedAt,
       ]) ?? null;
     const statusTimestamp =
       maxBigInt([indexedChainTimestamp, wallSeconds]) ?? wallSeconds;
@@ -613,22 +470,8 @@ export function registerDataRoutes(app: ApiApp) {
       humanCredential,
       statusTimestamp,
     );
-    const openChallengeCount = Number(challengeStats?.openCount ?? 0);
-    const aiDeclarationInactiveReason = declarationInactiveReason(
-      declaration,
-      statusTimestamp,
-      openChallengeCount,
-    );
-    const declaredDeclarationTier = declaration?.tier ?? 0;
-    const effectiveDeclarationTier =
-      aiDeclarationInactiveReason === "none" ? declaredDeclarationTier : 0;
-    const hasActiveAiDeclaration = aiDeclarationInactiveReason === "none";
     const participationLane =
-      humanCredentialStatus === "verified"
-        ? "verified_human"
-        : hasActiveAiDeclaration
-          ? "ai_declared"
-          : "open";
+      humanCredentialStatus === "verified" ? "verified_human" : "open";
     const currentLaunchPolicy = {
       minQualifyingScoreBps: launchPolicy?.minQualifyingScoreBps ?? 7_000,
       minVoters: launchPolicy?.minVoters ?? 3,
@@ -662,90 +505,6 @@ export function registerDataRoutes(app: ApiApp) {
         verifiedAt: humanCredential?.verifiedAt ?? null,
         expiresAt: humanCredential?.expiresAt ?? null,
         evidenceHash: humanCredential?.evidenceHash ?? null,
-      },
-      aiDeclaration: declaration
-        ? {
-            declared: true,
-            active: hasActiveAiDeclaration,
-            inactiveReason: aiDeclarationInactiveReason,
-            operator: declaration.operator,
-            version: declaration.version,
-            effectiveEpoch: declaration.effectiveEpoch,
-            expiresAtEpoch: declaration.expiresAtEpoch,
-            effectiveAt: declaration.effectiveEpoch,
-            expiresAt:
-              declaration.expiresAtEpoch === 0n
-                ? null
-                : declaration.expiresAtEpoch,
-            declaredTier: declaredDeclarationTier,
-            declaredTierName: aiTierName(declaredDeclarationTier),
-            effectiveTier: effectiveDeclarationTier,
-            effectiveTierName: aiTierName(effectiveDeclarationTier),
-            tier: effectiveDeclarationTier,
-            tierName: aiTierName(effectiveDeclarationTier),
-            behaviorChanged: declaration.behaviorChanged,
-            probePending: declaration.probePending,
-            probeStatus: probeStatus(declaration, latestProbe),
-            declarationHash: declaration.declarationHash,
-            modelClass: declaration.modelClass,
-            modelId: declaration.modelId,
-            provider: declaration.provider,
-            promptTemplateHash: declaration.promptTemplateHash,
-            retrievalConfigHash: declaration.retrievalConfigHash,
-            toolingHash: declaration.toolingHash,
-            disclosure: declaration.disclosure,
-            declaredAt: declaration.declaredAt,
-            retiredAt: declaration.retiredAt ?? null,
-            lastProbeResultHash: declaration.lastProbeResultHash ?? null,
-            latestProbe: latestProbe
-              ? {
-                  passed: latestProbe.passed,
-                  confidenceBps: latestProbe.confidenceBps,
-                  probeLibraryHash: latestProbe.probeLibraryHash,
-                  resultHash: latestProbe.resultHash,
-                  recordedAt: latestProbe.recordedAt,
-                }
-              : null,
-          }
-        : {
-            declared: false,
-            active: false,
-            inactiveReason: "missing",
-            operator: null,
-            version: 0,
-            effectiveEpoch: null,
-            expiresAtEpoch: null,
-            effectiveAt: null,
-            expiresAt: null,
-            declaredTier: 0,
-            declaredTierName: "A0",
-            effectiveTier: 0,
-            effectiveTierName: "A0",
-            tier: 0,
-            tierName: "A0",
-            behaviorChanged: false,
-            probePending: false,
-            probeStatus: "none",
-            declarationHash: null,
-            modelClass: null,
-            modelId: null,
-            provider: null,
-            promptTemplateHash: null,
-            retrievalConfigHash: null,
-            toolingHash: null,
-            disclosure: null,
-            declaredAt: null,
-            retiredAt: null,
-            lastProbeResultHash: null,
-            latestProbe: null,
-          },
-      challengeStatus: {
-        openCount: openChallengeCount,
-        latestChallengeId: latestChallenge?.challengeId ?? null,
-        latestStatus: latestChallenge?.status ?? 0,
-        latestResolvedAt: latestChallenge?.resolvedAt ?? null,
-        latestOperatorSlash: latestChallenge?.operatorSlash ?? 0n,
-        latestChallengerReward: latestChallenge?.challengerReward ?? 0n,
       },
       trust: {
         activeSeed: trustSeed
@@ -792,221 +551,7 @@ export function registerDataRoutes(app: ApiApp) {
       participationPolicy: {
         baseRewardWeightBps: BASE_RATER_MULTIPLIER_BPS,
         humanVerificationAffectsRewardWeight: false,
-        aiDeclarationAffectsRewardWeight: false,
         verifiedHumanCountsAsLaunchAnchor: true,
-        aiDeclarationCanAnchorLaunchRewards: false,
-      },
-    });
-  });
-
-  app.get("/ai-rater-declarations", async (c) => {
-    const operatorRaw = c.req.query("operator");
-    const tier = parseOptionalInteger(c.req.query("tier"));
-    const probePending = parseOptionalBoolean(c.req.query("probePending"));
-    const limit = safeLimit(c.req.query("limit"), 50, 200);
-    const offset = safeOffset(c.req.query("offset"));
-    if (Number.isNaN(offset)) return c.json({ error: "Invalid offset" }, 400);
-    if (tier === null) return c.json({ error: "Invalid tier" }, 400);
-    if (probePending === null) {
-      return c.json({ error: "Invalid probePending filter" }, 400);
-    }
-
-    const conditions = [];
-    if (operatorRaw) {
-      if (!isValidAddress(operatorRaw)) {
-        return c.json({ error: "Invalid operator address" }, 400);
-      }
-      conditions.push(
-        eq(aiRaterDeclaration.operator, operatorRaw.toLowerCase() as `0x${string}`),
-      );
-    }
-    if (tier !== undefined) conditions.push(eq(aiRaterDeclaration.tier, tier));
-    if (probePending !== undefined) {
-      conditions.push(eq(aiRaterDeclaration.probePending, probePending));
-    }
-    const where = conditions.length > 0 ? and(...conditions) : undefined;
-
-    const items = await db
-      .select()
-      .from(aiRaterDeclaration)
-      .where(where)
-      .orderBy(desc(aiRaterDeclaration.declaredAt), desc(aiRaterDeclaration.version))
-      .limit(limit)
-      .offset(offset);
-
-    return jsonBig(c, { items, limit, offset });
-  });
-
-  app.get("/ai-rater-declarations/:address", async (c) => {
-    const address = c.req.param("address").toLowerCase() as `0x${string}`;
-    if (!isValidAddress(address)) {
-      return c.json({ error: "Invalid address" }, 400);
-    }
-
-    const [declaration] = await db
-      .select()
-      .from(aiRaterDeclaration)
-      .where(eq(aiRaterDeclaration.rater, address))
-      .limit(1);
-
-    return jsonBig(c, { declaration: declaration ?? null });
-  });
-
-  app.get("/ai-rater-declarations/:address/history", async (c) => {
-    const address = c.req.param("address").toLowerCase() as `0x${string}`;
-    if (!isValidAddress(address)) {
-      return c.json({ error: "Invalid address" }, 400);
-    }
-
-    const version = parseOptionalInteger(c.req.query("version"));
-    const limit = safeLimit(c.req.query("limit"), 50, 200);
-    const offset = safeOffset(c.req.query("offset"));
-    if (Number.isNaN(offset)) return c.json({ error: "Invalid offset" }, 400);
-    if (version === null) return c.json({ error: "Invalid version" }, 400);
-
-    const conditions = [eq(aiRaterDeclarationHistory.rater, address)];
-    if (version !== undefined) {
-      conditions.push(eq(aiRaterDeclarationHistory.version, version));
-    }
-
-    const items = await db
-      .select()
-      .from(aiRaterDeclarationHistory)
-      .where(and(...conditions))
-      .orderBy(
-        desc(aiRaterDeclarationHistory.version),
-        desc(aiRaterDeclarationHistory.declaredAt),
-      )
-      .limit(limit)
-      .offset(offset);
-
-    return jsonBig(c, { items, limit, offset });
-  });
-
-  app.get("/ai-rater-declarations/:address/probes", async (c) => {
-    const address = c.req.param("address").toLowerCase() as `0x${string}`;
-    if (!isValidAddress(address)) {
-      return c.json({ error: "Invalid address" }, 400);
-    }
-
-    const version = parseOptionalInteger(c.req.query("version"));
-    const passed = parseOptionalBoolean(c.req.query("passed"));
-    const limit = safeLimit(c.req.query("limit"), 50, 200);
-    const offset = safeOffset(c.req.query("offset"));
-    if (Number.isNaN(offset)) return c.json({ error: "Invalid offset" }, 400);
-    if (version === null) return c.json({ error: "Invalid version" }, 400);
-    if (passed === null) return c.json({ error: "Invalid passed filter" }, 400);
-
-    const conditions = [eq(aiRaterProbeResult.rater, address)];
-    if (version !== undefined) {
-      conditions.push(eq(aiRaterProbeResult.version, version));
-    }
-    if (passed !== undefined) {
-      conditions.push(eq(aiRaterProbeResult.passed, passed));
-    }
-
-    const items = await db
-      .select()
-      .from(aiRaterProbeResult)
-      .where(and(...conditions))
-      .orderBy(desc(aiRaterProbeResult.recordedAt), desc(aiRaterProbeResult.id))
-      .limit(limit)
-      .offset(offset);
-
-    return jsonBig(c, { items, limit, offset });
-  });
-
-  app.get("/ai-rater-declarations/:address/drift-flags", async (c) => {
-    const address = c.req.param("address").toLowerCase() as `0x${string}`;
-    if (!isValidAddress(address)) {
-      return c.json({ error: "Invalid address" }, 400);
-    }
-
-    const version = parseOptionalInteger(c.req.query("version"));
-    const limit = safeLimit(c.req.query("limit"), 50, 200);
-    const offset = safeOffset(c.req.query("offset"));
-    if (Number.isNaN(offset)) return c.json({ error: "Invalid offset" }, 400);
-    if (version === null) return c.json({ error: "Invalid version" }, 400);
-
-    const conditions = [eq(aiRaterDriftFlag.rater, address)];
-    if (version !== undefined) {
-      conditions.push(eq(aiRaterDriftFlag.version, version));
-    }
-
-    const items = await db
-      .select()
-      .from(aiRaterDriftFlag)
-      .where(and(...conditions))
-      .orderBy(desc(aiRaterDriftFlag.flaggedAt), desc(aiRaterDriftFlag.id))
-      .limit(limit)
-      .offset(offset);
-
-    return jsonBig(c, { items, limit, offset });
-  });
-
-  app.get("/ai-rater-declarations/:address/challenges", async (c) => {
-    const address = c.req.param("address").toLowerCase() as `0x${string}`;
-    if (!isValidAddress(address)) {
-      return c.json({ error: "Invalid address" }, 400);
-    }
-
-    const version = parseOptionalInteger(c.req.query("version"));
-    const status = parseOptionalInteger(c.req.query("status"));
-    const limit = safeLimit(c.req.query("limit"), 50, 200);
-    const offset = safeOffset(c.req.query("offset"));
-    if (Number.isNaN(offset)) return c.json({ error: "Invalid offset" }, 400);
-    if (version === null) return c.json({ error: "Invalid version" }, 400);
-    if (status === null) return c.json({ error: "Invalid status filter" }, 400);
-
-    const conditions = [eq(aiRaterDeclarationChallenge.rater, address)];
-    if (version !== undefined) {
-      conditions.push(
-        eq(aiRaterDeclarationChallenge.declarationVersion, version),
-      );
-    }
-    if (status !== undefined) {
-      conditions.push(eq(aiRaterDeclarationChallenge.status, status));
-    }
-
-    const items = await db
-      .select()
-      .from(aiRaterDeclarationChallenge)
-      .where(and(...conditions))
-      .orderBy(
-        desc(aiRaterDeclarationChallenge.openedAt),
-        desc(aiRaterDeclarationChallenge.challengeId),
-      )
-      .limit(limit)
-      .offset(offset);
-
-    return jsonBig(c, {
-      items: items.map((item) => ({
-        ...item,
-        bondAsset: AI_RATER_BOND_ASSET,
-        bondDecimals: AI_RATER_BOND_DECIMALS,
-      })),
-      limit,
-      offset,
-    });
-  });
-
-  app.get("/ai-rater-operators/:address/bond", async (c) => {
-    const address = c.req.param("address").toLowerCase() as `0x${string}`;
-    if (!isValidAddress(address)) {
-      return c.json({ error: "Invalid address" }, 400);
-    }
-
-    const [bond] = await db
-      .select()
-      .from(aiRaterOperatorBond)
-      .where(eq(aiRaterOperatorBond.operator, address))
-      .limit(1);
-
-    return jsonBig(c, {
-      bond: {
-        ...(bond ?? { operator: address, totalBond: 0n, updatedAt: null }),
-        bondAsset: AI_RATER_BOND_ASSET,
-        bondDecimals: AI_RATER_BOND_DECIMALS,
       },
     });
   });

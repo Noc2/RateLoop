@@ -98,91 +98,6 @@ function mockPonderModules<T>(result: T) {
     globalStats: {
       id: "globalStats.id",
     },
-    aiRaterDeclaration: {
-      behaviorChanged: "aiRaterDeclaration.behaviorChanged",
-      declarationHash: "aiRaterDeclaration.declarationHash",
-      declaredAt: "aiRaterDeclaration.declaredAt",
-      disclosure: "aiRaterDeclaration.disclosure",
-      effectiveEpoch: "aiRaterDeclaration.effectiveEpoch",
-      expiresAtEpoch: "aiRaterDeclaration.expiresAtEpoch",
-      lastProbeResultHash: "aiRaterDeclaration.lastProbeResultHash",
-      modelClass: "aiRaterDeclaration.modelClass",
-      modelId: "aiRaterDeclaration.modelId",
-      operator: "aiRaterDeclaration.operator",
-      probePending: "aiRaterDeclaration.probePending",
-      promptTemplateHash: "aiRaterDeclaration.promptTemplateHash",
-      provider: "aiRaterDeclaration.provider",
-      rater: "aiRaterDeclaration.rater",
-      retrievalConfigHash: "aiRaterDeclaration.retrievalConfigHash",
-      retiredAt: "aiRaterDeclaration.retiredAt",
-      tier: "aiRaterDeclaration.tier",
-      toolingHash: "aiRaterDeclaration.toolingHash",
-      updatedAt: "aiRaterDeclaration.updatedAt",
-      version: "aiRaterDeclaration.version",
-    },
-    aiRaterDeclarationChallenge: {
-      bondAmount: "aiRaterDeclarationChallenge.bondAmount",
-      challengeId: "aiRaterDeclarationChallenge.challengeId",
-      challenger: "aiRaterDeclarationChallenge.challenger",
-      challengerReward: "aiRaterDeclarationChallenge.challengerReward",
-      declarationVersion: "aiRaterDeclarationChallenge.declarationVersion",
-      evidenceHash: "aiRaterDeclarationChallenge.evidenceHash",
-      openedAt: "aiRaterDeclarationChallenge.openedAt",
-      operator: "aiRaterDeclarationChallenge.operator",
-      operatorSlash: "aiRaterDeclarationChallenge.operatorSlash",
-      rater: "aiRaterDeclarationChallenge.rater",
-      resolvedAt: "aiRaterDeclarationChallenge.resolvedAt",
-      resolutionHash: "aiRaterDeclarationChallenge.resolutionHash",
-      status: "aiRaterDeclarationChallenge.status",
-    },
-    aiRaterDeclarationHistory: {
-      behaviorChanged: "aiRaterDeclarationHistory.behaviorChanged",
-      declarationHash: "aiRaterDeclarationHistory.declarationHash",
-      declaredAt: "aiRaterDeclarationHistory.declaredAt",
-      disclosure: "aiRaterDeclarationHistory.disclosure",
-      effectiveEpoch: "aiRaterDeclarationHistory.effectiveEpoch",
-      expiresAtEpoch: "aiRaterDeclarationHistory.expiresAtEpoch",
-      id: "aiRaterDeclarationHistory.id",
-      lastProbeResultHash: "aiRaterDeclarationHistory.lastProbeResultHash",
-      modelClass: "aiRaterDeclarationHistory.modelClass",
-      modelId: "aiRaterDeclarationHistory.modelId",
-      operator: "aiRaterDeclarationHistory.operator",
-      probePending: "aiRaterDeclarationHistory.probePending",
-      promptTemplateHash: "aiRaterDeclarationHistory.promptTemplateHash",
-      provider: "aiRaterDeclarationHistory.provider",
-      rater: "aiRaterDeclarationHistory.rater",
-      retrievalConfigHash: "aiRaterDeclarationHistory.retrievalConfigHash",
-      retiredAt: "aiRaterDeclarationHistory.retiredAt",
-      tier: "aiRaterDeclarationHistory.tier",
-      toolingHash: "aiRaterDeclarationHistory.toolingHash",
-      updatedAt: "aiRaterDeclarationHistory.updatedAt",
-      version: "aiRaterDeclarationHistory.version",
-    },
-    aiRaterDriftFlag: {
-      driftScoreBps: "aiRaterDriftFlag.driftScoreBps",
-      evidenceHash: "aiRaterDriftFlag.evidenceHash",
-      flaggedAt: "aiRaterDriftFlag.flaggedAt",
-      id: "aiRaterDriftFlag.id",
-      operator: "aiRaterDriftFlag.operator",
-      rater: "aiRaterDriftFlag.rater",
-      version: "aiRaterDriftFlag.version",
-    },
-    aiRaterOperatorBond: {
-      operator: "aiRaterOperatorBond.operator",
-      totalBond: "aiRaterOperatorBond.totalBond",
-      updatedAt: "aiRaterOperatorBond.updatedAt",
-    },
-    aiRaterProbeResult: {
-      confidenceBps: "aiRaterProbeResult.confidenceBps",
-      id: "aiRaterProbeResult.id",
-      operator: "aiRaterProbeResult.operator",
-      passed: "aiRaterProbeResult.passed",
-      probeLibraryHash: "aiRaterProbeResult.probeLibraryHash",
-      rater: "aiRaterProbeResult.rater",
-      recordedAt: "aiRaterProbeResult.recordedAt",
-      resultHash: "aiRaterProbeResult.resultHash",
-      version: "aiRaterProbeResult.version",
-    },
     launchRaterRewardProgress: {
       cohortIndex: "launchRaterRewardProgress.cohortIndex",
       distinctAnchorRoundCount: "launchRaterRewardProgress.distinctAnchorRoundCount",
@@ -963,11 +878,6 @@ describe("registerLeaderboardRoutes", () => {
         verified: true,
         revoked: false,
         expiresAt: 9_999_999_999n,
-        tier: 2,
-        retiredAt: null,
-        effectiveEpoch: 1n,
-        expiresAtEpoch: 0n,
-        probePending: false,
       },
     ]);
     const { registerLeaderboardRoutes } = await import(
@@ -988,9 +898,6 @@ describe("registerLeaderboardRoutes", () => {
       participationLane: "verified_human",
       followerCount: 3,
       followingCount: 2,
-      aiTier: 2,
-      aiTierName: "A1Verified",
-      aiDeclared: true,
       activeTrustAttestationCount: 4,
     });
   });
@@ -1145,7 +1052,7 @@ describe("registerDataRoutes", () => {
     });
   });
 
-  it("returns challenged-agent participation status with launch context", async () => {
+  it("returns rater participation status with launch context", async () => {
     const zeroHash =
       "0x0000000000000000000000000000000000000000000000000000000000000000";
     const { db } = mockPonderModules([
@@ -1156,36 +1063,6 @@ describe("registerDataRoutes", () => {
         verifiedAt: 1_000n,
         expiresAt: 9_999_999_999n,
         evidenceHash: zeroHash,
-        operator: "0x00000000000000000000000000000000000000bb",
-        version: 3,
-        effectiveEpoch: 1n,
-        expiresAtEpoch: 0n,
-        tier: 2,
-        behaviorChanged: false,
-        probePending: false,
-        declarationHash: zeroHash,
-        modelClass: 1,
-        modelId: zeroHash,
-        provider: zeroHash,
-        promptTemplateHash: zeroHash,
-        retrievalConfigHash: zeroHash,
-        toolingHash: zeroHash,
-        disclosure: 1,
-        declaredAt: 2_000n,
-        retiredAt: null,
-        lastProbeResultHash: zeroHash,
-        passed: true,
-        confidenceBps: 9_400,
-        probeLibraryHash: zeroHash,
-        resultHash: zeroHash,
-        recordedAt: 3_000n,
-        openCount: 1,
-        challengeId: 7n,
-        status: 1,
-        resolvedAt: null,
-        resolutionHash: zeroHash,
-        operatorSlash: 0n,
-        challengerReward: 0n,
         active: true,
         seededAt: 500n,
         sunsetAt: 9_999_999_999n,
@@ -1236,20 +1113,6 @@ describe("registerDataRoutes", () => {
       humanCredential: {
         status: "verified",
       },
-      aiDeclaration: {
-        declared: true,
-        active: false,
-        inactiveReason: "challenged",
-        declaredTierName: "A1Verified",
-        effectiveTierName: "A0",
-        tierName: "A0",
-        probeStatus: "passed",
-      },
-      challengeStatus: {
-        openCount: 1,
-        latestChallengeId: "7",
-        latestStatus: 1,
-      },
       trust: {
         activeInboundAttestationCount: 4,
       },
@@ -1267,119 +1130,7 @@ describe("registerDataRoutes", () => {
       participationPolicy: {
         baseRewardWeightBps: 10_000,
         humanVerificationAffectsRewardWeight: false,
-        aiDeclarationAffectsRewardWeight: false,
         verifiedHumanCountsAsLaunchAnchor: true,
-        aiDeclarationCanAnchorLaunchRewards: false,
-      },
-    });
-  });
-
-  it("treats retired AI declarations as A0 for participation status", async () => {
-    const zeroHash =
-      "0x0000000000000000000000000000000000000000000000000000000000000000";
-    mockPonderModules([
-      {
-        raterType: 2,
-        verified: false,
-        revoked: false,
-        verifiedAt: null,
-        expiresAt: null,
-        evidenceHash: null,
-        operator: "0x00000000000000000000000000000000000000bb",
-        version: 3,
-        effectiveEpoch: 1n,
-        expiresAtEpoch: 0n,
-        tier: 2,
-        behaviorChanged: false,
-        probePending: false,
-        declarationHash: zeroHash,
-        modelClass: 1,
-        modelId: zeroHash,
-        provider: zeroHash,
-        promptTemplateHash: zeroHash,
-        retrievalConfigHash: zeroHash,
-        toolingHash: zeroHash,
-        disclosure: 1,
-        declaredAt: 2_000n,
-        retiredAt: 4_000n,
-        lastProbeResultHash: zeroHash,
-        passed: true,
-        confidenceBps: 9_400,
-        probeLibraryHash: zeroHash,
-        resultHash: zeroHash,
-        recordedAt: 3_000n,
-        openCount: 0,
-        challengeId: 7n,
-        status: 2,
-        resolvedAt: 4_000n,
-        resolutionHash: zeroHash,
-        operatorSlash: 100n,
-        challengerReward: 50n,
-        active: false,
-        seededAt: 0n,
-        sunsetAt: 0n,
-        seedRoot: zeroHash,
-        count: 0,
-        qualifyingRatingCount: 0,
-        rewardedRatingCount: 0,
-        distinctVerifiedAnchorCount: 0,
-        distinctAnchorRoundCount: 0,
-        payoutEligible: false,
-        launchCap: 0n,
-        launchPaid: 0n,
-        cohortIndex: null,
-        latestCreditedAt: null,
-        latestPaidAt: null,
-        minQualifyingScoreBps: 7_000,
-        minVoters: 3,
-        minVerifiedHumans: 1,
-        minDistinctVerifiedAnchors: 2,
-        minDistinctAnchorRounds: 2,
-        eligibilityRatingCount: 5,
-        rewardingRatingCount: 10,
-        requireNoPendingCleanup: true,
-      },
-    ]);
-    const { registerDataRoutes } = await import(
-      "../src/api/routes/data-routes.js"
-    );
-
-    const app = new Hono();
-    registerDataRoutes(app);
-
-    const response = await app.request(
-      "http://localhost/rater-participation-status/0x00000000000000000000000000000000000000aa",
-    );
-    const body = await response.json();
-
-    expect(response.status).toBe(200);
-    expect(body).toMatchObject({
-      participationLane: "open",
-      aiDeclaration: {
-        declared: true,
-        active: false,
-        inactiveReason: "retired",
-        declaredTier: 2,
-        declaredTierName: "A1Verified",
-        effectiveTier: 0,
-        effectiveTierName: "A0",
-        tier: 0,
-        tierName: "A0",
-        retiredAt: "4000",
-        probeStatus: "passed",
-      },
-      challengeStatus: {
-        latestChallengeId: "7",
-        latestStatus: 2,
-        latestResolvedAt: "4000",
-      },
-      launchRewards: {
-        eligible: false,
-        remainingLaunchCap: "0",
-        remainingRewardSlots: 10,
-      },
-      participationPolicy: {
-        baseRewardWeightBps: 10_000,
       },
     });
   });
@@ -1397,36 +1148,6 @@ describe("registerDataRoutes", () => {
         verifiedAt: 1_000n,
         expiresAt: 30_000n,
         evidenceHash: zeroHash,
-        operator: "0x00000000000000000000000000000000000000bb",
-        version: 1,
-        effectiveEpoch: 1_000n,
-        expiresAtEpoch: 10_000n,
-        tier: 2,
-        behaviorChanged: false,
-        probePending: false,
-        declarationHash: zeroHash,
-        modelClass: 1,
-        modelId: zeroHash,
-        provider: zeroHash,
-        promptTemplateHash: zeroHash,
-        retrievalConfigHash: zeroHash,
-        toolingHash: zeroHash,
-        disclosure: 1,
-        declaredAt: 5_000n,
-        retiredAt: null,
-        lastProbeResultHash: zeroHash,
-        passed: true,
-        confidenceBps: 9_400,
-        probeLibraryHash: zeroHash,
-        resultHash: zeroHash,
-        recordedAt: 5_000n,
-        openCount: 0,
-        challengeId: null,
-        status: null,
-        resolvedAt: null,
-        resolutionHash: zeroHash,
-        operatorSlash: 0n,
-        challengerReward: 0n,
         active: false,
         seededAt: 0n,
         sunsetAt: 0n,
@@ -1475,12 +1196,6 @@ describe("registerDataRoutes", () => {
       humanCredential: {
         status: "expired",
       },
-      aiDeclaration: {
-        active: false,
-        inactiveReason: "expired",
-        declaredTierName: "A1Verified",
-        effectiveTierName: "A0",
-      },
       launchRewards: {
         eligible: false,
         remainingLaunchCap: "50",
@@ -1492,122 +1207,6 @@ describe("registerDataRoutes", () => {
     });
 
     nowSpy.mockRestore();
-  });
-
-  it("rejects invalid AI rater read addresses before querying the database", async () => {
-    const { db } = mockPonderModules([]);
-    const { registerDataRoutes } = await import(
-      "../src/api/routes/data-routes.js"
-    );
-
-    const app = new Hono();
-    registerDataRoutes(app);
-
-    const historyResponse = await app.request(
-      "http://localhost/ai-rater-declarations/not-an-address/history",
-    );
-    const bondResponse = await app.request(
-      "http://localhost/ai-rater-operators/not-an-address/bond",
-    );
-
-    expect(historyResponse.status).toBe(400);
-    expect(await historyResponse.json()).toEqual({ error: "Invalid address" });
-    expect(bondResponse.status).toBe(400);
-    expect(await bondResponse.json()).toEqual({ error: "Invalid address" });
-    expect(db.select).not.toHaveBeenCalled();
-  });
-
-  it("returns paginated AI rater declaration history", async () => {
-    const zeroHash =
-      "0x0000000000000000000000000000000000000000000000000000000000000000";
-    const { queryBuilder } = mockPonderModules([
-      {
-        id: "0x00000000000000000000000000000000000000aa-3",
-        rater: "0x00000000000000000000000000000000000000aa",
-        operator: "0x00000000000000000000000000000000000000bb",
-        version: 3,
-        effectiveEpoch: 1n,
-        expiresAtEpoch: 0n,
-        tier: 2,
-        behaviorChanged: false,
-        probePending: false,
-        declarationHash: zeroHash,
-        modelClass: 1,
-        modelId: zeroHash,
-        provider: zeroHash,
-        promptTemplateHash: zeroHash,
-        retrievalConfigHash: zeroHash,
-        toolingHash: zeroHash,
-        disclosure: 1,
-        declaredAt: 2_000n,
-        retiredAt: null,
-        lastProbeResultHash: zeroHash,
-        updatedAt: 2_000n,
-      },
-    ]);
-    const { registerDataRoutes } = await import(
-      "../src/api/routes/data-routes.js"
-    );
-
-    const app = new Hono();
-    registerDataRoutes(app);
-
-    const response = await app.request(
-      "http://localhost/ai-rater-declarations/0x00000000000000000000000000000000000000AA/history?version=3&limit=25&offset=5",
-    );
-    const body = await response.json();
-
-    expect(response.status).toBe(200);
-    expect(body).toMatchObject({
-      items: [
-        {
-          id: "0x00000000000000000000000000000000000000aa-3",
-          rater: "0x00000000000000000000000000000000000000aa",
-          version: 3,
-          effectiveEpoch: "1",
-          declaredAt: "2000",
-        },
-      ],
-      limit: 25,
-      offset: 5,
-    });
-    expect(queryBuilder.limit).toHaveBeenCalledWith(25);
-    expect(queryBuilder.offset).toHaveBeenCalledWith(5);
-
-    const serializedWhere = serializeExpression(
-      queryBuilder.where.mock.calls[0]?.[0],
-    );
-    expect(serializedWhere).toContain("aiRaterDeclarationHistory.rater");
-    expect(serializedWhere).toContain(
-      "0x00000000000000000000000000000000000000aa",
-    );
-    expect(serializedWhere).toContain("aiRaterDeclarationHistory.version");
-  });
-
-  it("returns a zero operator bond when no indexed bond exists", async () => {
-    const { db } = mockPonderModules([]);
-    const { registerDataRoutes } = await import(
-      "../src/api/routes/data-routes.js"
-    );
-
-    const app = new Hono();
-    registerDataRoutes(app);
-
-    const response = await app.request(
-      "http://localhost/ai-rater-operators/0x00000000000000000000000000000000000000BB/bond",
-    );
-
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({
-      bond: {
-        operator: "0x00000000000000000000000000000000000000bb",
-        totalBond: "0",
-        bondAsset: "USDC",
-        bondDecimals: 6,
-        updatedAt: null,
-      },
-    });
-    expect(db.select).toHaveBeenCalledTimes(1);
   });
 
   it("includes bounty payouts in global stats", async () => {

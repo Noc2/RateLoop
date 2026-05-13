@@ -23,7 +23,6 @@ const INDEXED_CONTRACT_NAMES = [
   "QuestionRewardPoolEscrow",
   "FeedbackBonusEscrow",
   "RaterRegistry",
-  "RaterDeclarationRegistry",
 ] as const;
 
 type IndexedContractName = (typeof INDEXED_CONTRACT_NAMES)[number];
@@ -40,7 +39,6 @@ const INDEXED_CONTRACT_ENV_KEYS: Partial<Record<IndexedContractName, string>> = 
   QuestionRewardPoolEscrow: "PONDER_QUESTION_REWARD_POOL_ESCROW_ADDRESS",
   FeedbackBonusEscrow: "PONDER_FEEDBACK_BONUS_ESCROW_ADDRESS",
   RaterRegistry: "PONDER_RATER_REGISTRY_ADDRESS",
-  RaterDeclarationRegistry: "PONDER_RATER_DECLARATION_REGISTRY_ADDRESS",
 };
 
 function addExcludedAddress(addresses: Set<string>, address: string | undefined) {

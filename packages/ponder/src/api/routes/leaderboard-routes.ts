@@ -2,7 +2,6 @@ import { ROUND_STATE } from "@rateloop/contracts/protocol";
 import { and, asc, desc, eq, gte, inArray, lt, notInArray, sql } from "ponder";
 import { db } from "ponder:api";
 import {
-  aiRaterDeclaration,
   content,
   profile,
   raterHumanCredential,
@@ -27,9 +26,7 @@ import {
   profileTotalVotesExpr,
 } from "../profile-aggregate-expressions.js";
 import {
-  aiTierName,
   credentialStatus,
-  declarationInactiveReason,
   raterTypeName,
 } from "../reputation-utils.js";
 import type { ApiApp } from "../shared.js";
@@ -50,7 +47,6 @@ async function attachAccuracyLeaderboardReputation<T extends { voter: `0x${strin
     raterProfiles,
     humanCredentials,
     trustCounts,
-    aiDeclarations,
     followStats,
   ] = await Promise.all([
     db
@@ -75,10 +71,6 @@ async function attachAccuracyLeaderboardReputation<T extends { voter: `0x${strin
         ),
       )
       .groupBy(raterTrustAttestation.subject),
-    db
-      .select()
-      .from(aiRaterDeclaration)
-      .where(inArray(aiRaterDeclaration.rater, addresses)),
     getFollowStatsMap(addresses),
   ]);
 
@@ -87,7 +79,6 @@ async function attachAccuracyLeaderboardReputation<T extends { voter: `0x${strin
   const trustCountMap = new Map(
     trustCounts.map((row) => [row.rater as `0x${string}`, Number(row.count ?? 0)]),
   );
-  const aiDeclarationMap = new Map(aiDeclarations.map((row) => [row.rater, row]));
 
   return items.map((item) => {
     const credential = humanCredentialMap.get(item.voter);
@@ -95,22 +86,9 @@ async function attachAccuracyLeaderboardReputation<T extends { voter: `0x${strin
       followerCount: 0,
       followingCount: 0,
     };
-    const declaration = aiDeclarationMap.get(item.voter);
-    const aiInactiveReason = declarationInactiveReason(
-      declaration,
-      nowSeconds,
-      0,
-    );
-    const effectiveAiTier =
-      aiInactiveReason === "none" ? declaration?.tier ?? 0 : 0;
     const humanCredentialStatus = credentialStatus(credential, nowSeconds);
-    const aiDeclared = aiInactiveReason === "none";
     const participationLane =
-      humanCredentialStatus === "verified"
-        ? "verified_human"
-        : aiDeclared
-          ? "ai_declared"
-          : "open";
+      humanCredentialStatus === "verified" ? "verified_human" : "open";
 
     return {
       ...item,
@@ -122,9 +100,6 @@ async function attachAccuracyLeaderboardReputation<T extends { voter: `0x${strin
         activeTrustAttestationCount: trustCountMap.get(item.voter) ?? 0,
         followerCount: follow.followerCount,
         followingCount: follow.followingCount,
-        aiTier: effectiveAiTier,
-        aiTierName: aiTierName(effectiveAiTier),
-        aiDeclared,
       },
     };
   });
