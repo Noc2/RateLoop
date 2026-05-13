@@ -4,9 +4,10 @@ Research date: 2026-05-07
 
 Implementation status: archived research, not the current protocol plan. The
 current pre-deploy implementation removes protocol-enforced cluster discounts,
-independence multipliers, and identity reward multipliers. See
-`docs/implementation-plan.md` for the canonical human-credential, AI
-declaration, and launch-anchor policy. The current RateLoop implementation also
+independence multipliers, identity reward multipliers, and AI-specific
+accountability rules. See `docs/implementation-plan.md` for the canonical
+human-credential and launch-anchor policy. The current RateLoop implementation
+also
 intentionally diverges from this research note on LREP transferability. LREP is
 capped, transferable, checkpointed, and protected by governance locks, hard
 bootstrap floors, prediction scoring floors, and verified-human launch-anchor

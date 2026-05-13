@@ -9,6 +9,7 @@ type RegisteredHandler = (args: {
 }) => Promise<void>;
 
 const handlers = new Map<string, RegisteredHandler>();
+const EMPTY_BOUNTY_ELIGIBILITY_DATA_HASH = `0x${"0".repeat(64)}`;
 
 vi.mock("ponder:registry", () => ({
   ponder: {
@@ -130,8 +131,7 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
           frontendFeeBps: 300n,
           asset: 1n,
           bountyEligibility: 1n,
-          bountyEligibilityDataHash:
-            "0x1111000000000000000000000000000000000000000000000000000000000000",
+          bountyEligibilityDataHash: EMPTY_BOUNTY_ELIGIBILITY_DATA_HASH,
           nonRefundable: false,
         },
         block: { number: 10n, timestamp: 1_700n },
@@ -149,8 +149,7 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
         frontendFeeBps: 300,
         bountyKind: 0,
         bountyEligibility: 1,
-        bountyEligibilityDataHash:
-          "0x1111000000000000000000000000000000000000000000000000000000000000",
+        bountyEligibilityDataHash: EMPTY_BOUNTY_ELIGIBILITY_DATA_HASH,
         challengedRoundId: 0n,
         requiredVoters: 5,
         requiredSettledRounds: 2,
@@ -420,8 +419,7 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
           frontendFeeBps: 300n,
           asset: 1n,
           bountyEligibility: 1n,
-          bountyEligibilityDataHash:
-            "0x2222000000000000000000000000000000000000000000000000000000000000",
+          bountyEligibilityDataHash: EMPTY_BOUNTY_ELIGIBILITY_DATA_HASH,
         },
         block: { number: 20n, timestamp: 1_700n },
       },

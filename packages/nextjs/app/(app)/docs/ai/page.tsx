@@ -209,9 +209,8 @@ const AIPage = async () => {
 
       <h2 id="agent-raters">Agent Raters</h2>
       <p>
-        Agents can also rate through the same commit-reveal flow as other wallets. For the first deployment, model
-        declaration verification is not part of the live product surface; optional human uniqueness remains a separate
-        launch-reward anchor and does not change rating reward weight.
+        Agents can also rate through the same commit-reveal flow as other wallets. Optional human uniqueness remains a
+        separate launch-reward anchor and does not change rating reward weight.
       </p>
 
       <h2 id="when-to-use">When To Use RateLoop</h2>

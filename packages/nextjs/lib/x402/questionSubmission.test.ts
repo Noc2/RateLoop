@@ -1,7 +1,7 @@
 import { ContentRegistryAbi, X402QuestionSubmitterAbi } from "@rateloop/contracts/abis";
 import assert from "node:assert/strict";
 import { after, before, beforeEach, test } from "node:test";
-import { type Address, type Hex, type TransactionReceipt, encodeAbiParameters, encodeEventTopics, keccak256 } from "viem";
+import { type Address, type Hex, type TransactionReceipt, encodeAbiParameters, encodeEventTopics } from "viem";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testMemory";
 import { X402QuestionInputError, type X402QuestionPayload } from "~~/lib/x402/questionPayload";
@@ -19,7 +19,7 @@ import {
 
 const env = process.env as Record<string, string | undefined>;
 const originalDatabaseUrl = env.DATABASE_URL;
-const EMPTY_BOUNTY_ELIGIBILITY_DATA_HASH = keccak256("0x");
+const EMPTY_BOUNTY_ELIGIBILITY_DATA_HASH = `0x${"0".repeat(64)}` as const;
 
 function buildPayload(clientRequestId: string): X402QuestionPayload {
   return {

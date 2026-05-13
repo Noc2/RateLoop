@@ -341,7 +341,7 @@ contract RoundVotingEngine is
     /// @param roundContext Packed expected round ID and reference score: `(roundId << 16) | ratingBps`.
     /// @param targetRound drand round targeted by the ciphertext.
     /// @param drandChainHash drand chain hash bound into the commitment.
-    /// @param commitHash keccak256(abi.encodePacked(isUp, salt, voter, contentId, roundId, roundReferenceRatingBps, targetRound, drandChainHash, keccak256(ciphertext))).
+    /// @param commitHash keccak256(abi.encodePacked(isUp, predictedUpBps, salt, voter, contentId, roundId, roundReferenceRatingBps, targetRound, drandChainHash, keccak256(ciphertext))).
     /// @param ciphertext Tlock-encrypted payload (decryptable after epoch end via drand).
     /// @param stakeAmount Amount of LREP tokens to stake (0-10).
     /// @param frontend Address of frontend operator for fee distribution.

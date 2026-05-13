@@ -5,7 +5,7 @@ Review date: 2026-05-08
 Implementation status: archived review of an older research draft, not the
 current protocol plan. The current pre-deploy implementation removes
 protocol-enforced cluster discounts, independence multipliers, identity
-reward multipliers, and AI model-accountability rails. See
+reward multipliers, and AI-specific accountability rules. See
 `docs/implementation-plan.md` for the canonical human-credential and
 launch-anchor policy.
 

@@ -117,7 +117,7 @@ contract VotingHandler is VotingTestBase {
 
         bytes32 salt = keccak256(abi.encodePacked(voter, contentId, isUp, block.timestamp, commitCount));
         bytes memory ciphertext = _testCiphertext(isUp, salt, contentId);
-        bytes32 commitHash = _commitHash(isUp, salt, contentId, ciphertext);
+        bytes32 commitHash = _commitHash(isUp, salt, voter, contentId, ciphertext);
 
         vm.startPrank(voter);
         hrepToken.approve(address(engine), stakeAmount);

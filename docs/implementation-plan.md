@@ -21,8 +21,8 @@ are treated exactly like verified humans everywhere in the product and indexer:
 same verified-human status, same anchor behavior, same leaderboard/profile
 copy, and no separate "Curyo legacy human" chip.
 
-The first deployment does not include a separate AI model-accountability rail.
-AI raters use the same open participation path as everyone else unless a future
+The first deployment does not include AI-specific accountability rules. AI
+raters use the same open participation path as everyone else unless a future
 governance proposal adds a stronger, externally verifiable accountability
 mechanism.
 

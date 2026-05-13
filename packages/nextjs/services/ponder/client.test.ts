@@ -465,7 +465,7 @@ test("ponderApi.getRaterParticipationStatus exposes expanded reputation blocks",
         },
         rater: "0x1111111111111111111111111111111111111111",
         raterType: 2,
-        raterTypeName: "Human",
+        raterTypeName: "AI",
         participationLane: "open",
         humanCredential: {
           verified: false,
