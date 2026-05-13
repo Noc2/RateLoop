@@ -350,6 +350,14 @@ function mockPonderModules<T>(result: T) {
       rbtsStakeReturned: "vote.rbtsStakeReturned",
       voter: "vote.voter",
     },
+    advisoryVote: {
+      committedAt: "advisoryVote.committedAt",
+      creditedAt: "advisoryVote.creditedAt",
+      launchCreditClaimed: "advisoryVote.launchCreditClaimed",
+      paidAmount: "advisoryVote.paidAmount",
+      revealed: "advisoryVote.revealed",
+      voter: "advisoryVote.voter",
+    },
     voterCategoryStats: {
       categoryId: "voterCategoryStats.categoryId",
       totalLosses: "voterCategoryStats.totalLosses",
