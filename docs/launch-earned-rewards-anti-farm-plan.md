@@ -67,13 +67,10 @@ thresholds. With the `25M LREP` earned-rater allocation, this supports about
 All policy values must be timelock-governance updateable so the network can
 start permissive and become stricter if farming pressure appears.
 
-Negative invariant: an AI rater declaration, including `A1Verified`, is not a
-verified-human anchor and does not change reward weight. The earned launch pool
-only counts active human credentials from `RaterRegistry` as anchors, including
-World ID credentials and the nine seeded Curyo Self.xyz verified humans. The
-reward distributor excludes anchors using the commit-time AI declaration
-snapshot, so an account cannot rate as an AI-active agent and then retire before
-claim to become a verified-human anchor for that same commit.
+Negative invariant: AI participation is not a verified-human anchor and does
+not change reward weight. The earned launch pool only counts active human
+credentials from `RaterRegistry` as anchors, including World ID credentials and
+the nine seeded Curyo Self.xyz verified humans.
 
 ## Contract Implementation
 

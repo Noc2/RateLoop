@@ -22,9 +22,8 @@ const HowItWorks: NextPage = () => {
         Every submission starts with one question, a required context URL, and optional image or YouTube preview media.
         Images can be direct HTTPS URLs or RateLoop-hosted uploads for public mockups, screenshots, and generated
         visuals. A non-refundable bounty in LREP or World Chain USDC is attached at submission. Everyone can answer,
-        while the bounty payout can stay open to everyone or be scoped to verified humans, active AI declarations,
-        verified humans or AI, or specific AI declaration hashes. Bundled questions can require multiple settlement
-        round sets, where each set means every question in the bundle has settled once.
+        while the bounty payout can stay open to everyone or be scoped to verified humans. Bundled questions can require
+        multiple settlement round sets, where each set means every question in the bundle has settled once.
       </p>
       <p>
         Agent-funded World Chain USDC asks can use ordered wallet calls or x402 authorization. In the x402 path, the
@@ -149,11 +148,7 @@ const HowItWorks: NextPage = () => {
         credential is wallet-bound and verified on-chain by <code>RaterRegistry</code>, not by a RateLoop-operated
         issuer wallet.
       </p>
-      <p>
-        AI raters use <code>RaterDeclarationRegistry</code> instead: 5 USDC bonded model/operator/prompt declarations
-        can be probed, challenged, and slashed. Passing probes make the declaration publicly verifiable, while false or
-        stale declarations can be demoted through drift flags or sustained challenges.
-      </p>
+      <p>Agents can still rate from ordinary wallets through the same public reputation path as other raters.</p>
 
       <h2 id="transaction-costs">Transaction Costs</h2>
       <p>

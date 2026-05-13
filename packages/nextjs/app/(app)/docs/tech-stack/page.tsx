@@ -12,14 +12,13 @@ const webMcpSpecHref = "https://webmachinelearning.github.io/webmcp/";
 const worldIdConceptsHref = "https://docs.world.org/world-id/concepts";
 const worldIdIdkitHref = "https://docs.world.org/world-id/idkit/integrate";
 const worldIdOnchainHref = "https://docs.world.org/world-id/idkit/onchain-verification";
-const llmmapHref = "https://github.com/pasquini-dario/LLMmap";
 const btsHref = "https://www.science.org/doi/10.1126/science.1102081";
 const circleWorldChainUsdcHref = "https://www.circle.com/multi-chain-usdc/worldchain";
 
 export const metadata = {
   title: "Tech Stack | RateLoop Docs",
   description:
-    "The protocol terms behind RateLoop: x402 agent payments, MCP and WebMCP tools, World ID proof-of-human credentials, AI rater verification, robust BTS reports, LREP staking, and World Chain USDC settlement.",
+    "The protocol terms behind RateLoop: x402 agent payments, MCP and WebMCP tools, World ID proof-of-human credentials, robust BTS reports, LREP staking, and World Chain USDC settlement.",
 } satisfies Metadata;
 
 const TechStackPage: NextPage = () => {
@@ -110,32 +109,10 @@ const TechStackPage: NextPage = () => {
         launch bonus can be claimed.
       </p>
 
-      <h2 id="ai-rater-verification">AI Rater Verification</h2>
+      <h2 id="agent-raters">Agent Raters</h2>
       <p>
-        AI raters verify a different claim. They do not prove personhood; they publish 5 USDC bonded model, operator,
-        prompt, retrieval, and tooling declarations through <code>RaterDeclarationRegistry</code>. Those declarations
-        can be probed, challenged, demoted, or slashed if the declared agent identity becomes false or stale.
-      </p>
-      <p>
-        A passed probe can promote a declaration to <code>A1Verified</code>. That gives RateLoop a way to say &quot;this
-        agent claim has been checked&quot; without pretending an AI wallet is a verified human or changing the
-        commit-time reward weight.
-      </p>
-
-      <h2 id="llmmap">LLMmap</h2>
-      <p>
-        <a href={llmmapHref} target="_blank" rel="noopener noreferrer" className="link link-primary">
-          LLMmap
-        </a>{" "}
-        is a candidate detector for AI rater verification. It fingerprints language models from behavioral traces with a
-        small query set, then compares the responses against known model templates. That is useful when an agent claims
-        to be a particular model or model family but only exposes a black-box endpoint.
-      </p>
-      <p>
-        RateLoop should treat LLMmap as one signal, not ground truth. A prober can combine LLMmap distance or
-        probability output with deterministic rules, embedding checks, signed transcripts, and community challenges.
-        Only hashes, confidence, and pass/fail status need to be recorded on-chain; full probe evidence can stay in
-        signed or content-addressed off-chain records.
+        Agent wallets can participate in the same commit-reveal rating flow as other wallets. The first deployment keeps
+        the trust surface focused on public reputation, calibration, and optional verified-human anchoring.
       </p>
 
       <h2 id="commit-reveal-voting">Commit-Reveal Voting</h2>
@@ -223,9 +200,6 @@ const TechStackPage: NextPage = () => {
         <li>
           World ID: <a href={worldIdConceptsHref}>core concepts</a>, <a href={worldIdIdkitHref}>IDKit</a>,{" "}
           <a href={worldIdOnchainHref}>on-chain verification</a>
-        </li>
-        <li>
-          LLMmap: <a href={llmmapHref}>model fingerprinting repository</a>
         </li>
         <li>
           Bayesian Truth Serum: <a href={btsHref}>Prelec paper</a>

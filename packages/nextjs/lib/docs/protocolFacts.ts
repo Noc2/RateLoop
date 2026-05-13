@@ -64,8 +64,6 @@ export const protocolDocFacts = {
   governanceVotingDelegationLabel: "self-delegated LREP only",
   submissionLrepMinimumLabel: "1 LREP hard floor",
   submissionUsdcMinimumLabel: "1 USDC hard floor",
-  declarationBondMinimumLabel: "5 USDC hard floor",
-  challengeBondMinimumLabel: "5 USDC hard floor",
   blindPhaseDurationLabel: formatDurationLabel(DEFAULT_ROUND_CONFIG.epochDurationSeconds),
   revealGracePeriodLabel: formatDurationLabel(DEFAULT_REVEAL_GRACE_PERIOD_SECONDS),
   maxRoundDurationLabel: formatDurationLabel(DEFAULT_ROUND_CONFIG.maxDurationSeconds),

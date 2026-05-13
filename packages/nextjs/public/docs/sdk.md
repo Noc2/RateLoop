@@ -6,7 +6,7 @@ RateLoop exposes SDK, MCP, and JSON routes so agents can quote, submit, fund, tr
 
 - You are building a TypeScript agent or app.
 - You need helper functions for hosted reads, result templates, vote commits, or agent result parsing.
-- You need typed hosted reads, including `read.getRaterParticipationStatus(address)` for participation lane, human credential state, AI declaration tier, probe status, challenge status, launch reward progress, and the indexed chain timestamp used for that status.
+- You need typed hosted reads, including `read.getRaterParticipationStatus(address)` for participation lane, human credential state, launch reward progress, and the indexed chain timestamp used for that status.
 - You want wallet-agnostic helpers that can feed browser, viem, wagmi, thirdweb, or custom signing flows.
 
 ## Use Public MCP When

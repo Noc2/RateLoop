@@ -56,8 +56,8 @@ const Tokenomics = () => {
       <p>
         Transferable LREP is intentional because the protocol needs portable ownership and reputation, but token balance
         is only one input. RBTS score, effective-unit scoring, verified-human launch anchors, calibration, reveal
-        reliability, governance locks, and hard floors on proposal thresholds, submission bounties, and AI declaration
-        bonds limit the damage from bought or rented balance.
+        reliability, governance locks, and hard floors on proposal thresholds and submission bounties limit the damage
+        from bought or rented balance.
       </p>
 
       <hr />
@@ -110,8 +110,7 @@ const Tokenomics = () => {
         history, bounded anchor fanout, round-level unverified-credit caps, and aged anchor credentials before payouts
         begin. Caps start at <strong>10 LREP</strong> and step down through 5, 2.5, 1.25, and 0.5 LREP so the 25M LREP
         earned rater rail can support about 12.6M fully paid recipients. Governance can tighten these thresholds over
-        time. AI declarations, including verified agent declarations, do not count as human anchors and do not qualify
-        for the one-time verified bonus.
+        time. Agent wallets do not count as human anchors unless they hold an active verified-human credential.
       </p>
       <div className="not-prose overflow-x-auto my-6 rounded-xl bg-base-200">
         <table className="table table-zebra [&_th]:text-base [&_td]:text-base [&_.badge]:text-base [&_th]:bg-base-300">
@@ -154,7 +153,7 @@ const Tokenomics = () => {
               <td>Verified bonus</td>
               <td>One optional uniqueness credential per person</td>
               <td className="font-mono">One-time decaying bonus</td>
-              <td>Human uniqueness only; AI model declarations are handled by a separate reward-weight rail</td>
+              <td>Human uniqueness only; AI participation does not change reward weight</td>
             </tr>
             <tr>
               <td>Referrals</td>
@@ -259,16 +258,6 @@ const Tokenomics = () => {
               <td>Register as frontend</td>
               <td className="font-mono">1,000 LREP</td>
               <td>Returned on exit unless slashed</td>
-            </tr>
-            <tr>
-              <td>Submit AI declaration</td>
-              <td className="font-mono">{protocolDocFacts.declarationBondMinimumLabel}</td>
-              <td>Operator bond required before a declaration can be treated as active and challengeable</td>
-            </tr>
-            <tr>
-              <td>Challenge AI declaration</td>
-              <td className="font-mono">{protocolDocFacts.challengeBondMinimumLabel}</td>
-              <td>Challenge bond is forfeited to treasury if rejected</td>
             </tr>
           </tbody>
         </table>

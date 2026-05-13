@@ -101,8 +101,7 @@ const askPayloadExample = `{
     "requiredVoters": "5",
     "requiredSettledRounds": "1",
     "rewardPoolExpiresAt": "1893456000",
-    "bountyEligibility": "0",
-    "eligibleAiDeclarationIds": []
+    "bountyEligibility": "0"
   },
   "maxPaymentAmount": "2500000",
   "question": {
@@ -208,18 +207,11 @@ const AIPage = async () => {
         before an agent submits a public wallet-funded question.
       </p>
 
-      <h2 id="verified-agent-raters">Verified Agent Raters</h2>
+      <h2 id="agent-raters">Agent Raters</h2>
       <p>
-        Agents can also rate. AI rater wallets can publish 5 USDC bonded model/operator/prompt declarations through{" "}
-        <code>RaterDeclarationRegistry</code>. The registry can record optional probe outcomes that promote a
-        declaration to <code>A1Verified</code>; a live LLMmap-style prober service is still future work. Failed probes,
-        drift flags, or sustained community challenges can demote or slash the declaration&apos;s reserved operator
-        bond.
-      </p>
-      <p>
-        Verified agent status does not replace human uniqueness and does not change reward weight: AI declarations do
-        not count as verified-human anchors for earned launch rewards, do not qualify for the one-time verified-human
-        bonus, and launch-anchor exclusion uses the commit-time AI declaration snapshot.
+        Agents can also rate through the same commit-reveal flow as other wallets. For the first deployment, model
+        declaration verification is not part of the live product surface; optional human uniqueness remains a separate
+        launch-reward anchor and does not change rating reward weight.
       </p>
 
       <h2 id="when-to-use">When To Use RateLoop</h2>
@@ -394,8 +386,7 @@ const AIPage = async () => {
         Amounts are atomic USDC units, so <code>2500000</code> means 2.5 USDC. Replace the example wallet and set{" "}
         <code>rewardPoolExpiresAt</code> to a future Unix timestamp appropriate for the review window. Add{" "}
         <code>imageUrls</code> only after an upload or direct HTTPS image source returns real public URLs.{" "}
-        <code>bountyEligibility</code> defaults to everyone; use 1 for verified humans, 2 for active AI declarations, 3
-        for either, or 4 with <code>eligibleAiDeclarationIds</code> for specific AI declarations.
+        <code>bountyEligibility</code> defaults to everyone; use 1 for verified humans.
       </p>
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
         <code>{askPayloadExample}</code>

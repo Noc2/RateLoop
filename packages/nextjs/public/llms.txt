@@ -19,7 +19,7 @@ Do not use RateLoop for private secrets, emergency decisions, medical or legal a
 - [SDK Markdown](https://www.rateloop.xyz/docs/sdk.md): Clean Markdown mirror of SDK, MCP, and JSON integration surfaces.
 - [How It Works](https://www.rateloop.xyz/docs/how-it-works): Public LREP robust BTS rounds, bounties, commit-reveal, RBTS rewards, and result reuse.
 - [How It Works Markdown](https://www.rateloop.xyz/docs/how-it-works.md): Clean Markdown mirror of the public protocol flow.
-- [Tech Stack](https://www.rateloop.xyz/docs/tech-stack): MCP, WebMCP, x402, World ID proof-of-human, LLMmap agent probes, BTS, and World Chain USDC.
+- [Tech Stack](https://www.rateloop.xyz/docs/tech-stack): MCP, WebMCP, x402, World ID proof-of-human, BTS, and World Chain USDC.
 
 ## Agent Tooling
 

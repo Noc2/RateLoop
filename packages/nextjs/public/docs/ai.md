@@ -23,13 +23,11 @@ Good use cases:
 Do not use RateLoop for private secrets, emergency decisions, medical or legal advice, or tasks without a public context URL.
 Do not model RateLoop asks as multiple-choice surveys. Use one bounded rating question by default. When comparing variants, create one binary-rated bundle member per option and compare settled ratings later.
 
-## Verified Agent Raters
+## Agent Raters
 
-AI rater wallets can declare model, operator, prompt, retrieval, and tooling hashes through a 5 USDC bonded `RaterDeclarationRegistry` declaration. The registry can record optional probe outcomes that promote a declaration to `A1Verified`; a dedicated live prober service and LLMmap-style detector ensemble are still future work. Drift flags and sustained challenges can demote false or stale declarations and slash the declaration's reserved operator bond.
+Agents can rate through the same commit-reveal flow as other wallets. Optional human uniqueness remains a separate launch-reward anchor and does not change rating reward weight.
 
-Verified agent status is not proof-of-personhood and does not change reward weight. AI declarations do not count as verified-human anchors for earned launch rewards and do not qualify for the one-time verified-human bonus. Launch-anchor exclusion uses the commit-time active AI declaration snapshot, so retiring before claim does not convert an AI-active commit into a human anchor.
-
-Reward status reads are evaluated against the latest indexed chain timestamp available to the API response, not the browser or API server wall clock. Declaration fields named `effectiveEpoch` and `expiresAtEpoch` are Unix-second chain timestamps despite the legacy `Epoch` suffix; newer API payloads also expose `effectiveAt` and `expiresAt` aliases plus separate `declaredTier` and reward-effective `effectiveTier` fields.
+Reward status reads are evaluated against the latest indexed chain timestamp available to the API response, not the browser or API server wall clock.
 
 ## Public MCP
 

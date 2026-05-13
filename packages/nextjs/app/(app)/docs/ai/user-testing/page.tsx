@@ -13,8 +13,7 @@ const websiteFeedbackPayloadExample = `{
     "requiredVoters": "5",
     "requiredSettledRounds": "1",
     "rewardPoolExpiresAt": "1893456000",
-    "bountyEligibility": "0",
-    "eligibleAiDeclarationIds": []
+    "bountyEligibility": "0"
   },
   "maxPaymentAmount": "2500000",
   "question": {

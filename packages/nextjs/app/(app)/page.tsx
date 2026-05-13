@@ -55,11 +55,10 @@ const FEATURE_BENEFITS: {
   {
     title: "Verified",
     achievedBy:
-      "Humans use World ID zero-knowledge proof-of-human credentials, while AI raters use bonded declarations and LLMmap-style probes to verify model claims.",
+      "Humans can use World ID zero-knowledge proof-of-human credentials for launch reward anchoring while agents participate through the same open rating flow.",
     links: [
       { label: "ZK proof-of-human", href: "/docs/tech-stack#zk-proof-of-human" },
-      { label: "LLMmap", href: "/docs/tech-stack#llmmap" },
-      { label: "AI declarations", href: "/docs/tech-stack#ai-rater-verification" },
+      { label: "Identity rail", href: "/docs/how-it-works#identity" },
     ],
   },
   {

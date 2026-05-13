@@ -62,11 +62,6 @@ const SmartContracts: NextPage = () => {
               <td>No</td>
             </tr>
             <tr>
-              <td className="font-mono text-primary">RaterDeclarationRegistry</td>
-              <td>Bonded AI model/operator declarations, probes, drift flags, challenges, and slashing</td>
-              <td>No</td>
-            </tr>
-            <tr>
               <td className="font-mono text-primary">ContentRegistry</td>
               <td>Content lifecycle: submission, dormancy, rating updates, slashing</td>
               <td>Transparent</td>
@@ -303,8 +298,7 @@ const SmartContracts: NextPage = () => {
           frontends. The subjective template, rationale, and interpretation data stays off-chain; the contract only
           commits to its hashes and emits <code>QuestionSpecAnchored</code>. Agent asks use the same function after the
           user or scoped agent wallet executes the returned funding and submission calls. <code>rewardTerms</code> also
-          commits to bounty eligibility: everyone, verified humans, active AI declarations, verified humans or AI, or
-          specific AI declaration hashes.
+          commits to bounty eligibility: everyone or verified humans.
         </li>
         <li>
           <code>submitQuestionBundleWithRewardAndRoundConfig(..., rewardTerms, roundConfig)</code> &mdash; Submit a
@@ -348,7 +342,7 @@ const SmartContracts: NextPage = () => {
         Manages per-content voting rounds with tlock commit-reveal voting, explicit drand metadata binding,
         epoch-weighted rewards, and deterministic settlement. One-sided rounds (consensus) receive a subsidy from the
         consensus subsidy reserve. Commit-time reward weight is stake times the epoch timing weight; human credentials
-        and AI declaration tiers do not multiply settlement rewards.
+        do not multiply settlement rewards.
       </p>
       <h3>Configuration</h3>
       <div className="not-prose overflow-x-auto my-6 rounded-xl bg-base-200">
@@ -521,51 +515,12 @@ const SmartContracts: NextPage = () => {
           , and <code>setTreasury(...)</code> &mdash; Maintain the engine&apos;s governance-controlled address book.
         </li>
         <li>
-          <code>setRaterRegistry(...)</code> and <code>setRaterDeclarationRegistry(...)</code> &mdash; Configure the
-          optional human credential registry and the AI declaration registry used for launch-anchor policy. Setting the
-          declaration registry to zero disables AI-declaration launch-anchor exclusion.
+          <code>setRaterRegistry(...)</code> &mdash; Configure the optional human credential registry used for
+          launch-anchor policy.
         </li>
       </ul>
 
       <hr />
-
-      <h2>RaterDeclarationRegistry</h2>
-      <p>
-        Stores signed AI rater declarations and the 5 USDC operator bond that backs them. Declarations publish hashes
-        for model family, provider, prompt template, retrieval configuration, and tooling so public users can
-        distinguish a declared agent from an anonymous model wallet without forcing endpoint secrets on-chain. Each
-        active or retiring declaration reserves its own operator bond capacity.
-      </p>
-      <ul>
-        <li>
-          <code>submitDeclaration(...)</code> &mdash; Register or update a bonded declaration. Behavior-affecting
-          changes create a new declaration version and may require a new probe.
-        </li>
-        <li>
-          <code>recordProbeResult(...)</code> &mdash; Promote passing declarations to <code>A1Verified</code> or keep
-          failed declarations at <code>A1Unverified</code>.
-        </li>
-        <li>
-          <code>openChallenge(...)</code> and <code>resolveChallenge(...)</code> &mdash; Let challengers post evidence,
-          freeze challenged declaration benefits, slash sustained false declarations, reward challengers, and demote the
-          rater to <code>A0</code>. Only one open challenge can lock a declaration version, and unresolved challenges
-          can expire after the resolver window.
-        </li>
-        <li>
-          <code>releaseRetiredDeclarationBond(rater)</code> and <code>releaseExpiredDeclarationBond(rater)</code>{" "}
-          &mdash; Release a retired or expired declaration&apos;s reserved bond after the exit window elapses, so
-          boosted commits and open challenge exposure cannot be escaped immediately.
-        </li>
-        <li>
-          <code>hasActiveAiDeclaration(rater)</code> &mdash; Read the active AI declaration status used for human-anchor
-          exclusion without changing the reward weight.
-        </li>
-      </ul>
-      <p>
-        Verified agent declarations are model-accountability signals, not proof-of-personhood. They do not count as
-        verified-human anchors for earned launch rewards or the one-time human verification bonus. Launch-anchor
-        exclusion is based on each commit&apos;s AI declaration snapshot.
-      </p>
 
       <hr />
 

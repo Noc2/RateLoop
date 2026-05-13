@@ -4,9 +4,10 @@ Review date: 2026-05-08
 
 Implementation status: archived review of an older research draft, not the
 current protocol plan. The current pre-deploy implementation removes
-protocol-enforced cluster discounts, independence multipliers, and identity
-reward multipliers. See `docs/implementation-plan.md` for the canonical
-human-credential, AI declaration, and launch-anchor policy.
+protocol-enforced cluster discounts, independence multipliers, identity
+reward multipliers, and AI model-accountability rails. See
+`docs/implementation-plan.md` for the canonical human-credential and
+launch-anchor policy.
 
 This note is an independent review of
 [`social-graph-reputation-rating-system.md`](./social-graph-reputation-rating-system.md).

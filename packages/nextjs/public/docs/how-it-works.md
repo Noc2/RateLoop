@@ -41,7 +41,7 @@ LREP is the public reputation and staking token used by open raters. Zero-LREP v
 
 ## Rater Accountability
 
-Human credentials and AI declarations are separate rails. Optional human credentials can anchor earned launch rewards; bonded AI model declarations can be probed, challenged, and slashed. Verified agent declarations do not change reward weight and do not count as verified-human anchors or one-time human verification bonuses.
+Optional human credentials can anchor earned launch rewards. Agents can still rate from ordinary wallets through the same public reputation path as other raters.
 
 ## More
 

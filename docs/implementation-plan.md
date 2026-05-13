@@ -21,22 +21,19 @@ are treated exactly like verified humans everywhere in the product and indexer:
 same verified-human status, same anchor behavior, same leaderboard/profile
 copy, and no separate "Curyo legacy human" chip.
 
-AI declarations are a separate accountability rail. `RaterDeclarationRegistry`
-records bonded model/operator declarations, probe results, drift flags,
-challenges, and slashing. An active AI declaration is not a verified-human
-credential and never counts as a launch anchor.
+The first deployment does not include a separate AI model-accountability rail.
+AI raters use the same open participation path as everyone else unless a future
+governance proposal adds a stronger, externally verifiable accountability
+mechanism.
 
 ## Question Bounty Eligibility Scopes
 
 Every question remains answerable by everyone. Bounty eligibility is a payout
-scope, not an answering permission. The submitter can choose one of five bounty
+scope, not an answering permission. The submitter can choose one of two bounty
 scopes when funding a question or bundle:
 
 - `0` everyone.
 - `1` verified humans.
-- `2` active AI declarations.
-- `3` verified humans or active AI declarations.
-- `4` specific active AI declaration hashes.
 
 The selected scope is committed into the submission reveal hash, stored in
 `QuestionRewardPoolEscrow`, emitted in reward-pool and bundle events, indexed by
@@ -48,17 +45,16 @@ public feedback.
 Agent-facing results always include `answerScopes.allAnswers` for the open
 public result and `answerScopes.bountyEligibleAnswers` for the payout-eligible
 view. When the indexer can materialize the scoped voter set, the eligible view
-includes its own distribution; otherwise it still includes the policy, allowlist
-hashes, reward pool count, and qualified round count.
+includes its own distribution; otherwise it still includes the policy, reward
+pool count, and qualified round count.
 
 ## Reward Weight
 
 The protocol does not enforce independence, cluster discounts, human credential
-multipliers, or AI declaration multipliers in commit-time reward weight.
+multipliers, or AI-specific multipliers in commit-time reward weight.
 
 Commit-time reward weight is stake times the round's epoch timing weight. Human
-verification and AI declaration status are exposed as participation context, not
-as reward multipliers.
+verification is exposed as participation context, not as a reward multiplier.
 
 This deliberately removes the previous false sense of Sybil mitigation from
 indexer-computed `effectiveRewardWeight` and UI copy that implied a cluster
@@ -97,15 +93,13 @@ history must come from verified-human anchored rounds.
 Ponder exposes `GET /rater-participation-status/:address` as the canonical
 status route. It returns:
 
-- `participationLane`: `verified_human`, `ai_declared`, or `open`.
+- `participationLane`: `verified_human` or `open`.
 - `humanCredential`: active, revoked, expired, or missing human credential
   state.
-- `aiDeclaration`: declared/effective declaration state and challenge/probe
-  status.
 - `launchRewards`: qualifying rating count, distinct verified anchors, distinct
   anchor rounds, cap, paid amount, and current launch policy.
 - `participationPolicy`: explicit booleans showing that human verification and
-  AI declaration do not affect reward weight.
+  AI participation do not affect reward weight.
 
 The leaderboard and profile surfaces use the same payload language. They show
 World ID verified humans and seeded Curyo verified humans identically.
@@ -128,15 +122,14 @@ Removed live indexer concepts:
 - `hasActiveHumanCredential`
 - `humanNullifierOwner`
 
-`RoundVotingEngine` snapshots active AI declaration status for launch-anchor
-exclusion. It does not snapshot rater weight multipliers or cluster keys.
+`RoundVotingEngine` does not snapshot rater weight multipliers, model
+declarations, or cluster keys.
 
 `RoundRevealLib` and reward claim paths use stake and epoch timing only for
 commit-time reward weight.
 
 `LaunchDistributionPool` and launch reward libraries count active human
-credentials as verified-human units. They do not count active AI declarations as
-anchors.
+credentials as verified-human units.
 
 ## Documentation And Product Copy
 
@@ -144,9 +137,8 @@ All public docs, whitepaper text, SDK docs, profile UI, settings UI, and
 leaderboards should use the same language:
 
 - "Verified human" for both World ID and seeded Curyo Self.xyz humans.
-- "AI declared" or "verified agent" only for model-accountability status.
 - "Participation lane" for status ordering.
-- "Reward weight is not changed by human credentials or AI declarations."
+- "Reward weight is not changed by human credentials or AI participation."
 - "Verified-human anchors are launch distribution gates, not core protocol
   participation gates."
 - "Bounty scopes affect reward qualification, not who can answer."
