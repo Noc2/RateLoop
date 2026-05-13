@@ -554,6 +554,13 @@ body {
   border-radius: var(--curyo-radius-control);
 }
 
+@media (max-width: 767px) {
+  .vote-btn.vote-btn-sm.vote-yes,
+  .vote-btn.vote-btn-sm.vote-no {
+    border-radius: 9999px;
+  }
+}
+
 .vote-btn .vote-bg {
   position: absolute;
   inset: 0;
