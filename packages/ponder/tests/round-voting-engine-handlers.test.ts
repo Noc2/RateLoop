@@ -422,7 +422,7 @@ describe("RoundVotingEngine ponder handlers", () => {
     expect(insertCalls).toContainEqual({
       table: "dailyVoteActivity",
       values: expect.objectContaining({
-        id: `${holder}-1970-01-01`,
+        id: `${holder}-19700101`,
         voter: holder,
       }),
     });
