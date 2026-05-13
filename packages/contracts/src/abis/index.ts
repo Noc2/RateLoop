@@ -1,3 +1,4 @@
+export { AdvisoryVoteRecorderAbi } from "./AdvisoryVoteRecorderAbi";
 export { CategoryRegistryAbi } from "./CategoryRegistryAbi";
 export { ContentRegistryAbi } from "./ContentRegistryAbi";
 export { CuryoGovernorAbi } from "./CuryoGovernorAbi";

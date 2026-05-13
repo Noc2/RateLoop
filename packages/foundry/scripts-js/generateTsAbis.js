@@ -41,6 +41,7 @@ const REQUIRED_NON_LOCAL_DEPLOYMENT_EXPORT_CONTRACTS = [
   "VoterIdNFT",
   "ParticipationPool",
   "LaunchDistributionPool",
+  "AdvisoryVoteRecorder",
 ];
 
 function getDirectories(path) {
@@ -683,6 +684,7 @@ const PONDER_CONTRACT_ENV_KEYS = {
   LoopReputation: "PONDER_LREP_ADDRESS",
   ParticipationPool: "PONDER_PARTICIPATION_POOL_ADDRESS",
   LaunchDistributionPool: "PONDER_LAUNCH_DISTRIBUTION_POOL_ADDRESS",
+  AdvisoryVoteRecorder: "PONDER_ADVISORY_VOTE_RECORDER_ADDRESS",
   RaterRegistry: "PONDER_RATER_REGISTRY_ADDRESS",
   TimelockController: "PONDER_TIMELOCK_ADDRESS",
 };
@@ -700,6 +702,7 @@ const PONDER_START_BLOCK_ENV_KEYS = {
   LoopReputation: "PONDER_LREP_START_BLOCK",
   ParticipationPool: "PONDER_PARTICIPATION_POOL_START_BLOCK",
   LaunchDistributionPool: "PONDER_LAUNCH_DISTRIBUTION_POOL_START_BLOCK",
+  AdvisoryVoteRecorder: "PONDER_ADVISORY_VOTE_RECORDER_START_BLOCK",
   RaterRegistry: "PONDER_RATER_REGISTRY_START_BLOCK",
   TimelockController: "PONDER_TIMELOCK_START_BLOCK",
 };
@@ -844,6 +847,7 @@ const ABI_TARGETS = [
   { contract: "RaterRegistry", targets: ["contracts/src/abis"] },
   { contract: "ParticipationPool", targets: ["contracts/src/abis"] },
   { contract: "LaunchDistributionPool", targets: ["contracts/src/abis"] },
+  { contract: "AdvisoryVoteRecorder", targets: ["contracts/src/abis"] },
   { contract: "TimelockController", targets: ["contracts/src/abis"] },
   { contract: "CuryoGovernor", targets: ["contracts/src/abis"] },
 ];
