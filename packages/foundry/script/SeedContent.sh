@@ -655,18 +655,19 @@ done
 # Vote on content items 1, 2, and 3 using commitVote (tlock commit-reveal).
 # commitVote(uint256 contentId, uint256 roundContext, uint64 targetRound, bytes32 drandChainHash, bytes32 commitHash, bytes ciphertext, uint256 stakeAmount, address frontend)
 # roundContext = (expectedRoundId << 16) | roundReferenceRatingBps
-# commitHash = keccak256(abi.encodePacked(isUp, salt, voter, contentId, roundId, roundReferenceRatingBps, targetRound, drandChainHash, keccak256(ciphertext)))
+# commitHash = keccak256(abi.encodePacked(isUp, predictedUpBps, salt, voter, contentId, roundId, roundReferenceRatingBps, targetRound, drandChainHash, keccak256(ciphertext)))
 #
 # Voter 1 (account #9) votes UP on content 1 and 2
 # Voter 2 (account #10) votes DOWN on content 1, UP on content 3
 
 # Helper: generate tlock ciphertext and submit commitVote
-# Usage: seed_commit <contentId> <isUp:true|false> <salt_hex> <private_key>
+# Usage: seed_commit <contentId> <isUp:true|false> <salt_hex> <private_key> [predictedUpBps]
 seed_commit() {
   local contentId="$1"
   local isUp="$2"
   local salt="$3"
   local privKey="$4"
+  local predictedUpBps="${5:-5000}"
   local commitHash
   local ciphertext
   local targetRound
@@ -682,7 +683,7 @@ seed_commit() {
 
   voterAddr=$(cast wallet address "$privKey")
   artifacts=$(node "$SCRIPT_DIR/../scripts-js/generateTlockCommit.js" \
-    "$RPC" "$VOTING_ENGINE" "$REGISTRY" "$contentId" "$isUp" "0x${salt}" "$voterAddr") || {
+    "$RPC" "$VOTING_ENGINE" "$REGISTRY" "$contentId" "$isUp" "0x${salt}" "$voterAddr" "$predictedUpBps") || {
     echo "  (Failed to build tlock ciphertext)"
     return 1
   }

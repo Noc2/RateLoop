@@ -11,12 +11,12 @@ import { mainnetClient, timelockEncrypt } from "tlock-js";
 
 function usage() {
   console.error(
-    "Usage: node scripts-js/generateTlockCommit.js <rpcUrl> <votingEngine> <contentRegistry> <contentId> <isUp:true|false> <saltHex> <voterAddress>"
+    "Usage: node scripts-js/generateTlockCommit.js <rpcUrl> <votingEngine> <contentRegistry> <contentId> <isUp:true|false> <saltHex> <voterAddress> [predictedUpBps]"
   );
   process.exit(1);
 }
 
-const [rpcUrlArg, votingEngineArg, contentRegistryArg, contentIdArg, isUpArg, saltArg, voterArg] =
+const [rpcUrlArg, votingEngineArg, contentRegistryArg, contentIdArg, isUpArg, saltArg, voterArg, predictedUpBpsArg] =
   process.argv.slice(2);
 
 if (!rpcUrlArg || !votingEngineArg || !contentRegistryArg || !contentIdArg || !isUpArg || !saltArg || !voterArg) {
@@ -51,9 +51,13 @@ const contentId = BigInt(contentIdArg);
 const isUp = isUpArg === "true";
 const salt = saltArg.startsWith("0x") ? saltArg : `0x${saltArg}`;
 const voter = getAddress(voterArg);
+const predictedUpBps = predictedUpBpsArg == null ? 5_000 : Number.parseInt(predictedUpBpsArg, 10);
 
 if (salt.length !== 66) {
   throw new Error("saltHex must be 32 bytes");
+}
+if (!Number.isInteger(predictedUpBps) || predictedUpBps < 0 || predictedUpBps > 10_000) {
+  throw new Error("predictedUpBps must be an integer from 0 to 10000");
 }
 
 function roundAt(timestamp, genesisTime, period) {
@@ -194,9 +198,12 @@ const targetRound =
     ? minAcceptedTargetRound + 1n
     : minAcceptedTargetRound;
 
-const plaintext = Buffer.alloc(33);
-plaintext[0] = isUp ? 1 : 0;
-Buffer.from(salt.slice(2), "hex").copy(plaintext, 1);
+const plaintext = Buffer.alloc(36);
+plaintext[0] = 2;
+plaintext[1] = isUp ? 1 : 0;
+plaintext[2] = predictedUpBps >> 8;
+plaintext[3] = predictedUpBps & 0xff;
+Buffer.from(salt.slice(2), "hex").copy(plaintext, 4);
 
 const client = mainnetClient();
 const chainInfo = await client.chain().info();
@@ -215,8 +222,19 @@ const armored = await timelockEncrypt(Number(targetRound), plaintext, client);
 const ciphertext = `0x${Buffer.from(armored, "utf-8").toString("hex")}`;
 const commitHash = keccak256(
   encodePacked(
-    ["bool", "bytes32", "address", "uint256", "uint256", "uint16", "uint64", "bytes32", "bytes32"],
-    [isUp, salt, voter, contentId, previewRoundId, roundReferenceRatingBps, targetRound, drandChainHash, keccak256(ciphertext)]
+    ["bool", "uint16", "bytes32", "address", "uint256", "uint256", "uint16", "uint64", "bytes32", "bytes32"],
+    [
+      isUp,
+      predictedUpBps,
+      salt,
+      voter,
+      contentId,
+      previewRoundId,
+      roundReferenceRatingBps,
+      targetRound,
+      drandChainHash,
+      keccak256(ciphertext),
+    ]
   )
 );
 
