@@ -94,7 +94,7 @@ contract RoundVotingEngine is
     bytes32 internal constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 
     // --- Constants ---
-    uint256 internal constant MIN_STAKE = 0; // zero-LREP ratings are valid; launch credit has separate stake policy
+    uint256 internal constant MIN_STAKE = 1e6; // 1 LREP; zero-LREP ratings use AdvisoryVoteRecorder
     uint256 internal constant MAX_STAKE = 10e6; // 10 LREP (6 decimals)
     uint256 internal constant VOTE_COOLDOWN = 24 hours; // Time-based cooldown per content per voter
     uint256 internal constant MAX_CIPHERTEXT_SIZE = 2_048; // 2 KB max ciphertext to prevent storage bloat
@@ -343,7 +343,7 @@ contract RoundVotingEngine is
     /// @param drandChainHash drand chain hash bound into the commitment.
     /// @param commitHash keccak256(abi.encodePacked(isUp, predictedUpBps, salt, voter, contentId, roundId, roundReferenceRatingBps, targetRound, drandChainHash, keccak256(ciphertext))).
     /// @param ciphertext Tlock-encrypted payload (decryptable after epoch end via drand).
-    /// @param stakeAmount Amount of LREP tokens to stake (0-10).
+    /// @param stakeAmount Amount of LREP tokens to stake (1-10).
     /// @param frontend Address of frontend operator for fee distribution.
     function commitVote(
         uint256 contentId,
@@ -1379,6 +1379,63 @@ contract RoundVotingEngine is
         bytes32[] storage commitKeys = roundCommitHashes[contentId][roundId];
         if (index >= commitKeys.length) revert IndexOutOfBounds();
         return commitKeys[index];
+    }
+
+    function roundCore(uint256 contentId, uint256 roundId)
+        external
+        view
+        returns (
+            uint48 startTime,
+            RoundLib.RoundState state,
+            uint16 voteCount,
+            uint16 revealedCount,
+            uint64 totalStake,
+            uint48 thresholdReachedAt,
+            uint48 settledAt
+        )
+    {
+        RoundLib.Round storage round = rounds[contentId][roundId];
+        return (
+            round.startTime,
+            round.state,
+            round.voteCount,
+            round.revealedCount,
+            round.totalStake,
+            round.thresholdReachedAt,
+            round.settledAt
+        );
+    }
+
+    function roundDrandConfig(uint256 contentId, uint256 roundId)
+        external
+        view
+        returns (bytes32 chainHash, uint64 genesisTime, uint64 period)
+    {
+        return (
+            roundDrandChainHashSnapshot[contentId][roundId],
+            roundDrandGenesisTimeSnapshot[contentId][roundId],
+            roundDrandPeriodSnapshot[contentId][roundId]
+        );
+    }
+
+    function targetRoundRevealableTimestamp(uint256 contentId, uint256 roundId, uint64 targetRound)
+        external
+        view
+        returns (uint256)
+    {
+        return _targetRoundRevealableAt(contentId, roundId, targetRound);
+    }
+
+    function roundReferenceRatingBpsForRound(uint256 contentId, uint256 roundId) external view returns (uint16) {
+        return _getRoundReferenceRatingBps(contentId, roundId);
+    }
+
+    function voterLastVoteTimestamp(uint256 contentId, address voter) external view returns (uint256) {
+        return lastVoteTimestamp[contentId][voter];
+    }
+
+    function nullifierLastVoteTimestamp(uint256 contentId, uint256 nullifier) external view returns (uint256) {
+        return lastVoteTimestampByNullifier[contentId][nullifier];
     }
 
     function roundRbtsStats(uint256 contentId, uint256 roundId)

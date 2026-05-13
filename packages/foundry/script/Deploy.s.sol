@@ -7,6 +7,7 @@ import {TransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transpa
 import {TimelockController} from "@openzeppelin/contracts/governance/TimelockController.sol";
 import {IVotes} from "@openzeppelin/contracts/governance/utils/IVotes.sol";
 import {LoopReputation} from "../contracts/LoopReputation.sol";
+import {AdvisoryVoteRecorder} from "../contracts/AdvisoryVoteRecorder.sol";
 import {ContentRegistry} from "../contracts/ContentRegistry.sol";
 import {RoundVotingEngine} from "../contracts/RoundVotingEngine.sol";
 import {RoundRewardDistributor} from "../contracts/RoundRewardDistributor.sol";
@@ -251,11 +252,15 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         LaunchDistributionPool launchDistributionPool =
             new LaunchDistributionPool(address(lrepToken), address(raterRegistry), governance);
         launchDistributionPool.setAuthorizedCaller(address(rewardDistributor), true);
+        AdvisoryVoteRecorder advisoryVoteRecorder =
+            new AdvisoryVoteRecorder(address(votingEngine), address(registry), governance);
+        launchDistributionPool.setAuthorizedCaller(address(advisoryVoteRecorder), true);
         lrepToken.mint(deployer, LAUNCH_DISTRIBUTION_AMOUNT);
         lrepToken.approve(address(launchDistributionPool), LAUNCH_DISTRIBUTION_AMOUNT);
         launchDistributionPool.depositPool(LAUNCH_DISTRIBUTION_AMOUNT);
         protocolConfig.setLaunchDistributionPool(address(launchDistributionPool));
         console.log("LaunchDistributionPool deployed and funded with 64M LREP");
+        console.log("AdvisoryVoteRecorder deployed at:", address(advisoryVoteRecorder));
 
         if (!isLocalDev) {
             address[] memory excludedHolders = _buildQuorumExcludedHolders(
@@ -294,6 +299,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         deployments.push(Deployment("VoterIdNFT", address(optionalIdentity)));
         deployments.push(Deployment("ParticipationPool", address(participationPool)));
         deployments.push(Deployment("LaunchDistributionPool", address(launchDistributionPool)));
+        deployments.push(Deployment("AdvisoryVoteRecorder", address(advisoryVoteRecorder)));
         if (isLocalDev) deployments.push(Deployment("MockERC20", usdcTokenAddress));
 
         if (!isLocalDev) {
@@ -335,6 +341,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         console.log("Optional identity NFT:", address(optionalIdentity));
         console.log("ParticipationPool:", address(participationPool));
         console.log("LaunchDistributionPool:", address(launchDistributionPool));
+        console.log("AdvisoryVoteRecorder:", address(advisoryVoteRecorder));
         console.log("Governance:", governance);
     }
 

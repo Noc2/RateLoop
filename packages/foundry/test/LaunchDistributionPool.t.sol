@@ -83,7 +83,7 @@ contract LaunchDistributionPoolTest is Test {
         assertEq(minLaunchCreditStake, 1e6);
         assertEq(maxDistinctRatersPerVerifiedAnchor, 25);
         assertEq(maxUnverifiedCreditsPerRound, 3);
-        assertEq(unverifiedEarnedRaterCapBps, 10_000);
+        assertEq(unverifiedEarnedRaterCapBps, 2_500);
         assertEq(minAnchorCredentialAgeSeconds, 7 days);
         assertEq(pool.launchAnchorCredentialAgeSeconds(), 7 days);
         assertEq(eligibilityRatingCount, 5);
@@ -105,8 +105,8 @@ contract LaunchDistributionPoolTest is Test {
         }
 
         uint256 firstReward = _recordLaunchRewardWithScore(alice, 5, bytes32("anchor-a"), 9_000);
-        assertEq(firstReward, 1e6);
-        assertEq(pool.raterLaunchPaid(alice), 1e6);
+        assertEq(firstReward, 250_000);
+        assertEq(pool.raterLaunchPaid(alice), 250_000);
     }
 
     function test_SetLaunchRewardPolicyRejectsUnsafeAntiFarmFloors() public {
@@ -181,8 +181,8 @@ contract LaunchDistributionPoolTest is Test {
         assertEq(pool.qualifyingRatingCount(alice), 4);
 
         uint256 firstReward = _recordLaunchReward(alice, 5, bytes32("anchor-a"));
-        assertEq(firstReward, 1e6);
-        assertEq(pool.raterLaunchCap(alice), 10e6);
+        assertEq(firstReward, 250_000);
+        assertEq(pool.raterLaunchCap(alice), 2_500_000);
         assertEq(pool.raterFullLaunchCap(alice), 10e6);
         assertTrue(pool.raterLaunchCapAssigned(alice));
         assertFalse(pool.raterFullLaunchCapUnlocked(alice));
@@ -204,11 +204,11 @@ contract LaunchDistributionPoolTest is Test {
             );
         }
         assertEq(pool.rewardedRatingCount(alice), 10);
-        assertEq(pool.raterLaunchPaid(alice), 10e6);
-        assertEq(lrep.balanceOf(alice), 10e6);
+        assertEq(pool.raterLaunchPaid(alice), 2_500_000);
+        assertEq(lrep.balanceOf(alice), 2_500_000);
 
         assertEq(_recordLaunchReward(alice, 15, bytes32("anchor-a")), 0);
-        assertEq(lrep.balanceOf(alice), 10e6);
+        assertEq(lrep.balanceOf(alice), 2_500_000);
     }
 
     function test_RecordEarnedRaterRewardAppliesLowerUnverifiedCapWhenGovernanceSetsBps() public {
@@ -412,7 +412,7 @@ contract LaunchDistributionPoolTest is Test {
                 pool.MIN_LAUNCH_CREDIT_STAKE(),
                 _singleAnchor(bytes32("anchor-a"))
             ),
-            1e6
+            250_000
         );
     }
 
@@ -519,6 +519,77 @@ contract LaunchDistributionPoolTest is Test {
         assertEq(pool.qualifyingRatingCount(alice), 1);
     }
 
+    function test_RecordAdvisoryRaterRewardAllowsZeroStakeUnderUnverifiedCap() public {
+        for (uint256 i = 0; i < 4; i++) {
+            bytes32 anchorId = i % 2 == 0 ? bytes32("anchor-a") : bytes32("anchor-b");
+            (bool recorded, uint256 intermediatePaid) = pool.recordAdvisoryRaterReward(
+                alice, 1, i + 1, keccak256(abi.encode("advisory", i)), 8_000, 3, true, _singleAnchor(anchorId)
+            );
+            assertTrue(recorded);
+            assertEq(intermediatePaid, 0);
+        }
+
+        (bool fifthRecorded, uint256 paid) = pool.recordAdvisoryRaterReward(
+            alice, 1, 5, keccak256(abi.encode("advisory", uint256(5))), 8_000, 3, true, _singleAnchor(bytes32("anchor-a"))
+        );
+
+        assertEq(pool.raterFullLaunchCap(alice), 10e6);
+        assertEq(pool.raterLaunchCap(alice), 2_500_000);
+        assertTrue(fifthRecorded);
+        assertEq(paid, 250_000);
+        assertEq(pool.qualifyingRatingCount(alice), 5);
+    }
+
+    function test_RecordAdvisoryRaterRewardDoesNotDoubleCreditSameRaterRound() public {
+        bytes32 countedCommitKey = _commitKey(1);
+        uint256 countedPaid = pool.recordEarnedRaterReward(
+            alice, 1, 1, countedCommitKey, 8_000, 3, true, pool.MIN_LAUNCH_CREDIT_STAKE(), _singleAnchor(bytes32("anchor-a"))
+        );
+        (bool advisoryRecorded, uint256 advisoryPaid) = pool.recordAdvisoryRaterReward(
+            alice, 1, 1, bytes32("advisory-1"), 8_000, 3, true, _singleAnchor(bytes32("anchor-b"))
+        );
+
+        assertEq(countedPaid, 0);
+        assertFalse(advisoryRecorded);
+        assertEq(advisoryPaid, 0);
+        assertTrue(pool.earnedRewardCreditRecorded(1, 1, countedCommitKey));
+        assertFalse(pool.earnedRewardCreditRecorded(1, 1, bytes32("advisory-1")));
+        assertTrue(pool.raterRoundCreditRecorded(alice, 1, 1));
+        assertEq(pool.qualifyingRatingCount(alice), 1);
+        assertEq(pool.raterDistinctAnchorRoundCount(alice), 1);
+    }
+
+    function test_RecordAdvisoryRaterRewardCanRetryAfterUnverifiedRoundCapUntilVerified() public {
+        bytes32 anchorId = bytes32("anchor-a");
+        uint256 maxCredits = pool.MAX_UNVERIFIED_LAUNCH_CREDITS_PER_ROUND();
+
+        for (uint256 i = 0; i < maxCredits; i++) {
+            address rater = address(uint160(0x5000 + i));
+            (bool recorded,) = pool.recordAdvisoryRaterReward(
+                rater, 50, 1, keccak256(abi.encode("advisory", i)), 8_000, 3, true, _singleAnchor(anchorId)
+            );
+            assertTrue(recorded);
+        }
+
+        bytes32 advisoryCommitKey = bytes32("advisory-blocked");
+        (bool blockedRecorded,) = pool.recordAdvisoryRaterReward(
+            alice, 50, 1, advisoryCommitKey, 8_000, 3, true, _singleAnchor(anchorId)
+        );
+        assertFalse(blockedRecorded);
+        assertFalse(pool.earnedRewardCreditRecorded(50, 1, advisoryCommitKey));
+        assertFalse(pool.raterRoundCreditRecorded(alice, 50, 1));
+
+        _verify(alice, bytes32("verified-advisory-alice"));
+        (bool retryRecorded,) = pool.recordAdvisoryRaterReward(
+            alice, 50, 1, advisoryCommitKey, 8_000, 3, true, _singleAnchor(anchorId)
+        );
+        assertTrue(retryRecorded);
+        assertTrue(pool.earnedRewardCreditRecorded(50, 1, advisoryCommitKey));
+        assertTrue(pool.raterRoundCreditRecorded(alice, 50, 1));
+        assertEq(pool.roundUnverifiedLaunchCreditCount(50, 1), maxCredits);
+        assertEq(pool.qualifyingRatingCount(alice), 1);
+    }
+
     function test_RecordEarnedRaterRewardRequiresDistinctAnchorsAcrossRounds() public {
         for (uint256 i = 0; i < 5; i++) {
             assertEq(_recordLaunchReward(alice, i + 1, bytes32("anchor-a")), 0);
@@ -530,7 +601,7 @@ contract LaunchDistributionPoolTest is Test {
         assertEq(lrep.balanceOf(alice), 0);
 
         uint256 firstReward = _recordLaunchReward(alice, 6, bytes32("anchor-b"));
-        assertEq(firstReward, 1e6);
+        assertEq(firstReward, 250_000);
         assertEq(pool.raterDistinctVerifiedAnchorCount(alice), 2);
         assertEq(lrep.balanceOf(alice), firstReward);
     }

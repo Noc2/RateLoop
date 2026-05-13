@@ -6,12 +6,14 @@ import {Base64} from "@openzeppelin/contracts/utils/Base64.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {ContentRegistry} from "../contracts/ContentRegistry.sol";
+import {AdvisoryVoteRecorder} from "../contracts/AdvisoryVoteRecorder.sol";
 import {RoundVotingEngine} from "../contracts/RoundVotingEngine.sol";
 import {ProtocolConfig} from "../contracts/ProtocolConfig.sol";
 import {RoundRewardDistributor} from "../contracts/RoundRewardDistributor.sol";
 import {RoundLib} from "../contracts/libraries/RoundLib.sol";
 import {RoundEngineReadHelpers} from "./helpers/RoundEngineReadHelpers.sol";
 import {TlockVoteLib} from "../contracts/libraries/TlockVoteLib.sol";
+import {VotePreflightLib} from "../contracts/libraries/VotePreflightLib.sol";
 import {HumanReputation} from "../contracts/HumanReputation.sol";
 import {ParticipationPool} from "../contracts/ParticipationPool.sol";
 import {FrontendRegistry} from "../contracts/FrontendRegistry.sol";
@@ -27,6 +29,7 @@ import {MockCategoryRegistry} from "../contracts/mocks/MockCategoryRegistry.sol"
 contract RoundVotingEngineBranchesTest is VotingTestBase {
     HumanReputation public hrepToken;
     ContentRegistry public registry;
+    AdvisoryVoteRecorder public advisoryRecorder;
     RoundVotingEngine public engine;
     RoundRewardDistributor public rewardDistributor;
     MockVoterIdNFT public mockVoterIdNFT;
@@ -100,6 +103,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
             )
         );
         protocolConfigAddress = address(engine.protocolConfig());
+        advisoryRecorder = new AdvisoryVoteRecorder(address(engine), address(registry), owner);
 
         rewardDistributor = RoundRewardDistributor(
             address(
@@ -266,6 +270,26 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
             address(0)
         );
         vm.stopPrank();
+    }
+
+    function _recordAdvisory(address voter, uint256 contentId, string memory saltTag)
+        internal
+        returns (bytes32 advisoryCommitKey, bytes32 salt)
+    {
+        uint256 roundId = engine.previewCommitRoundId(contentId);
+        uint16 referenceRatingBps = engine.previewCommitReferenceRatingBps(contentId);
+        uint64 targetRound = _tlockCommitTargetRound();
+        bytes32 drandChainHash = _tlockDrandChainHash();
+        salt = keccak256(abi.encodePacked(voter, block.timestamp, saltTag));
+        bytes memory ciphertext = _testCiphertext(true, salt, contentId, targetRound, drandChainHash);
+        bytes32 commitHash = _commitHash(
+            true, salt, voter, contentId, roundId, referenceRatingBps, targetRound, drandChainHash, ciphertext
+        );
+
+        vm.prank(voter);
+        advisoryCommitKey = advisoryRecorder.recordAdvisoryVote(
+            contentId, _roundContext(roundId, referenceRatingBps), targetRound, drandChainHash, commitHash, ciphertext
+        );
     }
 
     function _maxAgeCiphertext() internal view returns (bytes memory ciphertext) {
@@ -440,76 +464,46 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertGt(engine.commitRbtsScoreBps(contentId, roundId, ck1), 0, "ck1 scored");
     }
 
-    function test_RbtsZeroStakeRevealDoesNotCreateEconomicRewards() public {
+    function test_RbtsZeroStakeCommitRejectedByCountedVoting() public {
         uint256 contentId = _submitContent();
 
-        (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, true, 8_000, STAKE);
-        (bytes32 ck2, bytes32 s2) = _commitPrediction(voter2, contentId, true, 7_000, STAKE);
-        (bytes32 ck3, bytes32 s3) = _commitPrediction(voter3, contentId, false, 3_000, 0);
-
-        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
-        RoundLib.Round memory r0 = RoundEngineReadHelpers.round(engine, contentId, roundId);
-        _warpPastTlockRevealTime(uint256(r0.startTime) + EPOCH);
-
-        engine.revealVoteByCommitKey(contentId, roundId, ck1, true, 8_000, s1);
-        engine.revealVoteByCommitKey(contentId, roundId, ck2, true, 7_000, s2);
-        engine.revealVoteByCommitKey(contentId, roundId, ck3, false, 3_000, s3);
-        engine.settleRound(contentId, roundId);
-
-        assertTrue(engine.roundRbtsScored(contentId, roundId), "round settles and is marked scored");
-        assertGt(engine.commitRbtsScoreBps(contentId, roundId, ck3), 0, "zero-stake vote still gets RBTS score");
-        assertEq(engine.commitRbtsRewardWeight(contentId, roundId, ck3), 0, "zero stake has no reward weight");
-        assertEq(engine.roundRbtsRewardWeight(contentId, roundId), 0, "no RBTS reward weight below 3 staked voters");
-        assertEq(engine.roundRbtsForfeitedPool(contentId, roundId), 0, "no stake is slashed below 3 staked voters");
-        assertEq(engine.roundVoterPool(contentId, roundId), 0, "no consensus subsidy or voter reward pool");
-        assertGt(engine.commitRbtsScoreBps(contentId, roundId, ck1), 0, "staked voter still gets signal score");
-        assertGt(engine.commitRbtsScoreBps(contentId, roundId, ck2), 0, "second staked voter still gets signal score");
-        assertGt(engine.commitRbtsScoreBps(contentId, roundId, ck3), 0, "zero-stake voter gets signal score");
-        assertEq(engine.commitRbtsStakeReturned(contentId, roundId, ck1), STAKE, "staked voter gets stake back");
-        assertEq(engine.commitRbtsStakeReturned(contentId, roundId, ck2), STAKE, "staked voter gets stake back");
-        assertEq(engine.commitRbtsStakeReturned(contentId, roundId, ck3), 0, "zero stake has no return");
-        assertEq(engine.commitRbtsForfeitedStake(contentId, roundId, ck3), 0, "zero stake has no forfeit");
-
-        uint256 voter1BalanceBefore = hrepToken.balanceOf(voter1);
-        vm.prank(voter1);
-        rewardDistributor.claimReward(contentId, roundId);
-        assertEq(hrepToken.balanceOf(voter1), voter1BalanceBefore + STAKE, "claim returns stake only");
-
-        uint256 voter3BalanceBefore = hrepToken.balanceOf(voter3);
+        bytes32 salt = keccak256(abi.encodePacked(voter1, block.timestamp));
+        bytes32 commitHash = _commitHash(true, salt, contentId);
+        bytes memory ciphertext = _testCiphertext(true, salt, contentId);
+        uint256 roundContext = _roundContext(engine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());
         vm.prank(voter3);
-        rewardDistributor.claimReward(contentId, roundId);
-        assertEq(hrepToken.balanceOf(voter3), voter3BalanceBefore, "zero-stake claim has no payout");
-
-        vm.prank(voter3);
-        vm.expectRevert(RoundRewardDistributor.NoStake.selector);
-        rewardDistributor.claimParticipationReward(contentId, roundId);
+        vm.expectRevert(RoundVotingEngine.InvalidStake.selector);
+        engine.commitVote(
+            contentId,
+            roundContext,
+            _tlockCommitTargetRound(),
+            _tlockDrandChainHash(),
+            commitHash,
+            ciphertext,
+            0,
+            address(0)
+        );
     }
 
-    function test_RbtsZeroStakeVotesDoNotDisableEconomicRewardsWhenThreeStakedVotersExist() public {
+    function test_RbtsBelowMinimumStakeCommitRejectedByCountedVoting() public {
         uint256 contentId = _submitContent();
 
-        (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, true, 8_000, STAKE);
-        (bytes32 ck2, bytes32 s2) = _commitPrediction(voter2, contentId, true, 7_000, STAKE);
-        (bytes32 ck3, bytes32 s3) = _commitPrediction(voter3, contentId, false, 3_000, STAKE);
-        (bytes32 ck4, bytes32 s4) = _commitPrediction(voter4, contentId, true, 6_500, 0);
-
-        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
-        RoundLib.Round memory r0 = RoundEngineReadHelpers.round(engine, contentId, roundId);
-        _warpPastTlockRevealTime(uint256(r0.startTime) + EPOCH);
-
-        engine.revealVoteByCommitKey(contentId, roundId, ck1, true, 8_000, s1);
-        engine.revealVoteByCommitKey(contentId, roundId, ck2, true, 7_000, s2);
-        engine.revealVoteByCommitKey(contentId, roundId, ck3, false, 3_000, s3);
-        engine.revealVoteByCommitKey(contentId, roundId, ck4, true, 6_500, s4);
-        engine.settleRound(contentId, roundId);
-
-        assertTrue(engine.roundRbtsScored(contentId, roundId), "round settles and is marked scored");
-        assertGt(engine.roundRbtsRewardWeight(contentId, roundId), 0, "three staked voters still create RBTS rewards");
-        assertGt(engine.roundRbtsForfeitedPool(contentId, roundId), 0, "three staked voters can still forfeit stake");
-        assertGt(engine.commitRbtsScoreBps(contentId, roundId, ck4), 0, "zero-stake voter gets signal score");
-        assertEq(engine.commitRbtsRewardWeight(contentId, roundId, ck4), 0, "zero-stake voter gets no reward weight");
-        assertEq(engine.commitRbtsStakeReturned(contentId, roundId, ck4), 0, "zero-stake voter gets no stake return");
-        assertEq(engine.commitRbtsForfeitedStake(contentId, roundId, ck4), 0, "zero-stake voter gets no forfeiture");
+        bytes32 salt = keccak256(abi.encodePacked(voter1, block.timestamp));
+        bytes32 commitHash = _commitHash(true, salt, contentId);
+        bytes memory ciphertext = _testCiphertext(true, salt, contentId);
+        uint256 roundContext = _roundContext(engine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());
+        vm.prank(voter4);
+        vm.expectRevert(RoundVotingEngine.InvalidStake.selector);
+        engine.commitVote(
+            contentId,
+            roundContext,
+            _tlockCommitTargetRound(),
+            _tlockDrandChainHash(),
+            commitHash,
+            ciphertext,
+            999_999,
+            address(0)
+        );
     }
 
     function test_RbtsSettlementRequiresThreeReveals() public {
@@ -1851,7 +1845,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     // ADDITIONAL BRANCH COVERAGE
     // =========================================================================
 
-    function test_Commit_ZeroStakeAccepted() public {
+    function test_Commit_ZeroStakeRejected() public {
         uint256 contentId = _submitContent();
 
         bytes32 salt = keccak256(abi.encodePacked(voter1, block.timestamp));
@@ -1863,6 +1857,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         uint256 cachedRoundContext7 =
             _roundContext(engine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());
         vm.prank(voter1);
+        vm.expectRevert(RoundVotingEngine.InvalidStake.selector);
         engine.commitVote(
             contentId,
             cachedRoundContext7,
@@ -1872,6 +1867,175 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
             ciphertext,
             0,
             address(0)
+        );
+    }
+
+    function test_AdvisoryVoteRecordsZeroStakeWithoutRoundAccounting() public {
+        uint256 contentId = _submitContent();
+        uint256 roundId = engine.previewCommitRoundId(contentId);
+        uint16 referenceRatingBps = engine.previewCommitReferenceRatingBps(contentId);
+        uint256 roundContext = _roundContext(roundId, referenceRatingBps);
+        uint64 targetRound = _tlockCommitTargetRound();
+        bytes32 drandChainHash = _tlockDrandChainHash();
+        bytes32 salt = keccak256(abi.encodePacked(voter1, block.timestamp, "advisory"));
+        bytes memory ciphertext = _testCiphertext(true, salt, contentId, targetRound, drandChainHash);
+        bytes32 commitHash = _commitHash(
+            true, salt, voter1, contentId, roundId, referenceRatingBps, targetRound, drandChainHash, ciphertext
+        );
+
+        vm.prank(voter1);
+        bytes32 advisoryCommitKey = advisoryRecorder.recordAdvisoryVote(
+            contentId, roundContext, targetRound, drandChainHash, commitHash, ciphertext
+        );
+
+        assertEq(RoundEngineReadHelpers.activeRoundId(engine, contentId), 0, "advisory vote does not open a round");
+        assertEq(advisoryRecorder.roundAdvisoryCommitCount(contentId, roundId), 1, "advisory commit indexed");
+
+        vm.expectRevert(AdvisoryVoteRecorder.RoundNotOpen.selector);
+        advisoryRecorder.revealAdvisoryVote(advisoryCommitKey, true, 5_000, salt);
+
+        _commit(voter2, contentId, true, STAKE);
+        RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        assertEq(round.voteCount, 1, "only staked commit counts");
+        assertEq(round.totalStake, STAKE, "only staked commit contributes stake");
+
+        _warpPastTlockRevealTime(uint256(round.startTime) + EPOCH);
+        advisoryRecorder.revealAdvisoryVote(advisoryCommitKey, true, 5_000, salt);
+        (,,,,, bool revealed,,,,) = advisoryRecorder.advisoryCommitCore(advisoryCommitKey);
+        assertTrue(revealed, "advisory vote revealed");
+        round = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        assertEq(round.revealedCount, 0, "advisory reveal does not count toward quorum");
+    }
+
+    function test_AdvisoryVoteCapsCommitsAtRoundMaxVoters() public {
+        vm.prank(owner);
+        _setTlockRoundConfig(ProtocolConfig(protocolConfigAddress), 1 hours, 7 days, 3, 3);
+
+        uint256 contentId = _submitContent();
+        _recordAdvisory(voter1, contentId, "advisory-cap-1");
+        _recordAdvisory(voter2, contentId, "advisory-cap-2");
+        _recordAdvisory(voter3, contentId, "advisory-cap-3");
+
+        uint256 roundId = engine.previewCommitRoundId(contentId);
+        uint16 referenceRatingBps = engine.previewCommitReferenceRatingBps(contentId);
+        uint64 targetRound = _tlockCommitTargetRound();
+        bytes32 drandChainHash = _tlockDrandChainHash();
+        bytes32 salt = keccak256(abi.encodePacked(voter4, block.timestamp, "advisory-cap-4"));
+        bytes memory ciphertext = _testCiphertext(true, salt, contentId, targetRound, drandChainHash);
+        bytes32 commitHash = _commitHash(
+            true, salt, voter4, contentId, roundId, referenceRatingBps, targetRound, drandChainHash, ciphertext
+        );
+
+        vm.prank(voter4);
+        vm.expectRevert(AdvisoryVoteRecorder.MaxAdvisoryVotersReached.selector);
+        advisoryRecorder.recordAdvisoryVote(
+            contentId, _roundContext(roundId, referenceRatingBps), targetRound, drandChainHash, commitHash, ciphertext
+        );
+    }
+
+    function test_AdvisoryVoteUsesCorePreflightAndVoterIdDedupe() public {
+        vm.startPrank(owner);
+        registry.setVoterIdNFT(address(mockVoterIdNFT));
+        ProtocolConfig(protocolConfigAddress).setVoterIdNFT(address(mockVoterIdNFT));
+        vm.stopPrank();
+        mockVoterIdNFT.mint(submitter, 9_001);
+        mockVoterIdNFT.mint(voter1, 42);
+
+        uint256 contentId = _submitContent();
+        uint256 roundId = engine.previewCommitRoundId(contentId);
+        uint16 referenceRatingBps = engine.previewCommitReferenceRatingBps(contentId);
+        uint256 roundContext = _roundContext(roundId, referenceRatingBps);
+        uint64 targetRound = _tlockCommitTargetRound();
+        bytes32 drandChainHash = _tlockDrandChainHash();
+
+        bytes32 submitterSalt = keccak256(abi.encodePacked(submitter, block.timestamp, "advisory-self"));
+        bytes memory submitterCiphertext = _testCiphertext(true, submitterSalt, contentId, targetRound, drandChainHash);
+        bytes32 submitterCommitHash = _commitHash(
+            true,
+            submitterSalt,
+            submitter,
+            contentId,
+            roundId,
+            referenceRatingBps,
+            targetRound,
+            drandChainHash,
+            submitterCiphertext
+        );
+
+        vm.prank(submitter);
+        vm.expectRevert(VotePreflightLib.SelfVote.selector);
+        advisoryRecorder.recordAdvisoryVote(
+            contentId, roundContext, targetRound, drandChainHash, submitterCommitHash, submitterCiphertext
+        );
+
+        bytes32 voterSalt = keccak256(abi.encodePacked(voter1, block.timestamp, "advisory-voter-id"));
+        bytes memory voterCiphertext = _testCiphertext(true, voterSalt, contentId, targetRound, drandChainHash);
+        bytes32 voterCommitHash = _commitHash(
+            true,
+            voterSalt,
+            voter1,
+            contentId,
+            roundId,
+            referenceRatingBps,
+            targetRound,
+            drandChainHash,
+            voterCiphertext
+        );
+
+        vm.prank(voter1);
+        advisoryRecorder.recordAdvisoryVote(
+            contentId, roundContext, targetRound, drandChainHash, voterCommitHash, voterCiphertext
+        );
+
+        vm.prank(voter1);
+        mockVoterIdNFT.setDelegate(delegate1);
+        vm.warp(block.timestamp + 1 days);
+        bytes32 delegateSalt = keccak256(abi.encodePacked(delegate1, block.timestamp, "advisory-voter-id"));
+        bytes memory delegateCiphertext = _testCiphertext(true, delegateSalt, contentId, targetRound, drandChainHash);
+        bytes32 delegateCommitHash = _commitHash(
+            true,
+            delegateSalt,
+            delegate1,
+            contentId,
+            roundId,
+            referenceRatingBps,
+            targetRound,
+            drandChainHash,
+            delegateCiphertext
+        );
+
+        vm.prank(delegate1);
+        vm.expectRevert(AdvisoryVoteRecorder.AlreadyCommitted.selector);
+        advisoryRecorder.recordAdvisoryVote(
+            contentId, roundContext, targetRound, drandChainHash, delegateCommitHash, delegateCiphertext
+        );
+    }
+
+    function test_AdvisoryVoteRespectsCountedVoteCooldown() public {
+        uint256 contentId = _submitContent();
+        _commit(voter1, contentId, true, STAKE);
+
+        uint256 roundId = engine.previewCommitRoundId(contentId);
+        uint16 referenceRatingBps = engine.previewCommitReferenceRatingBps(contentId);
+        uint64 targetRound = _tlockCommitTargetRound();
+        bytes32 drandChainHash = _tlockDrandChainHash();
+        bytes32 salt = keccak256(abi.encodePacked(voter1, block.timestamp, "advisory-cooldown"));
+        bytes memory ciphertext = _testCiphertext(true, salt, contentId, targetRound, drandChainHash);
+        bytes32 commitHash = _commitHash(
+            true, salt, voter1, contentId, roundId, referenceRatingBps, targetRound, drandChainHash, ciphertext
+        );
+
+        vm.prank(voter1);
+        vm.expectRevert(VotePreflightLib.CooldownActive.selector);
+        advisoryRecorder.recordAdvisoryVote(
+            contentId, _roundContext(roundId, referenceRatingBps), targetRound, drandChainHash, commitHash, ciphertext
+        );
+
+        vm.warp(block.timestamp + 1 days);
+        vm.prank(voter1);
+        vm.expectRevert(AdvisoryVoteRecorder.AlreadyCommitted.selector);
+        advisoryRecorder.recordAdvisoryVote(
+            contentId, _roundContext(roundId, referenceRatingBps), targetRound, drandChainHash, commitHash, ciphertext
         );
     }
 

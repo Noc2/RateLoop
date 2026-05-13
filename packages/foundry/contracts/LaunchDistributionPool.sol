@@ -38,7 +38,7 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
     uint64 public constant MIN_LAUNCH_CREDIT_STAKE = 1e6;
     uint16 public constant MAX_DISTINCT_RATERS_PER_VERIFIED_ANCHOR = 25;
     uint16 public constant MAX_UNVERIFIED_LAUNCH_CREDITS_PER_ROUND = 3;
-    uint16 public constant DEFAULT_UNVERIFIED_EARNED_RATER_CAP_BPS = 10_000;
+    uint16 public constant DEFAULT_UNVERIFIED_EARNED_RATER_CAP_BPS = 2_500;
     uint16 public constant BPS_DENOMINATOR = 10_000;
     uint32 public constant MIN_ANCHOR_CREDENTIAL_AGE_SECONDS = 7 days;
 
@@ -78,6 +78,7 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
     mapping(address => uint32) public raterDistinctAnchorRoundCount;
     mapping(bytes32 => mapping(address => bool)) public verifiedAnchorRaterSeen;
     mapping(bytes32 => uint32) public verifiedAnchorDistinctRaterCount;
+    mapping(address => mapping(uint256 => mapping(uint256 => bool))) public raterRoundCreditRecorded;
     mapping(uint256 => mapping(uint256 => uint16)) public roundUnverifiedLaunchCreditCount;
     LaunchRewardPolicy public launchRewardPolicy;
 
@@ -281,6 +282,7 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
         }
 
         if (earnedRewardCreditRecorded[contentId][roundId][commitKey]) return 0;
+        if (raterRoundCreditRecorded[rater][contentId][roundId]) return 0;
         bool raterVerified = _hasActiveHumanCredential(rater);
         if (
             !raterVerified
@@ -290,6 +292,7 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
         }
 
         earnedRewardCreditRecorded[contentId][roundId][commitKey] = true;
+        raterRoundCreditRecorded[rater][contentId][roundId] = true;
         if (!raterVerified) {
             roundUnverifiedLaunchCreditCount[contentId][roundId] += 1;
         }
@@ -297,6 +300,52 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
         _recordVerifiedAnchors(policy, rater, verifiedAnchorIds);
 
         return _recordEarnedRaterReward(rater, contentId, roundId, commitKey, scoreBps, policy);
+    }
+
+    function recordAdvisoryRaterReward(
+        address rater,
+        uint256 contentId,
+        uint256 roundId,
+        bytes32 advisoryCommitKey,
+        uint16 scoreBps,
+        uint16 revealedRaterCount,
+        bool noPendingCleanup,
+        bytes32[] calldata verifiedAnchorIds
+    ) external onlyAuthorized nonReentrant returns (bool recorded, uint256 paidAmount) {
+        LaunchRewardPolicy memory policy = launchRewardPolicy;
+        uint16 distinctRoundAnchors = _countDistinctAvailableAnchors(policy, rater, verifiedAnchorIds);
+        if (!_passesAdvisoryLaunchRewardContext(
+                policy,
+                rater,
+                advisoryCommitKey,
+                scoreBps,
+                revealedRaterCount,
+                noPendingCleanup,
+                distinctRoundAnchors
+            )) {
+            return (false, 0);
+        }
+
+        if (earnedRewardCreditRecorded[contentId][roundId][advisoryCommitKey]) return (false, 0);
+        if (raterRoundCreditRecorded[rater][contentId][roundId]) return (false, 0);
+        bool raterVerified = _hasActiveHumanCredential(rater);
+        if (
+            !raterVerified
+                && roundUnverifiedLaunchCreditCount[contentId][roundId] >= policy.maxUnverifiedCreditsPerRound
+        ) {
+            return (false, 0);
+        }
+
+        earnedRewardCreditRecorded[contentId][roundId][advisoryCommitKey] = true;
+        raterRoundCreditRecorded[rater][contentId][roundId] = true;
+        if (!raterVerified) {
+            roundUnverifiedLaunchCreditCount[contentId][roundId] += 1;
+        }
+        _recordAnchorRound(rater, contentId, roundId);
+        _recordVerifiedAnchors(policy, rater, verifiedAnchorIds);
+
+        paidAmount = _recordEarnedRaterReward(rater, contentId, roundId, advisoryCommitKey, scoreBps, policy);
+        return (true, paidAmount);
     }
 
     function _recordEarnedRaterReward(
@@ -508,6 +557,23 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
         if (revealedRaterCount < policy.minVoters) return false;
         if (policy.requireNoPendingCleanup && !noPendingCleanup) return false;
         if (stakeAmount < policy.minLaunchCreditStake) return false;
+        if (distinctRoundAnchors < policy.minVerifiedHumans) return false;
+        return true;
+    }
+
+    function _passesAdvisoryLaunchRewardContext(
+        LaunchRewardPolicy memory policy,
+        address rater,
+        bytes32 advisoryCommitKey,
+        uint16 scoreBps,
+        uint16 revealedRaterCount,
+        bool noPendingCleanup,
+        uint16 distinctRoundAnchors
+    ) internal pure returns (bool) {
+        if (rater == address(0) || advisoryCommitKey == bytes32(0)) return false;
+        if (scoreBps < policy.minQualifyingScoreBps) return false;
+        if (revealedRaterCount < policy.minVoters) return false;
+        if (policy.requireNoPendingCleanup && !noPendingCleanup) return false;
         if (distinctRoundAnchors < policy.minVerifiedHumans) return false;
         return true;
     }

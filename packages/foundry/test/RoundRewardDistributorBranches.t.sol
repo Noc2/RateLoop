@@ -448,28 +448,50 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         assertEq(lrepToken.balanceOf(voter1), 0);
     }
 
-    function test_ClaimReward_ZeroStakeVoteDoesNotRecordLaunchCredit() public {
-        _verifyHuman(voter2, bytes32("anchor-voter-2"));
-        (uint256 contentId, uint256 roundId) = _setupSettledPredictionRoundWithStakes(0, STAKE, STAKE);
-        bytes32 voter1CommitKey =
-            keccak256(abi.encodePacked(voter1, votingEngine.voterCommitHash(contentId, roundId, voter1)));
+    function test_ClaimReward_ZeroStakeCountedVoteRejectedBeforeLaunchCredit() public {
+        vm.startPrank(submitter);
+        hrepToken.approve(address(registry), 10e6);
+        _submitContentWithReservation(registry, "https://example.com/zero-stake-counted", "goal", "goal", "tags", 0);
+        vm.stopPrank();
 
-        uint256 hrepBefore = hrepToken.balanceOf(voter1);
-        uint256 lrepBefore = lrepToken.balanceOf(voter1);
-        vm.prank(voter1);
-        rewardDistributor.claimReward(contentId, roundId);
-
-        assertGe(
-            votingEngine.commitRbtsScoreBps(contentId, roundId, voter1CommitKey),
-            launchPool.MIN_QUALIFYING_SCORE_BPS(),
-            "zero-stake vote has qualifying RBTS score"
+        uint256 contentId = 1;
+        uint16 predictedRatingBps = 8_000;
+        bytes32 salt = keccak256(abi.encodePacked(voter1, predictedRatingBps, block.timestamp));
+        uint256 roundId = votingEngine.previewCommitRoundId(contentId);
+        uint16 referenceRatingBps = votingEngine.previewCommitReferenceRatingBps(contentId);
+        uint64 targetRound = _tlockCommitTargetRound();
+        bytes32 drandChainHash = _tlockDrandChainHash();
+        bool isUp = predictedRatingBps >= 5_000;
+        bytes memory ciphertext = _testCiphertext(isUp, salt, contentId, targetRound, drandChainHash);
+        bytes32 commitHash = TlockVoteLib.buildExpectedRbtsCommitHash(
+            isUp,
+            predictedRatingBps,
+            salt,
+            voter1,
+            contentId,
+            roundId,
+            referenceRatingBps,
+            targetRound,
+            drandChainHash,
+            ciphertext
         );
-        assertEq(votingEngine.commitRbtsRewardWeight(contentId, roundId, voter1CommitKey), 0);
-        assertEq(votingEngine.commitRbtsStakeReturned(contentId, roundId, voter1CommitKey), 0);
-        assertEq(votingEngine.commitRbtsForfeitedStake(contentId, roundId, voter1CommitKey), 0);
-        assertEq(hrepToken.balanceOf(voter1), hrepBefore, "zero-stake claim has no HREP payout");
-        assertEq(lrepToken.balanceOf(voter1), lrepBefore, "single launch credit does not pay yet");
-        assertFalse(launchPool.earnedRewardCreditRecorded(contentId, roundId, voter1CommitKey));
+
+        vm.startPrank(voter1);
+        hrepToken.approve(address(votingEngine), 0);
+        vm.expectRevert(RoundVotingEngine.InvalidStake.selector);
+        votingEngine.commitVote(
+            contentId,
+            _roundContext(roundId, referenceRatingBps),
+            targetRound,
+            drandChainHash,
+            commitHash,
+            ciphertext,
+            0,
+            address(0)
+        );
+        vm.stopPrank();
+
+        assertEq(RoundEngineReadHelpers.activeRoundId(votingEngine, contentId), 0);
         assertEq(launchPool.qualifyingRatingCount(voter1), 0);
         assertEq(launchPool.raterDistinctVerifiedAnchorCount(voter1), 0);
         assertEq(launchPool.raterDistinctAnchorRoundCount(voter1), 0);

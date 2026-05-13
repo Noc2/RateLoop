@@ -19,6 +19,7 @@ interface ILaunchDistributionPool {
     }
 
     function launchAnchorCredentialAgeSeconds() external view returns (uint32);
+    function raterRoundCreditRecorded(address rater, uint256 contentId, uint256 roundId) external view returns (bool);
 
     function recordEarnedRaterReward(
         address rater,
@@ -31,4 +32,15 @@ interface ILaunchDistributionPool {
         uint256 stakeAmount,
         bytes32[] calldata verifiedAnchorIds
     ) external returns (uint256 paidAmount);
+
+    function recordAdvisoryRaterReward(
+        address rater,
+        uint256 contentId,
+        uint256 roundId,
+        bytes32 advisoryCommitKey,
+        uint16 scoreBps,
+        uint16 revealedRaterCount,
+        bool noPendingCleanup,
+        bytes32[] calldata verifiedAnchorIds
+    ) external returns (bool recorded, uint256 paidAmount);
 }
