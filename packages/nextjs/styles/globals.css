@@ -536,16 +536,28 @@ body {
   transition: transform 0.2s ease;
 }
 
+.vote-btn.vote-yes,
+.vote-btn.vote-no {
+  width: 6.5rem;
+  height: 3.75rem;
+  border-radius: var(--curyo-radius-control);
+}
+
 .vote-btn.vote-btn-sm {
   width: 2.75rem;
   height: 2.75rem;
+}
+
+.vote-btn.vote-btn-sm.vote-yes,
+.vote-btn.vote-btn-sm.vote-no {
+  border-radius: var(--curyo-radius-control);
 }
 
 .vote-btn .vote-bg {
   position: absolute;
   inset: 0;
   box-sizing: border-box;
-  border-radius: 9999px;
+  border-radius: inherit;
   transition:
     transform 0.2s ease,
     box-shadow 0.2s ease,
@@ -557,13 +569,19 @@ body {
 }
 
 .vote-btn.vote-yes .vote-bg {
-  background: var(--curyo-ember);
-  box-shadow: none;
+  background: #20d6a3;
+  border: 1px solid rgb(32 214 163 / 0.68);
+  box-shadow:
+    0 0 0 1px rgb(32 214 163 / 0.18),
+    inset 0 1px 0 rgb(245 245 245 / 0.24);
 }
 
 .vote-btn.vote-no .vote-bg {
-  background: var(--curyo-ember-deep);
-  box-shadow: none;
+  background: #ff6b7a;
+  border: 1px solid rgb(255 107 122 / 0.76);
+  box-shadow:
+    0 0 0 1px rgb(255 107 122 / 0.2),
+    inset 0 1px 0 rgb(245 245 245 / 0.2);
 }
 
 .vote-btn.vote-feedback .vote-bg {
@@ -584,6 +602,14 @@ body {
   color: var(--curyo-warm-white);
 }
 
+.vote-btn.vote-yes .vote-symbol {
+  color: #050505;
+}
+
+.vote-btn.vote-no .vote-symbol {
+  color: #ffffff;
+}
+
 .vote-btn.vote-feedback:disabled .vote-bg {
   background: var(--curyo-ember);
   box-shadow: none;
@@ -599,7 +625,11 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 0.55rem;
   color: var(--curyo-action-content);
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1;
 }
 
 @keyframes vote-btn-attention {
@@ -682,11 +712,15 @@ body {
 }
 
 .vote-btn.vote-yes:hover .vote-bg {
-  box-shadow: none;
+  box-shadow:
+    0 0 0 3px rgb(32 214 163 / 0.2),
+    inset 0 1px 0 rgb(245 245 245 / 0.24);
 }
 
 .vote-btn.vote-no:hover .vote-bg {
-  box-shadow: none;
+  box-shadow:
+    0 0 0 3px rgb(255 107 122 / 0.22),
+    inset 0 1px 0 rgb(245 245 245 / 0.2);
 }
 
 .vote-btn:active .vote-bg {
