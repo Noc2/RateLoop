@@ -679,11 +679,13 @@ function isRaterEligibleForBounty(
 }
 
 function defaultAgentResultTemplate() {
-  return findAgentResultTemplate("generic_rating") ?? {
-    id: "generic_rating",
-    ratingSystem: "rateloop.robust_bts_binary.v1",
-    version: 1,
-  };
+  return (
+    findAgentResultTemplate("generic_rating") ?? {
+      id: "generic_rating",
+      ratingSystem: "rateloop.robust_bts_binary.v1",
+      version: 1,
+    }
+  );
 }
 
 function emptyResultDistribution() {
@@ -699,11 +701,7 @@ function emptyResultDistribution() {
   };
 }
 
-function buildPendingQuestionResultPackage(params: {
-  failed: boolean;
-  operation: JsonObject | null;
-  status: string;
-}) {
+function buildPendingQuestionResultPackage(params: { failed: boolean; operation: JsonObject | null; status: string }) {
   const template = defaultAgentResultTemplate();
   const distribution = emptyResultDistribution();
   return {

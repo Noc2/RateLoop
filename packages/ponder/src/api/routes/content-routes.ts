@@ -823,7 +823,9 @@ export function registerContentRoutes(app: ApiApp) {
           eq(vote.roundId, round.roundId),
         ),
       )
-      .where(and(voteMatchesVoter(voterAddr), eq(round.state, ROUND_STATE.Open)));
+      .where(
+        and(voteMatchesVoter(voterAddr), eq(round.state, ROUND_STATE.Open)),
+      );
 
     return jsonBig(c, {
       activeStake: activeResult?.total ?? "0",
