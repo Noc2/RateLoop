@@ -23,6 +23,7 @@ import {
   storeReferralAttributionFromValue,
 } from "~~/lib/referrals/referralAttribution";
 import { getWorldIdClientConfig } from "~~/lib/world-id/config";
+import { readLocalE2EWorldIdMock } from "~~/lib/world-id/e2eMock";
 import { parseWorldIdLegacyProof } from "~~/lib/world-id/onchainProof";
 import { pollWorldIdRequest } from "~~/lib/world-id/requestPolling";
 import { formatWorldIdError, getWorldIdRequestPanelState } from "~~/lib/world-id/verificationUiState";
@@ -58,6 +59,13 @@ function formatLrepAmount(amount: bigint | undefined) {
   }).format(value);
 }
 
+function publishWorldIdConnectorURI(connectorURI: string) {
+  if (typeof window === "undefined") return;
+
+  (window as typeof window & { __rateloopWorldIdConnectorURI?: string }).__rateloopWorldIdConnectorURI = connectorURI;
+  window.dispatchEvent(new CustomEvent("rateloop:world-id-connector-uri", { detail: { connectorURI } }));
+}
+
 export function WorldIdVerificationCard({ address }: { address?: string }) {
   const config = getWorldIdClientConfig();
   const { chain } = useAccount();
@@ -76,10 +84,13 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
   const referralInputId = useId();
   const referralHintId = useId();
   const { copyToClipboard, isCopiedToClipboard } = useCopyToClipboard({ successDurationMs: 1_600 });
-  const appId = config.appId?.startsWith("app_") ? (config.appId as `app_${string}`) : null;
+  const localE2EWorldIdMock = readLocalE2EWorldIdMock();
+  const appId = config.appId?.startsWith("app_")
+    ? (config.appId as `app_${string}`)
+    : (localE2EWorldIdMock?.appId ?? null);
   const signal = getWorldIdSignal(address);
   const walletAddress = address as `0x${string}` | undefined;
-  const isConfigured = Boolean(appId && config.enabled);
+  const isConfigured = Boolean((appId && config.enabled) || localE2EWorldIdMock);
   const canVerify = Boolean(isConfigured && address);
   const { data: hasActiveCredential, refetch: refetchHasActiveCredential } = useScaffoldReadContract({
     contractName: "RaterRegistry",
@@ -508,12 +519,45 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
     setWorldIdErrorCode(null);
 
     try {
-      const requestContext = await fetchWorldIdRequestContext();
+      const localMock = readLocalE2EWorldIdMock();
+      const requestContext = localMock
+        ? {
+            action: localMock.action,
+            environment: localMock.environment,
+            rpContext: localMock.rpContext,
+          }
+        : await fetchWorldIdRequestContext();
       if (activeWorldIdRequestRef.current !== requestId || abortController.signal.aborted) {
         return;
       }
 
       setRpContextResponse(requestContext);
+      if (localMock) {
+        setConnectorURI(localMock.connectorURI);
+        setIsPreparingWorldIdRequest(false);
+        setIsAwaitingWorldIdApproval(true);
+        await new Promise(resolve => window.setTimeout(resolve, 100));
+        if (activeWorldIdRequestRef.current !== requestId || abortController.signal.aborted) {
+          return;
+        }
+
+        setIsAwaitingWorldIdApproval(false);
+        setIsSubmittingWorldIdCredential(true);
+        try {
+          await handleVerify(localMock.result, requestContext);
+          if (activeWorldIdRequestRef.current !== requestId || abortController.signal.aborted) {
+            return;
+          }
+
+          await handleSuccess(localMock.result);
+        } finally {
+          if (activeWorldIdRequestRef.current === requestId) {
+            setIsSubmittingWorldIdCredential(false);
+          }
+        }
+        return;
+      }
+
       const request = await IDKit.request({
         action: requestContext.action,
         allow_legacy_proofs: true,
@@ -526,6 +570,7 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
       }
 
       setConnectorURI(request.connectorURI);
+      publishWorldIdConnectorURI(request.connectorURI);
       setIsPreparingWorldIdRequest(false);
 
       const completion = await pollWorldIdRequest(request, {
