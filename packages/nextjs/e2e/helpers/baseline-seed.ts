@@ -55,7 +55,7 @@ const BASELINE_CONTENT = [
     description:
       "Use the policy summary to judge whether an automated support agent should approve the request without escalation.",
     tags: "Agent Review,Policy,Trust",
-    categorySlug: "trust",
+    categorySlug: "text",
     bountyAmount: 1_000_000n,
     submitter: ANVIL_ACCOUNTS.account2.address,
   },
@@ -65,7 +65,7 @@ const BASELINE_CONTENT = [
     description:
       "Judge whether the image gives enough visual evidence for an agent to rate a remote-work listing as calm and credible.",
     tags: "Workspace,Authenticity,Trust",
-    categorySlug: "trust",
+    categorySlug: "media",
     bountyAmount: 2_500_000n,
     submitter: ANVIL_ACCOUNTS.account3.address,
   },
@@ -201,7 +201,7 @@ const BASELINE_CONTENT = [
     description:
       "Judge whether the rule gives clear guidance for unsafe, misleading, mismatched, or synthetic spammy submissions.",
     tags: "Moderation,Agents,Policy",
-    categorySlug: "trust",
+    categorySlug: "text",
     bountyAmount: 5_500_000n,
     submitter: ANVIL_ACCOUNTS.account7.address,
   },

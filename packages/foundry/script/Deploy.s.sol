@@ -558,17 +558,6 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         textSubcats[12] = "Examples";
         registry.addCategory("Text", "text", textSubcats);
 
-        string[] memory safetySubcats = new string[](8);
-        safetySubcats[0] = "Trust";
-        safetySubcats[1] = "Spam";
-        safetySubcats[2] = "Harassment";
-        safetySubcats[3] = "Moderation";
-        safetySubcats[4] = "Privacy";
-        safetySubcats[5] = "Disclosure";
-        safetySubcats[6] = "Risk";
-        safetySubcats[7] = "Policy";
-        registry.addCategory("Trust", "trust", safetySubcats);
-
         string[] memory opinionSubcats = new string[](8);
         opinionSubcats[0] = "Taste";
         opinionSubcats[1] = "Usefulness";

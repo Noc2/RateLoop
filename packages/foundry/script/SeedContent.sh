@@ -166,7 +166,7 @@ KEYS=(
 # Example Curyo 2 questions always include a context URL. Preview media is optional.
 # Curyo 2 default categoryIds:
 # 1=Products, 2=Places & Travel, 3=Software, 4=Media, 5=Design,
-# 6=AI Answers, 7=Text, 8=Trust, 9=General
+# 6=AI Answers, 7=Text, 8=General
 CONTEXT_URLS=(
   "https://example.com/curyo-refund-policy"
   "https://picsum.photos/seed/curyo-workspace/1200/800.jpg"
@@ -321,8 +321,8 @@ TAGS=(
 # Stable category slugs for each seeded question. The deployed category names/ids may differ
 # between local branches, so resolve IDs from slugs instead of assuming deploy order.
 CATEGORY_SLUGS=(
-  "trust"           # Trust
-  "trust"           # Trust
+  "text"            # Text
+  "media"           # Media
   "ai-answers"      # AI Answers
   "products"        # Products
   "places-travel"   # Places & Travel
@@ -335,7 +335,7 @@ CATEGORY_SLUGS=(
   "media"           # Media
   "places-travel"   # Places & Travel
   "software"        # Software
-  "trust"           # Trust
+  "text"            # Text
   "products"        # Products
   "ai-answers"      # AI Answers
 )

@@ -29,7 +29,6 @@ test.describe("Category filter", () => {
       "Design",
       "AI Answers",
       "Text",
-      "Trust",
       "General",
     ];
 

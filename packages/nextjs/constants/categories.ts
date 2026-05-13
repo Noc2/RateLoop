@@ -61,9 +61,10 @@ const SEEDED_CATEGORY_SUBCATEGORIES: Record<string, readonly string[]> = {
     "Troubleshooting",
     "Examples",
   ],
-  trust: ["Trust", "Spam", "Harassment", "Moderation", "Privacy", "Disclosure", "Risk", "Policy"],
   general: ["Taste", "Usefulness", "Interesting", "Clear", "Fun", "Convincing", "Worthwhile", "Other"],
 };
+
+export const HIDDEN_TOP_LEVEL_CATEGORY_SLUGS = new Set(["trust"]);
 
 /** Default seeded category tags used when an indexer cannot expose on-chain subcategories. */
 export function getSeededCategorySubcategories(slug: string): readonly string[] {

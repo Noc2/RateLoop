@@ -23,6 +23,10 @@ test("unknown categories do not receive seeded fallback tags", () => {
   assert.deepEqual(getSeededCategorySubcategories("custom-category"), []);
 });
 
+test("trust is not a seeded top-level category", () => {
+  assert.deepEqual(getSeededCategorySubcategories("trust"), []);
+});
+
 test("tag serialization helpers keep existing behavior", () => {
   assert.deepEqual(parseTags("alpha, beta,, gamma "), ["alpha", "beta", "gamma"]);
   assert.equal(serializeTags(["alpha", "beta", "gamma"]), "alpha,beta,gamma");
