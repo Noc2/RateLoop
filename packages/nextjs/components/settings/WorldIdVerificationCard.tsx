@@ -24,13 +24,12 @@ import {
 } from "~~/lib/referrals/referralAttribution";
 import { getWorldIdClientConfig } from "~~/lib/world-id/config";
 import { parseWorldIdLegacyProof } from "~~/lib/world-id/onchainProof";
+import { pollWorldIdRequest } from "~~/lib/world-id/requestPolling";
 import { formatWorldIdError, getWorldIdRequestPanelState } from "~~/lib/world-id/verificationUiState";
 import { notification } from "~~/utils/scaffold-eth";
 
 const LREP_DECIMALS = 6;
 const REFERRAL_BONUS_BPS = 5_000n;
-const WORLD_ID_POLL_INTERVAL_MS = 1_000;
-const WORLD_ID_REQUEST_TIMEOUT_MS = 15 * 60_000;
 
 type RpContextResponse = {
   action: string;
@@ -44,60 +43,8 @@ type VerificationState =
   | { status: "verified"; nullifier: string | null; verifiedAt: string }
   | { status: "error"; message: string };
 
-type WorldIdPollRequest = {
-  pollOnce: () => Promise<
-    | { type: "waiting_for_connection" }
-    | { type: "awaiting_confirmation" }
-    | { type: "confirmed"; result?: IDKitResult }
-    | { type: "failed"; error?: string }
-  >;
-};
-
 function getWorldIdSignal(address: string | undefined) {
   return address?.toLowerCase() ?? "";
-}
-
-function sleep(ms: number, signal: AbortSignal) {
-  return new Promise<void>(resolve => {
-    const timeoutId = window.setTimeout(resolve, ms);
-    signal.addEventListener(
-      "abort",
-      () => {
-        window.clearTimeout(timeoutId);
-        resolve();
-      },
-      { once: true },
-    );
-  });
-}
-
-async function pollWorldIdRequest(
-  request: WorldIdPollRequest,
-  options: {
-    signal: AbortSignal;
-    onAwaitingConfirmation: (value: boolean) => void;
-  },
-) {
-  const startedAt = Date.now();
-
-  while (Date.now() - startedAt <= WORLD_ID_REQUEST_TIMEOUT_MS) {
-    if (options.signal.aborted) {
-      return { success: false as const, error: "cancelled" };
-    }
-
-    const status = await request.pollOnce();
-    if (status.type === "confirmed" && status.result) {
-      return { success: true as const, result: status.result };
-    }
-    if (status.type === "failed") {
-      return { success: false as const, error: status.error ?? "generic_error" };
-    }
-
-    options.onAwaitingConfirmation(status.type === "awaiting_confirmation");
-    await sleep(WORLD_ID_POLL_INTERVAL_MS, options.signal);
-  }
-
-  return { success: false as const, error: "timeout" };
 }
 
 function formatLrepAmount(amount: bigint | undefined) {
