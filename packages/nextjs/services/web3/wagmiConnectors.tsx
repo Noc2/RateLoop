@@ -55,7 +55,7 @@ export const wagmiConnectors = () => {
         executionMode: getThirdwebWalletExecutionMode(preferredChainId),
         metadata: {
           icon: CURYO_THIRDWEB_ICON,
-          name: "Curyo Wallet",
+          name: "RateLoop Wallet",
         },
         onConnect: wallet => {
           setConnectedThirdwebConnectorWallet(wallet);

@@ -68,7 +68,7 @@ function FreeTransactionAllowanceText({ className }: { className?: string }) {
         {remaining}/{limit}
       </span>
       <span className="text-base-content/60">free tx</span>
-      <InfoTooltip text={`Curyo Wallet gets ${limit} sponsored app transactions after ID verification.`} />
+      <InfoTooltip text={`RateLoop Wallet gets ${limit} sponsored app transactions after ID verification.`} />
     </div>
   );
 }
