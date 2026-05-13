@@ -33,6 +33,10 @@ interface StakeSelectorProps {
 const PRESET_AMOUNTS = [0, 1, 2.5, 5, 10];
 const MIN_PREDICTED_UP_PERCENT = 0;
 const MAX_PREDICTED_UP_PERCENT = 100;
+const YOUR_VOTE_TOOLTIP =
+  "Thumbs up means you expect the rating should move higher than the current/reference score; thumbs down means lower. Consider the current rating before choosing.";
+const EXPECTED_CROWD_TOOLTIP =
+  "Your forecast of what share of revealed raters will vote up this round. Rewards score this forecast against peer signals; it is separate from your thumbs up/down vote.";
 
 function clampRating(value: number) {
   if (!Number.isFinite(value)) return 5;
@@ -202,7 +206,10 @@ export function StakeSelector({
             <div className="mb-5 px-1 pt-1">
               <div className="flex items-end justify-between gap-3">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-base-content/55">Your vote</p>
+                  <p className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-base-content/55">
+                    <span>Your vote</span>
+                    <InfoTooltip text={YOUR_VOTE_TOOLTIP} position="bottom" />
+                  </p>
                   <p className={`mt-1 text-3xl font-bold ${signalToneClassName}`}>{signalTone}</p>
                 </div>
                 <div className="text-right">
@@ -237,15 +244,15 @@ export function StakeSelector({
               <div className="mt-5 border-t border-base-content/10 pt-4">
                 <div className="flex items-end justify-between gap-3">
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-base-content/55">
-                      Expected crowd
+                    <p className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-base-content/55">
+                      <span>Expected crowd</span>
+                      <InfoTooltip text={EXPECTED_CROWD_TOOLTIP} position="bottom" />
                     </p>
                     <p className="mt-1 text-2xl font-bold tabular-nums text-base-content">
                       {predictedUpPercent.toFixed(0)}
                       <span className="ml-1 text-sm font-semibold text-base-content/55">% up</span>
                     </p>
                   </div>
-                  <InfoTooltip text="Rewards score this predicted up-share against peer signals." />
                 </div>
                 <label htmlFor={crowdPredictionInputId} className="sr-only">
                   Expected crowd up share
