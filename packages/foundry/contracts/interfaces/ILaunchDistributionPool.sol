@@ -11,6 +11,7 @@ interface ILaunchDistributionPool {
         uint64 minLaunchCreditStake;
         uint16 maxDistinctRatersPerVerifiedAnchor;
         uint16 maxUnverifiedCreditsPerRound;
+        uint16 unverifiedEarnedRaterCapBps;
         uint32 minAnchorCredentialAgeSeconds;
         uint32 eligibilityRatingCount;
         uint32 rewardingRatingCount;

@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
-import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import { MerkleProof } from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
-import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
-import { RaterRegistry } from "./RaterRegistry.sol";
-import { ILaunchDistributionPool } from "./interfaces/ILaunchDistributionPool.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {MerkleProof} from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
+import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
+import {RaterRegistry} from "./RaterRegistry.sol";
+import {ILaunchDistributionPool} from "./interfaces/ILaunchDistributionPool.sol";
 
 /// @title LaunchDistributionPool
 /// @notice Holds the 64M LREP launch allocation and releases it through earned, verified, and legacy paths.
@@ -38,6 +38,8 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
     uint64 public constant MIN_LAUNCH_CREDIT_STAKE = 1e6;
     uint16 public constant MAX_DISTINCT_RATERS_PER_VERIFIED_ANCHOR = 25;
     uint16 public constant MAX_UNVERIFIED_LAUNCH_CREDITS_PER_ROUND = 3;
+    uint16 public constant DEFAULT_UNVERIFIED_EARNED_RATER_CAP_BPS = 10_000;
+    uint16 public constant BPS_DENOMINATOR = 10_000;
     uint32 public constant MIN_ANCHOR_CREDENTIAL_AGE_SECONDS = 7 days;
 
     uint256 public constant REFERRAL_BONUS_BPS = 5_000;
@@ -59,9 +61,14 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
     mapping(address => bool) public legacyClaimed;
     mapping(address => uint32) public qualifyingRatingCount;
     mapping(address => uint32) public rewardedRatingCount;
+    mapping(address => bool) public raterLaunchCapAssigned;
     mapping(address => uint256) public raterLaunchCap;
+    mapping(address => uint256) public raterFullLaunchCap;
+    mapping(address => bool) public raterFullLaunchCapUnlocked;
+    mapping(address => bytes32) public raterLaunchCapNullifier;
     mapping(address => uint256) public raterLaunchPaid;
     mapping(bytes32 => bool) public verifiedCredentialClaimed;
+    mapping(bytes32 => address) public launchFullCapNullifierRater;
     mapping(address => bool) public verifiedBonusClaimedByAccount;
     mapping(address => uint256) public referralEarnings;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) public earnedRewardCreditRecorded;
@@ -83,6 +90,12 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
     event LaunchRewardPolicyUpdated(LaunchRewardPolicy policy);
     event LegacyClaimed(address indexed account, uint256 amount);
     event RaterLaunchCapAssigned(address indexed rater, uint256 cap, uint256 cohortIndex);
+    event RaterLaunchCapStatusUpdated(
+        address indexed rater, uint256 activeCap, uint256 fullCap, uint16 activeCapBps, bool fullCapUnlocked
+    );
+    event RaterLaunchCapUnlocked(
+        address indexed rater, bytes32 indexed nullifierHash, uint256 previousCap, uint256 fullCap, uint256 catchUpPaid
+    );
     event EarnedRaterRewardCreditRecorded(
         address indexed rater,
         uint256 indexed contentId,
@@ -218,6 +231,29 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
         paidAmount += referralBonus;
     }
 
+    function unlockFullEarnedRaterCap(address rater) external nonReentrant returns (uint256 catchUpPaid) {
+        if (rater == address(0)) revert InvalidAddress();
+        if (!raterLaunchCapAssigned[rater]) revert InvalidAmount();
+        if (raterFullLaunchCapUnlocked[rater]) return 0;
+
+        bytes32 nullifierHash = _activeHumanNullifier(rater);
+        if (nullifierHash == bytes32(0)) revert NotVerified();
+
+        address claimedBy = launchFullCapNullifierRater[nullifierHash];
+        if (claimedBy != address(0) && claimedBy != rater) revert AlreadyClaimed();
+
+        uint256 previousCap = raterLaunchCap[rater];
+        uint256 fullCap = raterFullLaunchCap[rater];
+        raterFullLaunchCapUnlocked[rater] = true;
+        raterLaunchCapNullifier[rater] = nullifierHash;
+        launchFullCapNullifierRater[nullifierHash] = rater;
+        raterLaunchCap[rater] = fullCap;
+
+        catchUpPaid = _payLaunchCapCatchUp(rater, fullCap, launchRewardPolicy);
+        emit RaterLaunchCapStatusUpdated(rater, fullCap, fullCap, BPS_DENOMINATOR, true);
+        emit RaterLaunchCapUnlocked(rater, nullifierHash, previousCap, fullCap, catchUpPaid);
+    }
+
     function recordEarnedRaterReward(
         address rater,
         uint256 contentId,
@@ -292,9 +328,9 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
         if (!payoutEligible) return 0;
 
         uint256 cap = raterLaunchCap[rater];
-        if (cap == 0) {
-            cap = currentRaterLaunchCap();
-            raterLaunchCap[rater] = cap;
+        if (!raterLaunchCapAssigned[rater]) {
+            uint256 fullCap = currentRaterLaunchCap();
+            (cap,) = _assignLaunchCap(rater, fullCap, policy);
             eligibleRaterCount += 1;
             emit RaterLaunchCapAssigned(rater, cap, eligibleRaterCount);
         }
@@ -359,6 +395,75 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
 
     function remainingVerifiedReferralPool() external view returns (uint256) {
         return _remainingVerifiedReferralPool();
+    }
+
+    function _assignLaunchCap(address rater, uint256 fullCap, LaunchRewardPolicy memory policy)
+        internal
+        returns (uint256 activeCap, bool fullCapUnlocked)
+    {
+        bytes32 nullifierHash = _activeHumanNullifier(rater);
+        if (nullifierHash != bytes32(0)) {
+            address claimedBy = launchFullCapNullifierRater[nullifierHash];
+            if (claimedBy == address(0) || claimedBy == rater) {
+                fullCapUnlocked = true;
+                raterFullLaunchCapUnlocked[rater] = true;
+                raterLaunchCapNullifier[rater] = nullifierHash;
+                launchFullCapNullifierRater[nullifierHash] = rater;
+            }
+        }
+
+        activeCap =
+            fullCapUnlocked ? fullCap : (fullCap * uint256(policy.unverifiedEarnedRaterCapBps)) / BPS_DENOMINATOR;
+        raterLaunchCapAssigned[rater] = true;
+        raterFullLaunchCap[rater] = fullCap;
+        raterLaunchCap[rater] = activeCap;
+        emit RaterLaunchCapStatusUpdated(rater, activeCap, fullCap, _launchCapBps(activeCap, fullCap), fullCapUnlocked);
+    }
+
+    function _payLaunchCapCatchUp(address rater, uint256 fullCap, LaunchRewardPolicy memory policy)
+        internal
+        returns (uint256 catchUpPaid)
+    {
+        uint32 targetRewardedCount = _earnedRewardSlotCount(qualifyingRatingCount[rater], policy);
+        uint32 currentRewardedCount = rewardedRatingCount[rater];
+        if (targetRewardedCount < currentRewardedCount) {
+            targetRewardedCount = currentRewardedCount;
+        }
+        if (targetRewardedCount == 0) return 0;
+
+        uint256 targetPaid = targetRewardedCount == policy.rewardingRatingCount
+            ? fullCap
+            : (fullCap * uint256(targetRewardedCount)) / policy.rewardingRatingCount;
+        if (targetPaid <= raterLaunchPaid[rater]) {
+            rewardedRatingCount[rater] = targetRewardedCount;
+            return 0;
+        }
+
+        catchUpPaid = targetPaid - raterLaunchPaid[rater];
+        uint256 remaining = _remainingEarnedRaterPool();
+        if (catchUpPaid > remaining) catchUpPaid = remaining;
+        if (catchUpPaid == 0) return 0;
+
+        rewardedRatingCount[rater] = targetRewardedCount;
+        raterLaunchPaid[rater] += catchUpPaid;
+        earnedRaterDistributed += catchUpPaid;
+        _pay(rater, catchUpPaid);
+    }
+
+    function _earnedRewardSlotCount(uint32 qualifyingCount, LaunchRewardPolicy memory policy)
+        internal
+        pure
+        returns (uint32)
+    {
+        if (qualifyingCount < policy.eligibilityRatingCount) return 0;
+        uint32 slots = qualifyingCount - policy.eligibilityRatingCount + 1;
+        return slots > policy.rewardingRatingCount ? policy.rewardingRatingCount : slots;
+    }
+
+    function _launchCapBps(uint256 activeCap, uint256 fullCap) internal pure returns (uint16) {
+        if (fullCap == 0) return 0;
+        uint256 capBps = (activeCap * BPS_DENOMINATOR) / fullCap;
+        return capBps > BPS_DENOMINATOR ? BPS_DENOMINATOR : uint16(capBps);
     }
 
     function _claimReferralBonus(address referrer, address referee, uint256 baseBonus)
@@ -455,8 +560,18 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
     }
 
     function _hasActiveHumanCredential(address rater) internal view returns (bool) {
+        return _activeHumanNullifier(rater) != bytes32(0);
+    }
+
+    function _activeHumanNullifier(address rater) internal view returns (bytes32) {
         RaterRegistry.HumanCredential memory credential = raterRegistry.getHumanCredential(rater);
-        return credential.verified && !credential.revoked && credential.expiresAt > block.timestamp;
+        if (
+            credential.verified && !credential.revoked && credential.expiresAt > block.timestamp
+                && credential.nullifierHash != bytes32(0)
+        ) {
+            return credential.nullifierHash;
+        }
+        return bytes32(0);
     }
 
     function _isDuplicateAnchor(bytes32[] calldata verifiedAnchorIds, uint256 index) internal pure returns (bool) {
@@ -477,6 +592,7 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
             minLaunchCreditStake: MIN_LAUNCH_CREDIT_STAKE,
             maxDistinctRatersPerVerifiedAnchor: MAX_DISTINCT_RATERS_PER_VERIFIED_ANCHOR,
             maxUnverifiedCreditsPerRound: MAX_UNVERIFIED_LAUNCH_CREDITS_PER_ROUND,
+            unverifiedEarnedRaterCapBps: DEFAULT_UNVERIFIED_EARNED_RATER_CAP_BPS,
             minAnchorCredentialAgeSeconds: MIN_ANCHOR_CREDENTIAL_AGE_SECONDS,
             eligibilityRatingCount: ELIGIBILITY_RATING_COUNT,
             rewardingRatingCount: REWARDING_RATING_COUNT,
@@ -502,6 +618,7 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
                 || policy.maxDistinctRatersPerVerifiedAnchor == 0
                 || policy.maxDistinctRatersPerVerifiedAnchor > MAX_DISTINCT_RATERS_PER_VERIFIED_ANCHOR
                 || policy.maxUnverifiedCreditsPerRound > MAX_UNVERIFIED_LAUNCH_CREDITS_PER_ROUND
+                || policy.unverifiedEarnedRaterCapBps > BPS_DENOMINATOR
                 || policy.minAnchorCredentialAgeSeconds < MIN_ANCHOR_CREDENTIAL_AGE_SECONDS
                 || policy.eligibilityRatingCount < ELIGIBILITY_RATING_COUNT
                 || policy.rewardingRatingCount < REWARDING_RATING_COUNT
