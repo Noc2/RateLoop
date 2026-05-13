@@ -538,8 +538,8 @@ body {
 
 .vote-btn.vote-yes,
 .vote-btn.vote-no {
-  width: 6.5rem;
-  height: 3.75rem;
+  width: 5.25rem;
+  height: 2.5rem;
   border-radius: var(--curyo-radius-control);
 }
 
@@ -625,7 +625,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.55rem;
+  gap: 0.45rem;
   color: var(--curyo-action-content);
   font-size: 1rem;
   font-weight: 700;
