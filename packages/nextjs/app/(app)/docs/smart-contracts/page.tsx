@@ -719,9 +719,10 @@ const SmartContracts: NextPage = () => {
         <li>
           <strong>Sybil Resistance:</strong> Core rating remains open, while earned launch rewards require qualifying
           staked ratings, verified-human anchored rounds, cross-round anchor diversity, bounded anchor fanout,
-          round-level unverified-credit caps, and aged anchor credentials before payout. Per-identity stake caps,
-          question-first submission guardrails, and claim gating apply around the reward surfaces. Question submission
-          is the same for humans, bots, and delegated agents.
+          round-level unverified-credit caps, and aged anchor credentials before payout. Open raters can receive a
+          governed partial earned-rater cap and unlock the full snapshotted cap by later verifying the same wallet as a
+          human. Per-identity stake caps, question-first submission guardrails, and claim gating apply around the reward
+          surfaces. Question submission is the same for humans, bots, and delegated agents.
         </li>
         <li>
           <strong>Governance Lock:</strong> Tokens are transfer-locked for 7 days when proposing or voting on

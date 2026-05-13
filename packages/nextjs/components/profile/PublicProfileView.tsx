@@ -94,12 +94,21 @@ function formatBpsPercent(value: number) {
 
 function formatLaunchEligibility(rewardStatus: PonderRaterParticipationStatusResponse["launchRewards"]) {
   if (rewardStatus.eligible) {
-    return `${rewardStatus.rewardedRatingCount}/${rewardStatus.qualifyingRatingCount} launch rewards paid`;
+    return `${rewardStatus.rewardedRatingCount}/${rewardStatus.qualifyingRatingCount} launch reward slots paid`;
   }
   if (rewardStatus.qualifyingRatingCount > 0) {
     return `${rewardStatus.qualifyingRatingCount} qualifying ratings recorded`;
   }
   return "No launch reward credits recorded yet";
+}
+
+function formatLaunchCapSummary(rewardStatus: PonderRaterParticipationStatusResponse["launchRewards"]) {
+  const activeCap = formatHrepString(rewardStatus.launchCap);
+  const fullCap = formatHrepString(rewardStatus.fullLaunchCap);
+  if (rewardStatus.fullCapUnlocked || rewardStatus.unlockableLaunchCap === "0") {
+    return `${activeCap} LREP cap`;
+  }
+  return `${activeCap} / ${fullCap} LREP cap`;
 }
 
 function formatParticipationLane(lane: PonderRaterParticipationStatusResponse["participationLane"]) {
@@ -1183,11 +1192,14 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
 
                 <div className="rounded-2xl bg-base-content/[0.04] px-4 py-3">
                   <div className="text-sm text-base-content/60">Launch reward progress</div>
-                  <div className="mt-1 text-xl font-semibold">
-                    {rewardStatus.launchRewards.remainingRewardSlots.toLocaleString()} slots left
-                  </div>
+                  <div className="mt-1 text-xl font-semibold">{formatLaunchCapSummary(rewardStatus.launchRewards)}</div>
                   <div className="mt-1 text-sm text-base-content/55">
-                    {formatLaunchEligibility(rewardStatus.launchRewards)}
+                    {rewardStatus.launchRewards.fullCapUnlocked ||
+                    rewardStatus.launchRewards.unlockableLaunchCap === "0"
+                      ? formatLaunchEligibility(rewardStatus.launchRewards)
+                      : `${formatLaunchEligibility(rewardStatus.launchRewards)}; verify to unlock ${formatHrepString(
+                          rewardStatus.launchRewards.unlockableLaunchCap,
+                        )} LREP`}
                   </div>
                 </div>
               </div>

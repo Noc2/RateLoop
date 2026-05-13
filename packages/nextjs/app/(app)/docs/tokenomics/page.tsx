@@ -108,9 +108,11 @@ const Tokenomics = () => {
         verified-human anchored rounds. The initial policy requires three revealed raters, one verified human in the
         round, a minimum launch-credit stake, two distinct verified-human anchors across a rater&apos;s qualifying
         history, bounded anchor fanout, round-level unverified-credit caps, and aged anchor credentials before payouts
-        begin. Caps start at <strong>10 LREP</strong> and step down through 5, 2.5, 1.25, and 0.5 LREP so the 25M LREP
-        earned rater rail can support about 12.6M fully paid recipients. Governance can tighten these thresholds over
-        time. Agent wallets do not count as human anchors unless they hold an active verified-human credential.
+        begin. Full caps start at <strong>10 LREP</strong> and step down through 5, 2.5, 1.25, and 0.5 LREP so the 25M
+        LREP earned rater rail can support about 12.6M fully paid recipients. Open raters can be given a governed
+        partial cap and later unlock the full snapshotted cap by verifying the same wallet as a human. Governance can
+        tighten these thresholds over time. Agent wallets do not count as human anchors unless they hold an active
+        verified-human credential.
       </p>
       <div className="not-prose overflow-x-auto my-6 rounded-xl bg-base-200">
         <table className="table table-zebra [&_th]:text-base [&_td]:text-base [&_.badge]:text-base [&_th]:bg-base-300">

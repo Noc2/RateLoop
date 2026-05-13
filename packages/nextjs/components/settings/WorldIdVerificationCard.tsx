@@ -96,7 +96,28 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
     args: [walletAddress],
     query: { enabled: Boolean(walletAddress) },
   });
+  const { data: raterLaunchCap, refetch: refetchRaterLaunchCap } = useScaffoldReadContract({
+    contractName: "LaunchDistributionPool",
+    functionName: "raterLaunchCap",
+    args: [walletAddress],
+    query: { enabled: Boolean(walletAddress) },
+  });
+  const { data: raterFullLaunchCap, refetch: refetchRaterFullLaunchCap } = useScaffoldReadContract({
+    contractName: "LaunchDistributionPool",
+    functionName: "raterFullLaunchCap",
+    args: [walletAddress],
+    query: { enabled: Boolean(walletAddress) },
+  });
+  const { data: raterFullLaunchCapUnlocked, refetch: refetchRaterFullLaunchCapUnlocked } = useScaffoldReadContract({
+    contractName: "LaunchDistributionPool",
+    functionName: "raterFullLaunchCapUnlocked",
+    args: [walletAddress],
+    query: { enabled: Boolean(walletAddress) },
+  });
   const { writeContractAsync: claimVerifiedBonus, isPending: isClaimPending } = useScaffoldWriteContract({
+    contractName: "LaunchDistributionPool",
+  });
+  const { writeContractAsync: unlockFullEarnedRaterCap, isPending: isUnlockPending } = useScaffoldWriteContract({
     contractName: "LaunchDistributionPool",
   });
   const { writeContractAsync: attestWorldIdCredential, isMining: isAttestingCredential } = useScaffoldWriteContract({
@@ -121,6 +142,19 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
     currentVerifiedBonus !== undefined ? (currentVerifiedBonus * REFERRAL_BONUS_BPS) / 10_000n : undefined;
   const isCredentialActive = hasActiveCredential === true;
   const isVerifiedBonusClaimed = verifiedBonusClaimed === true;
+  const activeEarnedRaterCap = typeof raterLaunchCap === "bigint" ? raterLaunchCap : undefined;
+  const fullEarnedRaterCap = typeof raterFullLaunchCap === "bigint" ? raterFullLaunchCap : undefined;
+  const launchCapUnlockAmount =
+    fullEarnedRaterCap !== undefined && activeEarnedRaterCap !== undefined && fullEarnedRaterCap > activeEarnedRaterCap
+      ? fullEarnedRaterCap - activeEarnedRaterCap
+      : 0n;
+  const canUnlockFullEarnedRaterCap = Boolean(
+    walletAddress &&
+      isCredentialActive &&
+      raterFullLaunchCapUnlocked === false &&
+      launchCapUnlockAmount > 0n &&
+      !isUnlockPending,
+  );
   const hasInvalidReferral = referralInputState.status === "invalid" || referralInputState.status === "self";
   const referralHint = referralInputState.message
     ? referralInputState.message
@@ -190,8 +224,19 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
       refetchVerifiedBonusClaimed(),
       refetchCurrentVerifiedBonus(),
       refetchReferralEarnings(),
+      refetchRaterLaunchCap(),
+      refetchRaterFullLaunchCap(),
+      refetchRaterFullLaunchCapUnlocked(),
     ]);
-  }, [refetchCurrentVerifiedBonus, refetchHasActiveCredential, refetchReferralEarnings, refetchVerifiedBonusClaimed]);
+  }, [
+    refetchCurrentVerifiedBonus,
+    refetchHasActiveCredential,
+    refetchRaterFullLaunchCap,
+    refetchRaterFullLaunchCapUnlocked,
+    refetchRaterLaunchCap,
+    refetchReferralEarnings,
+    refetchVerifiedBonusClaimed,
+  ]);
 
   const handleReferralBlur = useCallback(() => {
     if (referralInputState.canUseReferrer) {
@@ -287,6 +332,29 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
       // The transaction wrapper already renders the parsed contract error.
     }
   }, [canClaimVerifiedBonus, claimReferrer, claimVerifiedBonus, refreshLaunchReads]);
+
+  const handleUnlockFullEarnedRaterCap = useCallback(async () => {
+    if (!canUnlockFullEarnedRaterCap || !walletAddress) {
+      return;
+    }
+
+    try {
+      await unlockFullEarnedRaterCap(
+        {
+          functionName: "unlockFullEarnedRaterCap",
+          args: [walletAddress],
+        },
+        {
+          action: "unlock full earned-rater cap",
+          suppressSuccessToast: true,
+        },
+      );
+      notification.success("Full earned-rater launch cap unlocked.");
+      await refreshLaunchReads();
+    } catch {
+      // The transaction wrapper already renders the parsed contract error.
+    }
+  }, [canUnlockFullEarnedRaterCap, refreshLaunchReads, unlockFullEarnedRaterCap, walletAddress]);
 
   const handleSuccess = useCallback(
     async (result: IDKitResult) => {
@@ -494,6 +562,35 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
           </button>
           {claimDisabledReason ? (
             <p className="text-sm leading-relaxed text-base-content/55">{claimDisabledReason}</p>
+          ) : null}
+          {launchCapUnlockAmount > 0n || raterFullLaunchCapUnlocked === true ? (
+            <div className="rounded-xl border border-base-content/10 p-3 text-sm text-base-content/65">
+              <div className="flex items-center justify-between gap-3">
+                <span>Earned-rater cap</span>
+                <span className="font-semibold text-base-content">
+                  {raterFullLaunchCapUnlocked === true
+                    ? "Full cap active"
+                    : `${formatLrepAmount(launchCapUnlockAmount)} LREP unlockable`}
+                </span>
+              </div>
+              {raterFullLaunchCapUnlocked === true ? null : (
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm mt-3 w-full"
+                  disabled={!canUnlockFullEarnedRaterCap}
+                  onClick={() => void handleUnlockFullEarnedRaterCap()}
+                >
+                  {isUnlockPending ? (
+                    <>
+                      <span className="loading loading-spinner loading-xs" />
+                      Unlocking...
+                    </>
+                  ) : (
+                    "Unlock full earned cap"
+                  )}
+                </button>
+              )}
+            </div>
           ) : null}
         </div>
       </div>

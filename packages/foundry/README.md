@@ -59,7 +59,7 @@ contracts/
 ├── VoterIdNFT.sol               # Optional soulbound credential for verified raters
 ├── LoopReputation.sol           # LREP token (governance and reputation)
 ├── ParticipationPool.sol        # Optional governance-funded participation rewards
-├── LaunchDistributionPool.sol   # Anchor-gated earned rater, verification, referral, and legacy launch rewards
+├── LaunchDistributionPool.sol   # Anchor-gated earned rater rewards with verified full-cap unlocks, plus verification, referral, and legacy rewards
 ├── QuestionRewardPoolEscrow.sol     # Bounty custody and claims
 ├── governance/                  # Governor contracts
 ├── interfaces/                  # Contract interfaces

@@ -54,7 +54,7 @@ export const launchDistributionBreakdownRows = [
   [
     "Earned rater rewards",
     "25,000,000 LREP",
-    "Count-based rewards for useful revealed ratings in verified-human anchored rounds",
+    "Count-based rewards for useful revealed ratings in verified-human anchored rounds, with full caps unlockable by later human verification",
   ],
   ["Legacy users", "4,000,000 LREP", "Fixed allocation for the previous-user set"],
 ] as const;

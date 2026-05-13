@@ -24,7 +24,7 @@ Framework-specific hooks and UI components should live in a follow-up package ra
 
 - client config normalization via `createCuryoClient(...)`
 - typed read client for hosted/indexed HTTP routes
-- `read.getRaterParticipationStatus(address)` for participation lane, human credential state, launch reward progress, and the explicit reward policy flags
+- `read.getRaterParticipationStatus(address)` for participation lane, human credential state, active/full launch cap progress, and the explicit reward policy flags
 - vote/frontend helpers in `@rateloop/sdk/vote`
 - wallet-agnostic agent helpers in `@rateloop/sdk/agent` for MCP-compatible asks, non-custodial agent-wallet flows, result parsing, and webhook verification
 
