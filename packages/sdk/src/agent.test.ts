@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createHmac } from "node:crypto";
-import { ROUND_STATE } from "@rateloop/contracts/protocol";
 import {
   buildWebhookVerifier,
   createCuryoAgentClient,
@@ -494,167 +493,39 @@ test("authenticated status, result, and templates use direct agent HTTP endpoint
   assert.equal(templates.templates[0]?.bundleStrategy, "independent");
 });
 
-test("getResult can build a tokenless public result when contentId is known", async () => {
-  const requestedUrls: string[] = [];
+test("getResult uses tokenless public result packages when contentId is known", async () => {
+  let requestedUrl = "";
+  let requestedHeaders: Headers | undefined;
   const agent = createCuryoAgentClient({
     apiBaseUrl: API_BASE_URL,
-    fetchImpl: async (input: URL | RequestInfo) => {
-      const url = String(input);
-      requestedUrls.push(url);
-      if (url.includes("/content/42")) {
-        return jsonResponse({
-          audienceContext: null,
-          content: {
-            categoryId: "5",
-            id: "42",
-            question: "Would this pitch make you want to learn more?",
-            rating: 72,
-            ratingBps: 7200,
-            ratingSettledRounds: 1,
-            status: 1,
-            title: "Pitch interest",
-            totalVotes: 12,
+    fetchImpl: async (input: URL | RequestInfo, init?: RequestInit) => {
+      requestedUrl = String(input);
+      requestedHeaders = new Headers(init?.headers);
+      return jsonResponse({
+        answer: "proceed",
+        answerScopes: {
+          allAnswers: {
+            distribution: {
+              up: { share: 0.7 },
+            },
           },
-          ratings: [],
-          rounds: [
-            {
-              contentId: "42",
-              conservativeRatingBps: 6100,
-              downCount: 2,
-              downPool: "150",
-              id: "round-1",
-              ratingBps: 7200,
-              revealedCount: 12,
-              roundId: "1",
-              settledAt: "2026-04-23T12:00:00.000Z",
-              startTime: "2026-04-23T11:00:00.000Z",
-              state: ROUND_STATE.Settled,
-              totalStake: "500",
-              upCount: 10,
-              upPool: "350",
-              voteCount: 12,
-            },
-          ],
-        });
-      }
-      if (url.includes("/api/feedback?contentId=42")) {
-        return jsonResponse({
-          count: 1,
-          items: [
-            {
-              body: "People liked the value proposition but wanted clearer pricing.",
-              contentId: "42",
-              feedbackType: "concern",
-              id: 1,
-              isPublic: true,
-              roundId: "1",
-              sourceUrl: "https://example.com/pricing-note",
-            },
-          ],
-          publicCount: 1,
-        });
-      }
-      throw new Error(`Unexpected request: ${url}`);
+        },
+        methodology: { templateId: "generic_rating" },
+        publicUrl: "https://curyo.example/rate?content=42",
+        ready: true,
+        recommendedNextAction: "proceed",
+      });
     },
   });
 
-  const result = await agent.getResult({
-    contentId: "42",
-  });
+  const result = await agent.getResult({ contentId: "42" });
 
-  assert.deepEqual(requestedUrls, [
-    "https://curyo.example/content/42",
-    "https://curyo.example/api/feedback?contentId=42",
-  ]);
+  assert.equal(requestedUrl, "https://curyo.example/api/agent/results/by-content/42");
+  assert.equal(requestedHeaders?.get("authorization"), null);
   assert.equal(result.ready, true);
   assert.equal(result.answer, "proceed");
-  assert.equal(result.publicUrl, "https://curyo.example/rate?content=42");
-  assert.equal(result.recommendedNextAction, "proceed_after_addressing_objections");
   assert.equal(result.methodology?.templateId, "generic_rating");
-  assert.equal(result.operation, null);
-  assert.deepEqual(result.sourceUrls, ["https://example.com/pricing-note"]);
-});
-
-test("getResult summarizes tokenless feature acceptance feedback", async () => {
-  const featureSpecHash = "0x383236243362c424465503c886244a54c7b038d76e7aa5e06b0e4c70c61d246b";
-  const agent = createCuryoAgentClient({
-    apiBaseUrl: API_BASE_URL,
-    fetchImpl: async (input: URL | RequestInfo) => {
-      const url = String(input);
-      if (url.includes("/content/77")) {
-        return jsonResponse({
-          audienceContext: null,
-          content: {
-            categoryId: "5",
-            id: "77",
-            question: "Does wallet reconnect work?",
-            rating: 78,
-            ratingBps: 7800,
-            ratingSettledRounds: 1,
-            resultSpecHash: featureSpecHash,
-            status: 1,
-            title: "Wallet reconnect preview",
-            totalVotes: 8,
-          },
-          ratings: [],
-          rounds: [
-            {
-              contentId: "77",
-              conservativeRatingBps: 7000,
-              downCount: 2,
-              downPool: "250",
-              id: "round-7",
-              ratingBps: 7800,
-              revealedCount: 8,
-              roundId: "7",
-              settledAt: "2026-04-23T12:00:00.000Z",
-              state: ROUND_STATE.Settled,
-              totalStake: "1000",
-              upCount: 6,
-              upPool: "750",
-              voteCount: 8,
-            },
-          ],
-        });
-      }
-      if (url.includes("/api/feedback?contentId=77")) {
-        return jsonResponse({
-          count: 2,
-          items: [
-            {
-              body: "Actual result: refresh disconnects MetaMask. Expected: wallet remains connected.",
-              contentId: "77",
-              feedbackType: "bug_report",
-              id: 1,
-              isPublic: true,
-              roundId: "7",
-              sourceUrl: "https://example.com/repro",
-            },
-            {
-              body: "Reproduced on Chrome with MetaMask after following the preview steps.",
-              contentId: "77",
-              feedbackType: "repro_steps",
-              id: 2,
-              isPublic: true,
-              roundId: "7",
-            },
-          ],
-          publicCount: 2,
-        });
-      }
-      throw new Error(`Unexpected request: ${url}`);
-    },
-  });
-
-  const result = await agent.getResult({ contentId: "77" });
-
-  assert.equal(result.answer, "proceed");
-  assert.equal(result.methodology?.templateId, "feature_acceptance_test");
-  assert.equal(result.recommendedNextAction, "proceed_after_addressing_objections");
-  assert.equal(result.majorObjections?.[0]?.type, "bug_report");
-  assert.equal(result.featureTest?.verdict, "works_with_issues");
-  assert.equal(result.featureTest?.reproducibleReportCount, 1);
-  assert.deepEqual(result.sourceUrls, ["https://example.com/repro"]);
+  assert.equal((result.answerScopes as any).allAnswers.distribution.up.share, 0.7);
 });
 
 test("getResult supports tokenless direct operation lookups", async () => {
@@ -682,68 +553,6 @@ test("getResult supports tokenless direct operation lookups", async () => {
   assert.equal(requestedHeaders?.get("authorization"), null);
   assert.equal(result.ready, false);
   assert.equal(result.answer, "pending");
-});
-
-test("getResult treats terminal non-settled tokenless rounds as ready results", async () => {
-  const agent = createCuryoAgentClient({
-    apiBaseUrl: API_BASE_URL,
-    fetchImpl: async (input: URL | RequestInfo) => {
-      const url = String(input);
-      if (url.includes("/content/42")) {
-        return jsonResponse({
-          audienceContext: null,
-          content: {
-            categoryId: "5",
-            id: "42",
-            question: "Would this pitch make you want to learn more?",
-            rating: 50,
-            ratingBps: 5000,
-            ratingSettledRounds: 1,
-            status: 1,
-            title: "Pitch interest",
-            totalVotes: 8,
-          },
-          ratings: [],
-          rounds: [
-            {
-              contentId: "42",
-              conservativeRatingBps: 5000,
-              downCount: 4,
-              downPool: "500",
-              id: "round-2",
-              ratingBps: 5000,
-              revealedCount: 8,
-              roundId: "2",
-              settledAt: "2026-04-23T12:00:00.000Z",
-              startTime: "2026-04-23T11:00:00.000Z",
-              state: ROUND_STATE.Tied,
-              totalStake: "1000",
-              upCount: 4,
-              upPool: "500",
-              voteCount: 8,
-            },
-          ],
-        });
-      }
-      if (url.includes("/api/feedback?contentId=42")) {
-        return jsonResponse({
-          count: 0,
-          items: [],
-          publicCount: 0,
-        });
-      }
-      throw new Error(`Unexpected request: ${url}`);
-    },
-  });
-
-  const result = await agent.getResult({
-    contentId: "42",
-  });
-
-  assert.equal(result.ready, true);
-  assert.equal(result.answer, "inconclusive");
-  assert.equal(result.recommendedNextAction, "collect_more_votes");
-  assert.ok(!result.limitations?.some(item => item.includes("not final")));
 });
 
 test("parseAgentResult unwraps MCP tool content and preserves top-level fields", () => {
