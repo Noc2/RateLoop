@@ -1,8 +1,9 @@
-import { ChartBarIcon } from "@heroicons/react/24/outline";
+import { HandThumbDownIcon, HandThumbUpIcon } from "@heroicons/react/24/outline";
 import { TooltipAnchor } from "~~/components/ui/InfoTooltip";
 import type { TooltipPosition } from "~~/lib/ui/tooltipPosition";
 
-interface CuryoPredictButtonProps {
+interface CuryoVoteButtonProps {
+  direction: "up" | "down";
   disabled?: boolean;
   onClick: () => void;
   size?: "default" | "sm";
@@ -10,16 +11,32 @@ interface CuryoPredictButtonProps {
   tooltipPosition?: TooltipPosition;
 }
 
-export function CuryoPredictButton({
+interface VoteDirectionIconProps {
+  direction: "up" | "down";
+  className?: string;
+}
+
+export function VoteDirectionIcon({
+  direction,
+  className = "h-[22px] w-[22px] drop-shadow-sm",
+}: VoteDirectionIconProps) {
+  const Icon = direction === "up" ? HandThumbUpIcon : HandThumbDownIcon;
+
+  return <Icon className={className} aria-hidden />;
+}
+
+export function CuryoVoteButton({
+  direction,
   disabled = false,
   onClick,
   size = "default",
   attention = false,
   tooltipPosition = "bottom",
-}: CuryoPredictButtonProps) {
+}: CuryoVoteButtonProps) {
+  const isUp = direction === "up";
+  const label = isUp ? "Raise score" : "Lower score";
   const isSmall = size === "sm";
-  const label = "Predict final rating";
-  const iconClassName = isSmall ? "h-5 w-5" : "h-[20px] w-[20px]";
+  const iconClassName = isSmall ? "h-5 w-5 drop-shadow-sm" : "h-[22px] w-[22px] drop-shadow-sm";
 
   return (
     <TooltipAnchor text={label} position={tooltipPosition}>
@@ -27,14 +44,16 @@ export function CuryoPredictButton({
         type="button"
         onClick={onClick}
         disabled={disabled}
-        aria-label={label}
+        aria-label={isUp ? "Vote up and raise the score" : "Vote down and lower the score"}
         title={label}
-        className={`btn border-none action-orange-control ${
-          isSmall ? "h-11 min-h-11 w-11 rounded-full p-0" : "min-h-11 rounded-full px-4 text-sm"
-        } ${attention ? "ring-2 ring-primary/70 ring-offset-2 ring-offset-base-100" : ""}`}
+        className={`vote-btn ${isSmall ? "vote-btn-sm" : ""} ${isUp ? "vote-yes" : "vote-no"} ${
+          attention ? "vote-btn-attention" : ""
+        }`}
       >
-        <ChartBarIcon className={iconClassName} aria-hidden />
-        {!isSmall ? <span className="font-semibold">Predict</span> : null}
+        <span className="vote-bg" />
+        <span className="vote-symbol">
+          <VoteDirectionIcon direction={direction} className={iconClassName} />
+        </span>
       </button>
     </TooltipAnchor>
   );

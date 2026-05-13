@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { getDirectWagmiConnector } from "~~/services/web3/wagmiConnectFallback";
 import {
   findInjectedProvider,
   isCoinbaseInjectedProvider,
@@ -46,4 +47,22 @@ test("wallet-specific predicates stay aligned with dedicated connector routing",
   assert.equal(isCoinbaseInjectedProvider({ isMetaMask: true }), false);
   assert.equal(isRainbowInjectedProvider({ isRainbow: true }), true);
   assert.equal(isRainbowInjectedProvider({ isCoinbaseWallet: true }), false);
+});
+
+test("getDirectWagmiConnector prefers dedicated injected wallet connectors", () => {
+  const connectors = [{ id: "injected" }, { id: "com.coinbase.wallet" }, { id: "io.metamask" }] as any;
+
+  assert.equal(getDirectWagmiConnector(connectors)?.id, "io.metamask");
+});
+
+test("getDirectWagmiConnector falls back to generic injected connector", () => {
+  const connectors = [{ id: "in-app-wallet" }, { id: "injected" }] as any;
+
+  assert.equal(getDirectWagmiConnector(connectors)?.id, "injected");
+});
+
+test("getDirectWagmiConnector ignores thirdweb in-app connector when it is the only option", () => {
+  const connectors = [{ id: "in-app-wallet" }] as any;
+
+  assert.equal(getDirectWagmiConnector(connectors), undefined);
 });

@@ -78,7 +78,7 @@ export function NotificationSettingsPanel({
   address?: string;
   onStatusChange?: () => void;
 }) {
-  const { openConnectModal, isConnecting, thirdwebEnabled } = useCuryoConnectModal();
+  const { openConnectModal, isConnecting } = useCuryoConnectModal();
   const { preferences, isSaving, isLoading, updatePreference } = useNotificationPreferences(address, {
     autoRead: true,
   });
@@ -253,7 +253,7 @@ export function NotificationSettingsPanel({
           <button
             type="button"
             className="btn btn-primary px-6"
-            disabled={!thirdwebEnabled || isConnecting}
+            disabled={isConnecting}
             aria-busy={isConnecting || undefined}
             onClick={() => {
               void openConnectModal();

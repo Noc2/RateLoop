@@ -13,7 +13,7 @@ type HumanSignInButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "chi
 export function HumanSignInButton({ children, className, disabled, ...props }: HumanSignInButtonProps) {
   const router = useRouter();
   const { address } = useAccount();
-  const { openConnectModal, isConnecting, thirdwebEnabled } = useCuryoConnectModal();
+  const { openConnectModal, isConnecting } = useCuryoConnectModal();
   const [shouldRouteAfterSignIn, setShouldRouteAfterSignIn] = useState(false);
 
   const routeSignedInRater = useCallback(() => {
@@ -51,7 +51,7 @@ export function HumanSignInButton({ children, className, disabled, ...props }: H
       {...props}
       type="button"
       className={className}
-      disabled={disabled || (!address && !thirdwebEnabled) || isConnecting || shouldRouteAfterSignIn}
+      disabled={disabled || isConnecting || shouldRouteAfterSignIn}
       aria-busy={isConnecting || shouldRouteAfterSignIn || undefined}
       onClick={() => {
         void handleClick();

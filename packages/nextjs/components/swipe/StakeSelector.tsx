@@ -20,6 +20,7 @@ interface StakeSelectorProps {
   contentId: bigint;
   categoryId?: bigint;
   currentRating?: number;
+  initialIsUp?: boolean;
   openRound?: OpenRoundFallbackData | null;
   roundConfig?: VotingConfig | null;
   cooldownSecondsRemaining?: number;
@@ -58,6 +59,7 @@ export function StakeSelector({
   contentId,
   categoryId,
   currentRating,
+  initialIsUp,
   openRound,
   roundConfig,
   cooldownSecondsRemaining = 0,
@@ -70,7 +72,7 @@ export function StakeSelector({
   const crowdPredictionInputId = useId();
   const contentLabel = useContentLabel(categoryId);
   const [amount, setAmount] = useState(0);
-  const [isUp, setIsUp] = useState(() => normalizeStakeSelectorRating(currentRating) >= 5);
+  const [isUp, setIsUp] = useState(() => initialIsUp ?? normalizeStakeSelectorRating(currentRating) >= 5);
   const [predictedUpPercent, setPredictedUpPercent] = useState(() => getInitialPredictedUpPercent(currentRating));
   const { address } = useAccount();
   const voterIdData = useVoterIdNFT(address);
@@ -103,14 +105,14 @@ export function StakeSelector({
 
   useEffect(() => {
     if (!isOpen) return;
-    setIsUp(normalizeStakeSelectorRating(currentRating) >= 5);
+    setIsUp(initialIsUp ?? normalizeStakeSelectorRating(currentRating) >= 5);
     setPredictedUpPercent(getInitialPredictedUpPercent(currentRating));
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape" && !isConfirming) onCancel();
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [currentRating, isConfirming, isOpen, onCancel]);
+  }, [currentRating, initialIsUp, isConfirming, isOpen, onCancel]);
 
   const symbol = tokenSymbol ?? "LREP";
   const { calculateBonus, hasActiveParticipationRewards } = useParticipationRate();

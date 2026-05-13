@@ -3,8 +3,7 @@
 import { type ReactNode, useEffect, useState } from "react";
 import { ChatBubbleLeftRightIcon, ShareIcon } from "@heroicons/react/24/outline";
 import { FundQuestionModal } from "~~/components/reward-pool/FundQuestionModal";
-import { CuryoConnectButton } from "~~/components/scaffold-eth";
-import { CuryoPredictButton } from "~~/components/shared/CuryoVoteButton";
+import { CuryoVoteButton } from "~~/components/shared/CuryoVoteButton";
 import { MoreToggleButton } from "~~/components/shared/MoreToggleButton";
 import { RatingOrb } from "~~/components/shared/RatingOrb";
 import { RoundProgress } from "~~/components/shared/RoundProgress";
@@ -24,7 +23,7 @@ interface VotingQuestionCardProps {
   categoryId: bigint;
   questionTitle?: string;
   currentRating: number;
-  onVote: () => void;
+  onVote: (isUp: boolean) => void;
   isCommitting: boolean;
   address?: string;
   error?: string | null;
@@ -673,10 +672,21 @@ export function VotingQuestionCard({
                   {compact && !centerStatusContent ? (
                     <div className="grid w-full items-center" style={compactDockControlsGridStyle}>
                       <div className="col-start-2 justify-self-center">{shareDockButton}</div>
-                      <div className="col-start-4 col-end-7 justify-self-center">
-                        <CuryoPredictButton
+                      <div className="col-start-4 justify-self-center">
+                        <CuryoVoteButton
+                          direction="up"
                           size="sm"
-                          onClick={onVote}
+                          onClick={() => onVote(true)}
+                          disabled={dockVoteDisabled}
+                          attention={isAttentionActive && !dockVoteDisabled}
+                          tooltipPosition="top"
+                        />
+                      </div>
+                      <div className="col-start-6 justify-self-center">
+                        <CuryoVoteButton
+                          direction="down"
+                          size="sm"
+                          onClick={() => onVote(false)}
                           disabled={dockVoteDisabled}
                           attention={isAttentionActive && !dockVoteDisabled}
                           tooltipPosition="top"
@@ -687,9 +697,10 @@ export function VotingQuestionCard({
                   ) : !centerStatusContent ? (
                     <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-end gap-3">
                       <div className="justify-self-start">
-                        <CuryoPredictButton
+                        <CuryoVoteButton
+                          direction="up"
                           size="sm"
-                          onClick={onVote}
+                          onClick={() => onVote(true)}
                           disabled={dockVoteDisabled}
                           attention={isAttentionActive && !dockVoteDisabled}
                           tooltipPosition="top"
@@ -703,7 +714,16 @@ export function VotingQuestionCard({
                           className={dockMoreClassName}
                         />
                       </div>
-                      <div className="justify-self-end">{feedbackDockButton}</div>
+                      <div className="justify-self-end">
+                        <CuryoVoteButton
+                          direction="down"
+                          size="sm"
+                          onClick={() => onVote(false)}
+                          disabled={dockVoteDisabled}
+                          attention={isAttentionActive && !dockVoteDisabled}
+                          tooltipPosition="top"
+                        />
+                      </div>
                     </div>
                   ) : compact ? (
                     <div className="grid w-full items-center" style={compactDockControlsGridStyle}>
@@ -789,8 +809,15 @@ export function VotingQuestionCard({
             ) : null}
             {!(address && hasMyVote) && !centerStatusContent && isSignalVariant ? (
               <div className="mt-3 flex items-center justify-center gap-3">
-                <CuryoPredictButton
-                  onClick={onVote}
+                <CuryoVoteButton
+                  direction="up"
+                  onClick={() => onVote(true)}
+                  disabled={voteActionDisabled}
+                  attention={isAttentionActive && !voteActionDisabled}
+                />
+                <CuryoVoteButton
+                  direction="down"
+                  onClick={() => onVote(false)}
                   disabled={voteActionDisabled}
                   attention={isAttentionActive && !voteActionDisabled}
                 />
@@ -805,15 +832,18 @@ export function VotingQuestionCard({
               {/* Prediction action - centered below the rating stack */}
               {!(address && hasMyVote) && !centerStatusContent && !isSignalVariant && !isDockVariant && (
                 <div className="flex shrink-0 items-center justify-center gap-2 lg:gap-3">
-                  {address ? (
-                    <CuryoPredictButton
-                      onClick={onVote}
-                      disabled={voteActionDisabled}
-                      attention={isAttentionActive && !voteActionDisabled}
-                    />
-                  ) : (
-                    <CuryoConnectButton />
-                  )}
+                  <CuryoVoteButton
+                    direction="up"
+                    onClick={() => onVote(true)}
+                    disabled={voteActionDisabled}
+                    attention={isAttentionActive && !voteActionDisabled}
+                  />
+                  <CuryoVoteButton
+                    direction="down"
+                    onClick={() => onVote(false)}
+                    disabled={voteActionDisabled}
+                    attention={isAttentionActive && !voteActionDisabled}
+                  />
                 </div>
               )}
             </div>
