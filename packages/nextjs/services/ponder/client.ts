@@ -936,8 +936,12 @@ export interface PonderRaterParticipationStatusResponse {
     distinctVerifiedAnchorCount: number;
     distinctAnchorRoundCount: number;
     launchCap: string;
+    fullLaunchCap: string;
+    capBps: number;
+    fullCapUnlocked: boolean;
     launchPaid: string;
     remainingLaunchCap: string;
+    unlockableLaunchCap: string;
     remainingRewardSlots: number;
     cohortIndex: number | null;
     latestCreditedAt: string | null;

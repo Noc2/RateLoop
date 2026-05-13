@@ -22,6 +22,32 @@ export const LaunchDistributionPoolAbi = [
   },
   {
     "type": "function",
+    "name": "BPS_DENOMINATOR",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint16",
+        "internalType": "uint16"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "DEFAULT_UNVERIFIED_EARNED_RATER_CAP_BPS",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint16",
+        "internalType": "uint16"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "EARNED_RATER_POOL_AMOUNT",
     "inputs": [],
     "outputs": [
@@ -425,6 +451,25 @@ export const LaunchDistributionPoolAbi = [
   },
   {
     "type": "function",
+    "name": "launchFullCapNullifierRater",
+    "inputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "launchRewardPolicy",
     "inputs": [],
     "outputs": [
@@ -465,6 +510,11 @@ export const LaunchDistributionPoolAbi = [
       },
       {
         "name": "maxUnverifiedCreditsPerRound",
+        "type": "uint16",
+        "internalType": "uint16"
+      },
+      {
+        "name": "unverifiedEarnedRaterCapBps",
         "type": "uint16",
         "internalType": "uint16"
       },
@@ -658,6 +708,44 @@ export const LaunchDistributionPoolAbi = [
   },
   {
     "type": "function",
+    "name": "raterFullLaunchCap",
+    "inputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "raterFullLaunchCapUnlocked",
+    "inputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "raterLaunchCap",
     "inputs": [
       {
@@ -671,6 +759,44 @@ export const LaunchDistributionPoolAbi = [
         "name": "",
         "type": "uint256",
         "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "raterLaunchCapAssigned",
+    "inputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "raterLaunchCapNullifier",
+    "inputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
       }
     ],
     "stateMutability": "view"
@@ -979,6 +1105,11 @@ export const LaunchDistributionPoolAbi = [
             "internalType": "uint16"
           },
           {
+            "name": "unverifiedEarnedRaterCapBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
             "name": "minAnchorCredentialAgeSeconds",
             "type": "uint32",
             "internalType": "uint32"
@@ -1041,6 +1172,25 @@ export const LaunchDistributionPoolAbi = [
       }
     ],
     "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "unlockFullEarnedRaterCap",
+    "inputs": [
+      {
+        "name": "rater",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "catchUpPaid",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
     "stateMutability": "nonpayable"
   },
   {
@@ -1385,6 +1535,11 @@ export const LaunchDistributionPoolAbi = [
             "internalType": "uint16"
           },
           {
+            "name": "unverifiedEarnedRaterCapBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
             "name": "minAnchorCredentialAgeSeconds",
             "type": "uint32",
             "internalType": "uint32"
@@ -1510,6 +1665,80 @@ export const LaunchDistributionPoolAbi = [
       },
       {
         "name": "cohortIndex",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "RaterLaunchCapStatusUpdated",
+    "inputs": [
+      {
+        "name": "rater",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "activeCap",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "fullCap",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "activeCapBps",
+        "type": "uint16",
+        "indexed": false,
+        "internalType": "uint16"
+      },
+      {
+        "name": "fullCapUnlocked",
+        "type": "bool",
+        "indexed": false,
+        "internalType": "bool"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "RaterLaunchCapUnlocked",
+    "inputs": [
+      {
+        "name": "rater",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "nullifierHash",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "previousCap",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "fullCap",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "catchUpPaid",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"

@@ -481,10 +481,23 @@ export function registerDataRoutes(app: ApiApp) {
       minDistinctAnchorRounds: launchPolicy?.minDistinctAnchorRounds ?? 2,
       eligibilityRatingCount: launchPolicy?.eligibilityRatingCount ?? 5,
       rewardingRatingCount: launchPolicy?.rewardingRatingCount ?? 10,
+      unverifiedEarnedRaterCapBps:
+        launchPolicy?.unverifiedEarnedRaterCapBps ?? 10_000,
       requireNoPendingCleanup: launchPolicy?.requireNoPendingCleanup ?? true,
     };
     const launchPaid = launchProgress?.launchPaid ?? 0n;
     const launchCap = launchProgress?.launchCap ?? 0n;
+    const fullLaunchCap =
+      launchProgress && launchProgress.fullLaunchCap > 0n
+        ? launchProgress.fullLaunchCap
+        : launchCap;
+    const capBps =
+      launchProgress && launchProgress.capBps > 0
+        ? launchProgress.capBps
+        : fullLaunchCap > 0n
+          ? Number((launchCap * 10_000n) / fullLaunchCap)
+          : 0;
+    const fullCapUnlocked = launchProgress?.fullCapUnlocked ?? false;
     const launchRewardedCount = launchProgress?.rewardedRatingCount ?? 0;
     const launchEligible = launchProgress?.payoutEligible ?? false;
 
@@ -537,8 +550,15 @@ export function registerDataRoutes(app: ApiApp) {
         distinctAnchorRoundCount:
           launchProgress?.distinctAnchorRoundCount ?? 0,
         launchCap,
+        fullLaunchCap,
+        capBps,
+        fullCapUnlocked,
         launchPaid,
         remainingLaunchCap: launchCap > launchPaid ? launchCap - launchPaid : 0n,
+        unlockableLaunchCap:
+          !fullCapUnlocked && fullLaunchCap > launchCap
+            ? fullLaunchCap - launchCap
+            : 0n,
         remainingRewardSlots: Math.max(
           currentLaunchPolicy.rewardingRatingCount - launchRewardedCount,
           0,

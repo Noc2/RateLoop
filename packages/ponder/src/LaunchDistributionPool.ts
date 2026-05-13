@@ -18,6 +18,10 @@ function buildLaunchProgressDefaults(rater: `0x${string}`, timestamp: bigint) {
     distinctAnchorRoundCount: 0,
     payoutEligible: false,
     launchCap: 0n,
+    fullLaunchCap: 0n,
+    capBps: 0,
+    fullCapUnlocked: false,
+    capUnlockNullifierHash: null,
     launchPaid: 0n,
     cohortIndex: null,
     lastQualifiedContentId: null,
@@ -127,6 +131,7 @@ ponder.on("LaunchDistributionPool:LaunchRewardPolicyUpdated", async ({ event, co
       minDistinctAnchorRounds: Number(policy.minDistinctAnchorRounds),
       eligibilityRatingCount: Number(policy.eligibilityRatingCount),
       rewardingRatingCount: Number(policy.rewardingRatingCount),
+      unverifiedEarnedRaterCapBps: Number(policy.unverifiedEarnedRaterCapBps),
       requireNoPendingCleanup: policy.requireNoPendingCleanup,
       updatedAt: event.block.timestamp,
     })
@@ -138,6 +143,7 @@ ponder.on("LaunchDistributionPool:LaunchRewardPolicyUpdated", async ({ event, co
       minDistinctAnchorRounds: Number(policy.minDistinctAnchorRounds),
       eligibilityRatingCount: Number(policy.eligibilityRatingCount),
       rewardingRatingCount: Number(policy.rewardingRatingCount),
+      unverifiedEarnedRaterCapBps: Number(policy.unverifiedEarnedRaterCapBps),
       requireNoPendingCleanup: policy.requireNoPendingCleanup,
       updatedAt: event.block.timestamp,
     });
@@ -159,6 +165,74 @@ ponder.on("LaunchDistributionPool:RaterLaunchCapAssigned", async ({ event, conte
       cohortIndex,
       updatedAt: event.block.timestamp,
     });
+});
+
+ponder.on("LaunchDistributionPool:RaterLaunchCapStatusUpdated", async ({ event, context }) => {
+  const { rater, activeCap, fullCap, activeCapBps, fullCapUnlocked } = event.args;
+
+  await context.db
+    .insert(launchRaterRewardProgress)
+    .values({
+      ...buildLaunchProgressDefaults(rater, event.block.timestamp),
+      launchCap: activeCap,
+      fullLaunchCap: fullCap,
+      capBps: Number(activeCapBps),
+      fullCapUnlocked,
+      updatedAt: event.block.timestamp,
+    })
+    .onConflictDoUpdate({
+      launchCap: activeCap,
+      fullLaunchCap: fullCap,
+      capBps: Number(activeCapBps),
+      fullCapUnlocked,
+      updatedAt: event.block.timestamp,
+    });
+});
+
+ponder.on("LaunchDistributionPool:RaterLaunchCapUnlocked", async ({ event, context }) => {
+  const { rater, nullifierHash, fullCap, catchUpPaid } = event.args;
+
+  if (catchUpPaid > 0n) {
+    await context.db
+      .insert(rewardClaim)
+      .values({
+        id: `${event.transaction.hash}-${event.log.logIndex}`,
+        contentId: 0n,
+        roundId: 0n,
+        source: "launch",
+        voter: rater,
+        stakeReturned: 0n,
+        hrepReward: catchUpPaid,
+        claimedAt: event.block.timestamp,
+      })
+      .onConflictDoNothing();
+
+    await creditLaunchReward(context, rater, catchUpPaid);
+  }
+
+  await context.db
+    .insert(launchRaterRewardProgress)
+    .values({
+      ...buildLaunchProgressDefaults(rater, event.block.timestamp),
+      launchCap: fullCap,
+      fullLaunchCap: fullCap,
+      capBps: 10_000,
+      fullCapUnlocked: true,
+      capUnlockNullifierHash: nullifierHash,
+      launchPaid: catchUpPaid,
+      latestPaidAt: catchUpPaid > 0n ? event.block.timestamp : null,
+      updatedAt: event.block.timestamp,
+    })
+    .onConflictDoUpdate((row: any) => ({
+      launchCap: fullCap,
+      fullLaunchCap: fullCap,
+      capBps: 10_000,
+      fullCapUnlocked: true,
+      capUnlockNullifierHash: nullifierHash,
+      launchPaid: row.launchPaid + catchUpPaid,
+      latestPaidAt: catchUpPaid > 0n ? event.block.timestamp : row.latestPaidAt,
+      updatedAt: event.block.timestamp,
+    }));
 });
 
 ponder.on("LaunchDistributionPool:EarnedRaterRewardCreditRecorded", async ({ event, context }) => {

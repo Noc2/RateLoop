@@ -111,6 +111,11 @@ function mockPonderModules<T>(result: T) {
       lastScoreBps: "launchRaterRewardProgress.lastScoreBps",
       latestCreditedAt: "launchRaterRewardProgress.latestCreditedAt",
       latestPaidAt: "launchRaterRewardProgress.latestPaidAt",
+      capBps: "launchRaterRewardProgress.capBps",
+      capUnlockNullifierHash:
+        "launchRaterRewardProgress.capUnlockNullifierHash",
+      fullCapUnlocked: "launchRaterRewardProgress.fullCapUnlocked",
+      fullLaunchCap: "launchRaterRewardProgress.fullLaunchCap",
       launchCap: "launchRaterRewardProgress.launchCap",
       launchPaid: "launchRaterRewardProgress.launchPaid",
       payoutEligible: "launchRaterRewardProgress.payoutEligible",
@@ -134,6 +139,8 @@ function mockPonderModules<T>(result: T) {
       requireNoPendingCleanup:
         "launchRewardPolicyState.requireNoPendingCleanup",
       rewardingRatingCount: "launchRewardPolicyState.rewardingRatingCount",
+      unverifiedEarnedRaterCapBps:
+        "launchRewardPolicyState.unverifiedEarnedRaterCapBps",
       updatedAt: "launchRewardPolicyState.updatedAt",
     },
     raterFollow: {
@@ -1078,6 +1085,10 @@ describe("registerDataRoutes", () => {
         distinctAnchorRoundCount: 6,
         payoutEligible: true,
         launchCap: 100n,
+        fullLaunchCap: 400n,
+        capBps: 2_500,
+        fullCapUnlocked: false,
+        capUnlockNullifierHash: null,
         launchPaid: 25n,
         cohortIndex: 2,
         latestCreditedAt: 3_200n,
@@ -1089,6 +1100,7 @@ describe("registerDataRoutes", () => {
         minDistinctAnchorRounds: 2,
         eligibilityRatingCount: 5,
         rewardingRatingCount: 10,
+        unverifiedEarnedRaterCapBps: 2_500,
         requireNoPendingCleanup: true,
       },
     ]);
@@ -1121,10 +1133,15 @@ describe("registerDataRoutes", () => {
         qualifyingRatingCount: 6,
         rewardedRatingCount: 4,
         remainingLaunchCap: "75",
+        fullLaunchCap: "400",
+        capBps: 2_500,
+        fullCapUnlocked: false,
+        unlockableLaunchCap: "300",
         remainingRewardSlots: 6,
         policy: {
           minQualifyingScoreBps: 7_000,
           minDistinctVerifiedAnchors: 2,
+          unverifiedEarnedRaterCapBps: 2_500,
         },
       },
       participationPolicy: {
@@ -1159,6 +1176,10 @@ describe("registerDataRoutes", () => {
         distinctAnchorRoundCount: 1,
         payoutEligible: false,
         launchCap: 50n,
+        fullLaunchCap: 50n,
+        capBps: 10_000,
+        fullCapUnlocked: true,
+        capUnlockNullifierHash: zeroHash,
         launchPaid: 0n,
         cohortIndex: null,
         latestCreditedAt: 5_000n,
@@ -1170,6 +1191,7 @@ describe("registerDataRoutes", () => {
         minDistinctAnchorRounds: 2,
         eligibilityRatingCount: 5,
         rewardingRatingCount: 10,
+        unverifiedEarnedRaterCapBps: 10_000,
         requireNoPendingCleanup: true,
       },
     ]);
@@ -1199,6 +1221,10 @@ describe("registerDataRoutes", () => {
       launchRewards: {
         eligible: false,
         remainingLaunchCap: "50",
+        fullLaunchCap: "50",
+        capBps: 10_000,
+        fullCapUnlocked: true,
+        unlockableLaunchCap: "0",
         remainingRewardSlots: 10,
       },
       participationPolicy: {

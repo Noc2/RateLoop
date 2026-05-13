@@ -243,8 +243,12 @@ test("getRaterParticipationStatus requests the typed participation-status route"
             distinctVerifiedAnchorCount: 2,
             distinctAnchorRoundCount: 3,
             launchCap: "100",
+            fullLaunchCap: "400",
+            capBps: 2500,
+            fullCapUnlocked: false,
             launchPaid: "25",
             remainingLaunchCap: "75",
+            unlockableLaunchCap: "300",
             remainingRewardSlots: 6,
             cohortIndex: 1,
             latestCreditedAt: "1000",
@@ -281,6 +285,7 @@ test("getRaterParticipationStatus requests the typed participation-status route"
   assert.equal(response.humanCredential.status, "verified");
   assert.equal(response.trust.activeInboundAttestationCount, 4);
   assert.equal(response.launchRewards.remainingLaunchCap, "75");
+  assert.equal(response.launchRewards.unlockableLaunchCap, "300");
   assert.equal(response.participationPolicy.baseRewardWeightBps, 10000);
 });
 

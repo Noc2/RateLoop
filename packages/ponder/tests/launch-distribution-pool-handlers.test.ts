@@ -228,6 +228,7 @@ describe("LaunchDistributionPool ponder handlers", () => {
             minDistinctAnchorRounds: 2,
             eligibilityRatingCount: 5,
             rewardingRatingCount: 10,
+            unverifiedEarnedRaterCapBps: 10_000,
             requireNoPendingCleanup: true,
           },
         },
@@ -264,11 +265,13 @@ describe("LaunchDistributionPool ponder handlers", () => {
         minDistinctAnchorRounds: 2,
         eligibilityRatingCount: 5,
         rewardingRatingCount: 10,
+        unverifiedEarnedRaterCapBps: 10_000,
         requireNoPendingCleanup: true,
         updatedAt: 700n,
       },
       update: expect.objectContaining({
         minQualifyingScoreBps: 7_000,
+        unverifiedEarnedRaterCapBps: 10_000,
         updatedAt: 700n,
       }),
     });
@@ -286,6 +289,102 @@ describe("LaunchDistributionPool ponder handlers", () => {
         cohortIndex: 2,
         updatedAt: 710n,
       }),
+    });
+  });
+
+  it("indexes launch cap status and full-cap unlock catch-up", async () => {
+    const { db, finds, inserts } = createDb({
+      address: "0x0000000000000000000000000000000000001234",
+    });
+    const registeredHandlers = await loadHandlers();
+    const statusHandler = registeredHandlers.get(
+      "LaunchDistributionPool:RaterLaunchCapStatusUpdated",
+    );
+    const unlockHandler = registeredHandlers.get(
+      "LaunchDistributionPool:RaterLaunchCapUnlocked",
+    );
+
+    expect(statusHandler).toBeDefined();
+    expect(unlockHandler).toBeDefined();
+
+    await statusHandler!({
+      event: {
+        args: {
+          rater: "0x0000000000000000000000000000000000001234",
+          activeCap: 2_500_000n,
+          fullCap: 10_000_000n,
+          activeCapBps: 2_500,
+          fullCapUnlocked: false,
+        },
+        block: { timestamp: 720n },
+        transaction: { hash: `0x${"ee".repeat(32)}` },
+        log: { logIndex: 4 },
+      },
+      context: { db },
+    });
+
+    await unlockHandler!({
+      event: {
+        args: {
+          rater: "0x0000000000000000000000000000000000001234",
+          nullifierHash: `0x${"33".repeat(32)}`,
+          previousCap: 2_500_000n,
+          fullCap: 10_000_000n,
+          catchUpPaid: 750_000n,
+        },
+        block: { timestamp: 730n },
+        transaction: { hash: `0x${"ff".repeat(32)}` },
+        log: { logIndex: 5 },
+      },
+      context: { db },
+    });
+
+    expect(finds).toContainEqual({
+      table: "profile",
+      key: { address: "0x0000000000000000000000000000000000001234" },
+    });
+    expect(inserts).toContainEqual({
+      table: "launchRaterRewardProgress",
+      mode: "update",
+      values: expect.objectContaining({
+        rater: "0x0000000000000000000000000000000000001234",
+        launchCap: 2_500_000n,
+        fullLaunchCap: 10_000_000n,
+        capBps: 2_500,
+        fullCapUnlocked: false,
+        updatedAt: 720n,
+      }),
+      update: expect.objectContaining({
+        launchCap: 2_500_000n,
+        fullLaunchCap: 10_000_000n,
+        capBps: 2_500,
+        fullCapUnlocked: false,
+      }),
+    });
+    expect(inserts).toContainEqual({
+      table: "rewardClaim",
+      mode: "nothing",
+      values: expect.objectContaining({
+        id: `0x${"ff".repeat(32)}-5`,
+        source: "launch",
+        voter: "0x0000000000000000000000000000000000001234",
+        hrepReward: 750_000n,
+        claimedAt: 730n,
+      }),
+    });
+    expect(inserts).toContainEqual({
+      table: "launchRaterRewardProgress",
+      mode: "update",
+      values: expect.objectContaining({
+        launchCap: 10_000_000n,
+        fullLaunchCap: 10_000_000n,
+        capBps: 10_000,
+        fullCapUnlocked: true,
+        capUnlockNullifierHash: `0x${"33".repeat(32)}`,
+        launchPaid: 750_000n,
+        latestPaidAt: 730n,
+      }),
+      update: expect.any(Function),
     });
   });
 });
