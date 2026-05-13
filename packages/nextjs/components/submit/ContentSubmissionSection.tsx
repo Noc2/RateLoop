@@ -1896,7 +1896,7 @@ export function ContentSubmissionSection() {
     );
 
   const prohibitedContentNotice = (
-    <div className="rounded-lg bg-error/10 p-4">
+    <div className="surface-card-nested rounded-lg p-4">
       <p className="mb-2 text-base font-medium text-base-content">Prohibited Content</p>
       <p className="text-base text-base-content/70">
         Do not submit questions with illegal or harmful content. This includes but is not limited to: child exploitation
@@ -1972,7 +1972,7 @@ export function ContentSubmissionSection() {
         </span>
       </div>
 
-      <div className="rounded-lg border border-primary/20 bg-primary/10 px-3 py-2">
+      <div className="surface-card-nested rounded-lg px-3 py-2">
         <p className="text-sm font-medium text-base-content">Mandatory spam protection</p>
         <p className="mt-1 text-sm text-base-content/70">
           Every question needs a funded bounty before submission. This raises the cost of low-quality asks and rewards
@@ -2188,7 +2188,7 @@ export function ContentSubmissionSection() {
       </div>
 
       <div className="space-y-3 pt-2">
-        <div className="rounded-lg border border-base-300/70 bg-base-100/40 p-3">
+        <div className="surface-card-nested rounded-lg p-3">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-1.5">
               <button
@@ -2386,7 +2386,7 @@ export function ContentSubmissionSection() {
           </p>
         </div>
 
-        <div className="rounded-lg bg-primary/10 p-3">
+        <div className="surface-card-nested rounded-lg p-3">
           <p className="flex items-center gap-1.5 text-sm font-medium uppercase text-primary/90">
             {minimumClaimEstimateLabel}
             <InfoTooltip text={perPaidCompleterTooltipText} />
@@ -2396,7 +2396,7 @@ export function ContentSubmissionSection() {
           </p>
         </div>
 
-        <div className="rounded-lg bg-base-100/70 p-3">
+        <div className="surface-card-nested rounded-lg p-3">
           <p className="flex items-center gap-1.5 text-sm font-medium uppercase text-base-content/60">
             {voterCapEstimateLabel}
             <InfoTooltip text={voterCapEstimateTooltipText} />
@@ -2406,7 +2406,7 @@ export function ContentSubmissionSection() {
           </p>
         </div>
 
-        <div className="rounded-lg bg-base-100/70 p-3">
+        <div className="surface-card-nested rounded-lg p-3">
           <p className="flex items-center gap-1.5 text-sm font-medium uppercase text-base-content/60">
             Bounty expires
             <InfoTooltip text="Estimated from the selected bounty window and current time. The final timestamp is set when you submit." />
@@ -2415,7 +2415,7 @@ export function ContentSubmissionSection() {
         </div>
       </div>
 
-      <div className="rounded-lg bg-primary/10 p-4">
+      <div className="surface-card-nested rounded-lg p-4">
         <p className="mb-2 text-base font-medium text-primary">Recommendation</p>
         <p className="text-base text-base-content/70">{bountyRecommendation}</p>
       </div>

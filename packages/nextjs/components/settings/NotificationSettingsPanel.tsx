@@ -55,7 +55,7 @@ function NotificationPreferenceToggle({
   onChange: (checked: boolean) => void;
 }) {
   return (
-    <label className="flex items-start justify-between gap-4 rounded-2xl bg-base-300 px-4 py-3">
+    <label className="surface-card-nested flex items-start justify-between gap-4 rounded-2xl px-4 py-3">
       <div>
         <div className="text-base font-medium text-base-content">{label}</div>
         <p className="mt-1 text-sm text-base-content/70">{description}</p>
@@ -277,7 +277,7 @@ export function NotificationSettingsPanel({
             </div>
             <h2 className="mt-3 text-3xl font-semibold text-base-content sm:text-4xl">Notification settings</h2>
           </div>
-          <div className="rounded-2xl bg-base-300 px-4 py-3 text-sm text-base-content/75">
+          <div className="surface-card-nested rounded-2xl px-4 py-3 text-sm text-base-content/75">
             {browserPermission === "granted"
               ? "Browser notifications are enabled."
               : browserPermission === "denied"
@@ -326,7 +326,7 @@ export function NotificationSettingsPanel({
             </div>
             <h2 className="mt-3 text-xl font-semibold text-base-content">Email notifications</h2>
           </div>
-          <div className="rounded-2xl bg-base-300 px-4 py-3 text-sm text-base-content/75">
+          <div className="surface-card-nested rounded-2xl px-4 py-3 text-sm text-base-content/75">
             {!emailSettings.email
               ? "No email configured yet."
               : emailSettings.verified

@@ -943,11 +943,11 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
           ) : null}
 
           {profileError ? (
-            <div className="mt-4 rounded-2xl bg-error/10 px-4 py-3 text-base text-error">{profileError}</div>
+            <div className="mt-4 surface-card-nested rounded-2xl px-4 py-3 text-base text-error">{profileError}</div>
           ) : null}
 
           {ownProfile && isEditing ? (
-            <div className="mt-6 rounded-2xl bg-base-content/[0.04] px-5 py-4">
+            <div className="mt-6 surface-card-nested rounded-2xl px-5 py-4">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <AudienceContextHeading />
@@ -1109,7 +1109,7 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
               </div>
             </div>
           ) : hasCurrentSelfReport ? (
-            <div className="mt-6 rounded-2xl bg-base-content/[0.04] px-5 py-4">
+            <div className="mt-6 surface-card-nested rounded-2xl px-5 py-4">
               <AudienceContextHeading />
               <dl className="mt-4 grid gap-x-8 divide-y divide-base-content/10 md:grid-cols-2 md:divide-y-0">
                 {currentSelfReportGroups.map(group => (
@@ -1150,7 +1150,7 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
               <span>Loading public reputation context...</span>
             </div>
           ) : rewardStatusQuery.error ? (
-            <div className="mt-6 rounded-2xl bg-error/10 px-4 py-3 text-sm text-error">
+            <div className="mt-6 surface-card-nested rounded-2xl px-4 py-3 text-sm text-error">
               {rewardStatusQuery.error instanceof Error
                 ? rewardStatusQuery.error.message
                 : "Failed to load reputation context."}
@@ -1158,7 +1158,7 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
           ) : rewardStatus ? (
             <>
               <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                <div className="rounded-2xl bg-base-content/[0.04] px-4 py-3">
+                <div className="surface-card-nested rounded-2xl px-4 py-3">
                   <div className="text-sm text-base-content/60">Participation lane</div>
                   <div className="mt-1 text-xl font-semibold">
                     {formatParticipationLane(rewardStatus.participationLane)}
@@ -1168,13 +1168,13 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
                   </div>
                 </div>
 
-                <div className="rounded-2xl bg-base-content/[0.04] px-4 py-3">
+                <div className="surface-card-nested rounded-2xl px-4 py-3">
                   <div className="text-sm text-base-content/60">Verified human</div>
                   <div className="mt-1 text-xl font-semibold capitalize">{rewardStatus.humanCredential.status}</div>
                   <div className="mt-1 text-sm text-base-content/55">Counts as a launch anchor when active</div>
                 </div>
 
-                <div className="rounded-2xl bg-base-content/[0.04] px-4 py-3">
+                <div className="surface-card-nested rounded-2xl px-4 py-3">
                   <div className="text-sm text-base-content/60">Public follows</div>
                   <div className="mt-1 text-xl font-semibold">
                     {social.followerCount.toLocaleString()} / {social.followingCount.toLocaleString()}
@@ -1182,7 +1182,7 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
                   <div className="mt-1 text-sm text-base-content/55">Followers / following</div>
                 </div>
 
-                <div className="rounded-2xl bg-base-content/[0.04] px-4 py-3">
+                <div className="surface-card-nested rounded-2xl px-4 py-3">
                   <div className="text-sm text-base-content/60">Trust attestations</div>
                   <div className="mt-1 text-xl font-semibold">
                     {rewardStatus.trust.activeInboundAttestationCount.toLocaleString()}
@@ -1190,7 +1190,7 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
                   <div className="mt-1 text-sm text-base-content/55">Active inbound attestations</div>
                 </div>
 
-                <div className="rounded-2xl bg-base-content/[0.04] px-4 py-3">
+                <div className="surface-card-nested rounded-2xl px-4 py-3">
                   <div className="text-sm text-base-content/60">Launch reward progress</div>
                   <div className="mt-1 text-xl font-semibold">{formatLaunchCapSummary(rewardStatus.launchRewards)}</div>
                   <div className="mt-1 text-sm text-base-content/55">
@@ -1205,7 +1205,7 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
               </div>
 
               <div className="mt-6 grid gap-3 lg:grid-cols-2">
-                <div className="rounded-2xl border border-base-content/10 px-4 py-3 text-sm text-base-content/70">
+                <div className="surface-card-nested rounded-2xl px-4 py-3 text-sm text-base-content/70">
                   <div className="font-medium text-base-content/85">
                     Verified human {rewardStatus.humanCredential.status}
                   </div>
@@ -1214,7 +1214,7 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-base-content/10 px-4 py-3 text-sm text-base-content/70">
+                <div className="surface-card-nested rounded-2xl px-4 py-3 text-sm text-base-content/70">
                   <div className="font-medium text-base-content/85">
                     {rewardStatus.trust.activeSeed ? "Active trust seed" : "No active trust seed"}
                   </div>
@@ -1267,13 +1267,13 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
                   </div>
 
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="rounded-2xl bg-base-content/[0.05] px-4 py-3">
+                    <div className="surface-card-nested rounded-2xl px-4 py-3">
                       <div className="text-base text-base-content/60">Stake won</div>
                       <div className="mt-1 text-xl font-semibold text-success">
                         {formatHrepString(stats.totalStakeWon)} LREP
                       </div>
                     </div>
-                    <div className="rounded-2xl bg-base-content/[0.05] px-4 py-3">
+                    <div className="surface-card-nested rounded-2xl px-4 py-3">
                       <div className="text-base text-base-content/60">Stake lost</div>
                       <div className="mt-1 text-xl font-semibold text-error">
                         {formatHrepString(stats.totalStakeLost)} LREP
@@ -1286,7 +1286,7 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
               <CategoryBars categories={categories} />
             </div>
           ) : (
-            <div className="rounded-2xl bg-base-content/[0.04] px-4 py-8 text-center text-base text-base-content/55">
+            <div className="surface-card-nested rounded-2xl px-4 py-8 text-center text-base text-base-content/55">
               No resolved voting history yet.
             </div>
           )}
@@ -1308,7 +1308,7 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
               <span className="loading loading-spinner loading-sm"></span>
             </div>
           ) : recentSubmissions.length === 0 ? (
-            <div className="rounded-2xl bg-base-content/[0.04] px-4 py-8 text-center text-base text-base-content/55">
+            <div className="surface-card-nested rounded-2xl px-4 py-8 text-center text-base text-base-content/55">
               No questions yet.
             </div>
           ) : (
@@ -1320,7 +1320,7 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
                   <Link
                     key={submission.id}
                     href={buildRateContentHref(submission.id)}
-                    className="rounded-2xl border border-base-content/10 bg-base-content/[0.03] p-4 transition-colors hover:bg-base-content/[0.05]"
+                    className="surface-card-nested rounded-2xl p-4 transition-colors hover:bg-base-content/[0.08]"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -1368,7 +1368,7 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
               <span className="loading loading-spinner loading-sm"></span>
             </div>
           ) : recentVotes.length === 0 ? (
-            <div className="rounded-2xl bg-base-content/[0.04] px-4 py-8 text-center text-base text-base-content/55">
+            <div className="surface-card-nested rounded-2xl px-4 py-8 text-center text-base text-base-content/55">
               No recent votes yet.
             </div>
           ) : (

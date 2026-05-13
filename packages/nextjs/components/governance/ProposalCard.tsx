@@ -92,7 +92,7 @@ export const ProposalCard = ({ proposal, isActing = false, onVote, onQueue, onEx
     proposal.state === ProposalState.Queued || (proposal.state === ProposalState.Succeeded && !proposal.needsQueuing);
 
   return (
-    <div className="border border-base-300 rounded-xl p-4 hover:border-primary/30 transition-colors space-y-4">
+    <div className="surface-card-nested rounded-xl p-4 space-y-4">
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1 min-w-0 space-y-2">
           <div className="flex items-center gap-2 flex-wrap">
@@ -135,15 +135,15 @@ export const ProposalCard = ({ proposal, isActing = false, onVote, onQueue, onEx
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div className="bg-base-200 rounded-xl p-3">
+        <div className="surface-card-nested rounded-xl p-3">
           <p className="text-base text-base-content/50">For</p>
           <p className="font-semibold text-success">{formatVotes(proposal.forVotes)}</p>
         </div>
-        <div className="bg-base-200 rounded-xl p-3">
+        <div className="surface-card-nested rounded-xl p-3">
           <p className="text-base text-base-content/50">Against</p>
           <p className="font-semibold text-error">{formatVotes(proposal.againstVotes)}</p>
         </div>
-        <div className="bg-base-200 rounded-xl p-3">
+        <div className="surface-card-nested rounded-xl p-3">
           <p className="text-base text-base-content/50">Abstain</p>
           <p className="font-semibold">{formatVotes(proposal.abstainVotes)}</p>
         </div>

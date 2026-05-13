@@ -44,7 +44,7 @@ export function VoteSignalRail({
         style={{ background: VOTING_SURFACE_BACKGROUND }}
       >
         {isBundleQuestion ? (
-          <div className="mb-3 rounded-md border border-primary/20 bg-primary/10 px-3 py-2 text-sm text-base-content/75">
+          <div className="surface-card-nested mb-3 rounded-lg px-3 py-2 text-sm text-base-content/75">
             <p className="font-semibold text-primary">
               Question {bundleQuestionNumber} of {bundleQuestionCount}
             </p>

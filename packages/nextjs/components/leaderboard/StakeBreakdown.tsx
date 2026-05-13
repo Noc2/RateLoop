@@ -79,7 +79,7 @@ export function StakeBreakdown({
           )}
         </div>
       ) : (
-        <div className="rounded-2xl bg-base-content/[0.04] px-4 py-8 text-center text-base text-base-content/60">
+        <div className="surface-card-nested rounded-2xl px-4 py-8 text-center text-base text-base-content/60">
           No active stakes
         </div>
       )}

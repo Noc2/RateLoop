@@ -6,7 +6,7 @@ interface GasBalanceWarningProps {
 
 export function GasBalanceWarning({ nativeTokenSymbol }: GasBalanceWarningProps) {
   return (
-    <div className="rounded-lg bg-error/10 p-4">
+    <div className="surface-card-nested rounded-lg p-4">
       <p className="mb-2 text-base font-medium text-base-content">Need {nativeTokenSymbol} for gas</p>
       <p className="text-base text-base-content/70">
         Add a little {nativeTokenSymbol} in{" "}

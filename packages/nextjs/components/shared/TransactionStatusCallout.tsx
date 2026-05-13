@@ -14,7 +14,7 @@ export function TransactionStatusCallout({
   variant = "inline",
 }: TransactionStatusCalloutProps) {
   const isInline = variant === "inline";
-  const rootClassName = [isInline ? "rounded-2xl border border-primary/20 bg-primary/10 px-4 py-3" : "", className]
+  const rootClassName = [isInline ? "surface-card-nested rounded-2xl px-4 py-3" : "", className]
     .filter(Boolean)
     .join(" ");
 

@@ -169,7 +169,7 @@ export function ImageAttachmentUploader({ address, disabled = false, onUploaded 
   };
 
   return (
-    <div className="rounded-lg border border-base-300 bg-base-100 p-3">
+    <div className="surface-card-nested rounded-lg p-3">
       <div className="flex flex-wrap items-center gap-3">
         <button
           type="button"

@@ -207,7 +207,7 @@ export function DelegationSection() {
         <InfoTooltip text="Authorize a delegate address (hot wallet) to vote on behalf of your rater credential. Your main key stays safely offline." />
       </h2>
 
-      <div className="rounded-xl border border-base-300 bg-base-200/40 p-4 text-base text-base-content/75 space-y-2">
+      <div className="surface-card-nested rounded-xl p-4 text-base text-base-content/75 space-y-2">
         <p>Keep your rater credential on a cold wallet and use a separate hot wallet for daily actions.</p>
         <p>
           Your delegate can vote and use profile or frontend actions, but only the credential holder can set or remove
@@ -293,7 +293,7 @@ export function DelegationSection() {
       )}
 
       {delegationError && (
-        <div className="bg-error/10 rounded-lg p-4">
+        <div className="surface-card-nested rounded-lg p-4">
           <p className="text-error text-base">{delegationError}</p>
         </div>
       )}
@@ -410,7 +410,7 @@ export function DelegationSection() {
         </div>
 
         {transferError && (
-          <div className="bg-error/10 rounded-lg p-4">
+          <div className="surface-card-nested rounded-lg p-4">
             <p className="text-error text-base">{transferError}</p>
           </div>
         )}

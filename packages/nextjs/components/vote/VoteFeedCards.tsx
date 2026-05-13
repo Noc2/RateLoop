@@ -64,9 +64,7 @@ function formatDeadlineDistance(deadline: bigint) {
 }
 
 function getDeadlineChipClassName(tone: "active" | "ended") {
-  return tone === "active"
-    ? "border-primary/20 bg-primary/10 text-primary"
-    : "border-base-content/10 bg-base-content/[0.05] text-base-content/62";
+  return tone === "active" ? "reward-chip-primary" : "reward-chip-muted";
 }
 
 function getDeadlineTooltipClassName(tone: "active" | "ended") {
@@ -541,7 +539,7 @@ function FeedContentMetaCard({
               {rewardDeadlineChips.map(chip => (
                 <div
                   key={chip.label}
-                  className={`inline-flex max-w-full items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-semibold leading-none ${getDeadlineChipClassName(
+                  className={`reward-chip inline-flex max-w-full items-center gap-1.5 px-3 py-1.5 text-sm font-semibold leading-none ${getDeadlineChipClassName(
                     chip.tone,
                   )}`}
                 >

@@ -552,7 +552,7 @@ export function FrontendRegistration() {
             </div>
           </div>
 
-          <div className="bg-secondary/10 rounded-xl p-4 space-y-3">
+          <div className="surface-card-nested rounded-xl p-4 space-y-3">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="font-medium">Unclaimed Round Fees</p>
@@ -602,7 +602,7 @@ export function FrontendRegistration() {
                     const isClaimingRound = claimingRoundKey === roundKey;
 
                     return (
-                      <div key={roundKey} className="rounded-xl border border-base-300 bg-base-100/40 p-3">
+                      <div key={roundKey} className="surface-card-nested rounded-xl p-3">
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <p className="font-medium line-clamp-2">
@@ -664,7 +664,7 @@ export function FrontendRegistration() {
           </div>
 
           {/* Accumulated Fees */}
-          <div className="bg-primary/10 rounded-xl p-4">
+          <div className="surface-card-nested rounded-xl p-4">
             <p className="font-medium mb-3">Accumulated Fees</p>
             <div className="flex items-center justify-between">
               <div>

@@ -63,7 +63,7 @@ export const GovernanceStats = () => {
       <h2 className={`${surfaceSectionHeadingClassName} mb-4`}>Governance Parameters</h2>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="flex items-start gap-3 p-3 bg-base-200 rounded-xl">
+        <div className="surface-card-nested flex items-start gap-3 rounded-xl p-3">
           <ClockIcon className="w-5 h-5 text-primary shrink-0 mt-0.5" />
           <div>
             <div className="flex items-center gap-1">
@@ -74,7 +74,7 @@ export const GovernanceStats = () => {
           </div>
         </div>
 
-        <div className="flex items-start gap-3 p-3 bg-base-200 rounded-xl">
+        <div className="surface-card-nested flex items-start gap-3 rounded-xl p-3">
           <ClockIcon className="w-5 h-5 text-primary shrink-0 mt-0.5" />
           <div>
             <div className="flex items-center gap-1">
@@ -85,7 +85,7 @@ export const GovernanceStats = () => {
           </div>
         </div>
 
-        <div className="flex items-start gap-3 p-3 bg-base-200 rounded-xl">
+        <div className="surface-card-nested flex items-start gap-3 rounded-xl p-3">
           <ScaleIcon className="w-5 h-5 text-primary shrink-0 mt-0.5" />
           <div>
             <div className="flex items-center gap-1">
@@ -96,7 +96,7 @@ export const GovernanceStats = () => {
           </div>
         </div>
 
-        <div className="flex items-start gap-3 p-3 bg-base-200 rounded-xl">
+        <div className="surface-card-nested flex items-start gap-3 rounded-xl p-3">
           <UserGroupIcon className="w-5 h-5 text-primary shrink-0 mt-0.5" />
           <div>
             <div className="flex items-center gap-1">
@@ -111,7 +111,7 @@ export const GovernanceStats = () => {
           </div>
         </div>
 
-        <div className="flex items-start gap-3 p-3 bg-base-200 rounded-xl sm:col-span-2">
+        <div className="surface-card-nested flex items-start gap-3 rounded-xl p-3 sm:col-span-2">
           <ClockIcon className="w-5 h-5 text-primary shrink-0 mt-0.5" />
           <div>
             <div className="flex items-center gap-1">

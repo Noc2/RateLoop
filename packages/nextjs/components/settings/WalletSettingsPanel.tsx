@@ -120,7 +120,7 @@ export function WalletSettingsPanel({ address }: { address?: string }) {
               tokenEditable={false}
             />
           ) : (
-            <div className="rounded-2xl border border-dashed border-base-300 bg-base-100/50 p-5">
+            <div className="surface-card-nested rounded-2xl p-5">
               <p className="text-sm leading-relaxed text-base-content/65">{unavailableMessage}</p>
             </div>
           )}

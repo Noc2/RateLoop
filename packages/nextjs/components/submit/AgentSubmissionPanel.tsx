@@ -154,9 +154,9 @@ function formatDateTime(value: string | null | undefined) {
 }
 
 function statusClassName(status: AgentPolicyRecord["status"]) {
-  if (status === "active") return "border-success/30 text-success";
-  if (status === "paused") return "border-warning/40 text-warning";
-  return "border-error/40 text-error";
+  if (status === "active") return "text-success";
+  if (status === "paused") return "text-warning";
+  return "text-error";
 }
 
 function shortOperationKey(value: AgentAskSummary["operationKey"]) {
@@ -640,7 +640,7 @@ export function AgentSubmissionPanel() {
     ) : null;
 
   const policyControlsPanel = (
-    <div className="mt-5 rounded-lg border border-base-300 bg-base-100/50 p-4">
+    <div className="mt-5 surface-card-nested rounded-lg p-4">
       <label className="flex cursor-pointer items-start gap-3">
         <input
           type="checkbox"
@@ -661,7 +661,7 @@ export function AgentSubmissionPanel() {
           {agentPolicies.isReadSessionBusy ? <span className="loading loading-spinner loading-sm" /> : policySelector}
           {selectedPolicy ? (
             <span
-              className={`inline-flex rounded-full border px-3 py-1 text-sm ${statusClassName(selectedPolicy.status)}`}
+              className={`reward-chip reward-chip-muted inline-flex px-3 py-1 text-sm ${statusClassName(selectedPolicy.status)}`}
             >
               {selectedPolicy.status}
             </span>
@@ -707,7 +707,7 @@ export function AgentSubmissionPanel() {
       </div>
 
       {generatedToken ? (
-        <div className="mt-4 rounded-lg border border-success/30 bg-success/10 p-3">
+        <div className="surface-card-nested mt-4 rounded-lg p-3">
           <div className="flex items-center justify-between gap-2">
             <span className="text-sm font-semibold text-success">New access token</span>
             <button type="button" className="btn btn-outline btn-xs" onClick={() => void handleCopy(generatedToken)}>
@@ -722,7 +722,7 @@ export function AgentSubmissionPanel() {
       ) : null}
 
       {generatedMcpConfig ? (
-        <div className="mt-3 rounded-lg border border-base-300 bg-base-100/60 p-3">
+        <div className="mt-3 surface-card-nested rounded-lg p-3">
           <div className="flex items-center justify-between gap-2">
             <span className="text-sm font-semibold">Agent MCP config</span>
             <button
@@ -757,10 +757,10 @@ export function AgentSubmissionPanel() {
         <span className="loading loading-spinner loading-sm" />
       ) : recentAsks.length > 0 ? (
         recentAsks.map(ask => (
-          <div key={ask.operationKey} className="rounded-lg border border-base-300 bg-base-100/50 p-3 text-sm">
+          <div key={ask.operationKey} className="surface-card-nested rounded-lg p-3 text-sm">
             <div className="flex items-center justify-between gap-3">
               <span className="font-mono text-xs">{shortOperationKey(ask.operationKey)}</span>
-              <span className="rounded-full border border-base-300 px-2 py-0.5 text-xs">{ask.status}</span>
+              <span className="reward-chip reward-chip-muted px-2 py-0.5 text-xs">{ask.status}</span>
             </div>
             <div className="mt-2 grid gap-1 text-base-content/65">
               <span>{formatSubmissionRewardAmount(ask.paymentAmount, "usdc")}</span>
@@ -829,8 +829,8 @@ export function AgentSubmissionPanel() {
                 New
               </button>
               <span
-                className={`inline-flex w-fit items-center gap-2 rounded-full border px-3 py-1 text-sm font-medium ${
-                  ready ? "border-success/30 text-success" : "border-warning/40 text-warning"
+                className={`reward-chip reward-chip-muted inline-flex w-fit items-center gap-2 px-3 py-1 text-sm font-medium ${
+                  ready ? "text-success" : "text-warning"
                 }`}
               >
                 <WalletIcon className="h-4 w-4" />
@@ -840,21 +840,21 @@ export function AgentSubmissionPanel() {
           </div>
 
           <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <div className="rounded-lg border border-base-300 bg-base-100/70 p-4">
+            <div className="surface-card-nested rounded-lg p-4">
               <div className="flex items-center gap-2 text-sm font-medium text-base-content/60">
                 <CpuChipIcon className="h-4 w-4" />
                 <span>Policy identity</span>
               </div>
               <p className="mt-2 break-words text-lg font-semibold">{selectedPolicy.agentId}</p>
             </div>
-            <div className="rounded-lg border border-base-300 bg-base-100/70 p-4">
+            <div className="surface-card-nested rounded-lg p-4">
               <div className="flex items-center gap-2 text-sm font-medium text-base-content/60">
                 <WalletIcon className="h-4 w-4" />
                 <span>Agent wallet</span>
               </div>
               <p className="mt-2 font-mono text-sm">{shortAddress(selectedPolicy.agentWalletAddress)}</p>
             </div>
-            <div className="rounded-lg border border-base-300 bg-base-100/70 p-4">
+            <div className="surface-card-nested rounded-lg p-4">
               <div className="flex items-center gap-2 text-sm font-medium text-base-content/60">
                 <KeyIcon className="h-4 w-4" />
                 <span>Spend caps</span>
@@ -866,13 +866,13 @@ export function AgentSubmissionPanel() {
                 {formatPolicyCap(selectedPolicy.dailyBudgetAtomic)} daily
               </p>
             </div>
-            <div className="rounded-lg border border-base-300 bg-base-100/70 p-4">
+            <div className="surface-card-nested rounded-lg p-4">
               <div className="flex items-center gap-2 text-sm font-medium text-base-content/60">
                 <CheckCircleIcon className="h-4 w-4" />
                 <span>Status</span>
               </div>
               <span
-                className={`mt-2 inline-flex rounded-full border px-3 py-1 text-sm ${statusClassName(selectedPolicy.status)}`}
+                className={`reward-chip reward-chip-muted mt-2 inline-flex px-3 py-1 text-sm ${statusClassName(selectedPolicy.status)}`}
               >
                 {selectedPolicy.status}
               </span>
@@ -901,7 +901,7 @@ export function AgentSubmissionPanel() {
                 </div>
               </div>
               <div className="mt-4 grid gap-3">
-                <div className="rounded-lg border border-base-300 bg-base-100/50 p-4">
+                <div className="surface-card-nested rounded-lg p-4">
                   <p className="text-sm text-base-content/60">World Chain USDC</p>
                   <p className="mt-1 text-xl font-semibold">{formatUsdc(balance)}</p>
                   <p className="mt-1 text-sm text-base-content/55">
@@ -1048,7 +1048,7 @@ export function AgentSubmissionPanel() {
           </div>
 
           <div className="mt-5 grid gap-3 md:grid-cols-3">
-            <div className="rounded-lg border border-base-300 bg-base-100/50 p-4">
+            <div className="surface-card-nested rounded-lg p-4">
               <h4 className="text-sm font-semibold">User signs in browser</h4>
               <p className="mt-2 text-sm leading-relaxed text-base-content/60">
                 The agent creates a signing link. The user opens RateLoop, connects the wallet, and approves the exact
@@ -1058,7 +1058,7 @@ export function AgentSubmissionPanel() {
                 View handoff API
               </button>
             </div>
-            <div className="rounded-lg border border-base-300 bg-base-100/50 p-4">
+            <div className="surface-card-nested rounded-lg p-4">
               <h4 className="text-sm font-semibold">Local signer CLI</h4>
               <p className="mt-2 text-sm leading-relaxed text-base-content/60">
                 Generate an encrypted local signer, paste its public address here, fund it with World Chain USDC, then
@@ -1069,7 +1069,7 @@ export function AgentSubmissionPanel() {
                 Fund signer
               </button>
             </div>
-            <div className="rounded-lg border border-base-300 bg-base-100/50 p-4">
+            <div className="surface-card-nested rounded-lg p-4">
               <h4 className="text-sm font-semibold">Managed policy token</h4>
               <p className="mt-2 text-sm leading-relaxed text-base-content/60">
                 Save optional spend/category controls and create a bearer token for agents that need callbacks, audit
@@ -1118,7 +1118,7 @@ export function AgentSubmissionPanel() {
               </p>
 
               <div className="mt-4 grid gap-3">
-                <div className="rounded-lg border border-base-300 bg-base-100/50 p-4">
+                <div className="surface-card-nested rounded-lg p-4">
                   <div className="flex items-center gap-2 text-sm font-medium text-base-content/60">
                     <CpuChipIcon className="h-4 w-4" />
                     <span>{usdcDisplayName}</span>
@@ -1130,7 +1130,7 @@ export function AgentSubmissionPanel() {
                 </div>
               </div>
 
-              <div className="mt-4 rounded-lg border border-base-300 bg-base-100/50 p-4">
+              <div className="mt-4 surface-card-nested rounded-lg p-4">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
                   <label className="form-control w-full lg:max-w-xs">
                     <span className="label-text text-sm font-medium">Transfer from connected wallet</span>
@@ -1141,7 +1141,7 @@ export function AgentSubmissionPanel() {
                         onChange={event => setTransferAmount(event.target.value)}
                         inputMode="decimal"
                       />
-                      <span className="join-item inline-flex items-center border border-base-300 bg-base-200 px-3 text-sm text-base-content/70">
+                      <span className="join-item inline-flex items-center bg-base-200 px-3 text-sm text-base-content/70">
                         USDC
                       </span>
                     </div>
@@ -1193,7 +1193,7 @@ export function AgentSubmissionPanel() {
                   tokenEditable={false}
                 />
               ) : (
-                <div className="rounded-lg border border-dashed border-base-300 bg-base-100/50 p-4">
+                <div className="surface-card-nested rounded-lg p-4">
                   <p className="text-sm leading-relaxed text-base-content/65">{fundingUnavailableMessage}</p>
                 </div>
               )}
@@ -1233,7 +1233,7 @@ export function AgentSubmissionPanel() {
             </div>
             {selectedPolicy ? (
               <span
-                className={`inline-flex w-fit rounded-full border px-3 py-1 text-sm ${statusClassName(selectedPolicy.status)}`}
+                className={`reward-chip reward-chip-muted inline-flex w-fit px-3 py-1 text-sm ${statusClassName(selectedPolicy.status)}`}
               >
                 {selectedPolicy.status}
               </span>
@@ -1266,7 +1266,7 @@ export function AgentSubmissionPanel() {
                   inputMode="decimal"
                   placeholder="No cap"
                 />
-                <span className="join-item inline-flex items-center border border-base-300 bg-base-200 px-3 text-sm text-base-content/70">
+                <span className="join-item inline-flex items-center bg-base-200 px-3 text-sm text-base-content/70">
                   USDC
                 </span>
               </div>
@@ -1281,14 +1281,14 @@ export function AgentSubmissionPanel() {
                   inputMode="decimal"
                   placeholder="No cap"
                 />
-                <span className="join-item inline-flex items-center border border-base-300 bg-base-200 px-3 text-sm text-base-content/70">
+                <span className="join-item inline-flex items-center bg-base-200 px-3 text-sm text-base-content/70">
                   USDC
                 </span>
               </div>
             </label>
           </div>
 
-          <div className="mt-5 rounded-lg border border-base-300 bg-base-100/50 p-4">
+          <div className="mt-5 surface-card-nested rounded-lg p-4">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div>
                 <h4 className="font-semibold">Allowed categories</h4>
@@ -1304,14 +1304,11 @@ export function AgentSubmissionPanel() {
             <div className="mt-3 flex flex-wrap gap-2">{categoryControls}</div>
           </div>
 
-          <div className="mt-5 rounded-lg border border-base-300 bg-base-100/50 p-4">
+          <div className="mt-5 surface-card-nested rounded-lg p-4">
             <h4 className="font-semibold">MCP scopes</h4>
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
               {DEFAULT_AGENT_SCOPES.map(scope => (
-                <label
-                  key={scope}
-                  className="flex items-center gap-2 rounded-lg border border-base-300 px-3 py-2 text-sm"
-                >
+                <label key={scope} className="surface-card-nested flex items-center gap-2 rounded-lg px-3 py-2 text-sm">
                   <input
                     type="checkbox"
                     className="checkbox checkbox-primary checkbox-sm"
@@ -1372,21 +1369,21 @@ export function AgentSubmissionPanel() {
           {!policyControlsEnabled ? (
             <>
               <div className="mt-5 grid gap-3 md:grid-cols-3">
-                <div className="rounded-lg border border-base-300 bg-base-100/70 p-4">
+                <div className="surface-card-nested rounded-lg p-4">
                   <div className="flex items-center gap-2 text-sm font-medium text-base-content/60">
                     <WalletIcon className="h-4 w-4" />
                     <span>Wallet address</span>
                   </div>
                   <p className="mt-2 break-words font-mono text-sm">{agentWalletAddress ?? "0x..."}</p>
                 </div>
-                <div className="rounded-lg border border-base-300 bg-base-100/70 p-4">
+                <div className="surface-card-nested rounded-lg p-4">
                   <div className="flex items-center gap-2 text-sm font-medium text-base-content/60">
                     <CpuChipIcon className="h-4 w-4" />
                     <span>Direct HTTP</span>
                   </div>
                   <p className="mt-2 break-all font-mono text-xs">{publicAgentHttpUrl}</p>
                 </div>
-                <div className="rounded-lg border border-base-300 bg-base-100/70 p-4">
+                <div className="surface-card-nested rounded-lg p-4">
                   <div className="flex items-center gap-2 text-sm font-medium text-base-content/60">
                     <KeyIcon className="h-4 w-4" />
                     <span>Auth</span>
@@ -1395,7 +1392,7 @@ export function AgentSubmissionPanel() {
                 </div>
               </div>
 
-              <div className="mt-5 rounded-lg border border-base-300 bg-base-100/50 p-4">
+              <div className="mt-5 surface-card-nested rounded-lg p-4">
                 <div className="flex items-center justify-between gap-2">
                   <h4 className="font-semibold">Public MCP config</h4>
                   <button
@@ -1415,7 +1412,7 @@ export function AgentSubmissionPanel() {
               </div>
 
               <div className="mt-5 grid gap-4 lg:grid-cols-2">
-                <div className="rounded-lg border border-base-300 bg-base-100/50 p-4">
+                <div className="surface-card-nested rounded-lg p-4">
                   <div className="flex items-center justify-between gap-2">
                     <h4 className="font-semibold">Browser signing link</h4>
                     <button
@@ -1434,7 +1431,7 @@ export function AgentSubmissionPanel() {
                   </pre>
                 </div>
 
-                <div className="rounded-lg border border-base-300 bg-base-100/50 p-4">
+                <div className="surface-card-nested rounded-lg p-4">
                   <div className="flex items-center justify-between gap-2">
                     <h4 className="font-semibold">Local signer CLI</h4>
                     <button
@@ -1457,21 +1454,21 @@ export function AgentSubmissionPanel() {
           ) : selectedPolicy ? (
             <>
               <div className="mt-5 grid gap-3 md:grid-cols-3">
-                <div className="rounded-lg border border-base-300 bg-base-100/70 p-4">
+                <div className="surface-card-nested rounded-lg p-4">
                   <div className="flex items-center gap-2 text-sm font-medium text-base-content/60">
                     <CpuChipIcon className="h-4 w-4" />
                     <span>Policy identity</span>
                   </div>
                   <p className="mt-2 break-words text-lg font-semibold">{selectedPolicy.agentId}</p>
                 </div>
-                <div className="rounded-lg border border-base-300 bg-base-100/70 p-4">
+                <div className="surface-card-nested rounded-lg p-4">
                   <div className="flex items-center gap-2 text-sm font-medium text-base-content/60">
                     <WalletIcon className="h-4 w-4" />
                     <span>Agent wallet</span>
                   </div>
                   <p className="mt-2 font-mono text-sm">{shortAddress(selectedPolicy.agentWalletAddress)}</p>
                 </div>
-                <div className="rounded-lg border border-base-300 bg-base-100/70 p-4">
+                <div className="surface-card-nested rounded-lg p-4">
                   <div className="flex items-center gap-2 text-sm font-medium text-base-content/60">
                     <KeyIcon className="h-4 w-4" />
                     <span>Spend caps</span>
@@ -1485,7 +1482,7 @@ export function AgentSubmissionPanel() {
                 </div>
               </div>
 
-              <div className="mt-5 rounded-lg border border-base-300 bg-base-100/50 p-4">
+              <div className="mt-5 surface-card-nested rounded-lg p-4">
                 <h4 className="font-semibold">Access token</h4>
                 <p className="mt-1 text-sm leading-relaxed text-base-content/60">
                   Use this token and config in the agent client that will call RateLoop tools.
@@ -1494,7 +1491,7 @@ export function AgentSubmissionPanel() {
               </div>
             </>
           ) : (
-            <div className="mt-5 rounded-lg border border-warning/30 bg-warning/10 p-4">
+            <div className="surface-card-nested mt-5 rounded-lg p-4">
               <h4 className="font-semibold text-warning">No saved controls selected</h4>
               <p className="mt-2 text-sm leading-relaxed text-base-content/70">
                 Go back to Optional controls and save them first, or turn controls off to use public wallet access.
@@ -1512,8 +1509,8 @@ export function AgentSubmissionPanel() {
             </button>
             {!policyControlsEnabled ? (
               <span
-                className={`inline-flex items-center rounded-full border px-3 py-1 text-sm ${
-                  ready ? "border-success/30 text-success" : "border-warning/40 text-warning"
+                className={`reward-chip reward-chip-muted inline-flex items-center px-3 py-1 text-sm ${
+                  ready ? "text-success" : "text-warning"
                 }`}
               >
                 {ready ? "Ready for wallet-paid asks" : "Add wallet USDC before asking"}

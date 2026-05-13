@@ -722,7 +722,7 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
       ) : null}
 
       {verificationState.status === "error" ? (
-        <div className="mt-5 flex items-start gap-3 rounded-2xl bg-error/10 px-4 py-3 text-sm text-error">
+        <div className="surface-card-nested mt-5 flex items-start gap-3 rounded-2xl px-4 py-3 text-sm text-error">
           <ExclamationTriangleIcon className="mt-0.5 h-5 w-5 shrink-0" />
           <p>{verificationState.message}</p>
         </div>
@@ -845,7 +845,7 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
             <p className="text-sm leading-relaxed text-base-content/55">{claimDisabledReason}</p>
           ) : null}
           {launchCapUnlockAmount > 0n || raterFullLaunchCapUnlocked === true ? (
-            <div className="rounded-xl border border-base-content/10 p-3 text-sm text-base-content/65">
+            <div className="surface-card-nested rounded-xl p-3 text-sm text-base-content/65">
               <div className="flex items-center justify-between gap-3">
                 <span>Earned-rater cap</span>
                 <span className="font-semibold text-base-content">

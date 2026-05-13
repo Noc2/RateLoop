@@ -697,7 +697,7 @@ export function GovernanceActionComposer() {
 
         {selectedTemplate && (
           <>
-            <div className="bg-base-200 rounded-xl p-4 space-y-2">
+            <div className="surface-card-nested rounded-xl p-4 space-y-2">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="px-2 py-0.5 rounded-full text-base font-medium bg-primary/10 text-primary">
                   {selectedTemplate.mode === "proposal" ? "Governor Proposal" : "Direct Transaction"}
@@ -752,7 +752,7 @@ export function GovernanceActionComposer() {
               </div>
             )}
 
-            <div className="bg-base-200 rounded-xl p-4 space-y-2">
+            <div className="surface-card-nested rounded-xl p-4 space-y-2">
               <div className="flex items-center gap-2 text-base font-medium">
                 <ArrowsRightLeftIcon className="w-4 h-4 text-primary" />
                 Submission Preview

@@ -88,7 +88,7 @@
   --curyo-surface-elevated: #101010;
   --curyo-surface-elevated-hover: #171717;
   --curyo-surface-mobile-vote: #151515;
-  --curyo-surface-nested: #0a0a0a;
+  --curyo-surface-nested: #262626;
   --curyo-control-idle: rgb(245 245 245 / 0.11);
   --curyo-control-idle-hover: rgb(245 245 245 / 0.18);
   --curyo-control-idle-muted: rgb(245 245 245 / 0.075);
@@ -100,7 +100,7 @@
   --curyo-steel-rgb: 163 163 163;
   --curyo-surface-rgb: 0 0 0;
   --curyo-surface-elevated-rgb: 16 16 16;
-  --curyo-surface-nested-rgb: 10 10 10;
+  --curyo-surface-nested-rgb: 38 38 38;
   --curyo-radius-card: 0.5rem;
   --curyo-radius-control: var(--curyo-radius-card);
   --curyo-radius-pill: 9999px;
@@ -497,7 +497,7 @@ body {
 
 .surface-card-nested {
   border-radius: var(--curyo-card-radius);
-  background: rgb(var(--curyo-surface-nested-rgb) / 0.96);
+  background: rgb(var(--curyo-surface-nested-rgb) / 0.98);
   border: none;
   box-shadow: none;
 }
@@ -505,6 +505,7 @@ body {
 .surface-card .surface-card {
   border-radius: var(--curyo-card-radius);
   background: rgb(var(--curyo-surface-nested-rgb) / 0.98);
+  border: none;
   box-shadow: none;
 }
 
@@ -1062,6 +1063,22 @@ body {
 
 .tab-control {
   border-radius: var(--curyo-radius-control);
+}
+
+.reward-chip {
+  border-radius: var(--curyo-radius-control);
+  border: none;
+  box-shadow: none;
+}
+
+.reward-chip-primary {
+  background: rgb(var(--curyo-ember-rgb) / 0.12);
+  color: var(--color-primary);
+}
+
+.reward-chip-muted {
+  background: var(--curyo-control-idle-muted);
+  color: rgb(245 245 245 / 0.72);
 }
 
 /* Hide scrollbar but keep scroll functionality */

@@ -355,7 +355,7 @@ export function BrowserSigningPage({ intentId }: { intentId: string }) {
       ) : null}
 
       {error ? (
-        <div className="rounded-lg border border-error/30 bg-error/10 p-4 text-sm text-error">
+        <div className="surface-card-nested rounded-lg p-4 text-sm text-error">
           <div className="flex items-start gap-2">
             <ExclamationTriangleIcon className="mt-0.5 h-5 w-5 shrink-0" />
             <span>{error}</span>
@@ -367,21 +367,21 @@ export function BrowserSigningPage({ intentId }: { intentId: string }) {
         <>
           <section className="surface-card rounded-lg p-5">
             <div className="grid gap-3 md:grid-cols-3">
-              <div className="rounded-lg border border-base-300 bg-base-100/50 p-4">
+              <div className="surface-card-nested rounded-lg p-4">
                 <div className="flex items-center gap-2 text-sm font-medium text-base-content/60">
                   <WalletIcon className="h-4 w-4" />
                   <span>Signer wallet</span>
                 </div>
                 <p className="mt-2 font-mono text-sm">{shortAddress(intent.walletAddress ?? address)}</p>
               </div>
-              <div className="rounded-lg border border-base-300 bg-base-100/50 p-4">
+              <div className="surface-card-nested rounded-lg p-4">
                 <div className="flex items-center gap-2 text-sm font-medium text-base-content/60">
                   <ShieldCheckIcon className="h-4 w-4" />
                   <span>Bounty</span>
                 </div>
                 <p className="mt-2 text-lg font-semibold">{readBounty(intent)}</p>
               </div>
-              <div className="rounded-lg border border-base-300 bg-base-100/50 p-4">
+              <div className="surface-card-nested rounded-lg p-4">
                 <div className="flex items-center gap-2 text-sm font-medium text-base-content/60">
                   <CheckCircleIcon className="h-4 w-4" />
                   <span>Status</span>
@@ -391,12 +391,12 @@ export function BrowserSigningPage({ intentId }: { intentId: string }) {
             </div>
 
             {connectedMismatch ? (
-              <p className="mt-4 rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-warning">
+              <p className="surface-card-nested mt-4 rounded-lg p-3 text-sm text-warning">
                 This signing link expects {intent.walletAddress}. You are connected as {address}.
               </p>
             ) : null}
             {needsChainSwitch ? (
-              <p className="mt-4 rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-warning">
+              <p className="surface-card-nested mt-4 rounded-lg p-3 text-sm text-warning">
                 This ask is on chain {intent.chainId}. Your wallet is on chain {chain?.id}.
               </p>
             ) : null}
@@ -440,11 +440,11 @@ export function BrowserSigningPage({ intentId }: { intentId: string }) {
                 {intent.transactionPlan.calls.map((call, index) => (
                   <div
                     key={`${call.id ?? call.phase ?? "call"}-${index}`}
-                    className="rounded-lg border border-base-300 bg-base-100/50 p-3"
+                    className="surface-card-nested rounded-lg p-3"
                   >
                     <div className="flex items-center justify-between gap-3">
                       <span className="text-sm font-medium">{call.description ?? call.phase ?? "Wallet call"}</span>
-                      <span className="rounded-full border border-base-300 px-2 py-0.5 text-xs">
+                      <span className="reward-chip reward-chip-muted px-2 py-0.5 text-xs">
                         {steps[index]?.status ?? "ready"}
                       </span>
                     </div>

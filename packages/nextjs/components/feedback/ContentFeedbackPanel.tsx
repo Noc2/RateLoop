@@ -47,7 +47,7 @@ function FeedbackItem({ item }: { item: ContentFeedbackItem }) {
     : "Only you can see this feedback while voting is active. It becomes public after settlement.";
 
   return (
-    <li className="rounded-lg border border-base-content/10 bg-base-content/[0.035] p-3">
+    <li className="surface-card-nested rounded-lg p-3">
       <div className="flex min-w-0 items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="text-sm font-semibold leading-tight text-base-content">{item.feedbackTypeLabel}</p>
@@ -177,7 +177,7 @@ export function ContentFeedbackPanel({ item, variant = "rail", onRequestConnect 
       </div>
 
       {ownHiddenCopy ? (
-        <div className="mt-3 rounded-lg border border-base-content/10 bg-base-content/[0.035] px-3 py-2">
+        <div className="surface-card-nested mt-3 rounded-lg px-3 py-2">
           <p className="text-xs leading-relaxed text-base-content/60">{ownHiddenCopy}</p>
         </div>
       ) : null}
@@ -264,7 +264,7 @@ export function ContentFeedbackPanel({ item, variant = "rail", onRequestConnect 
             ))}
           </ul>
         ) : feedback.settlementComplete ? (
-          <p className="rounded-lg border border-dashed border-base-content/12 px-3 py-3 text-sm leading-relaxed text-base-content/60">
+          <p className="surface-card-nested rounded-lg px-3 py-3 text-sm leading-relaxed text-base-content/60">
             No feedback yet.
           </p>
         ) : null}
