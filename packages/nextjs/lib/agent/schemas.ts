@@ -48,12 +48,12 @@ const templateSelectorSchema = {
 const agentQuestionInputSchema = {
   additionalProperties: true,
   properties: {
-    categoryId: { description: "Curyo category id.", type: ["integer", "string"] },
+    categoryId: { description: "RateLoop category id.", type: ["integer", "string"] },
     contextUrl: { description: "HTTPS context URL voters should inspect.", type: "string" },
     description: { description: "Optional question details shown to voters.", type: "string" },
     imageUrls: {
       description:
-        "Optional direct HTTPS image URLs, including approved Curyo-hosted uploads for public mockups, screenshots, or generated visuals.",
+        "Optional direct HTTPS image URLs, including approved RateLoop-hosted uploads for public mockups, screenshots, or generated visuals.",
       items: { type: "string" },
       type: "array",
     },

@@ -102,7 +102,7 @@ const MEDIA_URL_CONFIG = {
   imagePlaceholder: "Paste a direct image URL or upload one below",
   videoPlaceholder: "Paste a YouTube URL, e.g. https://youtube.com/watch?v=...",
   imageHint:
-    "Optional. Add up to four direct image URLs or upload JPG, PNG, and WEBP files for Curyo-hosted, moderated image context. Landscape images fit the voting content area best; aim for 16:9 and at least 1280x720 px.",
+    "Optional. Add up to four direct image URLs or upload JPG, PNG, and WEBP files for RateLoop-hosted, moderated image context. Landscape images fit the voting content area best; aim for 16:9 and at least 1280x720 px.",
   videoHint: "Optional. Add one YouTube link as a preview; standard landscape videos fit the content area best.",
 };
 

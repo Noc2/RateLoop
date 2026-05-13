@@ -50,7 +50,7 @@ test("rejects reused pending image attachment ids", async () => {
   await assert.rejects(() => createPendingImageAttachment(params), /Image attachment already exists/);
 });
 
-test("validates approved Curyo-hosted image ownership before submission", async () => {
+test("validates approved RateLoop-hosted image ownership before submission", async () => {
   const now = new Date();
   await db.insert(questionImageAttachments).values({
     id: "att_abcdefghijklmnop",
@@ -77,11 +77,11 @@ test("validates approved Curyo-hosted image ownership before submission", async 
       imageUrls: ["https://www.curyo.xyz/api/attachments/images/att_abcdefghijklmnop.webp"],
       ownerWalletAddress: "0x00000000000000000000000000000000000000bb",
     }),
-    "imageUrls Curyo-hosted uploads must belong to the submitting wallet or agent.",
+    "imageUrls RateLoop-hosted uploads must belong to the submitting wallet or agent.",
   );
 });
 
-test("allows approved Curyo-hosted images owned by the submitting agent", async () => {
+test("allows approved RateLoop-hosted images owned by the submitting agent", async () => {
   const now = new Date();
   await db.insert(questionImageAttachments).values({
     id: "att_agentownedupload",
@@ -109,6 +109,6 @@ test("allows approved Curyo-hosted images owned by the submitting agent", async 
       agentId: "agent-456",
       imageUrls: ["https://www.curyo.xyz/api/attachments/images/att_agentownedupload.webp"],
     }),
-    "imageUrls Curyo-hosted uploads must belong to the submitting wallet or agent.",
+    "imageUrls RateLoop-hosted uploads must belong to the submitting wallet or agent.",
   );
 });

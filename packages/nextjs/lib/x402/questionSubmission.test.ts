@@ -510,7 +510,7 @@ test("preparePermissionlessWalletQuestionSubmissionRequest namespaces idempotenc
   assert.match(record?.paymentReceipt ?? "", /permissionless-wallet-plan/);
 });
 
-test("preparePermissionlessWalletQuestionSubmissionRequest rejects unapproved Curyo-hosted image uploads", async () => {
+test("preparePermissionlessWalletQuestionSubmissionRequest rejects unapproved RateLoop-hosted image uploads", async () => {
   const attachmentId = "att_pendingUpload0001";
   const walletAddress = "0x00000000000000000000000000000000000000aa" as const;
   const payload = buildPayloadWithImageUrl(
@@ -531,11 +531,11 @@ test("preparePermissionlessWalletQuestionSubmissionRequest rejects unapproved Cu
       }),
     (error: unknown) =>
       error instanceof X402QuestionInputError &&
-      error.message === "imageUrls must reference approved Curyo-hosted uploads.",
+      error.message === "imageUrls must reference approved RateLoop-hosted uploads.",
   );
 });
 
-test("preparePermissionlessWalletQuestionSubmissionRequest rejects Curyo-hosted image uploads from another wallet", async () => {
+test("preparePermissionlessWalletQuestionSubmissionRequest rejects RateLoop-hosted image uploads from another wallet", async () => {
   const attachmentId = "att_foreignUpload001";
   const walletAddress = "0x00000000000000000000000000000000000000aa" as const;
   const payload = buildPayloadWithImageUrl(
@@ -556,7 +556,7 @@ test("preparePermissionlessWalletQuestionSubmissionRequest rejects Curyo-hosted 
       }),
     (error: unknown) =>
       error instanceof X402QuestionInputError &&
-      error.message === "imageUrls Curyo-hosted uploads must belong to the submitting wallet or agent.",
+      error.message === "imageUrls RateLoop-hosted uploads must belong to the submitting wallet or agent.",
   );
 });
 
