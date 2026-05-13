@@ -950,6 +950,14 @@ export interface PonderRaterParticipationStatusResponse {
       [key: string]: unknown;
     };
   };
+  advisoryVotes?: {
+    totalCount: number;
+    revealedCount: number;
+    creditedCount: number;
+    totalPaid: string;
+    latestCommittedAt: string | null;
+    latestCreditedAt: string | null;
+  };
   participationPolicy: {
     baseRewardWeightBps: number;
     humanVerificationAffectsRewardWeight: boolean;

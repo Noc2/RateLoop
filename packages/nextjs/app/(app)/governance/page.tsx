@@ -44,6 +44,10 @@ const GovernanceStats = dynamic(
   () => import("~~/components/governance/GovernanceStats").then(mod => mod.GovernanceStats),
   { loading: GovernanceSectionLoading },
 );
+const GetLrepOnboarding = dynamic(
+  () => import("~~/components/governance/GetLrepOnboarding").then(mod => mod.GetLrepOnboarding),
+  { loading: GovernanceSectionLoading },
+);
 const GovernanceActionComposer = dynamic(
   () => import("~~/components/governance/GovernanceActionComposer").then(mod => mod.GovernanceActionComposer),
   { loading: GovernanceSectionLoading },
@@ -104,6 +108,7 @@ function GovernancePageInner() {
   });
 
   const hasResolvedBalance = !!address && !hrepBalanceLoading && hrepBalance !== undefined;
+  const hasZeroLrep = hasResolvedBalance && hrepBalance === 0n;
   const addressKey = address?.toLowerCase() ?? null;
   const shouldWaitForEntryRouting = Boolean(address) && !hashInitialized;
 
@@ -159,6 +164,25 @@ function GovernancePageInner() {
           <span className="loading loading-spinner loading-lg text-primary" />
           <p className="mt-4 text-sm text-base-content/60">Loading governance...</p>
         </div>
+      </AppPageShell>
+    );
+  }
+
+  if (hrepBalanceLoading) {
+    return (
+      <AppPageShell contentClassName="space-y-6">
+        <div className="flex min-h-[40vh] flex-col items-center justify-center px-4 text-center">
+          <span className="loading loading-spinner loading-lg text-primary" />
+          <p className="mt-4 text-sm text-base-content/60">Loading LREP status...</p>
+        </div>
+      </AppPageShell>
+    );
+  }
+
+  if (hasZeroLrep && address) {
+    return (
+      <AppPageShell contentClassName="space-y-6">
+        <GetLrepOnboarding address={address as `0x${string}`} />
       </AppPageShell>
     );
   }
