@@ -419,7 +419,7 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
           feedbackClosesAt: 2_592_000n,
           frontendFeeBps: 300n,
           asset: 1n,
-          bountyEligibility: 4n,
+          bountyEligibility: 1n,
           bountyEligibilityDataHash:
             "0x2222000000000000000000000000000000000000000000000000000000000000",
         },

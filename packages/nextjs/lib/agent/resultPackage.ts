@@ -81,7 +81,6 @@ type AgentResultPackage = {
       policy: {
         mode: number | null;
         label: string;
-        eligibleAiDeclarationIds: string[];
         eligibilityDataHash: string | null;
       };
       distribution: AgentResultPackage["distribution"] | null;
@@ -211,12 +210,6 @@ function bountyEligibilityLabel(mode: number | null | undefined) {
       return "Everyone";
     case 1:
       return "Verified humans";
-    case 2:
-      return "Validated AI models";
-    case 3:
-      return "Verified humans or validated AI models";
-    case 4:
-      return "Specific AI declarations";
     case null:
     case undefined:
       return "Mixed bounty scopes";
@@ -496,11 +489,9 @@ export function buildAgentResultPackage(params: {
   };
   const rewardPoolSummary = params.content.rewardPoolSummary;
   const rewardPoolCount = Number(rewardPoolSummary?.rewardPoolCount ?? 0);
-  const bountyEligibilityMode =
-    rewardPoolCount > 0 ? (rewardPoolSummary?.bountyEligibility ?? null) : 0;
+  const bountyEligibilityMode = rewardPoolCount > 0 ? (rewardPoolSummary?.bountyEligibility ?? null) : 0;
   const bountyEligibilityPolicy = {
     eligibilityDataHash: rewardPoolSummary?.bountyEligibilityDataHash ?? null,
-    eligibleAiDeclarationIds: rewardPoolSummary?.eligibleAiDeclarationIds ?? [],
     label: bountyEligibilityLabel(bountyEligibilityMode),
     mode: bountyEligibilityMode,
   };

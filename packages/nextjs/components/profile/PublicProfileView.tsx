@@ -21,7 +21,6 @@ import { BalanceHistory } from "~~/components/leaderboard/BalanceHistory";
 import { CategoryBars } from "~~/components/leaderboard/CategoryBars";
 import { StakeBreakdown } from "~~/components/leaderboard/StakeBreakdown";
 import { WinRateRing } from "~~/components/leaderboard/WinRateRing";
-import { AiRaterTrustSection } from "~~/components/profile/AiRaterTrustSection";
 import { FollowProfileButton } from "~~/components/shared/FollowProfileButton";
 import { ProfileImageLightbox } from "~~/components/shared/ProfileImageLightbox";
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
@@ -105,7 +104,6 @@ function formatLaunchEligibility(rewardStatus: PonderRaterParticipationStatusRes
 
 function formatParticipationLane(lane: PonderRaterParticipationStatusResponse["participationLane"]) {
   if (lane === "verified_human") return "Verified human";
-  if (lane === "ai_declared") return "AI declared";
   return "Open capped";
 }
 
@@ -1128,8 +1126,8 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
             <div>
               <h2 className="text-xl font-semibold text-base-content">Reputation context</h2>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-base-content/60">
-                Public follows, trust attestations, AI declaration status, and verified-human launch progress are
-                visible here. Verified-human status does not boost rating reward weight.
+                Public follows, trust attestations, and verified-human launch progress are visible here. Verified-human
+                status does not boost rating reward weight.
               </p>
             </div>
             <div className="rounded-full bg-base-content/[0.05] px-4 py-2 text-sm font-medium text-base-content/70">
@@ -1184,16 +1182,6 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
                 </div>
 
                 <div className="rounded-2xl bg-base-content/[0.04] px-4 py-3">
-                  <div className="text-sm text-base-content/60">AI declaration</div>
-                  <div className="mt-1 text-xl font-semibold capitalize">
-                    {rewardStatus.aiDeclaration.active ? "Active" : rewardStatus.aiDeclaration.inactiveReason}
-                  </div>
-                  <div className="mt-1 text-sm text-base-content/55">
-                    AI declarations never count as verified-human anchors
-                  </div>
-                </div>
-
-                <div className="rounded-2xl bg-base-content/[0.04] px-4 py-3">
                   <div className="text-sm text-base-content/60">Launch reward progress</div>
                   <div className="mt-1 text-xl font-semibold">
                     {rewardStatus.launchRewards.remainingRewardSlots.toLocaleString()} slots left
@@ -1207,8 +1195,7 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
               <div className="mt-6 grid gap-3 lg:grid-cols-2">
                 <div className="rounded-2xl border border-base-content/10 px-4 py-3 text-sm text-base-content/70">
                   <div className="font-medium text-base-content/85">
-                    Verified human {rewardStatus.humanCredential.status} • AI{" "}
-                    {rewardStatus.aiDeclaration.effectiveTierName}
+                    Verified human {rewardStatus.humanCredential.status}
                   </div>
                   <div className="mt-2">
                     Reward weight is stake, timing, and RBTS score. Identity status does not multiply it.
@@ -1229,8 +1216,6 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
             </>
           ) : null}
         </div>
-
-        <AiRaterTrustSection address={normalizedAddress} ownProfile={ownProfile} />
 
         {ownProfile ? (
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,1fr)]">

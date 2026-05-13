@@ -77,7 +77,6 @@ const submitQuestionWithRewardAndRoundConfigAbi = [
           { name: "bountyClosesAt", type: "uint256" },
           { name: "feedbackClosesAt", type: "uint256" },
           { name: "bountyEligibility", type: "uint8" },
-          { name: "eligibleAiDeclarationIds", type: "bytes32[]" },
         ],
       },
       {
@@ -502,7 +501,6 @@ test("supported sponsored operation families are allowlisted", async () => {
             bountyClosesAt: 0n,
             feedbackClosesAt: 0n,
             bountyEligibility: 0,
-            eligibleAiDeclarationIds: [],
           },
           { epochDuration: 1200, maxDuration: 604800, minVoters: 3, maxVoters: 200 },
           {

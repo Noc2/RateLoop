@@ -19,7 +19,7 @@ import {
 
 const env = process.env as Record<string, string | undefined>;
 const originalDatabaseUrl = env.DATABASE_URL;
-const EMPTY_DECLARATION_IDS_HASH = keccak256("0x");
+const EMPTY_BOUNTY_ELIGIBILITY_DATA_HASH = keccak256("0x");
 
 function buildPayload(clientRequestId: string): X402QuestionPayload {
   return {
@@ -27,7 +27,6 @@ function buildPayload(clientRequestId: string): X402QuestionPayload {
       amount: 1_000_000n,
       asset: "USDC" as const,
       bountyEligibility: 0,
-      eligibleAiDeclarationIds: [],
       feedbackClosesAt: 0n,
       requiredSettledRounds: 1n,
       requiredVoters: 3n,
@@ -260,7 +259,7 @@ function buildSubmissionRewardPoolAttachedLog(params: {
         params.payload.bounty.rewardPoolExpiresAt,
         params.payload.bounty.feedbackClosesAt,
         params.payload.bounty.bountyEligibility,
-        EMPTY_DECLARATION_IDS_HASH,
+        EMPTY_BOUNTY_ELIGIBILITY_DATA_HASH,
         params.rewardPoolId ?? 77n,
       ],
     ),

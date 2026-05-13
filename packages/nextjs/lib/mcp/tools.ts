@@ -60,10 +60,10 @@ import {
   x402QuestionSubmissionRecordBody,
 } from "~~/lib/x402/questionSubmission";
 import {
-  ponderApi,
   type PonderContentItem,
   type PonderRaterParticipationStatusResponse,
   type PonderVoteItem,
+  ponderApi,
 } from "~~/services/ponder/client";
 
 type JsonObject = Record<string, unknown>;
@@ -668,18 +668,13 @@ function normalizeHexId(value: string | null | undefined) {
 
 function isRaterEligibleForBounty(
   mode: number | null | undefined,
-  allowedAiDeclarationIds: ReadonlySet<string>,
   status: PonderRaterParticipationStatusResponse | undefined,
 ) {
   if (mode === 0) return true;
   if (!status) return false;
 
   const verifiedHuman = status.humanCredential.verified;
-  const activeAi = status.aiDeclaration.active && status.aiDeclaration.effectiveTier > 0;
   if (mode === 1) return verifiedHuman;
-  if (mode === 2) return activeAi;
-  if (mode === 3) return verifiedHuman || activeAi;
-  if (mode === 4) return activeAi && allowedAiDeclarationIds.has(normalizeHexId(status.aiDeclaration.declarationHash));
   return false;
 }
 
@@ -703,9 +698,9 @@ async function loadBountyEligibleVotes(params: {
     return null;
   }
   const revealedVotes = votes.filter(vote => vote.revealed && vote.isUp !== null);
-  const raterAddresses = [...new Set(revealedVotes.map(vote => normalizeHexId(vote.identityVoter ?? vote.voter)))].filter(
-    Boolean,
-  );
+  const raterAddresses = [
+    ...new Set(revealedVotes.map(vote => normalizeHexId(vote.identityVoter ?? vote.voter))),
+  ].filter(Boolean);
   const statuses = new Map<string, PonderRaterParticipationStatusResponse>();
   await Promise.all(
     raterAddresses.map(async address => {
@@ -717,13 +712,8 @@ async function loadBountyEligibleVotes(params: {
     }),
   );
 
-  const allowedAiDeclarationIds = new Set((rewardPoolSummary?.eligibleAiDeclarationIds ?? []).map(normalizeHexId));
   return revealedVotes.filter(vote =>
-    isRaterEligibleForBounty(
-      mode,
-      allowedAiDeclarationIds,
-      statuses.get(normalizeHexId(vote.identityVoter ?? vote.voter)),
-    ),
+    isRaterEligibleForBounty(mode, statuses.get(normalizeHexId(vote.identityVoter ?? vote.voter))),
   );
 }
 

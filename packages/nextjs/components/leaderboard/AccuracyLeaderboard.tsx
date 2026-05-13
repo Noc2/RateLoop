@@ -295,9 +295,7 @@ export function AccuracyLeaderboard() {
                                 <span className="rounded-full bg-base-content/[0.06] px-2 py-0.5">
                                   {entry.reputation.humanCredentialStatus === "verified"
                                     ? "Verified human"
-                                    : entry.reputation.aiDeclared
-                                      ? "AI declared"
-                                      : "Open capped"}
+                                    : "Open capped"}
                                 </span>
                                 <span className="rounded-full bg-base-content/[0.06] px-2 py-0.5">
                                   {entry.reputation.activeTrustAttestationCount} trust

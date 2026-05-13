@@ -250,7 +250,6 @@ async function buildSubmissionReservation(
     rewardPoolExpiresAt: DEFAULT_SUBMISSION_REWARD_EXPIRES_AT,
     feedbackClosesAt: DEFAULT_SUBMISSION_REWARD_EXPIRES_AT,
     bountyEligibility: 0,
-    eligibleAiDeclarationIds: [],
     roundConfig,
     salt,
     submissionKey,
@@ -903,7 +902,6 @@ export async function submitContentDirect(
               { name: "bountyClosesAt", type: "uint256" },
               { name: "feedbackClosesAt", type: "uint256" },
               { name: "bountyEligibility", type: "uint8" },
-              { name: "eligibleAiDeclarationIds", type: "bytes32[]" },
             ],
           },
           {
@@ -947,7 +945,6 @@ export async function submitContentDirect(
         bountyClosesAt: DEFAULT_SUBMISSION_REWARD_EXPIRES_AT,
         feedbackClosesAt: DEFAULT_SUBMISSION_REWARD_EXPIRES_AT,
         bountyEligibility: 0,
-        eligibleAiDeclarationIds: [],
       },
       resolvedRoundConfig,
       {

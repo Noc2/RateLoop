@@ -365,7 +365,6 @@ export interface PonderRewardPoolSummary {
   rewardPoolCount: number;
   bountyEligibility?: number | null;
   bountyEligibilityDataHash?: string | null;
-  eligibleAiDeclarationIds?: string[];
   activeRewardPoolCount: number;
   expiredRewardPoolCount?: number;
   totalFundedAmount: string;
@@ -784,9 +783,6 @@ export interface PonderAccuracyLeaderboardReputation {
   activeTrustAttestationCount: number;
   followerCount: number;
   followingCount: number;
-  aiTier: number;
-  aiTierName: PonderAiDeclarationTierName | "A0";
-  aiDeclared: boolean;
   [key: string]: unknown;
 }
 
@@ -892,10 +888,7 @@ export type PonderVoterStatsBatch = Record<string, PonderVoterStats>;
 
 export type PonderRaterTypeName = "Unknown" | "Human" | "AI" | "Team" | "Hybrid";
 export type PonderHumanCredentialStatus = "missing" | "verified" | "expired" | "revoked";
-export type PonderParticipationLane = "verified_human" | "ai_declared" | "open";
-export type PonderAiDeclarationTierName = "A0" | "A1Unverified" | "A1Verified";
-export type PonderAiProbeStatus = "none" | "pending" | "passed" | "failed";
-export type PonderAiDeclarationInactiveReason = "none" | "missing" | "retired" | "future" | "expired" | "challenged";
+export type PonderParticipationLane = "verified_human" | "open";
 
 export interface PonderRaterParticipationStatusResponse {
   asOf: {
@@ -914,52 +907,6 @@ export interface PonderRaterParticipationStatusResponse {
     verifiedAt: string | null;
     expiresAt: string | null;
     evidenceHash: string | null;
-  };
-  aiDeclaration: {
-    declared: boolean;
-    active: boolean;
-    inactiveReason: PonderAiDeclarationInactiveReason;
-    operator: string | null;
-    version: number;
-    effectiveEpoch: string | null;
-    expiresAtEpoch: string | null;
-    effectiveAt: string | null;
-    expiresAt: string | null;
-    declaredTier: number;
-    declaredTierName: PonderAiDeclarationTierName;
-    effectiveTier: number;
-    effectiveTierName: PonderAiDeclarationTierName;
-    tier: number;
-    tierName: PonderAiDeclarationTierName;
-    behaviorChanged: boolean;
-    probePending: boolean;
-    probeStatus: PonderAiProbeStatus;
-    declarationHash: string | null;
-    modelClass: number | null;
-    modelId: string | null;
-    provider: string | null;
-    promptTemplateHash: string | null;
-    retrievalConfigHash: string | null;
-    toolingHash: string | null;
-    disclosure: number | null;
-    declaredAt: string | null;
-    retiredAt: string | null;
-    lastProbeResultHash: string | null;
-    latestProbe: {
-      passed: boolean;
-      confidenceBps: number;
-      probeLibraryHash: string;
-      resultHash: string;
-      recordedAt: string;
-    } | null;
-  };
-  challengeStatus: {
-    openCount: number;
-    latestChallengeId: string | null;
-    latestStatus: number;
-    latestResolvedAt: string | null;
-    latestOperatorSlash: string;
-    latestChallengerReward: string;
   };
   trust: {
     activeSeed: {
@@ -998,115 +945,8 @@ export interface PonderRaterParticipationStatusResponse {
   participationPolicy: {
     baseRewardWeightBps: number;
     humanVerificationAffectsRewardWeight: boolean;
-    aiDeclarationAffectsRewardWeight: boolean;
     verifiedHumanCountsAsLaunchAnchor: boolean;
-    aiDeclarationCanAnchorLaunchRewards: boolean;
   };
-}
-
-export interface PonderAiRaterDeclaration {
-  rater: string;
-  operator: string;
-  version: number;
-  effectiveEpoch: string;
-  expiresAtEpoch: string;
-  tier: number;
-  behaviorChanged: boolean;
-  probePending: boolean;
-  declarationHash: string;
-  modelClass: number;
-  modelId: string;
-  provider: string;
-  promptTemplateHash: string;
-  retrievalConfigHash: string;
-  toolingHash: string;
-  disclosure: number;
-  declaredAt: string;
-  retiredAt: string | null;
-  lastProbeResultHash: string | null;
-  updatedAt: string;
-}
-
-export interface PonderAiRaterDeclarationHistoryItem extends PonderAiRaterDeclaration {
-  id: string;
-}
-
-export interface PonderAiRaterProbeResult {
-  id: string;
-  rater: string;
-  operator: string;
-  version: number;
-  passed: boolean;
-  confidenceBps: number;
-  probeLibraryHash: string;
-  resultHash: string;
-  recordedAt: string;
-}
-
-export interface PonderAiRaterDriftFlag {
-  id: string;
-  rater: string;
-  operator: string;
-  version: number;
-  driftScoreBps: number;
-  evidenceHash: string;
-  flaggedAt: string;
-}
-
-export interface PonderAiRaterDeclarationChallenge {
-  challengeId: string;
-  challenger: string;
-  rater: string;
-  operator: string;
-  declarationVersion: number;
-  evidenceHash: string;
-  resolutionHash: string | null;
-  bondAmount: string;
-  bondAsset?: string;
-  bondDecimals?: number;
-  status: number;
-  operatorSlash: string;
-  challengerReward: string;
-  openedAt: string;
-  resolvedAt: string | null;
-}
-
-export interface PonderAiRaterOperatorBond {
-  operator: string;
-  totalBond: string;
-  bondAsset?: string;
-  bondDecimals?: number;
-  updatedAt: string | null;
-}
-
-export interface PonderAiRaterPage<TItem> {
-  items: TItem[];
-  limit: number;
-  offset: number;
-}
-
-export interface PonderAiRaterListParams {
-  [key: string]: string | undefined;
-  operator?: string;
-  tier?: string;
-  probePending?: string;
-  limit?: string;
-  offset?: string;
-}
-
-export interface PonderAiRaterVersionedPageParams {
-  [key: string]: string | undefined;
-  version?: string;
-  limit?: string;
-  offset?: string;
-}
-
-export interface PonderAiRaterProbePageParams extends PonderAiRaterVersionedPageParams {
-  passed?: string;
-}
-
-export interface PonderAiRaterChallengePageParams extends PonderAiRaterVersionedPageParams {
-  status?: string;
 }
 
 const PONDER_PAGE_LIMIT = 200;
@@ -1385,43 +1225,6 @@ export const ponderApi = {
 
   getRaterParticipationStatus(address: string) {
     return ponderGet<PonderRaterParticipationStatusResponse>(`/rater-participation-status/${address}`);
-  },
-
-  getAiRaterDeclarations(params?: PonderAiRaterListParams) {
-    return ponderGet<PonderAiRaterPage<PonderAiRaterDeclaration>>("/ai-rater-declarations", params);
-  },
-
-  getAiRaterDeclaration(address: string) {
-    return ponderGet<{ declaration: PonderAiRaterDeclaration | null }>(`/ai-rater-declarations/${address}`);
-  },
-
-  getAiRaterDeclarationHistory(address: string, params?: PonderAiRaterVersionedPageParams) {
-    return ponderGet<PonderAiRaterPage<PonderAiRaterDeclarationHistoryItem>>(
-      `/ai-rater-declarations/${address}/history`,
-      params,
-    );
-  },
-
-  getAiRaterProbeResults(address: string, params?: PonderAiRaterProbePageParams) {
-    return ponderGet<PonderAiRaterPage<PonderAiRaterProbeResult>>(`/ai-rater-declarations/${address}/probes`, params);
-  },
-
-  getAiRaterDriftFlags(address: string, params?: PonderAiRaterVersionedPageParams) {
-    return ponderGet<PonderAiRaterPage<PonderAiRaterDriftFlag>>(
-      `/ai-rater-declarations/${address}/drift-flags`,
-      params,
-    );
-  },
-
-  getAiRaterDeclarationChallenges(address: string, params?: PonderAiRaterChallengePageParams) {
-    return ponderGet<PonderAiRaterPage<PonderAiRaterDeclarationChallenge>>(
-      `/ai-rater-declarations/${address}/challenges`,
-      params,
-    );
-  },
-
-  getAiRaterOperatorBond(address: string) {
-    return ponderGet<{ bond: PonderAiRaterOperatorBond }>(`/ai-rater-operators/${address}/bond`);
   },
 
   getVotes(params?: {

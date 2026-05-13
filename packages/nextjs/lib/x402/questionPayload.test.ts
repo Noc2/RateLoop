@@ -36,7 +36,6 @@ test("parseX402QuestionRequest normalizes a valid paid question payload", () => 
   assert.equal(payload.bounty.rewardPoolExpiresAt, 1_762_000_000n);
   assert.equal(payload.bounty.requiredVoters, 3n);
   assert.equal(payload.bounty.bountyEligibility, 0);
-  assert.deepEqual(payload.bounty.eligibleAiDeclarationIds, []);
   assert.equal(payload.roundConfig.epochDuration, 1200n);
   assert.equal(payload.questions[0].tags, "Media,Video");
   assert.deepEqual(payload.questions[0].imageUrls, ["https://example.com/preview.jpg"]);
@@ -250,8 +249,7 @@ test("buildX402QuestionOperation binds bounty eligibility into the payload hash"
       ...VALID_REQUEST,
       bounty: {
         ...VALID_REQUEST.bounty,
-        bountyEligibility: "4",
-        eligibleAiDeclarationIds: ["0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],
+        bountyEligibility: "1",
       },
     }),
   );
@@ -314,44 +312,17 @@ test("parseX402QuestionRequest accepts bundle payouts with multiple settled roun
   assert.equal(payload.bounty.requiredSettledRounds, 2n);
 });
 
-test("parseX402QuestionRequest validates specific AI bounty allowlists", () => {
-  const payload = parseX402QuestionRequest({
-    ...VALID_REQUEST,
-    bounty: {
-      ...VALID_REQUEST.bounty,
-      bountyEligibility: "4",
-      eligibleAiDeclarationIds: ["0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],
-    },
-  });
-
-  assert.equal(payload.bounty.bountyEligibility, 4);
-  assert.deepEqual(payload.bounty.eligibleAiDeclarationIds, [
-    "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-  ]);
-
+test("parseX402QuestionRequest rejects unsupported bounty scopes", () => {
   assert.throws(
     () =>
       parseX402QuestionRequest({
         ...VALID_REQUEST,
         bounty: {
           ...VALID_REQUEST.bounty,
-          bountyEligibility: "4",
+          bountyEligibility: "2",
         },
-      }),
-    /eligibleAiDeclarationIds is required/,
-  );
-
-  assert.throws(
-    () =>
-      parseX402QuestionRequest({
-        ...VALID_REQUEST,
-        bounty: {
-          ...VALID_REQUEST.bounty,
-          bountyEligibility: "1",
-          eligibleAiDeclarationIds: ["0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],
-        },
-      }),
-    /can only be set for specific AI/,
+    }),
+    /bountyEligibility must be 0 or 1/,
   );
 });
 

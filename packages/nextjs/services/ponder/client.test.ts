@@ -256,68 +256,6 @@ test("ponderApi.getAllSubmitterSettledRounds paginates a dedicated submitter end
   }
 });
 
-test("ponderApi AI rater helpers target the declaration productization routes", async () => {
-  const originalFetch = globalThis.fetch;
-  const requestedUrls: string[] = [];
-
-  globalThis.fetch = (async input => {
-    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
-    requestedUrls.push(url);
-    return new Response(JSON.stringify({ ok: true }), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    });
-  }) as typeof fetch;
-
-  try {
-    await ponderApi.getAiRaterDeclarations({
-      operator: "0x2222222222222222222222222222222222222222",
-      tier: "2",
-      probePending: "false",
-      limit: "10",
-    });
-    await ponderApi.getAiRaterDeclaration("0x1111111111111111111111111111111111111111");
-    await ponderApi.getAiRaterDeclarationHistory("0x1111111111111111111111111111111111111111", {
-      version: "3",
-      limit: "5",
-      offset: "10",
-    });
-    await ponderApi.getAiRaterProbeResults("0x1111111111111111111111111111111111111111", {
-      passed: "true",
-    });
-    await ponderApi.getAiRaterDriftFlags("0x1111111111111111111111111111111111111111");
-    await ponderApi.getAiRaterDeclarationChallenges("0x1111111111111111111111111111111111111111", {
-      status: "1",
-    });
-    await ponderApi.getAiRaterOperatorBond("0x2222222222222222222222222222222222222222");
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
-
-  assert.match(
-    requestedUrls[0] ?? "",
-    /\/ai-rater-declarations\?operator=0x2222222222222222222222222222222222222222&tier=2&probePending=false&limit=10$/,
-  );
-  assert.match(requestedUrls[1] ?? "", /\/ai-rater-declarations\/0x1111111111111111111111111111111111111111$/);
-  assert.match(
-    requestedUrls[2] ?? "",
-    /\/ai-rater-declarations\/0x1111111111111111111111111111111111111111\/history\?version=3&limit=5&offset=10$/,
-  );
-  assert.match(
-    requestedUrls[3] ?? "",
-    /\/ai-rater-declarations\/0x1111111111111111111111111111111111111111\/probes\?passed=true$/,
-  );
-  assert.match(
-    requestedUrls[4] ?? "",
-    /\/ai-rater-declarations\/0x1111111111111111111111111111111111111111\/drift-flags$/,
-  );
-  assert.match(
-    requestedUrls[5] ?? "",
-    /\/ai-rater-declarations\/0x1111111111111111111111111111111111111111\/challenges\?status=1$/,
-  );
-  assert.match(requestedUrls[6] ?? "", /\/ai-rater-operators\/0x2222222222222222222222222222222222222222\/bond$/);
-});
-
 test("ponderApi follow helpers target the public follow routes", async () => {
   const originalFetch = globalThis.fetch;
   const requestedUrls: string[] = [];
@@ -447,9 +385,6 @@ test("ponderApi.getAccuracyLeaderboard forwards includeReputation", async () => 
               activeTrustAttestationCount: 4,
               followerCount: 3,
               followingCount: 2,
-              aiTier: 0,
-              aiTierName: "A0",
-              aiDeclared: false,
             },
           },
         ],
@@ -471,7 +406,6 @@ test("ponderApi.getAccuracyLeaderboard forwards includeReputation", async () => 
     });
 
     assert.equal(response.items[0]?.reputation?.followerCount, 3);
-    assert.equal(response.items[0]?.reputation?.aiTierName, "A0");
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -531,8 +465,8 @@ test("ponderApi.getRaterParticipationStatus exposes expanded reputation blocks",
         },
         rater: "0x1111111111111111111111111111111111111111",
         raterType: 2,
-        raterTypeName: "AI",
-        participationLane: "ai_declared",
+        raterTypeName: "Human",
+        participationLane: "open",
         humanCredential: {
           verified: false,
           revoked: false,
@@ -540,46 +474,6 @@ test("ponderApi.getRaterParticipationStatus exposes expanded reputation blocks",
           verifiedAt: null,
           expiresAt: null,
           evidenceHash: null,
-        },
-        aiDeclaration: {
-          declared: true,
-          active: true,
-          inactiveReason: "none",
-          operator: "0x2222222222222222222222222222222222222222",
-          version: 1,
-          effectiveEpoch: "1",
-          expiresAtEpoch: "0",
-          effectiveAt: "1",
-          expiresAt: null,
-          declaredTier: 2,
-          declaredTierName: "A1Verified",
-          effectiveTier: 2,
-          effectiveTierName: "A1Verified",
-          tier: 2,
-          tierName: "A1Verified",
-          behaviorChanged: false,
-          probePending: false,
-          probeStatus: "passed",
-          declarationHash: null,
-          modelClass: 1,
-          modelId: null,
-          provider: null,
-          promptTemplateHash: null,
-          retrievalConfigHash: null,
-          toolingHash: null,
-          disclosure: 1,
-          declaredAt: "1000",
-          retiredAt: null,
-          lastProbeResultHash: null,
-          latestProbe: null,
-        },
-        challengeStatus: {
-          openCount: 0,
-          latestChallengeId: null,
-          latestStatus: 0,
-          latestResolvedAt: null,
-          latestOperatorSlash: "0",
-          latestChallengerReward: "0",
         },
         trust: {
           activeSeed: null,
@@ -607,9 +501,7 @@ test("ponderApi.getRaterParticipationStatus exposes expanded reputation blocks",
         participationPolicy: {
           baseRewardWeightBps: 10000,
           humanVerificationAffectsRewardWeight: false,
-          aiDeclarationAffectsRewardWeight: false,
           verifiedHumanCountsAsLaunchAnchor: true,
-          aiDeclarationCanAnchorLaunchRewards: false,
         },
       }),
       {
@@ -621,7 +513,7 @@ test("ponderApi.getRaterParticipationStatus exposes expanded reputation blocks",
   try {
     const response = await ponderApi.getRaterParticipationStatus("0x1111111111111111111111111111111111111111");
 
-    assert.equal(response.participationLane, "ai_declared");
+    assert.equal(response.participationLane, "open");
     assert.equal(response.humanCredential.status, "missing");
     assert.equal(response.trust.activeInboundAttestationCount, 4);
     assert.equal(response.launchRewards.remainingLaunchCap, "75");

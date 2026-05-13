@@ -1,6 +1,6 @@
 "use client";
 
-import { type Hex, encodeAbiParameters, keccak256, toHex } from "viem";
+import { encodeAbiParameters, keccak256, toHex } from "viem";
 import {
   type QuestionRoundConfig,
   type SerializedQuestionRoundConfig,
@@ -22,7 +22,6 @@ type SubmissionDraft = {
   rewardPoolExpiresAt: bigint;
   feedbackClosesAt: bigint;
   bountyEligibility: number;
-  eligibleAiDeclarationIds: readonly Hex[];
   roundConfig: QuestionRoundConfig;
   rewardAmount: bigint;
   rewardAsset: number;
@@ -45,7 +44,6 @@ type StoredSubmissionReservation = {
   rewardPoolExpiresAt: string;
   feedbackClosesAt: string;
   bountyEligibility: number;
-  eligibleAiDeclarationIds: Hex[];
   roundConfig: SerializedQuestionRoundConfig;
   rewardAmount: string;
   rewardAsset: number;
@@ -119,7 +117,6 @@ export function deriveSubmissionReservationSalt(
         { type: "uint256" },
         { type: "uint256" },
         { type: "uint8" },
-        { type: "bytes32[]" },
         { type: "uint32" },
         { type: "uint32" },
         { type: "uint16" },
@@ -145,7 +142,6 @@ export function deriveSubmissionReservationSalt(
         draft.rewardPoolExpiresAt,
         draft.feedbackClosesAt,
         draft.bountyEligibility,
-        draft.eligibleAiDeclarationIds,
         Number(draft.roundConfig.epochDuration),
         Number(draft.roundConfig.maxDuration),
         Number(draft.roundConfig.minVoters),
@@ -175,7 +171,6 @@ export function buildSubmissionRevealCommitment(
     rewardPoolExpiresAt: draft.rewardPoolExpiresAt,
     feedbackClosesAt: draft.feedbackClosesAt,
     bountyEligibility: draft.bountyEligibility,
-    eligibleAiDeclarationIds: draft.eligibleAiDeclarationIds,
     roundConfig: draft.roundConfig,
     salt,
     submissionKey: draft.submissionKey,
@@ -210,7 +205,6 @@ export function createStoredSubmissionReservation(
     rewardPoolExpiresAt: draft.rewardPoolExpiresAt.toString(),
     feedbackClosesAt: draft.feedbackClosesAt.toString(),
     bountyEligibility: draft.bountyEligibility,
-    eligibleAiDeclarationIds: [...draft.eligibleAiDeclarationIds],
     submissionKey: draft.submissionKey,
     tags: draft.tags,
     title: draft.title,
@@ -235,7 +229,6 @@ export function submissionReservationMatchesDraft(
     reservation.rewardPoolExpiresAt === draft.rewardPoolExpiresAt.toString() &&
     reservation.feedbackClosesAt === draft.feedbackClosesAt.toString() &&
     reservation.bountyEligibility === draft.bountyEligibility &&
-    stringArraysEqual(reservation.eligibleAiDeclarationIds, draft.eligibleAiDeclarationIds) &&
     questionRoundConfigsEqual(coerceQuestionRoundConfig(reservation.roundConfig), draft.roundConfig) &&
     reservation.requiredSettledRounds === draft.requiredSettledRounds.toString() &&
     reservation.requiredVoters === draft.requiredVoters.toString() &&

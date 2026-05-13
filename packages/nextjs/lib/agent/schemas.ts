@@ -96,15 +96,9 @@ const agentBountyInputSchema = {
     },
     bountyEligibility: {
       default: 0,
-      description:
-        "Bounty payout scope: 0 everyone, 1 verified humans, 2 validated AI, 3 verified humans or validated AI, 4 specific AI declarations. Everyone can still answer.",
-      enum: [0, 1, 2, 3, 4, "0", "1", "2", "3", "4"],
+      description: "Bounty payout scope: 0 everyone, 1 verified humans. Everyone can still answer.",
+      enum: [0, 1, "0", "1"],
       type: ["integer", "string"],
-    },
-    eligibleAiDeclarationIds: {
-      description: "bytes32 AI declaration hashes. Required only when bountyEligibility is 4.",
-      items: { pattern: "^0x[0-9a-fA-F]{64}$", type: "string" },
-      type: "array",
     },
     requiredSettledRounds: {
       description: "Required settled rounds for the bounty.",
