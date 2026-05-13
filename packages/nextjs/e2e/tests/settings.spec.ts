@@ -1,9 +1,10 @@
 import { expect, test } from "../fixtures/wallet";
-import { ANVIL_ACCOUNTS } from "../helpers/anvil-accounts";
 import { readTokenBalance } from "../helpers/admin-helpers";
+import { ANVIL_ACCOUNTS } from "../helpers/anvil-accounts";
 import { CONTRACT_ADDRESSES } from "../helpers/contracts";
 import { gotoWithRetry } from "../helpers/wait-helpers";
 import { setupWallet } from "../helpers/wallet-session";
+import { installLocalE2EWorldIdMock, readActiveHumanCredential } from "../helpers/world-id";
 
 test.describe("Settings page", () => {
   test("delegation tab can transfer LREP to another address", async ({ connectedPage: page }) => {
@@ -68,5 +69,25 @@ test.describe("Settings page", () => {
     await expect(page.getByRole("heading", { name: "Gas and wallet funding" })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByRole("heading", { name: "Top up network fees" })).toBeVisible();
     await expect(page.getByText("ETH top-up is available on World Chain mainnet deployments.")).toBeVisible();
+  });
+
+  test("world id mock flow attests an active human credential on-chain", async ({ page }) => {
+    test.setTimeout(90_000);
+
+    const account = ANVIL_ACCOUNTS.account2;
+    const registryAddress = CONTRACT_ADDRESSES.RaterRegistry;
+
+    await setupWallet(page, account.privateKey);
+    await installLocalE2EWorldIdMock(page, account.address);
+    await gotoWithRetry(page, "/settings#identity", { ensureWalletConnected: true });
+
+    await expect(page.getByRole("heading", { name: "Human credential" })).toBeVisible({ timeout: 15_000 });
+
+    const verifyButton = page.getByRole("button", { name: "Verify with World ID" });
+    await expect(verifyButton).toBeEnabled({ timeout: 15_000 });
+    await verifyButton.click();
+
+    await expect(page.getByText("World ID verified")).toBeVisible({ timeout: 45_000 });
+    await expect.poll(() => readActiveHumanCredential(account.address, registryAddress)).toBe(true);
   });
 });

@@ -21,4 +21,5 @@ export const CONTRACT_ADDRESSES = {
   QuestionRewardPoolEscrow: chain31337.QuestionRewardPoolEscrow.address,
   VoterIdNFT: chain31337.VoterIdNFT.address,
   ParticipationPool: chain31337.ParticipationPool.address,
+  RaterRegistry: chain31337.RaterRegistry.address,
 } as const;
