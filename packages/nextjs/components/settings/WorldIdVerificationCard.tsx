@@ -1,16 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useId, useMemo, useState } from "react";
-import { IDKitRequestWidget, type IDKitResult, type RpContext, orbLegacy } from "@worldcoin/idkit";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { IDKit, type IDKitResult, type RpContext, orbLegacy } from "@worldcoin/idkit";
 import { formatUnits, zeroAddress } from "viem";
 import { useAccount } from "wagmi";
 import {
+  ArrowTopRightOnSquareIcon,
   CheckCircleIcon,
   ClipboardDocumentIcon,
   ExclamationTriangleIcon,
+  QrCodeIcon,
   ShieldCheckIcon,
   XMarkIcon,
 } from "@heroicons/react/24/outline";
+import { WorldIdQrCode } from "~~/components/settings/WorldIdQrCode";
 import { useCopyToClipboard, useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
 import { getLaunchReferralInputState, resolveLaunchClaimReferrer } from "~~/lib/referrals/launchReferral";
 import {
@@ -21,10 +24,13 @@ import {
 } from "~~/lib/referrals/referralAttribution";
 import { getWorldIdClientConfig } from "~~/lib/world-id/config";
 import { parseWorldIdLegacyProof } from "~~/lib/world-id/onchainProof";
+import { formatWorldIdError, getWorldIdRequestPanelState } from "~~/lib/world-id/verificationUiState";
 import { notification } from "~~/utils/scaffold-eth";
 
 const LREP_DECIMALS = 6;
 const REFERRAL_BONUS_BPS = 5_000n;
+const WORLD_ID_POLL_INTERVAL_MS = 1_000;
+const WORLD_ID_REQUEST_TIMEOUT_MS = 15 * 60_000;
 
 type RpContextResponse = {
   action: string;
@@ -38,12 +44,60 @@ type VerificationState =
   | { status: "verified"; nullifier: string | null; verifiedAt: string }
   | { status: "error"; message: string };
 
-function formatWorldIdError(errorCode: string) {
-  return errorCode.replace(/_/g, " ");
-}
+type WorldIdPollRequest = {
+  pollOnce: () => Promise<
+    | { type: "waiting_for_connection" }
+    | { type: "awaiting_confirmation" }
+    | { type: "confirmed"; result?: IDKitResult }
+    | { type: "failed"; error?: string }
+  >;
+};
 
 function getWorldIdSignal(address: string | undefined) {
   return address?.toLowerCase() ?? "";
+}
+
+function sleep(ms: number, signal: AbortSignal) {
+  return new Promise<void>(resolve => {
+    const timeoutId = window.setTimeout(resolve, ms);
+    signal.addEventListener(
+      "abort",
+      () => {
+        window.clearTimeout(timeoutId);
+        resolve();
+      },
+      { once: true },
+    );
+  });
+}
+
+async function pollWorldIdRequest(
+  request: WorldIdPollRequest,
+  options: {
+    signal: AbortSignal;
+    onAwaitingConfirmation: (value: boolean) => void;
+  },
+) {
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt <= WORLD_ID_REQUEST_TIMEOUT_MS) {
+    if (options.signal.aborted) {
+      return { success: false as const, error: "cancelled" };
+    }
+
+    const status = await request.pollOnce();
+    if (status.type === "confirmed" && status.result) {
+      return { success: true as const, result: status.result };
+    }
+    if (status.type === "failed") {
+      return { success: false as const, error: status.error ?? "generic_error" };
+    }
+
+    options.onAwaitingConfirmation(status.type === "awaiting_confirmation");
+    await sleep(WORLD_ID_POLL_INTERVAL_MS, options.signal);
+  }
+
+  return { success: false as const, error: "timeout" };
 }
 
 function formatLrepAmount(amount: bigint | undefined) {
@@ -62,16 +116,22 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
   const { chain } = useAccount();
   const [open, setOpen] = useState(false);
   const [rpContextResponse, setRpContextResponse] = useState<RpContextResponse | null>(null);
+  const [connectorURI, setConnectorURI] = useState<string | null>(null);
+  const [isPreparingWorldIdRequest, setIsPreparingWorldIdRequest] = useState(false);
+  const [isAwaitingWorldIdApproval, setIsAwaitingWorldIdApproval] = useState(false);
+  const [isSubmittingWorldIdCredential, setIsSubmittingWorldIdCredential] = useState(false);
+  const [worldIdErrorCode, setWorldIdErrorCode] = useState<string | null>(null);
   const [verificationState, setVerificationState] = useState<VerificationState>({ status: "idle" });
   const [referralInput, setReferralInput] = useState("");
   const [shareLink, setShareLink] = useState("");
+  const activeWorldIdRequestRef = useRef(0);
+  const worldIdAbortControllerRef = useRef<AbortController | null>(null);
   const referralInputId = useId();
   const referralHintId = useId();
   const { copyToClipboard, isCopiedToClipboard } = useCopyToClipboard({ successDurationMs: 1_600 });
   const appId = config.appId?.startsWith("app_") ? (config.appId as `app_${string}`) : null;
   const signal = getWorldIdSignal(address);
   const walletAddress = address as `0x${string}` | undefined;
-  const preset = useMemo(() => orbLegacy({ signal }), [signal]);
   const isConfigured = Boolean(appId && config.enabled);
   const canVerify = Boolean(isConfigured && address);
   const { data: hasActiveCredential, refetch: refetchHasActiveCredential } = useScaffoldReadContract({
@@ -183,10 +243,30 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
         : hasInvalidReferral
           ? referralInputState.message
           : null;
+  const worldIdRequestPanelState = getWorldIdRequestPanelState({
+    connectorURI,
+    errorCode: worldIdErrorCode,
+    isAwaitingUserConfirmation: isAwaitingWorldIdApproval,
+    isError: Boolean(worldIdErrorCode),
+    isHostSubmitting: isAttestingCredential || isSubmittingWorldIdCredential,
+    isOpen: open,
+    isPreparing: isPreparingWorldIdRequest,
+  });
+  const isWorldIdRequestBusy =
+    worldIdRequestPanelState.step === "preparing" ||
+    worldIdRequestPanelState.step === "qrReady" ||
+    worldIdRequestPanelState.step === "awaitingApproval" ||
+    worldIdRequestPanelState.step === "submittingTx";
 
   useEffect(() => {
     setReferralInput(getStoredReferralAddress() ?? "");
   }, [address]);
+
+  useEffect(() => {
+    return () => {
+      worldIdAbortControllerRef.current?.abort();
+    };
+  }, []);
 
   useEffect(() => {
     if (!address || typeof window === "undefined") {
@@ -197,9 +277,7 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
     setShareLink(buildReferralLandingUrl(window.location.origin, address));
   }, [address]);
 
-  const prepareWorldIdRequest = useCallback(async () => {
-    setVerificationState({ status: "loading" });
-
+  const fetchWorldIdRequestContext = useCallback(async (): Promise<RpContextResponse> => {
     const response = await fetch("/api/world-id/rp-context", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -210,12 +288,11 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
       throw new Error(body.error ?? "World ID is not ready for this deployment.");
     }
 
-    setRpContextResponse({
+    return {
       action: body.action,
       environment: body.environment,
       rpContext: body.rpContext,
-    });
-    setOpen(true);
+    };
   }, []);
 
   const refreshLaunchReads = useCallback(async () => {
@@ -263,14 +340,14 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
   }, [copyToClipboard, shareLink]);
 
   const handleVerify = useCallback(
-    async (idkitResponse: IDKitResult) => {
+    async (idkitResponse: IDKitResult, requestContext: RpContextResponse | null = rpContextResponse) => {
       if (!address || !chain?.id) {
         const message = "Connect a wallet on a supported chain before verifying.";
         setVerificationState({ status: "error", message });
         throw new Error(message);
       }
 
-      if (!rpContextResponse) {
+      if (!requestContext) {
         const message = "World ID is not ready for this deployment.";
         setVerificationState({ status: "error", message });
         throw new Error(message);
@@ -278,7 +355,7 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
 
       try {
         const parsedProof = parseWorldIdLegacyProof(idkitResponse, {
-          expectedAction: rpContextResponse.action,
+          expectedAction: requestContext.action,
           expectedSignal: signal,
         });
 
@@ -367,10 +444,10 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
       isVerifiedBonusClaimed,
       raterFullLaunchCapUnlocked,
       refreshLaunchReads,
-      rpContextResponse,
       signal,
       unlockFullEarnedRaterCap,
       walletAddress,
+      rpContextResponse,
     ],
   );
 
@@ -450,16 +527,110 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
     [refreshLaunchReads],
   );
 
+  const resetWorldIdRequest = useCallback((nextVerificationState: VerificationState = { status: "idle" }) => {
+    activeWorldIdRequestRef.current += 1;
+    worldIdAbortControllerRef.current?.abort();
+    worldIdAbortControllerRef.current = null;
+    setOpen(false);
+    setConnectorURI(null);
+    setIsAwaitingWorldIdApproval(false);
+    setIsPreparingWorldIdRequest(false);
+    setIsSubmittingWorldIdCredential(false);
+    setRpContextResponse(null);
+    setVerificationState(nextVerificationState);
+    setWorldIdErrorCode(null);
+  }, []);
+
   const handleStart = useCallback(async () => {
+    if (!appId || !address) {
+      return;
+    }
+
+    const requestId = activeWorldIdRequestRef.current + 1;
+    activeWorldIdRequestRef.current = requestId;
+    worldIdAbortControllerRef.current?.abort();
+    const abortController = new AbortController();
+    worldIdAbortControllerRef.current = abortController;
+
+    setOpen(true);
+    setConnectorURI(null);
+    setIsAwaitingWorldIdApproval(false);
+    setIsPreparingWorldIdRequest(true);
+    setRpContextResponse(null);
+    setVerificationState({ status: "loading" });
+    setWorldIdErrorCode(null);
+
     try {
-      await prepareWorldIdRequest();
+      const requestContext = await fetchWorldIdRequestContext();
+      if (activeWorldIdRequestRef.current !== requestId || abortController.signal.aborted) {
+        return;
+      }
+
+      setRpContextResponse(requestContext);
+      const request = await IDKit.request({
+        action: requestContext.action,
+        allow_legacy_proofs: true,
+        app_id: appId,
+        environment: requestContext.environment,
+        rp_context: requestContext.rpContext,
+      }).preset(orbLegacy({ signal }));
+      if (activeWorldIdRequestRef.current !== requestId || abortController.signal.aborted) {
+        return;
+      }
+
+      setConnectorURI(request.connectorURI);
+      setIsPreparingWorldIdRequest(false);
+
+      const completion = await pollWorldIdRequest(request, {
+        onAwaitingConfirmation: value => {
+          if (activeWorldIdRequestRef.current === requestId) {
+            setIsAwaitingWorldIdApproval(value);
+          }
+        },
+        signal: abortController.signal,
+      });
+      if (activeWorldIdRequestRef.current !== requestId || abortController.signal.aborted) {
+        return;
+      }
+
+      if (!completion.success) {
+        const message = `World ID returned ${formatWorldIdError(completion.error)}.`;
+        setVerificationState({ status: "error", message });
+        setWorldIdErrorCode(completion.error);
+        return;
+      }
+
+      setIsSubmittingWorldIdCredential(true);
+      try {
+        await handleVerify(completion.result, requestContext);
+        if (activeWorldIdRequestRef.current !== requestId || abortController.signal.aborted) {
+          return;
+        }
+
+        await handleSuccess(completion.result);
+      } finally {
+        if (activeWorldIdRequestRef.current === requestId) {
+          setIsSubmittingWorldIdCredential(false);
+        }
+      }
     } catch (error) {
+      if (activeWorldIdRequestRef.current !== requestId || abortController.signal.aborted) {
+        return;
+      }
+
+      const message = error instanceof Error ? error.message : "World ID is not ready for this deployment.";
       setVerificationState({
         status: "error",
-        message: error instanceof Error ? error.message : "World ID is not ready for this deployment.",
+        message,
       });
+      setWorldIdErrorCode("generic_error");
+    } finally {
+      if (activeWorldIdRequestRef.current === requestId) {
+        setIsPreparingWorldIdRequest(false);
+        setIsAwaitingWorldIdApproval(false);
+      }
     }
-  }, [prepareWorldIdRequest]);
+  }, [address, appId, fetchWorldIdRequestContext, handleSuccess, handleVerify, signal]);
 
   return (
     <section className="surface-card rounded-2xl p-6">
@@ -479,11 +650,11 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
           <button
             type="button"
             className="btn btn-primary gap-2"
-            disabled={!canVerify || verificationState.status === "loading"}
+            disabled={!canVerify || isWorldIdRequestBusy}
             onClick={() => void handleStart()}
           >
             <ShieldCheckIcon className="h-5 w-5" />
-            {verificationState.status === "loading" || isAttestingCredential ? "Verifying..." : "Verify with World ID"}
+            {isWorldIdRequestBusy ? "Verifying..." : "Verify with World ID"}
           </button>
           {!isConfigured ? (
             <p className="text-sm leading-relaxed text-base-content/55">
@@ -494,6 +665,56 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
           ) : null}
         </div>
       </div>
+
+      {open && worldIdRequestPanelState.step !== "idle" ? (
+        <div className="mt-5 border-t border-base-300 pt-5">
+          <div className="grid gap-4 md:grid-cols-[minmax(0,280px)_minmax(0,1fr)] md:items-center">
+            <div className="hidden justify-center md:flex">
+              <div className="aspect-square w-full max-w-64 rounded-2xl border border-base-300 bg-white p-3 shadow-sm">
+                {connectorURI ? (
+                  <WorldIdQrCode data={connectorURI} />
+                ) : (
+                  <div className="flex h-full items-center justify-center text-base-content/35">
+                    <span className="loading loading-spinner loading-lg" />
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-base-content/55">
+                  <QrCodeIcon className="h-4 w-4" />
+                  World App
+                </div>
+                <h4 className="mt-2 text-xl font-semibold text-base-content">{worldIdRequestPanelState.title}</h4>
+                <p className="mt-2 text-sm leading-relaxed text-base-content/60">{worldIdRequestPanelState.detail}</p>
+              </div>
+
+              {connectorURI ? (
+                <div className="flex flex-wrap gap-2">
+                  <a className="btn btn-secondary gap-2 md:btn-outline" href={connectorURI}>
+                    <ArrowTopRightOnSquareIcon className="h-4 w-4" />
+                    Open World App
+                  </a>
+                </div>
+              ) : null}
+
+              <div className="flex flex-wrap gap-2">
+                {worldIdRequestPanelState.canRetry ? (
+                  <button type="button" className="btn btn-primary btn-sm" onClick={() => void handleStart()}>
+                    Try again
+                  </button>
+                ) : null}
+                {worldIdRequestPanelState.canCancel ? (
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => resetWorldIdRequest()}>
+                    Cancel
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {verificationState.status === "verified" ? (
         <div className="mt-5 flex items-start gap-3 rounded-2xl bg-success/10 px-4 py-3 text-sm text-success">
@@ -662,24 +883,6 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
           ) : null}
         </div>
       </div>
-
-      {appId && rpContextResponse ? (
-        <IDKitRequestWidget
-          open={open}
-          onOpenChange={setOpen}
-          app_id={appId}
-          action={rpContextResponse.action}
-          rp_context={rpContextResponse.rpContext}
-          allow_legacy_proofs={true}
-          preset={preset}
-          environment={rpContextResponse.environment}
-          handleVerify={handleVerify}
-          onError={errorCode => {
-            setVerificationState({ status: "error", message: `World ID returned ${formatWorldIdError(errorCode)}.` });
-          }}
-          onSuccess={handleSuccess}
-        />
-      ) : null}
     </section>
   );
 }
