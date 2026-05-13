@@ -73,8 +73,6 @@
     "agents:templates": "yarn workspace @rateloop/agents templates",
     "keeper:start": "yarn workspace @rateloop/keeper start",
     "keeper:dev": "yarn workspace @rateloop/keeper dev",
-    "prober:start": "yarn workspace @rateloop/prober start",
-    "prober:dev": "yarn workspace @rateloop/prober dev",
     "node-utils:check-types": "yarn workspace @rateloop/node-utils check-types",
     "sdk:test": "yarn workspace @rateloop/sdk test",
     "sdk:check-types": "yarn workspace @rateloop/sdk check-types",
