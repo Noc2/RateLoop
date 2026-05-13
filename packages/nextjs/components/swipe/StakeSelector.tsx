@@ -434,7 +434,7 @@ export function StakeSelector({
                     <span>Submitting...</span>
                   </span>
                 ) : amount === 0 ? (
-                  "Submit report"
+                  "Submit"
                 ) : (
                   `Stake ${amount} ${symbol}`
                 )}
