@@ -334,6 +334,10 @@ export interface PonderContentItem {
     allocatedAmount?: string;
     requiredCompleters: number;
     requiredSettledRounds: number;
+    frontendFeeBps?: number;
+    bountyEligibility?: number | null;
+    bountyEligibilityDataHash?: string | null;
+    bountyOpensAt?: string;
     questionCount: number;
     completedRoundSetCount: number;
     totalRecordedQuestionRounds: number;

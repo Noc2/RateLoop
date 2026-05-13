@@ -179,6 +179,63 @@ test("buildAgentResultPackage separates all answers from scoped bounty-eligible 
   assert.equal(result.answerScopes.bountyEligibleAnswers.distribution?.up.share, 0.5);
 });
 
+test("buildAgentResultPackage uses bundle bounty scope when no single-question reward pool exists", () => {
+  const result = buildAgentResultPackage({
+    audienceContext: null,
+    bountyEligibleVotes: [
+      { isUp: true, revealed: true, stake: "100" },
+      { isUp: false, revealed: true, stake: "100" },
+    ],
+    content: content({
+      bundle: {
+        allocatedAmount: "1000000",
+        asset: 1,
+        bountyClosesAt: "2000",
+        bountyEligibility: 1,
+        bountyEligibilityDataHash: `0x${"0".repeat(64)}`,
+        bountyOpensAt: "1000",
+        claimedAmount: "0",
+        claimedCount: 0,
+        completedRoundSetCount: 1,
+        failed: false,
+        feedbackClosesAt: "2000",
+        frontendFeeBps: 300,
+        fundedAmount: "1000000",
+        id: "bundle-1",
+        questionCount: 2,
+        refunded: false,
+        refundedAmount: "0",
+        requiredCompleters: 3,
+        requiredSettledRounds: 1,
+        totalRecordedQuestionRounds: 2,
+        unallocatedAmount: "0",
+      },
+      rewardPoolSummary: null,
+    }),
+    feedback: [],
+    latestRound: {
+      downCount: 1,
+      downPool: "100",
+      revealedCount: 3,
+      roundId: "2",
+      settledAt: "100",
+      state: ROUND_STATE.Settled,
+      totalStake: "300",
+      upCount: 2,
+      upPool: "200",
+      upWins: true,
+      voteCount: 3,
+    },
+    publicUrl: null,
+  });
+
+  assert.equal(result.answerScopes.bountyEligibleAnswers.policy.label, "Verified humans");
+  assert.equal(result.answerScopes.bountyEligibleAnswers.policy.mode, 1);
+  assert.equal(result.answerScopes.bountyEligibleAnswers.qualifiedRoundCount, 1);
+  assert.equal(result.answerScopes.bountyEligibleAnswers.rewardPoolCount, 1);
+  assert.equal(result.answerScopes.bountyEligibleAnswers.distribution?.up.share, 0.5);
+});
+
 test("buildAgentResultPackage exposes feedback source URLs for agents", () => {
   const result = buildAgentResultPackage({
     audienceContext: null,

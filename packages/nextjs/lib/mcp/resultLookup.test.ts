@@ -332,6 +332,136 @@ test("curyo_get_result returns schema-shaped pending packages before content exi
   assert.equal(result.methodology?.ratingSystem, "rateloop.robust_bts_binary.v1");
 });
 
+test("curyo_get_result applies bundle bounty eligibility when loading eligible answers", async () => {
+  let voteQuery: unknown;
+
+  __setMcpToolTestOverridesForTests({
+    getAllVotes: async params => {
+      voteQuery = params;
+      return [
+        {
+          contentId: "789",
+          id: "vote-1",
+          identityVoter: `0x${"a".repeat(40)}`,
+          isUp: true,
+          revealed: true,
+          roundId: "2",
+          stake: "100",
+          voter: `0x${"a".repeat(40)}`,
+        },
+        {
+          contentId: "789",
+          id: "vote-2",
+          identityVoter: `0x${"b".repeat(40)}`,
+          isUp: false,
+          revealed: true,
+          roundId: "2",
+          stake: "100",
+          voter: `0x${"b".repeat(40)}`,
+        },
+      ] as never;
+    },
+    getContentById: async contentId =>
+      ({
+        audienceContext: null,
+        content: {
+          bundle: {
+            allocatedAmount: "1000000",
+            asset: 1,
+            bountyClosesAt: "2000",
+            bountyEligibility: 1,
+            bountyEligibilityDataHash: `0x${"0".repeat(64)}`,
+            bountyOpensAt: "1000",
+            claimedAmount: "0",
+            claimedCount: 0,
+            completedRoundSetCount: 1,
+            failed: false,
+            feedbackClosesAt: "2000",
+            frontendFeeBps: 300,
+            fundedAmount: "1000000",
+            id: "bundle-1",
+            questionCount: 2,
+            refunded: false,
+            refundedAmount: "0",
+            requiredCompleters: 3,
+            requiredSettledRounds: 1,
+            totalRecordedQuestionRounds: 2,
+            unallocatedAmount: "0",
+          },
+          categoryId: "5",
+          conservativeRatingBps: 5000,
+          contentHash: `0x${"1".repeat(64)}`,
+          createdAt: "1",
+          description: "Would this make you want to learn more?",
+          id: contentId,
+          lastActivityAt: "2",
+          openRound: null,
+          questionMetadataHash: `0x${"2".repeat(64)}`,
+          rating: 50,
+          resultSpecHash: null,
+          rewardPoolSummary: null,
+          status: 0,
+          submitter: `0x${"3".repeat(40)}`,
+          tags: "agent,pitch",
+          title: "Pitch interest",
+          totalRounds: 1,
+          totalVotes: 2,
+          url: "https://example.com/pitch",
+        },
+        ratings: [],
+        rounds: [
+          {
+            downCount: 1,
+            downPool: "100",
+            revealedCount: 2,
+            roundId: "2",
+            settledAt: "100",
+            state: 1,
+            totalStake: "200",
+            upCount: 1,
+            upPool: "100",
+            upWins: true,
+            voteCount: 2,
+          },
+        ],
+      }) as never,
+    getRaterParticipationStatus: async address =>
+      ({
+        humanCredential: {
+          verified: address.toLowerCase() === `0x${"a".repeat(40)}`,
+        },
+      }) as never,
+  });
+
+  const result = (await callCuryoMcpTool({
+    agent: AGENT,
+    arguments: {
+      contentId: "789",
+    },
+    name: "curyo_get_result",
+  })) as {
+    answerScopes?: {
+      bountyEligibleAnswers?: {
+        distribution?: {
+          up?: {
+            share?: number | null;
+          };
+        } | null;
+        policy?: {
+          mode?: number | null;
+        };
+      };
+    };
+  };
+
+  assert.deepEqual(voteQuery, {
+    contentId: "789",
+    roundId: "2",
+  });
+  assert.equal(result.answerScopes?.bountyEligibleAnswers?.policy?.mode, 1);
+  assert.equal(result.answerScopes?.bountyEligibleAnswers?.distribution?.up?.share, 1);
+});
+
 test("normalizeToolError preserves category_disallowed for explicit MCP category blocks", () => {
   const normalized = normalizeToolError(new McpToolError("This MCP agent is not allowed to ask in category 6.", 403));
   assert.equal(normalized.code, "category_disallowed");

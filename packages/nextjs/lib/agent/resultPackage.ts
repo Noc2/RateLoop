@@ -218,6 +218,36 @@ function bountyEligibilityLabel(mode: number | null | undefined) {
   }
 }
 
+export function resolveAgentBountyEligibilityScope(content: PonderContentItem) {
+  const rewardPoolSummary = content.rewardPoolSummary;
+  const rewardPoolCount = toNumberValue(rewardPoolSummary?.rewardPoolCount, 0) ?? 0;
+  if (rewardPoolCount > 0) {
+    return {
+      eligibilityDataHash: rewardPoolSummary?.bountyEligibilityDataHash ?? null,
+      mode: rewardPoolSummary?.bountyEligibility ?? null,
+      qualifiedRoundCount: toNumberValue(rewardPoolSummary?.qualifiedRoundCount, 0) ?? 0,
+      rewardPoolCount,
+    };
+  }
+
+  const bundle = content.bundle;
+  if (bundle) {
+    return {
+      eligibilityDataHash: bundle.bountyEligibilityDataHash ?? null,
+      mode: bundle.bountyEligibility ?? 0,
+      qualifiedRoundCount: toNumberValue(bundle.completedRoundSetCount, 0) ?? 0,
+      rewardPoolCount: 1,
+    };
+  }
+
+  return {
+    eligibilityDataHash: null,
+    mode: 0,
+    qualifiedRoundCount: 0,
+    rewardPoolCount: 0,
+  };
+}
+
 function buildDistributionFromVotes(params: {
   roundState: number | null;
   stateLabel: string | null;
@@ -487,11 +517,11 @@ export function buildAgentResultPackage(params: {
       stake: upStake.toString(),
     },
   };
-  const rewardPoolSummary = params.content.rewardPoolSummary;
-  const rewardPoolCount = Number(rewardPoolSummary?.rewardPoolCount ?? 0);
-  const bountyEligibilityMode = rewardPoolCount > 0 ? (rewardPoolSummary?.bountyEligibility ?? null) : 0;
+  const bountyScope = resolveAgentBountyEligibilityScope(params.content);
+  const rewardPoolCount = bountyScope.rewardPoolCount;
+  const bountyEligibilityMode = bountyScope.mode;
   const bountyEligibilityPolicy = {
-    eligibilityDataHash: rewardPoolSummary?.bountyEligibilityDataHash ?? null,
+    eligibilityDataHash: bountyScope.eligibilityDataHash,
     label: bountyEligibilityLabel(bountyEligibilityMode),
     mode: bountyEligibilityMode,
   };
@@ -521,7 +551,7 @@ export function buildAgentResultPackage(params: {
             ? "Bounty eligibility affects reward qualification and payout, not who can answer."
             : "No scoped bounty is attached, so bounty eligibility defaults to everyone.",
       policy: bountyEligibilityPolicy,
-      qualifiedRoundCount: Number(rewardPoolSummary?.qualifiedRoundCount ?? 0),
+      qualifiedRoundCount: bountyScope.qualifiedRoundCount,
       rewardPoolCount,
     },
   };

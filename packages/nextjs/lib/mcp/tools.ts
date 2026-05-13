@@ -12,7 +12,7 @@ import { buildAgentCallbackPayload, callbackEventId, getAgentPublicQuestionUrl }
 import { assertSafeAgentCallbackUrl } from "~~/lib/agent-callbacks/urlSafety";
 import { buildAgentFastLaneGuidance } from "~~/lib/agent/fastLane";
 import { buildAgentLiveAskGuidance } from "~~/lib/agent/liveAskGuidance";
-import { buildAgentResultPackage } from "~~/lib/agent/resultPackage";
+import { buildAgentResultPackage, resolveAgentBountyEligibilityScope } from "~~/lib/agent/resultPackage";
 import {
   agentAskHumansInputSchema,
   agentAskHumansOutputSchema,
@@ -783,8 +783,7 @@ async function loadBountyEligibleVotes(params: {
   dependencies: McpToolDependencies;
   latestRound: ReturnType<typeof latestRoundFromContentResponse>;
 }): Promise<PonderVoteItem[] | null> {
-  const rewardPoolSummary = params.content.rewardPoolSummary;
-  const mode = rewardPoolSummary?.bountyEligibility ?? 0;
+  const { mode } = resolveAgentBountyEligibilityScope(params.content);
   if (mode === null || mode === 0 || !params.latestRound?.roundId) return null;
 
   let votes: PonderVoteItem[];
@@ -792,7 +791,6 @@ async function loadBountyEligibleVotes(params: {
     votes = await params.dependencies.getAllVotes({
       contentId: params.content.id,
       roundId: String(params.latestRound.roundId),
-      state: "revealed",
     });
   } catch {
     return null;
