@@ -2,7 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { LoopReputationAbi, packVoteRoundContext } from "@rateloop/contracts";
-import { ContentRegistryAbi, RoundVotingEngineAbi } from "@rateloop/contracts/abis";
+import { AdvisoryVoteRecorderAbi, ContentRegistryAbi, RoundVotingEngineAbi } from "@rateloop/contracts/abis";
 import { buildCommitVoteParams } from "@rateloop/sdk/vote";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAccount, usePublicClient, useWriteContract } from "wagmi";
@@ -42,6 +42,8 @@ interface RoundVoteParams {
   submitter?: string; // Content submitter address (for self-vote prevention)
 }
 
+const COUNTED_VOTE_MIN_STAKE_WEI = 1_000_000n;
+
 /**
  * Hook for tlock commit-reveal RBTS vote commits using reputation approval + commit.
  * Handles: optional allowance approval followed by a vote commit.
@@ -72,6 +74,9 @@ export function useRoundVote() {
 
   const { data: votingEngineInfo, isLoading: isVotingEngineLoading } = useDeployedContractInfo({
     contractName: "RoundVotingEngine",
+  } as any);
+  const { data: advisoryVoteRecorderInfo, isLoading: isAdvisoryVoteRecorderLoading } = useDeployedContractInfo({
+    contractName: "AdvisoryVoteRecorder",
   } as any);
   const { data: contentRegistryInfo, isLoading: isContentRegistryLoading } = useDeployedContractInfo({
     contractName: "ContentRegistry",
@@ -214,6 +219,25 @@ export function useRoundVote() {
         commitParams;
 
       const roundContext = packVoteRoundContext(runtime.roundId, roundReferenceRatingBps);
+      const isAdvisoryVote = stakeWei < COUNTED_VOTE_MIN_STAKE_WEI;
+      const advisoryVoteRecorderAddress = advisoryVoteRecorderInfo?.address as `0x${string}` | undefined;
+      if (isAdvisoryVote && isAdvisoryVoteRecorderLoading) {
+        setError("Preparing vote. Try again in a moment.");
+        return false;
+      }
+      if (isAdvisoryVote && !advisoryVoteRecorderAddress) {
+        setError("Zero-stake advisory voting is unavailable right now.");
+        return false;
+      }
+      const advisoryVoteRecorderWriteAddress = advisoryVoteRecorderAddress as `0x${string}`;
+      const advisoryVoteArgs = [
+        contentId,
+        roundContext,
+        targetRound,
+        drandChainHash,
+        commitHash,
+        ciphertext,
+      ] as const;
       const commitVoteArgs = [
         contentId,
         roundContext,
@@ -238,36 +262,52 @@ export function useRoundVote() {
         functionName: "commitVote",
         args: commitVoteArgs,
       };
-      const currentAllowance = (await publicClient.readContract({
-        address: hrepInfo.address as `0x${string}`,
-        abi: LoopReputationAbi,
-        functionName: "allowance",
-        args: [address as `0x${string}`, votingEngineInfo.address as `0x${string}`],
-      })) as bigint;
+      const currentAllowance = isAdvisoryVote
+        ? 0n
+        : ((await publicClient.readContract({
+            address: hrepInfo.address as `0x${string}`,
+            abi: LoopReputationAbi,
+            functionName: "allowance",
+            args: [address as `0x${string}`, votingEngineInfo.address as `0x${string}`],
+          })) as bigint);
       const needsApproval = currentAllowance < stakeWei;
 
       if (canUseSponsoredSubmitCalls) {
-        await executeSponsoredCalls(
-          [
-            ...(needsApproval
-              ? [
-                  {
-                    abi: LoopReputationAbi,
-                    address: hrepInfo.address as `0x${string}`,
-                    args: [votingEngineInfo.address, stakeWei] as const,
-                    functionName: "approve",
-                  },
-                ]
-              : []),
-            {
-              abi: RoundVotingEngineAbi,
-              address: votingEngineInfo.address as `0x${string}`,
-              args: commitVoteArgs,
-              functionName: "commitVote",
-            },
-          ],
-          { action: "vote", atomicRequired: true },
-        );
+        if (isAdvisoryVote) {
+          await executeSponsoredCalls(
+            [
+              {
+                abi: AdvisoryVoteRecorderAbi,
+                address: advisoryVoteRecorderWriteAddress,
+                args: advisoryVoteArgs,
+                functionName: "recordAdvisoryVote",
+              },
+            ],
+            { action: "vote", atomicRequired: true },
+          );
+        } else {
+          await executeSponsoredCalls(
+            [
+              ...(needsApproval
+                ? [
+                    {
+                      abi: LoopReputationAbi,
+                      address: hrepInfo.address as `0x${string}`,
+                      args: [votingEngineInfo.address, stakeWei] as const,
+                      functionName: "approve",
+                    },
+                  ]
+                : []),
+              {
+                abi: RoundVotingEngineAbi,
+                address: votingEngineInfo.address as `0x${string}`,
+                args: commitVoteArgs,
+                functionName: "commitVote",
+              },
+            ],
+            { action: "vote", atomicRequired: true },
+          );
+        }
       }
 
       if (!canUseSponsoredSubmitCalls) {
@@ -284,30 +324,59 @@ export function useRoundVote() {
 
         // Direct writes are self-funded here; only the sponsored helper can
         // safely confirm free-transaction reservations with the backend.
-        const estimatedGas = await publicClient.estimateContractGas({
-          address: votingEngineInfo.address,
-          abi: RoundVotingEngineAbi,
-          functionName: "commitVote",
-          args: commitVoteArgs,
-          account: address,
-        });
-        commitVoteRequest.gas = (estimatedGas * 120n) / 100n;
+        if (isAdvisoryVote) {
+          const advisoryVoteRequest: any = {
+            abi: AdvisoryVoteRecorderAbi,
+            address: advisoryVoteRecorderWriteAddress,
+            chainId: targetNetwork.id,
+            functionName: "recordAdvisoryVote",
+            args: advisoryVoteArgs,
+          };
+          const estimatedGas = await publicClient.estimateContractGas({
+            address: advisoryVoteRecorderWriteAddress,
+            abi: AdvisoryVoteRecorderAbi,
+            functionName: "recordAdvisoryVote",
+            args: advisoryVoteArgs,
+            account: address,
+          });
+          advisoryVoteRequest.gas = (estimatedGas * 120n) / 100n;
 
-        wagmiTokenWrite.reset();
-        const transactionHash = await writeTx(() => wagmiTokenWrite.writeContractAsync(commitVoteRequest), {
-          action: "vote",
-          suppressSuccessToast: true,
-        });
-        if (!transactionHash) {
-          return false;
+          wagmiTokenWrite.reset();
+          const transactionHash = await writeTx(() => wagmiTokenWrite.writeContractAsync(advisoryVoteRequest), {
+            action: "vote",
+            suppressSuccessToast: true,
+          });
+          if (!transactionHash) {
+            return false;
+          }
+        } else {
+          const estimatedGas = await publicClient.estimateContractGas({
+            address: votingEngineInfo.address,
+            abi: RoundVotingEngineAbi,
+            functionName: "commitVote",
+            args: commitVoteArgs,
+            account: address,
+          });
+          commitVoteRequest.gas = (estimatedGas * 120n) / 100n;
+
+          wagmiTokenWrite.reset();
+          const transactionHash = await writeTx(() => wagmiTokenWrite.writeContractAsync(commitVoteRequest), {
+            action: "vote",
+            suppressSuccessToast: true,
+          });
+          if (!transactionHash) {
+            return false;
+          }
         }
       }
 
-      addOptimisticVote(contentId, stakeWei, {
-        baseTotalStake: runtime.baseTotalStake,
-        baseVoteCount: runtime.baseVoteCount,
-        roundId: runtime.roundId,
-      });
+      if (!isAdvisoryVote) {
+        addOptimisticVote(contentId, stakeWei, {
+          baseTotalStake: runtime.baseTotalStake,
+          baseVoteCount: runtime.baseVoteCount,
+          roundId: runtime.roundId,
+        });
+      }
       recordLocalVoteCooldown({
         address,
         chainId: targetNetwork.id,
@@ -316,38 +385,40 @@ export function useRoundVote() {
       });
       void queryClient.invalidateQueries({ queryKey: FREE_TRANSACTION_ALLOWANCE_QUERY_KEY });
 
-      queryClient.setQueryData<WalletDisplaySummary | undefined>(
-        getWalletDisplaySummaryQueryKey(address.toLowerCase(), targetNetwork.id),
-        current => {
-          if (!current || current.liquidMicro < stakeWei) return current;
-          const nextSnapshot: WalletDisplaySummary = {
-            ...current,
-            liquidMicro: current.liquidMicro - stakeWei,
-            votingStakedMicro: current.votingStakedMicro + stakeWei,
-            totalStakedMicro: current.totalStakedMicro + stakeWei,
-            totalMicro: current.totalMicro,
-            updatedAt: Date.now(),
-          };
-          persistWalletDisplaySummarySnapshot(address.toLowerCase(), targetNetwork.id, nextSnapshot);
-          return nextSnapshot;
-        },
-      );
-
-      queryClient.setQueryData<{
-        data: { activeStaked: number; activeCount: number; totalVotingStake: number };
-        source: string;
-      }>(getVotingStakesQueryKey(address, targetNetwork.id), old => {
-        if (!old?.data) return old;
-        const added = Number(stakeWei) / 1e6;
-        return {
-          ...old,
-          data: {
-            activeStaked: old.data.activeStaked + added,
-            activeCount: old.data.activeCount + 1,
-            totalVotingStake: old.data.totalVotingStake + added,
+      if (!isAdvisoryVote) {
+        queryClient.setQueryData<WalletDisplaySummary | undefined>(
+          getWalletDisplaySummaryQueryKey(address.toLowerCase(), targetNetwork.id),
+          current => {
+            if (!current || current.liquidMicro < stakeWei) return current;
+            const nextSnapshot: WalletDisplaySummary = {
+              ...current,
+              liquidMicro: current.liquidMicro - stakeWei,
+              votingStakedMicro: current.votingStakedMicro + stakeWei,
+              totalStakedMicro: current.totalStakedMicro + stakeWei,
+              totalMicro: current.totalMicro,
+              updatedAt: Date.now(),
+            };
+            persistWalletDisplaySummarySnapshot(address.toLowerCase(), targetNetwork.id, nextSnapshot);
+            return nextSnapshot;
           },
-        };
-      });
+        );
+
+        queryClient.setQueryData<{
+          data: { activeStaked: number; activeCount: number; totalVotingStake: number };
+          source: string;
+        }>(getVotingStakesQueryKey(address, targetNetwork.id), old => {
+          if (!old?.data) return old;
+          const added = Number(stakeWei) / 1e6;
+          return {
+            ...old,
+            data: {
+              activeStaked: old.data.activeStaked + added,
+              activeCount: old.data.activeCount + 1,
+              totalVotingStake: old.data.totalVotingStake + added,
+            },
+          };
+        });
+      }
       queryClient.invalidateQueries({ queryKey: getVotingStakesQueryKey(address, targetNetwork.id) });
       queryClient.invalidateQueries({ queryKey: getRecentUserVotesQueryKey(address, targetNetwork.id) });
       queryClient.invalidateQueries({ queryKey: getVoteHistoryQueryKey(address, targetNetwork.id) });

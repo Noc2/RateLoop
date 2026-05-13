@@ -295,6 +295,52 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
         if (!transactionHash) {
           throw new Error("World ID credential transaction was not submitted.");
         }
+
+        if (!isVerifiedBonusClaimed && currentVerifiedBonus !== undefined && currentVerifiedBonus > 0n && !hasInvalidReferral) {
+          try {
+            await claimVerifiedBonus(
+              {
+                functionName: "claimVerifiedBonus",
+                args: [claimReferrer],
+              },
+              {
+                action: "claim launch bonus",
+                suppressSuccessToast: true,
+              },
+            );
+            if (claimReferrer !== zeroAddress) {
+              clearStoredReferralAttribution();
+              setReferralInput("");
+            }
+            notification.success("Launch bonus claimed.");
+          } catch {
+            // Verification succeeded. The separate claim control remains available if the bonus claim needs a retry.
+          }
+        }
+
+        if (
+          walletAddress &&
+          raterFullLaunchCapUnlocked === false &&
+          fullEarnedRaterCap !== undefined &&
+          activeEarnedRaterCap !== undefined &&
+          fullEarnedRaterCap > activeEarnedRaterCap
+        ) {
+          try {
+            await unlockFullEarnedRaterCap(
+              {
+                functionName: "unlockFullEarnedRaterCap",
+                args: [walletAddress],
+              },
+              {
+                action: "unlock full earned-rater cap",
+                suppressSuccessToast: true,
+              },
+            );
+            notification.success("Full earned-rater launch cap unlocked.");
+          } catch {
+            // Verification succeeded. The separate unlock control remains available if catch-up needs a retry.
+          }
+        }
       } catch (error) {
         const message = error instanceof Error ? error.message : "World ID credential attestation failed.";
         setVerificationState({ status: "error", message });
@@ -303,7 +349,24 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
 
       await refreshLaunchReads();
     },
-    [address, attestWorldIdCredential, chain?.id, refreshLaunchReads, rpContextResponse, signal],
+    [
+      activeEarnedRaterCap,
+      address,
+      attestWorldIdCredential,
+      chain?.id,
+      claimReferrer,
+      claimVerifiedBonus,
+      currentVerifiedBonus,
+      fullEarnedRaterCap,
+      hasInvalidReferral,
+      isVerifiedBonusClaimed,
+      raterFullLaunchCapUnlocked,
+      refreshLaunchReads,
+      rpContextResponse,
+      signal,
+      unlockFullEarnedRaterCap,
+      walletAddress,
+    ],
   );
 
   const handleClaimVerifiedBonus = useCallback(async () => {

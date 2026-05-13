@@ -775,6 +775,11 @@ function validateSponsoredCalls(
           continue;
         }
         return { ok: false, debugCode: "unsupported_operation" };
+      case "AdvisoryVoteRecorder":
+        if (functionName === "recordAdvisoryVote") {
+          continue;
+        }
+        return { ok: false, debugCode: "unsupported_operation" };
       case "RoundRewardDistributor":
         if (
           functionName === "claimFrontendFee" ||
