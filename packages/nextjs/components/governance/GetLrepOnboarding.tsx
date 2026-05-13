@@ -17,6 +17,8 @@ const DEFAULT_MIN_QUALIFYING_SCORE_BPS = 7_000;
 const DEFAULT_MIN_DISTINCT_VERIFIED_ANCHORS = 2;
 const DEFAULT_MIN_DISTINCT_ANCHOR_ROUNDS = 2;
 const DEFAULT_UNVERIFIED_EARNED_RATER_CAP_BPS = 2_500;
+const actionCardClassName = "surface-card flex h-full flex-col rounded-3xl p-6";
+const actionButtonClassName = "btn btn-primary mt-auto self-end gap-2";
 
 function formatMicroLrep(value: bigint | string | number | null | undefined) {
   if (value === null || value === undefined) return "0";
@@ -38,14 +40,14 @@ function scaleMicroAmount(value: bigint | undefined, bps: number) {
   return (value * BigInt(bps)) / 10_000n;
 }
 
-function ProgressMetric({ label, value, detail }: { label: string; value: string; detail: string }) {
+function ActionStat({ label, value, detail }: { label: string; value: string; detail?: string }) {
   return (
-    <div className="border-t border-base-content/10 py-4 first:border-t-0 first:pt-0 last:pb-0">
-      <div className="flex items-baseline justify-between gap-3">
+    <div className="space-y-1">
+      <div className="flex items-start justify-between gap-4">
         <span className="text-sm font-medium text-base-content/55">{label}</span>
-        <span className="font-mono text-lg font-semibold tabular-nums text-base-content">{value}</span>
+        <span className="text-right font-mono text-base font-semibold tabular-nums text-base-content">{value}</span>
       </div>
-      <p className="mt-1 text-sm leading-5 text-base-content/55">{detail}</p>
+      {detail && <p className="text-sm leading-5 text-base-content/55">{detail}</p>}
     </div>
   );
 }
@@ -108,87 +110,76 @@ export function GetLrepOnboarding({ address }: GetLrepOnboardingProps) {
       : humanVerified
         ? `${formatMicroLrep(currentRaterLaunchCap)} LREP`
         : `${formatMicroLrep(openRaterLaunchCap)} / ${formatMicroLrep(currentRaterLaunchCap)} LREP`;
-  const launchCapDetail = humanVerified
-    ? "Full earned-rater cap is available after eligibility."
-    : "Open wallets can start with a partial cap; verification unlocks the full cap.";
+  const launchCapDetail = humanVerified ? "Full cap unlocked." : "Verify to unlock the full cap.";
 
   return (
     <div className="space-y-6">
       <section className="surface-card rounded-3xl p-6 sm:p-8">
-        <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(260px,0.45fr)]">
-          <div className="max-w-3xl">
-            <h1 className="text-3xl font-semibold text-base-content sm:text-4xl">Start building reputation</h1>
-            <p className="mt-4 text-base leading-7 text-base-content/65">
-              You can earn LREP through protocol participation without buying it. The two useful paths for a new wallet
-              are a one-time verified-human launch bonus, and zero-LREP ratings that can become earned-rater launch
-              credits after rounds settle.
-            </p>
-          </div>
-
-          <div className="lg:border-l lg:border-base-content/10 lg:pl-6">
-            <ProgressMetric
-              label="Verified bonus"
-              value={humanVerified ? "Ready" : verifiedBonusLabel}
-              detail={humanVerified ? "Open identity settings to claim it." : "Verify once, then claim from settings."}
-            />
-            <ProgressMetric
-              label="Launch credits"
-              value={rewardStatusLoading ? "..." : `${qualifyingRatingCount}/${eligibilityRatingCount}`}
-              detail={`${creditedCount.toLocaleString()} zero-LREP credit${creditedCount === 1 ? "" : "s"} recorded.`}
-            />
-            <ProgressMetric label="Earned-rater cap" value={launchCapLabel} detail={launchCapDetail} />
-          </div>
-        </div>
+        <h1 className="text-3xl font-semibold text-base-content sm:text-4xl">Start building reputation</h1>
+        <p className="mt-4 max-w-2xl text-base leading-7 text-base-content/65">
+          Verify once or submit useful zero-LREP ratings to earn starter LREP.
+        </p>
       </section>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <Link
-          href={`${SETTINGS_ROUTE}#identity`}
-          className="group rounded-3xl border border-base-content/10 bg-base-100/80 p-6 transition-colors hover:border-primary/45 hover:bg-base-100"
-        >
+        <section className={actionCardClassName}>
           <div className="flex items-start justify-between gap-4">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/12 text-primary">
               <ShieldCheckIcon className="h-6 w-6" />
             </div>
-            <ArrowRightIcon className="mt-2 h-5 w-5 shrink-0 text-base-content/35 transition-transform group-hover:translate-x-1 group-hover:text-primary" />
           </div>
           <h2 className="mt-5 text-2xl font-semibold text-base-content">Verify as human</h2>
           <p className="mt-3 text-base leading-7 text-base-content/65">
-            Add a wallet-bound World ID credential and claim the decaying verified launch bonus. A verified wallet also
-            helps anchor rounds for other raters.
+            Add a wallet-bound World ID credential, then claim the launch bonus.
           </p>
-          <ul className="mt-5 space-y-2">
-            <PathStep>
-              {humanVerified ? "Credential active on this wallet" : "One optional uniqueness credential"}
-            </PathStep>
-            <PathStep>Claim the launch bonus from identity settings</PathStep>
-            <PathStep>No permanent reward-weight multiplier</PathStep>
-          </ul>
-        </Link>
+          <div className="mt-5 space-y-4">
+            <ActionStat
+              label="Verified bonus"
+              value={humanVerified ? "Ready" : verifiedBonusLabel}
+              detail={humanVerified ? "Claim from identity settings." : "Available after verification."}
+            />
+            <ActionStat
+              label="Credential"
+              value={humanVerified ? "Active" : "Not verified"}
+              detail="No permanent reward multiplier."
+            />
+          </div>
+          <Link href={`${SETTINGS_ROUTE}#identity`} className={actionButtonClassName}>
+            Verify as human
+            <ArrowRightIcon className="h-4 w-4" />
+          </Link>
+        </section>
 
-        <Link
-          href={RATE_ROUTE}
-          className="group rounded-3xl border border-base-content/10 bg-base-100/80 p-6 transition-colors hover:border-[#20D6A3]/50 hover:bg-base-100"
-        >
+        <section className={actionCardClassName}>
           <div className="flex items-start justify-between gap-4">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#20D6A3]/15 text-[#20D6A3]">
               <ChartBarSquareIcon className="h-6 w-6" />
             </div>
-            <ArrowRightIcon className="mt-2 h-5 w-5 shrink-0 text-base-content/35 transition-transform group-hover:translate-x-1 group-hover:text-[#20D6A3]" />
           </div>
           <h2 className="mt-5 text-2xl font-semibold text-base-content">Rate with 0 LREP</h2>
           <p className="mt-3 text-base leading-7 text-base-content/65">
-            Submit a private thumbs-up or thumbs-down rating and a crowd prediction without staking. Good revealed
-            advisory ratings can receive launch credit after eligible rounds settle.
+            Submit private ratings without staking; eligible settled rounds count as launch credits.
           </p>
+          <div className="mt-5 space-y-4">
+            <ActionStat
+              label="Launch credits"
+              value={rewardStatusLoading ? "..." : `${qualifyingRatingCount}/${eligibilityRatingCount}`}
+              detail={`${creditedCount.toLocaleString()} credit${creditedCount === 1 ? "" : "s"} recorded.`}
+            />
+            <ActionStat label="Earned-rater cap" value={launchCapLabel} detail={launchCapDetail} />
+          </div>
           <ul className="mt-5 space-y-2">
-            <PathStep>{scorePercent}%+ RBTS score target for launch credit</PathStep>
+            <PathStep>{scorePercent}%+ RBTS score</PathStep>
             <PathStep>
-              {minDistinctVerifiedAnchors} verified anchors across {minDistinctAnchorRounds} anchored rounds
+              {minDistinctVerifiedAnchors} verified anchors in {minDistinctAnchorRounds} rounds
             </PathStep>
-            <PathStep>Keeper-assisted reveal and advisory credit claim</PathStep>
+            <PathStep>Keeper-assisted claim</PathStep>
           </ul>
-        </Link>
+          <Link href={RATE_ROUTE} className={actionButtonClassName}>
+            Rate with 0 LREP
+            <ArrowRightIcon className="h-4 w-4" />
+          </Link>
+        </section>
       </div>
     </div>
   );
