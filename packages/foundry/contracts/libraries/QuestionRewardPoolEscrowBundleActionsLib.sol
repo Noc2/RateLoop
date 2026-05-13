@@ -238,6 +238,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
     function claimQuestionBundleReward(
         mapping(uint256 => BundleReward) storage bundleRewards,
         mapping(uint256 => BundleQuestion[]) storage bundleQuestions,
+        mapping(uint256 => mapping(uint256 => uint32)) storage bundleQuestionRecordedRounds,
         mapping(uint256 => mapping(uint256 => mapping(uint256 => uint64))) storage bundleRoundIds,
         mapping(uint256 => mapping(uint256 => BundleRoundSetSnapshot)) storage bundleRoundSetSnapshots,
         mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) storage bundleRoundSetRewardClaimed,
@@ -250,6 +251,18 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         uint256 roundSetIndex
     ) external returns (uint256 rewardAmount) {
         BundleReward storage bundle = _getExistingBundleReward(bundleRewards, bundleId);
+        _qualifyPendingBundleRoundSet(
+            bundleRewards,
+            bundleQuestions,
+            bundleQuestionRecordedRounds,
+            bundleRoundIds,
+            bundleRoundSetSnapshots,
+            registry,
+            votingEngine,
+            voterIdNFT,
+            bundleId,
+            bundle
+        );
         require(
             _isBundleRoundSetClaimOpen(bundleRoundSetSnapshots, bundle, bundleId, roundSetIndex), "Bundle not claimable"
         );

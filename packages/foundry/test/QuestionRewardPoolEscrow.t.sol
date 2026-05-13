@@ -1056,6 +1056,26 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertEq(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, voter2), 0);
     }
 
+    function testBundleClaimQualifiesRecordedRoundSetBeforeClaim() public {
+        uint256[] memory contentIds = _submitBundleQuestions();
+        uint256 bundleId = _createSubmissionBundle(contentIds, funder, REWARD_ASSET_USDC, REWARD_POOL_AMOUNT, 3);
+
+        address[] memory voters = _threeVoters();
+        bool[] memory directions = _directions(true, true, false);
+
+        _settleRoundWithoutBundleSync(voters, contentIds[0], directions);
+        _settleRoundWithoutBundleSync(voters, contentIds[1], directions);
+
+        assertEq(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, voter2), 0);
+
+        vm.prank(voter2);
+        uint256 reward = rewardPoolEscrow.claimQuestionBundleReward(bundleId, 0);
+
+        assertEq(reward, REWARD_POOL_AMOUNT / 3);
+        assertEq(usdc.balanceOf(voter2), 1_000e6 + reward);
+        assertEq(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, voter2), 0);
+    }
+
     function testBundleRewardsSnapshotAllCompletersAboveMinimum() public {
         uint256[] memory contentIds = _submitBundleQuestions();
         uint256 bundleId = _createSubmissionBundle(contentIds, funder, REWARD_ASSET_USDC, REWARD_POOL_AMOUNT, 3);
