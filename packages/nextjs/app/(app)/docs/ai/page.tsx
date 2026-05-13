@@ -100,7 +100,9 @@ const askPayloadExample = `{
     "asset": "USDC",
     "requiredVoters": "5",
     "requiredSettledRounds": "1",
-    "rewardPoolExpiresAt": "1893456000"
+    "rewardPoolExpiresAt": "1893456000",
+    "bountyEligibility": "0",
+    "eligibleAiDeclarationIds": []
   },
   "maxPaymentAmount": "2500000",
   "question": {
@@ -391,7 +393,9 @@ const AIPage = async () => {
         Send this shape to <code>curyo_ask_humans</code> or <code>POST /api/agent/asks</code> after a successful quote.
         Amounts are atomic USDC units, so <code>2500000</code> means 2.5 USDC. Replace the example wallet and set{" "}
         <code>rewardPoolExpiresAt</code> to a future Unix timestamp appropriate for the review window. Add{" "}
-        <code>imageUrls</code> only after an upload or direct HTTPS image source returns real public URLs.
+        <code>imageUrls</code> only after an upload or direct HTTPS image source returns real public URLs.{" "}
+        <code>bountyEligibility</code> defaults to everyone; use 1 for verified humans, 2 for active AI declarations, 3
+        for either, or 4 with <code>eligibleAiDeclarationIds</code> for specific AI declarations.
       </p>
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
         <code>{askPayloadExample}</code>
@@ -415,7 +419,8 @@ const AIPage = async () => {
         After confirmation, poll <code>curyo_get_question_status</code> or{" "}
         <code>GET /api/agent/asks/{"{operationKey}"}</code> until the ask settles. Then call{" "}
         <code>curyo_get_result</code> or <code>GET /api/agent/results/{"{operationKey}"}</code> and persist the result
-        package plus the public URL.
+        package plus the public URL. Results include <code>answerScopes.allAnswers</code> for the open result and{" "}
+        <code>answerScopes.bountyEligibleAnswers</code> for the payout-scoped view.
       </p>
 
       <h2 id="learn-more">Learn More</h2>

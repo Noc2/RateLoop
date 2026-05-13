@@ -35,6 +35,8 @@ test("parseX402QuestionRequest normalizes a valid paid question payload", () => 
   assert.equal(payload.bounty.amount, 1_000_000n);
   assert.equal(payload.bounty.rewardPoolExpiresAt, 1_762_000_000n);
   assert.equal(payload.bounty.requiredVoters, 3n);
+  assert.equal(payload.bounty.bountyEligibility, 0);
+  assert.deepEqual(payload.bounty.eligibleAiDeclarationIds, []);
   assert.equal(payload.roundConfig.epochDuration, 1200n);
   assert.equal(payload.questions[0].tags, "Media,Video");
   assert.deepEqual(payload.questions[0].imageUrls, ["https://example.com/preview.jpg"]);
@@ -241,6 +243,23 @@ test("buildX402QuestionOperation binds round config into the payload hash", () =
   assert.notEqual(first.payloadHash, second.payloadHash);
 });
 
+test("buildX402QuestionOperation binds bounty eligibility into the payload hash", () => {
+  const first = buildX402QuestionOperation(parseX402QuestionRequest(VALID_REQUEST));
+  const second = buildX402QuestionOperation(
+    parseX402QuestionRequest({
+      ...VALID_REQUEST,
+      bounty: {
+        ...VALID_REQUEST.bounty,
+        bountyEligibility: "4",
+        eligibleAiDeclarationIds: ["0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],
+      },
+    }),
+  );
+
+  assert.notEqual(first.operationKey, second.operationKey);
+  assert.notEqual(first.payloadHash, second.payloadHash);
+});
+
 test("buildX402QuestionOperation is sensitive to bundle question order", () => {
   const first = buildX402QuestionOperation(
     parseX402QuestionRequest({
@@ -293,6 +312,47 @@ test("parseX402QuestionRequest accepts bundle payouts with multiple settled roun
   });
 
   assert.equal(payload.bounty.requiredSettledRounds, 2n);
+});
+
+test("parseX402QuestionRequest validates specific AI bounty allowlists", () => {
+  const payload = parseX402QuestionRequest({
+    ...VALID_REQUEST,
+    bounty: {
+      ...VALID_REQUEST.bounty,
+      bountyEligibility: "4",
+      eligibleAiDeclarationIds: ["0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],
+    },
+  });
+
+  assert.equal(payload.bounty.bountyEligibility, 4);
+  assert.deepEqual(payload.bounty.eligibleAiDeclarationIds, [
+    "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  ]);
+
+  assert.throws(
+    () =>
+      parseX402QuestionRequest({
+        ...VALID_REQUEST,
+        bounty: {
+          ...VALID_REQUEST.bounty,
+          bountyEligibility: "4",
+        },
+      }),
+    /eligibleAiDeclarationIds is required/,
+  );
+
+  assert.throws(
+    () =>
+      parseX402QuestionRequest({
+        ...VALID_REQUEST,
+        bounty: {
+          ...VALID_REQUEST.bounty,
+          bountyEligibility: "1",
+          eligibleAiDeclarationIds: ["0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],
+        },
+      }),
+    /can only be set for specific AI/,
+  );
 });
 
 test("parseX402QuestionRequest rejects bundle payouts without a bounty close", () => {

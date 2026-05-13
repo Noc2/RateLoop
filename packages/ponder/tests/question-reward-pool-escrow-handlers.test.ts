@@ -128,6 +128,11 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
           bountyClosesAt: 2_592_000n,
           feedbackClosesAt: 2_592_000n,
           frontendFeeBps: 300n,
+          asset: 1n,
+          bountyEligibility: 1n,
+          bountyEligibilityDataHash:
+            "0x1111000000000000000000000000000000000000000000000000000000000000",
+          nonRefundable: false,
         },
         block: { number: 10n, timestamp: 1_700n },
       },
@@ -143,6 +148,10 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
         unallocatedAmount: 100_000_000n,
         frontendFeeBps: 300,
         bountyKind: 0,
+        bountyEligibility: 1,
+        bountyEligibilityDataHash:
+          "0x1111000000000000000000000000000000000000000000000000000000000000",
+        eligibleAiDeclarationIds: "[]",
         challengedRoundId: 0n,
         requiredVoters: 5,
         requiredSettledRounds: 2,
@@ -186,6 +195,68 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
         challengedRoundId: 3n,
         reasonHash,
         updatedAt: 1_800n,
+      },
+    });
+  });
+
+  it("indexes bounty eligibility allowlists", async () => {
+    const { db, updates } = createDb();
+    const registeredHandlers = await loadHandlers();
+    const rewardPoolHandler = registeredHandlers.get(
+      "QuestionRewardPoolEscrow:RewardPoolEligibilitySet",
+    );
+    const bundleHandler = registeredHandlers.get(
+      "QuestionRewardPoolEscrow:QuestionBundleEligibilitySet",
+    );
+
+    expect(rewardPoolHandler).toBeDefined();
+    expect(bundleHandler).toBeDefined();
+
+    const allowedAiDeclarationIds = [
+      "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    ];
+
+    await rewardPoolHandler!({
+      event: {
+        args: {
+          rewardPoolId: 7n,
+          bountyEligibility: 4n,
+          allowedAiDeclarationIds,
+        },
+        block: { number: 12n, timestamp: 1_900n },
+      },
+      context: { db },
+    });
+
+    await bundleHandler!({
+      event: {
+        args: {
+          bundleId: 9n,
+          bountyEligibility: 4n,
+          allowedAiDeclarationIds,
+        },
+        block: { number: 13n, timestamp: 2_000n },
+      },
+      context: { db },
+    });
+
+    expect(updates).toContainEqual({
+      table: "questionRewardPool",
+      key: { id: 7n },
+      values: {
+        bountyEligibility: 4,
+        eligibleAiDeclarationIds: JSON.stringify(allowedAiDeclarationIds),
+        updatedAt: 1_900n,
+      },
+    });
+    expect(updates).toContainEqual({
+      table: "questionBundleReward",
+      key: { id: 9n },
+      values: {
+        bountyEligibility: 4,
+        eligibleAiDeclarationIds: JSON.stringify(allowedAiDeclarationIds),
+        updatedAt: 2_000n,
       },
     });
   });
@@ -358,6 +429,9 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
           feedbackClosesAt: 2_592_000n,
           frontendFeeBps: 300n,
           asset: 1n,
+          bountyEligibility: 4n,
+          bountyEligibilityDataHash:
+            "0x2222000000000000000000000000000000000000000000000000000000000000",
         },
         block: { number: 20n, timestamp: 1_700n },
       },

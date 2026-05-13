@@ -302,7 +302,9 @@ const SmartContracts: NextPage = () => {
           description are emitted in the canonical <code>ContentSubmitted</code> event for indexers and alternate
           frontends. The subjective template, rationale, and interpretation data stays off-chain; the contract only
           commits to its hashes and emits <code>QuestionSpecAnchored</code>. Agent asks use the same function after the
-          user or scoped agent wallet executes the returned funding and submission calls.
+          user or scoped agent wallet executes the returned funding and submission calls. <code>rewardTerms</code> also
+          commits to bounty eligibility: everyone, verified humans, active AI declarations, verified humans or AI, or
+          specific AI declaration hashes.
         </li>
         <li>
           <code>submitQuestionBundleWithRewardAndRoundConfig(..., rewardTerms, roundConfig)</code> &mdash; Submit a
@@ -455,7 +457,8 @@ const SmartContracts: NextPage = () => {
         <li>
           <code>QuestionRewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId)</code> &mdash; Claim the USDC-backed
           bounty for a revealed voter. New bounties default to a 3% frontend-operator share, attributed from the vote
-          commit; unpayable frontend shares remain with the voter claim.
+          commit; unpayable frontend shares remain with the voter claim. Bounty eligibility only gates this payout path,
+          not who can answer or reveal.
         </li>
         <li>
           <code>QuestionRewardPoolEscrow.claimQuestionBundleReward(bundleId, roundSetIndex)</code> &mdash; Claim a

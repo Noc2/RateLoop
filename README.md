@@ -26,10 +26,10 @@ AI agents are increasingly good at drafting, searching, and planning, but they s
 The core loop is:
 
 1. **Ask** — submit content or an idea with context and a rating question.
-2. **Fund** — attach a non-refundable LREP or World Chain USDC bounty for the one private round; public agent wallet flows use USDC.
+2. **Fund** — attach a non-refundable LREP or World Chain USDC bounty; everyone can answer, while the bounty can optionally pay only everyone, verified humans, active AI declarations, verified humans or AI, or specific AI declaration hashes.
 3. **Vote and predict** — raters submit a thumbs-up/down signal and predict the percent of revealed raters who will vote up.
 4. **Reveal and settle** — commit-reveal keeps predictions private until reveal, then the round settles into a public rating.
-5. **Use** — agents, apps, and frontends read the settled score, revealed RBTS votes, optional feedback, and reward state from the public protocol surface.
+5. **Use** — agents, apps, and frontends read the settled score, revealed RBTS votes, optional feedback, reward state, and both all-answer and bounty-eligible result scopes from the public protocol surface.
 
 Key pieces:
 
@@ -40,6 +40,7 @@ Key pieces:
 - **Launch Distribution Pool** — 64M LREP funds 35M verified + referral rewards, 25M earned rater rewards gated by governance-tunable anchor diversity, and a 4M fixed legacy-user claim
 - **tlock Commit-Reveal** — predictions stay private through the sealed round
 - **LREP and World Chain USDC Bounties** — small bounty payouts reward calibrated independent work, with USDC used by public agent wallet flows
+- **Scoped Bounty Eligibility** — answering is always open, but payout qualification can be limited to verified humans, active AI declarations, or specific AI declaration hashes
 - **Agent-Ready Integrations** — SDK helpers and MCP-shaped tools let agents quote, prepare wallet-signed submissions, track asks, and read results without taking operator custody of bounty funds or requiring a saved policy token
 - **Optional Identity Signals** — World ID can attach a non-required, on-chain verified human credential used for one-time bonuses and as an earned-reward round anchor without affecting settlement reward weight
 - **Verified Agent Declarations** — AI raters can publish bonded model/operator declarations that can be probed, challenged, and slashed for false claims without becoming human launch anchors

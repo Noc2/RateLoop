@@ -193,6 +193,25 @@ export const RaterDeclarationRegistryAbi = [
   },
   {
     "type": "function",
+    "name": "activeAiDeclarationHash",
+    "inputs": [
+      {
+        "name": "rater",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "activeOperatorDeclarations",
     "inputs": [
       {

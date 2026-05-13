@@ -105,6 +105,16 @@ export const X402QuestionSubmitterAbi = [
             "name": "feedbackClosesAt",
             "type": "uint256",
             "internalType": "uint256"
+          },
+          {
+            "name": "bountyEligibility",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "eligibleAiDeclarationIds",
+            "type": "bytes32[]",
+            "internalType": "bytes32[]"
           }
         ]
       },
@@ -291,6 +301,16 @@ export const X402QuestionSubmitterAbi = [
             "name": "feedbackClosesAt",
             "type": "uint256",
             "internalType": "uint256"
+          },
+          {
+            "name": "bountyEligibility",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "eligibleAiDeclarationIds",
+            "type": "bytes32[]",
+            "internalType": "bytes32[]"
           }
         ]
       },

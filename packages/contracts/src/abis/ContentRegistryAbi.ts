@@ -1067,6 +1067,16 @@ export const ContentRegistryAbi = [
             "name": "feedbackClosesAt",
             "type": "uint256",
             "internalType": "uint256"
+          },
+          {
+            "name": "bountyEligibility",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "eligibleAiDeclarationIds",
+            "type": "bytes32[]",
+            "internalType": "bytes32[]"
           }
         ]
       },
@@ -1190,6 +1200,16 @@ export const ContentRegistryAbi = [
             "name": "feedbackClosesAt",
             "type": "uint256",
             "internalType": "uint256"
+          },
+          {
+            "name": "bountyEligibility",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "eligibleAiDeclarationIds",
+            "type": "bytes32[]",
+            "internalType": "bytes32[]"
           }
         ]
       },
@@ -1330,6 +1350,16 @@ export const ContentRegistryAbi = [
             "name": "feedbackClosesAt",
             "type": "uint256",
             "internalType": "uint256"
+          },
+          {
+            "name": "bountyEligibility",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "eligibleAiDeclarationIds",
+            "type": "bytes32[]",
+            "internalType": "bytes32[]"
           }
         ]
       },
@@ -1820,6 +1850,18 @@ export const ContentRegistryAbi = [
         "internalType": "uint256"
       },
       {
+        "name": "bountyEligibility",
+        "type": "uint8",
+        "indexed": false,
+        "internalType": "uint8"
+      },
+      {
+        "name": "bountyEligibilityDataHash",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
         "name": "bundleHash",
         "type": "bytes32",
         "indexed": false,
@@ -2147,6 +2189,18 @@ export const ContentRegistryAbi = [
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
+      },
+      {
+        "name": "bountyEligibility",
+        "type": "uint8",
+        "indexed": false,
+        "internalType": "uint8"
+      },
+      {
+        "name": "bountyEligibilityDataHash",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
       },
       {
         "name": "rewardPoolId",

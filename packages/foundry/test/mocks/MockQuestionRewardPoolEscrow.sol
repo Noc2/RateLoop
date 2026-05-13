@@ -11,6 +11,8 @@ contract MockQuestionRewardPoolEscrow {
     uint256 public lastRequiredSettledRounds;
     uint256 public lastBountyClosesAt;
     uint256 public lastFeedbackClosesAt;
+    uint8 public lastBountyEligibility;
+    bytes32[] public lastEligibleAiDeclarationIds;
 
     event MockSubmissionRewardPoolCreated(
         uint256 indexed rewardPoolId,
@@ -35,13 +37,16 @@ contract MockQuestionRewardPoolEscrow {
     function createSubmissionRewardPoolFromRegistry(
         uint256 contentId,
         address funder,
-        address /* payer */,
+        address,
+        /* payer */
         uint8 asset,
         uint256 amount,
         uint256 requiredVoters,
         uint256 requiredSettledRounds,
         uint256 bountyClosesAt,
-        uint256 feedbackClosesAt
+        uint256 feedbackClosesAt,
+        uint8 bountyEligibility,
+        bytes32[] calldata eligibleAiDeclarationIds
     ) external returns (uint256 rewardPoolId) {
         rewardPoolId = nextRewardPoolId++;
         lastContentId = contentId;
@@ -52,6 +57,7 @@ contract MockQuestionRewardPoolEscrow {
         lastRequiredSettledRounds = requiredSettledRounds;
         lastBountyClosesAt = bountyClosesAt;
         lastFeedbackClosesAt = feedbackClosesAt;
+        _storeEligibility(bountyEligibility, eligibleAiDeclarationIds);
         emit MockSubmissionRewardPoolCreated(
             rewardPoolId, contentId, funder, requiredVoters, requiredSettledRounds, bountyClosesAt, feedbackClosesAt
         );
@@ -66,7 +72,9 @@ contract MockQuestionRewardPoolEscrow {
         uint256 requiredCompleters,
         uint256 requiredSettledRounds,
         uint256 bountyClosesAt,
-        uint256 feedbackClosesAt
+        uint256 feedbackClosesAt,
+        uint8 bountyEligibility,
+        bytes32[] calldata eligibleAiDeclarationIds
     ) external returns (uint256 rewardPoolId) {
         rewardPoolId = nextRewardPoolId++;
         lastContentId = bundleId;
@@ -77,8 +85,17 @@ contract MockQuestionRewardPoolEscrow {
         lastRequiredSettledRounds = requiredSettledRounds;
         lastBountyClosesAt = bountyClosesAt;
         lastFeedbackClosesAt = feedbackClosesAt;
+        _storeEligibility(bountyEligibility, eligibleAiDeclarationIds);
         emit MockSubmissionBundleCreated(
             rewardPoolId, bundleId, funder, requiredCompleters, requiredSettledRounds, bountyClosesAt, feedbackClosesAt
         );
+    }
+
+    function _storeEligibility(uint8 bountyEligibility, bytes32[] calldata eligibleAiDeclarationIds) private {
+        lastBountyEligibility = bountyEligibility;
+        delete lastEligibleAiDeclarationIds;
+        for (uint256 i = 0; i < eligibleAiDeclarationIds.length; i++) {
+            lastEligibleAiDeclarationIds.push(eligibleAiDeclarationIds[i]);
+        }
     }
 }

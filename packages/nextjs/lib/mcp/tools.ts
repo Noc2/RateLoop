@@ -59,7 +59,12 @@ import {
   toPermissionlessWalletPayload,
   x402QuestionSubmissionRecordBody,
 } from "~~/lib/x402/questionSubmission";
-import { ponderApi } from "~~/services/ponder/client";
+import {
+  ponderApi,
+  type PonderContentItem,
+  type PonderRaterParticipationStatusResponse,
+  type PonderVoteItem,
+} from "~~/services/ponder/client";
 
 type JsonObject = Record<string, unknown>;
 
@@ -85,7 +90,9 @@ type BackgroundTaskScheduler = (task: () => Promise<void> | void) => void;
 type McpToolDependencies = {
   confirmAgentWalletQuestionSubmissionRequest: typeof confirmAgentWalletQuestionSubmissionRequest;
   enqueueAgentCallbackEvent: typeof enqueueAgentCallbackEvent;
+  getAllVotes: typeof ponderApi.getAllVotes;
   getContentById: typeof ponderApi.getContentById;
+  getRaterParticipationStatus: typeof ponderApi.getRaterParticipationStatus;
   getMcpAgentBudgetSummary: typeof getMcpAgentBudgetSummary;
   prepareAgentWalletQuestionSubmissionRequest: typeof prepareAgentWalletQuestionSubmissionRequest;
   prepareNativeX402QuestionSubmissionRequest: typeof prepareNativeX402QuestionSubmissionRequest;
@@ -105,7 +112,10 @@ function getMcpToolDependencies(): McpToolDependencies {
     confirmAgentWalletQuestionSubmissionRequest:
       mcpToolTestOverrides?.confirmAgentWalletQuestionSubmissionRequest ?? confirmAgentWalletQuestionSubmissionRequest,
     enqueueAgentCallbackEvent: mcpToolTestOverrides?.enqueueAgentCallbackEvent ?? enqueueAgentCallbackEvent,
+    getAllVotes: mcpToolTestOverrides?.getAllVotes ?? (params => ponderApi.getAllVotes(params)),
     getContentById: mcpToolTestOverrides?.getContentById ?? ponderApi.getContentById,
+    getRaterParticipationStatus:
+      mcpToolTestOverrides?.getRaterParticipationStatus ?? ponderApi.getRaterParticipationStatus,
     getMcpAgentBudgetSummary: mcpToolTestOverrides?.getMcpAgentBudgetSummary ?? getMcpAgentBudgetSummary,
     prepareAgentWalletQuestionSubmissionRequest:
       mcpToolTestOverrides?.prepareAgentWalletQuestionSubmissionRequest ?? prepareAgentWalletQuestionSubmissionRequest,
@@ -652,6 +662,71 @@ function latestRoundFromContentResponse(response: Awaited<ReturnType<typeof pond
   return rounds[0] ?? null;
 }
 
+function normalizeHexId(value: string | null | undefined) {
+  return typeof value === "string" ? value.toLowerCase() : "";
+}
+
+function isRaterEligibleForBounty(
+  mode: number | null | undefined,
+  allowedAiDeclarationIds: ReadonlySet<string>,
+  status: PonderRaterParticipationStatusResponse | undefined,
+) {
+  if (mode === 0) return true;
+  if (!status) return false;
+
+  const verifiedHuman = status.humanCredential.verified;
+  const activeAi = status.aiDeclaration.active && status.aiDeclaration.effectiveTier > 0;
+  if (mode === 1) return verifiedHuman;
+  if (mode === 2) return activeAi;
+  if (mode === 3) return verifiedHuman || activeAi;
+  if (mode === 4) return activeAi && allowedAiDeclarationIds.has(normalizeHexId(status.aiDeclaration.declarationHash));
+  return false;
+}
+
+async function loadBountyEligibleVotes(params: {
+  content: PonderContentItem;
+  dependencies: McpToolDependencies;
+  latestRound: ReturnType<typeof latestRoundFromContentResponse>;
+}): Promise<PonderVoteItem[] | null> {
+  const rewardPoolSummary = params.content.rewardPoolSummary;
+  const mode = rewardPoolSummary?.bountyEligibility ?? 0;
+  if (mode === null || mode === 0 || !params.latestRound?.roundId) return null;
+
+  let votes: PonderVoteItem[];
+  try {
+    votes = await params.dependencies.getAllVotes({
+      contentId: params.content.id,
+      roundId: String(params.latestRound.roundId),
+      state: "revealed",
+    });
+  } catch {
+    return null;
+  }
+  const revealedVotes = votes.filter(vote => vote.revealed && vote.isUp !== null);
+  const raterAddresses = [...new Set(revealedVotes.map(vote => normalizeHexId(vote.identityVoter ?? vote.voter)))].filter(
+    Boolean,
+  );
+  const statuses = new Map<string, PonderRaterParticipationStatusResponse>();
+  await Promise.all(
+    raterAddresses.map(async address => {
+      try {
+        statuses.set(address, await params.dependencies.getRaterParticipationStatus(address));
+      } catch {
+        // Missing status data should not make an agent result fail; it simply makes the eligible-only view conservative.
+      }
+    }),
+  );
+
+  const allowedAiDeclarationIds = new Set((rewardPoolSummary?.eligibleAiDeclarationIds ?? []).map(normalizeHexId));
+  return revealedVotes.filter(vote =>
+    isRaterEligibleForBounty(
+      mode,
+      allowedAiDeclarationIds,
+      statuses.get(normalizeHexId(vote.identityVoter ?? vote.voter)),
+    ),
+  );
+}
+
 async function buildQuestionResultForRecord(
   args: JsonObject,
   record: Awaited<ReturnType<typeof getX402QuestionSubmissionByOperationKey>> | null,
@@ -748,8 +823,14 @@ async function buildQuestionResultForRecord(
     response.content.openRound?.roundId ?? null,
   );
   const feedback = await listContentFeedback({ contentId, context: feedbackContext });
+  const bountyEligibleVotes = await loadBountyEligibleVotes({
+    content: response.content,
+    dependencies,
+    latestRound,
+  });
   const resultPackage = buildAgentResultPackage({
     audienceContext: response.audienceContext,
+    bountyEligibleVotes,
     content: response.content,
     feedback: feedback.items,
     latestRound,

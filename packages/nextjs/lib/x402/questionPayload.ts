@@ -53,6 +53,8 @@ export type X402QuestionPayload = {
     requiredSettledRounds: bigint;
     rewardPoolExpiresAt: bigint;
     feedbackClosesAt: bigint;
+    bountyEligibility: number;
+    eligibleAiDeclarationIds: `0x${string}`[];
   };
 };
 
@@ -307,6 +309,10 @@ function normalizeBounty(value: unknown): X402QuestionPayload["bounty"] {
     value.feedbackClosesAt ?? value.rewardPoolExpiresAt ?? 0n,
     "bounty.feedbackClosesAt",
   );
+  const bountyEligibility = Number(
+    parseNonNegativeInteger(value.bountyEligibility ?? 0n, "bounty.bountyEligibility"),
+  );
+  const eligibleAiDeclarationIds = normalizeEligibleAiDeclarationIds(value.eligibleAiDeclarationIds);
 
   if (requiredVoters < X402_MIN_REWARD_POOL_REQUIRED_VOTERS) {
     throw new X402QuestionInputError(`bounty.requiredVoters must be at least ${X402_MIN_REWARD_POOL_REQUIRED_VOTERS}.`);
@@ -325,6 +331,15 @@ function normalizeBounty(value: unknown): X402QuestionPayload["bounty"] {
   if (rewardPoolExpiresAt > 0n && feedbackClosesAt > rewardPoolExpiresAt) {
     throw new X402QuestionInputError("bounty.feedbackClosesAt cannot be after bounty.rewardPoolExpiresAt.");
   }
+  if (bountyEligibility > 4) {
+    throw new X402QuestionInputError("bounty.bountyEligibility must be between 0 and 4.");
+  }
+  if (bountyEligibility === 4 && eligibleAiDeclarationIds.length === 0) {
+    throw new X402QuestionInputError("bounty.eligibleAiDeclarationIds is required for specific AI bounties.");
+  }
+  if (bountyEligibility !== 4 && eligibleAiDeclarationIds.length > 0) {
+    throw new X402QuestionInputError("bounty.eligibleAiDeclarationIds can only be set for specific AI bounties.");
+  }
   assertSupportedX402BundleBounty({
     rewardPoolExpiresAt,
   });
@@ -336,7 +351,22 @@ function normalizeBounty(value: unknown): X402QuestionPayload["bounty"] {
     requiredSettledRounds,
     rewardPoolExpiresAt,
     feedbackClosesAt,
+    bountyEligibility,
+    eligibleAiDeclarationIds,
   };
+}
+
+function normalizeEligibleAiDeclarationIds(value: unknown): `0x${string}`[] {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value)) {
+    throw new X402QuestionInputError("bounty.eligibleAiDeclarationIds must be an array.");
+  }
+  return value.map((item, index) => {
+    if (typeof item !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(item)) {
+      throw new X402QuestionInputError(`bounty.eligibleAiDeclarationIds[${index}] must be a bytes32 hex string.`);
+    }
+    return item.toLowerCase() as `0x${string}`;
+  });
 }
 
 function normalizeRoundConfig(value: unknown): QuestionRoundConfig {
@@ -477,6 +507,8 @@ export function parseX402QuestionRequest(value: unknown, fallbackChainId?: numbe
       bounty: {
         amount: bounty.amount,
         asset: bounty.asset,
+        bountyEligibility: bounty.bountyEligibility,
+        eligibleAiDeclarationIds: bounty.eligibleAiDeclarationIds,
         requiredSettledRounds: bounty.requiredSettledRounds,
         requiredVoters: bounty.requiredVoters,
       },
@@ -534,6 +566,8 @@ export function toCanonicalQuestionPayload(payload: X402QuestionPayload) {
       requiredVoters: payload.bounty.requiredVoters.toString(),
       rewardPoolExpiresAt: payload.bounty.rewardPoolExpiresAt.toString(),
       feedbackClosesAt: payload.bounty.feedbackClosesAt.toString(),
+      bountyEligibility: String(payload.bounty.bountyEligibility),
+      eligibleAiDeclarationIds: payload.bounty.eligibleAiDeclarationIds,
     },
     chainId: payload.chainId,
     clientRequestId: payload.clientRequestId,

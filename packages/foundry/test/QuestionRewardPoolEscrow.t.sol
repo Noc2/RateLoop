@@ -1,30 +1,45 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import {VotingTestBase} from "./helpers/VotingTestHelpers.sol";
-import {ContentRegistry} from "../contracts/ContentRegistry.sol";
-import {HumanReputation} from "../contracts/HumanReputation.sol";
-import {FrontendRegistry} from "../contracts/FrontendRegistry.sol";
-import {MockCategoryRegistry} from "../contracts/mocks/MockCategoryRegistry.sol";
-import {MockERC20} from "../contracts/mocks/MockERC20.sol";
-import {ProtocolConfig} from "../contracts/ProtocolConfig.sol";
-import {QuestionRewardPoolEscrow} from "../contracts/QuestionRewardPoolEscrow.sol";
-import {RoundRewardDistributor} from "../contracts/RoundRewardDistributor.sol";
-import {RoundVotingEngine} from "../contracts/RoundVotingEngine.sol";
-import {RoundEngineReadHelpers} from "./helpers/RoundEngineReadHelpers.sol";
-import {RoundLib} from "../contracts/libraries/RoundLib.sol";
-import {RoundSnapshot} from "../contracts/libraries/QuestionRewardPoolEscrowTypes.sol";
-import {TlockVoteLib} from "../contracts/libraries/TlockVoteLib.sol";
-import {Eip3009Authorization, X402QuestionSubmitter} from "../contracts/X402QuestionSubmitter.sol";
-import {MockQuestionRewardPoolEscrow} from "./mocks/MockQuestionRewardPoolEscrow.sol";
-import {MockVoterIdNFT} from "./mocks/MockVoterIdNFT.sol";
+import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import { VotingTestBase } from "./helpers/VotingTestHelpers.sol";
+import { ContentRegistry } from "../contracts/ContentRegistry.sol";
+import { HumanReputation } from "../contracts/HumanReputation.sol";
+import { FrontendRegistry } from "../contracts/FrontendRegistry.sol";
+import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
+import { MockERC20 } from "../contracts/mocks/MockERC20.sol";
+import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
+import { QuestionRewardPoolEscrow } from "../contracts/QuestionRewardPoolEscrow.sol";
+import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
+import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
+import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
+import { RoundLib } from "../contracts/libraries/RoundLib.sol";
+import { RoundSnapshot } from "../contracts/libraries/QuestionRewardPoolEscrowTypes.sol";
+import { TlockVoteLib } from "../contracts/libraries/TlockVoteLib.sol";
+import { Eip3009Authorization, X402QuestionSubmitter } from "../contracts/X402QuestionSubmitter.sol";
+import { MockQuestionRewardPoolEscrow } from "./mocks/MockQuestionRewardPoolEscrow.sol";
+import { MockVoterIdNFT } from "./mocks/MockVoterIdNFT.sol";
 
 contract MockRaterDeclarationStatusForEscrow {
     mapping(address => bool) public hasActiveAiDeclaration;
+    mapping(address => bytes32) public activeAiDeclarationHash;
 
     function setActiveAiDeclaration(address rater, bool active) external {
         hasActiveAiDeclaration[rater] = active;
+        activeAiDeclarationHash[rater] = active ? keccak256(abi.encodePacked("ai-declaration", rater)) : bytes32(0);
+    }
+
+    function setActiveAiDeclarationHash(address rater, bytes32 declarationHash) external {
+        hasActiveAiDeclaration[rater] = declarationHash != bytes32(0);
+        activeAiDeclarationHash[rater] = declarationHash;
+    }
+}
+
+contract MockRaterRegistryStatusForEscrow {
+    mapping(address => bool) public hasActiveHumanCredential;
+
+    function setActiveHumanCredential(address rater, bool active) external {
+        hasActiveHumanCredential[rater] = active;
     }
 }
 
@@ -68,6 +83,8 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     uint256 internal constant MAX_FRONTEND_FEE_BPS = 500;
     uint256 internal constant BUNDLE_CLAIM_GRACE = 7 days;
     uint256 internal constant BUNDLE_REFUND_GRACE = 98 days;
+    uint8 internal constant BOUNTY_ELIGIBILITY_VERIFIED_HUMAN = 1;
+    uint8 internal constant BOUNTY_ELIGIBILITY_SPECIFIC_AI_DECLARATIONS = 4;
 
     mapping(uint256 => mapping(uint256 => uint256)) internal mockedRoundCommitCount;
 
@@ -85,6 +102,8 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         uint256 feedbackClosesAt,
         uint256 frontendFeeBps,
         uint8 asset,
+        uint8 bountyEligibility,
+        bytes32 bountyEligibilityDataHash,
         bool nonRefundable
     );
     event RewardPoolPurposeSet(
@@ -347,6 +366,60 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertTrue(snapshot.qualified);
         assertEq(snapshot.rawEligibleVoters, 4);
         assertEq(snapshot.eligibleVoters, 40_000);
+    }
+
+    function testVerifiedHumanBountyCountsOnlyVerifiedHumansWhileVotingStaysOpen() public {
+        MockRaterRegistryStatusForEscrow raterStatus = _installRaterRegistryStatus();
+        raterStatus.setActiveHumanCredential(voter1, true);
+        raterStatus.setActiveHumanCredential(voter2, true);
+        raterStatus.setActiveHumanCredential(voter3, true);
+
+        uint256 contentId = _submitQuestion("");
+        bytes32[] memory allowedAiDeclarationIds = new bytes32[](0);
+        uint256 rewardPoolId = _createRewardPoolWithEligibility(
+            contentId, REWARD_POOL_AMOUNT, 3, 1, BOUNTY_ELIGIBILITY_VERIFIED_HUMAN, allowedAiDeclarationIds
+        );
+
+        uint256 roundId = _settleRoundWith(_fourVoters(), contentId, _directions(true, true, false, true));
+        rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
+
+        RoundSnapshot memory snapshot = rewardPoolEscrow.getRoundSnapshot(rewardPoolId, roundId);
+        assertEq(snapshot.rawEligibleVoters, 3);
+        assertGt(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter1), 0);
+        assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter4), 0);
+
+        vm.prank(voter4);
+        vm.expectRevert("Not bounty eligible");
+        rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
+    }
+
+    function testSpecificAiBountyRequiresAllowedActiveDeclarationHash() public {
+        MockRaterDeclarationStatusForEscrow declarationStatus = _installRaterDeclarationStatus();
+        bytes32 voter1Declaration = keccak256("voter1-ai-model");
+        bytes32 voter2Declaration = keccak256("voter2-ai-model");
+        bytes32 voter3Declaration = keccak256("voter3-ai-model");
+        declarationStatus.setActiveAiDeclarationHash(voter1, voter1Declaration);
+        declarationStatus.setActiveAiDeclarationHash(voter2, voter2Declaration);
+        declarationStatus.setActiveAiDeclarationHash(voter3, voter3Declaration);
+        declarationStatus.setActiveAiDeclarationHash(voter4, keccak256("unlisted-ai-model"));
+
+        bytes32[] memory allowedAiDeclarationIds = new bytes32[](3);
+        allowedAiDeclarationIds[0] = voter1Declaration;
+        allowedAiDeclarationIds[1] = voter2Declaration;
+        allowedAiDeclarationIds[2] = voter3Declaration;
+
+        uint256 contentId = _submitQuestion("");
+        uint256 rewardPoolId = _createRewardPoolWithEligibility(
+            contentId, REWARD_POOL_AMOUNT, 3, 1, BOUNTY_ELIGIBILITY_SPECIFIC_AI_DECLARATIONS, allowedAiDeclarationIds
+        );
+
+        uint256 roundId = _settleRoundWith(_fourVoters(), contentId, _directions(true, true, false, true));
+        rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
+
+        RoundSnapshot memory snapshot = rewardPoolEscrow.getRoundSnapshot(rewardPoolId, roundId);
+        assertEq(snapshot.rawEligibleVoters, 3);
+        assertGt(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter1), 0);
+        assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter4), 0);
     }
 
     function testHighValueRewardPoolRequiresHigherParticipantFloor() public {
@@ -679,7 +752,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
     function testRefundableRewardPoolAmountUsesQuestionSelectedVoterCap() public {
         RoundLib.RoundConfig memory roundConfig =
-            RoundLib.RoundConfig({epochDuration: 10 minutes, maxDuration: 1 hours, minVoters: 3, maxVoters: 4});
+            RoundLib.RoundConfig({ epochDuration: 10 minutes, maxDuration: 1 hours, minVoters: 3, maxVoters: 4 });
         uint256 contentId = _submitQuestionWithRoundConfig("https://example.com/small-cap.jpg", roundConfig);
 
         uint256 rewardPoolId = _createRewardPool(contentId, 4, 3, 1);
@@ -690,7 +763,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
     function testRewardPoolRejectsRequiredVotersAboveQuestionCap() public {
         RoundLib.RoundConfig memory roundConfig =
-            RoundLib.RoundConfig({epochDuration: 10 minutes, maxDuration: 1 hours, minVoters: 3, maxVoters: 4});
+            RoundLib.RoundConfig({ epochDuration: 10 minutes, maxDuration: 1 hours, minVoters: 3, maxVoters: 4 });
         uint256 contentId = _submitQuestionWithRoundConfig("https://example.com/impossible-cap.jpg", roundConfig);
 
         vm.startPrank(funder);
@@ -706,7 +779,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             address(registry),
             abi.encodeWithSelector(ContentRegistry.getContentRoundConfig.selector, contentId),
             abi.encode(
-                RoundLib.RoundConfig({epochDuration: 10 minutes, maxDuration: 1 hours, minVoters: 3, maxVoters: 201})
+                RoundLib.RoundConfig({ epochDuration: 10 minutes, maxDuration: 1 hours, minVoters: 3, maxVoters: 201 })
             )
         );
 
@@ -1145,8 +1218,8 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
         uint256 firstRoundId = _revealRoundWith(_fourVoters(), contentIds[0], _directions(true, true, false, true));
         uint256 secondRoundId = _revealRoundWith(_fourVoters(), contentIds[1], _directions(true, true, false, true));
-        assertLe(RoundEngineReadHelpers.round(votingEngine, contentIds[0], firstRoundId).thresholdReachedAt, closesAt);
-        assertLe(RoundEngineReadHelpers.round(votingEngine, contentIds[1], secondRoundId).thresholdReachedAt, closesAt);
+        _assertThresholdReachedAtLe(contentIds[0], firstRoundId, closesAt);
+        _assertThresholdReachedAtLe(contentIds[1], secondRoundId, closesAt);
 
         vm.warp(closesAt + 1);
         votingEngine.settleRound(contentIds[0], firstRoundId);
@@ -1175,8 +1248,8 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             _revealThresholdAndReturnUnrevealed(contentIds[0]);
         (uint256 secondRoundId, bytes32 secondLateCommitKey, bytes32 secondLateSalt, bool secondLateDirection) =
             _revealThresholdAndReturnUnrevealed(contentIds[1]);
-        assertLe(RoundEngineReadHelpers.round(votingEngine, contentIds[0], firstRoundId).thresholdReachedAt, closesAt);
-        assertLe(RoundEngineReadHelpers.round(votingEngine, contentIds[1], secondRoundId).thresholdReachedAt, closesAt);
+        _assertThresholdReachedAtLe(contentIds[0], firstRoundId, closesAt);
+        _assertThresholdReachedAtLe(contentIds[1], secondRoundId, closesAt);
 
         vm.warp(closesAt + 1);
         votingEngine.revealVoteByCommitKey(
@@ -1210,8 +1283,8 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             _revealThresholdAndReturnUnrevealed(contentIds[0]);
         (uint256 secondRoundId, bytes32 secondLateCommitKey, bytes32 secondLateSalt, bool secondLateDirection) =
             _revealThresholdAndReturnUnrevealed(contentIds[1]);
-        assertLe(RoundEngineReadHelpers.round(votingEngine, contentIds[0], firstRoundId).thresholdReachedAt, closesAt);
-        assertLe(RoundEngineReadHelpers.round(votingEngine, contentIds[1], secondRoundId).thresholdReachedAt, closesAt);
+        _assertThresholdReachedAtLe(contentIds[0], firstRoundId, closesAt);
+        _assertThresholdReachedAtLe(contentIds[1], secondRoundId, closesAt);
 
         vm.warp(closesAt + 1);
         votingEngine.revealVoteByCommitKey(
@@ -2079,7 +2152,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         uint256 rewardPoolId = _createRewardPoolWithExpiry(contentId, REWARD_POOL_AMOUNT, 4, 1, expiresAt);
 
         uint256 roundId = _revealRoundWith(_fourVoters(), contentId, _directions(true, true, false, true));
-        assertLe(RoundEngineReadHelpers.round(votingEngine, contentId, roundId).thresholdReachedAt, expiresAt);
+        _assertThresholdReachedAtLe(contentId, roundId, expiresAt);
 
         vm.warp(expiresAt + 1);
         votingEngine.settleRound(contentId, roundId);
@@ -2098,7 +2171,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
         (uint256 roundId, bytes32 lateCommitKey, bytes32 lateSalt, bool lateDirection) =
             _revealThresholdAndReturnUnrevealed(contentId);
-        assertLe(RoundEngineReadHelpers.round(votingEngine, contentId, roundId).thresholdReachedAt, expiresAt);
+        _assertThresholdReachedAtLe(contentId, roundId, expiresAt);
 
         vm.warp(expiresAt + 1);
         votingEngine.revealVoteByCommitKey(contentId, roundId, lateCommitKey, lateDirection, 5_000, lateSalt);
@@ -2124,7 +2197,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
         (uint256 roundId, bytes32 lateCommitKey, bytes32 lateSalt, bool lateDirection) =
             _revealThresholdAndReturnUnrevealed(contentId);
-        assertLe(RoundEngineReadHelpers.round(votingEngine, contentId, roundId).thresholdReachedAt, expiresAt);
+        _assertThresholdReachedAtLe(contentId, roundId, expiresAt);
 
         vm.warp(expiresAt + 1);
         votingEngine.revealVoteByCommitKey(contentId, roundId, lateCommitKey, lateDirection, 5_000, lateSalt);
@@ -2450,7 +2523,9 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             requiredVoters: 3,
             requiredSettledRounds: 1,
             bountyClosesAt: block.timestamp + 30 days,
-            feedbackClosesAt: block.timestamp + 30 days
+            feedbackClosesAt: block.timestamp + 30 days,
+            bountyEligibility: 0,
+            eligibleAiDeclarationIds: new bytes32[](0)
         });
         bytes32 salt = keccak256("agent-wallet-usdc-submission-bounty");
         activeTlockContentRegistry = registry;
@@ -2938,7 +3013,9 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
                 requiredVoters: DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS,
                 requiredSettledRounds: DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
                 bountyClosesAt: DEFAULT_SUBMISSION_REWARD_EXPIRES_AT,
-                feedbackClosesAt: DEFAULT_SUBMISSION_REWARD_EXPIRES_AT
+                feedbackClosesAt: DEFAULT_SUBMISSION_REWARD_EXPIRES_AT,
+                bountyEligibility: 0,
+                eligibleAiDeclarationIds: new bytes32[](0)
             }),
             roundConfig
         );
@@ -2979,7 +3056,9 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             requiredVoters: 3,
             requiredSettledRounds: 1,
             bountyClosesAt: block.timestamp + 30 days,
-            feedbackClosesAt: block.timestamp + 30 days
+            feedbackClosesAt: block.timestamp + 30 days,
+            bountyEligibility: 0,
+            eligibleAiDeclarationIds: new bytes32[](0)
         });
         question.spec = ContentRegistry.QuestionSpecCommitment({
             questionMetadataHash: keccak256("x402-question-metadata"), resultSpecHash: keccak256("x402-result-spec")
@@ -3074,7 +3153,9 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             requiredVoters: 3,
             requiredSettledRounds: 1,
             bountyClosesAt: block.timestamp + 30 days,
-            feedbackClosesAt: block.timestamp + 30 days
+            feedbackClosesAt: block.timestamp + 30 days,
+            bountyEligibility: 0,
+            eligibleAiDeclarationIds: new bytes32[](0)
         });
         bytes32 salt = keccak256(abi.encodePacked(path, agentWallet));
         activeTlockContentRegistry = registry;
@@ -3194,10 +3275,39 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertEq(reward, expectedReward);
     }
 
+    function _createRewardPoolWithEligibility(
+        uint256 contentId,
+        uint256 amount,
+        uint256 requiredVoters,
+        uint256 requiredSettledRounds,
+        uint8 bountyEligibility,
+        bytes32[] memory allowedAiDeclarationIds
+    ) internal returns (uint256 rewardPoolId) {
+        vm.startPrank(funder);
+        usdc.approve(address(rewardPoolEscrow), amount);
+        rewardPoolId = rewardPoolEscrow.createRewardPoolWithEligibility(
+            contentId,
+            amount,
+            requiredVoters,
+            requiredSettledRounds,
+            block.timestamp + 30 days,
+            0,
+            bountyEligibility,
+            allowedAiDeclarationIds
+        );
+        vm.stopPrank();
+    }
+
     function _installRaterDeclarationStatus() internal returns (MockRaterDeclarationStatusForEscrow declarationStatus) {
         declarationStatus = new MockRaterDeclarationStatusForEscrow();
         vm.prank(owner);
         protocolConfig.setRaterDeclarationRegistry(address(declarationStatus));
+    }
+
+    function _installRaterRegistryStatus() internal returns (MockRaterRegistryStatusForEscrow raterStatus) {
+        raterStatus = new MockRaterRegistryStatusForEscrow();
+        vm.prank(owner);
+        protocolConfig.setRaterRegistry(address(raterStatus));
     }
 
     function _settleRoundWith(address[] memory voters, uint256 contentId, bool[] memory directions)
@@ -3638,6 +3748,15 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         directions[3] = d;
     }
 
+    function _assertThresholdReachedAtLe(uint256 contentId, uint256 roundId, uint256 maxThresholdReachedAt)
+        internal
+        view
+    {
+        assertLe(
+            RoundEngineReadHelpers.round(votingEngine, contentId, roundId).thresholdReachedAt, maxThresholdReachedAt
+        );
+    }
+
     // --- Security fix: BUNDLE_CLAIM_GRACE ---
 
     function testBundleRefundWindowAllowsThresholdReachedRoundsToSettleAfterClose() public {
@@ -3649,12 +3768,8 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         bool[] memory directions = _directions(true, true, false);
         uint256 firstRoundId = _revealRoundWith(voters, contentIds[0], directions);
         uint256 secondRoundId = _revealRoundWith(voters, contentIds[1], directions);
-        assertLe(
-            RoundEngineReadHelpers.round(votingEngine, contentIds[0], firstRoundId).thresholdReachedAt, bountyClosesAt
-        );
-        assertLe(
-            RoundEngineReadHelpers.round(votingEngine, contentIds[1], secondRoundId).thresholdReachedAt, bountyClosesAt
-        );
+        _assertThresholdReachedAtLe(contentIds[0], firstRoundId, bountyClosesAt);
+        _assertThresholdReachedAtLe(contentIds[1], secondRoundId, bountyClosesAt);
 
         vm.warp(bountyClosesAt + BUNDLE_CLAIM_GRACE + 1);
         vm.expectRevert("Grace");
@@ -3680,12 +3795,8 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.warp(bountyClosesAt - 1 days);
         uint256 firstRoundId = _revealThresholdWithOneUnrevealed(contentIds[0]);
         uint256 secondRoundId = _revealThresholdWithOneUnrevealed(contentIds[1]);
-        assertLe(
-            RoundEngineReadHelpers.round(votingEngine, contentIds[0], firstRoundId).thresholdReachedAt, bountyClosesAt
-        );
-        assertLe(
-            RoundEngineReadHelpers.round(votingEngine, contentIds[1], secondRoundId).thresholdReachedAt, bountyClosesAt
-        );
+        _assertThresholdReachedAtLe(contentIds[0], firstRoundId, bountyClosesAt);
+        _assertThresholdReachedAtLe(contentIds[1], secondRoundId, bountyClosesAt);
 
         vm.warp(bountyClosesAt + (2 * BUNDLE_CLAIM_GRACE) + 1);
         vm.expectRevert("Grace");

@@ -27,7 +27,9 @@ interface IQuestionRewardPoolEscrow {
         uint256 requiredVoters,
         uint256 requiredSettledRounds,
         uint256 bountyClosesAt,
-        uint256 feedbackClosesAt
+        uint256 feedbackClosesAt,
+        uint8 bountyEligibility,
+        bytes32[] calldata allowedAiDeclarationIds
     ) external returns (uint256 rewardPoolId);
 
     function createSubmissionBundleFromRegistry(
@@ -39,7 +41,9 @@ interface IQuestionRewardPoolEscrow {
         uint256 requiredCompleters,
         uint256 requiredSettledRounds,
         uint256 bountyClosesAt,
-        uint256 feedbackClosesAt
+        uint256 feedbackClosesAt,
+        uint8 bountyEligibility,
+        bytes32[] calldata allowedAiDeclarationIds
     ) external returns (uint256 rewardPoolId);
 }
 
@@ -133,6 +137,8 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         uint256 requiredSettledRounds;
         uint256 bountyClosesAt;
         uint256 feedbackClosesAt;
+        uint8 bountyEligibility;
+        bytes32[] eligibleAiDeclarationIds;
     }
 
     struct QuestionSpecCommitment {
@@ -240,6 +246,8 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         uint256 requiredSettledRounds,
         uint256 bountyClosesAt,
         uint256 feedbackClosesAt,
+        uint8 bountyEligibility,
+        bytes32 bountyEligibilityDataHash,
         uint256 rewardPoolId
     );
     event QuestionBundleSubmitted(
@@ -251,6 +259,8 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         uint256 requiredCompleters,
         uint256 bountyClosesAt,
         uint256 feedbackClosesAt,
+        uint8 bountyEligibility,
+        bytes32 bountyEligibilityDataHash,
         bytes32 bundleHash,
         uint256 rewardPoolId
     );
@@ -571,7 +581,9 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
                 rewardTerms.requiredVoters,
                 rewardTerms.requiredSettledRounds,
                 rewardTerms.bountyClosesAt,
-                rewardTerms.feedbackClosesAt
+                rewardTerms.feedbackClosesAt,
+                rewardTerms.bountyEligibility,
+                rewardTerms.eligibleAiDeclarationIds
             );
         emit QuestionBundleSubmitted(
             bundleId,
@@ -582,6 +594,8 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             rewardTerms.requiredVoters,
             rewardTerms.bountyClosesAt,
             rewardTerms.feedbackClosesAt,
+            rewardTerms.bountyEligibility,
+            keccak256(abi.encodePacked(rewardTerms.eligibleAiDeclarationIds)),
             bundleHash,
             rewardPoolId
         );
@@ -606,7 +620,9 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             requiredVoters: MIN_SUBMISSION_REWARD_REQUIRED_VOTERS,
             requiredSettledRounds: MIN_SUBMISSION_REWARD_SETTLED_ROUNDS,
             bountyClosesAt: 0,
-            feedbackClosesAt: 0
+            feedbackClosesAt: 0,
+            bountyEligibility: 0,
+            eligibleAiDeclarationIds: new bytes32[](0)
         });
         SubmissionMetadata memory metadata =
             _validatedContextSubmissionMetadata(contextUrl, imageUrls, videoUrl, title, description, tags, categoryId);
@@ -927,7 +943,9 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
                 rewardTerms.requiredVoters,
                 rewardTerms.requiredSettledRounds,
                 rewardTerms.bountyClosesAt,
-                rewardTerms.feedbackClosesAt
+                rewardTerms.feedbackClosesAt,
+                rewardTerms.bountyEligibility,
+                rewardTerms.eligibleAiDeclarationIds
             );
 
         emit ContentSubmitted(
@@ -951,6 +969,8 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             rewardTerms.requiredSettledRounds,
             rewardTerms.bountyClosesAt,
             rewardTerms.feedbackClosesAt,
+            rewardTerms.bountyEligibility,
+            keccak256(abi.encodePacked(rewardTerms.eligibleAiDeclarationIds)),
             rewardPoolId
         );
     }
@@ -1165,16 +1185,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
                 categoryId,
                 salt,
                 submitter,
-                keccak256(
-                    abi.encode(
-                        rewardTerms.asset,
-                        rewardTerms.amount,
-                        rewardTerms.requiredVoters,
-                        rewardTerms.requiredSettledRounds,
-                        rewardTerms.bountyClosesAt,
-                        rewardTerms.feedbackClosesAt
-                    )
-                ),
+                _hashRewardTerms(rewardTerms),
                 keccak256(
                     abi.encode(
                         roundConfig.epochDuration, roundConfig.maxDuration, roundConfig.minVoters, roundConfig.maxVoters
@@ -1230,6 +1241,8 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
                 rewardTerms.requiredSettledRounds,
                 rewardTerms.bountyClosesAt,
                 rewardTerms.feedbackClosesAt,
+                rewardTerms.bountyEligibility,
+                keccak256(abi.encodePacked(rewardTerms.eligibleAiDeclarationIds)),
                 roundConfig.epochDuration,
                 roundConfig.maxDuration,
                 roundConfig.minVoters,
@@ -1258,6 +1271,33 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             rewardTerms.bountyClosesAt == 0 || rewardTerms.feedbackClosesAt == 0
                 || rewardTerms.feedbackClosesAt <= rewardTerms.bountyClosesAt,
             "Feedback after bounty"
+        );
+        require(rewardTerms.bountyEligibility <= 4, "Invalid eligibility");
+        if (rewardTerms.bountyEligibility == 4) {
+            require(rewardTerms.eligibleAiDeclarationIds.length > 0, "Missing declarations");
+            for (uint256 i = 0; i < rewardTerms.eligibleAiDeclarationIds.length;) {
+                require(rewardTerms.eligibleAiDeclarationIds[i] != bytes32(0), "Invalid declaration");
+                unchecked {
+                    ++i;
+                }
+            }
+        } else {
+            require(rewardTerms.eligibleAiDeclarationIds.length == 0, "Unexpected declarations");
+        }
+    }
+
+    function _hashRewardTerms(SubmissionRewardTerms memory rewardTerms) internal pure returns (bytes32) {
+        return keccak256(
+            abi.encode(
+                rewardTerms.asset,
+                rewardTerms.amount,
+                rewardTerms.requiredVoters,
+                rewardTerms.requiredSettledRounds,
+                rewardTerms.bountyClosesAt,
+                rewardTerms.feedbackClosesAt,
+                rewardTerms.bountyEligibility,
+                keccak256(abi.encodePacked(rewardTerms.eligibleAiDeclarationIds))
+            )
         );
     }
 

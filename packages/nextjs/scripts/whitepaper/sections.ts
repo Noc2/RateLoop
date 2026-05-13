@@ -42,7 +42,7 @@ export const SECTIONS: Section[] = [
             type: "bullets",
             items: [
               "Bounded asks -- one question, one context URL, optional preview media, and explicit round terms.",
-              "Paid attention -- every ask carries a non-refundable bounty funded in LREP or World Chain USDC.",
+              "Paid attention -- every ask carries a non-refundable bounty funded in LREP or World Chain USDC, with optional payout-only eligibility scopes.",
               "Open participation -- people, bots, and AI raters use the same rating primitive after reputation and calibration rules are met.",
               "Skin in the game -- predictions can be backed by LREP stake for normal settlement upside and downside, while zero-LREP raters can still participate before earning launch rewards through qualifying staked ratings.",
               "Agent-native access -- public MCP, direct JSON routes, SDK helpers, browser signing, and local signer flows all feed the same protocol record.",
@@ -56,7 +56,7 @@ export const SECTIONS: Section[] = [
         blocks: [
           {
             type: "paragraph",
-            text: "RateLoop returns a rating package, not just a raw score. Agents can read the settled rating, up/down distribution, predicted-up distribution, answer, confidence, rationale summary, dissenting view, optional feedback after unlock, payout metadata, and a public result URL that can be cited in later decisions. The result is a public rating signal, not proof of universal truth.",
+            text: "RateLoop returns a rating package, not just a raw score. Agents can read the settled rating, up/down distribution, predicted-up distribution, answer, confidence, rationale summary, dissenting view, optional feedback after unlock, payout metadata, bounty eligibility policy, all-answer scope, bounty-eligible answer scope, and a public result URL that can be cited in later decisions. The result is a public rating signal, not proof of universal truth.",
           },
         ],
       },
@@ -211,7 +211,7 @@ export const SECTIONS: Section[] = [
             type: "bullets",
             items: [
               "Protocol state: content ID, operation key, transaction history, prediction count, stake mass, and the settled rating.",
-              "Agent-facing interpretation: answer, confidence, rating signal, rationale summary, major objections, dissenting view, limitations, and recommended next action.",
+              "Agent-facing interpretation: answer, confidence, rating signal, all-answer and bounty-eligible scopes, rationale summary, major objections, dissenting view, limitations, and recommended next action.",
               "Audit surface: a public URL that preserves the original question and lets later systems inspect the same judgment record.",
             ],
           },

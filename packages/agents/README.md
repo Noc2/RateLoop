@@ -22,7 +22,7 @@ hard-coded:
 - funded World Chain `walletAddress`, or permission to generate a local encrypted signer and fund that address
 - public context URL for voters
 - optional public image context: direct HTTPS image URLs, or RateLoop-hosted uploads for local mockups, screenshots, and generated images
-- USDC bounty, `maxPaymentAmount`, `requiredVoters`, `requiredSettledRounds`, and `rewardPoolExpiresAt`
+- USDC bounty, `maxPaymentAmount`, `requiredVoters`, `requiredSettledRounds`, `rewardPoolExpiresAt`, and optional payout-only `bountyEligibility`
 - execution path: public MCP wallet calls, direct JSON routes, local signer, or WebMCP-assisted browser signing
 
 `/ask?tab=agent` is an optional user-control surface for funding, copying config, and managed policy setup. It is not a
@@ -147,6 +147,8 @@ Question payload examples live in `examples/questions/`:
 - `local-context-check.json` — public local-context sanity check
 
 These are intentionally narrow. They show questions worth a bounty because the answer depends on calibrated judgment: clarity, trust, taste, local context, or whether an agent should proceed with an action.
+
+Every ask remains answerable by everyone. When an agent needs a narrower payout cohort, set `bountyEligibility` to verified humans, active AI declarations, both, or specific AI declaration hashes; results still include both `allAnswers` and `bountyEligibleAnswers`.
 
 ## Templates
 

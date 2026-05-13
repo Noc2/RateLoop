@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {IFrontendRegistry} from "../interfaces/IFrontendRegistry.sol";
-import {IVoterIdNFT} from "../interfaces/IVoterIdNFT.sol";
-import {RoundVotingEngine} from "../RoundVotingEngine.sol";
-import {RewardPool, RoundSnapshot} from "./QuestionRewardPoolEscrowTypes.sol";
-import {QuestionRewardPoolEscrowQualificationLib} from "./QuestionRewardPoolEscrowQualificationLib.sol";
-import {QuestionRewardPoolEscrowVoterLib} from "./QuestionRewardPoolEscrowVoterLib.sol";
+import { IFrontendRegistry } from "../interfaces/IFrontendRegistry.sol";
+import { IVoterIdNFT } from "../interfaces/IVoterIdNFT.sol";
+import { ProtocolConfig } from "../ProtocolConfig.sol";
+import { RoundVotingEngine } from "../RoundVotingEngine.sol";
+import { RewardPool, RoundSnapshot } from "./QuestionRewardPoolEscrowTypes.sol";
+import { QuestionRewardPoolEscrowEligibilityLib } from "./QuestionRewardPoolEscrowEligibilityLib.sol";
+import { QuestionRewardPoolEscrowQualificationLib } from "./QuestionRewardPoolEscrowQualificationLib.sol";
+import { QuestionRewardPoolEscrowVoterLib } from "./QuestionRewardPoolEscrowVoterLib.sol";
 
 library QuestionRewardPoolEscrowClaimLib {
     uint256 private constant BASE_PARTICIPATION_WEIGHT_BPS = 10_000;
@@ -85,10 +87,12 @@ library QuestionRewardPoolEscrowClaimLib {
         mapping(uint256 => RewardPool) storage rewardPools,
         mapping(uint256 => mapping(uint256 => RoundSnapshot)) storage roundSnapshots,
         mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) storage rewardClaimed,
+        mapping(uint256 => mapping(bytes32 => bool)) storage rewardPoolAllowedAiDeclarations,
         mapping(uint256 => address) storage rewardPoolPayerIdentity,
         mapping(uint256 => uint256) storage rewardPoolPayerNullifier,
         mapping(uint256 => uint256) storage rewardPoolSubmitterNullifier,
         RoundVotingEngine votingEngine,
+        ProtocolConfig protocolConfig,
         IVoterIdNFT voterIdNFT,
         uint256 rewardPoolId,
         uint256 roundId,
@@ -118,6 +122,19 @@ library QuestionRewardPoolEscrowClaimLib {
             return 0;
         }
 
+        address eligibilityAccount = _claimEligibilityAccount(
+            _roundVoterIdNft(votingEngine, voterIdNFT, rewardPool.contentId, roundId), voterId, account
+        );
+        if (!QuestionRewardPoolEscrowEligibilityLib.isAccountEligibleForBounty(
+                protocolConfig,
+                rewardPool.bountyEligibility,
+                rewardPoolAllowedAiDeclarations,
+                rewardPool.id,
+                eligibilityAccount
+            )) {
+            return 0;
+        }
+
         if (rewardClaimed[rewardPoolId][roundId][commitKey]) return 0;
         (bool revealed, address frontend) = QuestionRewardPoolEscrowVoterLib.timelyRevealedCommitFrontend(
             votingEngine, rewardPool.contentId, roundId, commitKey, rewardPool.bountyClosesAt
@@ -132,10 +149,12 @@ library QuestionRewardPoolEscrowClaimLib {
             if (!_canPreviewNewQualification(rewardPool, roundId)) return 0;
             (, bool canQualify,, uint256 effectiveParticipantUnits, uint256 totalClaimWeight,) = _previewRoundQualification(
                 rewardPool,
+                rewardPoolAllowedAiDeclarations,
                 rewardPoolPayerIdentity,
                 rewardPoolPayerNullifier,
                 rewardPoolSubmitterNullifier,
                 votingEngine,
+                protocolConfig,
                 voterIdNFT,
                 roundId
             );
@@ -294,10 +313,12 @@ library QuestionRewardPoolEscrowClaimLib {
 
     function _previewRoundQualification(
         RewardPool storage rewardPool,
+        mapping(uint256 => mapping(bytes32 => bool)) storage rewardPoolAllowedAiDeclarations,
         mapping(uint256 => address) storage rewardPoolPayerIdentity,
         mapping(uint256 => uint256) storage rewardPoolPayerNullifier,
         mapping(uint256 => uint256) storage rewardPoolSubmitterNullifier,
         RoundVotingEngine votingEngine,
+        ProtocolConfig protocolConfig,
         IVoterIdNFT voterIdNFT,
         uint256 roundId
     )
@@ -318,18 +339,32 @@ library QuestionRewardPoolEscrowClaimLib {
             QuestionRewardPoolEscrowQualificationLib.previewRoundQualification(
                 QuestionRewardPoolEscrowQualificationLib.QualificationContext({
                     votingEngine: votingEngine,
+                    protocolConfig: protocolConfig,
                     voterIdNft: _roundVoterIdNft(votingEngine, voterIdNFT, rewardPool.contentId, roundId),
+                    rewardId: rewardPool.id,
                     contentId: rewardPool.contentId,
                     roundId: roundId,
                     bountyClosesAt: rewardPool.bountyClosesAt,
                     requiredVoters: rewardPool.requiredVoters,
+                    bountyEligibility: rewardPool.bountyEligibility,
                     funder: rewardPool.funder,
                     funderIdentity: rewardPoolPayerIdentity[rewardPool.id],
                     funderNullifier: rewardPoolPayerNullifier[rewardPool.id],
                     submitterIdentity: rewardPool.submitterIdentity,
                     submitterNullifier: rewardPoolSubmitterNullifier[rewardPool.id]
-                })
+                }),
+                rewardPoolAllowedAiDeclarations
             );
+    }
+
+    function _claimEligibilityAccount(IVoterIdNFT voterIdNft, uint256 voterId, address account)
+        private
+        view
+        returns (address)
+    {
+        if (voterId == 0) return account;
+        address holder = voterIdNft.getHolder(voterId);
+        return holder == address(0) ? account : holder;
     }
 
     function _previewRoundAllocation(RewardPool storage rewardPool) private view returns (uint256 allocation) {

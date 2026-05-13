@@ -19,6 +19,8 @@ type QuestionSubmissionRevealCommitmentParams = {
   resultSpecHash: Hex;
   rewardPoolExpiresAt: bigint;
   feedbackClosesAt: bigint;
+  bountyEligibility: number;
+  eligibleAiDeclarationIds: readonly Hex[];
   roundConfig: QuestionSubmissionRoundConfig;
   salt: Hex;
   submissionKey: Hex;
@@ -51,6 +53,8 @@ type QuestionBundleRevealCommitmentParams = {
   requiredVoters: bigint;
   rewardPoolExpiresAt: bigint;
   feedbackClosesAt: bigint;
+  bountyEligibility: number;
+  eligibleAiDeclarationIds: readonly Hex[];
   roundConfig: QuestionSubmissionRoundConfig;
   submitter: Address;
 };
@@ -61,6 +65,10 @@ type QuestionBundleSubmissionRevealCommitmentParams = Omit<QuestionBundleRevealC
 
 function buildSubmissionMediaHash(imageUrls: readonly string[], videoUrl: string): Hex {
   return keccak256(encodeAbiParameters([{ type: "string[]" }, { type: "string" }], [[...imageUrls], videoUrl]));
+}
+
+function hashBytes32ArrayPacked(values: readonly Hex[]): Hex {
+  return keccak256(`0x${values.map(value => value.slice(2)).join("")}` as Hex);
 }
 
 export function buildQuestionSubmissionKey(
@@ -105,6 +113,8 @@ export function buildQuestionSubmissionRevealCommitment(params: QuestionSubmissi
         { type: "uint256" },
         { type: "uint256" },
         { type: "uint256" },
+        { type: "uint8" },
+        { type: "bytes32" },
       ],
       [
         params.rewardAsset,
@@ -113,6 +123,8 @@ export function buildQuestionSubmissionRevealCommitment(params: QuestionSubmissi
         params.requiredSettledRounds,
         params.rewardPoolExpiresAt,
         params.feedbackClosesAt,
+        params.bountyEligibility,
+        hashBytes32ArrayPacked(params.eligibleAiDeclarationIds),
       ],
     ),
   );
@@ -211,6 +223,8 @@ function buildQuestionBundleRevealCommitment(params: QuestionBundleRevealCommitm
         { type: "uint256" },
         { type: "uint256" },
         { type: "uint256" },
+        { type: "uint8" },
+        { type: "bytes32" },
         { type: "uint32" },
         { type: "uint32" },
         { type: "uint16" },
@@ -226,6 +240,8 @@ function buildQuestionBundleRevealCommitment(params: QuestionBundleRevealCommitm
         params.requiredSettledRounds,
         params.rewardPoolExpiresAt,
         params.feedbackClosesAt,
+        params.bountyEligibility,
+        hashBytes32ArrayPacked(params.eligibleAiDeclarationIds),
         Number(params.roundConfig.epochDuration),
         Number(params.roundConfig.maxDuration),
         Number(params.roundConfig.minVoters),

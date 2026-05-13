@@ -107,6 +107,19 @@ const MEDIA_URL_CONFIG = {
 };
 
 type SubmissionStep = "question" | "bounty";
+type BountyEligibilitySelection = "everyone" | "verified_humans" | "validated_ai" | "verified_humans_or_ai" | "specific_ai";
+
+const BOUNTY_ELIGIBILITY_OPTIONS: Array<{
+  id: BountyEligibilitySelection;
+  label: string;
+  mode: number;
+}> = [
+  { id: "everyone", label: "Everyone", mode: 0 },
+  { id: "verified_humans", label: "Verified humans", mode: 1 },
+  { id: "validated_ai", label: "Validated AI", mode: 2 },
+  { id: "verified_humans_or_ai", label: "Humans or AI", mode: 3 },
+  { id: "specific_ai", label: "Specific AI", mode: 4 },
+];
 
 const MAX_QUESTION_BUNDLE_COUNT = 10;
 const MAX_CONTENT_TAGS_LENGTH = 256;
@@ -331,6 +344,8 @@ export function ContentSubmissionSection() {
   const [rewardAmount, setRewardAmount] = useState("1");
   const [rewardRequiredVoters, setRewardRequiredVoters] = useState("3");
   const [rewardRequiredRounds, setRewardRequiredRounds] = useState("1");
+  const [bountyEligibility, setBountyEligibility] = useState<BountyEligibilitySelection>("everyone");
+  const [eligibleAiDeclarationInput, setEligibleAiDeclarationInput] = useState("");
   const [bountyWindowPreset, setBountyWindowPreset] = useState<BountyWindowPreset>(DEFAULT_BOUNTY_WINDOW_PRESET);
   const [customBountyWindowAmount, setCustomBountyWindowAmount] = useState(DEFAULT_CUSTOM_BOUNTY_WINDOW_AMOUNT);
   const [customBountyWindowUnit, setCustomBountyWindowUnit] = useState<BountyWindowUnit>(
@@ -969,12 +984,36 @@ export function ContentSubmissionSection() {
           ? "Choose a bounty window."
           : null;
   const rewardExpiryError = bountyStepAttempted ? rewardExpiryValidationError : null;
+  const selectedBountyEligibility = BOUNTY_ELIGIBILITY_OPTIONS.find(option => option.id === bountyEligibility)!;
+  const eligibleAiDeclarationEntries = useMemo(
+    () =>
+      eligibleAiDeclarationInput
+        .split(/[\s,]+/)
+        .map(value => value.trim().toLowerCase())
+        .filter(Boolean),
+    [eligibleAiDeclarationInput],
+  );
+  const eligibleAiDeclarationIds = useMemo(
+    () =>
+      eligibleAiDeclarationEntries.filter((value): value is `0x${string}` => /^0x[0-9a-f]{64}$/.test(value)),
+    [eligibleAiDeclarationEntries],
+  );
+  const hasInvalidAiDeclarationId = eligibleAiDeclarationEntries.length !== eligibleAiDeclarationIds.length;
+  const bountyEligibilityError =
+    bountyEligibility === "specific_ai" && eligibleAiDeclarationIds.length === 0
+      ? "Add at least one active AI declaration hash."
+      : bountyEligibility === "specific_ai" && hasInvalidAiDeclarationId
+        ? "AI declaration hashes must be bytes32 hex values."
+      : bountyEligibility !== "specific_ai" && eligibleAiDeclarationInput.trim() !== ""
+        ? "AI declaration hashes are only used for specific-AI bounties."
+        : null;
   const bountySettingsValid =
     rewardRequiredVotersValidationError === null &&
     rewardRequiredRoundsValidationError === null &&
     rewardExpiryValidationError === null &&
     roundConfigValidationError === null &&
     rewardAmountError === null &&
+    bountyEligibilityError === null &&
     selectedRewardAmount !== null;
   const frontendFeeBps =
     typeof defaultFrontendFeeBps === "bigint"
@@ -1437,6 +1476,8 @@ export function ContentSubmissionSection() {
           bounty: {
             amount: selectedRewardAmount,
             asset: rewardAsset === "hrep" ? "LREP" : "USDC",
+            bountyEligibility: selectedBountyEligibility.mode,
+            eligibleAiDeclarationIds,
             requiredSettledRounds: selectedRequiredSettledRounds,
             requiredVoters: selectedRequiredVoters,
           },
@@ -1475,6 +1516,8 @@ export function ContentSubmissionSection() {
         requiredSettledRounds: selectedRequiredSettledRounds,
         bountyClosesAt: rewardPoolExpiresAt,
         feedbackClosesAt,
+        bountyEligibility: selectedBountyEligibility.mode,
+        eligibleAiDeclarationIds,
       } as const;
       const roundConfigAbi = questionRoundConfigToAbi(selectedRoundConfig);
       const isBundleSubmission = bundleQuestions.length > 1;
@@ -1491,6 +1534,8 @@ export function ContentSubmissionSection() {
             requiredVoters: selectedRequiredVoters,
             rewardPoolExpiresAt,
             feedbackClosesAt,
+            bountyEligibility: selectedBountyEligibility.mode,
+            eligibleAiDeclarationIds,
             roundConfig: selectedRoundConfig,
             submitter: submitterAddress,
           })
@@ -1506,6 +1551,8 @@ export function ContentSubmissionSection() {
             resultSpecHash: primaryQuestion.spec.resultSpecHash,
             rewardPoolExpiresAt,
             feedbackClosesAt,
+            bountyEligibility: selectedBountyEligibility.mode,
+            eligibleAiDeclarationIds,
             roundConfig: selectedRoundConfig,
             salt: primaryQuestion.salt,
             submissionKey: buildQuestionSubmissionKey(primaryQuestion),
@@ -1999,6 +2046,40 @@ export function ContentSubmissionSection() {
         <span className="text-sm font-semibold text-base-content/50">{rewardAsset === "hrep" ? "LREP" : "USDC"}</span>
       </label>
       {bountyStepAttempted && rewardAmountError ? <p className="text-base text-error">{rewardAmountError}</p> : null}
+
+      <div className="space-y-2">
+        <p className="flex items-center gap-1.5 text-sm font-medium text-base-content/80">
+          Bounty eligibility
+          <InfoTooltip text="Everyone can answer. This only selects which revealed answers can qualify for the bounty payout and the eligible result view." />
+        </p>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+          {BOUNTY_ELIGIBILITY_OPTIONS.map(option => (
+            <button
+              key={option.id}
+              type="button"
+              aria-pressed={bountyEligibility === option.id}
+              onClick={() => setBountyEligibility(option.id)}
+              className={`btn btn-sm ${bountyEligibility === option.id ? "btn-primary" : "btn-outline"}`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+        {bountyEligibility === "specific_ai" ? (
+          <textarea
+            value={eligibleAiDeclarationInput}
+            onChange={e => setEligibleAiDeclarationInput(e.target.value)}
+            className={`textarea textarea-bordered min-h-20 bg-base-100 ${
+              bountyStepAttempted && bountyEligibilityError ? "textarea-error" : ""
+            }`}
+            placeholder="0x..."
+            aria-label="Eligible AI declaration hashes"
+          />
+        ) : null}
+        {bountyStepAttempted && bountyEligibilityError ? (
+          <p className="text-base text-error">{bountyEligibilityError}</p>
+        ) : null}
+      </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="form-control">

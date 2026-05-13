@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
-import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
+import { AccessControl } from "@openzeppelin/contracts/access/AccessControl.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { ECDSA } from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import { EIP712 } from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 
 /// @title RaterDeclarationRegistry
 /// @notice Bonded AI rater declarations, optional one-shot probes, drift flags, and community challenges.
@@ -590,6 +590,12 @@ contract RaterDeclarationRegistry is AccessControl, EIP712 {
     function hasActiveAiDeclaration(address rater) external view returns (bool) {
         StoredDeclaration storage stored = _declarations[rater];
         return stored.tier != RaterTier.A0 && _declarationIsActive(stored.declaration);
+    }
+
+    function activeAiDeclarationHash(address rater) external view returns (bytes32) {
+        StoredDeclaration storage stored = _declarations[rater];
+        if (stored.tier == RaterTier.A0 || !_declarationIsActive(stored.declaration)) return bytes32(0);
+        return stored.declarationHash;
     }
 
     function _behaviorChanged(RaterDeclaration memory previous, RaterDeclaration calldata next)

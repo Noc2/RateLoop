@@ -108,6 +108,9 @@ test("buildAgentResultPackage turns a settled rating into an agent decision", ()
 
   assert.equal(result.ready, true);
   assert.equal(result.answer, "proceed");
+  assert.equal(result.answerScopes.allAnswers.distribution.up.share, 0.7);
+  assert.equal(result.answerScopes.bountyEligibleAnswers.policy.label, "Everyone");
+  assert.equal(result.answerScopes.bountyEligibleAnswers.distribution?.up.share, 0.7);
   assert.equal(result.cohortSummary?.coverageShare, 0.25);
   assert.equal(result.cohortSummary?.topSignals.roles[0]?.value, "engineer");
   assert.equal(result.recommendedNextAction, "proceed_after_addressing_objections");
@@ -121,6 +124,59 @@ test("buildAgentResultPackage turns a settled rating into an agent decision", ()
   });
   assert.match(result.rationaleSummary, /72\/100/);
   assert.equal(result.methodology.templateId, "generic_rating");
+});
+
+test("buildAgentResultPackage separates all answers from scoped bounty-eligible answers", () => {
+  const result = buildAgentResultPackage({
+    audienceContext: null,
+    bountyEligibleVotes: [
+      { isUp: true, revealed: true, stake: "100" },
+      { isUp: false, revealed: true, stake: "100" },
+    ],
+    content: content({
+      rewardPoolSummary: {
+        asset: 1,
+        activeRewardPoolCount: 1,
+        bountyEligibility: 1,
+        bountyEligibilityDataHash: `0x${"0".repeat(64)}`,
+        claimableAllocatedAmount: "0",
+        currency: "USDC",
+        currentRewardPoolAmount: "1000000",
+        decimals: 6,
+        displayCurrency: "USD",
+        expiredRewardPoolCount: 0,
+        hasActiveBounty: false,
+        qualifiedRoundCount: 1,
+        rewardPoolCount: 1,
+        totalAllocatedAmount: "1000000",
+        totalClaimedAmount: "0",
+        totalFrontendClaimedAmount: "0",
+        totalFundedAmount: "1000000",
+        totalRefundedAmount: "0",
+        totalUnallocatedAmount: "0",
+        totalVoterClaimedAmount: "0",
+      },
+    }),
+    feedback: [],
+    latestRound: {
+      downCount: 1,
+      downPool: "100",
+      revealedCount: 3,
+      roundId: "2",
+      settledAt: "100",
+      state: ROUND_STATE.Settled,
+      totalStake: "300",
+      upCount: 2,
+      upPool: "200",
+      upWins: true,
+      voteCount: 3,
+    },
+    publicUrl: null,
+  });
+
+  assert.equal(result.answerScopes.allAnswers.distribution.up.share, 0.6666);
+  assert.equal(result.answerScopes.bountyEligibleAnswers.policy.label, "Verified humans");
+  assert.equal(result.answerScopes.bountyEligibleAnswers.distribution?.up.share, 0.5);
 });
 
 test("buildAgentResultPackage exposes feedback source URLs for agents", () => {

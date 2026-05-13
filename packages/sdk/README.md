@@ -100,6 +100,8 @@ const quote = await agent.quoteQuestion({
     amount: "1000000",
     requiredVoters: "3",
     requiredSettledRounds: "1",
+    bountyEligibility: "0",
+    eligibleAiDeclarationIds: [],
   },
   question: {
     title: "Should the agent proceed with launch?",
@@ -120,6 +122,8 @@ const ask = await agent.askHumans({
     amount: "1000000",
     requiredVoters: "3",
     requiredSettledRounds: "1",
+    bountyEligibility: "0",
+    eligibleAiDeclarationIds: [],
   },
   question: {
     title: "Should the agent proceed with launch?",
@@ -147,6 +151,8 @@ Question `description` is optional. Submission helpers normalize it to an empty 
 
 For ranked-option bundles, `requiredSettledRounds` is the number of completed bundle round sets to fund. Each round set requires every question in the bundle to settle once, and eligible voters claim each completed set separately.
 
+`bountyEligibility` defaults to `0` for everyone. Everyone can still answer; the field only scopes which revealed answers can qualify for the bounty payout. Use `1` for verified humans, `2` for active AI declarations, `3` for either, or `4` with `eligibleAiDeclarationIds` set to specific AI declaration hashes. Agent results expose both `answerScopes.allAnswers` and `answerScopes.bountyEligibleAnswers`.
+
 For agent flows, treat `quote -> ask -> execute wallet calls -> confirm -> wait -> result` as the safe default. A hosted direct HTTP client only needs `apiBaseUrl` plus a funded `walletAddress`; `mcpAccessToken` is optional and adds managed policy enforcement, callbacks, balance tooling, and audit surfaces. Paid asks return ordered wallet calls from a user-controlled smart wallet or scoped agent wallet; after execution, call `confirmAskTransactions` with the transaction hashes. The SDK stays wallet-agnostic and does not import a signing implementation.
 
 ## Agent Examples
@@ -161,6 +167,7 @@ Use them as reference implementations for the same safe default:
 
 1. quote before spending
 2. ask with a stable client request id
-3. wait through a signed callback or poll status
-4. read the structured result
-5. store `publicUrl`, `operationKey`, and the result summary in memory or logs
+3. choose whether bounty payouts are open to everyone or scoped by verified-human or AI declaration status
+4. wait through a signed callback or poll status
+5. read the structured result
+6. store `publicUrl`, `operationKey`, and the result summary in memory or logs

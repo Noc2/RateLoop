@@ -69,6 +69,8 @@ type StoredQuestionRewardTerms = {
   asset: string;
   bountyClosesAt: string;
   feedbackClosesAt: string;
+  bountyEligibility: string;
+  eligibleAiDeclarationIdsHash: Hex;
   requiredSettledRounds: string;
   requiredVoters: string;
 };
@@ -177,6 +179,10 @@ function isBytes32Hex(value: unknown): value is Hex {
   return typeof value === "string" && /^0x[a-fA-F0-9]{64}$/.test(value);
 }
 
+function hashBytes32ArrayPacked(values: readonly Hex[]): Hex {
+  return keccak256(`0x${values.map(value => value.slice(2)).join("")}` as Hex);
+}
+
 function toDecimalString(value: unknown): string {
   return typeof value === "bigint" || typeof value === "number" || typeof value === "string"
     ? BigInt(value).toString()
@@ -242,6 +248,8 @@ function serializeExpectedRewardTerms(payload: X402QuestionPayload): StoredQuest
     asset: X402_SUBMISSION_REWARD_ASSET_USDC.toString(),
     bountyClosesAt: payload.bounty.rewardPoolExpiresAt.toString(),
     feedbackClosesAt: payload.bounty.feedbackClosesAt.toString(),
+    bountyEligibility: payload.bounty.bountyEligibility.toString(),
+    eligibleAiDeclarationIdsHash: hashBytes32ArrayPacked(payload.bounty.eligibleAiDeclarationIds),
     requiredSettledRounds: payload.bounty.requiredSettledRounds.toString(),
     requiredVoters: payload.bounty.requiredVoters.toString(),
   };
@@ -289,7 +297,9 @@ function sameRewardTerms(left: StoredQuestionRewardTerms | undefined, right: Sto
     left.requiredVoters === right.requiredVoters &&
     left.requiredSettledRounds === right.requiredSettledRounds &&
     left.bountyClosesAt === right.bountyClosesAt &&
-    left.feedbackClosesAt === right.feedbackClosesAt
+    left.feedbackClosesAt === right.feedbackClosesAt &&
+    left.bountyEligibility === right.bountyEligibility &&
+    left.eligibleAiDeclarationIdsHash === right.eligibleAiDeclarationIdsHash
   );
 }
 
@@ -393,6 +403,8 @@ const X402QuestionSubmitterAbi = [
           { name: "requiredSettledRounds", type: "uint256" },
           { name: "bountyClosesAt", type: "uint256" },
           { name: "feedbackClosesAt", type: "uint256" },
+          { name: "bountyEligibility", type: "uint8" },
+          { name: "eligibleAiDeclarationIds", type: "bytes32[]" },
         ],
         name: "rewardTerms",
         type: "tuple",
@@ -444,6 +456,8 @@ const X402QuestionSubmitterAbi = [
           { name: "requiredSettledRounds", type: "uint256" },
           { name: "bountyClosesAt", type: "uint256" },
           { name: "feedbackClosesAt", type: "uint256" },
+          { name: "bountyEligibility", type: "uint8" },
+          { name: "eligibleAiDeclarationIds", type: "bytes32[]" },
         ],
         name: "rewardTerms",
         type: "tuple",
@@ -851,6 +865,8 @@ function buildQuestionSubmissionCallContext(params: {
     requiredSettledRounds: params.payload.bounty.requiredSettledRounds,
     bountyClosesAt: params.payload.bounty.rewardPoolExpiresAt,
     feedbackClosesAt: params.payload.bounty.feedbackClosesAt,
+    bountyEligibility: params.payload.bounty.bountyEligibility,
+    eligibleAiDeclarationIds: params.payload.bounty.eligibleAiDeclarationIds,
   } as const;
   const roundConfigAbi = questionRoundConfigToAbi(params.payload.roundConfig);
   const isBundleSubmission = questions.length > 1;
@@ -869,6 +885,8 @@ function buildQuestionSubmissionCallContext(params: {
         requiredVoters: params.payload.bounty.requiredVoters,
         rewardPoolExpiresAt: params.payload.bounty.rewardPoolExpiresAt,
         feedbackClosesAt: params.payload.bounty.feedbackClosesAt,
+        bountyEligibility: params.payload.bounty.bountyEligibility,
+        eligibleAiDeclarationIds: params.payload.bounty.eligibleAiDeclarationIds,
         roundConfig: params.payload.roundConfig,
         submitter: params.submitter,
       })
@@ -884,6 +902,8 @@ function buildQuestionSubmissionCallContext(params: {
         resultSpecHash: primaryQuestion.spec.resultSpecHash,
         rewardPoolExpiresAt: params.payload.bounty.rewardPoolExpiresAt,
         feedbackClosesAt: params.payload.bounty.feedbackClosesAt,
+        bountyEligibility: params.payload.bounty.bountyEligibility,
+        eligibleAiDeclarationIds: params.payload.bounty.eligibleAiDeclarationIds,
         roundConfig: params.payload.roundConfig,
         salt: primaryQuestion.salt,
         submissionKey: primarySubmissionKey,
@@ -1368,6 +1388,10 @@ function readSubmissionResult(
             bountyClosesAt: toDecimalString(decoded.args.bountyClosesAt),
             contentId: null,
             feedbackClosesAt: toDecimalString(decoded.args.feedbackClosesAt),
+            bountyEligibility: toDecimalString(decoded.args.bountyEligibility),
+            eligibleAiDeclarationIdsHash: isBytes32Hex(decoded.args.bountyEligibilityDataHash)
+              ? decoded.args.bountyEligibilityDataHash
+              : hashBytes32ArrayPacked([]),
             questionCount: toDecimalString(decoded.args.questionCount),
             rewardPoolId: typeof decoded.args.rewardPoolId === "bigint" ? decoded.args.rewardPoolId : null,
             requiredSettledRounds: "1",
@@ -1392,6 +1416,10 @@ function readSubmissionResult(
             bountyClosesAt: toDecimalString(decoded.args.bountyClosesAt),
             contentId: decoded.args.contentId,
             feedbackClosesAt: toDecimalString(decoded.args.feedbackClosesAt),
+            bountyEligibility: toDecimalString(decoded.args.bountyEligibility),
+            eligibleAiDeclarationIdsHash: isBytes32Hex(decoded.args.bountyEligibilityDataHash)
+              ? decoded.args.bountyEligibilityDataHash
+              : hashBytes32ArrayPacked([]),
             questionCount: null,
             rewardPoolId: decoded.args.rewardPoolId,
             requiredSettledRounds: toDecimalString(decoded.args.requiredSettledRounds),
@@ -1438,6 +1466,8 @@ function sameBundleRewardTerms(
     submitted.amount === expected.amount &&
     submitted.bountyClosesAt === expected.bountyClosesAt &&
     submitted.feedbackClosesAt === expected.feedbackClosesAt &&
+    submitted.bountyEligibility === expected.bountyEligibility &&
+    submitted.eligibleAiDeclarationIdsHash === expected.eligibleAiDeclarationIdsHash &&
     submitted.questionCount === expectedQuestionCount.toString() &&
     submitted.requiredVoters === bundleCompleterCount(expected)
   );
@@ -1523,6 +1553,9 @@ function x402QuestionSubmissionStatusBody(params: {
       requiredVoters: params.payload.bounty.requiredVoters.toString(),
       rewardPoolExpiresAt: params.payload.bounty.rewardPoolExpiresAt.toString(),
       feedbackClosesAt: params.payload.bounty.feedbackClosesAt.toString(),
+      bountyEligibility: params.payload.bounty.bountyEligibility.toString(),
+      eligibleAiDeclarationIds: params.payload.bounty.eligibleAiDeclarationIds,
+      eligibleAiDeclarationIdsHash: hashBytes32ArrayPacked(params.payload.bounty.eligibleAiDeclarationIds),
     },
     chainId: params.payload.chainId,
     bundleId: params.record?.bundleId ?? null,
@@ -1771,6 +1804,8 @@ function agentWalletQuestionSubmissionPlanBody(params: {
       requiredVoters: params.payload.bounty.requiredVoters.toString(),
       rewardPoolExpiresAt: params.payload.bounty.rewardPoolExpiresAt.toString(),
       feedbackClosesAt: params.payload.bounty.feedbackClosesAt.toString(),
+      bountyEligibility: params.payload.bounty.bountyEligibility.toString(),
+      eligibleAiDeclarationIds: params.payload.bounty.eligibleAiDeclarationIds,
     },
     chainId: params.payload.chainId,
     clientRequestId: params.clientRequestId ?? params.payload.clientRequestId,
@@ -1809,6 +1844,8 @@ function nativeX402QuestionSubmissionPlanBody(params: {
       requiredVoters: params.payload.bounty.requiredVoters.toString(),
       rewardPoolExpiresAt: params.payload.bounty.rewardPoolExpiresAt.toString(),
       feedbackClosesAt: params.payload.bounty.feedbackClosesAt.toString(),
+      bountyEligibility: params.payload.bounty.bountyEligibility.toString(),
+      eligibleAiDeclarationIds: params.payload.bounty.eligibleAiDeclarationIds,
     },
     chainId: params.payload.chainId,
     clientRequestId: params.clientRequestId ?? params.payload.clientRequestId,
@@ -2114,10 +2151,14 @@ export function x402QuestionSubmissionRecordBody(record: X402QuestionSubmissionR
     };
   }
 
+  const expectedRewardTerms = parseStoredSubmissionPlanReceipt(record.paymentReceipt)?.expectedRewardTerms;
+
   return {
     bounty: {
       amount: record.bountyAmount,
       asset: "USDC",
+      bountyEligibility: expectedRewardTerms?.bountyEligibility ?? "0",
+      eligibleAiDeclarationIdsHash: expectedRewardTerms?.eligibleAiDeclarationIdsHash ?? hashBytes32ArrayPacked([]),
     },
     bundleId: record.bundleId,
     chainId: record.chainId,

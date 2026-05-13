@@ -363,6 +363,9 @@ export interface PonderRewardPoolSummary {
   displayCurrency: PonderRewardPoolDisplayCurrency;
   decimals: 6;
   rewardPoolCount: number;
+  bountyEligibility?: number | null;
+  bountyEligibilityDataHash?: string | null;
+  eligibleAiDeclarationIds?: string[];
   activeRewardPoolCount: number;
   expiredRewardPoolCount?: number;
   totalFundedAmount: string;

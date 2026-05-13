@@ -23,6 +23,8 @@ export type AgentQuestionSpecInput = {
   bounty?: {
     amount: bigint | string;
     asset: string;
+    bountyEligibility?: bigint | number | string;
+    eligibleAiDeclarationIds?: readonly string[];
     requiredSettledRounds?: bigint | string;
     requiredVoters?: bigint | string;
   };
@@ -84,6 +86,8 @@ export function buildQuestionMetadata(
       ? {
           amount: input.bounty.amount.toString(),
           asset: input.bounty.asset,
+          bountyEligibility: input.bounty.bountyEligibility?.toString() ?? "0",
+          eligibleAiDeclarationIds: [...(input.bounty.eligibleAiDeclarationIds ?? [])],
           requiredSettledRounds:
             input.bounty.requiredSettledRounds?.toString() ?? null,
           requiredVoters: input.bounty.requiredVoters?.toString() ?? null,

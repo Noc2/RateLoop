@@ -19,6 +19,8 @@ export type AgentAskExample = {
   bounty: {
     amount: string | number | bigint;
     asset?: "USDC" | "usdc" | string;
+    bountyEligibility?: 0 | 1 | 2 | 3 | 4 | string | number;
+    eligibleAiDeclarationIds?: string[];
     requiredSettledRounds?: string | number | bigint;
     requiredVoters?: string | number | bigint;
     rewardPoolExpiresAt?: string | number | bigint;

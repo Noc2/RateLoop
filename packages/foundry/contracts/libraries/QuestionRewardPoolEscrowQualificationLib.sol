@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
-import {IVoterIdNFT} from "../interfaces/IVoterIdNFT.sol";
-import {ContentRegistry} from "../ContentRegistry.sol";
-import {RoundVotingEngine} from "../RoundVotingEngine.sol";
-import {RoundLib} from "./RoundLib.sol";
-import {RewardPool, RoundSnapshot} from "./QuestionRewardPoolEscrowTypes.sol";
+import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import { IVoterIdNFT } from "../interfaces/IVoterIdNFT.sol";
+import { ContentRegistry } from "../ContentRegistry.sol";
+import { ProtocolConfig } from "../ProtocolConfig.sol";
+import { RoundVotingEngine } from "../RoundVotingEngine.sol";
+import { RoundLib } from "./RoundLib.sol";
+import { RewardPool, RoundSnapshot } from "./QuestionRewardPoolEscrowTypes.sol";
+import { QuestionRewardPoolEscrowEligibilityLib } from "./QuestionRewardPoolEscrowEligibilityLib.sol";
 
 library QuestionRewardPoolEscrowQualificationLib {
     using SafeCast for uint256;
@@ -18,11 +20,14 @@ library QuestionRewardPoolEscrowQualificationLib {
 
     struct QualificationContext {
         RoundVotingEngine votingEngine;
+        ProtocolConfig protocolConfig;
         IVoterIdNFT voterIdNft;
+        uint256 rewardId;
         uint256 contentId;
         uint256 roundId;
         uint64 bountyClosesAt;
         uint32 requiredVoters;
+        uint8 bountyEligibility;
         address funder;
         address funderIdentity;
         uint256 funderNullifier;
@@ -30,8 +35,11 @@ library QuestionRewardPoolEscrowQualificationLib {
         uint256 submitterNullifier;
     }
 
-    function previewRoundQualification(QualificationContext memory ctx)
-        public
+    function previewRoundQualification(
+        QualificationContext memory ctx,
+        mapping(uint256 => mapping(bytes32 => bool)) storage allowedAiDeclarationIds
+    )
+        internal
         view
         returns (
             bool roundSettled,
@@ -48,7 +56,8 @@ library QuestionRewardPoolEscrowQualificationLib {
         settledAt = roundSettledAt;
 
         roundSettled = true;
-        (rawEligibleVoters, effectiveParticipantUnits, totalClaimWeight) = _countEligibleRevealedVoters(ctx);
+        (rawEligibleVoters, effectiveParticipantUnits, totalClaimWeight) =
+            _countEligibleRevealedVoters(ctx, allowedAiDeclarationIds);
         uint256 minEffectiveUnits =
             ctx.requiredVoters > MIN_EFFECTIVE_PARTICIPANT_UNITS ? ctx.requiredVoters : MIN_EFFECTIVE_PARTICIPANT_UNITS;
         uint256 effectiveFloor = minEffectiveUnits * BPS_SCALE;
@@ -71,6 +80,7 @@ library QuestionRewardPoolEscrowQualificationLib {
 
     function qualifyRound(
         mapping(uint256 => mapping(uint256 => RoundSnapshot)) storage roundSnapshots,
+        mapping(uint256 => mapping(bytes32 => bool)) storage allowedAiDeclarationIds,
         mapping(uint256 => address) storage rewardPoolPayerIdentity,
         mapping(uint256 => uint256) storage rewardPoolPayerNullifier,
         mapping(uint256 => uint256) storage rewardPoolSubmitterNullifier,
@@ -104,17 +114,21 @@ library QuestionRewardPoolEscrowQualificationLib {
         ) = previewRoundQualification(
             QualificationContext({
                 votingEngine: votingEngine,
+                protocolConfig: votingEngine.protocolConfig(),
                 voterIdNft: _roundVoterIdNft(votingEngine, defaultVoterIdNFT, rewardPool.contentId, roundId),
+                rewardId: rewardPool.id,
                 contentId: rewardPool.contentId,
                 roundId: roundId,
                 bountyClosesAt: rewardPool.bountyClosesAt,
                 requiredVoters: rewardPool.requiredVoters,
+                bountyEligibility: rewardPool.bountyEligibility,
                 funder: rewardPool.funder,
                 funderIdentity: rewardPoolPayerIdentity[rewardPool.id],
                 funderNullifier: rewardPoolPayerNullifier[rewardPool.id],
                 submitterIdentity: rewardPool.submitterIdentity,
                 submitterNullifier: rewardPoolSubmitterNullifier[rewardPool.id]
-            })
+            }),
+            allowedAiDeclarationIds
         );
         require(roundSettled, "Round not settled");
         require(canQualify, "Too few eligible voters");
@@ -195,11 +209,10 @@ library QuestionRewardPoolEscrowQualificationLib {
         return voterNullifier != 0 && (voterNullifier == funderNullifier || voterNullifier == submitterNullifier);
     }
 
-    function _countEligibleRevealedVoters(QualificationContext memory ctx)
-        private
-        view
-        returns (uint256 rawEligibleVoters, uint256 effectiveParticipantUnits, uint256 totalClaimWeight)
-    {
+    function _countEligibleRevealedVoters(
+        QualificationContext memory ctx,
+        mapping(uint256 => mapping(bytes32 => bool)) storage allowedAiDeclarationIds
+    ) private view returns (uint256 rawEligibleVoters, uint256 effectiveParticipantUnits, uint256 totalClaimWeight) {
         (,, uint16 commitCount,,,,,,,,,,,) = ctx.votingEngine.rounds(ctx.contentId, ctx.roundId);
         for (uint256 i = 0; i < commitCount;) {
             bytes32 commitKey = ctx.votingEngine.getRoundCommitKey(ctx.contentId, ctx.roundId, i);
@@ -207,15 +220,24 @@ library QuestionRewardPoolEscrowQualificationLib {
                 ctx.votingEngine.commitCore(ctx.contentId, ctx.roundId, commitKey);
             if (voter != address(0) && revealed && _revealedByBountyClose(ctx.bountyClosesAt, revealedAt)) {
                 uint256 voterId = ctx.votingEngine.commitVoterId(ctx.contentId, ctx.roundId, commitKey);
-                if (!_isExcludedVoter(
-                        ctx.voterIdNft,
-                        voterId,
-                        ctx.funder,
-                        ctx.funderIdentity,
-                        ctx.funderNullifier,
-                        ctx.submitterIdentity,
-                        ctx.submitterNullifier
-                    )) {
+                if (
+                    !_isExcludedVoter(
+                            ctx.voterIdNft,
+                            voterId,
+                            ctx.funder,
+                            ctx.funderIdentity,
+                            ctx.funderNullifier,
+                            ctx.submitterIdentity,
+                            ctx.submitterNullifier
+                        )
+                        && QuestionRewardPoolEscrowEligibilityLib.isAccountEligibleForBounty(
+                            ctx.protocolConfig,
+                            ctx.bountyEligibility,
+                            allowedAiDeclarationIds,
+                            ctx.rewardId,
+                            _bountyEligibilityAccount(ctx.voterIdNft, voterId, voter)
+                        )
+                ) {
                     rawEligibleVoters++;
                     uint256 claimWeight = _claimWeight(ctx.votingEngine, ctx.contentId, ctx.roundId, commitKey);
                     if (claimWeight > 0) {
@@ -229,6 +251,16 @@ library QuestionRewardPoolEscrowQualificationLib {
                 ++i;
             }
         }
+    }
+
+    function _bountyEligibilityAccount(IVoterIdNFT voterIdNft, uint256 voterId, address voter)
+        private
+        view
+        returns (address account)
+    {
+        if (voterId == 0) return voter;
+        account = voterIdNft.getHolder(voterId);
+        return account == address(0) ? voter : account;
     }
 
     function _claimWeight(RoundVotingEngine votingEngine, uint256 contentId, uint256 roundId, bytes32 commitKey)

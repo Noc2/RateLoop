@@ -61,6 +61,19 @@ export const LaunchDistributionPoolAbi = [
   },
   {
     "type": "function",
+    "name": "MAX_DISTINCT_RATERS_PER_VERIFIED_ANCHOR",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint16",
+        "internalType": "uint16"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "MAX_REFERRAL_REWARD_PER_REFERRER",
     "inputs": [],
     "outputs": [
@@ -68,6 +81,32 @@ export const LaunchDistributionPoolAbi = [
         "name": "",
         "type": "uint256",
         "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MAX_UNVERIFIED_LAUNCH_CREDITS_PER_ROUND",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint16",
+        "internalType": "uint16"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MIN_ANCHOR_CREDENTIAL_AGE_SECONDS",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint32",
+        "internalType": "uint32"
       }
     ],
     "stateMutability": "view"
@@ -120,6 +159,19 @@ export const LaunchDistributionPoolAbi = [
         "name": "",
         "type": "uint16",
         "internalType": "uint16"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MIN_LAUNCH_CREDIT_STAKE",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
       }
     ],
     "stateMutability": "view"
@@ -360,6 +412,19 @@ export const LaunchDistributionPoolAbi = [
   },
   {
     "type": "function",
+    "name": "launchAnchorCredentialAgeSeconds",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "launchRewardPolicy",
     "inputs": [],
     "outputs": [
@@ -387,6 +452,26 @@ export const LaunchDistributionPoolAbi = [
         "name": "minDistinctAnchorRounds",
         "type": "uint16",
         "internalType": "uint16"
+      },
+      {
+        "name": "minLaunchCreditStake",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "maxDistinctRatersPerVerifiedAnchor",
+        "type": "uint16",
+        "internalType": "uint16"
+      },
+      {
+        "name": "maxUnverifiedCreditsPerRound",
+        "type": "uint16",
+        "internalType": "uint16"
+      },
+      {
+        "name": "minAnchorCredentialAgeSeconds",
+        "type": "uint32",
+        "internalType": "uint32"
       },
       {
         "name": "eligibilityRatingCount",
@@ -686,6 +771,11 @@ export const LaunchDistributionPoolAbi = [
         "internalType": "bool"
       },
       {
+        "name": "stakeAmount",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
         "name": "verifiedAnchorIds",
         "type": "bytes32[]",
         "internalType": "bytes32[]"
@@ -786,6 +876,30 @@ export const LaunchDistributionPoolAbi = [
   },
   {
     "type": "function",
+    "name": "roundUnverifiedLaunchCreditCount",
+    "inputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint16",
+        "internalType": "uint16"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "setAuthorizedCaller",
     "inputs": [
       {
@@ -850,6 +964,26 @@ export const LaunchDistributionPoolAbi = [
             "internalType": "uint16"
           },
           {
+            "name": "minLaunchCreditStake",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "maxDistinctRatersPerVerifiedAnchor",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "maxUnverifiedCreditsPerRound",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "minAnchorCredentialAgeSeconds",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
             "name": "eligibilityRatingCount",
             "type": "uint32",
             "internalType": "uint32"
@@ -908,6 +1042,49 @@ export const LaunchDistributionPoolAbi = [
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "verifiedAnchorDistinctRaterCount",
+    "inputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "verifiedAnchorRaterSeen",
+    "inputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -1191,6 +1368,26 @@ export const LaunchDistributionPoolAbi = [
             "name": "minDistinctAnchorRounds",
             "type": "uint16",
             "internalType": "uint16"
+          },
+          {
+            "name": "minLaunchCreditStake",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "maxDistinctRatersPerVerifiedAnchor",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "maxUnverifiedCreditsPerRound",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "minAnchorCredentialAgeSeconds",
+            "type": "uint32",
+            "internalType": "uint32"
           },
           {
             "name": "eligibilityRatingCount",

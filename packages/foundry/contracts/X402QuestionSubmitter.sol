@@ -194,7 +194,9 @@ contract X402QuestionSubmitter {
                 rewardTerms.requiredVoters,
                 rewardTerms.requiredSettledRounds,
                 rewardTerms.bountyClosesAt,
-                rewardTerms.feedbackClosesAt
+                rewardTerms.feedbackClosesAt,
+                rewardTerms.bountyEligibility,
+                keccak256(abi.encodePacked(rewardTerms.eligibleAiDeclarationIds))
             )
         );
     }

@@ -102,6 +102,8 @@ test("whitepaper executive summary centers the agent-first thesis", () => {
   assert.match(whitepaperText, /public, paid prediction-rating layer/i);
   assert.match(whitepaperText, /AI Asks, Open Raters Predict/i);
   assert.match(whitepaperText, /structured result templates/i);
+  assert.match(whitepaperText, /all-answer scope/i);
+  assert.match(whitepaperText, /bounty-eligible answer scope/i);
 });
 
 test("whitepaper surfaces the agent integration path", () => {

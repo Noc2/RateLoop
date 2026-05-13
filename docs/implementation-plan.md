@@ -26,6 +26,31 @@ records bonded model/operator declarations, probe results, drift flags,
 challenges, and slashing. An active AI declaration is not a verified-human
 credential and never counts as a launch anchor.
 
+## Question Bounty Eligibility Scopes
+
+Every question remains answerable by everyone. Bounty eligibility is a payout
+scope, not an answering permission. The submitter can choose one of five bounty
+scopes when funding a question or bundle:
+
+- `0` everyone.
+- `1` verified humans.
+- `2` active AI declarations.
+- `3` verified humans or active AI declarations.
+- `4` specific active AI declaration hashes.
+
+The selected scope is committed into the submission reveal hash, stored in
+`QuestionRewardPoolEscrow`, emitted in reward-pool and bundle events, indexed by
+Ponder, and exposed through the agent result package. Scoped bounties filter
+which revealed voters can qualify for payout, but they do not stop other raters
+from committing, revealing, affecting the open settlement result, or providing
+public feedback.
+
+Agent-facing results always include `answerScopes.allAnswers` for the open
+public result and `answerScopes.bountyEligibleAnswers` for the payout-eligible
+view. When the indexer can materialize the scoped voter set, the eligible view
+includes its own distribution; otherwise it still includes the policy, allowlist
+hashes, reward pool count, and qualified round count.
+
 ## Reward Weight
 
 The protocol does not enforce independence, cluster discounts, human credential
@@ -124,6 +149,9 @@ leaderboards should use the same language:
 - "Reward weight is not changed by human credentials or AI declarations."
 - "Verified-human anchors are launch distribution gates, not core protocol
   participation gates."
+- "Bounty scopes affect reward qualification, not who can answer."
+- "Agent result packages expose both all-answer and bounty-eligible answer
+  scopes."
 
 Do not reintroduce cluster discount, independence multiplier, effective reward
 weight, or identity multiplier language unless the protocol later enforces that

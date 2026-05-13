@@ -1,7 +1,7 @@
 import { ContentRegistryAbi, X402QuestionSubmitterAbi } from "@rateloop/contracts/abis";
 import assert from "node:assert/strict";
 import { after, before, beforeEach, test } from "node:test";
-import { type Address, type Hex, type TransactionReceipt, encodeAbiParameters, encodeEventTopics } from "viem";
+import { type Address, type Hex, type TransactionReceipt, encodeAbiParameters, encodeEventTopics, keccak256 } from "viem";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testMemory";
 import { X402QuestionInputError, type X402QuestionPayload } from "~~/lib/x402/questionPayload";
@@ -19,12 +19,15 @@ import {
 
 const env = process.env as Record<string, string | undefined>;
 const originalDatabaseUrl = env.DATABASE_URL;
+const EMPTY_DECLARATION_IDS_HASH = keccak256("0x");
 
 function buildPayload(clientRequestId: string): X402QuestionPayload {
   return {
     bounty: {
       amount: 1_000_000n,
       asset: "USDC" as const,
+      bountyEligibility: 0,
+      eligibleAiDeclarationIds: [],
       feedbackClosesAt: 0n,
       requiredSettledRounds: 1n,
       requiredVoters: 3n,
@@ -246,6 +249,8 @@ function buildSubmissionRewardPoolAttachedLog(params: {
         { name: "requiredSettledRounds", type: "uint256" },
         { name: "bountyClosesAt", type: "uint256" },
         { name: "feedbackClosesAt", type: "uint256" },
+        { name: "bountyEligibility", type: "uint8" },
+        { name: "bountyEligibilityDataHash", type: "bytes32" },
         { name: "rewardPoolId", type: "uint256" },
       ],
       [
@@ -254,6 +259,8 @@ function buildSubmissionRewardPoolAttachedLog(params: {
         params.payload.bounty.requiredSettledRounds,
         params.payload.bounty.rewardPoolExpiresAt,
         params.payload.bounty.feedbackClosesAt,
+        params.payload.bounty.bountyEligibility,
+        EMPTY_DECLARATION_IDS_HASH,
         params.rewardPoolId ?? 77n,
       ],
     ),

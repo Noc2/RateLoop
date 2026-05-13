@@ -94,6 +94,18 @@ const agentBountyInputSchema = {
       description: "Unix timestamp in seconds when feedback bonuses close. 0 means no explicit close.",
       type: ["integer", "string"],
     },
+    bountyEligibility: {
+      default: 0,
+      description:
+        "Bounty payout scope: 0 everyone, 1 verified humans, 2 validated AI, 3 verified humans or validated AI, 4 specific AI declarations. Everyone can still answer.",
+      enum: [0, 1, 2, 3, 4, "0", "1", "2", "3", "4"],
+      type: ["integer", "string"],
+    },
+    eligibleAiDeclarationIds: {
+      description: "bytes32 AI declaration hashes. Required only when bountyEligibility is 4.",
+      items: { pattern: "^0x[0-9a-fA-F]{64}$", type: "string" },
+      type: "array",
+    },
     requiredSettledRounds: {
       description: "Required settled rounds for the bounty.",
       type: ["integer", "string"],
@@ -386,6 +398,7 @@ export const resultPackageOutputSchema = {
   additionalProperties: true,
   properties: {
     answer: { type: "string" },
+    answerScopes: { type: "object" },
     cohortSummary: { type: ["object", "null"] },
     confidence: {
       additionalProperties: false,
@@ -425,6 +438,7 @@ export const resultPackageOutputSchema = {
   required: [
     "ready",
     "answer",
+    "answerScopes",
     "cohortSummary",
     "confidence",
     "distribution",

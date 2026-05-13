@@ -53,6 +53,8 @@ export function buildAgentLiveAskGuidance(params: {
     bounty: {
       amount: currentBounty,
       asset: "USDC",
+      bountyEligibility: 0,
+      eligibleAiDeclarationIds: [],
       feedbackClosesAt: 0n,
       requiredSettledRounds: 1n,
       requiredVoters: minVoters,

@@ -209,7 +209,9 @@ abstract contract ContentSubmissionTestBase {
                 requiredVoters: DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS,
                 requiredSettledRounds: DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
                 bountyClosesAt: DEFAULT_SUBMISSION_REWARD_BOUNTY_CLOSES_AT,
-                feedbackClosesAt: DEFAULT_SUBMISSION_REWARD_FEEDBACK_CLOSES_AT
+                feedbackClosesAt: DEFAULT_SUBMISSION_REWARD_FEEDBACK_CLOSES_AT,
+                bountyEligibility: 0,
+                eligibleAiDeclarationIds: new bytes32[](0)
             });
         return _questionRevealCommitment(
             submissionKey,
@@ -245,7 +247,9 @@ abstract contract ContentSubmissionTestBase {
             requiredVoters: DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS,
             requiredSettledRounds: DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
             bountyClosesAt: DEFAULT_SUBMISSION_REWARD_BOUNTY_CLOSES_AT,
-            feedbackClosesAt: DEFAULT_SUBMISSION_REWARD_FEEDBACK_CLOSES_AT
+            feedbackClosesAt: DEFAULT_SUBMISSION_REWARD_FEEDBACK_CLOSES_AT,
+            bountyEligibility: 0,
+            eligibleAiDeclarationIds: new bytes32[](0)
         });
         return _questionRevealCommitment(
             submissionKey,
@@ -284,16 +288,7 @@ abstract contract ContentSubmissionTestBase {
                 categoryId,
                 salt,
                 submitter,
-                keccak256(
-                    abi.encode(
-                        rewardTerms.asset,
-                        rewardTerms.amount,
-                        rewardTerms.requiredVoters,
-                        rewardTerms.requiredSettledRounds,
-                        rewardTerms.bountyClosesAt,
-                        rewardTerms.feedbackClosesAt
-                    )
-                ),
+                _hashSubmissionRewardTerms(rewardTerms),
                 keccak256(
                     abi.encode(
                         roundConfig.epochDuration, roundConfig.maxDuration, roundConfig.minVoters, roundConfig.maxVoters
@@ -398,8 +393,29 @@ abstract contract ContentSubmissionTestBase {
             requiredVoters: DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS,
             requiredSettledRounds: DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
             bountyClosesAt: DEFAULT_SUBMISSION_REWARD_BOUNTY_CLOSES_AT,
-            feedbackClosesAt: DEFAULT_SUBMISSION_REWARD_FEEDBACK_CLOSES_AT
+            feedbackClosesAt: DEFAULT_SUBMISSION_REWARD_FEEDBACK_CLOSES_AT,
+            bountyEligibility: 0,
+            eligibleAiDeclarationIds: new bytes32[](0)
         });
+    }
+
+    function _hashSubmissionRewardTerms(ContentRegistry.SubmissionRewardTerms memory rewardTerms)
+        internal
+        pure
+        returns (bytes32)
+    {
+        return keccak256(
+            abi.encode(
+                rewardTerms.asset,
+                rewardTerms.amount,
+                rewardTerms.requiredVoters,
+                rewardTerms.requiredSettledRounds,
+                rewardTerms.bountyClosesAt,
+                rewardTerms.feedbackClosesAt,
+                rewardTerms.bountyEligibility,
+                keccak256(abi.encodePacked(rewardTerms.eligibleAiDeclarationIds))
+            )
+        );
     }
 
     function _activeSubmissionProtocolConfig() internal view virtual returns (ProtocolConfig) {

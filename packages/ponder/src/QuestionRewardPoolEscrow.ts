@@ -26,6 +26,10 @@ function bundleRoundSetRowId(bundleId: bigint, roundSetIndex: bigint | number) {
 const ZERO_HASH =
   "0x0000000000000000000000000000000000000000000000000000000000000000" as const;
 
+function serializeDeclarationIds(ids: readonly string[]) {
+  return JSON.stringify(ids.map((id) => id.toLowerCase()));
+}
+
 ponder.on(
   "QuestionRewardPoolEscrow:RewardPoolCreated",
   async ({ event, context }) => {
@@ -44,6 +48,8 @@ ponder.on(
       bountyClosesAt,
       feedbackClosesAt,
       frontendFeeBps,
+      bountyEligibility,
+      bountyEligibilityDataHash,
     } = event.args;
 
     await context.db
@@ -56,6 +62,9 @@ ponder.on(
         asset: Number(asset),
         nonRefundable,
         bountyKind: 0,
+        bountyEligibility: Number(bountyEligibility),
+        bountyEligibilityDataHash,
+        eligibleAiDeclarationIds: "[]",
         challengedRoundId: 0n,
         reasonHash: ZERO_HASH,
         fundedAmount: amount,
@@ -86,6 +95,22 @@ ponder.on(
         lastActivityAt: event.block.timestamp,
       });
     }
+  },
+);
+
+ponder.on(
+  "QuestionRewardPoolEscrow:RewardPoolEligibilitySet",
+  async ({ event, context }) => {
+    const { rewardPoolId, bountyEligibility, allowedAiDeclarationIds } =
+      event.args;
+
+    await context.db.update(questionRewardPool, { id: rewardPoolId }).set({
+      bountyEligibility: Number(bountyEligibility),
+      eligibleAiDeclarationIds: serializeDeclarationIds(
+        allowedAiDeclarationIds,
+      ),
+      updatedAt: event.block.timestamp,
+    });
   },
 );
 
@@ -310,6 +335,8 @@ ponder.on(
       feedbackClosesAt,
       frontendFeeBps,
       asset,
+      bountyEligibility,
+      bountyEligibilityDataHash,
     } = event.args;
 
     await context.db
@@ -333,6 +360,9 @@ ponder.on(
         totalRecordedQuestionRounds: 0,
         claimedCount: 0,
         frontendFeeBps: Number(frontendFeeBps),
+        bountyEligibility: Number(bountyEligibility),
+        bountyEligibilityDataHash,
+        eligibleAiDeclarationIds: "[]",
         bountyOpensAt,
         bountyClosesAt,
         feedbackClosesAt,
@@ -351,6 +381,8 @@ ponder.on(
         requiredSettledRounds: Number(requiredSettledRounds),
         questionCount: Number(questionCount),
         frontendFeeBps: Number(frontendFeeBps),
+        bountyEligibility: Number(bountyEligibility),
+        bountyEligibilityDataHash,
         bountyOpensAt,
         bountyClosesAt,
         feedbackClosesAt,
@@ -368,6 +400,22 @@ ponder.on(
         failed: row.failed,
         refunded: row.refunded,
       }));
+  },
+);
+
+ponder.on(
+  "QuestionRewardPoolEscrow:QuestionBundleEligibilitySet",
+  async ({ event, context }) => {
+    const { bundleId, bountyEligibility, allowedAiDeclarationIds } =
+      event.args;
+
+    await context.db.update(questionBundleReward, { id: bundleId }).set({
+      bountyEligibility: Number(bountyEligibility),
+      eligibleAiDeclarationIds: serializeDeclarationIds(
+        allowedAiDeclarationIds,
+      ),
+      updatedAt: event.block.timestamp,
+    });
   },
 );
 

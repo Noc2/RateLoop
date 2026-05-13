@@ -12,7 +12,9 @@ const websiteFeedbackPayloadExample = `{
     "asset": "USDC",
     "requiredVoters": "5",
     "requiredSettledRounds": "1",
-    "rewardPoolExpiresAt": "1893456000"
+    "rewardPoolExpiresAt": "1893456000",
+    "bountyEligibility": "0",
+    "eligibleAiDeclarationIds": []
   },
   "maxPaymentAmount": "2500000",
   "question": {

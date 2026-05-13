@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+uint8 constant BOUNTY_ELIGIBILITY_OPEN = 0;
+uint8 constant BOUNTY_ELIGIBILITY_VERIFIED_HUMAN = 1;
+uint8 constant BOUNTY_ELIGIBILITY_ACTIVE_AI = 2;
+uint8 constant BOUNTY_ELIGIBILITY_VERIFIED_HUMAN_OR_ACTIVE_AI = 3;
+uint8 constant BOUNTY_ELIGIBILITY_SPECIFIC_AI_DECLARATIONS = 4;
+
 struct RewardPool {
     uint64 id;
     uint64 contentId;
@@ -27,8 +33,10 @@ struct RewardPool {
     bool unallocatedRefunded;
     uint16 frontendFeeBps;
     uint8 bountyKind;
+    uint8 bountyEligibility;
     bool nonRefundable;
     bytes32 reasonHash;
+    bytes32 bountyEligibilityDataHash;
 }
 
 struct RoundSnapshot {
@@ -58,10 +66,12 @@ struct BundleReward {
     uint32 completedRoundSets;
     uint32 claimedCount;
     uint16 frontendFeeBps;
+    uint8 bountyEligibility;
     uint256 funderNullifier;
     uint256 fundedAmount;
     uint256 unallocatedAmount;
     uint256 claimedAmount;
+    bytes32 bountyEligibilityDataHash;
     bool refunded;
     // When set, unclaimed residue is forfeited to the protocol treasury instead of
     // refunded to the funder. Mirrors RewardPool.nonRefundable for the mandatory-

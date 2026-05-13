@@ -28,6 +28,12 @@ type RoundLike = {
   voteCount?: number | null;
 };
 
+type ResultVoteLike = {
+  isUp: boolean | null;
+  revealed?: boolean | null;
+  stake?: string | bigint | number | null;
+};
+
 const FEATURE_ACCEPTANCE_TEMPLATE_ID = "feature_acceptance_test";
 const OBJECTION_FEEDBACK_TYPES = new Set([
   "concern",
@@ -63,6 +69,26 @@ type AgentResultPackage = {
     revealedCount: number;
     state: number | null;
     stateLabel: string | null;
+  };
+  answerScopes: {
+    allAnswers: {
+      label: string;
+      note: string;
+      distribution: AgentResultPackage["distribution"];
+    };
+    bountyEligibleAnswers: {
+      label: string;
+      policy: {
+        mode: number | null;
+        label: string;
+        eligibleAiDeclarationIds: string[];
+        eligibilityDataHash: string | null;
+      };
+      distribution: AgentResultPackage["distribution"] | null;
+      qualifiedRoundCount: number;
+      rewardPoolCount: number;
+      note: string;
+    };
   };
   cohortSummary: AgentCohortSummary | null;
   voteCount: number;
@@ -177,6 +203,71 @@ function clamp01(value: number): number {
 
 function roundScore(value: number): number {
   return Math.round(value * 100) / 100;
+}
+
+function bountyEligibilityLabel(mode: number | null | undefined) {
+  switch (mode) {
+    case 0:
+      return "Everyone";
+    case 1:
+      return "Verified humans";
+    case 2:
+      return "Validated AI models";
+    case 3:
+      return "Verified humans or validated AI models";
+    case 4:
+      return "Specific AI declarations";
+    case null:
+    case undefined:
+      return "Mixed bounty scopes";
+    default:
+      return "Unknown bounty scope";
+  }
+}
+
+function buildDistributionFromVotes(params: {
+  roundState: number | null;
+  stateLabel: string | null;
+  votes: readonly ResultVoteLike[];
+}): AgentResultPackage["distribution"] {
+  let upCount = 0;
+  let downCount = 0;
+  let upStake = 0n;
+  let downStake = 0n;
+  for (const vote of params.votes) {
+    if (vote.revealed === false || vote.isUp === null) continue;
+    const stake = toBigIntValue(vote.stake);
+    if (vote.isUp) {
+      upCount += 1;
+      upStake += stake;
+    } else {
+      downCount += 1;
+      downStake += stake;
+    }
+  }
+
+  const totalStake = upStake + downStake;
+  const upShare = bigintShare(upStake, totalStake);
+  const downShare = bigintShare(downStake, totalStake);
+  const ratingBps = totalStake > 0n ? Number((upStake * 10_000n) / totalStake) : null;
+  return {
+    conservativeRatingBps: null,
+    down: {
+      count: downCount,
+      share: downShare,
+      stake: downStake.toString(),
+    },
+    rating: ratingBps === null ? null : ratingBps / 100,
+    ratingBps,
+    revealedCount: upCount + downCount,
+    state: params.roundState,
+    stateLabel: params.stateLabel,
+    up: {
+      count: upCount,
+      share: upShare,
+      stake: upStake.toString(),
+    },
+  };
 }
 
 function summarizeFeedbackTypes(feedback: readonly ContentFeedbackItem[]) {
@@ -314,6 +405,7 @@ function recommendedNextAction(
 export function buildAgentResultPackage(params: {
   audienceContext: unknown;
   content: PonderContentItem;
+  bountyEligibleVotes?: readonly ResultVoteLike[] | null;
   feedback: readonly ContentFeedbackItem[];
   latestRound: RoundLike | null;
   publicUrl: string | null;
@@ -384,29 +476,76 @@ export function buildAgentResultPackage(params: {
   if (revealedCount < Math.max(Number(params.content.roundMinVoters ?? 3), 3)) {
     limitations.push("The revealed vote count is low.");
   }
+  const distribution = {
+    conservativeRatingBps,
+    down: {
+      count: latestRound?.downCount ?? 0,
+      share: downShare,
+      stake: downStake.toString(),
+    },
+    rating,
+    ratingBps,
+    revealedCount,
+    state: roundState,
+    stateLabel,
+    up: {
+      count: latestRound?.upCount ?? 0,
+      share: upShare,
+      stake: upStake.toString(),
+    },
+  };
+  const rewardPoolSummary = params.content.rewardPoolSummary;
+  const rewardPoolCount = Number(rewardPoolSummary?.rewardPoolCount ?? 0);
+  const bountyEligibilityMode =
+    rewardPoolCount > 0 ? (rewardPoolSummary?.bountyEligibility ?? null) : 0;
+  const bountyEligibilityPolicy = {
+    eligibilityDataHash: rewardPoolSummary?.bountyEligibilityDataHash ?? null,
+    eligibleAiDeclarationIds: rewardPoolSummary?.eligibleAiDeclarationIds ?? [],
+    label: bountyEligibilityLabel(bountyEligibilityMode),
+    mode: bountyEligibilityMode,
+  };
+  const bountyEligibleDistribution =
+    bountyEligibilityMode === 0
+      ? distribution
+      : params.bountyEligibleVotes
+        ? buildDistributionFromVotes({
+            roundState,
+            stateLabel,
+            votes: params.bountyEligibleVotes,
+          })
+        : null;
+  const answerScopes: AgentResultPackage["answerScopes"] = {
+    allAnswers: {
+      distribution,
+      label: "All answers",
+      note: "Every revealed answer contributes to the open public result.",
+    },
+    bountyEligibleAnswers: {
+      distribution: bountyEligibleDistribution,
+      label: "Bounty-eligible answers",
+      note:
+        bountyEligibleDistribution === null && bountyEligibilityMode !== 0
+          ? "Bounty eligibility affects reward qualification and payout; the eligible-only vote distribution is not available from this result lookup."
+          : rewardPoolCount > 0
+            ? "Bounty eligibility affects reward qualification and payout, not who can answer."
+            : "No scoped bounty is attached, so bounty eligibility defaults to everyone.",
+      policy: bountyEligibilityPolicy,
+      qualifiedRoundCount: Number(rewardPoolSummary?.qualifiedRoundCount ?? 0),
+      rewardPoolCount,
+    },
+  };
+  if (bountyEligibilityMode !== 0) {
+    limitations.push(
+      "The open result includes every revealed answer; bounty payouts may reflect a narrower eligible cohort.",
+    );
+  }
 
   return {
     answer,
+    answerScopes,
     cohortSummary,
     confidence,
-    distribution: {
-      conservativeRatingBps,
-      down: {
-        count: latestRound?.downCount ?? 0,
-        share: downShare,
-        stake: downStake.toString(),
-      },
-      rating,
-      ratingBps,
-      revealedCount,
-      state: roundState,
-      stateLabel,
-      up: {
-        count: latestRound?.upCount ?? 0,
-        share: upShare,
-        stake: upStake.toString(),
-      },
-    },
+    distribution,
     dissentingView,
     featureTest,
     feedbackQuality,
@@ -417,7 +556,7 @@ export function buildAgentResultPackage(params: {
       questionMetadataHash: params.content.questionMetadataHash ?? null,
       ratingSystem: template.ratingSystem,
       resultSpecHash: params.content.resultSpecHash ?? null,
-      sources: ["ponder.content", "ponder.rounds", "public.content_feedback"],
+      sources: ["ponder.content", "ponder.rounds", "ponder.question_reward_pools", "public.content_feedback"],
       templateId: template.id,
       templateVersion: template.version,
       thresholds: template.interpretation,

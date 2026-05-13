@@ -20,6 +20,8 @@ const DEFAULT_DRAFT = {
   questionMetadataHash: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" as const,
   rewardPoolExpiresAt: 0n,
   feedbackClosesAt: 0n,
+  bountyEligibility: 0,
+  eligibleAiDeclarationIds: [] as `0x${string}`[],
   roundConfig: {
     epochDuration: 1200n,
     maxDuration: 604800n,
@@ -85,6 +87,28 @@ test("buildSubmissionRevealCommitment changes when bounty terms change", () => {
     {
       ...DEFAULT_DRAFT,
       requiredVoters: 5n,
+    },
+    SALT,
+    ADDRESS,
+  );
+
+  assert.notEqual(initial, edited);
+});
+
+test("buildSubmissionRevealCommitment changes when bounty eligibility changes", () => {
+  const initial = buildSubmissionRevealCommitment(
+    {
+      ...DEFAULT_DRAFT,
+    },
+    SALT,
+    ADDRESS,
+  );
+
+  const edited = buildSubmissionRevealCommitment(
+    {
+      ...DEFAULT_DRAFT,
+      bountyEligibility: 4,
+      eligibleAiDeclarationIds: ["0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"],
     },
     SALT,
     ADDRESS,

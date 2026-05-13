@@ -102,6 +102,9 @@ export async function attachOpenRoundSummary<T extends { id: bigint }>(items: T[
     .select({
       contentId: questionRewardPool.contentId,
       asset: sql<number | null>`case when min(${currentRewardPoolAsset}) = max(${currentRewardPoolAsset}) then min(${currentRewardPoolAsset}) else null end`,
+      bountyEligibility: sql<number | null>`case when min(${questionRewardPool.bountyEligibility}) = max(${questionRewardPool.bountyEligibility}) then min(${questionRewardPool.bountyEligibility}) else null end`,
+      bountyEligibilityDataHash: sql<string | null>`case when min(${questionRewardPool.bountyEligibilityDataHash}) = max(${questionRewardPool.bountyEligibilityDataHash}) then min(${questionRewardPool.bountyEligibilityDataHash}) else null end`,
+      eligibleAiDeclarationIds: sql<string | null>`case when min(${questionRewardPool.eligibleAiDeclarationIds}) = max(${questionRewardPool.eligibleAiDeclarationIds}) then min(${questionRewardPool.eligibleAiDeclarationIds}) else null end`,
       rewardPoolCount: sql<number>`count(*)`,
       activeRewardPoolCount: sql<number>`sum(case when ${questionRewardPool.refunded} = false and ${questionRewardPool.qualifiedRounds} < ${questionRewardPool.requiredSettledRounds} and (${questionRewardPool.bountyClosesAt} = 0 or ${questionRewardPool.bountyClosesAt} > ${nowSeconds}) then 1 else 0 end)`,
       expiredRewardPoolCount: sql<number>`sum(case when ${questionRewardPool.refunded} = false and ${questionRewardPool.qualifiedRounds} < ${questionRewardPool.requiredSettledRounds} and ${questionRewardPool.bountyClosesAt} != 0 and ${questionRewardPool.bountyClosesAt} <= ${nowSeconds} then 1 else 0 end)`,
@@ -237,6 +240,9 @@ function emptyRewardPoolSummary() {
     displayCurrency: "USD",
     decimals: 6,
     rewardPoolCount: 0,
+    bountyEligibility: 0 as number | null,
+    bountyEligibilityDataHash: null as string | null,
+    eligibleAiDeclarationIds: [] as string[],
     activeRewardPoolCount: 0,
     expiredRewardPoolCount: 0,
     totalFundedAmount: 0n,
@@ -356,6 +362,9 @@ function formatQuestionRewardAsset(value: number | string | bigint | null | unde
 
 function formatRewardPoolSummary(row: {
   asset: number | string | bigint | null;
+  bountyEligibility: number | string | bigint | null;
+  bountyEligibilityDataHash: string | null;
+  eligibleAiDeclarationIds: string | null;
   rewardPoolCount: number | string | bigint | null;
   activeRewardPoolCount: number | string | bigint | null;
   expiredRewardPoolCount: number | string | bigint | null;
@@ -385,6 +394,9 @@ function formatRewardPoolSummary(row: {
     ...rewardAsset,
     decimals: 6,
     rewardPoolCount: toNumberValue(row.rewardPoolCount),
+    bountyEligibility: row.bountyEligibility === null ? null : toNumberValue(row.bountyEligibility),
+    bountyEligibilityDataHash: row.bountyEligibilityDataHash,
+    eligibleAiDeclarationIds: parseDeclarationIds(row.eligibleAiDeclarationIds),
     activeRewardPoolCount,
     expiredRewardPoolCount: toNumberValue(row.expiredRewardPoolCount),
     totalFundedAmount: toBigIntValue(row.totalFundedAmount),
@@ -403,4 +415,14 @@ function formatRewardPoolSummary(row: {
     nextBountyClosesAt: row.nextBountyClosesAt === null ? null : toBigIntValue(row.nextBountyClosesAt),
     nextFeedbackClosesAt: row.nextFeedbackClosesAt === null ? null : toBigIntValue(row.nextFeedbackClosesAt),
   };
+}
+
+function parseDeclarationIds(value: string | null | undefined) {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string") : [];
+  } catch {
+    return [];
+  }
 }

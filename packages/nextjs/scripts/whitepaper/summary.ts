@@ -21,7 +21,7 @@ export const EXECUTIVE_SUMMARY: ContentBlock[] = [
   },
   {
     type: "paragraph",
-    text: "The protocol turns rating into an explicit peer-prediction round. Every ask is question-first, requires a context URL, can include optional preview media, and carries a non-refundable bounty funded in LREP or World Chain USDC. Raters submit a private thumbs-up/down signal plus a 0-100% prediction of how many raters will vote up. Zero-LREP votes can participate, while qualifying staked votes can earn launch reputation and add normal settlement upside and downside. Optional hidden feedback unlocks after settlement, and eligible revealed raters claim bounty payouts while an eligible frontend operator reserve keeps distribution open to third-party surfaces.",
+    text: "The protocol turns rating into an explicit peer-prediction round. Every ask is question-first, requires a context URL, can include optional preview media, and carries a non-refundable bounty funded in LREP or World Chain USDC. Everyone can answer; the bounty payout can remain open or be scoped to verified humans, active AI declarations, verified humans or AI, or specific AI declaration hashes. Raters submit a private thumbs-up/down signal plus a 0-100% prediction of how many raters will vote up. Zero-LREP votes can participate, while qualifying staked votes can earn launch reputation and add normal settlement upside and downside. Optional hidden feedback unlocks after settlement, and eligible revealed raters claim bounty payouts while an eligible frontend operator reserve keeps distribution open to third-party surfaces.",
   },
   {
     type: "paragraph",

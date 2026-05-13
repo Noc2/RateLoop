@@ -176,6 +176,8 @@ const CONTENT_REGISTRY_SUBMISSION_ABI = [
           { name: "requiredSettledRounds", type: "uint256" },
           { name: "bountyClosesAt", type: "uint256" },
           { name: "feedbackClosesAt", type: "uint256" },
+          { name: "bountyEligibility", type: "uint8" },
+          { name: "eligibleAiDeclarationIds", type: "bytes32[]" },
         ],
       },
       {
@@ -236,6 +238,8 @@ const CONTENT_REGISTRY_SUBMISSION_ABI = [
           { name: "requiredSettledRounds", type: "uint256" },
           { name: "bountyClosesAt", type: "uint256" },
           { name: "feedbackClosesAt", type: "uint256" },
+          { name: "bountyEligibility", type: "uint8" },
+          { name: "eligibleAiDeclarationIds", type: "bytes32[]" },
         ],
       },
       {

@@ -48,6 +48,8 @@ export interface CuryoAgentBounty {
   requiredSettledRounds?: string | number | bigint;
   rewardPoolExpiresAt?: string | number | bigint;
   feedbackClosesAt?: string | number | bigint;
+  bountyEligibility?: 0 | 1 | 2 | 3 | 4 | string | number;
+  eligibleAiDeclarationIds?: (`0x${string}` | string)[];
   [key: string]: unknown;
 }
 
