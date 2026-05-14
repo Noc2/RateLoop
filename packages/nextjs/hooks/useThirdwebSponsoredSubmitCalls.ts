@@ -27,7 +27,7 @@ import {
   thirdwebClient,
 } from "~~/services/thirdweb/client";
 
-type SponsoredSubmitContractCall = {
+export type ThirdwebContractCall = {
   abi: Abi;
   address: `0x${string}`;
   functionName: string;
@@ -35,22 +35,25 @@ type SponsoredSubmitContractCall = {
   value?: bigint;
 };
 
-type ExecuteSponsoredCallsOptions = {
+type ThirdwebBatchSponsorshipMode = "sponsored" | "self-funded";
+
+export type ExecuteContractCallBatchOptions = {
   atomicRequired?: boolean;
   action?: string;
+  sponsorshipMode?: ThirdwebBatchSponsorshipMode;
   suppressStatusToast?: boolean;
 };
 
-export function shouldPreferSponsoredSubmitCalls(params: {
+export function shouldPreferSponsoredBatchCalls(params: {
   canUseFreeTransactions: boolean;
   chainId: number | undefined;
   connectorId: string | undefined;
   isThirdwebInApp?: boolean;
 }) {
-  return params.canUseFreeTransactions && shouldExpectSponsoredSubmitCalls(params);
+  return params.canUseFreeTransactions && shouldExpectThirdwebBatchCalls(params);
 }
 
-export function shouldExpectSponsoredSubmitCalls(params: {
+export function shouldExpectThirdwebBatchCalls(params: {
   chainId: number | undefined;
   connectorId: string | undefined;
   isThirdwebInApp?: boolean;
@@ -60,6 +63,32 @@ export function shouldExpectSponsoredSubmitCalls(params: {
     typeof params.chainId === "number" &&
     supportsThirdwebExecutionCapabilities(params.chainId)
   );
+}
+
+export function shouldUseSelfFundedBatchCalls(params: {
+  chainId: number | undefined;
+  connectorId: string | undefined;
+  executionMode: WalletExecutionMode;
+  isThirdwebInApp?: boolean;
+}) {
+  return shouldExpectThirdwebBatchCalls(params) && params.executionMode === "self_funded_7702";
+}
+
+export function shouldPreferSponsoredSubmitCalls(params: {
+  canUseFreeTransactions: boolean;
+  chainId: number | undefined;
+  connectorId: string | undefined;
+  isThirdwebInApp?: boolean;
+}) {
+  return shouldPreferSponsoredBatchCalls(params);
+}
+
+export function shouldExpectSponsoredSubmitCalls(params: {
+  chainId: number | undefined;
+  connectorId: string | undefined;
+  isThirdwebInApp?: boolean;
+}) {
+  return shouldExpectThirdwebBatchCalls(params);
 }
 
 export function isThirdwebSponsorshipDeniedError(error: unknown) {
@@ -100,7 +129,7 @@ export function shouldAwaitSelfFundedSubmitCalls(params: {
   isThirdwebInApp?: boolean;
 }) {
   return (
-    shouldExpectSponsoredSubmitCalls(params) &&
+    shouldExpectThirdwebBatchCalls(params) &&
     params.freeTransactionAllowanceResolved &&
     !params.canUseFreeTransactions &&
     params.executionMode !== "self_funded_7702"
@@ -123,9 +152,9 @@ export function useThirdwebSponsoredSubmitCalls() {
   const { executionMode, hasSendCalls, isThirdwebInApp } = useWalletExecutionCapabilities();
   const chainId = resolveWalletExecutionChainId(wagmiChainId, activeWalletChain?.id);
 
-  const expectsSponsoredSubmitCalls = useMemo(
+  const expectsThirdwebBatchCalls = useMemo(
     () =>
-      shouldExpectSponsoredSubmitCalls({
+      shouldExpectThirdwebBatchCalls({
         chainId,
         connectorId: connector?.id,
         isThirdwebInApp,
@@ -133,9 +162,9 @@ export function useThirdwebSponsoredSubmitCalls() {
     [chainId, connector?.id, isThirdwebInApp],
   );
 
-  const prefersSponsoredSubmitCalls = useMemo(
+  const prefersSponsoredBatchCalls = useMemo(
     () =>
-      shouldPreferSponsoredSubmitCalls({
+      shouldPreferSponsoredBatchCalls({
         canUseFreeTransactions: freeTransactionAllowance.canUseFreeTransactions,
         chainId,
         connectorId: connector?.id,
@@ -144,16 +173,30 @@ export function useThirdwebSponsoredSubmitCalls() {
     [chainId, connector?.id, freeTransactionAllowance.canUseFreeTransactions, isThirdwebInApp],
   );
 
-  const canUseGaslessSubmitTransactions = prefersSponsoredSubmitCalls;
+  const prefersSelfFundedBatchCalls = useMemo(
+    () =>
+      shouldUseSelfFundedBatchCalls({
+        chainId,
+        connectorId: connector?.id,
+        executionMode,
+        isThirdwebInApp,
+      }),
+    [chainId, connector?.id, executionMode, isThirdwebInApp],
+  );
 
-  const isEligibleForGaslessSubmitTransactions = expectsSponsoredSubmitCalls;
+  const canUseGaslessSubmitTransactions = prefersSponsoredBatchCalls;
+
+  const isEligibleForGaslessSubmitTransactions = expectsThirdwebBatchCalls;
 
   const canUseSponsoredSubmitCalls = Boolean(
-    thirdwebClient && activeWallet && typeof chainId === "number" && hasSendCalls && canUseGaslessSubmitTransactions,
+    thirdwebClient && activeWallet && typeof chainId === "number" && hasSendCalls && prefersSponsoredBatchCalls,
+  );
+  const canUseSelfFundedBatchCalls = Boolean(
+    thirdwebClient && activeWallet && typeof chainId === "number" && hasSendCalls && prefersSelfFundedBatchCalls,
   );
   const isAwaitingSponsoredSubmitCalls =
-    expectsSponsoredSubmitCalls &&
-    (!freeTransactionAllowance.isResolved || (prefersSponsoredSubmitCalls && !canUseSponsoredSubmitCalls));
+    expectsThirdwebBatchCalls &&
+    (!freeTransactionAllowance.isResolved || (prefersSponsoredBatchCalls && !canUseSponsoredSubmitCalls));
   const isAwaitingSelfFundedSubmitCalls = useMemo(
     () =>
       shouldAwaitSelfFundedSubmitCalls({
@@ -192,11 +235,14 @@ export function useThirdwebSponsoredSubmitCalls() {
   }, []);
 
   const executeSponsoredCalls = useCallback(
-    async (calls: SponsoredSubmitContractCall[], options: ExecuteSponsoredCallsOptions = {}) => {
+    async (calls: ThirdwebContractCall[], options: ExecuteContractCallBatchOptions = {}) => {
       const client = thirdwebClient;
+      const sponsorshipMode = options.sponsorshipMode ?? "sponsored";
+      const canUseRequestedMode =
+        sponsorshipMode === "sponsored" ? canUseSponsoredSubmitCalls : canUseSelfFundedBatchCalls;
 
-      if (!client || !activeWallet || typeof chainId !== "number" || !canUseSponsoredSubmitCalls) {
-        throw new Error("Sponsored submit calls are unavailable.");
+      if (!client || !activeWallet || typeof chainId !== "number" || !canUseRequestedMode) {
+        throw new Error("Thirdweb batch calls are unavailable.");
       }
 
       const chain = defineChain(chainId);
@@ -209,8 +255,10 @@ export function useThirdwebSponsoredSubmitCalls() {
         to: call.address,
         ...(typeof call.value !== "undefined" ? { value: call.value } : {}),
       }));
+      const shouldConfirmSponsoredUsage =
+        sponsorshipMode === "sponsored" && freeTransactionAllowance.canUseFreeTransactions;
       const operationKey =
-        typeof address === "string"
+        shouldConfirmSponsoredUsage && typeof address === "string"
           ? buildFreeTransactionOperationKey({
               chainId,
               calls: encodedCalls.map(call => ({
@@ -250,7 +298,7 @@ export function useThirdwebSponsoredSubmitCalls() {
           throw error;
         }
 
-        if (operationKey && address) {
+        if (shouldConfirmSponsoredUsage && operationKey && address) {
           const transactionHashes = (result.receipts ?? [])
             .map(receipt => receipt.transactionHash)
             .filter((hash): hash is Hex => typeof hash === "string");
@@ -272,6 +320,7 @@ export function useThirdwebSponsoredSubmitCalls() {
         return result;
       } catch (error) {
         if (
+          sponsorshipMode === "sponsored" &&
           shouldAttemptSelfFundedThirdwebFallback({
             activeWalletId: activeWallet.id,
             chainId,
@@ -327,9 +376,11 @@ export function useThirdwebSponsoredSubmitCalls() {
     [
       activeWallet,
       address,
+      canUseSelfFundedBatchCalls,
       canUseSponsoredSubmitCalls,
       chainId,
       executionMode,
+      freeTransactionAllowance.canUseFreeTransactions,
       postFreeTransactionMutation,
       queryClient,
       setActiveWallet,
@@ -338,16 +389,23 @@ export function useThirdwebSponsoredSubmitCalls() {
     ],
   );
 
+  const executeContractCallBatch = executeSponsoredCalls;
+
   return {
     canUseGaslessSubmitTransactions,
+    canUseSelfFundedBatchCalls,
+    canUseSponsoredBatchCalls: canUseSponsoredSubmitCalls,
     canUseSponsoredSubmitCalls,
     executionMode,
+    executeContractCallBatch,
+    executeSponsoredCalls,
     freeTransactionLimit: freeTransactionAllowance.limit,
     freeTransactionRemaining: freeTransactionAllowance.remaining,
     freeTransactionVerified: freeTransactionAllowance.verified,
+    isAwaitingSelfFundedBatchCalls: isAwaitingSelfFundedSubmitCalls,
     isAwaitingSponsoredSubmitCalls,
     isAwaitingSelfFundedSubmitCalls,
+    isAwaitingSponsoredBatchCalls: isAwaitingSponsoredSubmitCalls,
     isAwaitingFreeTransactionAllowance: isEligibleForGaslessSubmitTransactions && !freeTransactionAllowance.isResolved,
-    executeSponsoredCalls,
   };
 }

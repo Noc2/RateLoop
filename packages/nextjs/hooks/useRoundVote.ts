@@ -2,10 +2,11 @@
 
 import { useCallback, useRef, useState } from "react";
 import { LoopReputationAbi, packVoteRoundContext } from "@rateloop/contracts";
-import { AdvisoryVoteRecorderAbi, ContentRegistryAbi, RoundVotingEngineAbi } from "@rateloop/contracts/abis";
+import { ContentRegistryAbi } from "@rateloop/contracts/abis";
 import { buildCommitVoteParams } from "@rateloop/sdk/vote";
 import { useQueryClient } from "@tanstack/react-query";
-import { useAccount, usePublicClient, useWriteContract } from "wagmi";
+import { type Address, parseSignature } from "viem";
+import { useAccount, usePublicClient, useSignTypedData, useWriteContract } from "wagmi";
 import { useOptimisticVote } from "~~/contexts/OptimisticVoteContext";
 import { useTermsAcceptance } from "~~/contexts/TermsAcceptanceContext";
 import { useDeployedContractInfo, useTransactor } from "~~/hooks/scaffold-eth";
@@ -28,8 +29,14 @@ import { getGasBalanceErrorMessage, isFreeTransactionExhaustedError } from "~~/l
 import { recordLocalVoteCooldown } from "~~/lib/vote/localCooldown";
 import { normalizeRoundVoteError } from "~~/lib/vote/roundVoteErrors";
 import { resolveRoundVoteRuntime } from "~~/lib/vote/roundVoteRuntime";
+import {
+  type RoundVoteContractCall,
+  buildCommitVoteWithPermitCall,
+  buildRoundVoteTransactionPlan,
+} from "~~/lib/vote/roundVoteTransactionPlan";
 import scaffoldConfig from "~~/scaffold.config";
 import { getParsedErrorWithAllAbis } from "~~/utils/scaffold-eth/contract";
+import { isSignatureRejected } from "~~/utils/signatureErrors";
 
 interface RoundVoteParams {
   contentId: bigint;
@@ -62,11 +69,13 @@ export function useRoundVote() {
   const queryClient = useQueryClient();
   const writeTx = useTransactor();
   const wagmiTokenWrite = useWriteContract();
+  const { signTypedDataAsync } = useSignTypedData();
   const {
-    canUseSponsoredSubmitCalls,
-    executeSponsoredCalls,
-    isAwaitingSelfFundedSubmitCalls,
-    isAwaitingSponsoredSubmitCalls,
+    canUseSelfFundedBatchCalls,
+    canUseSponsoredBatchCalls,
+    executeContractCallBatch,
+    isAwaitingSelfFundedBatchCalls,
+    isAwaitingSponsoredBatchCalls,
   } = useThirdwebSponsoredSubmitCalls();
   const { canSponsorTransactions, isMissingGasBalance, nativeTokenSymbol } = useGasBalanceStatus({
     includeExternalSendCalls: true,
@@ -130,12 +139,12 @@ export function useRoundVote() {
       return false;
     }
 
-    if (isAwaitingSponsoredSubmitCalls) {
+    if (isAwaitingSponsoredBatchCalls) {
       setError("Preparing wallet. Try again in a moment.");
       return false;
     }
 
-    if (isAwaitingSelfFundedSubmitCalls) {
+    if (isAwaitingSelfFundedBatchCalls) {
       setError("Wallet switching to paid gas. Retry in a moment.");
       return false;
     }
@@ -223,146 +232,161 @@ export function useRoundVote() {
         setError("Stake at least 1 LREP or choose 0 for advisory voting.");
         return false;
       }
-      const isAdvisoryVote = stakeWei === 0n;
+      const isZeroStakeVote = stakeWei === 0n;
       const advisoryVoteRecorderAddress = advisoryVoteRecorderInfo?.address as `0x${string}` | undefined;
-      if (isAdvisoryVote && isAdvisoryVoteRecorderLoading) {
+      if (isZeroStakeVote && isAdvisoryVoteRecorderLoading) {
         setError("Preparing vote. Try again in a moment.");
         return false;
       }
-      if (isAdvisoryVote && !advisoryVoteRecorderAddress) {
-        setError("Zero-stake advisory voting is unavailable right now.");
-        return false;
-      }
-      const advisoryVoteRecorderWriteAddress = advisoryVoteRecorderAddress as `0x${string}`;
-      const advisoryVoteArgs = [contentId, roundContext, targetRound, drandChainHash, commitHash, ciphertext] as const;
-      const commitVoteArgs = [
-        contentId,
-        roundContext,
-        targetRound,
-        drandChainHash,
-        commitHash,
-        ciphertext,
-        stakeWei,
-        frontend,
-      ] as const;
-      const approveRequest: any = {
-        abi: LoopReputationAbi,
-        address: hrepInfo.address,
-        chainId: targetNetwork.id,
-        functionName: "approve",
-        args: [votingEngineInfo.address, stakeWei] as const,
-      };
-      const commitVoteRequest: any = {
-        abi: RoundVotingEngineAbi,
-        address: votingEngineInfo.address,
-        chainId: targetNetwork.id,
-        functionName: "commitVote",
-        args: commitVoteArgs,
-      };
-      const currentAllowance = isAdvisoryVote
+      const hrepAddress = hrepInfo.address as `0x${string}`;
+      const votingEngineAddress = votingEngineInfo.address as `0x${string}`;
+      const currentAllowance = isZeroStakeVote
         ? 0n
         : ((await publicClient.readContract({
-            address: hrepInfo.address as `0x${string}`,
+            address: hrepAddress,
             abi: LoopReputationAbi,
             functionName: "allowance",
-            args: [address as `0x${string}`, votingEngineInfo.address as `0x${string}`],
+            args: [address as Address, votingEngineAddress],
           })) as bigint);
-      const needsApproval = currentAllowance < stakeWei;
+      const plan = buildRoundVoteTransactionPlan({
+        advisoryVoteRecorderAddress,
+        ciphertext,
+        commitHash,
+        contentId,
+        currentAllowance,
+        drandChainHash,
+        frontend,
+        hrepAddress,
+        roundContext,
+        stakeWei,
+        targetRound,
+        votingEngineAddress,
+      });
+      const { isAdvisoryVote, needsApproval } = plan;
 
-      if (canUseSponsoredSubmitCalls) {
-        if (isAdvisoryVote) {
-          await executeSponsoredCalls(
-            [
-              {
-                abi: AdvisoryVoteRecorderAbi,
-                address: advisoryVoteRecorderWriteAddress,
-                args: advisoryVoteArgs,
-                functionName: "recordAdvisoryVote",
-              },
-            ],
-            { action: "vote", atomicRequired: true },
-          );
-        } else {
-          await executeSponsoredCalls(
-            [
-              ...(needsApproval
-                ? [
-                    {
-                      abi: LoopReputationAbi,
-                      address: hrepInfo.address as `0x${string}`,
-                      args: [votingEngineInfo.address, stakeWei] as const,
-                      functionName: "approve",
-                    },
-                  ]
-                : []),
-              {
-                abi: RoundVotingEngineAbi,
-                address: votingEngineInfo.address as `0x${string}`,
-                args: commitVoteArgs,
-                functionName: "commitVote",
-              },
-            ],
-            { action: "vote", atomicRequired: true },
-          );
-        }
-      }
+      const writePlannedCall = async (call: RoundVoteContractCall, action: string) => {
+        const request: any = {
+          abi: call.abi,
+          address: call.address,
+          args: call.args,
+          chainId: targetNetwork.id,
+          functionName: call.functionName,
+          ...(typeof call.value !== "undefined" ? { value: call.value } : {}),
+        };
+        const estimatedGas = await publicClient.estimateContractGas({
+          account: address as Address,
+          address: call.address,
+          abi: call.abi,
+          args: call.args as never,
+          functionName: call.functionName as never,
+          ...(typeof call.value !== "undefined" ? { value: call.value } : {}),
+        } as any);
+        request.gas = (estimatedGas * 120n) / 100n;
 
-      if (!canUseSponsoredSubmitCalls) {
-        if (needsApproval) {
-          wagmiTokenWrite.reset();
-          const approvalHash = await writeTx(() => wagmiTokenWrite.writeContractAsync(approveRequest), {
-            action: "approve",
-            suppressSuccessToast: true,
-          });
-          if (!approvalHash) {
-            return false;
+        wagmiTokenWrite.reset();
+        return writeTx(() => wagmiTokenWrite.writeContractAsync(request), {
+          action,
+          suppressSuccessToast: true,
+        });
+      };
+
+      if (canUseSponsoredBatchCalls) {
+        await executeContractCallBatch(plan.calls, {
+          action: "vote",
+          atomicRequired: true,
+          sponsorshipMode: "sponsored",
+        });
+      } else if (canUseSelfFundedBatchCalls) {
+        await executeContractCallBatch(plan.calls, {
+          action: "vote",
+          atomicRequired: true,
+          sponsorshipMode: "self-funded",
+        });
+      } else {
+        let submittedWithPermit = false;
+
+        if (needsApproval && !isAdvisoryVote) {
+          let permitCall: RoundVoteContractCall | null = null;
+
+          try {
+            const nonce = (await publicClient.readContract({
+              address: hrepAddress,
+              abi: LoopReputationAbi,
+              functionName: "nonces",
+              args: [address as Address],
+            })) as bigint;
+            let permitTokenName = "Loop Reputation";
+            try {
+              permitTokenName = (await publicClient.readContract({
+                address: hrepAddress,
+                abi: LoopReputationAbi,
+                functionName: "name",
+              })) as string;
+            } catch (permitTokenNameError) {
+              console.warn("[round-vote] token name unavailable; using Loop Reputation permit domain.", {
+                error: permitTokenNameError,
+              });
+            }
+            const deadline = BigInt(Math.floor(Date.now() / 1000) + 30 * 60);
+            const signature = await signTypedDataAsync({
+              domain: {
+                chainId: targetNetwork.id,
+                name: permitTokenName,
+                verifyingContract: hrepAddress,
+                version: "1",
+              },
+              message: {
+                deadline,
+                nonce,
+                owner: address as Address,
+                spender: votingEngineAddress,
+                value: stakeWei,
+              },
+              primaryType: "Permit",
+              types: {
+                Permit: [
+                  { name: "owner", type: "address" },
+                  { name: "spender", type: "address" },
+                  { name: "value", type: "uint256" },
+                  { name: "nonce", type: "uint256" },
+                  { name: "deadline", type: "uint256" },
+                ],
+              },
+            });
+            const parsedSignature = parseSignature(signature);
+            permitCall = buildCommitVoteWithPermitCall(plan, {
+              deadline,
+              r: parsedSignature.r,
+              s: parsedSignature.s,
+              v: Number(parsedSignature.v ?? BigInt((parsedSignature.yParity ?? 0) + 27)),
+              votingEngineAddress,
+            });
+          } catch (permitSignatureError) {
+            if (isSignatureRejected(permitSignatureError)) {
+              setError("Signature cancelled. Submit again to continue.");
+              return false;
+            }
+
+            console.warn("[round-vote] permit signing unavailable; falling back to approval then commit.", {
+              error: permitSignatureError,
+            });
+          }
+
+          if (permitCall) {
+            const transactionHash = await writePlannedCall(permitCall, "vote");
+            if (!transactionHash) {
+              return false;
+            }
+            submittedWithPermit = true;
           }
         }
 
-        // Direct writes are self-funded here; only the sponsored helper can
-        // safely confirm free-transaction reservations with the backend.
-        if (isAdvisoryVote) {
-          const advisoryVoteRequest: any = {
-            abi: AdvisoryVoteRecorderAbi,
-            address: advisoryVoteRecorderWriteAddress,
-            chainId: targetNetwork.id,
-            functionName: "recordAdvisoryVote",
-            args: advisoryVoteArgs,
-          };
-          const estimatedGas = await publicClient.estimateContractGas({
-            address: advisoryVoteRecorderWriteAddress,
-            abi: AdvisoryVoteRecorderAbi,
-            functionName: "recordAdvisoryVote",
-            args: advisoryVoteArgs,
-            account: address,
-          });
-          advisoryVoteRequest.gas = (estimatedGas * 120n) / 100n;
-
-          wagmiTokenWrite.reset();
-          const transactionHash = await writeTx(() => wagmiTokenWrite.writeContractAsync(advisoryVoteRequest), {
-            action: "vote",
-            suppressSuccessToast: true,
-          });
-          if (!transactionHash) {
-            return false;
-          }
-        } else {
-          const estimatedGas = await publicClient.estimateContractGas({
-            address: votingEngineInfo.address,
-            abi: RoundVotingEngineAbi,
-            functionName: "commitVote",
-            args: commitVoteArgs,
-            account: address,
-          });
-          commitVoteRequest.gas = (estimatedGas * 120n) / 100n;
-
-          wagmiTokenWrite.reset();
-          const transactionHash = await writeTx(() => wagmiTokenWrite.writeContractAsync(commitVoteRequest), {
-            action: "vote",
-            suppressSuccessToast: true,
-          });
-          if (!transactionHash) {
-            return false;
+        if (!submittedWithPermit) {
+          for (const call of plan.calls) {
+            const transactionHash = await writePlannedCall(call, call.kind === "approve" ? "approve" : "vote");
+            if (!transactionHash) {
+              return false;
+            }
           }
         }
       }

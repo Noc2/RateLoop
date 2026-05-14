@@ -55,6 +55,32 @@ weight remains stake times the round's epoch timing weight, and human
 verification is exposed as participation context rather than as a settlement
 multiplier.
 
+## World Chain Transaction UX
+
+RateLoop uses thirdweb wallet execution for the World Chain launch, not a
+MiniKit-specific transaction path. This keeps the same wallet model across the
+standalone web app and any future World App surface.
+
+Counted voting keeps a one-action UX wherever the connected wallet can support
+it:
+
+- RateLoop Wallet with available sponsored quota submits one atomic thirdweb
+  batch: optional `approve` followed by `commitVote`.
+- RateLoop Wallet after sponsored quota is exhausted switches to the same
+  thirdweb batch in self-funded mode.
+- Direct wallets with enough existing allowance submit one `commitVote`.
+- Direct wallets without allowance first try ERC-2612 permit signing and then
+  submit one `commitVoteWithPermit` transaction.
+- If permit signing is unsupported, direct wallets fall back to the explicit
+  two-step `approve` then `commitVote` flow.
+
+Zero-stake advisory votes use the same execution ladder but submit
+`recordAdvisoryVote` instead of a staked commit.
+
+The old ERC-1363 transfer-and-call and approve-and-call vote path is removed
+for the redeploy. Plain LREP transfers to contracts are not votes; voting only
+happens through the explicit voting contracts and calls above.
+
 ## Binary RBTS Rating Policy
 
 Fresh content is publicly shown as `N/A` until at least one round settles. The

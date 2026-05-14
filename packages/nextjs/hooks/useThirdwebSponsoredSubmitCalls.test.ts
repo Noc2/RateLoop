@@ -4,8 +4,11 @@ import {
   shouldAttemptSelfFundedThirdwebFallback,
   shouldAwaitSelfFundedSubmitCalls,
   shouldExpectSponsoredSubmitCalls,
+  shouldExpectThirdwebBatchCalls,
   shouldIgnorePostTransactionFallbackWalletSyncError,
+  shouldPreferSponsoredBatchCalls,
   shouldPreferSponsoredSubmitCalls,
+  shouldUseSelfFundedBatchCalls,
 } from "./useThirdwebSponsoredSubmitCalls";
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -21,6 +24,17 @@ test("prefers sponsored submit calls for thirdweb connector wallets with free tr
   );
 });
 
+test("prefers sponsored batch calls for thirdweb connector wallets with free transactions on supported chains", () => {
+  assert.equal(
+    shouldPreferSponsoredBatchCalls({
+      canUseFreeTransactions: true,
+      chainId: 480,
+      connectorId: "in-app-wallet",
+    }),
+    true,
+  );
+});
+
 test("expects sponsored submit calls for supported thirdweb connector wallets before allowance resolves", () => {
   assert.equal(
     shouldExpectSponsoredSubmitCalls({
@@ -28,6 +42,44 @@ test("expects sponsored submit calls for supported thirdweb connector wallets be
       connectorId: "in-app-wallet",
     }),
     true,
+  );
+});
+
+test("expects thirdweb batch calls for supported in-app wallets", () => {
+  assert.equal(
+    shouldExpectThirdwebBatchCalls({
+      chainId: 480,
+      connectorId: "in-app-wallet",
+    }),
+    true,
+  );
+});
+
+test("uses self-funded batch calls only after in-app wallets switch to paid gas mode", () => {
+  assert.equal(
+    shouldUseSelfFundedBatchCalls({
+      chainId: 480,
+      connectorId: "in-app-wallet",
+      executionMode: "self_funded_7702",
+    }),
+    true,
+  );
+  assert.equal(
+    shouldUseSelfFundedBatchCalls({
+      chainId: 480,
+      connectorId: "in-app-wallet",
+      executionMode: "sponsored_7702",
+    }),
+    false,
+  );
+  assert.equal(
+    shouldUseSelfFundedBatchCalls({
+      chainId: 480,
+      connectorId: "io.metamask",
+      executionMode: "self_funded_7702",
+      isThirdwebInApp: true,
+    }),
+    false,
   );
 });
 
