@@ -448,6 +448,8 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         engine.revealVoteByCommitKey(contentId, roundId, ck1, true, 8_000, s1);
         engine.revealVoteByCommitKey(contentId, roundId, ck2, false, 5_000, s2);
         engine.revealVoteByCommitKey(contentId, roundId, ck3, true, 6_500, s3);
+        assertEq(engine.roundRatingUpEvidence(contentId, roundId), 3_300_000, "rating uses bounded up signal evidence");
+        assertEq(engine.roundRatingDownEvidence(contentId, roundId), 1_300_000, "rating uses bounded down signal evidence");
 
         (bool scored, uint256 rewardWeight, uint256 forfeitedPool) = engine.roundRbtsStats(contentId, roundId);
         assertFalse(scored, "RBTS scores are stored at settlement");

@@ -101,9 +101,11 @@ contract RoundVotingEngine is
     uint16 internal constant RBTS_SCORE_SCALE_BPS = 10_000;
 
     struct RbtsRoundTotals {
+        uint256 rewardWeight;
         uint256 rewardClaimants;
         uint256 participationClaimants;
         uint256 participationWeight;
+        uint256 forfeitedPool;
         uint256 forfeitClaimants;
     }
 
@@ -761,8 +763,9 @@ contract RoundVotingEngine is
     // =========================================================================
 
     /// @notice Settle a round after ≥minVoters votes have been revealed. Permissionless.
-    /// @dev Win condition uses epoch-weighted pools to prevent late-voter herding.
-    ///      Rating update uses the same weighted pools so discounted raters cannot move public ratings.
+    /// @dev Win condition uses epoch-weighted stake pools to prevent late-voter herding.
+    ///      Rating update uses bounded binary signal evidence so public rating movement is
+    ///      compatible with absolute Robust BTS reports without making it a raw stake vote.
     function settleRound(uint256 contentId, uint256 roundId) external nonReentrant {
         RoundLib.Round storage round = rounds[contentId][roundId];
 
@@ -850,8 +853,8 @@ contract RoundVotingEngine is
             roundId,
             _getRoundReferenceRatingBps(contentId, roundId),
             roundRbtsParticipationWeight[contentId][roundId],
-            round.weightedUpPool,
-            round.weightedDownPool
+            roundRatingUpEvidence[contentId][roundId],
+            roundRatingDownEvidence[contentId][roundId]
         );
         emit RbtsRewardsScored(
             contentId,
@@ -1207,17 +1210,7 @@ contract RoundVotingEngine is
         for (uint256 i = 0; i < revealedCount;) {
             bytes32 commitKey = revealedKeys[i];
             uint256 ownWeight = commitRbtsWeight[contentId][roundId][commitKey];
-            bytes32 drawKey = _rbtsDrawKey(contentId, roundId, commitKey);
-            uint256 referenceIndex = _rbtsOtherIndex(scoreSeed, drawKey, i, revealedCount, 1);
-            bytes32 referenceKey = revealedKeys[referenceIndex];
-            bytes32 peerKey = revealedKeys[_rbtsPeerIndex(scoreSeed, drawKey, i, referenceIndex, revealedCount)];
-            uint16 scoreBps = RobustBtsMath.scoreBps(
-                commits[contentId][roundId][commitKey].isUp,
-                commitPredictedUpBps[contentId][roundId][commitKey],
-                commitPredictedUpBps[contentId][roundId][referenceKey],
-                commits[contentId][roundId][peerKey].isUp
-            );
-            commitRbtsScoreBps[contentId][roundId][commitKey] = scoreBps;
+            uint16 scoreBps = _scoreRbtsCommitAt(contentId, roundId, revealedKeys, scoreSeed, i, revealedCount);
 
             if (ownWeight == 0 || economicCount < MIN_RBTS_PARTICIPANTS) {
                 if (ownWeight > 0) {
@@ -1230,44 +1223,91 @@ contract RoundVotingEngine is
                 continue;
             }
 
-            uint256 scoreWeight = (ownWeight * scoreBps) / RBTS_SCORE_SCALE_BPS;
-            uint256 stakeAmount = commits[contentId][roundId][commitKey].stakeAmount;
-            uint256 stakeReturned = (stakeAmount * scoreBps) / RBTS_SCORE_SCALE_BPS;
-            uint256 forfeitedStake = stakeAmount - stakeReturned;
-
-            commitRbtsRewardWeight[contentId][roundId][commitKey] = scoreWeight;
-            commitRbtsStakeReturned[contentId][roundId][commitKey] = stakeReturned;
-            commitRbtsForfeitedStake[contentId][roundId][commitKey] = forfeitedStake;
-
-            rewardWeight += scoreWeight;
-            forfeitedPool += forfeitedStake;
-            if (scoreWeight > 0) {
-                if (commits[contentId][roundId][commitKey].isUp == upWins) {
-                    totals.participationWeight += scoreWeight;
-                    unchecked {
-                        ++totals.participationClaimants;
-                    }
-                }
-                unchecked {
-                    ++totals.rewardClaimants;
-                }
-            }
-            if (forfeitedStake > 0) {
-                unchecked {
-                    ++totals.forfeitClaimants;
-                }
-            }
+            totals = _accumulateRbtsCommitScore(contentId, roundId, commitKey, ownWeight, scoreBps, upWins, totals);
             unchecked {
                 ++i;
             }
         }
 
-        roundRbtsRewardWeight[contentId][roundId] = rewardWeight;
+        rewardWeight = totals.rewardWeight;
+        forfeitedPool = totals.forfeitedPool;
+        roundRbtsRewardWeight[contentId][roundId] = totals.rewardWeight;
         roundRbtsRewardClaimants[contentId][roundId] = totals.rewardClaimants;
         roundRbtsParticipationWeight[contentId][roundId] = totals.participationWeight;
         roundRbtsParticipationClaimants[contentId][roundId] = totals.participationClaimants;
-        roundRbtsForfeitedPool[contentId][roundId] = forfeitedPool;
+        roundRbtsForfeitedPool[contentId][roundId] = totals.forfeitedPool;
         roundRbtsForfeitClaimants[contentId][roundId] = totals.forfeitClaimants;
+    }
+
+    function _accumulateRbtsCommitScore(
+        uint256 contentId,
+        uint256 roundId,
+        bytes32 commitKey,
+        uint256 ownWeight,
+        uint16 scoreBps,
+        bool upWins,
+        RbtsRoundTotals memory totals
+    ) internal returns (RbtsRoundTotals memory) {
+        uint256 scoreWeight = (ownWeight * scoreBps) / RBTS_SCORE_SCALE_BPS;
+        uint256 stakeAmount = commits[contentId][roundId][commitKey].stakeAmount;
+        uint256 stakeReturned = (stakeAmount * scoreBps) / RBTS_SCORE_SCALE_BPS;
+        uint256 forfeitedStake = stakeAmount - stakeReturned;
+
+        commitRbtsRewardWeight[contentId][roundId][commitKey] = scoreWeight;
+        commitRbtsStakeReturned[contentId][roundId][commitKey] = stakeReturned;
+        commitRbtsForfeitedStake[contentId][roundId][commitKey] = forfeitedStake;
+
+        totals.rewardWeight += scoreWeight;
+        totals.forfeitedPool += forfeitedStake;
+        if (scoreWeight > 0) {
+            if (commits[contentId][roundId][commitKey].isUp == upWins) {
+                totals.participationWeight += scoreWeight;
+                unchecked {
+                    ++totals.participationClaimants;
+                }
+            }
+            unchecked {
+                ++totals.rewardClaimants;
+            }
+        }
+        if (forfeitedStake > 0) {
+            unchecked {
+                ++totals.forfeitClaimants;
+            }
+        }
+        return totals;
+    }
+
+    function _scoreRbtsCommitAt(
+        uint256 contentId,
+        uint256 roundId,
+        bytes32[] memory revealedKeys,
+        bytes32 scoreSeed,
+        uint256 ownIndex,
+        uint256 revealedCount
+    ) internal returns (uint16) {
+        bytes32 commitKey = revealedKeys[ownIndex];
+        bytes32 drawKey = _rbtsDrawKey(contentId, roundId, commitKey);
+        uint256 referenceIndex = _rbtsOtherIndex(scoreSeed, drawKey, ownIndex, revealedCount, 1);
+        bytes32 referenceKey = revealedKeys[referenceIndex];
+        bytes32 peerKey = revealedKeys[_rbtsPeerIndex(scoreSeed, drawKey, ownIndex, referenceIndex, revealedCount)];
+        return _scoreRbtsCommit(contentId, roundId, commitKey, referenceKey, peerKey);
+    }
+
+    function _scoreRbtsCommit(
+        uint256 contentId,
+        uint256 roundId,
+        bytes32 commitKey,
+        bytes32 referenceKey,
+        bytes32 peerKey
+    ) internal returns (uint16 scoreBps) {
+        scoreBps = RobustBtsMath.scoreBps(
+            commits[contentId][roundId][commitKey].isUp,
+            commitPredictedUpBps[contentId][roundId][commitKey],
+            commitPredictedUpBps[contentId][roundId][referenceKey],
+            commits[contentId][roundId][peerKey].isUp
+        );
+        commitRbtsScoreBps[contentId][roundId][commitKey] = scoreBps;
     }
 
     function _rbtsScoreSeed(uint256 contentId, uint256 roundId, uint256 scoreableCount)
@@ -1332,7 +1372,13 @@ contract RoundVotingEngine is
         RoundLib.Commit storage commit = commits[contentId][roundId][commitKey];
         RoundLib.RoundConfig memory roundCfg = _getRoundConfig(contentId, roundId);
         uint256 targetRoundRevealableAt = _targetRoundRevealableAt(contentId, roundId, commit.targetRound);
-        (uint256 eligibleFrontendStake, uint256 eligibleFrontendCount, address voter, uint64 effectiveStake) = RoundRevealLib.revealRbtsVote(
+        (
+            uint256 eligibleFrontendStake,
+            uint256 eligibleFrontendCount,
+            address voter,
+            uint64 effectiveStake,
+            uint64 ratingEvidenceWeight
+        ) = RoundRevealLib.revealRbtsVote(
             round,
             commit,
             epochUnrevealedCount[contentId][roundId],
@@ -1356,6 +1402,11 @@ contract RoundVotingEngine is
         roundEligibleFrontendCount[contentId][roundId] = eligibleFrontendCount;
         commitPredictedUpBps[contentId][roundId][commitKey] = predictedUpBps;
         commitRbtsWeight[contentId][roundId][commitKey] = effectiveStake;
+        if (isUp) {
+            roundRatingUpEvidence[contentId][roundId] += ratingEvidenceWeight;
+        } else {
+            roundRatingDownEvidence[contentId][roundId] += ratingEvidenceWeight;
+        }
 
         emit VoteRevealed(contentId, roundId, voter, isUp);
         emit RbtsVoteRevealed(contentId, roundId, voter, isUp, predictedUpBps, effectiveStake);
@@ -1497,6 +1548,11 @@ contract RoundVotingEngine is
     // Cumulative cleanup incentive paid per round.
     mapping(uint256 => mapping(uint256 => uint256)) internal roundCleanupIncentivePaid;
 
+    // Bounded binary signal evidence used for public rating movement. Reward and payout
+    // accounting continue to use stake-weighted RBTS weights.
+    mapping(uint256 => mapping(uint256 => uint64)) public roundRatingUpEvidence;
+    mapping(uint256 => mapping(uint256 => uint64)) public roundRatingDownEvidence;
+
     // --- Storage gap reserved for future upgrades ---
-    uint256[30] private __gap;
+    uint256[28] private __gap;
 }

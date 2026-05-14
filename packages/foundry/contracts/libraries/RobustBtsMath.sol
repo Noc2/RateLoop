@@ -8,6 +8,11 @@ library RobustBtsMath {
 
     error InvalidPrediction();
 
+    struct ScoreParts {
+        uint16 informationScoreBps;
+        uint16 predictionScoreBps;
+    }
+
     function requireValidPrediction(uint16 predictedUpBps) internal pure {
         if (predictedUpBps > BPS_SCALE) revert InvalidPrediction();
     }
@@ -30,15 +35,37 @@ library RobustBtsMath {
         return uint16(uint256(BPS_SCALE) - (ySquared / BPS_SCALE));
     }
 
+    function informationScoreBps(bool ownSignalIsUp, uint16 referencePredictionBps, bool peerSignalIsUp)
+        internal
+        pure
+        returns (uint16)
+    {
+        uint16 shadow = shadowPredictionBps(referencePredictionBps, ownSignalIsUp);
+        return quadraticScoreBps(shadow, peerSignalIsUp);
+    }
+
+    function predictionScoreBps(uint16 ownPredictionBps, bool peerSignalIsUp) internal pure returns (uint16) {
+        return quadraticScoreBps(ownPredictionBps, peerSignalIsUp);
+    }
+
+    function scorePartsBps(
+        bool ownSignalIsUp,
+        uint16 ownPredictionBps,
+        uint16 referencePredictionBps,
+        bool peerSignalIsUp
+    ) internal pure returns (ScoreParts memory parts) {
+        parts.informationScoreBps = informationScoreBps(ownSignalIsUp, referencePredictionBps, peerSignalIsUp);
+        parts.predictionScoreBps = predictionScoreBps(ownPredictionBps, peerSignalIsUp);
+    }
+
     function scoreBps(
         bool ownSignalIsUp,
         uint16 ownPredictionBps,
         uint16 referencePredictionBps,
         bool peerSignalIsUp
     ) internal pure returns (uint16) {
-        uint16 shadow = shadowPredictionBps(referencePredictionBps, ownSignalIsUp);
-        uint256 informationScore = quadraticScoreBps(shadow, peerSignalIsUp);
-        uint256 predictionScore = quadraticScoreBps(ownPredictionBps, peerSignalIsUp);
-        return uint16((informationScore + predictionScore) / 2);
+        ScoreParts memory parts =
+            scorePartsBps(ownSignalIsUp, ownPredictionBps, referencePredictionBps, peerSignalIsUp);
+        return uint16((uint256(parts.informationScoreBps) + uint256(parts.predictionScoreBps)) / 2);
     }
 }
