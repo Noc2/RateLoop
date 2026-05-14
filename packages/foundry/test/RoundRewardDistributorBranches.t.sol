@@ -1,21 +1,22 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import { VotingTestBase } from "./helpers/VotingTestHelpers.sol";
-import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import { ContentRegistry } from "../contracts/ContentRegistry.sol";
-import { LaunchDistributionPool } from "../contracts/LaunchDistributionPool.sol";
-import { LoopReputation } from "../contracts/LoopReputation.sol";
-import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
-import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
-import { RaterRegistry } from "../contracts/RaterRegistry.sol";
-import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
-import { RoundLib } from "../contracts/libraries/RoundLib.sol";
-import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
-import { TlockVoteLib } from "../contracts/libraries/TlockVoteLib.sol";
-import { HumanReputation } from "../contracts/HumanReputation.sol";
-import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
-import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
+import {VotingTestBase} from "./helpers/VotingTestHelpers.sol";
+import {stdStorage, StdStorage} from "forge-std/Test.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {ContentRegistry} from "../contracts/ContentRegistry.sol";
+import {LaunchDistributionPool} from "../contracts/LaunchDistributionPool.sol";
+import {LoopReputation} from "../contracts/LoopReputation.sol";
+import {RoundVotingEngine} from "../contracts/RoundVotingEngine.sol";
+import {ProtocolConfig} from "../contracts/ProtocolConfig.sol";
+import {RaterRegistry} from "../contracts/RaterRegistry.sol";
+import {RoundRewardDistributor} from "../contracts/RoundRewardDistributor.sol";
+import {RoundLib} from "../contracts/libraries/RoundLib.sol";
+import {RoundEngineReadHelpers} from "./helpers/RoundEngineReadHelpers.sol";
+import {TlockVoteLib} from "../contracts/libraries/TlockVoteLib.sol";
+import {HumanReputation} from "../contracts/HumanReputation.sol";
+import {MockCategoryRegistry} from "../contracts/mocks/MockCategoryRegistry.sol";
+import {MockWorldIDRouter} from "../contracts/mocks/MockWorldIDRouter.sol";
 
 contract MockRevertingLaunchDistributionPool {
     error LaunchCreditRejected();
@@ -37,6 +38,8 @@ contract MockRevertingLaunchDistributionPool {
 
 /// @title RoundRewardDistributor branch coverage tests (tlock commit-reveal)
 contract RoundRewardDistributorBranchesTest is VotingTestBase {
+    using stdStorage for StdStorage;
+
     HumanReputation public hrepToken;
     ContentRegistry public registry;
     RoundVotingEngine public votingEngine;
@@ -216,7 +219,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
             RoundLib.Commit memory c = RoundEngineReadHelpers.commit(votingEngine, contentId, roundId, keys[i]);
             if (!c.revealed && c.stakeAmount > 0) {
                 (bool isUp, bytes32 salt) = _decodeTestCiphertext(c.ciphertext);
-                try votingEngine.revealVoteByCommitKey(contentId, roundId, keys[i], isUp, 5_000, salt) { } catch { }
+                try votingEngine.revealVoteByCommitKey(contentId, roundId, keys[i], isUp, 5_000, salt) {} catch {}
             }
         }
     }
@@ -231,7 +234,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
 
         RoundLib.Round memory r2 = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
         if (r2.thresholdReachedAt > 0) {
-            try votingEngine.settleRound(contentId, roundId) { } catch { }
+            try votingEngine.settleRound(contentId, roundId) {} catch {}
         }
     }
 
@@ -366,6 +369,22 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         assertGt(rbtsStakeReturned, 0, "RBTS returns scored stake");
         assertGe(claimedAmount, rbtsStakeReturned, "claim includes scored stake return");
         assertGt(claimedAmount, STAKE / 20, "not capped at old loser rebate");
+    }
+
+    function test_ClaimReward_LegacyUnscoredRoundCanClaim() public {
+        (uint256 contentId, uint256 roundId) = _setupSettledRound();
+        stdstore.target(address(votingEngine)).sig("roundRbtsScored(uint256,uint256)").with_key(contentId)
+            .with_key(roundId).checked_write(false);
+
+        uint256 winnerBefore = hrepToken.balanceOf(voter1);
+        vm.prank(voter1);
+        rewardDistributor.claimReward(contentId, roundId);
+        assertGt(hrepToken.balanceOf(voter1), winnerBefore, "legacy winner receives stake and reward");
+
+        uint256 loserBefore = hrepToken.balanceOf(voter3);
+        vm.prank(voter3);
+        rewardDistributor.claimReward(contentId, roundId);
+        assertGt(hrepToken.balanceOf(voter3), loserBefore, "legacy loser receives rebate");
     }
 
     function test_ClaimReward_WinnerGetsReward() public {
