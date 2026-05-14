@@ -88,20 +88,26 @@ contract SubmissionMediaValidator {
         // mask the effective host: '@' splits userinfo, '\' is normalized to '/',
         // and '%' allows percent-encoded host obfuscation.
         bool inHost = true;
+        uint256 hostLength;
         for (uint256 i = prefix.length; i < urlBytes.length; i++) {
             bytes1 char = urlBytes[i];
             if (char < 0x21 || char > 0x7E) return false;
             if (char == "\\" || char == "@") return false;
             if (inHost) {
                 if (char == "/" || char == "?" || char == "#") {
+                    if (hostLength == 0) return false;
                     inHost = false;
                 } else if (char == "%") {
                     return false;
+                } else {
+                    unchecked {
+                        ++hostLength;
+                    }
                 }
             }
         }
 
-        return true;
+        return hostLength > 0;
     }
 
     function _endsWithBeforeQuery(string memory value, string memory suffix) internal pure returns (bool) {
