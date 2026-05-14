@@ -4,7 +4,8 @@ import { dirname, join, resolve, relative } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createRequire } from "node:module";
 
-const TEST_FILE_RE = /\.(test|spec)\.(ts|tsx)$/;
+const TEST_FILE_RE = /\.(test|spec)\.(ts|tsx|js|mjs|cjs)$/;
+const TS_TEST_FILE_RE = /\.(test|spec)\.(ts|tsx)$/;
 const IGNORED_DIRS = new Set(["node_modules", ".next"]);
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = dirname(scriptDir);
@@ -90,14 +91,16 @@ if (files.length === 0) {
   process.exit(1);
 }
 
-const result = spawnSync(
-  process.execPath,
-  ["--import", preloadModule, "--import", resolveImportModule("tsx", files), "--test", ...files],
-  {
-    stdio: "inherit",
-    cwd: process.cwd(),
-  },
-);
+const nodeArgs = ["--import", preloadModule];
+if (files.some(file => TS_TEST_FILE_RE.test(file))) {
+  nodeArgs.push("--import", resolveImportModule("tsx", files));
+}
+nodeArgs.push("--test", ...files);
+
+const result = spawnSync(process.execPath, nodeArgs, {
+  stdio: "inherit",
+  cwd: process.cwd(),
+});
 
 if (result.error) {
   console.error(result.error);

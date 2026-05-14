@@ -55,6 +55,7 @@
     "precommit": "lint-staged",
     "start": "yarn workspace @rateloop/nextjs dev",
     "test": "yarn foundry:test",
+    "test:node": "node scripts/run-node-tests.mjs scripts packages/foundry/scripts-js",
     "vercel": "yarn workspace @rateloop/nextjs vercel",
     "vercel:login": "yarn workspace @rateloop/nextjs vercel:login",
     "vercel:yolo": "yarn workspace @rateloop/nextjs vercel:yolo",
@@ -83,7 +84,7 @@
     "e2e": "yarn workspace @rateloop/nextjs e2e",
     "e2e:ci:full": "yarn workspace @rateloop/nextjs e2e:ci:full",
     "e2e:ui": "yarn workspace @rateloop/nextjs e2e:ui",
-    "test:ts": "yarn contracts:check-types && yarn node-utils:check-types && yarn sdk:check-types && yarn ponder:check-types && yarn contracts:test && yarn sdk:test && yarn next:test && yarn workspace @rateloop/keeper test && yarn workspace @rateloop/agents test && yarn workspace @rateloop/ponder test"
+    "test:ts": "yarn contracts:check-types && yarn node-utils:check-types && yarn sdk:check-types && yarn ponder:check-types && yarn test:node && yarn contracts:test && yarn sdk:test && yarn next:test && yarn workspace @rateloop/keeper test && yarn workspace @rateloop/agents test && yarn workspace @rateloop/ponder test"
   },
   "devDependencies": {
     "husky": "~9.1.6",
