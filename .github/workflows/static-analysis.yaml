@@ -12,6 +12,29 @@ permissions:
   security-events: write
 
 jobs:
+  dead-code:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          submodules: true
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+          cache: yarn
+      - run: yarn install --immutable
+      - name: Run Knip dead-code scan
+        run: yarn dead-code:scan
+
+  keeper-docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          submodules: true
+      - name: Build keeper Docker image
+        run: docker build -f packages/keeper/Dockerfile -t rateloop-keeper:test .
+
   slither:
     runs-on: ubuntu-latest
     steps:

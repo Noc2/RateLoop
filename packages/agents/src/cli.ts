@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createCuryoAgentClient } from "@rateloop/sdk/agent";
@@ -15,6 +15,7 @@ import { listAgentResultTemplates } from "./templates";
 import { lintAgentAskRequest, summarizeLintFindings } from "./questions/lint";
 
 type CliOptions = Record<string, string | boolean>;
+const packageRoot = resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
 
 function printJson(value: unknown) {
   console.log(JSON.stringify(value, null, 2));
@@ -97,7 +98,6 @@ function printLocalAskProgress(event: LocalAskProgress) {
 }
 
 async function readJsonFile(path: string) {
-  const packageRoot = resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
   const candidates = [
     resolve(path),
     path.startsWith("packages/agents/") ? resolve(packageRoot, path.replace(/^packages\/agents\//, "")) : null,
@@ -113,6 +113,15 @@ async function readJsonFile(path: string) {
   }
 
   throw lastError;
+}
+
+async function listExampleQuestionFiles() {
+  const questionDir = resolve(packageRoot, "examples", "questions");
+  const entries = await readdir(questionDir, { withFileTypes: true });
+  return entries
+    .filter(entry => entry.isFile() && entry.name.endsWith(".json"))
+    .map(entry => `packages/agents/examples/questions/${entry.name}`)
+    .sort();
 }
 
 function usage() {
@@ -157,10 +166,33 @@ async function main() {
       return;
 
     case "lint": {
-      const payload = await readJsonFile(requireString(options, "file"));
-      const findings = lintAgentAskRequest(payload);
-      printJson({ findings, ...summarizeLintFindings(findings) });
-      if (findings.some(finding => finding.level === "error")) {
+      const explicitFile = typeof options.file === "string" ? options.file : null;
+      const files = explicitFile ? [explicitFile] : await listExampleQuestionFiles();
+      const results = [];
+
+      for (const file of files) {
+        const payload = await readJsonFile(file);
+        const findings = lintAgentAskRequest(payload);
+        results.push({ file, findings, ...summarizeLintFindings(findings) });
+      }
+
+      if (explicitFile) {
+        const [result] = results;
+        printJson(
+          result
+            ? {
+                findings: result.findings,
+                errorCount: result.errorCount,
+                ok: result.ok,
+                warningCount: result.warningCount,
+              }
+            : { findings: [], errorCount: 0, ok: true, warningCount: 0 },
+        );
+      } else {
+        printJson({ files: results });
+      }
+
+      if (results.some(result => result.findings.some(finding => finding.level === "error"))) {
         process.exitCode = 1;
       }
       return;

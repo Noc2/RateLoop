@@ -33,6 +33,12 @@ jobs:
 
       - name: Install dependencies
         run: yarn install --immutable
+
+      - name: Run foundry lint
+        run: yarn foundry:lint
+
+      - name: Run agent question lint
+        run: yarn agents:lint
       
       - name: Run foundry node, deploy contracts (& generate contracts typescript output)
         env:
