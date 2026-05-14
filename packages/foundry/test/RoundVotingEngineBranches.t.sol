@@ -1,26 +1,26 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {Test} from "forge-std/Test.sol";
-import {Base64} from "@openzeppelin/contracts/utils/Base64.sol";
-import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
-import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import {ContentRegistry} from "../contracts/ContentRegistry.sol";
-import {AdvisoryVoteRecorder} from "../contracts/AdvisoryVoteRecorder.sol";
-import {RoundVotingEngine} from "../contracts/RoundVotingEngine.sol";
-import {ProtocolConfig} from "../contracts/ProtocolConfig.sol";
-import {RoundRewardDistributor} from "../contracts/RoundRewardDistributor.sol";
-import {RoundLib} from "../contracts/libraries/RoundLib.sol";
-import {RoundEngineReadHelpers} from "./helpers/RoundEngineReadHelpers.sol";
-import {TlockVoteLib} from "../contracts/libraries/TlockVoteLib.sol";
-import {VotePreflightLib} from "../contracts/libraries/VotePreflightLib.sol";
-import {HumanReputation} from "../contracts/HumanReputation.sol";
-import {ParticipationPool} from "../contracts/ParticipationPool.sol";
-import {FrontendRegistry} from "../contracts/FrontendRegistry.sol";
-import {RaterRegistry} from "../contracts/RaterRegistry.sol";
-import {MockRaterIdentityRegistry} from "./mocks/MockRaterIdentityRegistry.sol";
-import {VotingTestBase} from "./helpers/VotingTestHelpers.sol";
-import {MockCategoryRegistry} from "../contracts/mocks/MockCategoryRegistry.sol";
+import { Test } from "forge-std/Test.sol";
+import { Base64 } from "@openzeppelin/contracts/utils/Base64.sol";
+import { Strings } from "@openzeppelin/contracts/utils/Strings.sol";
+import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import { ContentRegistry } from "../contracts/ContentRegistry.sol";
+import { AdvisoryVoteRecorder } from "../contracts/AdvisoryVoteRecorder.sol";
+import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
+import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
+import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
+import { RoundLib } from "../contracts/libraries/RoundLib.sol";
+import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
+import { TlockVoteLib } from "../contracts/libraries/TlockVoteLib.sol";
+import { VotePreflightLib } from "../contracts/libraries/VotePreflightLib.sol";
+import { HumanReputation } from "../contracts/HumanReputation.sol";
+import { ParticipationPool } from "../contracts/ParticipationPool.sol";
+import { FrontendRegistry } from "../contracts/FrontendRegistry.sol";
+import { RaterRegistry } from "../contracts/RaterRegistry.sol";
+import { MockRaterIdentityRegistry } from "./mocks/MockRaterIdentityRegistry.sol";
+import { VotingTestBase } from "./helpers/VotingTestHelpers.sol";
+import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
 
 // =========================================================================
 // TEST CONTRACT
@@ -53,6 +53,8 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     uint256 public constant STAKE = 5e6; // 5 HREP
     uint256 public constant T0 = 1_000_000; // setUp warp time
     uint256 public constant EPOCH = 1 hours; // epochDuration
+    bytes32 internal constant PERMIT_TYPEHASH =
+        keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)");
 
     function _tlockDrandChainHash() internal pure override returns (bytes32) {
         return DEFAULT_DRAND_CHAIN_HASH;
@@ -292,6 +294,48 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         );
     }
 
+    function _signPermit(uint256 privateKey, address tokenOwner, uint256 value, uint256 deadline)
+        internal
+        view
+        returns (uint8 v, bytes32 r, bytes32 s)
+    {
+        bytes32 structHash = keccak256(
+            abi.encode(PERMIT_TYPEHASH, tokenOwner, address(engine), value, hrepToken.nonces(tokenOwner), deadline)
+        );
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", hrepToken.DOMAIN_SEPARATOR(), structHash));
+        return vm.sign(privateKey, digest);
+    }
+
+    function _commitWithPermit(uint256 privateKey, uint256 contentId, bool isUp, uint256 stake)
+        internal
+        returns (bytes32 commitKey, bytes32 salt)
+    {
+        address permitVoter = vm.addr(privateKey);
+        salt = keccak256(abi.encodePacked(permitVoter, block.timestamp, "permit"));
+        TestCommitArtifacts memory artifacts =
+            _buildTestCommitArtifacts(address(engine), permitVoter, isUp, salt, contentId);
+        uint256 deadline = block.timestamp + 1 hours;
+        (uint8 v, bytes32 r, bytes32 s) = _signPermit(privateKey, permitVoter, stake, deadline);
+
+        vm.prank(permitVoter);
+        engine.commitVoteWithPermit(
+            contentId,
+            _roundContext(artifacts.roundId, artifacts.roundReferenceRatingBps),
+            artifacts.targetRound,
+            artifacts.drandChainHash,
+            artifacts.commitHash,
+            artifacts.ciphertext,
+            stake,
+            address(0),
+            deadline,
+            v,
+            r,
+            s
+        );
+
+        return (artifacts.commitKey, salt);
+    }
+
     function _maxAgeCiphertext() internal view returns (bytes memory ciphertext) {
         uint256 totalLength = 2_048;
         uint64 targetRound = _tlockCommitTargetRound();
@@ -399,6 +443,85 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     // 1. BASIC ROUND LIFECYCLE: commit -> reveal -> settle (3 voters, epoch 1)
     // =========================================================================
 
+    function test_CommitVoteWithPermit_Succeeds() public {
+        uint256 permitVoterKey = 0xA11CE;
+        address permitVoter = vm.addr(permitVoterKey);
+        vm.prank(owner);
+        hrepToken.mint(permitVoter, 10_000e6);
+
+        uint256 contentId = _submitContent();
+        (bytes32 commitKey,) = _commitWithPermit(permitVoterKey, contentId, true, STAKE);
+
+        RoundLib.Commit memory commit = RoundEngineReadHelpers.commit(engine, contentId, 1, commitKey);
+        assertEq(commit.stakeAmount, STAKE);
+        assertEq(hrepToken.nonces(permitVoter), 1);
+        assertEq(hrepToken.allowance(permitVoter, address(engine)), 0);
+        assertEq(hrepToken.balanceOf(address(engine)), 500_000e6 + STAKE);
+    }
+
+    function test_CommitVoteWithPermit_InvalidSignerReverts() public {
+        uint256 permitVoterKey = 0xB0B;
+        uint256 wrongKey = 0xCAFE;
+        address permitVoter = vm.addr(permitVoterKey);
+        vm.prank(owner);
+        hrepToken.mint(permitVoter, 10_000e6);
+
+        uint256 contentId = _submitContent();
+        bytes32 salt = keccak256(abi.encodePacked(permitVoter, block.timestamp, "invalid-permit"));
+        TestCommitArtifacts memory artifacts =
+            _buildTestCommitArtifacts(address(engine), permitVoter, true, salt, contentId);
+        uint256 deadline = block.timestamp + 1 hours;
+        (uint8 v, bytes32 r, bytes32 s) = _signPermit(wrongKey, permitVoter, STAKE, deadline);
+
+        vm.prank(permitVoter);
+        vm.expectRevert();
+        engine.commitVoteWithPermit(
+            contentId,
+            _roundContext(artifacts.roundId, artifacts.roundReferenceRatingBps),
+            artifacts.targetRound,
+            artifacts.drandChainHash,
+            artifacts.commitHash,
+            artifacts.ciphertext,
+            STAKE,
+            address(0),
+            deadline,
+            v,
+            r,
+            s
+        );
+    }
+
+    function test_CommitVoteWithPermit_ExpiredPermitReverts() public {
+        uint256 permitVoterKey = 0xC0FFEE;
+        address permitVoter = vm.addr(permitVoterKey);
+        vm.prank(owner);
+        hrepToken.mint(permitVoter, 10_000e6);
+
+        uint256 contentId = _submitContent();
+        bytes32 salt = keccak256(abi.encodePacked(permitVoter, block.timestamp, "expired-permit"));
+        TestCommitArtifacts memory artifacts =
+            _buildTestCommitArtifacts(address(engine), permitVoter, true, salt, contentId);
+        uint256 deadline = block.timestamp - 1;
+        (uint8 v, bytes32 r, bytes32 s) = _signPermit(permitVoterKey, permitVoter, STAKE, deadline);
+
+        vm.prank(permitVoter);
+        vm.expectRevert();
+        engine.commitVoteWithPermit(
+            contentId,
+            _roundContext(artifacts.roundId, artifacts.roundReferenceRatingBps),
+            artifacts.targetRound,
+            artifacts.drandChainHash,
+            artifacts.commitHash,
+            artifacts.ciphertext,
+            STAKE,
+            address(0),
+            deadline,
+            v,
+            r,
+            s
+        );
+    }
+
     function test_BasicLifecycle_ThreeVoters_UpWins() public {
         (uint256 contentId, uint256 roundId) = _setupThreeVoterRound(true, true, false);
 
@@ -449,7 +572,9 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         engine.revealVoteByCommitKey(contentId, roundId, ck2, false, 5_000, s2);
         engine.revealVoteByCommitKey(contentId, roundId, ck3, true, 6_500, s3);
         assertEq(engine.roundRatingUpEvidence(contentId, roundId), 3_300_000, "rating uses bounded up signal evidence");
-        assertEq(engine.roundRatingDownEvidence(contentId, roundId), 1_300_000, "rating uses bounded down signal evidence");
+        assertEq(
+            engine.roundRatingDownEvidence(contentId, roundId), 1_300_000, "rating uses bounded down signal evidence"
+        );
 
         (bool scored, uint256 rewardWeight, uint256 forfeitedPool) = engine.roundRbtsStats(contentId, roundId);
         assertFalse(scored, "RBTS scores are stored at settlement");

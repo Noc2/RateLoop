@@ -10,7 +10,6 @@ import {
   resolveFrontendCode,
 } from "./roundVotingEngine";
 import { ROUND_STATE } from "@rateloop/contracts/protocol";
-import { decodeVoteTransferPayload, encodeVoteTransferPayload } from "@rateloop/contracts/voting";
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -226,29 +225,4 @@ test("vote helpers normalize stake and frontend codes", () => {
     "0x1111111111111111111111111111111111111111",
   );
   assert.equal(resolveFrontendCode(undefined, undefined), "0x0000000000000000000000000000000000000000");
-});
-
-test("vote transfer payloads round-trip for single-transaction voting", () => {
-  const drandChainHash = ("0x" + "22".repeat(32)) as `0x${string}`;
-  const payload = encodeVoteTransferPayload({
-    contentId: 42n,
-    roundId: 4n,
-    roundReferenceRatingBps: 5_000,
-    commitHash: "0x1111111111111111111111111111111111111111111111111111111111111111",
-    ciphertext: "0x1234",
-    targetRound: 123n,
-    drandChainHash,
-    frontend: "0x2222222222222222222222222222222222222222",
-  });
-
-  assert.deepEqual(decodeVoteTransferPayload(payload), {
-    contentId: 42n,
-    roundId: 4n,
-    roundReferenceRatingBps: 5_000,
-    commitHash: "0x1111111111111111111111111111111111111111111111111111111111111111",
-    ciphertext: "0x1234",
-    targetRound: 123n,
-    drandChainHash,
-    frontend: "0x2222222222222222222222222222222222222222",
-  });
 });

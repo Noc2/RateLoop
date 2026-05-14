@@ -15,9 +15,7 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   workers: 1, // Single worker to prevent Anvil nonce conflicts
-  reporter: process.env.CI
-    ? [["github"], ["html", { open: "never", outputFolder: "playwright-report" }]]
-    : "html",
+  reporter: process.env.CI ? [["github"], ["html", { open: "never", outputFolder: "playwright-report" }]] : "html",
   timeout: 60_000, // On-chain tx confirmation needs time
 
   use: {
@@ -30,8 +28,7 @@ export default defineConfig({
     {
       name: "ci-smoke",
       use: { ...devices["Desktop Chrome"] },
-      testMatch:
-        /smoke|pages-smoke|docs-pages|nextjs-api|follow-api|watchlist-api|faucet|single-tx-vote|contract-boundaries/,
+      testMatch: /smoke|pages-smoke|docs-pages|nextjs-api|follow-api|watchlist-api|faucet|contract-boundaries/,
     },
     {
       name: "chromium",

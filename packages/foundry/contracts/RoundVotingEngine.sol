@@ -1,29 +1,28 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
-import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
+import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
-import {ContentRegistry} from "./ContentRegistry.sol";
-import {ProtocolConfig} from "./ProtocolConfig.sol";
-import {RoundLib} from "./libraries/RoundLib.sol";
-import {RatingLib} from "./libraries/RatingLib.sol";
-import {RoundSettlementSideEffectsLib} from "./libraries/RoundSettlementSideEffectsLib.sol";
-import {RoundSettlementDistributionLib} from "./libraries/RoundSettlementDistributionLib.sol";
-import {RoundCleanupLib} from "./libraries/RoundCleanupLib.sol";
-import {RoundRevealLib} from "./libraries/RoundRevealLib.sol";
-import {VotePreflightLib} from "./libraries/VotePreflightLib.sol";
-import {RobustBtsMath} from "./libraries/RobustBtsMath.sol";
-import {IFrontendRegistry} from "./interfaces/IFrontendRegistry.sol";
-import {ICategoryRegistry} from "./interfaces/ICategoryRegistry.sol";
-import {IRaterIdentityRegistry} from "./interfaces/IRaterIdentityRegistry.sol";
-import {IRoundVotingEngine} from "./interfaces/IRoundVotingEngine.sol";
-import {IParticipationPool} from "./interfaces/IParticipationPool.sol";
+import { ContentRegistry } from "./ContentRegistry.sol";
+import { ProtocolConfig } from "./ProtocolConfig.sol";
+import { RoundLib } from "./libraries/RoundLib.sol";
+import { RatingLib } from "./libraries/RatingLib.sol";
+import { RoundSettlementSideEffectsLib } from "./libraries/RoundSettlementSideEffectsLib.sol";
+import { RoundSettlementDistributionLib } from "./libraries/RoundSettlementDistributionLib.sol";
+import { RoundCleanupLib } from "./libraries/RoundCleanupLib.sol";
+import { RoundRevealLib } from "./libraries/RoundRevealLib.sol";
+import { VotePreflightLib } from "./libraries/VotePreflightLib.sol";
+import { IFrontendRegistry } from "./interfaces/IFrontendRegistry.sol";
+import { ICategoryRegistry } from "./interfaces/ICategoryRegistry.sol";
+import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol";
+import { IRoundVotingEngine } from "./interfaces/IRoundVotingEngine.sol";
+import { IParticipationPool } from "./interfaces/IParticipationPool.sol";
 
 interface IQuestionBundleRoundObserver {
     function recordBundleQuestionTerminal(uint256 contentId, uint256 roundId, bool settled) external;
@@ -99,15 +98,6 @@ contract RoundVotingEngine is
     uint256 internal constant MAX_CIPHERTEXT_SIZE = 2_048; // 2 KB max ciphertext to prevent storage bloat
     uint16 internal constant MIN_RBTS_PARTICIPANTS = 3;
     uint16 internal constant RBTS_SCORE_SCALE_BPS = 10_000;
-
-    struct RbtsRoundTotals {
-        uint256 rewardWeight;
-        uint256 rewardClaimants;
-        uint256 participationClaimants;
-        uint256 participationWeight;
-        uint256 forfeitedPool;
-        uint256 forfeitClaimants;
-    }
 
     // --- State ---
     IERC20 internal hrepToken;
@@ -366,8 +356,39 @@ contract RoundVotingEngine is
             commitHash,
             ciphertext,
             stakeAmount,
-            frontend,
-            false
+            frontend
+        );
+    }
+
+    /// @notice Commit a blind vote using an ERC-2612 permit for the stake allowance.
+    /// @dev This gives wallets without atomic batching a one-transaction counted-vote path.
+    function commitVoteWithPermit(
+        uint256 contentId,
+        uint256 roundContext,
+        uint64 targetRound,
+        bytes32 drandChainHash,
+        bytes32 commitHash,
+        bytes calldata ciphertext,
+        uint256 stakeAmount,
+        address frontend,
+        uint256 permitDeadline,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external nonReentrant whenNotPaused {
+        VotePreflightLib.permitStake(
+            address(hrepToken), msg.sender, address(this), stakeAmount, permitDeadline, v, r, s
+        );
+        _commitVote(
+            msg.sender,
+            contentId,
+            roundContext,
+            targetRound,
+            drandChainHash,
+            commitHash,
+            ciphertext,
+            stakeAmount,
+            frontend
         );
     }
 
@@ -380,8 +401,7 @@ contract RoundVotingEngine is
         bytes32 commitHash,
         bytes memory ciphertext,
         uint256 stakeAmount,
-        address frontend,
-        bool stakeAlreadyTransferred
+        address frontend
     ) internal {
         if (stakeAmount < MIN_STAKE || stakeAmount > MAX_STAKE) revert InvalidStake();
         if (commitHash == bytes32(0)) revert InvalidCommitHash();
@@ -443,9 +463,7 @@ contract RoundVotingEngine is
             contentId, roundId, ciphertext, targetRound, drandChainHash, epochEnd, roundCfg.epochDuration
         );
         // Transfer HREP stake after all lightweight validation passes.
-        if (!stakeAlreadyTransferred) {
-            hrepToken.safeTransferFrom(voter, address(this), stakeAmount);
-        }
+        hrepToken.safeTransferFrom(voter, address(this), stakeAmount);
         accountedHrepBalance += stakeAmount;
 
         _storeCommittedVote(
@@ -464,9 +482,7 @@ contract RoundVotingEngine is
             resolved.identityKey,
             resolved.holder
         );
-        _recordCommitAccounting(
-            round, contentId, roundId, voter, resolved.identityKey, stakeAmount64, stakeAmount
-        );
+        _recordCommitAccounting(round, contentId, roundId, voter, resolved.identityKey, stakeAmount64, stakeAmount);
 
         emit VoteCommitted(
             contentId, roundId, voter, commitHash, expectedReferenceRatingBps, targetRound, drandChainHash, stakeAmount
@@ -536,15 +552,7 @@ contract RoundVotingEngine is
         );
         _markFrontendEligibility(contentId, roundId, commitKey, frontend);
         _recordCommitIndexes(
-            contentId,
-            roundId,
-            commitKey,
-            epochEnd,
-            voter,
-            commitHash,
-            identityKey,
-            identityHolder,
-            targetRound
+            contentId, roundId, commitKey, epochEnd, voter, commitHash, identityKey, identityHolder, targetRound
         );
     }
 
@@ -705,8 +713,8 @@ contract RoundVotingEngine is
         address bundleEscrow = registry.questionRewardPoolEscrow();
         if (bundleEscrow == address(0)) return;
 
-        try IQuestionBundleRoundObserver(bundleEscrow).recordBundleQuestionTerminal(contentId, roundId, settled) {}
-            catch {}
+        try IQuestionBundleRoundObserver(bundleEscrow).recordBundleQuestionTerminal(contentId, roundId, settled) { }
+            catch { }
     }
 
     // =========================================================================
@@ -997,12 +1005,6 @@ contract RoundVotingEngine is
         return cfg;
     }
 
-    function _getRoundRevealGracePeriod(uint256 contentId, uint256 roundId) internal view returns (uint256) {
-        uint256 gracePeriod = roundRevealGracePeriodSnapshot[contentId][roundId];
-        if (gracePeriod == 0) return protocolConfig.revealGracePeriod();
-        return gracePeriod;
-    }
-
     function _targetRoundRevealableAt(uint256 contentId, uint256 roundId, uint64 targetRound)
         internal
         view
@@ -1070,11 +1072,7 @@ contract RoundVotingEngine is
         return ICategoryRegistry(protocolConfig.categoryRegistry());
     }
 
-    function _getRoundRaterRegistry(uint256 contentId, uint256 roundId)
-        internal
-        view
-        returns (IRaterIdentityRegistry)
-    {
+    function _getRoundRaterRegistry(uint256 contentId, uint256 roundId) internal view returns (IRaterIdentityRegistry) {
         address snapshot = roundRaterRegistrySnapshot[contentId][roundId];
         if (snapshot == address(0)) {
             snapshot = protocolConfig.raterRegistry();
@@ -1100,44 +1098,20 @@ contract RoundVotingEngine is
         );
     }
 
-    function _getRevealFailedFinalizationTime(uint256 contentId, uint256 roundId, RoundLib.Round storage round)
-        internal
-        view
-        returns (uint256)
-    {
-        RoundLib.RoundConfig memory roundCfg = _getRoundConfig(contentId, roundId);
-        uint256 lastRevealableAt = lastCommitRevealableAfter[contentId][roundId];
-        if (lastRevealableAt == 0) return 0;
-
-        uint256 votingWindowEnd = uint256(round.startTime) + roundCfg.maxDuration;
-        uint256 revealBase = lastRevealableAt > votingWindowEnd ? lastRevealableAt : votingWindowEnd;
-        return revealBase + _getRoundRevealGracePeriod(contentId, roundId);
-    }
-
     function _canFinalizeRevealFailedRound(uint256 contentId, uint256 roundId, RoundLib.Round storage round)
         internal
         view
         returns (bool)
     {
-        if (round.state != RoundLib.RoundState.Open) return false;
-
-        RoundLib.RoundConfig memory roundCfg = _getRoundConfig(contentId, roundId);
-        uint16 rbtsRevealQuorum = _rbtsRevealQuorum(roundCfg.minVoters);
-        if (round.voteCount < rbtsRevealQuorum) return false;
-        if (round.revealedCount >= rbtsRevealQuorum) return false;
-
-        return _isFinalRevealGraceElapsed(contentId, roundId, round);
-    }
-
-    function _isFinalRevealGraceElapsed(uint256 contentId, uint256 roundId, RoundLib.Round storage round)
-        internal
-        view
-        returns (bool)
-    {
-        uint256 finalizationTime = _getRevealFailedFinalizationTime(contentId, roundId, round);
-        if (finalizationTime == 0) return false;
-
-        return block.timestamp >= finalizationTime;
+        return RoundCleanupLib.canFinalizeRevealFailedRound(
+            round,
+            roundConfigSnapshot[contentId],
+            roundRevealGracePeriodSnapshot[contentId],
+            lastCommitRevealableAfter[contentId],
+            protocolConfig,
+            roundId,
+            MIN_RBTS_PARTICIPANTS
+        );
     }
 
     function _isSettlementRevealGraceElapsed(uint256 contentId, uint256 roundId, RoundLib.Round storage round)
@@ -1145,17 +1119,14 @@ contract RoundVotingEngine is
         view
         returns (bool)
     {
-        uint256 lastRevealableAt = lastCommitRevealableAfter[contentId][roundId];
-        if (lastRevealableAt == 0) return false;
-
-        uint256 revealBase = lastRevealableAt;
-        if (round.thresholdReachedAt == 0) {
-            RoundLib.RoundConfig memory roundCfg = _getRoundConfig(contentId, roundId);
-            uint256 votingWindowEnd = uint256(round.startTime) + roundCfg.maxDuration;
-            if (votingWindowEnd > revealBase) revealBase = votingWindowEnd;
-        }
-
-        return block.timestamp >= revealBase + _getRoundRevealGracePeriod(contentId, roundId);
+        return RoundCleanupLib.isSettlementRevealGraceElapsed(
+            round,
+            roundConfigSnapshot[contentId],
+            roundRevealGracePeriodSnapshot[contentId],
+            lastCommitRevealableAfter[contentId],
+            protocolConfig,
+            roundId
+        );
     }
 
     function _pastEpochUnrevealedCount(
@@ -1164,200 +1135,40 @@ contract RoundVotingEngine is
         RoundLib.Round storage round,
         RoundLib.RoundConfig memory roundCfg
     ) internal view returns (uint256 total) {
-        uint256 epochEnd = round.startTime + roundCfg.epochDuration;
-        uint256 maxEpochEnd = round.startTime + roundCfg.maxDuration + roundCfg.epochDuration;
-        while (epochEnd <= block.timestamp && epochEnd <= maxEpochEnd) {
-            total += epochUnrevealedCount[contentId][roundId][epochEnd];
-            epochEnd += roundCfg.epochDuration;
-        }
+        return RoundCleanupLib.pastEpochUnrevealedCount(epochUnrevealedCount[contentId][roundId], round, roundCfg);
     }
 
     function _scoreRbtsRewards(uint256 contentId, uint256 roundId, uint256 revealedCount, bool upWins)
         internal
         returns (uint256 rewardWeight, uint256 forfeitedPool, bytes32 scoreSeed)
     {
-        if (revealedCount < MIN_RBTS_PARTICIPANTS) revert NotEnoughVotes();
-
-        bytes32[] storage commitKeys = roundCommitHashes[contentId][roundId];
-        bytes32[] memory revealedKeys = new bytes32[](revealedCount);
-        uint256 revealedIndex;
-        uint256 economicCount;
-        for (uint256 i = 0; i < commitKeys.length;) {
-            bytes32 commitKey = commitKeys[i];
-            RoundLib.Commit storage revealedCommit = commits[contentId][roundId][commitKey];
-            if (revealedCommit.revealed) {
-                revealedKeys[revealedIndex] = commitKey;
-                if (commitRbtsWeight[contentId][roundId][commitKey] > 0) {
-                    unchecked {
-                        ++economicCount;
-                    }
-                } else if (revealedCommit.stakeAmount > 0) {
-                    commitRbtsStakeReturned[contentId][roundId][commitKey] = revealedCommit.stakeAmount;
-                }
-                unchecked {
-                    ++revealedIndex;
-                }
-            }
-            unchecked {
-                ++i;
-            }
-        }
-        if (revealedIndex != revealedCount) revert NotEnoughVotes();
-
-        RbtsRoundTotals memory totals;
-
-        scoreSeed = _rbtsScoreSeed(contentId, roundId, revealedCount);
-        for (uint256 i = 0; i < revealedCount;) {
-            bytes32 commitKey = revealedKeys[i];
-            uint256 ownWeight = commitRbtsWeight[contentId][roundId][commitKey];
-            uint16 scoreBps = _scoreRbtsCommitAt(contentId, roundId, revealedKeys, scoreSeed, i, revealedCount);
-
-            if (ownWeight == 0 || economicCount < MIN_RBTS_PARTICIPANTS) {
-                if (ownWeight > 0) {
-                    commitRbtsStakeReturned[contentId][roundId][commitKey] =
-                    commits[contentId][roundId][commitKey].stakeAmount;
-                }
-                unchecked {
-                    ++i;
-                }
-                continue;
-            }
-
-            totals = _accumulateRbtsCommitScore(contentId, roundId, commitKey, ownWeight, scoreBps, upWins, totals);
-            unchecked {
-                ++i;
-            }
-        }
-
-        rewardWeight = totals.rewardWeight;
-        forfeitedPool = totals.forfeitedPool;
-        roundRbtsRewardWeight[contentId][roundId] = totals.rewardWeight;
-        roundRbtsRewardClaimants[contentId][roundId] = totals.rewardClaimants;
-        roundRbtsParticipationWeight[contentId][roundId] = totals.participationWeight;
-        roundRbtsParticipationClaimants[contentId][roundId] = totals.participationClaimants;
-        roundRbtsForfeitedPool[contentId][roundId] = totals.forfeitedPool;
-        roundRbtsForfeitClaimants[contentId][roundId] = totals.forfeitClaimants;
-    }
-
-    function _accumulateRbtsCommitScore(
-        uint256 contentId,
-        uint256 roundId,
-        bytes32 commitKey,
-        uint256 ownWeight,
-        uint16 scoreBps,
-        bool upWins,
-        RbtsRoundTotals memory totals
-    ) internal returns (RbtsRoundTotals memory) {
-        uint256 scoreWeight = (ownWeight * scoreBps) / RBTS_SCORE_SCALE_BPS;
-        uint256 stakeAmount = commits[contentId][roundId][commitKey].stakeAmount;
-        uint256 stakeReturned = (stakeAmount * scoreBps) / RBTS_SCORE_SCALE_BPS;
-        uint256 forfeitedStake = stakeAmount - stakeReturned;
-
-        commitRbtsRewardWeight[contentId][roundId][commitKey] = scoreWeight;
-        commitRbtsStakeReturned[contentId][roundId][commitKey] = stakeReturned;
-        commitRbtsForfeitedStake[contentId][roundId][commitKey] = forfeitedStake;
-
-        totals.rewardWeight += scoreWeight;
-        totals.forfeitedPool += forfeitedStake;
-        if (scoreWeight > 0) {
-            if (commits[contentId][roundId][commitKey].isUp == upWins) {
-                totals.participationWeight += scoreWeight;
-                unchecked {
-                    ++totals.participationClaimants;
-                }
-            }
-            unchecked {
-                ++totals.rewardClaimants;
-            }
-        }
-        if (forfeitedStake > 0) {
-            unchecked {
-                ++totals.forfeitClaimants;
-            }
-        }
-        return totals;
-    }
-
-    function _scoreRbtsCommitAt(
-        uint256 contentId,
-        uint256 roundId,
-        bytes32[] memory revealedKeys,
-        bytes32 scoreSeed,
-        uint256 ownIndex,
-        uint256 revealedCount
-    ) internal returns (uint16) {
-        bytes32 commitKey = revealedKeys[ownIndex];
-        bytes32 drawKey = _rbtsDrawKey(contentId, roundId, commitKey);
-        uint256 referenceIndex = _rbtsOtherIndex(scoreSeed, drawKey, ownIndex, revealedCount, 1);
-        bytes32 referenceKey = revealedKeys[referenceIndex];
-        bytes32 peerKey = revealedKeys[_rbtsPeerIndex(scoreSeed, drawKey, ownIndex, referenceIndex, revealedCount)];
-        return _scoreRbtsCommit(contentId, roundId, commitKey, referenceKey, peerKey);
-    }
-
-    function _scoreRbtsCommit(
-        uint256 contentId,
-        uint256 roundId,
-        bytes32 commitKey,
-        bytes32 referenceKey,
-        bytes32 peerKey
-    ) internal returns (uint16 scoreBps) {
-        scoreBps = RobustBtsMath.scoreBps(
-            commits[contentId][roundId][commitKey].isUp,
-            commitPredictedUpBps[contentId][roundId][commitKey],
-            commitPredictedUpBps[contentId][roundId][referenceKey],
-            commits[contentId][roundId][peerKey].isUp
+        RoundRevealLib.ScoreRbtsResult memory result = RoundRevealLib.scoreRbtsRewards(
+            roundCommitHashes[contentId][roundId],
+            commits[contentId][roundId],
+            commitPredictedUpBps[contentId][roundId],
+            commitRbtsWeight[contentId][roundId],
+            commitRbtsScoreBps[contentId][roundId],
+            commitRbtsRewardWeight[contentId][roundId],
+            commitRbtsStakeReturned[contentId][roundId],
+            commitRbtsForfeitedStake[contentId][roundId],
+            commitIdentityKey[contentId][roundId],
+            contentId,
+            roundId,
+            revealedCount,
+            upWins,
+            MIN_RBTS_PARTICIPANTS,
+            RBTS_SCORE_SCALE_BPS
         );
-        commitRbtsScoreBps[contentId][roundId][commitKey] = scoreBps;
-    }
 
-    function _rbtsScoreSeed(uint256 contentId, uint256 roundId, uint256 scoreableCount)
-        internal
-        view
-        returns (bytes32 scoreSeed)
-    {
-        scoreSeed = keccak256(
-            abi.encodePacked(
-                block.chainid,
-                address(this),
-                contentId,
-                roundId,
-                scoreableCount,
-                block.prevrandao,
-                blockhash(block.number - 1)
-            )
-        );
-    }
-
-    function _rbtsDrawKey(uint256 contentId, uint256 roundId, bytes32 commitKey) internal view returns (bytes32) {
-        bytes32 identityKey = commitIdentityKey[contentId][roundId][commitKey];
-        if (identityKey != bytes32(0)) return identityKey;
-        return VotePreflightLib.addressIdentityKey(commits[contentId][roundId][commitKey].voter);
-    }
-
-    function _rbtsOtherIndex(bytes32 seed, bytes32 drawKey, uint256 ownIndex, uint256 count, uint8 domain)
-        internal
-        pure
-        returns (uint256)
-    {
-        // Deterministic sampler over rater identities plus settlement entropy; not chain entropy for custody.
-        // slither-disable-next-line weak-prng
-        uint256 drawn = uint256(keccak256(abi.encodePacked(seed, drawKey, ownIndex, domain))) % (count - 1);
-        return drawn >= ownIndex ? drawn + 1 : drawn;
-    }
-
-    function _rbtsPeerIndex(bytes32 seed, bytes32 drawKey, uint256 ownIndex, uint256 referenceIndex, uint256 count)
-        internal
-        pure
-        returns (uint256)
-    {
-        // Deterministic sampler over rater identities plus settlement entropy; not chain entropy for custody.
-        // slither-disable-next-line weak-prng
-        uint256 drawn = uint256(keccak256(abi.encodePacked(seed, drawKey, ownIndex, uint8(2)))) % (count - 2);
-        uint256 firstExcluded = ownIndex < referenceIndex ? ownIndex : referenceIndex;
-        uint256 secondExcluded = ownIndex < referenceIndex ? referenceIndex : ownIndex;
-        if (drawn >= firstExcluded) ++drawn;
-        if (drawn >= secondExcluded) ++drawn;
-        return drawn;
+        rewardWeight = result.rewardWeight;
+        forfeitedPool = result.forfeitedPool;
+        scoreSeed = result.scoreSeed;
+        roundRbtsRewardWeight[contentId][roundId] = result.rewardWeight;
+        roundRbtsRewardClaimants[contentId][roundId] = result.rewardClaimants;
+        roundRbtsParticipationWeight[contentId][roundId] = result.participationWeight;
+        roundRbtsParticipationClaimants[contentId][roundId] = result.participationClaimants;
+        roundRbtsForfeitedPool[contentId][roundId] = result.forfeitedPool;
+        roundRbtsForfeitClaimants[contentId][roundId] = result.forfeitClaimants;
     }
 
     function _revealRbtsVoteInternal(

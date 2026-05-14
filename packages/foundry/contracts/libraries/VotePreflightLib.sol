@@ -2,6 +2,7 @@
 pragma solidity ^0.8.24;
 
 import { ContentRegistry } from "../ContentRegistry.sol";
+import { IERC20Permit } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol";
 import { IFrontendRegistry } from "../interfaces/IFrontendRegistry.sol";
 import { IRaterIdentityRegistry } from "../interfaces/IRaterIdentityRegistry.sol";
 
@@ -33,11 +34,7 @@ library VotePreflightLib {
         ContentRegistry registry,
         address voter,
         uint256 contentId
-    )
-        external
-        view
-        returns (IRaterIdentityRegistry.ResolvedRater memory resolved)
-    {
+    ) external view returns (IRaterIdentityRegistry.ResolvedRater memory resolved) {
         resolved = resolveRater(identityRegistry, voter);
 
         (,, address rawSubmitter,,,,,,,) = registry.contents(contentId);
@@ -90,9 +87,24 @@ library VotePreflightLib {
         }
     }
 
+    function permitStake(
+        address token,
+        address owner,
+        address spender,
+        uint256 amount,
+        uint256 deadline,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external {
+        IERC20Permit(token).permit(owner, spender, amount, deadline, v, r, s);
+    }
+
     function prepareCommit(
         mapping(uint256 => mapping(uint256 => mapping(address => bytes32))) storage voterCommitHash,
-        mapping(uint256 => mapping(uint256 => mapping(bytes32 => bytes32))) storage identityCommitKey,
+        mapping(
+            uint256 => mapping(uint256 => mapping(bytes32 => bytes32))
+        ) storage identityCommitKey,
         mapping(uint256 => mapping(address => uint256)) storage lastVoteTimestamp,
         mapping(uint256 => mapping(bytes32 => uint256)) storage lastVoteTimestampByIdentity,
         mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint256))) storage identityRoundStake,

@@ -2,7 +2,6 @@
 pragma solidity ^0.8.20;
 
 import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import { ERC1363 } from "@openzeppelin/contracts/token/ERC20/extensions/ERC1363.sol";
 import { ERC20Permit } from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Permit.sol";
 import { ERC20Votes } from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Votes.sol";
 import { AccessControl } from "@openzeppelin/contracts/access/AccessControl.sol";
@@ -12,7 +11,7 @@ import { Nonces } from "@openzeppelin/contracts/utils/Nonces.sol";
 /// @notice Reputation token for Curyo platform with governance capabilities.
 /// @dev Uses 6 decimals. Includes ERC20Votes for governance and governance-specific token locking.
 ///      Minting is role-gated and always bounded by MAX_SUPPLY.
-contract HumanReputation is ERC20, ERC1363, ERC20Permit, ERC20Votes, AccessControl {
+contract HumanReputation is ERC20, ERC20Permit, ERC20Votes, AccessControl {
     uint8 private constant DECIMALS = 6;
     uint256 public constant MAX_SUPPLY = 100_000_000 * 10 ** DECIMALS; // 100M HREP total cap across launch, participation, consensus, and treasury pools
 
@@ -208,7 +207,7 @@ contract HumanReputation is ERC20, ERC1363, ERC20Permit, ERC20Votes, AccessContr
     }
 
     /// @notice ERC165 interface support (required override for AccessControl)
-    function supportsInterface(bytes4 interfaceId) public view virtual override(AccessControl, ERC1363) returns (bool) {
+    function supportsInterface(bytes4 interfaceId) public view virtual override(AccessControl) returns (bool) {
         return super.supportsInterface(interfaceId);
     }
 }

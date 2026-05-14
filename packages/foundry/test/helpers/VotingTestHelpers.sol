@@ -522,17 +522,6 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
         bytes32 salt;
     }
 
-    struct TransferAndCallTestCommitRequest {
-        RoundVotingEngine engine;
-        HumanReputation hrepToken;
-        address voter;
-        uint256 contentId;
-        bool isUp;
-        uint256 stake;
-        address frontend;
-        bytes32 salt;
-    }
-
     bytes32 internal constant DEFAULT_DRAND_CHAIN_HASH =
         0x52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971;
     uint64 internal constant DEFAULT_DRAND_GENESIS_TIME = 1;
@@ -573,12 +562,7 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
 
     function _deployRaterRegistry(address admin, address governance) internal returns (RaterRegistry raterRegistry) {
         raterRegistry = new RaterRegistry(
-            admin,
-            governance,
-            address(new MockWorldIDRouter()),
-            keccak256("rateloop-human-v1"),
-            12_345,
-            365 days
+            admin, governance, address(new MockWorldIDRouter()), keccak256("rateloop-human-v1"), 12_345, 365 days
         );
     }
 
@@ -785,29 +769,6 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
                 request.frontend
             );
         vm.stopPrank();
-
-        return artifacts.commitKey;
-    }
-
-    function _transferAndCallTestVote(TransferAndCallTestCommitRequest memory request)
-        internal
-        returns (bytes32 commitKey)
-    {
-        TestCommitArtifacts memory artifacts = _buildTestCommitArtifacts(
-            address(request.engine), request.voter, request.isUp, request.salt, request.contentId
-        );
-        bytes memory payload = abi.encode(
-            request.contentId,
-            _roundContext(artifacts.roundId, artifacts.roundReferenceRatingBps),
-            artifacts.commitHash,
-            artifacts.ciphertext,
-            request.frontend,
-            artifacts.targetRound,
-            artifacts.drandChainHash
-        );
-
-        vm.prank(request.voter);
-        request.hrepToken.transferAndCall(address(request.engine), request.stake, payload);
 
         return artifacts.commitKey;
     }

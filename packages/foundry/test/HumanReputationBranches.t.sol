@@ -3,45 +3,10 @@ pragma solidity ^0.8.20;
 
 import { Test } from "forge-std/Test.sol";
 import { HumanReputation } from "../contracts/HumanReputation.sol";
-import { IERC1363Receiver } from "@openzeppelin/contracts/interfaces/IERC1363Receiver.sol";
-import { IERC1363Spender } from "@openzeppelin/contracts/interfaces/IERC1363Spender.sol";
-
-contract ERC1363ReceiverMock is IERC1363Receiver {
-    address public lastOperator;
-    address public lastFrom;
-    uint256 public lastValue;
-    bytes public lastData;
-
-    function onTransferReceived(address operator, address from, uint256 value, bytes calldata data)
-        external
-        returns (bytes4)
-    {
-        lastOperator = operator;
-        lastFrom = from;
-        lastValue = value;
-        lastData = data;
-        return IERC1363Receiver.onTransferReceived.selector;
-    }
-}
-
-contract ERC1363SpenderMock is IERC1363Spender {
-    address public lastOwner;
-    uint256 public lastValue;
-    bytes public lastData;
-
-    function onApprovalReceived(address owner, uint256 value, bytes calldata data) external returns (bytes4) {
-        lastOwner = owner;
-        lastValue = value;
-        lastData = data;
-        return IERC1363Spender.onApprovalReceived.selector;
-    }
-}
 
 /// @title HumanReputation branch coverage tests
 contract HumanReputationBranchesTest is Test {
     HumanReputation public hrep;
-    ERC1363ReceiverMock public receiver;
-    ERC1363SpenderMock public spender;
 
     address public admin = address(1);
     address public governance = address(2);
@@ -58,8 +23,6 @@ contract HumanReputationBranchesTest is Test {
         vm.startPrank(admin);
 
         hrep = new HumanReputation(admin, governance);
-        receiver = new ERC1363ReceiverMock();
-        spender = new ERC1363SpenderMock();
 
         // Admin has MINTER_ROLE from constructor
         hrep.mint(user1, 1_000e6);
@@ -183,33 +146,6 @@ contract HumanReputationBranchesTest is Test {
 
         // Auto-delegation to self should have occurred
         assertEq(hrep.delegates(newUser), newUser);
-    }
-
-    function test_TransferAndCall_Succeeds() public {
-        bytes memory data = abi.encodePacked("vote payload");
-
-        vm.prank(user1);
-        bool ok = hrep.transferAndCall(address(receiver), 125e6, data);
-
-        assertTrue(ok);
-        assertEq(hrep.balanceOf(address(receiver)), 125e6);
-        assertEq(receiver.lastOperator(), user1);
-        assertEq(receiver.lastFrom(), user1);
-        assertEq(receiver.lastValue(), 125e6);
-        assertEq(receiver.lastData(), data);
-    }
-
-    function test_ApproveAndCall_Succeeds() public {
-        bytes memory data = abi.encodePacked("approval payload");
-
-        vm.prank(user1);
-        bool ok = hrep.approveAndCall(address(spender), 250e6, data);
-
-        assertTrue(ok);
-        assertEq(hrep.allowance(user1, address(spender)), 250e6);
-        assertEq(spender.lastOwner(), user1);
-        assertEq(spender.lastValue(), 250e6);
-        assertEq(spender.lastData(), data);
     }
 
     function test_Transfer_AlreadyDelegated_NoChange() public {

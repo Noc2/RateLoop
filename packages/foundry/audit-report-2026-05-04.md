@@ -84,9 +84,9 @@ The first division truncates before the second multiplication, causing at most *
 
 ## Notes on Previously Identified Issues (Confirmed / No Change Needed)
 
-### Reentrancy & ERC1363 Abuse
+### Reentrancy & Legacy ERC1363 Vote Path
 - ✅ `SecurityTests.t.sol` already covers reentrancy via `MaliciousToken` during refunds, commits, and settlement treasury transfers.
-- ✅ `transferAndCall` abuse is blocked: direct `onTransferReceived` calls revert, approved spenders cannot force votes, and malformed payloads are rejected.
+- ✅ The old ERC1363 vote-transfer path has been removed for the redeploy; counted voting now uses `commitVote`, `commitVoteWithPermit`, or wallet-level batched calls.
 
 ### Commit-Reveal Reliability
 - ✅ `SelectiveRevelationTest.t.sol` verifies that settlement is blocked until all past-epoch commits are revealed or the grace window elapses.

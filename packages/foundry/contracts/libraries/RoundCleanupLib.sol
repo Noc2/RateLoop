@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-import {ProtocolConfig} from "../ProtocolConfig.sol";
-import {IRaterIdentityRegistry} from "../interfaces/IRaterIdentityRegistry.sol";
-import {RoundLib} from "./RoundLib.sol";
-import {TlockVoteLib} from "./TlockVoteLib.sol";
-import {TokenTransferLib} from "./TokenTransferLib.sol";
-import {VotePreflightLib} from "./VotePreflightLib.sol";
+import { ProtocolConfig } from "../ProtocolConfig.sol";
+import { IRaterIdentityRegistry } from "../interfaces/IRaterIdentityRegistry.sol";
+import { RoundLib } from "./RoundLib.sol";
+import { TlockVoteLib } from "./TlockVoteLib.sol";
+import { TokenTransferLib } from "./TokenTransferLib.sol";
+import { VotePreflightLib } from "./VotePreflightLib.sol";
 
 interface IRoundCleanupActivityRegistry {
     function updateActivity(uint256 contentId) external;
@@ -75,6 +75,68 @@ library RoundCleanupLib {
         );
     }
 
+    function canFinalizeRevealFailedRound(
+        RoundLib.Round storage round,
+        mapping(uint256 => RoundLib.RoundConfig) storage roundConfigSnapshot,
+        mapping(uint256 => uint256) storage roundRevealGracePeriodSnapshot,
+        mapping(uint256 => uint256) storage lastCommitRevealableAfter,
+        ProtocolConfig protocolConfig,
+        uint256 roundId,
+        uint16 minRbtsParticipants
+    ) external view returns (bool) {
+        if (round.state != RoundLib.RoundState.Open) return false;
+
+        RoundLib.RoundConfig memory roundCfg = _getRoundConfig(roundConfigSnapshot, protocolConfig, roundId);
+        uint16 rbtsRevealQuorum = _rbtsRevealQuorum(roundCfg.minVoters, minRbtsParticipants);
+        if (round.voteCount < rbtsRevealQuorum) return false;
+        if (round.revealedCount >= rbtsRevealQuorum) return false;
+
+        uint256 finalizationTime = _getRevealFailedFinalizationTime(
+            round,
+            roundConfigSnapshot,
+            roundRevealGracePeriodSnapshot,
+            lastCommitRevealableAfter,
+            protocolConfig,
+            roundId
+        );
+        return finalizationTime != 0 && block.timestamp >= finalizationTime;
+    }
+
+    function isSettlementRevealGraceElapsed(
+        RoundLib.Round storage round,
+        mapping(uint256 => RoundLib.RoundConfig) storage roundConfigSnapshot,
+        mapping(uint256 => uint256) storage roundRevealGracePeriodSnapshot,
+        mapping(uint256 => uint256) storage lastCommitRevealableAfter,
+        ProtocolConfig protocolConfig,
+        uint256 roundId
+    ) external view returns (bool) {
+        uint256 lastRevealableAt = lastCommitRevealableAfter[roundId];
+        if (lastRevealableAt == 0) return false;
+
+        uint256 revealBase = lastRevealableAt;
+        if (round.thresholdReachedAt == 0) {
+            RoundLib.RoundConfig memory roundCfg = _getRoundConfig(roundConfigSnapshot, protocolConfig, roundId);
+            uint256 votingWindowEnd = uint256(round.startTime) + roundCfg.maxDuration;
+            if (votingWindowEnd > revealBase) revealBase = votingWindowEnd;
+        }
+
+        return block.timestamp
+            >= revealBase + _getRoundRevealGracePeriod(roundRevealGracePeriodSnapshot, protocolConfig, roundId);
+    }
+
+    function pastEpochUnrevealedCount(
+        mapping(uint256 => uint256) storage epochUnrevealedCount,
+        RoundLib.Round storage round,
+        RoundLib.RoundConfig memory roundCfg
+    ) external view returns (uint256 total) {
+        uint256 epochEnd = round.startTime + roundCfg.epochDuration;
+        uint256 maxEpochEnd = round.startTime + roundCfg.maxDuration + roundCfg.epochDuration;
+        while (epochEnd <= block.timestamp && epochEnd <= maxEpochEnd) {
+            total += epochUnrevealedCount[epochEnd];
+            epochEnd += roundCfg.epochDuration;
+        }
+    }
+
     function resolveClaimCommit(
         mapping(address => bytes32) storage roundVoterCommitHash,
         mapping(bytes32 => bytes32) storage roundIdentityCommitKey,
@@ -82,8 +144,7 @@ library RoundCleanupLib {
         IRaterIdentityRegistry identityRegistry,
         address account
     ) external view returns (bytes32 commitKey, address rewardRecipient) {
-        IRaterIdentityRegistry.ResolvedRater memory resolved =
-            VotePreflightLib.resolveRater(identityRegistry, account);
+        IRaterIdentityRegistry.ResolvedRater memory resolved = VotePreflightLib.resolveRater(identityRegistry, account);
         if (resolved.identityKey != bytes32(0)) {
             commitKey = roundIdentityCommitKey[resolved.identityKey];
             if (commitKey != bytes32(0)) {
@@ -253,7 +314,8 @@ library RoundCleanupLib {
         cleanupIncentive = _cleanupIncentive(forfeitedToTreasury + addedToConsensusReserve, 5e6 - cleanupIncentivePaid);
         if (cleanupIncentive > 0) {
             roundCleanupIncentivePaid[contentId][roundId] = cleanupIncentivePaid + cleanupIncentive;
-            uint256 fromReserve = addedToConsensusReserve < cleanupIncentive ? addedToConsensusReserve : cleanupIncentive;
+            uint256 fromReserve =
+                addedToConsensusReserve < cleanupIncentive ? addedToConsensusReserve : cleanupIncentive;
             if (fromReserve > 0) {
                 addedToConsensusReserve -= fromReserve;
                 updatedConsensusReserve -= fromReserve;
@@ -268,7 +330,7 @@ library RoundCleanupLib {
         if (forfeitedToTreasury > 0) {
             address currentTreasury = protocolConfig.treasury();
             if (currentTreasury != address(0)) {
-                try TokenTransferLib.safeTransfer(hrepToken, currentTreasury, forfeitedToTreasury) {}
+                try TokenTransferLib.safeTransfer(hrepToken, currentTreasury, forfeitedToTreasury) { }
                 catch {
                     updatedConsensusReserve += forfeitedToTreasury;
                 }
@@ -287,5 +349,46 @@ library RoundCleanupLib {
         incentive = forfeitedAmount * CLEANUP_INCENTIVE_BPS / 10_000;
         if (incentive > CLEANUP_INCENTIVE_MAX) incentive = CLEANUP_INCENTIVE_MAX;
         if (incentive > remainingCap) incentive = remainingCap;
+    }
+
+    function _getRevealFailedFinalizationTime(
+        RoundLib.Round storage round,
+        mapping(uint256 => RoundLib.RoundConfig) storage roundConfigSnapshot,
+        mapping(uint256 => uint256) storage roundRevealGracePeriodSnapshot,
+        mapping(uint256 => uint256) storage lastCommitRevealableAfter,
+        ProtocolConfig protocolConfig,
+        uint256 roundId
+    ) private view returns (uint256) {
+        RoundLib.RoundConfig memory roundCfg = _getRoundConfig(roundConfigSnapshot, protocolConfig, roundId);
+        uint256 lastRevealableAt = lastCommitRevealableAfter[roundId];
+        if (lastRevealableAt == 0) return 0;
+
+        uint256 votingWindowEnd = uint256(round.startTime) + roundCfg.maxDuration;
+        uint256 revealBase = lastRevealableAt > votingWindowEnd ? lastRevealableAt : votingWindowEnd;
+        return revealBase + _getRoundRevealGracePeriod(roundRevealGracePeriodSnapshot, protocolConfig, roundId);
+    }
+
+    function _getRoundConfig(
+        mapping(uint256 => RoundLib.RoundConfig) storage roundConfigSnapshot,
+        ProtocolConfig protocolConfig,
+        uint256 roundId
+    ) private view returns (RoundLib.RoundConfig memory cfg) {
+        cfg = roundConfigSnapshot[roundId];
+        if (cfg.epochDuration == 0) {
+            (cfg.epochDuration, cfg.maxDuration, cfg.minVoters, cfg.maxVoters) = protocolConfig.config();
+        }
+    }
+
+    function _getRoundRevealGracePeriod(
+        mapping(uint256 => uint256) storage roundRevealGracePeriodSnapshot,
+        ProtocolConfig protocolConfig,
+        uint256 roundId
+    ) private view returns (uint256 gracePeriod) {
+        gracePeriod = roundRevealGracePeriodSnapshot[roundId];
+        if (gracePeriod == 0) return protocolConfig.revealGracePeriod();
+    }
+
+    function _rbtsRevealQuorum(uint16 minVoters, uint16 minRbtsParticipants) private pure returns (uint16) {
+        return minVoters < minRbtsParticipants ? minRbtsParticipants : minVoters;
     }
 }

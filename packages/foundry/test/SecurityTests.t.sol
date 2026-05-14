@@ -270,17 +270,10 @@ contract SecurityReentrancyTest is SecurityHarnessBase {
 }
 
 // ============================================================================
-// Section 2 — ERC1363 transferAndCall Tests
+// Section 2 — Plain Transfer Surplus Tests
 // ============================================================================
 
-contract SecurityTransferAndCallTest is SecurityHarnessBase {
-    struct VotePayloadArtifacts {
-        uint64 targetRound;
-        bytes32 drandChainHash;
-        bytes ciphertext;
-        bytes32 commitHash;
-    }
-
+contract SecurityPlainTransferTest is SecurityHarnessBase {
     HumanReputation hrepToken;
     ContentRegistry registry;
     RoundVotingEngine votingEngine;
@@ -289,7 +282,6 @@ contract SecurityTransferAndCallTest is SecurityHarnessBase {
     address treasury = address(0xB);
     address submitter = address(0xC);
     address voter = address(0xD);
-    address spender = address(0xE);
 
     uint256 constant STAKE = 10e6;
     uint256 constant EPOCH_DURATION = 5 minutes;
@@ -334,33 +326,7 @@ contract SecurityTransferAndCallTest is SecurityHarnessBase {
         return 1;
     }
 
-    function _votePayload(uint256 contentId)
-        internal
-        view
-        returns (bytes memory payload, bytes32 commitHash, bytes memory ciphertext)
-    {
-        bytes32 salt = keccak256(abi.encodePacked(voter, block.timestamp, contentId));
-        VotePayloadArtifacts memory artifacts;
-        artifacts.targetRound = _tlockCommitTargetRound();
-        artifacts.drandChainHash = _tlockDrandChainHash();
-        artifacts.ciphertext = _testCiphertext(true, salt, contentId, artifacts.targetRound, artifacts.drandChainHash);
-        artifacts.commitHash = _commitHash(
-            true, salt, voter, contentId, artifacts.targetRound, artifacts.drandChainHash, artifacts.ciphertext
-        );
-        payload = abi.encode(
-            contentId,
-            _roundContext(votingEngine.previewCommitRoundId(contentId), _defaultRatingReferenceBps()),
-            artifacts.commitHash,
-            artifacts.ciphertext,
-            address(0),
-            artifacts.targetRound,
-            artifacts.drandChainHash
-        );
-        commitHash = artifacts.commitHash;
-        ciphertext = artifacts.ciphertext;
-    }
-
-    function test_TransferAndCall_PlainTransferDoesNotCreateVote() public {
+    function test_PlainTransferDoesNotCreateVote() public {
         uint256 contentId = _submitContent();
 
         vm.prank(voter);
@@ -372,7 +338,7 @@ contract SecurityTransferAndCallTest is SecurityHarnessBase {
         assertEq(hrepToken.balanceOf(address(votingEngine)), 1_000_000e6 + STAKE, "tokens transferred without vote");
     }
 
-    function test_TransferAndCall_GovernanceCanRecoverPlainTransferSurplus() public {
+    function test_GovernanceCanRecoverPlainTransferSurplus() public {
         _submitContent();
 
         vm.prank(voter);

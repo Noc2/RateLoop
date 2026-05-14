@@ -8,9 +8,7 @@ import {
   createTlockRbtsVoteCommit,
   deriveVoteTlockRevealAvailableAtSeconds,
   decodeRbtsVotePlaintext,
-  decodeVoteTransferPayload,
   encodeRbtsVotePlaintext,
-  encodeVoteTransferPayload,
   getVoteTlockChainInfo,
   predictionPercentToBps,
   parseTlockCiphertextMetadata,
@@ -338,30 +336,6 @@ test("buildRbtsCommitHash includes the binary signal, crowd prediction, and tloc
       ciphertext,
     ),
   );
-});
-
-test("encodeVoteTransferPayload round-trips the redeployed vote shape", () => {
-  const payload = encodeVoteTransferPayload({
-    contentId: 42n,
-    roundId: 4n,
-    roundReferenceRatingBps: 5_000,
-    commitHash: ("0x" + "11".repeat(32)) as `0x${string}`,
-    ciphertext: "0x1234" as `0x${string}`,
-    targetRound: 123n,
-    drandChainHash: ("0x" + "22".repeat(32)) as `0x${string}`,
-    frontend: "0x3333333333333333333333333333333333333333",
-  });
-
-  assert.deepEqual(decodeVoteTransferPayload(payload), {
-    contentId: 42n,
-    roundId: 4n,
-    roundReferenceRatingBps: 5_000,
-    commitHash: "0x" + "11".repeat(32),
-    ciphertext: "0x1234",
-    targetRound: 123n,
-    drandChainHash: "0x" + "22".repeat(32),
-    frontend: "0x3333333333333333333333333333333333333333",
-  });
 });
 
 test("createTlockRbtsVoteCommit returns the RBTS metadata used in the commit hash", async () => {

@@ -2,7 +2,7 @@
 pragma solidity ^0.8.24;
 
 /// @title TlockVoteLib
-/// @notice Shared helpers for vote payload decoding, tlock metadata validation, and commit hash reconstruction.
+/// @notice Shared helpers for tlock metadata validation and commit hash reconstruction.
 library TlockVoteLib {
     error CiphertextTooLarge();
     error InvalidCiphertext();
@@ -20,24 +20,6 @@ library TlockVoteLib {
     bytes internal constant AGE_RECIPIENT_PREFIX = "-> ";
     bytes internal constant AGE_RECIPIENT_LINE_PREFIX = "-> tlock ";
     bytes internal constant AGE_MAC_PREFIX = "--- ";
-
-    function decodeCommitPayload(bytes calldata data)
-        external
-        pure
-        returns (
-            uint256 contentId,
-            uint256 roundContext,
-            bytes32 commitHash,
-            bytes memory ciphertext,
-            uint64 targetRound,
-            bytes32 drandChainHash,
-            address frontend
-        )
-    {
-        if (data.length < 224) revert InvalidCiphertext();
-        (contentId, roundContext, commitHash, ciphertext, frontend, targetRound, drandChainHash) =
-            abi.decode(data, (uint256, uint256, bytes32, bytes, address, uint64, bytes32));
-    }
 
     function validateCommitData(
         bytes memory ciphertext,

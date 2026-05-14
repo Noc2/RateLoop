@@ -1,7 +1,5 @@
 import { Buffer } from "buffer";
 import {
-  decodeAbiParameters,
-  encodeAbiParameters,
   hexToString,
   keccak256,
   encodePacked,
@@ -52,19 +50,6 @@ export interface VoteTlockChainInfo {
 
 let tlockModulePromise: Promise<TlockModule> | undefined;
 
-export interface VoteTransferPayload {
-  contentId: bigint;
-  roundId: bigint;
-  roundReferenceRatingBps: number;
-  commitHash: VoteCommitHash;
-  ciphertext: VoteCiphertext;
-  targetRound: bigint;
-  drandChainHash: VoteDrandChainHash;
-  frontend: Address;
-}
-export interface RbtsTransferPayload extends VoteTransferPayload {
-  commitHash: RbtsCommitHash;
-}
 export type VoteTlockRuntime = {
   client?: TlockClient;
   now?: () => number;
@@ -72,16 +57,6 @@ export type VoteTlockRuntime = {
   encryptFn?: TlockEncryptFn;
   decryptFn?: TlockDecryptFn;
 };
-
-const voteTransferPayloadParams = [
-  { name: "contentId", type: "uint256" },
-  { name: "roundContext", type: "uint256" },
-  { name: "commitHash", type: "bytes32" },
-  { name: "ciphertext", type: "bytes" },
-  { name: "frontend", type: "address" },
-  { name: "targetRound", type: "uint64" },
-  { name: "drandChainHash", type: "bytes32" },
-] as const;
 
 const AGE_ARMOR_HEADER = "-----BEGIN AGE ENCRYPTED FILE-----";
 const AGE_ARMOR_FOOTER = "-----END AGE ENCRYPTED FILE-----";
@@ -321,67 +296,6 @@ export function buildCommitKey(
   commitHash: `0x${string}`,
 ): `0x${string}` {
   return keccak256(encodePacked(["address", "bytes32"], [voter, commitHash]));
-}
-
-export function encodeVoteTransferPayload(
-  payload: VoteTransferPayload,
-): `0x${string}` {
-  const roundContext = packVoteRoundContext(
-    payload.roundId,
-    payload.roundReferenceRatingBps,
-  );
-  return encodeAbiParameters(voteTransferPayloadParams, [
-    payload.contentId,
-    roundContext,
-    payload.commitHash,
-    payload.ciphertext,
-    payload.frontend,
-    payload.targetRound,
-    payload.drandChainHash,
-  ]);
-}
-
-export function decodeVoteTransferPayload(
-  data: `0x${string}`,
-): VoteTransferPayload {
-  try {
-    const [
-      contentId,
-      roundContext,
-      commitHash,
-      ciphertext,
-      frontend,
-      targetRound,
-      drandChainHash,
-    ] = decodeAbiParameters(voteTransferPayloadParams, data);
-    const { roundId, roundReferenceRatingBps } =
-      unpackVoteRoundContext(roundContext);
-    const reencoded = encodeAbiParameters(voteTransferPayloadParams, [
-      contentId,
-      roundContext,
-      commitHash,
-      ciphertext,
-      frontend,
-      targetRound,
-      drandChainHash,
-    ]);
-    if (reencoded.toLowerCase() !== data.toLowerCase()) {
-      throw new Error("invalid vote transfer payload");
-    }
-
-    return {
-      contentId,
-      roundId,
-      roundReferenceRatingBps,
-      commitHash,
-      ciphertext,
-      frontend,
-      targetRound,
-      drandChainHash,
-    };
-  } catch {
-    throw new Error("invalid vote transfer payload");
-  }
 }
 
 function decodeAgeArmor(armored: string): Buffer | null {

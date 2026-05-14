@@ -17,7 +17,7 @@ import "./fetch-shim";
 import { PONDER_URL } from "./ponder-url";
 import { E2E_RPC_URL } from "./service-urls";
 import { deriveAcceptedTlockTargetRound, deriveDrandRoundRevealableAtSeconds } from "./tlockRuntime";
-import { createTlockVoteCommit, encodeVoteTransferPayload, packVoteRoundContext } from "@rateloop/contracts/voting";
+import { createTlockVoteCommit, packVoteRoundContext } from "@rateloop/contracts/voting";
 
 const ANVIL_RPC = E2E_RPC_URL;
 // Contract gas costs shift as local protocol code evolves, so E2E helpers estimate
@@ -1567,118 +1567,6 @@ export async function commitVoteDirect(
     onRetry: attemptIndex => {
       console.warn(
         `[commitVoteDirect] Retrying stale tlock commit for ${fromAddress} on content ${contentIdBigInt.toString()} (attempt ${attemptIndex + 2}/${DIRECT_VOTE_COMMIT_ATTEMPTS})`,
-      );
-    },
-  });
-}
-
-/**
- * Commit a vote via the single-transaction ERC-1363 transferAndCall path.
- * Transfers HREP to the voting engine and commits the encrypted vote atomically.
- */
-export async function commitVoteWithTransferAndCallDirect(
-  contentId: number | bigint,
-  isUp: boolean,
-  stakeAmount: bigint,
-  frontend: string,
-  fromAddress: string,
-  tokenAddress: string,
-  votingEngineAddress: string,
-  epochDurationSeconds?: number,
-): Promise<{
-  success: boolean;
-  retryable: boolean;
-  commitKey: `0x${string}`;
-  isUp: boolean;
-  predictedUpBps: number;
-  salt: `0x${string}`;
-}> {
-  const { encodeFunctionData } = await import("viem");
-  const resolvedEpochDurationSeconds = await resolveVoteCommitEpochDurationSeconds(
-    votingEngineAddress,
-    epochDurationSeconds,
-  );
-  const contentIdBigInt = BigInt(contentId);
-
-  return runCommitAttempts({
-    attempts: DIRECT_VOTE_COMMIT_ATTEMPTS,
-    attempt: async attemptIndex => {
-      const salt = await buildVoteCommitSalt(fromAddress, contentIdBigInt, attemptIndex);
-      const latestBlock = await readLatestBlockSnapshot();
-      const roundId = await readPreviewCommitRoundId(votingEngineAddress, contentIdBigInt, latestBlock.blockTag);
-      const roundReferenceRatingBps = await readRoundReferenceRatingBps(
-        votingEngineAddress,
-        contentIdBigInt,
-        latestBlock.blockTag,
-      );
-      const tlockRuntime = await resolveTlockCommitRuntime(votingEngineAddress, contentIdBigInt, roundId);
-      const predictedUpBps = defaultPredictedUpBps(isUp);
-      const {
-        ciphertext,
-        commitHash: chash,
-        commitKey: ckey,
-        targetRound,
-        drandChainHash,
-      } = await createTlockVoteCommit(
-        {
-          voter: fromAddress as `0x${string}`,
-          isUp,
-          predictedUpBps,
-          salt,
-          contentId: contentIdBigInt,
-          roundId,
-          roundReferenceRatingBps,
-          epochDurationSeconds: resolvedEpochDurationSeconds,
-        },
-        {
-          targetRound: tlockRuntime.targetRound,
-        },
-      );
-
-      const payload = encodeVoteTransferPayload({
-        contentId: contentIdBigInt,
-        roundId,
-        roundReferenceRatingBps,
-        commitHash: chash,
-        ciphertext,
-        targetRound,
-        drandChainHash,
-        frontend: frontend as `0x${string}`,
-      });
-
-      const data = encodeFunctionData({
-        abi: [
-          {
-            name: "transferAndCall",
-            type: "function",
-            inputs: [
-              { name: "to", type: "address" },
-              { name: "value", type: "uint256" },
-              { name: "data", type: "bytes" },
-            ],
-            outputs: [{ name: "", type: "bool" }],
-            stateMutability: "nonpayable",
-          },
-        ],
-        functionName: "transferAndCall",
-        args: [votingEngineAddress as `0x${string}`, stakeAmount, payload],
-      });
-
-      const sendResult = await sendTxViaRpc(fromAddress, tokenAddress, data);
-      return {
-        success: sendResult.status === "success",
-        retryable: isRetryableDirectCommitSendResult(sendResult),
-        commitKey: ckey!,
-        isUp,
-        predictedUpBps,
-        salt,
-      };
-    },
-    isSuccess: result => result.success,
-    shouldRetry: result => result.retryable,
-    onRetry: attemptIndex => {
-      console.warn(
-        `[commitVoteWithTransferAndCallDirect] Retrying stale tlock commit for ${fromAddress} on content ${contentIdBigInt.toString()} (attempt ${attemptIndex + 2}/${DIRECT_VOTE_COMMIT_ATTEMPTS})`,
       );
     },
   });
