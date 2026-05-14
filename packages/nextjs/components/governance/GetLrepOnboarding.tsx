@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowRightIcon, ChartBarSquareIcon, CheckCircleIcon, ShieldCheckIcon } from "@heroicons/react/24/outline";
+import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import { RATE_ROUTE, SETTINGS_ROUTE } from "~~/constants/routes";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 import { type PonderRaterParticipationStatusResponse, ponderApi } from "~~/services/ponder/client";
@@ -19,6 +20,10 @@ const DEFAULT_MIN_DISTINCT_ANCHOR_ROUNDS = 2;
 const DEFAULT_UNVERIFIED_EARNED_RATER_CAP_BPS = 2_500;
 const actionCardClassName = "surface-card flex h-full flex-col rounded-3xl p-6";
 const actionButtonClassName = "btn btn-primary mt-auto self-end gap-2";
+const LAUNCH_CREDITS_TOOLTIP =
+  "Eligible settled zero-LREP ratings count toward starter LREP after they meet the score and anchor checks.";
+const EARNED_RATER_CAP_TOOLTIP =
+  "The launch LREP this wallet can earn from zero-LREP rating credits. Verified humans can access the full cap.";
 
 function formatMicroLrep(value: bigint | string | number | null | undefined) {
   if (value === null || value === undefined) return "0";
@@ -40,11 +45,30 @@ function scaleMicroAmount(value: bigint | undefined, bps: number) {
   return (value * BigInt(bps)) / 10_000n;
 }
 
-function ActionStat({ label, value, detail }: { label: string; value: string; detail?: string }) {
+function ActionStat({
+  label,
+  value,
+  detail,
+  tooltip,
+}: {
+  label: string;
+  value: string;
+  detail?: string;
+  tooltip?: string;
+}) {
   return (
     <div className="space-y-1">
       <div className="flex items-start justify-between gap-4">
-        <span className="text-sm font-medium text-base-content/55">{label}</span>
+        <span className="inline-flex items-center gap-1 text-sm font-medium text-base-content/55">
+          {label}
+          {tooltip ? (
+            <InfoTooltip
+              text={tooltip}
+              position="top"
+              className="[&>svg]:h-3.5 [&>svg]:w-3.5 [&>svg]:text-base-content/45 [&>svg]:hover:text-base-content/65"
+            />
+          ) : null}
+        </span>
         <span className="text-right font-mono text-base font-semibold tabular-nums text-base-content">{value}</span>
       </div>
       {detail && <p className="text-sm leading-5 text-base-content/55">{detail}</p>}
@@ -110,7 +134,7 @@ export function GetLrepOnboarding({ address }: GetLrepOnboardingProps) {
       : humanVerified
         ? `${formatMicroLrep(currentRaterLaunchCap)} LREP`
         : `${formatMicroLrep(openRaterLaunchCap)} / ${formatMicroLrep(currentRaterLaunchCap)} LREP`;
-  const launchCapDetail = humanVerified ? "Full cap unlocked." : "Verify to unlock the full cap.";
+  const launchCapDetail = humanVerified ? "Full cap unlocked." : undefined;
 
   return (
     <div className="space-y-6">
@@ -164,13 +188,19 @@ export function GetLrepOnboarding({ address }: GetLrepOnboardingProps) {
             <ActionStat
               label="Launch credits"
               value={rewardStatusLoading ? "..." : `${qualifyingRatingCount}/${eligibilityRatingCount}`}
+              tooltip={LAUNCH_CREDITS_TOOLTIP}
               detail={
                 creditedCount > 0
                   ? `${creditedCount.toLocaleString()} credit${creditedCount === 1 ? "" : "s"} recorded.`
                   : undefined
               }
             />
-            <ActionStat label="Earned-rater cap" value={launchCapLabel} detail={launchCapDetail} />
+            <ActionStat
+              label="Earned-rater cap"
+              value={launchCapLabel}
+              tooltip={EARNED_RATER_CAP_TOOLTIP}
+              detail={launchCapDetail}
+            />
           </div>
           <ul className="mt-5 space-y-2">
             <PathStep>{scorePercent}%+ RBTS score</PathStep>
