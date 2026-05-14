@@ -289,6 +289,7 @@ export const SECTIONS: Section[] = [
               "Calibration rounds gate USDC earning until an account or agent has shown enough prediction quality.",
               "Each account is capped at 10 LREP per content per round by default.",
               "Optional identity providers can unlock a one-time launch bonus and verified-human launch anchors, but they do not change settlement reward weight.",
+              "Correlation Epoch Snapshots cap USDC and launch LREP payouts for dense wallet or operator clusters across multiple rounds.",
             ],
           },
         ],
@@ -322,7 +323,7 @@ export const SECTIONS: Section[] = [
               "Economic anti-herding through epoch-weighted rewards and win conditions.",
               "Permissionless settlement, refunds, and cleanup once conditions are met.",
               "Malformed or non-armored ciphertexts are rejected on-chain before they can pollute settlement.",
-              "Public on-chain history makes suspicious funding, timing, and prediction patterns auditable by the community.",
+              "Public on-chain history and challengeable payout roots make suspicious funding, timing, and prediction patterns auditable by the community.",
             ],
           },
         ],
@@ -374,7 +375,7 @@ export const SECTIONS: Section[] = [
           },
           {
             type: "paragraph",
-            text: `High-scoring RBTS reports recover more stake plus a share of the rater pool, while revealed forfeited stake can reclaim ${protocolDocFacts.revealedLoserRefundPercentLabel}. Tier-1 raters carry full blind-epoch weight and later raters carry ${protocolDocFacts.openPhaseWeightLabel} weight, so the same anti-herding logic shapes both outcome and payout.`,
+            text: `High-scoring RBTS reports recover more stake plus a share of the rater pool, while revealed forfeited stake can reclaim ${protocolDocFacts.revealedLoserRefundPercentLabel}. Tier-1 raters carry full blind-epoch weight and later raters carry ${protocolDocFacts.openPhaseWeightLabel} weight, so the same anti-herding logic shapes settlement. USDC bounty and launch LREP claims add a second step: a finalized correlation payout snapshot supplies effective claim weights before funds move, without changing the already-settled result.`,
           },
         ],
       },
@@ -386,7 +387,7 @@ export const SECTIONS: Section[] = [
             items: [
               "Every ask attaches a non-refundable bounty in LREP or USDC on World Chain.",
               "World Chain USDC agent asks can use x402 authorization or ordered wallet calls to fund protocol escrow directly from the approved wallet.",
-              "Qualified bounty rounds pay eligible revealed raters and reserve 3% for eligible frontend operators.",
+              "Qualified bounty rounds pay eligible revealed raters and reserve 3% for eligible frontend operators after correlation-capped payout weights finalize.",
               "Optional USDC Feedback Bonuses reward hidden notes by canonical hash after settlement.",
               "USDC asks do not require proof-of-personhood; USDC earning starts after the required calibration rounds.",
               "Submitters do not earn upside from their own ask; the protocol pays for judgment, not self-rating.",
@@ -418,7 +419,7 @@ export const SECTIONS: Section[] = [
         blocks: [
           {
             type: "paragraph",
-            text: "The Launch Distribution Pool (64M LREP) is split into 35M LREP for verified + referral rewards, 25M LREP for earned rater rewards, and 4M LREP for legacy users. It is count-based and governance-tunable: the initial earned-rater policy requires three revealed raters, one verified-human anchor in the round, and two distinct verified-human anchors across a rater's qualifying history before payout. Full earned-rater caps start at 10 LREP and step down through 5, 2.5, 1.25, and 0.5 LREP, supporting about 12.6M fully paid earned-rater recipients from the 25M LREP rail. Open raters can receive a governed partial cap and later unlock the full snapshotted cap by verifying the same wallet as a human; each human nullifier can unlock the full earned-rater cap for only one rater address. Early useful raters receive higher caps, later cohorts receive less, and verified users receive only a one-time decaying bonus. The previous 12M LREP Bootstrap Pool allocation is folded into launch distribution: 10M LREP moved to verified + referral rewards, and 2M LREP moved to legacy users. The treasury starts with 32M LREP under the governance timelock and handles safety responses, verification acceleration, appeals, grants, and other governed programs. The bootstrap proposal threshold is 1,000 LREP with a minimum quorum floor of 100,000 LREP.",
+            text: "The Launch Distribution Pool (64M LREP) is split into 35M LREP for verified + referral rewards, 25M LREP for earned rater rewards, and 4M LREP for legacy users. It is effective-credit based and governance-tunable: the initial earned-rater policy requires three revealed raters, one verified-human anchor in the round, two distinct verified-human anchors across a rater's qualifying history, and finalized correlation payout snapshots before payout. Correlated or immature unverified accounts accrue fractional launch credit, so multiple independent rounds may be needed before LREP starts paying. Full earned-rater caps start at 10 LREP and step down through 5, 2.5, 1.25, and 0.5 LREP, supporting about 12.6M fully paid earned-rater recipients from the 25M LREP rail. Open raters can receive a governed partial cap and later unlock the full snapshotted cap by verifying the same wallet as a human; each human nullifier can unlock the full earned-rater cap for only one rater address. Early useful raters receive higher caps, later cohorts receive less, and verified users receive only a one-time decaying bonus. The previous 12M LREP Bootstrap Pool allocation is folded into launch distribution: 10M LREP moved to verified + referral rewards, and 2M LREP moved to legacy users. The treasury starts with 32M LREP under the governance timelock and handles safety responses, verification acceleration, appeals, grants, and other governed programs. The bootstrap proposal threshold is 1,000 LREP with a minimum quorum floor of 100,000 LREP.",
           },
         ],
       },

@@ -23,17 +23,17 @@ round creation and settlement are cheap enough.
 
 Initial governance defaults:
 
-| Parameter | Initial value |
-| --- | ---: |
-| `minVotersForEarnedRewards` | `3` |
-| `minVerifiedHumansPerRound` | `1` |
-| `minDistinctVerifiedAnchorsPerRater` | `2` |
-| `minDistinctAnchorRoundsPerRater` | `2` |
-| `minQualifyingScoreBps` | `7_000` |
-| `eligibilityRatingCount` | `5` |
-| `rewardingRatingCount` | `10` |
-| `earnedRaterCapSchedule` | `10 / 5 / 2.5 / 1.25 / 0.5 LREP` |
-| `requireNoPendingCleanup` | `true` |
+| Parameter                            |                    Initial value |
+| ------------------------------------ | -------------------------------: |
+| `minVotersForEarnedRewards`          |                              `3` |
+| `minVerifiedHumansPerRound`          |                              `1` |
+| `minDistinctVerifiedAnchorsPerRater` |                              `2` |
+| `minDistinctAnchorRoundsPerRater`    |                              `2` |
+| `minQualifyingScoreBps`              |                          `7_000` |
+| `eligibilityRatingCount`             |                              `5` |
+| `rewardingRatingCount`               |                             `10` |
+| `earnedRaterCapSchedule`             | `10 / 5 / 2.5 / 1.25 / 0.5 LREP` |
+| `requireNoPendingCleanup`            |                           `true` |
 
 A prediction creates a qualifying launch credit only when:
 
@@ -46,18 +46,22 @@ A prediction creates a qualifying launch credit only when:
    submitter identity.
 6. The claimant's prediction score is at least `minQualifyingScoreBps`.
 7. The `(contentId, roundId, commitKey)` credit has not already been recorded.
+8. When a `ClusterPayoutOracle` is configured, the credit has a finalized launch
+   payout snapshot and Merkle proof for its effective correlation-capped weight.
 
 Payout starts only after:
 
-1. The rater has at least `eligibilityRatingCount` qualifying launch credits.
+1. The rater has at least `eligibilityRatingCount` effective qualifying launch
+   credits. Correlated or immature unverified accounts may accrue fractional
+   credit, so they need more rounds before this threshold is reached.
 2. Those credits include at least `minDistinctVerifiedAnchorsPerRater` distinct
    verified-human nullifiers.
 3. Those credits span at least `minDistinctAnchorRoundsPerRater` distinct
    anchored rounds.
 
 Credits that arrive before the diversity gate is satisfied are not back-paid.
-They count toward eligibility, and future qualifying credits pay the normal
-per-credit slice once all gates are satisfied.
+They count toward eligibility after snapshot finality, and future effective
+credits pay the normal per-credit slice once all gates are satisfied.
 
 Earned-rater caps start at `10 LREP` for the first `100,000` eligible raters,
 then step down to `5`, `2.5`, `1.25`, and `0.5 LREP` at the existing count

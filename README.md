@@ -29,7 +29,8 @@ The core loop is:
 2. **Fund** — attach a non-refundable LREP or World Chain USDC bounty; everyone can answer, while the bounty can optionally pay either everyone or verified humans.
 3. **Vote and predict** — raters submit a thumbs-up/down signal and predict the percent of revealed raters who will vote up.
 4. **Reveal and settle** — commit-reveal keeps predictions private until reveal, then the round settles into a public rating.
-5. **Use** — agents, apps, and frontends read the settled score, revealed RBTS votes, optional feedback, reward state, and both all-answer and bounty-eligible result scopes from the public protocol surface.
+5. **Finalize payouts** — USDC bounties and launch LREP credits wait for challengeable correlation epoch snapshots, while the public result is already readable.
+6. **Use** — agents, apps, and frontends read the settled score, revealed RBTS votes, optional feedback, reward state, and both all-answer and bounty-eligible result scopes from the public protocol surface.
 
 Key pieces:
 
@@ -40,16 +41,17 @@ Key pieces:
 - **Launch Distribution Pool** — 64M LREP funds 35M verified + referral rewards, 25M earned rater rewards gated by governance-tunable anchor diversity, and a 4M fixed legacy-user claim
 - **tlock Commit-Reveal** — predictions stay private through the sealed round
 - **LREP and World Chain USDC Bounties** — small bounty payouts reward calibrated independent work, with USDC used by public agent wallet flows
+- **Correlation Epoch Snapshots** — permissionless keepers/indexers publish COCM-inspired payout roots so dense wallet clusters share capped USDC and launch LREP payouts across rounds
 - **Scoped Bounty Eligibility** — answering is always open, but payout qualification can be limited to verified humans
 - **Agent-Ready Integrations** — SDK helpers and MCP-shaped tools let agents quote, prepare wallet-signed submissions, track asks, and read results without taking operator custody of bounty funds or requiring a saved policy token
 - **Optional Identity Signals** — World ID can attach a non-required, on-chain verified human credential used for one-time bonuses and as an earned-reward round anchor without affecting settlement reward weight
 - **Frontend Attribution** — bounty accounting preserves the frontend operator earning incentive
-- **Security Guardrails** — calibration, reveal reliability, verified-human launch anchors, duplicate checks, and governance parameters keep the surface narrow
+- **Security Guardrails** — calibration, reveal reliability, verified-human launch anchors, duplicate checks, correlation caps, and governance parameters keep the surface narrow
 
 LREP transferability is intentional: it makes governance and protocol reputation portable instead of company-administered.
 RateLoop does not treat raw token balance as enough to earn or control outcomes. RBTS score, effective-unit
-weighting, verified-human launch anchors, governance locks, proposal/quorum floors, and hard minimums for submission
-bounties are the main mitigations.
+weighting, verified-human launch anchors, correlation epoch snapshots, governance locks, proposal/quorum floors, and hard
+minimums for submission bounties are the main mitigations.
 
 See [docs/implementation-plan.md](docs/implementation-plan.md) for the implementation history and design sequence.
 
@@ -75,7 +77,7 @@ node-utils (shared)  → keystore and other reusable Node helpers
 sdk        (shared)  → hosted read client + vote/frontend integration helpers
 ponder     (index)   → REST API at localhost:42069
 nextjs     (frontend)→ reads contracts via thirdweb, wagmi, and the Ponder API
-keeper     (service) → settles question rounds, finalizes reveal failures, cleans up unrevealed votes, marks dormant asks
+keeper     (service) → settles rounds, cleans up reveals, marks dormant asks, publishes correlation payout snapshots
 ```
 
 Built with Next.js, Foundry, Ponder, thirdweb, wagmi, viem, Drizzle ORM, and PostgreSQL.
@@ -152,7 +154,7 @@ If you only want the database helper, use `yarn dev:db`. It starts the local Pos
 
 ### Run the Keeper
 
-The keeper is a lightweight stateless service that calls settleRound() on eligible active rounds, cancels expired rounds, and marks dormant content. Anyone can run a keeper — all data is public, and multiple instances provide redundancy with no coordination.
+The keeper is a lightweight stateless service that calls settleRound() on eligible active rounds, cancels expired rounds, marks dormant content, and can publish correlation payout snapshots from deterministic artifacts. Anyone can run a keeper — all data is public, and multiple instances provide redundancy with no coordination.
 
 **Configure** by copying `.env.example` and setting contract addresses and a wallet:
 

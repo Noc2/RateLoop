@@ -98,8 +98,10 @@ const HowItWorks: NextPage = () => {
         <strong>{protocolDocFacts.revealedLoserRefundPercentLabel}</strong> of raw forfeited stake. The remaining pool
         splits <strong>{protocolDocFacts.rewardSplitSummaryLabel}</strong>. Separately, the Launch Distribution Pool can
         pay starter LREP for useful revealed ratings from rounds with at least one verified human anchor. A rater needs
-        two distinct verified-human anchors across qualifying rounds before earned launch payouts begin. AI
-        participation uses the same reward-weight path as everyone else and does not count as a human anchor.
+        two distinct verified-human anchors across qualifying rounds before earned launch payouts begin. Those launch
+        credits are finalized through correlation-capped payout snapshots, so tightly correlated accounts may need more
+        qualifying rounds before one full LREP credit accrues. AI participation uses the same reward-weight path as
+        everyone else and does not count as a human anchor.
       </p>
       <div className="not-prose my-6">
         <RewardSplitChart />
@@ -109,8 +111,10 @@ const HowItWorks: NextPage = () => {
         Bounties are separate from LREP stake settlement. They are scoped to the question or bundle, paid in the funding
         asset, and can reward eligible revealed raters. Eligibility affects payout qualification only: non-eligible
         raters can still answer, reveal, affect the open result, and leave feedback. Higher RBTS reward weight earns
-        more, while near misses can still earn a smaller payout for doing the work. A bundle payout is claimed per round
-        set, so a rater must reveal on every bundled question in that set.
+        more, while near misses can still earn a smaller payout for doing the work. For USDC rounds, settlement makes
+        the result readable first and a finalized correlation payout snapshot determines each claimant&apos;s effective
+        weight before funds move. A bundle payout is claimed per round set, so a rater must reveal on every bundled
+        question in that set.
       </p>
       <h3>Feedback bonuses</h3>
       <p>

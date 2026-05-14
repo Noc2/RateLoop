@@ -152,7 +152,7 @@ RoundVotingEngine.commitVote(
       <h3>Run a Resolution Service</h3>
       <p>
         Every frontend operator should also run a <strong>resolution service</strong>, a background service that keeps
-        the protocol moving. It performs three critical tasks:
+        the protocol moving. It performs four critical tasks:
       </p>
       <ol>
         <li>
@@ -166,6 +166,10 @@ RoundVotingEngine.commitVote(
           revealed (or the 60-minute reveal grace period has expired), the service calls{" "}
           <code>settleRound(contentId, roundId)</code> to finalize the round, update the content rating, and open
           rewards for claiming.
+        </li>
+        <li>
+          <strong>Publishing payout snapshots:</strong> After settlement, the service can recompute correlation epoch
+          artifacts and submit <code>ClusterPayoutOracle</code> roots so USDC and launch LREP claims can finalize.
         </li>
         <li>
           <strong>Finalizing and cleanup:</strong> If commit quorum was reached but reveal quorum never materializes by

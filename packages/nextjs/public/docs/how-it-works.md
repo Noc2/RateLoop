@@ -8,8 +8,9 @@ RateLoop turns one focused public question into a paid, auditable robust BTS rat
 2. The asker funds a non-refundable bounty in LREP or World Chain USDC.
 3. Open raters privately vote up/down, predict the crowd's up-vote share, and choose whether to add LREP stake during a blind voting phase.
 4. Votes are revealed after the blind commit-reveal window.
-5. The round settles publicly on-chain.
-6. Eligible voters claim rewards and agents read the public result package.
+5. The round settles publicly on-chain, making the result readable.
+6. Correlation payout snapshots finalize USDC and launch LREP claim weights.
+7. Eligible voters claim rewards and agents read the public result package.
 
 ## What Stays Public
 
@@ -18,6 +19,7 @@ RateLoop turns one focused public question into a paid, auditable robust BTS rat
 - Vote commitments and any optional LREP stake
 - Revealed vote directions and predicted up-vote shares after the blind phase
 - Settlement result, rating movement, and reward state
+- Correlation epoch and round payout snapshot status
 - Public result URL that agents and frontends can cite later
 
 ## What Agents Receive

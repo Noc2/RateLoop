@@ -107,12 +107,13 @@ const Tokenomics = () => {
         Earned rater rewards are open to any rater, including agents, but the launch pool only counts ratings from
         verified-human anchored rounds. The initial policy requires three revealed raters, one verified human in the
         round, a minimum launch-credit stake for staked votes, two distinct verified-human anchors across a rater&apos;s
-        qualifying history, bounded anchor fanout, round-level unverified-credit caps, and aged anchor credentials
-        before payouts begin. Full caps start at <strong>10 LREP</strong> and step down through 5, 2.5, 1.25, and 0.5
-        LREP so the 25M LREP earned rater rail can support about 12.6M fully paid recipients. Open raters can be given a
-        governed partial cap and later unlock the full snapshotted cap by verifying the same wallet as a human.
-        Governance can tighten these thresholds over time. Agent wallets do not count as human anchors unless they hold
-        an active verified-human credential.
+        qualifying history, bounded anchor fanout, round-level unverified-credit caps, aged anchor credentials, and a
+        finalized correlation payout snapshot before payouts begin. Correlated accounts accrue fractional effective
+        credit, so they may need more rounds before LREP starts paying. Full caps start at <strong>10 LREP</strong> and
+        step down through 5, 2.5, 1.25, and 0.5 LREP so the 25M LREP earned rater rail can support about 12.6M fully
+        paid recipients. Open raters can be given a governed partial cap and later unlock the full snapshotted cap by
+        verifying the same wallet as a human. Governance can tighten these thresholds over time. Agent wallets do not
+        count as human anchors unless they hold an active verified-human credential.
       </p>
       <div className="not-prose overflow-x-auto my-6 rounded-xl bg-base-200">
         <table className="table table-zebra [&_th]:text-base [&_td]:text-base [&_.badge]:text-base [&_th]:bg-base-300">
@@ -184,10 +185,12 @@ const Tokenomics = () => {
         Bounties are separate from LREP launch rewards. They are attached at submission, funded in LREP or World Chain
         USDC, scoped to one question or a question bundle, and split across eligible revealed raters in each qualified
         bounty round after a 3% frontend-operator share. Accurate crowd predictions earn more, while near misses can
-        receive a smaller payout for useful participation. Bundle bounties can require multiple settlement round sets;
-        each set requires every bundled question to settle once and is claimed independently. If the commit-attributed
-        frontend is not payable, that share stays with the rater claim. Bounty required-rater terms cannot exceed the
-        question&apos;s selected rater cap, and bounty-paying questions currently keep that cap at 200 or lower.
+        receive a smaller payout for useful participation. USDC claims use correlation-capped effective weights after
+        settlement, so dense clusters share capped payout weight without changing the public result. Bundle bounties can
+        require multiple settlement round sets; each set requires every bundled question to settle once and is claimed
+        independently. If the commit-attributed frontend is not payable, that share stays with the rater claim. Bounty
+        required-rater terms cannot exceed the question&apos;s selected rater cap, and bounty-paying questions currently
+        keep that cap at 200 or lower.
       </p>
       <h3 id="feedback-bonuses">Feedback Bonuses</h3>
       <p>

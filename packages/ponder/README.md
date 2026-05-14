@@ -1,6 +1,6 @@
 # RateLoop — Ponder (Indexer & API)
 
-On-chain event indexer built with [Ponder](https://ponder.sh/). Listens to smart contract events, stores processed data, and exposes a REST API on port 42069 for consumption by the frontend, bot, and AI/MCP adapters.
+On-chain event indexer built with [Ponder](https://ponder.sh/). Listens to smart contract events, stores processed data including correlation payout snapshots, and exposes a REST API on port 42069 for consumption by the frontend, bot, and AI/MCP adapters.
 
 ## Quick Start
 
@@ -34,17 +34,18 @@ Within the package directory, additional scripts are available:
 
 ## Configuration
 
-| Variable                                   | Description                                                                                      |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------------ |
-| `PONDER_NETWORK`                           | Active network: `hardhat`, `worldchainSepolia`, or `worldchain`                                  |
-| `PONDER_RPC_URL_31337`                     | RPC URL for local Hardhat/Anvil chain                                                            |
-| `PONDER_RPC_URL_4801`                      | RPC URL for World Chain Sepolia                                                                  |
-| `PONDER_RPC_URL_480`                       | RPC URL for World Chain mainnet                                                                  |
+| Variable                                   | Description                                                                                                                 |
+| ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| `PONDER_NETWORK`                           | Active network: `hardhat`, `worldchainSepolia`, or `worldchain`                                                             |
+| `PONDER_RPC_URL_31337`                     | RPC URL for local Hardhat/Anvil chain                                                                                       |
+| `PONDER_RPC_URL_4801`                      | RPC URL for World Chain Sepolia                                                                                             |
+| `PONDER_RPC_URL_480`                       | RPC URL for World Chain mainnet                                                                                             |
 | `PONDER_CONTENT_REGISTRY_ADDRESS` etc.     | Local Hardhat address overrides; fallback addresses when the active chain has no shared deployment in `@rateloop/contracts` |
-| `PONDER_ADVISORY_VOTE_RECORDER_ADDRESS`    | Advisory zero-stake vote recorder address; local override only once deployments are refreshed    |
-| `PONDER_CONTENT_REGISTRY_START_BLOCK` etc. | Optional fallback start blocks when the active chain has no shared deployment metadata           |
-| `CORS_ORIGIN`                              | Allowed origins (comma-separated; required in production)                                        |
-| `RATE_LIMIT_TRUSTED_IP_HEADERS`            | Comma-separated proxy IP headers to trust for API rate limiting in production                    |
+| `PONDER_ADVISORY_VOTE_RECORDER_ADDRESS`    | Advisory zero-stake vote recorder address; local override only once deployments are refreshed                               |
+| `PONDER_CLUSTER_PAYOUT_ORACLE_ADDRESS`     | Correlation payout oracle address; local override only once deployments are refreshed                                       |
+| `PONDER_CONTENT_REGISTRY_START_BLOCK` etc. | Optional fallback start blocks when the active chain has no shared deployment metadata                                      |
+| `CORS_ORIGIN`                              | Allowed origins (comma-separated; required in production)                                                                   |
+| `RATE_LIMIT_TRUSTED_IP_HEADERS`            | Comma-separated proxy IP headers to trust for API rate limiting in production                                               |
 
 For live supported chains, Ponder treats `@rateloop/contracts` as the source of truth and ignores stale address/start-block env values.
 For local Hardhat/Anvil, Ponder prefers the address env values generated into `packages/ponder/.env.local` so a fresh
@@ -64,6 +65,7 @@ src/
 ├── RoundVotingEngine.ts      # Commit, reveal, settle, cancel events
 ├── RoundRewardDistributor.ts # Reward distribution events
 ├── QuestionRewardPoolEscrow.ts # Bounty funding, voter claims, and frontend shares
+├── ClusterPayoutOracle.ts    # Correlation epoch and round payout snapshot roots
 ├── FeedbackBonusEscrow.ts    # Feedback bonus pools, awards, and forfeits
 ├── CategoryRegistry.ts       # Seeded discovery category metadata
 ├── ProfileRegistry.ts       # Profile update events

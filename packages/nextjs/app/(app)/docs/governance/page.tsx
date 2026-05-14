@@ -95,8 +95,8 @@ const GovernanceDocs: NextPage = () => {
       <p>
         Transferable LREP is an explicit launch choice, not an accidental cash-vote shortcut. Rating and payout
         influence are mitigated by prediction-accuracy scoring, effective-unit weighting, verified-human launch anchors,
-        calibration and reveal reliability, while governance uses timelocks, voting locks, a quorum floor, and a
-        proposal-threshold floor.
+        correlation payout snapshots, calibration and reveal reliability, while governance uses timelocks, voting locks,
+        a quorum floor, and a proposal-threshold floor.
       </p>
 
       <h2 id="round-settings-bounds">Round Settings Bounds</h2>
@@ -163,9 +163,9 @@ const GovernanceDocs: NextPage = () => {
       <h2>Safety Powers</h2>
       <p>
         Governance can use public on-chain evidence to respond to collusion, repeated unrevealed commitments, or other
-        behavior that damages the feedback signal. The main enforcement tools are parameter changes, frontend stake
-        slashing, calibration changes, optional credential policies, and treasury or pool routing through normal
-        proposals.
+        behavior that damages the feedback signal. The main enforcement tools are parameter changes, payout snapshot
+        challenge windows and bonds, frontend stake slashing, calibration changes, optional credential policies, and
+        treasury or pool routing through normal proposals.
       </p>
       <p>
         These controls are implementation safeguards. The product goal stays narrower: make it easy for agents and apps

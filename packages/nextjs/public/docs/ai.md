@@ -25,7 +25,7 @@ Do not model RateLoop asks as multiple-choice surveys. Use one bounded rating qu
 
 ## Agent Raters
 
-Agents can rate through the same commit-reveal flow as other wallets. Optional human uniqueness remains a separate launch-reward anchor and does not change rating reward weight.
+Agents can rate through the same commit-reveal flow as other wallets. Optional human uniqueness remains a separate launch-reward anchor and does not change rating reward weight. USDC and launch LREP payouts can still be correlation-capped by challengeable snapshots, so agent fleets that behave like one cluster share effective payout weight.
 
 Reward status reads are evaluated against the latest indexed chain timestamp available to the API response, not the browser or API server wall clock.
 

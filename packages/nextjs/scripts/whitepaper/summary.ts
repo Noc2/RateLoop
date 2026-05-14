@@ -21,11 +21,11 @@ export const EXECUTIVE_SUMMARY: ContentBlock[] = [
   },
   {
     type: "paragraph",
-    text: "The protocol turns rating into an explicit peer-prediction round. Every ask is question-first, requires a context URL, can include optional preview media, and carries a non-refundable bounty funded in LREP or World Chain USDC. Everyone can answer; the bounty payout can remain open or be scoped to verified humans. Raters submit a private thumbs-up/down signal plus a 0-100% prediction of how many raters will vote up. Zero-LREP votes can participate and qualify for launch reputation, while staked votes add normal settlement upside and downside. Optional hidden feedback unlocks after settlement, and eligible revealed raters claim bounty payouts while an eligible frontend operator reserve keeps distribution open to third-party surfaces.",
+    text: "The protocol turns rating into an explicit peer-prediction round. Every ask is question-first, requires a context URL, can include optional preview media, and carries a non-refundable bounty funded in LREP or World Chain USDC. Everyone can answer; the bounty payout can remain open or be scoped to verified humans. Raters submit a private thumbs-up/down signal plus a 0-100% prediction of how many raters will vote up. Zero-LREP votes can participate and qualify for launch reputation, while staked votes add normal settlement upside and downside. Optional hidden feedback unlocks after settlement, and eligible revealed raters claim bounty payouts after challengeable correlation payout snapshots finalize.",
   },
   {
     type: "paragraph",
-    text: `Signal integrity comes from combining calibration, optional LREP-backed RBTS stake, identity signals, and blind rounds. Votes and population predictions stay hidden through tlock until the blind epoch ends, later raters earn only ${protocolDocFacts.openPhaseWeightLabel} reward weight instead of ${protocolDocFacts.blindPhaseWeightLabel}, and settlement waits for at least three reveals plus the configured reveal conditions so the result is harder to herd or selectively reveal.`,
+    text: `Signal integrity comes from combining calibration, optional LREP-backed RBTS stake, identity signals, blind rounds, and correlation-capped payouts. Votes and population predictions stay hidden through tlock until the blind epoch ends, later raters earn only ${protocolDocFacts.openPhaseWeightLabel} reward weight instead of ${protocolDocFacts.blindPhaseWeightLabel}, and settlement waits for at least three reveals plus the configured reveal conditions so the result is harder to herd or selectively reveal. The result can be read immediately after settlement; USDC and launch LREP payouts wait for finalized Correlation Epoch Snapshots.`,
   },
   {
     type: "paragraph",
@@ -33,6 +33,6 @@ export const EXECUTIVE_SUMMARY: ContentBlock[] = [
   },
   {
     type: "paragraph",
-    text: "Because the underlying result lives on-chain, RateLoop behaves like public infrastructure rather than a closed approval service. Agents, frontends, researchers, and evaluation pipelines can audit the same settlement history, governance can tune bounds and treasury use in public, and future systems can reuse prior ratings instead of paying to answer the same question repeatedly. The 64M LREP Launch Distribution Pool is split into 35M LREP verified + referral rewards, 25M LREP earned rater rewards, and 4M LREP legacy users so early useful participation earns LREP from verified-human anchored rounds without making verification an ongoing multiplier.",
+    text: "Because the underlying result lives on-chain, RateLoop behaves like public infrastructure rather than a closed approval service. Agents, frontends, researchers, and evaluation pipelines can audit the same settlement history and payout roots, governance can tune bounds and treasury use in public, and future systems can reuse prior ratings instead of paying to answer the same question repeatedly. The 64M LREP Launch Distribution Pool is split into 35M LREP verified + referral rewards, 25M LREP earned rater rewards, and 4M LREP legacy users so early useful participation earns LREP from verified-human anchored rounds without making verification an ongoing multiplier.",
   },
 ];

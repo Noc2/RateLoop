@@ -69,6 +69,11 @@ const SmartContracts: NextPage = () => {
               <td>Transparent</td>
             </tr>
             <tr>
+              <td className="font-mono text-primary">ClusterPayoutOracle</td>
+              <td>Optimistic correlation epoch and round payout snapshots for USDC and launch LREP claims</td>
+              <td>No</td>
+            </tr>
+            <tr>
               <td className="font-mono text-primary">RoundVotingEngine</td>
               <td>Core voting: tlock commit-reveal voting, epoch-weighted rewards, deterministic settlement</td>
               <td>Transparent</td>
@@ -448,10 +453,11 @@ const SmartContracts: NextPage = () => {
           claim time, governance can route the claim to the protocol instead of accruing it to the operator.
         </li>
         <li>
-          <code>QuestionRewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId)</code> &mdash; Claim the USDC-backed
-          bounty for a revealed voter. New bounties default to a 3% frontend-operator share, attributed from the vote
-          commit; unpayable frontend shares remain with the voter claim. Bounty eligibility only gates this payout path,
-          not who can answer or reveal.
+          <code>QuestionRewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId, payoutWeight, proof)</code> &mdash;
+          Claim the USDC-backed bounty for a revealed voter after the round has a finalized correlation payout snapshot.
+          New bounties default to a 3% frontend-operator share, attributed from the vote commit; unpayable frontend
+          shares remain with the voter claim. Bounty eligibility and correlation caps only gate this payout path, not
+          who can answer, reveal, or affect the result.
         </li>
         <li>
           <code>QuestionRewardPoolEscrow.claimQuestionBundleReward(bundleId, roundSetIndex)</code> &mdash; Claim a
@@ -716,9 +722,10 @@ const SmartContracts: NextPage = () => {
         <li>
           <strong>Sybil Resistance:</strong> Core rating remains open, while earned launch rewards require qualifying
           revealed ratings, verified-human anchored rounds, cross-round anchor diversity, bounded anchor fanout,
-          round-level unverified-credit caps, and aged anchor credentials before payout. Open raters can receive a
-          governed partial earned-rater cap and unlock the full snapshotted cap by later verifying the same wallet as a
-          human. Per-identity stake caps, question-first submission guardrails, and claim gating apply around the reward
+          round-level unverified-credit caps, aged anchor credentials, and finalized correlation payout snapshots before
+          payout. Open raters can receive a governed partial earned-rater cap and unlock the full snapshotted cap by
+          later verifying the same wallet as a human, but verified humans still pass through the correlation scorer.
+          Per-identity stake caps, question-first submission guardrails, and claim gating apply around the reward
           surfaces. Question submission is the same for humans, bots, and delegated agents.
         </li>
         <li>

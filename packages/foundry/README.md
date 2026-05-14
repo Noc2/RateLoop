@@ -60,6 +60,7 @@ contracts/
 ├── LoopReputation.sol           # LREP token (governance and reputation)
 ├── ParticipationPool.sol        # Optional governance-funded participation rewards
 ├── LaunchDistributionPool.sol   # Anchor-gated earned rater rewards with verified full-cap unlocks, plus verification, referral, and legacy rewards
+├── ClusterPayoutOracle.sol      # Challengeable correlation epoch and payout-weight roots
 ├── QuestionRewardPoolEscrow.sol     # Bounty custody and claims
 ├── governance/                  # Governor contracts
 ├── interfaces/                  # Contract interfaces

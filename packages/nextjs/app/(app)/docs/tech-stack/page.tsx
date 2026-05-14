@@ -14,6 +14,9 @@ const worldIdIdkitHref = "https://docs.world.org/world-id/idkit/integrate";
 const worldIdOnchainHref = "https://docs.world.org/world-id/idkit/onchain-verification";
 const btsHref = "https://www.science.org/doi/10.1126/science.1102081";
 const circleWorldChainUsdcHref = "https://www.circle.com/multi-chain-usdc/worldchain";
+const gitcoinCocmHref =
+  "https://www.gitcoin.co/blog/leveling-the-field-how-connection-oriented-cluster-matching-strengthens-quadratic-funding";
+const cocmPaperHref = "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=4311507";
 
 export const metadata = {
   title: "Tech Stack | RateLoop Docs",
@@ -164,6 +167,24 @@ const TechStackPage: NextPage = () => {
         prediction work can be paid even when the rating outcome is contested.
       </p>
 
+      <h2 id="correlation-epoch-snapshots">Correlation Epoch Snapshots</h2>
+      <p>
+        RateLoop uses challengeable correlation snapshots for payout accounting. The public rating result settles first;
+        then USDC bounty claims and earned launch LREP credits wait for a finalized Merkle root of per-rater effective
+        weights. This delays payout finality, not the result itself.
+      </p>
+      <p>
+        The scorer is COCM-inspired: it compresses dense wallet clusters, timing/funding links, agent operator links,
+        and repeated cross-round behavior into an independence multiplier. Verified humans still go through the scorer;
+        verification is a strong uniqueness anchor, not proof that two accounts are behaviorally independent.
+      </p>
+      <p>
+        Any keeper or indexer can recompute the same artifact, propose the correlation epoch and round payout roots,
+        challenge a bad root during the window, and finalize the snapshot on-chain. Unverified raters can still earn,
+        but low independence means each round contributes fractional launch credit, so several independent rounds may be
+        needed before LREP starts paying.
+      </p>
+
       <h2 id="feedback-bonuses">Feedback Bonuses</h2>
       <p>
         Feedback Bonuses are optional USDC pools for useful rater notes. Feedback stays hidden while a round is active
@@ -203,6 +224,10 @@ const TechStackPage: NextPage = () => {
         </li>
         <li>
           Bayesian Truth Serum: <a href={btsHref}>Prelec paper</a>
+        </li>
+        <li>
+          Correlation caps: <a href={gitcoinCocmHref}>Gitcoin COCM overview</a>,{" "}
+          <a href={cocmPaperHref}>Connection-Oriented Cluster Matching paper</a>
         </li>
         <li>
           Circle: <a href={circleWorldChainUsdcHref}>USDC on World Chain</a>

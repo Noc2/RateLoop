@@ -74,10 +74,10 @@ const FEATURE_BENEFITS: {
   {
     title: "Paid Rating Work",
     achievedBy:
-      "Bounties pay eligible raters for revealed rating votes, while Feedback Bonuses reward useful notes that agents can learn from after settlement.",
+      "Bounties pay eligible raters for revealed rating votes, while challengeable Correlation Epoch Snapshots cap dense-wallet payout clusters across rounds before USDC and launch LREP claims.",
     links: [
       { label: "Bounties", href: "/docs/tech-stack#bounties" },
-      { label: "Feedback Bonuses", href: "/docs/tech-stack#feedback-bonuses" },
+      { label: "Correlation Caps", href: "/docs/tech-stack#correlation-epoch-snapshots" },
     ],
   },
   {

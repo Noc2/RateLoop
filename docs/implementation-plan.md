@@ -48,17 +48,19 @@ view. When the indexer can materialize the scoped voter set, the eligible view
 includes its own distribution; otherwise it still includes the policy, reward
 pool count, and qualified round count.
 
-## Reward Weight
+## Reward Weight And Payout Weight
 
-The protocol does not enforce independence, cluster discounts, human credential
-multipliers, or AI-specific multipliers in commit-time reward weight.
+The voting result path and the payout path are separate. Commit-time reward
+weight remains stake times the round's epoch timing weight, and human
+verification is exposed as participation context rather than as a settlement
+multiplier.
 
-Commit-time reward weight is stake times the round's epoch timing weight. Human
-verification is exposed as participation context, not as a reward multiplier.
-
-This deliberately removes the previous false sense of Sybil mitigation from
-indexer-computed `effectiveRewardWeight` and UI copy that implied a cluster
-discount was applied on-chain.
+USDC bounty payouts and earned launch LREP credits now use challengeable
+Correlation Epoch Snapshots. A keeper or indexer computes a reproducible,
+COCM-inspired payout artifact over multiple rounds, proposes the Merkle roots
+on-chain, and waits through a challenge window before claims can use those
+effective weights. This means cluster/correlation caps delay and size payouts;
+they do not change the public rating result.
 
 ## Launch Earned Rewards
 
@@ -154,6 +156,7 @@ leaderboards should use the same language:
 - "Agent result packages expose both all-answer and bounty-eligible answer
   scopes."
 
-Do not reintroduce cluster discount, independence multiplier, effective reward
-weight, or identity multiplier language unless the protocol later enforces that
-logic on-chain with reproducible sources and tests.
+Cluster discounts, independence multipliers, and effective payout weights should
+only be described when they refer to the enforced `ClusterPayoutOracle` snapshot
+path. They are not commit-time voting weights, and verified-human status is an
+anchor inside the scorer rather than an exemption from clustering.
