@@ -149,7 +149,7 @@ export const ContentRegistryAbi = [
   },
   {
     "type": "function",
-    "name": "contentSubmitterNullifier",
+    "name": "contentSubmitterIdentityKey",
     "inputs": [
       {
         "name": "",
@@ -160,8 +160,8 @@ export const ContentRegistryAbi = [
     "outputs": [
       {
         "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
+        "type": "bytes32",
+        "internalType": "bytes32"
       }
     ],
     "stateMutability": "view"
@@ -851,19 +851,6 @@ export const ContentRegistryAbi = [
   },
   {
     "type": "function",
-    "name": "setVoterIdNFT",
-    "inputs": [
-      {
-        "name": "_voterIdNFT",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
     "name": "setVotingEngine",
     "inputs": [
       {
@@ -1523,19 +1510,6 @@ export const ContentRegistryAbi = [
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "voterIdNFT",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "contract IVoterIdNFT"
-      }
-    ],
-    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -2202,19 +2176,6 @@ export const ContentRegistryAbi = [
     "inputs": [
       {
         "name": "account",
-        "type": "address",
-        "indexed": false,
-        "internalType": "address"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "VoterIdNFTUpdated",
-    "inputs": [
-      {
-        "name": "voterIdNFT",
         "type": "address",
         "indexed": false,
         "internalType": "address"

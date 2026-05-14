@@ -925,7 +925,7 @@ export const QuestionRewardPoolEscrowAbi = [
         "internalType": "address"
       },
       {
-        "name": "voterIdNFT_",
+        "name": "raterRegistry_",
         "type": "address",
         "internalType": "address"
       }
@@ -1218,10 +1218,10 @@ export const QuestionRewardPoolEscrowAbi = [
         "internalType": "address"
       },
       {
-        "name": "voterId",
-        "type": "uint256",
+        "name": "identityKey",
+        "type": "bytes32",
         "indexed": false,
-        "internalType": "uint256"
+        "internalType": "bytes32"
       },
       {
         "name": "amount",
@@ -1273,10 +1273,10 @@ export const QuestionRewardPoolEscrowAbi = [
         "internalType": "address"
       },
       {
-        "name": "funderVoterId",
-        "type": "uint256",
+        "name": "funderIdentityKey",
+        "type": "bytes32",
         "indexed": false,
-        "internalType": "uint256"
+        "internalType": "bytes32"
       },
       {
         "name": "amount",
@@ -1494,10 +1494,10 @@ export const QuestionRewardPoolEscrowAbi = [
         "internalType": "address"
       },
       {
-        "name": "voterId",
-        "type": "uint256",
+        "name": "identityKey",
+        "type": "bytes32",
         "indexed": false,
-        "internalType": "uint256"
+        "internalType": "bytes32"
       },
       {
         "name": "amount",
@@ -1555,10 +1555,10 @@ export const QuestionRewardPoolEscrowAbi = [
         "internalType": "address"
       },
       {
-        "name": "funderVoterId",
-        "type": "uint256",
+        "name": "funderIdentityKey",
+        "type": "bytes32",
         "indexed": false,
-        "internalType": "uint256"
+        "internalType": "bytes32"
       },
       {
         "name": "amount",

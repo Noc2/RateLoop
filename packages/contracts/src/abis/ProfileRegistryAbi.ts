@@ -308,6 +308,19 @@ export const ProfileRegistryAbi = [
   },
   {
     "type": "function",
+    "name": "raterRegistry",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract IRaterIdentityRegistry"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "releaseName",
     "inputs": [
       {
@@ -388,10 +401,10 @@ export const ProfileRegistryAbi = [
   },
   {
     "type": "function",
-    "name": "setVoterIdNFT",
+    "name": "setRaterRegistry",
     "inputs": [
       {
-        "name": "_voterIdNFT",
+        "name": "_raterRegistry",
         "type": "address",
         "internalType": "address"
       }
@@ -414,19 +427,6 @@ export const ProfileRegistryAbi = [
         "name": "",
         "type": "bool",
         "internalType": "bool"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "voterIdNFT",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "contract IVoterIdNFT"
       }
     ],
     "stateMutability": "view"
@@ -547,6 +547,19 @@ export const ProfileRegistryAbi = [
   },
   {
     "type": "event",
+    "name": "RaterRegistryUpdated",
+    "inputs": [
+      {
+        "name": "raterRegistry",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "RoleAdminChanged",
     "inputs": [
       {
@@ -615,19 +628,6 @@ export const ProfileRegistryAbi = [
         "name": "sender",
         "type": "address",
         "indexed": true,
-        "internalType": "address"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "VoterIdNFTUpdated",
-    "inputs": [
-      {
-        "name": "voterIdNFT",
-        "type": "address",
-        "indexed": false,
         "internalType": "address"
       }
     ],

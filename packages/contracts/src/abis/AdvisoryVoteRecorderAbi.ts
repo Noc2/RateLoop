@@ -86,7 +86,7 @@ export const AdvisoryVoteRecorderAbi = [
   },
   {
     "type": "function",
-    "name": "advisoryCommitKeyByNullifier",
+    "name": "advisoryCommitKeyByIdentity",
     "inputs": [
       {
         "name": "",
@@ -100,8 +100,8 @@ export const AdvisoryVoteRecorderAbi = [
       },
       {
         "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
+        "type": "bytes32",
+        "internalType": "bytes32"
       }
     ],
     "outputs": [
@@ -131,35 +131,6 @@ export const AdvisoryVoteRecorderAbi = [
         "name": "",
         "type": "address",
         "internalType": "address"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "advisoryCommitKeyByVoterId",
-    "inputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
       }
     ],
     "outputs": [
@@ -294,7 +265,7 @@ export const AdvisoryVoteRecorderAbi = [
   },
   {
     "type": "function",
-    "name": "lastAdvisoryVoteTimestampByNullifier",
+    "name": "lastAdvisoryVoteTimestampByIdentity",
     "inputs": [
       {
         "name": "",
@@ -303,8 +274,8 @@ export const AdvisoryVoteRecorderAbi = [
       },
       {
         "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
+        "type": "bytes32",
+        "internalType": "bytes32"
       }
     ],
     "outputs": [

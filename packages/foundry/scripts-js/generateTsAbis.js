@@ -5,6 +5,7 @@ import {
   existsSync,
   mkdirSync,
   writeFileSync,
+  unlinkSync,
 } from "fs";
 import { join, dirname, resolve } from "path";
 import { fileURLToPath } from "url";
@@ -38,11 +39,12 @@ const REQUIRED_NON_LOCAL_DEPLOYMENT_EXPORT_CONTRACTS = [
   "FeedbackBonusEscrow",
   "CategoryRegistry",
   "RaterRegistry",
-  "VoterIdNFT",
   "ParticipationPool",
   "LaunchDistributionPool",
   "AdvisoryVoteRecorder",
 ];
+
+const DEPRECATED_CONTRACTS_TO_PRUNE = new Set(["VoterIdNFT"]);
 
 function getDirectories(path) {
   if (!existsSync(path)) {
@@ -252,6 +254,7 @@ function processAllDeployments(broadcastPath) {
   allDeployments.forEach((deployment) => {
     const { chainId, contractName } = deployment;
     if (RAW_DEPLOYMENT_CONTRACTS_TO_SKIP.has(contractName)) return;
+    if (DEPRECATED_CONTRACTS_TO_PRUNE.has(contractName)) return;
 
     // Capture deployer address from first CREATE transaction per chain
     if (!deployers[chainId]) {
@@ -304,6 +307,19 @@ function readExistingDeployedContracts(targetFile) {
     );
     return {};
   }
+}
+
+function pruneDeprecatedContracts(contracts) {
+  return Object.fromEntries(
+    Object.entries(contracts).map(([chainId, chainConfig]) => [
+      chainId,
+      Object.fromEntries(
+        Object.entries(chainConfig).filter(
+          ([contractName]) => !DEPRECATED_CONTRACTS_TO_PRUNE.has(contractName)
+        )
+      ),
+    ])
+  );
 }
 
 function deploymentExportContractNames(chainDeployments) {
@@ -537,6 +553,7 @@ function main() {
     Object.entries(chainDeployments).forEach(([address, contractName]) => {
       // Skip metadata entries like "networkName"
       if (!address.startsWith("0x")) return;
+      if (DEPRECATED_CONTRACTS_TO_PRUNE.has(contractName)) return;
 
       const artifact = getArtifactOfContract(contractName);
       if (!artifact) return;
@@ -577,17 +594,21 @@ function main() {
   const existingContracts = readExistingDeployedContracts(
     deployedContractsTargetFile
   );
+  const existingContractsForPublish = pruneDeprecatedContracts(
+    existingContracts
+  );
   assertFreshTargetDeployment(
     allGeneratedContracts,
-    existingContracts,
+    existingContractsForPublish,
     deployments,
     latestBroadcastBlockNumbers,
     latestBroadcastDeploymentAddresses
   );
-  const generatedContractsForPublish =
-    filterGeneratedContractsForDeployTarget(allGeneratedContracts);
+  const generatedContractsForPublish = pruneDeprecatedContracts(
+    filterGeneratedContractsForDeployTarget(allGeneratedContracts)
+  );
   const mergedContracts = {
-    ...existingContracts,
+    ...existingContractsForPublish,
     ...generatedContractsForPublish,
   };
 
@@ -680,7 +701,6 @@ const PONDER_CONTRACT_ENV_KEYS = {
   CategoryRegistry: "PONDER_CATEGORY_REGISTRY_ADDRESS",
   ProfileRegistry: "PONDER_PROFILE_REGISTRY_ADDRESS",
   FrontendRegistry: "PONDER_FRONTEND_REGISTRY_ADDRESS",
-  VoterIdNFT: "PONDER_VOTER_ID_NFT_ADDRESS",
   LoopReputation: "PONDER_LREP_ADDRESS",
   ParticipationPool: "PONDER_PARTICIPATION_POOL_ADDRESS",
   LaunchDistributionPool: "PONDER_LAUNCH_DISTRIBUTION_POOL_ADDRESS",
@@ -698,7 +718,6 @@ const PONDER_START_BLOCK_ENV_KEYS = {
   CategoryRegistry: "PONDER_CATEGORY_REGISTRY_START_BLOCK",
   ProfileRegistry: "PONDER_PROFILE_REGISTRY_START_BLOCK",
   FrontendRegistry: "PONDER_FRONTEND_REGISTRY_START_BLOCK",
-  VoterIdNFT: "PONDER_VOTER_ID_NFT_START_BLOCK",
   LoopReputation: "PONDER_LREP_START_BLOCK",
   ParticipationPool: "PONDER_PARTICIPATION_POOL_START_BLOCK",
   LaunchDistributionPool: "PONDER_LAUNCH_DISTRIBUTION_POOL_START_BLOCK",
@@ -836,7 +855,6 @@ const ABI_TARGETS = [
   },
   { contract: "CategoryRegistry", targets: ["contracts/src/abis"] },
   { contract: "LoopReputation", targets: ["contracts/src/abis"] },
-  { contract: "VoterIdNFT", targets: ["contracts/src/abis"] },
   { contract: "FrontendRegistry", targets: ["contracts/src/abis"] },
   { contract: "RoundRewardDistributor", targets: ["contracts/src/abis"] },
   { contract: "QuestionRewardPoolEscrow", targets: ["contracts/src/abis"] },
@@ -855,6 +873,18 @@ const ABI_TARGETS = [
 function generateAbiFiles() {
   const packagesDir = join(__dirname, "..", "..");
   let totalWritten = 0;
+  const deprecatedAbiDirs = new Set(
+    ABI_TARGETS.flatMap(({ targets }) => targets).concat(["contracts/src/abis"])
+  );
+
+  for (const contract of DEPRECATED_CONTRACTS_TO_PRUNE) {
+    for (const target of deprecatedAbiDirs) {
+      const filePath = join(packagesDir, target, `${contract}Abi.ts`);
+      if (existsSync(filePath)) {
+        unlinkSync(filePath);
+      }
+    }
+  }
 
   for (const { contract, targets } of ABI_TARGETS) {
     const artifact = getArtifactOfContract(contract);

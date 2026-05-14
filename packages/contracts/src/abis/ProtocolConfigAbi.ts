@@ -1139,19 +1139,6 @@ export const ProtocolConfigAbi = [
   },
   {
     "type": "function",
-    "name": "setVoterIdNFT",
-    "inputs": [
-      {
-        "name": "value",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
     "name": "slashConfig",
     "inputs": [],
     "outputs": [
@@ -1262,19 +1249,6 @@ export const ProtocolConfigAbi = [
             "internalType": "uint16"
           }
         ]
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "voterIdNFT",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
       }
     ],
     "stateMutability": "view"
@@ -1729,19 +1703,6 @@ export const ProtocolConfigAbi = [
     "inputs": [
       {
         "name": "treasury",
-        "type": "address",
-        "indexed": false,
-        "internalType": "address"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "VoterIdNFTUpdated",
-    "inputs": [
-      {
-        "name": "voterIdNFT",
         "type": "address",
         "indexed": false,
         "internalType": "address"

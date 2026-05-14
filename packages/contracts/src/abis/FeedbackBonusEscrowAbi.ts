@@ -210,14 +210,14 @@ export const FeedbackBonusEscrowAbi = [
         "internalType": "address"
       },
       {
+        "name": "funderIdentityKey",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
         "name": "awarder",
         "type": "address",
         "internalType": "address"
-      },
-      {
-        "name": "funderVoterId",
-        "type": "uint256",
-        "internalType": "uint256"
       },
       {
         "name": "submitterIdentity",
@@ -225,12 +225,12 @@ export const FeedbackBonusEscrowAbi = [
         "internalType": "address"
       },
       {
-        "name": "submitterVoterId",
-        "type": "uint256",
-        "internalType": "uint256"
+        "name": "submitterIdentityKey",
+        "type": "bytes32",
+        "internalType": "bytes32"
       },
       {
-        "name": "voterIdNFTSnapshot",
+        "name": "raterRegistrySnapshot",
         "type": "address",
         "internalType": "address"
       },
@@ -363,6 +363,30 @@ export const FeedbackBonusEscrowAbi = [
   },
   {
     "type": "function",
+    "name": "identityKeyAwarded",
+    "inputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "initialize",
     "inputs": [
       {
@@ -386,7 +410,7 @@ export const FeedbackBonusEscrowAbi = [
         "internalType": "address"
       },
       {
-        "name": "voterIdNFT_",
+        "name": "raterRegistry_",
         "type": "address",
         "internalType": "address"
       }
@@ -423,6 +447,19 @@ export const FeedbackBonusEscrowAbi = [
         "name": "",
         "type": "bool",
         "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "raterRegistry",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract IRaterIdentityRegistry"
       }
     ],
     "stateMutability": "view"
@@ -491,10 +528,10 @@ export const FeedbackBonusEscrowAbi = [
   },
   {
     "type": "function",
-    "name": "setVoterIdNFT",
+    "name": "setRaterRegistry",
     "inputs": [
       {
-        "name": "voterIdNFT_",
+        "name": "raterRegistry_",
         "type": "address",
         "internalType": "address"
       }
@@ -550,43 +587,6 @@ export const FeedbackBonusEscrowAbi = [
         "name": "",
         "type": "address",
         "internalType": "contract IERC20"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "voterIdAwarded",
-    "inputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bool",
-        "internalType": "bool"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "voterIdNFT",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "contract IVoterIdNFT"
       }
     ],
     "stateMutability": "view"
@@ -652,10 +652,10 @@ export const FeedbackBonusEscrowAbi = [
         "internalType": "address"
       },
       {
-        "name": "voterId",
-        "type": "uint256",
+        "name": "identityKey",
+        "type": "bytes32",
         "indexed": false,
-        "internalType": "uint256"
+        "internalType": "bytes32"
       },
       {
         "name": "feedbackHash",
@@ -835,6 +835,19 @@ export const FeedbackBonusEscrowAbi = [
   },
   {
     "type": "event",
+    "name": "RaterRegistryUpdated",
+    "inputs": [
+      {
+        "name": "raterRegistry",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "RoleAdminChanged",
     "inputs": [
       {
@@ -914,19 +927,6 @@ export const FeedbackBonusEscrowAbi = [
     "inputs": [
       {
         "name": "account",
-        "type": "address",
-        "indexed": false,
-        "internalType": "address"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "VoterIdNFTUpdated",
-    "inputs": [
-      {
-        "name": "voterIdNFT",
         "type": "address",
         "indexed": false,
         "internalType": "address"

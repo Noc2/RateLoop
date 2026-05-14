@@ -575,19 +575,6 @@ export const FrontendRegistryAbi = [
   },
   {
     "type": "function",
-    "name": "setVoterIdNFT",
-    "inputs": [
-      {
-        "name": "_voterIdNFT",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
     "name": "setVotingEngine",
     "inputs": [
       {
@@ -666,19 +653,6 @@ export const FrontendRegistryAbi = [
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "voterIdNFT",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "contract IVoterIdNFT"
-      }
-    ],
-    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -972,19 +946,6 @@ export const FrontendRegistryAbi = [
         "name": "sender",
         "type": "address",
         "indexed": true,
-        "internalType": "address"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "VoterIdNFTUpdated",
-    "inputs": [
-      {
-        "name": "voterIdNFT",
-        "type": "address",
-        "indexed": false,
         "internalType": "address"
       }
     ],

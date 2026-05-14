@@ -48,6 +48,25 @@ const deployedContracts: GenericContractsDeclaration = {
       abi: [
         {
           type: "function",
+          name: "addressIdentityKey",
+          inputs: [
+            {
+              name: "account",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "pure",
+        },
+        {
+          type: "function",
           name: "isFrontendEligible",
           inputs: [
             {
@@ -72,12 +91,63 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "resolveRater",
+          inputs: [
+            {
+              name: "identityRegistry",
+              type: "IRaterIdentityRegistry",
+              internalType: "contract IRaterIdentityRegistry",
+            },
+            {
+              name: "actor",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [
+            {
+              name: "resolved",
+              type: "tuple",
+              internalType: "struct IRaterIdentityRegistry.ResolvedRater",
+              components: [
+                {
+                  name: "holder",
+                  type: "address",
+                  internalType: "address",
+                },
+                {
+                  name: "identityKey",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+                {
+                  name: "humanNullifier",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+                {
+                  name: "hasActiveHumanCredential",
+                  type: "bool",
+                  internalType: "bool",
+                },
+                {
+                  name: "delegated",
+                  type: "bool",
+                  internalType: "bool",
+                },
+              ],
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "validateVoterAndContent",
           inputs: [
             {
-              name: "voterIdNft",
-              type: "IVoterIdNFT",
-              internalType: "contract IVoterIdNFT",
+              name: "identityRegistry",
+              type: "IRaterIdentityRegistry",
+              internalType: "contract IRaterIdentityRegistry",
             },
             {
               name: "registry",
@@ -97,14 +167,36 @@ const deployedContracts: GenericContractsDeclaration = {
           ],
           outputs: [
             {
-              name: "voterId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "useTokenIdentity",
-              type: "bool",
-              internalType: "bool",
+              name: "resolved",
+              type: "tuple",
+              internalType: "struct IRaterIdentityRegistry.ResolvedRater",
+              components: [
+                {
+                  name: "holder",
+                  type: "address",
+                  internalType: "address",
+                },
+                {
+                  name: "identityKey",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+                {
+                  name: "humanNullifier",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+                {
+                  name: "hasActiveHumanCredential",
+                  type: "bool",
+                  internalType: "bool",
+                },
+                {
+                  name: "delegated",
+                  type: "bool",
+                  internalType: "bool",
+                },
+              ],
             },
           ],
           stateMutability: "view",
@@ -137,11 +229,6 @@ const deployedContracts: GenericContractsDeclaration = {
         {
           type: "error",
           name: "SelfVote",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "VoterIdRequired",
           inputs: [],
         },
       ],
@@ -781,140 +868,7 @@ const deployedContracts: GenericContractsDeclaration = {
     },
     QuestionRewardPoolEscrowVoterLib: {
       address: "0x51b24e48625e8890749bbbd2ab3cac4aa14661eb",
-      abi: [
-        {
-          type: "function",
-          name: "bundleCompleterAccount",
-          inputs: [
-            {
-              name: "votingEngine",
-              type: "RoundVotingEngine",
-              internalType: "contract RoundVotingEngine",
-            },
-            {
-              name: "defaultVoterIdNft",
-              type: "IVoterIdNFT",
-              internalType: "contract IVoterIdNFT",
-            },
-            {
-              name: "contentId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "roundId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "commitKey",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [
-            {
-              name: "voter",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "resolveRoundRewardClaim",
-          inputs: [
-            {
-              name: "votingEngine",
-              type: "RoundVotingEngine",
-              internalType: "contract RoundVotingEngine",
-            },
-            {
-              name: "defaultVoterIdNft",
-              type: "IVoterIdNFT",
-              internalType: "contract IVoterIdNFT",
-            },
-            {
-              name: "contentId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "roundId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "account",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [
-            {
-              name: "voterId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "commitKey",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-            {
-              name: "rewardRecipient",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "timelyRevealedCommitFrontend",
-          inputs: [
-            {
-              name: "votingEngine",
-              type: "RoundVotingEngine",
-              internalType: "contract RoundVotingEngine",
-            },
-            {
-              name: "contentId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "roundId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "commitKey",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-            {
-              name: "closesAt",
-              type: "uint64",
-              internalType: "uint64",
-            },
-          ],
-          outputs: [
-            {
-              name: "revealed",
-              type: "bool",
-              internalType: "bool",
-            },
-            {
-              name: "frontend",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          stateMutability: "view",
-        },
-      ],
+      abi: [],
       inheritedFunctions: {},
       deployedOnBlock: 9,
     },
@@ -941,12 +895,12 @@ const deployedContracts: GenericContractsDeclaration = {
       abi: [
         {
           type: "function",
-          name: "isBundleExcludedVoter",
+          name: "isExcludedRater",
           inputs: [
             {
-              name: "voterIdNft",
-              type: "IVoterIdNFT",
-              internalType: "contract IVoterIdNFT",
+              name: "identityKey",
+              type: "bytes32",
+              internalType: "bytes32",
             },
             {
               name: "account",
@@ -959,53 +913,14 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "address",
             },
             {
-              name: "funderNullifier",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "submitterNullifier",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bool",
-              internalType: "bool",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "isExcludedVoter",
-          inputs: [
-            {
-              name: "voterIdNft",
-              type: "IVoterIdNFT",
-              internalType: "contract IVoterIdNFT",
-            },
-            {
-              name: "voterId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "funder",
-              type: "address",
-              internalType: "address",
-            },
-            {
               name: "funderIdentity",
               type: "address",
               internalType: "address",
             },
             {
-              name: "funderNullifier",
-              type: "uint256",
-              internalType: "uint256",
+              name: "funderIdentityKey",
+              type: "bytes32",
+              internalType: "bytes32",
             },
             {
               name: "submitterIdentity",
@@ -1013,9 +928,9 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "address",
             },
             {
-              name: "submitterNullifier",
-              type: "uint256",
-              internalType: "uint256",
+              name: "submitterIdentityKey",
+              type: "bytes32",
+              internalType: "bytes32",
             },
           ],
           outputs: [
@@ -1025,7 +940,7 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "bool",
             },
           ],
-          stateMutability: "view",
+          stateMutability: "pure",
         },
         {
           type: "function",
@@ -1053,35 +968,6 @@ const deployedContracts: GenericContractsDeclaration = {
             },
           ],
           outputs: [],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "resolveSubmitterNullifier",
-          inputs: [
-            {
-              name: "registry",
-              type: "ContentRegistry",
-              internalType: "contract ContentRegistry",
-            },
-            {
-              name: "voterIdNft",
-              type: "IVoterIdNFT",
-              internalType: "contract IVoterIdNFT",
-            },
-            {
-              name: "contentId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
           stateMutability: "view",
         },
         {
@@ -1135,10 +1021,10 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "address",
             },
             {
-              name: "funderVoterId",
-              type: "uint256",
+              name: "funderIdentityKey",
+              type: "bytes32",
               indexed: false,
-              internalType: "uint256",
+              internalType: "bytes32",
             },
             {
               name: "amount",
@@ -1628,10 +1514,10 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "address",
             },
             {
-              name: "voterId",
-              type: "uint256",
+              name: "identityKey",
+              type: "bytes32",
               indexed: false,
-              internalType: "uint256",
+              internalType: "bytes32",
             },
             {
               name: "amount",
@@ -1683,10 +1569,10 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "address",
             },
             {
-              name: "funderVoterId",
-              type: "uint256",
+              name: "funderIdentityKey",
+              type: "bytes32",
               indexed: false,
-              internalType: "uint256",
+              internalType: "bytes32",
             },
             {
               name: "amount",
@@ -3581,7 +3467,7 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "contentSubmitterNullifier",
+          name: "contentSubmitterIdentityKey",
           inputs: [
             {
               name: "",
@@ -3592,8 +3478,8 @@ const deployedContracts: GenericContractsDeclaration = {
           outputs: [
             {
               name: "",
-              type: "uint256",
-              internalType: "uint256",
+              type: "bytes32",
+              internalType: "bytes32",
             },
           ],
           stateMutability: "view",
@@ -4283,19 +4169,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "setVoterIdNFT",
-          inputs: [
-            {
-              name: "_voterIdNFT",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
           name: "setVotingEngine",
           inputs: [
             {
@@ -4955,19 +4828,6 @@ const deployedContracts: GenericContractsDeclaration = {
           ],
           outputs: [],
           stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "voterIdNFT",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "contract IVoterIdNFT",
-            },
-          ],
-          stateMutability: "view",
         },
         {
           type: "function",
@@ -5642,19 +5502,6 @@ const deployedContracts: GenericContractsDeclaration = {
           anonymous: false,
         },
         {
-          type: "event",
-          name: "VoterIdNFTUpdated",
-          inputs: [
-            {
-              name: "voterIdNFT",
-              type: "address",
-              indexed: false,
-              internalType: "address",
-            },
-          ],
-          anonymous: false,
-        },
-        {
           type: "error",
           name: "AccessControlBadConfirmation",
           inputs: [],
@@ -5918,6 +5765,64 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "commitIdentityHolder",
+          inputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "commitIdentityKey",
+          inputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "commitPredictedUpBps",
           inputs: [
             {
@@ -6165,35 +6070,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "commitVoterId",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
           name: "consensusReserve",
           inputs: [],
           outputs: [
@@ -6382,6 +6258,88 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "identityCommitKey",
+          inputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "identityLastVoteTimestamp",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "identityKey",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "identityRoundStake",
+          inputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "initialize",
           inputs: [
             {
@@ -6419,30 +6377,6 @@ const deployedContracts: GenericContractsDeclaration = {
             },
             {
               name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "nullifierLastVoteTimestamp",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "nullifier",
               type: "uint256",
               internalType: "uint256",
             },
@@ -6866,6 +6800,30 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "roundRaterRegistrySnapshot",
+          inputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "roundRbtsForfeitClaimants",
           inputs: [
             {
@@ -7164,30 +7122,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "roundVoterIdNFTSnapshot",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
           name: "roundVoterPool",
           inputs: [
             {
@@ -7445,35 +7379,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "voterIdCommitKey",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
           name: "voterLastVoteTimestamp",
           inputs: [
             {
@@ -7492,35 +7397,6 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "uint256",
               internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "voterNullifierCommitKey",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
             },
           ],
           stateMutability: "view",
@@ -8425,11 +8301,6 @@ const deployedContracts: GenericContractsDeclaration = {
         {
           type: "error",
           name: "VoteNotRevealed",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "VoterIdRequired",
           inputs: [],
         },
       ],
@@ -11229,19 +11100,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "setVoterIdNFT",
-          inputs: [
-            {
-              name: "_voterIdNFT",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
           name: "setVotingEngine",
           inputs: [
             {
@@ -11320,19 +11178,6 @@ const deployedContracts: GenericContractsDeclaration = {
           ],
           outputs: [],
           stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "voterIdNFT",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "contract IVoterIdNFT",
-            },
-          ],
-          stateMutability: "view",
         },
         {
           type: "function",
@@ -11626,19 +11471,6 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "sender",
               type: "address",
               indexed: true,
-              internalType: "address",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "VoterIdNFTUpdated",
-          inputs: [
-            {
-              name: "voterIdNFT",
-              type: "address",
-              indexed: false,
               internalType: "address",
             },
           ],
@@ -12068,6 +11900,19 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "raterRegistry",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "contract IRaterIdentityRegistry",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "releaseName",
           inputs: [
             {
@@ -12148,10 +11993,10 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "setVoterIdNFT",
+          name: "setRaterRegistry",
           inputs: [
             {
-              name: "_voterIdNFT",
+              name: "_raterRegistry",
               type: "address",
               internalType: "address",
             },
@@ -12174,19 +12019,6 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "bool",
               internalType: "bool",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "voterIdNFT",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "contract IVoterIdNFT",
             },
           ],
           stateMutability: "view",
@@ -12307,6 +12139,19 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "event",
+          name: "RaterRegistryUpdated",
+          inputs: [
+            {
+              name: "raterRegistry",
+              type: "address",
+              indexed: false,
+              internalType: "address",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
           name: "RoleAdminChanged",
           inputs: [
             {
@@ -12375,19 +12220,6 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "sender",
               type: "address",
               indexed: true,
-              internalType: "address",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "VoterIdNFTUpdated",
-          inputs: [
-            {
-              name: "voterIdNFT",
-              type: "address",
-              indexed: false,
               internalType: "address",
             },
           ],
@@ -13594,19 +13426,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "setVoterIdNFT",
-          inputs: [
-            {
-              name: "value",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
           name: "slashConfig",
           inputs: [],
           outputs: [
@@ -13717,19 +13536,6 @@ const deployedContracts: GenericContractsDeclaration = {
                   internalType: "uint16",
                 },
               ],
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "voterIdNFT",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
             },
           ],
           stateMutability: "view",
@@ -14184,19 +13990,6 @@ const deployedContracts: GenericContractsDeclaration = {
           inputs: [
             {
               name: "treasury",
-              type: "address",
-              indexed: false,
-              internalType: "address",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "VoterIdNFTUpdated",
-          inputs: [
-            {
-              name: "voterIdNFT",
               type: "address",
               indexed: false,
               internalType: "address",
@@ -15193,7 +14986,7 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "address",
             },
             {
-              name: "voterIdNFT_",
+              name: "raterRegistry_",
               type: "address",
               internalType: "address",
             },
@@ -15486,10 +15279,10 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "address",
             },
             {
-              name: "voterId",
-              type: "uint256",
+              name: "identityKey",
+              type: "bytes32",
               indexed: false,
-              internalType: "uint256",
+              internalType: "bytes32",
             },
             {
               name: "amount",
@@ -15541,10 +15334,10 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "address",
             },
             {
-              name: "funderVoterId",
-              type: "uint256",
+              name: "funderIdentityKey",
+              type: "bytes32",
               indexed: false,
-              internalType: "uint256",
+              internalType: "bytes32",
             },
             {
               name: "amount",
@@ -15762,10 +15555,10 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "address",
             },
             {
-              name: "voterId",
-              type: "uint256",
+              name: "identityKey",
+              type: "bytes32",
               indexed: false,
-              internalType: "uint256",
+              internalType: "bytes32",
             },
             {
               name: "amount",
@@ -15823,10 +15616,10 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "address",
             },
             {
-              name: "funderVoterId",
-              type: "uint256",
+              name: "funderIdentityKey",
+              type: "bytes32",
               indexed: false,
-              internalType: "uint256",
+              internalType: "bytes32",
             },
             {
               name: "amount",
@@ -16516,14 +16309,14 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "address",
             },
             {
+              name: "funderIdentityKey",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
               name: "awarder",
               type: "address",
               internalType: "address",
-            },
-            {
-              name: "funderVoterId",
-              type: "uint256",
-              internalType: "uint256",
             },
             {
               name: "submitterIdentity",
@@ -16531,12 +16324,12 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "address",
             },
             {
-              name: "submitterVoterId",
-              type: "uint256",
-              internalType: "uint256",
+              name: "submitterIdentityKey",
+              type: "bytes32",
+              internalType: "bytes32",
             },
             {
-              name: "voterIdNFTSnapshot",
+              name: "raterRegistrySnapshot",
               type: "address",
               internalType: "address",
             },
@@ -16669,6 +16462,30 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "identityKeyAwarded",
+          inputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "initialize",
           inputs: [
             {
@@ -16692,7 +16509,7 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "address",
             },
             {
-              name: "voterIdNFT_",
+              name: "raterRegistry_",
               type: "address",
               internalType: "address",
             },
@@ -16729,6 +16546,19 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "bool",
               internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "raterRegistry",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "contract IRaterIdentityRegistry",
             },
           ],
           stateMutability: "view",
@@ -16797,10 +16627,10 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "setVoterIdNFT",
+          name: "setRaterRegistry",
           inputs: [
             {
-              name: "voterIdNFT_",
+              name: "raterRegistry_",
               type: "address",
               internalType: "address",
             },
@@ -16856,43 +16686,6 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "address",
               internalType: "contract IERC20",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "voterIdAwarded",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bool",
-              internalType: "bool",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "voterIdNFT",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "contract IVoterIdNFT",
             },
           ],
           stateMutability: "view",
@@ -16958,10 +16751,10 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "address",
             },
             {
-              name: "voterId",
-              type: "uint256",
+              name: "identityKey",
+              type: "bytes32",
               indexed: false,
-              internalType: "uint256",
+              internalType: "bytes32",
             },
             {
               name: "feedbackHash",
@@ -17141,6 +16934,19 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "event",
+          name: "RaterRegistryUpdated",
+          inputs: [
+            {
+              name: "raterRegistry",
+              type: "address",
+              indexed: false,
+              internalType: "address",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
           name: "RoleAdminChanged",
           inputs: [
             {
@@ -17220,19 +17026,6 @@ const deployedContracts: GenericContractsDeclaration = {
           inputs: [
             {
               name: "account",
-              type: "address",
-              indexed: false,
-              internalType: "address",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "VoterIdNFTUpdated",
-          inputs: [
-            {
-              name: "voterIdNFT",
               type: "address",
               indexed: false,
               internalType: "address",
@@ -18628,6 +18421,32 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "acceptDelegate",
+          inputs: [],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "addressIdentityKey",
+          inputs: [
+            {
+              name: "account",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "pure",
+        },
+        {
+          type: "function",
           name: "attestHumanCredentialWithProof",
           inputs: [
             {
@@ -18648,6 +18467,44 @@ const deployedContracts: GenericContractsDeclaration = {
           ],
           outputs: [],
           stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "delegateOf",
+          inputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "delegateTo",
+          inputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
         },
         {
           type: "function",
@@ -19062,6 +18919,51 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "pendingDelegateOf",
+          inputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "pendingDelegateTo",
+          inputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "removeDelegate",
+          inputs: [],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "renounceRole",
           inputs: [
             {
@@ -19077,6 +18979,52 @@ const deployedContracts: GenericContractsDeclaration = {
           ],
           outputs: [],
           stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "resolveRater",
+          inputs: [
+            {
+              name: "actor",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [
+            {
+              name: "resolved",
+              type: "tuple",
+              internalType: "struct IRaterIdentityRegistry.ResolvedRater",
+              components: [
+                {
+                  name: "holder",
+                  type: "address",
+                  internalType: "address",
+                },
+                {
+                  name: "identityKey",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+                {
+                  name: "humanNullifier",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+                {
+                  name: "hasActiveHumanCredential",
+                  type: "bool",
+                  internalType: "bool",
+                },
+                {
+                  name: "delegated",
+                  type: "bool",
+                  internalType: "bool",
+                },
+              ],
+            },
+          ],
+          stateMutability: "view",
         },
         {
           type: "function",
@@ -19163,6 +19111,19 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "evidenceHash",
               type: "bytes32",
               internalType: "bytes32",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "setDelegate",
+          inputs: [
+            {
+              name: "delegate",
+              type: "address",
+              internalType: "address",
             },
           ],
           outputs: [],
@@ -19382,6 +19343,63 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "event",
+          name: "DelegateRemoved",
+          inputs: [
+            {
+              name: "holder",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "previousDelegate",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "DelegateRequested",
+          inputs: [
+            {
+              name: "holder",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "delegate",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "DelegateSet",
+          inputs: [
+            {
+              name: "holder",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "delegate",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
           name: "HumanCredentialRevoked",
           inputs: [
             {
@@ -19444,6 +19462,25 @@ const deployedContracts: GenericContractsDeclaration = {
               type: "bytes32",
               indexed: false,
               internalType: "bytes32",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "PendingDelegateRemoved",
+          inputs: [
+            {
+              name: "holder",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "previousPendingDelegate",
+              type: "address",
+              indexed: true,
+              internalType: "address",
             },
           ],
           anonymous: false,
@@ -19745,6 +19782,26 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "error",
+          name: "CallerIsDelegate",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "CannotDelegateSelf",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "DelegateAlreadyAssigned",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "DelegateIsHolder",
+          inputs: [],
+        },
+        {
+          type: "error",
           name: "InvalidAddress",
           inputs: [],
         },
@@ -19761,6 +19818,16 @@ const deployedContracts: GenericContractsDeclaration = {
         {
           type: "error",
           name: "InvalidTrustAttestation",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "NoDelegateSet",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "NoPendingDelegate",
           inputs: [],
         },
         {
@@ -19784,1451 +19851,12 @@ const deployedContracts: GenericContractsDeclaration = {
           "lib/openzeppelin-contracts/contracts/access/AccessControl.sol",
         supportsInterface:
           "lib/openzeppelin-contracts/contracts/access/AccessControl.sol",
+        addressIdentityKey: "contracts/interfaces/IRaterIdentityRegistry.sol",
+        hasActiveHumanCredential:
+          "contracts/interfaces/IRaterIdentityRegistry.sol",
+        resolveRater: "contracts/interfaces/IRaterIdentityRegistry.sol",
       },
       deployedOnBlock: 35,
-    },
-    VoterIdNFT: {
-      address: "0x38381D63418Ff752Dba93eE018e36a6814388FA7",
-      abi: [
-        {
-          type: "constructor",
-          inputs: [
-            {
-              name: "_owner",
-              type: "address",
-              internalType: "address",
-            },
-            {
-              name: "_governance",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "MAX_STAKE_PER_VOTER",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "MAX_SUPPLY",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "acceptDelegate",
-          inputs: [],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "addMinter",
-          inputs: [
-            {
-              name: "_minter",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "approve",
-          inputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [],
-          stateMutability: "pure",
-        },
-        {
-          type: "function",
-          name: "authorizedMinters",
-          inputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bool",
-              internalType: "bool",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "balanceOf",
-          inputs: [
-            {
-              name: "owner",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "delegateOf",
-          inputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "delegateTo",
-          inputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "getApproved",
-          inputs: [
-            {
-              name: "tokenId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "getEpochContentStake",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "epochId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "tokenId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "getHolder",
-          inputs: [
-            {
-              name: "tokenId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "getNullifier",
-          inputs: [
-            {
-              name: "tokenId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "getRemainingStakeCapacity",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "epochId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "tokenId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "getTokenId",
-          inputs: [
-            {
-              name: "holder",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "getTokenIdForNullifier",
-          inputs: [
-            {
-              name: "nullifier",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "tokenId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "governance",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "hasVoterId",
-          inputs: [
-            {
-              name: "holder",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bool",
-              internalType: "bool",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "holderToTokenId",
-          inputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "isApprovedForAll",
-          inputs: [
-            {
-              name: "owner",
-              type: "address",
-              internalType: "address",
-            },
-            {
-              name: "operator",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bool",
-              internalType: "bool",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "isNullifierUsed",
-          inputs: [
-            {
-              name: "nullifier",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bool",
-              internalType: "bool",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "mint",
-          inputs: [
-            {
-              name: "to",
-              type: "address",
-              internalType: "address",
-            },
-            {
-              name: "nullifier",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "tokenId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "name",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "string",
-              internalType: "string",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "nullifierResettable",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bool",
-              internalType: "bool",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "nullifierUsed",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bool",
-              internalType: "bool",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "owner",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "ownerOf",
-          inputs: [
-            {
-              name: "tokenId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "pendingDelegateOf",
-          inputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "pendingDelegateTo",
-          inputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "recordStake",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "epochId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "tokenId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "amount",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "removeDelegate",
-          inputs: [],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "removeMinter",
-          inputs: [
-            {
-              name: "_minter",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "renounceOwnership",
-          inputs: [],
-          outputs: [],
-          stateMutability: "pure",
-        },
-        {
-          type: "function",
-          name: "resetNullifier",
-          inputs: [
-            {
-              name: "nullifier",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "resolveHolder",
-          inputs: [
-            {
-              name: "addr",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "revokeVoterId",
-          inputs: [
-            {
-              name: "holder",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "safeTransferFrom",
-          inputs: [
-            {
-              name: "from",
-              type: "address",
-              internalType: "address",
-            },
-            {
-              name: "to",
-              type: "address",
-              internalType: "address",
-            },
-            {
-              name: "tokenId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "safeTransferFrom",
-          inputs: [
-            {
-              name: "from",
-              type: "address",
-              internalType: "address",
-            },
-            {
-              name: "to",
-              type: "address",
-              internalType: "address",
-            },
-            {
-              name: "tokenId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "data",
-              type: "bytes",
-              internalType: "bytes",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "setApprovalForAll",
-          inputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-            {
-              name: "",
-              type: "bool",
-              internalType: "bool",
-            },
-          ],
-          outputs: [],
-          stateMutability: "pure",
-        },
-        {
-          type: "function",
-          name: "setDelegate",
-          inputs: [
-            {
-              name: "delegate",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "setGovernance",
-          inputs: [
-            {
-              name: "_governance",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "setStakeRecorder",
-          inputs: [
-            {
-              name: "_stakeRecorder",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "stakeRecorder",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "supportsInterface",
-          inputs: [
-            {
-              name: "interfaceId",
-              type: "bytes4",
-              internalType: "bytes4",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bool",
-              internalType: "bool",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "symbol",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "string",
-              internalType: "string",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "tokenIdToHolder",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "tokenURI",
-          inputs: [
-            {
-              name: "tokenId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "string",
-              internalType: "string",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "transferFrom",
-          inputs: [
-            {
-              name: "from",
-              type: "address",
-              internalType: "address",
-            },
-            {
-              name: "to",
-              type: "address",
-              internalType: "address",
-            },
-            {
-              name: "tokenId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "transferOwnership",
-          inputs: [
-            {
-              name: "newOwner",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "event",
-          name: "Approval",
-          inputs: [
-            {
-              name: "owner",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "approved",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "tokenId",
-              type: "uint256",
-              indexed: true,
-              internalType: "uint256",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "ApprovalForAll",
-          inputs: [
-            {
-              name: "owner",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "operator",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "approved",
-              type: "bool",
-              indexed: false,
-              internalType: "bool",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "DelegateRemoved",
-          inputs: [
-            {
-              name: "holder",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "previousDelegate",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "DelegateRequested",
-          inputs: [
-            {
-              name: "holder",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "delegate",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "DelegateSet",
-          inputs: [
-            {
-              name: "holder",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "delegate",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "GovernanceUpdated",
-          inputs: [
-            {
-              name: "governance",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "MinterAdded",
-          inputs: [
-            {
-              name: "minter",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "MinterRemoved",
-          inputs: [
-            {
-              name: "minter",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "NullifierReset",
-          inputs: [
-            {
-              name: "nullifier",
-              type: "uint256",
-              indexed: true,
-              internalType: "uint256",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "OwnershipTransferred",
-          inputs: [
-            {
-              name: "previousOwner",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "newOwner",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "PendingDelegateRemoved",
-          inputs: [
-            {
-              name: "holder",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "previousPendingDelegate",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "StakeRecorded",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              indexed: true,
-              internalType: "uint256",
-            },
-            {
-              name: "epochId",
-              type: "uint256",
-              indexed: true,
-              internalType: "uint256",
-            },
-            {
-              name: "tokenId",
-              type: "uint256",
-              indexed: true,
-              internalType: "uint256",
-            },
-            {
-              name: "amount",
-              type: "uint256",
-              indexed: false,
-              internalType: "uint256",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "StakeRecorderSet",
-          inputs: [
-            {
-              name: "stakeRecorder",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "Transfer",
-          inputs: [
-            {
-              name: "from",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "to",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "tokenId",
-              type: "uint256",
-              indexed: true,
-              internalType: "uint256",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "VoterIdMinted",
-          inputs: [
-            {
-              name: "tokenId",
-              type: "uint256",
-              indexed: true,
-              internalType: "uint256",
-            },
-            {
-              name: "holder",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "nullifier",
-              type: "uint256",
-              indexed: true,
-              internalType: "uint256",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "VoterIdRevoked",
-          inputs: [
-            {
-              name: "tokenId",
-              type: "uint256",
-              indexed: true,
-              internalType: "uint256",
-            },
-            {
-              name: "holder",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "error",
-          name: "AlreadyHasVoterId",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "ApprovalNotAllowed",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "CallerIsDelegate",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "CallerNotHolder",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "CannotDelegateSelf",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "DelegateAlreadyAssigned",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "DelegateIsHolder",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "ERC721IncorrectOwner",
-          inputs: [
-            {
-              name: "sender",
-              type: "address",
-              internalType: "address",
-            },
-            {
-              name: "tokenId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "owner",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-        },
-        {
-          type: "error",
-          name: "ERC721InsufficientApproval",
-          inputs: [
-            {
-              name: "operator",
-              type: "address",
-              internalType: "address",
-            },
-            {
-              name: "tokenId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-        },
-        {
-          type: "error",
-          name: "ERC721InvalidApprover",
-          inputs: [
-            {
-              name: "approver",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-        },
-        {
-          type: "error",
-          name: "ERC721InvalidOperator",
-          inputs: [
-            {
-              name: "operator",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-        },
-        {
-          type: "error",
-          name: "ERC721InvalidOwner",
-          inputs: [
-            {
-              name: "owner",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-        },
-        {
-          type: "error",
-          name: "ERC721InvalidReceiver",
-          inputs: [
-            {
-              name: "receiver",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-        },
-        {
-          type: "error",
-          name: "ERC721InvalidSender",
-          inputs: [
-            {
-              name: "sender",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-        },
-        {
-          type: "error",
-          name: "ERC721NonexistentToken",
-          inputs: [
-            {
-              name: "tokenId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-        },
-        {
-          type: "error",
-          name: "InvalidAddress",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "InvalidNullifier",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "MaxSupplyReached",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "NoDelegateSet",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "NoPendingDelegate",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "NullifierAlreadyUsed",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "OnlyMinter",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "OnlyStakeRecorder",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "OwnableInvalidOwner",
-          inputs: [
-            {
-              name: "owner",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-        },
-        {
-          type: "error",
-          name: "OwnableUnauthorizedAccount",
-          inputs: [
-            {
-              name: "account",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-        },
-        {
-          type: "error",
-          name: "TransferNotAllowed",
-          inputs: [],
-        },
-      ],
-      inheritedFunctions: {
-        approve: "lib/openzeppelin-contracts/contracts/token/ERC721/ERC721.sol",
-        balanceOf:
-          "lib/openzeppelin-contracts/contracts/token/ERC721/ERC721.sol",
-        getApproved:
-          "lib/openzeppelin-contracts/contracts/token/ERC721/ERC721.sol",
-        isApprovedForAll:
-          "lib/openzeppelin-contracts/contracts/token/ERC721/ERC721.sol",
-        name: "lib/openzeppelin-contracts/contracts/token/ERC721/ERC721.sol",
-        ownerOf: "lib/openzeppelin-contracts/contracts/token/ERC721/ERC721.sol",
-        safeTransferFrom:
-          "lib/openzeppelin-contracts/contracts/token/ERC721/ERC721.sol",
-        setApprovalForAll:
-          "lib/openzeppelin-contracts/contracts/token/ERC721/ERC721.sol",
-        supportsInterface:
-          "lib/openzeppelin-contracts/contracts/token/ERC721/ERC721.sol",
-        symbol: "lib/openzeppelin-contracts/contracts/token/ERC721/ERC721.sol",
-        tokenURI:
-          "lib/openzeppelin-contracts/contracts/token/ERC721/ERC721.sol",
-        transferFrom:
-          "lib/openzeppelin-contracts/contracts/token/ERC721/ERC721.sol",
-        owner: "lib/openzeppelin-contracts/contracts/access/Ownable.sol",
-        renounceOwnership:
-          "lib/openzeppelin-contracts/contracts/access/Ownable.sol",
-        transferOwnership:
-          "lib/openzeppelin-contracts/contracts/access/Ownable.sol",
-        acceptDelegate: "contracts/interfaces/IVoterIdNFT.sol",
-        authorizedMinters: "contracts/interfaces/IVoterIdNFT.sol",
-        delegateOf: "contracts/interfaces/IVoterIdNFT.sol",
-        delegateTo: "contracts/interfaces/IVoterIdNFT.sol",
-        getEpochContentStake: "contracts/interfaces/IVoterIdNFT.sol",
-        getHolder: "contracts/interfaces/IVoterIdNFT.sol",
-        getNullifier: "contracts/interfaces/IVoterIdNFT.sol",
-        getTokenId: "contracts/interfaces/IVoterIdNFT.sol",
-        getTokenIdForNullifier: "contracts/interfaces/IVoterIdNFT.sol",
-        hasVoterId: "contracts/interfaces/IVoterIdNFT.sol",
-        isNullifierUsed: "contracts/interfaces/IVoterIdNFT.sol",
-        mint: "contracts/interfaces/IVoterIdNFT.sol",
-        pendingDelegateOf: "contracts/interfaces/IVoterIdNFT.sol",
-        pendingDelegateTo: "contracts/interfaces/IVoterIdNFT.sol",
-        recordStake: "contracts/interfaces/IVoterIdNFT.sol",
-        removeDelegate: "contracts/interfaces/IVoterIdNFT.sol",
-        resetNullifier: "contracts/interfaces/IVoterIdNFT.sol",
-        resolveHolder: "contracts/interfaces/IVoterIdNFT.sol",
-        revokeVoterId: "contracts/interfaces/IVoterIdNFT.sol",
-        setDelegate: "contracts/interfaces/IVoterIdNFT.sol",
-      },
-      deployedOnBlock: 45,
     },
     X402QuestionSubmitter: {
       address: "0x8F3024D12c3D702930F2fF98Aa8e2261F0be490a",
@@ -24449,7 +23077,7 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "advisoryCommitKeyByNullifier",
+          name: "advisoryCommitKeyByIdentity",
           inputs: [
             {
               name: "",
@@ -24463,8 +23091,8 @@ const deployedContracts: GenericContractsDeclaration = {
             },
             {
               name: "",
-              type: "uint256",
-              internalType: "uint256",
+              type: "bytes32",
+              internalType: "bytes32",
             },
           ],
           outputs: [
@@ -24494,35 +23122,6 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "address",
               internalType: "address",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "advisoryCommitKeyByVoterId",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
             },
           ],
           outputs: [
@@ -24657,7 +23256,7 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "lastAdvisoryVoteTimestampByNullifier",
+          name: "lastAdvisoryVoteTimestampByIdentity",
           inputs: [
             {
               name: "",
@@ -24666,8 +23265,8 @@ const deployedContracts: GenericContractsDeclaration = {
             },
             {
               name: "",
-              type: "uint256",
-              internalType: "uint256",
+              type: "bytes32",
+              internalType: "bytes32",
             },
           ],
           outputs: [
