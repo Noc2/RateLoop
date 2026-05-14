@@ -337,7 +337,8 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         if (scoreBps == 0) return;
         RoundLib.Round memory round = _readRound(contentId, roundId);
         uint32 minAnchorCredentialAgeSeconds = _launchAnchorCredentialAgeSeconds(launchPool);
-        bytes32[] memory verifiedAnchorIds = LaunchRaterRewardLib.collectAnchorIds(
+
+        try LaunchRaterRewardLib.collectAnchorIds(
             config,
             votingEngine,
             registry,
@@ -347,23 +348,25 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
             round.voteCount,
             round.startTime,
             minAnchorCredentialAgeSeconds
-        );
-
-        try ILaunchDistributionPool(launchPool)
-            .recordEarnedRaterReward(
-                rewardRecipient,
-                contentId,
-                roundId,
-                commitKey,
-                scoreBps,
-                round.revealedCount,
-                votingEngine.roundUnrevealedCleanupRemaining(contentId, roundId) == 0,
-                stakeAmount,
-                verifiedAnchorIds
-            ) returns (
-            uint256
-        ) { }
-        catch (bytes memory reason) {
+        ) returns (bytes32[] memory verifiedAnchorIds) {
+            try ILaunchDistributionPool(launchPool)
+                .recordEarnedRaterReward(
+                    rewardRecipient,
+                    contentId,
+                    roundId,
+                    commitKey,
+                    scoreBps,
+                    round.revealedCount,
+                    votingEngine.roundUnrevealedCleanupRemaining(contentId, roundId) == 0,
+                    stakeAmount,
+                    verifiedAnchorIds
+                ) returns (
+                uint256
+            ) { }
+            catch (bytes memory reason) {
+                emit LaunchRaterRewardCreditFailed(contentId, roundId, commitKey, rewardRecipient, launchPool, reason);
+            }
+        } catch (bytes memory reason) {
             emit LaunchRaterRewardCreditFailed(contentId, roundId, commitKey, rewardRecipient, launchPool, reason);
         }
     }
