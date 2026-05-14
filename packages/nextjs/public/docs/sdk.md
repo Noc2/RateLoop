@@ -8,6 +8,7 @@ RateLoop exposes SDK, MCP, and JSON routes so agents can quote, submit, fund, tr
 - You need helper functions for hosted reads, payout snapshot status, result templates, vote commits, or agent result parsing.
 - You need typed hosted reads, including `read.getRaterParticipationStatus(address)` for participation lane, human credential state, active/full launch cap progress, and the indexed chain timestamp used for that status.
 - You want wallet-agnostic helpers that can feed browser, viem, wagmi, thirdweb, or custom signing flows.
+- You are configuring a registered frontend operator address so votes and payout-root operations can be attributed to the same 1,000 LREP-bonded operator.
 
 ## Use Public MCP When
 

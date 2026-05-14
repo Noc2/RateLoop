@@ -62,6 +62,7 @@ export const protocolDocFacts = {
   governanceMinimumQuorumLabel: "100,000 LREP",
   governanceTimelockDelayLabel: "2 days",
   governanceVotingDelegationLabel: "self-delegated LREP only",
+  frontendOperatorStakeLabel: "1,000 LREP",
   submissionLrepMinimumLabel: "1 LREP hard floor",
   submissionUsdcMinimumLabel: "1 USDC hard floor",
   blindPhaseDurationLabel: formatDurationLabel(DEFAULT_ROUND_CONFIG.epochDurationSeconds),

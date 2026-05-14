@@ -94,7 +94,7 @@ const FrontendCodes: NextPage = () => {
         Frontend operators who build frontends, mobile apps, or integrations receive{" "}
         <strong>{protocolDocFacts.frontendShareLabel}</strong> from settled two-sided rounds on votes made through their
         interface. Bounties also reserve a default 3% share for the eligible frontend operator attributed at vote commit
-        time.
+        time. The same registered operator bond is also what qualifies an operator to propose correlation payout roots.
       </p>
       <p>
         The reference app registration flow lives in{" "}
@@ -105,7 +105,7 @@ const FrontendCodes: NextPage = () => {
       </p>
       <ol>
         <li>
-          <strong>Stake 1,000 LREP</strong> to the FrontendRegistry contract.
+          <strong>Stake {protocolDocFacts.frontendOperatorStakeLabel}</strong> to the FrontendRegistry contract.
         </li>
         <li>
           <strong>Integrate:</strong> Include your registered address in the prediction commit, or configure it as the
@@ -116,8 +116,13 @@ const FrontendCodes: NextPage = () => {
           <code>RoundRewardDistributor.claimFrontendFee(contentId, roundId, frontend)</code> from your operator address
           on each settled round, then withdraw your accumulated LREP from <code>FrontendRegistry.claimFees()</code>{" "}
           while active, or with <code>completeDeregister()</code> after exit. If governance slashes your frontend, you
-          must restore the full 1,000 LREP bond before fee claims can accrue to you again. Reward-pool frontend shares
-          are paid automatically when eligible voters claim.
+          must restore the full {protocolDocFacts.frontendOperatorStakeLabel} bond before fee claims can accrue to you
+          again. Reward-pool frontend shares are paid automatically when eligible voters claim.
+        </li>
+        <li>
+          <strong>Publish roots:</strong> If you operate the correlation scorer, propose deterministic
+          ClusterPayoutOracle epoch and round payout roots from the registered frontend wallet so USDC bounty and launch
+          LREP claims can finalize.
         </li>
       </ol>
 
@@ -169,7 +174,9 @@ RoundVotingEngine.commitVote(
         </li>
         <li>
           <strong>Publishing payout snapshots:</strong> After settlement, the service can recompute correlation epoch
-          artifacts and submit <code>ClusterPayoutOracle</code> roots so USDC and launch LREP claims can finalize.
+          artifacts and submit <code>ClusterPayoutOracle</code> roots from the registered frontend operator wallet so
+          USDC and launch LREP claims can finalize. Root proposal is frontend-bonded, challengeable, and should point at
+          a public deterministic artifact.
         </li>
         <li>
           <strong>Finalizing and cleanup:</strong> If commit quorum was reached but reveal quorum never materializes by
@@ -306,11 +313,16 @@ RoundVotingEngine.commitVote(
       <ul>
         <li>
           <strong>Slashing</strong> - Governance can slash staked LREP for abuse and confiscate already accrued frontend
-          fees.
+          fees, including abuse of the payout-root publication process.
         </li>
         <li>
-          <strong>Rebonding required</strong> - After a partial slash, operators must top back up to the full 1,000 LREP
-          stake before frontend fees can accrue again.
+          <strong>Rebonding required</strong> - After a partial slash, operators must top back up to the full{" "}
+          {protocolDocFacts.frontendOperatorStakeLabel} stake before frontend fees can accrue again or they can continue
+          as a root-proposing operator.
+        </li>
+        <li>
+          <strong>Oracle arbitration</strong> - Governance can tune oracle challenge terms and resolve challenged roots
+          by finalizing a correct root or rejecting an invalid one with a public reason hash.
         </li>
       </ul>
 

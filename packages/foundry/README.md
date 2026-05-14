@@ -1,6 +1,6 @@
 # RateLoop — Foundry (Smart Contracts)
 
-Solidity smart contracts implementing the RateLoop protocol: voting engine, content registry, Loop Reputation token, LREP settlement, bounty escrow, launch distribution, and governance. Built with [Foundry](https://book.getfoundry.sh/). The docs now describe the question-first submission flow, a required context URL with optional preview media, mandatory non-refundable bounties funded in LREP or USDC, flexible minimum bounty terms for raters and settlement rounds, optional identity credentials, and the default frontend-operator fee on qualified bounty claims.
+Solidity smart contracts implementing the RateLoop protocol: voting engine, content registry, Loop Reputation token, LREP settlement, bounty escrow, launch distribution, ClusterPayoutOracle, and governance. Built with [Foundry](https://book.getfoundry.sh/). The docs now describe the question-first submission flow, a required context URL with optional preview media, mandatory non-refundable bounties funded in LREP or USDC, flexible minimum bounty terms for raters and settlement rounds, optional identity credentials, the default frontend-operator fee on qualified bounty claims, and frontend-backed payout-root publication.
 
 ## Quick Start
 
@@ -60,7 +60,7 @@ contracts/
 ├── LoopReputation.sol           # LREP token (governance and reputation)
 ├── ParticipationPool.sol        # Optional governance-funded participation rewards
 ├── LaunchDistributionPool.sol   # Anchor-gated earned rater rewards with verified full-cap unlocks, plus verification, referral, and legacy rewards
-├── ClusterPayoutOracle.sol      # Challengeable correlation epoch and payout-weight roots
+├── ClusterPayoutOracle.sol      # Governance-managed challengeable roots proposed by bonded frontend operators
 ├── QuestionRewardPoolEscrow.sol     # Bounty custody and claims
 ├── governance/                  # Governor contracts
 ├── interfaces/                  # Contract interfaces

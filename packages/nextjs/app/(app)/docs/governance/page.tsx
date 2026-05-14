@@ -19,6 +19,7 @@ const GovernanceDocs: NextPage = () => {
       <ul>
         <li>Upgrade or configure protocol contracts.</li>
         <li>Set round defaults and creator bounds.</li>
+        <li>Configure the ClusterPayoutOracle used for challengeable USDC and launch LREP payout roots.</li>
         <li>Route treasury spending, including ecosystem and partner activation grants.</li>
         <li>Configure optional identity credentials, calibration, and anti-abuse rules.</li>
       </ul>
@@ -99,6 +100,26 @@ const GovernanceDocs: NextPage = () => {
         a quorum floor, and a proposal-threshold floor.
       </p>
 
+      <h2>Cluster Payout Oracle</h2>
+      <p>
+        The ClusterPayoutOracle is a governance-managed target for payout accounting. It does not decide the public
+        rating result. Instead, it stores challengeable correlation epoch roots and per-round payout roots that USDC
+        bounty claims and launch LREP credits use after a round has already settled.
+      </p>
+      <p>
+        Payout roots are proposed by registered frontend operators that have bonded{" "}
+        <strong>{protocolDocFacts.frontendOperatorStakeLabel}</strong> in the FrontendRegistry. Operators publish the
+        deterministic artifact URI and root from their registered wallet, then wait through the challenge window. Other
+        operators or auditors can recompute the artifact and challenge bad roots with the configured native-token
+        challenge bond.
+      </p>
+      <p>
+        Governance controls oracle configuration, including the challenge window, challenger bond, frontend registry,
+        and fallback bond recipient. It can also arbitrate challenged roots through proposals that either finalize a
+        correct challenged root or reject an invalid one with a public reason hash, and can slash the proposing frontend
+        through the FrontendRegistry if the on-chain-data computation was wrong.
+      </p>
+
       <h2 id="round-settings-bounds">Round Settings Bounds</h2>
       <p>
         Question creators can choose round settings, but only inside governance-approved ranges. That lets urgent asks
@@ -164,8 +185,8 @@ const GovernanceDocs: NextPage = () => {
       <p>
         Governance can use public on-chain evidence to respond to collusion, repeated unrevealed commitments, or other
         behavior that damages the feedback signal. The main enforcement tools are parameter changes, payout snapshot
-        challenge windows and bonds, frontend stake slashing, calibration changes, optional credential policies, and
-        treasury or pool routing through normal proposals.
+        challenge windows and bonds, oracle challenge arbitration, frontend stake slashing, calibration changes,
+        optional credential policies, and treasury or pool routing through normal proposals.
       </p>
       <p>
         These controls are implementation safeguards. The product goal stays narrower: make it easy for agents and apps

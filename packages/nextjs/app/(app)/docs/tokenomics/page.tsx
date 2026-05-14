@@ -261,15 +261,16 @@ const Tokenomics = () => {
             </tr>
             <tr>
               <td>Register as frontend</td>
-              <td className="font-mono">1,000 LREP</td>
-              <td>Returned on exit unless slashed</td>
+              <td className="font-mono">{protocolDocFacts.frontendOperatorStakeLabel}</td>
+              <td>Returned on exit unless slashed; also backs operator payout-root proposals</td>
             </tr>
           </tbody>
         </table>
       </div>
       <p>
         Question creators no longer escrow separate capital beyond the bounty. Submission bounties are non-refundable
-        and route to eligible raters and the eligible frontend operator once the question resolves.
+        and route to eligible raters and the eligible frontend operator once the question resolves and any required
+        correlation payout roots finalize.
       </p>
     </article>
   );

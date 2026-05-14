@@ -41,7 +41,7 @@ Key pieces:
 - **Launch Distribution Pool** — 64M LREP funds 35M verified + referral rewards, 25M earned rater rewards gated by governance-tunable anchor diversity, and a 4M fixed legacy-user claim
 - **tlock Commit-Reveal** — predictions stay private through the sealed round
 - **LREP and World Chain USDC Bounties** — small bounty payouts reward calibrated independent work, with USDC used by public agent wallet flows
-- **Correlation Epoch Snapshots** — permissionless keepers/indexers publish COCM-inspired payout roots so dense wallet clusters share capped USDC and launch LREP payouts across rounds
+- **Correlation Epoch Snapshots** — registered frontend operators backed by 1,000 LREP publish COCM-inspired payout roots so dense wallet clusters share capped USDC and launch LREP payouts across rounds
 - **Scoped Bounty Eligibility** — answering is always open, but payout qualification can be limited to verified humans
 - **Agent-Ready Integrations** — SDK helpers and MCP-shaped tools let agents quote, prepare wallet-signed submissions, track asks, and read results without taking operator custody of bounty funds or requiring a saved policy token
 - **Optional Identity Signals** — World ID can attach a non-required, on-chain verified human credential used for one-time bonuses and as an earned-reward round anchor without affecting settlement reward weight
@@ -77,7 +77,7 @@ node-utils (shared)  → keystore and other reusable Node helpers
 sdk        (shared)  → hosted read client + vote/frontend integration helpers
 ponder     (index)   → REST API at localhost:42069
 nextjs     (frontend)→ reads contracts via thirdweb, wagmi, and the Ponder API
-keeper     (service) → settles rounds, cleans up reveals, marks dormant asks, publishes correlation payout snapshots
+keeper     (service) → settles rounds, cleans up reveals, marks dormant asks, publishes frontend-backed correlation payout snapshots
 ```
 
 Built with Next.js, Foundry, Ponder, thirdweb, wagmi, viem, Drizzle ORM, and PostgreSQL.

@@ -70,7 +70,10 @@ const SmartContracts: NextPage = () => {
             </tr>
             <tr>
               <td className="font-mono text-primary">ClusterPayoutOracle</td>
-              <td>Optimistic correlation epoch and round payout snapshots for USDC and launch LREP claims</td>
+              <td>
+                Governance-managed optimistic correlation epoch and round payout snapshots proposed by bonded frontend
+                operators for USDC and launch LREP claims
+              </td>
               <td>No</td>
             </tr>
             <tr>
@@ -456,9 +459,10 @@ const SmartContracts: NextPage = () => {
         <li>
           <code>QuestionRewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId, payoutWeight, proof)</code> &mdash;
           Claim the USDC-backed bounty for a revealed voter after the round has a finalized correlation payout snapshot.
-          New bounties default to a 3% frontend-operator share, attributed from the vote commit; unpayable frontend
-          shares remain with the voter claim. Bounty eligibility and correlation caps only gate this payout path, not
-          who can answer, reveal, or affect the result.
+          Snapshot roots are proposed through <code>ClusterPayoutOracle</code> by registered frontend operators bonded
+          with 1,000 LREP, then finalized after the challenge window. New bounties default to a 3% frontend-operator
+          share, attributed from the vote commit; unpayable frontend shares remain with the voter claim. Bounty
+          eligibility and correlation caps only gate this payout path, not who can answer, reveal, or affect the result.
         </li>
         <li>
           <code>QuestionRewardPoolEscrow.claimQuestionBundleReward(bundleId, roundSetIndex)</code> &mdash; Claim a
@@ -723,7 +727,8 @@ const SmartContracts: NextPage = () => {
           <strong>Sybil Resistance:</strong> Core rating remains open, while earned launch rewards require qualifying
           revealed ratings, verified-human anchored rounds, cross-round anchor diversity, bounded anchor fanout,
           round-level unverified-credit caps, aged anchor credentials, and finalized correlation payout snapshots before
-          payout. Open raters can receive a governed partial earned-rater cap and unlock the full snapshotted cap by
+          payout. Those roots are proposed by registered frontend operators and remain challengeable before claim paths
+          use them. Open raters can receive a governed partial earned-rater cap and unlock the full snapshotted cap by
           later verifying the same wallet as a human, but verified humans still pass through the correlation scorer.
           Per-identity stake caps, question-first submission guardrails, and claim gating apply around the reward
           surfaces. Question submission is the same for humans, bots, and delegated agents.

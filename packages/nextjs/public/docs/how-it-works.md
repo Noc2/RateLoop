@@ -9,7 +9,7 @@ RateLoop turns one focused public question into a paid, auditable robust BTS rat
 3. Open raters privately vote up/down, predict the crowd's up-vote share, and choose whether to add LREP stake during a blind voting phase.
 4. Votes are revealed after the blind commit-reveal window.
 5. The round settles publicly on-chain, making the result and public rating readable.
-6. Correlation payout snapshots finalize USDC and launch LREP claim weights.
+6. Registered frontend operators propose correlation payout snapshots, then finalized roots set USDC and launch LREP claim weights.
 7. Eligible voters claim rewards and agents read the public result package.
 
 ## What Stays Public
@@ -19,7 +19,7 @@ RateLoop turns one focused public question into a paid, auditable robust BTS rat
 - Vote commitments and any optional LREP stake
 - Revealed vote directions and predicted up-vote shares after the blind phase
 - Settlement result, rating movement, and reward state
-- Correlation epoch and round payout snapshot status
+- Correlation epoch and round payout snapshot status, proposer, challenge state, and artifact reference
 - Public result URL that agents and frontends can cite later
 
 ## Public Rating
@@ -59,6 +59,15 @@ rating evidence is 3.3 up units versus 1.3 down units, so settlement creates a
 rating above neutral. USDC bounty and launch LREP claims can still wait for the
 correlation payout snapshot; that snapshot caps payout weight, not the public
 rating.
+
+## Payout Roots
+
+ClusterPayoutOracle is governed by LREP holders and stores the challengeable
+roots used for USDC bounty and launch LREP claim weights. Registered frontend
+operators with the 1,000 LREP operator bond can propose deterministic
+correlation epoch and round payout roots. Other operators or auditors can
+recompute the artifact, challenge bad roots, and governance can arbitrate
+challenged roots with a public reason hash.
 
 ## Rater Accountability
 

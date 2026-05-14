@@ -289,7 +289,7 @@ export const SECTIONS: Section[] = [
               "Calibration rounds gate USDC earning until an account or agent has shown enough prediction quality.",
               "Each account is capped at 10 LREP per content per round by default.",
               "Optional identity providers can unlock a one-time launch bonus and verified-human launch anchors, but they do not change settlement reward weight.",
-              "Correlation Epoch Snapshots cap USDC and launch LREP payouts for dense wallet or operator clusters across multiple rounds.",
+              "Correlation Epoch Snapshots cap USDC and launch LREP payouts for dense wallet or operator clusters across multiple rounds, with roots proposed by 1,000 LREP-bonded frontend operators.",
             ],
           },
         ],
@@ -323,7 +323,7 @@ export const SECTIONS: Section[] = [
               "Economic anti-herding through epoch-weighted rewards and win conditions.",
               "Permissionless settlement, refunds, and cleanup once conditions are met.",
               "Malformed or non-armored ciphertexts are rejected on-chain before they can pollute settlement.",
-              "Public on-chain history and challengeable payout roots make suspicious funding, timing, and prediction patterns auditable by the community.",
+              "Public on-chain history and frontend-backed challengeable payout roots make suspicious funding, timing, and prediction patterns auditable by the community.",
             ],
           },
         ],
@@ -375,7 +375,7 @@ export const SECTIONS: Section[] = [
           },
           {
             type: "paragraph",
-            text: `High-scoring RBTS reports recover more stake plus a share of the rater pool, while revealed forfeited stake can reclaim ${protocolDocFacts.revealedLoserRefundPercentLabel}. Tier-1 raters carry full blind-epoch weight and later raters carry ${protocolDocFacts.openPhaseWeightLabel} weight, so the same anti-herding logic shapes settlement. USDC bounty and launch LREP claims add a second step: a finalized correlation payout snapshot supplies effective claim weights before funds move, without changing the already-settled result.`,
+            text: `High-scoring RBTS reports recover more stake plus a share of the rater pool, while revealed forfeited stake can reclaim ${protocolDocFacts.revealedLoserRefundPercentLabel}. Tier-1 raters carry full blind-epoch weight and later raters carry ${protocolDocFacts.openPhaseWeightLabel} weight, so the same anti-herding logic shapes settlement. USDC bounty and launch LREP claims add a second step: a finalized correlation payout snapshot proposed by a registered frontend operator supplies effective claim weights before funds move, without changing the already-settled result.`,
           },
         ],
       },
@@ -388,6 +388,7 @@ export const SECTIONS: Section[] = [
               "Every ask attaches a non-refundable bounty in LREP or USDC on World Chain.",
               "World Chain USDC agent asks can use x402 authorization or ordered wallet calls to fund protocol escrow directly from the approved wallet.",
               "Qualified bounty rounds pay eligible revealed raters and reserve 3% for eligible frontend operators after correlation-capped payout weights finalize.",
+              "Registered frontend operators bond 1,000 LREP before proposing payout roots for those claim weights.",
               "Optional USDC Feedback Bonuses reward hidden notes by canonical hash after settlement.",
               "USDC asks do not require proof-of-personhood; USDC earning starts after the required calibration rounds.",
               "Submitters do not earn upside from their own ask; the protocol pays for judgment, not self-rating.",
@@ -441,7 +442,11 @@ export const SECTIONS: Section[] = [
                   "1 LREP or 1 USDC minimum bounty",
                   "Mandatory and non-refundable; the ask is funded before judgment arrives",
                 ],
-                ["Register as a frontend", "1,000 LREP", "Returned on exit unless governance-defined slashing applies"],
+                [
+                  "Register as a frontend",
+                  "1,000 LREP",
+                  "Returned on exit unless governance-defined slashing applies; also backs payout-root proposals",
+                ],
               ],
             },
           },
@@ -549,6 +554,15 @@ export const SECTIONS: Section[] = [
           {
             type: "paragraph",
             text: "Governor and timelock contracts own upgrades, configuration, and treasury routing in finalized deployments. The intent is that the same community that earns LREP by participating in ratings should also be able to tune the rules of the rating layer in public.",
+          },
+        ],
+      },
+      {
+        heading: "Cluster Payout Oracle",
+        blocks: [
+          {
+            type: "paragraph",
+            text: "The ClusterPayoutOracle is a governance-managed target for challengeable correlation epoch and round payout roots. Registered frontend operators with a 1,000 LREP bond propose deterministic artifact roots from their registered wallet; independent operators can recompute them and challenge bad roots with the configured native-token challenge bond. Governance configures oracle challenge terms, arbitrates challenged roots with public reason hashes, and can slash the proposing frontend through the FrontendRegistry when the on-chain-data computation is wrong.",
           },
         ],
       },

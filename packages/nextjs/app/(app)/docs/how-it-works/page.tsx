@@ -139,7 +139,7 @@ const HowItWorks: NextPage = () => {
         Example: if Alice votes thumbs up with 10 LREP, Bob votes thumbs up with 3 LREP, and Carol votes thumbs down
         with 3 LREP, settlement records 3.3 bounded up evidence units versus 1.3 bounded down units. The first public
         rating appears above neutral, while USDC bounty and launch LREP claims can still wait for the finalized
-        correlation payout snapshot.
+        correlation payout snapshot proposed by a registered frontend operator.
       </p>
       <p>
         Optional feedback stays hidden while the round is active and unlocks after settlement or another terminal round
