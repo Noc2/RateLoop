@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
-import { RobustBtsMath } from "./RobustBtsMath.sol";
-import { RoundLib } from "./RoundLib.sol";
-import { TlockVoteLib } from "./TlockVoteLib.sol";
-import { VotePreflightLib } from "./VotePreflightLib.sol";
+import {RobustBtsMath} from "./RobustBtsMath.sol";
+import {RoundLib} from "./RoundLib.sol";
+import {TlockVoteLib} from "./TlockVoteLib.sol";
+import {VotePreflightLib} from "./VotePreflightLib.sol";
 
 /// @title RoundRevealLib
 /// @notice Shared reveal accounting extracted from RoundVotingEngine to reduce runtime size.
@@ -159,6 +159,7 @@ library RoundRevealLib {
         if (revealedCount < minParticipants) revert NotEnoughVotes();
 
         bytes32[] memory revealedKeys = new bytes32[](revealedCount);
+        bytes32 revealedSetHash;
         uint256 revealedIndex;
         uint256 economicCount;
         for (uint256 i = 0; i < commitKeys.length;) {
@@ -166,6 +167,7 @@ library RoundRevealLib {
             RoundLib.Commit storage revealedCommit = roundCommits[commitKey];
             if (revealedCommit.revealed) {
                 revealedKeys[revealedIndex] = commitKey;
+                revealedSetHash = keccak256(abi.encodePacked(revealedSetHash, commitKey));
                 if (commitRbtsWeight[commitKey] > 0) {
                     unchecked {
                         ++economicCount;
@@ -185,7 +187,7 @@ library RoundRevealLib {
 
         RbtsRoundTotals memory totals;
 
-        result.scoreSeed = _rbtsScoreSeed(contentId, roundId, revealedCount);
+        result.scoreSeed = _rbtsScoreSeed(contentId, roundId, revealedCount, revealedSetHash);
         for (uint256 i = 0; i < revealedCount;) {
             bytes32 commitKey = revealedKeys[i];
             uint256 ownWeight = commitRbtsWeight[commitKey];
@@ -328,21 +330,13 @@ library RoundRevealLib {
         commitRbtsScoreBps[commitKey] = scoreBps;
     }
 
-    function _rbtsScoreSeed(uint256 contentId, uint256 roundId, uint256 scoreableCount)
+    function _rbtsScoreSeed(uint256 contentId, uint256 roundId, uint256 scoreableCount, bytes32 revealedSetHash)
         private
         view
         returns (bytes32 scoreSeed)
     {
         scoreSeed = keccak256(
-            abi.encodePacked(
-                block.chainid,
-                address(this),
-                contentId,
-                roundId,
-                scoreableCount,
-                block.prevrandao,
-                blockhash(block.number - 1)
-            )
+            abi.encodePacked(block.chainid, address(this), contentId, roundId, scoreableCount, revealedSetHash)
         );
     }
 
@@ -361,7 +355,7 @@ library RoundRevealLib {
         pure
         returns (uint256)
     {
-        // Deterministic sampler over rater identities plus settlement entropy; not chain entropy for custody.
+        // Deterministic sampler over rater identities and the revealed commit set.
         // slither-disable-next-line weak-prng
         uint256 drawn = uint256(keccak256(abi.encodePacked(seed, drawKey, ownIndex, domain))) % (count - 1);
         return drawn >= ownIndex ? drawn + 1 : drawn;
@@ -372,7 +366,7 @@ library RoundRevealLib {
         pure
         returns (uint256)
     {
-        // Deterministic sampler over rater identities plus settlement entropy; not chain entropy for custody.
+        // Deterministic sampler over rater identities and the revealed commit set.
         // slither-disable-next-line weak-prng
         uint256 drawn = uint256(keccak256(abi.encodePacked(seed, drawKey, ownIndex, uint8(2)))) % (count - 2);
         uint256 firstExcluded = ownIndex < referenceIndex ? ownIndex : referenceIndex;

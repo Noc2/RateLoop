@@ -1,26 +1,27 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import { Test } from "forge-std/Test.sol";
-import { Base64 } from "@openzeppelin/contracts/utils/Base64.sol";
-import { Strings } from "@openzeppelin/contracts/utils/Strings.sol";
-import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import { ContentRegistry } from "../contracts/ContentRegistry.sol";
-import { AdvisoryVoteRecorder } from "../contracts/AdvisoryVoteRecorder.sol";
-import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
-import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
-import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
-import { RoundLib } from "../contracts/libraries/RoundLib.sol";
-import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
-import { TlockVoteLib } from "../contracts/libraries/TlockVoteLib.sol";
-import { VotePreflightLib } from "../contracts/libraries/VotePreflightLib.sol";
-import { HumanReputation } from "../contracts/HumanReputation.sol";
-import { ParticipationPool } from "../contracts/ParticipationPool.sol";
-import { FrontendRegistry } from "../contracts/FrontendRegistry.sol";
-import { RaterRegistry } from "../contracts/RaterRegistry.sol";
-import { MockRaterIdentityRegistry } from "./mocks/MockRaterIdentityRegistry.sol";
-import { VotingTestBase } from "./helpers/VotingTestHelpers.sol";
-import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
+import {Test} from "forge-std/Test.sol";
+import {Vm} from "forge-std/Vm.sol";
+import {Base64} from "@openzeppelin/contracts/utils/Base64.sol";
+import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {ContentRegistry} from "../contracts/ContentRegistry.sol";
+import {AdvisoryVoteRecorder} from "../contracts/AdvisoryVoteRecorder.sol";
+import {RoundVotingEngine} from "../contracts/RoundVotingEngine.sol";
+import {ProtocolConfig} from "../contracts/ProtocolConfig.sol";
+import {RoundRewardDistributor} from "../contracts/RoundRewardDistributor.sol";
+import {RoundLib} from "../contracts/libraries/RoundLib.sol";
+import {RoundEngineReadHelpers} from "./helpers/RoundEngineReadHelpers.sol";
+import {TlockVoteLib} from "../contracts/libraries/TlockVoteLib.sol";
+import {VotePreflightLib} from "../contracts/libraries/VotePreflightLib.sol";
+import {HumanReputation} from "../contracts/HumanReputation.sol";
+import {ParticipationPool} from "../contracts/ParticipationPool.sol";
+import {FrontendRegistry} from "../contracts/FrontendRegistry.sol";
+import {RaterRegistry} from "../contracts/RaterRegistry.sol";
+import {MockRaterIdentityRegistry} from "./mocks/MockRaterIdentityRegistry.sol";
+import {VotingTestBase} from "./helpers/VotingTestHelpers.sol";
+import {MockCategoryRegistry} from "../contracts/mocks/MockCategoryRegistry.sol";
 
 // =========================================================================
 // TEST CONTRACT
@@ -589,6 +590,49 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertGt(rewardWeight, 0, "positive RBTS reward weight");
         assertGt(forfeitedPool, 0, "imperfect scores forfeit some stake");
         assertGt(engine.commitRbtsScoreBps(contentId, roundId, ck1), 0, "ck1 scored");
+    }
+
+    function test_RbtsScoringSeed_UsesRevealedCommitSetOnly() public {
+        uint256 contentId = _submitContent();
+
+        (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, true, 8_000, 10e6);
+        (bytes32 ck2, bytes32 s2) = _commitPrediction(voter2, contentId, false, 5_000, 3e6);
+        (bytes32 ck3, bytes32 s3) = _commitPrediction(voter3, contentId, true, 6_500, 3e6);
+
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        RoundLib.Round memory r0 = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        _warpPastTlockRevealTime(uint256(r0.startTime) + EPOCH);
+
+        engine.revealVoteByCommitKey(contentId, roundId, ck1, true, 8_000, s1);
+        engine.revealVoteByCommitKey(contentId, roundId, ck2, false, 5_000, s2);
+        engine.revealVoteByCommitKey(contentId, roundId, ck3, true, 6_500, s3);
+
+        vm.recordLogs();
+        engine.settleRound(contentId, roundId);
+
+        bytes32 revealedSetHash;
+        revealedSetHash = keccak256(abi.encodePacked(revealedSetHash, ck1));
+        revealedSetHash = keccak256(abi.encodePacked(revealedSetHash, ck2));
+        revealedSetHash = keccak256(abi.encodePacked(revealedSetHash, ck3));
+        bytes32 expectedSeed = keccak256(
+            abi.encodePacked(block.chainid, address(engine), contentId, roundId, uint256(3), revealedSetHash)
+        );
+
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        bytes32 expectedTopic = keccak256("RbtsRewardsScored(uint256,uint256,bytes32,uint256,uint256,uint256,uint256)");
+        bool found;
+        for (uint256 i = 0; i < logs.length; i++) {
+            if (
+                logs[i].emitter == address(engine) && logs[i].topics.length == 3 && logs[i].topics[0] == expectedTopic
+                    && uint256(logs[i].topics[1]) == contentId && uint256(logs[i].topics[2]) == roundId
+            ) {
+                (bytes32 scoreSeed,,,,) = abi.decode(logs[i].data, (bytes32, uint256, uint256, uint256, uint256));
+                assertEq(scoreSeed, expectedSeed, "score seed must be independent of settlement block entropy");
+                found = true;
+                break;
+            }
+        }
+        assertTrue(found, "RbtsRewardsScored event not emitted");
     }
 
     function test_RbtsZeroStakeCommitRejectedByCountedVoting() public {
