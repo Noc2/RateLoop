@@ -159,12 +159,5 @@ jobs:
         run: |
           forge coverage --offline --ir-minimum \
             --skip script \
-            --skip AdversarialTests.t.sol \
-            --skip AuditGapTests.t.sol \
-            --skip FormalVerification_GameTheory.t.sol \
-            --skip GameTheoryImprovements.t.sol \
             --skip GasBudget.t.sol \
-            --skip GasEstimatesReport.t.sol \
-            --skip QuestionRewardPoolEscrow.t.sol \
-            --skip RoundIntegration.t.sol \
-            --skip SettlementEdgeCases.t.sol
+            --skip GasEstimatesReport.t.sol

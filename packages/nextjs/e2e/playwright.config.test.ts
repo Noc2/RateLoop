@@ -12,6 +12,15 @@ function getProjectTestMatch(name: string): RegExp {
   return project.testMatch;
 }
 
+function getProjectTestIgnore(name: string): RegExp {
+  const project = (config.projects ?? []).find(candidate => candidate.name === name);
+
+  assert.ok(project, `Expected Playwright project "${name}" to exist`);
+  assert.ok(project.testIgnore instanceof RegExp, `Expected Playwright project "${name}" to use a RegExp testIgnore`);
+
+  return project.testIgnore;
+}
+
 test("browser-scoped Playwright projects only match their intended spec files", () => {
   const scenarios = [
     {
@@ -62,4 +71,17 @@ test("CI lifecycle script does not expand Playwright project dependencies", () =
 
   assert.match(lifecycleScript, /--no-deps\b/, "lifecycle CI should not rerun dependency projects");
   assert.doesNotMatch(lifecycleScript, /--project=chromium\b/, "lifecycle CI should not include the broad suite");
+});
+
+test("CI app project covers broad Chromium specs without rerunning scoped suites", () => {
+  const testIgnore = getProjectTestIgnore("ci-app");
+  const broadSpec = "/tmp/rateloop/packages/nextjs/e2e/tests/vote.spec.ts";
+  const smokeSpec = "/tmp/rateloop/packages/nextjs/e2e/tests/smoke.spec.ts";
+  const lifecycleSpec = "/tmp/rateloop/packages/nextjs/e2e/tests/settlement-lifecycle.spec.ts";
+  const compatSpec = "/tmp/rateloop/packages/nextjs/e2e/tests/browser-compat.spec.ts";
+
+  assert.equal(testIgnore.test(broadSpec), false, "ci-app should include broad app specs");
+  assert.equal(testIgnore.test(smokeSpec), true, "ci-app should leave smoke specs to ci-smoke");
+  assert.equal(testIgnore.test(lifecycleSpec), true, "ci-app should leave lifecycle specs to lifecycle projects");
+  assert.equal(testIgnore.test(compatSpec), true, "ci-app should leave browser compat specs to scheduled compat projects");
 });

@@ -7,6 +7,12 @@ const BROWSER_COMPAT_TESTS = specFile("browser-compat");
 const RESPONSIVE_LAYOUT_TESTS = specFile("responsive-layout");
 const ACCESSIBILITY_AXE_TESTS = specFile("accessibility-axe");
 const MOBILE_TESTS = specFile("mobile");
+const CI_SMOKE_TESTS =
+  /smoke|pages-smoke|docs-pages|nextjs-api|follow-api|watchlist-api|faucet|contract-boundaries/;
+const CHROMIUM_SPECIAL_TESTS =
+  /round-cancellation|content-dormancy|settlement-lifecycle|reward-claim|tied-round|zz-multi-round|unanimous-settlement|frontend-fee-claim|reveal-failed|manual-reveal|keeper-settlement|mobile|browser-compat|responsive-layout|accessibility-axe/;
+const CI_APP_IGNORED_TESTS =
+  /smoke|pages-smoke|docs-pages|nextjs-api|follow-api|watchlist-api|faucet|contract-boundaries|round-cancellation|content-dormancy|settlement-lifecycle|reward-claim|tied-round|zz-multi-round|unanimous-settlement|frontend-fee-claim|reveal-failed|manual-reveal|keeper-settlement|mobile|browser-compat|responsive-layout|accessibility-axe/;
 
 export default defineConfig({
   globalSetup: "./global-setup.cts",
@@ -28,7 +34,12 @@ export default defineConfig({
     {
       name: "ci-smoke",
       use: { ...devices["Desktop Chrome"] },
-      testMatch: /smoke|pages-smoke|docs-pages|nextjs-api|follow-api|watchlist-api|faucet|contract-boundaries/,
+      testMatch: CI_SMOKE_TESTS,
+    },
+    {
+      name: "ci-app",
+      use: { ...devices["Desktop Chrome"] },
+      testIgnore: CI_APP_IGNORED_TESTS,
     },
     {
       name: "chromium",
@@ -37,8 +48,7 @@ export default defineConfig({
       // - settlement/reward/tied-round: need block advancement for settlement
       // - round-cancellation/content-dormancy: need time-skip (fast-forward days)
       // - mobile/responsive/browser-compat/a11y: scoped device/browser projects
-      testIgnore:
-        /round-cancellation|content-dormancy|settlement-lifecycle|reward-claim|tied-round|zz-multi-round|unanimous-settlement|frontend-fee-claim|reveal-failed|manual-reveal|keeper-settlement|mobile|browser-compat|responsive-layout|accessibility-axe/,
+      testIgnore: CHROMIUM_SPECIAL_TESTS,
     },
     {
       name: "responsive-layout",

@@ -40,6 +40,11 @@ jobs:
             playwright_browsers: chromium
             timeout: 30
             start_keeper: false
+          - suite: app
+            command: yarn workspace @rateloop/nextjs e2e:ci:app
+            playwright_browsers: chromium
+            timeout: 45
+            start_keeper: false
           - suite: responsive
             command: yarn workspace @rateloop/nextjs e2e:responsive
             playwright_browsers: chromium

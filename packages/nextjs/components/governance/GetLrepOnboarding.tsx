@@ -164,7 +164,11 @@ export function GetLrepOnboarding({ address }: GetLrepOnboardingProps) {
             <ActionStat
               label="Launch credits"
               value={rewardStatusLoading ? "..." : `${qualifyingRatingCount}/${eligibilityRatingCount}`}
-              detail={`${creditedCount.toLocaleString()} credit${creditedCount === 1 ? "" : "s"} recorded.`}
+              detail={
+                creditedCount > 0
+                  ? `${creditedCount.toLocaleString()} credit${creditedCount === 1 ? "" : "s"} recorded.`
+                  : undefined
+              }
             />
             <ActionStat label="Earned-rater cap" value={launchCapLabel} detail={launchCapDetail} />
           </div>
