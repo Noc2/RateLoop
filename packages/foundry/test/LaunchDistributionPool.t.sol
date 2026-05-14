@@ -2,9 +2,11 @@
 pragma solidity ^0.8.20;
 
 import {Test, stdStorage, StdStorage} from "forge-std/Test.sol";
+import {ClusterPayoutOracle} from "../contracts/ClusterPayoutOracle.sol";
 import {LaunchDistributionPool} from "../contracts/LaunchDistributionPool.sol";
 import {LoopReputation} from "../contracts/LoopReputation.sol";
 import {RaterRegistry} from "../contracts/RaterRegistry.sol";
+import {IClusterPayoutOracle} from "../contracts/interfaces/IClusterPayoutOracle.sol";
 import {ILaunchDistributionPool} from "../contracts/interfaces/ILaunchDistributionPool.sol";
 import {MockWorldIDRouter} from "../contracts/mocks/MockWorldIDRouter.sol";
 
@@ -235,6 +237,63 @@ contract LaunchDistributionPoolTest is Test {
 
         assertEq(_recordLaunchReward(alice, 15, bytes32("anchor-a")), 0);
         assertEq(lrep.balanceOf(alice), 2_500_000);
+    }
+
+    function test_CorrelationOracleDelaysAndFractionalizesLaunchCredit() public {
+        ClusterPayoutOracle oracle = new ClusterPayoutOracle(address(this));
+        oracle.setOracleConfig(1, 0, address(this));
+        pool.setClusterPayoutOracle(address(oracle));
+
+        uint256 paidBeforeSnapshot = _recordLaunchReward(alice, 1, bytes32("anchor-a"));
+        assertEq(paidBeforeSnapshot, 0);
+        assertEq(pool.qualifyingCreditBps(alice), 0);
+        assertEq(pool.qualifyingRatingCount(alice), 0);
+
+        oracle.proposeCorrelationEpoch(
+            1, 1, 1, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+        );
+        vm.warp(2);
+        oracle.finalizeCorrelationEpoch(1);
+
+        IClusterPayoutOracle.PayoutWeight memory payout = IClusterPayoutOracle.PayoutWeight({
+            domain: pool.PAYOUT_DOMAIN_LAUNCH_CREDIT(),
+            rewardPoolId: 0,
+            contentId: 1,
+            roundId: 1,
+            commitKey: _commitKey(1),
+            identityKey: bytes32(0),
+            account: alice,
+            baseWeight: pool.BPS_DENOMINATOR(),
+            independenceBps: 2_500,
+            effectiveWeight: 2_500,
+            reasonHash: keccak256("clustered")
+        });
+        bytes32 leaf = oracle.payoutWeightLeaf(payout);
+        oracle.proposeRoundPayoutSnapshot(
+            IClusterPayoutOracle.RoundPayoutSnapshotInput({
+                domain: pool.PAYOUT_DOMAIN_LAUNCH_CREDIT(),
+                rewardPoolId: 0,
+                contentId: 1,
+                roundId: 1,
+                correlationEpochId: 1,
+                rawEligibleVoters: 1,
+                effectiveParticipantUnits: 2_500,
+                totalClaimWeight: 2_500,
+                weightRoot: leaf,
+                reasonRoot: keccak256("reason-root"),
+                artifactHash: keccak256("round-artifact"),
+                artifactURI: "ipfs://round"
+            })
+        );
+        bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(pool.PAYOUT_DOMAIN_LAUNCH_CREDIT(), 0, 1, 1);
+        vm.warp(4);
+        oracle.finalizeRoundPayoutSnapshot(snapshotKey);
+
+        uint256 paidAfterSnapshot = pool.finalizeEarnedRaterRewardCredit(1, 1, _commitKey(1), payout, new bytes32[](0));
+        assertEq(paidAfterSnapshot, 0);
+        assertEq(pool.qualifyingCreditBps(alice), 2_500);
+        assertEq(pool.qualifyingRatingCount(alice), 0);
+        assertTrue(pool.earnedRewardCreditFinalized(1, 1, _commitKey(1)));
     }
 
     function test_RecordEarnedRaterRewardAppliesLowerUnverifiedCapWhenGovernanceSetsBps() public {
@@ -556,7 +615,14 @@ contract LaunchDistributionPoolTest is Test {
         }
 
         (bool fifthRecorded, uint256 paid) = pool.recordAdvisoryRaterReward(
-            alice, 1, 5, keccak256(abi.encode("advisory", uint256(5))), 8_000, 3, true, _singleAnchor(bytes32("anchor-a"))
+            alice,
+            1,
+            5,
+            keccak256(abi.encode("advisory", uint256(5))),
+            8_000,
+            3,
+            true,
+            _singleAnchor(bytes32("anchor-a"))
         );
 
         assertEq(pool.raterFullLaunchCap(alice), 10e6);
@@ -569,7 +635,15 @@ contract LaunchDistributionPoolTest is Test {
     function test_RecordAdvisoryRaterRewardDoesNotDoubleCreditSameRaterRound() public {
         bytes32 countedCommitKey = _commitKey(1);
         uint256 countedPaid = pool.recordEarnedRaterReward(
-            alice, 1, 1, countedCommitKey, 8_000, 3, true, pool.MIN_LAUNCH_CREDIT_STAKE(), _singleAnchor(bytes32("anchor-a"))
+            alice,
+            1,
+            1,
+            countedCommitKey,
+            8_000,
+            3,
+            true,
+            pool.MIN_LAUNCH_CREDIT_STAKE(),
+            _singleAnchor(bytes32("anchor-a"))
         );
         (bool advisoryRecorded, uint256 advisoryPaid) = pool.recordAdvisoryRaterReward(
             alice, 1, 1, bytes32("advisory-1"), 8_000, 3, true, _singleAnchor(bytes32("anchor-b"))
@@ -598,17 +672,15 @@ contract LaunchDistributionPoolTest is Test {
         }
 
         bytes32 advisoryCommitKey = bytes32("advisory-blocked");
-        (bool blockedRecorded,) = pool.recordAdvisoryRaterReward(
-            alice, 50, 1, advisoryCommitKey, 8_000, 3, true, _singleAnchor(anchorId)
-        );
+        (bool blockedRecorded,) =
+            pool.recordAdvisoryRaterReward(alice, 50, 1, advisoryCommitKey, 8_000, 3, true, _singleAnchor(anchorId));
         assertFalse(blockedRecorded);
         assertFalse(pool.earnedRewardCreditRecorded(50, 1, advisoryCommitKey));
         assertFalse(pool.raterRoundCreditRecorded(alice, 50, 1));
 
         _verify(alice, bytes32("verified-advisory-alice"));
-        (bool retryRecorded,) = pool.recordAdvisoryRaterReward(
-            alice, 50, 1, advisoryCommitKey, 8_000, 3, true, _singleAnchor(anchorId)
-        );
+        (bool retryRecorded,) =
+            pool.recordAdvisoryRaterReward(alice, 50, 1, advisoryCommitKey, 8_000, 3, true, _singleAnchor(anchorId));
         assertTrue(retryRecorded);
         assertTrue(pool.earnedRewardCreditRecorded(50, 1, advisoryCommitKey));
         assertTrue(pool.raterRoundCreditRecorded(alice, 50, 1));

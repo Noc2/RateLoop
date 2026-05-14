@@ -41,6 +41,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     mapping(address => address) public rewardDistributorForVotingEngine;
     address public raterRegistry;
     address public launchDistributionPool;
+    address public clusterPayoutOracle;
 
     struct RoundConfigBounds {
         uint32 minEpochDuration;
@@ -54,7 +55,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     }
 
     /// @dev Reserved storage gap for future proxy-safe upgrades.
-    uint256[25] private __gap;
+    uint256[24] private __gap;
 
     event RewardDistributorUpdated(address rewardDistributor);
     event RewardDistributorAuthorizationUpdated(address rewardDistributor, bool authorized);
@@ -65,6 +66,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     event ParticipationPoolUpdated(address participationPool);
     event RaterRegistryUpdated(address raterRegistry);
     event LaunchDistributionPoolUpdated(address launchDistributionPool);
+    event ClusterPayoutOracleUpdated(address clusterPayoutOracle);
     event ConfigUpdated(uint256 epochDuration, uint256 maxDuration, uint256 minVoters, uint256 maxVoters);
     event DrandConfigUpdated(bytes32 drandChainHash, uint64 genesisTime, uint64 period);
     event RatingConfigUpdated(
@@ -213,6 +215,12 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         if (value == address(0)) revert InvalidAddress();
         launchDistributionPool = value;
         emit LaunchDistributionPoolUpdated(value);
+    }
+
+    function setClusterPayoutOracle(address value) external onlyRole(CONFIG_ROLE) {
+        if (value == address(0)) revert InvalidAddress();
+        clusterPayoutOracle = value;
+        emit ClusterPayoutOracleUpdated(value);
     }
 
     function setConfig(uint256 epochDuration, uint256 maxDuration, uint256 minVoters, uint256 maxVoters)

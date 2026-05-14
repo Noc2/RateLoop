@@ -177,6 +177,19 @@ export const RaterRegistryAbi = [
   },
   {
     "type": "function",
+    "name": "clearRevokedHumanNullifier",
+    "inputs": [
+      {
+        "name": "nullifierHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "delegateOf",
     "inputs": [
       {
@@ -797,6 +810,25 @@ export const RaterRegistryAbi = [
   },
   {
     "type": "function",
+    "name": "revokedHumanNullifier",
+    "inputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "seedHumanCredential",
     "inputs": [
       {
@@ -1168,6 +1200,19 @@ export const RaterRegistryAbi = [
         "name": "evidenceHash",
         "type": "bytes32",
         "indexed": false,
+        "internalType": "bytes32"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "HumanNullifierRevocationCleared",
+    "inputs": [
+      {
+        "name": "nullifierHash",
+        "type": "bytes32",
+        "indexed": true,
         "internalType": "bytes32"
       }
     ],

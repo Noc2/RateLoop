@@ -21,6 +21,7 @@ import {RaterRegistry} from "../contracts/RaterRegistry.sol";
 import {X402QuestionSubmitter} from "../contracts/X402QuestionSubmitter.sol";
 import {ParticipationPool} from "../contracts/ParticipationPool.sol";
 import {LaunchDistributionPool} from "../contracts/LaunchDistributionPool.sol";
+import {ClusterPayoutOracle} from "../contracts/ClusterPayoutOracle.sol";
 import {MockERC20} from "../contracts/mocks/MockERC20.sol";
 import {MockWorldIDRouter} from "../contracts/mocks/MockWorldIDRouter.sol";
 import {CuryoGovernor} from "../contracts/governance/CuryoGovernor.sol";
@@ -169,6 +170,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         }
 
         CategoryRegistry categoryRegistry = new CategoryRegistry(deployer, governance);
+        ClusterPayoutOracle clusterPayoutOracle = new ClusterPayoutOracle(governance);
         RaterRegistry raterRegistry = new RaterRegistry(
             deployer,
             governance,
@@ -220,6 +222,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         protocolConfig.setFrontendRegistry(address(frontendRegistry));
         protocolConfig.setCategoryRegistry(address(categoryRegistry));
         protocolConfig.setRaterRegistry(address(raterRegistry));
+        protocolConfig.setClusterPayoutOracle(address(clusterPayoutOracle));
 
         profileRegistry.setRaterRegistry(address(raterRegistry));
 
@@ -244,6 +247,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
 
         LaunchDistributionPool launchDistributionPool =
             new LaunchDistributionPool(address(lrepToken), address(raterRegistry), governance);
+        launchDistributionPool.setClusterPayoutOracle(address(clusterPayoutOracle));
         launchDistributionPool.setAuthorizedCaller(address(rewardDistributor), true);
         AdvisoryVoteRecorder advisoryVoteRecorder =
             new AdvisoryVoteRecorder(address(votingEngine), address(registry), governance);
@@ -253,6 +257,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         launchDistributionPool.depositPool(LAUNCH_DISTRIBUTION_AMOUNT);
         protocolConfig.setLaunchDistributionPool(address(launchDistributionPool));
         console.log("LaunchDistributionPool deployed and funded with 64M LREP");
+        console.log("ClusterPayoutOracle deployed at:", address(clusterPayoutOracle));
         console.log("AdvisoryVoteRecorder deployed at:", address(advisoryVoteRecorder));
 
         if (!isLocalDev) {
@@ -287,6 +292,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         deployments.push(Deployment("X402QuestionSubmitter", address(x402QuestionSubmitter)));
         deployments.push(Deployment("FeedbackBonusEscrow", address(feedbackBonusEscrowProxy)));
         deployments.push(Deployment("CategoryRegistry", address(categoryRegistry)));
+        deployments.push(Deployment("ClusterPayoutOracle", address(clusterPayoutOracle)));
         deployments.push(Deployment("RaterRegistry", address(raterRegistry)));
         if (isLocalDev) deployments.push(Deployment("MockWorldIDRouter", address(localWorldIdRouter)));
         deployments.push(Deployment("ParticipationPool", address(participationPool)));
@@ -326,6 +332,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         console.log("FeedbackBonusEscrow:", address(feedbackBonusEscrow));
         console.log("USDC token:", usdcTokenAddress);
         console.log("CategoryRegistry:", address(categoryRegistry));
+        console.log("ClusterPayoutOracle:", address(clusterPayoutOracle));
         console.log("RaterRegistry:", address(raterRegistry));
         console.log("World ID Router:", worldIdRouterAddress);
         console.log("World ID External Nullifier Hash:", worldIdExternalNullifierHash);

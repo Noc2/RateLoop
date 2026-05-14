@@ -7,6 +7,7 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {MerkleProof} from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 import {RaterRegistry} from "./RaterRegistry.sol";
+import {IClusterPayoutOracle} from "./interfaces/IClusterPayoutOracle.sol";
 import {ILaunchDistributionPool} from "./interfaces/ILaunchDistributionPool.sol";
 
 /// @title LaunchDistributionPool
@@ -21,6 +22,7 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
     error NotVerified();
     error PoolDepleted();
     error InvalidPolicy();
+    error SnapshotNotFinalized();
 
     uint256 public constant LEGACY_POOL_AMOUNT = 4_000_000e6;
     uint256 public constant EARNED_RATER_POOL_AMOUNT = 25_000_000e6;
@@ -40,13 +42,22 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
     uint16 public constant MAX_UNVERIFIED_LAUNCH_CREDITS_PER_ROUND = 3;
     uint16 public constant DEFAULT_UNVERIFIED_EARNED_RATER_CAP_BPS = 2_500;
     uint16 public constant BPS_DENOMINATOR = 10_000;
+    uint8 public constant PAYOUT_DOMAIN_LAUNCH_CREDIT = 2;
     uint32 public constant MIN_ANCHOR_CREDENTIAL_AGE_SECONDS = 7 days;
 
     uint256 public constant REFERRAL_BONUS_BPS = 5_000;
     uint256 public constant MAX_REFERRAL_REWARD_PER_REFERRER = 10_000e6;
 
+    struct PendingEarnedRaterCredit {
+        address rater;
+        uint16 scoreBps;
+        LaunchRewardPolicy policy;
+        bool pending;
+    }
+
     IERC20 public immutable lrepToken;
     RaterRegistry public raterRegistry;
+    IClusterPayoutOracle public clusterPayoutOracle;
     address public governance;
     uint256 public poolBalance;
     uint256 public legacyDistributed;
@@ -60,6 +71,7 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
     mapping(address => bool) public authorizedCallers;
     mapping(address => bool) public legacyClaimed;
     mapping(address => uint32) public qualifyingRatingCount;
+    mapping(address => uint256) public qualifyingCreditBps;
     mapping(address => uint32) public rewardedRatingCount;
     mapping(address => bool) public raterLaunchCapAssigned;
     mapping(address => uint256) public raterLaunchCap;
@@ -80,6 +92,9 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
     mapping(bytes32 => uint32) public verifiedAnchorDistinctRaterCount;
     mapping(address => mapping(uint256 => mapping(uint256 => bool))) public raterRoundCreditRecorded;
     mapping(uint256 => mapping(uint256 => uint16)) public roundUnverifiedLaunchCreditCount;
+    mapping(uint256 => mapping(uint256 => mapping(bytes32 => PendingEarnedRaterCredit))) public
+        pendingEarnedRaterCredits;
+    mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) public earnedRewardCreditFinalized;
     LaunchRewardPolicy public launchRewardPolicy;
 
     event PoolDeposit(uint256 amount);
@@ -88,6 +103,7 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
     event LegacyRootUpdated(bytes32 legacyRoot);
     event GovernanceUpdated(address indexed governance);
     event RaterRegistryUpdated(address indexed raterRegistry);
+    event ClusterPayoutOracleUpdated(address indexed clusterPayoutOracle);
     event AuthorizedCallerUpdated(address indexed caller, bool authorized);
     event LaunchRewardPolicyUpdated(LaunchRewardPolicy policy);
     event LegacyClaimed(address indexed account, uint256 amount);
@@ -108,6 +124,18 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
         uint32 distinctVerifiedAnchorCount,
         uint32 distinctAnchorRoundCount,
         bool payoutEligible
+    );
+    event EarnedRaterRewardCreditPending(
+        address indexed rater, uint256 indexed contentId, uint256 indexed roundId, bytes32 commitKey, uint16 scoreBps
+    );
+    event EarnedRaterRewardCreditFinalized(
+        address indexed rater,
+        uint256 indexed contentId,
+        uint256 indexed roundId,
+        bytes32 commitKey,
+        uint16 independenceBps,
+        uint256 effectiveCreditBps,
+        uint256 qualifyingCreditBps
     );
     event EarnedRaterRewardPaid(
         address indexed rater,
@@ -158,6 +186,12 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
         if (newRegistry == address(0)) revert InvalidAddress();
         raterRegistry = RaterRegistry(newRegistry);
         emit RaterRegistryUpdated(newRegistry);
+    }
+
+    function setClusterPayoutOracle(address newOracle) external onlyOwner {
+        if (newOracle == address(0)) revert InvalidAddress();
+        clusterPayoutOracle = IClusterPayoutOracle(newOracle);
+        emit ClusterPayoutOracleUpdated(newOracle);
     }
 
     function setAuthorizedCaller(address caller, bool authorized) external onlyOwner {
@@ -310,7 +344,12 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
         _recordAnchorRound(rater, contentId, roundId);
         _recordVerifiedAnchors(policy, rater, verifiedAnchorIds);
 
-        return _recordEarnedRaterReward(rater, contentId, roundId, commitKey, scoreBps, policy);
+        if (address(clusterPayoutOracle) != address(0)) {
+            _storePendingEarnedRaterCredit(rater, contentId, roundId, commitKey, scoreBps, policy);
+            return 0;
+        }
+
+        return _recordEarnedRaterReward(rater, contentId, roundId, commitKey, scoreBps, policy, BPS_DENOMINATOR);
     }
 
     function recordAdvisoryRaterReward(
@@ -326,13 +365,7 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
         LaunchRewardPolicy memory policy = launchRewardPolicy;
         uint16 distinctRoundAnchors = _countDistinctAvailableAnchors(policy, rater, verifiedAnchorIds);
         if (!_passesAdvisoryLaunchRewardContext(
-                policy,
-                rater,
-                advisoryCommitKey,
-                scoreBps,
-                revealedRaterCount,
-                noPendingCleanup,
-                distinctRoundAnchors
+                policy, rater, advisoryCommitKey, scoreBps, revealedRaterCount, noPendingCleanup, distinctRoundAnchors
             )) {
             return (false, 0);
         }
@@ -355,8 +388,54 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
         _recordAnchorRound(rater, contentId, roundId);
         _recordVerifiedAnchors(policy, rater, verifiedAnchorIds);
 
-        paidAmount = _recordEarnedRaterReward(rater, contentId, roundId, advisoryCommitKey, scoreBps, policy);
+        if (address(clusterPayoutOracle) != address(0)) {
+            _storePendingEarnedRaterCredit(rater, contentId, roundId, advisoryCommitKey, scoreBps, policy);
+            return (true, 0);
+        }
+
+        paidAmount =
+            _recordEarnedRaterReward(rater, contentId, roundId, advisoryCommitKey, scoreBps, policy, BPS_DENOMINATOR);
         return (true, paidAmount);
+    }
+
+    function finalizeEarnedRaterRewardCredit(
+        uint256 contentId,
+        uint256 roundId,
+        bytes32 commitKey,
+        IClusterPayoutOracle.PayoutWeight calldata payoutWeight,
+        bytes32[] calldata proof
+    ) external nonReentrant returns (uint256 paidAmount) {
+        IClusterPayoutOracle oracle = clusterPayoutOracle;
+        if (address(oracle) == address(0)) revert SnapshotNotFinalized();
+
+        PendingEarnedRaterCredit memory pending = pendingEarnedRaterCredits[contentId][roundId][commitKey];
+        if (!pending.pending) revert InvalidAmount();
+        if (earnedRewardCreditFinalized[contentId][roundId][commitKey]) revert AlreadyClaimed();
+        if (
+            payoutWeight.domain != PAYOUT_DOMAIN_LAUNCH_CREDIT || payoutWeight.rewardPoolId != 0
+                || payoutWeight.contentId != contentId || payoutWeight.roundId != roundId
+                || payoutWeight.commitKey != commitKey || payoutWeight.account != pending.rater
+                || payoutWeight.baseWeight != BPS_DENOMINATOR || payoutWeight.effectiveWeight == 0
+                || payoutWeight.effectiveWeight > BPS_DENOMINATOR
+        ) {
+            revert InvalidProof();
+        }
+        if (!oracle.verifyPayoutWeight(payoutWeight, proof)) revert InvalidProof();
+
+        earnedRewardCreditFinalized[contentId][roundId][commitKey] = true;
+        uint256 effectiveCreditBps = payoutWeight.effectiveWeight;
+        paidAmount = _recordEarnedRaterReward(
+            pending.rater, contentId, roundId, commitKey, pending.scoreBps, pending.policy, effectiveCreditBps
+        );
+        emit EarnedRaterRewardCreditFinalized(
+            pending.rater,
+            contentId,
+            roundId,
+            commitKey,
+            payoutWeight.independenceBps,
+            effectiveCreditBps,
+            qualifyingCreditBps[pending.rater]
+        );
     }
 
     function _recordEarnedRaterReward(
@@ -365,9 +444,12 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
         uint256 roundId,
         bytes32 commitKey,
         uint16 scoreBps,
-        LaunchRewardPolicy memory policy
+        LaunchRewardPolicy memory policy,
+        uint256 effectiveCreditBps
     ) internal returns (uint256 paidAmount) {
-        uint32 qualifyingCount = qualifyingRatingCount[rater] + 1;
+        uint256 updatedCreditBps = qualifyingCreditBps[rater] + effectiveCreditBps;
+        qualifyingCreditBps[rater] = updatedCreditBps;
+        uint32 qualifyingCount = _fullQualifyingCreditCount(updatedCreditBps);
         qualifyingRatingCount[rater] = qualifyingCount;
         bool payoutEligible = qualifyingCount >= policy.eligibilityRatingCount
             && raterDistinctVerifiedAnchorCount[rater] >= policy.minDistinctVerifiedAnchors
@@ -422,6 +504,25 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
             raterDistinctVerifiedAnchorCount[rater],
             raterDistinctAnchorRoundCount[rater]
         );
+    }
+
+    function _storePendingEarnedRaterCredit(
+        address rater,
+        uint256 contentId,
+        uint256 roundId,
+        bytes32 commitKey,
+        uint16 scoreBps,
+        LaunchRewardPolicy memory policy
+    ) internal {
+        pendingEarnedRaterCredits[contentId][roundId][commitKey] = PendingEarnedRaterCredit({
+            rater: rater, scoreBps: scoreBps, policy: policy, pending: true
+        });
+        emit EarnedRaterRewardCreditPending(rater, contentId, roundId, commitKey, scoreBps);
+    }
+
+    function _fullQualifyingCreditCount(uint256 creditBps) internal pure returns (uint32) {
+        uint256 count = creditBps / BPS_DENOMINATOR;
+        return count > type(uint32).max ? type(uint32).max : uint32(count);
     }
 
     function currentRaterLaunchCap() public view returns (uint256) {
