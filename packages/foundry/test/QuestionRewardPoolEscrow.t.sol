@@ -2303,6 +2303,45 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertEq(nextRoundToEvaluate, roundId + 1);
     }
 
+    function testRewardPoolCreatedBeforeClusterOracleKeepsStandardClaims() public {
+        uint256 contentId = _submitQuestion("");
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        _enableClusterPayoutOracle();
+
+        uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+
+        _claimQuestionRewardAndAssert(voter1, rewardPoolId, roundId);
+    }
+
+    function testClusterRewardPoolUsesSnapshottedOracleAfterConfigRotation() public {
+        ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
+        uint256 contentId = _submitQuestion("");
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+
+        uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+        IClusterPayoutOracle.PayoutWeight memory payoutWeight =
+            _clusterPayoutWeight(rewardPoolId, contentId, roundId, 0);
+        _finalizeClusterPayoutSnapshotWithRoot(
+            oracle,
+            rewardPoolId,
+            contentId,
+            roundId,
+            3,
+            30_000,
+            payoutWeight.effectiveWeight,
+            oracle.payoutWeightLeaf(payoutWeight)
+        );
+
+        ClusterPayoutOracle replacementOracle = new ClusterPayoutOracle(address(this));
+        vm.prank(owner);
+        protocolConfig.setClusterPayoutOracle(address(replacementOracle));
+
+        bytes32[] memory proof = new bytes32[](0);
+        vm.prank(voter1);
+        uint256 reward = rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId, payoutWeight, proof);
+        assertGt(reward, 0);
+    }
+
     function testIneligibleEarlierRoundCanBeSkippedForLaterEligibleRound() public {
         uint256 contentId = _submitQuestion("");
         uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
@@ -3232,6 +3271,28 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         uint32 effectiveParticipantUnits,
         uint256 totalClaimWeight
     ) internal {
+        _finalizeClusterPayoutSnapshotWithRoot(
+            oracle,
+            rewardPoolId,
+            contentId,
+            roundId,
+            rawEligibleVoters,
+            effectiveParticipantUnits,
+            totalClaimWeight,
+            keccak256(abi.encode("weight-root", rewardPoolId, roundId))
+        );
+    }
+
+    function _finalizeClusterPayoutSnapshotWithRoot(
+        ClusterPayoutOracle oracle,
+        uint256 rewardPoolId,
+        uint256 contentId,
+        uint256 roundId,
+        uint32 rawEligibleVoters,
+        uint32 effectiveParticipantUnits,
+        uint256 totalClaimWeight,
+        bytes32 weightRoot
+    ) internal {
         uint64 correlationEpochId = uint64(roundId);
         oracle.proposeCorrelationEpoch{value: 0.01 ether}(
             correlationEpochId,
@@ -3255,7 +3316,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
                 rawEligibleVoters: rawEligibleVoters,
                 effectiveParticipantUnits: effectiveParticipantUnits,
                 totalClaimWeight: totalClaimWeight,
-                weightRoot: keccak256(abi.encode("weight-root", rewardPoolId, roundId)),
+                weightRoot: weightRoot,
                 reasonRoot: keccak256("reason-root"),
                 artifactHash: keccak256("round-artifact"),
                 artifactURI: "ipfs://round"
@@ -3264,6 +3325,30 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(1, rewardPoolId, contentId, roundId);
         vm.warp(block.timestamp + 1 hours + 1);
         oracle.finalizeRoundPayoutSnapshot(snapshotKey);
+    }
+
+    function _clusterPayoutWeight(uint256 rewardPoolId, uint256 contentId, uint256 roundId, uint256 commitIndex)
+        internal
+        view
+        returns (IClusterPayoutOracle.PayoutWeight memory payoutWeight)
+    {
+        bytes32 commitKey = votingEngine.getRoundCommitKey(contentId, roundId, commitIndex);
+        uint256 baseWeight = votingEngine.roundRbtsScored(contentId, roundId)
+            ? votingEngine.commitRbtsRewardWeight(contentId, roundId, commitKey)
+            : 10_000;
+        payoutWeight = IClusterPayoutOracle.PayoutWeight({
+            domain: 1,
+            rewardPoolId: rewardPoolId,
+            contentId: contentId,
+            roundId: roundId,
+            commitKey: commitKey,
+            identityKey: votingEngine.commitIdentityKey(contentId, roundId, commitKey),
+            account: votingEngine.commitIdentityHolder(contentId, roundId, commitKey),
+            baseWeight: baseWeight,
+            independenceBps: 10_000,
+            effectiveWeight: baseWeight,
+            reasonHash: keccak256("cluster-payout")
+        });
     }
 
     function _createRewardPoolWithEligibility(

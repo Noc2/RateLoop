@@ -85,6 +85,7 @@ contract QuestionRewardPoolEscrow is
     mapping(uint256 => uint256) private contentBundleId;
     mapping(uint256 => uint256) private contentBundleIndex;
     uint16 public defaultFrontendFeeBps;
+    mapping(uint256 => address) private rewardPoolClusterPayoutOracle;
 
     event RewardPoolCreated(
         uint256 indexed rewardPoolId,
@@ -127,6 +128,7 @@ contract QuestionRewardPoolEscrow is
         uint64 correlationEpochId,
         bytes32 weightRoot
     );
+    event RewardPoolClusterPayoutOracleSnapshotted(uint256 indexed rewardPoolId, address indexed clusterPayoutOracle);
     event RewardPoolCursorAdvanced(
         uint256 indexed rewardPoolId, uint256 indexed contentId, uint256 fromRoundId, uint256 toRoundId, uint256 skipped
     );
@@ -403,6 +405,7 @@ contract QuestionRewardPoolEscrow is
             relatedRoundId,
             reasonHash
         );
+        _snapshotRewardPoolClusterPayoutOracle(rewardPoolId, REWARD_ASSET_USDC);
     }
 
     function createSubmissionRewardPoolFromRegistry(
@@ -592,6 +595,15 @@ contract QuestionRewardPoolEscrow is
             0,
             bytes32(0)
         );
+        _snapshotRewardPoolClusterPayoutOracle(rewardPoolId, asset);
+    }
+
+    function _snapshotRewardPoolClusterPayoutOracle(uint256 rewardPoolId, uint8 asset) private {
+        if (asset != REWARD_ASSET_USDC) return;
+        address clusterPayoutOracle = _configuredClusterPayoutOracleAddress();
+        if (clusterPayoutOracle == address(0)) return;
+        rewardPoolClusterPayoutOracle[rewardPoolId] = clusterPayoutOracle;
+        emit RewardPoolClusterPayoutOracleSnapshotted(rewardPoolId, clusterPayoutOracle);
     }
 
     function qualifyRound(uint256 rewardPoolId, uint256 roundId) external {
@@ -1291,7 +1303,8 @@ contract QuestionRewardPoolEscrow is
             );
         if (!roundSettled) return (false, false, 0, 0, 0, 0);
 
-        try IClusterPayoutOracle(_clusterPayoutOracleAddress())
+        address clusterPayoutOracle = _clusterPayoutOracleAddress(rewardPool.id);
+        try IClusterPayoutOracle(clusterPayoutOracle)
             .getRoundPayoutSnapshot(
                 PAYOUT_DOMAIN_QUESTION_REWARD, rewardPool.id, rewardPool.contentId, roundId
             ) returns (
@@ -1344,7 +1357,8 @@ contract QuestionRewardPoolEscrow is
             _previewRoundQualificationWithClusterSnapshot(rewardPool, roundId);
         if (!roundSettled) return (false, false, 0);
 
-        try IClusterPayoutOracle(_clusterPayoutOracleAddress())
+        address clusterPayoutOracle = _clusterPayoutOracleAddress(rewardPool.id);
+        try IClusterPayoutOracle(clusterPayoutOracle)
             .getRoundPayoutSnapshot(
                 PAYOUT_DOMAIN_QUESTION_REWARD, rewardPool.id, rewardPool.contentId, roundId
             ) returns (
@@ -1421,7 +1435,7 @@ contract QuestionRewardPoolEscrow is
             "Invalid cluster proof"
         );
         require(
-            IClusterPayoutOracle(_clusterPayoutOracleAddress()).verifyPayoutWeight(payoutWeight, proof),
+            IClusterPayoutOracle(_clusterPayoutOracleAddress(rewardPool.id)).verifyPayoutWeight(payoutWeight, proof),
             "Invalid cluster proof"
         );
         return payoutWeight.effectiveWeight;
@@ -1432,16 +1446,20 @@ contract QuestionRewardPoolEscrow is
         view
         returns (IClusterPayoutOracle.RoundPayoutSnapshot memory payoutSnapshot)
     {
-        payoutSnapshot = IClusterPayoutOracle(_clusterPayoutOracleAddress())
+        payoutSnapshot = IClusterPayoutOracle(_clusterPayoutOracleAddress(rewardPoolId))
             .getRoundPayoutSnapshot(PAYOUT_DOMAIN_QUESTION_REWARD, rewardPoolId, contentId, roundId);
         require(payoutSnapshot.status == IClusterPayoutOracle.SnapshotStatus.Finalized, "Cluster snapshot pending");
     }
 
     function _usesClusterPayoutSnapshot(RewardPool storage rewardPool) internal view returns (bool) {
-        return rewardPool.asset == REWARD_ASSET_USDC && _clusterPayoutOracleAddress() != address(0);
+        return rewardPool.asset == REWARD_ASSET_USDC && _clusterPayoutOracleAddress(rewardPool.id) != address(0);
     }
 
-    function _clusterPayoutOracleAddress() internal view returns (address) {
+    function _clusterPayoutOracleAddress(uint256 rewardPoolId) internal view returns (address) {
+        return rewardPoolClusterPayoutOracle[rewardPoolId];
+    }
+
+    function _configuredClusterPayoutOracleAddress() internal view returns (address) {
         return votingEngine.protocolConfig().clusterPayoutOracle();
     }
 
