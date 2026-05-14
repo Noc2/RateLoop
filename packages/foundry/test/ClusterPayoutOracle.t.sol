@@ -171,6 +171,41 @@ contract ClusterPayoutOracleTest is Test {
         oracle.challengeRoundPayoutSnapshot{value: 0.01 ether}(snapshotKey, keccak256("late-round-challenge"));
     }
 
+    function test_BondCreditsDoNotBlockRejectingProposerFinalization() public {
+        RejectingBondReceiver rejectingProposer = new RejectingBondReceiver();
+        rejectingProposer.proposeCorrelationEpoch{value: 0.01 ether}(oracle, 1);
+
+        vm.warp(1 hours + 2);
+        oracle.finalizeCorrelationEpoch(1);
+
+        assertEq(oracle.pendingBondWithdrawals(address(rejectingProposer)), 0.01 ether);
+
+        uint8 questionRewardDomain = oracle.PAYOUT_DOMAIN_QUESTION_REWARD();
+        rejectingProposer.proposeRoundPayoutSnapshot{value: 0.01 ether}(
+            oracle,
+            IClusterPayoutOracle.RoundPayoutSnapshotInput({
+                domain: questionRewardDomain,
+                rewardPoolId: 7,
+                contentId: 42,
+                roundId: 3,
+                correlationEpochId: 1,
+                rawEligibleVoters: 4,
+                effectiveParticipantUnits: 25_000,
+                totalClaimWeight: 2_500,
+                weightRoot: keccak256("leaf"),
+                reasonRoot: keccak256("reason-root"),
+                artifactHash: keccak256("round-artifact"),
+                artifactURI: "ipfs://round"
+            })
+        );
+
+        bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(questionRewardDomain, 7, 42, 3);
+        vm.warp(block.timestamp + 1 hours);
+        oracle.finalizeRoundPayoutSnapshot(snapshotKey);
+
+        assertEq(oracle.pendingBondWithdrawals(address(rejectingProposer)), 0.02 ether);
+    }
+
     function test_RejectedSnapshotsCanBeReplaced() public {
         oracle.proposeCorrelationEpoch{value: 0.01 ether}(
             1, 1, 20, keccak256("bad-cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
@@ -285,5 +320,24 @@ contract ClusterPayoutOracleTest is Test {
                 artifactURI: "ipfs://round"
             })
         );
+    }
+}
+
+contract RejectingBondReceiver {
+    function proposeCorrelationEpoch(ClusterPayoutOracle oracle, uint64 epochId) external payable {
+        oracle.proposeCorrelationEpoch{value: msg.value}(
+            epochId, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+        );
+    }
+
+    function proposeRoundPayoutSnapshot(
+        ClusterPayoutOracle oracle,
+        IClusterPayoutOracle.RoundPayoutSnapshotInput calldata input
+    ) external payable {
+        oracle.proposeRoundPayoutSnapshot{value: msg.value}(input);
+    }
+
+    receive() external payable {
+        revert("reject");
     }
 }

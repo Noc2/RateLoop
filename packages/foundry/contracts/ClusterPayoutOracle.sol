@@ -69,8 +69,11 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
 
     mapping(uint256 => CorrelationEpochSnapshot) private correlationEpochSnapshots;
     mapping(bytes32 => RoundPayoutProposal) private roundPayoutProposals;
+    mapping(address => uint256) public pendingBondWithdrawals;
 
     event OracleConfigUpdated(uint64 challengeWindow, uint256 proposalBond, address bondRecipient);
+    event BondWithdrawalCredited(address indexed recipient, uint256 amount);
+    event BondWithdrawn(address indexed account, address indexed recipient, uint256 amount);
     event CorrelationEpochProposed(
         uint64 indexed epochId,
         uint64 fromRoundId,
@@ -205,7 +208,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
         }
         snapshot.status = SnapshotStatus.Finalized;
         snapshot.finalizedAt = block.timestamp.toUint64();
-        _releaseBond(snapshot.proposer, snapshot.bond);
+        _creditBond(snapshot.proposer, snapshot.bond);
         snapshot.bond = 0;
         emit CorrelationEpochFinalized(epochId, snapshot.clusterRoot, snapshot.parameterHash);
     }
@@ -216,7 +219,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
         if (snapshot.status != SnapshotStatus.Challenged) revert SnapshotNotFinalizable();
         snapshot.status = SnapshotStatus.Finalized;
         snapshot.finalizedAt = block.timestamp.toUint64();
-        _releaseBond(snapshot.proposer, snapshot.bond);
+        _creditBond(snapshot.proposer, snapshot.bond);
         snapshot.bond = 0;
         emit CorrelationEpochChallengeDismissed(epochId, msg.sender, reasonHash);
         emit CorrelationEpochFinalized(epochId, snapshot.clusterRoot, snapshot.parameterHash);
@@ -230,7 +233,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
         address challenger = snapshot.challenger;
         uint256 bond = snapshot.bond;
         snapshot.bond = 0;
-        if (bond > 0) _releaseBond(challenger == address(0) ? bondRecipient : challenger, bond);
+        if (bond > 0) _creditBond(challenger == address(0) ? bondRecipient : challenger, bond);
         emit CorrelationEpochRejected(epochId, msg.sender, reasonHash);
     }
 
@@ -315,7 +318,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
         }
         proposal.snapshot.status = SnapshotStatus.Finalized;
         proposal.snapshot.finalizedAt = block.timestamp.toUint64();
-        _releaseBond(proposal.proposer, proposal.bond);
+        _creditBond(proposal.proposer, proposal.bond);
         proposal.bond = 0;
         emit RoundPayoutSnapshotFinalized(
             snapshotKey,
@@ -336,7 +339,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
         if (proposal.snapshot.status != SnapshotStatus.Challenged) revert SnapshotNotFinalizable();
         proposal.snapshot.status = SnapshotStatus.Finalized;
         proposal.snapshot.finalizedAt = block.timestamp.toUint64();
-        _releaseBond(proposal.proposer, proposal.bond);
+        _creditBond(proposal.proposer, proposal.bond);
         proposal.bond = 0;
         emit RoundPayoutSnapshotChallengeDismissed(snapshotKey, msg.sender, reasonHash);
         emit RoundPayoutSnapshotFinalized(
@@ -357,8 +360,26 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
         address challenger = proposal.challenger;
         uint256 bond = proposal.bond;
         proposal.bond = 0;
-        if (bond > 0) _releaseBond(challenger == address(0) ? bondRecipient : challenger, bond);
+        if (bond > 0) _creditBond(challenger == address(0) ? bondRecipient : challenger, bond);
         emit RoundPayoutSnapshotRejected(snapshotKey, msg.sender, reasonHash);
+    }
+
+    function withdrawBondCredit() external returns (uint256 amount) {
+        return withdrawBondCreditTo(payable(msg.sender));
+    }
+
+    function withdrawBondCreditTo(address payable recipient) public returns (uint256 amount) {
+        if (recipient == address(0)) revert InvalidAddress();
+        amount = pendingBondWithdrawals[msg.sender];
+        if (amount == 0) revert InvalidBond();
+        pendingBondWithdrawals[msg.sender] = 0;
+
+        (bool ok,) = recipient.call{value: amount}("");
+        if (!ok) {
+            pendingBondWithdrawals[msg.sender] = amount;
+            revert TransferFailed();
+        }
+        emit BondWithdrawn(msg.sender, recipient, amount);
     }
 
     function correlationEpochSnapshot(uint64 epochId) external view returns (CorrelationEpochSnapshot memory) {
@@ -447,9 +468,9 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
         if (input.domain == PAYOUT_DOMAIN_LAUNCH_CREDIT && input.rewardPoolId != 0) revert InvalidSnapshot();
     }
 
-    function _releaseBond(address to, uint256 amount) private {
+    function _creditBond(address to, uint256 amount) private {
         if (amount == 0) return;
-        (bool ok,) = payable(to).call{value: amount}("");
-        if (!ok) revert TransferFailed();
+        pendingBondWithdrawals[to] += amount;
+        emit BondWithdrawalCredited(to, amount);
     }
 }
