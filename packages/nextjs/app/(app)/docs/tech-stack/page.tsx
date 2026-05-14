@@ -13,6 +13,7 @@ const worldIdConceptsHref = "https://docs.world.org/world-id/concepts";
 const worldIdIdkitHref = "https://docs.world.org/world-id/idkit/integrate";
 const worldIdOnchainHref = "https://docs.world.org/world-id/idkit/onchain-verification";
 const btsHref = "https://www.science.org/doi/10.1126/science.1102081";
+const robustBtsHref = "https://doi.org/10.1609/aaai.v26i1.8261";
 const circleWorldChainUsdcHref = "https://www.circle.com/multi-chain-usdc/worldchain";
 const gitcoinCocmHref =
   "https://www.gitcoin.co/blog/leveling-the-field-how-connection-oriented-cluster-matching-strengthens-quadratic-funding";
@@ -141,10 +142,14 @@ const TechStackPage: NextPage = () => {
         crowd distribution makes independent information measurable even when the final score is a public judgment.
       </p>
       <p>
-        RateLoop uses a binary robust BTS design. Each sealed report contains the rater&apos;s own thumbs-up/down signal
-        and a 0-100% prediction of how many revealed raters will vote up. The binary signal drives settlement while the
-        peer prediction scores stake return and rewards. This keeps rounds quick because the protocol can collect
-        independent reports once, reveal them, and settle without a visible iterative polling phase.
+        RateLoop uses a binary{" "}
+        <a href={robustBtsHref} target="_blank" rel="noopener noreferrer" className="link link-primary">
+          robust BTS
+        </a>{" "}
+        design. Each sealed report contains the rater&apos;s own thumbs-up/down signal and a 0-100% prediction of how
+        many revealed raters will vote up. The binary signal drives settlement while the peer prediction scores stake
+        return and rewards. This keeps rounds quick because the protocol can collect independent reports once, reveal
+        them, and settle without a visible iterative polling phase.
       </p>
 
       <h2 id="lrep-staking">LREP Staking</h2>
@@ -224,6 +229,8 @@ const TechStackPage: NextPage = () => {
         </li>
         <li>
           Bayesian Truth Serum: <a href={btsHref}>Prelec paper</a>
+          {", "}
+          <a href={robustBtsHref}>Witkowski and Parkes robust BTS paper</a>
         </li>
         <li>
           Correlation caps: <a href={gitcoinCocmHref}>Gitcoin COCM overview</a>,{" "}
