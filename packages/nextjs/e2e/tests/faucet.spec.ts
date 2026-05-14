@@ -26,25 +26,6 @@ test.describe("Dev faucet API", () => {
     }
   });
 
-  test("can mint VoterID via API route", async ({ request }) => {
-    const response = await request.post(`${E2E_BASE_URL}/api/dev-faucet`, {
-      data: {
-        address: ANVIL_ACCOUNTS.account1.address,
-        action: "mint-voter-id",
-      },
-    });
-
-    const status = response.status();
-
-    if (status === 200) {
-      const body = await response.json();
-      expect(body.success).toBe(true);
-    } else {
-      // Dev faucet disabled (403), not configured (500), already has VoterID (409)
-      expect([403, 409, 500]).toContain(status);
-    }
-  });
-
   test("can mint mock USDC via API route", async ({ request }) => {
     const response = await request.post(`${E2E_BASE_URL}/api/dev-faucet`, {
       data: {

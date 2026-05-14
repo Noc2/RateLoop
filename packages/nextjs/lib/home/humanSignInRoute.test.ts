@@ -6,6 +6,6 @@ test("keeps the legacy faucet route alias pointed at rating discovery", () => {
   assert.equal(HUMAN_SIGN_IN_FAUCET_ROUTE, HUMAN_SIGN_IN_DISCOVER_ROUTE);
 });
 
-test("routes connected raters to Discover without requiring a Voter ID", () => {
+test("routes connected raters to Discover without requiring a rater credential", () => {
   assert.equal(getHumanSignInRoute(), HUMAN_SIGN_IN_DISCOVER_ROUTE);
 });

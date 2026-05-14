@@ -1297,29 +1297,23 @@ export function ContentSubmissionSection() {
 
     let verifiedRewardTokenAddress = rewardTokenAddress;
     try {
-      const [activeRewardEscrowAddress, registryHrepAddress, registryVoterIdNftAddress, registryVotingEngineAddress] =
-        (await Promise.all([
-          readContract(wagmiConfig, {
-            address: registryAddress,
-            abi: QUESTION_SUBMISSION_ABI,
-            functionName: "questionRewardPoolEscrow",
-          }) as Promise<`0x${string}`>,
-          readContract(wagmiConfig, {
-            address: registryAddress,
-            abi: QUESTION_SUBMISSION_ABI,
-            functionName: "hrepToken",
-          }) as Promise<`0x${string}`>,
-          readContract(wagmiConfig, {
-            address: registryAddress,
-            abi: QUESTION_SUBMISSION_ABI,
-            functionName: "voterIdNFT",
-          }) as Promise<`0x${string}`>,
-          readContract(wagmiConfig, {
-            address: registryAddress,
-            abi: QUESTION_SUBMISSION_ABI,
-            functionName: "votingEngine",
-          }) as Promise<`0x${string}`>,
-        ])) as readonly [`0x${string}`, `0x${string}`, `0x${string}`, `0x${string}`];
+      const [activeRewardEscrowAddress, registryHrepAddress, registryVotingEngineAddress] = (await Promise.all([
+        readContract(wagmiConfig, {
+          address: registryAddress,
+          abi: QUESTION_SUBMISSION_ABI,
+          functionName: "questionRewardPoolEscrow",
+        }) as Promise<`0x${string}`>,
+        readContract(wagmiConfig, {
+          address: registryAddress,
+          abi: QUESTION_SUBMISSION_ABI,
+          functionName: "hrepToken",
+        }) as Promise<`0x${string}`>,
+        readContract(wagmiConfig, {
+          address: registryAddress,
+          abi: QUESTION_SUBMISSION_ABI,
+          functionName: "votingEngine",
+        }) as Promise<`0x${string}`>,
+      ])) as readonly [`0x${string}`, `0x${string}`, `0x${string}`];
 
       if (activeRewardEscrowAddress.toLowerCase() !== rewardEscrowAddress.toLowerCase()) {
         notification.error("Bounty escrow is not active for this registry.");
@@ -1329,7 +1323,7 @@ export function ContentSubmissionSection() {
         notification.error("Configured LREP token does not match this registry.");
         return;
       }
-      if (!registryVotingEngineAddress || !registryVoterIdNftAddress) {
+      if (!registryVotingEngineAddress) {
         notification.error("Bounty registry wiring is incomplete for this network.");
         return;
       }

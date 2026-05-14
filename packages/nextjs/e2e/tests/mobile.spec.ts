@@ -763,8 +763,8 @@ test.describe("Mobile viewport (phone)", () => {
     await expect(main).toBeVisible({ timeout: 10_000 });
 
     const governanceContent = main
-      .getByRole("button", { name: /Profile|Leaderboard|Governance|Voter ID/ })
-      .or(main.getByText(/Voting performance|Staked HREP|Checking Voter ID/i));
+      .getByRole("button", { name: /Profile|Leaderboard|Governance|rater credential/ })
+      .or(main.getByText(/Voting performance|Staked HREP|Checking rater credential/i));
     await expect(governanceContent.first()).toBeVisible({ timeout: 15_000 });
   });
 

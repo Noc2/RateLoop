@@ -94,7 +94,7 @@ Key environment variables (see `.env.example` for the full list):
 | `RATE_LIMIT_TRUSTED_IP_HEADERS`                   | Comma-separated proxy IP headers to trust for API rate limiting in production                                                                           |
 | `KEYSTORE_ACCOUNT`                                | Optional Foundry keystore name used by the development faucet                                                                                           |
 | `KEYSTORE_PASSWORD`                               | Optional password used to decrypt the development faucet keystore                                                                                       |
-| `DEV_FAUCET_ENABLED`                              | Enable the development-only LREP, mock USDC, and Voter ID faucet route                                                                                  |
+| `DEV_FAUCET_ENABLED`                              | Enable the development-only LREP, mock USDC, and local identity faucet route                                                                            |
 | `FAUCET_PRIVATE_KEY`                              | Server-side faucet wallet key                                                                                                                           |
 | `CURYO_E2E_PRODUCTION_BUILD`                      | Server-side opt-in for local production-style E2E builds                                                                                                |
 | `NEXT_PUBLIC_CURYO_E2E_PRODUCTION_BUILD`          | Browser-side opt-in for local production-style E2E builds                                                                                               |

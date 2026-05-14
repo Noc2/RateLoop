@@ -181,26 +181,3 @@ export async function getFrontend(address: string, baseURL = PONDER_URL): Promis
   if (!res.ok) throw new Error(`GET /frontend/${address} returned ${res.status}`);
   return res.json();
 }
-
-// ============================================================
-// VOTER IDS
-// ============================================================
-
-export type VoterIdItem = {
-  tokenId: string;
-  holder: string;
-  nullifier: string;
-  mintedAt: string;
-  revoked: boolean;
-};
-
-/**
- * Fetch voter IDs, optionally filtered by holder address.
- */
-export async function getVoterIds(holder?: string, baseURL = PONDER_URL): Promise<{ items: VoterIdItem[] }> {
-  const params = new URLSearchParams();
-  if (holder) params.set("holder", holder);
-  const res = await fetchWithRetry(`${baseURL}/voter-ids?${params}`);
-  if (!res.ok) throw new Error(`GET /voter-ids returned ${res.status}`);
-  return res.json();
-}

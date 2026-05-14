@@ -76,6 +76,7 @@ test("builds a self-funded fallback summary when the free transaction store is u
     verified: false,
     exhausted: false,
     walletAddress: "0xfa9605A2c38a0B4f16f689FDD07B63F295b86d1C",
+    raterIdentityKey: null,
     voterIdTokenId: null,
   });
 });
@@ -126,7 +127,7 @@ test("free transaction session route falls back to self-funded mode when summary
     },
   });
   __setFreeTransactionTestOverridesForTests({
-    resolveVoterIdTokenId: async () => {
+    resolveRaterIdentityKey: async () => {
       throw new Error("rpc unavailable");
     },
   });
@@ -144,5 +145,5 @@ test("free transaction session route falls back to self-funded mode when summary
   assert.equal(body.verified, false);
   assert.equal(body.remaining, 0);
   assert.equal(body.walletAddress, "0x63cada40E8AcF7A1d47229af5Be35b78b16035fa");
-  assert.equal(body.voterIdTokenId, null);
+  assert.equal(body.raterIdentityKey, null);
 });

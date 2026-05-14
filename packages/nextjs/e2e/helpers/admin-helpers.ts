@@ -1127,64 +1127,6 @@ export async function evmSetTimestamp(timestampSeconds: number): Promise<void> {
 }
 
 /**
- * Mint a voter ID NFT for a holder.
- * Calls VoterIdNFT.mint(address to, uint256 nullifier).
- * Requires authorized minter (account #0 in local dev).
- */
-export async function mintVoterId(
-  holderAddress: string,
-  nullifier: bigint,
-  fromAddress: string,
-  contractAddress: string,
-): Promise<boolean> {
-  const { encodeFunctionData } = await import("viem");
-  const data = encodeFunctionData({
-    abi: [
-      {
-        name: "mint",
-        type: "function",
-        inputs: [
-          { name: "to", type: "address" },
-          { name: "nullifier", type: "uint256" },
-        ],
-        outputs: [{ name: "tokenId", type: "uint256" }],
-        stateMutability: "nonpayable",
-      },
-    ],
-    functionName: "mint",
-    args: [holderAddress as `0x${string}`, nullifier],
-  });
-  return sendTx(fromAddress, contractAddress, data);
-}
-
-/**
- * Revoke a voter ID NFT from a holder.
- * Calls VoterIdNFT.revokeVoterId(address holder).
- * Requires owner (deployer in local dev).
- */
-export async function revokeVoterId(
-  holderAddress: string,
-  fromAddress: string,
-  contractAddress: string,
-): Promise<boolean> {
-  const { encodeFunctionData } = await import("viem");
-  const data = encodeFunctionData({
-    abi: [
-      {
-        name: "revokeVoterId",
-        type: "function",
-        inputs: [{ name: "holder", type: "address" }],
-        outputs: [],
-        stateMutability: "nonpayable",
-      },
-    ],
-    functionName: "revokeVoterId",
-    args: [holderAddress as `0x${string}`],
-  });
-  return sendTx(fromAddress, contractAddress, data);
-}
-
-/**
  * Mark content as dormant after DORMANCY_PERIOD (30 days) of inactivity.
  * Calls ContentRegistry.markDormant(uint256 contentId).
  * Permissionless — anyone can call after the dormancy period expires.
@@ -1393,42 +1335,6 @@ export async function confiscateFrontendFee(
     args: [BigInt(contentId), BigInt(roundId), frontendAddress as `0x${string}`],
   });
   return sendTx(fromAddress, contractAddress, data);
-}
-
-/**
- * Check if an address has a VoterID on-chain (not Ponder).
- * Calls holderToTokenId(address) — returns true if tokenId > 0.
- */
-export async function hasVoterIdOnChain(holderAddress: string, contractAddress: string): Promise<boolean> {
-  const { encodeFunctionData, decodeFunctionResult } = await import("viem");
-  const abi = [
-    {
-      name: "holderToTokenId",
-      type: "function",
-      inputs: [{ name: "holder", type: "address" }],
-      outputs: [{ name: "", type: "uint256" }],
-      stateMutability: "view",
-    },
-  ] as const;
-  const data = encodeFunctionData({
-    abi,
-    functionName: "holderToTokenId",
-    args: [holderAddress as `0x${string}`],
-  });
-  const res = await fetch(ANVIL_RPC, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      jsonrpc: "2.0",
-      method: "eth_call",
-      params: [{ to: contractAddress, data }, "latest"],
-      id: Date.now(),
-    }),
-  });
-  const json = await res.json();
-  if (json.error || !json.result) return false;
-  const tokenId = decodeFunctionResult({ abi, functionName: "holderToTokenId", data: json.result });
-  return tokenId > 0n;
 }
 
 /**

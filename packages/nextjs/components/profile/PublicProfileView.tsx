@@ -38,8 +38,8 @@ import {
   useSetAvatarAccent,
   useSetProfile,
 } from "~~/hooks/useProfileRegistry";
+import { useRaterRegistryIdentity } from "~~/hooks/useRaterRegistryIdentity";
 import { useVoterAccuracy } from "~~/hooks/useVoterAccuracy";
-import { useVoterIdNFT } from "~~/hooks/useVoterIdNFT";
 import { useVoterStreak } from "~~/hooks/useVoterStreak";
 import { avatarAccentHexToRgb, normalizeAvatarAccentHex } from "~~/lib/avatar/avatarAccent";
 import { FOLLOWED_CURATOR_TOAST_ID } from "~~/lib/notifications/followedActivity";
@@ -456,7 +456,7 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
   const { openConnectModal } = useCuryoConnectModal();
   const { followedWallets, toggleFollow, isPending: isFollowPending } = useFollowedProfiles(connectedAddress);
   const { stats, categories } = useVoterAccuracy(normalizedAddress);
-  const { hasVoterId, tokenId, isLoading: voterIdLoading } = useVoterIdNFT(normalizedAddress);
+  const { hasActiveHumanCredential, isLoading: credentialLoading } = useRaterRegistryIdentity(normalizedAddress);
   const {
     profile: liveProfile,
     hasProfile: hasLiveProfile,
@@ -932,11 +932,11 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
                 <span>{social.followingCount.toLocaleString()} following</span>
                 <span className="text-base-content/60">&bull;</span>
                 <span>
-                  {voterIdLoading
+                  {credentialLoading
                     ? "Loading credential..."
-                    : hasVoterId
-                      ? `Credential #${tokenId.toString()}`
-                      : "No credential"}
+                    : hasActiveHumanCredential
+                      ? "Human credential active"
+                      : "No human credential"}
                 </span>
               </div>
             </div>

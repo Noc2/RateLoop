@@ -250,7 +250,7 @@ beforeEach(async () => {
   dbModule.__setDatabaseResourcesForTests(memoryResources);
   freeTransactions.__setFreeTransactionTestOverridesForTests({
     allTransactionHashesSucceeded: async () => true,
-    resolveVoterIdTokenId: async () => "42",
+    resolveRaterIdentityKey: async () => "0x1111111111111111111111111111111111111111111111111111111111111111",
   });
 
   await dbModule.dbClient.execute("DELETE FROM free_transaction_reservations");
@@ -375,7 +375,7 @@ test("confirm accepts relayed 7702 receipts when the executed event proves the w
         status: "success",
       }),
     }),
-    resolveVoterIdTokenId: async () => "42",
+    resolveRaterIdentityKey: async () => "0x1111111111111111111111111111111111111111111111111111111111111111",
   });
 
   await freeTransactions.confirmFreeTransactionReservation({
@@ -405,7 +405,7 @@ test("confirm accepts relayed 4337 receipts when the user operation event proves
         status: "success",
       }),
     }),
-    resolveVoterIdTokenId: async () => "42",
+    resolveRaterIdentityKey: async () => "0x1111111111111111111111111111111111111111111111111111111111111111",
   });
 
   await freeTransactions.confirmFreeTransactionReservation({
@@ -435,7 +435,7 @@ test("confirm still rejects relayed receipts without wallet execution proof", as
         status: "success",
       }),
     }),
-    resolveVoterIdTokenId: async () => "42",
+    resolveRaterIdentityKey: async () => "0x1111111111111111111111111111111111111111111111111111111111111111",
   });
 
   await assert.rejects(
@@ -574,7 +574,7 @@ test("confirm leaves the reservation pending when receipt verification fails", a
 
   freeTransactions.__setFreeTransactionTestOverridesForTests({
     allTransactionHashesSucceeded: async () => false,
-    resolveVoterIdTokenId: async () => "42",
+    resolveRaterIdentityKey: async () => "0x1111111111111111111111111111111111111111111111111111111111111111",
   });
 
   await assert.rejects(

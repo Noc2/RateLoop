@@ -41,13 +41,13 @@ test.describe("Settings page", () => {
     expect(recipientBalanceAfter).toBe(recipientBalanceBefore + transferAmountMicro);
   });
 
-  test("delegation tab explains missing Voter ID instead of rendering empty", async ({ page }) => {
+  test("delegation tab explains missing rater credential instead of rendering empty", async ({ page }) => {
     await setupWallet(page, ANVIL_ACCOUNTS.account1.privateKey);
     await gotoWithRetry(page, "/settings#delegation", { ensureWalletConnected: true });
 
     await expect(page).toHaveURL(/\/settings#delegation$/);
     await expect(page.getByRole("button", { name: "Delegation", exact: true })).toHaveClass(/pill-active/);
-    await expect(page.getByRole("heading", { name: "Voter ID required for delegation" })).toBeVisible({
+    await expect(page.getByRole("heading", { name: "Rater credential required for delegation" })).toBeVisible({
       timeout: 15_000,
     });
     await expect(page.getByRole("link", { name: "Open LREP faucet" })).toHaveAttribute("href", "/governance#faucet");

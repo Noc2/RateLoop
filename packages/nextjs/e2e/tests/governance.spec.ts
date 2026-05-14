@@ -68,7 +68,7 @@ test.describe("Governance page", () => {
     const profileEditorEntry = page
       .getByRole("button", { name: "Edit profile", exact: true })
       .or(page.getByLabel("Profile name"))
-      .or(page.getByRole("link", { name: "Get Voter ID", exact: true }));
+      .or(page.getByRole("link", { name: "Get rater credential", exact: true }));
     await expect(profileEditorEntry.first()).toBeVisible({ timeout: 15_000 });
 
     const editProfileButton = page.getByRole("button", { name: "Edit profile", exact: true });

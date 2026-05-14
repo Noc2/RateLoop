@@ -28,7 +28,7 @@ type FreeTransactionAllowanceResponse = {
   verified: boolean;
   exhausted: boolean;
   walletAddress: `0x${string}` | null;
-  voterIdTokenId: string | null;
+  raterIdentityKey: string | null;
 };
 
 type SponsorshipMode = "sponsored" | "self-funded";
@@ -107,12 +107,12 @@ function storeFreeTransactionAllowanceSummary(
 export function buildExhaustionToastKey(params: {
   chainId: number;
   environmentScope?: string;
-  voterIdTokenId: string;
+  raterIdentityKey: string;
 }) {
-  return `curyo-free-transactions-exhausted:${params.environmentScope ?? "unknown"}:${params.chainId}:${params.voterIdTokenId}`;
+  return `curyo-free-transactions-exhausted:${params.environmentScope ?? "unknown"}:${params.chainId}:${params.raterIdentityKey}`;
 }
 
-function hasShownExhaustionToast(params: { chainId: number; voterIdTokenId: string }) {
+function hasShownExhaustionToast(params: { chainId: number; raterIdentityKey: string }) {
   if (typeof window === "undefined") {
     return false;
   }
@@ -131,7 +131,7 @@ function hasShownExhaustionToast(params: { chainId: number; voterIdTokenId: stri
   }
 }
 
-function markExhaustionToastShown(params: { chainId: number; voterIdTokenId: string }) {
+function markExhaustionToastShown(params: { chainId: number; raterIdentityKey: string }) {
   if (typeof window === "undefined") {
     return;
   }
@@ -221,7 +221,7 @@ export function useFreeTransactionAllowance() {
       remaining: summary?.remaining ?? 0,
       used: summary?.used ?? 0,
       verified: Boolean(summary?.verified),
-      voterIdTokenId: summary?.voterIdTokenId ?? null,
+      raterIdentityKey: summary?.raterIdentityKey ?? null,
     };
   }, [fallbackSummary, query]);
 
@@ -298,7 +298,7 @@ export function useFreeTransactionAllowance() {
   }, [activeWallet, address, desiredSponsorshipMode, resolvedChainId, setActiveWallet, syncWalletToWagmi]);
 
   useEffect(() => {
-    if (!allowance.verified || !resolvedChainId || !allowance.voterIdTokenId) {
+    if (!allowance.verified || !resolvedChainId || !allowance.raterIdentityKey) {
       previousRemainingRef.current = allowance.remaining;
       return;
     }
@@ -312,7 +312,7 @@ export function useFreeTransactionAllowance() {
 
     const toastKey = {
       chainId: resolvedChainId,
-      voterIdTokenId: allowance.voterIdTokenId,
+      raterIdentityKey: allowance.raterIdentityKey,
     };
 
     if (hasShownExhaustionToast(toastKey)) {
@@ -321,7 +321,7 @@ export function useFreeTransactionAllowance() {
 
     markExhaustionToastShown(toastKey);
     notification.warning("Free transactions used up. Add ETH to continue.");
-  }, [allowance.remaining, allowance.verified, allowance.voterIdTokenId, resolvedChainId]);
+  }, [allowance.remaining, allowance.verified, allowance.raterIdentityKey, resolvedChainId]);
 
   return allowance;
 }

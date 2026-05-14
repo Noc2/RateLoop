@@ -15,12 +15,16 @@ interface LocalVoteCooldownRecord {
   chainId: number;
   committedAt: number;
   contentId: string;
+  identityKey?: string;
   savedAt: number;
+  /** @deprecated retained only to match cooldown entries written before RaterRegistry identities. */
   voterIdTokenId?: string;
 }
 
 interface VoteCooldownIdentity {
   address?: string | null;
+  identityKey?: string | null;
+  /** @deprecated retained only to match cooldown entries written before RaterRegistry identities. */
   voterIdTokenId?: bigint | string | number | null;
 }
 
@@ -65,6 +69,11 @@ function normalizeTokenId(tokenId?: bigint | string | number | null) {
   }
 }
 
+function normalizeIdentityKey(identityKey?: string | null) {
+  const trimmed = identityKey?.trim().toLowerCase();
+  return trimmed && /^0x[0-9a-f]{64}$/.test(trimmed) ? trimmed : null;
+}
+
 function normalizeContentId(contentId: bigint | string | number) {
   try {
     const value = BigInt(contentId);
@@ -87,6 +96,7 @@ function isRecord(value: unknown): value is LocalVoteCooldownRecord {
     typeof record.savedAt === "number" &&
     Number.isFinite(record.savedAt) &&
     (record.address === undefined || typeof record.address === "string") &&
+    (record.identityKey === undefined || typeof record.identityKey === "string") &&
     (record.voterIdTokenId === undefined || typeof record.voterIdTokenId === "string")
   );
 }
@@ -124,21 +134,26 @@ function pruneRecords(records: LocalVoteCooldownRecord[], nowSeconds: number) {
 
 function buildIdentitySets(identities: readonly VoteCooldownIdentity[]) {
   const addresses = new Set<string>();
+  const identityKeys = new Set<string>();
   const tokenIds = new Set<string>();
 
   for (const identity of identities) {
     const address = normalizeAddress(identity.address);
     if (address) addresses.add(address);
 
+    const identityKey = normalizeIdentityKey(identity.identityKey);
+    if (identityKey) identityKeys.add(identityKey);
+
     const tokenId = normalizeTokenId(identity.voterIdTokenId);
     if (tokenId) tokenIds.add(tokenId);
   }
 
-  return { addresses, tokenIds };
+  return { addresses, identityKeys, tokenIds };
 }
 
 function matchesIdentity(record: LocalVoteCooldownRecord, identities: ReturnType<typeof buildIdentitySets>) {
   return (
+    (record.identityKey !== undefined && identities.identityKeys.has(record.identityKey)) ||
     (record.voterIdTokenId !== undefined && identities.tokenIds.has(record.voterIdTokenId)) ||
     (record.address !== undefined && identities.addresses.has(record.address))
   );
@@ -151,12 +166,14 @@ export function recordLocalVoteCooldown({
   contentId,
   nowSeconds = Math.floor(Date.now() / 1000),
   storage = getDefaultStorage(),
+  identityKey,
   voterIdTokenId,
 }: RecordLocalVoteCooldownParams) {
   const normalizedContentId = normalizeContentId(contentId);
   const normalizedAddress = normalizeAddress(address);
+  const normalizedIdentityKey = normalizeIdentityKey(identityKey);
   const normalizedTokenId = normalizeTokenId(voterIdTokenId);
-  if (!normalizedContentId || (!normalizedAddress && !normalizedTokenId)) return;
+  if (!normalizedContentId || (!normalizedAddress && !normalizedIdentityKey && !normalizedTokenId)) return;
 
   const committedAt = Math.floor(committedAtSeconds ?? nowSeconds);
   if (!Number.isFinite(committedAt) || committedAt <= 0) return;
@@ -167,10 +184,12 @@ export function recordLocalVoteCooldown({
     contentId: normalizedContentId,
     savedAt: nowSeconds,
     ...(normalizedAddress ? { address: normalizedAddress } : {}),
+    ...(normalizedIdentityKey ? { identityKey: normalizedIdentityKey } : {}),
     ...(normalizedTokenId ? { voterIdTokenId: normalizedTokenId } : {}),
   };
   const records = pruneRecords(readRecords(storage), nowSeconds).filter(record => {
     if (record.chainId !== chainId || record.contentId !== normalizedContentId) return true;
+    if (normalizedIdentityKey && record.identityKey === normalizedIdentityKey) return false;
     if (normalizedTokenId && record.voterIdTokenId === normalizedTokenId) return false;
     if (normalizedAddress && record.address === normalizedAddress) return false;
     return true;

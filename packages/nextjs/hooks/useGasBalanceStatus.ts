@@ -124,7 +124,7 @@ export function useGasBalanceStatus(options: GasBalanceStatusOptions = {}) {
       nativeBalanceValue,
       nativeTokenSymbol,
       supportsSponsoredCalls,
-      voterIdTokenId: freeTransactionAllowance.voterIdTokenId,
+      raterIdentityKey: freeTransactionAllowance.raterIdentityKey,
     };
   }, [
     address,
@@ -136,7 +136,7 @@ export function useGasBalanceStatus(options: GasBalanceStatusOptions = {}) {
     freeTransactionAllowance.remaining,
     freeTransactionAllowance.isResolved,
     freeTransactionAllowance.verified,
-    freeTransactionAllowance.voterIdTokenId,
+    freeTransactionAllowance.raterIdentityKey,
     includeExternalSendCalls,
     isThirdwebInApp,
     nativeBalance,

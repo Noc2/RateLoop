@@ -30,8 +30,5 @@ export function normalizeRoundVoteError(message: string) {
   if (message.includes("RoundNotAccepting") || message.includes("RoundNotOpen")) {
     return "This round is not accepting votes right now.";
   }
-  if (message.includes("VoterIdRequired")) {
-    return "This legacy deployment still requires an eligible rater credential.";
-  }
   return message;
 }

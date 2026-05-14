@@ -8,7 +8,6 @@ import {
   evmIncreaseTime,
   getActiveRoundId,
   getFrontendAccumulatedFees,
-  mintVoterId,
   readTokenBalance,
   registerFrontend,
   revealVoteDirect,
@@ -39,7 +38,6 @@ test.describe("Frontend fee claim lifecycle", () => {
   const FRONTEND_REGISTRY = CONTRACT_ADDRESSES.FrontendRegistry;
   const CONTENT_REGISTRY = CONTRACT_ADDRESSES.ContentRegistry;
   const HREP_TOKEN = CONTRACT_ADDRESSES.HumanReputation;
-  const VOTER_ID_NFT = CONTRACT_ADDRESSES.VoterIdNFT;
   const STAKE = BigInt(10e6);
   const FRONTEND_STAKE = BigInt(1000e6);
   const EPOCH_DURATION = 300;
@@ -56,7 +54,7 @@ test.describe("Frontend fee claim lifecycle", () => {
     return `0x${seed.toString(16).padStart(40, "0")}` as `0x${string}`;
   }
 
-  async function setupFrontend(frontendAddress: `0x${string}`, nullifier: bigint): Promise<void> {
+  async function setupFrontend(frontendAddress: `0x${string}`): Promise<void> {
     // Fund the impersonated frontend address with ETH for gas
     await fetch(E2E_RPC_URL, {
       method: "POST",
@@ -68,9 +66,6 @@ test.describe("Frontend fee claim lifecycle", () => {
         id: Date.now(),
       }),
     });
-
-    const minted = await mintVoterId(frontendAddress, nullifier, DEPLOYER.address, VOTER_ID_NFT);
-    expect(minted, `Failed to mint Voter ID for ${frontendAddress}`).toBe(true);
 
     const funded = await transferHREP(frontendAddress, FRONTEND_STAKE, DEPLOYER.address, HREP_TOKEN);
     expect(funded, `Failed to fund frontend ${frontendAddress}`).toBe(true);
@@ -176,7 +171,7 @@ test.describe("Frontend fee claim lifecycle", () => {
 
     const uniqueId = Date.now();
     const frontendAddress = frontendAddressFor(uniqueId);
-    await setupFrontend(frontendAddress, BigInt(uniqueId));
+    await setupFrontend(frontendAddress);
 
     const { contentId, roundId } = await settleRoundWithFrontend(frontendAddress, uniqueId);
 
@@ -211,7 +206,7 @@ test.describe("Frontend fee claim lifecycle", () => {
 
     const uniqueId = Date.now() + 1;
     const frontendAddress = frontendAddressFor(uniqueId);
-    await setupFrontend(frontendAddress, BigInt(uniqueId));
+    await setupFrontend(frontendAddress);
 
     const { contentId, roundId } = await settleRoundWithFrontend(frontendAddress, uniqueId);
 

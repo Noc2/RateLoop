@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
-import { ProtocolConfigAbi, RoundVotingEngineAbi, VoterIdNFTAbi } from "@rateloop/contracts/abis";
+import { ProtocolConfigAbi, RaterRegistryAbi, RoundVotingEngineAbi } from "@rateloop/contracts/abis";
 import {
   buildCommitKey,
   decryptTlockVoteCiphertext,
@@ -150,7 +150,7 @@ async function readLiveDrandConfig(publicClient: PublicClient, engineAddress: Ad
   };
 }
 
-async function readProtocolVoterIdNft(publicClient: PublicClient, engineAddress: Address): Promise<Address | null> {
+async function readProtocolRaterRegistry(publicClient: PublicClient, engineAddress: Address): Promise<Address | null> {
   try {
     const protocolConfigAddress = (await publicClient.readContract({
       address: engineAddress,
@@ -159,18 +159,18 @@ async function readProtocolVoterIdNft(publicClient: PublicClient, engineAddress:
     })) as Address;
     if (!isNonZeroAddress(protocolConfigAddress)) return null;
 
-    const voterIdNft = (await publicClient.readContract({
+    const raterRegistry = (await publicClient.readContract({
       address: protocolConfigAddress,
       abi: ProtocolConfigAbi,
-      functionName: "voterIdNFT",
+      functionName: "raterRegistry",
     })) as Address;
-    return isNonZeroAddress(voterIdNft) ? voterIdNft : null;
+    return isNonZeroAddress(raterRegistry) ? raterRegistry : null;
   } catch {
     return null;
   }
 }
 
-async function readRoundVoterIdNft(
+async function readRoundRaterRegistry(
   publicClient: PublicClient,
   engineAddress: Address,
   contentId: bigint,
@@ -180,7 +180,7 @@ async function readRoundVoterIdNft(
     const snapshot = (await publicClient.readContract({
       address: engineAddress,
       abi: RoundVotingEngineAbi,
-      functionName: "roundVoterIdNFTSnapshot",
+      functionName: "roundRaterRegistrySnapshot",
       args: [contentId, roundId],
     })) as Address;
     if (isNonZeroAddress(snapshot)) return snapshot;
@@ -188,7 +188,7 @@ async function readRoundVoterIdNft(
     return null;
   }
 
-  return readProtocolVoterIdNft(publicClient, engineAddress);
+  return readProtocolRaterRegistry(publicClient, engineAddress);
 }
 
 async function readDirectCommitReference(params: {
@@ -215,7 +215,7 @@ async function readDirectCommitReference(params: {
   }
 }
 
-async function readVoterIdCommitReference(params: {
+async function readIdentityCommitReference(params: {
   publicClient: PublicClient;
   engineAddress: Address;
   contentId: bigint;
@@ -223,33 +223,36 @@ async function readVoterIdCommitReference(params: {
   voter: Address;
   indexedCommitHash: `0x${string}`;
 }): Promise<CommitReference | null> {
-  const voterIdNft = await readRoundVoterIdNft(
+  const raterRegistry = await readRoundRaterRegistry(
     params.publicClient,
     params.engineAddress,
     params.contentId,
     params.roundId,
   );
-  if (!voterIdNft) return null;
+  if (!raterRegistry) return null;
 
-  let voterId = 0n;
+  let identityKey: `0x${string}` = zeroHash;
   try {
-    voterId = (await params.publicClient.readContract({
-      address: voterIdNft,
-      abi: VoterIdNFTAbi,
-      functionName: "getTokenId",
+    const resolved = (await params.publicClient.readContract({
+      address: raterRegistry,
+      abi: RaterRegistryAbi,
+      functionName: "resolveRater",
       args: [params.voter],
-    })) as bigint;
+    })) as { identityKey?: `0x${string}` } | readonly [Address, `0x${string}`, `0x${string}`, boolean, boolean];
+    identityKey = Array.isArray(resolved)
+      ? (resolved as readonly [Address, `0x${string}`, `0x${string}`, boolean, boolean])[1]
+      : ((resolved as { identityKey?: `0x${string}` }).identityKey ?? zeroHash);
   } catch {
     return null;
   }
-  if (voterId <= 0n) return null;
+  if (!isNonZeroBytes32(identityKey)) return null;
 
   try {
     const commitKey = await params.publicClient.readContract({
       address: params.engineAddress,
       abi: RoundVotingEngineAbi,
-      functionName: "voterIdCommitKey",
-      args: [params.contentId, params.roundId, voterId],
+      functionName: "identityCommitKey",
+      args: [params.contentId, params.roundId, identityKey],
     });
     if (isNonZeroBytes32(commitKey)) {
       return { commitHash: params.indexedCommitHash, commitKey };
@@ -257,26 +260,7 @@ async function readVoterIdCommitReference(params: {
   } catch {
     return null;
   }
-
-  try {
-    const nullifier = (await params.publicClient.readContract({
-      address: voterIdNft,
-      abi: VoterIdNFTAbi,
-      functionName: "getNullifier",
-      args: [voterId],
-    })) as bigint;
-    if (nullifier <= 0n) return null;
-
-    const commitKey = await params.publicClient.readContract({
-      address: params.engineAddress,
-      abi: RoundVotingEngineAbi,
-      functionName: "voterNullifierCommitKey",
-      args: [params.contentId, params.roundId, nullifier],
-    });
-    return isNonZeroBytes32(commitKey) ? { commitHash: params.indexedCommitHash, commitKey } : null;
-  } catch {
-    return null;
-  }
+  return null;
 }
 
 function readIndexedCommitReference(vote: PonderVoteItem): CommitReference | null {
@@ -304,7 +288,7 @@ async function resolveManualRevealCommitReference(params: {
       roundId,
       voter: params.voter,
     })) ??
-    (await readVoterIdCommitReference({
+    (await readIdentityCommitReference({
       publicClient: params.publicClient,
       engineAddress: params.engineAddress,
       contentId,

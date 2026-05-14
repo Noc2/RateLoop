@@ -13,9 +13,9 @@ import { expect, test } from "@playwright/test";
  *
  * Account allocation:
  * - Account #9 (scaffold-eth deployer) — has GOVERNANCE_ROLE
- * - Account #0 (no VoterID) — unauthorized user
- * - Account #2 (1000 HREP + VoterID) — submitter of content #1
- * - Account #3 (1000 HREP + VoterID) — non-submitter
+ * - Account #0 (no rater credential) — unauthorized user
+ * - Account #2 (1000 HREP + rater credential) — submitter of content #1
+ * - Account #3 (1000 HREP + rater credential) — non-submitter
  */
 test.describe("Negative cases", () => {
   test("non-submitter cannot cancel content", async () => {
@@ -24,10 +24,10 @@ test.describe("Negative cases", () => {
     expect(success).toBe(false);
   });
 
-  test("vote page shows content for user without VoterID", async ({ browser }) => {
-    // Account #0 has no VoterID — verify the vote page loads
+  test("vote page shows content for user without rater credential", async ({ browser }) => {
+    // Account #0 has no rater credential — verify the vote page loads
     // and content is visible. Vote buttons may or may not be shown
-    // (the contract will reject votes without VoterID regardless).
+    // (the contract will reject votes without rater credential regardless).
     const context = await newE2EContext(browser);
     const page = await context.newPage();
     await setupWallet(page, ANVIL_ACCOUNTS.account0.privateKey, { bootstrap: false });
@@ -41,24 +41,24 @@ test.describe("Negative cases", () => {
     await context.close();
   });
 
-  test("ask page shows VoterID prompt for user without VoterID", async ({ browser }) => {
+  test("ask page shows rater credential prompt for user without rater credential", async ({ browser }) => {
     const context = await newE2EContext(browser);
     const page = await context.newPage();
     await setupWallet(page, ANVIL_ACCOUNTS.account0.privateKey, { bootstrap: false });
 
     await page.goto("/ask");
 
-    const voterIdRequired = page.getByRole("heading", { name: /Voter ID Required/i });
+    const voterIdRequired = page.getByRole("heading", { name: /Rater Credential Required/i });
     const submitForm = page.getByRole("heading", { name: "Submit Question" });
     const signedOutHeading = page.getByRole("heading", { name: "Submit" });
 
-    // Accept either the connected no-VoterID prompt, the ask form, or the
+    // Accept either the connected no rater credential prompt, the ask form, or the
     // signed-out shell if the local test wallet bridge doesn't attach.
     await expect(voterIdRequired.or(submitForm).or(signedOutHeading)).toBeVisible({ timeout: 15_000 });
 
-    // If VoterID prompt shows, verify the "Get Voter ID" link exists
+    // If rater credential prompt shows, verify the "Get rater credential" link exists
     if (await voterIdRequired.isVisible()) {
-      const getVoterIdLink = page.getByRole("link", { name: /Get Voter ID/i });
+      const getVoterIdLink = page.getByRole("link", { name: /Get rater credential/i });
       await expect(getVoterIdLink).toBeVisible({ timeout: 5_000 });
     } else if (await signedOutHeading.isVisible().catch(() => false)) {
       test.skip(true, "Local test wallet bridge did not attach on ask page");
@@ -70,7 +70,7 @@ test.describe("Negative cases", () => {
   test("double vote on same content shows cooldown", async ({ page }) => {
     test.setTimeout(120_000);
 
-    // Account #6 has VoterID #104 and HREP.
+    // Account #6 has rater credential #104 and HREP.
     await setupWallet(page, ANVIL_ACCOUNTS.account6.privateKey);
 
     await gotoWithRetry(page, "/rate", { ensureWalletConnected: true, timeout: 30_000 });

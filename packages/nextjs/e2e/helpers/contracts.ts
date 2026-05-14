@@ -19,7 +19,6 @@ export const CONTRACT_ADDRESSES = {
   FrontendRegistry: chain31337.FrontendRegistry.address,
   CategoryRegistry: chain31337.CategoryRegistry.address,
   QuestionRewardPoolEscrow: chain31337.QuestionRewardPoolEscrow.address,
-  VoterIdNFT: chain31337.VoterIdNFT.address,
   ParticipationPool: chain31337.ParticipationPool.address,
   RaterRegistry: chain31337.RaterRegistry.address,
 } as const;

@@ -23,9 +23,9 @@ test("buildExhaustionToastKey scopes exhaustion notifications by environment", (
     buildExhaustionToastKey({
       chainId: 4801,
       environmentScope: "https://curyo.example",
-      voterIdTokenId: "42",
+      raterIdentityKey: "0x1111111111111111111111111111111111111111111111111111111111111111",
     }),
-    "curyo-free-transactions-exhausted:https://curyo.example:4801:42",
+    "curyo-free-transactions-exhausted:https://curyo.example:4801:0x1111111111111111111111111111111111111111111111111111111111111111",
   );
 });
 

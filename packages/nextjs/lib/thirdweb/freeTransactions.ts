@@ -58,7 +58,7 @@ type ThirdwebVerifierRequest = {
 };
 
 type FreeTransactionDbWrite = Pick<typeof db, "insert" | "select" | "update">;
-type ResolveVoterIdTokenId = (address: `0x${string}`, chainId: number) => Promise<string | null>;
+type ResolveRaterIdentityKey = (address: `0x${string}`, chainId: number) => Promise<string | null>;
 type CheckTransactionHashesSucceeded = (params: {
   chainId: number;
   transactionHashes: Hash[];
@@ -86,6 +86,8 @@ export type FreeTransactionAllowanceSummary = {
   verified: boolean;
   exhausted: boolean;
   walletAddress: `0x${string}` | null;
+  raterIdentityKey: string | null;
+  /** @deprecated use raterIdentityKey */
   voterIdTokenId: string | null;
 };
 
@@ -106,14 +108,14 @@ export type FreeTransactionAllowanceDecision =
         | "target_not_allowlisted"
         | "unsupported_operation"
         | "invalid_operation_key"
-        | "missing_voter_id"
+        | "missing_rater_identity"
         | "free_tx_exhausted"
         | "quota_store_unavailable";
     };
 
 const DEFAULT_DENY_REASON = "Transaction not sponsored.";
 const FREE_TX_EXHAUSTED_REASON = "Free transactions used up. Add ETH to continue.";
-const NO_VOTER_ID_REASON = "Verify your ID to unlock free transactions.";
+const NO_RATER_IDENTITY_REASON = "Verify your ID to unlock free transactions.";
 const FREE_TRANSACTION_RESERVATION_TTL_MS = 5 * 60_000;
 const FREE_TRANSACTION_IDEMPOTENCY_WINDOW_MS = 2 * 60_000;
 const USER_OPERATION_RECEIPT_EVENT_ABI = parseAbi([
@@ -261,7 +263,7 @@ const CONTENT_REGISTRY_SUBMISSION_ABI = [
 
 let ensureFreeTransactionQuotaTablePromise: Promise<void> | null = null;
 let freeTransactionTestOverrides: {
-  resolveVoterIdTokenId?: ResolveVoterIdTokenId;
+  resolveRaterIdentityKey?: ResolveRaterIdentityKey;
   allTransactionHashesSucceeded?: CheckTransactionHashesSucceeded;
   getTransactionVerificationClient?: GetTransactionVerificationClient;
 } | null = null;
@@ -270,8 +272,8 @@ function getContractsForChain(chainId: number) {
   return (deployedContracts as unknown as Partial<DeployedContractsMap>)[chainId];
 }
 
-function buildIdentityKey(params: { chainId: number; environment: string; voterIdTokenId: string }) {
-  return `${params.environment}:${params.chainId}:${params.voterIdTokenId}`;
+function buildIdentityKey(params: { chainId: number; environment: string; raterIdentityKey: string }) {
+  return `${params.environment}:${params.chainId}:${params.raterIdentityKey}`;
 }
 
 function normalizeAddress(value: string): `0x${string}` {
@@ -360,42 +362,48 @@ async function getTransactionVerificationClient(chainId: number): Promise<Transa
   };
 }
 
-async function resolveVoterIdTokenId(address: `0x${string}`, chainId: number) {
+async function resolveRaterIdentityKey(address: `0x${string}`, chainId: number) {
   const client = await getPublicClientForChain(chainId);
   const contracts = getContractsForChain(chainId);
-  const voterIdContract = contracts?.VoterIdNFT;
+  const raterRegistry = contracts?.RaterRegistry;
 
-  if (!client || !voterIdContract) {
+  if (!client || !raterRegistry) {
     return null;
   }
 
-  const hasVoterId = await client
+  const resolvedRater = await client
     .readContract({
-      address: voterIdContract.address,
-      abi: voterIdContract.abi,
-      functionName: "hasVoterId",
+      address: raterRegistry.address,
+      abi: raterRegistry.abi,
+      functionName: "resolveRater",
       args: [address],
     })
-    .catch(() => false);
+    .catch(() => null);
 
-  if (!hasVoterId) {
+  if (!resolvedRater) {
     return null;
   }
 
-  const tokenId = await client
-    .readContract({
-      address: voterIdContract.address,
-      abi: voterIdContract.abi,
-      functionName: "getTokenId",
-      args: [address],
-    })
-    .catch(() => 0n);
+  const resolved = resolvedRater as
+    | { identityKey?: `0x${string}`; hasActiveHumanCredential?: boolean }
+    | readonly [`0x${string}`, `0x${string}`, `0x${string}`, boolean, boolean];
+  const identityKey = Array.isArray(resolved)
+    ? (resolved as readonly [`0x${string}`, `0x${string}`, `0x${string}`, boolean, boolean])[1]
+    : (resolved as { identityKey?: `0x${string}` }).identityKey;
+  const hasActiveHumanCredential = Array.isArray(resolved)
+    ? (resolved as readonly [`0x${string}`, `0x${string}`, `0x${string}`, boolean, boolean])[3]
+    : (resolved as { hasActiveHumanCredential?: boolean }).hasActiveHumanCredential;
 
-  if (typeof tokenId !== "bigint" || tokenId <= 0n) {
+  if (
+    !hasActiveHumanCredential ||
+    !identityKey ||
+    !/^0x[0-9a-fA-F]{64}$/.test(identityKey) ||
+    /^0x0{64}$/.test(identityKey)
+  ) {
     return null;
   }
 
-  return tokenId.toString();
+  return identityKey.toLowerCase();
 }
 
 async function ensureQuotaRow(
@@ -403,7 +411,7 @@ async function ensureQuotaRow(
   params: {
     chainId: number;
     environment: string;
-    voterIdTokenId: string;
+    raterIdentityKey: string;
     walletAddress: `0x${string}`;
   },
 ) {
@@ -415,7 +423,7 @@ async function ensureQuotaRow(
     .insert(freeTransactionQuotas)
     .values({
       identityKey,
-      voterIdTokenId: params.voterIdTokenId,
+      voterIdTokenId: params.raterIdentityKey,
       chainId: params.chainId,
       environment: params.environment,
       lastWalletAddress: params.walletAddress,
@@ -436,7 +444,7 @@ function buildQuotaSummary(params: {
   freeTxLimit: number;
   freeTxUsed: number;
   pendingReservations?: number;
-  voterIdTokenId: string;
+  raterIdentityKey: string;
   walletAddress: `0x${string}`;
 }) {
   const used = params.freeTxUsed + (params.pendingReservations ?? 0);
@@ -450,7 +458,8 @@ function buildQuotaSummary(params: {
     verified: true,
     exhausted: used >= params.freeTxLimit,
     walletAddress: params.walletAddress,
-    voterIdTokenId: params.voterIdTokenId,
+    raterIdentityKey: params.raterIdentityKey,
+    voterIdTokenId: params.raterIdentityKey,
   } satisfies FreeTransactionAllowanceSummary;
 }
 
@@ -467,7 +476,7 @@ function normalizeQuotaRow(
         freeTxUsed?: number | string | null;
         free_tx_used?: number | string | null;
         freetxused?: number | string | null;
-        voterIdTokenId?: string | null;
+        raterIdentityKey?: string | null;
         voter_id_token_id?: string | null;
         voteridtokenid?: string | null;
       }
@@ -483,7 +492,7 @@ function normalizeQuotaRow(
     environment: row.environment ?? "",
     freeTxLimit: Number(row.freeTxLimit ?? row.free_tx_limit ?? row.freetxlimit),
     freeTxUsed: Number(row.freeTxUsed ?? row.free_tx_used ?? row.freetxused),
-    voterIdTokenId: row.voterIdTokenId ?? row.voter_id_token_id ?? row.voteridtokenid ?? "",
+    raterIdentityKey: row.raterIdentityKey ?? row.voter_id_token_id ?? row.voteridtokenid ?? "",
   };
 }
 
@@ -523,7 +532,7 @@ function normalizeReservationRow(
 async function readQuotaSummary(params: {
   chainId: number;
   environment: string;
-  voterIdTokenId: string;
+  raterIdentityKey: string;
   walletAddress: `0x${string}`;
 }) {
   const identityKey = await ensureQuotaRow(db, params);
@@ -554,14 +563,14 @@ async function readQuotaSummary(params: {
     freeTxLimit: quotaRow.freeTxLimit,
     freeTxUsed: quotaRow.freeTxUsed,
     pendingReservations,
-    voterIdTokenId: quotaRow.voterIdTokenId,
+    raterIdentityKey: quotaRow.raterIdentityKey,
     walletAddress: params.walletAddress,
   });
 }
 
 export function __setFreeTransactionTestOverridesForTests(
   overrides: {
-    resolveVoterIdTokenId?: ResolveVoterIdTokenId;
+    resolveRaterIdentityKey?: ResolveRaterIdentityKey;
     allTransactionHashesSucceeded?: CheckTransactionHashesSucceeded;
     getTransactionVerificationClient?: GetTransactionVerificationClient;
   } | null,
@@ -581,6 +590,7 @@ function buildUnverifiedSummary(params: { chainId: number; walletAddress: `0x${s
     verified: false,
     exhausted: false,
     walletAddress: params.walletAddress,
+    raterIdentityKey: null,
     voterIdTokenId: null,
   } satisfies FreeTransactionAllowanceSummary;
 }
@@ -938,12 +948,12 @@ export async function getFreeTransactionAllowanceSummary(params: { address: stri
   }
 
   const walletAddress = normalizeAddress(params.address);
-  const voterIdTokenId = await (freeTransactionTestOverrides?.resolveVoterIdTokenId ?? resolveVoterIdTokenId)(
+  const raterIdentityKey = await (freeTransactionTestOverrides?.resolveRaterIdentityKey ?? resolveRaterIdentityKey)(
     walletAddress,
     params.chainId,
   );
 
-  if (!voterIdTokenId) {
+  if (!raterIdentityKey) {
     return buildUnverifiedSummary({
       chainId: params.chainId,
       walletAddress,
@@ -954,7 +964,7 @@ export async function getFreeTransactionAllowanceSummary(params: { address: stri
     const summary = await readQuotaSummary({
       chainId: params.chainId,
       environment: getServerEnvironmentScope(),
-      voterIdTokenId,
+      raterIdentityKey,
       walletAddress,
     });
 
@@ -968,7 +978,7 @@ export async function getFreeTransactionAllowanceSummary(params: { address: stri
       console.warn("[thirdweb-free-tx] quota store unavailable during summary lookup; using self-funded fallback.", {
         address: walletAddress,
         chainId: params.chainId,
-        voterIdTokenId,
+        raterIdentityKey,
       });
     }
 
@@ -1026,16 +1036,16 @@ export async function evaluateFreeTransactionAllowance(
   }
 
   const walletAddress = normalizeAddress(sender);
-  const voterIdTokenId = await (freeTransactionTestOverrides?.resolveVoterIdTokenId ?? resolveVoterIdTokenId)(
+  const raterIdentityKey = await (freeTransactionTestOverrides?.resolveRaterIdentityKey ?? resolveRaterIdentityKey)(
     walletAddress,
     body.chainId,
   );
 
-  if (!voterIdTokenId) {
+  if (!raterIdentityKey) {
     return {
       isAllowed: false,
-      debugCode: "missing_voter_id",
-      reason: NO_VOTER_ID_REASON,
+      debugCode: "missing_rater_identity",
+      reason: NO_RATER_IDENTITY_REASON,
       summary: buildUnverifiedSummary({
         chainId: body.chainId,
         walletAddress,
@@ -1050,7 +1060,7 @@ export async function evaluateFreeTransactionAllowance(
       const identityKey = await ensureQuotaRow(tx, {
         chainId: body.chainId!,
         environment,
-        voterIdTokenId,
+        raterIdentityKey,
         walletAddress,
       });
       const now = new Date();
@@ -1097,7 +1107,7 @@ export async function evaluateFreeTransactionAllowance(
             freeTxLimit: normalizedQuotaRow.freeTxLimit,
             freeTxUsed: normalizedQuotaRow.freeTxUsed,
             pendingReservations: activePendingReservations,
-            voterIdTokenId: normalizedQuotaRow.voterIdTokenId,
+            raterIdentityKey: normalizedQuotaRow.raterIdentityKey,
             walletAddress,
           }),
         };
@@ -1112,7 +1122,7 @@ export async function evaluateFreeTransactionAllowance(
             freeTxLimit: normalizedQuotaRow.freeTxLimit,
             freeTxUsed: normalizedQuotaRow.freeTxUsed,
             pendingReservations: activePendingReservations,
-            voterIdTokenId: normalizedQuotaRow.voterIdTokenId,
+            raterIdentityKey: normalizedQuotaRow.raterIdentityKey,
             walletAddress,
           }),
         };
@@ -1140,7 +1150,7 @@ export async function evaluateFreeTransactionAllowance(
             freeTxLimit: normalizedLatestQuotaRow.freeTxLimit,
             freeTxUsed: normalizedLatestQuotaRow.freeTxUsed,
             pendingReservations: activePendingReservations,
-            voterIdTokenId: normalizedLatestQuotaRow.voterIdTokenId,
+            raterIdentityKey: normalizedLatestQuotaRow.raterIdentityKey,
             walletAddress,
           }),
         };
@@ -1151,7 +1161,7 @@ export async function evaluateFreeTransactionAllowance(
           .update(freeTransactionReservations)
           .set({
             identityKey,
-            voterIdTokenId,
+            voterIdTokenId: raterIdentityKey,
             chainId: body.chainId!,
             environment,
             walletAddress,
@@ -1168,7 +1178,7 @@ export async function evaluateFreeTransactionAllowance(
         await tx.insert(freeTransactionReservations).values({
           operationKey,
           identityKey,
-          voterIdTokenId,
+          voterIdTokenId: raterIdentityKey,
           chainId: body.chainId!,
           environment,
           walletAddress,
@@ -1190,7 +1200,7 @@ export async function evaluateFreeTransactionAllowance(
           freeTxLimit: normalizedQuotaRow.freeTxLimit,
           freeTxUsed: normalizedQuotaRow.freeTxUsed,
           pendingReservations: activePendingReservations + 1,
-          voterIdTokenId: normalizedQuotaRow.voterIdTokenId,
+          raterIdentityKey: normalizedQuotaRow.raterIdentityKey,
           walletAddress,
         }),
       };
@@ -1200,7 +1210,7 @@ export async function evaluateFreeTransactionAllowance(
       console.warn("[thirdweb-free-tx] quota store unavailable during verifier check; failing closed.", {
         chainId: body.chainId,
         sender: walletAddress,
-        voterIdTokenId,
+        raterIdentityKey,
       });
       return {
         isAllowed: false,

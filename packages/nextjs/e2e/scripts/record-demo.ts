@@ -227,7 +227,7 @@ async function recordVoteScene(page: Page, searchQuery?: string): Promise<void> 
   await showCaption(
     page,
     "Blind vote with stake",
-    "This wallet already has a Voter ID and HREP, so the demo can go straight into a live vote.",
+    "This wallet already has a rater credential and HREP, so the demo can go straight into a live vote.",
   );
   await pause(page, 1_600);
   await hideCaption(page);

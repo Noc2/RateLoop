@@ -14,7 +14,7 @@ import { expect, test } from "@playwright/test";
  * Triggers Ponder events: ContentCancelled.
  *
  * Account allocation:
- * - Account #2 (HREP + VoterID) — submits content, cancels own content
+ * - Account #2 (HREP + rater credential) — submits content, cancels own content
  * - Account #9 (deployer = governance in local dev) — funds account #2
  *
  * All interactions use direct contract calls for reliability.

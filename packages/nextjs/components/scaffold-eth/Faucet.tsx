@@ -69,34 +69,6 @@ const questionRewardPoolEscrowAbi = [
   },
 ] as const;
 
-// Minimal ABI for VoterIdNFT functions we need
-const voterIdNFTAbi = [
-  {
-    type: "function",
-    name: "mint",
-    inputs: [
-      { name: "to", type: "address" },
-      { name: "nullifier", type: "uint256" },
-    ],
-    outputs: [{ name: "tokenId", type: "uint256" }],
-    stateMutability: "nonpayable",
-  },
-  {
-    type: "function",
-    name: "hasVoterId",
-    inputs: [{ name: "holder", type: "address" }],
-    outputs: [{ name: "", type: "bool" }],
-    stateMutability: "view",
-  },
-  {
-    type: "function",
-    name: "getTokenId",
-    inputs: [{ name: "holder", type: "address" }],
-    outputs: [{ name: "", type: "uint256" }],
-    stateMutability: "view",
-  },
-] as const;
-
 /**
  * Shared ID used by faucet triggers and the single app-level modal.
  */
@@ -132,16 +104,12 @@ export const FaucetModal = () => {
   const [loading, setLoading] = useState(false);
   const [hrepLoading, setHrepLoading] = useState(false);
   const [usdcLoading, setUsdcLoading] = useState(false);
-  const [voterIdLoading, setVoterIdLoading] = useState(false);
   const [inputAddress, setInputAddress] = useState<AddressType>();
   const [faucetAddress, setFaucetAddress] = useState<AddressType>();
   const [sendValue, setSendValue] = useState("");
   const [hrepAmount, setHrepAmount] = useState("1000");
   const [usdcAmount, setUsdcAmount] = useState("1000");
   const [mockUsdcTokenAddress, setMockUsdcTokenAddress] = useState<AddressType>();
-  const [hasVoterId, setHasVoterId] = useState<boolean | null>(null);
-  const [voterIdTokenId, setVoterIdTokenId] = useState<bigint | null>(null);
-  const [voterIdReadFailed, setVoterIdReadFailed] = useState(false);
   const { chain: ConnectedChain, address: connectedAddress } = useAccount();
 
   const isHardhat = ConnectedChain?.id === hardhat.id;
@@ -151,7 +119,6 @@ export const FaucetModal = () => {
 
   // Get contract addresses from localhost deployment
   const hrepTokenAddress = (deployedContracts as any)[31337]?.LoopReputation?.address as AddressType | undefined;
-  const voterIdNFTAddress = (deployedContracts as any)[31337]?.VoterIdNFT?.address as AddressType | undefined;
   const directMockUsdcTokenAddress = (deployedContracts as any)[31337]?.MockERC20?.address as AddressType | undefined;
   const questionRewardPoolEscrowAddress = (deployedContracts as any)[31337]?.QuestionRewardPoolEscrow?.address as
     | AddressType
@@ -228,50 +195,6 @@ export const FaucetModal = () => {
       setInputAddress(connectedAddress);
     }
   }, [connectedAddress, inputAddress]);
-
-  // Check if inputAddress has a Voter ID (local chain only)
-  useEffect(() => {
-    if (!isHardhat) return;
-
-    const checkVoterId = async () => {
-      if (!inputAddress || !voterIdNFTAddress) {
-        setHasVoterId(null);
-        setVoterIdTokenId(null);
-        setVoterIdReadFailed(false);
-        return;
-      }
-
-      try {
-        const hasId = await localPublicClient.readContract({
-          address: voterIdNFTAddress,
-          abi: voterIdNFTAbi,
-          functionName: "hasVoterId",
-          args: [inputAddress],
-        });
-        setHasVoterId(hasId);
-
-        if (hasId) {
-          const tokenId = await localPublicClient.readContract({
-            address: voterIdNFTAddress,
-            abi: voterIdNFTAbi,
-            functionName: "getTokenId",
-            args: [inputAddress],
-          });
-          setVoterIdTokenId(tokenId);
-        } else {
-          setVoterIdTokenId(null);
-        }
-        setVoterIdReadFailed(false);
-      } catch (error) {
-        console.warn("[Faucet] Unable to read local VoterIdNFT contract", error);
-        setHasVoterId(null);
-        setVoterIdTokenId(null);
-        setVoterIdReadFailed(true);
-      }
-    };
-
-    checkVoterId();
-  }, [inputAddress, voterIdNFTAddress, isHardhat]);
 
   const sendETH = async () => {
     if (!faucetAddress || !inputAddress) {
@@ -354,57 +277,6 @@ export const FaucetModal = () => {
     } catch (error: any) {
       notification.error(error?.message || "Failed to claim mock USDC");
       setUsdcLoading(false);
-    }
-  };
-
-  const claimVoterId = async () => {
-    if (!inputAddress || !voterIdNFTAddress) {
-      notification.error("Missing destination address or VoterIdNFT contract");
-      return;
-    }
-    if (!faucetAddress) {
-      notification.error("Missing faucet address");
-      return;
-    }
-
-    if (hasVoterId) {
-      notification.error("Address already has a Voter ID");
-      return;
-    }
-    if (voterIdReadFailed) {
-      notification.error(
-        "Local VoterIdNFT reads are failing. Restart Anvil and run yarn deploy so deployedContracts.ts matches the chain.",
-      );
-      return;
-    }
-
-    try {
-      setVoterIdLoading(true);
-
-      const nullifier = BigInt(inputAddress) ^ BigInt(Date.now());
-      const mintHash = await localWalletClient.writeContract({
-        address: voterIdNFTAddress,
-        abi: voterIdNFTAbi,
-        functionName: "mint",
-        args: [inputAddress, nullifier],
-        account: faucetAddress,
-      });
-      await localPublicClient.waitForTransactionReceipt({ hash: mintHash });
-
-      const tokenId = await localPublicClient.readContract({
-        address: voterIdNFTAddress,
-        abi: voterIdNFTAbi,
-        functionName: "getTokenId",
-        args: [inputAddress],
-      });
-      setHasVoterId(true);
-      setVoterIdTokenId(tokenId);
-      notification.success(`Minted Voter ID #${tokenId} to ${inputAddress.slice(0, 6)}...${inputAddress.slice(-4)}`);
-
-      setVoterIdLoading(false);
-    } catch (error: any) {
-      notification.error(error?.message || "Failed to mint Voter ID");
-      setVoterIdLoading(false);
     }
   };
 
@@ -528,47 +400,6 @@ export const FaucetModal = () => {
                 )}
                 <span>Claim Mock USDC</span>
               </button>
-            </div>
-
-            {/* Voter ID Section */}
-            <div className="bg-secondary/10 rounded-xl p-4 space-y-3">
-              <h4 className="font-semibold text-secondary">Claim Voter ID</h4>
-              <p className="text-base text-base-content/60">
-                Create a non-transferable local rater credential for delegation and identity test paths.
-              </p>
-              {voterIdReadFailed && (
-                <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-warning">
-                  Local VoterIdNFT reads are failing. The running Anvil chain is likely out of sync with{" "}
-                  <code>deployedContracts.ts</code>; restart <code>yarn chain</code> and run <code>yarn deploy</code>.
-                </div>
-              )}
-              {hasVoterId === true ? (
-                <div className="flex items-center gap-2 text-success">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                    <path
-                      fillRule="evenodd"
-                      d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                  <span className="font-medium">
-                    {voterIdTokenId !== null ? `Voter ID #${voterIdTokenId.toString()} owned` : "Voter ID owned"}
-                  </span>
-                </div>
-              ) : (
-                <button
-                  className="h-10 btn btn-secondary btn-sm px-4 rounded-full w-full"
-                  onClick={claimVoterId}
-                  disabled={voterIdLoading || !inputAddress || voterIdReadFailed}
-                >
-                  {!voterIdLoading ? (
-                    <GiftIcon className="h-5 w-5" />
-                  ) : (
-                    <span className="loading loading-spinner loading-sm"></span>
-                  )}
-                  <span>Claim Voter ID</span>
-                </button>
-              )}
             </div>
           </div>
         </label>

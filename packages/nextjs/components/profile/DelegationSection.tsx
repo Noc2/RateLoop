@@ -10,7 +10,7 @@ import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import { GOVERNANCE_ROUTE } from "~~/constants/routes";
 import { useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
 import { useDelegation } from "~~/hooks/useDelegation";
-import { useVoterIdNFT } from "~~/hooks/useVoterIdNFT";
+import { useRaterRegistryIdentity } from "~~/hooks/useRaterRegistryIdentity";
 import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
 import { formatHrepAmount } from "~~/lib/vote/voteIncentives";
 import { notification } from "~~/utils/scaffold-eth";
@@ -34,7 +34,7 @@ function parseHrepAmount(value: string): bigint | null {
 export function DelegationSection() {
   const { address } = useAccount();
   const queryClient = useQueryClient();
-  const { hasVoterId, isLoading: voterIdLoading } = useVoterIdNFT(address);
+  const { hasActiveHumanCredential, isLoading: credentialLoading } = useRaterRegistryIdentity(address);
   const {
     delegateTo,
     hasDelegate,
@@ -170,7 +170,7 @@ export function DelegationSection() {
     }
   };
 
-  if (voterIdLoading || isLoading) {
+  if (credentialLoading || isLoading) {
     return (
       <div className="surface-card rounded-2xl p-6">
         <div className="flex items-center justify-center py-8">
@@ -181,7 +181,7 @@ export function DelegationSection() {
     );
   }
 
-  if (!hasVoterId) {
+  if (!hasActiveHumanCredential) {
     return (
       <div className="surface-card rounded-2xl p-6 space-y-4">
         <h2 className="text-xl font-semibold flex items-center gap-2">

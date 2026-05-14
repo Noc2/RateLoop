@@ -4,7 +4,7 @@ import { useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaf
 import { ZERO_ADDRESS } from "~~/utils/scaffold-eth/common";
 
 /**
- * Hook to read and manage delegation state for a VoterIdNFT holder.
+ * Hook to read and manage delegation state for a RaterRegistry identity holder.
  */
 export function useDelegation(address?: string) {
   const {
@@ -12,7 +12,7 @@ export function useDelegation(address?: string) {
     isLoading: delegateToLoading,
     refetch: refetchDelegateTo,
   } = useScaffoldReadContract({
-    contractName: "VoterIdNFT" as any,
+    contractName: "RaterRegistry" as any,
     functionName: "delegateTo",
     args: [address],
     query: { enabled: !!address },
@@ -23,14 +23,14 @@ export function useDelegation(address?: string) {
     isLoading: delegateOfLoading,
     refetch: refetchDelegateOf,
   } = useScaffoldReadContract({
-    contractName: "VoterIdNFT" as any,
+    contractName: "RaterRegistry" as any,
     functionName: "delegateOf",
     args: [address],
     query: { enabled: !!address },
   } as any);
 
   const { writeContractAsync, isPending } = useScaffoldWriteContract({
-    contractName: "VoterIdNFT" as any,
+    contractName: "RaterRegistry" as any,
   } as any);
 
   const refetch = () => {

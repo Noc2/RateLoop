@@ -21,7 +21,7 @@ import { expect, test } from "@playwright/test";
  * FrontendExitRequested, FrontendDeregistered.
  *
  * Account allocation:
- * - Account #8 (VoterID #106, unlocked on Anvil) — registers as frontend operator
+ * - Account #8 (rater credential #106, unlocked on Anvil) — registers as frontend operator
  * - Account #9 (deployer = governance in local dev) — funds, approves, slashes
  *
  * Flow: cleanup prior state → register → slash → deregister.

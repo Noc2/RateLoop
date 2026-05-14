@@ -56,8 +56,8 @@ test.describe("Smoke tests", () => {
     await gotoWithRetry(page, "/ask", { ensureWalletConnected: true });
 
     await expect(page).toHaveURL(/\/ask/);
-    // Verify the ask page rendered (form, VoterID prompt, or connect wallet prompt)
-    const heading = page.getByRole("heading", { name: /^Submit$|Submit Question|Voter ID Required/i });
+    // Verify the ask page rendered (form, rater credential prompt, or connect wallet prompt)
+    const heading = page.getByRole("heading", { name: /^Submit$|Submit Question|Rater Credential Required/i });
     await expect(heading).toBeVisible({ timeout: 15_000 });
   });
 });

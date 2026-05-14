@@ -31,29 +31,6 @@ const erc20FaucetAbi = [
   },
 ] as const;
 
-const mintVoterIdAbi = [
-  {
-    type: "function",
-    name: "mint",
-    inputs: [
-      { name: "to", type: "address" },
-      { name: "nullifier", type: "uint256" },
-    ],
-    outputs: [{ name: "tokenId", type: "uint256" }],
-    stateMutability: "nonpayable",
-  },
-] as const;
-
-const hasVoterIdAbi = [
-  {
-    type: "function",
-    name: "hasVoterId",
-    inputs: [{ name: "holder", type: "address" }],
-    outputs: [{ name: "", type: "bool" }],
-    stateMutability: "view",
-  },
-] as const;
-
 const questionRewardPoolEscrowAbi = [
   {
     type: "function",
@@ -86,7 +63,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid wallet address" }, { status: 400 });
     }
 
-    if (!["mint-hrep", "mint-voter-id", "mint-usdc"].includes(action)) {
+    if (!["mint-hrep", "mint-usdc"].includes(action)) {
       return NextResponse.json({ error: "Invalid action" }, { status: 400 });
     }
 
@@ -198,41 +175,6 @@ export async function POST(request: NextRequest) {
         txHash,
         action: "mint-usdc",
         amount: requestedAmount.toString(),
-      });
-    }
-
-    if (action === "mint-voter-id") {
-      const voterIdAddress = contracts.VoterIdNFT?.address;
-      if (!voterIdAddress) {
-        return NextResponse.json({ error: "VoterIdNFT not deployed on localhost" }, { status: 500 });
-      }
-
-      const hasId = await publicClient.readContract({
-        address: voterIdAddress,
-        abi: hasVoterIdAbi,
-        functionName: "hasVoterId",
-        args: [address as `0x${string}`],
-      });
-
-      if (hasId) {
-        return NextResponse.json({ error: "Address already has a Voter ID" }, { status: 409 });
-      }
-
-      const nullifier = BigInt(address) ^ BigInt(Date.now());
-
-      const txHash = await walletClient.writeContract({
-        address: voterIdAddress,
-        abi: mintVoterIdAbi,
-        functionName: "mint",
-        args: [address as `0x${string}`, nullifier],
-      });
-
-      await publicClient.waitForTransactionReceipt({ hash: txHash });
-
-      return NextResponse.json({
-        success: true,
-        txHash,
-        action: "mint-voter-id",
       });
     }
   } catch (error: any) {

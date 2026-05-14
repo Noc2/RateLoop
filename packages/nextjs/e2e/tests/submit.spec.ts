@@ -8,16 +8,16 @@ import {
 import { gotoWithRetry } from "../helpers/wait-helpers";
 
 test.describe("Ask page", () => {
-  test("ask page shows form when connected with VoterID", async ({ connectedPage: page }) => {
+  test("ask page shows form when connected with rater credential", async ({ connectedPage: page }) => {
     await gotoWithRetry(page, "/ask", { ensureWalletConnected: true });
-    // Account #2 has a VoterID — the form should render with "Submit Question" heading.
+    // Account #2 has a rater credential — the form should render with "Submit Question" heading.
     await expect(page.getByRole("heading", { name: "Submit Question" })).toBeVisible({ timeout: 15_000 });
   });
 
   test("can ask a question", async ({ connectedPage: page }) => {
     await gotoWithRetry(page, "/ask", { ensureWalletConnected: true });
 
-    // Wait for the form to appear (requires wallet + VoterID)
+    // Wait for the form to appear (requires wallet + rater credential)
     await expect(page.getByRole("heading", { name: "Submit Question" })).toBeVisible({ timeout: 15_000 });
 
     // 1. Select category — click the category dropdown trigger

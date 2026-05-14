@@ -9,7 +9,7 @@ async function gotoPath(page: Page, path: string, options?: { ensureWalletConnec
 }
 
 const PRIMARY_HEADING_CASES: Array<{ path: string; heading: RegExp }> = [
-  { path: "/ask", heading: /^Submit$|Submit Question|Voter ID Required/i },
+  { path: "/ask", heading: /^Submit$|Submit Question|Rater Credential Required/i },
   { path: "/docs", heading: /RateLoop\s+Introduction|Introduction/i },
   { path: "/legal", heading: /^Legal$/i },
 ];

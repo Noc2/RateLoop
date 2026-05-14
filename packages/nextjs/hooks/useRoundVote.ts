@@ -12,10 +12,10 @@ import { useDeployedContractInfo, useTransactor } from "~~/hooks/scaffold-eth";
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import { FREE_TRANSACTION_ALLOWANCE_QUERY_KEY } from "~~/hooks/useFreeTransactionAllowance";
 import { useGasBalanceStatus } from "~~/hooks/useGasBalanceStatus";
+import { useRaterRegistryIdentity } from "~~/hooks/useRaterRegistryIdentity";
 import { getRecentUserVotesQueryKey } from "~~/hooks/useRecentUserVotes";
 import { useThirdwebSponsoredSubmitCalls } from "~~/hooks/useThirdwebSponsoredSubmitCalls";
 import { getVoteHistoryQueryKey } from "~~/hooks/useVoteHistoryQuery";
-import { useVoterIdNFT } from "~~/hooks/useVoterIdNFT";
 import { getVotingStakesQueryKey } from "~~/hooks/useVotingStakes";
 import {
   type WalletDisplaySummary,
@@ -54,7 +54,7 @@ export function useRoundVote() {
   const { address, chain } = useAccount();
   const { addOptimisticVote } = useOptimisticVote();
   const { targetNetwork } = useTargetNetwork();
-  const { hasVoterId, tokenId } = useVoterIdNFT(address);
+  const { hasActiveHumanCredential, identityKey } = useRaterRegistryIdentity(address);
   const [isCommitting, setIsCommitting] = useState(false);
   const commitLock = useRef(false);
   const [error, setError] = useState<string | null>(null);
@@ -378,7 +378,7 @@ export function useRoundVote() {
         address,
         chainId: targetNetwork.id,
         contentId,
-        voterIdTokenId: tokenId,
+        identityKey,
       });
       void queryClient.invalidateQueries({ queryKey: FREE_TRANSACTION_ALLOWANCE_QUERY_KEY });
 
@@ -442,7 +442,7 @@ export function useRoundVote() {
     isCommitting,
     error,
     clearError,
-    hasVoterId,
-    tokenId,
+    hasActiveHumanCredential,
+    identityKey,
   };
 }

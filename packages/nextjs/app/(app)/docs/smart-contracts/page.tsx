@@ -18,7 +18,7 @@ const SmartContracts: NextPage = () => {
       <p>
         The upgradeable control-plane contracts use <strong>transparent proxies</strong> managed by timelock-owned proxy
         admins: ContentRegistry, ProtocolConfig, RoundVotingEngine, RoundRewardDistributor, FrontendRegistry, and
-        ProfileRegistry. Token, identity, launch distribution, participation, governance, and helper contracts are
+        ProfileRegistry. Token, rater identity, launch distribution, participation, governance, and helper contracts are
         intentionally non-upgradeable.
       </p>
       <p>
@@ -52,13 +52,10 @@ const SmartContracts: NextPage = () => {
               <td>No</td>
             </tr>
             <tr>
-              <td className="font-mono text-primary">VoterIdNFT</td>
-              <td>Soulbound ERC-721 representing optional verified-rater credentials</td>
-              <td>No</td>
-            </tr>
-            <tr>
               <td className="font-mono text-primary">RaterRegistry</td>
-              <td>Optional human credentials, rater profiles, trust seeds, and verified-human anchor reads</td>
+              <td>
+                Rater identity, optional human credentials, delegation, trust seeds, and verified-human anchor reads
+              </td>
               <td>No</td>
             </tr>
             <tr>
@@ -192,41 +189,43 @@ const SmartContracts: NextPage = () => {
 
       <hr />
 
-      <h2>VoterIdNFT</h2>
+      <h2>RaterRegistry</h2>
       <p>
-        Soulbound (non-transferable) ERC-721 representing an optional open rater identity handle. It can be wired to
-        delegated or identity-aware flows when configured; token ID 0 is reserved (indicates no Voter ID).
+        The single rater identity surface. It stores optional wallet-bound human credentials, rater profile metadata,
+        trust seeds and attestations, profile follows, and delegation links for cold-wallet and agent-wallet operation.
       </p>
       <h3>Sybil Resistance</h3>
       <p>
-        VoterIdNFT is optional for the core rating path, but gives the protocol a stable identity handle when configured
-        for delegated voting and identity-gated flows. USDC-funded question submission is permissionless and does not
-        require a Voter ID. Where VoterIdNFT is active, it also enforces a per-Voter-ID stake cap of{" "}
-        <strong>10 LREP per content per round</strong>, preventing a single identity from dominating any vote.
+        RaterRegistry credentials are optional for the core rating path, but give the protocol a stable rater anchor for
+        delegated voting, verified-human launch rewards, and other identity-aware flows. USDC-funded question submission
+        is permissionless and does not require a human credential. Where identity stake caps are active, they prevent a
+        single rater identity from dominating any vote.
       </p>
       <h3>Key Functions</h3>
       <ul>
         <li>
-          <code>mint(holder, nullifier)</code> &mdash; Mint a new Voter ID (authorized identity minters only).
+          <code>attestHumanCredentialWithProof(root, nullifierHash, proof)</code> &mdash; Verify a World ID proof and
+          attach an active human credential to the submitting wallet.
         </li>
         <li>
-          <code>revokeVoterId(holder)</code> &mdash; Revoke a Voter ID (owner/governance).
+          <code>seedHumanCredential(rater, expiresAt, anchorId, evidenceHash)</code> &mdash; Seed an approved human
+          credential during deployment or migration.
         </li>
         <li>
-          <code>recordStake(contentId, roundId, tokenId, amount)</code> &mdash; Record stake against a Voter ID (voting
-          engine only).
+          <code>hasActiveHumanCredential(rater)</code> / <code>getHumanCredential(rater)</code> &mdash; Read credential
+          status and metadata.
         </li>
         <li>
-          <code>hasVoterId(address)</code> / <code>getTokenId(address)</code> &mdash; Check identity status (resolves
-          delegates transparently).
+          <code>setProfile(raterType, metadataHash)</code> &mdash; Publish rater metadata used by identity-aware
+          clients.
         </li>
       </ul>
       <h3>Delegation</h3>
       <p>
-        VoterIdNFT supports delegation: an SBT holder (cold wallet) can authorize a delegate (hot wallet) to act on
-        their behalf for flows that accept delegated identities, notably content submission and voting. Holder-only
-        actions such as frontend registration, profile management, and category submission still require the SBT holder
-        address itself. Setup and security guidance now live in the <code>/settings?tab=delegation</code> flow.
+        RaterRegistry supports delegation: a credential holder or rater identity wallet can authorize a delegate (hot
+        wallet or agent wallet) to act on their behalf for flows that accept delegated identities, notably voting and
+        daily profile/frontend actions. Holder-only recovery and delegation management still require the identity
+        wallet. Setup and security guidance live in the <code>/settings?tab=delegation</code> flow.
       </p>
       <ul>
         <li>
@@ -236,7 +235,7 @@ const SmartContracts: NextPage = () => {
           <code>removeDelegate()</code> &mdash; Revoke delegate authorization (holder only).
         </li>
         <li>
-          <code>resolveHolder(address)</code> &mdash; Returns the effective SBT holder for an address.
+          <code>resolveHolder(address)</code> &mdash; Returns the effective rater identity for an address.
         </li>
       </ul>
 
@@ -365,7 +364,7 @@ const SmartContracts: NextPage = () => {
             <tr>
               <td className="font-mono">MAX_STAKE</td>
               <td>10 LREP</td>
-              <td>Maximum vote stake per Voter ID per round</td>
+              <td>Maximum counted vote stake per rater identity per round when identity stake caps are active</td>
             </tr>
             <tr>
               <td className="font-mono">epochDuration</td>
@@ -395,7 +394,7 @@ const SmartContracts: NextPage = () => {
             <tr>
               <td className="font-mono">VOTE_COOLDOWN</td>
               <td>24 hours</td>
-              <td>Time before the same effective voter ID can vote on the same content again</td>
+              <td>Time before the same resolved rater identity can vote on the same content again</td>
             </tr>
           </tbody>
         </table>
@@ -511,12 +510,10 @@ const SmartContracts: NextPage = () => {
         </li>
         <li>
           <code>setRewardDistributor(...)</code>, <code>setFrontendRegistry(...)</code>,{" "}
-          <code>setCategoryRegistry(...)</code>, <code>setVoterIdNFT(...)</code>, <code>setParticipationPool(...)</code>
-          , and <code>setTreasury(...)</code> &mdash; Maintain the engine&apos;s governance-controlled address book.
-        </li>
-        <li>
-          <code>setRaterRegistry(...)</code> &mdash; Configure the optional human credential registry used for
-          launch-anchor policy.
+          <code>setCategoryRegistry(...)</code>, <code>setRaterRegistry(...)</code>,{" "}
+          <code>setParticipationPool(...)</code>, and <code>setTreasury(...)</code> &mdash; Maintain the engine&apos;s
+          governance-controlled address book, including the rater identity registry used by delegation and launch-anchor
+          policy.
         </li>
       </ul>
 
@@ -591,8 +588,8 @@ const SmartContracts: NextPage = () => {
       <h2>ProfileRegistry</h2>
       <p>
         On-chain user profiles with unique names (3&ndash;20 characters) and optional public self-reported audience
-        context. Profile settings also support an on-chain generated avatar color override. Voter ID is optional profile
-        continuity metadata when the identity rail is configured.
+        context. Profile settings also support an on-chain generated avatar color override. RaterRegistry provides the
+        optional identity and credential context used alongside public profile metadata.
       </p>
       <h3>Key Functions</h3>
       <ul>

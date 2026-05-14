@@ -9,8 +9,8 @@ import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 import { useContentLabel } from "~~/hooks/useCategoryRegistry";
 import { useParticipationRate } from "~~/hooks/useParticipationRate";
+import { useRaterIdentityStake, useRaterRegistryIdentity } from "~~/hooks/useRaterRegistryIdentity";
 import { useRoundSnapshot } from "~~/hooks/useRoundSnapshot";
-import { useVoterIdNFT, useVoterIdStake } from "~~/hooks/useVoterIdNFT";
 import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
 import type { OpenRoundFallbackData, VotingConfig } from "~~/lib/contracts/roundVotingEngine";
 import { estimateVoteReturn, formatHrepAmount } from "~~/lib/vote/voteIncentives";
@@ -85,8 +85,7 @@ export function StakeSelector({
   const [isUp, setIsUp] = useState(() => initialIsUp ?? normalizeStakeSelectorRating(currentRating) >= 5);
   const [predictedUpPercent, setPredictedUpPercent] = useState(() => getInitialPredictedUpPercent(currentRating));
   const { address } = useAccount();
-  const voterIdData = useVoterIdNFT(address);
-  const tokenId = voterIdData.tokenId as bigint;
+  const { identityKey } = useRaterRegistryIdentity(address);
 
   const roundSnapshot = useRoundSnapshot(contentId, openRound ?? undefined, roundConfig ?? undefined);
   const { roundId: currentRoundId, phase, isEpoch1, upPool, downPool } = roundSnapshot;
@@ -100,7 +99,7 @@ export function StakeSelector({
     [effectiveIsBlind, roundSnapshot],
   );
 
-  const { remainingCapacity } = useVoterIdStake(contentId, currentRoundId, tokenId);
+  const { remainingCapacity } = useRaterIdentityStake(contentId, currentRoundId, identityKey);
 
   const { data: hrepBalance } = useScaffoldReadContract({
     contractName: REPUTATION_CONTRACT_NAME,
@@ -338,9 +337,9 @@ export function StakeSelector({
               {isCapacityLimited && (
                 <span
                   className="tooltip tooltip-top ml-2 inline-block cursor-help align-middle"
-                  data-tip={`Max per ${contentLabel}: ${maxByCapacity} ${symbol} remaining (10 limit per round)`}
+                  data-tip={`Max per rater for this ${contentLabel}: ${maxByCapacity} ${symbol} remaining (10 limit per round)`}
                   role="img"
-                  aria-label={`Max per ${contentLabel}: ${maxByCapacity} ${symbol} remaining (10 limit per round)`}
+                  aria-label={`Max per rater for this ${contentLabel}: ${maxByCapacity} ${symbol} remaining (10 limit per round)`}
                 >
                   <svg
                     width="16"

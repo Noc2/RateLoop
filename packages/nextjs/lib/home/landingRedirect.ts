@@ -3,7 +3,7 @@ export function shouldAutoRedirectFromLanding(params: {
   connectorId: string | undefined;
   hasExplicitLandingOverride: boolean;
   isConnected: boolean;
-  voterIdResolved: boolean;
+  raterIdentityResolved: boolean;
 }) {
   if (params.hasExplicitLandingOverride) {
     return false;
@@ -13,7 +13,7 @@ export function shouldAutoRedirectFromLanding(params: {
     return false;
   }
 
-  if (!params.voterIdResolved) {
+  if (!params.raterIdentityResolved) {
     return false;
   }
 

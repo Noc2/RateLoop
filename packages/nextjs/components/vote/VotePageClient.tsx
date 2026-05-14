@@ -32,6 +32,7 @@ import { useDiscoverSignals } from "~~/hooks/useDiscoverSignals";
 import { useFollowedProfiles } from "~~/hooks/useFollowedProfiles";
 import { useInterestProfile } from "~~/hooks/useInterestProfile";
 import { useOnboarding } from "~~/hooks/useOnboarding";
+import { useRaterRegistryIdentity } from "~~/hooks/useRaterRegistryIdentity";
 import { useRoundVote } from "~~/hooks/useRoundVote";
 import { SubmitterProfile, useSubmitterProfiles } from "~~/hooks/useSubmitterProfiles";
 import { useUnixTime } from "~~/hooks/useUnixTime";
@@ -39,7 +40,6 @@ import { useVoteCooldowns } from "~~/hooks/useVoteCooldowns";
 import { useVoteFeedStage } from "~~/hooks/useVoteFeedStage";
 import { useVoteHistoryQuery } from "~~/hooks/useVoteHistoryQuery";
 import { useVoterAccuracyBatch } from "~~/hooks/useVoterAccuracyBatch";
-import { useVoterIdNFT } from "~~/hooks/useVoterIdNFT";
 import { useWatchedContent } from "~~/hooks/useWatchedContent";
 import { mergeVoteHistoryItems } from "~~/hooks/voteHistory/shared";
 import { FOLLOWED_CURATOR_TOAST_ID } from "~~/lib/notifications/followedActivity";
@@ -254,20 +254,20 @@ const HomeInner = () => {
   const { delegateTo, delegateOf, hasDelegate, isDelegate, isLoading: delegationLoading } = useDelegation(address);
   const delegateVoteAddress = hasDelegate ? delegateTo : undefined;
   const delegatorVoteAddress = isDelegate ? delegateOf : undefined;
-  const { tokenId: voteCooldownVoterIdTokenId } = useVoterIdNFT(address);
+  const { identityKey: voteCooldownIdentityKey } = useRaterRegistryIdentity(address);
   const voteCooldownAddresses = useMemo(
     () => buildLinkedWalletAddresses(address, delegateVoteAddress, delegatorVoteAddress),
     [address, delegateVoteAddress, delegatorVoteAddress],
   );
   const localVoteCooldownIdentities = useMemo(() => {
-    const identities: { address?: string; voterIdTokenId?: string }[] = voteCooldownAddresses.map(voterAddress => ({
+    const identities: { address?: string; identityKey?: string }[] = voteCooldownAddresses.map(voterAddress => ({
       address: voterAddress,
     }));
-    if (voteCooldownVoterIdTokenId > 0n) {
-      identities.push({ voterIdTokenId: voteCooldownVoterIdTokenId.toString() });
+    if (voteCooldownIdentityKey) {
+      identities.push({ identityKey: voteCooldownIdentityKey });
     }
     return identities;
-  }, [voteCooldownAddresses, voteCooldownVoterIdTokenId]);
+  }, [voteCooldownAddresses, voteCooldownIdentityKey]);
   const ownSubmitterAddresses = useMemo(
     () => buildLinkedWalletAddresses(address, delegateVoteAddress, delegatorVoteAddress),
     [address, delegateVoteAddress, delegatorVoteAddress],

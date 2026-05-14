@@ -38,9 +38,10 @@ test("local vote cooldown cache returns same-browser address matches", () => {
   assert.equal(cooldowns.get("7"), VOTE_COOLDOWN_SECONDS - 60);
 });
 
-test("local vote cooldown cache matches voter id tokens across linked addresses", () => {
+test("local vote cooldown cache matches rater identity keys across linked addresses", () => {
   const storage = new MemoryStorage();
   const nowSeconds = 1_000_000;
+  const identityKey = "0x1111111111111111111111111111111111111111111111111111111111111111";
 
   recordLocalVoteCooldown({
     address: "0x1111111111111111111111111111111111111111",
@@ -48,13 +49,13 @@ test("local vote cooldown cache matches voter id tokens across linked addresses"
     contentId: "9",
     nowSeconds,
     storage,
-    voterIdTokenId: 42n,
+    identityKey,
   });
 
   const cooldowns = getLocalVoteCooldownsByContentId({
     chainId: 4801,
     contentIds: [9n],
-    identities: [{ address: "0x2222222222222222222222222222222222222222", voterIdTokenId: "42" }],
+    identities: [{ address: "0x2222222222222222222222222222222222222222", identityKey }],
     nowSeconds: nowSeconds + 30,
     storage,
   });

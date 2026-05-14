@@ -50,9 +50,9 @@ test("default required deployment list fails closed for core app contracts", () 
       ParticipationPool: {},
       ProfileRegistry: {},
       ProtocolConfig: {},
+      RaterRegistry: {},
       RoundRewardDistributor: {},
       RoundVotingEngine: {},
-      VoterIdNFT: {},
     },
   });
 

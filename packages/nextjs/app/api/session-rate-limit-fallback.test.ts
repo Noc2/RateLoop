@@ -155,7 +155,7 @@ test("notification email session route fails open when the rate limit store is u
 
 test("free transaction session route keeps serving its fallback when the rate limit store is unavailable", async () => {
   freeTransactions.__setFreeTransactionTestOverridesForTests({
-    resolveVoterIdTokenId: async () => null,
+    resolveRaterIdentityKey: async () => null,
   });
 
   const response = await freeTransactionSessionRoute.GET(
@@ -170,7 +170,7 @@ test("free transaction session route keeps serving its fallback when the rate li
   assert.equal(body.exhausted, false);
   assert.equal(body.remaining, 0);
   assert.equal(body.walletAddress, "0x63cada40E8AcF7A1d47229af5Be35b78b16035fa");
-  assert.equal(body.voterIdTokenId, null);
+  assert.equal(body.raterIdentityKey, null);
 });
 
 test("feedback challenge route continues past rate limit store outages", async () => {

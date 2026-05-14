@@ -10,7 +10,7 @@ import { expect, test } from "@playwright/test";
  * Profile creation and update tests.
  * Triggers Ponder events: ProfileCreated, ProfileUpdated.
  *
- * Uses account #8 which has a VoterID but may not have a profile yet.
+ * Uses account #8 which has a rater credential but may not have a profile yet.
  */
 test.describe("Profile management", () => {
   const createProfileAccount = ANVIL_ACCOUNTS.account8;

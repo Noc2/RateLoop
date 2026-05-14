@@ -68,8 +68,8 @@ async function expectRouteControls(page: Page, path: string, width: number): Pro
   if (path === "/governance") {
     await expect(
       main
-        .getByRole("button", { name: /Profile|Leaderboard|Governance|Voter ID/ })
-        .or(main.getByText(/Voting performance|Staked LREP|Checking Voter ID/i))
+        .getByRole("button", { name: /Profile|Leaderboard|Governance|rater credential/ })
+        .or(main.getByText(/Voting performance|Staked LREP|Checking rater credential/i))
         .first(),
       "Governance claim surface should stay visible",
     ).toBeVisible({ timeout: 15_000 });
