@@ -42,7 +42,7 @@ ponder.on(
       rewardPoolId,
       contentId,
       funder,
-      funderVoterId,
+      funderIdentityKey,
       asset,
       nonRefundable,
       amount,
@@ -63,7 +63,7 @@ ponder.on(
         id: rewardPoolId,
         contentId,
         funder,
-        funderVoterId,
+        funderIdentityKey,
         asset: Number(asset),
         nonRefundable,
         bountyKind: 0,
@@ -342,7 +342,7 @@ ponder.on(
     const {
       bundleId,
       funder,
-      funderVoterId,
+      funderIdentityKey,
       amount,
       requiredCompleters,
       questionCount,
@@ -361,7 +361,7 @@ ponder.on(
       .values({
         id: bundleId,
         funder,
-        funderVoterId,
+        funderIdentityKey,
         asset: Number(asset),
         fundedAmount: amount,
         claimedAmount: 0n,
@@ -390,7 +390,7 @@ ponder.on(
       })
       .onConflictDoUpdate((row) => ({
         funder,
-        funderVoterId,
+        funderIdentityKey,
         asset: Number(asset),
         fundedAmount: amount,
         requiredCompleters: Number(requiredCompleters),

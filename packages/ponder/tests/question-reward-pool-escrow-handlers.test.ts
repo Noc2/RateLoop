@@ -10,6 +10,7 @@ type RegisteredHandler = (args: {
 
 const handlers = new Map<string, RegisteredHandler>();
 const EMPTY_BOUNTY_ELIGIBILITY_DATA_HASH = `0x${"0".repeat(64)}`;
+const FUNDER_IDENTITY_KEY = `0x${"1".repeat(64)}`;
 
 vi.mock("ponder:registry", () => ({
   ponder: {
@@ -120,7 +121,7 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
           rewardPoolId: 7n,
           contentId: 1n,
           funder: "0x0000000000000000000000000000000000000001",
-          funderVoterId: 11n,
+          funderIdentityKey: FUNDER_IDENTITY_KEY,
           amount: 100_000_000n,
           requiredVoters: 5n,
           requiredSettledRounds: 2n,
@@ -144,6 +145,7 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
       values: expect.objectContaining({
         id: 7n,
         contentId: 1n,
+        funderIdentityKey: FUNDER_IDENTITY_KEY,
         fundedAmount: 100_000_000n,
         unallocatedAmount: 100_000_000n,
         frontendFeeBps: 300,
@@ -409,7 +411,7 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
         args: {
           bundleId: 9n,
           funder: "0x0000000000000000000000000000000000000001",
-          funderVoterId: 11n,
+          funderIdentityKey: FUNDER_IDENTITY_KEY,
           amount: 120_000_000n,
           requiredCompleters: 3n,
           questionCount: 2n,

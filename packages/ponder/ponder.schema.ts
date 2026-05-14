@@ -281,7 +281,7 @@ export const questionRewardPool = onchainTable(
     id: t.bigint().primaryKey(),
     contentId: t.bigint().notNull(),
     funder: t.hex().notNull(),
-    funderVoterId: t.bigint().notNull(),
+    funderIdentityKey: t.hex().notNull(),
     asset: t.integer().notNull(),
     nonRefundable: t.boolean().notNull(),
     bountyKind: t.integer().notNull(),
@@ -312,6 +312,7 @@ export const questionRewardPool = onchainTable(
   (table) => ({
     contentIdx: index().on(table.contentId),
     funderIdx: index().on(table.funder),
+    funderIdentityKeyIdx: index().on(table.funderIdentityKey),
     refundedIdx: index().on(table.refunded),
     bountyKindIdx: index().on(table.bountyKind),
     challengedRoundIdx: index().on(table.challengedRoundId),
@@ -434,7 +435,7 @@ export const questionBundleReward = onchainTable(
   (t) => ({
     id: t.bigint().primaryKey(),
     funder: t.hex().notNull(),
-    funderVoterId: t.bigint().notNull(),
+    funderIdentityKey: t.hex().notNull(),
     asset: t.integer().notNull(),
     fundedAmount: t.bigint().notNull(),
     claimedAmount: t.bigint().notNull(),
@@ -463,6 +464,7 @@ export const questionBundleReward = onchainTable(
   }),
   (table) => ({
     funderIdx: index().on(table.funder),
+    funderIdentityKeyIdx: index().on(table.funderIdentityKey),
     assetIdx: index().on(table.asset),
     failedIdx: index().on(table.failed),
     refundedIdx: index().on(table.refunded),
