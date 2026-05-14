@@ -55,12 +55,68 @@ weight remains stake times the round's epoch timing weight, and human
 verification is exposed as participation context rather than as a settlement
 multiplier.
 
+## Binary RBTS Rating Policy
+
+Fresh content is publicly shown as `N/A` until at least one round settles. The
+protocol can still snapshot an internal 5.0 prior for the first round's rating
+math, but the UI must not present that prior as a community rating.
+
+Each revealed report has two separate fields:
+
+- `isUp`: the absolute thumbs-up or thumbs-down signal for the question.
+- `predictedUpBps`: the rater's forecast of the revealed crowd's thumbs-up
+  share.
+
+The public rating is updated from bounded binary signal evidence only. It does
+not use the rater's forecast and it does not treat the current score as the
+thing being voted up or down. LREP stake still matters, but only as a capped
+confidence bonus on top of one base signal unit:
+
+- Base signal evidence: `1.0` unit per revealed report.
+- Stake evidence bonus: linear up to `+1.0` unit at `10 LREP`.
+- Epoch timing: the same blind/open epoch weight discounts late evidence.
+- Settlement rewards and stake return continue to use the existing
+  stake-weighted RBTS reward weight.
+
+This keeps the rating closer to binary Robust BTS: users report their own
+binary signal plus their forecast of others, and the score is not a relative
+"raise/lower the current number" vote. The internal reference score remains
+relevant only as the prior rating state that the settlement math updates from.
+For a first round this prior is hidden behind `N/A`; after settlement the
+rating shown is the settled community rating.
+
+Example:
+
+1. A new question starts as `N/A`.
+2. Alice votes thumbs up, forecasts `70%` up, and stakes `10 LREP`.
+3. Bob votes thumbs up, forecasts `60%` up, and stakes `3 LREP`.
+4. Carol votes thumbs down, forecasts `30%` up, and stakes `3 LREP`.
+5. At reveal, Alice contributes `2.0` up evidence units, Bob contributes
+   `1.3` up units, and Carol contributes `1.3` down units.
+6. Settlement records `3.3` bounded up evidence versus `1.3` bounded down
+   evidence, so the public rating appears above neutral after the first round.
+   It does not jump straight to the maximum because one report is down and the
+   rating model smooths limited evidence.
+7. The RBTS reward score is computed separately from each rater's signal and
+   crowd forecast. That score controls score-based stake return, ordinary LREP
+   rater-pool rewards, and earned launch-credit quality.
+
 USDC bounty payouts and earned launch LREP credits now use challengeable
 Correlation Epoch Snapshots. A keeper or indexer computes a reproducible,
 COCM-inspired payout artifact over multiple rounds, proposes the Merkle roots
 on-chain, and waits through a challenge window before claims can use those
 effective weights. This means cluster/correlation caps delay and size payouts;
 they do not change the public rating result.
+
+Continuing the example: the public rating and ordinary settled-round reward
+state are readable immediately after settlement. If this question has a USDC
+bounty or launch LREP rewards, the claimant must wait for the finalized
+correlation payout snapshot. If Alice is fully independent she may keep
+`10,000` independence bps. If Bob and Carol are partially correlated with a
+larger cluster, their bounty or launch-credit claim weights might be multiplied
+by `5,000` bps. That cap changes only how much USDC or launch LREP they can
+claim; it does not erase their visible signal and it does not rewrite the
+public rating.
 
 ## Launch Earned Rewards
 

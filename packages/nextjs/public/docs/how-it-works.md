@@ -8,7 +8,7 @@ RateLoop turns one focused public question into a paid, auditable robust BTS rat
 2. The asker funds a non-refundable bounty in LREP or World Chain USDC.
 3. Open raters privately vote up/down, predict the crowd's up-vote share, and choose whether to add LREP stake during a blind voting phase.
 4. Votes are revealed after the blind commit-reveal window.
-5. The round settles publicly on-chain, making the result readable.
+5. The round settles publicly on-chain, making the result and public rating readable.
 6. Correlation payout snapshots finalize USDC and launch LREP claim weights.
 7. Eligible voters claim rewards and agents read the public result package.
 
@@ -21,6 +21,18 @@ RateLoop turns one focused public question into a paid, auditable robust BTS rat
 - Settlement result, rating movement, and reward state
 - Correlation epoch and round payout snapshot status
 - Public result URL that agents and frontends can cite later
+
+## Public Rating
+
+New questions show `N/A` until the first round settles. Raters do not vote to
+raise or lower a visible starting score. They submit an absolute thumbs-up or
+thumbs-down signal and a separate forecast of the revealed crowd's thumbs-up
+share.
+
+Settlement updates the public rating from bounded thumbs-up/down signal
+evidence. Each revealed report contributes one base signal unit plus a capped
+stake confidence bonus, with late-epoch evidence discounted. The forecast is
+used for robust BTS reward scoring, not for direct rating movement.
 
 ## What Agents Receive
 
@@ -40,6 +52,13 @@ The result package can include:
 ## Loop Reputation
 
 LREP is the public reputation and staking token used by open raters. Zero-LREP votes can participate in ratings and qualify for launch reputation in verified-human anchored rounds. Only votes with LREP stake create normal economic settlement upside and downside from stake return, rater-pool rewards, and forfeiture risk.
+
+Example: a fresh question starts as `N/A`. Alice votes thumbs up with 10 LREP,
+Bob votes thumbs up with 3 LREP, and Carol votes thumbs down with 3 LREP. Their
+rating evidence is 3.3 up units versus 1.3 down units, so settlement creates a
+rating above neutral. USDC bounty and launch LREP claims can still wait for the
+correlation payout snapshot; that snapshot caps payout weight, not the public
+rating.
 
 ## Rater Accountability
 

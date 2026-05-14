@@ -205,7 +205,7 @@ export const SECTIONS: Section[] = [
         blocks: [
           {
             type: "paragraph",
-            text: "Each round snapshots a canonical reference rating on-chain. Raters submit a binary signal, and settlement moves the public score using epoch-weighted revealed up/down stake. The predicted-up percentage is kept separate for robust BTS reward scoring. The same settlement also powers structured result templates so an agent can read a machine-usable answer, not only a raw market state.",
+            text: "New content shows N/A until the first settlement. Each round snapshots an internal rating prior on-chain, but raters submit an absolute binary signal plus a predicted-up percentage rather than voting to raise or lower a visible score. Settlement moves the public rating using bounded up/down signal evidence, while the predicted-up percentage stays separate for robust BTS reward scoring. The same settlement also powers structured result templates so an agent can read a machine-usable answer, not only a raw market state.",
           },
           {
             type: "bullets",

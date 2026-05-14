@@ -329,8 +329,9 @@ const SmartContracts: NextPage = () => {
         </li>
         <li>
           <code>updateRatingState(contentId, roundId, referenceRatingBps, nextState)</code> &mdash; Called by
-          RoundVotingEngine after settlement with the score-relative update derived from the round&apos;s snapshotted
-          reference score, epoch-weighted revealed evidence, and conservative rating bound.
+          RoundVotingEngine after settlement with the rating update derived from bounded up/down signal evidence, the
+          internal reference prior, and the conservative rating bound. Fresh content can use the internal default prior
+          while the public UI still shows <strong>N/A</strong> until the first settlement.
         </li>
       </ul>
       <h3>Submission Economics</h3>
@@ -414,8 +415,9 @@ const SmartContracts: NextPage = () => {
           </code>{" "}
           &mdash; Default robust BTS flow. Locks LREP and records the tlock-encrypted up/down signal plus expected
           up-vote percentage. The report is hidden until the epoch ends. The redeployed contract rejects malformed or
-          non-armored ciphertexts, binds the canonical round reference score into the round context, and binds the
-          reveal-target metadata on-chain.
+          non-armored ciphertexts, binds the canonical internal rating prior into the round context, and binds the
+          reveal-target metadata on-chain. The prior is not a user-facing vote target; raters submit an absolute
+          thumbs-up/down signal and a separate crowd forecast.
         </li>
         <li>
           <code>commitVote(...)</code> &mdash; Lower-level integration path for bots, tests, and direct contract callers
@@ -443,8 +445,9 @@ const SmartContracts: NextPage = () => {
           <code>settleRound(contentId, roundId)</code> &mdash; Settle the current round once at least{" "}
           <code>max(minVoters, 3)</code> votes from the round snapshot are revealed and all past-epoch votes have been
           revealed (or their {protocolDocFacts.revealGracePeriodLabel} reveal grace period has expired). Determines
-          winners based on epoch-weighted stakes, splits bounties, and updates content rating from the round reference
-          score using the governed score-relative rating model.
+          winners based on epoch-weighted stakes, scores RBTS rewards from the signal and crowd forecast, and updates
+          content rating from bounded binary signal evidence. Bounty and launch-LREP correlation caps apply later in the
+          claim path, not to this public rating result.
         </li>
         <li>
           <code>RoundRewardDistributor.claimFrontendFee(contentId, roundId, frontend)</code> &mdash; Frontend operators
@@ -692,9 +695,8 @@ const SmartContracts: NextPage = () => {
         </li>
         <li>
           <code>calculateRating(totalUpStake, totalDownStake)</code> &mdash; Legacy deployments use this smoothed
-          stake-imbalance helper. The planned redeploy replaces it with a dedicated score-relative rating math library
-          that consumes the round reference score, epoch-weighted evidence, dynamic confidence, and conservative-bound
-          logic.
+          stake-imbalance helper. The redeployed rating path uses <code>RatingMath.applySettlement</code> with bounded
+          thumbs-up/down signal evidence, an internal reference prior, dynamic confidence, and conservative-bound logic.
         </li>
       </ul>
       <h3>RoundLib</h3>

@@ -129,9 +129,17 @@ const HowItWorks: NextPage = () => {
 
       <h2 id="content-rating">4. Read the Result</h2>
       <p>
-        Content starts at 5.0 on the public rating scale. When a round opens, it snapshots the current score as the
-        reference. Settlement uses revealed up/down stake to move the public rating up or down, while the population
-        prediction remains separate and is used for robust BTS reward scoring.
+        New content shows <strong>N/A</strong> until at least one round settles. Raters do not vote to raise or lower a
+        visible starting score: they submit an absolute thumbs-up/down signal and a separate forecast of the revealed
+        crowd&apos;s thumbs-up share. Settlement updates the public rating from bounded binary signal evidence, with
+        LREP stake contributing only a capped confidence bonus. The forecast remains separate and is used for robust BTS
+        reward scoring.
+      </p>
+      <p>
+        Example: if Alice votes thumbs up with 10 LREP, Bob votes thumbs up with 3 LREP, and Carol votes thumbs down
+        with 3 LREP, settlement records 3.3 bounded up evidence units versus 1.3 bounded down units. The first public
+        rating appears above neutral, while USDC bounty and launch LREP claims can still wait for the finalized
+        correlation payout snapshot.
       </p>
       <p>
         Optional feedback stays hidden while the round is active and unlocks after settlement or another terminal round
