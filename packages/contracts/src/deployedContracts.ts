@@ -712,7 +712,7 @@ const deployedContracts: GenericContractsDeclaration = {
       deployedOnBlock: 6,
     },
     RoundRevealLib: {
-      address: "0xa25f602d454e21f26e902d702fa61530bf8155bb",
+      address: "0xc54fa424ed264e34172bdd9b6c2dc59a50cc0843",
       abi: [
         {
           type: "error",
@@ -1314,7 +1314,7 @@ const deployedContracts: GenericContractsDeclaration = {
       deployedOnBlock: 11,
     },
     QuestionRewardPoolEscrowClaimLib: {
-      address: "0xe72a492b4abd6b9213139d38ca7d9f28303291b7",
+      address: "0x90b8c52662387a29f9fbbeaa5f29f92ad77f1730",
       abi: [
         {
           type: "function",
@@ -1612,7 +1612,7 @@ const deployedContracts: GenericContractsDeclaration = {
       deployedOnBlock: 13,
     },
     QuestionRewardPoolEscrowBundleActionsLib: {
-      address: "0x34bd3081fadd26424a082be307a2e2f13ab443c7",
+      address: "0x25cf32afa0fdbc909c2881c2f68c408a32a1b5ca",
       abi: [
         {
           type: "event",
@@ -18835,6 +18835,11 @@ const deployedContracts: GenericContractsDeclaration = {
               type: "address",
               internalType: "address",
             },
+            {
+              name: "newFrontendRegistry",
+              type: "address",
+              internalType: "address",
+            },
           ],
           stateMutability: "nonpayable",
         },
@@ -18909,6 +18914,19 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "DEFAULT_CHALLENGE_BOND",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "DEFAULT_CHALLENGE_WINDOW",
           inputs: [],
           outputs: [
@@ -18922,13 +18940,13 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "DEFAULT_PROPOSAL_BOND",
+          name: "MAX_CHALLENGE_WINDOW",
           inputs: [],
           outputs: [
             {
               name: "",
-              type: "uint256",
-              internalType: "uint256",
+              type: "uint64",
+              internalType: "uint64",
             },
           ],
           stateMutability: "view",
@@ -18994,6 +19012,19 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "address",
               internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "challengeBond",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
             },
           ],
           stateMutability: "view",
@@ -19195,6 +19226,19 @@ const deployedContracts: GenericContractsDeclaration = {
           ],
           outputs: [],
           stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "frontendRegistry",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "contract IFrontendRegistry",
+            },
+          ],
+          stateMutability: "view",
         },
         {
           type: "function",
@@ -19478,19 +19522,6 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "address",
             },
           ],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "proposalBond",
-          inputs: [],
           outputs: [
             {
               name: "",
@@ -19851,6 +19882,19 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "setFrontendRegistry",
+          inputs: [
+            {
+              name: "newFrontendRegistry",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "setOracleConfig",
           inputs: [
             {
@@ -19859,7 +19903,7 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "uint64",
             },
             {
-              name: "newProposalBond",
+              name: "newChallengeBond",
               type: "uint256",
               internalType: "uint256",
             },
@@ -20146,7 +20190,7 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "uint64",
             },
             {
-              name: "proposer",
+              name: "frontendOperator",
               type: "address",
               indexed: true,
               internalType: "address",
@@ -20205,6 +20249,19 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "event",
+          name: "FrontendRegistryUpdated",
+          inputs: [
+            {
+              name: "frontendRegistry",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
           name: "OracleConfigUpdated",
           inputs: [
             {
@@ -20214,7 +20271,7 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "uint64",
             },
             {
-              name: "proposalBond",
+              name: "challengeBond",
               type: "uint256",
               indexed: false,
               internalType: "uint256",
@@ -20437,7 +20494,7 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "uint64",
             },
             {
-              name: "proposer",
+              name: "frontendOperator",
               type: "address",
               indexed: false,
               internalType: "address",
@@ -20532,6 +20589,11 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "bytes32",
             },
           ],
+        },
+        {
+          type: "error",
+          name: "FrontendNotEligible",
+          inputs: [],
         },
         {
           type: "error",

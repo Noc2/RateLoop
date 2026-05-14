@@ -6,6 +6,11 @@ export const ClusterPayoutOracleAbi = [
         "name": "admin",
         "type": "address",
         "internalType": "address"
+      },
+      {
+        "name": "newFrontendRegistry",
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "stateMutability": "nonpayable"
@@ -81,6 +86,19 @@ export const ClusterPayoutOracleAbi = [
   },
   {
     "type": "function",
+    "name": "DEFAULT_CHALLENGE_BOND",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "DEFAULT_CHALLENGE_WINDOW",
     "inputs": [],
     "outputs": [
@@ -94,13 +112,13 @@ export const ClusterPayoutOracleAbi = [
   },
   {
     "type": "function",
-    "name": "DEFAULT_PROPOSAL_BOND",
+    "name": "MAX_CHALLENGE_WINDOW",
     "inputs": [],
     "outputs": [
       {
         "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
+        "type": "uint64",
+        "internalType": "uint64"
       }
     ],
     "stateMutability": "view"
@@ -166,6 +184,19 @@ export const ClusterPayoutOracleAbi = [
         "name": "",
         "type": "address",
         "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "challengeBond",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -366,6 +397,19 @@ export const ClusterPayoutOracleAbi = [
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "frontendRegistry",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract IFrontendRegistry"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -649,19 +693,6 @@ export const ClusterPayoutOracleAbi = [
         "internalType": "address"
       }
     ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "proposalBond",
-    "inputs": [],
     "outputs": [
       {
         "name": "",
@@ -1020,6 +1051,19 @@ export const ClusterPayoutOracleAbi = [
   },
   {
     "type": "function",
+    "name": "setFrontendRegistry",
+    "inputs": [
+      {
+        "name": "newFrontendRegistry",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "setOracleConfig",
     "inputs": [
       {
@@ -1028,7 +1072,7 @@ export const ClusterPayoutOracleAbi = [
         "internalType": "uint64"
       },
       {
-        "name": "newProposalBond",
+        "name": "newChallengeBond",
         "type": "uint256",
         "internalType": "uint256"
       },
@@ -1315,7 +1359,7 @@ export const ClusterPayoutOracleAbi = [
         "internalType": "uint64"
       },
       {
-        "name": "proposer",
+        "name": "frontendOperator",
         "type": "address",
         "indexed": true,
         "internalType": "address"
@@ -1374,6 +1418,19 @@ export const ClusterPayoutOracleAbi = [
   },
   {
     "type": "event",
+    "name": "FrontendRegistryUpdated",
+    "inputs": [
+      {
+        "name": "frontendRegistry",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "OracleConfigUpdated",
     "inputs": [
       {
@@ -1383,7 +1440,7 @@ export const ClusterPayoutOracleAbi = [
         "internalType": "uint64"
       },
       {
-        "name": "proposalBond",
+        "name": "challengeBond",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -1606,7 +1663,7 @@ export const ClusterPayoutOracleAbi = [
         "internalType": "uint64"
       },
       {
-        "name": "proposer",
+        "name": "frontendOperator",
         "type": "address",
         "indexed": false,
         "internalType": "address"
@@ -1701,6 +1758,11 @@ export const ClusterPayoutOracleAbi = [
         "internalType": "bytes32"
       }
     ]
+  },
+  {
+    "type": "error",
+    "name": "FrontendNotEligible",
+    "inputs": []
   },
   {
     "type": "error",
