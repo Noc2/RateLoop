@@ -91,6 +91,32 @@ contract LaunchDistributionPoolTest is Test {
         assertTrue(requireNoPendingCleanup);
     }
 
+    function test_RecoverSurplusRecoversDirectTransfersWithoutChangingPoolBalance() public {
+        uint256 trackedBefore = pool.poolBalance();
+        lrep.mint(address(pool), 123e6);
+
+        uint256 recovered = pool.recoverSurplus(bob, type(uint256).max);
+
+        assertEq(recovered, 123e6);
+        assertEq(lrep.balanceOf(bob), 123e6);
+        assertEq(pool.poolBalance(), trackedBefore);
+    }
+
+    function test_RecoverSurplusPartialAndValidation() public {
+        lrep.mint(address(pool), 123e6);
+
+        assertEq(pool.recoverSurplus(bob, 23e6), 23e6);
+        assertEq(lrep.balanceOf(bob), 23e6);
+        assertEq(pool.recoverSurplus(bob, type(uint256).max), 100e6);
+
+        vm.expectRevert(LaunchDistributionPool.InvalidAmount.selector);
+        pool.recoverSurplus(bob, type(uint256).max);
+
+        lrep.mint(address(pool), 1);
+        vm.expectRevert(LaunchDistributionPool.InvalidAddress.selector);
+        pool.recoverSurplus(address(0), 1);
+    }
+
     function test_SetLaunchRewardPolicyUpdatesRewardMath() public {
         ILaunchDistributionPool.LaunchRewardPolicy memory policy = _defaultPolicy();
         policy.minQualifyingScoreBps = 8_500;

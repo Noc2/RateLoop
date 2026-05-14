@@ -84,6 +84,7 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
 
     event PoolDeposit(uint256 amount);
     event PoolWithdrawal(address indexed to, uint256 amount);
+    event SurplusRecovered(address indexed to, uint256 amount);
     event LegacyRootUpdated(bytes32 legacyRoot);
     event GovernanceUpdated(address indexed governance);
     event RaterRegistryUpdated(address indexed raterRegistry);
@@ -189,6 +190,16 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
         poolBalance -= withdrawn;
         lrepToken.safeTransfer(to, withdrawn);
         emit PoolWithdrawal(to, withdrawn);
+    }
+
+    function recoverSurplus(address to, uint256 amount) external onlyOwner nonReentrant returns (uint256 recovered) {
+        if (to == address(0)) revert InvalidAddress();
+        uint256 actualBalance = lrepToken.balanceOf(address(this));
+        uint256 surplus = actualBalance > poolBalance ? actualBalance - poolBalance : 0;
+        recovered = amount > surplus ? surplus : amount;
+        if (recovered == 0) revert InvalidAmount();
+        lrepToken.safeTransfer(to, recovered);
+        emit SurplusRecovered(to, recovered);
     }
 
     function claimLegacy(uint256 amount, bytes32[] calldata proof) external nonReentrant returns (uint256 paidAmount) {
