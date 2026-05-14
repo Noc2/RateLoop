@@ -7,7 +7,9 @@ current protocol plan. The current pre-deploy implementation removes
 protocol-enforced cluster discounts, independence multipliers, identity
 reward multipliers, and AI-specific accountability rules. See
 `docs/implementation-plan.md` for the canonical human-credential and
-launch-anchor policy.
+launch-anchor policy. Social-graph trust scoring and trust attestations are
+also historical research only; they are not part of the current contracts,
+indexer schema, SDK, app UI, or payout policy.
 
 This note is an independent review of
 [`social-graph-reputation-rating-system.md`](./social-graph-reputation-rating-system.md).

@@ -18,6 +18,10 @@ research tradeoff, not as the current implementation target.
 `1.0-9.9` prediction payload. RateLoop now uses binary robust BTS reports:
 `isUp`, `predictedUpBps` in `0-10000`, and a salt.
 
+2026-05-14 cleanup: social-graph trust scoring, trust seeds, and trust
+attestations remain research-only ideas. They are not part of the current
+pre-deploy contracts, indexer schema, SDK, app UI, or payout policy.
+
 This note evaluates replacing the Self.xyz faucet-centered identity model with
 an open rater network based on earned reputation and social-graph-informed
 signal quality. The rater can be a human, an AI agent, a team, or a hybrid

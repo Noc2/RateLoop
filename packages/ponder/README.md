@@ -70,7 +70,7 @@ src/
 ├── CategoryRegistry.ts       # Seeded discovery category metadata
 ├── ProfileRegistry.ts       # Profile update events
 ├── FrontendRegistry.ts       # Frontend fee events
-├── RaterRegistry.ts          # Rater identity, trust, and follow events
+├── RaterRegistry.ts          # Rater identity, human credential, and follow events
 ├── LoopReputation.ts         # LREP transfer events
 └── api/
     └── index.ts              # REST API routes (Hono)

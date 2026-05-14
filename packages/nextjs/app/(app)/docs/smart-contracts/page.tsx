@@ -54,7 +54,7 @@ const SmartContracts: NextPage = () => {
             <tr>
               <td className="font-mono text-primary">RaterRegistry</td>
               <td>
-                Rater identity, optional human credentials, delegation, trust seeds, and verified-human anchor reads
+                Rater identity, optional human credentials, delegation, profile follows, and verified-human anchor reads
               </td>
               <td>No</td>
             </tr>
@@ -197,7 +197,7 @@ const SmartContracts: NextPage = () => {
       <h2>RaterRegistry</h2>
       <p>
         The single rater identity surface. It stores optional wallet-bound human credentials, rater profile metadata,
-        trust seeds and attestations, profile follows, and delegation links for cold-wallet and agent-wallet operation.
+        profile follows, and delegation links for cold-wallet and agent-wallet operation.
       </p>
       <h3>Sybil Resistance</h3>
       <p>

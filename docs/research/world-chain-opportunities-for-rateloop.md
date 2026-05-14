@@ -322,7 +322,7 @@ The real advantage is:
 
 1. Mini App distribution
 2. World App wallet UX and sponsored gas
-3. optional World ID trust signals
+3. optional World ID human credentials
 4. built-in retention and sharing primitives
 5. eventually, human-backed agent identity
 

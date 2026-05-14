@@ -17,6 +17,11 @@ path rather than the current implementation target.
 active vote payload is `isUp`, `predictedUpBps` in `0-10000`, and a salt, not a
 scalar `1.0-9.9` own-rating/crowd-rating pair.
 
+2026-05-14 cleanup: the active pre-deploy plan also removes trust graph
+primitives, trust attestations, trust seeds, and trust-attestation multipliers.
+Those sections below are historical alternative-design notes only, not current
+contracts, indexing, SDK, or product behavior.
+
 This note describes an alternative to the no-proof reputation design: keep
 Self.xyz as an optional identity credential while still allowing users to
 participate without proving their identity. The goal is to preserve low-friction
