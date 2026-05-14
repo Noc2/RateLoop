@@ -33,7 +33,8 @@ library RoundSettlementDistributionLib {
         uint256 contentId,
         uint256 roundId,
         uint256 weightedWinningStake,
-        uint256 losingPool
+        uint256 losingPool,
+        bool rawUnanimous
     ) external returns (uint256 updatedConsensusReserve, uint256 treasuryPaid) {
         updatedConsensusReserve = consensusReserve;
 
@@ -42,7 +43,12 @@ library RoundSettlementDistributionLib {
             (uint256 voterShare, uint256 platformShare, uint256 treasuryShare, uint256 consensusShare) =
                 RewardMath.splitPool(losingPool - loserRefundShare);
 
-            roundVoterPool[contentId][roundId] = voterShare;
+            if (weightedWinningStake > 0) {
+                roundVoterPool[contentId][roundId] += voterShare;
+            } else if (voterShare > 0) {
+                updatedConsensusReserve += voterShare;
+                emit ConsensusReserveFunded(contentId, roundId, voterShare);
+            }
             roundWinningStake[contentId][roundId] = weightedWinningStake;
 
             if (consensusShare > 0) {
@@ -67,16 +73,14 @@ library RoundSettlementDistributionLib {
                 treasuryPaid =
                     _transferTreasuryFee(hrepToken, protocolConfig, roundVoterPool, contentId, roundId, treasuryShare);
             }
-
-            return (updatedConsensusReserve, treasuryPaid);
         }
 
-        if (weightedWinningStake > 0) {
+        if (rawUnanimous && weightedWinningStake > 0) {
             uint256 totalStake = round.upPool + round.downPool;
             uint256 subsidy = RewardMath.calculateConsensusSubsidy(totalStake, consensusReserve);
             if (subsidy > 0) {
                 updatedConsensusReserve -= subsidy;
-                roundVoterPool[contentId][roundId] = subsidy;
+                roundVoterPool[contentId][roundId] += subsidy;
                 emit ConsensusSubsidyDistributed(contentId, roundId, subsidy);
             }
         }

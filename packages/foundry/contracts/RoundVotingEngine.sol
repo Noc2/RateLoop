@@ -785,7 +785,8 @@ contract RoundVotingEngine is
         }
 
         uint256 weightedWinningStake;
-        uint256 losingPool;
+        uint256 rbtsForfeitedPool;
+        uint256 binaryLosingPool;
         bool upWins;
         bytes32 scoreSeed;
 
@@ -806,8 +807,9 @@ contract RoundVotingEngine is
             // This inverts the conventional raw-majority-breaks-tie convention intentionally.
             upWins = round.upPool < round.downPool;
         }
+        binaryLosingPool = upWins ? round.downPool : round.upPool;
 
-        (weightedWinningStake, losingPool, scoreSeed) =
+        (weightedWinningStake, rbtsForfeitedPool, scoreSeed) =
             _scoreRbtsRewards(contentId, roundId, round.revealedCount, upWins);
         roundRbtsScored[contentId][roundId] = true;
 
@@ -829,7 +831,8 @@ contract RoundVotingEngine is
             contentId,
             roundId,
             weightedWinningStake,
-            losingPool
+            rbtsForfeitedPool,
+            binaryLosingPool == 0
         );
         consensusReserve = updatedConsensusReserve;
         if (treasuryPaid > 0) {
@@ -859,7 +862,7 @@ contract RoundVotingEngine is
             roundRbtsForfeitedPool[contentId][roundId],
             roundRbtsForfeitClaimants[contentId][roundId]
         );
-        emit RoundSettled(contentId, roundId, upWins, losingPool);
+        emit RoundSettled(contentId, roundId, upWins, binaryLosingPool);
     }
 
     // =========================================================================
@@ -1200,13 +1203,14 @@ contract RoundVotingEngine is
 
         RbtsRoundTotals memory totals;
 
-        scoreSeed = _rbtsScoreSeed(contentId, roundId, revealedKeys, revealedCount);
+        scoreSeed = _rbtsScoreSeed(contentId, roundId, revealedCount);
         for (uint256 i = 0; i < revealedCount;) {
             bytes32 commitKey = revealedKeys[i];
             uint256 ownWeight = commitRbtsWeight[contentId][roundId][commitKey];
-            uint256 referenceIndex = _rbtsOtherIndex(scoreSeed, commitKey, i, revealedCount, 1);
+            bytes32 drawKey = _rbtsDrawKey(contentId, roundId, commitKey);
+            uint256 referenceIndex = _rbtsOtherIndex(scoreSeed, drawKey, i, revealedCount, 1);
             bytes32 referenceKey = revealedKeys[referenceIndex];
-            bytes32 peerKey = revealedKeys[_rbtsPeerIndex(scoreSeed, commitKey, i, referenceIndex, revealedCount)];
+            bytes32 peerKey = revealedKeys[_rbtsPeerIndex(scoreSeed, drawKey, i, referenceIndex, revealedCount)];
             uint16 scoreBps = RobustBtsMath.scoreBps(
                 commits[contentId][roundId][commitKey].isUp,
                 commitPredictedUpBps[contentId][roundId][commitKey],
@@ -1266,39 +1270,49 @@ contract RoundVotingEngine is
         roundRbtsForfeitClaimants[contentId][roundId] = totals.forfeitClaimants;
     }
 
-    function _rbtsScoreSeed(uint256 contentId, uint256 roundId, bytes32[] memory scoreableKeys, uint256 scoreableCount)
+    function _rbtsScoreSeed(uint256 contentId, uint256 roundId, uint256 scoreableCount)
         internal
         view
         returns (bytes32 scoreSeed)
     {
-        scoreSeed = keccak256(abi.encodePacked(address(this), contentId, roundId, scoreableCount));
-        for (uint256 i = 0; i < scoreableCount;) {
-            scoreSeed = keccak256(abi.encodePacked(scoreSeed, scoreableKeys[i]));
-            unchecked {
-                ++i;
-            }
-        }
+        scoreSeed = keccak256(
+            abi.encodePacked(
+                block.chainid,
+                address(this),
+                contentId,
+                roundId,
+                scoreableCount,
+                block.prevrandao,
+                blockhash(block.number - 1)
+            )
+        );
     }
 
-    function _rbtsOtherIndex(bytes32 seed, bytes32 commitKey, uint256 ownIndex, uint256 count, uint8 domain)
+    function _rbtsDrawKey(uint256 contentId, uint256 roundId, bytes32 commitKey) internal view returns (bytes32) {
+        bytes32 identityKey = commitIdentityKey[contentId][roundId][commitKey];
+        if (identityKey != bytes32(0)) return identityKey;
+        return VotePreflightLib.addressIdentityKey(commits[contentId][roundId][commitKey].voter);
+    }
+
+    function _rbtsOtherIndex(bytes32 seed, bytes32 drawKey, uint256 ownIndex, uint256 count, uint8 domain)
         internal
         pure
         returns (uint256)
     {
-        // Deterministic sampler over pre-committed vote keys; not chain entropy for custody or authorization.
+        // Deterministic sampler over rater identities plus settlement entropy; not chain entropy for custody.
         // slither-disable-next-line weak-prng
-        uint256 drawn = uint256(keccak256(abi.encodePacked(seed, commitKey, ownIndex, domain))) % (count - 1);
+        uint256 drawn = uint256(keccak256(abi.encodePacked(seed, drawKey, ownIndex, domain))) % (count - 1);
         return drawn >= ownIndex ? drawn + 1 : drawn;
     }
 
-    function _rbtsPeerIndex(bytes32 seed, bytes32 commitKey, uint256 ownIndex, uint256 referenceIndex, uint256 count)
+    function _rbtsPeerIndex(bytes32 seed, bytes32 drawKey, uint256 ownIndex, uint256 referenceIndex, uint256 count)
         internal
         pure
         returns (uint256)
     {
-        // Deterministic sampler over pre-committed vote keys; not chain entropy for custody or authorization.
+        // Deterministic sampler over rater identities plus settlement entropy; not chain entropy for custody.
         // slither-disable-next-line weak-prng
-        uint256 drawn = uint256(keccak256(abi.encodePacked(seed, commitKey, ownIndex, uint8(2)))) % (count - 2);
+        uint256 drawn = uint256(keccak256(abi.encodePacked(seed, drawKey, ownIndex, uint8(2)))) % (count - 2);
         uint256 firstExcluded = ownIndex < referenceIndex ? ownIndex : referenceIndex;
         uint256 secondExcluded = ownIndex < referenceIndex ? referenceIndex : ownIndex;
         if (drawn >= firstExcluded) ++drawn;
