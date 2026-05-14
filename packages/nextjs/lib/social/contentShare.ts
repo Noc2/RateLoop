@@ -9,7 +9,7 @@ const DESCRIPTION_MAX_LENGTH = 180;
 const ALT_MAX_LENGTH = 180;
 const ALLOWED_SHARE_IMAGE_HOSTS = new Set(["i.ytimg.com", "img.youtube.com"]);
 
-export type ContentShareRatingSource = "open_round_reference" | "content_rating_bps" | "content_rating";
+export type ContentShareRatingSource = "content_rating_bps" | "content_rating";
 
 export interface ContentShareContentInput {
   id: string;
@@ -28,7 +28,6 @@ export interface ContentShareContentInput {
   totalVotes?: number;
   lastActivityAt?: string | null;
   openRound?: {
-    referenceRatingBps?: number;
     voteCount?: number;
   } | null;
 }

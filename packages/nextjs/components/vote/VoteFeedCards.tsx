@@ -617,10 +617,6 @@ function FeedContentMetaCard({
           openRound={
             item.openRound
               ? {
-                  referenceRatingBps:
-                    item.openRound.referenceRatingBps !== undefined
-                      ? Number(item.openRound.referenceRatingBps)
-                      : undefined,
                   voteCount: item.openRound.voteCount,
                 }
               : null

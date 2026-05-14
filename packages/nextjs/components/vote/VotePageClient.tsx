@@ -1914,10 +1914,6 @@ const HomeInner = () => {
           openRound={
             shareSheetItem.openRound
               ? {
-                  referenceRatingBps:
-                    shareSheetItem.openRound.referenceRatingBps !== undefined
-                      ? Number(shareSheetItem.openRound.referenceRatingBps)
-                      : undefined,
                   voteCount: shareSheetItem.openRound.voteCount,
                 }
               : null

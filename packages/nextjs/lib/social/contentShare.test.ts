@@ -31,23 +31,6 @@ test("normalizeContentShareContentId rejects invalid content ids", () => {
   assert.equal(normalizeContentShareContentId(undefined), null);
 });
 
-test("resolveContentShareRating ignores the open round reference rating for public shares", () => {
-  const rating = resolveContentShareRating({
-    ...baseContent,
-    rating: 30,
-    ratingBps: 3_300,
-    openRound: {
-      referenceRatingBps: 7_250,
-      voteCount: 2,
-    },
-  });
-
-  assert.equal(rating?.rating, 33);
-  assert.equal(rating?.ratingBps, 3_300);
-  assert.equal(rating?.label, "3.3");
-  assert.equal(rating?.source, "content_rating_bps");
-});
-
 test("resolveContentShareRating falls back to content rating bps before raw rating", () => {
   const rating = resolveContentShareRating({
     ...baseContent,
