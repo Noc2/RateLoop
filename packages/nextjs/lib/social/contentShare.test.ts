@@ -31,7 +31,7 @@ test("normalizeContentShareContentId rejects invalid content ids", () => {
   assert.equal(normalizeContentShareContentId(undefined), null);
 });
 
-test("resolveContentShareRating prefers the open round reference rating", () => {
+test("resolveContentShareRating ignores the open round reference rating for public shares", () => {
   const rating = resolveContentShareRating({
     ...baseContent,
     rating: 30,
@@ -42,10 +42,10 @@ test("resolveContentShareRating prefers the open round reference rating", () => 
     },
   });
 
-  assert.equal(rating.rating, 72.5);
-  assert.equal(rating.ratingBps, 7_250);
-  assert.equal(rating.label, "7.3");
-  assert.equal(rating.source, "open_round_reference");
+  assert.equal(rating?.rating, 33);
+  assert.equal(rating?.ratingBps, 3_300);
+  assert.equal(rating?.label, "3.3");
+  assert.equal(rating?.source, "content_rating_bps");
 });
 
 test("resolveContentShareRating falls back to content rating bps before raw rating", () => {
@@ -55,9 +55,20 @@ test("resolveContentShareRating falls back to content rating bps before raw rati
     ratingBps: 6_125,
   });
 
-  assert.equal(rating.rating, 61.25);
-  assert.equal(rating.ratingBps, 6_125);
-  assert.equal(rating.source, "content_rating_bps");
+  assert.equal(rating?.rating, 61.25);
+  assert.equal(rating?.ratingBps, 6_125);
+  assert.equal(rating?.source, "content_rating_bps");
+});
+
+test("resolveContentShareRating hides neutral prior ratings before settlement", () => {
+  const rating = resolveContentShareRating({
+    ...baseContent,
+    rating: 50,
+    ratingBps: 5_000,
+    ratingSettledRounds: 0,
+  });
+
+  assert.equal(rating, null);
 });
 
 test("buildContentShareRatingVersion changes when rating signals change", () => {
@@ -104,6 +115,23 @@ test("buildContentShareData includes the rating in metadata and versioned share 
   assert.equal(imageUrl.pathname, "/api/og/vote");
   assert.equal(imageUrl.searchParams.get("content"), "88");
   assert.equal(imageUrl.searchParams.get("rv"), data.ratingVersion);
+});
+
+test("buildContentShareData omits the rating label for unrated content", () => {
+  const data = buildContentShareData(
+    {
+      ...baseContent,
+      rating: 50,
+      ratingBps: 5_000,
+      ratingSettledRounds: 0,
+    },
+    "https://www.curyo.xyz",
+  );
+
+  assert.equal(data.rating, null);
+  assert.match(data.title, /Rate this on Curyo/);
+  assert.match(data.description, /No community rating yet/);
+  assert.match(data.ratingVersion, /r-88-na-/);
 });
 
 test("resolveContentShareImageUrl prefers explicit HTTPS image metadata", () => {

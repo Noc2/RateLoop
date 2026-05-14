@@ -124,6 +124,10 @@ function getRewardAvailableAmount() {
   ), 0)`;
 }
 
+function getRatedContentPriority() {
+  return sql<number>`case when ${content.ratingSettledRounds} > 0 then 1 else 0 end`;
+}
+
 function getContentOrderBy(sortBy: string) {
   switch (sortBy) {
     case "oldest":
@@ -136,6 +140,7 @@ function getContentOrderBy(sortBy: string) {
       ];
     case "highest_rated":
       return [
+        desc(getRatedContentPriority()),
         desc(content.ratingBps),
         desc(content.rating),
         desc(content.createdAt),
@@ -143,6 +148,7 @@ function getContentOrderBy(sortBy: string) {
       ];
     case "lowest_rated":
       return [
+        desc(getRatedContentPriority()),
         asc(content.ratingBps),
         asc(content.rating),
         desc(content.createdAt),
@@ -178,6 +184,7 @@ function getSearchOrderBy(
     case "highest_rated":
       return [
         desc(searchRank),
+        desc(getRatedContentPriority()),
         desc(content.ratingBps),
         desc(content.rating),
         desc(content.createdAt),
@@ -186,6 +193,7 @@ function getSearchOrderBy(
     case "lowest_rated":
       return [
         desc(searchRank),
+        desc(getRatedContentPriority()),
         asc(content.ratingBps),
         asc(content.rating),
         desc(content.createdAt),

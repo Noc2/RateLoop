@@ -44,6 +44,8 @@ function Metric({ label, value, valueFontSize = 38 }: { label: string; value: st
 }
 
 function RatingShareImage({ shareData }: { shareData: ContentShareData }) {
+  const ratingLabel = shareData.rating?.label ?? "N/A";
+  const hasRating = shareData.rating !== null;
   const openRoundLabel =
     shareData.openRoundVoteCount > 0
       ? `${shareData.openRoundVoteCount} hidden vote${shareData.openRoundVoteCount === 1 ? "" : "s"} in the open round`
@@ -98,7 +100,9 @@ function RatingShareImage({ shareData }: { shareData: ContentShareData }) {
 
       <div style={{ display: "flex", flex: 1, gap: 44, alignItems: "center", paddingTop: 46 }}>
         <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
-          <div style={{ color: "#50f29a", fontSize: 28, fontWeight: 800, marginBottom: 18 }}>Current Curyo rating</div>
+          <div style={{ color: "#50f29a", fontSize: 28, fontWeight: 800, marginBottom: 18 }}>
+            {hasRating ? "Current Curyo rating" : "Community rating pending"}
+          </div>
           <div
             style={{
               fontSize: 68,
@@ -174,12 +178,14 @@ function RatingShareImage({ shareData }: { shareData: ContentShareData }) {
                   boxShadow: "0 16px 42px rgba(0,0,0,0.34)",
                 }}
               >
-                <div style={{ fontSize: 64, fontWeight: 900, lineHeight: 0.86 }}>{shareData.rating.label}</div>
-                <div style={{ fontSize: 24, fontWeight: 900, lineHeight: 1.1 }}>/10</div>
+                <div style={{ fontSize: hasRating ? 64 : 50, fontWeight: 900, lineHeight: 0.86 }}>{ratingLabel}</div>
+                {hasRating ? <div style={{ fontSize: 24, fontWeight: 900, lineHeight: 1.1 }}>/10</div> : null}
               </div>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 16, padding: 22 }}>
-              <div style={{ fontSize: 24, fontWeight: 900, color: "#10130f" }}>Current rating</div>
+              <div style={{ fontSize: 24, fontWeight: 900, color: "#10130f" }}>
+                {hasRating ? "Current rating" : "No rating yet"}
+              </div>
               {ratingMetrics}
             </div>
           </div>
@@ -197,10 +203,14 @@ function RatingShareImage({ shareData }: { shareData: ContentShareData }) {
               gap: 20,
             }}
           >
-            <div style={{ fontSize: 26, fontWeight: 900, color: "#10130f" }}>Current rating</div>
+            <div style={{ fontSize: 26, fontWeight: 900, color: "#10130f" }}>
+              {hasRating ? "Current rating" : "No rating yet"}
+            </div>
             <div style={{ display: "flex", alignItems: "flex-end", gap: 10 }}>
-              <div style={{ fontSize: 104, fontWeight: 900, lineHeight: 0.9 }}>{shareData.rating.label}</div>
-              <div style={{ fontSize: 36, fontWeight: 900, lineHeight: 1.1, paddingBottom: 8 }}>/10</div>
+              <div style={{ fontSize: hasRating ? 104 : 84, fontWeight: 900, lineHeight: 0.9 }}>{ratingLabel}</div>
+              {hasRating ? (
+                <div style={{ fontSize: 36, fontWeight: 900, lineHeight: 1.1, paddingBottom: 8 }}>/10</div>
+              ) : null}
             </div>
             {ratingMetrics}
           </div>

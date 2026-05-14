@@ -36,3 +36,11 @@ test("RatingOrb omits a fallback outer track when no progress is visible", () =>
   assert.doesNotMatch(html, /rgba\(245,245,245,0\.06\)/);
   assert.doesNotMatch(html, /rgba\(179,52,27,0\.2\)/);
 });
+
+test("RatingOrb renders unrated content as N/A without a numeric suffix", () => {
+  const html = renderToStaticMarkup(<RatingOrb rating={null} size={96} />).replace(/\s+/g, " ");
+
+  assert.match(html, /No community rating yet/);
+  assert.match(html, />N\/A</);
+  assert.doesNotMatch(html, />\/10</);
+});

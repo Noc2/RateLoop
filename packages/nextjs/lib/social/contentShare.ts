@@ -16,8 +16,9 @@ export interface ContentShareContentInput {
   url?: string | null;
   title: string;
   description: string;
-  rating: number;
+  rating?: number | null;
   ratingBps?: number;
+  ratingSettledRounds?: number;
   thumbnailUrl?: string | null;
   imageUrl?: string | null;
   contentMetadata?: {
@@ -48,7 +49,7 @@ export interface ContentShareData {
   title: string;
   description: string;
   imageAlt: string;
-  rating: ContentShareRating;
+  rating: ContentShareRating | null;
   ratingVersion: string;
   totalVotes: number;
   openRoundVoteCount: number;
@@ -142,17 +143,19 @@ export function normalizeContentShareContentId(value: unknown): string | null {
   return id > 0n ? id.toString() : null;
 }
 
-export function resolveContentShareRating(content: ContentShareContentInput): ContentShareRating {
-  const referenceRatingBps = normalizeRatingBps(content.openRound?.referenceRatingBps);
+export function resolveContentShareRating(content: ContentShareContentInput): ContentShareRating | null {
+  if (content.ratingSettledRounds !== undefined && content.ratingSettledRounds <= 0) {
+    return null;
+  }
+
   const contentRatingBps = normalizeRatingBps(content.ratingBps);
-  const ratingBps =
-    referenceRatingBps ?? contentRatingBps ?? Math.round(clampContentRating(Number(content.rating)) * 100);
-  const source: ContentShareRatingSource =
-    referenceRatingBps !== null
-      ? "open_round_reference"
-      : contentRatingBps !== null
-        ? "content_rating_bps"
-        : "content_rating";
+  const hasRawRating = typeof content.rating === "number" && Number.isFinite(content.rating);
+  if (contentRatingBps === null && !hasRawRating) {
+    return null;
+  }
+
+  const ratingBps = contentRatingBps ?? Math.round(clampContentRating(Number(content.rating)) * 100);
+  const source: ContentShareRatingSource = contentRatingBps !== null ? "content_rating_bps" : "content_rating";
   const rating = ratingBps / 100;
 
   return {
@@ -171,7 +174,7 @@ export function buildContentShareRatingVersion(
   const totalVotes = normalizeFiniteInteger(content.totalVotes);
   const openRoundVoteCount = normalizeFiniteInteger(content.openRound?.voteCount);
 
-  return `r-${content.id}-${rating.ratingBps}-${totalVotes}-${openRoundVoteCount}-${activitySeconds}`;
+  return `r-${content.id}-${rating?.ratingBps ?? "na"}-${totalVotes}-${openRoundVoteCount}-${activitySeconds}`;
 }
 
 function buildVoteShareUrl(origin: string, contentId: string, ratingVersion?: string): string {
@@ -200,13 +203,20 @@ export function buildContentShareData(content: ContentShareContentInput, origin:
   const totalVotes = normalizeFiniteInteger(content.totalVotes);
   const openRoundVoteCount = normalizeFiniteInteger(content.openRound?.voteCount);
   const voteLabel = `${totalVotes} vote${totalVotes === 1 ? "" : "s"}`;
-  const title = truncateText(`Rated ${rating.label}/10 on Curyo: ${contentTitle}`, TITLE_MAX_LENGTH);
+  const title = truncateText(
+    rating ? `Rated ${rating.label}/10 on Curyo: ${contentTitle}` : `Rate this on Curyo: ${contentTitle}`,
+    TITLE_MAX_LENGTH,
+  );
   const description = truncateText(
-    `Current rating ${rating.label}/10 from ${voteLabel}. Disagree? Stake LREP and vote.`,
+    rating
+      ? `Current rating ${rating.label}/10 from ${voteLabel}. Disagree? Stake LREP and vote.`
+      : `No community rating yet. Stake LREP and be among the first raters.`,
     DESCRIPTION_MAX_LENGTH,
   );
   const imageAlt = truncateText(
-    `Curyo social card for ${contentTitle}, showing a current rating of ${rating.label} out of 10.`,
+    rating
+      ? `Curyo social card for ${contentTitle}, showing a current rating of ${rating.label} out of 10.`
+      : `Curyo social card for ${contentTitle}, which has no community rating yet.`,
     ALT_MAX_LENGTH,
   );
 

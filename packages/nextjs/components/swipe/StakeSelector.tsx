@@ -19,7 +19,7 @@ interface StakeSelectorProps {
   isOpen: boolean;
   contentId: bigint;
   categoryId?: bigint;
-  currentRating?: number;
+  currentRating?: number | null;
   initialIsUp?: boolean;
   openRound?: OpenRoundFallbackData | null;
   roundConfig?: VotingConfig | null;
@@ -44,8 +44,8 @@ function clampRating(value: number) {
   return Math.min(10, Math.max(0, value));
 }
 
-export function normalizeStakeSelectorRating(currentRating: number | undefined) {
-  if (currentRating === undefined || !Number.isFinite(currentRating)) return 5;
+export function normalizeStakeSelectorRating(currentRating: number | null | undefined) {
+  if (currentRating === null || currentRating === undefined || !Number.isFinite(currentRating)) return 5;
   if (currentRating > 100) return clampRating(currentRating / 1000);
   if (currentRating > 10) return clampRating(currentRating / 10);
   return clampRating(currentRating);
@@ -56,7 +56,7 @@ export function normalizeStakeSelectorAmount(stakeAmount: number) {
   return stakeAmount < MIN_COUNTED_STAKE_AMOUNT ? MIN_COUNTED_STAKE_AMOUNT : stakeAmount;
 }
 
-function getInitialPredictedUpPercent(currentRating: number | undefined) {
+function getInitialPredictedUpPercent(currentRating: number | null | undefined) {
   const baseRating = normalizeStakeSelectorRating(currentRating);
   return Math.round(baseRating * 10);
 }
@@ -130,6 +130,10 @@ export function StakeSelector({
   const voteEstimate = estimateVoteReturn(estimateSnapshot, isUp, amount);
   const signalTone = isUp ? "Thumbs up" : "Thumbs down";
   const signalToneClassName = isUp ? "text-success" : "text-error";
+  const currentRatingLabel =
+    currentRating === null || currentRating === undefined || !Number.isFinite(currentRating)
+      ? "N/A"
+      : normalizedCurrentRating.toFixed(1);
 
   const balanceFormatted = hrepBalance ? Number(hrepBalance) / 1e6 : 0;
   const capacityFormatted = remainingCapacity != null ? Number(remainingCapacity) / 1e6 : 10;
@@ -219,9 +223,7 @@ export function StakeSelector({
                 </div>
                 <div className="text-right">
                   <p className="text-xs font-semibold uppercase tracking-[0.16em] text-base-content/55">Current</p>
-                  <p className="mt-1 text-lg font-semibold tabular-nums text-base-content/75">
-                    {normalizedCurrentRating.toFixed(1)}
-                  </p>
+                  <p className="mt-1 text-lg font-semibold tabular-nums text-base-content/75">{currentRatingLabel}</p>
                 </div>
               </div>
               <div className="mt-4 grid grid-cols-2 gap-2">

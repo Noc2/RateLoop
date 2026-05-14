@@ -62,6 +62,7 @@ export interface ContentItem {
   rating: number;
   ratingBps?: bigint;
   conservativeRatingBps?: bigint;
+  ratingSettledRounds?: number;
   createdAt: string | null;
   lastActivityAt: string | null;
   totalVotes: number;
@@ -255,6 +256,7 @@ export function mapContentItem(
     rating: number;
     ratingBps?: number;
     conservativeRatingBps?: number;
+    ratingSettledRounds?: number;
     createdAt?: string | null;
     lastActivityAt?: string | null;
     totalVotes?: number;
@@ -393,8 +395,8 @@ export function mapContentItem(
     item.rewardPoolSummary && rewardPoolCurrency
       ? normalizeRewardPoolDisplayCurrency(item.rewardPoolSummary.displayCurrency, rewardPoolCurrency)
       : undefined;
-  const displayedRating =
-    mappedOpenRound?.referenceRatingBps !== undefined ? Number(mappedOpenRound.referenceRatingBps) / 100 : item.rating;
+  const ratingSettledRounds = Math.max(0, item.ratingSettledRounds ?? mappedOpenRound?.settledRounds ?? 0);
+  const displayedRating = item.rating;
   const url = item.url ?? "";
   const media = (item.media ?? [])
     .filter(mediaItem => mediaItem.url)
@@ -424,6 +426,7 @@ export function mapContentItem(
     rating: displayedRating,
     ratingBps,
     conservativeRatingBps,
+    ratingSettledRounds,
     createdAt: item.createdAt ?? null,
     lastActivityAt: item.lastActivityAt ?? null,
     totalVotes: item.totalVotes ?? 0,
@@ -518,6 +521,10 @@ export function mapContentItem(
         }
       : null,
   };
+}
+
+export function getVisibleContentRating(item: Pick<ContentItem, "rating" | "ratingSettledRounds">): number | null {
+  return (item.ratingSettledRounds ?? 0) > 0 ? item.rating : null;
 }
 
 export function mergeContentFeedMetadata(
@@ -634,6 +641,10 @@ function getRpcRelevanceScore(item: ContentItem, normalizedQuery: string, queryT
   return score;
 }
 
+function getSortableRating(item: ContentItem): number {
+  return getVisibleContentRating(item) ?? Number.NEGATIVE_INFINITY;
+}
+
 export function sortRpcFeed(feed: ContentItem[], sortBy: FeedSort, searchQuery?: string): ContentItem[] {
   const items = [...feed];
 
@@ -656,7 +667,7 @@ export function sortRpcFeed(feed: ContentItem[], sortBy: FeedSort, searchQuery?:
           return scoreDifference;
         }
 
-        const ratingDifference = b.rating - a.rating;
+        const ratingDifference = getSortableRating(b) - getSortableRating(a);
         if (ratingDifference !== 0) {
           return ratingDifference;
         }
@@ -676,9 +687,34 @@ export function sortRpcFeed(feed: ContentItem[], sortBy: FeedSort, searchQuery?:
       });
       break;
     case "newest":
+      items.sort((a, b) => Number(b.id - a.id));
+      break;
     case "highest_rated":
+      items.sort((a, b) => {
+        const ratingDifference = getSortableRating(b) - getSortableRating(a);
+        if (ratingDifference !== 0) return ratingDifference;
+        return Number(b.id - a.id);
+      });
+      break;
     case "lowest_rated":
+      items.sort((a, b) => {
+        const aRating = getSortableRating(a);
+        const bRating = getSortableRating(b);
+        const aUnrated = aRating === Number.NEGATIVE_INFINITY;
+        const bUnrated = bRating === Number.NEGATIVE_INFINITY;
+        if (aUnrated !== bUnrated) return aUnrated ? 1 : -1;
+        const ratingDifference = aRating - bRating;
+        if (ratingDifference !== 0) return ratingDifference;
+        return Number(b.id - a.id);
+      });
+      break;
     case "most_votes":
+      items.sort((a, b) => {
+        const voteDifference = b.totalVotes - a.totalVotes;
+        if (voteDifference !== 0) return voteDifference;
+        return Number(b.id - a.id);
+      });
+      break;
     default:
       items.sort((a, b) => Number(b.id - a.id));
       break;

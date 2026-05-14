@@ -614,6 +614,12 @@ export interface PonderProfileSubmissionItem {
   categoryName: string | null;
   status: number;
   rating: number;
+  ratingBps?: number;
+  conservativeRatingBps?: number;
+  ratingConfidenceMass?: string;
+  ratingEffectiveEvidence?: string;
+  ratingSettledRounds?: number;
+  ratingLowSince?: string;
   createdAt: string;
   totalVotes: number;
   totalRounds: number;

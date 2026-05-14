@@ -1315,7 +1315,9 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
             <div className="grid gap-3 md:grid-cols-2">
               {recentSubmissions.map(submission => {
                 const categoryName = submission.categoryName || `Category #${submission.categoryId}`;
-                const ratingScore = formatRatingScoreOutOfTen(submission.rating);
+                const ratingScore = formatRatingScoreOutOfTen(
+                  (submission.ratingSettledRounds ?? 0) > 0 ? submission.rating : null,
+                );
                 return (
                   <Link
                     key={submission.id}
@@ -1334,7 +1336,7 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
                       </div>
                       <div className="rounded-full bg-base-content/[0.06] px-2.5 py-1 text-sm font-mono text-base-content/70">
                         <span className="font-semibold tabular-nums text-base-content/85">{ratingScore}</span>
-                        <span className="font-medium text-base-content/50">/10</span>
+                        {ratingScore !== "N/A" ? <span className="font-medium text-base-content/50">/10</span> : null}
                       </div>
                     </div>
 

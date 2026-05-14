@@ -22,7 +22,7 @@ interface VotingQuestionCardProps {
   contentId: bigint;
   categoryId: bigint;
   questionTitle?: string;
-  currentRating: number;
+  currentRating: number | null;
   onVote: (isUp: boolean) => void;
   isCommitting: boolean;
   address?: string;

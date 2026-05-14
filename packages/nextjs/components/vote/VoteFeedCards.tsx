@@ -21,6 +21,7 @@ import {
 } from "~~/components/shared/VotingQuestionCard";
 import { WatchContentButton } from "~~/components/shared/WatchContentButton";
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
+import { getVisibleContentRating } from "~~/hooks/contentFeed/shared";
 import type { ContentItem } from "~~/hooks/useContentFeed";
 import type { SubmitterProfile } from "~~/hooks/useSubmitterProfiles";
 import { type ContentMediaItem, buildFallbackMediaItems, isDirectImageUrl } from "~~/lib/contentMedia";
@@ -608,8 +609,9 @@ function FeedContentMetaCard({
           contentId={item.id}
           title={item.title}
           description={item.description}
-          rating={item.rating}
+          rating={getVisibleContentRating(item)}
           ratingBps={item.ratingBps !== undefined ? Number(item.ratingBps) : undefined}
+          ratingSettledRounds={item.ratingSettledRounds}
           totalVotes={item.totalVotes}
           lastActivityAt={item.lastActivityAt}
           openRound={

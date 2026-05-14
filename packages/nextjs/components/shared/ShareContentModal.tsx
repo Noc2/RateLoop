@@ -12,8 +12,9 @@ interface ShareContentModalProps {
   contentId: bigint;
   title: string;
   description: string;
-  rating?: number;
+  rating?: number | null;
   ratingBps?: number;
+  ratingSettledRounds?: number;
   totalVotes?: number;
   lastActivityAt?: string | null;
   openRound?: ContentShareContentInput["openRound"];
@@ -26,6 +27,7 @@ export function ShareContentModal({
   description,
   rating,
   ratingBps,
+  ratingSettledRounds,
   totalVotes,
   lastActivityAt,
   openRound,
@@ -49,8 +51,7 @@ export function ShareContentModal({
     if (typeof window === "undefined") return { ratingLabel: null, url: "" };
 
     const fallbackUrl = `${window.location.origin}${buildRateContentHref(contentId)}`;
-    const hasRatingSignal =
-      rating !== undefined || ratingBps !== undefined || openRound?.referenceRatingBps !== undefined;
+    const hasRatingSignal = rating !== null && (rating !== undefined || ratingBps !== undefined);
     if (!hasRatingSignal) return { ratingLabel: null, url: fallbackUrl };
 
     const shareData = buildContentShareData(
@@ -58,8 +59,9 @@ export function ShareContentModal({
         id: contentId.toString(),
         title,
         description,
-        rating: rating ?? (ratingBps ?? 5_000) / 100,
+        rating,
         ratingBps,
+        ratingSettledRounds,
         totalVotes,
         lastActivityAt,
         openRound,
@@ -67,8 +69,8 @@ export function ShareContentModal({
       window.location.origin,
     );
 
-    return { ratingLabel: shareData.rating.label, url: shareData.shareUrl };
-  }, [contentId, description, lastActivityAt, openRound, rating, ratingBps, title, totalVotes]);
+    return { ratingLabel: shareData.rating?.label ?? null, url: shareData.shareUrl };
+  }, [contentId, description, lastActivityAt, openRound, rating, ratingBps, ratingSettledRounds, title, totalVotes]);
   const shareUrl = shareDetails.url;
   const truncatedTitle = truncateContentTitle(title);
 

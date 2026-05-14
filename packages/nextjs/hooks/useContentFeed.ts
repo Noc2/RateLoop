@@ -124,6 +124,7 @@ export function useContentFeed(voterAddress?: string, options: UseContentFeedOpt
           isOwnContent: ownSubmitterAddressSet.has(eventSubmitter.toLowerCase()),
           categoryId: args.categoryId ?? 0n,
           rating: 50,
+          ratingSettledRounds: 0,
           createdAt: event.blockData?.timestamp
             ? new Date(Number(event.blockData.timestamp) * 1000).toISOString()
             : null,

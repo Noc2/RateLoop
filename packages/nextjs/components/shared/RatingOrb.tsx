@@ -1,7 +1,13 @@
 "use client";
 
 import React, { useEffect, useId, useRef, useState } from "react";
-import { clampContentRating, formatCommunityRatingAriaLabel, formatRatingScoreOutOfTen } from "~~/lib/ui/ratingDisplay";
+import {
+  type DisplayRating,
+  clampContentRating,
+  formatCommunityRatingAriaLabel,
+  formatRatingScoreOutOfTen,
+  hasVisibleRating,
+} from "~~/lib/ui/ratingDisplay";
 
 const START_ANGLE = 0;
 const MIN_ANIMATION_MS = 500;
@@ -22,7 +28,7 @@ function polarToCartesian(center: number, radius: number, angleInDegrees: number
 }
 
 interface RatingOrbProps {
-  rating: number;
+  rating: DisplayRating;
   size?: number;
   className?: string;
 }
@@ -31,14 +37,15 @@ export function RatingOrb({ rating, size = 196, className = "" }: RatingOrbProps
   const orbId = useId().replace(/:/g, "");
   const progressGradientId = `${orbId}-progress-gradient`;
   const progressStroke = `url(#${progressGradientId})`;
-  const clampedRating = clampContentRating(rating);
+  const hasRating = hasVisibleRating(rating);
+  const clampedRating = hasRating ? clampContentRating(rating) : 0;
   const [animatedRating, setAnimatedRating] = useState(0);
   const animatedRatingRef = useRef(0);
   const center = size / 2;
   const trackRadius = size * 0.41;
-  const displayedRating = clampContentRating(animatedRating);
+  const displayedRating = hasRating ? clampContentRating(animatedRating) : null;
   const displayedScore = formatRatingScoreOutOfTen(displayedRating);
-  const progress = displayedRating / 100;
+  const progress = displayedRating === null ? 0 : displayedRating / 100;
   const circumference = 2 * Math.PI * trackRadius;
   const progressLength = circumference * progress;
   const endPoint = polarToCartesian(center, trackRadius, START_ANGLE + progress * 360);
@@ -68,6 +75,12 @@ export function RatingOrb({ rating, size = 196, className = "" }: RatingOrbProps
   const scoreMaxWidth = isTinyOrb ? size * 0.84 : trackRadius * 1.7;
 
   useEffect(() => {
+    if (!hasRating) {
+      animatedRatingRef.current = 0;
+      setAnimatedRating(0);
+      return;
+    }
+
     if (typeof window === "undefined") return;
 
     const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -107,14 +120,14 @@ export function RatingOrb({ rating, size = 196, className = "" }: RatingOrbProps
 
     frameId = window.requestAnimationFrame(animate);
     return () => window.cancelAnimationFrame(frameId);
-  }, [clampedRating]);
+  }, [clampedRating, hasRating]);
 
   return (
     <div
       className={`relative flex items-center justify-center ${className}`}
       style={{ width: size, height: size }}
       role="img"
-      aria-label={formatCommunityRatingAriaLabel(clampedRating)}
+      aria-label={formatCommunityRatingAriaLabel(rating)}
     >
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="absolute inset-0 overflow-visible">
         <defs>
@@ -200,12 +213,14 @@ export function RatingOrb({ rating, size = 196, className = "" }: RatingOrbProps
           <span className="font-semibold tracking-normal" style={{ fontSize: ratingFontSize }}>
             {displayedScore}
           </span>
-          <span
-            className={`${scoreGapClassName} mb-[0.12em] shrink-0 font-medium leading-[0.92]`}
-            style={{ color: "rgb(255 255 255 / 0.72)", fontSize: scaleFontSize }}
-          >
-            /10
-          </span>
+          {hasRating ? (
+            <span
+              className={`${scoreGapClassName} mb-[0.12em] shrink-0 font-medium leading-[0.92]`}
+              style={{ color: "rgb(255 255 255 / 0.72)", fontSize: scaleFontSize }}
+            >
+              /10
+            </span>
+          ) : null}
         </span>
       </div>
     </div>

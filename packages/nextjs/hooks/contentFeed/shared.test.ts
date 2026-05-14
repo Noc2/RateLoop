@@ -3,6 +3,7 @@ import {
   type ContentItem,
   filterModeratedContentItems,
   filterRpcFeed,
+  getVisibleContentRating,
   isContentSearchQueryTooShort,
   mapContentItem,
   sortRpcFeed,
@@ -31,6 +32,7 @@ function buildItem(
     isOwnContent: false,
     categoryId: 1n,
     rating: 50,
+    ratingSettledRounds: 1,
     createdAt: "2026-03-31T00:00:00.000Z",
     lastActivityAt: "2026-03-31T00:00:00.000Z",
     totalVotes: 0,
@@ -153,6 +155,69 @@ test("mapContentItem marks linked submitter addresses as own content", () => {
   );
 
   assert.equal(item.isOwnContent, true);
+});
+
+test("mapContentItem keeps neutral protocol rating hidden until a round settles", () => {
+  const item = mapContentItem({
+    id: "5",
+    url: "https://example.com/new",
+    title: "Fresh question",
+    description: "No settled rounds yet.",
+    tags: "",
+    submitter: "0x00000000000000000000000000000000000000aa",
+    contentHash: "hash-5",
+    categoryId: "1",
+    rating: 50,
+    ratingBps: 5_000,
+    ratingSettledRounds: 0,
+    openRound: {
+      roundId: "1",
+      voteCount: 0,
+      revealedCount: 0,
+      totalStake: "0",
+      upPool: "0",
+      downPool: "0",
+      referenceRatingBps: 5_000,
+      settledRounds: 0,
+      startTime: null,
+      estimatedSettlementTime: null,
+    },
+  });
+
+  assert.equal(item.rating, 50);
+  assert.equal(item.ratingSettledRounds, 0);
+  assert.equal(getVisibleContentRating(item), null);
+});
+
+test("mapContentItem exposes settled ratings without using the open round reference as public score", () => {
+  const item = mapContentItem({
+    id: "6",
+    url: "https://example.com/settled",
+    title: "Settled question",
+    description: "A later open round has a different reference snapshot.",
+    tags: "",
+    submitter: "0x00000000000000000000000000000000000000aa",
+    contentHash: "hash-6",
+    categoryId: "1",
+    rating: 72,
+    ratingBps: 7_200,
+    ratingSettledRounds: 1,
+    openRound: {
+      roundId: "2",
+      voteCount: 1,
+      revealedCount: 0,
+      totalStake: "1000000",
+      upPool: "1000000",
+      downPool: "0",
+      referenceRatingBps: 5_000,
+      settledRounds: 1,
+      startTime: null,
+      estimatedSettlementTime: null,
+    },
+  });
+
+  assert.equal(item.rating, 72);
+  assert.equal(getVisibleContentRating(item), 72);
 });
 
 test("mapContentItem preserves inactive Ponder content status", () => {

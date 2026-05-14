@@ -6,6 +6,11 @@ test("normalizeStakeSelectorRating accepts out-of-ten ratings", () => {
   assert.equal(normalizeStakeSelectorRating(6.4), 6.4);
 });
 
+test("normalizeStakeSelectorRating keeps unrated commit defaults neutral", () => {
+  assert.equal(normalizeStakeSelectorRating(null), 5);
+  assert.equal(normalizeStakeSelectorRating(undefined), 5);
+});
+
 test("normalizeStakeSelectorRating converts display-scale ratings", () => {
   assert.equal(normalizeStakeSelectorRating(64), 6.4);
 });

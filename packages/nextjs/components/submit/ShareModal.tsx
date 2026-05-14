@@ -12,8 +12,9 @@ interface ShareModalProps {
   contentId: bigint;
   title: string;
   description: string;
-  rating?: number;
+  rating?: number | null;
   ratingBps?: number;
+  ratingSettledRounds?: number;
   totalVotes?: number;
   lastActivityAt?: string | null;
   openRound?: ContentShareContentInput["openRound"];
@@ -24,8 +25,9 @@ export function ShareModal({
   contentId,
   title,
   description,
-  rating = 50,
+  rating = null,
   ratingBps,
+  ratingSettledRounds = 0,
   totalVotes = 0,
   lastActivityAt,
   openRound,
@@ -51,6 +53,7 @@ export function ShareModal({
         description,
         rating,
         ratingBps,
+        ratingSettledRounds,
         totalVotes,
         lastActivityAt,
         openRound,
@@ -58,8 +61,8 @@ export function ShareModal({
       window.location.origin,
     );
 
-    return { ratingLabel: shareData.rating.label, url: shareData.shareUrl };
-  }, [contentId, description, lastActivityAt, openRound, rating, ratingBps, title, totalVotes]);
+    return { ratingLabel: shareData.rating?.label ?? null, url: shareData.shareUrl };
+  }, [contentId, description, lastActivityAt, openRound, rating, ratingBps, ratingSettledRounds, title, totalVotes]);
   const shareUrl = shareDetails.url;
   const truncatedTitle = truncateContentTitle(title);
   const tweetText = shareDetails.ratingLabel

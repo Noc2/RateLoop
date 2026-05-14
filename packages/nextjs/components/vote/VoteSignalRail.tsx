@@ -4,7 +4,7 @@ import { useAccount } from "wagmi";
 import { FooterLinks } from "~~/components/FooterLinks";
 import { ContentFeedbackPanel } from "~~/components/feedback/ContentFeedbackPanel";
 import { VOTING_SURFACE_BACKGROUND, VotingQuestionCard } from "~~/components/shared/VotingQuestionCard";
-import { isContentItemActive } from "~~/hooks/contentFeed/shared";
+import { getVisibleContentRating, isContentItemActive } from "~~/hooks/contentFeed/shared";
 import type { ContentItem } from "~~/hooks/useContentFeed";
 import { useCuryoConnectModal } from "~~/hooks/useCuryoConnectModal";
 
@@ -56,7 +56,7 @@ export function VoteSignalRail({
             contentId={primaryItem.id}
             categoryId={primaryItem.categoryId}
             questionTitle={primaryItem.question || primaryItem.title}
-            currentRating={primaryItem.rating}
+            currentRating={getVisibleContentRating(primaryItem)}
             openRound={primaryItem.openRound}
             roundConfig={primaryItem.roundConfig}
             onVote={isUp => onVote(primaryItem, isUp)}

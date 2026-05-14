@@ -18,6 +18,7 @@ import { useMobileHeaderVisibility } from "~~/contexts/MobileHeaderVisibilityCon
 import {
   MIN_CONTENT_SEARCH_QUERY_LENGTH,
   getInactiveContentVotingMessage,
+  getVisibleContentRating,
   isContentItemActive,
   isContentSearchQueryTooShort,
 } from "~~/hooks/contentFeed/shared";
@@ -669,7 +670,7 @@ const HomeInner = () => {
     initialIsUp: boolean;
     contentId: bigint;
     categoryId: bigint;
-    currentRating: number;
+    currentRating: number | null;
     roundConfig?: ContentItem["roundConfig"] | null;
     openRound?: ContentItem["openRound"] | null;
   }>({
@@ -677,7 +678,7 @@ const HomeInner = () => {
     initialIsUp: true,
     contentId: 0n,
     categoryId: 0n,
-    currentRating: 5,
+    currentRating: null,
     roundConfig: null,
     openRound: null,
   });
@@ -1840,7 +1841,7 @@ const HomeInner = () => {
                 contentId={primaryItem.id}
                 categoryId={primaryItem.categoryId}
                 questionTitle={primaryItem.question || primaryItem.title}
-                currentRating={primaryItem.rating}
+                currentRating={getVisibleContentRating(primaryItem)}
                 openRound={primaryItem.openRound}
                 roundConfig={primaryItem.roundConfig}
                 onVote={isUp => handleButtonVote(primaryItem, isUp)}
@@ -1905,8 +1906,9 @@ const HomeInner = () => {
           contentId={shareSheetItem.id}
           title={shareSheetItem.title}
           description={shareSheetItem.description}
-          rating={shareSheetItem.rating}
+          rating={getVisibleContentRating(shareSheetItem)}
           ratingBps={shareSheetItem.ratingBps !== undefined ? Number(shareSheetItem.ratingBps) : undefined}
+          ratingSettledRounds={shareSheetItem.ratingSettledRounds}
           totalVotes={shareSheetItem.totalVotes}
           lastActivityAt={shareSheetItem.lastActivityAt}
           openRound={
