@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
-import {MerkleProof} from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
-import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
-import {IClusterPayoutOracle} from "./interfaces/IClusterPayoutOracle.sol";
+import { AccessControl } from "@openzeppelin/contracts/access/AccessControl.sol";
+import { MerkleProof } from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
+import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import { IClusterPayoutOracle } from "./interfaces/IClusterPayoutOracle.sol";
 
 /// @title ClusterPayoutOracle
 /// @notice Optimistic oracle for correlation epoch snapshots and per-round payout weights.
@@ -129,7 +129,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
         emit OracleConfigUpdated(DEFAULT_CHALLENGE_WINDOW, DEFAULT_PROPOSAL_BOND, admin);
     }
 
-    receive() external payable {}
+    receive() external payable { }
 
     function setOracleConfig(uint64 newChallengeWindow, uint256 newProposalBond, address newBondRecipient)
         external
@@ -374,7 +374,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
         if (amount == 0) revert InvalidBond();
         pendingBondWithdrawals[msg.sender] = 0;
 
-        (bool ok,) = recipient.call{value: amount}("");
+        (bool ok,) = recipient.call{ value: amount }("");
         if (!ok) {
             pendingBondWithdrawals[msg.sender] = amount;
             revert TransferFailed();

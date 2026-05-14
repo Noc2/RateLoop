@@ -145,7 +145,9 @@ library QuestionRewardPoolEscrowBundleActionsLib {
                     protocolConfig, registry.getSubmitterIdentity(contentId)
                 );
             }
-            bundleQuestions[bundleId].push(BundleQuestion({ contentId: contentId, submitterIdentityKey: submitterIdentityKey }));
+            bundleQuestions[bundleId].push(
+                BundleQuestion({ contentId: contentId, submitterIdentityKey: submitterIdentityKey })
+            );
             unchecked {
                 ++i;
             }
@@ -285,7 +287,14 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         );
         require(
             _isBundleBountyEligible(
-                bundleQuestions, bundleRoundIds, votingEngine, protocolConfig, bundle, bundleId, roundSetIndex, msg.sender
+                bundleQuestions,
+                bundleRoundIds,
+                votingEngine,
+                protocolConfig,
+                bundle,
+                bundleId,
+                roundSetIndex,
+                msg.sender
             ),
             "Not bounty eligible"
         );

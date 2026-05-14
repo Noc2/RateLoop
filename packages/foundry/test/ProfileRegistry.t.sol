@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {Test, console} from "forge-std/Test.sol";
-import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import {ProfileRegistry} from "../contracts/ProfileRegistry.sol";
-import {RaterRegistry} from "../contracts/RaterRegistry.sol";
-import {IProfileRegistry} from "../contracts/interfaces/IProfileRegistry.sol";
-import {MockWorldIDRouter} from "../contracts/mocks/MockWorldIDRouter.sol";
+import { Test, console } from "forge-std/Test.sol";
+import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import { ProfileRegistry } from "../contracts/ProfileRegistry.sol";
+import { RaterRegistry } from "../contracts/RaterRegistry.sol";
+import { IProfileRegistry } from "../contracts/interfaces/IProfileRegistry.sol";
+import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
 
 /// @title ProfileRegistry Test Suite
 contract ProfileRegistryTest is Test {
@@ -27,12 +27,7 @@ contract ProfileRegistryTest is Test {
             address(new ERC1967Proxy(address(impl), abi.encodeCall(ProfileRegistry.initialize, (admin, admin))))
         );
         raterRegistry = new RaterRegistry(
-            admin,
-            admin,
-            address(new MockWorldIDRouter()),
-            keccak256("rateloop-human-v1"),
-            12_345,
-            365 days
+            admin, admin, address(new MockWorldIDRouter()), keccak256("rateloop-human-v1"), 12_345, 365 days
         );
         registry.setRaterRegistry(address(raterRegistry));
         _seedIdentity(user1, bytes32(uint256(uint160(user1))));

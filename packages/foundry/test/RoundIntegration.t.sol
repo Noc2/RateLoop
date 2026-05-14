@@ -1370,7 +1370,9 @@ contract RoundIntegrationTest is VotingTestBase {
 
         assertFalse(raterRegistry.hasActiveHumanCredential(openRater));
         assertEq(votingEngine.voterCommitHash(contentId, roundId, openRater), commitHash);
-        assertEq(votingEngine.commitIdentityKey(contentId, roundId, commitKey), raterRegistry.addressIdentityKey(openRater));
+        assertEq(
+            votingEngine.commitIdentityKey(contentId, roundId, commitKey), raterRegistry.addressIdentityKey(openRater)
+        );
         (address committedVoter,,,,,,) = votingEngine.commitCore(contentId, roundId, commitKey);
         assertEq(committedVoter, openRater);
         assertEq(commitKey, _commitKey(openRater, commitHash));
@@ -2954,7 +2956,11 @@ contract RoundIntegrationTest is VotingTestBase {
         _claimFrontendFeeAsOperator(contentId, roundId, frontendOp);
 
         assertEq(hrepToken.balanceOf(frontendOp), frontendBalanceBefore, "fee should still credit registry first");
-        assertEq(frontendReg.getAccumulatedFees(frontendOp), feesBefore + fee, "revocation should not erase earned historical fees");
+        assertEq(
+            frontendReg.getAccumulatedFees(frontendOp),
+            feesBefore + fee,
+            "revocation should not erase earned historical fees"
+        );
         assertEq(hrepToken.balanceOf(treasury), treasuryBalanceBefore, "claim should not route earned fees to treasury");
         assertEq(votingEngine.consensusReserve(), reserveBefore, "claim should not route earned fees to reserve");
     }

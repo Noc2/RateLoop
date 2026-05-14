@@ -39,11 +39,11 @@ contract RatingMathHarness {
         return RatingMath.computeNextConfidenceMass(previousConfidenceMass, roundEvidence, observedGapX18, cfg);
     }
 
-    function computeConservativeRatingBps(
-        uint16 ratingBps,
-        uint256 confidenceMass,
-        RatingLib.RatingConfig calldata cfg
-    ) external pure returns (uint16) {
+    function computeConservativeRatingBps(uint16 ratingBps, uint256 confidenceMass, RatingLib.RatingConfig calldata cfg)
+        external
+        pure
+        returns (uint16)
+    {
         return RatingMath.computeConservativeRatingBps(ratingBps, confidenceMass, cfg);
     }
 
@@ -55,11 +55,7 @@ contract RatingMathHarness {
         RatingLib.RatingConfig calldata ratingConfig,
         RatingLib.SlashConfig calldata slashConfig,
         uint48 settledAt
-    )
-        external
-        pure
-        returns (RatingLib.RatingState memory nextState, int256 observedGapX18, int256 ratingDeltaBps)
-    {
+    ) external pure returns (RatingLib.RatingState memory nextState, int256 observedGapX18, int256 ratingDeltaBps) {
         return RatingMath.applySettlement(
             referenceRatingBps, weightedUp, weightedDown, previousState, ratingConfig, slashConfig, settledAt
         );
@@ -93,10 +89,7 @@ contract RatingMathTest is Test {
 
     function _slashConfig() internal pure returns (RatingLib.SlashConfig memory cfg) {
         cfg = RatingLib.SlashConfig({
-            slashThresholdBps: 2_500,
-            minSlashSettledRounds: 2,
-            minSlashLowDuration: 7 days,
-            minSlashEvidence: 200e6
+            slashThresholdBps: 2_500, minSlashSettledRounds: 2, minSlashLowDuration: 7 days, minSlashEvidence: 200e6
         });
     }
 
@@ -144,10 +137,8 @@ contract RatingMathTest is Test {
         RatingLib.SlashConfig memory slashCfg = _slashConfig();
         RatingLib.RatingState memory prev = _state(0, 80e6, 0, 0, 5_000, 5_000, 0, 0);
 
-        (RatingLib.RatingState memory nextLow,,) =
-            harness.applySettlement(5_000, 60e6, 40e6, prev, cfg, slashCfg, 1);
-        (RatingLib.RatingState memory nextHigh,,) =
-            harness.applySettlement(6_000, 60e6, 40e6, prev, cfg, slashCfg, 1);
+        (RatingLib.RatingState memory nextLow,,) = harness.applySettlement(5_000, 60e6, 40e6, prev, cfg, slashCfg, 1);
+        (RatingLib.RatingState memory nextHigh,,) = harness.applySettlement(6_000, 60e6, 40e6, prev, cfg, slashCfg, 1);
 
         assertGt(nextLow.ratingBps, 5_000, "positive evidence should move above the anchor");
         assertGt(nextHigh.ratingBps, nextLow.ratingBps, "higher anchor should settle higher under same evidence");
@@ -187,11 +178,11 @@ contract RatingMathTest is Test {
         assertEq(notYetSlashable.lowSince, 0, "insufficient settled rounds should not arm lowSince");
 
         prev = _state(0, 80e6, 100e6, 1, 5_000, 5_000, 1, 0);
-        (RatingLib.RatingState memory slashable,,) =
-            harness.applySettlement(5_000, 0, 300e6, prev, cfg, slashCfg, 2);
+        (RatingLib.RatingState memory slashable,,) = harness.applySettlement(5_000, 0, 300e6, prev, cfg, slashCfg, 2);
         assertEq(slashable.lowSince, 2, "persistent low rating should arm lowSince once thresholds are met");
 
-        (RatingLib.RatingState memory recovered,,) = harness.applySettlement(5_000, 500e6, 0, slashable, cfg, slashCfg, 3);
+        (RatingLib.RatingState memory recovered,,) =
+            harness.applySettlement(5_000, 500e6, 0, slashable, cfg, slashCfg, 3);
         assertEq(recovered.lowSince, 0, "recovery above threshold should clear lowSince");
     }
 }

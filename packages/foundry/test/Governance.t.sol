@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {Test} from "forge-std/Test.sol";
-import {TimelockController} from "@openzeppelin/contracts/governance/TimelockController.sol";
-import {IVotes} from "@openzeppelin/contracts/governance/utils/IVotes.sol";
-import {IGovernor} from "@openzeppelin/contracts/governance/IGovernor.sol";
+import { Test } from "forge-std/Test.sol";
+import { TimelockController } from "@openzeppelin/contracts/governance/TimelockController.sol";
+import { IVotes } from "@openzeppelin/contracts/governance/utils/IVotes.sol";
+import { IGovernor } from "@openzeppelin/contracts/governance/IGovernor.sol";
 
-import {HumanReputation} from "../contracts/HumanReputation.sol";
-import {CuryoGovernor} from "../contracts/governance/CuryoGovernor.sol";
+import { HumanReputation } from "../contracts/HumanReputation.sol";
+import { CuryoGovernor } from "../contracts/governance/CuryoGovernor.sol";
 
 contract GovernanceTest is Test {
     HumanReputation public token;

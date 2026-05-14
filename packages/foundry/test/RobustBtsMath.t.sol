@@ -13,12 +13,11 @@ contract RobustBtsMathHarness {
         return RobustBtsMath.quadraticScoreBps(predictionBps, actualIsUp);
     }
 
-    function scoreBps(
-        bool ownSignalIsUp,
-        uint16 ownPredictionBps,
-        uint16 referencePredictionBps,
-        bool peerSignalIsUp
-    ) external pure returns (uint16) {
+    function scoreBps(bool ownSignalIsUp, uint16 ownPredictionBps, uint16 referencePredictionBps, bool peerSignalIsUp)
+        external
+        pure
+        returns (uint16)
+    {
         return RobustBtsMath.scoreBps(ownSignalIsUp, ownPredictionBps, referencePredictionBps, peerSignalIsUp);
     }
 }

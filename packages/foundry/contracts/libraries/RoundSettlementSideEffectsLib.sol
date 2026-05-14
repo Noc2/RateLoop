@@ -119,5 +119,4 @@ library RoundSettlementSideEffectsLib {
             referenceRatingBps, upPool, downPool, previousState, ratingConfig, slashConfig, uint48(block.timestamp)
         );
     }
-
 }

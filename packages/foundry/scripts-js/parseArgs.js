@@ -177,9 +177,7 @@ if (network !== "localhost") {
     process.env.RUST_LOG = existing
       ? `${existing},etherscan=off`
       : "etherscan=off";
-    console.log(
-      `\n⚠️  Skipping auto-verification for ${network}`
-    );
+    console.log(`\n⚠️  Skipping auto-verification for ${network}`);
     console.log(
       `   Verify after deploy: ${formatBlockscoutVerifyCommand(network)}`
     );

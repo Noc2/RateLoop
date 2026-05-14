@@ -26,10 +26,7 @@ contract RatingMathFuzzTest is Test {
 
     function _slashConfig() internal pure returns (RatingLib.SlashConfig memory cfg) {
         cfg = RatingLib.SlashConfig({
-            slashThresholdBps: 2_500,
-            minSlashSettledRounds: 2,
-            minSlashLowDuration: 7 days,
-            minSlashEvidence: 200e6
+            slashThresholdBps: 2_500, minSlashSettledRounds: 2, minSlashLowDuration: 7 days, minSlashEvidence: 200e6
         });
     }
 
@@ -90,10 +87,7 @@ contract RatingMathFuzzTest is Test {
         assertLe(nextA.ratingBps, nextB.ratingBps, "higher anchor should not settle lower for same vote mix");
     }
 
-    function testFuzz_ConservativePenalty_WeakensWithConfidence(uint16 ratingBps, uint256 confidenceMass)
-        public
-        pure
-    {
+    function testFuzz_ConservativePenalty_WeakensWithConfidence(uint16 ratingBps, uint256 confidenceMass) public pure {
         ratingBps = RatingMath.clampRatingBps(ratingBps);
         confidenceMass = bound(confidenceMass, 1, 1_000e6);
         RatingLib.RatingConfig memory cfg = _ratingConfig();
@@ -120,7 +114,8 @@ contract RatingMathFuzzTest is Test {
 
         uint256 lessSurprisingMass =
             RatingMath.computeNextConfidenceMass(previousConfidenceMass, roundEvidence, lessSurprisingGap, cfg);
-        uint256 surprisingMass = RatingMath.computeNextConfidenceMass(previousConfidenceMass, roundEvidence, surprisingGap, cfg);
+        uint256 surprisingMass =
+            RatingMath.computeNextConfidenceMass(previousConfidenceMass, roundEvidence, surprisingGap, cfg);
 
         assertGe(lessSurprisingMass, surprisingMass, "more surprising round should reopen confidence more");
     }

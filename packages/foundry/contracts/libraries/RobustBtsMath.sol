@@ -30,12 +30,11 @@ library RobustBtsMath {
         return uint16(uint256(BPS_SCALE) - (ySquared / BPS_SCALE));
     }
 
-    function scoreBps(
-        bool ownSignalIsUp,
-        uint16 ownPredictionBps,
-        uint16 referencePredictionBps,
-        bool peerSignalIsUp
-    ) internal pure returns (uint16) {
+    function scoreBps(bool ownSignalIsUp, uint16 ownPredictionBps, uint16 referencePredictionBps, bool peerSignalIsUp)
+        internal
+        pure
+        returns (uint16)
+    {
         uint16 shadow = shadowPredictionBps(referencePredictionBps, ownSignalIsUp);
         uint256 informationScore = quadraticScoreBps(shadow, peerSignalIsUp);
         uint256 predictionScore = quadraticScoreBps(ownPredictionBps, peerSignalIsUp);

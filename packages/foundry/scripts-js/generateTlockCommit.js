@@ -16,10 +16,26 @@ function usage() {
   process.exit(1);
 }
 
-const [rpcUrlArg, votingEngineArg, contentRegistryArg, contentIdArg, isUpArg, saltArg, voterArg, predictedUpBpsArg] =
-  process.argv.slice(2);
+const [
+  rpcUrlArg,
+  votingEngineArg,
+  contentRegistryArg,
+  contentIdArg,
+  isUpArg,
+  saltArg,
+  voterArg,
+  predictedUpBpsArg,
+] = process.argv.slice(2);
 
-if (!rpcUrlArg || !votingEngineArg || !contentRegistryArg || !contentIdArg || !isUpArg || !saltArg || !voterArg) {
+if (
+  !rpcUrlArg ||
+  !votingEngineArg ||
+  !contentRegistryArg ||
+  !contentIdArg ||
+  !isUpArg ||
+  !saltArg ||
+  !voterArg
+) {
   usage();
 }
 
@@ -51,24 +67,29 @@ const contentId = BigInt(contentIdArg);
 const isUp = isUpArg === "true";
 const salt = saltArg.startsWith("0x") ? saltArg : `0x${saltArg}`;
 const voter = getAddress(voterArg);
-const predictedUpBps = predictedUpBpsArg == null ? 5_000 : Number.parseInt(predictedUpBpsArg, 10);
+const predictedUpBps =
+  predictedUpBpsArg == null ? 5_000 : Number.parseInt(predictedUpBpsArg, 10);
 
 if (salt.length !== 66) {
   throw new Error("saltHex must be 32 bytes");
 }
-if (!Number.isInteger(predictedUpBps) || predictedUpBps < 0 || predictedUpBps > 10_000) {
+if (
+  !Number.isInteger(predictedUpBps) ||
+  predictedUpBps < 0 ||
+  predictedUpBps > 10_000
+) {
   throw new Error("predictedUpBps must be an integer from 0 to 10000");
 }
 
 function roundAt(timestamp, genesisTime, period) {
   if (period <= 0n || timestamp < genesisTime) return 0n;
-  return ((timestamp - genesisTime) / period) + 1n;
+  return (timestamp - genesisTime) / period + 1n;
 }
 
 function roundAtOrAfter(timestamp, genesisTime, period) {
   if (period <= 0n || timestamp < genesisTime) return 0n;
   const elapsed = timestamp - genesisTime;
-  return ((elapsed + period - 1n) / period) + 1n;
+  return (elapsed + period - 1n) / period + 1n;
 }
 
 const chainClient = createPublicClient({ transport: http(rpcUrl) });
@@ -177,18 +198,35 @@ for (const timestamp of [latestBlock.timestamp, latestBlock.timestamp + 1n]) {
     );
   }
 
-  const minTargetRound = roundAtOrAfter(revealableAfter, drandGenesisTime, drandPeriod);
-  const maxTargetRound = roundAt(revealableAfter + epochDuration, drandGenesisTime, drandPeriod);
-  if (minTargetRound === 0n || maxTargetRound === 0n || minTargetRound > maxTargetRound) {
+  const minTargetRound = roundAtOrAfter(
+    revealableAfter,
+    drandGenesisTime,
+    drandPeriod
+  );
+  const maxTargetRound = roundAt(
+    revealableAfter + epochDuration,
+    drandGenesisTime,
+    drandPeriod
+  );
+  if (
+    minTargetRound === 0n ||
+    maxTargetRound === 0n ||
+    minTargetRound > maxTargetRound
+  ) {
     throw new Error(
       `No valid drand target round for revealableAfter=${revealableAfter}, epochDuration=${epochDuration}, genesis=${drandGenesisTime}, period=${drandPeriod}`
     );
   }
-  if (minTargetRound > minAcceptedTargetRound) minAcceptedTargetRound = minTargetRound;
-  if (maxAcceptedTargetRound === 0n || maxTargetRound < maxAcceptedTargetRound) maxAcceptedTargetRound = maxTargetRound;
+  if (minTargetRound > minAcceptedTargetRound)
+    minAcceptedTargetRound = minTargetRound;
+  if (maxAcceptedTargetRound === 0n || maxTargetRound < maxAcceptedTargetRound)
+    maxAcceptedTargetRound = maxTargetRound;
 }
 
-if (minAcceptedTargetRound === 0n || minAcceptedTargetRound > maxAcceptedTargetRound) {
+if (
+  minAcceptedTargetRound === 0n ||
+  minAcceptedTargetRound > maxAcceptedTargetRound
+) {
   throw new Error(
     `No shared drand target round for latest and next-block commit windows, min=${minAcceptedTargetRound}, max=${maxAcceptedTargetRound}`
   );
@@ -222,7 +260,18 @@ const armored = await timelockEncrypt(Number(targetRound), plaintext, client);
 const ciphertext = `0x${Buffer.from(armored, "utf-8").toString("hex")}`;
 const commitHash = keccak256(
   encodePacked(
-    ["bool", "uint16", "bytes32", "address", "uint256", "uint256", "uint16", "uint64", "bytes32", "bytes32"],
+    [
+      "bool",
+      "uint16",
+      "bytes32",
+      "address",
+      "uint256",
+      "uint256",
+      "uint16",
+      "uint64",
+      "bytes32",
+      "bytes32",
+    ],
     [
       isUp,
       predictedUpBps,
@@ -238,4 +287,6 @@ const commitHash = keccak256(
   )
 );
 
-process.stdout.write(`${commitHash}\n${ciphertext}\n${targetRound}\n${drandChainHash}\n${roundReferenceRatingBps}\n${previewRoundId}\n`);
+process.stdout.write(
+  `${commitHash}\n${ciphertext}\n${targetRound}\n${drandChainHash}\n${roundReferenceRatingBps}\n${previewRoundId}\n`
+);

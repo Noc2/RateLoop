@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {IWorldIDRouter} from "../interfaces/IWorldIDRouter.sol";
+import { IWorldIDRouter } from "../interfaces/IWorldIDRouter.sol";
 
 contract MockWorldIDRouter is IWorldIDRouter {
     bool public shouldReject;

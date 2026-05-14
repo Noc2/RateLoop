@@ -1,30 +1,30 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {ScaffoldETHDeploy} from "./DeployHelpers.s.sol";
-import {console} from "forge-std/console.sol";
-import {TransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
-import {TimelockController} from "@openzeppelin/contracts/governance/TimelockController.sol";
-import {IVotes} from "@openzeppelin/contracts/governance/utils/IVotes.sol";
-import {LoopReputation} from "../contracts/LoopReputation.sol";
-import {AdvisoryVoteRecorder} from "../contracts/AdvisoryVoteRecorder.sol";
-import {ContentRegistry} from "../contracts/ContentRegistry.sol";
-import {RoundVotingEngine} from "../contracts/RoundVotingEngine.sol";
-import {RoundRewardDistributor} from "../contracts/RoundRewardDistributor.sol";
-import {FrontendRegistry} from "../contracts/FrontendRegistry.sol";
-import {CategoryRegistry} from "../contracts/CategoryRegistry.sol";
-import {FeedbackBonusEscrow} from "../contracts/FeedbackBonusEscrow.sol";
-import {ProfileRegistry} from "../contracts/ProfileRegistry.sol";
-import {ProtocolConfig} from "../contracts/ProtocolConfig.sol";
-import {QuestionRewardPoolEscrow} from "../contracts/QuestionRewardPoolEscrow.sol";
-import {RaterRegistry} from "../contracts/RaterRegistry.sol";
-import {X402QuestionSubmitter} from "../contracts/X402QuestionSubmitter.sol";
-import {ParticipationPool} from "../contracts/ParticipationPool.sol";
-import {LaunchDistributionPool} from "../contracts/LaunchDistributionPool.sol";
-import {ClusterPayoutOracle} from "../contracts/ClusterPayoutOracle.sol";
-import {MockERC20} from "../contracts/mocks/MockERC20.sol";
-import {MockWorldIDRouter} from "../contracts/mocks/MockWorldIDRouter.sol";
-import {CuryoGovernor} from "../contracts/governance/CuryoGovernor.sol";
+import { ScaffoldETHDeploy } from "./DeployHelpers.s.sol";
+import { console } from "forge-std/console.sol";
+import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
+import { TimelockController } from "@openzeppelin/contracts/governance/TimelockController.sol";
+import { IVotes } from "@openzeppelin/contracts/governance/utils/IVotes.sol";
+import { LoopReputation } from "../contracts/LoopReputation.sol";
+import { AdvisoryVoteRecorder } from "../contracts/AdvisoryVoteRecorder.sol";
+import { ContentRegistry } from "../contracts/ContentRegistry.sol";
+import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
+import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
+import { FrontendRegistry } from "../contracts/FrontendRegistry.sol";
+import { CategoryRegistry } from "../contracts/CategoryRegistry.sol";
+import { FeedbackBonusEscrow } from "../contracts/FeedbackBonusEscrow.sol";
+import { ProfileRegistry } from "../contracts/ProfileRegistry.sol";
+import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
+import { QuestionRewardPoolEscrow } from "../contracts/QuestionRewardPoolEscrow.sol";
+import { RaterRegistry } from "../contracts/RaterRegistry.sol";
+import { X402QuestionSubmitter } from "../contracts/X402QuestionSubmitter.sol";
+import { ParticipationPool } from "../contracts/ParticipationPool.sol";
+import { LaunchDistributionPool } from "../contracts/LaunchDistributionPool.sol";
+import { ClusterPayoutOracle } from "../contracts/ClusterPayoutOracle.sol";
+import { MockERC20 } from "../contracts/mocks/MockERC20.sol";
+import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
+import { CuryoGovernor } from "../contracts/governance/CuryoGovernor.sol";
 
 /// @notice Fresh RateLoop deployment script for World Chain.
 /// @dev Rater identity is resolved through RaterRegistry; no separate proof-of-personhood token is deployed.
@@ -570,4 +570,4 @@ contract DeployRateLoop is ScaffoldETHDeploy {
 }
 
 /// @notice Main deployment entrypoint used by scaffold-eth/yarn deploy.
-contract DeployScript is DeployRateLoop {}
+contract DeployScript is DeployRateLoop { }

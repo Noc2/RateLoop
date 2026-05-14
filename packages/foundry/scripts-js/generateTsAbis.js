@@ -398,9 +398,10 @@ function assertCompleteNonLocalDeploymentExport(
   }
 
   const exportedContractNames = deploymentExportContractNames(chainDeployments);
-  const missingContracts = REQUIRED_NON_LOCAL_DEPLOYMENT_EXPORT_CONTRACTS.filter(
-    (contractName) => !exportedContractNames.has(contractName)
-  );
+  const missingContracts =
+    REQUIRED_NON_LOCAL_DEPLOYMENT_EXPORT_CONTRACTS.filter(
+      (contractName) => !exportedContractNames.has(contractName)
+    );
   if (missingContracts.length > 0) {
     throw new Error(
       `Fresh deployment export for ${targetLabel} is missing required contracts: ${missingContracts.join(
@@ -549,7 +550,8 @@ function main() {
     if (typeof chainDeployments !== "object" || chainDeployments === null)
       return;
 
-    const chainDeploymentBlockNumber = deploymentExportBlockNumber(chainDeployments);
+    const chainDeploymentBlockNumber =
+      deploymentExportBlockNumber(chainDeployments);
 
     Object.entries(chainDeployments).forEach(([address, contractName]) => {
       // Skip metadata entries like "networkName"
@@ -595,9 +597,8 @@ function main() {
   const existingContracts = readExistingDeployedContracts(
     deployedContractsTargetFile
   );
-  const existingContractsForPublish = pruneDeprecatedContracts(
-    existingContracts
-  );
+  const existingContractsForPublish =
+    pruneDeprecatedContracts(existingContracts);
   assertFreshTargetDeployment(
     allGeneratedContracts,
     existingContractsForPublish,

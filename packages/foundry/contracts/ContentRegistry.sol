@@ -1320,7 +1320,8 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         if (submitter == address(0)) return (address(0), bytes32(0));
         IRaterIdentityRegistry.ResolvedRater memory resolved = _resolveRater(submitter);
         submitterIdentity = resolved.holder == address(0) ? submitter : resolved.holder;
-        submitterIdentityKey = resolved.identityKey == bytes32(0) ? _addressIdentityKey(submitter) : resolved.identityKey;
+        submitterIdentityKey =
+            resolved.identityKey == bytes32(0) ? _addressIdentityKey(submitter) : resolved.identityKey;
     }
 
     function _resolveRater(address account)

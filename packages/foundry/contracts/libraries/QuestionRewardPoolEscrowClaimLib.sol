@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {IFrontendRegistry} from "../interfaces/IFrontendRegistry.sol";
-import {IClusterPayoutOracle} from "../interfaces/IClusterPayoutOracle.sol";
-import {ProtocolConfig} from "../ProtocolConfig.sol";
-import {RoundVotingEngine} from "../RoundVotingEngine.sol";
-import {RewardPool, RoundSnapshot} from "./QuestionRewardPoolEscrowTypes.sol";
-import {QuestionRewardPoolEscrowEligibilityLib} from "./QuestionRewardPoolEscrowEligibilityLib.sol";
-import {QuestionRewardPoolEscrowQualificationLib} from "./QuestionRewardPoolEscrowQualificationLib.sol";
-import {QuestionRewardPoolEscrowVoterLib} from "./QuestionRewardPoolEscrowVoterLib.sol";
+import { IFrontendRegistry } from "../interfaces/IFrontendRegistry.sol";
+import { IClusterPayoutOracle } from "../interfaces/IClusterPayoutOracle.sol";
+import { ProtocolConfig } from "../ProtocolConfig.sol";
+import { RoundVotingEngine } from "../RoundVotingEngine.sol";
+import { RewardPool, RoundSnapshot } from "./QuestionRewardPoolEscrowTypes.sol";
+import { QuestionRewardPoolEscrowEligibilityLib } from "./QuestionRewardPoolEscrowEligibilityLib.sol";
+import { QuestionRewardPoolEscrowQualificationLib } from "./QuestionRewardPoolEscrowQualificationLib.sol";
+import { QuestionRewardPoolEscrowVoterLib } from "./QuestionRewardPoolEscrowVoterLib.sol";
 
 library QuestionRewardPoolEscrowClaimLib {
     uint256 private constant BASE_PARTICIPATION_WEIGHT_BPS = 10_000;

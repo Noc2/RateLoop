@@ -1,17 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {
-    SD59x18,
-    abs,
-    convert,
-    div,
-    exp,
-    ln,
-    mul,
-    sd,
-    unwrap
-} from "../../lib/prb-math/src/SD59x18.sol";
+import { SD59x18, abs, convert, div, exp, ln, mul, sd, unwrap } from "../../lib/prb-math/src/SD59x18.sol";
 import { RatingLib } from "./RatingLib.sol";
 
 /// @title RatingMath
@@ -60,7 +50,8 @@ library RatingMath {
         uint48 settledAt
     ) internal pure returns (RatingLib.RatingState memory nextState, int256 observedGapX18, int256 ratingDeltaBps) {
         uint256 roundEvidence = weightedUp + weightedDown;
-        uint256 confidenceMass = previousState.confidenceMass == 0 ? ratingConfig.confidenceMassInitial : previousState.confidenceMass;
+        uint256 confidenceMass =
+            previousState.confidenceMass == 0 ? ratingConfig.confidenceMassInitial : previousState.confidenceMass;
         confidenceMass = _clampConfidenceMass(confidenceMass, ratingConfig);
 
         int256 anchorLogitX18 = ratingBpsToLogitX18(referenceRatingBps);
@@ -75,7 +66,8 @@ library RatingMath {
         nextState.effectiveEvidence = _toUint128(uint256(previousState.effectiveEvidence) + roundEvidence);
         nextState.settledRounds = previousState.settledRounds + 1;
         nextState.ratingBps = nextRatingBps;
-        nextState.conservativeRatingBps = computeConservativeRatingBps(nextRatingBps, uint256(nextState.confidenceMass), ratingConfig);
+        nextState.conservativeRatingBps =
+            computeConservativeRatingBps(nextRatingBps, uint256(nextState.confidenceMass), ratingConfig);
         nextState.lastUpdatedAt = settledAt;
 
         bool canTrackLowRating = uint256(nextState.effectiveEvidence) >= slashConfig.minSlashEvidence

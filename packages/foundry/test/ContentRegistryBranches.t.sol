@@ -1466,7 +1466,9 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.stopPrank();
 
         assertEq(reg2.getSubmitterIdentity(id), submitter);
-        assertEq(reg2.contentSubmitterIdentityKey(id), keccak256(abi.encodePacked("rateloop.address-identity-v1", submitter)));
+        assertEq(
+            reg2.contentSubmitterIdentityKey(id), keccak256(abi.encodePacked("rateloop.address-identity-v1", submitter))
+        );
     }
 
     function test_SubmitContent_NonHttpsUrl_Reverts() public {

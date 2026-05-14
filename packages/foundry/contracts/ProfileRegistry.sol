@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import {IProfileRegistry} from "./interfaces/IProfileRegistry.sol";
-import {IRaterIdentityRegistry} from "./interfaces/IRaterIdentityRegistry.sol";
+import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import { IProfileRegistry } from "./interfaces/IProfileRegistry.sol";
+import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol";
 
 /// @title ProfileRegistry
 /// @notice Manages on-chain user profiles with unique names and public self-reported context

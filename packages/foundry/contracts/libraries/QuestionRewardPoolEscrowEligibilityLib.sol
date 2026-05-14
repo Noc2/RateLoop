@@ -3,21 +3,18 @@ pragma solidity ^0.8.24;
 
 import { ProtocolConfig } from "../ProtocolConfig.sol";
 import { IRaterRegistryStatus } from "../interfaces/IRaterRegistryStatus.sol";
-import {
-    BOUNTY_ELIGIBILITY_OPEN,
-    BOUNTY_ELIGIBILITY_VERIFIED_HUMAN
-} from "./QuestionRewardPoolEscrowTypes.sol";
+import { BOUNTY_ELIGIBILITY_OPEN, BOUNTY_ELIGIBILITY_VERIFIED_HUMAN } from "./QuestionRewardPoolEscrowTypes.sol";
 
 library QuestionRewardPoolEscrowEligibilityLib {
     function isValidPolicy(uint8 bountyEligibility) internal pure returns (bool) {
         return bountyEligibility <= BOUNTY_ELIGIBILITY_VERIFIED_HUMAN;
     }
 
-    function isAccountEligibleForBounty(
-        ProtocolConfig protocolConfig,
-        uint8 bountyEligibility,
-        address account
-    ) internal view returns (bool) {
+    function isAccountEligibleForBounty(ProtocolConfig protocolConfig, uint8 bountyEligibility, address account)
+        internal
+        view
+        returns (bool)
+    {
         if (bountyEligibility == BOUNTY_ELIGIBILITY_OPEN) return true;
         if (account == address(0)) return false;
 
@@ -42,5 +39,4 @@ library QuestionRewardPoolEscrowEligibilityLib {
             return false;
         }
     }
-
 }

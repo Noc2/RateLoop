@@ -155,12 +155,7 @@ contract AdversarialTests is VotingTestBase {
 
     function _deployRaterRegistry() internal returns (RaterRegistry identityRegistry) {
         identityRegistry = new RaterRegistry(
-            owner,
-            owner,
-            address(new MockWorldIDRouter()),
-            keccak256("rateloop-human-v1"),
-            12_345,
-            365 days
+            owner, owner, address(new MockWorldIDRouter()), keccak256("rateloop-human-v1"), 12_345, 365 days
         );
     }
 

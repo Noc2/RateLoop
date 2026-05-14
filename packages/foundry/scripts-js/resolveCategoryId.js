@@ -56,7 +56,7 @@ try {
   process.stdout.write(categoryId.toString());
 } catch (error) {
   console.error(
-    `ERROR: Could not resolve category slug ${slug} from CategoryRegistry`,
+    `ERROR: Could not resolve category slug ${slug} from CategoryRegistry`
   );
   if (error instanceof Error && error.shortMessage) {
     console.error(error.shortMessage);

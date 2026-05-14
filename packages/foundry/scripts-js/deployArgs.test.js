@@ -13,7 +13,12 @@ test("parseDeployArgs returns defaults with no options", () => {
 
 test("parseDeployArgs reads supported options", () => {
   assert.deepEqual(
-    parseDeployArgs(["--network", "worldchainSepolia", "--keystore", "deployer"]),
+    parseDeployArgs([
+      "--network",
+      "worldchainSepolia",
+      "--keystore",
+      "deployer",
+    ]),
     {
       showHelp: false,
       network: "worldchainSepolia",

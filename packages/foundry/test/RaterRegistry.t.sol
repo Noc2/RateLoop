@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {Test} from "forge-std/Test.sol";
-import {RaterRegistry} from "../contracts/RaterRegistry.sol";
-import {IRaterIdentityRegistry} from "../contracts/interfaces/IRaterIdentityRegistry.sol";
-import {MockWorldIDRouter} from "../contracts/mocks/MockWorldIDRouter.sol";
+import { Test } from "forge-std/Test.sol";
+import { RaterRegistry } from "../contracts/RaterRegistry.sol";
+import { IRaterIdentityRegistry } from "../contracts/interfaces/IRaterIdentityRegistry.sol";
+import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
 
 contract RaterRegistryTest is Test {
     RaterRegistry internal registry;

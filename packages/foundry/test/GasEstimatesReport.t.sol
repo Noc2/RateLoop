@@ -318,12 +318,7 @@ contract IdentityTransactionGasEstimatesTest is Test {
     function setUp() public {
         vm.startPrank(admin);
         raterRegistry = new RaterRegistry(
-            admin,
-            admin,
-            address(new MockWorldIDRouter()),
-            keccak256("rateloop-human-v1"),
-            12_345,
-            365 days
+            admin, admin, address(new MockWorldIDRouter()), keccak256("rateloop-human-v1"), 12_345, 365 days
         );
         vm.stopPrank();
     }
@@ -345,7 +340,9 @@ contract IdentityTransactionGasEstimatesTest is Test {
         uint256 gasUsed = _measureCallAs(
             admin,
             address(raterRegistry),
-            abi.encodeCall(RaterRegistry.seedHumanCredential, (user1, uint64(block.timestamp + 365 days), ANCHOR_1, bytes32(0)))
+            abi.encodeCall(
+                RaterRegistry.seedHumanCredential, (user1, uint64(block.timestamp + 365 days), ANCHOR_1, bytes32(0))
+            )
         );
         console2.log("rater_registry_seed_human_credential_gas", gasUsed);
     }

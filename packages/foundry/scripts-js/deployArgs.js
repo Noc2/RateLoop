@@ -69,7 +69,9 @@ export function parseDeployArgs(args) {
 
   if (!SUPPORTED_DEPLOY_NETWORKS.has(network)) {
     throw new Error(
-      `Unsupported deploy network: ${network}. Supported networks: ${Array.from(SUPPORTED_DEPLOY_NETWORKS).join(", ")}.`
+      `Unsupported deploy network: ${network}. Supported networks: ${Array.from(
+        SUPPORTED_DEPLOY_NETWORKS
+      ).join(", ")}.`
     );
   }
 
