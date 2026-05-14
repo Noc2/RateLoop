@@ -164,9 +164,11 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
         if (delegate == address(0)) revert InvalidAddress();
         if (delegate == msg.sender) revert CannotDelegateSelf();
         if (delegateOf[msg.sender] != address(0)) revert CallerIsDelegate();
+        if (pendingDelegateOf[msg.sender] != address(0)) revert CallerIsDelegate();
         if (_hasCredentialIdentity(delegate)) revert DelegateIsHolder();
         if (delegateOf[delegate] != address(0)) revert DelegateAlreadyAssigned();
         if (pendingDelegateOf[delegate] != address(0)) revert DelegateAlreadyAssigned();
+        if (pendingDelegateTo[delegate] != address(0)) revert DelegateAlreadyAssigned();
         if (delegateTo[delegate] != address(0)) revert DelegateAlreadyAssigned();
 
         _clearPendingDelegateRequest(msg.sender);
@@ -183,7 +185,10 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
         if (holder == address(0)) revert NoPendingDelegate();
         if (_hasCredentialIdentity(msg.sender)) revert DelegateIsHolder();
         if (delegateOf[msg.sender] != address(0)) revert DelegateAlreadyAssigned();
+        if (pendingDelegateTo[msg.sender] != address(0)) revert DelegateAlreadyAssigned();
         if (delegateTo[msg.sender] != address(0)) revert DelegateAlreadyAssigned();
+        if (delegateOf[holder] != address(0)) revert CallerIsDelegate();
+        if (pendingDelegateOf[holder] != address(0)) revert CallerIsDelegate();
 
         address oldDelegate = delegateTo[holder];
         if (oldDelegate != address(0)) {

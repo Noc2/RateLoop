@@ -342,6 +342,24 @@ contract RaterRegistryTest is Test {
         registry.setDelegate(subject);
     }
 
+    function test_PendingOutboundDelegateCannotBecomeDelegate() public {
+        vm.prank(otherRater);
+        registry.setDelegate(subject);
+
+        vm.prank(rater);
+        vm.expectRevert(RaterRegistry.DelegateAlreadyAssigned.selector);
+        registry.setDelegate(otherRater);
+    }
+
+    function test_PendingInboundDelegateCannotOpenOutboundRequest() public {
+        vm.prank(rater);
+        registry.setDelegate(otherRater);
+
+        vm.prank(otherRater);
+        vm.expectRevert(RaterRegistry.CallerIsDelegate.selector);
+        registry.setDelegate(subject);
+    }
+
     function test_AttestingCredentialClearsInboundDelegation() public {
         vm.prank(rater);
         registry.setDelegate(otherRater);
