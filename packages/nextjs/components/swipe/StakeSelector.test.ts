@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { normalizeStakeSelectorAmount, normalizeStakeSelectorRating } from "~~/components/swipe/StakeSelector";
+import {
+  getInitialPredictedUpPercent,
+  normalizeStakeSelectorAmount,
+  normalizeStakeSelectorRating,
+} from "~~/components/swipe/StakeSelector";
 
 test("normalizeStakeSelectorRating accepts out-of-ten ratings", () => {
   assert.equal(normalizeStakeSelectorRating(6.4), 6.4);
@@ -33,4 +37,10 @@ test("normalizeStakeSelectorAmount snaps nonzero values to the counted minimum",
   assert.equal(normalizeStakeSelectorAmount(0.5), 1);
   assert.equal(normalizeStakeSelectorAmount(1), 1);
   assert.equal(normalizeStakeSelectorAmount(2.5), 2.5);
+});
+
+test("getInitialPredictedUpPercent starts from the chosen binary signal", () => {
+  assert.equal(getInitialPredictedUpPercent(true), 60);
+  assert.equal(getInitialPredictedUpPercent(false), 40);
+  assert.equal(getInitialPredictedUpPercent(undefined), 50);
 });

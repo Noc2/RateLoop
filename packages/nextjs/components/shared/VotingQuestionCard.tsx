@@ -43,7 +43,7 @@ interface VotingQuestionCardProps {
 }
 
 const RATING_GUIDANCE_TEXT =
-  "The community score runs from 1.0 to 9.9, where higher means better. Predict the final rating you expect after the private round. Always rate illegal, broken, or misdescribed content near the bottom of the scale.";
+  "The public rating appears after a round settles. Vote thumbs up when the content is useful for the question, thumbs down when it is unhelpful, broken, misleading, or unsafe. Your separate forecast is the expected share of revealed raters choosing thumbs up.";
 const REWARD_POOL_TOOLTIP_TEXT =
   "This question's bounty is shown in USD and backed by USDC on World Chain. Eligible revealed raters can claim from it in qualified rounds, with 3% reserved for the eligible frontend operator.";
 const LREP_REWARD_POOL_TOOLTIP_TEXT =
@@ -117,7 +117,7 @@ function LiveRoundActivity({
           ? blindDetail
           : hasParticipationBonus
             ? `Example bonus: ${blindDetail}.`
-            : "Blind predictions keep full reward weight."
+            : "Blind signals keep full reward weight."
         : condensed
           ? (progress?.detailLabel ?? `${formatHrepAmount(snapshot.totalStake, 0)} LREP active`)
           : describeOpenRoundActivity(snapshot);
@@ -125,8 +125,8 @@ function LiveRoundActivity({
     snapshot.phase !== "voting"
       ? "Check the round details below for the settled breakdown."
       : snapshot.isEpoch1
-        ? "Predictions stay hidden until reveal, so early signal stays private while keeping full weight."
-        : "Revealed signal is live now. Open predictions use informed weight, but they can still help close the round.";
+        ? "Signals stay hidden until reveal, so early signal stays private while keeping full weight."
+        : "Revealed signal is live now. Open signals use informed weight, but they can still help close the round.";
   const condensedDetailCopy =
     progress?.detailLabel ??
     (snapshot.phase === "voting" && snapshot.voteCount >= snapshot.minVoters ? "Waiting for reveals" : detailCopy);
@@ -453,23 +453,23 @@ export function VotingQuestionCard({
   ) : address ? (
     hasMyVote ? (
       <HoverTooltip
-        text="You submitted a private predicted final rating. After the epoch, eligible predictions are normally revealed automatically, and you can self-reveal if needed."
+        text="You submitted a private thumbs-up/down signal and crowd forecast. After the epoch, eligible signals are normally revealed automatically, and you can self-reveal if needed."
         position="bottom"
       >
         {usesDockStatusText ? (
           <span className={DOCK_STATUS_TEXT_CLASS_NAME}>
-            <span className="text-[0.95rem] font-semibold leading-none text-primary">Predicted</span>
+            <span className="text-[0.95rem] font-semibold leading-none text-primary">Submitted</span>
             <span className="text-[0.95rem] leading-none text-base-content/62">hidden</span>
           </span>
         ) : (
           <span className={STATUS_PILL_CLASS_NAME}>
-            <span className="text-base font-semibold text-primary">Predicted</span>
+            <span className="text-base font-semibold text-primary">Submitted</span>
             <span className="text-base text-base-content/70">hidden</span>
           </span>
         )}
       </HoverTooltip>
     ) : isOwnContent ? (
-      <HoverTooltip text="Content submitters cannot predict on their own submissions." position="bottom">
+      <HoverTooltip text="Content submitters cannot vote on their own submissions." position="bottom">
         {usesDockStatusText ? (
           <span
             className={`${DOCK_STATUS_TEXT_CLASS_NAME} max-w-[7.25rem] text-[0.95rem] leading-tight text-base-content/68`}
@@ -484,7 +484,7 @@ export function VotingQuestionCard({
       </HoverTooltip>
     ) : cooldownActive ? (
       <HoverTooltip
-        text={`You already predicted this content within the last 24 hours. Try again in ${cooldownLabel}.`}
+        text={`You already voted on this content within the last 24 hours. Try again in ${cooldownLabel}.`}
         position="bottom"
       >
         {usesDockStatusText ? (

@@ -35,14 +35,14 @@ export function RoundRevealedBreakdown({ snapshot, stacked = false }: RoundRevea
           <span>Up</span>
           <span className="font-semibold tabular-nums">{upPoolFormatted.toFixed(0)} LREP</span>
           <span className="text-sm text-base-content/60">
-            {upCount} prediction{upCount === 1 ? "" : "s"}
+            {upCount} signal{upCount === 1 ? "" : "s"}
           </span>
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-left">
           <span>Down</span>
           <span className="font-semibold tabular-nums">{downPoolFormatted.toFixed(0)} LREP</span>
           <span className="text-sm text-base-content/60">
-            {downCount} prediction{downCount === 1 ? "" : "s"}
+            {downCount} signal{downCount === 1 ? "" : "s"}
           </span>
         </div>
       </div>
@@ -55,7 +55,7 @@ export function RoundRevealedBreakdown({ snapshot, stacked = false }: RoundRevea
         <span className="font-semibold">Up</span>
         <span className="font-semibold tabular-nums">{upPoolFormatted.toFixed(0)} LREP</span>
         <span className="text-xs text-base-content/60">
-          {upCount} prediction{upCount === 1 ? "" : "s"}
+          {upCount} signal{upCount === 1 ? "" : "s"}
         </span>
       </div>
       <div className="h-4 w-px shrink-0 bg-base-content/10" />
@@ -63,7 +63,7 @@ export function RoundRevealedBreakdown({ snapshot, stacked = false }: RoundRevea
         <span className="font-semibold">Down</span>
         <span className="font-semibold tabular-nums">{downPoolFormatted.toFixed(0)} LREP</span>
         <span className="text-xs text-base-content/60">
-          {downCount} prediction{downCount === 1 ? "" : "s"}
+          {downCount} signal{downCount === 1 ? "" : "s"}
         </span>
       </div>
     </div>
@@ -71,11 +71,11 @@ export function RoundRevealedBreakdown({ snapshot, stacked = false }: RoundRevea
 }
 
 /**
- * Displays stake and prediction statistics for the current round on a specific content.
+ * Displays stake and signal statistics for the current round on a specific content.
  *
- * Blind prediction model:
- * - During blind phase: predictions are encrypted and hidden. Only totalStake and voteCount are shown.
- * - After blind phase: the system reveals predictions. Revealed pool breakdown is shown.
+ * Blind signal model:
+ * - During blind phase: signals are encrypted and hidden. Only totalStake and voteCount are shown.
+ * - After blind phase: the system reveals signals. Revealed pool breakdown is shown.
  */
 export function RoundStats({ categoryId, snapshot }: RoundStatsProps) {
   const contentLabel = useContentLabel(categoryId);
@@ -98,7 +98,7 @@ export function RoundStats({ categoryId, snapshot }: RoundStatsProps) {
   const revealedVotesNeeded = snapshot.votersNeeded;
   const settlementHint =
     phase === "voting" && revealedVotesNeeded > 0
-      ? `${revealedVotesNeeded} more revealed prediction${revealedVotesNeeded === 1 ? "" : "s"} to settle`
+      ? `${revealedVotesNeeded} more revealed signal${revealedVotesNeeded === 1 ? "" : "s"} to settle`
       : null;
 
   return (
@@ -116,7 +116,7 @@ export function RoundStats({ categoryId, snapshot }: RoundStatsProps) {
           <span className="flex items-center gap-1">
             Raters
             <InfoTooltip
-              text={`Number of predictions committed on this ${contentLabel} in the current round.`}
+              text={`Number of private signals committed on this ${contentLabel} in the current round.`}
               position="bottom"
             />
           </span>
@@ -135,7 +135,7 @@ export function RoundStats({ categoryId, snapshot }: RoundStatsProps) {
           <span className="flex items-center gap-1 text-warning/80">
             Round full ({voteCount} / {maxVoters} raters)
             <InfoTooltip
-              text="This round has reached the maximum rater limit. New predictions cannot be added until a new round starts."
+              text="This round has reached the maximum rater limit. New signals cannot be added until a new round starts."
               position="bottom"
             />
           </span>
@@ -146,7 +146,7 @@ export function RoundStats({ categoryId, snapshot }: RoundStatsProps) {
         <div className="flex items-center gap-1 text-success">
           <span>Rewards distributed</span>
           <InfoTooltip
-            text="Rewards are proportional to phase-weighted stake. Blind predictions earned the 4x early-rater advantage."
+            text="Rewards are proportional to phase-weighted stake. Blind signals earned the 4x early-rater advantage."
             position="bottom"
           />
         </div>
@@ -156,7 +156,7 @@ export function RoundStats({ categoryId, snapshot }: RoundStatsProps) {
         <div className="flex items-center gap-1 text-warning/80">
           <span>Round expired — full refund available</span>
           <InfoTooltip
-            text="The round expired before enough predictions were committed. All stakes are refunded."
+            text="The round expired before enough signals were committed. All stakes are refunded."
             position="bottom"
           />
         </div>
@@ -171,9 +171,9 @@ export function RoundStats({ categoryId, snapshot }: RoundStatsProps) {
 
       {phase === "revealFailed" && (
         <div className="flex items-center gap-1 text-warning/80">
-          <span>Reveal failed — only revealed predictions can refund</span>
+          <span>Reveal failed — only revealed signals can refund</span>
           <InfoTooltip
-            text="Commit quorum was reached, but not enough predictions were revealed before the final reveal grace deadline. Revealed raters can claim refunds; unrevealed predictions forfeit."
+            text="Commit quorum was reached, but not enough signals were revealed before the final reveal grace deadline. Revealed raters can claim refunds; unrevealed signals forfeit."
             position="bottom"
           />
         </div>

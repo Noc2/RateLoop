@@ -505,8 +505,8 @@ test.describe("Mobile viewport (phone)", () => {
       const shell = dockElement.querySelector<HTMLElement>('[data-mobile-dock-shell="true"]');
       const actionControls = [
         dockElement.querySelector<HTMLElement>('[aria-label^="Bounty:"]'),
-        dockElement.querySelector<HTMLElement>('button[aria-label="Vote up and raise the score"]'),
-        dockElement.querySelector<HTMLElement>('button[aria-label="Vote down and lower the score"]'),
+        dockElement.querySelector<HTMLElement>('button[aria-label="Vote thumbs up"]'),
+        dockElement.querySelector<HTMLElement>('button[aria-label="Vote thumbs down"]'),
         dockElement.querySelector<HTMLElement>(
           'button[aria-label="Expand details"], button[aria-label="Collapse details"]',
         ),

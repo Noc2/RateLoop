@@ -32,7 +32,7 @@ export interface RecommendationSignalEvent extends RecommendationSignalContext {
   dwellMs?: number;
   selected?: boolean;
   isUp?: boolean;
-  predictedRating?: number;
+  predictedUpPercent?: number;
 }
 
 export function buildRecommendationSignalContext(
@@ -65,7 +65,7 @@ export function getRecommendationSignals(): RecommendationSignalEvent[] {
 export function trackRecommendationSignal(
   context: RecommendationSignalContext,
   type: RecommendationSignalType,
-  fields: Pick<RecommendationSignalEvent, "dwellMs" | "selected" | "isUp" | "predictedRating"> = {},
+  fields: Pick<RecommendationSignalEvent, "dwellMs" | "selected" | "isUp" | "predictedUpPercent"> = {},
 ): void {
   if (typeof window === "undefined") return;
 

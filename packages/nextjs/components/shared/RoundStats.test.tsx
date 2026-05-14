@@ -27,7 +27,7 @@ test("RoundRevealedBreakdown renders Up before Down to match the rating button o
     />,
   ).replace(/\s+/g, " ");
 
-  assert.match(html, /Up<\/span>\s*<span[^>]*>0 LREP<\/span>\s*<span[^>]*>0 predictions<\/span>/);
-  assert.match(html, /Down<\/span>\s*<span[^>]*>5 LREP<\/span>\s*<span[^>]*>1 prediction<\/span>/);
+  assert.match(html, /Up<\/span>\s*<span[^>]*>0 LREP<\/span>\s*<span[^>]*>0 signals<\/span>/);
+  assert.match(html, /Down<\/span>\s*<span[^>]*>5 LREP<\/span>\s*<span[^>]*>1 signal<\/span>/);
   assert.ok(html.indexOf(">Up<") < html.indexOf(">Down<"));
 });

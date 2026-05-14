@@ -27,7 +27,7 @@ test("getRoundProgressMessaging makes blind rounds sell bonus and urgency", () =
     detailLabel: "+90% bonus · 11:00 left",
     detailTone: "warning",
     tooltip:
-      "Blind predictions stay hidden and earn full reward weight. Open-phase predictions use 25% informed weight, so early raters keep the 4x advantage.",
+      "Blind signals stay hidden and earn full reward weight. Open-phase signals use 25% informed weight, so early raters keep the 4x advantage.",
   });
 });
 
@@ -48,7 +48,7 @@ test("getRoundProgressMessaging reframes open rounds around settlement momentum"
   });
 
   assert.equal(message?.badgeLabel, "Open");
-  assert.equal(message?.detailLabel, "2 more revealed predictions to settle");
+  assert.equal(message?.detailLabel, "2 more revealed signals to settle");
 });
 
 test("describeOpenRoundActivity uses revealed predictions for settlement progress", () => {
@@ -59,7 +59,7 @@ test("describeOpenRoundActivity uses revealed predictions for settlement progres
       revealedCount: 0,
       minVoters: 3,
     }),
-    "30 LREP active · 3 more revealed predictions to settle.",
+    "30 LREP active · 3 more revealed signals to settle.",
   );
 });
 
@@ -71,7 +71,7 @@ test("describeOpenRoundActivity keeps using reveal progress after commit quorum 
       revealedCount: 1,
       minVoters: 3,
     }),
-    "30 LREP active · 2 more revealed predictions to settle.",
+    "30 LREP active · 2 more revealed signals to settle.",
   );
 });
 

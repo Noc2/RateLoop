@@ -93,9 +93,9 @@ const ShareContentModal = dynamic(
 );
 
 function getStakeModalCurrentRating(item: ContentItem) {
-  const referenceRatingBps = item.openRound?.referenceRatingBps;
-  if (referenceRatingBps !== undefined) return Number(referenceRatingBps) / 1000;
-  return item.rating > 10 ? item.rating / 10 : item.rating;
+  const visibleRating = getVisibleContentRating(item);
+  if (visibleRating === null) return null;
+  return visibleRating > 10 ? visibleRating / 10 : visibleRating;
 }
 
 const ALL_FILTER = DISCOVER_ALL_FILTER;
@@ -131,7 +131,7 @@ function areIdListsEqual(left: readonly string[], right: readonly string[]) {
 }
 
 function getVoteCooldownMessage(seconds: number) {
-  return `You already predicted this content recently. Try again in ${formatVoteCooldownRemaining(seconds)}.`;
+  return `You already voted on this content recently. Try again in ${formatVoteCooldownRemaining(seconds)}.`;
 }
 
 function readInternalContentPinKey(contentPinKey: string | null) {
@@ -1103,7 +1103,7 @@ const HomeInner = () => {
   const handleButtonVote = useCallback(
     (item: ContentItem, isUp: boolean) => {
       if (!address) {
-        notification.info("Sign in to predict.");
+        notification.info("Sign in to vote.");
         void openConnectModal();
         return;
       }
@@ -1116,7 +1116,7 @@ const HomeInner = () => {
       }
 
       if (item.isOwnContent) {
-        notification.info("You cannot predict on your own content.", { duration: 6000 });
+        notification.info("You cannot vote on your own content.", { duration: 6000 });
         return;
       }
 
@@ -1264,7 +1264,7 @@ const HomeInner = () => {
       }
 
       if (item.isOwnContent) {
-        notification.info("You cannot predict on your own content.", { duration: 6000 });
+        notification.info("You cannot vote on your own content.", { duration: 6000 });
         setStakeModal(prev => ({ ...prev, isOpen: false }));
         return;
       }
@@ -1303,18 +1303,18 @@ const HomeInner = () => {
       setLocalVoteCooldownVersion(version => version + 1);
       if (item) {
         markPrimaryInteraction(item.id, { isVote: true });
-        recordRecommendationSignal(item, "vote_commit", { isUp, predictedRating: predictedUpPercent / 10 });
+        recordRecommendationSignal(item, "vote_commit", { isUp, predictedUpPercent });
       }
 
       const stakeStatus =
         stakeAmount > 0 ? `${stakeAmount} reputation locked.` : "no reputation locked; network fee only.";
       notification.success(
-        `Vote submitted: ${isUp ? "up" : "down"}, crowd prediction ${predictedUpPercent.toFixed(0)}% up, ${stakeStatus}`,
+        `Vote submitted: ${isUp ? "up" : "down"}, crowd forecast ${predictedUpPercent.toFixed(0)}% up, ${stakeStatus}`,
       );
 
       if (isFirstVote) {
         markVoteCompleted();
-        notification.info("Great first prediction! Keep going to build your reputation.", { duration: 5000 });
+        notification.info("Great first vote! Keep going to build your reputation.", { duration: 5000 });
       }
     },
     [

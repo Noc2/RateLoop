@@ -71,7 +71,7 @@ export function describeOpenRoundActivity(
 ) {
   const revealsNeeded = Math.max(0, snapshot.minVoters - snapshot.revealedCount);
   if (revealsNeeded > 0) {
-    return `${formatHrepAmount(snapshot.totalStake, 0)} LREP active · ${revealsNeeded} more revealed prediction${revealsNeeded === 1 ? "" : "s"} to settle.`;
+    return `${formatHrepAmount(snapshot.totalStake, 0)} LREP active · ${revealsNeeded} more revealed signal${revealsNeeded === 1 ? "" : "s"} to settle.`;
   }
 
   return `${formatHrepAmount(snapshot.totalStake, 0)} LREP active · Settlement threshold is in reach.`;
@@ -101,7 +101,7 @@ export function getRoundProgressMessaging(
       detailLabel: bonusLabel ? `${bonusLabel} · ${urgencyLabel}` : urgencyLabel,
       detailTone: snapshot.epoch1Remaining <= 15 * 60 ? "warning" : "primary",
       tooltip:
-        "Blind predictions stay hidden and earn full reward weight. Open-phase predictions use 25% informed weight, so early raters keep the 4x advantage.",
+        "Blind signals stay hidden and earn full reward weight. Open-phase signals use 25% informed weight, so early raters keep the 4x advantage.",
     };
   }
 
@@ -114,7 +114,7 @@ export function getRoundProgressMessaging(
       detailLabel: "Near settlement",
       detailTone: "success",
       tooltip:
-        "Open predictions can see live pools and revealed signal. Informed predictions use 25% weight, but they help push rounds to settlement faster.",
+        "Open signals can see live pools and revealed signal. Informed signals use 25% weight, but they help push rounds to settlement faster.",
     };
   }
 
@@ -122,10 +122,10 @@ export function getRoundProgressMessaging(
     return {
       badgeLabel: "Open",
       badgeTone: "warning",
-      detailLabel: `${revealsNeeded} more revealed prediction${revealsNeeded === 1 ? "" : "s"} to settle`,
+      detailLabel: `${revealsNeeded} more revealed signal${revealsNeeded === 1 ? "" : "s"} to settle`,
       detailTone: revealsNeeded === 1 ? "success" : "warning",
       tooltip:
-        "Open predictions can use the revealed market signal. Settlement starts once enough predictions are revealed and past-epoch checks clear.",
+        "Open signals can use the revealed market signal. Settlement starts once enough signals are revealed and past-epoch checks clear.",
     };
   }
 
@@ -135,7 +135,7 @@ export function getRoundProgressMessaging(
     detailLabel: "Help settle this round",
     detailTone: "success",
     tooltip:
-      "Open predictions can use the revealed market signal. Informed predictions use 25% weight, but they often help rounds close faster.",
+      "Open signals can use the revealed market signal. Informed signals use 25% weight, but they often help rounds close faster.",
   };
 }
 

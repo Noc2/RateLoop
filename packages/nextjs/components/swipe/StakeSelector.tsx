@@ -35,9 +35,9 @@ const MIN_COUNTED_STAKE_AMOUNT = 1;
 const MIN_PREDICTED_UP_PERCENT = 0;
 const MAX_PREDICTED_UP_PERCENT = 100;
 const YOUR_VOTE_TOOLTIP =
-  "Thumbs up means you expect the rating should move higher than the current/reference score; thumbs down means lower. Consider the current rating before choosing.";
+  "Thumbs up means you think this content is useful for the question; thumbs down means it is unhelpful, broken, misleading, or unsafe.";
 const EXPECTED_CROWD_TOOLTIP =
-  "Your forecast of what share of revealed raters will vote up this round. Rewards score this forecast against peer signals; it is separate from your thumbs up/down vote.";
+  "Your forecast of what share of revealed raters will choose thumbs up this round. RBTS rewards this forecast against peer signals; it is separate from your own thumbs up/down vote.";
 
 function clampRating(value: number) {
   if (!Number.isFinite(value)) return 5;
@@ -56,9 +56,10 @@ export function normalizeStakeSelectorAmount(stakeAmount: number) {
   return stakeAmount < MIN_COUNTED_STAKE_AMOUNT ? MIN_COUNTED_STAKE_AMOUNT : stakeAmount;
 }
 
-function getInitialPredictedUpPercent(currentRating: number | null | undefined) {
-  const baseRating = normalizeStakeSelectorRating(currentRating);
-  return Math.round(baseRating * 10);
+export function getInitialPredictedUpPercent(initialIsUp?: boolean) {
+  if (initialIsUp === true) return 60;
+  if (initialIsUp === false) return 40;
+  return 50;
 }
 
 /**
@@ -82,8 +83,9 @@ export function StakeSelector({
   const crowdPredictionInputId = useId();
   const contentLabel = useContentLabel(categoryId);
   const [amount, setAmount] = useState(0);
-  const [isUp, setIsUp] = useState(() => initialIsUp ?? normalizeStakeSelectorRating(currentRating) >= 5);
-  const [predictedUpPercent, setPredictedUpPercent] = useState(() => getInitialPredictedUpPercent(currentRating));
+  const [isUp, setIsUp] = useState(() => initialIsUp ?? true);
+  const [predictedUpPercent, setPredictedUpPercent] = useState(() => getInitialPredictedUpPercent(initialIsUp));
+  const [hasAdjustedPrediction, setHasAdjustedPrediction] = useState(false);
   const { address } = useAccount();
   const { identityKey } = useRaterRegistryIdentity(address);
 
@@ -114,14 +116,15 @@ export function StakeSelector({
 
   useEffect(() => {
     if (!isOpen) return;
-    setIsUp(initialIsUp ?? normalizeStakeSelectorRating(currentRating) >= 5);
-    setPredictedUpPercent(getInitialPredictedUpPercent(currentRating));
+    setIsUp(initialIsUp ?? true);
+    setPredictedUpPercent(getInitialPredictedUpPercent(initialIsUp));
+    setHasAdjustedPrediction(false);
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape" && !isConfirming) onCancel();
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [currentRating, initialIsUp, isConfirming, isOpen, onCancel]);
+  }, [initialIsUp, isConfirming, isOpen, onCancel]);
 
   const symbol = tokenSymbol ?? "LREP";
   const { calculateBonus, hasActiveParticipationRewards } = useParticipationRate();
@@ -134,6 +137,13 @@ export function StakeSelector({
     currentRating === null || currentRating === undefined || !Number.isFinite(currentRating)
       ? "N/A"
       : normalizedCurrentRating.toFixed(1);
+
+  const handleSignalChange = (nextIsUp: boolean) => {
+    setIsUp(nextIsUp);
+    if (!hasAdjustedPrediction) {
+      setPredictedUpPercent(getInitialPredictedUpPercent(nextIsUp));
+    }
+  };
 
   const balanceFormatted = hrepBalance ? Number(hrepBalance) / 1e6 : 0;
   const capacityFormatted = remainingCapacity != null ? Number(remainingCapacity) / 1e6 : 10;
@@ -216,43 +226,43 @@ export function StakeSelector({
               <div className="flex items-end justify-between gap-3">
                 <div>
                   <p className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-base-content/55">
-                    <span>Your vote</span>
+                    <span>Your signal</span>
                     <InfoTooltip text={YOUR_VOTE_TOOLTIP} position="bottom" />
                   </p>
                   <p className={`mt-1 text-3xl font-bold ${signalToneClassName}`}>{signalTone}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-base-content/55">Current</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-base-content/55">Rating</p>
                   <p className="mt-1 text-lg font-semibold tabular-nums text-base-content/75">{currentRatingLabel}</p>
                 </div>
               </div>
               <div className="mt-4 grid grid-cols-2 gap-2">
                 <button
                   type="button"
-                  onClick={() => setIsUp(true)}
+                  onClick={() => handleSignalChange(true)}
                   className={`btn min-h-12 rounded-lg ${isUp ? "btn-success text-success-content" : "pill-inactive-muted"}`}
                   disabled={isConfirming}
                   aria-pressed={isUp}
                 >
                   <HandThumbUpIcon className="h-5 w-5" />
-                  Up
+                  Thumbs up
                 </button>
                 <button
                   type="button"
-                  onClick={() => setIsUp(false)}
+                  onClick={() => handleSignalChange(false)}
                   className={`btn min-h-12 rounded-lg ${!isUp ? "btn-error text-error-content" : "pill-inactive-muted"}`}
                   disabled={isConfirming}
                   aria-pressed={!isUp}
                 >
                   <HandThumbDownIcon className="h-5 w-5" />
-                  Down
+                  Thumbs down
                 </button>
               </div>
               <div className="mt-5 border-t border-base-content/10 pt-4">
                 <div className="flex items-end justify-between gap-3">
                   <div>
                     <p className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-base-content/55">
-                      <span>Expected crowd</span>
+                      <span>Crowd forecast</span>
                       <InfoTooltip text={EXPECTED_CROWD_TOOLTIP} position="bottom" />
                     </p>
                     <p className="mt-1 text-2xl font-bold tabular-nums text-base-content">
@@ -262,7 +272,7 @@ export function StakeSelector({
                   </div>
                 </div>
                 <label htmlFor={crowdPredictionInputId} className="sr-only">
-                  Expected crowd up share
+                  Crowd thumbs-up forecast
                 </label>
                 <input
                   id={crowdPredictionInputId}
@@ -272,11 +282,14 @@ export function StakeSelector({
                   max={MAX_PREDICTED_UP_PERCENT}
                   step={1}
                   value={predictedUpPercent}
-                  onChange={e => setPredictedUpPercent(Number(e.target.value))}
+                  onChange={e => {
+                    setHasAdjustedPrediction(true);
+                    setPredictedUpPercent(Number(e.target.value));
+                  }}
                   className="range range-primary range-sm mt-4 w-full"
                   style={sliderStyle}
                   disabled={isConfirming}
-                  aria-label="Expected crowd up share"
+                  aria-label="Crowd thumbs-up forecast"
                   aria-valuetext={`${predictedUpPercent.toFixed(0)} percent up`}
                 />
                 <div className="mt-1 flex justify-between text-xs text-base-content/55">
@@ -421,7 +434,7 @@ export function StakeSelector({
                     <div className="flex items-center justify-between gap-3">
                       <span>Live pools</span>
                       <span className="font-semibold tabular-nums">
-                        above {formatHrepAmount(upPool, 0)} · below {formatHrepAmount(downPool, 0)}
+                        up {formatHrepAmount(upPool, 0)} · down {formatHrepAmount(downPool, 0)}
                       </span>
                     </div>
                   </>

@@ -34,7 +34,7 @@ export function CuryoVoteButton({
   tooltipPosition = "bottom",
 }: CuryoVoteButtonProps) {
   const isUp = direction === "up";
-  const label = isUp ? "Raise score" : "Lower score";
+  const label = isUp ? "Thumbs up" : "Thumbs down";
   const directionLabel = isUp ? "Up" : "Down";
   const isSmall = size === "sm";
   const iconClassName = isSmall ? "h-5 w-5 drop-shadow-sm" : "h-5 w-5 drop-shadow-sm";
@@ -45,7 +45,7 @@ export function CuryoVoteButton({
         type="button"
         onClick={onClick}
         disabled={disabled}
-        aria-label={isUp ? "Vote up and raise the score" : "Vote down and lower the score"}
+        aria-label={isUp ? "Vote thumbs up" : "Vote thumbs down"}
         title={label}
         className={`vote-btn ${isSmall ? "vote-btn-sm" : ""} ${isUp ? "vote-yes" : "vote-no"} ${
           attention ? "vote-btn-attention" : ""

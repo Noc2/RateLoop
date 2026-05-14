@@ -13,11 +13,11 @@ const STEPS = [
     label: HUMAN_SIGN_IN_LABEL,
     desc: "connect a wallet and start building calibration history",
   },
-  { label: "Predict", desc: "submit your expected final rating while the round stays private" },
-  { label: "Lock", desc: "back your prediction with reputation once you are eligible" },
+  { label: "Vote", desc: "submit a private thumbs-up/down signal and crowd forecast" },
+  { label: "Lock", desc: "optionally back your signal with reputation once you are eligible" },
   {
     label: "Reveal & Resolve",
-    desc: "after the private phase, predictions are revealed and the round settles",
+    desc: "after the private phase, signals are revealed and the round settles",
   },
   { label: "Claim", desc: "collect eligible rewards after settlement" },
 ];
