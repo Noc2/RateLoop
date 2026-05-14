@@ -29,6 +29,7 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
     error HashMismatch();
     error NoCommit();
     error VoteNotRevealed();
+    error AdvisoryRevealedAfterSettlement();
     error PendingCleanup();
     error NotEnoughVotes();
     error Paused();
@@ -287,8 +288,10 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         ) = votingEngine.roundCore(advisoryCommit.contentId, advisoryCommit.roundId);
         totalStake;
         thresholdReachedAt;
-        settledAt;
         if (state != RoundLib.RoundState.Settled) revert RoundNotSettled();
+        if (advisoryCommit.revealedAt == 0 || advisoryCommit.revealedAt > settledAt) {
+            revert AdvisoryRevealedAfterSettlement();
+        }
         if (!votingEngine.roundRbtsScored(advisoryCommit.contentId, advisoryCommit.roundId)) revert RoundNotSettled();
         if (revealedCount < 3) revert NotEnoughVotes();
         if (votingEngine.roundUnrevealedCleanupRemaining(advisoryCommit.contentId, advisoryCommit.roundId) != 0) {
@@ -328,16 +331,17 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         address launchPool = protocolConfig.launchDistributionPool();
         if (launchPool == address(0)) return (scoreBps, 0);
 
+        address rewardRecipient = _advisoryRewardRecipient(advisoryCommit);
         ILaunchDistributionPool launchDistributionPool = ILaunchDistributionPool(launchPool);
         if (
             _hasCountedCommitForAdvisory(advisoryCommit)
                 || launchDistributionPool.raterRoundCreditRecorded(
-                    advisoryCommit.voter, advisoryCommit.contentId, advisoryCommit.roundId
+                    rewardRecipient, advisoryCommit.contentId, advisoryCommit.roundId
                 )
         ) {
             advisoryCommit.launchCreditClaimed = true;
             emit AdvisoryLaunchCreditClaimed(
-                advisoryCommit.contentId, advisoryCommit.roundId, advisoryCommit.voter, advisoryCommitKey, scoreBps, 0
+                advisoryCommit.contentId, advisoryCommit.roundId, rewardRecipient, advisoryCommitKey, scoreBps, 0
             );
             return (scoreBps, 0);
         }
@@ -349,14 +353,14 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
             registry,
             advisoryCommit.contentId,
             advisoryCommit.roundId,
-            advisoryCommit.voter,
+            rewardRecipient,
             voteCount,
             startTime,
             minAnchorCredentialAgeSeconds
         );
         bool recorded;
         (recorded, paidAmount) = launchDistributionPool.recordAdvisoryRaterReward(
-            advisoryCommit.voter,
+            rewardRecipient,
             advisoryCommit.contentId,
             advisoryCommit.roundId,
             advisoryCommitKey,
@@ -372,7 +376,7 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         emit AdvisoryLaunchCreditClaimed(
             advisoryCommit.contentId,
             advisoryCommit.roundId,
-            advisoryCommit.voter,
+            rewardRecipient,
             advisoryCommitKey,
             scoreBps,
             paidAmount
@@ -504,8 +508,9 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
     }
 
     function _effectiveRevealableAfter(AdvisoryCommit storage advisoryCommit) internal view returns (uint256) {
-        (uint48 roundStart,,,,,,) = votingEngine.roundCore(advisoryCommit.contentId, advisoryCommit.roundId);
-        if (roundStart == 0) revert RoundNotOpen();
+        (uint48 roundStart, RoundLib.RoundState state,,,,, uint48 settledAt) =
+            votingEngine.roundCore(advisoryCommit.contentId, advisoryCommit.roundId);
+        if (roundStart == 0 || state != RoundLib.RoundState.Open || settledAt != 0) revert RoundNotOpen();
 
         (uint32 epochDuration,,,) = votingEngine.roundConfigSnapshot(advisoryCommit.contentId, advisoryCommit.roundId);
         if (epochDuration == 0) {
@@ -521,6 +526,24 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         if (firstRealEpochEnd > revealableAfter) revealableAfter = firstRealEpochEnd;
         if (targetRevealableAfter > revealableAfter) revealableAfter = targetRevealableAfter;
         return revealableAfter;
+    }
+
+    function _advisoryRewardRecipient(AdvisoryCommit storage advisoryCommit) internal view returns (address) {
+        if (advisoryCommit.identityHolder != address(0)) return advisoryCommit.identityHolder;
+        if (advisoryCommit.identityKey != bytes32(0)) {
+            IRaterIdentityRegistry identityRegistry =
+                _roundRaterRegistry(advisoryCommit.contentId, advisoryCommit.roundId);
+            if (address(identityRegistry) != address(0)) {
+                try identityRegistry.resolveRater(advisoryCommit.voter) returns (
+                    IRaterIdentityRegistry.ResolvedRater memory resolved
+                ) {
+                    if (resolved.identityKey == advisoryCommit.identityKey && resolved.holder != address(0)) {
+                        return resolved.holder;
+                    }
+                } catch {}
+            }
+        }
+        return advisoryCommit.voter;
     }
 
     function _hasCountedCommitForAdvisory(AdvisoryCommit storage advisoryCommit) internal view returns (bool) {

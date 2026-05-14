@@ -1903,6 +1903,27 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertEq(round.revealedCount, 0, "advisory reveal does not count toward quorum");
     }
 
+    function test_AdvisoryVoteCannotRevealAfterSettlement() public {
+        uint256 contentId = _submitContent();
+        (bytes32 advisoryCommitKey, bytes32 advisorySalt) = _recordAdvisory(voter1, contentId, "late-advisory");
+
+        (bytes32 ck2, bytes32 s2) = _commit(voter2, contentId, true, STAKE);
+        (bytes32 ck3, bytes32 s3) = _commit(voter3, contentId, true, STAKE);
+        (bytes32 ck4, bytes32 s4) = _commit(voter4, contentId, false, STAKE);
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+
+        RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        _warpPastTlockRevealTime(uint256(round.startTime) + EPOCH);
+        _reveal(contentId, roundId, ck2, true, s2);
+        _reveal(contentId, roundId, ck3, true, s3);
+        _reveal(contentId, roundId, ck4, false, s4);
+        vm.warp(block.timestamp + 60 minutes + 1);
+        engine.settleRound(contentId, roundId);
+
+        vm.expectRevert(AdvisoryVoteRecorder.RoundNotOpen.selector);
+        advisoryRecorder.revealAdvisoryVote(advisoryCommitKey, true, 5_000, advisorySalt);
+    }
+
     function test_AdvisoryVoteCapsCommitsAtRoundMaxVoters() public {
         vm.prank(owner);
         _setTlockRoundConfig(ProtocolConfig(protocolConfigAddress), 1 hours, 7 days, 3, 3);
