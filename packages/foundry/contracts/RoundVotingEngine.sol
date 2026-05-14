@@ -843,7 +843,7 @@ contract RoundVotingEngine is
             roundId,
             weightedWinningStake,
             rbtsForfeitedPool,
-            binaryLosingPool == 0
+            binaryLosingPool == 0 && round.revealedCount == round.voteCount
         );
         consensusReserve = updatedConsensusReserve;
         if (treasuryPaid > 0) {

@@ -267,6 +267,33 @@ contract SelectiveRevelationTest is VotingTestBase {
         assertEq(uint256(round.state), uint256(RoundLib.RoundState.Settled));
     }
 
+    function test_MultiEpoch_CurrentEpochUnrevealedPreventsConsensusSubsidy() public {
+        uint256 contentId = _submitContent();
+
+        (bytes32 ck1, bytes32 s1) = _commit(voters[0], contentId, true, STAKE);
+        (bytes32 ck2, bytes32 s2) = _commit(voters[1], contentId, true, STAKE);
+        (bytes32 ck3, bytes32 s3) = _commit(voters[2], contentId, true, STAKE);
+
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        RoundLib.Round memory r = RoundEngineReadHelpers.round(engine, contentId, roundId);
+
+        _warpPastTlockRevealTime(uint256(r.startTime) + EPOCH);
+
+        _commit(voters[3], contentId, false, STAKE);
+
+        _reveal(contentId, roundId, ck1, true, s1);
+        _reveal(contentId, roundId, ck2, true, s2);
+        _reveal(contentId, roundId, ck3, true, s3);
+
+        uint256 reserveBefore = engine.consensusReserve();
+        engine.settleRound(contentId, roundId);
+
+        RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        assertEq(uint256(round.state), uint256(RoundLib.RoundState.Settled));
+        assertEq(engine.roundUnrevealedCleanupRemaining(contentId, roundId), 0);
+        assertGe(engine.consensusReserve(), reserveBefore, "unrevealed current-epoch vote should block subsidy");
+    }
+
     // =========================================================================
     // GRACE PERIOD EXPIRY
     // =========================================================================
@@ -306,6 +333,35 @@ contract SelectiveRevelationTest is VotingTestBase {
 
         engine.processUnrevealedVotes(contentId, roundId, 0, 0);
         assertEq(engine.roundUnrevealedCleanupRemaining(contentId, roundId), 0);
+    }
+
+    function test_FinalGraceExpiry_UnrevealedPastEpochPreventsConsensusSubsidy() public {
+        uint256 contentId = _submitContent();
+
+        bytes32[4] memory commitKeys;
+        bytes32[4] memory salts;
+        bool[4] memory directions = [true, true, true, false];
+
+        for (uint256 i = 0; i < 4; i++) {
+            (commitKeys[i], salts[i]) = _commit(voters[i], contentId, directions[i], STAKE);
+        }
+
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        uint256 revealGraceDeadline = engine.lastCommitRevealableAfter(contentId, roundId) + GRACE_PERIOD;
+
+        vm.warp(revealGraceDeadline + 1);
+
+        _reveal(contentId, roundId, commitKeys[0], true, salts[0]);
+        _reveal(contentId, roundId, commitKeys[1], true, salts[1]);
+        _reveal(contentId, roundId, commitKeys[2], true, salts[2]);
+
+        uint256 reserveBefore = engine.consensusReserve();
+        engine.settleRound(contentId, roundId);
+
+        RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        assertEq(uint256(round.state), uint256(RoundLib.RoundState.Settled));
+        assertEq(engine.roundUnrevealedCleanupRemaining(contentId, roundId), 1);
+        assertGe(engine.consensusReserve(), reserveBefore, "unrevealed past-epoch vote should block subsidy");
     }
 
     /// @notice Within grace period, unrevealed votes still block settlement.
