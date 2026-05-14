@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "check-types": "tsc --noEmit",
     "start": "tsx src/index.ts",
     "dev": "tsx watch src/index.ts",
     "test": "vitest run",

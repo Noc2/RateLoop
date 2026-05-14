@@ -71,6 +71,7 @@
     "ponder:codegen": "yarn workspace @rateloop/ponder codegen",
     "ponder:check-types": "yarn workspace @rateloop/ponder check-types",
     "agents:ask": "yarn workspace @rateloop/agents ask",
+    "agents:check-types": "yarn workspace @rateloop/agents check-types",
     "agents:lint": "yarn workspace @rateloop/agents lint:questions",
     "agents:quote": "yarn workspace @rateloop/agents quote",
     "agents:result": "yarn workspace @rateloop/agents result",
@@ -78,13 +79,14 @@
     "agents:templates": "yarn workspace @rateloop/agents templates",
     "keeper:start": "yarn workspace @rateloop/keeper start",
     "keeper:dev": "yarn workspace @rateloop/keeper dev",
+    "keeper:check-types": "yarn workspace @rateloop/keeper check-types",
     "node-utils:check-types": "yarn workspace @rateloop/node-utils check-types",
     "sdk:test": "yarn workspace @rateloop/sdk test",
     "sdk:check-types": "yarn workspace @rateloop/sdk check-types",
     "e2e": "yarn workspace @rateloop/nextjs e2e",
     "e2e:ci:full": "yarn workspace @rateloop/nextjs e2e:ci:full",
     "e2e:ui": "yarn workspace @rateloop/nextjs e2e:ui",
-    "test:ts": "yarn contracts:check-types && yarn node-utils:check-types && yarn sdk:check-types && yarn ponder:check-types && yarn test:node && yarn contracts:test && yarn sdk:test && yarn next:test && yarn workspace @rateloop/keeper test && yarn workspace @rateloop/agents test && yarn workspace @rateloop/ponder test"
+    "test:ts": "yarn contracts:check-types && yarn node-utils:check-types && yarn sdk:check-types && yarn ponder:check-types && yarn agents:check-types && yarn keeper:check-types && yarn test:node && yarn contracts:test && yarn sdk:test && yarn next:test && yarn workspace @rateloop/keeper test && yarn workspace @rateloop/agents test && yarn workspace @rateloop/ponder test"
   },
   "devDependencies": {
     "husky": "~9.1.6",

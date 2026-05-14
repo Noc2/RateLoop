@@ -279,15 +279,17 @@ async function recordVoteReveal({
 
   const existingRound = await context.db.find(round, { id: roundKey });
   if (existingRound && shouldCountReveal) {
-    await context.db.update(round, { id: roundKey }).set((row) => ({
-      revealedCount: row.revealedCount + 1,
-      upPool: isUp ? row.upPool + (existingVote?.stake ?? 0n) : row.upPool,
-      downPool: isUp
-        ? row.downPool
-        : row.downPool + (existingVote?.stake ?? 0n),
-      upCount: isUp ? row.upCount + 1 : row.upCount,
-      downCount: isUp ? row.downCount : row.downCount + 1,
-    }));
+    await context.db
+      .update(round, { id: roundKey })
+      .set((row: NonNullable<typeof existingRound>) => ({
+        revealedCount: row.revealedCount + 1,
+        upPool: isUp ? row.upPool + (existingVote?.stake ?? 0n) : row.upPool,
+        downPool: isUp
+          ? row.downPool
+          : row.downPool + (existingVote?.stake ?? 0n),
+        upCount: isUp ? row.upCount + 1 : row.upCount,
+        downCount: isUp ? row.downCount : row.downCount + 1,
+      }));
   }
 }
 

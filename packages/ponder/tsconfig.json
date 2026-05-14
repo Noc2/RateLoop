@@ -13,9 +13,8 @@
   "include": [
     "ponder-env.d.ts",
     "ponder.schema.ts",
-    "src/api/**/*.ts",
-    "src/streak-utils.ts",
-    "src/urlCanonicalization.ts"
+    "ponder.config.ts",
+    "src/**/*.ts"
   ],
   "exclude": ["node_modules"]
 }
