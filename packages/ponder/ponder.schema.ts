@@ -642,7 +642,7 @@ export const categoryRelations = relations(category, ({ many }) => ({
 }));
 
 // ============================================================
-// RATER REGISTRY AND DECLARATIONS
+// RATER REGISTRY
 // ============================================================
 
 export const raterProfile = onchainTable(

@@ -1,7 +1,7 @@
 const DEFAULT_WORLD_ID_ACTION = "rateloop-human-credential-v1";
 const DEFAULT_WORLD_ID_ENVIRONMENT = "production";
 
-export type WorldIdE2EMode = "mock" | null;
+type WorldIdE2EMode = "mock" | null;
 
 function cleanEnv(value: string | undefined) {
   const trimmed = value?.trim();

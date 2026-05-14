@@ -21,7 +21,7 @@ type WorldIdRequestStateInput = {
   isPreparing?: boolean;
 };
 
-export type WorldIdRequestPanelState = {
+type WorldIdRequestPanelState = {
   canCancel: boolean;
   canRetry: boolean;
   detail: string;

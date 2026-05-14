@@ -1,7 +1,7 @@
 import type { IDKitResult } from "@worldcoin/idkit";
 
-export const WORLD_ID_POLL_INTERVAL_MS = 1_000;
-export const WORLD_ID_REQUEST_TIMEOUT_MS = 15 * 60_000;
+const WORLD_ID_POLL_INTERVAL_MS = 1_000;
+const WORLD_ID_REQUEST_TIMEOUT_MS = 15 * 60_000;
 
 type WorldIdPollingStatus =
   | { type: "waiting_for_connection" }

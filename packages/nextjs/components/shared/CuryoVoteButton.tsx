@@ -16,10 +16,7 @@ interface VoteDirectionIconProps {
   className?: string;
 }
 
-export function VoteDirectionIcon({
-  direction,
-  className = "h-[22px] w-[22px] drop-shadow-sm",
-}: VoteDirectionIconProps) {
+function VoteDirectionIcon({ direction, className = "h-[22px] w-[22px] drop-shadow-sm" }: VoteDirectionIconProps) {
   const Icon = direction === "up" ? HandThumbUpIcon : HandThumbDownIcon;
 
   return <Icon className={className} aria-hidden />;

@@ -11,7 +11,7 @@ const STATUS = {
   Rejected: 4,
 } as const;
 
-export interface CorrelationSnapshotPublisherResult {
+interface CorrelationSnapshotPublisherResult {
   epochsProposed: number;
   epochsFinalized: number;
   roundSnapshotsProposed: number;

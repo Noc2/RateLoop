@@ -39,19 +39,22 @@ import {
   parseBigIntList,
 } from "../shared.js";
 import { getFollowStatsMap } from "../follow-utils.js";
+import {
+  BASE_RATER_MULTIPLIER_BPS,
+  credentialStatus,
+  maxBigInt,
+  raterTypeName,
+} from "../reputation-utils.js";
 import { isValidAddress, safeBigInt, safeLimit, safeOffset } from "../utils.js";
 import { deriveEffectiveVoterStreak } from "../../streak-utils.js";
 
 const VOTE_COOLDOWN_SECONDS = 24 * 60 * 60;
-const BASE_RATER_MULTIPLIER_BPS = 10_000;
 
 const STREAK_MILESTONES = [
   { days: 7, baseBonus: 10 },
   { days: 30, baseBonus: 50 },
   { days: 90, baseBonus: 200 },
 ];
-
-const RATER_TYPES = ["Unknown", "Human", "AI", "Team", "Hybrid"] as const;
 
 function voteMatchesVoter(address: `0x${string}`) {
   return or(
@@ -67,37 +70,6 @@ function voteMatchesAnyVoter(addresses: `0x${string}`[]) {
     inArray(vote.identityHolder, addresses),
     inArray(vote.identityVoter, addresses),
   );
-}
-
-function maxBigInt(values: Array<bigint | number | null | undefined>) {
-  let max: bigint | null = null;
-  for (const value of values) {
-    if (value == null) continue;
-    const next = typeof value === "bigint" ? value : BigInt(value);
-    if (max === null || next > max) max = next;
-  }
-  return max;
-}
-
-function raterTypeName(raterType: number | null | undefined) {
-  return RATER_TYPES[raterType ?? 0] ?? "Unknown";
-}
-
-function credentialStatus(
-  credential:
-    | {
-        verified: boolean;
-        revoked: boolean;
-        expiresAt: bigint;
-      }
-    | undefined,
-  nowSeconds: bigint,
-) {
-  if (!credential?.verified) return "missing";
-  if (credential.revoked) return "revoked";
-  if (credential.expiresAt !== 0n && credential.expiresAt <= nowSeconds)
-    return "expired";
-  return "verified";
 }
 
 export function registerDataRoutes(app: ApiApp) {
