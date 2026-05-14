@@ -1577,6 +1577,55 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.stopPrank();
     }
 
+    function test_SubmitContent_UrlWithUnsafePrintableCharacter_Reverts() public {
+        vm.startPrank(submitter);
+        hrepToken.approve(address(registry), 10e6);
+        vm.expectRevert("Invalid URL");
+        registry.submitQuestion(
+            "https://example.com/<script>",
+            _singleImageUrls("https://example.com/1.jpg"),
+            "",
+            "goal",
+            "goal",
+            "tags",
+            1,
+            bytes32(0),
+            _defaultQuestionSpec()
+        );
+
+        vm.expectRevert("Invalid URL");
+        registry.submitQuestion(
+            "https://example.com/context",
+            _singleImageUrls("https://example.com/\"quote\".jpg"),
+            "",
+            "goal",
+            "goal",
+            "tags",
+            1,
+            bytes32(0),
+            _defaultQuestionSpec()
+        );
+        vm.stopPrank();
+    }
+
+    function test_SubmitContent_UrlWithInvalidPercentEncoding_Reverts() public {
+        vm.startPrank(submitter);
+        hrepToken.approve(address(registry), 10e6);
+        vm.expectRevert("Invalid URL");
+        registry.submitQuestion(
+            "https://example.com/context",
+            _singleImageUrls("https://example.com/bad%zz.jpg"),
+            "",
+            "goal",
+            "goal",
+            "tags",
+            1,
+            bytes32(0),
+            _defaultQuestionSpec()
+        );
+        vm.stopPrank();
+    }
+
     function test_SubmitContent_UrlWithEmptyHost_Reverts() public {
         vm.startPrank(submitter);
         hrepToken.approve(address(registry), 10e6);
@@ -1748,6 +1797,18 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
         registry.previewQuestionSubmissionKey(
             "https://example.com/context", _singleImageUrls(maxUrl), "", "Question?", "Context.", "tags", 1
+        );
+    }
+
+    function test_SubmitQuestion_AllowsPercentEncodedPath() public view {
+        registry.previewQuestionSubmissionKey(
+            "https://example.com/a%20b",
+            _singleImageUrls("https://example.com/a%20b.jpg"),
+            "",
+            "Question?",
+            "Context.",
+            "tags",
+            1
         );
     }
 

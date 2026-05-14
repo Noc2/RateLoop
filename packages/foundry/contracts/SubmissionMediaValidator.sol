@@ -92,13 +92,22 @@ contract SubmissionMediaValidator {
         for (uint256 i = prefix.length; i < urlBytes.length; i++) {
             bytes1 char = urlBytes[i];
             if (char < 0x21 || char > 0x7E) return false;
+            if (!_isSafeSubmissionUrlChar(char)) return false;
             if (char == "\\" || char == "@") return false;
+            if (char == "%") {
+                if (inHost) return false;
+                if (i + 2 >= urlBytes.length || !_isHexByte(urlBytes[i + 1]) || !_isHexByte(urlBytes[i + 2])) {
+                    return false;
+                }
+                unchecked {
+                    i += 2;
+                }
+                continue;
+            }
             if (inHost) {
                 if (char == "/" || char == "?" || char == "#") {
                     if (hostLength == 0) return false;
                     inHost = false;
-                } else if (char == "%") {
-                    return false;
                 } else {
                     unchecked {
                         ++hostLength;
@@ -108,6 +117,19 @@ contract SubmissionMediaValidator {
         }
 
         return hostLength > 0;
+    }
+
+    function _isSafeSubmissionUrlChar(bytes1 char) private pure returns (bool) {
+        if (char >= "0" && char <= "9") return true;
+        if (char >= "A" && char <= "Z") return true;
+        if (char >= "a" && char <= "z") return true;
+        return char == "-" || char == "." || char == "_" || char == "~" || char == ":" || char == "/" || char == "?"
+            || char == "#" || char == "%" || char == "!" || char == "$" || char == "&" || char == "(" || char == ")"
+            || char == "*" || char == "+" || char == "," || char == ";" || char == "=";
+    }
+
+    function _isHexByte(bytes1 char) private pure returns (bool) {
+        return (char >= "0" && char <= "9") || (char >= "A" && char <= "F") || (char >= "a" && char <= "f");
     }
 
     function _endsWithBeforeQuery(string memory value, string memory suffix) internal pure returns (bool) {
