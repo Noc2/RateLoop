@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import { Test, stdStorage, StdStorage } from "forge-std/Test.sol";
-import { ClusterPayoutOracle } from "../contracts/ClusterPayoutOracle.sol";
-import { LaunchDistributionPool } from "../contracts/LaunchDistributionPool.sol";
-import { LoopReputation } from "../contracts/LoopReputation.sol";
-import { RaterRegistry } from "../contracts/RaterRegistry.sol";
-import { IClusterPayoutOracle } from "../contracts/interfaces/IClusterPayoutOracle.sol";
-import { ILaunchDistributionPool } from "../contracts/interfaces/ILaunchDistributionPool.sol";
-import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
+import {Test, stdStorage, StdStorage} from "forge-std/Test.sol";
+import {ClusterPayoutOracle} from "../contracts/ClusterPayoutOracle.sol";
+import {LaunchDistributionPool} from "../contracts/LaunchDistributionPool.sol";
+import {LoopReputation} from "../contracts/LoopReputation.sol";
+import {RaterRegistry} from "../contracts/RaterRegistry.sol";
+import {IClusterPayoutOracle} from "../contracts/interfaces/IClusterPayoutOracle.sol";
+import {ILaunchDistributionPool} from "../contracts/interfaces/ILaunchDistributionPool.sol";
+import {MockWorldIDRouter} from "../contracts/mocks/MockWorldIDRouter.sol";
 
 contract LaunchDistributionPoolTest is Test {
     using stdStorage for StdStorage;
@@ -240,7 +240,9 @@ contract LaunchDistributionPoolTest is Test {
     }
 
     function test_CorrelationOracleDelaysAndFractionalizesLaunchCredit() public {
-        ClusterPayoutOracle oracle = new ClusterPayoutOracle(address(this));
+        MockLaunchOracleFrontendRegistry frontendRegistry = new MockLaunchOracleFrontendRegistry();
+        frontendRegistry.setEligible(address(this), true);
+        ClusterPayoutOracle oracle = new ClusterPayoutOracle(address(this), address(frontendRegistry));
         oracle.setOracleConfig(1, 0, address(this));
         pool.setClusterPayoutOracle(address(oracle));
 
@@ -999,5 +1001,17 @@ contract LaunchDistributionPoolTest is Test {
 
     function _setEligibleRaterCount(uint256 count) internal {
         stdstore.target(address(pool)).sig("eligibleRaterCount()").checked_write(count);
+    }
+}
+
+contract MockLaunchOracleFrontendRegistry {
+    mapping(address => bool) internal eligible;
+
+    function setEligible(address frontend, bool value) external {
+        eligible[frontend] = value;
+    }
+
+    function isEligible(address frontend) external view returns (bool) {
+        return eligible[frontend];
     }
 }

@@ -1,15 +1,16 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import { AccessControl } from "@openzeppelin/contracts/access/AccessControl.sol";
-import { MerkleProof } from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
-import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
-import { IClusterPayoutOracle } from "./interfaces/IClusterPayoutOracle.sol";
+import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
+import {MerkleProof} from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
+import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import {IClusterPayoutOracle} from "./interfaces/IClusterPayoutOracle.sol";
+import {IFrontendRegistry} from "./interfaces/IFrontendRegistry.sol";
 
 /// @title ClusterPayoutOracle
 /// @notice Optimistic oracle for correlation epoch snapshots and per-round payout weights.
-/// @dev Anyone can propose deterministic scorer outputs. Finalized roots gate USDC/LREP payouts,
-///      but they do not affect voting settlement or the public rating result.
+/// @dev Fully bonded frontend operators can propose deterministic scorer outputs. Finalized roots gate
+///      USDC/LREP payouts, but they do not affect voting settlement or the public rating result.
 contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
     using SafeCast for uint256;
 
@@ -24,11 +25,13 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
     uint8 public constant PAYOUT_DOMAIN_QUESTION_REWARD = 1;
     uint8 public constant PAYOUT_DOMAIN_LAUNCH_CREDIT = 2;
     uint64 public constant DEFAULT_CHALLENGE_WINDOW = 12 hours;
-    uint256 public constant DEFAULT_PROPOSAL_BOND = 0.01 ether;
+    uint64 public constant MAX_CHALLENGE_WINDOW = 3 days;
+    uint256 public constant DEFAULT_CHALLENGE_BOND = 0.01 ether;
 
     error InvalidAddress();
     error InvalidBond();
     error InvalidSnapshot();
+    error FrontendNotEligible();
     error SnapshotExists();
     error SnapshotNotFound();
     error SnapshotNotFinalizable();
@@ -64,21 +67,23 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
     }
 
     uint64 public challengeWindow;
-    uint256 public proposalBond;
+    uint256 public challengeBond;
     address public bondRecipient;
+    IFrontendRegistry public frontendRegistry;
 
     mapping(uint256 => CorrelationEpochSnapshot) private correlationEpochSnapshots;
     mapping(bytes32 => RoundPayoutProposal) private roundPayoutProposals;
     mapping(address => uint256) public pendingBondWithdrawals;
 
-    event OracleConfigUpdated(uint64 challengeWindow, uint256 proposalBond, address bondRecipient);
+    event OracleConfigUpdated(uint64 challengeWindow, uint256 challengeBond, address bondRecipient);
+    event FrontendRegistryUpdated(address indexed frontendRegistry);
     event BondWithdrawalCredited(address indexed recipient, uint256 amount);
     event BondWithdrawn(address indexed account, address indexed recipient, uint256 amount);
     event CorrelationEpochProposed(
         uint64 indexed epochId,
         uint64 fromRoundId,
         uint64 toRoundId,
-        address indexed proposer,
+        address indexed frontendOperator,
         bytes32 clusterRoot,
         bytes32 parameterHash,
         bytes32 artifactHash,
@@ -95,7 +100,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
         uint256 contentId,
         uint256 roundId,
         uint64 correlationEpochId,
-        address proposer,
+        address frontendOperator,
         uint32 rawEligibleVoters,
         uint32 effectiveParticipantUnits,
         uint256 totalClaimWeight,
@@ -118,29 +123,34 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
     );
     event RoundPayoutSnapshotRejected(bytes32 indexed snapshotKey, address indexed arbiter, bytes32 reasonHash);
 
-    constructor(address admin) {
+    constructor(address admin, address newFrontendRegistry) {
         if (admin == address(0)) revert InvalidAddress();
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
         _grantRole(CONFIG_ROLE, admin);
         _grantRole(ARBITER_ROLE, admin);
         challengeWindow = DEFAULT_CHALLENGE_WINDOW;
-        proposalBond = DEFAULT_PROPOSAL_BOND;
+        challengeBond = DEFAULT_CHALLENGE_BOND;
         bondRecipient = admin;
-        emit OracleConfigUpdated(DEFAULT_CHALLENGE_WINDOW, DEFAULT_PROPOSAL_BOND, admin);
+        _setFrontendRegistry(newFrontendRegistry);
+        emit OracleConfigUpdated(DEFAULT_CHALLENGE_WINDOW, DEFAULT_CHALLENGE_BOND, admin);
     }
 
-    receive() external payable { }
+    receive() external payable {}
 
-    function setOracleConfig(uint64 newChallengeWindow, uint256 newProposalBond, address newBondRecipient)
+    function setOracleConfig(uint64 newChallengeWindow, uint256 newChallengeBond, address newBondRecipient)
         external
         onlyRole(CONFIG_ROLE)
     {
-        if (newChallengeWindow == 0) revert InvalidSnapshot();
+        if (newChallengeWindow == 0 || newChallengeWindow > MAX_CHALLENGE_WINDOW) revert InvalidSnapshot();
         if (newBondRecipient == address(0)) revert InvalidAddress();
         challengeWindow = newChallengeWindow;
-        proposalBond = newProposalBond;
+        challengeBond = newChallengeBond;
         bondRecipient = newBondRecipient;
-        emit OracleConfigUpdated(newChallengeWindow, newProposalBond, newBondRecipient);
+        emit OracleConfigUpdated(newChallengeWindow, newChallengeBond, newBondRecipient);
+    }
+
+    function setFrontendRegistry(address newFrontendRegistry) external onlyRole(CONFIG_ROLE) {
+        _setFrontendRegistry(newFrontendRegistry);
     }
 
     function proposeCorrelationEpoch(
@@ -155,7 +165,8 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
         if (epochId == 0 || toRoundId < fromRoundId || clusterRoot == bytes32(0) || parameterHash == bytes32(0)) {
             revert InvalidSnapshot();
         }
-        if (msg.value < proposalBond) revert InvalidBond();
+        if (msg.value != 0) revert InvalidBond();
+        _requireEligibleFrontendProposer();
         CorrelationEpochSnapshot storage existing = correlationEpochSnapshots[epochId];
         if (existing.status != SnapshotStatus.None && existing.status != SnapshotStatus.Rejected) {
             revert SnapshotExists();
@@ -174,7 +185,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
             artifactHash: artifactHash,
             artifactURI: artifactURI,
             status: SnapshotStatus.Proposed,
-            bond: msg.value
+            bond: 0
         });
 
         emit CorrelationEpochProposed(
@@ -189,7 +200,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
         if (block.timestamp >= uint256(snapshot.proposedAt) + uint256(challengeWindow)) {
             revert SnapshotNotFinalizable();
         }
-        if (msg.value < proposalBond) revert InvalidBond();
+        if (msg.value < challengeBond) revert InvalidBond();
         snapshot.status = SnapshotStatus.Challenged;
         snapshot.challenger = msg.sender;
         snapshot.bond += msg.value;
@@ -239,7 +250,8 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
 
     function proposeRoundPayoutSnapshot(RoundPayoutSnapshotInput calldata input) external payable {
         _validateRoundPayoutInput(input);
-        if (msg.value < proposalBond) revert InvalidBond();
+        if (msg.value != 0) revert InvalidBond();
+        _requireEligibleFrontendProposer();
         CorrelationEpochSnapshot storage epoch = correlationEpochSnapshots[input.correlationEpochId];
         if (epoch.status != SnapshotStatus.Finalized) revert SnapshotNotFinalizable();
         if (input.roundId < epoch.fromRoundId || input.roundId > epoch.toRoundId) revert InvalidSnapshot();
@@ -271,7 +283,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
             challenger: address(0),
             artifactHash: input.artifactHash,
             artifactURI: input.artifactURI,
-            bond: msg.value
+            bond: 0
         });
 
         emit RoundPayoutSnapshotProposed(
@@ -299,7 +311,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
         if (block.timestamp >= uint256(proposal.proposedAt) + uint256(challengeWindow)) {
             revert SnapshotNotFinalizable();
         }
-        if (msg.value < proposalBond) revert InvalidBond();
+        if (msg.value < challengeBond) revert InvalidBond();
         proposal.snapshot.status = SnapshotStatus.Challenged;
         proposal.challenger = msg.sender;
         proposal.bond += msg.value;
@@ -374,7 +386,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
         if (amount == 0) revert InvalidBond();
         pendingBondWithdrawals[msg.sender] = 0;
 
-        (bool ok,) = recipient.call{ value: amount }("");
+        (bool ok,) = recipient.call{value: amount}("");
         if (!ok) {
             pendingBondWithdrawals[msg.sender] = amount;
             revert TransferFailed();
@@ -472,5 +484,19 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
         if (amount == 0) return;
         pendingBondWithdrawals[to] += amount;
         emit BondWithdrawalCredited(to, amount);
+    }
+
+    function _setFrontendRegistry(address newFrontendRegistry) private {
+        if (newFrontendRegistry == address(0)) revert InvalidAddress();
+        frontendRegistry = IFrontendRegistry(newFrontendRegistry);
+        emit FrontendRegistryUpdated(newFrontendRegistry);
+    }
+
+    function _requireEligibleFrontendProposer() private view {
+        try frontendRegistry.isEligible(msg.sender) returns (bool eligible) {
+            if (!eligible) revert FrontendNotEligible();
+        } catch {
+            revert FrontendNotEligible();
+        }
     }
 }

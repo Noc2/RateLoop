@@ -1,23 +1,69 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-import { Test } from "forge-std/Test.sol";
-import { ClusterPayoutOracle } from "../contracts/ClusterPayoutOracle.sol";
-import { IClusterPayoutOracle } from "../contracts/interfaces/IClusterPayoutOracle.sol";
+import {Test} from "forge-std/Test.sol";
+import {ClusterPayoutOracle} from "../contracts/ClusterPayoutOracle.sol";
+import {IClusterPayoutOracle} from "../contracts/interfaces/IClusterPayoutOracle.sol";
 
 contract ClusterPayoutOracleTest is Test {
     ClusterPayoutOracle internal oracle;
+    MockFrontendRegistry internal frontendRegistry;
 
-    receive() external payable { }
+    receive() external payable {}
 
     function setUp() public {
-        oracle = new ClusterPayoutOracle(address(this));
+        frontendRegistry = new MockFrontendRegistry();
+        frontendRegistry.setEligible(address(this), true);
+        oracle = new ClusterPayoutOracle(address(this), address(frontendRegistry));
         oracle.setOracleConfig(1 hours, 0.01 ether, address(this));
         vm.deal(address(this), 10 ether);
     }
 
+    function test_ConstructorRequiresFrontendRegistry() public {
+        vm.expectRevert(ClusterPayoutOracle.InvalidAddress.selector);
+        new ClusterPayoutOracle(address(this), address(0));
+    }
+
+    function test_OnlyEligibleFrontendsCanProposeSnapshots() public {
+        address ineligibleFrontend = address(0xFEE);
+
+        vm.prank(ineligibleFrontend);
+        vm.expectRevert(ClusterPayoutOracle.FrontendNotEligible.selector);
+        oracle.proposeCorrelationEpoch(
+            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+        );
+
+        frontendRegistry.setEligible(ineligibleFrontend, true);
+        vm.prank(ineligibleFrontend);
+        oracle.proposeCorrelationEpoch(
+            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+        );
+
+        vm.warp(1 hours + 2);
+        oracle.finalizeCorrelationEpoch(1);
+
+        frontendRegistry.setEligible(ineligibleFrontend, false);
+        IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
+        vm.prank(ineligibleFrontend);
+        vm.expectRevert(ClusterPayoutOracle.FrontendNotEligible.selector);
+        oracle.proposeRoundPayoutSnapshot(input);
+    }
+
+    function test_ProposalsDoNotAcceptEthBonds() public {
+        vm.expectRevert(ClusterPayoutOracle.InvalidBond.selector);
+        oracle.proposeCorrelationEpoch{value: 1}(
+            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+        );
+    }
+
+    function test_ChallengeWindowCannotOutliveFrontendUnbondingBuffer() public {
+        uint64 maxChallengeWindow = oracle.MAX_CHALLENGE_WINDOW();
+        vm.expectRevert(ClusterPayoutOracle.InvalidSnapshot.selector);
+        oracle.setOracleConfig(maxChallengeWindow + 1, 0.01 ether, address(this));
+    }
+
     function test_OptimisticEpochAndRoundSnapshotFinalizeAndVerifyLeaf() public {
-        oracle.proposeCorrelationEpoch{ value: 0.01 ether }(
+        oracle.proposeCorrelationEpoch(
             1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
         );
 
@@ -39,7 +85,7 @@ contract ClusterPayoutOracleTest is Test {
         });
         bytes32 leaf = oracle.payoutWeightLeaf(payout);
 
-        oracle.proposeRoundPayoutSnapshot{ value: 0.01 ether }(
+        oracle.proposeRoundPayoutSnapshot(
             IClusterPayoutOracle.RoundPayoutSnapshotInput({
                 domain: oracle.PAYOUT_DOMAIN_QUESTION_REWARD(),
                 rewardPoolId: 7,
@@ -70,10 +116,10 @@ contract ClusterPayoutOracleTest is Test {
     }
 
     function test_ChallengedEpochCannotFinalizeUntilArbiterRejectsIt() public {
-        oracle.proposeCorrelationEpoch{ value: 0.01 ether }(
+        oracle.proposeCorrelationEpoch(
             1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
         );
-        oracle.challengeCorrelationEpoch{ value: 0.01 ether }(1, keccak256("bad-root"));
+        oracle.challengeCorrelationEpoch{value: 0.01 ether}(1, keccak256("bad-root"));
 
         vm.warp(1 hours + 2);
         vm.expectRevert(ClusterPayoutOracle.SnapshotChallenged.selector);
@@ -85,10 +131,10 @@ contract ClusterPayoutOracleTest is Test {
     }
 
     function test_ArbiterCanFinalizeChallengedSnapshots() public {
-        oracle.proposeCorrelationEpoch{ value: 0.01 ether }(
+        oracle.proposeCorrelationEpoch(
             1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
         );
-        oracle.challengeCorrelationEpoch{ value: 0.01 ether }(1, keccak256("invalid-challenge"));
+        oracle.challengeCorrelationEpoch{value: 0.01 ether}(1, keccak256("invalid-challenge"));
         oracle.finalizeChallengedCorrelationEpoch(1, keccak256("challenge-dismissed"));
 
         ClusterPayoutOracle.CorrelationEpochSnapshot memory epoch = oracle.correlationEpochSnapshot(1);
@@ -109,7 +155,7 @@ contract ClusterPayoutOracleTest is Test {
         });
         bytes32 leaf = oracle.payoutWeightLeaf(payout);
 
-        oracle.proposeRoundPayoutSnapshot{ value: 0.01 ether }(
+        oracle.proposeRoundPayoutSnapshot(
             IClusterPayoutOracle.RoundPayoutSnapshotInput({
                 domain: oracle.PAYOUT_DOMAIN_QUESTION_REWARD(),
                 rewardPoolId: 7,
@@ -126,7 +172,7 @@ contract ClusterPayoutOracleTest is Test {
             })
         );
         bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), 7, 42, 3);
-        oracle.challengeRoundPayoutSnapshot{ value: 0.01 ether }(snapshotKey, keccak256("invalid-round-challenge"));
+        oracle.challengeRoundPayoutSnapshot{value: 0.01 ether}(snapshotKey, keccak256("invalid-round-challenge"));
         oracle.finalizeChallengedRoundPayoutSnapshot(snapshotKey, keccak256("round-challenge-dismissed"));
 
         IClusterPayoutOracle.RoundPayoutSnapshot memory snapshot =
@@ -137,18 +183,18 @@ contract ClusterPayoutOracleTest is Test {
     }
 
     function test_ChallengesCloseWhenSnapshotIsFinalizable() public {
-        oracle.proposeCorrelationEpoch{ value: 0.01 ether }(
+        oracle.proposeCorrelationEpoch(
             1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
         );
 
         vm.warp(1 hours + 2);
         vm.expectRevert(ClusterPayoutOracle.SnapshotNotFinalizable.selector);
-        oracle.challengeCorrelationEpoch{ value: 0.01 ether }(1, keccak256("late-challenge"));
+        oracle.challengeCorrelationEpoch{value: 0.01 ether}(1, keccak256("late-challenge"));
 
         oracle.finalizeCorrelationEpoch(1);
 
         uint8 questionRewardDomain = oracle.PAYOUT_DOMAIN_QUESTION_REWARD();
-        oracle.proposeRoundPayoutSnapshot{ value: 0.01 ether }(
+        oracle.proposeRoundPayoutSnapshot(
             IClusterPayoutOracle.RoundPayoutSnapshotInput({
                 domain: questionRewardDomain,
                 rewardPoolId: 7,
@@ -168,52 +214,43 @@ contract ClusterPayoutOracleTest is Test {
 
         vm.warp(block.timestamp + 1 hours);
         vm.expectRevert(ClusterPayoutOracle.SnapshotNotFinalizable.selector);
-        oracle.challengeRoundPayoutSnapshot{ value: 0.01 ether }(snapshotKey, keccak256("late-round-challenge"));
+        oracle.challengeRoundPayoutSnapshot{value: 0.01 ether}(snapshotKey, keccak256("late-round-challenge"));
     }
 
-    function test_BondCreditsDoNotBlockRejectingProposerFinalization() public {
-        RejectingBondReceiver rejectingProposer = new RejectingBondReceiver();
-        rejectingProposer.proposeCorrelationEpoch{ value: 0.01 ether }(oracle, 1);
+    function test_ChallengeBondCreditsDoNotTransferDuringResolution() public {
+        RejectingBondReceiver rejectingChallenger = new RejectingBondReceiver();
+        vm.deal(address(rejectingChallenger), 1 ether);
 
+        oracle.proposeCorrelationEpoch(
+            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+        );
+        rejectingChallenger.challengeCorrelationEpoch{value: 0.01 ether}(oracle, 1, keccak256("bad-root"));
+        oracle.rejectCorrelationEpoch(1, keccak256("bad-root"));
+        assertEq(oracle.pendingBondWithdrawals(address(rejectingChallenger)), 0.01 ether);
+
+        oracle.proposeCorrelationEpoch(
+            2, 1, 20, keccak256("cluster-root-2"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+        );
         vm.warp(1 hours + 2);
-        oracle.finalizeCorrelationEpoch(1);
-
-        assertEq(oracle.pendingBondWithdrawals(address(rejectingProposer)), 0.01 ether);
+        oracle.finalizeCorrelationEpoch(2);
 
         uint8 questionRewardDomain = oracle.PAYOUT_DOMAIN_QUESTION_REWARD();
-        rejectingProposer.proposeRoundPayoutSnapshot{ value: 0.01 ether }(
-            oracle,
-            IClusterPayoutOracle.RoundPayoutSnapshotInput({
-                domain: questionRewardDomain,
-                rewardPoolId: 7,
-                contentId: 42,
-                roundId: 3,
-                correlationEpochId: 1,
-                rawEligibleVoters: 4,
-                effectiveParticipantUnits: 25_000,
-                totalClaimWeight: 2_500,
-                weightRoot: keccak256("leaf"),
-                reasonRoot: keccak256("reason-root"),
-                artifactHash: keccak256("round-artifact"),
-                artifactURI: "ipfs://round"
-            })
-        );
-
+        oracle.proposeRoundPayoutSnapshot(_defaultRoundPayoutInput(2));
         bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(questionRewardDomain, 7, 42, 3);
-        vm.warp(block.timestamp + 1 hours);
-        oracle.finalizeRoundPayoutSnapshot(snapshotKey);
+        rejectingChallenger.challengeRoundPayoutSnapshot{value: 0.01 ether}(oracle, snapshotKey, keccak256("bad-round"));
+        oracle.rejectRoundPayoutSnapshot(snapshotKey, keccak256("bad-round"));
 
-        assertEq(oracle.pendingBondWithdrawals(address(rejectingProposer)), 0.02 ether);
+        assertEq(oracle.pendingBondWithdrawals(address(rejectingChallenger)), 0.02 ether);
     }
 
     function test_RejectedSnapshotsCanBeReplaced() public {
-        oracle.proposeCorrelationEpoch{ value: 0.01 ether }(
+        oracle.proposeCorrelationEpoch(
             1, 1, 20, keccak256("bad-cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
         );
-        oracle.challengeCorrelationEpoch{ value: 0.01 ether }(1, keccak256("bad-root"));
+        oracle.challengeCorrelationEpoch{value: 0.01 ether}(1, keccak256("bad-root"));
         oracle.rejectCorrelationEpoch(1, keccak256("bad-root"));
 
-        oracle.proposeCorrelationEpoch{ value: 0.01 ether }(
+        oracle.proposeCorrelationEpoch(
             1,
             1,
             20,
@@ -253,15 +290,15 @@ contract ClusterPayoutOracleTest is Test {
             artifactHash: keccak256("bad-round-artifact"),
             artifactURI: "ipfs://round"
         });
-        oracle.proposeRoundPayoutSnapshot{ value: 0.01 ether }(input);
+        oracle.proposeRoundPayoutSnapshot(input);
         bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), 7, 42, 3);
-        oracle.challengeRoundPayoutSnapshot{ value: 0.01 ether }(snapshotKey, keccak256("bad-round"));
+        oracle.challengeRoundPayoutSnapshot{value: 0.01 ether}(snapshotKey, keccak256("bad-round"));
         oracle.rejectRoundPayoutSnapshot(snapshotKey, keccak256("bad-round"));
 
         input.reasonRoot = keccak256("replacement-reason-root");
         input.artifactHash = keccak256("replacement-round-artifact");
         input.artifactURI = "ipfs://round-replacement";
-        oracle.proposeRoundPayoutSnapshot{ value: 0.01 ether }(input);
+        oracle.proposeRoundPayoutSnapshot(input);
 
         ClusterPayoutOracle.RoundPayoutProposal memory proposal = oracle.roundPayoutProposal(snapshotKey);
         assertEq(uint8(proposal.snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Proposed));
@@ -269,7 +306,7 @@ contract ClusterPayoutOracleTest is Test {
     }
 
     function test_LaunchSnapshotsUseZeroRewardPoolId() public {
-        oracle.proposeCorrelationEpoch{ value: 0.01 ether }(
+        oracle.proposeCorrelationEpoch(
             1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
         );
         vm.warp(1 hours + 2);
@@ -277,7 +314,7 @@ contract ClusterPayoutOracleTest is Test {
 
         uint8 launchDomain = oracle.PAYOUT_DOMAIN_LAUNCH_CREDIT();
         vm.expectRevert(ClusterPayoutOracle.InvalidSnapshot.selector);
-        oracle.proposeRoundPayoutSnapshot{ value: 0.01 ether }(
+        oracle.proposeRoundPayoutSnapshot(
             IClusterPayoutOracle.RoundPayoutSnapshotInput({
                 domain: launchDomain,
                 rewardPoolId: 7,
@@ -296,7 +333,7 @@ contract ClusterPayoutOracleTest is Test {
     }
 
     function test_RoundSnapshotMustStayWithinCorrelationEpochRange() public {
-        oracle.proposeCorrelationEpoch{ value: 0.01 ether }(
+        oracle.proposeCorrelationEpoch(
             1, 10, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
         );
         vm.warp(1 hours + 2);
@@ -304,7 +341,7 @@ contract ClusterPayoutOracleTest is Test {
 
         uint8 questionRewardDomain = oracle.PAYOUT_DOMAIN_QUESTION_REWARD();
         vm.expectRevert(ClusterPayoutOracle.InvalidSnapshot.selector);
-        oracle.proposeRoundPayoutSnapshot{ value: 0.01 ether }(
+        oracle.proposeRoundPayoutSnapshot(
             IClusterPayoutOracle.RoundPayoutSnapshotInput({
                 domain: questionRewardDomain,
                 rewardPoolId: 7,
@@ -321,23 +358,57 @@ contract ClusterPayoutOracleTest is Test {
             })
         );
     }
+
+    function _defaultRoundPayoutInput(uint64 epochId)
+        private
+        view
+        returns (IClusterPayoutOracle.RoundPayoutSnapshotInput memory)
+    {
+        return IClusterPayoutOracle.RoundPayoutSnapshotInput({
+            domain: oracle.PAYOUT_DOMAIN_QUESTION_REWARD(),
+            rewardPoolId: 7,
+            contentId: 42,
+            roundId: 3,
+            correlationEpochId: epochId,
+            rawEligibleVoters: 4,
+            effectiveParticipantUnits: 25_000,
+            totalClaimWeight: 2_500,
+            weightRoot: keccak256("leaf"),
+            reasonRoot: keccak256("reason-root"),
+            artifactHash: keccak256("round-artifact"),
+            artifactURI: "ipfs://round"
+        });
+    }
 }
 
 contract RejectingBondReceiver {
-    function proposeCorrelationEpoch(ClusterPayoutOracle oracle, uint64 epochId) external payable {
-        oracle.proposeCorrelationEpoch{ value: msg.value }(
-            epochId, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
-        );
+    function challengeCorrelationEpoch(ClusterPayoutOracle oracle, uint64 epochId, bytes32 reasonHash)
+        external
+        payable
+    {
+        oracle.challengeCorrelationEpoch{value: msg.value}(epochId, reasonHash);
     }
 
-    function proposeRoundPayoutSnapshot(
-        ClusterPayoutOracle oracle,
-        IClusterPayoutOracle.RoundPayoutSnapshotInput calldata input
-    ) external payable {
-        oracle.proposeRoundPayoutSnapshot{ value: msg.value }(input);
+    function challengeRoundPayoutSnapshot(ClusterPayoutOracle oracle, bytes32 snapshotKey, bytes32 reasonHash)
+        external
+        payable
+    {
+        oracle.challengeRoundPayoutSnapshot{value: msg.value}(snapshotKey, reasonHash);
     }
 
     receive() external payable {
         revert("reject");
+    }
+}
+
+contract MockFrontendRegistry {
+    mapping(address => bool) internal eligible;
+
+    function setEligible(address frontend, bool value) external {
+        eligible[frontend] = value;
+    }
+
+    function isEligible(address frontend) external view returns (bool) {
+        return eligible[frontend];
     }
 }
