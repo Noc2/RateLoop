@@ -8,6 +8,8 @@ import { HumanReputation } from "../contracts/HumanReputation.sol";
 import { FrontendRegistry } from "../contracts/FrontendRegistry.sol";
 import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
 import { MockERC20 } from "../contracts/mocks/MockERC20.sol";
+import { ClusterPayoutOracle } from "../contracts/ClusterPayoutOracle.sol";
+import { IClusterPayoutOracle } from "../contracts/interfaces/IClusterPayoutOracle.sol";
 import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
 import { QuestionRewardPoolEscrow } from "../contracts/QuestionRewardPoolEscrow.sol";
 import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
@@ -2276,6 +2278,31 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         _claimQuestionRewardAndAssert(voter1, rewardPoolId, firstRoundId);
     }
 
+    function testClusterRewardPoolDoesNotSkipSettledRoundWithoutFinalizedSnapshot() public {
+        _enableClusterPayoutOracle();
+        uint256 contentId = _submitQuestion("");
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+
+        uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+
+        (uint256 skipped, uint256 nextRoundToEvaluate) = rewardPoolEscrow.advanceQualificationCursor(rewardPoolId, 1);
+        assertEq(skipped, 0);
+        assertEq(nextRoundToEvaluate, roundId);
+    }
+
+    function testClusterRewardPoolCanSkipFinalizedBelowFloorSnapshot() public {
+        ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
+        uint256 contentId = _submitQuestion("");
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+
+        uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+        _finalizeClusterPayoutSnapshot(oracle, rewardPoolId, contentId, roundId, 3, 20_000, 1);
+
+        (uint256 skipped, uint256 nextRoundToEvaluate) = rewardPoolEscrow.advanceQualificationCursor(rewardPoolId, 1);
+        assertEq(skipped, 1);
+        assertEq(nextRoundToEvaluate, roundId + 1);
+    }
+
     function testIneligibleEarlierRoundCanBeSkippedForLaterEligibleRound() public {
         uint256 contentId = _submitQuestion("");
         uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
@@ -3186,6 +3213,57 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.prank(claimant);
         reward = rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
         assertEq(reward, expectedReward);
+    }
+
+    function _enableClusterPayoutOracle() internal returns (ClusterPayoutOracle oracle) {
+        oracle = new ClusterPayoutOracle(address(this));
+        oracle.setOracleConfig(1 hours, 0.01 ether, address(this));
+        vm.deal(address(this), 10 ether);
+        vm.prank(owner);
+        protocolConfig.setClusterPayoutOracle(address(oracle));
+    }
+
+    function _finalizeClusterPayoutSnapshot(
+        ClusterPayoutOracle oracle,
+        uint256 rewardPoolId,
+        uint256 contentId,
+        uint256 roundId,
+        uint32 rawEligibleVoters,
+        uint32 effectiveParticipantUnits,
+        uint256 totalClaimWeight
+    ) internal {
+        uint64 correlationEpochId = uint64(roundId);
+        oracle.proposeCorrelationEpoch{value: 0.01 ether}(
+            correlationEpochId,
+            uint64(roundId),
+            uint64(roundId),
+            keccak256(abi.encode("cluster-root", roundId)),
+            keccak256("params"),
+            keccak256("epoch-artifact"),
+            "ipfs://epoch"
+        );
+        vm.warp(block.timestamp + 1 hours + 1);
+        oracle.finalizeCorrelationEpoch(correlationEpochId);
+
+        oracle.proposeRoundPayoutSnapshot{value: 0.01 ether}(
+            IClusterPayoutOracle.RoundPayoutSnapshotInput({
+                domain: 1,
+                rewardPoolId: rewardPoolId,
+                contentId: contentId,
+                roundId: roundId,
+                correlationEpochId: correlationEpochId,
+                rawEligibleVoters: rawEligibleVoters,
+                effectiveParticipantUnits: effectiveParticipantUnits,
+                totalClaimWeight: totalClaimWeight,
+                weightRoot: keccak256(abi.encode("weight-root", rewardPoolId, roundId)),
+                reasonRoot: keccak256("reason-root"),
+                artifactHash: keccak256("round-artifact"),
+                artifactURI: "ipfs://round"
+            })
+        );
+        bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(1, rewardPoolId, contentId, roundId);
+        vm.warp(block.timestamp + 1 hours + 1);
+        oracle.finalizeRoundPayoutSnapshot(snapshotKey);
     }
 
     function _createRewardPoolWithEligibility(

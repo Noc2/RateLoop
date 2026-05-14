@@ -1325,10 +1325,50 @@ contract QuestionRewardPoolEscrow is
         if (state == RoundLib.RoundState.Open) return (false, false, 0);
         if (state != RoundLib.RoundState.Settled) return (true, false, 0);
 
+        if (_usesClusterPayoutSnapshot(rewardPool)) {
+            return _clusterRoundQualificationStatus(rewardPool, roundId);
+        }
+
         uint256 effectiveParticipantUnits;
         (, canQualify,, effectiveParticipantUnits,,) = _previewRoundQualification(rewardPool, roundId);
         if (canQualify) canQualify = _previewRoundAllocation(rewardPool) >= effectiveParticipantUnits;
         return (true, canQualify, effectiveParticipantUnits);
+    }
+
+    function _clusterRoundQualificationStatus(RewardPool storage rewardPool, uint256 roundId)
+        internal
+        view
+        returns (bool roundFinished, bool canQualify, uint256 eligibleVoters)
+    {
+        (bool roundSettled,, uint256 rawEligibleVoters,,,) =
+            _previewRoundQualificationWithClusterSnapshot(rewardPool, roundId);
+        if (!roundSettled) return (false, false, 0);
+
+        try IClusterPayoutOracle(_clusterPayoutOracleAddress())
+            .getRoundPayoutSnapshot(
+                PAYOUT_DOMAIN_QUESTION_REWARD, rewardPool.id, rewardPool.contentId, roundId
+            ) returns (
+            IClusterPayoutOracle.RoundPayoutSnapshot memory payoutSnapshot
+        ) {
+            if (
+                payoutSnapshot.status != IClusterPayoutOracle.SnapshotStatus.Finalized
+                    || payoutSnapshot.rawEligibleVoters != rawEligibleVoters
+            ) {
+                return (false, false, 0);
+            }
+
+            uint256 effectiveParticipantUnits = payoutSnapshot.effectiveParticipantUnits;
+            uint256 minEffectiveUnits = rewardPool.requiredVoters > MIN_EFFECTIVE_PARTICIPANT_UNITS
+                ? rewardPool.requiredVoters
+                : MIN_EFFECTIVE_PARTICIPANT_UNITS;
+            uint256 effectiveFloor = minEffectiveUnits * BPS_SCALE;
+            canQualify = rawEligibleVoters >= rewardPool.requiredVoters
+                && effectiveParticipantUnits >= effectiveFloor && payoutSnapshot.totalClaimWeight > 0;
+            if (canQualify) canQualify = _previewRoundAllocation(rewardPool) >= effectiveParticipantUnits;
+            return (true, canQualify, effectiveParticipantUnits);
+        } catch {
+            return (false, false, 0);
+        }
     }
 
     function _requireNoPendingFinishedRound(RewardPool storage rewardPool) internal view {
