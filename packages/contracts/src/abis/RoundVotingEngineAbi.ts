@@ -2675,11 +2675,6 @@ export const RoundVotingEngineAbi = [
   },
   {
     "type": "error",
-    "name": "InvalidPrediction",
-    "inputs": []
-  },
-  {
-    "type": "error",
     "name": "InvalidStake",
     "inputs": []
   },
