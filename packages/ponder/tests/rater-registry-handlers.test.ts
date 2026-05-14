@@ -22,8 +22,6 @@ vi.mock("ponder:schema", () => ({
   raterFollow: "raterFollow",
   raterHumanCredential: "raterHumanCredential",
   raterProfile: "raterProfile",
-  raterTrustAttestation: "raterTrustAttestation",
-  raterTrustSeed: "raterTrustSeed",
 }));
 
 function createDb() {
@@ -85,8 +83,12 @@ describe("RaterRegistry ponder handlers", () => {
   it("indexes public follow edges and deactivations", async () => {
     const { db, upserts } = createDb();
     const registeredHandlers = await loadHandlers();
-    const followedHandler = registeredHandlers.get("RaterRegistry:ProfileFollowed");
-    const unfollowedHandler = registeredHandlers.get("RaterRegistry:ProfileUnfollowed");
+    const followedHandler = registeredHandlers.get(
+      "RaterRegistry:ProfileFollowed",
+    );
+    const unfollowedHandler = registeredHandlers.get(
+      "RaterRegistry:ProfileUnfollowed",
+    );
 
     expect(followedHandler).toBeDefined();
     expect(unfollowedHandler).toBeDefined();
@@ -200,45 +202,5 @@ describe("RaterRegistry ponder handlers", () => {
         }),
       },
     ]);
-  });
-
-  it("indexes revocable trust attestations", async () => {
-    const { db, upserts } = createDb();
-    const registeredHandlers = await loadHandlers();
-    const handler = registeredHandlers.get("RaterRegistry:TrustAttestationSet");
-
-    expect(handler).toBeDefined();
-
-    await handler!({
-      event: {
-        args: {
-          attestationId: `0x${"44".repeat(32)}`,
-          issuer: "0x0000000000000000000000000000000000001111",
-          subject: "0x0000000000000000000000000000000000002222",
-          categoryId: 3n,
-          maxBoostBps: 11_500,
-          expiresAt: 300n,
-          metadataHash: `0x${"55".repeat(32)}`,
-        },
-        block: { timestamp: 123n },
-      },
-      context: { db },
-    });
-
-    expect(upserts[0]).toMatchObject({
-      table: "raterTrustAttestation",
-      values: {
-        id: `0x${"44".repeat(32)}`,
-        issuer: "0x0000000000000000000000000000000000001111",
-        subject: "0x0000000000000000000000000000000000002222",
-        categoryId: 3n,
-        maxBoostBps: 11_500,
-        expiresAt: 300n,
-        metadataHash: `0x${"55".repeat(32)}`,
-        issuedAt: 123n,
-        revoked: false,
-        updatedAt: 123n,
-      },
-    });
   });
 });

@@ -22,8 +22,6 @@ import {
   raterFollow,
   raterHumanCredential,
   raterProfile,
-  raterTrustAttestation,
-  raterTrustSeed,
   rewardClaim,
   round,
   tokenTransfer,
@@ -56,7 +54,11 @@ const STREAK_MILESTONES = [
 const RATER_TYPES = ["Unknown", "Human", "AI", "Team", "Hybrid"] as const;
 
 function voteMatchesVoter(address: `0x${string}`) {
-  return or(eq(vote.voter, address), eq(vote.identityHolder, address), eq(vote.identityVoter, address));
+  return or(
+    eq(vote.voter, address),
+    eq(vote.identityHolder, address),
+    eq(vote.identityVoter, address),
+  );
 }
 
 function voteMatchesAnyVoter(addresses: `0x${string}`[]) {
@@ -280,7 +282,9 @@ export function registerDataRoutes(app: ApiApp) {
           createdAt: raterFollow.createdAt,
         })
         .from(raterFollow)
-        .where(and(eq(raterFollow.follower, address), eq(raterFollow.active, true)))
+        .where(
+          and(eq(raterFollow.follower, address), eq(raterFollow.active, true)),
+        )
         .orderBy(desc(raterFollow.createdAt), asc(raterFollow.target))
         .limit(limit)
         .offset(offset),
@@ -319,7 +323,9 @@ export function registerDataRoutes(app: ApiApp) {
           createdAt: raterFollow.createdAt,
         })
         .from(raterFollow)
-        .where(and(eq(raterFollow.target, address), eq(raterFollow.active, true)))
+        .where(
+          and(eq(raterFollow.target, address), eq(raterFollow.active, true)),
+        )
         .orderBy(desc(raterFollow.createdAt), asc(raterFollow.follower))
         .limit(limit)
         .offset(offset),
@@ -396,7 +402,6 @@ export function registerDataRoutes(app: ApiApp) {
     const [
       [profile],
       [humanCredential],
-      [trustSeed],
       [launchProgress],
       [launchPolicy],
       [advisoryStats],
@@ -410,11 +415,6 @@ export function registerDataRoutes(app: ApiApp) {
         .select()
         .from(raterHumanCredential)
         .where(eq(raterHumanCredential.rater, address))
-        .limit(1),
-      db
-        .select()
-        .from(raterTrustSeed)
-        .where(eq(raterTrustSeed.rater, address))
         .limit(1),
       db
         .select()
@@ -444,7 +444,6 @@ export function registerDataRoutes(app: ApiApp) {
       maxBigInt([
         profile?.updatedAt,
         humanCredential?.updatedAt,
-        trustSeed?.updatedAt,
         launchProgress?.updatedAt,
         launchPolicy?.updatedAt,
         advisoryStats?.latestCommittedAt,
@@ -452,37 +451,6 @@ export function registerDataRoutes(app: ApiApp) {
       ]) ?? null;
     const statusTimestamp =
       maxBigInt([indexedChainTimestamp, wallSeconds]) ?? wallSeconds;
-
-    const [[activeTrustAttestationStats], inboundTrustAttestations] =
-      await Promise.all([
-        db
-          .select({
-            count: sql<number>`count(*)`,
-          })
-          .from(raterTrustAttestation)
-          .where(
-            and(
-              eq(raterTrustAttestation.subject, address),
-              eq(raterTrustAttestation.revoked, false),
-              sql`${raterTrustAttestation.expiresAt} > ${statusTimestamp}`,
-            ),
-          ),
-        db
-          .select()
-          .from(raterTrustAttestation)
-          .where(
-            and(
-              eq(raterTrustAttestation.subject, address),
-              eq(raterTrustAttestation.revoked, false),
-              sql`${raterTrustAttestation.expiresAt} > ${statusTimestamp}`,
-            ),
-          )
-          .orderBy(
-            desc(raterTrustAttestation.issuedAt),
-            desc(raterTrustAttestation.id),
-          )
-          .limit(5),
-      ]);
 
     const humanCredentialStatus = credentialStatus(
       humanCredential,
@@ -494,8 +462,7 @@ export function registerDataRoutes(app: ApiApp) {
       minQualifyingScoreBps: launchPolicy?.minQualifyingScoreBps ?? 7_000,
       minVoters: launchPolicy?.minVoters ?? 3,
       minVerifiedHumans: launchPolicy?.minVerifiedHumans ?? 1,
-      minDistinctVerifiedAnchors:
-        launchPolicy?.minDistinctVerifiedAnchors ?? 2,
+      minDistinctVerifiedAnchors: launchPolicy?.minDistinctVerifiedAnchors ?? 2,
       minDistinctAnchorRounds: launchPolicy?.minDistinctAnchorRounds ?? 2,
       eligibilityRatingCount: launchPolicy?.eligibilityRatingCount ?? 5,
       rewardingRatingCount: launchPolicy?.rewardingRatingCount ?? 10,
@@ -537,42 +504,20 @@ export function registerDataRoutes(app: ApiApp) {
         expiresAt: humanCredential?.expiresAt ?? null,
         evidenceHash: humanCredential?.evidenceHash ?? null,
       },
-      trust: {
-        activeSeed: trustSeed
-          ? {
-              active:
-                trustSeed.active && trustSeed.sunsetAt > statusTimestamp,
-              seededAt: trustSeed.seededAt,
-              sunsetAt: trustSeed.sunsetAt,
-              seedRoot: trustSeed.seedRoot,
-            }
-          : null,
-        activeInboundAttestationCount: Number(
-          activeTrustAttestationStats?.count ?? 0,
-        ),
-        latestInboundAttestations: inboundTrustAttestations.map((attestation) => ({
-          issuer: attestation.issuer,
-          categoryId: attestation.categoryId,
-          maxBoostBps: attestation.maxBoostBps,
-          expiresAt: attestation.expiresAt,
-          metadataHash: attestation.metadataHash,
-          issuedAt: attestation.issuedAt,
-        })),
-      },
       launchRewards: {
         eligible: launchEligible,
         qualifyingRatingCount: launchProgress?.qualifyingRatingCount ?? 0,
         rewardedRatingCount: launchRewardedCount,
         distinctVerifiedAnchorCount:
           launchProgress?.distinctVerifiedAnchorCount ?? 0,
-        distinctAnchorRoundCount:
-          launchProgress?.distinctAnchorRoundCount ?? 0,
+        distinctAnchorRoundCount: launchProgress?.distinctAnchorRoundCount ?? 0,
         launchCap,
         fullLaunchCap,
         capBps,
         fullCapUnlocked,
         launchPaid,
-        remainingLaunchCap: launchCap > launchPaid ? launchCap - launchPaid : 0n,
+        remainingLaunchCap:
+          launchCap > launchPaid ? launchCap - launchPaid : 0n,
         unlockableLaunchCap:
           !fullCapUnlocked && fullLaunchCap > launchCap
             ? fullLaunchCap - launchCap
@@ -633,7 +578,12 @@ export function registerDataRoutes(app: ApiApp) {
           verifiedAt: raterHumanCredential.verifiedAt,
         })
         .from(raterHumanCredential)
-        .where(and(eq(raterHumanCredential.rater, address), eq(raterHumanCredential.revoked, false)))
+        .where(
+          and(
+            eq(raterHumanCredential.rater, address),
+            eq(raterHumanCredential.revoked, false),
+          ),
+        )
         .limit(1)
         .then((rows) => rows[0] ?? null),
     ]);
@@ -784,7 +734,9 @@ export function registerDataRoutes(app: ApiApp) {
     if (voterRaw) {
       if (!isValidAddress(voterRaw))
         return c.json({ error: "Invalid voter address" }, 400);
-      conditions.push(voteMatchesVoter(voterRaw.toLowerCase() as `0x${string}`));
+      conditions.push(
+        voteMatchesVoter(voterRaw.toLowerCase() as `0x${string}`),
+      );
     }
     if (contentId) {
       const parsed = safeBigInt(contentId);
@@ -1198,10 +1150,17 @@ export function registerDataRoutes(app: ApiApp) {
     if (holder) {
       if (!isValidAddress(holder))
         return c.json({ error: "Invalid holder address" }, 400);
-      where = eq(raterHumanCredential.rater, holder.toLowerCase() as `0x${string}`);
+      where = eq(
+        raterHumanCredential.rater,
+        holder.toLowerCase() as `0x${string}`,
+      );
     }
 
-    const rows = await db.select().from(raterHumanCredential).where(where).limit(limit);
+    const rows = await db
+      .select()
+      .from(raterHumanCredential)
+      .where(where)
+      .limit(limit);
     const items = rows.map((row) => ({
       holder: row.rater,
       identityKey: row.nullifierHash,

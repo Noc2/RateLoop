@@ -6,7 +6,6 @@ import {
   profile,
   raterHumanCredential,
   raterProfile,
-  raterTrustAttestation,
   round,
   tokenHolder,
   vote,
@@ -25,30 +24,24 @@ import {
   profileTotalRewardsClaimedExpr,
   profileTotalVotesExpr,
 } from "../profile-aggregate-expressions.js";
-import {
-  credentialStatus,
-  raterTypeName,
-} from "../reputation-utils.js";
+import { credentialStatus, raterTypeName } from "../reputation-utils.js";
 import type { ApiApp } from "../shared.js";
 import { jsonBig } from "../shared.js";
 import { safeBigInt, safeLimit, safeOffset } from "../utils.js";
 
 type OrderableExpression = Parameters<typeof desc>[0];
 
-async function attachAccuracyLeaderboardReputation<T extends { voter: `0x${string}` }>(
-  items: T[],
-) {
+async function attachAccuracyLeaderboardReputation<
+  T extends { voter: `0x${string}` },
+>(items: T[]) {
   if (items.length === 0) return items;
 
-  const addresses = [...new Set(items.map((item) => item.voter.toLowerCase() as `0x${string}`))];
+  const addresses = [
+    ...new Set(items.map((item) => item.voter.toLowerCase() as `0x${string}`)),
+  ];
   const nowSeconds = BigInt(Math.floor(Date.now() / 1000));
 
-  const [
-    raterProfiles,
-    humanCredentials,
-    trustCounts,
-    followStats,
-  ] = await Promise.all([
+  const [raterProfiles, humanCredentials, followStats] = await Promise.all([
     db
       .select()
       .from(raterProfile)
@@ -57,27 +50,14 @@ async function attachAccuracyLeaderboardReputation<T extends { voter: `0x${strin
       .select()
       .from(raterHumanCredential)
       .where(inArray(raterHumanCredential.rater, addresses)),
-    db
-      .select({
-        rater: raterTrustAttestation.subject,
-        count: sql<number>`count(*)`,
-      })
-      .from(raterTrustAttestation)
-      .where(
-        and(
-          inArray(raterTrustAttestation.subject, addresses),
-          eq(raterTrustAttestation.revoked, false),
-          sql`${raterTrustAttestation.expiresAt} > ${nowSeconds}`,
-        ),
-      )
-      .groupBy(raterTrustAttestation.subject),
     getFollowStatsMap(addresses),
   ]);
 
-  const raterProfileMap = new Map(raterProfiles.map((row) => [row.address, row]));
-  const humanCredentialMap = new Map(humanCredentials.map((row) => [row.rater, row]));
-  const trustCountMap = new Map(
-    trustCounts.map((row) => [row.rater as `0x${string}`, Number(row.count ?? 0)]),
+  const raterProfileMap = new Map(
+    raterProfiles.map((row) => [row.address, row]),
+  );
+  const humanCredentialMap = new Map(
+    humanCredentials.map((row) => [row.rater, row]),
   );
 
   return items.map((item) => {
@@ -94,10 +74,11 @@ async function attachAccuracyLeaderboardReputation<T extends { voter: `0x${strin
       ...item,
       reputation: {
         raterType: raterProfileMap.get(item.voter)?.raterType ?? 0,
-        raterTypeName: raterTypeName(raterProfileMap.get(item.voter)?.raterType),
+        raterTypeName: raterTypeName(
+          raterProfileMap.get(item.voter)?.raterType,
+        ),
         humanCredentialStatus,
         participationLane,
-        activeTrustAttestationCount: trustCountMap.get(item.voter) ?? 0,
         followerCount: follow.followerCount,
         followingCount: follow.followingCount,
       },
@@ -168,9 +149,7 @@ export function registerLeaderboardRoutes(app: ApiApp) {
     let orderBy;
     const totalVotes = profileTotalVotesExpr(profile.address);
     const totalContent = profileTotalContentExpr(profile.address);
-    const totalRewardsClaimed = profileTotalRewardsClaimedExpr(
-      profile.address,
-    );
+    const totalRewardsClaimed = profileTotalRewardsClaimedExpr(profile.address);
     switch (type) {
       case "creators":
         orderBy = desc(totalContent);

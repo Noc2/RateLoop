@@ -681,46 +681,6 @@ export const raterHumanCredential = onchainTable(
   }),
 );
 
-export const raterTrustSeed = onchainTable(
-  "rater_trust_seed",
-  (t) => ({
-    rater: t.hex().primaryKey(),
-    active: t.boolean().notNull(),
-    seededAt: t.bigint().notNull(),
-    sunsetAt: t.bigint().notNull(),
-    seedRoot: t.hex().notNull(),
-    updatedAt: t.bigint().notNull(),
-  }),
-  (table) => ({
-    activeIdx: index().on(table.active),
-    sunsetAtIdx: index().on(table.sunsetAt),
-    seedRootIdx: index().on(table.seedRoot),
-  }),
-);
-
-export const raterTrustAttestation = onchainTable(
-  "rater_trust_attestation",
-  (t) => ({
-    id: t.hex().primaryKey(),
-    issuer: t.hex().notNull(),
-    subject: t.hex().notNull(),
-    categoryId: t.bigint().notNull(),
-    maxBoostBps: t.integer().notNull(),
-    expiresAt: t.bigint().notNull(),
-    metadataHash: t.hex().notNull(),
-    issuedAt: t.bigint().notNull(),
-    revoked: t.boolean().notNull(),
-    updatedAt: t.bigint().notNull(),
-  }),
-  (table) => ({
-    issuerIdx: index().on(table.issuer),
-    subjectIdx: index().on(table.subject),
-    categoryIdx: index().on(table.categoryId),
-    revokedIdx: index().on(table.revoked),
-    expiresAtIdx: index().on(table.expiresAt),
-  }),
-);
-
 export const raterFollow = onchainTable(
   "rater_follow",
   (t) => ({

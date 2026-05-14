@@ -108,7 +108,8 @@ function mockPonderModules<T>(result: T) {
     },
     launchRaterRewardProgress: {
       cohortIndex: "launchRaterRewardProgress.cohortIndex",
-      distinctAnchorRoundCount: "launchRaterRewardProgress.distinctAnchorRoundCount",
+      distinctAnchorRoundCount:
+        "launchRaterRewardProgress.distinctAnchorRoundCount",
       distinctVerifiedAnchorCount:
         "launchRaterRewardProgress.distinctVerifiedAnchorCount",
       eligibleAt: "launchRaterRewardProgress.eligibleAt",
@@ -127,8 +128,7 @@ function mockPonderModules<T>(result: T) {
       launchCap: "launchRaterRewardProgress.launchCap",
       launchPaid: "launchRaterRewardProgress.launchPaid",
       payoutEligible: "launchRaterRewardProgress.payoutEligible",
-      qualifyingRatingCount:
-        "launchRaterRewardProgress.qualifyingRatingCount",
+      qualifyingRatingCount: "launchRaterRewardProgress.qualifyingRatingCount",
       rater: "launchRaterRewardProgress.rater",
       rewardedRatingCount: "launchRaterRewardProgress.rewardedRatingCount",
       updatedAt: "launchRaterRewardProgress.updatedAt",
@@ -140,8 +140,7 @@ function mockPonderModules<T>(result: T) {
         "launchRewardPolicyState.minDistinctAnchorRounds",
       minDistinctVerifiedAnchors:
         "launchRewardPolicyState.minDistinctVerifiedAnchors",
-      minQualifyingScoreBps:
-        "launchRewardPolicyState.minQualifyingScoreBps",
+      minQualifyingScoreBps: "launchRewardPolicyState.minQualifyingScoreBps",
       minVerifiedHumans: "launchRewardPolicyState.minVerifiedHumans",
       minVoters: "launchRewardPolicyState.minVoters",
       requireNoPendingCleanup:
@@ -175,25 +174,6 @@ function mockPonderModules<T>(result: T) {
       updatedAt: "raterHumanCredential.updatedAt",
       verified: "raterHumanCredential.verified",
       verifiedAt: "raterHumanCredential.verifiedAt",
-    },
-    raterTrustAttestation: {
-      categoryId: "raterTrustAttestation.categoryId",
-      expiresAt: "raterTrustAttestation.expiresAt",
-      id: "raterTrustAttestation.id",
-      issuedAt: "raterTrustAttestation.issuedAt",
-      issuer: "raterTrustAttestation.issuer",
-      maxBoostBps: "raterTrustAttestation.maxBoostBps",
-      metadataHash: "raterTrustAttestation.metadataHash",
-      revoked: "raterTrustAttestation.revoked",
-      subject: "raterTrustAttestation.subject",
-    },
-    raterTrustSeed: {
-      active: "raterTrustSeed.active",
-      rater: "raterTrustSeed.rater",
-      seededAt: "raterTrustSeed.seededAt",
-      seedRoot: "raterTrustSeed.seedRoot",
-      sunsetAt: "raterTrustSeed.sunsetAt",
-      updatedAt: "raterTrustSeed.updatedAt",
     },
     profile: {
       address: "profile.address",
@@ -916,7 +896,6 @@ describe("registerLeaderboardRoutes", () => {
       participationLane: "verified_human",
       followerCount: 3,
       followingCount: 2,
-      activeTrustAttestationCount: 4,
     });
   });
 
@@ -1081,15 +1060,6 @@ describe("registerDataRoutes", () => {
         verifiedAt: 1_000n,
         expiresAt: 9_999_999_999n,
         evidenceHash: zeroHash,
-        active: true,
-        seededAt: 500n,
-        sunsetAt: 9_999_999_999n,
-        seedRoot: zeroHash,
-        count: 4,
-        issuer: "0x00000000000000000000000000000000000000cc",
-        categoryId: 3n,
-        maxBoostBps: 11_500,
-        issuedAt: 2_500n,
         qualifyingRatingCount: 6,
         rewardedRatingCount: 4,
         distinctVerifiedAnchorCount: 2,
@@ -1135,9 +1105,6 @@ describe("registerDataRoutes", () => {
       participationLane: "verified_human",
       humanCredential: {
         status: "verified",
-      },
-      trust: {
-        activeInboundAttestationCount: 4,
       },
       launchRewards: {
         eligible: true,
@@ -1292,7 +1259,9 @@ describe("registerDataRoutes", () => {
       .find((value) => value.includes("raterHumanCredential.expiresAt"));
     expect(verifiedHumanWhere ?? "").toContain("raterHumanCredential.verified");
     expect(verifiedHumanWhere ?? "").toContain("raterHumanCredential.revoked");
-    expect(verifiedHumanWhere ?? "").toContain("raterHumanCredential.expiresAt");
+    expect(verifiedHumanWhere ?? "").toContain(
+      "raterHumanCredential.expiresAt",
+    );
   });
 
   it("rejects vote cooldown requests without valid voters before querying the database", async () => {
