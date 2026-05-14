@@ -795,6 +795,78 @@ export const LaunchDistributionPoolAbi = [
         "internalType": "uint16"
       },
       {
+        "name": "policy",
+        "type": "tuple",
+        "internalType": "struct ILaunchDistributionPool.LaunchRewardPolicy",
+        "components": [
+          {
+            "name": "minQualifyingScoreBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "minVoters",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "minVerifiedHumans",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "minDistinctVerifiedAnchors",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "minDistinctAnchorRounds",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "minLaunchCreditStake",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "maxDistinctRatersPerVerifiedAnchor",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "maxUnverifiedCreditsPerRound",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "unverifiedEarnedRaterCapBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "minAnchorCredentialAgeSeconds",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "eligibilityRatingCount",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "rewardingRatingCount",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "requireNoPendingCleanup",
+            "type": "bool",
+            "internalType": "bool"
+          }
+        ]
+      },
+      {
         "name": "pending",
         "type": "bool",
         "internalType": "bool"
