@@ -220,6 +220,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
         if (msg.value < proposalBond) revert InvalidBond();
         CorrelationEpochSnapshot storage epoch = correlationEpochSnapshots[input.correlationEpochId];
         if (epoch.status != SnapshotStatus.Finalized) revert SnapshotNotFinalizable();
+        if (input.roundId < epoch.fromRoundId || input.roundId > epoch.toRoundId) revert InvalidSnapshot();
 
         bytes32 snapshotKey = roundPayoutSnapshotKey(input.domain, input.rewardPoolId, input.contentId, input.roundId);
         RoundPayoutProposal storage existing = roundPayoutProposals[snapshotKey];
