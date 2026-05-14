@@ -357,6 +357,7 @@ export const correlationEpochSnapshot = onchainTable(
     fromRoundId: t.bigint().notNull(),
     toRoundId: t.bigint().notNull(),
     proposer: t.hex().notNull(),
+    frontendOperator: t.hex().notNull(),
     challenger: t.hex(),
     clusterRoot: t.hex().notNull(),
     parameterHash: t.hex().notNull(),
@@ -369,6 +370,7 @@ export const correlationEpochSnapshot = onchainTable(
   }),
   (table) => ({
     statusIdx: index().on(table.status),
+    frontendOperatorIdx: index().on(table.frontendOperator),
     proposedAtIdx: index().on(table.proposedAt),
     finalizedAtIdx: index().on(table.finalizedAt),
   }),
@@ -384,6 +386,7 @@ export const roundPayoutSnapshot = onchainTable(
     roundId: t.bigint().notNull(),
     correlationEpochId: t.bigint().notNull(),
     proposer: t.hex().notNull(),
+    frontendOperator: t.hex().notNull(),
     challenger: t.hex(),
     rawEligibleVoters: t.integer().notNull(),
     effectiveParticipantUnits: t.integer().notNull(),
@@ -402,6 +405,7 @@ export const roundPayoutSnapshot = onchainTable(
     contentRoundIdx: index().on(table.contentId, table.roundId),
     rewardPoolIdx: index().on(table.rewardPoolId),
     epochIdx: index().on(table.correlationEpochId),
+    frontendOperatorIdx: index().on(table.frontendOperator),
     statusIdx: index().on(table.status),
   }),
 );

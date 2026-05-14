@@ -1,0 +1,141 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+type RegisteredHandler = (args: {
+  event: {
+    args: Record<string, unknown>;
+    block: { number: bigint; timestamp: bigint };
+  };
+  context: { db: ReturnType<typeof createDb>["db"] };
+}) => Promise<void>;
+
+const handlers = new Map<string, RegisteredHandler>();
+
+vi.mock("ponder:registry", () => ({
+  ponder: {
+    on: vi.fn((name: string, handler: RegisteredHandler) => {
+      handlers.set(name, handler);
+    }),
+  },
+}));
+
+vi.mock("ponder:schema", () => ({
+  correlationEpochSnapshot: "correlationEpochSnapshot",
+  roundPayoutSnapshot: "roundPayoutSnapshot",
+}));
+
+function createDb() {
+  const inserts: Array<{ table: string; values: Record<string, unknown> }> = [];
+  const conflictUpdates: Array<Record<string, unknown>> = [];
+  const updates: Array<{
+    table: string;
+    key: Record<string, unknown>;
+    values: Record<string, unknown>;
+  }> = [];
+
+  const db = {
+    insert: vi.fn((table: string) => ({
+      values: vi.fn((values: Record<string, unknown>) => {
+        inserts.push({ table, values });
+        return {
+          onConflictDoUpdate: vi.fn(async (values: Record<string, unknown>) => {
+            conflictUpdates.push(values);
+          }),
+        };
+      }),
+    })),
+    update: vi.fn((table: string, key: Record<string, unknown>) => ({
+      set: vi.fn(async (values: Record<string, unknown>) => {
+        updates.push({ table, key, values });
+      }),
+    })),
+  };
+
+  return { db, inserts, conflictUpdates, updates };
+}
+
+async function loadHandlers() {
+  handlers.clear();
+  await import("../src/ClusterPayoutOracle.js");
+  return handlers;
+}
+
+afterEach(() => {
+  handlers.clear();
+  vi.resetModules();
+  vi.clearAllMocks();
+});
+
+describe("ClusterPayoutOracle ponder handlers", () => {
+  it("indexes the frontend operator on correlation epoch proposals", async () => {
+    const { db, inserts, conflictUpdates } = createDb();
+    const registeredHandlers = await loadHandlers();
+
+    await registeredHandlers.get("ClusterPayoutOracle:CorrelationEpochProposed")!({
+      event: {
+        args: {
+          epochId: 1n,
+          fromRoundId: 1n,
+          toRoundId: 4n,
+          frontendOperator: "0x00000000000000000000000000000000000000f1",
+          clusterRoot: `0x${"1".repeat(64)}`,
+          parameterHash: `0x${"2".repeat(64)}`,
+          artifactHash: `0x${"3".repeat(64)}`,
+          artifactURI: "ipfs://epoch",
+        },
+        block: { number: 10n, timestamp: 1_700n },
+      },
+      context: { db },
+    });
+
+    expect(inserts).toContainEqual({
+      table: "correlationEpochSnapshot",
+      values: expect.objectContaining({
+        id: 1n,
+        proposer: "0x00000000000000000000000000000000000000f1",
+        frontendOperator: "0x00000000000000000000000000000000000000f1",
+      }),
+    });
+    expect(conflictUpdates).toContainEqual(
+      expect.objectContaining({
+        frontendOperator: "0x00000000000000000000000000000000000000f1",
+      }),
+    );
+  });
+
+  it("falls back to proposer for older round payout snapshot events", async () => {
+    const { db, inserts } = createDb();
+    const registeredHandlers = await loadHandlers();
+
+    await registeredHandlers.get("ClusterPayoutOracle:RoundPayoutSnapshotProposed")!({
+      event: {
+        args: {
+          snapshotKey: `0x${"a".repeat(64)}`,
+          domain: 1n,
+          rewardPoolId: 7n,
+          contentId: 9n,
+          roundId: 2n,
+          correlationEpochId: 1n,
+          proposer: "0x00000000000000000000000000000000000000f1",
+          rawEligibleVoters: 5n,
+          effectiveParticipantUnits: 50_000n,
+          totalClaimWeight: 100n,
+          weightRoot: `0x${"4".repeat(64)}`,
+          reasonRoot: `0x${"5".repeat(64)}`,
+          artifactHash: `0x${"6".repeat(64)}`,
+          artifactURI: "ipfs://round",
+        },
+        block: { number: 11n, timestamp: 1_800n },
+      },
+      context: { db },
+    });
+
+    expect(inserts).toContainEqual({
+      table: "roundPayoutSnapshot",
+      values: expect.objectContaining({
+        id: `0x${"a".repeat(64)}`,
+        proposer: "0x00000000000000000000000000000000000000f1",
+        frontendOperator: "0x00000000000000000000000000000000000000f1",
+      }),
+    });
+  });
+});

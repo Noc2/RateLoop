@@ -320,6 +320,16 @@ function loadConfig() {
           }),
         }
       : null;
+  const correlationSnapshotFrontendRegistry =
+    correlationSnapshotsEnabled && chainId > 0
+      ? resolveContractAddress({
+          chainId,
+          envName: "FRONTEND_REGISTRY_ADDRESS",
+          contractName: "FrontendRegistry",
+          errors,
+          warnings,
+        })
+      : undefined;
 
   const loadedConfig = {
     // Network
@@ -427,11 +437,7 @@ function loadConfig() {
     correlationSnapshots: {
       enabled: correlationSnapshotsEnabled,
       artifactPath: correlationSnapshotArtifactPath,
-      proposalBondWei: readNonNegativeBigIntStringEnv(
-        "KEEPER_CORRELATION_PROPOSAL_BOND_WEI",
-        "10000000000000000",
-        errors,
-      ),
+      frontendRegistry: correlationSnapshotFrontendRegistry,
     },
   };
 

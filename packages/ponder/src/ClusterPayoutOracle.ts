@@ -8,6 +8,10 @@ const SNAPSHOT_STATUS = {
   Rejected: 4,
 } as const;
 
+function readFrontendOperator(args: Record<string, unknown>): `0x${string}` {
+  return (args.frontendOperator ?? args.proposer) as `0x${string}`;
+}
+
 ponder.on(
   "ClusterPayoutOracle:CorrelationEpochProposed",
   async ({ event, context }) => {
@@ -15,12 +19,13 @@ ponder.on(
       epochId,
       fromRoundId,
       toRoundId,
-      proposer,
       clusterRoot,
       parameterHash,
       artifactHash,
       artifactURI,
     } = event.args;
+    const frontendOperator = readFrontendOperator(event.args);
+    const proposer = frontendOperator;
 
     await context.db
       .insert(correlationEpochSnapshot)
@@ -29,6 +34,7 @@ ponder.on(
         fromRoundId,
         toRoundId,
         proposer,
+        frontendOperator,
         challenger: null,
         clusterRoot,
         parameterHash,
@@ -43,6 +49,7 @@ ponder.on(
         fromRoundId,
         toRoundId,
         proposer,
+        frontendOperator,
         challenger: null,
         clusterRoot,
         parameterHash,
@@ -104,7 +111,6 @@ ponder.on(
       contentId,
       roundId,
       correlationEpochId,
-      proposer,
       rawEligibleVoters,
       effectiveParticipantUnits,
       totalClaimWeight,
@@ -113,6 +119,8 @@ ponder.on(
       artifactHash,
       artifactURI,
     } = event.args;
+    const frontendOperator = readFrontendOperator(event.args);
+    const proposer = frontendOperator;
 
     await context.db
       .insert(roundPayoutSnapshot)
@@ -124,6 +132,7 @@ ponder.on(
         roundId,
         correlationEpochId,
         proposer,
+        frontendOperator,
         challenger: null,
         rawEligibleVoters: Number(rawEligibleVoters),
         effectiveParticipantUnits: Number(effectiveParticipantUnits),
@@ -144,6 +153,7 @@ ponder.on(
         roundId,
         correlationEpochId,
         proposer,
+        frontendOperator,
         challenger: null,
         rawEligibleVoters: Number(rawEligibleVoters),
         effectiveParticipantUnits: Number(effectiveParticipantUnits),

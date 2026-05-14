@@ -96,7 +96,7 @@ async function loadKeeperIndex(options: KeeperIndexOptions = {}) {
       correlationSnapshots: {
         enabled: false,
         artifactPath: undefined,
-        proposalBondWei: "10000000000000000",
+        frontendRegistry: undefined,
       },
     },
   }));

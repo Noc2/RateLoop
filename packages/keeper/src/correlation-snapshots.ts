@@ -1,8 +1,12 @@
 import { readFile } from "node:fs/promises";
 import type { Account, Chain, PublicClient, WalletClient } from "viem";
-import { ClusterPayoutOracleAbi } from "@rateloop/contracts/abis";
+import {
+  ClusterPayoutOracleAbi,
+  FrontendRegistryAbi,
+} from "@rateloop/contracts/abis";
 import type { Logger } from "./logger.js";
 import { config } from "./config.js";
+import { getRevertReason } from "./revert-utils.js";
 
 const STATUS = {
   None: 0,
@@ -57,6 +61,57 @@ function emptyResult(): CorrelationSnapshotPublisherResult {
   };
 }
 
+async function readFrontendEligibility(
+  publicClient: PublicClient,
+  account: Account,
+  logger: Logger,
+): Promise<boolean> {
+  const frontendRegistry = config.correlationSnapshots.frontendRegistry;
+  if (!frontendRegistry) {
+    logger.warn(
+      "Skipping correlation snapshot proposals because no frontend registry is configured",
+      {
+        frontendOperator: account.address,
+      },
+    );
+    return false;
+  }
+
+  try {
+    const eligible = (await publicClient.readContract({
+      address: frontendRegistry,
+      abi: FrontendRegistryAbi,
+      functionName: "isEligible",
+      args: [account.address],
+    })) as boolean;
+
+    const data = {
+      frontendOperator: account.address,
+      frontendRegistry,
+      eligible,
+    };
+    if (eligible) {
+      logger.info("Correlation snapshot frontend eligibility confirmed", data);
+    } else {
+      logger.warn(
+        "Skipping correlation snapshot proposals because frontend operator is not eligible",
+        data,
+      );
+    }
+    return eligible;
+  } catch (error: unknown) {
+    logger.warn(
+      "Skipping correlation snapshot proposals because frontend eligibility could not be read",
+      {
+        frontendOperator: account.address,
+        frontendRegistry,
+        error: getRevertReason(error),
+      },
+    );
+    return false;
+  }
+}
+
 export async function publishConfiguredCorrelationSnapshots(
   publicClient: PublicClient,
   walletClient: WalletClient,
@@ -75,7 +130,11 @@ export async function publishConfiguredCorrelationSnapshots(
     await readFile(config.correlationSnapshots.artifactPath, "utf8"),
   ) as CorrelationSnapshotArtifactFile;
   const result = emptyResult();
-  const bond = BigInt(config.correlationSnapshots.proposalBondWei);
+  const frontendEligible = await readFrontendEligibility(
+    publicClient,
+    account,
+    logger,
+  );
 
   for (const epoch of artifact.correlationEpochs ?? []) {
     const epochId = BigInt(epoch.epochId);
@@ -87,6 +146,17 @@ export async function publishConfiguredCorrelationSnapshots(
     });
     const status = Number(existing.status);
     if (status === STATUS.None || status === STATUS.Rejected) {
+      if (!frontendEligible) {
+        logger.debug(
+          "Skipping correlation epoch proposal until frontend operator is eligible",
+          {
+            epochId: epochId.toString(),
+            frontendOperator: account.address,
+          },
+        );
+        continue;
+      }
+
       await walletClient.writeContract({
         account,
         chain,
@@ -102,7 +172,6 @@ export async function publishConfiguredCorrelationSnapshots(
           epoch.artifactHash,
           epoch.artifactURI,
         ],
-        value: bond,
       });
       result.epochsProposed += 1;
       logger.info("Proposed correlation epoch snapshot", {
@@ -158,6 +227,17 @@ export async function publishConfiguredCorrelationSnapshots(
     }
 
     if (status === STATUS.None || status === STATUS.Rejected) {
+      if (!frontendEligible) {
+        logger.debug(
+          "Skipping round payout snapshot proposal until frontend operator is eligible",
+          {
+            snapshotKey,
+            frontendOperator: account.address,
+          },
+        );
+        continue;
+      }
+
       await walletClient.writeContract({
         account,
         chain,
@@ -180,7 +260,6 @@ export async function publishConfiguredCorrelationSnapshots(
             artifactURI: snapshot.artifactURI,
           },
         ],
-        value: bond,
       });
       result.roundSnapshotsProposed += 1;
       logger.info("Proposed round payout snapshot", { snapshotKey });
