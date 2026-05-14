@@ -5,6 +5,7 @@ import { http } from "viem";
 import {
   AdvisoryVoteRecorderAbi,
   CategoryRegistryAbi,
+  ClusterPayoutOracleAbi,
   ContentRegistryAbi,
   LoopReputationAbi,
   FeedbackBonusEscrowAbi,
@@ -51,8 +52,14 @@ const NETWORKS: Record<
   },
 };
 
-function isPonderNetworkName(value: string | undefined): value is PonderNetworkName {
-  return value === "worldchainSepolia" || value === "hardhat" || value === "worldchain";
+function isPonderNetworkName(
+  value: string | undefined,
+): value is PonderNetworkName {
+  return (
+    value === "worldchainSepolia" ||
+    value === "hardhat" ||
+    value === "worldchain"
+  );
 }
 
 function getActiveNetwork(): PonderNetworkName {
@@ -60,14 +67,18 @@ function getActiveNetwork(): PonderNetworkName {
 
   if (!value) {
     if (isProduction) {
-      throw new Error("Missing PONDER_NETWORK. Set it to hardhat, worldchainSepolia, or worldchain.");
+      throw new Error(
+        "Missing PONDER_NETWORK. Set it to hardhat, worldchainSepolia, or worldchain.",
+      );
     }
 
     return "hardhat";
   }
 
   if (!isPonderNetworkName(value)) {
-    throw new Error(`Unsupported PONDER_NETWORK "${value}". Use hardhat, worldchainSepolia, or worldchain.`);
+    throw new Error(
+      `Unsupported PONDER_NETWORK "${value}". Use hardhat, worldchainSepolia, or worldchain.`,
+    );
   }
 
   return value;
@@ -75,6 +86,7 @@ function getActiveNetwork(): PonderNetworkName {
 
 const activeNetwork = getActiveNetwork();
 const activeChainId = NETWORKS[activeNetwork].chainId;
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
 let warnedAboutHardhatStartBlocks = false;
 
 function readEnv(key: string): string | undefined {
@@ -122,7 +134,10 @@ function resolveAddress(key: string, contractName: string): `0x${string}` {
         throw new Error(`${key} must be a valid address.`);
       }
 
-      if (sharedAddress && envValue.toLowerCase() !== sharedAddress.toLowerCase()) {
+      if (
+        sharedAddress &&
+        envValue.toLowerCase() !== sharedAddress.toLowerCase()
+      ) {
         console.warn(
           `[ponder config] Using ${key}=${envValue} for local hardhat; shared ${contractName} artifact points at ${sharedAddress}.`,
         );
@@ -143,7 +158,9 @@ function resolveAddress(key: string, contractName: string): `0x${string}` {
   if (sharedAddress) {
     if (envValue) {
       if (!isAddress(envValue)) {
-        throw new Error(`${key} must be a valid address when provided for chain ${activeChainId}.`);
+        throw new Error(
+          `${key} must be a valid address when provided for chain ${activeChainId}.`,
+        );
       }
 
       if (envValue.toLowerCase() !== sharedAddress.toLowerCase()) {
@@ -165,6 +182,38 @@ function resolveAddress(key: string, contractName: string): `0x${string}` {
   );
 }
 
+function resolveOptionalAddress(
+  key: string,
+  contractName: string,
+): `0x${string}` {
+  const sharedAddress = getSharedArtifactAddress(activeChainId, contractName);
+  const envValue = readEnv(key);
+
+  if (envValue) {
+    if (!isAddress(envValue)) {
+      throw new Error(`${key} must be a valid address.`);
+    }
+    if (
+      sharedAddress &&
+      envValue.toLowerCase() !== sharedAddress.toLowerCase()
+    ) {
+      throw new Error(
+        `${key}=${envValue} conflicts with ${contractName} from shared deployment artifacts (${sharedAddress}) for chain ${activeChainId}. Remove the env override or refresh shared deployments.`,
+      );
+    }
+    return envValue as `0x${string}`;
+  }
+
+  if (sharedAddress) return sharedAddress;
+  if (isProduction) {
+    throw new Error(
+      `Missing shared deployment artifact for ${contractName} on chain ${activeChainId}. Run \`yarn deploy --network <network>\` to refresh shared deployments before starting Ponder for ${activeNetwork}.`,
+    );
+  }
+
+  return ZERO_ADDRESS;
+}
+
 function resolveStartBlock(key: string, contractName: string): number {
   const envValue = readEnv(key);
 
@@ -179,13 +228,22 @@ function resolveStartBlock(key: string, contractName: string): number {
     return 0;
   }
 
-  const sharedStartBlock = getSharedArtifactStartBlock(activeChainId, contractName);
+  const sharedStartBlock = getSharedArtifactStartBlock(
+    activeChainId,
+    contractName,
+  );
 
   if (sharedStartBlock !== undefined) {
     if (envValue) {
       const parsedEnvValue = Number(envValue);
-      if (!Number.isFinite(parsedEnvValue) || !Number.isInteger(parsedEnvValue) || parsedEnvValue < 0) {
-        throw new Error(`${key} must be a non-negative integer when provided for chain ${activeChainId}.`);
+      if (
+        !Number.isFinite(parsedEnvValue) ||
+        !Number.isInteger(parsedEnvValue) ||
+        parsedEnvValue < 0
+      ) {
+        throw new Error(
+          `${key} must be a non-negative integer when provided for chain ${activeChainId}.`,
+        );
       } else if (parsedEnvValue !== sharedStartBlock) {
         throw new Error(
           `${key}=${envValue} conflicts with ${contractName} start block from shared deployment artifacts (${sharedStartBlock}) for chain ${activeChainId}. Remove the env override or refresh shared deployments.`,
@@ -207,35 +265,118 @@ function resolveStartBlock(key: string, contractName: string): number {
 }
 
 const addresses = {
-  contentRegistry: resolveAddress("PONDER_CONTENT_REGISTRY_ADDRESS", "ContentRegistry"),
-  roundVotingEngine: resolveAddress("PONDER_ROUND_VOTING_ENGINE_ADDRESS", "RoundVotingEngine"),
-  roundRewardDistributor: resolveAddress("PONDER_ROUND_REWARD_DISTRIBUTOR_ADDRESS", "RoundRewardDistributor"),
-  categoryRegistry: resolveAddress("PONDER_CATEGORY_REGISTRY_ADDRESS", "CategoryRegistry"),
-  profileRegistry: resolveAddress("PONDER_PROFILE_REGISTRY_ADDRESS", "ProfileRegistry"),
-  frontendRegistry: resolveAddress("PONDER_FRONTEND_REGISTRY_ADDRESS", "FrontendRegistry"),
+  contentRegistry: resolveAddress(
+    "PONDER_CONTENT_REGISTRY_ADDRESS",
+    "ContentRegistry",
+  ),
+  roundVotingEngine: resolveAddress(
+    "PONDER_ROUND_VOTING_ENGINE_ADDRESS",
+    "RoundVotingEngine",
+  ),
+  roundRewardDistributor: resolveAddress(
+    "PONDER_ROUND_REWARD_DISTRIBUTOR_ADDRESS",
+    "RoundRewardDistributor",
+  ),
+  categoryRegistry: resolveAddress(
+    "PONDER_CATEGORY_REGISTRY_ADDRESS",
+    "CategoryRegistry",
+  ),
+  profileRegistry: resolveAddress(
+    "PONDER_PROFILE_REGISTRY_ADDRESS",
+    "ProfileRegistry",
+  ),
+  frontendRegistry: resolveAddress(
+    "PONDER_FRONTEND_REGISTRY_ADDRESS",
+    "FrontendRegistry",
+  ),
   loopReputation: resolveAddress("PONDER_LREP_ADDRESS", "LoopReputation"),
-  participationPool: resolveAddress("PONDER_PARTICIPATION_POOL_ADDRESS", "ParticipationPool"),
-  launchDistributionPool: resolveAddress("PONDER_LAUNCH_DISTRIBUTION_POOL_ADDRESS", "LaunchDistributionPool"),
-  advisoryVoteRecorder: resolveAddress("PONDER_ADVISORY_VOTE_RECORDER_ADDRESS", "AdvisoryVoteRecorder"),
-  questionRewardPoolEscrow: resolveAddress("PONDER_QUESTION_REWARD_POOL_ESCROW_ADDRESS", "QuestionRewardPoolEscrow"),
-  feedbackBonusEscrow: resolveAddress("PONDER_FEEDBACK_BONUS_ESCROW_ADDRESS", "FeedbackBonusEscrow"),
-  raterRegistry: resolveAddress("PONDER_RATER_REGISTRY_ADDRESS", "RaterRegistry"),
+  participationPool: resolveAddress(
+    "PONDER_PARTICIPATION_POOL_ADDRESS",
+    "ParticipationPool",
+  ),
+  launchDistributionPool: resolveAddress(
+    "PONDER_LAUNCH_DISTRIBUTION_POOL_ADDRESS",
+    "LaunchDistributionPool",
+  ),
+  clusterPayoutOracle: resolveOptionalAddress(
+    "PONDER_CLUSTER_PAYOUT_ORACLE_ADDRESS",
+    "ClusterPayoutOracle",
+  ),
+  advisoryVoteRecorder: resolveAddress(
+    "PONDER_ADVISORY_VOTE_RECORDER_ADDRESS",
+    "AdvisoryVoteRecorder",
+  ),
+  questionRewardPoolEscrow: resolveAddress(
+    "PONDER_QUESTION_REWARD_POOL_ESCROW_ADDRESS",
+    "QuestionRewardPoolEscrow",
+  ),
+  feedbackBonusEscrow: resolveAddress(
+    "PONDER_FEEDBACK_BONUS_ESCROW_ADDRESS",
+    "FeedbackBonusEscrow",
+  ),
+  raterRegistry: resolveAddress(
+    "PONDER_RATER_REGISTRY_ADDRESS",
+    "RaterRegistry",
+  ),
 };
 
 const startBlocks = {
-  contentRegistry: resolveStartBlock("PONDER_CONTENT_REGISTRY_START_BLOCK", "ContentRegistry"),
-  roundVotingEngine: resolveStartBlock("PONDER_ROUND_VOTING_ENGINE_START_BLOCK", "RoundVotingEngine"),
-  roundRewardDistributor: resolveStartBlock("PONDER_ROUND_REWARD_DISTRIBUTOR_START_BLOCK", "RoundRewardDistributor"),
-  categoryRegistry: resolveStartBlock("PONDER_CATEGORY_REGISTRY_START_BLOCK", "CategoryRegistry"),
-  profileRegistry: resolveStartBlock("PONDER_PROFILE_REGISTRY_START_BLOCK", "ProfileRegistry"),
-  frontendRegistry: resolveStartBlock("PONDER_FRONTEND_REGISTRY_START_BLOCK", "FrontendRegistry"),
-  loopReputation: resolveStartBlock("PONDER_LREP_START_BLOCK", "LoopReputation"),
-  participationPool: resolveStartBlock("PONDER_PARTICIPATION_POOL_START_BLOCK", "ParticipationPool"),
-  launchDistributionPool: resolveStartBlock("PONDER_LAUNCH_DISTRIBUTION_POOL_START_BLOCK", "LaunchDistributionPool"),
-  advisoryVoteRecorder: resolveStartBlock("PONDER_ADVISORY_VOTE_RECORDER_START_BLOCK", "AdvisoryVoteRecorder"),
-  questionRewardPoolEscrow: resolveStartBlock("PONDER_QUESTION_REWARD_POOL_ESCROW_START_BLOCK", "QuestionRewardPoolEscrow"),
-  feedbackBonusEscrow: resolveStartBlock("PONDER_FEEDBACK_BONUS_ESCROW_START_BLOCK", "FeedbackBonusEscrow"),
-  raterRegistry: resolveStartBlock("PONDER_RATER_REGISTRY_START_BLOCK", "RaterRegistry"),
+  contentRegistry: resolveStartBlock(
+    "PONDER_CONTENT_REGISTRY_START_BLOCK",
+    "ContentRegistry",
+  ),
+  roundVotingEngine: resolveStartBlock(
+    "PONDER_ROUND_VOTING_ENGINE_START_BLOCK",
+    "RoundVotingEngine",
+  ),
+  roundRewardDistributor: resolveStartBlock(
+    "PONDER_ROUND_REWARD_DISTRIBUTOR_START_BLOCK",
+    "RoundRewardDistributor",
+  ),
+  categoryRegistry: resolveStartBlock(
+    "PONDER_CATEGORY_REGISTRY_START_BLOCK",
+    "CategoryRegistry",
+  ),
+  profileRegistry: resolveStartBlock(
+    "PONDER_PROFILE_REGISTRY_START_BLOCK",
+    "ProfileRegistry",
+  ),
+  frontendRegistry: resolveStartBlock(
+    "PONDER_FRONTEND_REGISTRY_START_BLOCK",
+    "FrontendRegistry",
+  ),
+  loopReputation: resolveStartBlock(
+    "PONDER_LREP_START_BLOCK",
+    "LoopReputation",
+  ),
+  participationPool: resolveStartBlock(
+    "PONDER_PARTICIPATION_POOL_START_BLOCK",
+    "ParticipationPool",
+  ),
+  launchDistributionPool: resolveStartBlock(
+    "PONDER_LAUNCH_DISTRIBUTION_POOL_START_BLOCK",
+    "LaunchDistributionPool",
+  ),
+  clusterPayoutOracle: resolveStartBlock(
+    "PONDER_CLUSTER_PAYOUT_ORACLE_START_BLOCK",
+    "ClusterPayoutOracle",
+  ),
+  advisoryVoteRecorder: resolveStartBlock(
+    "PONDER_ADVISORY_VOTE_RECORDER_START_BLOCK",
+    "AdvisoryVoteRecorder",
+  ),
+  questionRewardPoolEscrow: resolveStartBlock(
+    "PONDER_QUESTION_REWARD_POOL_ESCROW_START_BLOCK",
+    "QuestionRewardPoolEscrow",
+  ),
+  feedbackBonusEscrow: resolveStartBlock(
+    "PONDER_FEEDBACK_BONUS_ESCROW_START_BLOCK",
+    "FeedbackBonusEscrow",
+  ),
+  raterRegistry: resolveStartBlock(
+    "PONDER_RATER_REGISTRY_START_BLOCK",
+    "RaterRegistry",
+  ),
 };
 
 function contractOnActiveNetwork(address: `0x${string}`, startBlock: number) {
@@ -259,55 +400,101 @@ export default createConfig({
   contracts: {
     ContentRegistry: {
       abi: ContentRegistryAbi,
-      network: contractOnActiveNetwork(addresses.contentRegistry, startBlocks.contentRegistry),
+      network: contractOnActiveNetwork(
+        addresses.contentRegistry,
+        startBlocks.contentRegistry,
+      ),
     },
     RoundVotingEngine: {
       abi: RoundVotingEngineAbi,
-      network: contractOnActiveNetwork(addresses.roundVotingEngine, startBlocks.roundVotingEngine),
+      network: contractOnActiveNetwork(
+        addresses.roundVotingEngine,
+        startBlocks.roundVotingEngine,
+      ),
     },
     RoundRewardDistributor: {
       abi: RoundRewardDistributorAbi,
-      network: contractOnActiveNetwork(addresses.roundRewardDistributor, startBlocks.roundRewardDistributor),
+      network: contractOnActiveNetwork(
+        addresses.roundRewardDistributor,
+        startBlocks.roundRewardDistributor,
+      ),
     },
     CategoryRegistry: {
       abi: CategoryRegistryAbi,
-      network: contractOnActiveNetwork(addresses.categoryRegistry, startBlocks.categoryRegistry),
+      network: contractOnActiveNetwork(
+        addresses.categoryRegistry,
+        startBlocks.categoryRegistry,
+      ),
     },
     ProfileRegistry: {
       abi: ProfileRegistryAbi,
-      network: contractOnActiveNetwork(addresses.profileRegistry, startBlocks.profileRegistry),
+      network: contractOnActiveNetwork(
+        addresses.profileRegistry,
+        startBlocks.profileRegistry,
+      ),
     },
     FrontendRegistry: {
       abi: FrontendRegistryAbi,
-      network: contractOnActiveNetwork(addresses.frontendRegistry, startBlocks.frontendRegistry),
+      network: contractOnActiveNetwork(
+        addresses.frontendRegistry,
+        startBlocks.frontendRegistry,
+      ),
     },
     LoopReputation: {
       abi: LoopReputationAbi,
-      network: contractOnActiveNetwork(addresses.loopReputation, startBlocks.loopReputation),
+      network: contractOnActiveNetwork(
+        addresses.loopReputation,
+        startBlocks.loopReputation,
+      ),
     },
     ParticipationPool: {
       abi: ParticipationPoolAbi,
-      network: contractOnActiveNetwork(addresses.participationPool, startBlocks.participationPool),
+      network: contractOnActiveNetwork(
+        addresses.participationPool,
+        startBlocks.participationPool,
+      ),
     },
     LaunchDistributionPool: {
       abi: LaunchDistributionPoolAbi,
-      network: contractOnActiveNetwork(addresses.launchDistributionPool, startBlocks.launchDistributionPool),
+      network: contractOnActiveNetwork(
+        addresses.launchDistributionPool,
+        startBlocks.launchDistributionPool,
+      ),
+    },
+    ClusterPayoutOracle: {
+      abi: ClusterPayoutOracleAbi,
+      network: contractOnActiveNetwork(
+        addresses.clusterPayoutOracle,
+        startBlocks.clusterPayoutOracle,
+      ),
     },
     AdvisoryVoteRecorder: {
       abi: AdvisoryVoteRecorderAbi,
-      network: contractOnActiveNetwork(addresses.advisoryVoteRecorder, startBlocks.advisoryVoteRecorder),
+      network: contractOnActiveNetwork(
+        addresses.advisoryVoteRecorder,
+        startBlocks.advisoryVoteRecorder,
+      ),
     },
     QuestionRewardPoolEscrow: {
       abi: QuestionRewardPoolEscrowAbi,
-      network: contractOnActiveNetwork(addresses.questionRewardPoolEscrow, startBlocks.questionRewardPoolEscrow),
+      network: contractOnActiveNetwork(
+        addresses.questionRewardPoolEscrow,
+        startBlocks.questionRewardPoolEscrow,
+      ),
     },
     FeedbackBonusEscrow: {
       abi: FeedbackBonusEscrowAbi,
-      network: contractOnActiveNetwork(addresses.feedbackBonusEscrow, startBlocks.feedbackBonusEscrow),
+      network: contractOnActiveNetwork(
+        addresses.feedbackBonusEscrow,
+        startBlocks.feedbackBonusEscrow,
+      ),
     },
     RaterRegistry: {
       abi: RaterRegistryAbi,
-      network: contractOnActiveNetwork(addresses.raterRegistry, startBlocks.raterRegistry),
+      network: contractOnActiveNetwork(
+        addresses.raterRegistry,
+        startBlocks.raterRegistry,
+      ),
     },
   },
 });

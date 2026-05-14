@@ -21,16 +21,18 @@ async function loadKeeperIndex(options: KeeperIndexOptions = {}) {
   };
 
   const getBalance = vi.fn().mockResolvedValue(options.balance ?? 500n);
-  const readContract = vi.fn(async ({ functionName }: { functionName: string }) => {
-    if (functionName === "consensusReserve") {
-      if (options.failRead === "consensusReserve") {
-        throw new Error("consensus reserve read failed");
+  const readContract = vi.fn(
+    async ({ functionName }: { functionName: string }) => {
+      if (functionName === "consensusReserve") {
+        if (options.failRead === "consensusReserve") {
+          throw new Error("consensus reserve read failed");
+        }
+        return options.consensusReserve ?? 900n;
       }
-      return options.consensusReserve ?? 900n;
-    }
 
-    throw new Error(`unexpected readContract(${functionName})`);
-  });
+      throw new Error(`unexpected readContract(${functionName})`);
+    },
+  );
 
   const resolveRounds = vi.fn().mockResolvedValue({
     roundsSettled: 0,
@@ -54,7 +56,9 @@ async function loadKeeperIndex(options: KeeperIndexOptions = {}) {
     withdrawnAmount: 0n,
   });
   const validateKeeperConnectivity = vi.fn().mockResolvedValue(undefined);
-  const processOn = vi.spyOn(process, "on").mockImplementation(((..._args: any[]) => process) as typeof process.on);
+  const processOn = vi
+    .spyOn(process, "on")
+    .mockImplementation(((..._args: any[]) => process) as typeof process.on);
   const setIntervalMock = vi.fn(() => 1 as unknown as NodeJS.Timeout);
   const clearIntervalMock = vi.fn();
 
@@ -68,6 +72,7 @@ async function loadKeeperIndex(options: KeeperIndexOptions = {}) {
       contracts: {
         votingEngine: ENGINE,
         contentRegistry: REGISTRY,
+        clusterPayoutOracle: "0x0000000000000000000000000000000000000000",
       },
       intervalMs: 30_000,
       metricsEnabled: false,
@@ -82,10 +87,16 @@ async function loadKeeperIndex(options: KeeperIndexOptions = {}) {
         withdrawEnabled: true,
         contracts: options.frontendFeeEnabled
           ? {
-              roundRewardDistributor: "0x4444444444444444444444444444444444444444",
+              roundRewardDistributor:
+                "0x4444444444444444444444444444444444444444",
               frontendRegistry: "0x5555555555555555555555555555555555555555",
             }
           : null,
+      },
+      correlationSnapshots: {
+        enabled: false,
+        artifactPath: undefined,
+        proposalBondWei: "10000000000000000",
       },
     },
   }));
@@ -153,15 +164,30 @@ describe("keeper index", () => {
       consensusReserve: 4_000n,
     });
 
-    expect(keeper.validateKeeperConnectivity).toHaveBeenCalledWith(expect.anything());
-    expect(keeper.validateKeeperContracts).toHaveBeenCalledWith(expect.anything(), ENGINE, REGISTRY);
+    expect(keeper.validateKeeperConnectivity).toHaveBeenCalledWith(
+      expect.anything(),
+    );
+    expect(keeper.validateKeeperContracts).toHaveBeenCalledWith(
+      expect.anything(),
+      ENGINE,
+      REGISTRY,
+    );
     expect(keeper.getBalance).toHaveBeenCalledWith({ address: ACCOUNT });
     expect(keeper.readContract).toHaveBeenNthCalledWith(
       1,
-      expect.objectContaining({ address: ENGINE, functionName: "consensusReserve" }),
+      expect.objectContaining({
+        address: ENGINE,
+        functionName: "consensusReserve",
+      }),
     );
-    expect(keeper.setGauge).toHaveBeenCalledWith("keeper_wallet_balance_wei", 1500);
-    expect(keeper.setGauge).toHaveBeenCalledWith("keeper_consensus_reserve_wei", 4000);
+    expect(keeper.setGauge).toHaveBeenCalledWith(
+      "keeper_wallet_balance_wei",
+      1500,
+    );
+    expect(keeper.setGauge).toHaveBeenCalledWith(
+      "keeper_consensus_reserve_wei",
+      4000,
+    );
     expect(keeper.resolveRounds).toHaveBeenCalledOnce();
     expect(keeper.recordRun).toHaveBeenCalledOnce();
   });
@@ -172,10 +198,16 @@ describe("keeper index", () => {
       failRead: "consensusReserve",
     });
 
-    expect(keeper.logger.warn).toHaveBeenCalledWith("Failed to read consensus reserve", {
-      error: "consensus reserve read failed",
-    });
-    expect(keeper.setGauge).not.toHaveBeenCalledWith("keeper_consensus_reserve_wei", expect.any(Number));
+    expect(keeper.logger.warn).toHaveBeenCalledWith(
+      "Failed to read consensus reserve",
+      {
+        error: "consensus reserve read failed",
+      },
+    );
+    expect(keeper.setGauge).not.toHaveBeenCalledWith(
+      "keeper_consensus_reserve_wei",
+      expect.any(Number),
+    );
     expect(keeper.resolveRounds).toHaveBeenCalledOnce();
     expect(keeper.recordError).not.toHaveBeenCalled();
   });
@@ -186,12 +218,21 @@ describe("keeper index", () => {
       consensusReserve: 4_000n,
     });
 
-    expect(keeper.logger.warn).toHaveBeenCalledWith("Keeper wallet balance low", {
-      balance: "50",
-      minRequired: "100",
-    });
-    expect(keeper.setGauge).toHaveBeenCalledWith("keeper_wallet_balance_wei", 50);
-    expect(keeper.setGauge).toHaveBeenCalledWith("keeper_consensus_reserve_wei", 4000);
+    expect(keeper.logger.warn).toHaveBeenCalledWith(
+      "Keeper wallet balance low",
+      {
+        balance: "50",
+        minRequired: "100",
+      },
+    );
+    expect(keeper.setGauge).toHaveBeenCalledWith(
+      "keeper_wallet_balance_wei",
+      50,
+    );
+    expect(keeper.setGauge).toHaveBeenCalledWith(
+      "keeper_consensus_reserve_wei",
+      4000,
+    );
     expect(keeper.resolveRounds).toHaveBeenCalledOnce();
   });
 

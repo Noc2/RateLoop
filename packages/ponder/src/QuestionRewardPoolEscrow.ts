@@ -186,6 +186,8 @@ ponder.on(
         rawEligibleVoters: Number(eligibleVoters),
         effectiveParticipantUnits: Number(eligibleVoters),
         totalClaimWeight: eligibleVoters,
+        correlationEpochId: null,
+        correlationWeightRoot: null,
         claimedAmount: 0n,
         voterClaimedAmount: 0n,
         frontendClaimedAmount: 0n,
@@ -229,6 +231,21 @@ ponder.on(
         rawEligibleVoters: Number(rawEligibleVoters),
         effectiveParticipantUnits: Number(effectiveParticipantUnits),
         totalClaimWeight,
+      });
+  },
+);
+
+ponder.on(
+  "QuestionRewardPoolEscrow:RewardPoolRoundCorrelationSnapshotApplied",
+  async ({ event, context }) => {
+    const { rewardPoolId, roundId, correlationEpochId, weightRoot } =
+      event.args;
+
+    await context.db
+      .update(questionRewardPoolRound, { id: `${rewardPoolId}-${roundId}` })
+      .set({
+        correlationEpochId,
+        correlationWeightRoot: weightRoot,
       });
   },
 );

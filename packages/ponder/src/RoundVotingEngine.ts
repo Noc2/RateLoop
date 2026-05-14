@@ -29,7 +29,9 @@ const RBTS_SCORE_SCALE_BPS = 10_000;
 const RBTS_SCORE_SCALE = 10_000n;
 const ZERO_SCORE_SEED = `0x${"00".repeat(32)}` as `0x${string}`;
 
-function normalizeAddress(address: string | null | undefined): `0x${string}` | null {
+function normalizeAddress(
+  address: string | null | undefined,
+): `0x${string}` | null {
   if (!address || !isAddress(address)) return null;
   return address.toLowerCase() as `0x${string}`;
 }
@@ -47,7 +49,9 @@ async function resolveVoteIdentityAtCommit(params: {
   commitHash: `0x${string}`;
 }) {
   const rawVoter = normalizeAddress(params.voter) ?? params.voter;
-  const engineAddress = firstContractAddress(params.context.contracts?.RoundVotingEngine?.address);
+  const engineAddress = firstContractAddress(
+    params.context.contracts?.RoundVotingEngine?.address,
+  );
   if (!params.context.client?.readContract || !engineAddress) {
     return {
       identityKey: null as `0x${string}` | null,
@@ -72,7 +76,8 @@ async function resolveVoteIdentityAtCommit(params: {
       }),
     ]);
     const holderAddress = normalizeAddress(String(holder));
-    const identityHolder = holderAddress && holderAddress !== zeroAddress ? holderAddress : rawVoter;
+    const identityHolder =
+      holderAddress && holderAddress !== zeroAddress ? holderAddress : rawVoter;
     return {
       identityKey: String(identityKey) as `0x${string}`,
       identityHolder,
@@ -87,7 +92,10 @@ async function resolveVoteIdentityAtCommit(params: {
   }
 }
 
-function voteIdentity(voteRow: { voter: `0x${string}`; identityVoter?: `0x${string}` | null }) {
+function voteIdentity(voteRow: {
+  voter: `0x${string}`;
+  identityVoter?: `0x${string}` | null;
+}) {
   return voteRow.identityVoter ?? voteRow.voter;
 }
 
@@ -402,14 +410,16 @@ ponder.on("RoundVotingEngine:VoteCommitted", async ({ event, context }) => {
   };
   const roundKey = `${contentId}-${roundId}`;
   const rawVoter = normalizeAddress(voter) ?? voter;
-  const { identityKey, identityHolder, identityVoter } = await resolveVoteIdentityAtCommit({
-    context,
-    contentId,
-    roundId,
-    voter: rawVoter,
-    commitHash,
-  });
+  const { identityKey, identityHolder, identityVoter } =
+    await resolveVoteIdentityAtCommit({
+      context,
+      contentId,
+      roundId,
+      voter: rawVoter,
+      commitHash,
+    });
   const voteKey = `${contentId}-${roundId}-${rawVoter}`;
+  const commitKey = rbtsCommitKey(rawVoter, commitHash);
   const referenceRatingBps = Number(roundReferenceRatingBps);
 
   // Upsert round record — VoteCommitted is the first event for a new round
@@ -462,6 +472,7 @@ ponder.on("RoundVotingEngine:VoteCommitted", async ({ event, context }) => {
       identityKey,
       identityHolder,
       identityVoter,
+      commitKey,
       commitHash,
       targetRound,
       drandChainHash,
@@ -504,7 +515,9 @@ ponder.on("RoundVotingEngine:VoteCommitted", async ({ event, context }) => {
   }
 
   // Update voter profile aggregate
-  const existingProfile = await context.db.find(profile, { address: identityVoter });
+  const existingProfile = await context.db.find(profile, {
+    address: identityVoter,
+  });
   if (existingProfile) {
     await context.db
       .update(profile, { address: identityVoter })
@@ -550,7 +563,9 @@ ponder.on("RoundVotingEngine:VoteCommitted", async ({ event, context }) => {
   const yesterdayStr = getPreviousUtcDateKey(dateStr);
 
   // Upsert voter streak
-  const existingStreak = await context.db.find(voterStreak, { voter: identityVoter });
+  const existingStreak = await context.db.find(voterStreak, {
+    voter: identityVoter,
+  });
   if (!existingStreak) {
     await context.db.insert(voterStreak).values({
       voter: identityVoter,

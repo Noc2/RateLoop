@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     "./contentModeration": "./src/contentModeration.ts",
+    "./correlationScoring": "./src/correlationScoring.ts",
     "./keystore": "./src/keystore.ts",
     "./profileSelfReport": "./src/profileSelfReport.ts"
   },

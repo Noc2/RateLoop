@@ -19,7 +19,11 @@ function readEnv(name: string): string | undefined {
   return value ? value : undefined;
 }
 
-function parseBooleanEnv(value: string | undefined, fallback: boolean, label: string): boolean {
+function parseBooleanEnv(
+  value: string | undefined,
+  fallback: boolean,
+  label: string,
+): boolean {
   if (value === undefined) {
     return fallback;
   }
@@ -65,12 +69,20 @@ function requireIntEnv(name: string, errors: string[]): number {
   return parseIntegerEnv(name, value, "positive", 0, errors);
 }
 
-function readPositiveIntEnv(name: string, fallback: string, errors: string[]): number {
+function readPositiveIntEnv(
+  name: string,
+  fallback: string,
+  errors: string[],
+): number {
   const value = readEnv(name) || fallback;
   return parseIntegerEnv(name, value, "positive", Number(fallback), errors);
 }
 
-function readNonNegativeIntEnv(name: string, fallback: string, errors: string[]): number {
+function readNonNegativeIntEnv(
+  name: string,
+  fallback: string,
+  errors: string[],
+): number {
   const value = readEnv(name) || fallback;
   return parseIntegerEnv(name, value, "non-negative", Number(fallback), errors);
 }
@@ -94,11 +106,19 @@ function parseIntegerEnv(
   return parsed;
 }
 
-function readPositiveBigIntEnv(name: string, fallback: string, errors: string[]): bigint {
+function readPositiveBigIntEnv(
+  name: string,
+  fallback: string,
+  errors: string[],
+): bigint {
   return BigInt(readBigIntStringEnv(name, fallback, "positive", errors));
 }
 
-function readNonNegativeBigIntStringEnv(name: string, fallback: string, errors: string[]): string {
+function readNonNegativeBigIntStringEnv(
+  name: string,
+  fallback: string,
+  errors: string[],
+): string {
   return readBigIntStringEnv(name, fallback, "non-negative", errors);
 }
 
@@ -111,7 +131,8 @@ function readBigIntStringEnv(
   const value = readEnv(name) || fallback;
   const isValidInteger = /^\d+$/.test(value);
   const parsed = isValidInteger ? BigInt(value) : null;
-  const isValidRange = parsed !== null && (kind === "positive" ? parsed > 0n : parsed >= 0n);
+  const isValidRange =
+    parsed !== null && (kind === "positive" ? parsed > 0n : parsed >= 0n);
 
   if (!isValidInteger || !isValidRange) {
     errors.push(`${name} must be a ${kind} integer`);
@@ -136,7 +157,10 @@ function requireAddressEnv(name: string, errors: string[]): `0x${string}` {
   return value as `0x${string}`;
 }
 
-function readOptionalAddressEnv(name: string, errors: string[]): `0x${string}` | undefined {
+function readOptionalAddressEnv(
+  name: string,
+  errors: string[],
+): `0x${string}` | undefined {
   const value = readEnv(name);
   if (!value) {
     return undefined;
@@ -148,6 +172,36 @@ function readOptionalAddressEnv(name: string, errors: string[]): `0x${string}` |
   }
 
   return value as `0x${string}`;
+}
+
+function resolveOptionalContractAddress(params: {
+  chainId: number;
+  envName: string;
+  contractName: string;
+  errors: string[];
+  warnings: string[];
+}): `0x${string}` {
+  const { chainId, envName, contractName, errors, warnings } = params;
+  const sharedAddress = getSharedArtifactAddress(chainId, contractName);
+  const envValue = readEnv(envName);
+
+  if (envValue) {
+    if (!isAddress(envValue)) {
+      errors.push(`${envName} must be a valid address`);
+      return ZERO_ADDRESS;
+    }
+    if (
+      sharedAddress &&
+      envValue.toLowerCase() !== sharedAddress.toLowerCase()
+    ) {
+      warnings.push(
+        `Using ${envName}=${envValue}; shared ${contractName} artifact points at ${sharedAddress}.`,
+      );
+    }
+    return envValue as `0x${string}`;
+  }
+
+  return (sharedAddress as `0x${string}` | undefined) ?? ZERO_ADDRESS;
 }
 
 function resolveContractAddress(params: {
@@ -168,7 +222,10 @@ function resolveContractAddress(params: {
         return ZERO_ADDRESS;
       }
 
-      if (sharedAddress && envValue.toLowerCase() !== sharedAddress.toLowerCase()) {
+      if (
+        sharedAddress &&
+        envValue.toLowerCase() !== sharedAddress.toLowerCase()
+      ) {
         warnings.push(
           `Using ${envName}=${envValue} for local chain ${chainId}; shared ${contractName} artifact points at ${sharedAddress}.`,
         );
@@ -187,7 +244,9 @@ function resolveContractAddress(params: {
   if (sharedAddress) {
     if (envValue) {
       if (!isAddress(envValue)) {
-        errors.push(`${envName} must be a valid address when provided for chain ${chainId}`);
+        errors.push(
+          `${envName} must be a valid address when provided for chain ${chainId}`,
+        );
         return ZERO_ADDRESS;
       }
 
@@ -202,7 +261,9 @@ function resolveContractAddress(params: {
   }
 
   if (envValue && !isAddress(envValue)) {
-    errors.push(`${envName} must be a valid address when provided for chain ${chainId}`);
+    errors.push(
+      `${envName} must be a valid address when provided for chain ${chainId}`,
+    );
   }
   errors.push(
     `Missing shared deployment artifact for ${contractName} on chain ${chainId}. Refresh @rateloop/contracts deployedContracts.ts before starting the keeper for live networks.`,
@@ -216,14 +277,28 @@ function loadConfig() {
   const chainId = requireIntEnv("CHAIN_ID", errors);
   const keystoreAccount = readEnv("KEYSTORE_ACCOUNT");
   const privateKey = readEnv("KEEPER_PRIVATE_KEY") as `0x${string}` | undefined;
-  const frontendFeeEnabled = parseBooleanEnv(readEnv("KEEPER_FRONTEND_FEE_ENABLED"), false, "KEEPER_FRONTEND_FEE_ENABLED");
+  const frontendFeeEnabled = parseBooleanEnv(
+    readEnv("KEEPER_FRONTEND_FEE_ENABLED"),
+    false,
+    "KEEPER_FRONTEND_FEE_ENABLED",
+  );
+  const correlationSnapshotsEnabled = parseBooleanEnv(
+    readEnv("KEEPER_CORRELATION_SNAPSHOTS_ENABLED"),
+    false,
+    "KEEPER_CORRELATION_SNAPSHOTS_ENABLED",
+  );
+  const correlationSnapshotArtifactPath = readEnv(
+    "KEEPER_CORRELATION_SNAPSHOT_ARTIFACT_PATH",
+  );
 
   if (!keystoreAccount && !privateKey) {
     errors.push("KEYSTORE_ACCOUNT or KEEPER_PRIVATE_KEY is required");
   }
 
   if (keystoreAccount && !privateKey && !readEnv("KEYSTORE_PASSWORD")) {
-    errors.push("KEYSTORE_PASSWORD is required when KEYSTORE_ACCOUNT is configured without KEEPER_PRIVATE_KEY");
+    errors.push(
+      "KEYSTORE_PASSWORD is required when KEYSTORE_ACCOUNT is configured without KEEPER_PRIVATE_KEY",
+    );
   }
 
   const frontendFeeContracts =
@@ -250,7 +325,8 @@ function loadConfig() {
     // Network
     rpcUrl: requireUrlEnv("RPC_URL", errors),
     chainId,
-    chainName: readEnv("CHAIN_NAME") || CHAIN_NAMES[chainId] || `Chain ${chainId}`,
+    chainName:
+      readEnv("CHAIN_NAME") || CHAIN_NAMES[chainId] || `Chain ${chainId}`,
 
     // Contracts
     contracts: {
@@ -275,6 +351,13 @@ function loadConfig() {
         errors,
         warnings,
       }),
+      clusterPayoutOracle: resolveOptionalContractAddress({
+        chainId,
+        envName: "CLUSTER_PAYOUT_ORACLE_ADDRESS",
+        contractName: "ClusterPayoutOracle",
+        errors,
+        warnings,
+      }),
     },
 
     // Wallet
@@ -284,18 +367,38 @@ function loadConfig() {
 
     // Keeper behavior
     intervalMs: readPositiveIntEnv("KEEPER_INTERVAL_MS", "30000", errors),
-    startupJitterMs: readNonNegativeIntEnv("KEEPER_STARTUP_JITTER_MS", "0", errors),
-    cleanupBatchSize: readPositiveIntEnv("KEEPER_CLEANUP_BATCH_SIZE", "25", errors),
+    startupJitterMs: readNonNegativeIntEnv(
+      "KEEPER_STARTUP_JITTER_MS",
+      "0",
+      errors,
+    ),
+    cleanupBatchSize: readPositiveIntEnv(
+      "KEEPER_CLEANUP_BATCH_SIZE",
+      "25",
+      errors,
+    ),
 
     // Tuning
-    dormancyPeriod: readPositiveBigIntEnv("DORMANCY_PERIOD", String(30 * 24 * 60 * 60), errors),
-    minGasBalanceWei: readNonNegativeBigIntStringEnv("MIN_GAS_BALANCE_WEI", "10000000000000000", errors), // 0.01 ETH
+    dormancyPeriod: readPositiveBigIntEnv(
+      "DORMANCY_PERIOD",
+      String(30 * 24 * 60 * 60),
+      errors,
+    ),
+    minGasBalanceWei: readNonNegativeBigIntStringEnv(
+      "MIN_GAS_BALANCE_WEI",
+      "10000000000000000",
+      errors,
+    ), // 0.01 ETH
     maxGasPerTx: readPositiveIntEnv("MAX_GAS_PER_TX", "2000000", errors),
 
     // Monitoring
     metricsPort: readPositiveIntEnv("METRICS_PORT", "9090", errors),
     metricsBindAddress: readEnv("METRICS_BIND_ADDRESS") || "127.0.0.1",
-    metricsEnabled: parseBooleanEnv(readEnv("METRICS_ENABLED"), true, "METRICS_ENABLED"),
+    metricsEnabled: parseBooleanEnv(
+      readEnv("METRICS_ENABLED"),
+      true,
+      "METRICS_ENABLED",
+    ),
 
     // Logging
     logFormat: (process.env.LOG_FORMAT || "json") as "json" | "text",
@@ -303,12 +406,47 @@ function loadConfig() {
     // Frontend-fee ops
     frontendFees: {
       enabled: frontendFeeEnabled,
-      frontendAddress: readOptionalAddressEnv("KEEPER_FRONTEND_ADDRESS", errors),
-      lookbackRounds: readPositiveIntEnv("KEEPER_FRONTEND_FEE_LOOKBACK_ROUNDS", "8", errors),
-      withdrawEnabled: parseBooleanEnv(readEnv("KEEPER_FRONTEND_FEE_WITHDRAW"), true, "KEEPER_FRONTEND_FEE_WITHDRAW"),
+      frontendAddress: readOptionalAddressEnv(
+        "KEEPER_FRONTEND_ADDRESS",
+        errors,
+      ),
+      lookbackRounds: readPositiveIntEnv(
+        "KEEPER_FRONTEND_FEE_LOOKBACK_ROUNDS",
+        "8",
+        errors,
+      ),
+      withdrawEnabled: parseBooleanEnv(
+        readEnv("KEEPER_FRONTEND_FEE_WITHDRAW"),
+        true,
+        "KEEPER_FRONTEND_FEE_WITHDRAW",
+      ),
       contracts: frontendFeeContracts,
     },
+
+    // Correlation snapshot publication
+    correlationSnapshots: {
+      enabled: correlationSnapshotsEnabled,
+      artifactPath: correlationSnapshotArtifactPath,
+      proposalBondWei: readNonNegativeBigIntStringEnv(
+        "KEEPER_CORRELATION_PROPOSAL_BOND_WEI",
+        "10000000000000000",
+        errors,
+      ),
+    },
   };
+
+  if (correlationSnapshotsEnabled) {
+    if (!correlationSnapshotArtifactPath) {
+      errors.push(
+        "KEEPER_CORRELATION_SNAPSHOT_ARTIFACT_PATH is required when KEEPER_CORRELATION_SNAPSHOTS_ENABLED=true",
+      );
+    }
+    if (loadedConfig.contracts.clusterPayoutOracle === ZERO_ADDRESS) {
+      errors.push(
+        "CLUSTER_PAYOUT_ORACLE_ADDRESS or a shared ClusterPayoutOracle deployment artifact is required when KEEPER_CORRELATION_SNAPSHOTS_ENABLED=true",
+      );
+    }
+  }
 
   if (errors.length > 0) {
     throw new Error(`Invalid keeper configuration:\n- ${errors.join("\n- ")}`);

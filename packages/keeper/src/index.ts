@@ -10,9 +10,16 @@
  */
 import { config } from "./config.js";
 import { createLogger } from "./logger.js";
-import { publicClient, getWalletClient, getAccount, chain, validateKeeperConnectivity } from "./client.js";
+import {
+  publicClient,
+  getWalletClient,
+  getAccount,
+  chain,
+  validateKeeperConnectivity,
+} from "./client.js";
 import { resolveRounds, validateKeeperContracts } from "./keeper.js";
 import { claimConfiguredFrontendFees } from "./frontend-fees.js";
+import { publishConfiguredCorrelationSnapshots } from "./correlation-snapshots.js";
 import { RoundVotingEngineAbi } from "@rateloop/contracts/abis";
 import {
   startMetricsServer,
@@ -37,10 +44,15 @@ async function main() {
     metricsEnabled: config.metricsEnabled,
     frontendFeesEnabled: config.frontendFees.enabled,
     frontendFeeAddress: config.frontendFees.frontendAddress ?? account.address,
+    correlationSnapshotsEnabled: config.correlationSnapshots.enabled,
   });
 
   await validateKeeperConnectivity(publicClient);
-  await validateKeeperContracts(publicClient, config.contracts.votingEngine, config.contracts.contentRegistry);
+  await validateKeeperContracts(
+    publicClient,
+    config.contracts.votingEngine,
+    config.contracts.contentRegistry,
+  );
   logger.info("Keeper contract connectivity verified");
 
   const walletClient = getWalletClient();
@@ -49,7 +61,10 @@ async function main() {
   let metricsServer: ReturnType<typeof startMetricsServer> | undefined;
   if (config.metricsEnabled) {
     setHealthThreshold(config.intervalMs);
-    metricsServer = startMetricsServer(config.metricsPort, config.metricsBindAddress);
+    metricsServer = startMetricsServer(
+      config.metricsPort,
+      config.metricsBindAddress,
+    );
     logger.info("Metrics server started", {
       port: config.metricsPort,
       bindAddress: config.metricsBindAddress,
@@ -61,7 +76,7 @@ async function main() {
   if (config.startupJitterMs > 0) {
     const jitter = Math.floor(Math.random() * config.startupJitterMs);
     logger.info("Startup jitter", { delayMs: jitter });
-    await new Promise(r => setTimeout(r, jitter));
+    await new Promise((r) => setTimeout(r, jitter));
   }
 
   // --- Run loop ---
@@ -90,14 +105,21 @@ async function main() {
         });
       }
     } else {
-      logger.warn("Failed to check wallet balance", { error: balanceResult.reason?.message || String(balanceResult.reason) });
+      logger.warn("Failed to check wallet balance", {
+        error: balanceResult.reason?.message || String(balanceResult.reason),
+      });
     }
 
     if (consensusReserveResult.status === "fulfilled") {
-      setGauge("keeper_consensus_reserve_wei", Number(consensusReserveResult.value));
+      setGauge(
+        "keeper_consensus_reserve_wei",
+        Number(consensusReserveResult.value),
+      );
     } else {
       logger.warn("Failed to read consensus reserve", {
-        error: consensusReserveResult.reason?.message || String(consensusReserveResult.reason),
+        error:
+          consensusReserveResult.reason?.message ||
+          String(consensusReserveResult.reason),
       });
     }
   }
@@ -111,9 +133,30 @@ async function main() {
     try {
       await updateOperationalGauges();
 
-      const result = await resolveRounds(publicClient, walletClient, chain, account, logger);
+      const result = await resolveRounds(
+        publicClient,
+        walletClient,
+        chain,
+        account,
+        logger,
+      );
       const frontendFeeResult = config.frontendFees.enabled
-        ? await claimConfiguredFrontendFees(publicClient, walletClient, chain, account, logger)
+        ? await claimConfiguredFrontendFees(
+            publicClient,
+            walletClient,
+            chain,
+            account,
+            logger,
+          )
+        : null;
+      const correlationSnapshotResult = config.correlationSnapshots.enabled
+        ? await publishConfiguredCorrelationSnapshots(
+            publicClient,
+            walletClient,
+            chain,
+            account,
+            logger,
+          )
         : null;
       const duration = Date.now() - start;
       recordRun(result, duration);
@@ -129,12 +172,27 @@ async function main() {
       if (total > 0) {
         logger.info("Run complete", { ...result, durationMs: duration });
       }
-      if (frontendFeeResult && (frontendFeeResult.roundsClaimed > 0 || frontendFeeResult.withdrawals > 0)) {
+      if (
+        frontendFeeResult &&
+        (frontendFeeResult.roundsClaimed > 0 ||
+          frontendFeeResult.withdrawals > 0)
+      ) {
         logger.info("Frontend fee sweep complete", {
           frontendAddress: frontendFeeResult.frontendAddress,
           roundsClaimed: frontendFeeResult.roundsClaimed,
           withdrawals: frontendFeeResult.withdrawals,
           withdrawnAmount: frontendFeeResult.withdrawnAmount.toString(),
+        });
+      }
+      if (
+        correlationSnapshotResult &&
+        (correlationSnapshotResult.epochsProposed > 0 ||
+          correlationSnapshotResult.epochsFinalized > 0 ||
+          correlationSnapshotResult.roundSnapshotsProposed > 0 ||
+          correlationSnapshotResult.roundSnapshotsFinalized > 0)
+      ) {
+        logger.info("Correlation snapshot publication complete", {
+          ...correlationSnapshotResult,
         });
       }
     } catch (err: any) {
@@ -168,7 +226,7 @@ async function main() {
       logger.info("Waiting for in-flight tick to complete...");
       const deadline = Date.now() + SHUTDOWN_TIMEOUT_MS;
       while (isRunning && Date.now() < deadline) {
-        await new Promise(r => setTimeout(r, 500));
+        await new Promise((r) => setTimeout(r, 500));
       }
       if (isRunning) {
         logger.warn("Shutdown timeout — forcing exit with tick still running");
@@ -183,7 +241,7 @@ async function main() {
   process.on("SIGTERM", () => shutdown("SIGTERM"));
 }
 
-main().catch(err => {
+main().catch((err) => {
   logger.error("Fatal error", { error: err.message });
   process.exit(1);
 });

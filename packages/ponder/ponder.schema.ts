@@ -162,6 +162,7 @@ export const vote = onchainTable(
     identityKey: t.hex(), // resolved RaterRegistry identity key at commit time, when available
     identityHolder: t.hex(), // resolved RaterRegistry holder at commit time, or voter when unavailable
     identityVoter: t.hex(), // compatibility alias for identityHolder
+    commitKey: t.hex().notNull(),
     commitHash: t.hex().notNull(),
     targetRound: t.bigint().notNull(),
     drandChainHash: t.hex().notNull(),
@@ -194,6 +195,7 @@ export const vote = onchainTable(
       table.committedAt,
     ),
     commitHashIdx: index().on(table.commitHash),
+    commitKeyIdx: index().on(table.commitKey),
     revealedIdx: index().on(table.revealed),
   }),
 );
@@ -332,6 +334,8 @@ export const questionRewardPoolRound = onchainTable(
     rawEligibleVoters: t.integer().notNull(),
     effectiveParticipantUnits: t.integer().notNull(),
     totalClaimWeight: t.bigint().notNull(),
+    correlationEpochId: t.bigint(),
+    correlationWeightRoot: t.hex(),
     claimedAmount: t.bigint().notNull(),
     voterClaimedAmount: t.bigint().notNull(),
     frontendClaimedAmount: t.bigint().notNull(),
@@ -342,6 +346,62 @@ export const questionRewardPoolRound = onchainTable(
     rewardPoolIdx: index().on(table.rewardPoolId),
     contentIdx: index().on(table.contentId),
     roundIdx: index().on(table.contentId, table.roundId),
+  }),
+);
+
+export const correlationEpochSnapshot = onchainTable(
+  "correlation_epoch_snapshot",
+  (t) => ({
+    id: t.bigint().primaryKey(),
+    fromRoundId: t.bigint().notNull(),
+    toRoundId: t.bigint().notNull(),
+    proposer: t.hex().notNull(),
+    challenger: t.hex(),
+    clusterRoot: t.hex().notNull(),
+    parameterHash: t.hex().notNull(),
+    artifactHash: t.hex().notNull(),
+    artifactUri: t.text().notNull(),
+    status: t.integer().notNull(),
+    proposedAt: t.bigint().notNull(),
+    finalizedAt: t.bigint(),
+    updatedAt: t.bigint().notNull(),
+  }),
+  (table) => ({
+    statusIdx: index().on(table.status),
+    proposedAtIdx: index().on(table.proposedAt),
+    finalizedAtIdx: index().on(table.finalizedAt),
+  }),
+);
+
+export const roundPayoutSnapshot = onchainTable(
+  "round_payout_snapshot",
+  (t) => ({
+    id: t.hex().primaryKey(),
+    domain: t.integer().notNull(),
+    rewardPoolId: t.bigint().notNull(),
+    contentId: t.bigint().notNull(),
+    roundId: t.bigint().notNull(),
+    correlationEpochId: t.bigint().notNull(),
+    proposer: t.hex().notNull(),
+    challenger: t.hex(),
+    rawEligibleVoters: t.integer().notNull(),
+    effectiveParticipantUnits: t.integer().notNull(),
+    totalClaimWeight: t.bigint().notNull(),
+    weightRoot: t.hex().notNull(),
+    reasonRoot: t.hex().notNull(),
+    artifactHash: t.hex().notNull(),
+    artifactUri: t.text().notNull(),
+    status: t.integer().notNull(),
+    proposedAt: t.bigint().notNull(),
+    finalizedAt: t.bigint(),
+    updatedAt: t.bigint().notNull(),
+  }),
+  (table) => ({
+    domainIdx: index().on(table.domain),
+    contentRoundIdx: index().on(table.contentId, table.roundId),
+    rewardPoolIdx: index().on(table.rewardPoolId),
+    epochIdx: index().on(table.correlationEpochId),
+    statusIdx: index().on(table.status),
   }),
 );
 
@@ -706,6 +766,7 @@ export const launchRaterRewardProgress = onchainTable(
   (t) => ({
     rater: t.hex().primaryKey(),
     qualifyingRatingCount: t.integer().notNull(),
+    qualifyingCreditBps: t.bigint().notNull(),
     rewardedRatingCount: t.integer().notNull(),
     distinctVerifiedAnchorCount: t.integer().notNull(),
     distinctAnchorRoundCount: t.integer().notNull(),
