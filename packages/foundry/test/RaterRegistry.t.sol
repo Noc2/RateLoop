@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import { Test } from "forge-std/Test.sol";
-import { RaterRegistry } from "../contracts/RaterRegistry.sol";
-import { IRaterIdentityRegistry } from "../contracts/interfaces/IRaterIdentityRegistry.sol";
-import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
+import {Test} from "forge-std/Test.sol";
+import {RaterRegistry} from "../contracts/RaterRegistry.sol";
+import {IRaterIdentityRegistry} from "../contracts/interfaces/IRaterIdentityRegistry.sol";
+import {MockWorldIDRouter} from "../contracts/mocks/MockWorldIDRouter.sol";
 
 contract RaterRegistryTest is Test {
     RaterRegistry internal registry;
@@ -21,7 +21,6 @@ contract RaterRegistryTest is Test {
     bytes32 internal constant HUMAN_SCOPE = keccak256("rateloop-human-v1");
     bytes32 internal constant EVIDENCE_HASH = keccak256("evidence");
     bytes32 internal constant CURYO_ANCHOR_ID = keccak256("curyo-self-verified-anchor");
-    bytes32 internal constant SEED_ROOT = keccak256("legacy-seed-root");
     uint256 internal constant WORLD_ID_EXTERNAL_NULLIFIER_HASH = 12_345;
     uint64 internal constant WORLD_ID_CREDENTIAL_TTL = 365 days;
 
@@ -266,20 +265,6 @@ contract RaterRegistryTest is Test {
         assertTrue(registry.hasActiveHumanCredential(rater));
     }
 
-    function test_SetTrustSeedIsSeparateFromHumanCredentialSeeding() public {
-        uint64 sunsetAt = uint64(block.timestamp + 180 days);
-
-        vm.prank(admin);
-        registry.setTrustSeed(rater, sunsetAt, SEED_ROOT);
-
-        RaterRegistry.TrustSeed memory seed = registry.getTrustSeed(rater);
-        assertTrue(seed.active);
-        assertEq(seed.seededAt, uint64(block.timestamp));
-        assertEq(seed.sunsetAt, sunsetAt);
-        assertEq(seed.seedRoot, SEED_ROOT);
-        assertTrue(registry.hasActiveTrustSeed(rater));
-    }
-
     function test_SeedHumanCredentialExpiresLikeWorldIdHumanUnit() public {
         uint64 expiresAt = uint64(block.timestamp + 7 days);
 
@@ -373,40 +358,5 @@ contract RaterRegistryTest is Test {
         assertEq(resolved.holder, otherRater);
         assertEq(resolved.identityKey, CURYO_ANCHOR_ID);
         assertFalse(resolved.delegated);
-    }
-
-    function test_TrustAttestationIsRevocable() public {
-        uint64 expiresAt = uint64(block.timestamp + 30 days);
-
-        vm.prank(rater);
-        bytes32 attestationId = registry.setTrustAttestation(subject, 1, 11_500, expiresAt, METADATA_HASH);
-
-        assertEq(attestationId, registry.trustAttestationId(rater, subject, 1));
-        RaterRegistry.TrustAttestation memory attestation = registry.getTrustAttestation(attestationId);
-        assertEq(attestation.issuer, rater);
-        assertEq(attestation.subject, subject);
-        assertEq(attestation.categoryId, 1);
-        assertEq(attestation.maxBoostBps, 11_500);
-        assertEq(attestation.expiresAt, expiresAt);
-        assertEq(attestation.metadataHash, METADATA_HASH);
-        assertFalse(attestation.revoked);
-
-        vm.prank(rater);
-        registry.revokeTrustAttestation(subject, 1);
-
-        attestation = registry.getTrustAttestation(attestationId);
-        assertTrue(attestation.revoked);
-    }
-
-    function test_TrustAttestationRejectsInvalidBoosts() public {
-        vm.startPrank(rater);
-
-        vm.expectRevert(RaterRegistry.InvalidMultiplier.selector);
-        registry.setTrustAttestation(subject, 1, 20_000, uint64(block.timestamp + 30 days), METADATA_HASH);
-
-        vm.expectRevert(RaterRegistry.InvalidTrustAttestation.selector);
-        registry.setTrustAttestation(rater, 1, 11_000, uint64(block.timestamp + 30 days), METADATA_HASH);
-
-        vm.stopPrank();
     }
 }

@@ -6,15 +6,13 @@ import {IWorldIDRouter} from "./interfaces/IWorldIDRouter.sol";
 import {IRaterIdentityRegistry} from "./interfaces/IRaterIdentityRegistry.sol";
 
 /// @title RaterRegistry
-/// @notice Optional rater metadata, human credentials, trust anchors, and social follows for RateLoop.
+/// @notice Optional rater metadata, human credentials, public follows, and delegation for RateLoop.
 /// @dev This registry is intentionally non-gating: rating contracts may read it, but base participation
-///      must keep working when no profile, credential, or trust signal exists.
+///      must keep working when no profile or credential exists.
 contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
     bytes32 public constant SEEDER_ROLE = keccak256("SEEDER_ROLE");
 
-    uint16 public constant BASE_MULTIPLIER_BPS = 10_000;
-    uint16 public constant MAX_TRUST_BOOST_BPS = 12_000;
     uint256 public constant WORLD_ID_GROUP_ID = 1;
     bytes32 public constant CURYO_SELF_VERIFIED_SCOPE = keccak256("rateloop-curyo-self-verified-v1");
 
@@ -49,30 +47,10 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
         bytes32 evidenceHash;
     }
 
-    struct TrustSeed {
-        bool active;
-        uint64 seededAt;
-        uint64 sunsetAt;
-        bytes32 seedRoot;
-    }
-
-    struct TrustAttestation {
-        address issuer;
-        address subject;
-        uint256 categoryId;
-        uint16 maxBoostBps;
-        uint64 expiresAt;
-        bytes32 metadataHash;
-        uint64 issuedAt;
-        bool revoked;
-    }
-
     mapping(address => RaterProfile) private _profiles;
     mapping(address => HumanCredential) private _humanCredentials;
     mapping(bytes32 => address) public humanNullifierOwner;
     mapping(bytes32 => bool) public revokedHumanNullifier;
-    mapping(address => TrustSeed) private _trustSeeds;
-    mapping(bytes32 => TrustAttestation) private _trustAttestations;
     mapping(address => mapping(address => bool)) public isFollowing;
     mapping(address => uint256) public followingCount;
     mapping(address => uint256) public followerCount;
@@ -100,18 +78,6 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
     );
     event HumanCredentialRevoked(address indexed rater, bytes32 indexed nullifierHash);
     event HumanNullifierRevocationCleared(bytes32 indexed nullifierHash);
-    event TrustSeedSet(address indexed rater, uint64 indexed seededAt, uint64 indexed sunsetAt, bytes32 seedRoot);
-    event TrustSeedRevoked(address indexed rater);
-    event TrustAttestationSet(
-        bytes32 indexed attestationId,
-        address indexed issuer,
-        address indexed subject,
-        uint256 categoryId,
-        uint16 maxBoostBps,
-        uint64 expiresAt,
-        bytes32 metadataHash
-    );
-    event TrustAttestationRevoked(bytes32 indexed attestationId, address indexed issuer, address indexed subject);
     event ProfileFollowed(address indexed follower, address indexed target, uint64 followedAt);
     event ProfileUnfollowed(address indexed follower, address indexed target, uint64 unfollowedAt);
     event DelegateRequested(address indexed holder, address indexed delegate);
@@ -121,8 +87,6 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
 
     error InvalidAddress();
     error InvalidCredential();
-    error InvalidMultiplier();
-    error InvalidTrustAttestation();
     error NullifierAlreadyAssigned();
     error CannotDelegateSelf();
     error CallerIsDelegate();
@@ -343,66 +307,12 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
         emit HumanNullifierRevocationCleared(nullifierHash);
     }
 
-    function setTrustSeed(address rater, uint64 sunsetAt, bytes32 seedRoot) external onlyRole(SEEDER_ROLE) {
-        _setTrustSeed(rater, sunsetAt, seedRoot);
-    }
-
-    function revokeTrustSeed(address rater) external onlyRole(SEEDER_ROLE) {
-        if (rater == address(0)) revert InvalidAddress();
-        TrustSeed storage seed = _trustSeeds[rater];
-        if (!seed.active) revert InvalidCredential();
-        seed.active = false;
-        emit TrustSeedRevoked(rater);
-    }
-
-    function setTrustAttestation(
-        address subject,
-        uint256 categoryId,
-        uint16 maxBoostBps,
-        uint64 expiresAt,
-        bytes32 metadataHash
-    ) external returns (bytes32 attestationId) {
-        if (subject == address(0) || subject == msg.sender) revert InvalidTrustAttestation();
-        if (expiresAt <= block.timestamp) revert InvalidTrustAttestation();
-        if (maxBoostBps < BASE_MULTIPLIER_BPS || maxBoostBps > MAX_TRUST_BOOST_BPS) revert InvalidMultiplier();
-
-        attestationId = trustAttestationId(msg.sender, subject, categoryId);
-        _trustAttestations[attestationId] = TrustAttestation({
-            issuer: msg.sender,
-            subject: subject,
-            categoryId: categoryId,
-            maxBoostBps: maxBoostBps,
-            expiresAt: expiresAt,
-            metadataHash: metadataHash,
-            issuedAt: uint64(block.timestamp),
-            revoked: false
-        });
-
-        emit TrustAttestationSet(attestationId, msg.sender, subject, categoryId, maxBoostBps, expiresAt, metadataHash);
-    }
-
-    function revokeTrustAttestation(address subject, uint256 categoryId) external {
-        bytes32 attestationId = trustAttestationId(msg.sender, subject, categoryId);
-        TrustAttestation storage attestation = _trustAttestations[attestationId];
-        if (attestation.issuer != msg.sender || attestation.revoked) revert InvalidTrustAttestation();
-        attestation.revoked = true;
-        emit TrustAttestationRevoked(attestationId, msg.sender, subject);
-    }
-
     function getProfile(address rater) external view returns (RaterProfile memory) {
         return _profiles[rater];
     }
 
     function getHumanCredential(address rater) external view returns (HumanCredential memory) {
         return _humanCredentials[rater];
-    }
-
-    function getTrustSeed(address rater) external view returns (TrustSeed memory) {
-        return _trustSeeds[rater];
-    }
-
-    function getTrustAttestation(bytes32 attestationId) external view returns (TrustAttestation memory) {
-        return _trustAttestations[attestationId];
     }
 
     function resolveRater(address actor) public view returns (ResolvedRater memory resolved) {
@@ -423,10 +333,6 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
         });
     }
 
-    function trustAttestationId(address issuer, address subject, uint256 categoryId) public pure returns (bytes32) {
-        return keccak256(abi.encode(issuer, subject, categoryId));
-    }
-
     function worldIdSignalHash(address rater) public pure returns (uint256) {
         return hashToField(abi.encodePacked(rater));
     }
@@ -443,11 +349,6 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
     function hasActiveHumanCredential(address rater) public view returns (bool) {
         HumanCredential storage credential = _humanCredentials[rater];
         return credential.verified && !credential.revoked && credential.expiresAt > block.timestamp;
-    }
-
-    function hasActiveTrustSeed(address rater) public view returns (bool) {
-        TrustSeed storage seed = _trustSeeds[rater];
-        return seed.active && seed.sunsetAt > block.timestamp;
     }
 
     function _attestHumanCredential(
@@ -535,15 +436,5 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
             delete pendingDelegateTo[pendingDelegator];
             emit PendingDelegateRemoved(pendingDelegator, account);
         }
-    }
-
-    function _setTrustSeed(address rater, uint64 sunsetAt, bytes32 seedRoot) internal {
-        if (rater == address(0)) revert InvalidAddress();
-        if (sunsetAt <= block.timestamp) revert InvalidCredential();
-
-        _trustSeeds[rater] =
-            TrustSeed({active: true, seededAt: uint64(block.timestamp), sunsetAt: sunsetAt, seedRoot: seedRoot});
-
-        emit TrustSeedSet(rater, uint64(block.timestamp), sunsetAt, seedRoot);
     }
 }

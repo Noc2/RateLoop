@@ -5,7 +5,7 @@
 import type { GenericContractsDeclaration } from "./types";
 
 const deployedContracts: GenericContractsDeclaration = {
-  31337: {
+  "31337": {
     FrontendFeeDustLib: {
       address: "0xe809fee4725c394ae379249eee3b7186b2257ea1",
       abi: [
@@ -18606,19 +18606,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "BASE_MULTIPLIER_BPS",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "uint16",
-              internalType: "uint16",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
           name: "CURYO_SELF_VERIFIED_SCOPE",
           inputs: [],
           outputs: [
@@ -18639,19 +18626,6 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "bytes32",
               internalType: "bytes32",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "MAX_TRUST_BOOST_BPS",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "uint16",
-              internalType: "uint16",
             },
           ],
           stateMutability: "view",
@@ -18951,108 +18925,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "getTrustAttestation",
-          inputs: [
-            {
-              name: "attestationId",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "tuple",
-              internalType: "struct RaterRegistry.TrustAttestation",
-              components: [
-                {
-                  name: "issuer",
-                  type: "address",
-                  internalType: "address",
-                },
-                {
-                  name: "subject",
-                  type: "address",
-                  internalType: "address",
-                },
-                {
-                  name: "categoryId",
-                  type: "uint256",
-                  internalType: "uint256",
-                },
-                {
-                  name: "maxBoostBps",
-                  type: "uint16",
-                  internalType: "uint16",
-                },
-                {
-                  name: "expiresAt",
-                  type: "uint64",
-                  internalType: "uint64",
-                },
-                {
-                  name: "metadataHash",
-                  type: "bytes32",
-                  internalType: "bytes32",
-                },
-                {
-                  name: "issuedAt",
-                  type: "uint64",
-                  internalType: "uint64",
-                },
-                {
-                  name: "revoked",
-                  type: "bool",
-                  internalType: "bool",
-                },
-              ],
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "getTrustSeed",
-          inputs: [
-            {
-              name: "rater",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "tuple",
-              internalType: "struct RaterRegistry.TrustSeed",
-              components: [
-                {
-                  name: "active",
-                  type: "bool",
-                  internalType: "bool",
-                },
-                {
-                  name: "seededAt",
-                  type: "uint64",
-                  internalType: "uint64",
-                },
-                {
-                  name: "sunsetAt",
-                  type: "uint64",
-                  internalType: "uint64",
-                },
-                {
-                  name: "seedRoot",
-                  type: "bytes32",
-                  internalType: "bytes32",
-                },
-              ],
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
           name: "grantRole",
           inputs: [
             {
@@ -19072,25 +18944,6 @@ const deployedContracts: GenericContractsDeclaration = {
         {
           type: "function",
           name: "hasActiveHumanCredential",
-          inputs: [
-            {
-              name: "rater",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bool",
-              internalType: "bool",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "hasActiveTrustSeed",
           inputs: [
             {
               name: "rater",
@@ -19335,37 +19188,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "revokeTrustAttestation",
-          inputs: [
-            {
-              name: "subject",
-              type: "address",
-              internalType: "address",
-            },
-            {
-              name: "categoryId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "revokeTrustSeed",
-          inputs: [
-            {
-              name: "rater",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
           name: "revokedHumanNullifier",
           inputs: [
             {
@@ -19444,68 +19266,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "setTrustAttestation",
-          inputs: [
-            {
-              name: "subject",
-              type: "address",
-              internalType: "address",
-            },
-            {
-              name: "categoryId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "maxBoostBps",
-              type: "uint16",
-              internalType: "uint16",
-            },
-            {
-              name: "expiresAt",
-              type: "uint64",
-              internalType: "uint64",
-            },
-            {
-              name: "metadataHash",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [
-            {
-              name: "attestationId",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "setTrustSeed",
-          inputs: [
-            {
-              name: "rater",
-              type: "address",
-              internalType: "address",
-            },
-            {
-              name: "sunsetAt",
-              type: "uint64",
-              internalType: "uint64",
-            },
-            {
-              name: "seedRoot",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
           name: "supportsInterface",
           inputs: [
             {
@@ -19522,35 +19282,6 @@ const deployedContracts: GenericContractsDeclaration = {
             },
           ],
           stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "trustAttestationId",
-          inputs: [
-            {
-              name: "issuer",
-              type: "address",
-              internalType: "address",
-            },
-            {
-              name: "subject",
-              type: "address",
-              internalType: "address",
-            },
-            {
-              name: "categoryId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          stateMutability: "pure",
         },
         {
           type: "function",
@@ -19950,124 +19681,6 @@ const deployedContracts: GenericContractsDeclaration = {
           anonymous: false,
         },
         {
-          type: "event",
-          name: "TrustAttestationRevoked",
-          inputs: [
-            {
-              name: "attestationId",
-              type: "bytes32",
-              indexed: true,
-              internalType: "bytes32",
-            },
-            {
-              name: "issuer",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "subject",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "TrustAttestationSet",
-          inputs: [
-            {
-              name: "attestationId",
-              type: "bytes32",
-              indexed: true,
-              internalType: "bytes32",
-            },
-            {
-              name: "issuer",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "subject",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "categoryId",
-              type: "uint256",
-              indexed: false,
-              internalType: "uint256",
-            },
-            {
-              name: "maxBoostBps",
-              type: "uint16",
-              indexed: false,
-              internalType: "uint16",
-            },
-            {
-              name: "expiresAt",
-              type: "uint64",
-              indexed: false,
-              internalType: "uint64",
-            },
-            {
-              name: "metadataHash",
-              type: "bytes32",
-              indexed: false,
-              internalType: "bytes32",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "TrustSeedRevoked",
-          inputs: [
-            {
-              name: "rater",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "TrustSeedSet",
-          inputs: [
-            {
-              name: "rater",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "seededAt",
-              type: "uint64",
-              indexed: true,
-              internalType: "uint64",
-            },
-            {
-              name: "sunsetAt",
-              type: "uint64",
-              indexed: true,
-              internalType: "uint64",
-            },
-            {
-              name: "seedRoot",
-              type: "bytes32",
-              indexed: false,
-              internalType: "bytes32",
-            },
-          ],
-          anonymous: false,
-        },
-        {
           type: "error",
           name: "AccessControlBadConfirmation",
           inputs: [],
@@ -20116,16 +19729,6 @@ const deployedContracts: GenericContractsDeclaration = {
         {
           type: "error",
           name: "InvalidCredential",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "InvalidMultiplier",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "InvalidTrustAttestation",
           inputs: [],
         },
         {
