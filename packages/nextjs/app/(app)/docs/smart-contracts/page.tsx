@@ -48,7 +48,7 @@ const SmartContracts: NextPage = () => {
           <tbody>
             <tr>
               <td className="font-mono text-primary">LoopReputation</td>
-              <td>ERC-20 token (LREP) with governance voting power, ERC-1363 hooks, and governance locks</td>
+              <td>ERC-20 token (LREP) with governance voting power, treasury mint controls, and governance locks</td>
               <td>No</td>
             </tr>
             <tr>
@@ -362,10 +362,8 @@ const SmartContracts: NextPage = () => {
           <tbody>
             <tr>
               <td className="font-mono">MIN_STAKE</td>
-              <td>0 LREP</td>
-              <td>
-                Minimum vote stake; zero-LREP ratings can participate but do not satisfy launch-credit stake policy
-              </td>
+              <td>1 LREP</td>
+              <td>Minimum counted vote stake; zero-LREP ratings route through the advisory recorder instead</td>
             </tr>
             <tr>
               <td className="font-mono">MAX_STAKE</td>
