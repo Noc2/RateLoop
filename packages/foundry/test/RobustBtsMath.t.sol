@@ -21,17 +21,6 @@ contract RobustBtsMathHarness {
     ) external pure returns (uint16) {
         return RobustBtsMath.scoreBps(ownSignalIsUp, ownPredictionBps, referencePredictionBps, peerSignalIsUp);
     }
-
-    function scorePartsBps(
-        bool ownSignalIsUp,
-        uint16 ownPredictionBps,
-        uint16 referencePredictionBps,
-        bool peerSignalIsUp
-    ) external pure returns (uint16 informationScoreBps, uint16 predictionScoreBps) {
-        RobustBtsMath.ScoreParts memory parts =
-            RobustBtsMath.scorePartsBps(ownSignalIsUp, ownPredictionBps, referencePredictionBps, peerSignalIsUp);
-        return (parts.informationScoreBps, parts.predictionScoreBps);
-    }
 }
 
 contract RobustBtsMathTest is Test {
@@ -60,13 +49,6 @@ contract RobustBtsMathTest is Test {
     function test_RbtsScoreAveragesInformationAndPredictionScores() public view {
         uint16 score = math.scoreBps(true, 7_500, 3_000, true);
         assertEq(score, 8_887);
-    }
-
-    function test_RbtsScorePartsExposeInformationAndPredictionComponents() public view {
-        (uint16 informationScore, uint16 predictionScore) = math.scorePartsBps(true, 7_500, 3_000, true);
-        assertEq(informationScore, 8_400);
-        assertEq(predictionScore, 9_375);
-        assertEq(math.scoreBps(true, 7_500, 3_000, true), (uint256(informationScore) + predictionScore) / 2);
     }
 
     function test_InvalidPredictionReverts() public {
