@@ -50,6 +50,7 @@ const timelockAbi = parseAbi(["function getMinDelay() view returns (uint256)"]);
 type GovernanceManagedContractName =
   | "CuryoGovernor"
   | "LoopReputation"
+  | "ClusterPayoutOracle"
   | "FrontendRegistry"
   | "ContentRegistry"
   | "ProtocolConfig";
@@ -132,6 +133,7 @@ export function useGovernanceContracts() {
   const { targetNetwork } = useTargetNetwork();
   const publicClient = usePublicClient({ chainId: targetNetwork.id });
   const token = useDeployedContractInfo({ contractName: REPUTATION_CONTRACT_NAME });
+  const clusterPayoutOracle = useDeployedContractInfo({ contractName: "ClusterPayoutOracle" });
   const frontendRegistry = useDeployedContractInfo({ contractName: "FrontendRegistry" });
   const contentRegistry = useDeployedContractInfo({ contractName: "ContentRegistry" });
   const protocolConfig = useDeployedContractInfo({ contractName: "ProtocolConfig" });
@@ -199,6 +201,13 @@ export function useGovernanceContracts() {
         abi: token.data.abi as Abi,
       });
     }
+    if (clusterPayoutOracle.data) {
+      items.push({
+        name: "ClusterPayoutOracle",
+        address: clusterPayoutOracle.data.address,
+        abi: clusterPayoutOracle.data.abi as Abi,
+      });
+    }
     if (frontendRegistry.data) {
       items.push({
         name: "FrontendRegistry",
@@ -223,6 +232,7 @@ export function useGovernanceContracts() {
     return items;
   }, [
     contentRegistry.data,
+    clusterPayoutOracle.data,
     frontendRegistry.data,
     governorAddress,
     hasGovernorContract,
@@ -250,6 +260,7 @@ export function useGovernanceContracts() {
   return {
     targetNetwork,
     token,
+    clusterPayoutOracle,
     frontendRegistry,
     contentRegistry,
     protocolConfig,

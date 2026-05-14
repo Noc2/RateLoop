@@ -42,7 +42,13 @@ type GovernanceActionTemplate = {
   group: string;
   label: string;
   mode: "proposal" | "direct";
-  contractName: "CuryoGovernor" | "LoopReputation" | "FrontendRegistry" | "ContentRegistry" | "ProtocolConfig";
+  contractName:
+    | "CuryoGovernor"
+    | "LoopReputation"
+    | "ClusterPayoutOracle"
+    | "FrontendRegistry"
+    | "ContentRegistry"
+    | "ProtocolConfig";
   functionName: string;
   description: string;
   allowCustomDescription?: boolean;
@@ -307,6 +313,164 @@ const actionTemplates: readonly GovernanceActionTemplate[] = [
     fields: [{ key: "creditor", label: "Creditor address", type: "address", required: true }],
     buildArgs: (_, parser) => [parser.address("creditor", "Creditor address")],
     buildDescription: values => `Revoke FrontendRegistry fee-creditor role from ${values.creditor || "address"}`,
+  },
+  {
+    id: "oracle-set-config",
+    group: "Cluster Payout Oracle",
+    label: "Set oracle config",
+    mode: "proposal",
+    contractName: "ClusterPayoutOracle",
+    functionName: "setOracleConfig",
+    description: "Create a proposal to update payout-root challenge timing, challenge bond, and bond recipient.",
+    fields: [
+      {
+        key: "challengeWindow",
+        label: "Challenge window (seconds)",
+        type: "uint",
+        required: true,
+        helperText: "Use enough time for independent operators to recompute and challenge proposed payout roots.",
+      },
+      {
+        key: "challengeBond",
+        label: "Challenge bond (wei)",
+        type: "uint",
+        required: true,
+        helperText:
+          "Native-token anti-spam bond required from challengers. Proposers are backed by their frontend stake.",
+      },
+      {
+        key: "bondRecipient",
+        label: "Default bond recipient",
+        type: "address",
+        required: true,
+        helperText: "Receives bonds when a rejected root had no successful challenger.",
+      },
+    ],
+    buildArgs: (_, parser) => [
+      parser.uint("challengeWindow", "Challenge window"),
+      parser.uint("challengeBond", "Challenge bond"),
+      parser.address("bondRecipient", "Default bond recipient"),
+    ],
+    buildDescription: values =>
+      `Set ClusterPayoutOracle config: ${values.challengeWindow || "0"}s challenge window, ${
+        values.challengeBond || "0"
+      } wei challenge bond`,
+  },
+  {
+    id: "oracle-finalize-challenged-correlation-epoch",
+    group: "Cluster Payout Oracle",
+    label: "Finalize challenged epoch",
+    mode: "proposal",
+    contractName: "ClusterPayoutOracle",
+    functionName: "finalizeChallengedCorrelationEpoch",
+    description: "Create a proposal to dismiss a challenge and finalize a proposed correlation epoch root.",
+    fields: [
+      { key: "epochId", label: "Correlation epoch ID", type: "uint", required: true },
+      {
+        key: "reasonHash",
+        label: "Reason hash",
+        type: "bytes32",
+        required: true,
+        helperText: "Hash of the public arbitration note voters can inspect off-chain.",
+      },
+    ],
+    buildArgs: (_, parser) => [
+      parser.uint("epochId", "Correlation epoch ID"),
+      parser.bytes32("reasonHash", "Reason hash"),
+    ],
+    buildDescription: values => `Finalize challenged correlation epoch ${values.epochId || "0"}`,
+  },
+  {
+    id: "oracle-set-frontend-registry",
+    group: "Cluster Payout Oracle",
+    label: "Set frontend registry",
+    mode: "proposal",
+    contractName: "ClusterPayoutOracle",
+    functionName: "setFrontendRegistry",
+    description: "Create a proposal to update the registry used to verify frontend operator proposal eligibility.",
+    advanced: true,
+    fields: [
+      {
+        key: "frontendRegistry",
+        label: "Frontend registry",
+        type: "address",
+        required: true,
+      },
+    ],
+    buildArgs: (_, parser) => [parser.address("frontendRegistry", "Frontend registry")],
+    buildDescription: values => `Set ClusterPayoutOracle frontend registry to ${values.frontendRegistry || "address"}`,
+  },
+  {
+    id: "oracle-reject-correlation-epoch",
+    group: "Cluster Payout Oracle",
+    label: "Reject epoch root",
+    mode: "proposal",
+    contractName: "ClusterPayoutOracle",
+    functionName: "rejectCorrelationEpoch",
+    description: "Create a proposal to reject a challenged or invalid correlation epoch root.",
+    fields: [
+      { key: "epochId", label: "Correlation epoch ID", type: "uint", required: true },
+      {
+        key: "reasonHash",
+        label: "Reason hash",
+        type: "bytes32",
+        required: true,
+        helperText: "Hash of the public arbitration note voters can inspect off-chain.",
+      },
+    ],
+    buildArgs: (_, parser) => [
+      parser.uint("epochId", "Correlation epoch ID"),
+      parser.bytes32("reasonHash", "Reason hash"),
+    ],
+    buildDescription: values => `Reject correlation epoch ${values.epochId || "0"} payout root`,
+  },
+  {
+    id: "oracle-finalize-challenged-round-payout",
+    group: "Cluster Payout Oracle",
+    label: "Finalize challenged payout root",
+    mode: "proposal",
+    contractName: "ClusterPayoutOracle",
+    functionName: "finalizeChallengedRoundPayoutSnapshot",
+    description: "Create a proposal to dismiss a challenge and finalize a round payout root.",
+    fields: [
+      { key: "snapshotKey", label: "Snapshot key", type: "bytes32", required: true },
+      {
+        key: "reasonHash",
+        label: "Reason hash",
+        type: "bytes32",
+        required: true,
+        helperText: "Hash of the public arbitration note voters can inspect off-chain.",
+      },
+    ],
+    buildArgs: (_, parser) => [
+      parser.bytes32("snapshotKey", "Snapshot key"),
+      parser.bytes32("reasonHash", "Reason hash"),
+    ],
+    buildDescription: values => `Finalize challenged round payout root ${values.snapshotKey || "snapshot"}`,
+  },
+  {
+    id: "oracle-reject-round-payout",
+    group: "Cluster Payout Oracle",
+    label: "Reject payout root",
+    mode: "proposal",
+    contractName: "ClusterPayoutOracle",
+    functionName: "rejectRoundPayoutSnapshot",
+    description: "Create a proposal to reject a challenged or invalid round payout root.",
+    fields: [
+      { key: "snapshotKey", label: "Snapshot key", type: "bytes32", required: true },
+      {
+        key: "reasonHash",
+        label: "Reason hash",
+        type: "bytes32",
+        required: true,
+        helperText: "Hash of the public arbitration note voters can inspect off-chain.",
+      },
+    ],
+    buildArgs: (_, parser) => [
+      parser.bytes32("snapshotKey", "Snapshot key"),
+      parser.bytes32("reasonHash", "Reason hash"),
+    ],
+    buildDescription: values => `Reject round payout root ${values.snapshotKey || "snapshot"}`,
   },
   {
     id: "content-mark-dormant",
