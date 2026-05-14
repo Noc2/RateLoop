@@ -1936,8 +1936,11 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
         address remintedSubmitter = address(0xBEEF);
         bytes32 anchor = bytes32(uint256(uint160(submitter)));
+        vm.startPrank(owner);
         raterRegistry.revokeHumanCredential(submitter);
+        raterRegistry.clearRevokedHumanNullifier(anchor);
         _seedRaterIdentity(raterRegistry, remintedSubmitter, anchor);
+        vm.stopPrank();
 
         vm.prank(submitter);
         vm.expectRevert("Not submitter");
@@ -2560,10 +2563,17 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
         address remintedSubmitter = address(0xCAFE);
         bytes32 anchor = bytes32(uint256(uint160(submitter)));
+        vm.startPrank(owner);
         raterRegistry.revokeHumanCredential(submitter);
+        raterRegistry.clearRevokedHumanNullifier(anchor);
         _seedRaterIdentity(raterRegistry, remintedSubmitter, anchor);
+        vm.stopPrank();
         vm.prank(owner);
         hrepToken.mint(remintedSubmitter, 10_000e6);
+
+        vm.prank(submitter);
+        vm.expectRevert("Not original submitter");
+        registry.reviveContent(contentId);
 
         vm.startPrank(remintedSubmitter);
         hrepToken.approve(address(registry), 5e6);
