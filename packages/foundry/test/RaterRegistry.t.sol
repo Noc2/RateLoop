@@ -220,6 +220,32 @@ contract RaterRegistryTest is Test {
         assertTrue(credential.revoked);
         assertFalse(registry.hasActiveHumanCredential(rater));
         assertEq(registry.humanNullifierOwner(NULLIFIER_HASH), address(0));
+        assertTrue(registry.revokedHumanNullifier(NULLIFIER_HASH));
+    }
+
+    function test_RevokeHumanCredentialBlocksNullifierReuseUntilCleared() public {
+        uint256[8] memory proof;
+
+        vm.prank(rater);
+        registry.attestHumanCredentialWithProof(1, uint256(NULLIFIER_HASH), proof);
+
+        vm.prank(admin);
+        registry.revokeHumanCredential(rater);
+
+        vm.prank(rater);
+        vm.expectRevert(RaterRegistry.InvalidCredential.selector);
+        registry.attestHumanCredentialWithProof(1, uint256(NULLIFIER_HASH), proof);
+
+        vm.prank(otherRater);
+        vm.expectRevert(RaterRegistry.InvalidCredential.selector);
+        registry.attestHumanCredentialWithProof(1, uint256(NULLIFIER_HASH), proof);
+
+        vm.prank(admin);
+        registry.clearRevokedHumanNullifier(NULLIFIER_HASH);
+
+        vm.prank(otherRater);
+        registry.attestHumanCredentialWithProof(1, uint256(NULLIFIER_HASH), proof);
+        assertEq(registry.humanNullifierOwner(NULLIFIER_HASH), otherRater);
     }
 
     function test_SeedHumanCredentialStoresCuryoSelfVerifiedAccountAsVerifiedHuman() public {

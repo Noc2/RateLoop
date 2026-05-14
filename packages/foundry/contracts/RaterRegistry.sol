@@ -70,6 +70,7 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
     mapping(address => RaterProfile) private _profiles;
     mapping(address => HumanCredential) private _humanCredentials;
     mapping(bytes32 => address) public humanNullifierOwner;
+    mapping(bytes32 => bool) public revokedHumanNullifier;
     mapping(address => TrustSeed) private _trustSeeds;
     mapping(bytes32 => TrustAttestation) private _trustAttestations;
     mapping(address => mapping(address => bool)) public isFollowing;
@@ -98,6 +99,7 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
         bytes32 evidenceHash
     );
     event HumanCredentialRevoked(address indexed rater, bytes32 indexed nullifierHash);
+    event HumanNullifierRevocationCleared(bytes32 indexed nullifierHash);
     event TrustSeedSet(address indexed rater, uint64 indexed seededAt, uint64 indexed sunsetAt, bytes32 seedRoot);
     event TrustSeedRevoked(address indexed rater);
     event TrustAttestationSet(
@@ -329,9 +331,16 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
         bytes32 nullifierHash = credential.nullifierHash;
         if (nullifierHash != bytes32(0) && humanNullifierOwner[nullifierHash] == rater) {
             delete humanNullifierOwner[nullifierHash];
+            revokedHumanNullifier[nullifierHash] = true;
         }
 
         emit HumanCredentialRevoked(rater, nullifierHash);
+    }
+
+    function clearRevokedHumanNullifier(bytes32 nullifierHash) external onlyRole(SEEDER_ROLE) {
+        if (nullifierHash == bytes32(0)) revert InvalidCredential();
+        revokedHumanNullifier[nullifierHash] = false;
+        emit HumanNullifierRevocationCleared(nullifierHash);
     }
 
     function setTrustSeed(address rater, uint64 sunsetAt, bytes32 seedRoot) external onlyRole(SEEDER_ROLE) {
@@ -453,6 +462,7 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
         if (expiresAt <= block.timestamp) revert InvalidCredential();
         if (provider == HumanCredentialProvider.None) revert InvalidCredential();
         if (nullifierHash == bytes32(0) || scope == bytes32(0)) revert InvalidCredential();
+        if (revokedHumanNullifier[nullifierHash]) revert InvalidCredential();
 
         HumanCredential storage previous = _humanCredentials[rater];
         if (previous.nullifierHash != bytes32(0) && previous.nullifierHash != nullifierHash) {
