@@ -2,6 +2,7 @@
 pragma solidity ^0.8.24;
 
 import { IFrontendRegistry } from "../interfaces/IFrontendRegistry.sol";
+import { IClusterPayoutOracle } from "../interfaces/IClusterPayoutOracle.sol";
 import { ProtocolConfig } from "../ProtocolConfig.sol";
 import { RoundVotingEngine } from "../RoundVotingEngine.sol";
 import { RewardPool, RoundSnapshot } from "./QuestionRewardPoolEscrowTypes.sol";
@@ -95,30 +96,166 @@ library QuestionRewardPoolEscrowClaimLib {
         address account,
         uint256 bpsScale
     ) external view returns (uint256 claimableAmount) {
+        return _claimableQuestionReward(
+            rewardPools,
+            roundSnapshots,
+            rewardClaimed,
+            rewardPoolPayerIdentity,
+            rewardPoolPayerIdentityKey,
+            votingEngine,
+            protocolConfig,
+            rewardPoolId,
+            roundId,
+            account,
+            bpsScale
+        );
+    }
+
+    function claimableQuestionRewardWithPayoutWeight(
+        mapping(uint256 => RewardPool) storage rewardPools,
+        mapping(uint256 => mapping(uint256 => RoundSnapshot)) storage roundSnapshots,
+        mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) storage rewardClaimed,
+        mapping(uint256 => address) storage rewardPoolPayerIdentity,
+        mapping(uint256 => bytes32) storage rewardPoolPayerIdentityKey,
+        mapping(uint256 => address) storage rewardPoolClusterPayoutOracle,
+        RoundVotingEngine votingEngine,
+        ProtocolConfig protocolConfig,
+        uint256 rewardPoolId,
+        uint256 roundId,
+        address account,
+        IClusterPayoutOracle.PayoutWeight calldata payoutWeight,
+        bytes32[] calldata proof,
+        uint256 bpsScale,
+        uint8 rewardAssetUsdc,
+        uint8 payoutDomain
+    ) external view returns (uint256 claimableAmount) {
+        RewardPool storage rewardPool = rewardPools[rewardPoolId];
+        if (rewardPool.id == 0 || rewardPool.refunded) return 0;
+        if (!_usesClusterPayoutSnapshot(rewardPoolClusterPayoutOracle, rewardPool, rewardAssetUsdc)) {
+            return _claimableQuestionReward(
+                rewardPools,
+                roundSnapshots,
+                rewardClaimed,
+                rewardPoolPayerIdentity,
+                rewardPoolPayerIdentityKey,
+                votingEngine,
+                protocolConfig,
+                rewardPoolId,
+                roundId,
+                account,
+                bpsScale
+            );
+        }
+
+        (bytes32 identityKey, bytes32 commitKey, address rewardRecipient) = QuestionRewardPoolEscrowVoterLib.resolveRoundRewardClaim(
+            votingEngine, protocolConfig, rewardPool.contentId, roundId, account
+        );
+        if (
+            commitKey == bytes32(0) || rewardClaimed[rewardPoolId][roundId][commitKey]
+                || _isExcludedClaimant(
+                    rewardPool, rewardPoolPayerIdentity, rewardPoolPayerIdentityKey, identityKey, account
+                )
+                || !QuestionRewardPoolEscrowEligibilityLib.isAccountEligibleForBounty(
+                    protocolConfig, rewardPool.bountyEligibility, rewardRecipient
+                )
+        ) return 0;
+        (bool revealed, address frontend) = QuestionRewardPoolEscrowVoterLib.timelyRevealedCommitFrontend(
+            votingEngine, rewardPool.contentId, roundId, commitKey, rewardPool.bountyClosesAt
+        );
+        if (!revealed || votingEngine.roundUnrevealedCleanupRemaining(rewardPool.contentId, roundId) > 0) return 0;
+
+        RoundSnapshot storage snapshot = roundSnapshots[rewardPoolId][roundId];
+        if (!snapshot.qualified || snapshot.claimedWeight >= snapshot.totalClaimWeight) return 0;
+        uint256 baseClaimWeight = _roundClaimWeight(votingEngine, rewardPool.contentId, roundId, commitKey);
+        uint256 claimWeight = _effectiveClusterQuestionClaimWeight(
+            rewardPoolClusterPayoutOracle,
+            rewardPool,
+            rewardPoolId,
+            roundId,
+            identityKey,
+            commitKey,
+            rewardRecipient,
+            baseClaimWeight,
+            payoutWeight,
+            proof,
+            payoutDomain
+        );
+        if (claimWeight == 0) return 0;
+
+        return _claimableWeighted(
+            votingEngine,
+            rewardPool.contentId,
+            roundId,
+            commitKey,
+            frontend,
+            snapshot.allocation,
+            snapshot.frontendFeeAllocation,
+            snapshot.totalClaimWeight,
+            claimWeight,
+            snapshot.claimedWeight,
+            snapshot.claimedAmount,
+            snapshot.frontendFeeClaimedAmount
+        );
+    }
+
+    function effectiveClusterQuestionClaimWeight(
+        mapping(uint256 => address) storage rewardPoolClusterPayoutOracle,
+        RewardPool storage rewardPool,
+        uint256 rewardPoolId,
+        uint256 roundId,
+        bytes32 identityKey,
+        bytes32 commitKey,
+        address rewardRecipient,
+        uint256 baseClaimWeight,
+        IClusterPayoutOracle.PayoutWeight memory payoutWeight,
+        bytes32[] memory proof,
+        uint8 payoutDomain
+    ) external view returns (uint256) {
+        return _effectiveClusterQuestionClaimWeight(
+            rewardPoolClusterPayoutOracle,
+            rewardPool,
+            rewardPoolId,
+            roundId,
+            identityKey,
+            commitKey,
+            rewardRecipient,
+            baseClaimWeight,
+            payoutWeight,
+            proof,
+            payoutDomain
+        );
+    }
+
+    function _claimableQuestionReward(
+        mapping(uint256 => RewardPool) storage rewardPools,
+        mapping(uint256 => mapping(uint256 => RoundSnapshot)) storage roundSnapshots,
+        mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) storage rewardClaimed,
+        mapping(uint256 => address) storage rewardPoolPayerIdentity,
+        mapping(uint256 => bytes32) storage rewardPoolPayerIdentityKey,
+        RoundVotingEngine votingEngine,
+        ProtocolConfig protocolConfig,
+        uint256 rewardPoolId,
+        uint256 roundId,
+        address account,
+        uint256 bpsScale
+    ) private view returns (uint256 claimableAmount) {
         RewardPool storage rewardPool = rewardPools[rewardPoolId];
         if (rewardPool.id == 0 || rewardPool.refunded) return 0;
 
-        (bytes32 identityKey, bytes32 commitKey, address rewardRecipient) =
-            QuestionRewardPoolEscrowVoterLib.resolveRoundRewardClaim(
+        (bytes32 identityKey, bytes32 commitKey, address rewardRecipient) = QuestionRewardPoolEscrowVoterLib.resolveRoundRewardClaim(
             votingEngine, protocolConfig, rewardPool.contentId, roundId, account
         );
         if (
             commitKey == bytes32(0)
                 || _isExcludedClaimant(
-                    rewardPool,
-                    rewardPoolPayerIdentity,
-                    rewardPoolPayerIdentityKey,
-                    identityKey,
-                    account
+                    rewardPool, rewardPoolPayerIdentity, rewardPoolPayerIdentityKey, identityKey, account
                 )
         ) {
             return 0;
         }
 
         if (!QuestionRewardPoolEscrowEligibilityLib.isAccountEligibleForBounty(
-                protocolConfig,
-                rewardPool.bountyEligibility,
-                rewardRecipient
+                protocolConfig, rewardPool.bountyEligibility, rewardRecipient
             )) {
             return 0;
         }
@@ -136,12 +273,7 @@ library QuestionRewardPoolEscrowClaimLib {
         if (!snapshot.qualified) {
             if (!_canPreviewNewQualification(rewardPool, roundId)) return 0;
             (, bool canQualify,, uint256 effectiveParticipantUnits, uint256 totalClaimWeight,) = _previewRoundQualification(
-                rewardPool,
-                rewardPoolPayerIdentity,
-                rewardPoolPayerIdentityKey,
-                votingEngine,
-                protocolConfig,
-                roundId
+                rewardPool, rewardPoolPayerIdentity, rewardPoolPayerIdentityKey, votingEngine, protocolConfig, roundId
             );
             if (!canQualify) return 0;
 
@@ -347,6 +479,42 @@ library QuestionRewardPoolEscrowClaimLib {
             return BASE_PARTICIPATION_WEIGHT_BPS;
         }
         return votingEngine.commitRbtsRewardWeight(contentId, roundId, commitKey);
+    }
+
+    function _effectiveClusterQuestionClaimWeight(
+        mapping(uint256 => address) storage rewardPoolClusterPayoutOracle,
+        RewardPool storage rewardPool,
+        uint256 rewardPoolId,
+        uint256 roundId,
+        bytes32 identityKey,
+        bytes32 commitKey,
+        address rewardRecipient,
+        uint256 baseClaimWeight,
+        IClusterPayoutOracle.PayoutWeight memory payoutWeight,
+        bytes32[] memory proof,
+        uint8 payoutDomain
+    ) private view returns (uint256) {
+        require(
+            payoutWeight.domain == payoutDomain && payoutWeight.rewardPoolId == rewardPoolId
+                && payoutWeight.contentId == rewardPool.contentId && payoutWeight.roundId == roundId
+                && payoutWeight.commitKey == commitKey && payoutWeight.identityKey == identityKey
+                && payoutWeight.account == rewardRecipient && payoutWeight.baseWeight == baseClaimWeight
+                && payoutWeight.effectiveWeight > 0,
+            "Invalid cluster proof"
+        );
+        require(
+            IClusterPayoutOracle(rewardPoolClusterPayoutOracle[rewardPool.id]).verifyPayoutWeight(payoutWeight, proof),
+            "Invalid cluster proof"
+        );
+        return payoutWeight.effectiveWeight;
+    }
+
+    function _usesClusterPayoutSnapshot(
+        mapping(uint256 => address) storage rewardPoolClusterPayoutOracle,
+        RewardPool storage rewardPool,
+        uint8 rewardAssetUsdc
+    ) private view returns (bool) {
+        return rewardPool.asset == rewardAssetUsdc && rewardPoolClusterPayoutOracle[rewardPool.id] != address(0);
     }
 
     function _computeClaimSplit(

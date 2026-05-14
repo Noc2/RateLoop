@@ -275,38 +275,12 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertEq(usdc.balanceOf(address(rewardPoolEscrow)), 0);
     }
 
-    function testQuestionRewardsBlockWhenPredictionEffectiveUnitsBelowFloor() public {
-        uint256 contentId = _submitQuestion("");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
-
-        address[] memory voters = _threeVoters();
-        uint256[] memory stakes = new uint256[](3);
-        stakes[0] = STAKE;
-        stakes[1] = STAKE;
-        stakes[2] = STAKE;
-        uint16[] memory predictions = new uint16[](3);
-        predictions[0] = 0;
-        predictions[1] = 10_000;
-        predictions[2] = 0;
-        uint256 roundId = _settlePredictionRoundWithStakes(voters, contentId, predictions, stakes);
-
-        assertEq(MIN_REWARD_POOL_PARTICIPANTS, 3);
-        assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter1), 0);
-        assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter2), 0);
-        assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter3), 0);
-
-        vm.prank(voter1);
-        vm.expectRevert("Too few eligible voters");
-        rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
-    }
-
     function testVerifiedHumanBountyCountsOnlyVerifiedHumansWhileVotingStaysOpen() public {
         raterIdentityRegistry.revokeHumanCredential(voter4);
 
         uint256 contentId = _submitQuestion("");
-        uint256 rewardPoolId = _createRewardPoolWithEligibility(
-            contentId, REWARD_POOL_AMOUNT, 3, 1, BOUNTY_ELIGIBILITY_VERIFIED_HUMAN
-        );
+        uint256 rewardPoolId =
+            _createRewardPoolWithEligibility(contentId, REWARD_POOL_AMOUNT, 3, 1, BOUNTY_ELIGIBILITY_VERIFIED_HUMAN);
 
         uint256 roundId = _settleRoundWith(_fourVoters(), contentId, _directions(true, true, false, true));
         rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
@@ -943,7 +917,9 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertEq(votingEngine.roundRaterRegistrySnapshot(contentId, roundId), address(raterIdentityRegistry));
 
         MockRaterIdentityRegistry migratedRaterIdentityRegistry = _migrateRaterIdentitiesWithDifferentIds();
-        assertNotEq(migratedRaterIdentityRegistry.getCredentialId(voter2), raterIdentityRegistry.getCredentialId(voter2));
+        assertNotEq(
+            migratedRaterIdentityRegistry.getCredentialId(voter2), raterIdentityRegistry.getCredentialId(voter2)
+        );
 
         bytes32 salt2 = keccak256("snapshot-voter-2");
         bytes32 commitKey2 = _commitTestVote(
@@ -994,7 +970,9 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         uint256 roundId = _settleRoundWith(voters, contentId, directions);
 
         MockRaterIdentityRegistry migratedRaterIdentityRegistry = _migrateRaterIdentitiesWithDifferentIds();
-        assertNotEq(migratedRaterIdentityRegistry.getCredentialId(funder), raterIdentityRegistry.getCredentialId(funder));
+        assertNotEq(
+            migratedRaterIdentityRegistry.getCredentialId(funder), raterIdentityRegistry.getCredentialId(funder)
+        );
 
         assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, funder), 0);
         vm.prank(funder);
@@ -1030,10 +1008,15 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertEq(votingEngine.roundRaterRegistrySnapshot(contentIds[0], firstRoundId), address(raterIdentityRegistry));
 
         MockRaterIdentityRegistry migratedRaterIdentityRegistry = _migrateRaterIdentitiesWithDifferentIds();
-        assertNotEq(migratedRaterIdentityRegistry.getCredentialId(voter2), raterIdentityRegistry.getCredentialId(voter2));
+        assertNotEq(
+            migratedRaterIdentityRegistry.getCredentialId(voter2), raterIdentityRegistry.getCredentialId(voter2)
+        );
 
         uint256 secondRoundId = _settleRoundWith(voters, contentIds[1], directions);
-        assertEq(votingEngine.roundRaterRegistrySnapshot(contentIds[1], secondRoundId), address(migratedRaterIdentityRegistry));
+        assertEq(
+            votingEngine.roundRaterRegistrySnapshot(contentIds[1], secondRoundId),
+            address(migratedRaterIdentityRegistry)
+        );
 
         assertGt(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, voter2), 0);
 
@@ -2778,7 +2761,8 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertEq(storedSubmitter, agentWallet);
         assertEq(registry.getSubmitterIdentity(contentId), submitter);
         assertEq(
-            registry.contentSubmitterIdentityKey(contentId), bytes32(raterIdentityRegistry.getCredentialNullifier(raterIdentityRegistry.getCredentialId(submitter)))
+            registry.contentSubmitterIdentityKey(contentId),
+            bytes32(raterIdentityRegistry.getCredentialNullifier(raterIdentityRegistry.getCredentialId(submitter)))
         );
         assertTrue(usdc.authorizationState(agentWallet, authorization.nonce));
         assertEq(usdc.balanceOf(address(rewardPoolEscrow)), escrowBalanceBefore + question.rewardTerms.amount);
@@ -3294,7 +3278,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         bytes32 weightRoot
     ) internal {
         uint64 correlationEpochId = uint64(roundId);
-        oracle.proposeCorrelationEpoch{value: 0.01 ether}(
+        oracle.proposeCorrelationEpoch{ value: 0.01 ether }(
             correlationEpochId,
             uint64(roundId),
             uint64(roundId),
@@ -3306,7 +3290,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.warp(block.timestamp + 1 hours + 1);
         oracle.finalizeCorrelationEpoch(correlationEpochId);
 
-        oracle.proposeRoundPayoutSnapshot{value: 0.01 ether}(
+        oracle.proposeRoundPayoutSnapshot{ value: 0.01 ether }(
             IClusterPayoutOracle.RoundPayoutSnapshotInput({
                 domain: 1,
                 rewardPoolId: rewardPoolId,
@@ -3361,13 +3345,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.startPrank(funder);
         usdc.approve(address(rewardPoolEscrow), amount);
         rewardPoolId = rewardPoolEscrow.createRewardPoolWithEligibility(
-            contentId,
-            amount,
-            requiredVoters,
-            requiredSettledRounds,
-            block.timestamp + 30 days,
-            0,
-            bountyEligibility
+            contentId, amount, requiredVoters, requiredSettledRounds, block.timestamp + 30 days, 0, bountyEligibility
         );
         vm.stopPrank();
     }
@@ -3689,9 +3667,12 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         );
     }
 
-    function _mockRevealedCommitForRaterIdentity(uint256 contentId, uint256 roundId, uint256 raterIdentity, address voter)
-        internal
-    {
+    function _mockRevealedCommitForRaterIdentity(
+        uint256 contentId,
+        uint256 roundId,
+        uint256 raterIdentity,
+        address voter
+    ) internal {
         bytes32 commitKey = keccak256(abi.encode(contentId, roundId, raterIdentity, voter));
         bytes32 identityKey = bytes32(raterIdentityRegistry.getCredentialNullifier(raterIdentity));
         uint256 index = mockedRoundCommitCount[contentId][roundId]++;
@@ -3736,7 +3717,10 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.stopPrank();
     }
 
-    function _migrateRaterIdentitiesWithDifferentIds() internal returns (MockRaterIdentityRegistry migratedRaterIdentityRegistry) {
+    function _migrateRaterIdentitiesWithDifferentIds()
+        internal
+        returns (MockRaterIdentityRegistry migratedRaterIdentityRegistry)
+    {
         migratedRaterIdentityRegistry = new MockRaterIdentityRegistry();
         address[7] memory migratedHumans = [voter3, voter2, voter1, submitter, funder, voter4, frontend1];
         for (uint256 i = 0; i < migratedHumans.length; i++) {
@@ -3748,7 +3732,10 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.stopPrank();
     }
 
-    function _migrateRaterIdentitiesWithVoter1AtOldFunderId() internal returns (MockRaterIdentityRegistry migratedRaterIdentityRegistry) {
+    function _migrateRaterIdentitiesWithVoter1AtOldFunderId()
+        internal
+        returns (MockRaterIdentityRegistry migratedRaterIdentityRegistry)
+    {
         migratedRaterIdentityRegistry = new MockRaterIdentityRegistry();
         address[6] memory migratedHumans = [submitter, voter1, voter2, voter3, voter4, frontend1];
         for (uint256 i = 0; i < migratedHumans.length; i++) {

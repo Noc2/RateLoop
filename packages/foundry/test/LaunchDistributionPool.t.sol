@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {Test, stdStorage, StdStorage} from "forge-std/Test.sol";
-import {ClusterPayoutOracle} from "../contracts/ClusterPayoutOracle.sol";
-import {LaunchDistributionPool} from "../contracts/LaunchDistributionPool.sol";
-import {LoopReputation} from "../contracts/LoopReputation.sol";
-import {RaterRegistry} from "../contracts/RaterRegistry.sol";
-import {IClusterPayoutOracle} from "../contracts/interfaces/IClusterPayoutOracle.sol";
-import {ILaunchDistributionPool} from "../contracts/interfaces/ILaunchDistributionPool.sol";
-import {MockWorldIDRouter} from "../contracts/mocks/MockWorldIDRouter.sol";
+import { Test, stdStorage, StdStorage } from "forge-std/Test.sol";
+import { ClusterPayoutOracle } from "../contracts/ClusterPayoutOracle.sol";
+import { LaunchDistributionPool } from "../contracts/LaunchDistributionPool.sol";
+import { LoopReputation } from "../contracts/LoopReputation.sol";
+import { RaterRegistry } from "../contracts/RaterRegistry.sol";
+import { IClusterPayoutOracle } from "../contracts/interfaces/IClusterPayoutOracle.sol";
+import { ILaunchDistributionPool } from "../contracts/interfaces/ILaunchDistributionPool.sol";
+import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
 
 contract LaunchDistributionPoolTest is Test {
     using stdStorage for StdStorage;
@@ -412,6 +412,7 @@ contract LaunchDistributionPoolTest is Test {
         assertTrue(pool.raterFullLaunchCapUnlocked(alice));
 
         registry.revokeHumanCredential(alice);
+        registry.clearRevokedHumanNullifier(bytes32("shared-human"));
         _verify(bob, bytes32("shared-human"));
         for (uint256 i = 0; i < 5; i++) {
             bytes32 anchorId = i % 2 == 0 ? bytes32("anchor-a") : bytes32("anchor-b");

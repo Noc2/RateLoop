@@ -48,6 +48,7 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         uint256 indexed rewardPoolId, uint8 indexed bountyKind, uint256 indexed challengedRoundId, bytes32 reasonHash
     );
     event RewardPoolEligibilitySet(uint256 indexed rewardPoolId, uint8 indexed bountyEligibility);
+    event RewardPoolClusterPayoutOracleSnapshotted(uint256 indexed rewardPoolId, address indexed clusterPayoutOracle);
 
     function createRewardPool(
         mapping(uint256 => RewardPool) storage rewardPools,
@@ -106,6 +107,19 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         }
     }
 
+    function snapshotRewardPoolClusterPayoutOracle(
+        mapping(uint256 => address) storage rewardPoolClusterPayoutOracle,
+        RoundVotingEngine votingEngine,
+        uint256 rewardPoolId,
+        uint8 asset
+    ) external {
+        if (asset != REWARD_ASSET_USDC) return;
+        address clusterPayoutOracle = votingEngine.protocolConfig().clusterPayoutOracle();
+        if (clusterPayoutOracle == address(0)) return;
+        rewardPoolClusterPayoutOracle[rewardPoolId] = clusterPayoutOracle;
+        emit RewardPoolClusterPayoutOracleSnapshotted(rewardPoolId, clusterPayoutOracle);
+    }
+
     function _storeRewardPool(
         mapping(uint256 => RewardPool) storage rewardPools,
         mapping(uint256 => address) storage rewardPoolPayerIdentity,
@@ -158,8 +172,9 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         address submitterIdentity = registry.getSubmitterIdentity(contentId);
         bytes32 submitterIdentityKey = registry.contentSubmitterIdentityKey(contentId);
         if (submitterIdentityKey == bytes32(0) && submitterIdentity != address(0)) {
-            submitterIdentityKey =
-                QuestionRewardPoolEscrowVoterLib.identityKeyForCurrentRater(votingEngine.protocolConfig(), submitterIdentity);
+            submitterIdentityKey = QuestionRewardPoolEscrowVoterLib.identityKeyForCurrentRater(
+                votingEngine.protocolConfig(), submitterIdentity
+            );
         }
 
         rewardPools[rewardPoolId] = RewardPool({

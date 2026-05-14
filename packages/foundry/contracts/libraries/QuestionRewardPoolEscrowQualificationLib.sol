@@ -4,6 +4,7 @@ pragma solidity ^0.8.24;
 import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import { ProtocolConfig } from "../ProtocolConfig.sol";
 import { RoundVotingEngine } from "../RoundVotingEngine.sol";
+import { IClusterPayoutOracle } from "../interfaces/IClusterPayoutOracle.sol";
 import { RoundLib } from "./RoundLib.sol";
 import { RewardPool, RoundSnapshot } from "./QuestionRewardPoolEscrowTypes.sol";
 import { QuestionRewardPoolEscrowEligibilityLib } from "./QuestionRewardPoolEscrowEligibilityLib.sol";
@@ -16,6 +17,30 @@ library QuestionRewardPoolEscrowQualificationLib {
     uint256 internal constant BPS_SCALE = 10_000;
 
     error RewardPoolCursorNeedsAdvance();
+
+    event RewardPoolRoundQualified(
+        uint256 indexed rewardPoolId,
+        uint256 indexed contentId,
+        uint256 indexed roundId,
+        uint256 allocation,
+        uint256 eligibleVoters,
+        uint256 frontendFeeAllocation
+    );
+    event RewardPoolRoundEffectiveUnits(
+        uint256 indexed rewardPoolId,
+        uint256 indexed contentId,
+        uint256 indexed roundId,
+        uint256 rawEligibleVoters,
+        uint256 effectiveParticipantUnits,
+        uint256 totalClaimWeight
+    );
+    event RewardPoolRoundCorrelationSnapshotApplied(
+        uint256 indexed rewardPoolId,
+        uint256 indexed contentId,
+        uint256 indexed roundId,
+        uint64 correlationEpochId,
+        bytes32 weightRoot
+    );
 
     struct QualificationContext {
         RoundVotingEngine votingEngine;
@@ -156,6 +181,179 @@ library QuestionRewardPoolEscrowQualificationLib {
         totalClaimWeight = totalWeight;
     }
 
+    function qualifyRoundWithClusterSnapshot(
+        mapping(uint256 => mapping(uint256 => RoundSnapshot)) storage roundSnapshots,
+        mapping(uint256 => address) storage rewardPoolPayerIdentity,
+        mapping(uint256 => bytes32) storage rewardPoolPayerIdentityKey,
+        mapping(uint256 => address) storage rewardPoolClusterPayoutOracle,
+        RoundVotingEngine votingEngine,
+        RewardPool storage rewardPool,
+        uint256 rewardPoolId,
+        uint256 roundId,
+        uint8 payoutDomain
+    ) external {
+        require(roundId >= rewardPool.startRoundId, "Round too early");
+        require(!roundSnapshots[rewardPoolId][roundId].qualified, "Round qualified");
+        require(roundId == rewardPool.nextRoundToEvaluate, "Round out of order");
+
+        (bool roundSettled,, uint256 baseRawEligibleVoters,,, uint48 settledAt) = previewRoundQualification(
+            QualificationContext({
+                votingEngine: votingEngine,
+                protocolConfig: votingEngine.protocolConfig(),
+                rewardId: rewardPool.id,
+                contentId: rewardPool.contentId,
+                roundId: roundId,
+                bountyClosesAt: rewardPool.bountyClosesAt,
+                requiredVoters: rewardPool.requiredVoters,
+                bountyEligibility: rewardPool.bountyEligibility,
+                funder: rewardPool.funder,
+                funderIdentity: rewardPoolPayerIdentity[rewardPool.id],
+                funderIdentityKey: rewardPoolPayerIdentityKey[rewardPool.id],
+                submitterIdentity: rewardPool.submitterIdentity,
+                submitterIdentityKey: rewardPool.submitterIdentityKey
+            })
+        );
+        require(roundSettled, "Round not settled");
+        require(votingEngine.roundUnrevealedCleanupRemaining(rewardPool.contentId, roundId) == 0, "Cleanup pending");
+
+        IClusterPayoutOracle.RoundPayoutSnapshot memory payoutSnapshot = _finalizedQuestionPayoutSnapshot(
+            rewardPoolClusterPayoutOracle, rewardPoolId, rewardPool.contentId, roundId, payoutDomain
+        );
+        require(payoutSnapshot.rawEligibleVoters == baseRawEligibleVoters, "Cluster snapshot mismatch");
+
+        uint256 effectiveParticipantUnits = payoutSnapshot.effectiveParticipantUnits;
+        uint256 totalClaimWeight = payoutSnapshot.totalClaimWeight;
+        uint256 minEffectiveUnits = rewardPool.requiredVoters > MIN_EFFECTIVE_PARTICIPANT_UNITS
+            ? rewardPool.requiredVoters
+            : MIN_EFFECTIVE_PARTICIPANT_UNITS;
+        uint256 effectiveFloor = minEffectiveUnits * BPS_SCALE;
+        require(
+            baseRawEligibleVoters >= rewardPool.requiredVoters && effectiveParticipantUnits >= effectiveFloor
+                && totalClaimWeight > 0,
+            "Too few eligible voters"
+        );
+
+        uint256 allocation = _previewRoundAllocation(rewardPool);
+        require(allocation > 0 && allocation <= rewardPool.unallocatedAmount, "No allocation");
+        require(allocation >= effectiveParticipantUnits, "Small allocation");
+        uint256 frontendFeeAllocation = (allocation * rewardPool.frontendFeeBps) / BPS_SCALE;
+
+        unchecked {
+            rewardPool.qualifiedRounds++;
+        }
+        uint256 claimDeadline = block.timestamp > settledAt ? block.timestamp : settledAt;
+        if (claimDeadline > rewardPool.claimDeadline) {
+            rewardPool.claimDeadline = claimDeadline.toUint64();
+        }
+        rewardPool.nextRoundToEvaluate = (roundId + 1).toUint64();
+        rewardPool.unallocatedAmount -= allocation;
+
+        roundSnapshots[rewardPoolId][roundId] = RoundSnapshot({
+            qualified: true,
+            eligibleVoters: effectiveParticipantUnits.toUint32(),
+            rawEligibleVoters: baseRawEligibleVoters.toUint32(),
+            allocation: allocation,
+            claimedCount: 0,
+            frontendFeeAllocation: frontendFeeAllocation,
+            totalClaimWeight: totalClaimWeight,
+            claimedWeight: 0,
+            claimedAmount: 0,
+            frontendFeeClaimedAmount: 0
+        });
+
+        emit RewardPoolRoundQualified(
+            rewardPoolId, rewardPool.contentId, roundId, allocation, effectiveParticipantUnits, frontendFeeAllocation
+        );
+        emit RewardPoolRoundEffectiveUnits(
+            rewardPoolId,
+            rewardPool.contentId,
+            roundId,
+            baseRawEligibleVoters,
+            effectiveParticipantUnits,
+            totalClaimWeight
+        );
+        emit RewardPoolRoundCorrelationSnapshotApplied(
+            rewardPoolId, rewardPool.contentId, roundId, payoutSnapshot.correlationEpochId, payoutSnapshot.weightRoot
+        );
+    }
+
+    function previewRoundQualificationWithClusterSnapshot(
+        mapping(uint256 => address) storage rewardPoolPayerIdentity,
+        mapping(uint256 => bytes32) storage rewardPoolPayerIdentityKey,
+        mapping(uint256 => address) storage rewardPoolClusterPayoutOracle,
+        RoundVotingEngine votingEngine,
+        RewardPool storage rewardPool,
+        uint256 roundId,
+        uint8 payoutDomain
+    )
+        external
+        view
+        returns (
+            bool roundSettled,
+            bool canQualify,
+            uint256 rawEligibleVoters,
+            uint256 effectiveParticipantUnits,
+            uint256 totalClaimWeight,
+            uint48 settledAt
+        )
+    {
+        return _previewRoundQualificationWithClusterSnapshot(
+            rewardPoolPayerIdentity,
+            rewardPoolPayerIdentityKey,
+            rewardPoolClusterPayoutOracle,
+            votingEngine,
+            rewardPool,
+            roundId,
+            payoutDomain
+        );
+    }
+
+    function clusterRoundQualificationStatus(
+        mapping(uint256 => address) storage rewardPoolPayerIdentity,
+        mapping(uint256 => bytes32) storage rewardPoolPayerIdentityKey,
+        mapping(uint256 => address) storage rewardPoolClusterPayoutOracle,
+        RoundVotingEngine votingEngine,
+        RewardPool storage rewardPool,
+        uint256 roundId,
+        uint8 payoutDomain
+    ) external view returns (bool roundFinished, bool canQualify, uint256 eligibleVoters) {
+        (bool roundSettled,, uint256 rawEligibleVoters,,,) = _previewRoundQualificationWithClusterSnapshot(
+            rewardPoolPayerIdentity,
+            rewardPoolPayerIdentityKey,
+            rewardPoolClusterPayoutOracle,
+            votingEngine,
+            rewardPool,
+            roundId,
+            payoutDomain
+        );
+        if (!roundSettled) return (false, false, 0);
+
+        address clusterPayoutOracle = _clusterPayoutOracleAddress(rewardPoolClusterPayoutOracle, rewardPool.id);
+        try IClusterPayoutOracle(clusterPayoutOracle)
+            .getRoundPayoutSnapshot(payoutDomain, rewardPool.id, rewardPool.contentId, roundId) returns (
+            IClusterPayoutOracle.RoundPayoutSnapshot memory payoutSnapshot
+        ) {
+            if (
+                payoutSnapshot.status != IClusterPayoutOracle.SnapshotStatus.Finalized
+                    || payoutSnapshot.rawEligibleVoters != rawEligibleVoters
+            ) {
+                return (false, false, 0);
+            }
+
+            uint256 effectiveParticipantUnits = payoutSnapshot.effectiveParticipantUnits;
+            uint256 minEffectiveUnits = rewardPool.requiredVoters > MIN_EFFECTIVE_PARTICIPANT_UNITS
+                ? rewardPool.requiredVoters
+                : MIN_EFFECTIVE_PARTICIPANT_UNITS;
+            uint256 effectiveFloor = minEffectiveUnits * BPS_SCALE;
+            canQualify = rawEligibleVoters >= rewardPool.requiredVoters && effectiveParticipantUnits >= effectiveFloor
+                && payoutSnapshot.totalClaimWeight > 0;
+            if (canQualify) canQualify = _previewRoundAllocation(rewardPool) >= effectiveParticipantUnits;
+            return (true, canQualify, effectiveParticipantUnits);
+        } catch {
+            return (false, false, 0);
+        }
+    }
+
     function isExcludedRater(
         bytes32 identityKey,
         address account,
@@ -186,14 +384,14 @@ library QuestionRewardPoolEscrowQualificationLib {
                 );
                 if (
                     !_isExcludedRater(
-                        identityKey,
-                        holder,
-                        ctx.funder,
-                        ctx.funderIdentity,
-                        ctx.funderIdentityKey,
-                        ctx.submitterIdentity,
-                        ctx.submitterIdentityKey
-                    )
+                            identityKey,
+                            holder,
+                            ctx.funder,
+                            ctx.funderIdentity,
+                            ctx.funderIdentityKey,
+                            ctx.submitterIdentity,
+                            ctx.submitterIdentityKey
+                        )
                         && QuestionRewardPoolEscrowEligibilityLib.isAccountEligibleForBounty(
                             ctx.protocolConfig, ctx.bountyEligibility, holder
                         )
@@ -230,6 +428,88 @@ library QuestionRewardPoolEscrowQualificationLib {
             ? rewardPool.unallocatedAmount
             : rewardPool.fundedAmount / rewardPool.requiredSettledRounds;
         if (allocation > rewardPool.unallocatedAmount) return 0;
+    }
+
+    function _previewRoundQualificationWithClusterSnapshot(
+        mapping(uint256 => address) storage rewardPoolPayerIdentity,
+        mapping(uint256 => bytes32) storage rewardPoolPayerIdentityKey,
+        mapping(uint256 => address) storage rewardPoolClusterPayoutOracle,
+        RoundVotingEngine votingEngine,
+        RewardPool storage rewardPool,
+        uint256 roundId,
+        uint8 payoutDomain
+    )
+        private
+        view
+        returns (
+            bool roundSettled,
+            bool canQualify,
+            uint256 rawEligibleVoters,
+            uint256 effectiveParticipantUnits,
+            uint256 totalClaimWeight,
+            uint48 settledAt
+        )
+    {
+        (roundSettled,, rawEligibleVoters,,, settledAt) = previewRoundQualification(
+            QualificationContext({
+                votingEngine: votingEngine,
+                protocolConfig: votingEngine.protocolConfig(),
+                rewardId: rewardPool.id,
+                contentId: rewardPool.contentId,
+                roundId: roundId,
+                bountyClosesAt: rewardPool.bountyClosesAt,
+                requiredVoters: rewardPool.requiredVoters,
+                bountyEligibility: rewardPool.bountyEligibility,
+                funder: rewardPool.funder,
+                funderIdentity: rewardPoolPayerIdentity[rewardPool.id],
+                funderIdentityKey: rewardPoolPayerIdentityKey[rewardPool.id],
+                submitterIdentity: rewardPool.submitterIdentity,
+                submitterIdentityKey: rewardPool.submitterIdentityKey
+            })
+        );
+        if (!roundSettled) return (false, false, 0, 0, 0, 0);
+
+        address clusterPayoutOracle = _clusterPayoutOracleAddress(rewardPoolClusterPayoutOracle, rewardPool.id);
+        try IClusterPayoutOracle(clusterPayoutOracle)
+            .getRoundPayoutSnapshot(payoutDomain, rewardPool.id, rewardPool.contentId, roundId) returns (
+            IClusterPayoutOracle.RoundPayoutSnapshot memory payoutSnapshot
+        ) {
+            if (payoutSnapshot.status != IClusterPayoutOracle.SnapshotStatus.Finalized) {
+                return (roundSettled, false, rawEligibleVoters, 0, 0, settledAt);
+            }
+            if (payoutSnapshot.rawEligibleVoters != rawEligibleVoters) {
+                return (roundSettled, false, rawEligibleVoters, 0, 0, settledAt);
+            }
+            effectiveParticipantUnits = payoutSnapshot.effectiveParticipantUnits;
+            totalClaimWeight = payoutSnapshot.totalClaimWeight;
+            uint256 minEffectiveUnits = rewardPool.requiredVoters > MIN_EFFECTIVE_PARTICIPANT_UNITS
+                ? rewardPool.requiredVoters
+                : MIN_EFFECTIVE_PARTICIPANT_UNITS;
+            uint256 effectiveFloor = minEffectiveUnits * BPS_SCALE;
+            canQualify = rawEligibleVoters >= rewardPool.requiredVoters && effectiveParticipantUnits >= effectiveFloor
+                && totalClaimWeight > 0;
+        } catch {
+            return (roundSettled, false, rawEligibleVoters, 0, 0, settledAt);
+        }
+    }
+
+    function _finalizedQuestionPayoutSnapshot(
+        mapping(uint256 => address) storage rewardPoolClusterPayoutOracle,
+        uint256 rewardPoolId,
+        uint256 contentId,
+        uint256 roundId,
+        uint8 payoutDomain
+    ) private view returns (IClusterPayoutOracle.RoundPayoutSnapshot memory payoutSnapshot) {
+        payoutSnapshot = IClusterPayoutOracle(_clusterPayoutOracleAddress(rewardPoolClusterPayoutOracle, rewardPoolId))
+            .getRoundPayoutSnapshot(payoutDomain, rewardPoolId, contentId, roundId);
+        require(payoutSnapshot.status == IClusterPayoutOracle.SnapshotStatus.Finalized, "Cluster snapshot pending");
+    }
+
+    function _clusterPayoutOracleAddress(
+        mapping(uint256 => address) storage rewardPoolClusterPayoutOracle,
+        uint256 rewardPoolId
+    ) private view returns (address) {
+        return rewardPoolClusterPayoutOracle[rewardPoolId];
     }
 
     function _revealedByBountyClose(uint64 bountyClosesAt, uint48 revealedAt) private pure returns (bool) {
