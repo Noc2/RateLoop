@@ -5,10 +5,11 @@ import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
 import { ContentRegistry } from "../ContentRegistry.sol";
+import { ProtocolConfig } from "../ProtocolConfig.sol";
 import { RoundVotingEngine } from "../RoundVotingEngine.sol";
-import { IVoterIdNFT } from "../interfaces/IVoterIdNFT.sol";
 import { QuestionRewardPoolEscrowEligibilityLib } from "./QuestionRewardPoolEscrowEligibilityLib.sol";
 import { QuestionRewardPoolEscrowTransferLib } from "./QuestionRewardPoolEscrowTransferLib.sol";
+import { QuestionRewardPoolEscrowVoterLib } from "./QuestionRewardPoolEscrowVoterLib.sol";
 import { RewardPool } from "./QuestionRewardPoolEscrowTypes.sol";
 import { RoundLib } from "./RoundLib.sol";
 
@@ -29,7 +30,7 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         uint256 indexed rewardPoolId,
         uint256 indexed contentId,
         address indexed funder,
-        uint256 funderVoterId,
+        bytes32 funderIdentityKey,
         uint256 amount,
         uint256 requiredVoters,
         uint256 requiredSettledRounds,
@@ -50,12 +51,10 @@ library QuestionRewardPoolEscrowPoolActionsLib {
 
     function createRewardPool(
         mapping(uint256 => RewardPool) storage rewardPools,
-        mapping(uint256 => uint256) storage rewardPoolSubmitterNullifier,
         mapping(uint256 => address) storage rewardPoolPayerIdentity,
-        mapping(uint256 => uint256) storage rewardPoolPayerNullifier,
+        mapping(uint256 => bytes32) storage rewardPoolPayerIdentityKey,
         ContentRegistry registry,
         RoundVotingEngine votingEngine,
-        IVoterIdNFT voterIdNFT,
         IERC20 hrepToken,
         IERC20 usdcToken,
         uint16 defaultFrontendFeeBps,
@@ -83,12 +82,10 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         updatedNextRewardPoolId = nextRewardPoolId + 1;
         _storeRewardPool(
             rewardPools,
-            rewardPoolSubmitterNullifier,
             rewardPoolPayerIdentity,
-            rewardPoolPayerNullifier,
+            rewardPoolPayerIdentityKey,
             registry,
             votingEngine,
-            voterIdNFT,
             defaultFrontendFeeBps,
             rewardPoolId,
             contentId,
@@ -111,12 +108,10 @@ library QuestionRewardPoolEscrowPoolActionsLib {
 
     function _storeRewardPool(
         mapping(uint256 => RewardPool) storage rewardPools,
-        mapping(uint256 => uint256) storage rewardPoolSubmitterNullifier,
         mapping(uint256 => address) storage rewardPoolPayerIdentity,
-        mapping(uint256 => uint256) storage rewardPoolPayerNullifier,
+        mapping(uint256 => bytes32) storage rewardPoolPayerIdentityKey,
         ContentRegistry registry,
         RoundVotingEngine votingEngine,
-        IVoterIdNFT voterIdNFT,
         uint16 defaultFrontendFeeBps,
         uint256 rewardPoolId,
         uint256 contentId,
@@ -155,11 +150,17 @@ library QuestionRewardPoolEscrowPoolActionsLib {
 
         uint256 currentRoundId = votingEngine.currentRoundId(contentId);
         uint256 startRoundId = currentRoundId == 0 ? 1 : currentRoundId + 1;
-        (uint256 funderVoterId, address funderIdentity,) = _resolveFunderIdentity(voterIdNFT, funder);
+        (address funderIdentity, bytes32 funderIdentityKey) =
+            _resolveFunderIdentity(votingEngine.protocolConfig(), funder);
         address effectivePayer = payer == address(0) ? funder : payer;
-        (, address payerIdentity, uint256 payerNullifier) = _resolveFunderIdentity(voterIdNFT, effectivePayer);
+        (address payerIdentity, bytes32 payerIdentityKey) =
+            _resolveFunderIdentity(votingEngine.protocolConfig(), effectivePayer);
         address submitterIdentity = registry.getSubmitterIdentity(contentId);
-        uint256 submitterNullifier = registry.contentSubmitterNullifier(contentId);
+        bytes32 submitterIdentityKey = registry.contentSubmitterIdentityKey(contentId);
+        if (submitterIdentityKey == bytes32(0) && submitterIdentity != address(0)) {
+            submitterIdentityKey =
+                QuestionRewardPoolEscrowVoterLib.identityKeyForCurrentRater(votingEngine.protocolConfig(), submitterIdentity);
+        }
 
         rewardPools[rewardPoolId] = RewardPool({
             id: rewardPoolId.toUint64(),
@@ -173,8 +174,8 @@ library QuestionRewardPoolEscrowPoolActionsLib {
             funder: funder,
             funderIdentity: funderIdentity,
             submitterIdentity: submitterIdentity,
-            submitterVoterId: 0,
-            submitterVoterIdNFT: address(0),
+            funderIdentityKey: funderIdentityKey,
+            submitterIdentityKey: submitterIdentityKey,
             asset: asset,
             fundedAmount: fundedAmount,
             unallocatedAmount: fundedAmount,
@@ -191,15 +192,14 @@ library QuestionRewardPoolEscrowPoolActionsLib {
             reasonHash: bytes32(0),
             bountyEligibilityDataHash: QuestionRewardPoolEscrowEligibilityLib.eligibilityDataHash()
         });
-        rewardPoolSubmitterNullifier[rewardPoolId] = submitterNullifier;
         rewardPoolPayerIdentity[rewardPoolId] = payerIdentity;
-        rewardPoolPayerNullifier[rewardPoolId] = payerNullifier;
+        rewardPoolPayerIdentityKey[rewardPoolId] = payerIdentityKey;
 
         emit RewardPoolCreated(
             rewardPoolId,
             contentId,
             funder,
-            funderVoterId,
+            funderIdentityKey,
             fundedAmount,
             requiredVoters,
             requiredSettledRounds,
@@ -235,24 +235,14 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         emit RewardPoolPurposeSet(rewardPoolId, bountyKind, challengedRoundId, reasonHash);
     }
 
-    function _resolveFunderIdentity(IVoterIdNFT voterIdNFT, address funder)
+    function _resolveFunderIdentity(ProtocolConfig protocolConfig, address funder)
         private
         view
-        returns (uint256 funderVoterId, address funderIdentity, uint256 funderNullifier)
+        returns (address funderIdentity, bytes32 funderIdentityKey)
     {
-        if (address(voterIdNFT) == address(0)) {
-            return (0, funder, 0);
-        }
-        funderVoterId = voterIdNFT.getTokenId(funder);
-        if (funderVoterId == 0) {
-            return (0, funder, 0);
-        }
-
-        funderIdentity = voterIdNFT.getHolder(funderVoterId);
-        if (funderIdentity == address(0)) {
-            funderIdentity = funder;
-        }
-        funderNullifier = voterIdNFT.getNullifier(funderVoterId);
+        funderIdentity = QuestionRewardPoolEscrowVoterLib.resolveCurrentRater(protocolConfig, funder).holder;
+        if (funderIdentity == address(0)) funderIdentity = funder;
+        funderIdentityKey = QuestionRewardPoolEscrowVoterLib.identityKeyForCurrentRater(protocolConfig, funder);
     }
 
     function _rewardToken(IERC20 hrepToken, IERC20 usdcToken, uint8 asset) private pure returns (IERC20 token) {

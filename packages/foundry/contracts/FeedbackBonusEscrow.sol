@@ -13,12 +13,12 @@ import { ContentRegistry } from "./ContentRegistry.sol";
 import { RoundVotingEngine } from "./RoundVotingEngine.sol";
 import { ProtocolConfig } from "./ProtocolConfig.sol";
 import { IFrontendRegistry } from "./interfaces/IFrontendRegistry.sol";
-import { IVoterIdNFT } from "./interfaces/IVoterIdNFT.sol";
+import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol";
 import { RoundLib } from "./libraries/RoundLib.sol";
 import { TokenTransferLib } from "./libraries/TokenTransferLib.sol";
 
 /// @title FeedbackBonusEscrow
-/// @notice Holds optional USDC bonuses for useful voter feedback and pays awarded feedback hashes after a round ends.
+/// @notice Holds optional USDC bonuses for useful rater feedback and pays awarded feedback hashes after a round ends.
 contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, PausableUpgradeable, ReentrancyGuardTransient {
     using SafeERC20 for IERC20;
     using SafeCast for uint256;
@@ -37,11 +37,11 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
         uint48 feedbackClosesAt;
         address funder;
         address funderIdentity;
+        bytes32 funderIdentityKey;
         address awarder;
-        uint256 funderVoterId;
         address submitterIdentity;
-        uint256 submitterVoterId;
-        address voterIdNFTSnapshot;
+        bytes32 submitterIdentityKey;
+        address raterRegistrySnapshot;
         uint256 fundedAmount;
         uint256 remainingAmount;
         bool forfeited;
@@ -51,14 +51,12 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
     IERC20 public usdcToken;
     ContentRegistry public registry;
     RoundVotingEngine public votingEngine;
-    IVoterIdNFT public voterIdNFT;
+    IRaterIdentityRegistry public raterRegistry;
     uint256 public nextFeedbackBonusPoolId;
     uint16 public defaultFrontendFeeBps;
 
     mapping(uint256 => FeedbackBonusPool) public feedbackBonusPools;
-    mapping(uint256 => uint256) private poolFunderNullifier;
-    mapping(uint256 => uint256) private poolSubmitterNullifier;
-    mapping(uint256 => mapping(uint256 => bool)) public voterIdAwarded;
+    mapping(uint256 => mapping(bytes32 => bool)) public identityKeyAwarded;
     mapping(uint256 => mapping(bytes32 => bool)) public feedbackHashAwarded;
 
     /// @dev Reserved storage gap for future upgrades. Mirrors the pattern used by every other
@@ -84,7 +82,7 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
         uint256 indexed contentId,
         uint256 indexed roundId,
         address recipient,
-        uint256 voterId,
+        bytes32 identityKey,
         bytes32 feedbackHash,
         uint256 grossAmount,
         uint256 recipientAmount,
@@ -94,7 +92,7 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
     );
     event FeedbackBonusForfeited(uint256 indexed poolId, address indexed treasury, uint256 amount);
     event DefaultFrontendFeeBpsUpdated(uint256 previousFrontendFeeBps, uint256 newFrontendFeeBps);
-    event VoterIdNFTUpdated(address voterIdNFT);
+    event RaterRegistryUpdated(address raterRegistry);
     event VotingEngineUpdated(address votingEngine);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
@@ -107,7 +105,7 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
         address usdcToken_,
         address registry_,
         address votingEngine_,
-        address voterIdNFT_
+        address raterRegistry_
     ) external initializer {
         require(admin != address(0), "Invalid admin");
         require(usdcToken_ != address(0), "Invalid token");
@@ -124,7 +122,7 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
         usdcToken = IERC20(usdcToken_);
         registry = ContentRegistry(registry_);
         votingEngine = RoundVotingEngine(votingEngine_);
-        voterIdNFT = IVoterIdNFT(voterIdNFT_);
+        raterRegistry = IRaterIdentityRegistry(raterRegistry_);
         nextFeedbackBonusPoolId = 1;
         defaultFrontendFeeBps = DEFAULT_FRONTEND_FEE_BPS.toUint16();
     }
@@ -145,9 +143,12 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
         _requireTargetRound(contentId, roundId);
 
         uint256 receivedAmount = _pullUsdc(msg.sender, amount);
-        (uint256 funderVoterId, address funderIdentity, uint256 funderNullifier) = _resolveIdentity(msg.sender);
+        (address funderIdentity, bytes32 funderIdentityKey) = _resolveIdentity(contentId, roundId, msg.sender);
         address submitterIdentity = registry.getSubmitterIdentity(contentId);
-        (uint256 submitterVoterId,, uint256 submitterNullifier) = _resolveIdentity(submitterIdentity);
+        bytes32 submitterIdentityKey = registry.contentSubmitterIdentityKey(contentId);
+        if (submitterIdentityKey == bytes32(0) && submitterIdentity != address(0)) {
+            (, submitterIdentityKey) = _resolveIdentity(contentId, roundId, submitterIdentity);
+        }
 
         poolId = nextFeedbackBonusPoolId++;
         feedbackBonusPools[poolId] = FeedbackBonusPool({
@@ -157,18 +158,16 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
             feedbackClosesAt: feedbackClosesAt.toUint48(),
             funder: msg.sender,
             funderIdentity: funderIdentity,
+            funderIdentityKey: funderIdentityKey,
             awarder: awarder,
-            funderVoterId: funderVoterId,
             submitterIdentity: submitterIdentity,
-            submitterVoterId: submitterVoterId,
-            voterIdNFTSnapshot: address(voterIdNFT),
+            submitterIdentityKey: submitterIdentityKey,
+            raterRegistrySnapshot: _roundRaterRegistryAddress(contentId, roundId),
             fundedAmount: receivedAmount,
             remainingAmount: receivedAmount,
             forfeited: false,
             frontendFeeBps: defaultFrontendFeeBps
         });
-        poolFunderNullifier[poolId] = funderNullifier;
-        poolSubmitterNullifier[poolId] = submitterNullifier;
 
         emit FeedbackBonusPoolCreated(
             poolId, contentId, roundId, msg.sender, awarder, receivedAmount, feedbackClosesAt, defaultFrontendFeeBps
@@ -190,19 +189,22 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
         require(grossAmount > 0 && grossAmount <= pool.remainingAmount, "Invalid amount");
         require(!feedbackHashAwarded[poolId][feedbackHash], "Feedback already awarded");
 
-        (uint256 voterId, address rewardRecipient, bytes32 commitKey, address frontend) =
-            _requireRevealedIndependentVoter(pool, recipient);
-        uint256 awardVoterId = votingEngine.commitVoterId(pool.contentId, pool.roundId, commitKey);
-        if (awardVoterId == 0) awardVoterId = voterId;
-        require(!voterIdAwarded[poolId][voterId] && !voterIdAwarded[poolId][awardVoterId], "Voter already awarded");
+        (bytes32 identityKey, address rewardRecipient, bytes32 commitKey, address frontend) =
+            _requireRevealedIndependentRater(pool, recipient);
+        bytes32 awardIdentityKey = votingEngine.commitIdentityKey(pool.contentId, pool.roundId, commitKey);
+        if (awardIdentityKey == bytes32(0)) awardIdentityKey = identityKey;
+        require(
+            !identityKeyAwarded[poolId][identityKey] && !identityKeyAwarded[poolId][awardIdentityKey],
+            "Rater already awarded"
+        );
 
         uint256 frontendFee;
         address frontendRecipient;
         (recipientAmount, frontendFee, frontendRecipient) = _splitAward(pool, commitKey, frontend, grossAmount);
 
         pool.remainingAmount -= grossAmount;
-        voterIdAwarded[poolId][awardVoterId] = true;
-        if (awardVoterId != voterId) voterIdAwarded[poolId][voterId] = true;
+        identityKeyAwarded[poolId][awardIdentityKey] = true;
+        if (awardIdentityKey != identityKey) identityKeyAwarded[poolId][identityKey] = true;
         feedbackHashAwarded[poolId][feedbackHash] = true;
 
         uint256 paidFrontendFee = _routeFrontendFee(usdcToken, frontendRecipient, frontendFee);
@@ -220,7 +222,7 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
             pool.contentId,
             pool.roundId,
             rewardRecipient,
-            voterId,
+            awardIdentityKey,
             feedbackHash,
             grossAmount,
             recipientAmount,
@@ -251,16 +253,10 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
         emit FeedbackBonusForfeited(poolId, treasury, forfeitedAmount);
     }
 
-    function setVoterIdNFT(address voterIdNFT_) external onlyRole(CONFIG_ROLE) {
-        require(
-            voterIdNFT_ == address(0)
-                || ((address(registry.voterIdNFT()) == address(0) || voterIdNFT_ == address(registry.voterIdNFT()))
-                    && (votingEngine.protocolConfig().voterIdNFT() == address(0)
-                        || voterIdNFT_ == votingEngine.protocolConfig().voterIdNFT())),
-            "Voter ID mismatch"
-        );
-        voterIdNFT = IVoterIdNFT(voterIdNFT_);
-        emit VoterIdNFTUpdated(voterIdNFT_);
+    function setRaterRegistry(address raterRegistry_) external onlyRole(CONFIG_ROLE) {
+        require(raterRegistry_ != address(0), "Invalid registry");
+        raterRegistry = IRaterIdentityRegistry(raterRegistry_);
+        emit RaterRegistryUpdated(raterRegistry_);
     }
 
     function setVotingEngine(address) external view onlyRole(CONFIG_ROLE) {
@@ -305,10 +301,10 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
         require(registry.votingEngine() == address(votingEngine), "Stale engine");
     }
 
-    function _requireRevealedIndependentVoter(FeedbackBonusPool storage pool, address recipient)
+    function _requireRevealedIndependentRater(FeedbackBonusPool storage pool, address recipient)
         internal
         view
-        returns (uint256 voterId, address rewardRecipient, bytes32 commitKey, address frontend)
+        returns (bytes32 identityKey, address rewardRecipient, bytes32 commitKey, address frontend)
     {
         require(recipient != address(0), "Invalid recipient");
         (, RoundLib.RoundState state,,,,,,,,,,,,) = votingEngine.rounds(pool.contentId, pool.roundId);
@@ -318,8 +314,8 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
             "Round not settled"
         );
 
-        (voterId, rewardRecipient, commitKey) = _resolveRecipientCommit(pool, recipient);
-        require(!_isExcludedClaimant(pool, voterId, recipient), "Excluded voter");
+        (identityKey, rewardRecipient, commitKey) = _resolveRecipientCommit(pool, recipient);
+        require(!_isExcludedRater(pool, identityKey), "Excluded rater");
         require(commitKey != bytes32(0), "No commit");
 
         (address voter,, address commitFrontend,, bool revealed,,) =
@@ -328,38 +324,29 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
         require(voter != address(0) && revealed, "Vote not revealed");
     }
 
-    function _isExcludedVoter(FeedbackBonusPool storage pool, uint256 voterId) internal view returns (bool) {
-        if (voterId == 0) return true;
-        uint256 voterNullifier = _roundVoterIdNft(pool.contentId, pool.roundId).getNullifier(voterId);
-        if (
-            voterNullifier != 0
-                && (voterNullifier == poolFunderNullifier[pool.id] || voterNullifier == poolSubmitterNullifier[pool.id])
-        ) {
-            return true;
-        }
-        if (
-            pool.voterIdNFTSnapshot == address(_roundVoterIdNft(pool.contentId, pool.roundId))
-                && (voterId == pool.funderVoterId || voterId == pool.submitterVoterId)
-        ) {
-            return true;
-        }
-        if (voterId == _voterIdForRound(pool.contentId, pool.roundId, pool.funder)) return true;
+    function _isExcludedRater(FeedbackBonusPool storage pool, bytes32 identityKey) internal view returns (bool) {
+        if (identityKey == bytes32(0)) return true;
+        if (identityKey == pool.funderIdentityKey || identityKey == pool.submitterIdentityKey) return true;
+        if (identityKey == _identityKeyForRound(pool.contentId, pool.roundId, pool.funder)) return true;
         if (
             pool.funderIdentity != address(0)
-                && voterId == _voterIdForRound(pool.contentId, pool.roundId, pool.funderIdentity)
+                && identityKey == _identityKeyForRound(pool.contentId, pool.roundId, pool.funderIdentity)
         ) {
             return true;
         }
         if (
             pool.submitterIdentity != address(0)
-                && voterId == _voterIdForRound(pool.contentId, pool.roundId, pool.submitterIdentity)
+                && identityKey == _identityKeyForRound(pool.contentId, pool.roundId, pool.submitterIdentity)
         ) {
             return true;
         }
 
+        bytes32 currentSubmitterIdentityKey = registry.contentSubmitterIdentityKey(pool.contentId);
+        if (currentSubmitterIdentityKey != bytes32(0) && identityKey == currentSubmitterIdentityKey) return true;
+
         address currentSubmitterIdentity = registry.getSubmitterIdentity(pool.contentId);
         return currentSubmitterIdentity != address(0)
-            && voterId == _voterIdForRound(pool.contentId, pool.roundId, currentSubmitterIdentity);
+            && identityKey == _identityKeyForRound(pool.contentId, pool.roundId, currentSubmitterIdentity);
     }
 
     function _splitAward(FeedbackBonusPool storage pool, bytes32 commitKey, address frontend, uint256 grossAmount)
@@ -406,7 +393,7 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
                 return address(0);
             }
             // Round-time eligibility gate: a frontend that re-registered after the round
-            // settled cannot revive feedback-bonus fees. Subsumes slash/exit/Voter ID checks.
+            // settled cannot revive feedback-bonus fees. Subsumes slash/exit checks.
             (,,,,,,,,,, uint48 roundSettledAt,,,) = votingEngine.rounds(contentId, roundId);
             if (_canClaimFeesForRound(frontendRegistry, frontend, roundSettledAt)) {
                 frontendRecipient = operator;
@@ -428,56 +415,45 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
         }
     }
 
-    function _isExcludedClaimant(FeedbackBonusPool storage pool, uint256 voterId, address recipient)
-        internal
-        view
-        returns (bool)
-    {
-        if (voterId != 0) return _isExcludedVoter(pool, voterId);
-        return recipient == pool.funder || recipient == pool.funderIdentity || recipient == pool.submitterIdentity;
-    }
-
     function _resolveRecipientCommit(FeedbackBonusPool storage pool, address recipient)
         internal
         view
-        returns (uint256 voterId, address rewardRecipient, bytes32 commitKey)
+        returns (bytes32 identityKey, address rewardRecipient, bytes32 commitKey)
     {
-        rewardRecipient = recipient;
-        address voterIdNftAddress = _roundVoterIdNftAddress(pool.contentId, pool.roundId);
-        if (voterIdNftAddress != address(0)) {
-            IVoterIdNFT roundVoterIdNft = IVoterIdNFT(voterIdNftAddress);
-            voterId = roundVoterIdNft.getTokenId(recipient);
-            if (voterId != 0) {
-                rewardRecipient = roundVoterIdNft.getHolder(voterId);
-                commitKey = _commitKeyForVoter(pool.contentId, pool.roundId, roundVoterIdNft, voterId);
-                return (voterId, rewardRecipient, commitKey);
+        IRaterIdentityRegistry.ResolvedRater memory resolved = _resolveRater(pool.contentId, pool.roundId, recipient);
+        identityKey = resolved.identityKey;
+        rewardRecipient = resolved.holder == address(0) ? recipient : resolved.holder;
+
+        if (identityKey != bytes32(0)) {
+            commitKey = votingEngine.identityCommitKey(pool.contentId, pool.roundId, identityKey);
+            if (commitKey != bytes32(0)) {
+                return (identityKey, rewardRecipient, commitKey);
             }
         }
 
         bytes32 commitHash = votingEngine.voterCommitHash(pool.contentId, pool.roundId, recipient);
         if (commitHash != bytes32(0)) {
             commitKey = keccak256(abi.encodePacked(recipient, commitHash));
+            bytes32 committedIdentityKey = votingEngine.commitIdentityKey(pool.contentId, pool.roundId, commitKey);
+            if (committedIdentityKey != bytes32(0)) {
+                identityKey = committedIdentityKey;
+            }
+            address committedHolder = votingEngine.commitIdentityHolder(pool.contentId, pool.roundId, commitKey);
+            if (committedHolder != address(0)) {
+                rewardRecipient = committedHolder;
+            }
         }
-        voterId = 0;
-        rewardRecipient = recipient;
     }
 
-    function _resolveIdentity(address account)
+    function _resolveIdentity(uint256 contentId, uint256 roundId, address account)
         internal
         view
-        returns (uint256 voterId, address identity, uint256 nullifier)
+        returns (address identity, bytes32 identityKey)
     {
-        if (account == address(0)) return (0, address(0), 0);
-        if (address(voterIdNFT) == address(0)) return (0, account, 0);
-
-        voterId = voterIdNFT.getTokenId(account);
-        if (voterId == 0) return (0, account, 0);
-
-        identity = voterIdNFT.getHolder(voterId);
-        if (identity == address(0)) {
-            identity = account;
-        }
-        nullifier = voterIdNFT.getNullifier(voterId);
+        if (account == address(0)) return (address(0), bytes32(0));
+        IRaterIdentityRegistry.ResolvedRater memory resolved = _resolveRater(contentId, roundId, account);
+        identity = resolved.holder == address(0) ? account : resolved.holder;
+        identityKey = resolved.identityKey == bytes32(0) ? _addressIdentityKey(account) : resolved.identityKey;
     }
 
     function _routeFrontendFee(IERC20 token, address frontendRecipient, uint256 amount)
@@ -488,34 +464,57 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
         return TokenTransferLib.tryTransfer(token, frontendRecipient, amount) ? amount : 0;
     }
 
-    function _roundVoterIdNft(uint256 contentId, uint256 roundId) internal view returns (IVoterIdNFT) {
-        return IVoterIdNFT(_roundVoterIdNftAddress(contentId, roundId));
-    }
-
-    function _roundVoterIdNftAddress(uint256 contentId, uint256 roundId) internal view returns (address) {
-        address snapshot = votingEngine.roundVoterIdNFTSnapshot(contentId, roundId);
-        return snapshot == address(0) ? address(voterIdNFT) : snapshot;
-    }
-
-    function _voterIdForRound(uint256 contentId, uint256 roundId, address account) internal view returns (uint256) {
-        if (account == address(0)) return 0;
-        address voterIdNftAddress = _roundVoterIdNftAddress(contentId, roundId);
-        if (voterIdNftAddress == address(0)) return 0;
-        return IVoterIdNFT(voterIdNftAddress).getTokenId(account);
-    }
-
-    function _commitKeyForVoter(uint256 contentId, uint256 roundId, IVoterIdNFT voterIdNft_, uint256 voterId)
+    function _identityKeyForRound(uint256 contentId, uint256 roundId, address account)
         internal
         view
-        returns (bytes32 commitKey)
+        returns (bytes32 identityKey)
     {
-        commitKey = votingEngine.voterIdCommitKey(contentId, roundId, voterId);
-        if (commitKey == bytes32(0)) {
-            uint256 nullifier = voterIdNft_.getNullifier(voterId);
-            if (nullifier != 0) {
-                commitKey = votingEngine.voterNullifierCommitKey(contentId, roundId, nullifier);
-            }
+        if (account == address(0)) return bytes32(0);
+        IRaterIdentityRegistry.ResolvedRater memory resolved = _resolveRater(contentId, roundId, account);
+        return resolved.identityKey == bytes32(0) ? _addressIdentityKey(account) : resolved.identityKey;
+    }
+
+    function _resolveRater(uint256 contentId, uint256 roundId, address account)
+        internal
+        view
+        returns (IRaterIdentityRegistry.ResolvedRater memory resolved)
+    {
+        if (account == address(0)) return resolved;
+        address registryAddress = _roundRaterRegistryAddress(contentId, roundId);
+        if (registryAddress != address(0)) {
+            resolved = IRaterIdentityRegistry(registryAddress).resolveRater(account);
+            if (resolved.identityKey != bytes32(0)) return resolved;
         }
+
+        resolved = IRaterIdentityRegistry.ResolvedRater({
+            holder: account,
+            identityKey: _addressIdentityKey(account),
+            humanNullifier: bytes32(0),
+            hasActiveHumanCredential: false,
+            delegated: false
+        });
+    }
+
+    function _roundRaterRegistryAddress(uint256 contentId, uint256 roundId)
+        internal
+        view
+        returns (address registryAddress)
+    {
+        registryAddress = votingEngine.roundRaterRegistrySnapshot(contentId, roundId);
+        if (registryAddress != address(0)) return registryAddress;
+
+        ProtocolConfig cfg = votingEngine.protocolConfig();
+        if (address(cfg) != address(0)) {
+            registryAddress = cfg.raterRegistry();
+        }
+        if (registryAddress == address(0)) {
+            registryAddress = address(raterRegistry);
+        }
+    }
+
+    function _addressIdentityKey(address account) internal pure returns (bytes32) {
+        if (account == address(0)) return bytes32(0);
+        return keccak256(abi.encodePacked("rateloop.address-identity-v1", account));
     }
 
     function _protocolTreasury() internal view returns (address treasury) {

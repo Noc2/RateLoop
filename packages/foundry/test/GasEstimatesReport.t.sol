@@ -10,9 +10,9 @@ import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
 import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
 import { FrontendRegistry } from "../contracts/FrontendRegistry.sol";
 import { HumanReputation } from "../contracts/HumanReputation.sol";
-import { VoterIdNFT } from "../contracts/VoterIdNFT.sol";
+import { RaterRegistry } from "../contracts/RaterRegistry.sol";
 import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
-import { MockVoterIdNFT } from "./mocks/MockVoterIdNFT.sol";
+import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract MockVotingEngineForFrontendGas {
@@ -81,7 +81,7 @@ contract UserTransactionGasEstimatesTest is RoundIntegrationTest {
     function testGasEstimate_submitContent_logs() public {
         vm.pauseGasMetering();
         uint256 rewardAmount = _defaultSubmissionRewardAmount(registry);
-        _ensureDefaultSubmitterVoterId(registry, submitter);
+        _ensureDefaultSubmitterIdentity(registry, submitter);
         address rewardEscrow = _ensureDefaultQuestionRewardPoolEscrow(registry);
         vm.startPrank(submitter);
         hrepToken.approve(rewardEscrow, rewardAmount);
@@ -229,7 +229,6 @@ contract FrontendTransactionGasEstimatesTest is Test {
     HumanReputation public hrepToken;
     MockVotingEngineForFrontendGas public votingEngine;
     MockRewardDistributorForFrontendGas public rewardDistributor;
-    MockVoterIdNFT public voterIdNFT;
 
     address public admin = address(1);
     address public frontend = address(3);
@@ -245,7 +244,6 @@ contract FrontendTransactionGasEstimatesTest is Test {
         votingEngine = new MockVotingEngineForFrontendGas();
         rewardDistributor = new MockRewardDistributorForFrontendGas(address(votingEngine));
         feeCreditor = address(rewardDistributor);
-        voterIdNFT = new MockVoterIdNFT();
 
         FrontendRegistry impl = new FrontendRegistry();
         registry = FrontendRegistry(
@@ -258,11 +256,9 @@ contract FrontendTransactionGasEstimatesTest is Test {
 
         registry.setVotingEngine(address(votingEngine));
         registry.addFeeCreditor(feeCreditor);
-        registry.setVoterIdNFT(address(voterIdNFT));
 
         hrepToken.mint(frontend, 10_000e6);
         hrepToken.mint(address(registry), 1_000_000e6);
-        voterIdNFT.setHolder(frontend);
         vm.stopPrank();
     }
 
@@ -311,21 +307,24 @@ contract FrontendTransactionGasEstimatesTest is Test {
 }
 
 contract IdentityTransactionGasEstimatesTest is Test {
-    VoterIdNFT public voterIdNFT;
+    RaterRegistry public raterRegistry;
 
     address public admin = address(1);
-    address public minterAddr = address(2);
-    address public recorderAddr = address(3);
     address public user1 = address(4);
     address public delegate = address(5);
 
-    uint256 public constant NULLIFIER_1 = 111111;
+    bytes32 public constant ANCHOR_1 = bytes32(uint256(111111));
 
     function setUp() public {
         vm.startPrank(admin);
-        voterIdNFT = new VoterIdNFT(admin, admin);
-        voterIdNFT.addMinter(minterAddr);
-        voterIdNFT.setStakeRecorder(recorderAddr);
+        raterRegistry = new RaterRegistry(
+            admin,
+            admin,
+            address(new MockWorldIDRouter()),
+            keccak256("rateloop-human-v1"),
+            12_345,
+            365 days
+        );
         vm.stopPrank();
     }
 
@@ -341,19 +340,23 @@ contract IdentityTransactionGasEstimatesTest is Test {
         assertTrue(success, "measured pranked call reverted");
     }
 
-    function testGasEstimate_voterIdMint_logs() public {
+    function testGasEstimate_seedHumanCredential_logs() public {
         vm.pauseGasMetering();
-        uint256 gasUsed =
-            _measureCallAs(minterAddr, address(voterIdNFT), abi.encodeCall(VoterIdNFT.mint, (user1, NULLIFIER_1)));
-        console2.log("voter_id_mint_gas", gasUsed);
+        uint256 gasUsed = _measureCallAs(
+            admin,
+            address(raterRegistry),
+            abi.encodeCall(RaterRegistry.seedHumanCredential, (user1, uint64(block.timestamp + 365 days), ANCHOR_1, bytes32(0)))
+        );
+        console2.log("rater_registry_seed_human_credential_gas", gasUsed);
     }
 
-    function testGasEstimate_setDelegate_logs() public {
+    function testGasEstimate_requestDelegate_logs() public {
         vm.pauseGasMetering();
-        vm.prank(minterAddr);
-        voterIdNFT.mint(user1, NULLIFIER_1);
+        vm.prank(admin);
+        raterRegistry.seedHumanCredential(user1, uint64(block.timestamp + 365 days), ANCHOR_1, bytes32(0));
 
-        uint256 gasUsed = _measureCallAs(user1, address(voterIdNFT), abi.encodeCall(VoterIdNFT.setDelegate, (delegate)));
-        console2.log("voter_id_set_delegate_gas", gasUsed);
+        uint256 gasUsed =
+            _measureCallAs(user1, address(raterRegistry), abi.encodeCall(RaterRegistry.setDelegate, (delegate)));
+        console2.log("rater_registry_request_delegate_gas", gasUsed);
     }
 }

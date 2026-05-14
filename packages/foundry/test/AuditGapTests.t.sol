@@ -13,7 +13,6 @@ import { HumanReputation } from "../contracts/HumanReputation.sol";
 import { ParticipationPool } from "../contracts/ParticipationPool.sol";
 import { FrontendRegistry } from "../contracts/FrontendRegistry.sol";
 import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
-import { MockVoterIdNFT } from "./mocks/MockVoterIdNFT.sol";
 
 /// @title Audit Gap Tests — Priority-1 test coverage for gaps identified during security audit.
 /// @dev Covers:
@@ -105,8 +104,6 @@ contract AuditGapTests is VotingTestBase {
         );
         frontendRegistry.setVotingEngine(address(votingEngine));
         frontendRegistry.addFeeCreditor(address(rewardDistributor));
-        MockVoterIdNFT voterIdNFT = new MockVoterIdNFT();
-        frontendRegistry.setVoterIdNFT(address(voterIdNFT));
 
         // Wire up
         registry.setVotingEngine(address(votingEngine));
@@ -131,7 +128,6 @@ contract AuditGapTests is VotingTestBase {
         for (uint256 i = 0; i < users.length; i++) {
             hrepToken.mint(users[i], 100_000e6);
         }
-        voterIdNFT.setHolder(frontend);
 
         // Register frontend
         vm.stopPrank();

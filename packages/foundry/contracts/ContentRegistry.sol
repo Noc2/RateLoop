@@ -10,7 +10,7 @@ import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.s
 import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import { ICategoryRegistry } from "./interfaces/ICategoryRegistry.sol";
 import { IRoundVotingEngine } from "./interfaces/IRoundVotingEngine.sol";
-import { IVoterIdNFT } from "./interfaces/IVoterIdNFT.sol";
+import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol";
 import { RoundLib } from "./libraries/RoundLib.sol";
 import { RatingLib } from "./libraries/RatingLib.sol";
 import { RatingMath } from "./libraries/RatingMath.sol";
@@ -165,8 +165,6 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     uint256 internal nextQuestionBundleId;
     mapping(uint256 => Content) public contents;
     mapping(bytes32 => bool) public submissionKeyUsed; // Canonical submission keys prevent duplicate content variants
-    IVoterIdNFT public voterIdNFT; // Optional identity credential signal.
-
     /// @notice Escrow that holds mandatory bounties.
     address public questionRewardPoolEscrow;
     uint256 internal votingEngineGeneration;
@@ -181,8 +179,8 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     ///      explicit external wrapper, keeping ContentRegistry under the EIP-170 size limit.
     mapping(uint256 => address) public getSubmitterIdentity;
 
-    /// @notice Stable Self nullifier for the canonical submitter identity.
-    mapping(uint256 => uint256) public contentSubmitterNullifier;
+    /// @notice Stable rater identity key for the canonical submitter identity.
+    mapping(uint256 => bytes32) public contentSubmitterIdentityKey;
 
     /// @notice Per-question round settings selected at submission and bounded by governance.
     mapping(uint256 => RoundLib.RoundConfig) internal contentRoundConfig;
@@ -277,7 +275,6 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         uint256 effectiveEvidence,
         uint32 settledRounds
     );
-    event VoterIdNFTUpdated(address voterIdNFT);
     event QuestionRewardPoolEscrowUpdated(address rewardPoolEscrow);
     event ContentRoundConfigSet(
         uint256 indexed contentId, uint32 epochDuration, uint32 maxDuration, uint16 minVoters, uint16 maxVoters
@@ -351,22 +348,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
 
     function setProtocolConfig(address _protocolConfig) external onlyRole(CONFIG_ROLE) {
         require(_protocolConfig != address(0), "Invalid address");
-        if (address(voterIdNFT) != address(0)) {
-            require(ProtocolConfig(_protocolConfig).voterIdNFT() == address(voterIdNFT), "Voter ID mismatch");
-        }
         protocolConfig = ProtocolConfig(_protocolConfig);
-    }
-
-    /// @notice Set or clear the optional identity credential contract.
-    /// @param _voterIdNFT The optional identity NFT contract address, or zero to disable the signal.
-    function setVoterIdNFT(address _voterIdNFT) external onlyRole(CONFIG_ROLE) {
-        require(
-            _voterIdNFT == address(0) || address(protocolConfig) == address(0)
-                || protocolConfig.voterIdNFT() == address(0) || protocolConfig.voterIdNFT() == _voterIdNFT,
-            "Voter ID mismatch"
-        );
-        voterIdNFT = IVoterIdNFT(_voterIdNFT);
-        emit VoterIdNFTUpdated(_voterIdNFT);
     }
 
     /// @notice Set or update the bounty escrow.
@@ -874,9 +856,9 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     ) internal returns (uint256 contentId) {
         contentId = nextContentId++;
         contentSubmissionKey[contentId] = submissionKey;
-        (address submitterIdentity, uint256 submitterNullifier) = _snapshotSubmitterIdentity(submitter);
+        (address submitterIdentity, bytes32 submitterIdentityKey) = _snapshotSubmitterIdentity(submitter);
         getSubmitterIdentity[contentId] = submitterIdentity;
-        contentSubmitterNullifier[contentId] = submitterNullifier;
+        contentSubmitterIdentityKey[contentId] = submitterIdentityKey;
         contentRoundConfig[contentId] = roundConfig;
         contents[contentId] = Content({
             id: contentId.toUint64(),
@@ -1314,31 +1296,59 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
 
     function _resolveSubmitterIdentity(address submitter) internal view returns (address) {
         if (submitter == address(0)) return address(0);
-        if (address(voterIdNFT) == address(0)) return submitter;
-        address resolved = voterIdNFT.resolveHolder(submitter);
-        return resolved == address(0) ? submitter : resolved;
+        IRaterIdentityRegistry identityRegistry = _raterRegistry();
+        if (address(identityRegistry) == address(0)) return submitter;
+        IRaterIdentityRegistry.ResolvedRater memory resolved = identityRegistry.resolveRater(submitter);
+        return resolved.holder == address(0) ? submitter : resolved.holder;
     }
 
     function _isSubmitterIdentity(uint256 contentId, address account) private view returns (bool) {
-        if (contentSubmitterNullifier[contentId] == 0) {
-            return getSubmitterIdentity[contentId] == account;
-        }
-        if (address(voterIdNFT) == address(0)) return false;
-        uint256 voterId = voterIdNFT.getTokenId(account);
-        return voterId != 0 && voterIdNFT.getNullifier(voterId) == contentSubmitterNullifier[contentId];
+        if (getSubmitterIdentity[contentId] == account) return true;
+        bytes32 submitterIdentityKey = contentSubmitterIdentityKey[contentId];
+        if (submitterIdentityKey == bytes32(0)) return false;
+        IRaterIdentityRegistry.ResolvedRater memory resolved = _resolveRater(account);
+        return resolved.identityKey == submitterIdentityKey;
     }
 
     function _snapshotSubmitterIdentity(address submitter)
         internal
         view
-        returns (address submitterIdentity, uint256 submitterNullifier)
+        returns (address submitterIdentity, bytes32 submitterIdentityKey)
     {
-        if (submitter == address(0)) return (address(0), 0);
-        submitterIdentity = _resolveSubmitterIdentity(submitter);
-        if (address(voterIdNFT) == address(0)) return (submitterIdentity, 0);
-        uint256 voterId = voterIdNFT.getTokenId(submitterIdentity);
-        if (voterId == 0) return (submitterIdentity, 0);
-        submitterNullifier = voterIdNFT.getNullifier(voterId);
+        if (submitter == address(0)) return (address(0), bytes32(0));
+        IRaterIdentityRegistry.ResolvedRater memory resolved = _resolveRater(submitter);
+        submitterIdentity = resolved.holder == address(0) ? submitter : resolved.holder;
+        submitterIdentityKey = resolved.identityKey == bytes32(0) ? _addressIdentityKey(submitter) : resolved.identityKey;
+    }
+
+    function _resolveRater(address account)
+        internal
+        view
+        returns (IRaterIdentityRegistry.ResolvedRater memory resolved)
+    {
+        IRaterIdentityRegistry identityRegistry = _raterRegistry();
+        if (address(identityRegistry) != address(0)) {
+            resolved = identityRegistry.resolveRater(account);
+            if (resolved.identityKey != bytes32(0)) return resolved;
+        }
+
+        resolved = IRaterIdentityRegistry.ResolvedRater({
+            holder: account,
+            identityKey: _addressIdentityKey(account),
+            humanNullifier: bytes32(0),
+            hasActiveHumanCredential: false,
+            delegated: false
+        });
+    }
+
+    function _raterRegistry() internal view returns (IRaterIdentityRegistry identityRegistry) {
+        if (address(protocolConfig) == address(0)) return IRaterIdentityRegistry(address(0));
+        return IRaterIdentityRegistry(protocolConfig.raterRegistry());
+    }
+
+    function _addressIdentityKey(address account) internal pure returns (bytes32) {
+        if (account == address(0)) return bytes32(0);
+        return keccak256(abi.encodePacked("rateloop.address-identity-v1", account));
     }
 
     function _hasOpenRound(uint256 contentId) internal view returns (bool) {

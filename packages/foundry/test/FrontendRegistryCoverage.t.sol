@@ -8,7 +8,6 @@ import { HumanReputation } from "../contracts/HumanReputation.sol";
 import { IFrontendRegistry } from "../contracts/interfaces/IFrontendRegistry.sol";
 import { IRoundVotingEngine } from "../contracts/interfaces/IRoundVotingEngine.sol";
 import { RoundLib } from "../contracts/libraries/RoundLib.sol";
-import { MockVoterIdNFT } from "./mocks/MockVoterIdNFT.sol";
 
 // =========================================================================
 // MOCKS
@@ -70,13 +69,12 @@ contract MockRewardDistributor_FR {
 
 /// @title FrontendRegistryCoverageTest
 /// @notice Tests for branch coverage gaps in FrontendRegistry: register/deregister edge cases,
-///         VoterIdNFT gating, creditFees boundaries, slash edge cases, access control negatives.
+///         creditFees boundaries, slash edge cases, access control negatives.
 contract FrontendRegistryCoverageTest is Test {
     FrontendRegistry public registry;
     HumanReputation public hrepToken;
     MockVotingEngine_FR public votingEngine;
     MockRewardDistributor_FR public rewardDistributor;
-    MockVoterIdNFT public mockVoterIdNFT;
 
     address public admin = address(1);
     address public governance = address(10);
@@ -98,7 +96,6 @@ contract FrontendRegistryCoverageTest is Test {
         votingEngine = new MockVotingEngine_FR();
         rewardDistributor = new MockRewardDistributor_FR(address(votingEngine));
         feeCreditor = address(rewardDistributor);
-        mockVoterIdNFT = new MockVoterIdNFT();
 
         FrontendRegistry impl = new FrontendRegistry();
         registry = FrontendRegistry(
@@ -111,13 +108,11 @@ contract FrontendRegistryCoverageTest is Test {
 
         registry.setVotingEngine(address(votingEngine));
         registry.addFeeCreditor(feeCreditor);
-        registry.setVoterIdNFT(address(mockVoterIdNFT));
 
         hrepToken.mint(frontend1, 50_000e6);
         hrepToken.mint(frontend2, 50_000e6);
         hrepToken.mint(frontend3, 50_000e6);
         hrepToken.mint(address(registry), 1_000_000e6);
-        mockVoterIdNFT.setHolder(frontend1);
 
         vm.stopPrank();
 
@@ -177,12 +172,10 @@ contract FrontendRegistryCoverageTest is Test {
     }
 
     // =========================================================================
-    // 2. REGISTER WITH OPTIONAL IDENTITY SIGNAL
+    // 2. REGISTER
     // =========================================================================
 
-    function test_Register_WithVoterIdNFT_AllowsUnverifiedOperator() public {
-        mockVoterIdNFT.removeHolder(frontend1);
-
+    function test_Register_AllowsAnyBondedOperator() public {
         vm.startPrank(frontend1);
         hrepToken.approve(address(registry), STAKE);
         registry.register();
@@ -192,7 +185,7 @@ contract FrontendRegistryCoverageTest is Test {
         assertEq(operator, frontend1);
     }
 
-    function test_Register_WithVoterIdNFT_SucceedsWithVoterId() public {
+    function test_Register_SucceedsWithBond() public {
         vm.startPrank(frontend1);
         hrepToken.approve(address(registry), STAKE);
         registry.register();
@@ -202,10 +195,7 @@ contract FrontendRegistryCoverageTest is Test {
         assertEq(operator, frontend1);
     }
 
-    function test_Register_WithDelegatedVoterId_AllowsDelegateWallet() public {
-        vm.prank(frontend1);
-        mockVoterIdNFT.setDelegate(frontend2);
-
+    function test_Register_AllowsIndependentFrontendWallet() public {
         vm.startPrank(frontend2);
         hrepToken.approve(address(registry), STAKE);
         registry.register();
@@ -215,20 +205,11 @@ contract FrontendRegistryCoverageTest is Test {
         assertEq(operator, frontend2);
     }
 
-    function test_Register_DelegateRotation_AllowsIndependentFrontendWallets() public {
-        vm.prank(frontend1);
-        mockVoterIdNFT.setDelegate(frontend2);
-
+    function test_Register_IndependentFrontendWalletsRemainEligible() public {
         vm.startPrank(frontend2);
         hrepToken.approve(address(registry), STAKE);
         registry.register();
         vm.stopPrank();
-
-        vm.prank(frontend1);
-        mockVoterIdNFT.removeDelegate();
-
-        vm.prank(frontend1);
-        mockVoterIdNFT.setDelegate(frontend3);
 
         vm.startPrank(frontend3);
         hrepToken.approve(address(registry), STAKE);
@@ -239,7 +220,7 @@ contract FrontendRegistryCoverageTest is Test {
         assertTrue(registry.isEligible(frontend3));
     }
 
-    function test_Register_WithoutVoterIdNFT_Succeeds() public {
+    function test_Register_WithoutVotingEngine_Succeeds() public {
         vm.startPrank(admin);
         FrontendRegistry impl2 = new FrontendRegistry();
         FrontendRegistry unsetRegistry = FrontendRegistry(
@@ -278,35 +259,7 @@ contract FrontendRegistryCoverageTest is Test {
     }
 
     // =========================================================================
-    // 3. SET VOTER ID NFT
-    // =========================================================================
-
-    function test_SetVoterIdNFT_Success() public {
-        vm.prank(admin);
-        vm.expectEmit(true, false, false, false);
-        emit FrontendRegistry.VoterIdNFTUpdated(address(mockVoterIdNFT));
-        registry.setVoterIdNFT(address(mockVoterIdNFT));
-
-        assertEq(address(registry.voterIdNFT()), address(mockVoterIdNFT));
-    }
-
-    function test_SetVoterIdNFT_ZeroAddress_ClearsOptionalSignal() public {
-        vm.prank(admin);
-        vm.expectEmit(true, false, false, false);
-        emit FrontendRegistry.VoterIdNFTUpdated(address(0));
-        registry.setVoterIdNFT(address(0));
-
-        assertEq(address(registry.voterIdNFT()), address(0));
-    }
-
-    function test_SetVoterIdNFT_NonAdmin_Reverts() public {
-        vm.prank(nonAdmin);
-        vm.expectRevert();
-        registry.setVoterIdNFT(address(mockVoterIdNFT));
-    }
-
-    // =========================================================================
-    // 4. CREDIT FEES BRANCH COVERAGE
+    // 3. CREDIT FEES BRANCH COVERAGE
     // =========================================================================
 
     function test_CreditFees_ExactMaxAmount_Succeeds() public {
@@ -936,7 +889,6 @@ contract FrontendRegistryCoverageTest is Test {
     // =========================================================================
 
     function _registerFrontend(address fe) internal {
-        mockVoterIdNFT.setHolder(fe);
         vm.startPrank(fe);
         hrepToken.approve(address(registry), STAKE);
         registry.register();

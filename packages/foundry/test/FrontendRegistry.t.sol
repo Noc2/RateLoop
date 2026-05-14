@@ -8,7 +8,6 @@ import { HumanReputation } from "../contracts/HumanReputation.sol";
 import { IFrontendRegistry } from "../contracts/interfaces/IFrontendRegistry.sol";
 import { IRoundVotingEngine } from "../contracts/interfaces/IRoundVotingEngine.sol";
 import { RoundLib } from "../contracts/libraries/RoundLib.sol";
-import { MockVoterIdNFT } from "./mocks/MockVoterIdNFT.sol";
 
 /// @title Mock RoundVotingEngine for testing FrontendRegistry
 contract MockVotingEngine is IRoundVotingEngine {
@@ -73,7 +72,6 @@ contract FrontendRegistryTest is Test {
     HumanReputation public hrepToken;
     MockVotingEngine public votingEngine;
     MockRewardDistributor public rewardDistributor;
-    MockVoterIdNFT public mockVoterIdNFT;
 
     address public admin = address(1);
     address public frontend1 = address(3);
@@ -96,7 +94,6 @@ contract FrontendRegistryTest is Test {
         votingEngine = new MockVotingEngine();
         rewardDistributor = new MockRewardDistributor(address(votingEngine));
         feeCreditor = address(rewardDistributor);
-        mockVoterIdNFT = new MockVoterIdNFT();
 
         // Deploy registry behind an ERC1967 proxy for upgradeable storage behavior
         FrontendRegistry impl = new FrontendRegistry();
@@ -110,7 +107,6 @@ contract FrontendRegistryTest is Test {
 
         // Set voting engine for slashing
         registry.setVotingEngine(address(votingEngine));
-        registry.setVoterIdNFT(address(mockVoterIdNFT));
 
         // Grant fee creditor role
         registry.addFeeCreditor(feeCreditor);
@@ -119,9 +115,6 @@ contract FrontendRegistryTest is Test {
         hrepToken.mint(frontend1, 10_000e6);
         hrepToken.mint(frontend2, 10_000e6);
         hrepToken.mint(frontend3, 10_000e6);
-        mockVoterIdNFT.setHolder(frontend1);
-        mockVoterIdNFT.setHolder(frontend2);
-        mockVoterIdNFT.setHolder(frontend3);
 
         // Mint HREP for fee crediting (to registry)
         hrepToken.mint(address(registry), 1_000_000e6);
@@ -411,13 +404,11 @@ contract FrontendRegistryTest is Test {
         assertFalse(registry.isEligible(frontend1));
     }
 
-    function test_RevokedVoterIdFrontendRemainsEligible() public {
+    function test_RegisteredFrontendRemainsEligibleWithoutIdentityGate() public {
         vm.startPrank(frontend1);
         hrepToken.approve(address(registry), STAKE);
         registry.register();
         vm.stopPrank();
-
-        mockVoterIdNFT.removeHolder(frontend1);
 
         assertTrue(registry.isEligible(frontend1));
         (,, bool eligible,) = registry.getFrontendInfo(frontend1);
@@ -534,7 +525,6 @@ contract FrontendRegistryTest is Test {
 
         vm.startPrank(admin);
         largeFeeRegistry.setVotingEngine(address(votingEngine));
-        largeFeeRegistry.setVoterIdNFT(address(mockVoterIdNFT));
         largeFeeRegistry.addFeeCreditor(feeCreditor);
         vm.stopPrank();
 
@@ -558,13 +548,11 @@ contract FrontendRegistryTest is Test {
         registry.creditFees(frontend1, 100e6);
     }
 
-    function test_CreditFeesAfterVoterIdRevocation() public {
+    function test_CreditFeesAfterRegistrationWithoutIdentityGate() public {
         vm.startPrank(frontend1);
         hrepToken.approve(address(registry), STAKE);
         registry.register();
         vm.stopPrank();
-
-        mockVoterIdNFT.removeHolder(frontend1);
 
         vm.prank(feeCreditor);
         registry.creditFees(frontend1, 100e6);
@@ -653,7 +641,7 @@ contract FrontendRegistryTest is Test {
         vm.stopPrank();
     }
 
-    function test_ClaimFeesAfterVoterIdRevocation() public {
+    function test_ClaimFeesWithoutIdentityGate() public {
         vm.startPrank(frontend1);
         hrepToken.approve(address(registry), STAKE);
         registry.register();
@@ -661,8 +649,6 @@ contract FrontendRegistryTest is Test {
 
         vm.prank(feeCreditor);
         registry.creditFees(frontend1, 100e6);
-
-        mockVoterIdNFT.removeHolder(frontend1);
 
         uint256 hrepBefore = hrepToken.balanceOf(frontend1);
 
@@ -672,7 +658,7 @@ contract FrontendRegistryTest is Test {
         assertEq(hrepToken.balanceOf(frontend1) - hrepBefore, 100e6);
     }
 
-    function test_DeregisterAfterVoterIdRevocationPaysPendingFees() public {
+    function test_DeregisterPaysPendingFeesWithoutIdentityGate() public {
         vm.startPrank(frontend1);
         hrepToken.approve(address(registry), STAKE);
         registry.register();
@@ -680,8 +666,6 @@ contract FrontendRegistryTest is Test {
 
         vm.prank(feeCreditor);
         registry.creditFees(frontend1, 200e6);
-
-        mockVoterIdNFT.removeHolder(frontend1);
 
         vm.prank(frontend1);
         registry.requestDeregister();
@@ -802,7 +786,6 @@ contract FrontendRegistryTest is Test {
             )
         );
         // Do NOT call setVotingEngine
-        noEngineRegistry.setVoterIdNFT(address(mockVoterIdNFT));
 
         // Mint and register a frontend
         hrepToken.mint(frontend1, 10_000e6);

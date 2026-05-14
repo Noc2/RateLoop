@@ -12,10 +12,10 @@ import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.so
 import { MockERC20 } from "../contracts/mocks/MockERC20.sol";
 import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
 import { QuestionRewardPoolEscrow } from "../contracts/QuestionRewardPoolEscrow.sol";
+import { RaterRegistry } from "../contracts/RaterRegistry.sol";
 import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
 import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
 import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
-import { MockVoterIdNFT } from "./mocks/MockVoterIdNFT.sol";
 import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 
 contract SlashedFrontendRegistryMock is IFrontendRegistry {
@@ -69,7 +69,7 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
     FeedbackBonusEscrow public feedbackBonusEscrow;
     ProtocolConfig public protocolConfig;
     MockERC20 public usdc;
-    MockVoterIdNFT public voterIdNFT;
+    RaterRegistry public raterRegistry;
 
     address public owner = address(1);
     address public submitter = address(2);
@@ -158,7 +158,7 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         );
 
         usdc = new MockERC20("USD Coin", "USDC", 6);
-        voterIdNFT = new MockVoterIdNFT();
+        raterRegistry = _deployRaterRegistry(owner);
         frontendRegistry = FrontendRegistry(
             address(
                 new ERC1967Proxy(
@@ -179,7 +179,7 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
                             address(usdc),
                             address(registry),
                             address(votingEngine),
-                            address(voterIdNFT)
+                            address(raterRegistry)
                         )
                     )
                 )
@@ -191,7 +191,7 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
                     address(feedbackBonusImpl),
                     abi.encodeCall(
                         FeedbackBonusEscrow.initialize,
-                        (owner, address(usdc), address(registry), address(votingEngine), address(voterIdNFT))
+                        (owner, address(usdc), address(registry), address(votingEngine), address(raterRegistry))
                     )
                 )
             )
@@ -203,17 +203,15 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         registry.setVotingEngine(address(votingEngine));
         registry.setProtocolConfig(address(protocolConfig));
         registry.setCategoryRegistry(address(mockCategoryRegistry));
-        registry.setVoterIdNFT(address(voterIdNFT));
         registry.setQuestionRewardPoolEscrow(address(questionRewardPoolEscrow));
 
         frontendRegistry.setVotingEngine(address(votingEngine));
-        frontendRegistry.setVoterIdNFT(address(voterIdNFT));
 
         protocolConfig.setRewardDistributor(address(rewardDistributor));
         protocolConfig.setCategoryRegistry(address(mockCategoryRegistry));
         protocolConfig.setFrontendRegistry(address(frontendRegistry));
         protocolConfig.setTreasury(treasury);
-        protocolConfig.setVoterIdNFT(address(voterIdNFT));
+        protocolConfig.setRaterRegistry(address(raterRegistry));
         _setTlockDrandConfig(protocolConfig, DEFAULT_DRAND_CHAIN_HASH, DEFAULT_DRAND_GENESIS_TIME, DEFAULT_DRAND_PERIOD);
         _setTlockRoundConfig(protocolConfig, EPOCH_DURATION, 7 days, 3, 200);
 
@@ -224,7 +222,7 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
 
         address[7] memory humans = [submitter, funder, voter1, voter2, voter3, voter4, frontend1];
         for (uint256 i = 0; i < humans.length; i++) {
-            voterIdNFT.setHolder(humans[i]);
+            _seedRaterIdentity(raterRegistry, humans[i], bytes32(uint256(uint160(humans[i]))));
             hrepToken.mint(humans[i], 10_000e6);
             usdc.mint(humans[i], 1_000e6);
         }
@@ -318,16 +316,11 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         assertEq(usdc.balanceOf(frontend1), frontendBalanceBefore);
     }
 
-    function testAwardAfterRemintUsesOriginalCommitKeyForFrontendFee() public {
+    function testAwardUsesOriginalCommitKeyForFrontendFee() public {
         _registerFrontend(frontend1);
-        uint256 nullifier = 333_333;
-        voterIdNFT.mint(voter1, nullifier);
         uint256 contentId = _submitQuestion("");
         uint256 poolId = _createFeedbackBonusPool(contentId);
         _settleRoundWithFrontend(_threeVoters(), contentId, _directions(true, true, false), frontend1);
-
-        voterIdNFT.resetNullifier(nullifier);
-        voterIdNFT.mint(voter1, nullifier);
 
         vm.prank(funder);
         uint256 recipientAmount = feedbackBonusEscrow.awardFeedbackBonus(poolId, voter1, FEEDBACK_HASH, 10e6);
@@ -402,34 +395,36 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         _settleRoundWith(voters, contentId, _directions(true, true, true, false));
 
         vm.prank(funder);
-        vm.expectRevert("Excluded voter");
+        vm.expectRevert("Excluded rater");
         feedbackBonusEscrow.awardFeedbackBonus(poolId, funder, FEEDBACK_HASH, 10e6);
     }
 
-    function testFunderNullifierCannotReceiveFeedbackBonusAfterRemint() public {
-        voterIdNFT.mint(funder, 444_001);
+    function testFunderIdentityCannotReceiveFeedbackBonusAfterRebind() public {
         uint256 contentId = _submitQuestion("");
         uint256 poolId = _createFeedbackBonusPool(contentId);
 
-        voterIdNFT.revokeVoterId(funder);
-        voterIdNFT.resetNullifier(444_001);
-        voterIdNFT.mint(voter1, 444_001);
+        bytes32 anchor = bytes32(uint256(uint160(funder)));
+        vm.startPrank(owner);
+        raterRegistry.revokeHumanCredential(funder);
+        _seedRaterIdentity(raterRegistry, voter1, anchor);
+        vm.stopPrank();
 
         _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
 
         vm.prank(funder);
-        vm.expectRevert("Excluded voter");
+        vm.expectRevert("Excluded rater");
         feedbackBonusEscrow.awardFeedbackBonus(poolId, voter1, FEEDBACK_HASH, 10e6);
     }
 
-    function testSubmitterNullifierCannotReceiveFeedbackBonusAfterRemint() public {
-        voterIdNFT.mint(submitter, 444_002);
+    function testSubmitterIdentityCannotReceiveFeedbackBonusAfterRebind() public {
         uint256 contentId = _submitQuestion("");
         uint256 poolId = _createFeedbackBonusPool(contentId);
 
-        voterIdNFT.revokeVoterId(submitter);
-        voterIdNFT.resetNullifier(444_002);
-        voterIdNFT.mint(voter1, 444_002);
+        bytes32 anchor = bytes32(uint256(uint160(submitter)));
+        vm.startPrank(owner);
+        raterRegistry.revokeHumanCredential(submitter);
+        _seedRaterIdentity(raterRegistry, voter1, anchor);
+        vm.stopPrank();
 
         _expectSelfVoteCommitRevert(voter1, contentId, keccak256("feedback-reminted-submitter"));
 
@@ -440,25 +435,20 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         _settleRoundWith(voters, contentId, _directions(true, true, false));
 
         vm.prank(funder);
-        vm.expectRevert("Excluded voter");
+        vm.expectRevert("Excluded rater");
         feedbackBonusEscrow.awardFeedbackBonus(poolId, voter1, FEEDBACK_HASH, 10e6);
     }
 
-    function testVoterIdMigrationRejectedAfterInitialWiring() public {
-        MockVoterIdNFT migratedVoterIdNFT = new MockVoterIdNFT();
-        migratedVoterIdNFT.setHolder(voter1);
-
+    function testRaterRegistryRejectsZeroAfterInitialWiring() public {
         vm.prank(owner);
-        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
-        protocolConfig.setVoterIdNFT(address(migratedVoterIdNFT));
+        vm.expectRevert(ProtocolConfig.InvalidAddress.selector);
+        protocolConfig.setRaterRegistry(address(0));
     }
 
-    function testSetVoterIdNFTRejectsRegistryOrProtocolMismatch() public {
-        MockVoterIdNFT replacementVoterIdNFT = new MockVoterIdNFT();
-
+    function testSetRaterRegistryRejectsZero() public {
         vm.prank(owner);
-        vm.expectRevert("Voter ID mismatch");
-        feedbackBonusEscrow.setVoterIdNFT(address(replacementVoterIdNFT));
+        vm.expectRevert("Invalid registry");
+        feedbackBonusEscrow.setRaterRegistry(address(0));
     }
 
     function testAwardRequiresRevealedVote() public {
@@ -471,11 +461,12 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         feedbackBonusEscrow.awardFeedbackBonus(poolId, voter4, FEEDBACK_HASH, 10e6);
     }
 
-    function testAwardNoVoterIdRecipientUsesDirectCommitKey() public {
+    function testAwardUnverifiedRecipientUsesDirectCommitKey() public {
         uint256 contentId = _submitQuestion("");
         uint256 poolId = _createFeedbackBonusPool(contentId);
 
-        voterIdNFT.revokeVoterId(voter1);
+        vm.prank(owner);
+        raterRegistry.revokeHumanCredential(voter1);
         uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
         bytes32 commitHash = votingEngine.voterCommitHash(contentId, roundId, voter1);
         bytes32 commitKey = _commitKey(voter1, commitHash);
@@ -493,13 +484,12 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         assertEq(usdc.balanceOf(voter1), voterBalanceBefore + recipientAmount);
     }
 
-    function testAwardPaysVoterIdHolderWhenNewDelegateIsRecipient() public {
+    function testAwardPaysIdentityHolderWhenNewDelegateIsRecipient() public {
         address newDelegate = address(0xD1E);
         uint256 contentId = _submitQuestion("");
         uint256 poolId = _createFeedbackBonusPool(contentId);
 
-        vm.prank(voter1);
-        voterIdNFT.setDelegate(delegate1);
+        _setAcceptedDelegate(raterRegistry, voter1, delegate1);
 
         address[] memory voters = new address[](3);
         voters[0] = delegate1;
@@ -508,9 +498,8 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         _settleRoundWith(voters, contentId, _directions(true, true, false));
 
         vm.prank(voter1);
-        voterIdNFT.removeDelegate();
-        vm.prank(voter1);
-        voterIdNFT.setDelegate(newDelegate);
+        raterRegistry.removeDelegate();
+        _setAcceptedDelegate(raterRegistry, voter1, newDelegate);
 
         uint256 holderBalanceBefore = usdc.balanceOf(voter1);
         uint256 delegateBalanceBefore = usdc.balanceOf(newDelegate);
@@ -523,7 +512,7 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         assertEq(usdc.balanceOf(newDelegate), delegateBalanceBefore);
     }
 
-    function testCreateFeedbackBonusPoolAllowsFunderWithoutVoterId() public {
+    function testCreateFeedbackBonusPoolAllowsFunderWithoutHumanCredential() public {
         uint256 contentId = _submitQuestion("");
         address unverifiedFunder = address(0xB0B);
         usdc.mint(unverifiedFunder, BONUS_AMOUNT);
@@ -546,16 +535,14 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
 
         vm.startPrank(funder);
         feedbackBonusEscrow.awardFeedbackBonus(poolId, voter1, FEEDBACK_HASH, 10e6);
-        vm.expectRevert("Voter already awarded");
+        vm.expectRevert("Rater already awarded");
         feedbackBonusEscrow.awardFeedbackBonus(poolId, voter1, keccak256("second-feedback"), 10e6);
         vm.expectRevert("Feedback already awarded");
         feedbackBonusEscrow.awardFeedbackBonus(poolId, voter2, FEEDBACK_HASH, 10e6);
         vm.stopPrank();
     }
 
-    function testCannotAwardSameCommittedVoterAfterRemint() public {
-        uint256 nullifier = 444_444;
-        voterIdNFT.mint(voter1, nullifier);
+    function testCannotAwardSameCommittedIdentityAfterRebind() public {
         uint256 contentId = _submitQuestion("");
         uint256 poolId = _createFeedbackBonusPool(contentId);
         _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
@@ -564,11 +551,14 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         feedbackBonusEscrow.awardFeedbackBonus(poolId, voter1, FEEDBACK_HASH, 10e6);
         vm.stopPrank();
 
-        voterIdNFT.resetNullifier(nullifier);
-        voterIdNFT.mint(voter1, nullifier);
+        bytes32 anchor = bytes32(uint256(uint160(voter1)));
+        vm.startPrank(owner);
+        raterRegistry.revokeHumanCredential(voter1);
+        _seedRaterIdentity(raterRegistry, voter1, anchor);
+        vm.stopPrank();
 
         vm.prank(funder);
-        vm.expectRevert("Voter already awarded");
+        vm.expectRevert("Rater already awarded");
         feedbackBonusEscrow.awardFeedbackBonus(poolId, voter1, keccak256("second-feedback"), 10e6);
     }
 

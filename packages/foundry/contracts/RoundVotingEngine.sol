@@ -21,7 +21,7 @@ import {VotePreflightLib} from "./libraries/VotePreflightLib.sol";
 import {RobustBtsMath} from "./libraries/RobustBtsMath.sol";
 import {IFrontendRegistry} from "./interfaces/IFrontendRegistry.sol";
 import {ICategoryRegistry} from "./interfaces/ICategoryRegistry.sol";
-import {IVoterIdNFT} from "./interfaces/IVoterIdNFT.sol";
+import {IRaterIdentityRegistry} from "./interfaces/IRaterIdentityRegistry.sol";
 import {IRoundVotingEngine} from "./interfaces/IRoundVotingEngine.sol";
 import {IParticipationPool} from "./interfaces/IParticipationPool.sol";
 
@@ -58,7 +58,6 @@ contract RoundVotingEngine is
     error InvalidAddress();
     error InvalidStake();
     error Unauthorized();
-    error VoterIdRequired();
     error SelfVote();
     error ContentNotActive();
     error CooldownActive();
@@ -170,17 +169,18 @@ contract RoundVotingEngine is
     // Voter to commit hash lookup: contentId => roundId => voter => commitHash (O(1) claim lookups)
     mapping(uint256 => mapping(uint256 => mapping(address => bytes32))) public voterCommitHash;
 
-    // Voter ID keyed commit lookups for stablecoin bounties through delegated wallets.
-    mapping(uint256 => mapping(uint256 => mapping(uint256 => bytes32))) public voterIdCommitKey;
-    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint256))) public commitVoterId;
-    mapping(uint256 => mapping(uint256 => mapping(uint256 => bytes32))) public voterNullifierCommitKey;
+    // Stable rater-identity keyed commit lookups for duplicate prevention and delegated wallets.
+    mapping(uint256 => mapping(uint256 => mapping(bytes32 => bytes32))) public identityCommitKey;
+    mapping(uint256 => mapping(uint256 => mapping(bytes32 => bytes32))) public commitIdentityKey;
+    mapping(uint256 => mapping(uint256 => mapping(bytes32 => address))) public commitIdentityHolder;
+    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint256))) public identityRoundStake;
 
     // Frontend fee aggregation (computed incrementally during revealVote for O(1) settlement)
     mapping(uint256 => mapping(uint256 => uint256)) public roundStakeWithEligibleFrontend;
     mapping(uint256 => mapping(uint256 => mapping(address => uint256))) public roundPerFrontendStake;
     mapping(uint256 => mapping(uint256 => uint256)) public roundFrontendPool;
     mapping(uint256 => mapping(uint256 => uint256)) public roundEligibleFrontendCount;
-    mapping(uint256 => mapping(uint256 => address)) public roundVoterIdNFTSnapshot;
+    mapping(uint256 => mapping(uint256 => address)) public roundRaterRegistrySnapshot;
 
     // --- Events ---
     event VoteCommitted(
@@ -413,23 +413,21 @@ contract RoundVotingEngine is
         if (!RoundLib.acceptsVotes(round, roundCfg.maxDuration)) revert RoundNotOpen();
         if (round.thresholdReachedAt != 0) revert ThresholdReached();
 
-        IVoterIdNFT roundVoterIdNft = _getRoundVoterIdNft(contentId, roundId);
-        (uint256 voterId, bool useTokenIdentity) =
-            VotePreflightLib.validateVoterAndContent(roundVoterIdNft, registry, voter, contentId);
+        IRaterIdentityRegistry roundRaterRegistry = _getRoundRaterRegistry(contentId, roundId);
+        IRaterIdentityRegistry.ResolvedRater memory resolved =
+            VotePreflightLib.validateVoterAndContent(roundRaterRegistry, registry, voter, contentId);
 
         bytes32 commitKey = VotePreflightLib.prepareCommit(
             voterCommitHash,
-            hasTokenIdCommitted,
-            voterNullifierCommitKey,
+            identityCommitKey,
             lastVoteTimestamp,
-            lastVoteTimestampByNullifier,
-            roundVoterIdNft,
+            lastVoteTimestampByIdentity,
+            identityRoundStake,
             VotePreflightLib.CommitPreflightParams({
                 voter: voter,
                 contentId: contentId,
                 roundId: roundId,
-                voterId: voterId,
-                useTokenIdentity: useTokenIdentity,
+                identityKey: resolved.identityKey,
                 cooldownWindow: VOTE_COOLDOWN,
                 maxStake: MAX_STAKE,
                 stakeAmount: stakeAmount,
@@ -461,12 +459,11 @@ contract RoundVotingEngine is
             drandChainHash,
             epochIdx,
             commitHash,
-            voterId,
-            roundVoterIdNft,
-            useTokenIdentity
+            resolved.identityKey,
+            resolved.holder
         );
         _recordCommitAccounting(
-            round, roundVoterIdNft, contentId, roundId, voter, voterId, useTokenIdentity, stakeAmount64, stakeAmount
+            round, contentId, roundId, voter, resolved.identityKey, stakeAmount64, stakeAmount
         );
 
         emit VoteCommitted(
@@ -519,9 +516,8 @@ contract RoundVotingEngine is
         bytes32 drandChainHash,
         uint8 epochIdx,
         bytes32 commitHash,
-        uint256 voterId,
-        IVoterIdNFT roundVoterIdNft,
-        bool useTokenIdentity
+        bytes32 identityKey,
+        address identityHolder
     ) internal {
         _writeCommitStruct(
             contentId,
@@ -544,10 +540,9 @@ contract RoundVotingEngine is
             epochEnd,
             voter,
             commitHash,
-            voterId,
-            roundVoterIdNft,
-            targetRound,
-            useTokenIdentity
+            identityKey,
+            identityHolder,
+            targetRound
         );
     }
 
@@ -598,10 +593,9 @@ contract RoundVotingEngine is
         uint256 epochEnd,
         address voter,
         bytes32 commitHash,
-        uint256 voterId,
-        IVoterIdNFT roundVoterIdNft,
-        uint64 targetRound,
-        bool useTokenIdentity
+        bytes32 identityKey,
+        address identityHolder,
+        uint64 targetRound
     ) internal {
         uint256 effectiveRevealableAfter = _targetRoundRevealableAt(contentId, roundId, targetRound);
         if (effectiveRevealableAfter < epochEnd) effectiveRevealableAfter = epochEnd;
@@ -618,41 +612,35 @@ contract RoundVotingEngine is
             voter,
             commitHash
         );
-        if (useTokenIdentity) {
-            RoundCleanupLib.recordTokenIdentityCommitIndex(
-                hasTokenIdCommitted[contentId][roundId],
-                voterIdCommitKey[contentId][roundId],
-                commitVoterId[contentId][roundId],
-                voterNullifierCommitKey[contentId][roundId],
-                commitKey,
-                voterId,
-                roundVoterIdNft
-            );
-        }
+        RoundCleanupLib.recordIdentityCommitIndex(
+            identityCommitKey[contentId][roundId],
+            commitIdentityKey[contentId][roundId],
+            commitIdentityHolder[contentId][roundId],
+            commitKey,
+            identityKey,
+            identityHolder
+        );
     }
 
     function _recordCommitAccounting(
         RoundLib.Round storage round,
-        IVoterIdNFT currentVoterIdNft,
         uint256 contentId,
         uint256 roundId,
         address voter,
-        uint256 voterId,
-        bool useTokenIdentity,
+        bytes32 identityKey,
         uint64 stakeAmount64,
         uint256 stakeAmount
     ) internal {
         RoundCleanupLib.recordCommitAccounting(
             round,
             lastVoteTimestamp[contentId],
-            lastVoteTimestampByNullifier[contentId],
+            lastVoteTimestampByIdentity[contentId],
+            identityRoundStake[contentId],
             address(registry),
-            currentVoterIdNft,
             contentId,
             roundId,
             voter,
-            voterId,
-            useTokenIdentity,
+            identityKey,
             stakeAmount64,
             stakeAmount
         );
@@ -693,7 +681,7 @@ contract RoundVotingEngine is
         roundDrandChainHashSnapshot[contentId][roundId] = protocolConfig.drandChainHash();
         roundDrandGenesisTimeSnapshot[contentId][roundId] = protocolConfig.drandGenesisTime();
         roundDrandPeriodSnapshot[contentId][roundId] = protocolConfig.drandPeriod();
-        roundVoterIdNFTSnapshot[contentId][roundId] = protocolConfig.voterIdNFT();
+        roundRaterRegistrySnapshot[contentId][roundId] = protocolConfig.raterRegistry();
         roundFrontendRegistrySnapshot[contentId][roundId] = protocolConfig.frontendRegistry();
         emit RoundConfigSnapshotted(
             contentId, roundId, roundCfg.epochDuration, roundCfg.maxDuration, roundCfg.minVoters, roundCfg.maxVoters
@@ -1076,16 +1064,16 @@ contract RoundVotingEngine is
         return ICategoryRegistry(protocolConfig.categoryRegistry());
     }
 
-    function _getVoterIdNft() internal view returns (IVoterIdNFT) {
-        return IVoterIdNFT(protocolConfig.voterIdNFT());
-    }
-
-    function _getRoundVoterIdNft(uint256 contentId, uint256 roundId) internal view returns (IVoterIdNFT) {
-        address snapshot = roundVoterIdNFTSnapshot[contentId][roundId];
+    function _getRoundRaterRegistry(uint256 contentId, uint256 roundId)
+        internal
+        view
+        returns (IRaterIdentityRegistry)
+    {
+        address snapshot = roundRaterRegistrySnapshot[contentId][roundId];
         if (snapshot == address(0)) {
-            return _getVoterIdNft();
+            snapshot = protocolConfig.raterRegistry();
         }
-        return IVoterIdNFT(snapshot);
+        return IRaterIdentityRegistry(snapshot);
     }
 
     function _getParticipationPool() internal view returns (IParticipationPool) {
@@ -1097,14 +1085,11 @@ contract RoundVotingEngine is
         view
         returns (bytes32 commitKey, address rewardRecipient)
     {
-        address voterIdNftAddress = roundVoterIdNFTSnapshot[contentId][roundId];
-        if (voterIdNftAddress == address(0)) voterIdNftAddress = protocolConfig.voterIdNFT();
         return RoundCleanupLib.resolveClaimCommit(
             voterCommitHash[contentId][roundId],
-            voterIdCommitKey[contentId][roundId],
-            voterNullifierCommitKey[contentId][roundId],
-            commitVoterId[contentId][roundId],
-            voterIdNftAddress,
+            identityCommitKey[contentId][roundId],
+            commitIdentityHolder[contentId][roundId],
+            _getRoundRaterRegistry(contentId, roundId),
             account
         );
     }
@@ -1434,8 +1419,8 @@ contract RoundVotingEngine is
         return lastVoteTimestamp[contentId][voter];
     }
 
-    function nullifierLastVoteTimestamp(uint256 contentId, uint256 nullifier) external view returns (uint256) {
-        return lastVoteTimestampByNullifier[contentId][nullifier];
+    function identityLastVoteTimestamp(uint256 contentId, bytes32 identityKey) external view returns (uint256) {
+        return lastVoteTimestampByIdentity[contentId][identityKey];
     }
 
     function roundRbtsStats(uint256 contentId, uint256 roundId)
@@ -1462,11 +1447,8 @@ contract RoundVotingEngine is
     // STORAGE
     // =========================================================================
 
-    // One vote per identity per round
-    mapping(uint256 => mapping(uint256 => mapping(uint256 => bool))) internal hasTokenIdCommitted;
-
-    // Per-identity cooldown: contentId => nullifier => timestamp (survives delegation and reset/remint)
-    mapping(uint256 => mapping(uint256 => uint256)) internal lastVoteTimestampByNullifier;
+    // Per-identity cooldown: contentId => identity key => timestamp (survives delegation)
+    mapping(uint256 => mapping(bytes32 => uint256)) internal lastVoteTimestampByIdentity;
 
     // Per-epoch unrevealed commit counter: prevents selective vote revelation (front-running keeper).
     // contentId => roundId => epochEnd => number of unrevealed commits for that epoch.

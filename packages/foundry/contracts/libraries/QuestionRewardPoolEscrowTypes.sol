@@ -16,9 +16,8 @@ struct RewardPool {
     address funder;
     address funderIdentity;
     address submitterIdentity;
-    // Deprecated fields retained to preserve proxy storage layout.
-    uint256 submitterVoterId;
-    address submitterVoterIdNFT;
+    bytes32 funderIdentityKey;
+    bytes32 submitterIdentityKey;
     uint8 asset;
     uint256 fundedAmount;
     uint256 unallocatedAmount;
@@ -64,7 +63,7 @@ struct BundleReward {
     uint32 claimedCount;
     uint16 frontendFeeBps;
     uint8 bountyEligibility;
-    uint256 funderNullifier;
+    bytes32 funderIdentityKey;
     uint256 fundedAmount;
     uint256 unallocatedAmount;
     uint256 claimedAmount;
@@ -78,7 +77,7 @@ struct BundleReward {
 
 struct BundleQuestion {
     uint256 contentId;
-    uint256 submitterNullifier;
+    bytes32 submitterIdentityKey;
 }
 
 struct BundleRoundSetSnapshot {

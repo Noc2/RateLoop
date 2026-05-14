@@ -13,7 +13,7 @@ import { ProtocolConfig } from "./ProtocolConfig.sol";
 import { IFrontendRegistry } from "./interfaces/IFrontendRegistry.sol";
 import { IParticipationPool } from "./interfaces/IParticipationPool.sol";
 import { ILaunchDistributionPool } from "./interfaces/ILaunchDistributionPool.sol";
-import { IVoterIdNFT } from "./interfaces/IVoterIdNFT.sol";
+import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol";
 import { FrontendFeeDustLib } from "./libraries/FrontendFeeDustLib.sol";
 import { LaunchRaterRewardLib } from "./libraries/LaunchRaterRewardLib.sol";
 import { RoundLib } from "./libraries/RoundLib.sol";
@@ -229,7 +229,7 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
     /// @dev RBTS-scored rounds pay score-based stake return plus voter-pool rewards by score weight.
     ///      Recipient split: stake refunds and loser rebates flow to `commit.voter` (whoever
     ///      funded the stake — typically a delegate), while voter-pool rewards flow to the
-    ///      current SBT holder (resolved via VoterIdNFT). A rotated or removed delegate
+    ///      current rater identity holder (resolved via RaterRegistry). A rotated or removed delegate
     ///      therefore cannot capture historical voter-pool rewards, while still being made
     ///      whole on the stake they personally posted. This mirrors `claimCancelledRoundRefund`,
     ///      which routes stake refunds to the original payer.
@@ -432,7 +432,7 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
     ///      that originally committed the vote — not the SBT holder. For delegated commits
     ///      these differ; off-chain dust finalizers must enumerate `commit.voter` from the
     ///      `voterCommitHash` mapping (or the `VoteCommitted` events), NOT call
-    ///      `voterIdNFT.getHolder(voterId)`. Passing the holder address for a delegated
+    ///      `RaterRegistry.resolveRater(account).holder`. Passing the holder address for a delegated
     ///      commit fails the lookup and reverts the entire batch with `InvalidFinalizationInput`.
     function finalizeVoterRewardDust(uint256 contentId, uint256 roundId, address[] calldata sortedWinningVoters)
         external
@@ -488,7 +488,7 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
     ///      originally committed the vote — not the SBT holder. For delegated commits these
     ///      differ; off-chain dust finalizers must enumerate `commit.voter` from the
     ///      `voterCommitHash` mapping (or `VoteCommitted` events), NOT call
-    ///      `voterIdNFT.getHolder(voterId)`. Passing the holder address fails the lookup and
+    ///      `RaterRegistry.resolveRater(account).holder`. Passing the holder address fails the lookup and
     ///      reverts the entire batch with `InvalidFinalizationInput`.
     function finalizeLoserRebateDust(uint256 contentId, uint256 roundId, address[] calldata sortedLosingVoters)
         external
@@ -787,21 +787,11 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         view
         returns (bytes32 commitKey, address rewardRecipient)
     {
-        address voterIdNftAddress = _roundVoterIdNftAddress(contentId, roundId);
-        if (voterIdNftAddress != address(0)) {
-            IVoterIdNFT voterIdNft = IVoterIdNFT(voterIdNftAddress);
-            uint256 voterId = voterIdNft.getTokenId(account);
-            if (voterId != 0) {
-                commitKey = votingEngine.voterIdCommitKey(contentId, roundId, voterId);
-                if (commitKey == bytes32(0)) {
-                    uint256 nullifier = voterIdNft.getNullifier(voterId);
-                    if (nullifier != 0) {
-                        commitKey = votingEngine.voterNullifierCommitKey(contentId, roundId, nullifier);
-                    }
-                }
-
-                rewardRecipient = _currentVoterIdRewardRecipient(voterIdNft, voterId);
-                if (rewardRecipient == address(0)) return (bytes32(0), account);
+        IRaterIdentityRegistry.ResolvedRater memory resolved = _resolveRater(contentId, roundId, account);
+        if (resolved.identityKey != bytes32(0)) {
+            commitKey = votingEngine.identityCommitKey(contentId, roundId, resolved.identityKey);
+            if (commitKey != bytes32(0)) {
+                rewardRecipient = resolved.holder == address(0) ? account : resolved.holder;
                 return (commitKey, rewardRecipient);
             }
         }
@@ -809,40 +799,31 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         bytes32 directCommitHash = votingEngine.voterCommitHash(contentId, roundId, account);
         if (directCommitHash != bytes32(0)) {
             commitKey = keccak256(abi.encodePacked(account, directCommitHash));
-            uint256 committedVoterId = votingEngine.commitVoterId(contentId, roundId, commitKey);
-            if (committedVoterId != 0) {
-                if (voterIdNftAddress == address(0)) return (bytes32(0), account);
-                rewardRecipient = _currentVoterIdRewardRecipient(IVoterIdNFT(voterIdNftAddress), committedVoterId);
-                if (rewardRecipient == address(0)) return (bytes32(0), account);
-                return (commitKey, rewardRecipient);
-            }
-            return (commitKey, account);
+            rewardRecipient = votingEngine.commitIdentityHolder(contentId, roundId, commitKey);
+            return (commitKey, rewardRecipient == address(0) ? account : rewardRecipient);
         }
 
         return (bytes32(0), account);
     }
 
-    function _currentVoterIdRewardRecipient(IVoterIdNFT voterIdNft, uint256 voterId)
+    function _resolveRater(uint256 contentId, uint256 roundId, address account)
         internal
         view
-        returns (address rewardRecipient)
+        returns (IRaterIdentityRegistry.ResolvedRater memory resolved)
     {
-        rewardRecipient = voterIdNft.getHolder(voterId);
-        if (rewardRecipient != address(0)) return rewardRecipient;
-
-        uint256 nullifier = voterIdNft.getNullifier(voterId);
-        if (nullifier == 0) return address(0);
-
-        uint256 currentVoterId = voterIdNft.getTokenIdForNullifier(nullifier);
-        if (currentVoterId == 0) return address(0);
-
-        return voterIdNft.getHolder(currentVoterId);
-    }
-
-    function _roundVoterIdNftAddress(uint256 contentId, uint256 roundId) internal view returns (address) {
-        address snapshot = votingEngine.roundVoterIdNFTSnapshot(contentId, roundId);
-        if (snapshot != address(0)) return snapshot;
-        return votingEngine.protocolConfig().voterIdNFT();
+        address registryAddress = votingEngine.roundRaterRegistrySnapshot(contentId, roundId);
+        if (registryAddress == address(0)) registryAddress = votingEngine.protocolConfig().raterRegistry();
+        if (registryAddress != address(0)) {
+            resolved = IRaterIdentityRegistry(registryAddress).resolveRater(account);
+            if (resolved.identityKey != bytes32(0)) return resolved;
+        }
+        resolved = IRaterIdentityRegistry.ResolvedRater({
+            holder: account,
+            identityKey: keccak256(abi.encodePacked("rateloop.address-identity-v1", account)),
+            humanNullifier: bytes32(0),
+            hasActiveHumanCredential: false,
+            delegated: false
+        });
     }
 
     function _readRound(uint256 contentId, uint256 roundId) internal view returns (RoundLib.Round memory round) {
@@ -946,7 +927,7 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
                 return (FrontendFeeDisposition.Protocol, frontend, false, snapshotRegistryAddress);
             }
             // canClaimFeesForRound subsumes the eligible / slashed / stakedAmount /
-            // exit-pending / Voter ID / registered-before-round checks. A frontend that
+            // exit-pending / credential status / registered-before-round checks. A frontend that
             // re-registered after this round settled fails the registeredAt gate and routes
             // the fee to Protocol (admin confiscation) instead of reviving a claim.
             if (_canClaimFeesForRound(snapshotRegistry, frontend, roundSettledAt)) {

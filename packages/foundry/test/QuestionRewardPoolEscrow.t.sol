@@ -18,15 +18,7 @@ import { RoundSnapshot } from "../contracts/libraries/QuestionRewardPoolEscrowTy
 import { TlockVoteLib } from "../contracts/libraries/TlockVoteLib.sol";
 import { Eip3009Authorization, X402QuestionSubmitter } from "../contracts/X402QuestionSubmitter.sol";
 import { MockQuestionRewardPoolEscrow } from "./mocks/MockQuestionRewardPoolEscrow.sol";
-import { MockVoterIdNFT } from "./mocks/MockVoterIdNFT.sol";
-
-contract MockRaterRegistryStatusForEscrow {
-    mapping(address => bool) public hasActiveHumanCredential;
-
-    function setActiveHumanCredential(address rater, bool active) external {
-        hasActiveHumanCredential[rater] = active;
-    }
-}
+import { MockRaterIdentityRegistry } from "./mocks/MockRaterIdentityRegistry.sol";
 
 contract QuestionRewardPoolEscrowTest is VotingTestBase {
     HumanReputation public hrepToken;
@@ -38,7 +30,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     X402QuestionSubmitter public x402QuestionSubmitter;
     ProtocolConfig public protocolConfig;
     MockERC20 public usdc;
-    MockVoterIdNFT public voterIdNFT;
+    MockRaterIdentityRegistry public raterIdentityRegistry;
 
     address public owner = address(1);
     address public submitter = address(2);
@@ -76,7 +68,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         uint256 indexed rewardPoolId,
         uint256 indexed contentId,
         address indexed funder,
-        uint256 funderVoterId,
+        uint256 funderRaterIdentity,
         uint256 amount,
         uint256 requiredVoters,
         uint256 requiredSettledRounds,
@@ -170,7 +162,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         );
 
         usdc = new MockERC20("USD Coin", "USDC", 6);
-        voterIdNFT = new MockVoterIdNFT();
+        raterIdentityRegistry = new MockRaterIdentityRegistry();
         frontendRegistry = FrontendRegistry(
             address(
                 new ERC1967Proxy(
@@ -191,7 +183,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
                             address(usdc),
                             address(registry),
                             address(votingEngine),
-                            address(voterIdNFT)
+                            address(raterIdentityRegistry)
                         )
                     )
                 )
@@ -204,19 +196,17 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         registry.setVotingEngine(address(votingEngine));
         registry.setProtocolConfig(address(protocolConfig));
         registry.setCategoryRegistry(address(mockCategoryRegistry));
-        registry.setVoterIdNFT(address(voterIdNFT));
         registry.setQuestionRewardPoolEscrow(address(rewardPoolEscrow));
         x402QuestionSubmitter = new X402QuestionSubmitter(registry, address(usdc), address(rewardPoolEscrow));
         registry.grantRole(registry.X402_GATEWAY_ROLE(), address(x402QuestionSubmitter));
 
         frontendRegistry.setVotingEngine(address(votingEngine));
-        frontendRegistry.setVoterIdNFT(address(voterIdNFT));
 
         protocolConfig.setRewardDistributor(address(rewardDistributor));
         protocolConfig.setCategoryRegistry(address(mockCategoryRegistry));
         protocolConfig.setFrontendRegistry(address(frontendRegistry));
         protocolConfig.setTreasury(treasury);
-        protocolConfig.setVoterIdNFT(address(voterIdNFT));
+        protocolConfig.setRaterRegistry(address(raterIdentityRegistry));
         _setTlockDrandConfig(protocolConfig, DEFAULT_DRAND_CHAIN_HASH, DEFAULT_DRAND_GENESIS_TIME, DEFAULT_DRAND_PERIOD);
         _setTlockRoundConfig(protocolConfig, EPOCH_DURATION, 7 days, 3, 200);
 
@@ -227,7 +217,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
         address[7] memory humans = [submitter, funder, voter1, voter2, voter3, voter4, frontend1];
         for (uint256 i = 0; i < humans.length; i++) {
-            voterIdNFT.setHolder(humans[i]);
+            raterIdentityRegistry.setHolder(humans[i]);
             hrepToken.mint(humans[i], 10_000e6);
             usdc.mint(humans[i], 1_000e6);
         }
@@ -291,11 +281,11 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         uint256[] memory stakes = new uint256[](3);
         stakes[0] = STAKE;
         stakes[1] = STAKE;
-        stakes[2] = 0;
+        stakes[2] = STAKE;
         uint16[] memory predictions = new uint16[](3);
-        predictions[0] = 9_900;
-        predictions[1] = 9_900;
-        predictions[2] = 1_000;
+        predictions[0] = 0;
+        predictions[1] = 10_000;
+        predictions[2] = 0;
         uint256 roundId = _settlePredictionRoundWithStakes(voters, contentId, predictions, stakes);
 
         assertEq(MIN_REWARD_POOL_PARTICIPANTS, 3);
@@ -309,10 +299,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     }
 
     function testVerifiedHumanBountyCountsOnlyVerifiedHumansWhileVotingStaysOpen() public {
-        MockRaterRegistryStatusForEscrow raterStatus = _installRaterRegistryStatus();
-        raterStatus.setActiveHumanCredential(voter1, true);
-        raterStatus.setActiveHumanCredential(voter2, true);
-        raterStatus.setActiveHumanCredential(voter3, true);
+        raterIdentityRegistry.revokeHumanCredential(voter4);
 
         uint256 contentId = _submitQuestion("");
         uint256 rewardPoolId = _createRewardPoolWithEligibility(
@@ -350,7 +337,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertGt(rewardPoolId, 0);
     }
 
-    function testOpenWalletCanClaimQuestionRewardWithoutVoterId() public {
+    function testOpenWalletCanClaimQuestionRewardWithoutRaterIdentity() public {
         address openVoter1 = address(201);
         address openVoter2 = address(202);
         address openVoter3 = address(203);
@@ -387,7 +374,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
                             address(usdc),
                             address(registry),
                             address(votingEngine),
-                            address(voterIdNFT)
+                            address(raterIdentityRegistry)
                         )
                     )
                 )
@@ -407,11 +394,11 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.stopPrank();
     }
 
-    function testQuestionRewardCannotReplayAfterVoterIdRemintWithSameNullifier() public {
+    function testQuestionRewardCannotReplayAfterRaterIdentityRemintWithSameNullifier() public {
         uint256 contentId = _submitQuestion("");
         uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
         uint256 nullifier = 111_111;
-        voterIdNFT.mint(voter1, nullifier);
+        raterIdentityRegistry.mint(voter1, nullifier);
 
         address[] memory voters = _threeVoters();
         bool[] memory directions = _directions(true, true, false);
@@ -419,8 +406,8 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
         _claimQuestionRewardAndAssert(voter1, rewardPoolId, roundId);
 
-        voterIdNFT.resetNullifier(nullifier);
-        voterIdNFT.mint(voter1, nullifier);
+        raterIdentityRegistry.resetNullifier(nullifier);
+        raterIdentityRegistry.mint(voter1, nullifier);
 
         assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter1), 0);
         vm.prank(voter1);
@@ -526,7 +513,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         // Bootstrap a fifth voter (existing fixtures define voter1..voter4).
         address voter5 = address(0x55);
         vm.startPrank(owner);
-        voterIdNFT.setHolder(voter5);
+        raterIdentityRegistry.setHolder(voter5);
         hrepToken.mint(voter5, 10_000e6);
         usdc.mint(voter5, 1_000e6);
         vm.stopPrank();
@@ -912,12 +899,12 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertFalse(ok);
     }
 
-    function testDelegateCanClaimByUnderlyingVoterIdOnlyOnce() public {
+    function testDelegateCanClaimByUnderlyingRaterIdentityOnlyOnce() public {
         uint256 contentId = _submitQuestion("");
         uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
 
         vm.prank(voter1);
-        voterIdNFT.setDelegate(delegate1);
+        raterIdentityRegistry.setDelegate(delegate1);
 
         address[] memory voters = _threeVoters();
         bool[] memory directions = _directions(true, true, false);
@@ -933,7 +920,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
     }
 
-    function testOpenRoundUsesVoterIdSnapshotAfterMigration() public {
+    function testOpenRoundUsesRaterIdentitySnapshotAfterMigration() public {
         uint256 contentId = _submitQuestion("");
         uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
 
@@ -951,10 +938,10 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             })
         );
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(votingEngine, contentId);
-        assertEq(votingEngine.roundVoterIdNFTSnapshot(contentId, roundId), address(voterIdNFT));
+        assertEq(votingEngine.roundRaterRegistrySnapshot(contentId, roundId), address(raterIdentityRegistry));
 
-        MockVoterIdNFT migratedVoterIdNFT = _migrateVoterIdsWithDifferentIds();
-        assertNotEq(migratedVoterIdNFT.getTokenId(voter2), voterIdNFT.getTokenId(voter2));
+        MockRaterIdentityRegistry migratedRaterIdentityRegistry = _migrateRaterIdentitiesWithDifferentIds();
+        assertNotEq(migratedRaterIdentityRegistry.getCredentialId(voter2), raterIdentityRegistry.getCredentialId(voter2));
 
         bytes32 salt2 = keccak256("snapshot-voter-2");
         bytes32 commitKey2 = _commitTestVote(
@@ -992,7 +979,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         _claimQuestionRewardAndAssert(voter2, rewardPoolId, roundId);
     }
 
-    function testFunderExclusionUsesRoundVoterIdSnapshotAfterMigration() public {
+    function testFunderExclusionUsesRoundRaterIdentitySnapshotAfterMigration() public {
         uint256 contentId = _submitQuestion("");
         uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
 
@@ -1004,8 +991,8 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         bool[] memory directions = _directions(true, true, true, false);
         uint256 roundId = _settleRoundWith(voters, contentId, directions);
 
-        MockVoterIdNFT migratedVoterIdNFT = _migrateVoterIdsWithDifferentIds();
-        assertNotEq(migratedVoterIdNFT.getTokenId(funder), voterIdNFT.getTokenId(funder));
+        MockRaterIdentityRegistry migratedRaterIdentityRegistry = _migrateRaterIdentitiesWithDifferentIds();
+        assertNotEq(migratedRaterIdentityRegistry.getCredentialId(funder), raterIdentityRegistry.getCredentialId(funder));
 
         assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, funder), 0);
         vm.prank(funder);
@@ -1013,21 +1000,21 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
     }
 
-    function testStoredFunderVoterIdDoesNotExcludeDifferentSnapshotHolder() public {
+    function testStoredFunderRaterIdentityDoesNotExcludeDifferentSnapshotHolder() public {
         uint256 contentId = _submitQuestion("");
         uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
-        uint256 oldFunderVoterId = voterIdNFT.getTokenId(funder);
+        uint256 oldFunderRaterIdentity = raterIdentityRegistry.getCredentialId(funder);
 
-        MockVoterIdNFT migratedVoterIdNFT = _migrateVoterIdsWithVoter1AtOldFunderId();
-        assertEq(migratedVoterIdNFT.getTokenId(voter1), oldFunderVoterId);
-        assertEq(migratedVoterIdNFT.getTokenId(funder), 0);
+        MockRaterIdentityRegistry migratedRaterIdentityRegistry = _migrateRaterIdentitiesWithVoter1AtOldFunderId();
+        assertEq(migratedRaterIdentityRegistry.getCredentialId(voter1), oldFunderRaterIdentity);
+        assertEq(migratedRaterIdentityRegistry.getCredentialId(funder), 0);
 
         uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
 
         _claimQuestionRewardAndAssert(voter1, rewardPoolId, roundId);
     }
 
-    function testBundleClaimUsesRoundSpecificVoterIdsAfterMigration() public {
+    function testBundleClaimUsesRoundSpecificRaterIdentitiesAfterMigration() public {
         uint256[] memory contentIds = _submitBundleQuestions();
         uint256 bundleId = _createSubmissionBundle(contentIds, funder, REWARD_ASSET_USDC, REWARD_POOL_AMOUNT, 3);
 
@@ -1038,13 +1025,13 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         bool[] memory directions = _directions(true, true, false);
 
         uint256 firstRoundId = _settleRoundWith(voters, contentIds[0], directions);
-        assertEq(votingEngine.roundVoterIdNFTSnapshot(contentIds[0], firstRoundId), address(voterIdNFT));
+        assertEq(votingEngine.roundRaterRegistrySnapshot(contentIds[0], firstRoundId), address(raterIdentityRegistry));
 
-        MockVoterIdNFT migratedVoterIdNFT = _migrateVoterIdsWithDifferentIds();
-        assertNotEq(migratedVoterIdNFT.getTokenId(voter2), voterIdNFT.getTokenId(voter2));
+        MockRaterIdentityRegistry migratedRaterIdentityRegistry = _migrateRaterIdentitiesWithDifferentIds();
+        assertNotEq(migratedRaterIdentityRegistry.getCredentialId(voter2), raterIdentityRegistry.getCredentialId(voter2));
 
         uint256 secondRoundId = _settleRoundWith(voters, contentIds[1], directions);
-        assertEq(votingEngine.roundVoterIdNFTSnapshot(contentIds[1], secondRoundId), address(voterIdNFT));
+        assertEq(votingEngine.roundRaterRegistrySnapshot(contentIds[1], secondRoundId), address(migratedRaterIdentityRegistry));
 
         assertGt(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, voter2), 0);
 
@@ -1099,7 +1086,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertEq(usdc.balanceOf(address(rewardPoolEscrow)), 0);
     }
 
-    function testBundleRewardSupportsOpenWalletCompletersWithoutVoterId() public {
+    function testBundleRewardSupportsOpenWalletCompletersWithoutRaterIdentity() public {
         address openVoter1 = address(211);
         address openVoter2 = address(212);
         address openVoter3 = address(213);
@@ -1291,11 +1278,11 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertEq(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 1, voter2), 0);
     }
 
-    function testBundleRewardCannotReplayAfterVoterIdRemintWithSameNullifier() public {
+    function testBundleRewardCannotReplayAfterRaterIdentityRemintWithSameNullifier() public {
         uint256[] memory contentIds = _submitBundleQuestions();
         uint256 bundleId = _createSubmissionBundle(contentIds, funder, REWARD_ASSET_USDC, REWARD_POOL_AMOUNT, 3);
         uint256 nullifier = 222_222;
-        voterIdNFT.mint(voter2, nullifier);
+        raterIdentityRegistry.mint(voter2, nullifier);
 
         address[] memory voters = new address[](3);
         voters[0] = voter2;
@@ -1310,8 +1297,8 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         uint256 firstReward = rewardPoolEscrow.claimQuestionBundleReward(bundleId, 0);
         assertEq(firstReward, REWARD_POOL_AMOUNT / 3);
 
-        voterIdNFT.resetNullifier(nullifier);
-        voterIdNFT.mint(voter2, nullifier);
+        raterIdentityRegistry.resetNullifier(nullifier);
+        raterIdentityRegistry.mint(voter2, nullifier);
 
         assertEq(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, voter2), 0);
         vm.prank(voter2);
@@ -1319,11 +1306,11 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         rewardPoolEscrow.claimQuestionBundleReward(bundleId, 0);
     }
 
-    function testBundleRoundSetCountsCompleterAfterVoterIdRemintWithSameNullifier() public {
+    function testBundleRoundSetCountsCompleterAfterRaterIdentityRemintWithSameNullifier() public {
         uint256[] memory contentIds = _submitBundleQuestions();
         uint256 bundleId = _createSubmissionBundle(contentIds, funder, REWARD_ASSET_USDC, REWARD_POOL_AMOUNT, 3);
         uint256 nullifier = 222_223;
-        voterIdNFT.mint(voter2, nullifier);
+        raterIdentityRegistry.mint(voter2, nullifier);
 
         address[] memory voters = new address[](3);
         voters[0] = voter2;
@@ -1332,9 +1319,9 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         bool[] memory directions = _directions(true, true, false);
 
         _settleRoundWith(voters, contentIds[0], directions);
-        voterIdNFT.revokeVoterId(voter2);
-        voterIdNFT.resetNullifier(nullifier);
-        voterIdNFT.mint(voter2, nullifier);
+        raterIdentityRegistry.revokeHumanCredential(voter2);
+        raterIdentityRegistry.resetNullifier(nullifier);
+        raterIdentityRegistry.mint(voter2, nullifier);
         _settleRoundWith(voters, contentIds[1], directions);
 
         uint256 claimable = rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, voter2);
@@ -1344,13 +1331,13 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     function testBundleFunderNullifierStaysExcludedAfterRemintToDifferentAddress() public {
         address remintedFunder = address(0xF00D);
         uint256 nullifier = 222_224;
-        voterIdNFT.mint(funder, nullifier);
+        raterIdentityRegistry.mint(funder, nullifier);
         uint256[] memory contentIds = _submitBundleQuestions();
         uint256 bundleId = _createSubmissionBundle(contentIds, funder, REWARD_ASSET_USDC, REWARD_POOL_AMOUNT, 3);
 
-        voterIdNFT.revokeVoterId(funder);
-        voterIdNFT.resetNullifier(nullifier);
-        voterIdNFT.mint(remintedFunder, nullifier);
+        raterIdentityRegistry.revokeHumanCredential(funder);
+        raterIdentityRegistry.resetNullifier(nullifier);
+        raterIdentityRegistry.mint(remintedFunder, nullifier);
         vm.prank(owner);
         hrepToken.mint(remintedFunder, 10_000e6);
 
@@ -1369,7 +1356,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
     function testBundleDelegatedFunderStaysExcludedAfterAgentReassignment() public {
         address voter5 = address(0x55);
-        voterIdNFT.setHolder(voter5);
+        raterIdentityRegistry.setHolder(voter5);
         vm.prank(owner);
         hrepToken.mint(voter5, 10_000e6);
         vm.prank(owner);
@@ -1377,12 +1364,12 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
         uint256[] memory contentIds = _submitBundleQuestions();
         vm.prank(voter1);
-        voterIdNFT.setDelegate(delegate1);
+        raterIdentityRegistry.setDelegate(delegate1);
         uint256 bundleId = _createSubmissionBundle(contentIds, delegate1, REWARD_ASSET_USDC, REWARD_POOL_AMOUNT, 3);
         vm.prank(voter1);
-        voterIdNFT.removeDelegate();
+        raterIdentityRegistry.removeDelegate();
         vm.prank(voter3);
-        voterIdNFT.setDelegate(delegate1);
+        raterIdentityRegistry.setDelegate(delegate1);
 
         address[] memory voters = new address[](4);
         voters[0] = delegate1;
@@ -1394,8 +1381,8 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         _settleRoundWith(voters, contentIds[0], directions);
         _settleRoundWith(voters, contentIds[1], directions);
 
-        assertEq(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, voter3), 0);
-        vm.prank(voter3);
+        assertEq(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, delegate1), 0);
+        vm.prank(delegate1);
         vm.expectRevert("Excluded voter");
         rewardPoolEscrow.claimQuestionBundleReward(bundleId, 0);
     }
@@ -1403,13 +1390,13 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     function testBundleSubmitterNullifierStaysExcludedAfterRemintToDifferentAddress() public {
         address remintedSubmitter = address(0x5A1D);
         uint256 nullifier = 222_225;
-        voterIdNFT.mint(submitter, nullifier);
+        raterIdentityRegistry.mint(submitter, nullifier);
         uint256[] memory contentIds = _submitBundleQuestions();
         uint256 bundleId = _createSubmissionBundle(contentIds, funder, REWARD_ASSET_USDC, REWARD_POOL_AMOUNT, 3);
 
-        voterIdNFT.revokeVoterId(submitter);
-        voterIdNFT.resetNullifier(nullifier);
-        voterIdNFT.mint(remintedSubmitter, nullifier);
+        raterIdentityRegistry.revokeHumanCredential(submitter);
+        raterIdentityRegistry.resetNullifier(nullifier);
+        raterIdentityRegistry.mint(remintedSubmitter, nullifier);
         vm.prank(owner);
         hrepToken.mint(remintedSubmitter, 10_000e6);
 
@@ -1442,7 +1429,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         secondSetVoters[2] = address(22);
         vm.startPrank(owner);
         for (uint256 i = 0; i < secondSetVoters.length; i++) {
-            voterIdNFT.setHolder(secondSetVoters[i]);
+            raterIdentityRegistry.setHolder(secondSetVoters[i]);
             hrepToken.mint(secondSetVoters[i], 10_000e6);
         }
         vm.stopPrank();
@@ -1607,7 +1594,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         extraVoters[5] = retryCompleter3;
         vm.startPrank(owner);
         for (uint256 i = 0; i < extraVoters.length; i++) {
-            voterIdNFT.setHolder(extraVoters[i]);
+            raterIdentityRegistry.setHolder(extraVoters[i]);
             hrepToken.mint(extraVoters[i], 10_000e6);
         }
         vm.stopPrank();
@@ -1673,7 +1660,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
         vm.startPrank(owner);
         for (uint256 i = 0; i < extraVoters.length; i++) {
-            voterIdNFT.setHolder(extraVoters[i]);
+            raterIdentityRegistry.setHolder(extraVoters[i]);
             hrepToken.mint(extraVoters[i], 10_000e6);
         }
         MockQuestionRewardPoolEscrow mockEscrow = new MockQuestionRewardPoolEscrow();
@@ -1717,7 +1704,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         hrepToken.mint(delegate1, 10_000e6);
 
         vm.prank(voter2);
-        voterIdNFT.setDelegate(delegate1);
+        raterIdentityRegistry.setDelegate(delegate1);
 
         address[] memory firstQuestionVoters = new address[](3);
         firstQuestionVoters[0] = delegate1;
@@ -1731,14 +1718,14 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
         _settleRoundWith(firstQuestionVoters, contentIds[0], directions);
         vm.prank(voter2);
-        voterIdNFT.removeDelegate();
+        raterIdentityRegistry.removeDelegate();
         _settleRoundWith(secondQuestionVoters, contentIds[1], directions);
 
         uint256 claimable = rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, voter2);
         assertEq(claimable, REWARD_POOL_AMOUNT / 3);
     }
 
-    function testBundleRewardPaysVoterIdHolderWhenNewDelegateClaims() public {
+    function testBundleRewardPaysRaterIdentityHolderWhenNewDelegateClaims() public {
         address newDelegate = address(0xD1E);
         uint256[] memory contentIds = _submitBundleQuestions();
         uint256 bundleId = _createSubmissionBundle(contentIds, funder, REWARD_ASSET_USDC, REWARD_POOL_AMOUNT, 3);
@@ -1746,7 +1733,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         hrepToken.mint(delegate1, 10_000e6);
 
         vm.prank(voter1);
-        voterIdNFT.setDelegate(delegate1);
+        raterIdentityRegistry.setDelegate(delegate1);
 
         address[] memory voters = new address[](3);
         voters[0] = delegate1;
@@ -1757,9 +1744,9 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         _settleRoundWith(voters, contentIds[1], directions);
 
         vm.prank(voter1);
-        voterIdNFT.removeDelegate();
+        raterIdentityRegistry.removeDelegate();
         vm.prank(voter1);
-        voterIdNFT.setDelegate(newDelegate);
+        raterIdentityRegistry.setDelegate(newDelegate);
 
         uint256 holderBalanceBefore = usdc.balanceOf(voter1);
         uint256 delegateBalanceBefore = usdc.balanceOf(newDelegate);
@@ -1772,7 +1759,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertEq(usdc.balanceOf(newDelegate), delegateBalanceBefore);
     }
 
-    function testFunderAndSubmitterVoterIdsAreExcludedFromRewardPoolClaims() public {
+    function testFunderAndSubmitterRaterIdentitiesAreExcludedFromRewardPoolClaims() public {
         uint256 contentId = _submitQuestion("");
         uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
 
@@ -1795,18 +1782,18 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         _claimQuestionRewardAndAssert(voter1, rewardPoolId, roundId);
     }
 
-    function testSubmitterSnapshotKeepsOldVoterIdExcludedAfterRemint() public {
+    function testSubmitterSnapshotKeepsOldRaterIdentityExcludedAfterRemint() public {
         uint256 contentId = _submitQuestion("");
-        uint256 submitterSnapshotVoterId = voterIdNFT.getTokenId(submitter);
+        uint256 submitterSnapshotRaterIdentity = raterIdentityRegistry.getCredentialId(submitter);
         uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
 
-        voterIdNFT.mint(submitter, 999);
-        assertNotEq(voterIdNFT.getTokenId(submitter), submitterSnapshotVoterId);
+        raterIdentityRegistry.mint(submitter, 999);
+        assertNotEq(raterIdentityRegistry.getCredentialId(submitter), submitterSnapshotRaterIdentity);
 
         uint256 roundId = 1;
         _mockSettledRound(contentId, roundId, 2);
-        _mockRevealedCommitForVoterId(contentId, roundId, submitterSnapshotVoterId, submitter);
-        _mockRevealedCommitForVoterId(contentId, roundId, voterIdNFT.getTokenId(voter1), voter1);
+        _mockRevealedCommitForRaterIdentity(contentId, roundId, submitterSnapshotRaterIdentity, submitter);
+        _mockRevealedCommitForRaterIdentity(contentId, roundId, raterIdentityRegistry.getCredentialId(voter1), voter1);
 
         assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter1), 0);
         vm.prank(voter1);
@@ -1818,10 +1805,10 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         uint256 contentId = _submitQuestion("");
 
         vm.prank(voter1);
-        voterIdNFT.setDelegate(delegate1);
+        raterIdentityRegistry.setDelegate(delegate1);
         uint256 rewardPoolId = _createRewardPoolAs(delegate1, contentId, REWARD_POOL_AMOUNT, 3, 1);
         vm.prank(voter1);
-        voterIdNFT.removeDelegate();
+        raterIdentityRegistry.removeDelegate();
 
         address[] memory voters = new address[](4);
         voters[0] = voter1;
@@ -1839,13 +1826,13 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     }
 
     function testFunderNullifierStaysExcludedAfterRemint() public {
-        voterIdNFT.mint(funder, 333_001);
+        raterIdentityRegistry.mint(funder, 333_001);
         uint256 contentId = _submitQuestion("");
         uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
 
-        voterIdNFT.revokeVoterId(funder);
-        voterIdNFT.resetNullifier(333_001);
-        voterIdNFT.mint(voter1, 333_001);
+        raterIdentityRegistry.revokeHumanCredential(funder);
+        raterIdentityRegistry.resetNullifier(333_001);
+        raterIdentityRegistry.mint(voter1, 333_001);
 
         address[] memory voters = new address[](4);
         voters[0] = voter1;
@@ -1863,26 +1850,26 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     }
 
     function testSubmitterNullifierStaysExcludedAfterRemint() public {
-        voterIdNFT.mint(submitter, 333_002);
+        raterIdentityRegistry.mint(submitter, 333_002);
         uint256 contentId = _submitQuestion("");
-        assertEq(registry.contentSubmitterNullifier(contentId), 333_002);
+        assertEq(registry.contentSubmitterIdentityKey(contentId), bytes32(uint256(333_002)));
 
-        voterIdNFT.revokeVoterId(submitter);
-        voterIdNFT.resetNullifier(333_002);
-        voterIdNFT.mint(voter1, 333_002);
+        raterIdentityRegistry.revokeHumanCredential(submitter);
+        raterIdentityRegistry.resetNullifier(333_002);
+        raterIdentityRegistry.mint(voter1, 333_002);
 
         _expectSelfVoteCommitRevert(voter1, contentId, keccak256("reminted-submitter-self-vote"));
     }
 
     function testRemintedSubmitterCannotVoteOnOwnQuestion() public {
-        voterIdNFT.mint(submitter, 333_003);
+        raterIdentityRegistry.mint(submitter, 333_003);
         uint256 contentId = _submitQuestion("");
-        assertEq(registry.contentSubmitterNullifier(contentId), 333_003);
+        assertEq(registry.contentSubmitterIdentityKey(contentId), bytes32(uint256(333_003)));
 
-        voterIdNFT.revokeVoterId(submitter);
-        voterIdNFT.resetNullifier(333_003);
+        raterIdentityRegistry.revokeHumanCredential(submitter);
+        raterIdentityRegistry.resetNullifier(333_003);
         address remintedSubmitter = address(0x5A1D);
-        voterIdNFT.mint(remintedSubmitter, 333_003);
+        raterIdentityRegistry.mint(remintedSubmitter, 333_003);
         vm.prank(owner);
         hrepToken.mint(remintedSubmitter, 10_000e6);
 
@@ -1893,12 +1880,12 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         uint256 contentId = _submitQuestion("");
 
         vm.prank(voter1);
-        voterIdNFT.setDelegate(delegate1);
+        raterIdentityRegistry.setDelegate(delegate1);
         uint256 rewardPoolId = _createRewardPoolAs(delegate1, contentId, REWARD_POOL_AMOUNT, 3, 1);
         vm.prank(voter1);
-        voterIdNFT.removeDelegate();
+        raterIdentityRegistry.removeDelegate();
         vm.prank(voter3);
-        voterIdNFT.setDelegate(delegate1);
+        raterIdentityRegistry.setDelegate(delegate1);
 
         address[] memory voters = new address[](5);
         voters[0] = voter1;
@@ -1915,13 +1902,13 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         uint256 roundId = _settleRoundWith(voters, contentId, directions);
 
         assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter1), 0);
-        assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter3), 0);
+        assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, delegate1), 0);
 
         vm.prank(voter1);
         vm.expectRevert("Excluded voter");
         rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
 
-        vm.prank(voter3);
+        vm.prank(delegate1);
         vm.expectRevert("Excluded voter");
         rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
 
@@ -1932,10 +1919,10 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         uint256 contentId = _submitQuestion("");
 
         vm.prank(voter1);
-        voterIdNFT.setDelegate(delegate1);
+        raterIdentityRegistry.setDelegate(delegate1);
         uint256 rewardPoolId = _createRewardPoolAs(delegate1, contentId, REWARD_POOL_AMOUNT, 3, 1);
         vm.prank(voter1);
-        voterIdNFT.removeDelegate();
+        raterIdentityRegistry.removeDelegate();
 
         address[] memory voters = new address[](3);
         voters[0] = voter1;
@@ -1949,18 +1936,18 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
     }
 
-    function testDelegatedFunderStaysExcludedAfterDelegateRemovalAndVoterIdMigration() public {
+    function testDelegatedFunderStaysExcludedAfterDelegateRemovalAndRaterIdentityMigration() public {
         uint256 contentId = _submitQuestion("");
 
         vm.prank(voter2);
-        voterIdNFT.setDelegate(delegate1);
-        uint256 originalVoterId = voterIdNFT.getTokenId(voter2);
+        raterIdentityRegistry.setDelegate(delegate1);
+        uint256 originalRaterIdentity = raterIdentityRegistry.getCredentialId(voter2);
         uint256 rewardPoolId = _createRewardPoolAs(delegate1, contentId, REWARD_POOL_AMOUNT, 3, 1);
         vm.prank(voter2);
-        voterIdNFT.removeDelegate();
+        raterIdentityRegistry.removeDelegate();
 
-        MockVoterIdNFT migratedVoterIdNFT = _migrateVoterIdsWithDifferentIds();
-        assertNotEq(migratedVoterIdNFT.getTokenId(voter2), originalVoterId);
+        MockRaterIdentityRegistry migratedRaterIdentityRegistry = _migrateRaterIdentitiesWithDifferentIds();
+        assertNotEq(migratedRaterIdentityRegistry.getCredentialId(voter2), originalRaterIdentity);
 
         address[] memory voters = new address[](4);
         voters[0] = voter2;
@@ -1977,7 +1964,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         _claimQuestionRewardAndAssert(voter1, rewardPoolId, roundId);
     }
 
-    function testQuestionRewardPaysVoterIdHolderWhenNewDelegateClaims() public {
+    function testQuestionRewardPaysRaterIdentityHolderWhenNewDelegateClaims() public {
         address newDelegate = address(0xD1E);
         uint256 contentId = _submitQuestion("");
         uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
@@ -1985,7 +1972,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.prank(owner);
         hrepToken.mint(delegate1, 10_000e6);
         vm.prank(voter1);
-        voterIdNFT.setDelegate(delegate1);
+        raterIdentityRegistry.setDelegate(delegate1);
 
         address[] memory voters = new address[](3);
         voters[0] = delegate1;
@@ -1994,9 +1981,9 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         uint256 roundId = _settleRoundWith(voters, contentId, _directions(true, true, false));
 
         vm.prank(voter1);
-        voterIdNFT.removeDelegate();
+        raterIdentityRegistry.removeDelegate();
         vm.prank(voter1);
-        voterIdNFT.setDelegate(newDelegate);
+        raterIdentityRegistry.setDelegate(newDelegate);
 
         uint256 holderBalanceBefore = usdc.balanceOf(voter1);
         uint256 delegateBalanceBefore = usdc.balanceOf(newDelegate);
@@ -2422,7 +2409,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.stopPrank();
     }
 
-    function testStandaloneUsdcRewardPoolAllowsFunderWithoutVoterId() public {
+    function testStandaloneUsdcRewardPoolAllowsFunderWithoutRaterIdentity() public {
         uint256 contentId = _submitQuestion("");
         address unverifiedFunder = address(0xB0B);
         usdc.mint(unverifiedFunder, REWARD_POOL_AMOUNT);
@@ -2460,7 +2447,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         activeTlockContentRegistry = registry;
 
         vm.prank(submitter);
-        voterIdNFT.setDelegate(agentWallet);
+        raterIdentityRegistry.setDelegate(agentWallet);
         usdc.mint(agentWallet, REWARD_POOL_AMOUNT);
 
         (, bytes32 submissionKey) =
@@ -2519,7 +2506,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
         assertEq(contentId, nextContentIdBefore);
         assertEq(registry.getSubmitterIdentity(contentId), agentWallet);
-        assertEq(registry.contentSubmitterNullifier(contentId), 0);
+        assertEq(registry.contentSubmitterIdentityKey(contentId), raterIdentityRegistry.addressIdentityKey(agentWallet));
         assertEq(usdc.balanceOf(address(rewardPoolEscrow)), escrowBalanceBefore + REWARD_POOL_AMOUNT);
     }
 
@@ -2554,7 +2541,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertTrue(usdc.authorizationState(agentWallet, authorization.nonce));
         assertEq(contentId, nextContentIdBefore);
         assertEq(registry.getSubmitterIdentity(contentId), agentWallet);
-        assertEq(registry.contentSubmitterNullifier(contentId), 0);
+        assertEq(registry.contentSubmitterIdentityKey(contentId), raterIdentityRegistry.addressIdentityKey(agentWallet));
         assertEq(registry.nextContentId(), nextContentIdBefore + 1);
         assertEq(usdc.balanceOf(address(rewardPoolEscrow)), escrowBalanceBefore + question.rewardTerms.amount);
         assertEq(usdc.balanceOf(agentWallet), agentBalanceBefore - question.rewardTerms.amount);
@@ -2566,7 +2553,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         Eip3009Authorization memory authorization = _x402Authorization(agentWallet, question);
 
         vm.prank(submitter);
-        voterIdNFT.setDelegate(agentWallet);
+        raterIdentityRegistry.setDelegate(agentWallet);
         usdc.mint(agentWallet, question.rewardTerms.amount);
         uint256 escrowBalanceBefore = usdc.balanceOf(address(rewardPoolEscrow));
         uint256 agentBalanceBefore = usdc.balanceOf(agentWallet);
@@ -2600,7 +2587,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         Eip3009Authorization memory authorization = _x402Authorization(agentWallet, question);
 
         vm.prank(submitter);
-        voterIdNFT.setDelegate(agentWallet);
+        raterIdentityRegistry.setDelegate(agentWallet);
         usdc.mint(agentWallet, question.rewardTerms.amount);
         uint256 escrowBalanceBefore = usdc.balanceOf(address(rewardPoolEscrow));
         uint256 agentBalanceBefore = usdc.balanceOf(agentWallet);
@@ -2636,7 +2623,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         Eip3009Authorization memory authorization = _x402Authorization(agentWallet, question);
 
         vm.prank(submitter);
-        voterIdNFT.setDelegate(agentWallet);
+        raterIdentityRegistry.setDelegate(agentWallet);
         usdc.mint(agentWallet, question.rewardTerms.amount);
         uint256 escrowBalanceBefore = usdc.balanceOf(address(rewardPoolEscrow));
         uint256 agentBalanceBefore = usdc.balanceOf(agentWallet);
@@ -2657,7 +2644,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
                             address(usdc),
                             address(registry),
                             address(votingEngine),
-                            address(voterIdNFT)
+                            address(raterIdentityRegistry)
                         )
                     )
                 )
@@ -2692,13 +2679,13 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertEq(usdc.balanceOf(agentWallet), agentBalanceBefore);
     }
 
-    function testX402QuestionSubmissionConsumesUsdcAuthorizationWithDelegatedVoterId() public {
+    function testX402QuestionSubmissionConsumesUsdcAuthorizationWithDelegatedRaterIdentity() public {
         address agentWallet = address(0xA11CE);
         X402TestQuestion memory question = _x402TestQuestion();
         Eip3009Authorization memory authorization = _x402Authorization(agentWallet, question);
 
         vm.prank(submitter);
-        voterIdNFT.setDelegate(agentWallet);
+        raterIdentityRegistry.setDelegate(agentWallet);
         usdc.mint(agentWallet, question.rewardTerms.amount);
         uint256 escrowBalanceBefore = usdc.balanceOf(address(rewardPoolEscrow));
         uint256 agentBalanceBefore = usdc.balanceOf(agentWallet);
@@ -2725,7 +2712,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertEq(storedSubmitter, agentWallet);
         assertEq(registry.getSubmitterIdentity(contentId), submitter);
         assertEq(
-            registry.contentSubmitterNullifier(contentId), voterIdNFT.getNullifier(voterIdNFT.getTokenId(submitter))
+            registry.contentSubmitterIdentityKey(contentId), bytes32(raterIdentityRegistry.getCredentialNullifier(raterIdentityRegistry.getCredentialId(submitter)))
         );
         assertTrue(usdc.authorizationState(agentWallet, authorization.nonce));
         assertEq(usdc.balanceOf(address(rewardPoolEscrow)), escrowBalanceBefore + question.rewardTerms.amount);
@@ -2735,18 +2722,18 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     function testDelegatedAgentSubmitterHolderCannotClaimQuestionReward() public {
         address agentWallet = address(0xA11CE);
         vm.prank(submitter);
-        voterIdNFT.setDelegate(agentWallet);
+        raterIdentityRegistry.setDelegate(agentWallet);
 
         (uint256 contentId, uint256 rewardPoolId) =
             _submitAgentQuestionWithUsdcReward(agentWallet, "agent-delegated-claim");
         uint256 roundId = 1;
-        uint256 submitterVoterId = voterIdNFT.getTokenId(submitter);
+        uint256 submitterRaterIdentity = raterIdentityRegistry.getCredentialId(submitter);
 
         _mockSettledRound(contentId, roundId, 4);
-        _mockRevealedCommitForVoterId(contentId, roundId, submitterVoterId, submitter);
-        _mockRevealedCommitForVoterId(contentId, roundId, voterIdNFT.getTokenId(voter1), voter1);
-        _mockRevealedCommitForVoterId(contentId, roundId, voterIdNFT.getTokenId(voter2), voter2);
-        _mockRevealedCommitForVoterId(contentId, roundId, voterIdNFT.getTokenId(voter3), voter3);
+        _mockRevealedCommitForRaterIdentity(contentId, roundId, submitterRaterIdentity, submitter);
+        _mockRevealedCommitForRaterIdentity(contentId, roundId, raterIdentityRegistry.getCredentialId(voter1), voter1);
+        _mockRevealedCommitForRaterIdentity(contentId, roundId, raterIdentityRegistry.getCredentialId(voter2), voter2);
+        _mockRevealedCommitForRaterIdentity(contentId, roundId, raterIdentityRegistry.getCredentialId(voter3), voter3);
 
         assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, submitter), 0);
         vm.prank(submitter);
@@ -2834,7 +2821,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
     function _registerTestVoter(address voter) internal {
         vm.startPrank(owner);
-        voterIdNFT.setHolder(voter);
+        raterIdentityRegistry.setHolder(voter);
         hrepToken.mint(voter, 10_000e6);
         usdc.mint(voter, 1_000e6);
         vm.stopPrank();
@@ -3222,12 +3209,6 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.stopPrank();
     }
 
-    function _installRaterRegistryStatus() internal returns (MockRaterRegistryStatusForEscrow raterStatus) {
-        raterStatus = new MockRaterRegistryStatusForEscrow();
-        vm.prank(owner);
-        protocolConfig.setRaterRegistry(address(raterStatus));
-    }
-
     function _settleRoundWith(address[] memory voters, uint256 contentId, bool[] memory directions)
         internal
         returns (uint256 roundId)
@@ -3545,10 +3526,11 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         );
     }
 
-    function _mockRevealedCommitForVoterId(uint256 contentId, uint256 roundId, uint256 voterId, address voter)
+    function _mockRevealedCommitForRaterIdentity(uint256 contentId, uint256 roundId, uint256 raterIdentity, address voter)
         internal
     {
-        bytes32 commitKey = keccak256(abi.encode(contentId, roundId, voterId, voter));
+        bytes32 commitKey = keccak256(abi.encode(contentId, roundId, raterIdentity, voter));
+        bytes32 identityKey = bytes32(raterIdentityRegistry.getCredentialNullifier(raterIdentity));
         uint256 index = mockedRoundCommitCount[contentId][roundId]++;
         vm.mockCall(
             address(votingEngine),
@@ -3557,23 +3539,18 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         );
         vm.mockCall(
             address(votingEngine),
-            abi.encodeWithSignature("voterIdCommitKey(uint256,uint256,uint256)", contentId, roundId, voterId),
+            abi.encodeWithSignature("identityCommitKey(uint256,uint256,bytes32)", contentId, roundId, identityKey),
             abi.encode(commitKey)
         );
-        uint256 nullifier = voterIdNFT.getNullifier(voterId);
-        if (nullifier != 0) {
-            vm.mockCall(
-                address(votingEngine),
-                abi.encodeWithSignature(
-                    "voterNullifierCommitKey(uint256,uint256,uint256)", contentId, roundId, nullifier
-                ),
-                abi.encode(commitKey)
-            );
-        }
         vm.mockCall(
             address(votingEngine),
-            abi.encodeWithSignature("commitVoterId(uint256,uint256,bytes32)", contentId, roundId, commitKey),
-            abi.encode(voterId)
+            abi.encodeWithSignature("commitIdentityKey(uint256,uint256,bytes32)", contentId, roundId, commitKey),
+            abi.encode(identityKey)
+        );
+        vm.mockCall(
+            address(votingEngine),
+            abi.encodeWithSignature("commitIdentityHolder(uint256,uint256,bytes32)", contentId, roundId, commitKey),
+            abi.encode(voter)
         );
         vm.mockCall(
             address(votingEngine),
@@ -3596,29 +3573,27 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.stopPrank();
     }
 
-    function _migrateVoterIdsWithDifferentIds() internal returns (MockVoterIdNFT migratedVoterIdNFT) {
-        migratedVoterIdNFT = new MockVoterIdNFT();
+    function _migrateRaterIdentitiesWithDifferentIds() internal returns (MockRaterIdentityRegistry migratedRaterIdentityRegistry) {
+        migratedRaterIdentityRegistry = new MockRaterIdentityRegistry();
         address[7] memory migratedHumans = [voter3, voter2, voter1, submitter, funder, voter4, frontend1];
         for (uint256 i = 0; i < migratedHumans.length; i++) {
-            migratedVoterIdNFT.setHolder(migratedHumans[i]);
+            migratedRaterIdentityRegistry.setHolder(migratedHumans[i]);
         }
 
         vm.startPrank(owner);
-        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
-        protocolConfig.setVoterIdNFT(address(migratedVoterIdNFT));
+        protocolConfig.setRaterRegistry(address(migratedRaterIdentityRegistry));
         vm.stopPrank();
     }
 
-    function _migrateVoterIdsWithVoter1AtOldFunderId() internal returns (MockVoterIdNFT migratedVoterIdNFT) {
-        migratedVoterIdNFT = new MockVoterIdNFT();
+    function _migrateRaterIdentitiesWithVoter1AtOldFunderId() internal returns (MockRaterIdentityRegistry migratedRaterIdentityRegistry) {
+        migratedRaterIdentityRegistry = new MockRaterIdentityRegistry();
         address[6] memory migratedHumans = [submitter, voter1, voter2, voter3, voter4, frontend1];
         for (uint256 i = 0; i < migratedHumans.length; i++) {
-            migratedVoterIdNFT.setHolder(migratedHumans[i]);
+            migratedRaterIdentityRegistry.setHolder(migratedHumans[i]);
         }
 
         vm.startPrank(owner);
-        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
-        protocolConfig.setVoterIdNFT(address(migratedVoterIdNFT));
+        protocolConfig.setRaterRegistry(address(migratedRaterIdentityRegistry));
         vm.stopPrank();
     }
 

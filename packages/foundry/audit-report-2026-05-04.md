@@ -98,7 +98,7 @@ The first division truncates before the second multiplication, causing at most *
 - ✅ `InvariantSolvency.t.sol` enforces that claimed amounts never exceed pool obligations.
 
 ### Governance & Identity
-- ✅ VoterIdNFT delegation chaining is blocked (H-2 fix verified in source).
+- ✅ RaterRegistry delegation chaining is blocked (H-2 fix verified in source).
 - ✅ Governance locks enforce 7-day cooldown and only self-delegation is allowed.
 - ✅ HumanFaucet uses a manual `_claiming` lock and checks-effects-interactions ordering.
 

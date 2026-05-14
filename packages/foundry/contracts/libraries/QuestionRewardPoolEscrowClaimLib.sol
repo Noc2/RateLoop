@@ -2,7 +2,6 @@
 pragma solidity ^0.8.24;
 
 import { IFrontendRegistry } from "../interfaces/IFrontendRegistry.sol";
-import { IVoterIdNFT } from "../interfaces/IVoterIdNFT.sol";
 import { ProtocolConfig } from "../ProtocolConfig.sol";
 import { RoundVotingEngine } from "../RoundVotingEngine.sol";
 import { RewardPool, RoundSnapshot } from "./QuestionRewardPoolEscrowTypes.sol";
@@ -88,11 +87,9 @@ library QuestionRewardPoolEscrowClaimLib {
         mapping(uint256 => mapping(uint256 => RoundSnapshot)) storage roundSnapshots,
         mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) storage rewardClaimed,
         mapping(uint256 => address) storage rewardPoolPayerIdentity,
-        mapping(uint256 => uint256) storage rewardPoolPayerNullifier,
-        mapping(uint256 => uint256) storage rewardPoolSubmitterNullifier,
+        mapping(uint256 => bytes32) storage rewardPoolPayerIdentityKey,
         RoundVotingEngine votingEngine,
         ProtocolConfig protocolConfig,
-        IVoterIdNFT voterIdNFT,
         uint256 rewardPoolId,
         uint256 roundId,
         address account,
@@ -101,33 +98,27 @@ library QuestionRewardPoolEscrowClaimLib {
         RewardPool storage rewardPool = rewardPools[rewardPoolId];
         if (rewardPool.id == 0 || rewardPool.refunded) return 0;
 
-        (uint256 voterId, bytes32 commitKey,) = QuestionRewardPoolEscrowVoterLib.resolveRoundRewardClaim(
-            votingEngine, voterIdNFT, rewardPool.contentId, roundId, account
+        (bytes32 identityKey, bytes32 commitKey, address rewardRecipient) =
+            QuestionRewardPoolEscrowVoterLib.resolveRoundRewardClaim(
+            votingEngine, protocolConfig, rewardPool.contentId, roundId, account
         );
         if (
             commitKey == bytes32(0)
                 || _isExcludedClaimant(
-                    votingEngine,
-                    voterIdNFT,
                     rewardPool,
                     rewardPoolPayerIdentity,
-                    rewardPoolPayerNullifier,
-                    rewardPoolSubmitterNullifier,
-                    roundId,
-                    voterId,
+                    rewardPoolPayerIdentityKey,
+                    identityKey,
                     account
                 )
         ) {
             return 0;
         }
 
-        address eligibilityAccount = _claimEligibilityAccount(
-            _roundVoterIdNft(votingEngine, voterIdNFT, rewardPool.contentId, roundId), voterId, account
-        );
         if (!QuestionRewardPoolEscrowEligibilityLib.isAccountEligibleForBounty(
                 protocolConfig,
                 rewardPool.bountyEligibility,
-                eligibilityAccount
+                rewardRecipient
             )) {
             return 0;
         }
@@ -147,11 +138,9 @@ library QuestionRewardPoolEscrowClaimLib {
             (, bool canQualify,, uint256 effectiveParticipantUnits, uint256 totalClaimWeight,) = _previewRoundQualification(
                 rewardPool,
                 rewardPoolPayerIdentity,
-                rewardPoolPayerNullifier,
-                rewardPoolSubmitterNullifier,
+                rewardPoolPayerIdentityKey,
                 votingEngine,
                 protocolConfig,
-                voterIdNFT,
                 roundId
             );
             if (!canQualify) return 0;
@@ -274,28 +263,20 @@ library QuestionRewardPoolEscrowClaimLib {
     }
 
     function _isExcludedClaimant(
-        RoundVotingEngine votingEngine,
-        IVoterIdNFT voterIdNFT,
         RewardPool storage rewardPool,
         mapping(uint256 => address) storage rewardPoolPayerIdentity,
-        mapping(uint256 => uint256) storage rewardPoolPayerNullifier,
-        mapping(uint256 => uint256) storage rewardPoolSubmitterNullifier,
-        uint256 roundId,
-        uint256 voterId,
+        mapping(uint256 => bytes32) storage rewardPoolPayerIdentityKey,
+        bytes32 identityKey,
         address account
     ) private view returns (bool) {
-        if (voterId == 0) {
-            return account == rewardPool.funder || account == rewardPoolPayerIdentity[rewardPool.id]
-                || account == rewardPool.submitterIdentity;
-        }
-        return QuestionRewardPoolEscrowQualificationLib.isExcludedVoter(
-            _roundVoterIdNft(votingEngine, voterIdNFT, rewardPool.contentId, roundId),
-            voterId,
+        return QuestionRewardPoolEscrowQualificationLib.isExcludedRater(
+            identityKey,
+            account,
             rewardPool.funder,
             rewardPoolPayerIdentity[rewardPool.id],
-            rewardPoolPayerNullifier[rewardPool.id],
+            rewardPoolPayerIdentityKey[rewardPool.id],
             rewardPool.submitterIdentity,
-            rewardPoolSubmitterNullifier[rewardPool.id]
+            rewardPool.submitterIdentityKey
         );
     }
 
@@ -310,11 +291,9 @@ library QuestionRewardPoolEscrowClaimLib {
     function _previewRoundQualification(
         RewardPool storage rewardPool,
         mapping(uint256 => address) storage rewardPoolPayerIdentity,
-        mapping(uint256 => uint256) storage rewardPoolPayerNullifier,
-        mapping(uint256 => uint256) storage rewardPoolSubmitterNullifier,
+        mapping(uint256 => bytes32) storage rewardPoolPayerIdentityKey,
         RoundVotingEngine votingEngine,
         ProtocolConfig protocolConfig,
-        IVoterIdNFT voterIdNFT,
         uint256 roundId
     )
         private
@@ -335,7 +314,6 @@ library QuestionRewardPoolEscrowClaimLib {
                 QuestionRewardPoolEscrowQualificationLib.QualificationContext({
                     votingEngine: votingEngine,
                     protocolConfig: protocolConfig,
-                    voterIdNft: _roundVoterIdNft(votingEngine, voterIdNFT, rewardPool.contentId, roundId),
                     rewardId: rewardPool.id,
                     contentId: rewardPool.contentId,
                     roundId: roundId,
@@ -344,21 +322,11 @@ library QuestionRewardPoolEscrowClaimLib {
                     bountyEligibility: rewardPool.bountyEligibility,
                     funder: rewardPool.funder,
                     funderIdentity: rewardPoolPayerIdentity[rewardPool.id],
-                    funderNullifier: rewardPoolPayerNullifier[rewardPool.id],
+                    funderIdentityKey: rewardPoolPayerIdentityKey[rewardPool.id],
                     submitterIdentity: rewardPool.submitterIdentity,
-                    submitterNullifier: rewardPoolSubmitterNullifier[rewardPool.id]
+                    submitterIdentityKey: rewardPool.submitterIdentityKey
                 })
             );
-    }
-
-    function _claimEligibilityAccount(IVoterIdNFT voterIdNft, uint256 voterId, address account)
-        private
-        view
-        returns (address)
-    {
-        if (voterId == 0) return account;
-        address holder = voterIdNft.getHolder(voterId);
-        return holder == address(0) ? account : holder;
     }
 
     function _previewRoundAllocation(RewardPool storage rewardPool) private view returns (uint256 allocation) {
@@ -379,16 +347,6 @@ library QuestionRewardPoolEscrowClaimLib {
             return BASE_PARTICIPATION_WEIGHT_BPS;
         }
         return votingEngine.commitRbtsRewardWeight(contentId, roundId, commitKey);
-    }
-
-    function _roundVoterIdNft(
-        RoundVotingEngine votingEngine,
-        IVoterIdNFT defaultVoterIdNFT,
-        uint256 contentId,
-        uint256 roundId
-    ) private view returns (IVoterIdNFT) {
-        address snapshot = votingEngine.roundVoterIdNFTSnapshot(contentId, roundId);
-        return IVoterIdNFT(snapshot == address(0) ? address(defaultVoterIdNFT) : snapshot);
     }
 
     function _computeClaimSplit(
@@ -438,7 +396,7 @@ library QuestionRewardPoolEscrowClaimLib {
                 return address(0);
             }
             // Use the round-time gate so a frontend that re-registered after this round
-            // settled cannot revive the bounty fee. Also covers slash/exit-pending/Voter ID.
+            // settled cannot revive the bounty fee. Also covers slash/exit-pending/credential status.
             uint48 roundSettledAt = _readRoundSettledAt(votingEngine, contentId, roundId);
             if (_canClaimFeesForRound(frontendRegistry, frontend, roundSettledAt)) {
                 return operator;

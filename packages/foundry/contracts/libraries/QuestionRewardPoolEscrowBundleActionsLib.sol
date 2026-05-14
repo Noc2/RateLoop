@@ -5,8 +5,9 @@ import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
 import { ContentRegistry } from "../ContentRegistry.sol";
+import { ProtocolConfig } from "../ProtocolConfig.sol";
 import { RoundVotingEngine } from "../RoundVotingEngine.sol";
-import { IVoterIdNFT } from "../interfaces/IVoterIdNFT.sol";
+import { IRaterIdentityRegistry } from "../interfaces/IRaterIdentityRegistry.sol";
 import { QuestionRewardPoolEscrowBundleLib } from "./QuestionRewardPoolEscrowBundleLib.sol";
 import { QuestionRewardPoolEscrowClaimLib } from "./QuestionRewardPoolEscrowClaimLib.sol";
 import { QuestionRewardPoolEscrowEligibilityLib } from "./QuestionRewardPoolEscrowEligibilityLib.sol";
@@ -33,7 +34,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
     event QuestionBundleRewardCreated(
         uint256 indexed bundleId,
         address indexed funder,
-        uint256 funderVoterId,
+        bytes32 funderIdentityKey,
         uint256 amount,
         uint256 requiredCompleters,
         uint256 questionCount,
@@ -61,7 +62,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         uint256 indexed bundleId,
         uint256 indexed roundSetIndex,
         address indexed claimant,
-        uint256 voterId,
+        bytes32 identityKey,
         uint256 amount,
         address frontend,
         address frontendRecipient,
@@ -77,7 +78,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         mapping(uint256 => uint256) storage contentBundleId,
         mapping(uint256 => uint256) storage contentBundleIndex,
         ContentRegistry registry,
-        IVoterIdNFT voterIdNFT,
+        ProtocolConfig protocolConfig,
         IERC20 hrepToken,
         IERC20 usdcToken,
         uint16 defaultFrontendFeeBps,
@@ -112,8 +113,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         uint256 fundedAmount = QuestionRewardPoolEscrowTransferLib.pullExactToken(
             _rewardToken(hrepToken, usdcToken, asset), funder, amount
         );
-        (uint256 funderVoterId, address funderIdentity, uint256 funderNullifier) =
-            _resolveFunderIdentity(voterIdNFT, funder);
+        (bytes32 funderIdentityKey, address funderIdentity) = _resolveFunderIdentity(protocolConfig, funder);
 
         BundleReward storage bundle = bundleRewards[bundleId];
         bundle.id = bundleId.toUint64();
@@ -127,7 +127,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         bundle.requiredSettledRounds = uint32(requiredSettledRounds);
         bundle.frontendFeeBps = defaultFrontendFeeBps;
         bundle.bountyEligibility = bountyEligibility;
-        bundle.funderNullifier = funderNullifier;
+        bundle.funderIdentityKey = funderIdentityKey;
         bundle.fundedAmount = fundedAmount;
         bundle.unallocatedAmount = fundedAmount;
         bundle.bountyEligibilityDataHash = QuestionRewardPoolEscrowEligibilityLib.eligibilityDataHash();
@@ -139,11 +139,13 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             require(contentBundleId[contentId] == 0, "Bundled");
             contentBundleId[contentId] = bundleId;
             contentBundleIndex[contentId] = i;
-            uint256 submitterNullifier =
-                QuestionRewardPoolEscrowQualificationLib.resolveSubmitterNullifier(registry, voterIdNFT, contentId);
-            bundleQuestions[bundleId].push(
-                BundleQuestion({ contentId: contentId, submitterNullifier: submitterNullifier })
-            );
+            bytes32 submitterIdentityKey = registry.contentSubmitterIdentityKey(contentId);
+            if (submitterIdentityKey == bytes32(0)) {
+                submitterIdentityKey = QuestionRewardPoolEscrowVoterLib.identityKeyForCurrentRater(
+                    protocolConfig, registry.getSubmitterIdentity(contentId)
+                );
+            }
+            bundleQuestions[bundleId].push(BundleQuestion({ contentId: contentId, submitterIdentityKey: submitterIdentityKey }));
             unchecked {
                 ++i;
             }
@@ -152,7 +154,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         emit QuestionBundleRewardCreated(
             bundleId,
             funder,
-            funderVoterId,
+            funderIdentityKey,
             fundedAmount,
             requiredCompleters,
             contentIds.length,
@@ -201,7 +203,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         mapping(uint256 => uint256) storage contentBundleIndex,
         ContentRegistry registry,
         RoundVotingEngine votingEngine,
-        IVoterIdNFT voterIdNFT,
+        ProtocolConfig protocolConfig,
         uint256 contentId,
         uint256 roundId
     ) external {
@@ -229,7 +231,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             bundleRoundSetSnapshots,
             registry,
             votingEngine,
-            voterIdNFT,
+            protocolConfig,
             bundleId,
             bundle
         );
@@ -244,7 +246,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) storage bundleRoundSetRewardClaimed,
         ContentRegistry registry,
         RoundVotingEngine votingEngine,
-        IVoterIdNFT voterIdNFT,
+        ProtocolConfig protocolConfig,
         IERC20 hrepToken,
         IERC20 usdcToken,
         uint256 bundleId,
@@ -259,7 +261,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             bundleRoundSetSnapshots,
             registry,
             votingEngine,
-            voterIdNFT,
+            protocolConfig,
             bundleId,
             bundle
         );
@@ -273,7 +275,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
                 bundleRoundIds,
                 registry,
                 votingEngine,
-                voterIdNFT,
+                protocolConfig,
                 bundle,
                 bundleId,
                 roundSetIndex,
@@ -283,7 +285,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         );
         require(
             _isBundleBountyEligible(
-                bundleQuestions, bundleRoundIds, votingEngine, voterIdNFT, bundle, bundleId, roundSetIndex, msg.sender
+                bundleQuestions, bundleRoundIds, votingEngine, protocolConfig, bundle, bundleId, roundSetIndex, msg.sender
             ),
             "Not bounty eligible"
         );
@@ -292,7 +294,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             bundleQuestions,
             bundleRoundIds,
             votingEngine,
-            voterIdNFT,
+            protocolConfig,
             bundle.bountyClosesAt,
             bundleId,
             roundSetIndex,
@@ -300,8 +302,8 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         );
         BundleQuestion storage firstQuestion = bundleQuestions[bundleId][0];
         uint256 firstRoundId = bundleRoundIds[bundleId][0][roundSetIndex];
-        (uint256 voterId, bytes32 resolvedFirstCommitKey, address rewardRecipient) = QuestionRewardPoolEscrowVoterLib.resolveRoundRewardClaim(
-            votingEngine, voterIdNFT, firstQuestion.contentId, firstRoundId, msg.sender
+        (bytes32 identityKey, bytes32 resolvedFirstCommitKey, address rewardRecipient) = QuestionRewardPoolEscrowVoterLib.resolveRoundRewardClaim(
+            votingEngine, protocolConfig, firstQuestion.contentId, firstRoundId, msg.sender
         );
         require(resolvedFirstCommitKey == firstCommitKey, "Bundle incomplete");
         require(!bundleRoundSetRewardClaimed[bundleId][roundSetIndex][firstCommitKey], "Already claimed");
@@ -342,7 +344,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             bundleId,
             roundSetIndex,
             rewardRecipient,
-            voterId,
+            identityKey,
             rewardAmount,
             frontend,
             frontendRecipient,
@@ -359,7 +361,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) storage bundleRoundSetRewardClaimed,
         ContentRegistry registry,
         RoundVotingEngine votingEngine,
-        IVoterIdNFT voterIdNFT,
+        ProtocolConfig protocolConfig,
         uint256 bundleId,
         uint256 roundSetIndex,
         address account
@@ -373,21 +375,21 @@ library QuestionRewardPoolEscrowBundleActionsLib {
                 bundleRoundIds,
                 registry,
                 votingEngine,
-                voterIdNFT,
+                protocolConfig,
                 bundle,
                 bundleId,
                 roundSetIndex,
                 account
             )) return 0;
         if (!_isBundleBountyEligible(
-                bundleQuestions, bundleRoundIds, votingEngine, voterIdNFT, bundle, bundleId, roundSetIndex, account
+                bundleQuestions, bundleRoundIds, votingEngine, protocolConfig, bundle, bundleId, roundSetIndex, account
             )) return 0;
 
         (bool completed, address frontend, bytes32 firstCommitKey) = _bundleRoundSetCommitStatus(
             bundleQuestions,
             bundleRoundIds,
             votingEngine,
-            voterIdNFT,
+            protocolConfig,
             bundle.bountyClosesAt,
             bundleId,
             roundSetIndex,
@@ -422,7 +424,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         mapping(uint256 => mapping(uint256 => BundleRoundSetSnapshot)) storage bundleRoundSetSnapshots,
         ContentRegistry registry,
         RoundVotingEngine votingEngine,
-        IVoterIdNFT voterIdNFT,
+        ProtocolConfig protocolConfig,
         IERC20 hrepToken,
         IERC20 usdcToken,
         uint256 bundleId
@@ -439,7 +441,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             bundleRoundSetSnapshots,
             registry,
             votingEngine,
-            voterIdNFT,
+            protocolConfig,
             bundleId,
             bundle
         );
@@ -513,7 +515,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         mapping(uint256 => mapping(uint256 => BundleRoundSetSnapshot)) storage bundleRoundSetSnapshots,
         ContentRegistry registry,
         RoundVotingEngine votingEngine,
-        IVoterIdNFT voterIdNFT,
+        ProtocolConfig protocolConfig,
         uint256 bundleId,
         BundleReward storage bundle
     ) private {
@@ -529,7 +531,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             bundleRoundSetSnapshots,
             registry,
             votingEngine,
-            voterIdNFT,
+            protocolConfig,
             bundleId,
             bundle,
             roundSetIndex
@@ -544,7 +546,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         mapping(uint256 => mapping(uint256 => BundleRoundSetSnapshot)) storage bundleRoundSetSnapshots,
         ContentRegistry registry,
         RoundVotingEngine votingEngine,
-        IVoterIdNFT voterIdNFT,
+        ProtocolConfig protocolConfig,
         uint256 bundleId,
         BundleReward storage bundle,
         uint256 roundSetIndex
@@ -552,7 +554,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         if (bundleRoundSetSnapshots[bundleId][roundSetIndex].qualified) return;
 
         uint256 completerCount = _bundleRoundSetCompleterCount(
-            bundleQuestions, bundleRoundIds, registry, votingEngine, voterIdNFT, bundle, bundleId, roundSetIndex
+            bundleQuestions, bundleRoundIds, registry, votingEngine, protocolConfig, bundle, bundleId, roundSetIndex
         );
         if (completerCount < bundle.requiredCompleters) {
             QuestionRewardPoolEscrowBundleLib.resetRoundSet(
@@ -596,7 +598,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         ) storage bundleRoundIds,
         ContentRegistry registry,
         RoundVotingEngine votingEngine,
-        IVoterIdNFT voterIdNFT,
+        ProtocolConfig protocolConfig,
         BundleReward storage bundle,
         uint256 bundleId,
         uint256 roundSetIndex
@@ -610,7 +612,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         for (uint256 i = 0; i < commitCount;) {
             bytes32 commitKey = votingEngine.getRoundCommitKey(firstContentId, firstRoundId, i);
             address voter = QuestionRewardPoolEscrowVoterLib.bundleCompleterAccount(
-                votingEngine, voterIdNFT, firstContentId, firstRoundId, commitKey
+                votingEngine, firstContentId, firstRoundId, commitKey
             );
             if (
                 voter != address(0)
@@ -619,7 +621,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
                         bundleRoundIds,
                         registry,
                         votingEngine,
-                        voterIdNFT,
+                        protocolConfig,
                         bundle,
                         bundleId,
                         roundSetIndex,
@@ -629,7 +631,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
                         bundleQuestions,
                         bundleRoundIds,
                         votingEngine,
-                        voterIdNFT,
+                        protocolConfig,
                         bundle,
                         bundleId,
                         roundSetIndex,
@@ -639,7 +641,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
                         bundleQuestions,
                         bundleRoundIds,
                         votingEngine,
-                        voterIdNFT,
+                        protocolConfig,
                         bundle.bountyClosesAt,
                         bundleId,
                         roundSetIndex,
@@ -665,7 +667,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             )
         ) storage bundleRoundIds,
         RoundVotingEngine votingEngine,
-        IVoterIdNFT voterIdNFT,
+        ProtocolConfig protocolConfig,
         uint64 bountyClosesAt,
         uint256 bundleId,
         uint256 roundSetIndex,
@@ -675,7 +677,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             bundleQuestions,
             bundleRoundIds,
             votingEngine,
-            voterIdNFT,
+            protocolConfig,
             bountyClosesAt,
             bundleId,
             roundSetIndex,
@@ -693,7 +695,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             uint256 => mapping(uint256 => mapping(uint256 => uint64))
         ) storage bundleRoundIds,
         RoundVotingEngine votingEngine,
-        IVoterIdNFT voterIdNFT,
+        ProtocolConfig protocolConfig,
         uint64 bountyClosesAt,
         uint256 bundleId,
         uint256 roundSetIndex,
@@ -703,7 +705,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             bundleQuestions,
             bundleRoundIds,
             votingEngine,
-            voterIdNFT,
+            protocolConfig,
             bountyClosesAt,
             bundleId,
             roundSetIndex,
@@ -722,7 +724,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             )
         ) storage bundleRoundIds,
         RoundVotingEngine votingEngine,
-        IVoterIdNFT voterIdNFT,
+        ProtocolConfig protocolConfig,
         uint64 bountyClosesAt,
         uint256 bundleId,
         uint256 roundSetIndex,
@@ -734,7 +736,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             bundleQuestions,
             bundleRoundIds,
             votingEngine,
-            voterIdNFT,
+            protocolConfig,
             bountyClosesAt,
             bundleId,
             roundSetIndex,
@@ -754,7 +756,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         ) storage bundleRoundIds,
         ContentRegistry registry,
         RoundVotingEngine votingEngine,
-        IVoterIdNFT voterIdNFT,
+        ProtocolConfig protocolConfig,
         BundleReward storage bundle,
         uint256 bundleId,
         uint256 roundSetIndex,
@@ -765,7 +767,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             bundleRoundIds,
             registry,
             votingEngine,
-            voterIdNFT,
+            protocolConfig,
             bundle,
             bundleId,
             roundSetIndex,
@@ -782,14 +784,14 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             )
         ) storage bundleRoundIds,
         RoundVotingEngine votingEngine,
-        IVoterIdNFT voterIdNFT,
+        ProtocolConfig protocolConfig,
         BundleReward storage bundle,
         uint256 bundleId,
         uint256 roundSetIndex,
         address account
     ) private view returns (bool) {
         address eligibilityAccount = _bundleBountyEligibilityAccount(
-            bundleQuestions, bundleRoundIds, votingEngine, voterIdNFT, bundleId, roundSetIndex, account
+            bundleQuestions, bundleRoundIds, votingEngine, protocolConfig, bundleId, roundSetIndex, account
         );
         return QuestionRewardPoolEscrowEligibilityLib.isAccountEligibleForBounty(
             votingEngine.protocolConfig(), bundle.bountyEligibility, eligibilityAccount
@@ -805,7 +807,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             )
         ) storage bundleRoundIds,
         RoundVotingEngine votingEngine,
-        IVoterIdNFT voterIdNFT,
+        ProtocolConfig protocolConfig,
         uint256 bundleId,
         uint256 roundSetIndex,
         address account
@@ -814,13 +816,11 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         BundleQuestion storage firstQuestion = bundleQuestions[bundleId][0];
         uint256 firstRoundId = bundleRoundIds[bundleId][0][roundSetIndex];
         if (firstRoundId == 0) return account;
-        (uint256 voterId,,) = QuestionRewardPoolEscrowVoterLib.resolveRoundRewardClaim(
-            votingEngine, voterIdNFT, firstQuestion.contentId, firstRoundId, account
+        (, bytes32 commitKey, address rewardRecipient) = QuestionRewardPoolEscrowVoterLib.resolveRoundRewardClaim(
+            votingEngine, protocolConfig, firstQuestion.contentId, firstRoundId, account
         );
-        if (voterId == 0) return account;
-        IVoterIdNFT roundVoterIdNft = _roundVoterIdNft(votingEngine, voterIdNFT, firstQuestion.contentId, firstRoundId);
-        address holder = roundVoterIdNft.getHolder(voterId);
-        return holder == address(0) ? account : holder;
+        if (commitKey == bytes32(0)) return account;
+        return rewardRecipient == address(0) ? account : rewardRecipient;
     }
 
     function _isBundleRoundSetComplete(
@@ -858,34 +858,18 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         require(bundle.id != 0, "Bundle not found");
     }
 
-    function _resolveFunderIdentity(IVoterIdNFT voterIdNFT, address funder)
+    function _resolveFunderIdentity(ProtocolConfig protocolConfig, address funder)
         private
         view
-        returns (uint256 funderVoterId, address funderIdentity, uint256 funderNullifier)
+        returns (bytes32 funderIdentityKey, address funderIdentity)
     {
-        if (address(voterIdNFT) == address(0)) {
-            return (0, funder, 0);
-        }
-        funderVoterId = voterIdNFT.getTokenId(funder);
-        if (funderVoterId == 0) {
-            return (0, funder, 0);
-        }
-
-        funderIdentity = voterIdNFT.getHolder(funderVoterId);
+        IRaterIdentityRegistry.ResolvedRater memory resolved =
+            QuestionRewardPoolEscrowVoterLib.resolveCurrentRater(protocolConfig, funder);
+        funderIdentityKey = resolved.identityKey;
+        funderIdentity = resolved.holder;
         if (funderIdentity == address(0)) {
             funderIdentity = funder;
         }
-        funderNullifier = voterIdNFT.getNullifier(funderVoterId);
-    }
-
-    function _roundVoterIdNft(
-        RoundVotingEngine votingEngine,
-        IVoterIdNFT defaultVoterIdNFT,
-        uint256 contentId,
-        uint256 roundId
-    ) private view returns (IVoterIdNFT) {
-        address snapshot = votingEngine.roundVoterIdNFTSnapshot(contentId, roundId);
-        return IVoterIdNFT(snapshot == address(0) ? address(defaultVoterIdNFT) : snapshot);
     }
 
     function _rewardToken(IERC20 hrepToken, IERC20 usdcToken, uint8 asset) private pure returns (IERC20 token) {

@@ -11,7 +11,7 @@ import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import { ContentRegistry } from "./ContentRegistry.sol";
 import { RoundVotingEngine } from "./RoundVotingEngine.sol";
 import { ProtocolConfig } from "./ProtocolConfig.sol";
-import { IVoterIdNFT } from "./interfaces/IVoterIdNFT.sol";
+import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol";
 import { RoundLib } from "./libraries/RoundLib.sol";
 import { QuestionRewardPoolEscrowBundleActionsLib } from "./libraries/QuestionRewardPoolEscrowBundleActionsLib.sol";
 import { QuestionRewardPoolEscrowClaimLib } from "./libraries/QuestionRewardPoolEscrowClaimLib.sol";
@@ -58,7 +58,7 @@ contract QuestionRewardPoolEscrow is
     IERC20 internal usdcToken;
     ContentRegistry internal registry;
     RoundVotingEngine internal votingEngine;
-    IVoterIdNFT internal voterIdNFT;
+    IRaterIdentityRegistry internal raterRegistry;
     uint256 internal nextRewardPoolId;
 
     mapping(uint256 => RewardPool) private rewardPools;
@@ -77,9 +77,8 @@ contract QuestionRewardPoolEscrow is
     ///      payer-identity refactor; refunds use `RewardPool.funder` directly and exclusion
     ///      uses `rewardPoolPayerNullifier` for gateway-mediated payments.
     mapping(uint256 => uint256) private __deprecated_rewardPoolFunderNullifier;
-    mapping(uint256 => uint256) private rewardPoolSubmitterNullifier;
     mapping(uint256 => address) private rewardPoolPayerIdentity;
-    mapping(uint256 => uint256) private rewardPoolPayerNullifier;
+    mapping(uint256 => bytes32) private rewardPoolPayerIdentityKey;
     mapping(uint256 => uint256) private contentBundleId;
     mapping(uint256 => uint256) private contentBundleIndex;
     uint16 public defaultFrontendFeeBps;
@@ -88,7 +87,7 @@ contract QuestionRewardPoolEscrow is
         uint256 indexed rewardPoolId,
         uint256 indexed contentId,
         address indexed funder,
-        uint256 funderVoterId,
+        bytes32 funderIdentityKey,
         uint256 amount,
         uint256 requiredVoters,
         uint256 requiredSettledRounds,
@@ -126,7 +125,7 @@ contract QuestionRewardPoolEscrow is
         uint256 indexed contentId,
         uint256 indexed roundId,
         address claimant,
-        uint256 voterId,
+        bytes32 identityKey,
         uint256 amount,
         address frontend,
         address frontendRecipient,
@@ -143,7 +142,7 @@ contract QuestionRewardPoolEscrow is
     event QuestionBundleRewardCreated(
         uint256 indexed bundleId,
         address indexed funder,
-        uint256 funderVoterId,
+        bytes32 funderIdentityKey,
         uint256 amount,
         uint256 requiredCompleters,
         uint256 questionCount,
@@ -173,7 +172,7 @@ contract QuestionRewardPoolEscrow is
         uint256 indexed bundleId,
         uint256 indexed roundSetIndex,
         address indexed claimant,
-        uint256 voterId,
+        bytes32 identityKey,
         uint256 amount,
         address frontend,
         address frontendRecipient,
@@ -194,7 +193,7 @@ contract QuestionRewardPoolEscrow is
         address usdcToken_,
         address registry_,
         address votingEngine_,
-        address voterIdNFT_
+        address raterRegistry_
     ) external initializer {
         require(admin != address(0), "Invalid admin");
         require(hrepToken_ != address(0), "Invalid HREP token");
@@ -213,7 +212,7 @@ contract QuestionRewardPoolEscrow is
         usdcToken = IERC20(usdcToken_);
         registry = ContentRegistry(registry_);
         votingEngine = RoundVotingEngine(votingEngine_);
-        voterIdNFT = IVoterIdNFT(voterIdNFT_);
+        raterRegistry = IRaterIdentityRegistry(raterRegistry_);
         nextRewardPoolId = 1;
         defaultFrontendFeeBps = uint16(DEFAULT_FRONTEND_FEE_BPS);
     }
@@ -371,12 +370,10 @@ contract QuestionRewardPoolEscrow is
         _requireCurrentRegistryEscrow();
         (rewardPoolId, nextRewardPoolId) = QuestionRewardPoolEscrowPoolActionsLib.createRewardPool(
             rewardPools,
-            rewardPoolSubmitterNullifier,
             rewardPoolPayerIdentity,
-            rewardPoolPayerNullifier,
+            rewardPoolPayerIdentityKey,
             registry,
             votingEngine,
-            voterIdNFT,
             hrepToken,
             usdcToken,
             defaultFrontendFeeBps,
@@ -530,7 +527,7 @@ contract QuestionRewardPoolEscrow is
             contentBundleId,
             contentBundleIndex,
             registry,
-            voterIdNFT,
+            votingEngine.protocolConfig(),
             hrepToken,
             usdcToken,
             defaultFrontendFeeBps,
@@ -562,12 +559,10 @@ contract QuestionRewardPoolEscrow is
     ) internal returns (uint256 rewardPoolId) {
         (rewardPoolId, nextRewardPoolId) = QuestionRewardPoolEscrowPoolActionsLib.createRewardPool(
             rewardPools,
-            rewardPoolSubmitterNullifier,
             rewardPoolPayerIdentity,
-            rewardPoolPayerNullifier,
+            rewardPoolPayerIdentityKey,
             registry,
             votingEngine,
-            voterIdNFT,
             hrepToken,
             usdcToken,
             defaultFrontendFeeBps,
@@ -624,10 +619,10 @@ contract QuestionRewardPoolEscrow is
         require(votingEngine.roundUnrevealedCleanupRemaining(rewardPool.contentId, roundId) == 0, "Cleanup pending");
         _qualifyRoundIfNeeded(rewardPoolId, rewardPool, roundId);
 
-        (uint256 voterId, bytes32 commitKey, address rewardRecipient) =
+        (bytes32 identityKey, bytes32 commitKey, address rewardRecipient) =
             _resolveQuestionRewardClaim(rewardPool, roundId, msg.sender);
-        require(!_isExcludedClaimant(rewardPool, roundId, voterId, msg.sender), "Excluded voter");
-        require(_isQuestionBountyEligible(rewardPool, roundId, voterId, msg.sender), "Not bounty eligible");
+        require(!_isExcludedClaimant(rewardPool, identityKey, msg.sender), "Excluded voter");
+        require(_isQuestionBountyEligible(rewardPool, rewardRecipient), "Not bounty eligible");
         require(commitKey != bytes32(0), "No commit");
         require(!rewardClaimed[rewardPoolId][roundId][commitKey], "Already claimed");
 
@@ -694,7 +689,7 @@ contract QuestionRewardPoolEscrow is
             rewardPool.contentId,
             roundId,
             rewardRecipient,
-            voterId,
+            identityKey,
             rewardAmount,
             frontend,
             frontendRecipient,
@@ -754,7 +749,7 @@ contract QuestionRewardPoolEscrow is
             contentBundleIndex,
             registry,
             votingEngine,
-            voterIdNFT,
+            votingEngine.protocolConfig(),
             contentId,
             roundId
         );
@@ -774,7 +769,7 @@ contract QuestionRewardPoolEscrow is
             bundleRoundSetRewardClaimed,
             registry,
             votingEngine,
-            voterIdNFT,
+            votingEngine.protocolConfig(),
             hrepToken,
             usdcToken,
             bundleId,
@@ -795,7 +790,7 @@ contract QuestionRewardPoolEscrow is
             bundleRoundSetRewardClaimed,
             registry,
             votingEngine,
-            voterIdNFT,
+            votingEngine.protocolConfig(),
             bundleId,
             roundSetIndex,
             account
@@ -811,7 +806,7 @@ contract QuestionRewardPoolEscrow is
             bundleRoundSetSnapshots,
             registry,
             votingEngine,
-            voterIdNFT,
+            votingEngine.protocolConfig(),
             hrepToken,
             usdcToken,
             bundleId
@@ -896,11 +891,9 @@ contract QuestionRewardPoolEscrow is
             roundSnapshots,
             rewardClaimed,
             rewardPoolPayerIdentity,
-            rewardPoolPayerNullifier,
-            rewardPoolSubmitterNullifier,
+            rewardPoolPayerIdentityKey,
             votingEngine,
             votingEngine.protocolConfig(),
-            voterIdNFT,
             rewardPoolId,
             roundId,
             account,
@@ -997,10 +990,8 @@ contract QuestionRewardPoolEscrow is
         ) = QuestionRewardPoolEscrowQualificationLib.qualifyRound(
             roundSnapshots,
             rewardPoolPayerIdentity,
-            rewardPoolPayerNullifier,
-            rewardPoolSubmitterNullifier,
+            rewardPoolPayerIdentityKey,
             votingEngine,
-            voterIdNFT,
             rewardPool,
             rewardPoolId,
             roundId,
@@ -1042,7 +1033,6 @@ contract QuestionRewardPoolEscrow is
                 QuestionRewardPoolEscrowQualificationLib.QualificationContext({
                     votingEngine: votingEngine,
                     protocolConfig: votingEngine.protocolConfig(),
-                    voterIdNft: _roundVoterIdNft(rewardPool.contentId, roundId),
                     rewardId: rewardPool.id,
                     contentId: rewardPool.contentId,
                     roundId: roundId,
@@ -1053,9 +1043,9 @@ contract QuestionRewardPoolEscrow is
                     // Use payer identity for exclusion checks so gateway-mediated payments
                     // (e.g. X402) correctly exclude the actual human payer, not the gateway contract.
                     funderIdentity: rewardPoolPayerIdentity[rewardPool.id],
-                    funderNullifier: rewardPoolPayerNullifier[rewardPool.id],
+                    funderIdentityKey: rewardPoolPayerIdentityKey[rewardPool.id],
                     submitterIdentity: rewardPool.submitterIdentity,
-                    submitterNullifier: rewardPoolSubmitterNullifier[rewardPool.id]
+                    submitterIdentityKey: rewardPool.submitterIdentityKey
                 })
             );
     }
@@ -1108,60 +1098,36 @@ contract QuestionRewardPoolEscrow is
         return votingEngine.commitRbtsRewardWeight(contentId, roundId, commitKey);
     }
 
-    function _isExcludedVoter(RewardPool storage rewardPool, uint256 roundId, uint256 voterId)
+    function _isExcludedClaimant(RewardPool storage rewardPool, bytes32 identityKey, address account)
         internal
         view
         returns (bool)
     {
-        return QuestionRewardPoolEscrowQualificationLib.isExcludedVoter(
-            _roundVoterIdNft(rewardPool.contentId, roundId),
-            voterId,
+        return QuestionRewardPoolEscrowQualificationLib.isExcludedRater(
+            identityKey,
+            account,
             rewardPool.funder,
-            // Use payer identity for exclusion checks so gateway-mediated payments
-            // (e.g. X402) correctly exclude the actual human payer, not the gateway contract.
             rewardPoolPayerIdentity[rewardPool.id],
-            rewardPoolPayerNullifier[rewardPool.id],
+            rewardPoolPayerIdentityKey[rewardPool.id],
             rewardPool.submitterIdentity,
-            rewardPoolSubmitterNullifier[rewardPool.id]
+            rewardPool.submitterIdentityKey
         );
     }
 
-    function _isExcludedClaimant(RewardPool storage rewardPool, uint256 roundId, uint256 voterId, address account)
+    function _isQuestionBountyEligible(RewardPool storage rewardPool, address account)
         internal
         view
         returns (bool)
     {
-        if (voterId != 0) return _isExcludedVoter(rewardPool, roundId, voterId);
-        return account == rewardPool.funder || account == rewardPoolPayerIdentity[rewardPool.id]
-            || account == rewardPool.submitterIdentity;
-    }
-
-    function _isQuestionBountyEligible(RewardPool storage rewardPool, uint256 roundId, uint256 voterId, address account)
-        internal
-        view
-        returns (bool)
-    {
-        address eligibilityAccount =
-            _bountyEligibilityAccount(_roundVoterIdNft(rewardPool.contentId, roundId), voterId, account);
         return QuestionRewardPoolEscrowEligibilityLib.isAccountEligibleForBounty(
-            votingEngine.protocolConfig(), rewardPool.bountyEligibility, eligibilityAccount
+            votingEngine.protocolConfig(), rewardPool.bountyEligibility, account
         );
-    }
-
-    function _bountyEligibilityAccount(IVoterIdNFT roundVoterIdNft, uint256 voterId, address account)
-        internal
-        view
-        returns (address)
-    {
-        if (voterId == 0) return account;
-        address holder = roundVoterIdNft.getHolder(voterId);
-        return holder == address(0) ? account : holder;
     }
 
     function _resolveQuestionRewardClaim(RewardPool storage rewardPool, uint256 roundId, address account)
         internal
         view
-        returns (uint256 voterId, bytes32 commitKey, address rewardRecipient)
+        returns (bytes32 identityKey, bytes32 commitKey, address rewardRecipient)
     {
         return _resolveRoundRewardClaim(rewardPool.contentId, roundId, account);
     }
@@ -1169,20 +1135,11 @@ contract QuestionRewardPoolEscrow is
     function _resolveRoundRewardClaim(uint256 contentId, uint256 roundId, address account)
         internal
         view
-        returns (uint256 voterId, bytes32 commitKey, address rewardRecipient)
+        returns (bytes32 identityKey, bytes32 commitKey, address rewardRecipient)
     {
         return QuestionRewardPoolEscrowVoterLib.resolveRoundRewardClaim(
-            votingEngine, voterIdNFT, contentId, roundId, account
+            votingEngine, votingEngine.protocolConfig(), contentId, roundId, account
         );
-    }
-
-    function _roundVoterIdNft(uint256 contentId, uint256 roundId) internal view returns (IVoterIdNFT) {
-        return IVoterIdNFT(_roundVoterIdNftAddress(contentId, roundId));
-    }
-
-    function _roundVoterIdNftAddress(uint256 contentId, uint256 roundId) internal view returns (address) {
-        address snapshot = votingEngine.roundVoterIdNFTSnapshot(contentId, roundId);
-        return snapshot == address(0) ? address(voterIdNFT) : snapshot;
     }
 
     uint256[50] private __gap;

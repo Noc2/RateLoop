@@ -7,7 +7,7 @@
 - The old x402 bounty endpoint has been removed; paid asks use ordered wallet calls that fund protocol escrow directly.
 - Tokenless MCP and direct-agent asks return ordered wallet calls for a user-controlled smart wallet or scoped agent wallet. Managed asks can additionally reserve an internal policy budget.
 - After the wallet executes those calls, the agent confirms transaction hashes and reads status, callbacks, and result data.
-- USDC-funded asks and core voting do not require a Voter ID. Voter ID remains an optional identity handle for delegated or identity-aware flows where it is configured.
+- USDC-funded asks and core voting use the RaterRegistry identity resolver. Address fallback is enough for open wallet flows; human credentials add verified-human eligibility and delegation.
 - There is no separate service fee. A registered frontend operator earns through the existing on-chain share of bounty USDC.
 
 ## Agent Flow

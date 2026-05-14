@@ -3,12 +3,11 @@ pragma solidity ^0.8.24;
 
 import { ContentRegistry } from "../ContentRegistry.sol";
 import { IFrontendRegistry } from "../interfaces/IFrontendRegistry.sol";
-import { IVoterIdNFT } from "../interfaces/IVoterIdNFT.sol";
+import { IRaterIdentityRegistry } from "../interfaces/IRaterIdentityRegistry.sol";
 
 /// @title VotePreflightLib
 /// @notice Extracts external preflight checks for vote commits to reduce RoundVotingEngine runtime size.
 library VotePreflightLib {
-    error VoterIdRequired();
     error SelfVote();
     error ContentNotActive();
     error CooldownActive();
@@ -20,8 +19,7 @@ library VotePreflightLib {
         address voter;
         uint256 contentId;
         uint256 roundId;
-        uint256 voterId;
-        bool useTokenIdentity;
+        bytes32 identityKey;
         uint256 cooldownWindow;
         uint256 maxStake;
         uint256 stakeAmount;
@@ -30,34 +28,50 @@ library VotePreflightLib {
         uint256 maxVoters;
     }
 
-    function validateVoterAndContent(IVoterIdNFT voterIdNft, ContentRegistry registry, address voter, uint256 contentId)
+    function validateVoterAndContent(
+        IRaterIdentityRegistry identityRegistry,
+        ContentRegistry registry,
+        address voter,
+        uint256 contentId
+    )
         external
         view
-        returns (uint256 voterId, bool useTokenIdentity)
+        returns (IRaterIdentityRegistry.ResolvedRater memory resolved)
     {
-        bool hasVoterIdNft = address(voterIdNft) != address(0);
-        address effectiveVoter = voter;
-
-        if (hasVoterIdNft) {
-            voterId = voterIdNft.getTokenId(voter);
-            if (voterId != 0) {
-                uint256 submitterNullifier = registry.contentSubmitterNullifier(contentId);
-                if (submitterNullifier != 0 && voterIdNft.getNullifier(voterId) == submitterNullifier) {
-                    revert SelfVote();
-                }
-
-                address resolved = voterIdNft.resolveHolder(voter);
-                if (resolved != address(0)) effectiveVoter = resolved;
-            }
-        }
+        resolved = resolveRater(identityRegistry, voter);
 
         (,, address rawSubmitter,,,,,,,) = registry.contents(contentId);
         if (voter == rawSubmitter) revert SelfVote();
 
-        if (effectiveVoter == registry.getSubmitterIdentity(contentId)) revert SelfVote();
+        if (resolved.holder == registry.getSubmitterIdentity(contentId)) revert SelfVote();
+        bytes32 submitterIdentityKey = registry.contentSubmitterIdentityKey(contentId);
+        if (submitterIdentityKey != bytes32(0) && resolved.identityKey == submitterIdentityKey) revert SelfVote();
         if (!registry.isContentActive(contentId)) revert ContentNotActive();
+    }
 
-        useTokenIdentity = voterId != 0;
+    function resolveRater(IRaterIdentityRegistry identityRegistry, address actor)
+        public
+        view
+        returns (IRaterIdentityRegistry.ResolvedRater memory resolved)
+    {
+        if (actor == address(0)) return resolved;
+        if (address(identityRegistry) != address(0)) {
+            resolved = identityRegistry.resolveRater(actor);
+            if (resolved.identityKey != bytes32(0) && resolved.holder != address(0)) return resolved;
+        }
+
+        resolved = IRaterIdentityRegistry.ResolvedRater({
+            holder: actor,
+            identityKey: addressIdentityKey(actor),
+            humanNullifier: bytes32(0),
+            hasActiveHumanCredential: false,
+            delegated: false
+        });
+    }
+
+    function addressIdentityKey(address account) public pure returns (bytes32) {
+        if (account == address(0)) return bytes32(0);
+        return keccak256(abi.encodePacked("rateloop.address-identity-v1", account));
     }
 
     function isFrontendEligible(IFrontendRegistry frontendRegistry, address frontend)
@@ -78,46 +92,37 @@ library VotePreflightLib {
 
     function prepareCommit(
         mapping(uint256 => mapping(uint256 => mapping(address => bytes32))) storage voterCommitHash,
-        mapping(
-            uint256 => mapping(uint256 => mapping(uint256 => bool))
-        ) storage hasTokenIdCommitted,
-        mapping(uint256 => mapping(uint256 => mapping(uint256 => bytes32))) storage voterNullifierCommitKey,
+        mapping(uint256 => mapping(uint256 => mapping(bytes32 => bytes32))) storage identityCommitKey,
         mapping(uint256 => mapping(address => uint256)) storage lastVoteTimestamp,
-        mapping(uint256 => mapping(uint256 => uint256)) storage lastVoteTimestampByNullifier,
-        IVoterIdNFT voterIdNft,
+        mapping(uint256 => mapping(bytes32 => uint256)) storage lastVoteTimestampByIdentity,
+        mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint256))) storage identityRoundStake,
         CommitPreflightParams memory params
     ) external view returns (bytes32 commitKey) {
         _validateCooldown(
             lastVoteTimestamp,
-            lastVoteTimestampByNullifier,
-            voterIdNft,
+            lastVoteTimestampByIdentity,
             params.voter,
             params.contentId,
-            params.voterId,
-            params.useTokenIdentity,
+            params.identityKey,
             params.cooldownWindow,
             block.timestamp
         );
         commitKey = _validateCommitCapacityAndKey(
             voterCommitHash,
-            hasTokenIdCommitted,
+            identityCommitKey,
             params.voter,
             params.contentId,
             params.roundId,
-            params.voterId,
-            params.useTokenIdentity,
+            params.identityKey,
             params.commitHash,
-            voterNullifierCommitKey,
-            voterIdNft,
             params.roundVoteCount,
             params.maxVoters
         );
         _validateStakeLimit(
-            voterIdNft,
+            identityRoundStake,
             params.contentId,
             params.roundId,
-            params.voterId,
-            params.useTokenIdentity,
+            params.identityKey,
             params.stakeAmount,
             params.maxStake
         );
@@ -125,49 +130,33 @@ library VotePreflightLib {
 
     function _validateCooldown(
         mapping(uint256 => mapping(address => uint256)) storage lastVoteTimestamp,
-        mapping(uint256 => mapping(uint256 => uint256)) storage lastVoteTimestampByNullifier,
-        IVoterIdNFT voterIdNft,
+        mapping(uint256 => mapping(bytes32 => uint256)) storage lastVoteTimestampByIdentity,
         address voter,
         uint256 contentId,
-        uint256 voterId,
-        bool useTokenIdentity,
+        bytes32 identityKey,
         uint256 cooldownWindow,
         uint256 timestamp
     ) private view {
-        if (useTokenIdentity) {
-            uint256 nullifier = voterIdNft.getNullifier(voterId);
-            uint256 lastVoteByNullifier = nullifier == 0 ? 0 : lastVoteTimestampByNullifier[contentId][nullifier];
-            if (lastVoteByNullifier > 0 && timestamp < lastVoteByNullifier + cooldownWindow) {
-                revert CooldownActive();
-            }
-            return;
-        }
-
         uint256 lastVote = lastVoteTimestamp[contentId][voter];
+        uint256 lastVoteByIdentity = lastVoteTimestampByIdentity[contentId][identityKey];
+        if (lastVoteByIdentity > lastVote) lastVote = lastVoteByIdentity;
         if (lastVote > 0 && timestamp < lastVote + cooldownWindow) revert CooldownActive();
     }
 
     function _validateCommitCapacityAndKey(
         mapping(uint256 => mapping(uint256 => mapping(address => bytes32))) storage voterCommitHash,
-        mapping(uint256 => mapping(uint256 => mapping(uint256 => bool))) storage hasTokenIdCommitted,
+        mapping(uint256 => mapping(uint256 => mapping(bytes32 => bytes32))) storage identityCommitKey,
         address voter,
         uint256 contentId,
         uint256 roundId,
-        uint256 voterId,
-        bool useTokenIdentity,
+        bytes32 identityKey,
         bytes32 commitHash,
-        mapping(uint256 => mapping(uint256 => mapping(uint256 => bytes32))) storage voterNullifierCommitKey,
-        IVoterIdNFT voterIdNft,
         uint256 roundVoteCount,
         uint256 maxVoters
     ) private view returns (bytes32 commitKey) {
         if (voterCommitHash[contentId][roundId][voter] != bytes32(0)) revert AlreadyCommitted();
-        if (useTokenIdentity && hasTokenIdCommitted[contentId][roundId][voterId]) revert AlreadyCommitted();
-        if (useTokenIdentity) {
-            uint256 nullifier = voterIdNft.getNullifier(voterId);
-            if (nullifier != 0 && voterNullifierCommitKey[contentId][roundId][nullifier] != bytes32(0)) {
-                revert AlreadyCommitted();
-            }
+        if (identityKey != bytes32(0) && identityCommitKey[contentId][roundId][identityKey] != bytes32(0)) {
+            revert AlreadyCommitted();
         }
         if (roundVoteCount >= maxVoters) revert MaxVotersReached();
 
@@ -175,17 +164,14 @@ library VotePreflightLib {
     }
 
     function _validateStakeLimit(
-        IVoterIdNFT voterIdNft,
+        mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint256))) storage identityRoundStake,
         uint256 contentId,
         uint256 roundId,
-        uint256 voterId,
-        bool useTokenIdentity,
+        bytes32 identityKey,
         uint256 stakeAmount,
         uint256 maxStake
     ) private view {
-        if (!useTokenIdentity) return;
-
-        uint256 currentStake = voterIdNft.getEpochContentStake(contentId, roundId, voterId);
+        uint256 currentStake = identityRoundStake[contentId][roundId][identityKey];
         if (currentStake + stakeAmount > maxStake) revert InvalidStake();
     }
 }

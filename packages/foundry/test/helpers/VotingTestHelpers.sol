@@ -10,11 +10,12 @@ import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { HumanReputation } from "../../contracts/HumanReputation.sol";
 import { ContentRegistry } from "../../contracts/ContentRegistry.sol";
 import { ProtocolConfig } from "../../contracts/ProtocolConfig.sol";
+import { RaterRegistry } from "../../contracts/RaterRegistry.sol";
 import { RoundVotingEngine } from "../../contracts/RoundVotingEngine.sol";
 import { RatingLib } from "../../contracts/libraries/RatingLib.sol";
 import { RoundLib } from "../../contracts/libraries/RoundLib.sol";
+import { MockWorldIDRouter } from "../../contracts/mocks/MockWorldIDRouter.sol";
 import { MockQuestionRewardPoolEscrow } from "../mocks/MockQuestionRewardPoolEscrow.sol";
-import { MockVoterIdNFT } from "../mocks/MockVoterIdNFT.sol";
 
 function deployInitializedProtocolConfig(address admin) returns (ProtocolConfig protocolConfig) {
     return deployInitializedProtocolConfig(admin, admin);
@@ -176,7 +177,7 @@ abstract contract ContentSubmissionTestBase {
             HEVM.stopPrank();
         }
         _ensureActiveProtocolConfig(reservation.registry);
-        _ensureDefaultSubmitterVoterId(reservation.registry, reservation.submitter);
+        _ensureDefaultSubmitterIdentity(reservation.registry, reservation.submitter);
         address rewardEscrow = _ensureDefaultQuestionRewardPoolEscrow(reservation.registry);
         if (hasActivePrank) {
             HEVM.startPrank(msgSender, txOrigin);
@@ -437,33 +438,8 @@ abstract contract ContentSubmissionTestBase {
         }
     }
 
-    function _ensureDefaultSubmitterVoterId(ContentRegistry registry, address submitter) internal {
-        if (address(registry.voterIdNFT()) != address(0)) {
-            return;
-        }
-
-        ProtocolConfig config = registry.protocolConfig();
-        address voterIdNFT = address(config) == address(0) ? address(0) : config.voterIdNFT();
-        if (voterIdNFT == address(0)) {
-            MockVoterIdNFT mockVoterIdNFT = new MockVoterIdNFT();
-            mockVoterIdNFT.setHolder(submitter);
-            voterIdNFT = address(mockVoterIdNFT);
-        } else {
-            try MockVoterIdNFT(voterIdNFT).setHolder(submitter) { } catch { }
-        }
-
-        bytes32 configRole = registry.CONFIG_ROLE();
-        address[8] memory candidates = [
-            address(this), address(1), address(2), address(0xA), address(0xB), address(0xAA), address(0xBB), address(10)
-        ];
-        for (uint256 i = 0; i < candidates.length; i++) {
-            if (registry.hasRole(configRole, candidates[i])) {
-                HEVM.prank(candidates[i]);
-                registry.setVoterIdNFT(voterIdNFT);
-                return;
-            }
-        }
-        revert("Voter ID NFT not set");
+    function _ensureDefaultSubmitterIdentity(ContentRegistry, address) internal pure {
+        // Address-key identity fallback is sufficient for generic reservation tests.
     }
 
     function _ensureDefaultQuestionRewardPoolEscrow(ContentRegistry registry) internal returns (address rewardEscrow) {
@@ -589,6 +565,40 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
             vm.prank(governance);
         }
         _setTlockDrandConfig(protocolConfig, DEFAULT_DRAND_CHAIN_HASH, DEFAULT_DRAND_GENESIS_TIME, DEFAULT_DRAND_PERIOD);
+    }
+
+    function _deployRaterRegistry(address admin) internal returns (RaterRegistry raterRegistry) {
+        return _deployRaterRegistry(admin, admin);
+    }
+
+    function _deployRaterRegistry(address admin, address governance) internal returns (RaterRegistry raterRegistry) {
+        raterRegistry = new RaterRegistry(
+            admin,
+            governance,
+            address(new MockWorldIDRouter()),
+            keccak256("rateloop-human-v1"),
+            12_345,
+            365 days
+        );
+    }
+
+    function _seedRaterIdentity(RaterRegistry raterRegistry, address account, bytes32 anchorId) internal {
+        raterRegistry.seedHumanCredential(account, uint64(block.timestamp + 365 days), anchorId, keccak256("test-seed"));
+    }
+
+    function _setAcceptedDelegate(RaterRegistry raterRegistry, address holder, address delegate) internal {
+        (VmSafe.CallerMode mode, address msgSender, address txOrigin) = HEVM.readCallers();
+        bool hasActivePrank = mode == VmSafe.CallerMode.Prank || mode == VmSafe.CallerMode.RecurrentPrank;
+        if (hasActivePrank) {
+            HEVM.stopPrank();
+        }
+        HEVM.prank(holder);
+        raterRegistry.setDelegate(delegate);
+        HEVM.prank(delegate);
+        raterRegistry.acceptDelegate();
+        if (hasActivePrank) {
+            HEVM.startPrank(msgSender, txOrigin);
+        }
     }
 
     function _setTlockRoundConfig(

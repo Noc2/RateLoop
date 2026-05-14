@@ -94,26 +94,22 @@ contract ProtocolConfigBranchesTest is Test {
         config.setSubmissionRewardMinimums(hrepFloor, usdcFloor - 1);
     }
 
-    function test_SetVoterIdNFT_RejectsRotationAfterInitialSet() public {
+    function test_SetRaterRegistry_AllowsRotation() public {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
-        address voterIdNFT = address(0xA11CE);
-        address replacementVoterIdNFT = address(0xB0B);
+        address raterRegistry = address(0xA11CE);
+        address replacementRaterRegistry = address(0xB0B);
 
-        config.setVoterIdNFT(voterIdNFT);
-        config.setVoterIdNFT(voterIdNFT);
+        config.setRaterRegistry(raterRegistry);
+        config.setRaterRegistry(replacementRaterRegistry);
 
-        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
-        config.setVoterIdNFT(replacementVoterIdNFT);
+        assertEq(config.raterRegistry(), replacementRaterRegistry);
     }
 
-    function test_SetVoterIdNFT_AllowsClearingOptionalIdentitySignal() public {
+    function test_SetRaterRegistry_RejectsZeroAddress() public {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
-        address voterIdNFT = address(0xA11CE);
 
-        config.setVoterIdNFT(voterIdNFT);
-        config.setVoterIdNFT(address(0));
-
-        assertEq(config.voterIdNFT(), address(0));
+        vm.expectRevert(ProtocolConfig.InvalidAddress.selector);
+        config.setRaterRegistry(address(0));
     }
 
     function test_InitializeWithTreasury_GovernanceCanRecoverTreasuryRoles() public {

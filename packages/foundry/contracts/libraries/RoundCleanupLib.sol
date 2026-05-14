@@ -5,10 +5,11 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import {ProtocolConfig} from "../ProtocolConfig.sol";
-import {IVoterIdNFT} from "../interfaces/IVoterIdNFT.sol";
+import {IRaterIdentityRegistry} from "../interfaces/IRaterIdentityRegistry.sol";
 import {RoundLib} from "./RoundLib.sol";
 import {TlockVoteLib} from "./TlockVoteLib.sol";
 import {TokenTransferLib} from "./TokenTransferLib.sol";
+import {VotePreflightLib} from "./VotePreflightLib.sol";
 
 interface IRoundCleanupActivityRegistry {
     function updateActivity(uint256 contentId) external;
@@ -76,26 +77,17 @@ library RoundCleanupLib {
 
     function resolveClaimCommit(
         mapping(address => bytes32) storage roundVoterCommitHash,
-        mapping(uint256 => bytes32) storage roundVoterIdCommitKey,
-        mapping(uint256 => bytes32) storage roundVoterNullifierCommitKey,
-        mapping(bytes32 => uint256) storage,
-        address voterIdNftAddress,
+        mapping(bytes32 => bytes32) storage roundIdentityCommitKey,
+        mapping(bytes32 => address) storage roundCommitIdentityHolder,
+        IRaterIdentityRegistry identityRegistry,
         address account
     ) external view returns (bytes32 commitKey, address rewardRecipient) {
-        if (voterIdNftAddress != address(0)) {
-            IVoterIdNFT voterIdNft = IVoterIdNFT(voterIdNftAddress);
-            uint256 voterId = voterIdNft.getTokenId(account);
-            if (voterId != 0) {
-                commitKey = roundVoterIdCommitKey[voterId];
-                if (commitKey == bytes32(0)) {
-                    uint256 nullifier = voterIdNft.getNullifier(voterId);
-                    if (nullifier != 0) {
-                        commitKey = roundVoterNullifierCommitKey[nullifier];
-                    }
-                }
-
-                rewardRecipient = voterIdNft.getHolder(voterId);
-                if (rewardRecipient == address(0)) rewardRecipient = account;
+        IRaterIdentityRegistry.ResolvedRater memory resolved =
+            VotePreflightLib.resolveRater(identityRegistry, account);
+        if (resolved.identityKey != bytes32(0)) {
+            commitKey = roundIdentityCommitKey[resolved.identityKey];
+            if (commitKey != bytes32(0)) {
+                rewardRecipient = resolved.holder == address(0) ? account : resolved.holder;
                 return (commitKey, rewardRecipient);
             }
         }
@@ -103,7 +95,8 @@ library RoundCleanupLib {
         bytes32 directCommitHash = roundVoterCommitHash[account];
         if (directCommitHash != bytes32(0)) {
             commitKey = keccak256(abi.encodePacked(account, directCommitHash));
-            return (commitKey, account);
+            rewardRecipient = roundCommitIdentityHolder[commitKey];
+            return (commitKey, rewardRecipient == address(0) ? account : rewardRecipient);
         }
 
         return (bytes32(0), account);
@@ -130,37 +123,29 @@ library RoundCleanupLib {
         roundVoterCommitHash[voter] = commitHash;
     }
 
-    function recordTokenIdentityCommitIndex(
-        mapping(uint256 => bool) storage roundHasTokenIdCommitted,
-        mapping(uint256 => bytes32) storage roundVoterIdCommitKey,
-        mapping(bytes32 => uint256) storage roundCommitVoterId,
-        mapping(uint256 => bytes32) storage roundVoterNullifierCommitKey,
+    function recordIdentityCommitIndex(
+        mapping(bytes32 => bytes32) storage roundIdentityCommitKey,
+        mapping(bytes32 => bytes32) storage roundCommitIdentityKey,
+        mapping(bytes32 => address) storage roundCommitIdentityHolder,
         bytes32 commitKey,
-        uint256 voterId,
-        IVoterIdNFT voterIdNft
+        bytes32 identityKey,
+        address identityHolder
     ) external {
-        roundHasTokenIdCommitted[voterId] = true;
-        roundVoterIdCommitKey[voterId] = commitKey;
-        roundCommitVoterId[commitKey] = voterId;
-        uint256 voterNullifier = voterIdNft.getNullifier(voterId);
-        if (voterNullifier != 0) {
-            if (roundVoterNullifierCommitKey[voterNullifier] == bytes32(0)) {
-                roundVoterNullifierCommitKey[voterNullifier] = commitKey;
-            }
-        }
+        roundIdentityCommitKey[identityKey] = commitKey;
+        roundCommitIdentityKey[commitKey] = identityKey;
+        roundCommitIdentityHolder[commitKey] = identityHolder;
     }
 
     function recordCommitAccounting(
         RoundLib.Round storage round,
         mapping(address => uint256) storage contentLastVoteTimestamp,
-        mapping(uint256 => uint256) storage contentLastVoteTimestampByNullifier,
+        mapping(bytes32 => uint256) storage contentLastVoteTimestampByIdentity,
+        mapping(uint256 => mapping(bytes32 => uint256)) storage contentRoundIdentityStake,
         address registry,
-        IVoterIdNFT currentVoterIdNft,
         uint256 contentId,
         uint256 roundId,
         address voter,
-        uint256 voterId,
-        bool useTokenIdentity,
+        bytes32 identityKey,
         uint64 stakeAmount64,
         uint256 stakeAmount
     ) external {
@@ -168,11 +153,8 @@ library RoundCleanupLib {
         round.totalStake += stakeAmount64;
 
         contentLastVoteTimestamp[voter] = block.timestamp;
-        if (useTokenIdentity) {
-            uint256 nullifier = currentVoterIdNft.getNullifier(voterId);
-            if (nullifier != 0) contentLastVoteTimestampByNullifier[nullifier] = block.timestamp;
-            currentVoterIdNft.recordStake(contentId, roundId, voterId, stakeAmount);
-        }
+        contentLastVoteTimestampByIdentity[identityKey] = block.timestamp;
+        contentRoundIdentityStake[roundId][identityKey] += stakeAmount;
 
         // Vote commits still refresh UI activity timestamps, but not the dormancy anchor.
         IRoundCleanupActivityRegistry(registry).updateActivity(contentId);

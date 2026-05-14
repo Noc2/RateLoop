@@ -27,7 +27,7 @@ interface IFrontendRegistry {
 
     /// @notice Whether a registered frontend can receive historical fees right now.
     /// @dev Mirrors the `claimFees` eligibility (active operator, fully bonded, not slashed,
-    ///      not mid-unbonding, Voter ID active). Does NOT verify the frontend was registered
+    ///      not mid-unbonding, active human credential). Does NOT verify the frontend was registered
     ///      at the time the round settled; use `canClaimFeesForRound` for that round-time
     ///      guard.
     function canReceiveHistoricalFees(address frontend) external view returns (bool);

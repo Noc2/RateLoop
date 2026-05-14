@@ -7,7 +7,7 @@ import {ContentRegistry} from "./ContentRegistry.sol";
 import {ProtocolConfig} from "./ProtocolConfig.sol";
 import {RoundVotingEngine} from "./RoundVotingEngine.sol";
 import {ILaunchDistributionPool} from "./interfaces/ILaunchDistributionPool.sol";
-import {IVoterIdNFT} from "./interfaces/IVoterIdNFT.sol";
+import {IRaterIdentityRegistry} from "./interfaces/IRaterIdentityRegistry.sol";
 import {LaunchRaterRewardLib} from "./libraries/LaunchRaterRewardLib.sol";
 import {RobustBtsMath} from "./libraries/RobustBtsMath.sol";
 import {RoundLib} from "./libraries/RoundLib.sol";
@@ -55,8 +55,8 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         uint48 revealedAt;
         uint16 roundReferenceRatingBps;
         uint16 predictedUpBps;
-        uint256 voterId;
-        uint256 voterNullifier;
+        bytes32 identityKey;
+        address identityHolder;
         bool revealed;
         bool isUp;
         bool launchCreditClaimed;
@@ -65,10 +65,9 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
 
     mapping(bytes32 => AdvisoryCommit) internal advisoryCommits;
     mapping(uint256 => mapping(uint256 => mapping(address => bytes32))) public advisoryCommitKeyByRater;
-    mapping(uint256 => mapping(uint256 => mapping(uint256 => bytes32))) public advisoryCommitKeyByVoterId;
-    mapping(uint256 => mapping(uint256 => mapping(uint256 => bytes32))) public advisoryCommitKeyByNullifier;
+    mapping(uint256 => mapping(uint256 => mapping(bytes32 => bytes32))) public advisoryCommitKeyByIdentity;
     mapping(uint256 => mapping(address => uint256)) public lastAdvisoryVoteTimestamp;
-    mapping(uint256 => mapping(uint256 => uint256)) public lastAdvisoryVoteTimestampByNullifier;
+    mapping(uint256 => mapping(bytes32 => uint256)) public lastAdvisoryVoteTimestampByIdentity;
     mapping(uint256 => mapping(uint256 => bytes32[])) internal roundAdvisoryCommitKeys;
 
     event AdvisoryVoteRecorded(
@@ -169,27 +168,17 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         }
         if (roundAdvisoryCommitKeys[contentId][roundId].length >= maxVoters) revert MaxAdvisoryVotersReached();
 
-        IVoterIdNFT voterIdNft = _roundVoterIdNft(contentId, roundId);
-        (uint256 voterId, bool useTokenIdentity) =
-            VotePreflightLib.validateVoterAndContent(voterIdNft, registry, msg.sender, contentId);
-        uint256 voterNullifier = useTokenIdentity ? voterIdNft.getNullifier(voterId) : 0;
-        _validateAdvisoryCooldown(contentId, msg.sender, voterNullifier);
+        IRaterIdentityRegistry identityRegistry = _roundRaterRegistry(contentId, roundId);
+        IRaterIdentityRegistry.ResolvedRater memory resolved =
+            VotePreflightLib.validateVoterAndContent(identityRegistry, registry, msg.sender, contentId);
+        _validateAdvisoryCooldown(contentId, msg.sender, resolved.identityKey);
 
         if (votingEngine.voterCommitHash(contentId, roundId, msg.sender) != bytes32(0)) revert AlreadyCommitted();
-        if (useTokenIdentity && votingEngine.voterIdCommitKey(contentId, roundId, voterId) != bytes32(0)) {
-            revert AlreadyCommitted();
-        }
-        if (
-            voterNullifier != 0
-                && votingEngine.voterNullifierCommitKey(contentId, roundId, voterNullifier) != bytes32(0)
-        ) {
+        if (votingEngine.identityCommitKey(contentId, roundId, resolved.identityKey) != bytes32(0)) {
             revert AlreadyCommitted();
         }
         if (advisoryCommitKeyByRater[contentId][roundId][msg.sender] != bytes32(0)) revert AlreadyCommitted();
-        if (useTokenIdentity && advisoryCommitKeyByVoterId[contentId][roundId][voterId] != bytes32(0)) {
-            revert AlreadyCommitted();
-        }
-        if (voterNullifier != 0 && advisoryCommitKeyByNullifier[contentId][roundId][voterNullifier] != bytes32(0)) {
+        if (advisoryCommitKeyByIdentity[contentId][roundId][resolved.identityKey] != bytes32(0)) {
             revert AlreadyCommitted();
         }
         advisoryCommitKey = keccak256(abi.encodePacked(bytes1(0xa1), msg.sender, contentId, roundId, commitHash));
@@ -211,24 +200,17 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
             revealedAt: 0,
             roundReferenceRatingBps: roundReferenceRatingBps,
             predictedUpBps: 0,
-            voterId: useTokenIdentity ? voterId : 0,
-            voterNullifier: voterNullifier,
+            identityKey: resolved.identityKey,
+            identityHolder: resolved.holder,
             revealed: false,
             isUp: false,
             launchCreditClaimed: false,
             scoreBps: 0
         });
         advisoryCommitKeyByRater[contentId][roundId][msg.sender] = advisoryCommitKey;
-        if (useTokenIdentity) {
-            advisoryCommitKeyByVoterId[contentId][roundId][voterId] = advisoryCommitKey;
-        }
-        if (voterNullifier != 0) {
-            advisoryCommitKeyByNullifier[contentId][roundId][voterNullifier] = advisoryCommitKey;
-        }
+        advisoryCommitKeyByIdentity[contentId][roundId][resolved.identityKey] = advisoryCommitKey;
         lastAdvisoryVoteTimestamp[contentId][msg.sender] = block.timestamp;
-        if (voterNullifier != 0) {
-            lastAdvisoryVoteTimestampByNullifier[contentId][voterNullifier] = block.timestamp;
-        }
+        lastAdvisoryVoteTimestampByIdentity[contentId][resolved.identityKey] = block.timestamp;
         roundAdvisoryCommitKeys[contentId][roundId].push(advisoryCommitKey);
 
         emit AdvisoryVoteRecorded(
@@ -492,24 +474,28 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         );
     }
 
-    function _roundVoterIdNft(uint256 contentId, uint256 roundId) internal view returns (IVoterIdNFT) {
-        address snapshot = votingEngine.roundVoterIdNFTSnapshot(contentId, roundId);
+    function _roundRaterRegistry(uint256 contentId, uint256 roundId)
+        internal
+        view
+        returns (IRaterIdentityRegistry)
+    {
+        address snapshot = votingEngine.roundRaterRegistrySnapshot(contentId, roundId);
         if (snapshot == address(0)) {
-            snapshot = protocolConfig.voterIdNFT();
+            snapshot = protocolConfig.raterRegistry();
         }
-        return IVoterIdNFT(snapshot);
+        return IRaterIdentityRegistry(snapshot);
     }
 
-    function _validateAdvisoryCooldown(uint256 contentId, address voter, uint256 voterNullifier) internal view {
+    function _validateAdvisoryCooldown(uint256 contentId, address voter, bytes32 identityKey) internal view {
         uint256 lastVote = votingEngine.voterLastVoteTimestamp(contentId, voter);
         uint256 lastAdvisory = lastAdvisoryVoteTimestamp[contentId][voter];
         if (lastAdvisory > lastVote) lastVote = lastAdvisory;
 
-        if (voterNullifier != 0) {
-            uint256 lastNullifierVote = votingEngine.nullifierLastVoteTimestamp(contentId, voterNullifier);
-            uint256 lastNullifierAdvisory = lastAdvisoryVoteTimestampByNullifier[contentId][voterNullifier];
-            if (lastNullifierVote > lastVote) lastVote = lastNullifierVote;
-            if (lastNullifierAdvisory > lastVote) lastVote = lastNullifierAdvisory;
+        if (identityKey != bytes32(0)) {
+            uint256 lastIdentityVote = votingEngine.identityLastVoteTimestamp(contentId, identityKey);
+            uint256 lastIdentityAdvisory = lastAdvisoryVoteTimestampByIdentity[contentId][identityKey];
+            if (lastIdentityVote > lastVote) lastVote = lastIdentityVote;
+            if (lastIdentityAdvisory > lastVote) lastVote = lastIdentityAdvisory;
         }
 
         if (lastVote > 0 && block.timestamp < lastVote + ADVISORY_VOTE_COOLDOWN) {
@@ -545,17 +531,9 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
             return true;
         }
         if (
-            advisoryCommit.voterId != 0
-                && votingEngine.voterIdCommitKey(
-                        advisoryCommit.contentId, advisoryCommit.roundId, advisoryCommit.voterId
-                    ) != bytes32(0)
-        ) {
-            return true;
-        }
-        if (
-            advisoryCommit.voterNullifier != 0
-                && votingEngine.voterNullifierCommitKey(
-                        advisoryCommit.contentId, advisoryCommit.roundId, advisoryCommit.voterNullifier
+            advisoryCommit.identityKey != bytes32(0)
+                && votingEngine.identityCommitKey(
+                        advisoryCommit.contentId, advisoryCommit.roundId, advisoryCommit.identityKey
                     ) != bytes32(0)
         ) {
             return true;

@@ -6,15 +6,17 @@ import { Test } from "forge-std/Test.sol";
 
 import { HumanReputation } from "../contracts/HumanReputation.sol";
 import { ContentRegistry } from "../contracts/ContentRegistry.sol";
+import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
 import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
-import { MockVoterIdNFT } from "./mocks/MockVoterIdNFT.sol";
-import { ContentSubmissionTestBase } from "./helpers/VotingTestHelpers.sol";
+import { MockRaterIdentityRegistry } from "./mocks/MockRaterIdentityRegistry.sol";
+import { ContentSubmissionTestBase, deployInitializedProtocolConfig } from "./helpers/VotingTestHelpers.sol";
 
 contract SubmitterIdentityReservationTest is Test, ContentSubmissionTestBase {
     ContentRegistry public registry;
     HumanReputation public hrepToken;
+    ProtocolConfig public protocolConfig;
     MockCategoryRegistry public mockCategoryRegistry;
-    MockVoterIdNFT public mockVoterIdNFT;
+    MockRaterIdentityRegistry public mockRaterIdentityRegistry;
 
     address public owner = address(1);
     address public submitter = address(2);
@@ -42,8 +44,10 @@ contract SubmitterIdentityReservationTest is Test, ContentSubmissionTestBase {
         mockCategoryRegistry.seedDefaultTestCategories();
         registry.setCategoryRegistry(address(mockCategoryRegistry));
 
-        mockVoterIdNFT = new MockVoterIdNFT();
-        registry.setVoterIdNFT(address(mockVoterIdNFT));
+        protocolConfig = deployInitializedProtocolConfig(owner);
+        mockRaterIdentityRegistry = new MockRaterIdentityRegistry();
+        protocolConfig.setRaterRegistry(address(mockRaterIdentityRegistry));
+        registry.setProtocolConfig(address(protocolConfig));
 
         hrepToken.mint(submitter, 100e6);
         hrepToken.mint(delegate, 100e6);
@@ -53,7 +57,7 @@ contract SubmitterIdentityReservationTest is Test, ContentSubmissionTestBase {
 
     function test_NormalReveal_WithUnchangedIdentity_Succeeds() public {
         vm.prank(owner);
-        mockVoterIdNFT.setHolder(submitter);
+        mockRaterIdentityRegistry.setHolder(submitter);
 
         vm.startPrank(submitter);
         hrepToken.approve(address(registry), 10e6);
@@ -65,12 +69,12 @@ contract SubmitterIdentityReservationTest is Test, ContentSubmissionTestBase {
         assertEq(registry.getSubmitterIdentity(contentId), submitter);
     }
 
-    function test_SubmitContent_DoesNotRequireStableVoterIdIdentity() public {
+    function test_SubmitContent_DoesNotRequireStableRaterIdentity() public {
         vm.prank(owner);
-        mockVoterIdNFT.setHolder(submitter);
+        mockRaterIdentityRegistry.setHolder(submitter);
 
         vm.prank(submitter);
-        mockVoterIdNFT.setDelegate(delegate);
+        mockRaterIdentityRegistry.setDelegate(delegate);
 
         string memory url = "https://example.com/delegate-content";
         string memory title = "goal";
@@ -88,10 +92,10 @@ contract SubmitterIdentityReservationTest is Test, ContentSubmissionTestBase {
         vm.stopPrank();
 
         vm.prank(submitter);
-        mockVoterIdNFT.removeDelegate();
+        mockRaterIdentityRegistry.removeDelegate();
 
         vm.prank(delegate);
-        mockVoterIdNFT.setHolder(delegate);
+        mockRaterIdentityRegistry.setHolder(delegate);
 
         vm.warp(block.timestamp + 1);
 
@@ -104,12 +108,12 @@ contract SubmitterIdentityReservationTest is Test, ContentSubmissionTestBase {
         assertEq(registry.getSubmitterIdentity(contentId), delegate);
     }
 
-    function test_SubmitQuestion_DoesNotRequireStableVoterIdIdentity() public {
+    function test_SubmitQuestion_DoesNotRequireStableRaterIdentity() public {
         vm.prank(owner);
-        mockVoterIdNFT.setHolder(submitter);
+        mockRaterIdentityRegistry.setHolder(submitter);
 
         vm.prank(submitter);
-        mockVoterIdNFT.setDelegate(delegate);
+        mockRaterIdentityRegistry.setDelegate(delegate);
 
         string memory title = "Is this supported?";
         string memory description = "Question submission identity should remain stable.";
@@ -123,10 +127,10 @@ contract SubmitterIdentityReservationTest is Test, ContentSubmissionTestBase {
         vm.stopPrank();
 
         vm.prank(submitter);
-        mockVoterIdNFT.removeDelegate();
+        mockRaterIdentityRegistry.removeDelegate();
 
         vm.prank(delegate);
-        mockVoterIdNFT.setHolder(delegate);
+        mockRaterIdentityRegistry.setHolder(delegate);
 
         vm.warp(block.timestamp + 1);
 

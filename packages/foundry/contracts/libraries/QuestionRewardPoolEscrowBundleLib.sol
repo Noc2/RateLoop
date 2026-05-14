@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import { IVoterIdNFT } from "../interfaces/IVoterIdNFT.sol";
 import { ContentRegistry } from "../ContentRegistry.sol";
+import { ProtocolConfig } from "../ProtocolConfig.sol";
 import { RoundVotingEngine } from "../RoundVotingEngine.sol";
 import { BundleReward, BundleQuestion, BundleRoundSetSnapshot } from "./QuestionRewardPoolEscrowTypes.sol";
 import { QuestionRewardPoolEscrowQualificationLib } from "./QuestionRewardPoolEscrowQualificationLib.sol";
@@ -60,7 +60,7 @@ library QuestionRewardPoolEscrowBundleLib {
             )
         ) storage bundleRoundIds,
         RoundVotingEngine votingEngine,
-        IVoterIdNFT voterIdNFT,
+        ProtocolConfig protocolConfig,
         uint64 bountyClosesAt,
         uint256 bundleId,
         uint256 roundSetIndex,
@@ -79,7 +79,7 @@ library QuestionRewardPoolEscrowBundleLib {
                 return (false, address(0), bytes32(0));
             }
             (, bytes32 commitKey,) = QuestionRewardPoolEscrowVoterLib.resolveRoundRewardClaim(
-                votingEngine, voterIdNFT, question.contentId, roundId, account
+                votingEngine, protocolConfig, question.contentId, roundId, account
             );
             if (commitKey == bytes32(0)) return (false, address(0), bytes32(0));
             (bool revealed, address questionFrontend) = QuestionRewardPoolEscrowVoterLib.timelyRevealedCommitFrontend(
@@ -183,7 +183,7 @@ library QuestionRewardPoolEscrowBundleLib {
         ) storage bundleRoundIds,
         ContentRegistry registry,
         RoundVotingEngine votingEngine,
-        IVoterIdNFT defaultVoterIdNFT,
+        ProtocolConfig protocolConfig,
         BundleReward storage bundle,
         uint256 bundleId,
         uint256 roundSetIndex,
@@ -196,15 +196,18 @@ library QuestionRewardPoolEscrowBundleLib {
         for (uint256 i = 0; i < questions.length;) {
             BundleQuestion storage question = questions[i];
             uint256 roundId = bundleRoundIds[bundleId][i][roundSetIndex];
-            if (account == registry.getSubmitterIdentity(question.contentId)) {
-                return true;
-            }
-            if (QuestionRewardPoolEscrowQualificationLib.isBundleExcludedVoter(
-                    _roundVoterIdNft(votingEngine, defaultVoterIdNFT, question.contentId, roundId),
+            address submitterIdentity = registry.getSubmitterIdentity(question.contentId);
+            bytes32 identityKey = QuestionRewardPoolEscrowVoterLib.identityKeyForRoundRater(
+                votingEngine, protocolConfig, question.contentId, roundId, account
+            );
+            if (QuestionRewardPoolEscrowQualificationLib.isExcludedRater(
+                    identityKey,
                     account,
                     bundle.funder,
-                    bundle.funderNullifier,
-                    question.submitterNullifier
+                    bundle.funderIdentity,
+                    bundle.funderIdentityKey,
+                    submitterIdentity,
+                    question.submitterIdentityKey
                 )) {
                 return true;
             }
@@ -213,15 +216,5 @@ library QuestionRewardPoolEscrowBundleLib {
             }
         }
         return false;
-    }
-
-    function _roundVoterIdNft(
-        RoundVotingEngine votingEngine,
-        IVoterIdNFT defaultVoterIdNFT,
-        uint256 contentId,
-        uint256 roundId
-    ) private view returns (IVoterIdNFT) {
-        address snapshot = votingEngine.roundVoterIdNFTSnapshot(contentId, roundId);
-        return IVoterIdNFT(snapshot == address(0) ? address(defaultVoterIdNFT) : snapshot);
     }
 }

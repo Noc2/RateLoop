@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import {IProfileRegistry} from "./interfaces/IProfileRegistry.sol";
-import {IVoterIdNFT} from "./interfaces/IVoterIdNFT.sol";
+import {IRaterIdentityRegistry} from "./interfaces/IRaterIdentityRegistry.sol";
 
 /// @title ProfileRegistry
 /// @notice Manages on-chain user profiles with unique names and public self-reported context
@@ -30,9 +30,9 @@ contract ProfileRegistry is IProfileRegistry, Initializable, AccessControlUpgrad
     mapping(address => uint32) private _avatarAccents;
     mapping(bytes32 => address) private _nameToAddress; // lowercase name hash => owner
     address[] private _registeredAddresses;
-    IVoterIdNFT public voterIdNFT; // Voter ID NFT for sybil resistance
-    mapping(address => uint256) private _profileNullifiers;
-    mapping(uint256 => address) private _profileOwnerByNullifier;
+    IRaterIdentityRegistry public raterRegistry;
+    mapping(address => bytes32) private _profileIdentityKeys;
+    mapping(bytes32 => address) private _profileOwnerByIdentityKey;
 
     /// @dev Reserved storage gap for future upgrades
     uint256[47] private __gap;
@@ -42,7 +42,7 @@ contract ProfileRegistry is IProfileRegistry, Initializable, AccessControlUpgrad
     event ProfileUpdated(address indexed user, string name, string selfReport);
     event AvatarAccentUpdated(address indexed user, uint24 rgb);
     event AvatarAccentCleared(address indexed user);
-    event VoterIdNFTUpdated(address voterIdNFT);
+    event RaterRegistryUpdated(address raterRegistry);
     event ProfileNameReleased(address indexed user, string name);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
@@ -71,11 +71,11 @@ contract ProfileRegistry is IProfileRegistry, Initializable, AccessControlUpgrad
 
     // --- Admin Functions ---
 
-    /// @notice Set or clear the optional Voter ID NFT contract used as a profile continuity signal.
-    /// @param _voterIdNFT The Voter ID NFT contract address, or zero to disable credential lookups.
-    function setVoterIdNFT(address _voterIdNFT) external onlyRole(ADMIN_ROLE) {
-        voterIdNFT = IVoterIdNFT(_voterIdNFT);
-        emit VoterIdNFTUpdated(_voterIdNFT);
+    /// @notice Set or clear the optional rater registry used as a profile continuity signal.
+    /// @param _raterRegistry The rater registry contract address, or zero to disable credential lookups.
+    function setRaterRegistry(address _raterRegistry) external onlyRole(ADMIN_ROLE) {
+        raterRegistry = IRaterIdentityRegistry(_raterRegistry);
+        emit RaterRegistryUpdated(_raterRegistry);
     }
 
     /// @notice Release a profile name so it can be claimed again after the user loses eligibility.
@@ -103,9 +103,9 @@ contract ProfileRegistry is IProfileRegistry, Initializable, AccessControlUpgrad
 
     /// @inheritdoc IProfileRegistry
     function setProfile(string calldata name, string calldata selfReport) external override {
-        uint256 nullifier = _optionalDirectVoterIdNullifier(msg.sender);
-        if (nullifier != 0) {
-            _migrateProfileForNullifier(msg.sender, nullifier);
+        bytes32 identityKey = _optionalDirectHumanIdentityKey(msg.sender);
+        if (identityKey != bytes32(0)) {
+            _migrateProfileForIdentityKey(msg.sender, identityKey);
         }
 
         require(bytes(name).length >= MIN_NAME_LENGTH, "Name too short");
@@ -145,16 +145,16 @@ contract ProfileRegistry is IProfileRegistry, Initializable, AccessControlUpgrad
 
         // Register name ownership
         _nameToAddress[nameHash] = msg.sender;
-        uint256 previousNullifier = _profileNullifiers[msg.sender];
-        if (previousNullifier != 0 && previousNullifier != nullifier) {
-            if (_profileOwnerByNullifier[previousNullifier] == msg.sender) {
-                delete _profileOwnerByNullifier[previousNullifier];
+        bytes32 previousIdentityKey = _profileIdentityKeys[msg.sender];
+        if (previousIdentityKey != bytes32(0) && previousIdentityKey != identityKey) {
+            if (_profileOwnerByIdentityKey[previousIdentityKey] == msg.sender) {
+                delete _profileOwnerByIdentityKey[previousIdentityKey];
             }
         }
 
-        _profileNullifiers[msg.sender] = nullifier;
-        if (nullifier != 0) {
-            _profileOwnerByNullifier[nullifier] = msg.sender;
+        _profileIdentityKeys[msg.sender] = identityKey;
+        if (identityKey != bytes32(0)) {
+            _profileOwnerByIdentityKey[identityKey] = msg.sender;
         }
     }
 
@@ -238,22 +238,17 @@ contract ProfileRegistry is IProfileRegistry, Initializable, AccessControlUpgrad
 
     // --- Internal Functions ---
 
-    function _optionalDirectVoterIdNullifier(address user) internal view returns (uint256 nullifier) {
-        IVoterIdNFT idNFT = voterIdNFT;
-        if (address(idNFT) == address(0) || !idNFT.hasVoterId(user) || idNFT.resolveHolder(user) != user) {
-            return 0;
-        }
+    function _optionalDirectHumanIdentityKey(address user) internal view returns (bytes32 identityKey) {
+        IRaterIdentityRegistry registry = raterRegistry;
+        if (address(registry) == address(0)) return bytes32(0);
 
-        uint256 tokenId = idNFT.getTokenId(user);
-        if (tokenId == 0) {
-            return 0;
-        }
-
-        return idNFT.getNullifier(tokenId);
+        IRaterIdentityRegistry.ResolvedRater memory resolved = registry.resolveRater(user);
+        if (resolved.holder != user || resolved.humanNullifier == bytes32(0)) return bytes32(0);
+        return resolved.identityKey;
     }
 
-    function _migrateProfileForNullifier(address user, uint256 nullifier) internal {
-        address previousOwner = _profileOwnerByNullifier[nullifier];
+    function _migrateProfileForIdentityKey(address user, bytes32 identityKey) internal {
+        address previousOwner = _profileOwnerByIdentityKey[identityKey];
         if (previousOwner == address(0) || previousOwner == user) return;
 
         StoredProfile storage previous = _profiles[previousOwner];
@@ -281,8 +276,8 @@ contract ProfileRegistry is IProfileRegistry, Initializable, AccessControlUpgrad
         }
 
         delete _profiles[previousOwner];
-        delete _profileNullifiers[previousOwner];
-        _profileOwnerByNullifier[nullifier] = user;
+        delete _profileIdentityKeys[previousOwner];
+        _profileOwnerByIdentityKey[identityKey] = user;
     }
 
     /// @notice Validate name format (alphanumeric and underscore only)

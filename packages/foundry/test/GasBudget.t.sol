@@ -50,7 +50,7 @@ contract GasBudgetTest is RoundIntegrationTest {
     function testGas_submitContent_underBudget() public {
         vm.pauseGasMetering();
         uint256 rewardAmount = _defaultSubmissionRewardAmount(registry);
-        _ensureDefaultSubmitterVoterId(registry, submitter);
+        _ensureDefaultSubmitterIdentity(registry, submitter);
         address rewardEscrow = _ensureDefaultQuestionRewardPoolEscrow(registry);
         vm.startPrank(submitter);
         hrepToken.approve(rewardEscrow, rewardAmount);

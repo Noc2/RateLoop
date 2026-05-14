@@ -677,10 +677,10 @@ contract SecurityAccessControlTest is Test {
         votingEngine.addToConsensusReserve(100);
     }
 
-    function test_ACL_Engine_setVoterIdNFT_Unauthorized() public {
+    function test_ACL_Engine_setRaterRegistry_Unauthorized() public {
         vm.prank(attacker);
         _expectUnauthorized(attacker, CONFIG_ROLE_ENGINE);
-        ProtocolConfig(protocolConfigAddress).setVoterIdNFT(attacker);
+        ProtocolConfig(protocolConfigAddress).setRaterRegistry(attacker);
     }
 
     function test_ACL_Engine_setParticipationPool_Unauthorized() public {
@@ -717,10 +717,10 @@ contract SecurityAccessControlTest is Test {
         registry.setCategoryRegistry(attacker);
     }
 
-    function test_ACL_Registry_setVoterIdNFT_Unauthorized() public {
+    function test_ACL_Registry_setProtocolConfig_Unauthorized() public {
         vm.prank(attacker);
         _expectUnauthorized(attacker, CONFIG_ROLE_REGISTRY);
-        registry.setVoterIdNFT(attacker);
+        registry.setProtocolConfig(attacker);
     }
 
     function test_ACL_Registry_setBonusPool_Unauthorized() public {

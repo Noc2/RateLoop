@@ -18,7 +18,7 @@ import {HumanReputation} from "../contracts/HumanReputation.sol";
 import {ParticipationPool} from "../contracts/ParticipationPool.sol";
 import {FrontendRegistry} from "../contracts/FrontendRegistry.sol";
 import {RaterRegistry} from "../contracts/RaterRegistry.sol";
-import {MockVoterIdNFT} from "./mocks/MockVoterIdNFT.sol";
+import {MockRaterIdentityRegistry} from "./mocks/MockRaterIdentityRegistry.sol";
 import {VotingTestBase} from "./helpers/VotingTestHelpers.sol";
 import {MockCategoryRegistry} from "../contracts/mocks/MockCategoryRegistry.sol";
 
@@ -32,7 +32,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     AdvisoryVoteRecorder public advisoryRecorder;
     RoundVotingEngine public engine;
     RoundRewardDistributor public rewardDistributor;
-    MockVoterIdNFT public mockVoterIdNFT;
+    MockRaterIdentityRegistry public mockRaterIdentityRegistry;
     ParticipationPool public participationPool;
     FrontendRegistry public frontendRegistry;
     address internal protocolConfigAddress;
@@ -135,7 +135,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         // epochDuration=1h, maxDuration=7d, minVoters=3, maxVoters=1000
         _setTlockRoundConfig(ProtocolConfig(protocolConfigAddress), 1 hours, 7 days, 3, 1000);
 
-        mockVoterIdNFT = new MockVoterIdNFT();
+        mockRaterIdentityRegistry = new MockRaterIdentityRegistry();
 
         FrontendRegistry frImpl = new FrontendRegistry();
         frontendRegistry = FrontendRegistry(
@@ -147,9 +147,9 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         );
         frontendRegistry.setVotingEngine(address(engine));
         frontendRegistry.addFeeCreditor(address(rewardDistributor));
-        frontendRegistry.setVoterIdNFT(address(mockVoterIdNFT));
-        mockVoterIdNFT.setHolder(frontend1);
+        mockRaterIdentityRegistry.setHolder(frontend1);
         ProtocolConfig(protocolConfigAddress).setFrontendRegistry(address(frontendRegistry));
+        ProtocolConfig(protocolConfigAddress).setRaterRegistry(address(mockRaterIdentityRegistry));
 
         participationPool = new ParticipationPool(address(hrepToken), owner);
         participationPool.setAuthorizedCaller(address(rewardDistributor), true);
@@ -364,7 +364,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
     /// @dev Register a frontend operator.
     function _registerFrontend(address fe) internal {
-        mockVoterIdNFT.setHolder(fe);
+        mockRaterIdentityRegistry.setHolder(fe);
         vm.startPrank(fe);
         hrepToken.approve(address(frontendRegistry), 1000e6);
         frontendRegistry.register();
@@ -826,20 +826,18 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
     function test_CommitSameNullifierAfterRemint_SameRound_RevertsAlreadyCommitted() public {
         vm.prank(owner);
-        registry.setVoterIdNFT(address(mockVoterIdNFT));
-        vm.prank(owner);
-        ProtocolConfig(protocolConfigAddress).setVoterIdNFT(address(mockVoterIdNFT));
+        ProtocolConfig(protocolConfigAddress).setRaterRegistry(address(mockRaterIdentityRegistry));
 
-        mockVoterIdNFT.mint(submitter, 9_001);
-        mockVoterIdNFT.mint(voter1, 42);
+        mockRaterIdentityRegistry.mint(submitter, 9_001);
+        mockRaterIdentityRegistry.mint(voter1, 42);
 
         uint256 contentId = _submitContent();
         (bytes32 originalCommitKey,) = _commit(voter1, contentId, true, STAKE);
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
 
-        mockVoterIdNFT.revokeVoterId(voter1);
-        mockVoterIdNFT.resetNullifier(42);
-        mockVoterIdNFT.mint(voter2, 42);
+        mockRaterIdentityRegistry.revokeHumanCredential(voter1);
+        mockRaterIdentityRegistry.resetNullifier(42);
+        mockRaterIdentityRegistry.mint(voter2, 42);
 
         vm.warp(block.timestamp + 25 hours);
 
@@ -864,19 +862,17 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         );
         vm.stopPrank();
 
-        assertEq(engine.voterNullifierCommitKey(contentId, roundId, 42), originalCommitKey);
+        assertEq(engine.identityCommitKey(contentId, roundId, bytes32(uint256(42))), originalCommitKey);
     }
 
     function test_CommitSameNullifierAfterRemint_NewRoundRespectsCooldown() public {
         vm.prank(owner);
-        registry.setVoterIdNFT(address(mockVoterIdNFT));
-        vm.prank(owner);
-        ProtocolConfig(protocolConfigAddress).setVoterIdNFT(address(mockVoterIdNFT));
+        ProtocolConfig(protocolConfigAddress).setRaterRegistry(address(mockRaterIdentityRegistry));
 
-        mockVoterIdNFT.mint(submitter, 9_001);
-        mockVoterIdNFT.mint(voter1, 42);
-        mockVoterIdNFT.mint(voter2, 43);
-        mockVoterIdNFT.mint(voter3, 44);
+        mockRaterIdentityRegistry.mint(submitter, 9_001);
+        mockRaterIdentityRegistry.mint(voter1, 42);
+        mockRaterIdentityRegistry.mint(voter2, 43);
+        mockRaterIdentityRegistry.mint(voter3, 44);
 
         uint256 contentId = _submitContent();
         (bytes32 ck1, bytes32 s1) = _commit(voter1, contentId, true, STAKE);
@@ -891,9 +887,9 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         _reveal(contentId, roundId, ck3, false, s3);
         engine.settleRound(contentId, roundId);
 
-        mockVoterIdNFT.revokeVoterId(voter1);
-        mockVoterIdNFT.resetNullifier(42);
-        mockVoterIdNFT.mint(voter4, 42);
+        mockRaterIdentityRegistry.revokeHumanCredential(voter1);
+        mockRaterIdentityRegistry.resetNullifier(42);
+        mockRaterIdentityRegistry.mint(voter4, 42);
 
         bytes32 salt2 = keccak256(abi.encodePacked(voter4, block.timestamp, "remint-cooldown"));
         bytes32 commitHash2 = _commitHash(false, salt2, contentId);
@@ -1639,7 +1635,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         address[] memory unrevealedVoters = new address[](60);
         for (uint256 i = 0; i < unrevealedVoters.length; ++i) {
             unrevealedVoters[i] = address(uint160(1_000 + i));
-            mockVoterIdNFT.setHolder(unrevealedVoters[i]);
+            mockRaterIdentityRegistry.setHolder(unrevealedVoters[i]);
             vm.prank(owner);
             hrepToken.mint(unrevealedVoters[i], highStake);
             _commit(unrevealedVoters[i], contentId, true, highStake);
@@ -1933,13 +1929,12 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         );
     }
 
-    function test_AdvisoryVoteUsesCorePreflightAndVoterIdDedupe() public {
+    function test_AdvisoryVoteUsesCorePreflightAndRaterIdentityDedupe() public {
         vm.startPrank(owner);
-        registry.setVoterIdNFT(address(mockVoterIdNFT));
-        ProtocolConfig(protocolConfigAddress).setVoterIdNFT(address(mockVoterIdNFT));
+        ProtocolConfig(protocolConfigAddress).setRaterRegistry(address(mockRaterIdentityRegistry));
         vm.stopPrank();
-        mockVoterIdNFT.mint(submitter, 9_001);
-        mockVoterIdNFT.mint(voter1, 42);
+        mockRaterIdentityRegistry.mint(submitter, 9_001);
+        mockRaterIdentityRegistry.mint(voter1, 42);
 
         uint256 contentId = _submitContent();
         uint256 roundId = engine.previewCommitRoundId(contentId);
@@ -1988,7 +1983,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         );
 
         vm.prank(voter1);
-        mockVoterIdNFT.setDelegate(delegate1);
+        mockRaterIdentityRegistry.setDelegate(delegate1);
         vm.warp(block.timestamp + 1 days);
         bytes32 delegateSalt = keccak256(abi.encodePacked(delegate1, block.timestamp, "advisory-voter-id"));
         bytes memory delegateCiphertext = _testCiphertext(true, delegateSalt, contentId, targetRound, drandChainHash);
@@ -2121,13 +2116,11 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
     function test_Commit_SelfVote_DelegateSubmittedContentRevertsForHolderAndDelegate() public {
         vm.prank(owner);
-        registry.setVoterIdNFT(address(mockVoterIdNFT));
-        vm.prank(owner);
-        ProtocolConfig(protocolConfigAddress).setVoterIdNFT(address(mockVoterIdNFT));
+        ProtocolConfig(protocolConfigAddress).setRaterRegistry(address(mockRaterIdentityRegistry));
 
-        mockVoterIdNFT.setHolder(submitter);
+        mockRaterIdentityRegistry.setHolder(submitter);
         vm.prank(submitter);
-        mockVoterIdNFT.setDelegate(delegate1);
+        mockRaterIdentityRegistry.setDelegate(delegate1);
 
         uint256 contentId;
         vm.startPrank(delegate1);
@@ -2159,7 +2152,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         );
 
         vm.prank(submitter);
-        mockVoterIdNFT.removeDelegate();
+        mockRaterIdentityRegistry.removeDelegate();
 
         bytes32 saltHolder = keccak256(abi.encodePacked(submitter, block.timestamp, "holder"));
         bytes memory ciphertextHolder = _testCiphertext(true, saltHolder, contentId);

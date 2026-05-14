@@ -10,7 +10,6 @@ import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import { IFrontendRegistry } from "./interfaces/IFrontendRegistry.sol";
 import { IRoundVotingEngine } from "./interfaces/IRoundVotingEngine.sol";
 import { IRoundRewardDistributor } from "./interfaces/IRoundRewardDistributor.sol";
-import { IVoterIdNFT } from "./interfaces/IVoterIdNFT.sol";
 
 /// @title FrontendRegistry
 /// @notice Manages frontend operator registration (fixed 1,000 LREP stake) and fee distribution.
@@ -52,7 +51,6 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     mapping(address => Frontend) public frontends;
     address[] public registeredFrontends;
     mapping(address => uint256) private registeredFrontendIndexPlusOne;
-    IVoterIdNFT public voterIdNFT; // Optional identity credential signal.
     mapping(address => uint256) public frontendExitAvailableAt;
     bool public initialFeeCreditorConfigured;
     address public feeCreditor;
@@ -72,7 +70,6 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     event FeesClaimed(address indexed frontend, uint256 hrepAmount);
     event FeesConfiscated(address indexed frontend, uint256 hrepAmount);
     event VotingEngineUpdated(address votingEngine);
-    event VoterIdNFTUpdated(address voterIdNFT);
     event FeeCreditorUpdated(address indexed oldCreditor, address indexed newCreditor);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
@@ -343,13 +340,6 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
         require(_votingEngine != address(0), "Invalid voting engine");
         votingEngine = IRoundVotingEngine(_votingEngine);
         emit VotingEngineUpdated(_votingEngine);
-    }
-
-    /// @notice Set or clear the optional identity credential contract.
-    /// @param _voterIdNFT The optional identity NFT contract address, or zero to disable the signal.
-    function setVoterIdNFT(address _voterIdNFT) external onlyRole(ADMIN_ROLE) {
-        voterIdNFT = IVoterIdNFT(_voterIdNFT);
-        emit VoterIdNFTUpdated(_voterIdNFT);
     }
 
     /// @notice Grant fee creditor role to the reward distributor for the current voting engine.

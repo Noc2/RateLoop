@@ -19,7 +19,6 @@ import {ProtocolConfig} from "../contracts/ProtocolConfig.sol";
 import {QuestionRewardPoolEscrow} from "../contracts/QuestionRewardPoolEscrow.sol";
 import {RaterRegistry} from "../contracts/RaterRegistry.sol";
 import {X402QuestionSubmitter} from "../contracts/X402QuestionSubmitter.sol";
-import {VoterIdNFT} from "../contracts/VoterIdNFT.sol";
 import {ParticipationPool} from "../contracts/ParticipationPool.sol";
 import {LaunchDistributionPool} from "../contracts/LaunchDistributionPool.sol";
 import {MockERC20} from "../contracts/mocks/MockERC20.sol";
@@ -27,7 +26,7 @@ import {MockWorldIDRouter} from "../contracts/mocks/MockWorldIDRouter.sol";
 import {CuryoGovernor} from "../contracts/governance/CuryoGovernor.sol";
 
 /// @notice Fresh RateLoop deployment script for World Chain.
-/// @dev Optional identity can be wired later by governance; no required proof-of-personhood faucet is deployed here.
+/// @dev Rater identity is resolved through RaterRegistry; no separate proof-of-personhood token is deployed.
 contract DeployRateLoop is ScaffoldETHDeploy {
     error UnsupportedWorldChain(uint256 chainId);
 
@@ -180,9 +179,6 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         );
         _seedCuryoSelfVerifiedHumans(raterRegistry);
         console.log("Seeded 9 Curyo Self.xyz verified humans");
-        VoterIdNFT optionalIdentity = new VoterIdNFT(deployer, governance);
-        optionalIdentity.setStakeRecorder(address(votingEngine));
-
         TransparentUpgradeableProxy questionRewardPoolEscrowProxy = new TransparentUpgradeableProxy(
             address(questionRewardPoolEscrowImpl),
             governance,
@@ -194,7 +190,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
                     usdcTokenAddress,
                     address(registry),
                     address(votingEngine),
-                    address(optionalIdentity)
+                    address(raterRegistry)
                 )
             )
         );
@@ -209,7 +205,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
             governance,
             abi.encodeCall(
                 FeedbackBonusEscrow.initialize,
-                (governance, usdcTokenAddress, address(registry), address(votingEngine), address(optionalIdentity))
+                (governance, usdcTokenAddress, address(registry), address(votingEngine), address(raterRegistry))
             )
         );
         FeedbackBonusEscrow feedbackBonusEscrow = FeedbackBonusEscrow(address(feedbackBonusEscrowProxy));
@@ -223,12 +219,9 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         protocolConfig.setRewardDistributor(address(rewardDistributor));
         protocolConfig.setFrontendRegistry(address(frontendRegistry));
         protocolConfig.setCategoryRegistry(address(categoryRegistry));
-        protocolConfig.setVoterIdNFT(address(optionalIdentity));
         protocolConfig.setRaterRegistry(address(raterRegistry));
 
-        registry.setVoterIdNFT(address(optionalIdentity));
-        frontendRegistry.setVoterIdNFT(address(optionalIdentity));
-        profileRegistry.setVoterIdNFT(address(optionalIdentity));
+        profileRegistry.setRaterRegistry(address(raterRegistry));
 
         frontendRegistry.setVotingEngine(address(votingEngine));
         frontendRegistry.initializeFeeCreditor(address(rewardDistributor));
@@ -278,7 +271,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         }
 
         if (isLocalDev) {
-            _fundLocalDevAccounts(lrepToken, localUsdcToken, optionalIdentity);
+            _fundLocalDevAccounts(lrepToken, localUsdcToken, raterRegistry);
         }
 
         deployments.push(Deployment("LoopReputation", address(lrepToken)));
@@ -296,7 +289,6 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         deployments.push(Deployment("CategoryRegistry", address(categoryRegistry)));
         deployments.push(Deployment("RaterRegistry", address(raterRegistry)));
         if (isLocalDev) deployments.push(Deployment("MockWorldIDRouter", address(localWorldIdRouter)));
-        deployments.push(Deployment("VoterIdNFT", address(optionalIdentity)));
         deployments.push(Deployment("ParticipationPool", address(participationPool)));
         deployments.push(Deployment("LaunchDistributionPool", address(launchDistributionPool)));
         deployments.push(Deployment("AdvisoryVoteRecorder", address(advisoryVoteRecorder)));
@@ -312,7 +304,6 @@ contract DeployRateLoop is ScaffoldETHDeploy {
             categoryRegistry.renounceRole(categoryRegistry.ADMIN_ROLE(), deployer);
             raterRegistry.renounceRole(raterRegistry.ADMIN_ROLE(), deployer);
             raterRegistry.renounceRole(raterRegistry.SEEDER_ROLE(), deployer);
-            optionalIdentity.transferOwnership(governance);
 
             TimelockController tc = TimelockController(payable(governance));
             tc.revokeRole(tc.PROPOSER_ROLE(), deployer);
@@ -338,7 +329,6 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         console.log("RaterRegistry:", address(raterRegistry));
         console.log("World ID Router:", worldIdRouterAddress);
         console.log("World ID External Nullifier Hash:", worldIdExternalNullifierHash);
-        console.log("Optional identity NFT:", address(optionalIdentity));
         console.log("ParticipationPool:", address(participationPool));
         console.log("LaunchDistributionPool:", address(launchDistributionPool));
         console.log("AdvisoryVoteRecorder:", address(advisoryVoteRecorder));
@@ -439,7 +429,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         }
     }
 
-    function _fundLocalDevAccounts(LoopReputation lrepToken, MockERC20 localUsdcToken, VoterIdNFT optionalIdentity)
+    function _fundLocalDevAccounts(LoopReputation lrepToken, MockERC20 localUsdcToken, RaterRegistry raterRegistry)
         internal
     {
         uint256 testAmount = 1000 * 1e6;
@@ -460,9 +450,10 @@ contract DeployRateLoop is ScaffoldETHDeploy {
             localUsdcToken.mint(testAccounts[i], 10_000 * 1e6);
         }
 
-        optionalIdentity.addMinter(deployer);
         for (uint256 i = 0; i < testAccounts.length; i++) {
-            optionalIdentity.mint(testAccounts[i], i + 100);
+            bytes32 anchorId = keccak256(abi.encodePacked("rateloop:local-dev-human-v1", testAccounts[i]));
+            bytes32 evidenceHash = keccak256(abi.encodePacked("rateloop:local-dev-evidence-v1", testAccounts[i]));
+            raterRegistry.seedHumanCredential(testAccounts[i], type(uint64).max, anchorId, evidenceHash);
         }
     }
 

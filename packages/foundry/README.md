@@ -56,7 +56,7 @@ contracts/
 ├── CategoryRegistry.sol         # Content category management
 ├── ProfileRegistry.sol          # User reputation & metadata
 ├── FrontendRegistry.sol         # Frontend operator fee tracking
-├── VoterIdNFT.sol               # Optional soulbound credential for verified raters
+├── RaterRegistry.sol            # Rater profiles, delegation, and human identity resolution
 ├── LoopReputation.sol           # LREP token (governance and reputation)
 ├── ParticipationPool.sol        # Optional governance-funded participation rewards
 ├── LaunchDistributionPool.sol   # Anchor-gated earned rater rewards with verified full-cap unlocks, plus verification, referral, and legacy rewards

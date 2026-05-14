@@ -2,13 +2,12 @@
 pragma solidity ^0.8.24;
 
 import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
-import { IVoterIdNFT } from "../interfaces/IVoterIdNFT.sol";
-import { ContentRegistry } from "../ContentRegistry.sol";
 import { ProtocolConfig } from "../ProtocolConfig.sol";
 import { RoundVotingEngine } from "../RoundVotingEngine.sol";
 import { RoundLib } from "./RoundLib.sol";
 import { RewardPool, RoundSnapshot } from "./QuestionRewardPoolEscrowTypes.sol";
 import { QuestionRewardPoolEscrowEligibilityLib } from "./QuestionRewardPoolEscrowEligibilityLib.sol";
+import { QuestionRewardPoolEscrowVoterLib } from "./QuestionRewardPoolEscrowVoterLib.sol";
 
 library QuestionRewardPoolEscrowQualificationLib {
     using SafeCast for uint256;
@@ -21,7 +20,6 @@ library QuestionRewardPoolEscrowQualificationLib {
     struct QualificationContext {
         RoundVotingEngine votingEngine;
         ProtocolConfig protocolConfig;
-        IVoterIdNFT voterIdNft;
         uint256 rewardId;
         uint256 contentId;
         uint256 roundId;
@@ -30,9 +28,9 @@ library QuestionRewardPoolEscrowQualificationLib {
         uint8 bountyEligibility;
         address funder;
         address funderIdentity;
-        uint256 funderNullifier;
+        bytes32 funderIdentityKey;
         address submitterIdentity;
-        uint256 submitterNullifier;
+        bytes32 submitterIdentityKey;
     }
 
     function previewRoundQualification(QualificationContext memory ctx)
@@ -77,10 +75,8 @@ library QuestionRewardPoolEscrowQualificationLib {
     function qualifyRound(
         mapping(uint256 => mapping(uint256 => RoundSnapshot)) storage roundSnapshots,
         mapping(uint256 => address) storage rewardPoolPayerIdentity,
-        mapping(uint256 => uint256) storage rewardPoolPayerNullifier,
-        mapping(uint256 => uint256) storage rewardPoolSubmitterNullifier,
+        mapping(uint256 => bytes32) storage rewardPoolPayerIdentityKey,
         RoundVotingEngine votingEngine,
-        IVoterIdNFT defaultVoterIdNFT,
         RewardPool storage rewardPool,
         uint256 rewardPoolId,
         uint256 roundId,
@@ -110,7 +106,6 @@ library QuestionRewardPoolEscrowQualificationLib {
             QualificationContext({
                 votingEngine: votingEngine,
                 protocolConfig: votingEngine.protocolConfig(),
-                voterIdNft: _roundVoterIdNft(votingEngine, defaultVoterIdNFT, rewardPool.contentId, roundId),
                 rewardId: rewardPool.id,
                 contentId: rewardPool.contentId,
                 roundId: roundId,
@@ -119,9 +114,9 @@ library QuestionRewardPoolEscrowQualificationLib {
                 bountyEligibility: rewardPool.bountyEligibility,
                 funder: rewardPool.funder,
                 funderIdentity: rewardPoolPayerIdentity[rewardPool.id],
-                funderNullifier: rewardPoolPayerNullifier[rewardPool.id],
+                funderIdentityKey: rewardPoolPayerIdentityKey[rewardPool.id],
                 submitterIdentity: rewardPool.submitterIdentity,
-                submitterNullifier: rewardPoolSubmitterNullifier[rewardPool.id]
+                submitterIdentityKey: rewardPool.submitterIdentityKey
             })
         );
         require(roundSettled, "Round not settled");
@@ -161,46 +156,18 @@ library QuestionRewardPoolEscrowQualificationLib {
         totalClaimWeight = totalWeight;
     }
 
-    function isExcludedVoter(
-        IVoterIdNFT voterIdNft,
-        uint256 voterId,
-        address funder,
-        address funderIdentity,
-        uint256 funderNullifier,
-        address submitterIdentity,
-        uint256 submitterNullifier
-    ) external view returns (bool) {
-        return _isExcludedVoter(
-            voterIdNft, voterId, funder, funderIdentity, funderNullifier, submitterIdentity, submitterNullifier
-        );
-    }
-
-    function resolveSubmitterNullifier(ContentRegistry registry, IVoterIdNFT voterIdNft, uint256 contentId)
-        external
-        view
-        returns (uint256)
-    {
-        uint256 snapshottedNullifier = registry.contentSubmitterNullifier(contentId);
-        if (snapshottedNullifier != 0) return snapshottedNullifier;
-
-        address account = registry.getSubmitterIdentity(contentId);
-        uint256 voterId = voterIdNft.getTokenId(account);
-        return voterId == 0 ? 0 : voterIdNft.getNullifier(voterId);
-    }
-
-    function isBundleExcludedVoter(
-        IVoterIdNFT voterIdNft,
+    function isExcludedRater(
+        bytes32 identityKey,
         address account,
         address funder,
-        uint256 funderNullifier,
-        uint256 submitterNullifier
-    ) external view returns (bool) {
-        uint256 voterId = voterIdNft.getTokenId(account);
-        if (voterId == 0) return false;
-        if (voterId == voterIdNft.getTokenId(funder)) return true;
-
-        uint256 voterNullifier = voterIdNft.getNullifier(voterId);
-        return voterNullifier != 0 && (voterNullifier == funderNullifier || voterNullifier == submitterNullifier);
+        address funderIdentity,
+        bytes32 funderIdentityKey,
+        address submitterIdentity,
+        bytes32 submitterIdentityKey
+    ) external pure returns (bool) {
+        return _isExcludedRater(
+            identityKey, account, funder, funderIdentity, funderIdentityKey, submitterIdentity, submitterIdentityKey
+        );
     }
 
     function _countEligibleRevealedVoters(QualificationContext memory ctx)
@@ -214,29 +181,28 @@ library QuestionRewardPoolEscrowQualificationLib {
             (address voter,,, uint48 revealedAt, bool revealed,,) =
                 ctx.votingEngine.commitCore(ctx.contentId, ctx.roundId, commitKey);
             if (voter != address(0) && revealed && _revealedByBountyClose(ctx.bountyClosesAt, revealedAt)) {
-                uint256 voterId = ctx.votingEngine.commitVoterId(ctx.contentId, ctx.roundId, commitKey);
+                (bytes32 identityKey, address holder) = QuestionRewardPoolEscrowVoterLib.commitIdentity(
+                    ctx.votingEngine, ctx.protocolConfig, ctx.contentId, ctx.roundId, commitKey, voter
+                );
                 if (
-                    !_isExcludedVoter(
-                            ctx.voterIdNft,
-                            voterId,
-                            ctx.funder,
-                            ctx.funderIdentity,
-                            ctx.funderNullifier,
-                            ctx.submitterIdentity,
-                            ctx.submitterNullifier
-                        )
+                    !_isExcludedRater(
+                        identityKey,
+                        holder,
+                        ctx.funder,
+                        ctx.funderIdentity,
+                        ctx.funderIdentityKey,
+                        ctx.submitterIdentity,
+                        ctx.submitterIdentityKey
+                    )
                         && QuestionRewardPoolEscrowEligibilityLib.isAccountEligibleForBounty(
-                            ctx.protocolConfig,
-                            ctx.bountyEligibility,
-                            _bountyEligibilityAccount(ctx.voterIdNft, voterId, voter)
+                            ctx.protocolConfig, ctx.bountyEligibility, holder
                         )
                 ) {
                     rawEligibleVoters++;
                     uint256 claimWeight = _claimWeight(ctx.votingEngine, ctx.contentId, ctx.roundId, commitKey);
                     if (claimWeight > 0) {
                         totalClaimWeight += claimWeight;
-                        uint256 participantUnits = BPS_SCALE;
-                        effectiveParticipantUnits += participantUnits;
+                        effectiveParticipantUnits += BPS_SCALE;
                     }
                 }
             }
@@ -244,16 +210,6 @@ library QuestionRewardPoolEscrowQualificationLib {
                 ++i;
             }
         }
-    }
-
-    function _bountyEligibilityAccount(IVoterIdNFT voterIdNft, uint256 voterId, address voter)
-        private
-        view
-        returns (address account)
-    {
-        if (voterId == 0) return voter;
-        account = voterIdNft.getHolder(voterId);
-        return account == address(0) ? voter : account;
     }
 
     function _claimWeight(RoundVotingEngine votingEngine, uint256 contentId, uint256 roundId, bytes32 commitKey)
@@ -276,59 +232,21 @@ library QuestionRewardPoolEscrowQualificationLib {
         if (allocation > rewardPool.unallocatedAmount) return 0;
     }
 
-    function _roundVoterIdNft(
-        RoundVotingEngine votingEngine,
-        IVoterIdNFT defaultVoterIdNFT,
-        uint256 contentId,
-        uint256 roundId
-    ) private view returns (IVoterIdNFT) {
-        address snapshot = votingEngine.roundVoterIdNFTSnapshot(contentId, roundId);
-        return IVoterIdNFT(snapshot == address(0) ? address(defaultVoterIdNFT) : snapshot);
-    }
-
     function _revealedByBountyClose(uint64 bountyClosesAt, uint48 revealedAt) private pure returns (bool) {
         return bountyClosesAt == 0 || revealedAt <= bountyClosesAt;
     }
 
-    function _isExcludedVoter(
-        IVoterIdNFT voterIdNft,
-        uint256 voterId,
+    function _isExcludedRater(
+        bytes32 identityKey,
+        address account,
         address funder,
         address funderIdentity,
-        uint256 funderNullifier,
+        bytes32 funderIdentityKey,
         address submitterIdentity,
-        uint256 submitterNullifier
-    ) private view returns (bool) {
-        if (voterId == 0) return false;
-
-        uint256 voterNullifier = voterIdNft.getNullifier(voterId);
-        if (voterNullifier != 0 && (voterNullifier == funderNullifier || voterNullifier == submitterNullifier)) {
-            return true;
-        }
-
-        if (
-            voterId == _resolveFunderVoterId(voterIdNft, funder, funderIdentity)
-                || voterId == voterIdNft.getTokenId(funder)
-        ) {
-            return true;
-        }
-
-        if (submitterIdentity != address(0) && voterId == voterIdNft.getTokenId(submitterIdentity)) {
-            return true;
-        }
-
-        return false;
-    }
-
-    function _resolveFunderVoterId(IVoterIdNFT voterIdNft, address funder, address funderIdentity)
-        private
-        view
-        returns (uint256)
-    {
-        if (funderIdentity != address(0)) {
-            uint256 identityVoterId = voterIdNft.getTokenId(funderIdentity);
-            if (identityVoterId != 0) return identityVoterId;
-        }
-        return voterIdNft.getTokenId(funder);
+        bytes32 submitterIdentityKey
+    ) private pure returns (bool) {
+        if (identityKey == bytes32(0)) return true;
+        if (identityKey == funderIdentityKey || identityKey == submitterIdentityKey) return true;
+        return account == funder || account == funderIdentity || account == submitterIdentity;
     }
 }

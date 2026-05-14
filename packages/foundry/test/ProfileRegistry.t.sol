@@ -4,13 +4,14 @@ pragma solidity ^0.8.20;
 import {Test, console} from "forge-std/Test.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {ProfileRegistry} from "../contracts/ProfileRegistry.sol";
+import {RaterRegistry} from "../contracts/RaterRegistry.sol";
 import {IProfileRegistry} from "../contracts/interfaces/IProfileRegistry.sol";
-import {MockVoterIdNFT} from "./mocks/MockVoterIdNFT.sol";
+import {MockWorldIDRouter} from "../contracts/mocks/MockWorldIDRouter.sol";
 
 /// @title ProfileRegistry Test Suite
 contract ProfileRegistryTest is Test {
     ProfileRegistry public registry;
-    MockVoterIdNFT public voterIdNFT;
+    RaterRegistry public raterRegistry;
 
     address public admin = address(1);
     address public user1 = address(2);
@@ -25,15 +26,26 @@ contract ProfileRegistryTest is Test {
         registry = ProfileRegistry(
             address(new ERC1967Proxy(address(impl), abi.encodeCall(ProfileRegistry.initialize, (admin, admin))))
         );
-        voterIdNFT = new MockVoterIdNFT();
-        registry.setVoterIdNFT(address(voterIdNFT));
-        voterIdNFT.setHolder(user1);
-        voterIdNFT.setHolder(user2);
-        voterIdNFT.setHolder(address(6));
-        voterIdNFT.setHolder(address(7));
-        voterIdNFT.setHolder(address(8));
+        raterRegistry = new RaterRegistry(
+            admin,
+            admin,
+            address(new MockWorldIDRouter()),
+            keccak256("rateloop-human-v1"),
+            12_345,
+            365 days
+        );
+        registry.setRaterRegistry(address(raterRegistry));
+        _seedIdentity(user1, bytes32(uint256(uint160(user1))));
+        _seedIdentity(user2, bytes32(uint256(uint160(user2))));
+        _seedIdentity(address(6), bytes32(uint256(6)));
+        _seedIdentity(address(7), bytes32(uint256(7)));
+        _seedIdentity(address(8), bytes32(uint256(8)));
 
         vm.stopPrank();
+    }
+
+    function _seedIdentity(address account, bytes32 anchorId) internal {
+        raterRegistry.seedHumanCredential(account, uint64(block.timestamp + 365 days), anchorId, bytes32(0));
     }
 
     // --- Initialization Tests ---
@@ -281,9 +293,11 @@ contract ProfileRegistryTest is Test {
         assertTrue(registry.hasProfile(user1));
     }
 
-    function test_SetProfileUsesWalletProfileForDelegateWhenVoterIdConfigured() public {
+    function test_SetProfileUsesWalletProfileForDelegateWhenRaterRegistryConfigured() public {
         vm.prank(user1);
-        voterIdNFT.setDelegate(delegate);
+        raterRegistry.setDelegate(delegate);
+        vm.prank(delegate);
+        raterRegistry.acceptDelegate();
 
         vm.prank(delegate);
         registry.setProfile("agent", "");
@@ -293,9 +307,11 @@ contract ProfileRegistryTest is Test {
         assertEq(registry.getAddressByName("agent"), delegate);
     }
 
-    function test_SetAvatarAccentUsesWalletProfileForDelegateWhenVoterIdConfigured() public {
+    function test_SetAvatarAccentUsesWalletProfileForDelegateWhenRaterRegistryConfigured() public {
         vm.prank(user1);
-        voterIdNFT.setDelegate(delegate);
+        raterRegistry.setDelegate(delegate);
+        vm.prank(delegate);
+        raterRegistry.acceptDelegate();
 
         vm.prank(delegate);
         registry.setAvatarAccent(0xF26426);
@@ -305,17 +321,18 @@ contract ProfileRegistryTest is Test {
         assertEq(rgb, 0xF26426);
     }
 
-    function test_RemintedVoterIdCanReclaimProfileNameAndAvatar() public {
+    function test_ReboundIdentityCanReclaimProfileNameAndAvatar() public {
         vm.startPrank(user1);
         registry.setProfile("alice", "{\"v\":1,\"expertise\":[\"science\"]}");
         registry.setAvatarAccent(0xF26426);
         vm.stopPrank();
 
-        uint256 nullifier = voterIdNFT.getNullifier(voterIdNFT.getTokenId(user1));
+        bytes32 anchor = bytes32(uint256(uint160(user1)));
         address remintedUser = address(9);
-        voterIdNFT.revokeVoterId(user1);
-        voterIdNFT.resetNullifier(nullifier);
-        voterIdNFT.mint(remintedUser, nullifier);
+        vm.startPrank(admin);
+        raterRegistry.revokeHumanCredential(user1);
+        _seedIdentity(remintedUser, anchor);
+        vm.stopPrank();
 
         vm.prank(remintedUser);
         registry.setProfile("alice", "{\"v\":2,\"expertise\":[\"science\"]}");
@@ -338,20 +355,19 @@ contract ProfileRegistryTest is Test {
         assertEq(rgb, 0xF26426);
     }
 
-    function test_DifferentNullifierCannotReclaimProfileName() public {
+    function test_DifferentIdentityCannotReclaimProfileName() public {
         vm.prank(user1);
         registry.setProfile("alice", "");
 
-        uint256 nullifier = voterIdNFT.getNullifier(voterIdNFT.getTokenId(user1));
-        voterIdNFT.revokeVoterId(user1);
-        voterIdNFT.resetNullifier(nullifier);
+        vm.prank(admin);
+        raterRegistry.revokeHumanCredential(user1);
 
         vm.prank(user2);
         vm.expectRevert("Name already taken");
         registry.setProfile("alice", "");
     }
 
-    function test_SetProfileAllowsUnsetVoterIdNFT() public {
+    function test_SetProfileAllowsUnsetRaterRegistry() public {
         vm.startPrank(admin);
         ProfileRegistry impl = new ProfileRegistry();
         ProfileRegistry unsetRegistry = ProfileRegistry(
@@ -366,11 +382,11 @@ contract ProfileRegistryTest is Test {
         assertEq(unsetRegistry.getAddressByName("alice"), user1);
     }
 
-    function test_AdminCanClearVoterIdNFT() public {
+    function test_AdminCanClearRaterRegistry() public {
         vm.prank(admin);
-        registry.setVoterIdNFT(address(0));
+        registry.setRaterRegistry(address(0));
 
-        assertEq(address(registry.voterIdNFT()), address(0));
+        assertEq(address(registry.raterRegistry()), address(0));
 
         vm.prank(user1);
         registry.setProfile("alice", "");
@@ -542,7 +558,8 @@ contract ProfileRegistryTest is Test {
         vm.prank(user1);
         registry.setProfile("alice", "{\"v\":1,\"expertise\":[\"science\"]}");
 
-        voterIdNFT.removeHolder(user1);
+        vm.prank(admin);
+        raterRegistry.revokeHumanCredential(user1);
 
         vm.prank(user1);
         registry.setProfile("alice2", "{\"v\":1,\"expertise\":[\"science\"]}");

@@ -6,14 +6,15 @@ import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy
 import { ContentRegistry } from "../contracts/ContentRegistry.sol";
 import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
 import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
+import { RaterRegistry } from "../contracts/RaterRegistry.sol";
 import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
 import { HumanReputation } from "../contracts/HumanReputation.sol";
 import { RoundLib } from "../contracts/libraries/RoundLib.sol";
 import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
 import { RewardMath } from "../contracts/libraries/RewardMath.sol";
 import { VotingTestBase } from "./helpers/VotingTestHelpers.sol";
-import { MockVoterIdNFT } from "./mocks/MockVoterIdNFT.sol";
 import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
+import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
 
 /// @title AdversarialTests
 /// @notice Pre-deployment adversarial tests covering reward exhaustion, state transition
@@ -150,6 +151,24 @@ contract AdversarialTests is VotingTestBase {
         _submitContentWithReservation(registry, "https://example.com/adv2", "test", "test", "test", 0);
         vm.stopPrank();
         return 2;
+    }
+
+    function _deployRaterRegistry() internal returns (RaterRegistry identityRegistry) {
+        identityRegistry = new RaterRegistry(
+            owner,
+            owner,
+            address(new MockWorldIDRouter()),
+            keccak256("rateloop-human-v1"),
+            12_345,
+            365 days
+        );
+    }
+
+    function _delegateIdentity(RaterRegistry identityRegistry, address holder, address delegate) internal {
+        vm.prank(holder);
+        identityRegistry.setDelegate(delegate);
+        vm.prank(delegate);
+        identityRegistry.acceptDelegate();
     }
 
     function _commit(address voter, uint256 contentId, bool isUp, uint256 stake)
@@ -731,15 +750,12 @@ contract AdversarialTests is VotingTestBase {
     // 7. COOLDOWN BYPASS VIA DELEGATION (regression test for fix 59241a4)
     // =========================================================================
 
-    /// @notice Token-based cooldown prevents same identity from voting twice within cooldown
-    /// @dev Simulates delegation by making two addresses share the same tokenId in the mock.
-    ///      In production, VoterIdNFT.hasVoterId() and getTokenId() resolve delegates to the
-    ///      holder's token. Here we simulate that by directly setting mock storage.
+    /// @notice Identity cooldown prevents a delegated identity from voting twice within cooldown.
     function test_CooldownBypass_DelegationBlocked() public {
-        MockVoterIdNFT voterIdNFT = new MockVoterIdNFT();
+        RaterRegistry identityRegistry = _deployRaterRegistry();
         ProtocolConfig cfg = ProtocolConfig(address(engine.protocolConfig()));
         vm.prank(owner);
-        cfg.setVoterIdNFT(address(voterIdNFT));
+        cfg.setRaterRegistry(address(identityRegistry));
 
         address holder = address(0xA1);
         address delegate = address(0xA2);
@@ -749,15 +765,7 @@ contract AdversarialTests is VotingTestBase {
         hrepToken.mint(delegate, 100_000e6);
         vm.stopPrank();
 
-        // Mint VoterID to holder → tokenId=1
-        voterIdNFT.mint(holder, 12345);
-
-        // Simulate delegate resolving to the same tokenId (as real VoterIdNFT delegation does).
-        // MockVoterIdNFT storage: slot 0 = holders, slot 1 = tokenIds
-        bytes32 holdersSlot = keccak256(abi.encode(delegate, uint256(0)));
-        vm.store(address(voterIdNFT), holdersSlot, bytes32(uint256(1))); // holders[delegate] = true
-        bytes32 tokenSlot = keccak256(abi.encode(delegate, uint256(1)));
-        vm.store(address(voterIdNFT), tokenSlot, bytes32(uint256(1))); // tokenIds[delegate] = 1 (same as holder)
+        _delegateIdentity(identityRegistry, holder, delegate);
 
         uint256 contentId = _submitContent();
 
@@ -781,9 +789,7 @@ contract AdversarialTests is VotingTestBase {
         );
         vm.stopPrank();
 
-        // Delegate tries to vote immediately on DIFFERENT content (same tokenId → blocked by IdentityAlreadyCommitted
-        // is per-round, but cooldown is per-content). For same content, it would be IdentityAlreadyCommitted.
-        // For a NEW content item, it should be blocked by per-token cooldown.
+        // Delegate resolves to the same identity, so voting again on the same content is blocked.
         vm.startPrank(submitter);
         hrepToken.approve(address(registry), 10e6);
         _submitContentWithReservation(registry, "https://example.com/adv3", "test", "test", "test", 0);
@@ -811,12 +817,12 @@ contract AdversarialTests is VotingTestBase {
         vm.stopPrank();
     }
 
-    /// @notice Per-token cooldown blocks same identity on same content across rounds
+    /// @notice Identity cooldown blocks the same delegated identity across rounds.
     function test_CooldownBypass_SameTokenAcrossRounds() public {
-        MockVoterIdNFT voterIdNFT = new MockVoterIdNFT();
+        RaterRegistry identityRegistry = _deployRaterRegistry();
         ProtocolConfig cfg = ProtocolConfig(address(engine.protocolConfig()));
         vm.prank(owner);
-        cfg.setVoterIdNFT(address(voterIdNFT));
+        cfg.setRaterRegistry(address(identityRegistry));
 
         address holder = address(0xA1);
         address delegate = address(0xA2);
@@ -826,16 +832,7 @@ contract AdversarialTests is VotingTestBase {
         hrepToken.mint(delegate, 100_000e6);
         vm.stopPrank();
 
-        voterIdNFT.mint(holder, 12345); // tokenId=1
-        // voter1 and voter2 need VoterIDs too (different tokens)
-        voterIdNFT.mint(voter1, 11111); // tokenId=2
-        voterIdNFT.mint(voter2, 22222); // tokenId=3
-
-        // Make delegate resolve to same tokenId=1
-        bytes32 holdersSlot = keccak256(abi.encode(delegate, uint256(0)));
-        vm.store(address(voterIdNFT), holdersSlot, bytes32(uint256(1)));
-        bytes32 tokenSlot = keccak256(abi.encode(delegate, uint256(1)));
-        vm.store(address(voterIdNFT), tokenSlot, bytes32(uint256(1)));
+        _delegateIdentity(identityRegistry, holder, delegate);
 
         uint256 contentId = _submitContent();
 

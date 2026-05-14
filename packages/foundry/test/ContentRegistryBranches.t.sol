@@ -7,12 +7,12 @@ import { ContentRegistry } from "../contracts/ContentRegistry.sol";
 import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
 import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
 import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
+import { RaterRegistry } from "../contracts/RaterRegistry.sol";
 import { HumanReputation } from "../contracts/HumanReputation.sol";
 import { ParticipationPool } from "../contracts/ParticipationPool.sol";
 import { RoundLib } from "../contracts/libraries/RoundLib.sol";
 import { RatingLib } from "../contracts/libraries/RatingLib.sol";
 import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
-import { MockVoterIdNFT } from "./mocks/MockVoterIdNFT.sol";
 import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
 import { MockQuestionRewardPoolEscrow } from "./mocks/MockQuestionRewardPoolEscrow.sol";
 import { VotingTestBase } from "./helpers/VotingTestHelpers.sol";
@@ -28,7 +28,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
     ContentRegistry public registry;
     RoundVotingEngine public votingEngine;
     RoundRewardDistributor public rewardDistributor;
-    MockVoterIdNFT public mockVoterIdNFT;
+    RaterRegistry public raterRegistry;
     MockCategoryRegistry public mockCategoryRegistry;
     MockQuestionRewardPoolEscrow public mockQuestionRewardPoolEscrow;
     ParticipationPool public participationPool;
@@ -112,16 +112,15 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         ProtocolConfig(address(votingEngine.protocolConfig())).setTreasury(treasury);
         _setTlockRoundConfig(ProtocolConfig(address(votingEngine.protocolConfig())), 1 hours, 7 days, 3, 200);
 
-        mockVoterIdNFT = new MockVoterIdNFT();
+        raterRegistry = _deployRaterRegistry(owner);
         mockCategoryRegistry = new MockCategoryRegistry();
         mockCategoryRegistry.seedDefaultTestCategories();
         mockQuestionRewardPoolEscrow = new MockQuestionRewardPoolEscrow();
         registry.setCategoryRegistry(address(mockCategoryRegistry));
         registry.setProtocolConfig(address(votingEngine.protocolConfig()));
         registry.setQuestionRewardPoolEscrow(address(mockQuestionRewardPoolEscrow));
-        registry.setVoterIdNFT(address(mockVoterIdNFT));
         ProtocolConfig(address(votingEngine.protocolConfig())).setCategoryRegistry(address(mockCategoryRegistry));
-        ProtocolConfig(address(votingEngine.protocolConfig())).setVoterIdNFT(address(mockVoterIdNFT));
+        ProtocolConfig(address(votingEngine.protocolConfig())).setRaterRegistry(address(raterRegistry));
 
         participationPool = new ParticipationPool(address(hrepToken), owner);
         participationPool.setAuthorizedCaller(address(registry), true);
@@ -137,7 +136,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         for (uint256 i = 0; i < users.length; i++) {
             hrepToken.mint(users[i], 10_000e6);
             if (users[i] != delegate) {
-                mockVoterIdNFT.setHolder(users[i]);
+                _seedRaterIdentity(raterRegistry, users[i], bytes32(uint256(uint160(users[i]))));
             }
         }
 
@@ -161,23 +160,16 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         assertEq(registry.questionRewardPoolEscrow(), address(replacementEscrow));
     }
 
-    function test_SetVoterIdNFT_RejectsProtocolMismatch() public {
-        MockVoterIdNFT replacementVoterIdNFT = new MockVoterIdNFT();
-
-        vm.prank(owner);
-        vm.expectRevert("Voter ID mismatch");
-        registry.setVoterIdNFT(address(replacementVoterIdNFT));
-    }
-
-    function test_SetProtocolConfig_RejectsVoterIdMismatch() public {
+    function test_SetProtocolConfig_UpdatesIdentityRegistry() public {
         ProtocolConfig replacementConfig = _deployProtocolConfig(owner);
-        MockVoterIdNFT replacementVoterIdNFT = new MockVoterIdNFT();
+        RaterRegistry replacementRaterRegistry = _deployRaterRegistry(owner);
 
         vm.startPrank(owner);
-        replacementConfig.setVoterIdNFT(address(replacementVoterIdNFT));
-        vm.expectRevert("Voter ID mismatch");
+        replacementConfig.setRaterRegistry(address(replacementRaterRegistry));
         registry.setProtocolConfig(address(replacementConfig));
         vm.stopPrank();
+
+        assertEq(address(registry.protocolConfig()), address(replacementConfig));
     }
 
     function _vote(address voter, uint256 contentId, bool isUp) internal {
@@ -760,11 +752,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             rewardPoolExpiresAt
         );
 
-        vm.prank(owner);
-        registry.setVoterIdNFT(address(mockVoterIdNFT));
-        mockVoterIdNFT.setHolder(submitter);
-        vm.prank(submitter);
-        mockVoterIdNFT.setDelegate(agentWallet);
+        _setAcceptedDelegate(raterRegistry, submitter, agentWallet);
 
         vm.startPrank(agentWallet);
         hrepToken.approve(address(mockQuestionRewardPoolEscrow), rewardAmount);
@@ -1354,7 +1342,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         );
     }
 
-    function test_SubmitContent_VoterIdConfigured_AllowsUnverifiedSubmitter() public {
+    function test_SubmitContent_IdentityRegistryConfigured_AllowsUnverifiedSubmitter() public {
         address noIdSubmitter = address(0xDEAD);
         vm.prank(owner);
         hrepToken.mint(noIdSubmitter, 10_000e6);
@@ -1370,10 +1358,10 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.stopPrank();
 
         assertEq(registry.getSubmitterIdentity(id), noIdSubmitter);
-        assertEq(registry.contentSubmitterNullifier(id), 0);
+        assertEq(registry.contentSubmitterIdentityKey(id), raterRegistry.addressIdentityKey(noIdSubmitter));
     }
 
-    function test_SubmitContent_VoterIdConfigured_SucceedsWithId() public {
+    function test_SubmitContent_IdentityRegistryConfigured_SucceedsWithSeededIdentity() public {
         vm.startPrank(submitter);
         hrepToken.approve(address(registry), 10e6);
         uint256 id = _submitContentWithReservation(registry, "https://example.com/1", "goal", "goal", "tags", 0);
@@ -1382,12 +1370,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
     }
 
     function test_SubmitContent_SnapshotsCanonicalSubmitterIdentityForDelegate() public {
-        vm.prank(owner);
-        registry.setVoterIdNFT(address(mockVoterIdNFT));
-
-        mockVoterIdNFT.setHolder(submitter);
-        vm.prank(submitter);
-        mockVoterIdNFT.setDelegate(delegate);
+        _setAcceptedDelegate(raterRegistry, submitter, delegate);
 
         vm.startPrank(delegate);
         hrepToken.approve(address(registry), 10e6);
@@ -1401,8 +1384,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
     }
 
     function test_SubmitContent_RawDelegateSubmitterCannotVoteAfterReassignment() public {
-        vm.prank(submitter);
-        mockVoterIdNFT.setDelegate(delegate);
+        _setAcceptedDelegate(raterRegistry, submitter, delegate);
 
         vm.startPrank(delegate);
         hrepToken.approve(address(registry), 10e6);
@@ -1412,9 +1394,8 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.stopPrank();
 
         vm.prank(submitter);
-        mockVoterIdNFT.removeDelegate();
-        vm.prank(voter4);
-        mockVoterIdNFT.setDelegate(delegate);
+        raterRegistry.removeDelegate();
+        _setAcceptedDelegate(raterRegistry, voter4, delegate);
 
         bytes32 salt = keccak256("raw-delegate-submit-vote");
         uint16 referenceRatingBps = _currentRatingReferenceBps(1);
@@ -1440,7 +1421,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.stopPrank();
     }
 
-    function test_SubmitContent_VoterIdNotConfigured_Succeeds() public {
+    function test_SubmitContent_RaterRegistryNotConfigured_Succeeds() public {
         vm.startPrank(owner);
         ContentRegistry registryImpl2 = new ContentRegistry();
         ContentRegistry reg2 = ContentRegistry(
@@ -1485,7 +1466,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.stopPrank();
 
         assertEq(reg2.getSubmitterIdentity(id), submitter);
-        assertEq(reg2.contentSubmitterNullifier(id), 0);
+        assertEq(reg2.contentSubmitterIdentityKey(id), keccak256(abi.encodePacked("rateloop.address-identity-v1", submitter)));
     }
 
     function test_SubmitContent_NonHttpsUrl_Reverts() public {
@@ -1897,12 +1878,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
     }
 
     function test_CancelContent_UsesCurrentCanonicalSubmitterIdentity() public {
-        vm.prank(owner);
-        registry.setVoterIdNFT(address(mockVoterIdNFT));
-
-        mockVoterIdNFT.setHolder(submitter);
-        vm.prank(submitter);
-        mockVoterIdNFT.setDelegate(delegate);
+        _setAcceptedDelegate(raterRegistry, submitter, delegate);
 
         vm.startPrank(delegate);
         hrepToken.approve(address(registry), 10e6);
@@ -1911,7 +1887,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.stopPrank();
 
         vm.prank(submitter);
-        mockVoterIdNFT.removeDelegate();
+        raterRegistry.removeDelegate();
 
         vm.prank(delegate);
         vm.expectRevert("Not submitter");
@@ -1921,7 +1897,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         registry.cancelContent(contentId);
     }
 
-    function test_CancelContent_AllowsRemintedSubmitterNullifier() public {
+    function test_CancelContent_AllowsReboundSubmitterIdentity() public {
         vm.startPrank(submitter);
         hrepToken.approve(address(registry), 10e6);
         uint256 contentId =
@@ -1929,10 +1905,9 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.stopPrank();
 
         address remintedSubmitter = address(0xBEEF);
-        uint256 nullifier = mockVoterIdNFT.getNullifier(mockVoterIdNFT.getTokenId(submitter));
-        mockVoterIdNFT.revokeVoterId(submitter);
-        mockVoterIdNFT.resetNullifier(nullifier);
-        mockVoterIdNFT.mint(remintedSubmitter, nullifier);
+        bytes32 anchor = bytes32(uint256(uint160(submitter)));
+        raterRegistry.revokeHumanCredential(submitter);
+        _seedRaterIdentity(raterRegistry, remintedSubmitter, anchor);
 
         vm.prank(submitter);
         vm.expectRevert("Not submitter");
@@ -2178,7 +2153,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         MockCategoryRegistry mockCategoryRegistry2 = new MockCategoryRegistry();
         mockCategoryRegistry2.seedDefaultTestCategories();
         reg2.setCategoryRegistry(address(mockCategoryRegistry2));
-        reg2.setVoterIdNFT(address(mockVoterIdNFT));
         // DON'T set votingEngine
         vm.stopPrank();
 
@@ -2265,7 +2239,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         MockCategoryRegistry mockCategoryRegistry2 = new MockCategoryRegistry();
         mockCategoryRegistry2.seedDefaultTestCategories();
         reg2.setCategoryRegistry(address(mockCategoryRegistry2));
-        reg2.setVoterIdNFT(address(mockVoterIdNFT));
         // DON'T set votingEngine
         vm.stopPrank();
 
@@ -2544,7 +2517,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.stopPrank();
     }
 
-    function test_ReviveContent_AllowsRemintedSubmitterNullifier() public {
+    function test_ReviveContent_AllowsReboundSubmitterIdentity() public {
         string memory url = "https://example.com/reminted-revive";
 
         vm.startPrank(submitter);
@@ -2556,10 +2529,9 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         registry.markDormant(contentId);
 
         address remintedSubmitter = address(0xCAFE);
-        uint256 nullifier = mockVoterIdNFT.getNullifier(mockVoterIdNFT.getTokenId(submitter));
-        mockVoterIdNFT.revokeVoterId(submitter);
-        mockVoterIdNFT.resetNullifier(nullifier);
-        mockVoterIdNFT.mint(remintedSubmitter, nullifier);
+        bytes32 anchor = bytes32(uint256(uint160(submitter)));
+        raterRegistry.revokeHumanCredential(submitter);
+        _seedRaterIdentity(raterRegistry, remintedSubmitter, anchor);
         vm.prank(owner);
         hrepToken.mint(remintedSubmitter, 10_000e6);
 

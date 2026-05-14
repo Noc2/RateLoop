@@ -8,7 +8,6 @@ import {IGovernor} from "@openzeppelin/contracts/governance/IGovernor.sol";
 
 import {HumanReputation} from "../contracts/HumanReputation.sol";
 import {CuryoGovernor} from "../contracts/governance/CuryoGovernor.sol";
-import {VoterIdNFT} from "../contracts/VoterIdNFT.sol";
 
 contract GovernanceTest is Test {
     HumanReputation public token;
@@ -949,34 +948,5 @@ contract GovernanceTest is Test {
         governor.execute(targets, values, calldatas, descriptionHash);
 
         assertEq(uint256(governor.state(proposalId)), uint256(IGovernor.ProposalState.Executed));
-    }
-}
-
-/// @title Governance Access Control Tests for Ownable Contracts
-contract GovernanceOwnableTest is Test {
-    function test_VoterIdNFTTransferOnlyToGovernance() public {
-        address admin = address(0xA);
-        address governance = address(0xB);
-
-        vm.prank(admin);
-        VoterIdNFT nft = new VoterIdNFT(admin, governance);
-
-        assertEq(nft.governance(), governance);
-        assertEq(nft.owner(), admin);
-
-        // Transfer to non-governance should revert
-        vm.prank(admin);
-        vm.expectRevert("Can only transfer to governance");
-        nft.transferOwnership(address(0xC));
-
-        // Transfer to governance should succeed
-        vm.prank(admin);
-        nft.transferOwnership(governance);
-        assertEq(nft.owner(), governance);
-    }
-
-    function test_VoterIdNFTGovernanceCannotBeZero() public {
-        vm.expectRevert(VoterIdNFT.InvalidAddress.selector);
-        new VoterIdNFT(address(0xA), address(0));
     }
 }

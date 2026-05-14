@@ -5,7 +5,6 @@ import { ContentRegistry } from "../ContentRegistry.sol";
 import { ProtocolConfig } from "../ProtocolConfig.sol";
 import { RaterRegistry } from "../RaterRegistry.sol";
 import { RoundVotingEngine } from "../RoundVotingEngine.sol";
-import { IVoterIdNFT } from "../interfaces/IVoterIdNFT.sol";
 
 /// @notice Linked helper for launch-distribution rater reward qualification.
 library LaunchRaterRewardLib {
@@ -25,7 +24,6 @@ library LaunchRaterRewardLib {
 
         RaterRegistry raterRegistry = RaterRegistry(raterRegistryAddress);
         address submitterIdentity = registry.getSubmitterIdentity(contentId);
-        address voterIdNftAddress = roundVoterIdNftAddress(votingEngine, config, contentId, roundId);
         bytes32[] memory candidates = new bytes32[](voteCount);
         uint256 anchorCount;
 
@@ -34,8 +32,7 @@ library LaunchRaterRewardLib {
             (address voter,,,, bool revealed,,) = votingEngine.commitCore(contentId, roundId, roundCommitKey);
             if (!revealed) continue;
 
-            address anchorAccount =
-                launchRewardAnchorAccount(votingEngine, voterIdNftAddress, contentId, roundId, roundCommitKey, voter);
+            address anchorAccount = launchRewardAnchorAccount(votingEngine, contentId, roundId, roundCommitKey, voter);
             if (anchorAccount == rewardRecipient || anchorAccount == submitterIdentity) continue;
 
             bytes32 anchorId =
@@ -52,48 +49,15 @@ library LaunchRaterRewardLib {
         }
     }
 
-    function roundVoterIdNftAddress(
-        RoundVotingEngine votingEngine,
-        ProtocolConfig config,
-        uint256 contentId,
-        uint256 roundId
-    ) internal view returns (address) {
-        address snapshot = votingEngine.roundVoterIdNFTSnapshot(contentId, roundId);
-        if (snapshot != address(0)) return snapshot;
-        return config.voterIdNFT();
-    }
-
     function launchRewardAnchorAccount(
         RoundVotingEngine votingEngine,
-        address voterIdNftAddress,
         uint256 contentId,
         uint256 roundId,
         bytes32 commitKey,
         address fallbackAccount
     ) internal view returns (address) {
-        if (voterIdNftAddress == address(0)) return fallbackAccount;
-        uint256 voterId = votingEngine.commitVoterId(contentId, roundId, commitKey);
-        if (voterId == 0) return fallbackAccount;
-
-        address rewardRecipient = currentVoterIdRewardRecipient(IVoterIdNFT(voterIdNftAddress), voterId);
-        return rewardRecipient == address(0) ? fallbackAccount : rewardRecipient;
-    }
-
-    function currentVoterIdRewardRecipient(IVoterIdNFT voterIdNft, uint256 voterId)
-        internal
-        view
-        returns (address rewardRecipient)
-    {
-        rewardRecipient = voterIdNft.getHolder(voterId);
-        if (rewardRecipient != address(0)) return rewardRecipient;
-
-        uint256 nullifier = voterIdNft.getNullifier(voterId);
-        if (nullifier == 0) return address(0);
-
-        uint256 currentVoterId = voterIdNft.getTokenIdForNullifier(nullifier);
-        if (currentVoterId == 0) return address(0);
-
-        return voterIdNft.getHolder(currentVoterId);
+        address holder = votingEngine.commitIdentityHolder(contentId, roundId, commitKey);
+        return holder == address(0) ? fallbackAccount : holder;
     }
 
     function launchRewardAnchorId(

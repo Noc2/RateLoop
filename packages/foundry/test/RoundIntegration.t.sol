@@ -7,6 +7,7 @@ import { Vm } from "forge-std/Test.sol";
 import { ContentRegistry } from "../contracts/ContentRegistry.sol";
 import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
 import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
+import { RaterRegistry } from "../contracts/RaterRegistry.sol";
 import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
 import { RoundLib } from "../contracts/libraries/RoundLib.sol";
 import { RatingLib } from "../contracts/libraries/RatingLib.sol";
@@ -19,7 +20,6 @@ import { FrontendRegistry } from "../contracts/FrontendRegistry.sol";
 import { IFrontendRegistry } from "../contracts/interfaces/IFrontendRegistry.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
-import { MockVoterIdNFT } from "./mocks/MockVoterIdNFT.sol";
 
 contract RevertingParticipationPool {
     IERC20 public immutable token;
@@ -50,6 +50,7 @@ contract RoundIntegrationTest is VotingTestBase {
     ContentRegistry public registry;
     RoundVotingEngine public votingEngine;
     RoundRewardDistributor public rewardDistributor;
+    RaterRegistry public raterRegistry;
 
     address public owner = address(1);
     address public submitter = address(2);
@@ -138,6 +139,8 @@ contract RoundIntegrationTest is VotingTestBase {
         ProtocolConfig(address(votingEngine.protocolConfig())).setRewardDistributor(address(rewardDistributor));
         ProtocolConfig(address(votingEngine.protocolConfig())).setCategoryRegistry(address(mockCategoryRegistry));
         ProtocolConfig(address(votingEngine.protocolConfig())).setTreasury(treasury);
+        raterRegistry = _deployRaterRegistry(owner);
+        ProtocolConfig(address(votingEngine.protocolConfig())).setRaterRegistry(address(raterRegistry));
         _setTlockDrandConfig(
             ProtocolConfig(address(votingEngine.protocolConfig())),
             DEFAULT_DRAND_CHAIN_HASH,
@@ -159,6 +162,7 @@ contract RoundIntegrationTest is VotingTestBase {
         address[7] memory users = [submitter, voter1, voter2, voter3, voter4, voter5, voter6];
         for (uint256 i = 0; i < users.length; i++) {
             hrepToken.mint(users[i], 10_000e6);
+            _seedRaterIdentity(raterRegistry, users[i], bytes32(uint256(uint160(users[i]))));
         }
 
         vm.stopPrank();
@@ -1354,38 +1358,28 @@ contract RoundIntegrationTest is VotingTestBase {
         assertEq(hrepToken.balanceOf(voter2) - bal2Before, STAKE, "Voter2 should get refund from tie");
     }
 
-    function test_ConfiguredVoterIdNft_AllowsOpenRaterWithoutCredential() public {
+    function test_ConfiguredRaterRegistry_AllowsOpenRaterWithoutCredential() public {
         uint256 contentId = _submitContent();
-
-        MockVoterIdNFT voterIdNFT = new MockVoterIdNFT();
-        ProtocolConfig cfg = ProtocolConfig(address(votingEngine.protocolConfig()));
+        address openRater = address(0xCA11);
         vm.prank(owner);
-        cfg.setVoterIdNFT(address(voterIdNFT));
+        hrepToken.mint(openRater, 10_000e6);
 
         bytes32 salt = keccak256("open-rater-with-optional-identity");
-        (bytes32 commitHash, bytes32 commitKey) = _commitWithSalt(voter1, contentId, true, STAKE, salt);
+        (bytes32 commitHash, bytes32 commitKey) = _commitWithSalt(openRater, contentId, true, STAKE, salt);
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(votingEngine, contentId);
 
-        assertEq(voterIdNFT.getTokenId(voter1), 0);
-        assertEq(votingEngine.voterCommitHash(contentId, roundId, voter1), commitHash);
-        assertEq(votingEngine.commitVoterId(contentId, roundId, commitKey), 0);
+        assertFalse(raterRegistry.hasActiveHumanCredential(openRater));
+        assertEq(votingEngine.voterCommitHash(contentId, roundId, openRater), commitHash);
+        assertEq(votingEngine.commitIdentityKey(contentId, roundId, commitKey), raterRegistry.addressIdentityKey(openRater));
         (address committedVoter,,,,,,) = votingEngine.commitCore(contentId, roundId, commitKey);
-        assertEq(committedVoter, voter1);
-        assertEq(commitKey, _commitKey(voter1, commitHash));
+        assertEq(committedVoter, openRater);
+        assertEq(commitKey, _commitKey(openRater, commitHash));
     }
 
     function test_TiedRound_DelegatedLockedStakeRefundsStakePayer() public {
         uint256 contentId = _submitContent();
 
-        MockVoterIdNFT voterIdNFT = new MockVoterIdNFT();
-        voterIdNFT.setHolder(voter1);
-        voterIdNFT.setHolder(voter2);
-        vm.prank(voter1);
-        voterIdNFT.setDelegate(voter4);
-
-        ProtocolConfig cfg = ProtocolConfig(address(votingEngine.protocolConfig()));
-        vm.prank(owner);
-        cfg.setVoterIdNFT(address(voterIdNFT));
+        _setAcceptedDelegate(raterRegistry, voter1, voter4);
         vm.startPrank(owner);
         hrepToken.setGovernor(owner);
         hrepToken.setContentVotingContracts(address(votingEngine), address(registry));
@@ -1408,7 +1402,7 @@ contract RoundIntegrationTest is VotingTestBase {
         vm.prank(voter1);
         votingEngine.claimCancelledRoundRefund(contentId, roundId);
 
-        assertEq(hrepToken.balanceOf(voter1), holderBalanceBefore, "Voter ID holder should not receive payer stake");
+        assertEq(hrepToken.balanceOf(voter1), holderBalanceBefore, "identity holder should not receive payer stake");
         assertEq(hrepToken.balanceOf(voter4), stakePayerBalanceBefore, "stake payer should receive HREP refund");
         assertEq(hrepToken.getLockedBalance(voter4), STAKE, "governance lock remains active");
     }
@@ -1416,15 +1410,7 @@ contract RoundIntegrationTest is VotingTestBase {
     function test_TiedRound_RemovedDelegateCanClaimOwnStakeRefund() public {
         uint256 contentId = _submitContent();
 
-        MockVoterIdNFT voterIdNFT = new MockVoterIdNFT();
-        voterIdNFT.setHolder(voter1);
-        voterIdNFT.setHolder(voter2);
-        vm.prank(voter1);
-        voterIdNFT.setDelegate(voter4);
-
-        ProtocolConfig cfg = ProtocolConfig(address(votingEngine.protocolConfig()));
-        vm.prank(owner);
-        cfg.setVoterIdNFT(address(voterIdNFT));
+        _setAcceptedDelegate(raterRegistry, voter1, voter4);
 
         address[] memory voters = new address[](2);
         voters[0] = voter4;
@@ -1435,7 +1421,7 @@ contract RoundIntegrationTest is VotingTestBase {
 
         uint256 roundId = _settleRoundWith(voters, contentId, dirs, STAKE);
         vm.prank(voter1);
-        voterIdNFT.removeDelegate();
+        raterRegistry.removeDelegate();
 
         uint256 stakePayerBalanceBefore = hrepToken.balanceOf(voter4);
         vm.prank(voter4);
@@ -1446,16 +1432,7 @@ contract RoundIntegrationTest is VotingTestBase {
     function test_SettledRound_RemovedDelegateRoutesRewardToHolder() public {
         uint256 contentId = _submitContent();
 
-        MockVoterIdNFT voterIdNFT = new MockVoterIdNFT();
-        voterIdNFT.setHolder(voter1);
-        voterIdNFT.setHolder(voter2);
-        voterIdNFT.setHolder(voter3);
-        vm.prank(voter1);
-        voterIdNFT.setDelegate(voter4);
-
-        ProtocolConfig cfg = ProtocolConfig(address(votingEngine.protocolConfig()));
-        vm.prank(owner);
-        cfg.setVoterIdNFT(address(voterIdNFT));
+        _setAcceptedDelegate(raterRegistry, voter1, voter4);
 
         address[] memory voters = new address[](3);
         voters[0] = voter4;
@@ -1468,7 +1445,7 @@ contract RoundIntegrationTest is VotingTestBase {
 
         uint256 roundId = _settleRoundWith(voters, contentId, dirs, STAKE);
         vm.prank(voter1);
-        voterIdNFT.removeDelegate();
+        raterRegistry.removeDelegate();
 
         uint256 holderBalanceBefore = hrepToken.balanceOf(voter1);
         uint256 stakePayerBalanceBefore = hrepToken.balanceOf(voter4);
@@ -1479,17 +1456,8 @@ contract RoundIntegrationTest is VotingTestBase {
         assertGt(hrepToken.balanceOf(voter1), holderBalanceBefore, "holder receives voter-pool reward");
     }
 
-    function test_SettledRound_RevokedVoterIdCannotClaimBeforeRemint() public {
+    function test_SettledRound_RevokedIdentityCanClaimEarnedRewardFromSnapshot() public {
         uint256 contentId = _submitContent();
-
-        MockVoterIdNFT voterIdNFT = new MockVoterIdNFT();
-        voterIdNFT.setHolder(voter1);
-        voterIdNFT.setHolder(voter2);
-        voterIdNFT.setHolder(voter3);
-
-        ProtocolConfig cfg = ProtocolConfig(address(votingEngine.protocolConfig()));
-        vm.prank(owner);
-        cfg.setVoterIdNFT(address(voterIdNFT));
 
         address[] memory voters = new address[](3);
         voters[0] = voter1;
@@ -1501,11 +1469,12 @@ contract RoundIntegrationTest is VotingTestBase {
         dirs[2] = false;
 
         uint256 roundId = _settleRoundWith(voters, contentId, dirs, STAKE);
-        voterIdNFT.revokeVoterId(voter1);
+        raterRegistry.revokeHumanCredential(voter1);
 
+        uint256 balanceBefore = hrepToken.balanceOf(voter1);
         vm.prank(voter1);
-        vm.expectRevert("No vote found");
         rewardDistributor.claimReward(contentId, roundId);
+        assertGt(hrepToken.balanceOf(voter1), balanceBefore);
     }
 
     /// @dev Verifies the `RewardClaimed` event correctly attributes stake refund to the
@@ -1515,16 +1484,7 @@ contract RoundIntegrationTest is VotingTestBase {
     function test_SettledRound_RewardClaimedEventSplitsRecipients() public {
         uint256 contentId = _submitContent();
 
-        MockVoterIdNFT voterIdNFT = new MockVoterIdNFT();
-        voterIdNFT.setHolder(voter1);
-        voterIdNFT.setHolder(voter2);
-        voterIdNFT.setHolder(voter3);
-        vm.prank(voter1);
-        voterIdNFT.setDelegate(voter4);
-
-        ProtocolConfig cfg = ProtocolConfig(address(votingEngine.protocolConfig()));
-        vm.prank(owner);
-        cfg.setVoterIdNFT(address(voterIdNFT));
+        _setAcceptedDelegate(raterRegistry, voter1, voter4);
 
         address[] memory voters = new address[](3);
         voters[0] = voter4;
@@ -1569,20 +1529,11 @@ contract RoundIntegrationTest is VotingTestBase {
     /// @dev Holder votes via an active delegate and then claims directly. The voter-pool reward
     ///      must reach the holder, while the original stake refund returns to the delegate that
     ///      paid it. Pre-fix, both flowed to `commit.voter` (the delegate) and the holder
-    ///      received nothing from their own SBT identity's vote.
+    ///      received nothing from their own registry identity's vote.
     function test_SettledRound_HolderClaimsRewardWhileDelegateActive() public {
         uint256 contentId = _submitContent();
 
-        MockVoterIdNFT voterIdNFT = new MockVoterIdNFT();
-        voterIdNFT.setHolder(voter1);
-        voterIdNFT.setHolder(voter2);
-        voterIdNFT.setHolder(voter3);
-        vm.prank(voter1);
-        voterIdNFT.setDelegate(voter4);
-
-        ProtocolConfig cfg = ProtocolConfig(address(votingEngine.protocolConfig()));
-        vm.prank(owner);
-        cfg.setVoterIdNFT(address(voterIdNFT));
+        _setAcceptedDelegate(raterRegistry, voter1, voter4);
 
         address[] memory voters = new address[](3);
         voters[0] = voter4; // votes UP on behalf of voter1
@@ -1615,16 +1566,7 @@ contract RoundIntegrationTest is VotingTestBase {
     function test_SettledRound_RotatedDelegateRoutesRewardToHolder() public {
         uint256 contentId = _submitContent();
 
-        MockVoterIdNFT voterIdNFT = new MockVoterIdNFT();
-        voterIdNFT.setHolder(voter1);
-        voterIdNFT.setHolder(voter2);
-        voterIdNFT.setHolder(voter3);
-        vm.prank(voter1);
-        voterIdNFT.setDelegate(voter4);
-
-        ProtocolConfig cfg = ProtocolConfig(address(votingEngine.protocolConfig()));
-        vm.prank(owner);
-        cfg.setVoterIdNFT(address(voterIdNFT));
+        _setAcceptedDelegate(raterRegistry, voter1, voter4);
 
         address[] memory voters = new address[](3);
         voters[0] = voter4; // ex-delegate at claim time
@@ -1643,9 +1585,8 @@ contract RoundIntegrationTest is VotingTestBase {
 
         // Holder rotates: removes voter4, sets voter5 as the new delegate.
         vm.prank(voter1);
-        voterIdNFT.removeDelegate();
-        vm.prank(voter1);
-        voterIdNFT.setDelegate(voter5);
+        raterRegistry.removeDelegate();
+        _setAcceptedDelegate(raterRegistry, voter1, voter5);
 
         // Claim through the new delegate.
         vm.prank(voter5);
@@ -1661,16 +1602,7 @@ contract RoundIntegrationTest is VotingTestBase {
     function test_SettledRound_RotatedDelegateBlocksExDelegateReplay() public {
         uint256 contentId = _submitContent();
 
-        MockVoterIdNFT voterIdNFT = new MockVoterIdNFT();
-        voterIdNFT.setHolder(voter1);
-        voterIdNFT.setHolder(voter2);
-        voterIdNFT.setHolder(voter3);
-        vm.prank(voter1);
-        voterIdNFT.setDelegate(voter4);
-
-        ProtocolConfig cfg = ProtocolConfig(address(votingEngine.protocolConfig()));
-        vm.prank(owner);
-        cfg.setVoterIdNFT(address(voterIdNFT));
+        _setAcceptedDelegate(raterRegistry, voter1, voter4);
 
         address[] memory voters = new address[](3);
         voters[0] = voter4;
@@ -1684,15 +1616,14 @@ contract RoundIntegrationTest is VotingTestBase {
         uint256 roundId = _settleRoundWith(voters, contentId, dirs, STAKE);
 
         vm.prank(voter1);
-        voterIdNFT.removeDelegate();
-        vm.prank(voter1);
-        voterIdNFT.setDelegate(voter5);
+        raterRegistry.removeDelegate();
+        _setAcceptedDelegate(raterRegistry, voter1, voter5);
 
         // Holder/new-delegate path claims first.
         vm.prank(voter5);
         rewardDistributor.claimReward(contentId, roundId);
 
-        // The ex-delegate (now no SBT relationship) cannot re-claim via the direct EOA path —
+        // The ex-delegate (now no delegated relationship) cannot re-claim via the direct EOA path —
         // the rewardClaimed flag is keyed on commit.voter == voter4.
         vm.prank(voter4);
         vm.expectRevert("Already claimed");
@@ -2698,16 +2629,12 @@ contract RoundIntegrationTest is VotingTestBase {
 
     /// @dev Helper to set up a FrontendRegistry wired to the voting engine.
     function _setupFrontendRegistry() internal returns (FrontendRegistry frontendReg, address frontendOp) {
-        MockVoterIdNFT voterIdNFT;
-        (frontendReg, voterIdNFT) = _setupFrontendRegistryWithVoterId();
+        frontendReg = _setupFrontendRegistryForFees();
         frontendOp = address(200);
-        _registerFrontend(frontendReg, voterIdNFT, frontendOp);
+        _registerFrontend(frontendReg, frontendOp);
     }
 
-    function _setupFrontendRegistryWithVoterId()
-        internal
-        returns (FrontendRegistry frontendReg, MockVoterIdNFT voterIdNFT)
-    {
+    function _setupFrontendRegistryForFees() internal returns (FrontendRegistry frontendReg) {
         vm.startPrank(owner);
         FrontendRegistry frontendRegistryImpl = new FrontendRegistry();
         frontendReg = FrontendRegistry(
@@ -2721,15 +2648,12 @@ contract RoundIntegrationTest is VotingTestBase {
         ProtocolConfig(address(votingEngine.protocolConfig())).setFrontendRegistry(address(frontendReg));
         frontendReg.setVotingEngine(address(votingEngine));
         frontendReg.addFeeCreditor(address(rewardDistributor));
-        voterIdNFT = new MockVoterIdNFT();
-        frontendReg.setVoterIdNFT(address(voterIdNFT));
         vm.stopPrank();
     }
 
-    function _registerFrontend(FrontendRegistry frontendReg, MockVoterIdNFT voterIdNFT, address frontendOp) internal {
+    function _registerFrontend(FrontendRegistry frontendReg, address frontendOp) internal {
         vm.startPrank(owner);
         hrepToken.mint(frontendOp, 2000e6);
-        voterIdNFT.setHolder(frontendOp);
         vm.stopPrank();
 
         vm.startPrank(frontendOp);
@@ -2821,11 +2745,11 @@ contract RoundIntegrationTest is VotingTestBase {
     }
 
     function test_FinalizeFrontendFeeDust_RoutesOnlyRoundingDustAfterDelay() public {
-        (FrontendRegistry frontendReg, MockVoterIdNFT voterIdNFT) = _setupFrontendRegistryWithVoterId();
+        FrontendRegistry frontendReg = _setupFrontendRegistryForFees();
         address frontendA = address(200);
         address frontendB = address(201);
-        _registerFrontend(frontendReg, voterIdNFT, frontendA);
-        _registerFrontend(frontendReg, voterIdNFT, frontendB);
+        _registerFrontend(frontendReg, frontendA);
+        _registerFrontend(frontendReg, frontendB);
 
         uint256 contentId = _submitContent();
         uint256 stake1 = 1_000_001;
@@ -3015,15 +2939,11 @@ contract RoundIntegrationTest is VotingTestBase {
         );
     }
 
-    function test_ClaimFrontendFee_KeepsHistoricalShareAfterVoterIdRevocation() public {
-        FrontendRegistry frontendReg;
-        MockVoterIdNFT voterIdNFT;
-        (frontendReg, voterIdNFT) = _setupFrontendRegistryWithVoterId();
+    function test_ClaimFrontendFee_KeepsHistoricalShareWithoutIdentityGate() public {
+        FrontendRegistry frontendReg = _setupFrontendRegistryForFees();
         address frontendOp = address(200);
-        _registerFrontend(frontendReg, voterIdNFT, frontendOp);
+        _registerFrontend(frontendReg, frontendOp);
         (uint256 contentId, uint256 roundId) = _settleRoundWithFrontend(frontendOp);
-
-        voterIdNFT.removeHolder(frontendOp);
 
         (uint256 fee,,,) = rewardDistributor.previewFrontendFee(contentId, roundId, frontendOp);
         uint256 feesBefore = frontendReg.getAccumulatedFees(frontendOp);

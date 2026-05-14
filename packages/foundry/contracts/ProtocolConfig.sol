@@ -26,7 +26,6 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     address public frontendRegistry;
     address public treasury;
     RoundLib.RoundConfig public config;
-    address public voterIdNFT;
     address public participationPool;
     uint256 public revealGracePeriod;
     bytes32 public drandChainHash;
@@ -63,7 +62,6 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     event CategoryRegistryUpdated(address categoryRegistry);
     event TreasuryUpdated(address treasury);
     event RevealGracePeriodUpdated(uint256 revealGracePeriod);
-    event VoterIdNFTUpdated(address voterIdNFT);
     event ParticipationPoolUpdated(address participationPool);
     event RaterRegistryUpdated(address raterRegistry);
     event LaunchDistributionPoolUpdated(address launchDistributionPool);
@@ -201,15 +199,12 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         _setRevealGracePeriod(value);
     }
 
-    function setVoterIdNFT(address value) external onlyRole(CONFIG_ROLE) {
-        _setVoterIdNFT(value);
-    }
-
     function setParticipationPool(address value) external onlyRole(CONFIG_ROLE) {
         _setParticipationPool(value);
     }
 
     function setRaterRegistry(address value) external onlyRole(CONFIG_ROLE) {
+        if (value == address(0)) revert InvalidAddress();
         raterRegistry = value;
         emit RaterRegistryUpdated(value);
     }
@@ -393,12 +388,6 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         if (value > maxRevealGrace) revert InvalidConfig();
         revealGracePeriod = value;
         emit RevealGracePeriodUpdated(value);
-    }
-
-    function _setVoterIdNFT(address value) internal {
-        if (value != address(0) && voterIdNFT != address(0) && voterIdNFT != value) revert InvalidConfig();
-        voterIdNFT = value;
-        emit VoterIdNFTUpdated(value);
     }
 
     function _setParticipationPool(address value) internal {
