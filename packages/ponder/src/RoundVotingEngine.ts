@@ -1,10 +1,7 @@
 import { ponder } from "ponder:registry";
 import { asc, eq, and } from "ponder";
 import { encodePacked, isAddress, keccak256, zeroAddress } from "viem";
-import {
-  RoundVotingEngineAbi,
-  VoterIdNFTAbi,
-} from "@rateloop/contracts/abis";
+import { RoundVotingEngineAbi } from "@rateloop/contracts/abis";
 import {
   DEFAULT_ROUND_CONFIG,
   ROUND_STATE,
@@ -42,69 +39,51 @@ function firstContractAddress(address: unknown): `0x${string}` | null {
   return typeof value === "string" ? normalizeAddress(value) : null;
 }
 
-async function readRoundVoterIdNFTAddress(
-  context: any,
-  contentId: bigint,
-  roundId: bigint,
-) {
-  const fallbackAddress = firstContractAddress(context.contracts?.VoterIdNFT?.address);
-  const engineAddress = firstContractAddress(context.contracts?.RoundVotingEngine?.address);
-  if (!context.client?.readContract || !engineAddress) return fallbackAddress;
-
-  try {
-    const snapshot = await context.client.readContract({
-      abi: RoundVotingEngineAbi,
-      address: engineAddress,
-      functionName: "roundVoterIdNFTSnapshot",
-      args: [contentId, roundId],
-    });
-    const snapshotAddress = normalizeAddress(String(snapshot));
-    if (snapshotAddress && snapshotAddress !== zeroAddress) return snapshotAddress;
-  } catch {
-    // Older/local test contexts may not expose readContract. Fall back to the configured NFT.
-  }
-
-  return fallbackAddress;
-}
-
 async function resolveVoteIdentityAtCommit(params: {
   context: any;
   contentId: bigint;
   roundId: bigint;
   voter: `0x${string}`;
+  commitHash: `0x${string}`;
 }) {
   const rawVoter = normalizeAddress(params.voter) ?? params.voter;
-  const voterIdNFTAddress = await readRoundVoterIdNFTAddress(
-    params.context,
-    params.contentId,
-    params.roundId,
-  );
-  if (!params.context.client?.readContract || !voterIdNFTAddress) {
-    return { identityVoter: rawVoter, voterId: null as bigint | null };
+  const engineAddress = firstContractAddress(params.context.contracts?.RoundVotingEngine?.address);
+  if (!params.context.client?.readContract || !engineAddress) {
+    return {
+      identityKey: null as `0x${string}` | null,
+      identityHolder: rawVoter,
+      identityVoter: rawVoter,
+    };
   }
 
   try {
-    const voterId = await params.context.client.readContract({
-      abi: VoterIdNFTAbi,
-      address: voterIdNFTAddress,
-      functionName: "getTokenId",
-      args: [rawVoter],
-    }) as bigint;
-    if (voterId === 0n) return { identityVoter: rawVoter, voterId: null };
-
-    const holder = await params.context.client.readContract({
-      abi: VoterIdNFTAbi,
-      address: voterIdNFTAddress,
-      functionName: "getHolder",
-      args: [voterId],
-    });
+    const [identityKey, holder] = await Promise.all([
+      params.context.client.readContract({
+        abi: RoundVotingEngineAbi,
+        address: engineAddress,
+        functionName: "commitIdentityKey",
+        args: [params.contentId, params.roundId, params.commitHash],
+      }),
+      params.context.client.readContract({
+        abi: RoundVotingEngineAbi,
+        address: engineAddress,
+        functionName: "commitIdentityHolder",
+        args: [params.contentId, params.roundId, params.commitHash],
+      }),
+    ]);
     const holderAddress = normalizeAddress(String(holder));
+    const identityHolder = holderAddress && holderAddress !== zeroAddress ? holderAddress : rawVoter;
     return {
-      identityVoter: holderAddress && holderAddress !== zeroAddress ? holderAddress : rawVoter,
-      voterId,
+      identityKey: String(identityKey) as `0x${string}`,
+      identityHolder,
+      identityVoter: identityHolder,
     };
   } catch {
-    return { identityVoter: rawVoter, voterId: null };
+    return {
+      identityKey: null,
+      identityHolder: rawVoter,
+      identityVoter: rawVoter,
+    };
   }
 }
 
@@ -423,11 +402,12 @@ ponder.on("RoundVotingEngine:VoteCommitted", async ({ event, context }) => {
   };
   const roundKey = `${contentId}-${roundId}`;
   const rawVoter = normalizeAddress(voter) ?? voter;
-  const { identityVoter, voterId } = await resolveVoteIdentityAtCommit({
+  const { identityKey, identityHolder, identityVoter } = await resolveVoteIdentityAtCommit({
     context,
     contentId,
     roundId,
     voter: rawVoter,
+    commitHash,
   });
   const voteKey = `${contentId}-${roundId}-${rawVoter}`;
   const referenceRatingBps = Number(roundReferenceRatingBps);
@@ -479,8 +459,9 @@ ponder.on("RoundVotingEngine:VoteCommitted", async ({ event, context }) => {
       contentId,
       roundId,
       voter: rawVoter,
+      identityKey,
+      identityHolder,
       identityVoter,
-      voterId,
       commitHash,
       targetRound,
       drandChainHash,

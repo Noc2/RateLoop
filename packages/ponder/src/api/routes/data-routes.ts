@@ -30,7 +30,6 @@ import {
   vote,
   voterCategoryStats,
   dailyVoteActivity,
-  voterId,
   voterStats,
   voterStreak,
 } from "ponder:schema";
@@ -57,11 +56,15 @@ const STREAK_MILESTONES = [
 const RATER_TYPES = ["Unknown", "Human", "AI", "Team", "Hybrid"] as const;
 
 function voteMatchesVoter(address: `0x${string}`) {
-  return or(eq(vote.voter, address), eq(vote.identityVoter, address));
+  return or(eq(vote.voter, address), eq(vote.identityHolder, address), eq(vote.identityVoter, address));
 }
 
 function voteMatchesAnyVoter(addresses: `0x${string}`[]) {
-  return or(inArray(vote.voter, addresses), inArray(vote.identityVoter, addresses));
+  return or(
+    inArray(vote.voter, addresses),
+    inArray(vote.identityHolder, addresses),
+    inArray(vote.identityVoter, addresses),
+  );
 }
 
 function maxBigInt(values: Array<bigint | number | null | undefined>) {
@@ -604,7 +607,7 @@ export function registerDataRoutes(app: ApiApp) {
     if (!isValidAddress(address))
       return c.json({ error: "Invalid address" }, 400);
 
-    const [stats, streak, streakActivity, voterIdRecord] = await Promise.all([
+    const [stats, streak, streakActivity, humanCredential] = await Promise.all([
       db
         .select()
         .from(voterStats)
@@ -626,11 +629,11 @@ export function registerDataRoutes(app: ApiApp) {
         .orderBy(asc(dailyVoteActivity.date)),
       db
         .select({
-          tokenId: voterId.tokenId,
-          mintedAt: voterId.mintedAt,
+          identityKey: raterHumanCredential.nullifierHash,
+          verifiedAt: raterHumanCredential.verifiedAt,
         })
-        .from(voterId)
-        .where(and(eq(voterId.holder, address), eq(voterId.revoked, false)))
+        .from(raterHumanCredential)
+        .where(and(eq(raterHumanCredential.rater, address), eq(raterHumanCredential.revoked, false)))
         .limit(1)
         .then((rows) => rows[0] ?? null),
     ]);
@@ -723,7 +726,10 @@ export function registerDataRoutes(app: ApiApp) {
 
     return jsonBig(c, {
       address,
-      voterId: voterIdRecord,
+      identity: humanCredential,
+      voterId: humanCredential
+        ? { tokenId: null, mintedAt: humanCredential.verifiedAt }
+        : null,
       stats: statsWithRate,
       streak: effectiveStreak,
       categories90d,
@@ -804,8 +810,10 @@ export function registerDataRoutes(app: ApiApp) {
         contentId: vote.contentId,
         roundId: vote.roundId,
         voter: vote.voter,
+        identityKey: vote.identityKey,
+        identityHolder: vote.identityHolder,
         identityVoter: vote.identityVoter,
-        voterId: vote.voterId,
+        voterId: sql<null>`null`,
         commitHash: vote.commitHash,
         targetRound: vote.targetRound,
         drandChainHash: vote.drandChainHash,
@@ -1190,10 +1198,18 @@ export function registerDataRoutes(app: ApiApp) {
     if (holder) {
       if (!isValidAddress(holder))
         return c.json({ error: "Invalid holder address" }, 400);
-      where = eq(voterId.holder, holder.toLowerCase() as `0x${string}`);
+      where = eq(raterHumanCredential.rater, holder.toLowerCase() as `0x${string}`);
     }
 
-    const items = await db.select().from(voterId).where(where).limit(limit);
+    const rows = await db.select().from(raterHumanCredential).where(where).limit(limit);
+    const items = rows.map((row) => ({
+      holder: row.rater,
+      identityKey: row.nullifierHash,
+      verifiedAt: row.verifiedAt,
+      revoked: row.revoked,
+      tokenId: null,
+      mintedAt: row.verifiedAt,
+    }));
 
     return jsonBig(c, { items });
   });

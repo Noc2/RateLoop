@@ -16,7 +16,6 @@ import {
   RaterRegistryAbi,
   RoundRewardDistributorAbi,
   RoundVotingEngineAbi,
-  VoterIdNFTAbi,
 } from "@rateloop/contracts/abis";
 import {
   getSharedDeploymentAddress as getSharedArtifactAddress,
@@ -214,7 +213,6 @@ const addresses = {
   categoryRegistry: resolveAddress("PONDER_CATEGORY_REGISTRY_ADDRESS", "CategoryRegistry"),
   profileRegistry: resolveAddress("PONDER_PROFILE_REGISTRY_ADDRESS", "ProfileRegistry"),
   frontendRegistry: resolveAddress("PONDER_FRONTEND_REGISTRY_ADDRESS", "FrontendRegistry"),
-  voterIdNFT: resolveAddress("PONDER_VOTER_ID_NFT_ADDRESS", "VoterIdNFT"),
   loopReputation: resolveAddress("PONDER_LREP_ADDRESS", "LoopReputation"),
   participationPool: resolveAddress("PONDER_PARTICIPATION_POOL_ADDRESS", "ParticipationPool"),
   launchDistributionPool: resolveAddress("PONDER_LAUNCH_DISTRIBUTION_POOL_ADDRESS", "LaunchDistributionPool"),
@@ -231,7 +229,6 @@ const startBlocks = {
   categoryRegistry: resolveStartBlock("PONDER_CATEGORY_REGISTRY_START_BLOCK", "CategoryRegistry"),
   profileRegistry: resolveStartBlock("PONDER_PROFILE_REGISTRY_START_BLOCK", "ProfileRegistry"),
   frontendRegistry: resolveStartBlock("PONDER_FRONTEND_REGISTRY_START_BLOCK", "FrontendRegistry"),
-  voterIdNFT: resolveStartBlock("PONDER_VOTER_ID_NFT_START_BLOCK", "VoterIdNFT"),
   loopReputation: resolveStartBlock("PONDER_LREP_START_BLOCK", "LoopReputation"),
   participationPool: resolveStartBlock("PONDER_PARTICIPATION_POOL_START_BLOCK", "ParticipationPool"),
   launchDistributionPool: resolveStartBlock("PONDER_LAUNCH_DISTRIBUTION_POOL_START_BLOCK", "LaunchDistributionPool"),
@@ -283,10 +280,6 @@ export default createConfig({
     FrontendRegistry: {
       abi: FrontendRegistryAbi,
       network: contractOnActiveNetwork(addresses.frontendRegistry, startBlocks.frontendRegistry),
-    },
-    VoterIdNFT: {
-      abi: VoterIdNFTAbi,
-      network: contractOnActiveNetwork(addresses.voterIdNFT, startBlocks.voterIdNFT),
     },
     LoopReputation: {
       abi: LoopReputationAbi,

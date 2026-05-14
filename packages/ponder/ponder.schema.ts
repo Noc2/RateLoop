@@ -159,8 +159,9 @@ export const vote = onchainTable(
     contentId: t.bigint().notNull(),
     roundId: t.bigint().notNull(),
     voter: t.hex().notNull(), // raw commit/stake-payer address
-    identityVoter: t.hex(), // resolved Voter ID holder at commit time, or voter when no Voter ID is used
-    voterId: t.bigint(), // resolved Voter ID token at commit time, when available
+    identityKey: t.hex(), // resolved RaterRegistry identity key at commit time, when available
+    identityHolder: t.hex(), // resolved RaterRegistry holder at commit time, or voter when unavailable
+    identityVoter: t.hex(), // compatibility alias for identityHolder
     commitHash: t.hex().notNull(),
     targetRound: t.bigint().notNull(),
     drandChainHash: t.hex().notNull(),
@@ -181,6 +182,8 @@ export const vote = onchainTable(
   }),
   (table) => ({
     voterIdx: index().on(table.voter),
+    identityKeyIdx: index().on(table.identityKey),
+    identityHolderIdx: index().on(table.identityHolder),
     identityVoterIdx: index().on(table.identityVoter),
     contentIdx: index().on(table.contentId),
     roundIdx: index().on(table.roundId),
@@ -345,12 +348,12 @@ export const questionRewardPoolRound = onchainTable(
 export const questionRewardPoolClaim = onchainTable(
   "question_reward_pool_claim",
   (t) => ({
-    id: t.text().primaryKey(), // `${rewardPoolId}-${roundId}-${voterId}`
+    id: t.text().primaryKey(), // `${rewardPoolId}-${roundId}-${identityKey}`
     rewardPoolId: t.bigint().notNull(),
     contentId: t.bigint().notNull(),
     roundId: t.bigint().notNull(),
     claimant: t.hex().notNull(),
-    voterId: t.bigint().notNull(),
+    identityKey: t.hex().notNull(),
     amount: t.bigint().notNull(),
     grossAmount: t.bigint().notNull(),
     frontend: t.hex().notNull(),
@@ -361,7 +364,7 @@ export const questionRewardPoolClaim = onchainTable(
   (table) => ({
     rewardPoolIdx: index().on(table.rewardPoolId),
     claimantIdx: index().on(table.claimant),
-    voterIdIdx: index().on(table.voterId),
+    identityKeyIdx: index().on(table.identityKey),
     contentIdx: index().on(table.contentId),
   }),
 );
@@ -472,11 +475,11 @@ export const questionBundleRoundSet = onchainTable(
 export const questionBundleClaim = onchainTable(
   "question_bundle_claim",
   (t) => ({
-    id: t.text().primaryKey(), // `${bundleId}-${roundSetIndex}-${voterId}`
+    id: t.text().primaryKey(), // `${bundleId}-${roundSetIndex}-${identityKey}`
     bundleId: t.bigint().notNull(),
     roundSetIndex: t.integer().notNull(),
     claimant: t.hex().notNull(),
-    voterId: t.bigint().notNull(),
+    identityKey: t.hex().notNull(),
     amount: t.bigint().notNull(),
     grossAmount: t.bigint().notNull(),
     frontend: t.hex().notNull(),
@@ -488,7 +491,7 @@ export const questionBundleClaim = onchainTable(
     bundleIdx: index().on(table.bundleId),
     roundSetIdx: index().on(table.bundleId, table.roundSetIndex),
     claimantIdx: index().on(table.claimant),
-    voterIdIdx: index().on(table.voterId),
+    identityKeyIdx: index().on(table.identityKey),
   }),
 );
 
@@ -536,7 +539,7 @@ export const feedbackBonusAward = onchainTable(
     contentId: t.bigint().notNull(),
     roundId: t.bigint().notNull(),
     recipient: t.hex().notNull(),
-    voterId: t.bigint().notNull(),
+    identityKey: t.hex().notNull(),
     feedbackHash: t.hex().notNull(),
     grossAmount: t.bigint().notNull(),
     recipientAmount: t.bigint().notNull(),
@@ -550,7 +553,7 @@ export const feedbackBonusAward = onchainTable(
     contentIdx: index().on(table.contentId),
     roundIdx: index().on(table.contentId, table.roundId),
     recipientIdx: index().on(table.recipient),
-    voterIdIdx: index().on(table.voterId),
+    identityKeyIdx: index().on(table.identityKey),
     feedbackHashIdx: index().on(table.feedbackHash),
   }),
 );
@@ -797,24 +800,6 @@ export const frontend = onchainTable("frontend", (t) => ({
   totalFeesClaimed: t.bigint().notNull(),
   registeredAt: t.bigint().notNull(),
 }));
-
-// ============================================================
-// VOTER ID NFT
-// ============================================================
-
-export const voterId = onchainTable(
-  "voter_id",
-  (t) => ({
-    tokenId: t.bigint().primaryKey(),
-    holder: t.hex().notNull(),
-    nullifier: t.bigint().notNull(),
-    mintedAt: t.bigint().notNull(),
-    revoked: t.boolean().notNull().default(false),
-  }),
-  (table) => ({
-    holderIdx: index().on(table.holder),
-  }),
-);
 
 // ============================================================
 // TOKEN HOLDERS (LREP)

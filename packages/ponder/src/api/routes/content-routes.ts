@@ -39,7 +39,7 @@ import {
 type SqlCondition = ReturnType<typeof sql>;
 
 function voteMatchesVoter(address: `0x${string}`) {
-  return or(eq(vote.voter, address), eq(vote.identityVoter, address));
+  return or(eq(vote.voter, address), eq(vote.identityHolder, address), eq(vote.identityVoter, address));
 }
 
 function profileSelection() {
@@ -939,8 +939,10 @@ export function registerContentRoutes(app: ApiApp) {
         contentId: vote.contentId,
         roundId: vote.roundId,
         voter: vote.voter,
+        identityKey: vote.identityKey,
+        identityHolder: vote.identityHolder,
         identityVoter: vote.identityVoter,
-        voterId: vote.voterId,
+        voterId: sql<null>`null`,
         commitHash: vote.commitHash,
         targetRound: vote.targetRound,
         drandChainHash: vote.drandChainHash,

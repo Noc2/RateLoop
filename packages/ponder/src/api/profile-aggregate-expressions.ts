@@ -5,7 +5,9 @@ export function profileTotalVotesExpr(addressExpr: unknown) {
   return sql<number>`(
     select count(*)
     from ${vote}
-    where ${vote.voter} = ${addressExpr} or ${vote.identityVoter} = ${addressExpr}
+    where ${vote.voter} = ${addressExpr}
+      or ${vote.identityHolder} = ${addressExpr}
+      or ${vote.identityVoter} = ${addressExpr}
   )`;
 }
 

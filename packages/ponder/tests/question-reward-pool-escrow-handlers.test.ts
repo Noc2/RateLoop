@@ -300,7 +300,7 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
           contentId: 1n,
           roundId: 3n,
           claimant: "0x0000000000000000000000000000000000000002",
-          voterId: 12n,
+          identityKey: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
           amount: 9_700_000n,
           frontend: "0x00000000000000000000000000000000000000f1",
           frontendRecipient: "0x00000000000000000000000000000000000000f1",
@@ -343,7 +343,8 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
         expect.objectContaining({
           table: "questionRewardPoolClaim",
           values: expect.objectContaining({
-            id: "7-3-0x0000000000000000000000000000000000000002-12",
+            id: "7-3-0x0000000000000000000000000000000000000002-0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            identityKey: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             amount: 9_700_000n,
             grossAmount: 10_000_000n,
             frontendFee: 300_000n,
@@ -465,7 +466,7 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
           bundleId: 9n,
           roundSetIndex: 1n,
           claimant: "0x00000000000000000000000000000000000000A2",
-          voterId: 12n,
+          identityKey: "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
           amount: 19_400_000n,
           frontend: "0x00000000000000000000000000000000000000f1",
           frontendRecipient: "0x00000000000000000000000000000000000000f1",
@@ -510,7 +511,8 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
         expect.objectContaining({
           table: "questionBundleClaim",
           values: expect.objectContaining({
-            id: "9-1-0x00000000000000000000000000000000000000a2-12",
+            id: "9-1-0x00000000000000000000000000000000000000a2-0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            identityKey: "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
             roundSetIndex: 1,
             amount: 19_400_000n,
             frontendFee: 600_000n,

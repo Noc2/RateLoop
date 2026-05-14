@@ -356,14 +356,13 @@ describe("RoundVotingEngine ponder handlers", () => {
     });
   });
 
-  it("attributes delegated Voter ID commits to the holder identity", async () => {
+  it("attributes delegated RaterRegistry commits to the holder identity", async () => {
     const delegate = "0x0000000000000000000000000000000000000001";
     const holder = "0x0000000000000000000000000000000000000002";
-    const voterIdNft = "0x0000000000000000000000000000000000000777";
+    const identityKey = `0x${"33".repeat(32)}`;
     const readContract = vi.fn(async ({ functionName }: { functionName: string }) => {
-      if (functionName === "roundVoterIdNFTSnapshot") return "0x0000000000000000000000000000000000000000";
-      if (functionName === "getTokenId") return 42n;
-      if (functionName === "getHolder") return holder;
+      if (functionName === "commitIdentityKey") return identityKey;
+      if (functionName === "commitIdentityHolder") return holder;
       return null;
     });
     const { db, insertCalls } = createDb({
@@ -405,7 +404,6 @@ describe("RoundVotingEngine ponder handlers", () => {
         client: { readContract },
         contracts: {
           RoundVotingEngine: { address: "0x0000000000000000000000000000000000000666" },
-          VoterIdNFT: { address: voterIdNft },
         },
       },
     });
@@ -415,8 +413,9 @@ describe("RoundVotingEngine ponder handlers", () => {
       values: expect.objectContaining({
         id: `7-2-${delegate}`,
         voter: delegate,
+        identityKey,
+        identityHolder: holder,
         identityVoter: holder,
-        voterId: 42n,
       }),
     });
     expect(insertCalls).toContainEqual({

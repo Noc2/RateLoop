@@ -131,7 +131,7 @@ describe("FeedbackBonusEscrow ponder handlers", () => {
           contentId: 1n,
           roundId: 3n,
           recipient: "0x0000000000000000000000000000000000000003",
-          voterId: 12n,
+          identityKey: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
           feedbackHash: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
           grossAmount: 10_000_000n,
           recipientAmount: 9_700_000n,

@@ -68,7 +68,7 @@ src/
 ├── CategoryRegistry.ts       # Seeded discovery category metadata
 ├── ProfileRegistry.ts       # Profile update events
 ├── FrontendRegistry.ts       # Frontend fee events
-├── VoterIdNFT.ts             # NFT minting events
+├── RaterRegistry.ts          # Rater identity, trust, and follow events
 ├── LoopReputation.ts         # LREP transfer events
 └── api/
     └── index.ts              # REST API routes (Hono)

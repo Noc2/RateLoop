@@ -27,9 +27,9 @@ function bundleClaimRowId(
   bundleId: bigint,
   roundSetIndex: bigint | number,
   claimant: string,
-  voterId: bigint,
+  identityKey: string,
 ) {
-  return `${bundleId}-${roundSetIndex}-${claimant.toLowerCase()}-${voterId}`;
+  return `${bundleId}-${roundSetIndex}-${claimant.toLowerCase()}-${identityKey}`;
 }
 
 const ZERO_HASH =
@@ -241,7 +241,7 @@ ponder.on(
       contentId,
       roundId,
       claimant,
-      voterId,
+      identityKey,
       amount,
       frontend,
       frontendRecipient,
@@ -252,12 +252,12 @@ ponder.on(
     await context.db
       .insert(questionRewardPoolClaim)
       .values({
-        id: `${rewardPoolId}-${roundId}-${claimant.toLowerCase()}-${voterId}`,
+        id: `${rewardPoolId}-${roundId}-${claimant.toLowerCase()}-${identityKey}`,
         rewardPoolId,
         contentId,
         roundId,
         claimant,
-        voterId,
+        identityKey,
         amount,
         grossAmount,
         frontend,
@@ -512,14 +512,14 @@ ponder.on(
       bundleId,
       roundSetIndex,
       claimant,
-      voterId,
+      identityKey,
       amount,
       frontend,
       frontendRecipient,
       frontendFee,
       grossAmount,
     } = event.args;
-    const id = bundleClaimRowId(bundleId, roundSetIndex, claimant, voterId);
+    const id = bundleClaimRowId(bundleId, roundSetIndex, claimant, identityKey);
     const existingClaim = await context.db.find(questionBundleClaim, { id });
 
     await context.db
@@ -529,7 +529,7 @@ ponder.on(
         bundleId,
         roundSetIndex: Number(roundSetIndex),
         claimant,
-        voterId,
+        identityKey,
         amount,
         grossAmount,
         frontend,
