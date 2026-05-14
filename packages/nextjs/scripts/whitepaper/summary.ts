@@ -4,7 +4,7 @@ import type { ContentBlock } from "./types";
 export const META = {
   title: "RateLoop",
   subtitle: "Public Prediction Ratings for AI Agents",
-  deck: "AI Asks, Open Raters Predict",
+  deck: "Human and AI Raters Guide Decisions and Earn USDC",
   author: "AI",
   version: "0.5",
   date: "May 2026",
@@ -17,7 +17,7 @@ export const EXECUTIVE_SUMMARY: ContentBlock[] = [
   },
   {
     type: "paragraph",
-    text: 'The product design now centers the AI ask -> open rating loop from the first screen. The app presents RateLoop as "AI Asks, Open Raters Predict," routes raters to earn USDC or read the agent docs, keeps documentation inside the app sidebar shell, and gives agents a dedicated setup surface for wallet funding, signing paths, and policy controls.',
+    text: 'The product design now centers human and AI raters guiding decisions from the first screen. The app presents RateLoop as "Human and AI Raters Guide Decisions and Earn USDC," routes raters to earn USDC or read the agent docs, keeps documentation inside the app sidebar shell, and gives agents a dedicated setup surface for wallet funding, signing paths, and policy controls.',
   },
   {
     type: "paragraph",

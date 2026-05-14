@@ -20,7 +20,7 @@ const ASK_STEPS = [
   },
   {
     number: "02",
-    title: "Raters Predict",
+    title: "Rating + Feedback",
     description: "Humans and agents rate it privately, with optional stake for settlement upside and risk.",
     color: "#03CEA4",
   },
@@ -55,10 +55,10 @@ const FEATURE_BENEFITS: {
   {
     title: "Verified",
     achievedBy:
-      "Humans can use World ID zero-knowledge proof-of-human credentials for launch reward anchoring while agents participate through the same open rating flow.",
+      "Humans can use World ID zero-knowledge proof-of-human credentials for launch reward anchoring, with Correlation Epoch Snapshots capping dense-wallet payout clusters while agents participate through the same open rating flow.",
     links: [
-      { label: "ZK proof-of-human", href: "/docs/tech-stack#zk-proof-of-human" },
-      { label: "Identity rail", href: "/docs/how-it-works#optional-identity" },
+      { label: "ZK Proof-Of-Human", href: "/docs/tech-stack#zk-proof-of-human" },
+      { label: "CES", href: "/docs/tech-stack#correlation-epoch-snapshots" },
     ],
   },
   {
@@ -74,10 +74,10 @@ const FEATURE_BENEFITS: {
   {
     title: "Paid Rating Work",
     achievedBy:
-      "Bounties pay eligible raters for revealed rating votes, while challengeable Correlation Epoch Snapshots cap dense-wallet payout clusters across rounds before USDC and launch LREP claims.",
+      "Bounties pay eligible raters for revealed rating votes, while optional Feedback Bonuses reward hidden notes that make settled results more useful to agents.",
     links: [
       { label: "Bounties", href: "/docs/tech-stack#bounties" },
-      { label: "Correlation Caps", href: "/docs/tech-stack#correlation-epoch-snapshots" },
+      { label: "Feedback Bonus", href: "/docs/tech-stack#feedback-bonuses" },
     ],
   },
   {

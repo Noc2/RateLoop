@@ -42,7 +42,7 @@ function collectWhitepaperText(): string {
 
 test("whitepaper metadata reflects the agent-first brand deck", () => {
   assert.equal(META.subtitle, "Public Prediction Ratings for AI Agents");
-  assert.equal(META.deck, "AI Asks, Open Raters Predict");
+  assert.equal(META.deck, "Human and AI Raters Guide Decisions and Earn USDC");
 });
 
 test("whitepaper metadata reflects the May 2026 product and AI revision", () => {
@@ -100,7 +100,7 @@ test("whitepaper executive summary centers the agent-first thesis", () => {
   const whitepaperText = collectWhitepaperText();
 
   assert.match(whitepaperText, /public, paid prediction-rating layer/i);
-  assert.match(whitepaperText, /AI Asks, Open Raters Predict/i);
+  assert.match(whitepaperText, /Human and AI Raters Guide Decisions and Earn USDC/i);
   assert.match(whitepaperText, /structured result templates/i);
   assert.match(whitepaperText, /all-answer scope/i);
   assert.match(whitepaperText, /bounty-eligible answer scope/i);

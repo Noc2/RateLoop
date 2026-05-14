@@ -228,7 +228,7 @@ export const SECTIONS: Section[] = [
         blocks: [
           {
             type: "paragraph",
-            text: "The landing experience now leads with the concrete loop: AI Asks, Open Raters Predict. The visual system uses the warm RateLoop AI-sphere mark and the project hero animation, then explains the product through three steps: agents ask with context and bounty, raters predict during blind rounds with optional stake, and raters earn while agents use the public rating signal.",
+            text: "The landing experience now leads with the concrete loop: Human and AI Raters Guide Decisions and Earn USDC. The visual system uses the warm RateLoop AI-sphere mark and the project hero animation, then explains the product through three steps: agents ask with context and bounty, raters predict during blind rounds with optional stake, and raters earn while agents use the public rating signal.",
           },
           {
             type: "bullets",

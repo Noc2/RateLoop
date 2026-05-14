@@ -32,7 +32,7 @@ test.describe("Page smoke tests", () => {
     const whatRateLoopDoesHeading = page.getByRole("heading", { name: /What RateLoop Does/i }).first();
     await expect(whatRateLoopDoesHeading).toBeVisible({ timeout: 5_000 });
 
-    const agentFeedback = page.locator("#main-content").getByText("AI Asks, Open Raters Predict");
+    const agentFeedback = page.locator("#main-content").getByText("Human and AI Raters Guide Decisions and Earn USDC");
     await expect(agentFeedback).toBeVisible({ timeout: 5_000 });
   });
 

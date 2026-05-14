@@ -124,7 +124,7 @@ export function GetLrepOnboarding({ address }: GetLrepOnboardingProps) {
       <div className="grid gap-4 lg:grid-cols-2">
         <section className={actionCardClassName}>
           <div className="flex items-start justify-between gap-4">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/12 text-primary">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#359EEE]/15 text-[#359EEE]">
               <ShieldCheckIcon className="h-6 w-6" />
             </div>
           </div>
@@ -152,7 +152,7 @@ export function GetLrepOnboarding({ address }: GetLrepOnboardingProps) {
 
         <section className={actionCardClassName}>
           <div className="flex items-start justify-between gap-4">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#20D6A3]/15 text-[#20D6A3]">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#03CEA4]/15 text-[#03CEA4]">
               <ChartBarSquareIcon className="h-6 w-6" />
             </div>
           </div>
