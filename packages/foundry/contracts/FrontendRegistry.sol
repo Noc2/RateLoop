@@ -253,7 +253,8 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     /// @dev No eligibility check here — commit-time eligibility is snapshotted in RoundVotingEngine.
     ///      Slashed or underbonded frontends cannot accrue newly claimed historical fees.
     function creditFees(address frontend, uint256 hrepAmount) external override onlyRole(FEE_CREDITOR_ROLE) {
-        require(authorizedFeeCreditors[msg.sender], "Unauthorized fee creditor");
+        require(msg.sender == feeCreditor && authorizedFeeCreditors[msg.sender], "Unauthorized fee creditor");
+        _requireFeeCreditorForEngine(msg.sender, address(votingEngine));
         require(hrepAmount <= MAX_FEE_CREDIT, "Fee credit too large");
         Frontend storage f = frontends[frontend];
         require(f.operator != address(0), "Frontend not registered");
@@ -338,6 +339,13 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     /// @param _votingEngine New voting engine address
     function setVotingEngine(address _votingEngine) external onlyRole(ADMIN_ROLE) {
         require(_votingEngine != address(0), "Invalid voting engine");
+        address oldCreditor = feeCreditor;
+        if (oldCreditor != address(0)) {
+            feeCreditor = address(0);
+            authorizedFeeCreditors[oldCreditor] = false;
+            _revokeRole(FEE_CREDITOR_ROLE, oldCreditor);
+            emit FeeCreditorUpdated(oldCreditor, address(0));
+        }
         votingEngine = IRoundVotingEngine(_votingEngine);
         emit VotingEngineUpdated(_votingEngine);
     }
