@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { isAddress, zeroAddress } from "viem";
 import { useAccount, useReadContracts } from "wagmi";
-import { type ClaimableRewardItem } from "~~/hooks/claimableRewards";
+import { type ClaimableRewardItem, type QuestionRewardPayoutWeight } from "~~/hooks/claimableRewards";
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import { useDelegation } from "~~/hooks/useDelegation";
 import { usePonderQuery } from "~~/hooks/usePonderQuery";
@@ -11,7 +11,7 @@ import {
   QUESTION_REWARD_POOL_ESCROW_ABI,
   getConfiguredQuestionRewardPoolEscrowAddress,
 } from "~~/lib/questionRewardPools";
-import { ponderApi } from "~~/services/ponder/client";
+import { type PonderQuestionRewardClaimCandidate, ponderApi } from "~~/services/ponder/client";
 
 export function getClaimableQuestionRewardsQueryKey(addresses?: readonly string[], chainId?: number) {
   return ["claimableQuestionRewards", addresses?.join(",") ?? null, chainId ?? null] as const;
@@ -45,6 +45,33 @@ function getQuestionRewardAsset(candidate: { asset?: number | null; currency?: s
   return candidate.currency === "LREP" || candidate.currency === "HREP" || candidate.asset === 0
     ? ("LREP" as const)
     : ("USDC" as const);
+}
+
+function buildPayoutWeight(
+  payoutWeight?: PonderQuestionRewardClaimCandidate["payoutWeight"],
+): QuestionRewardPayoutWeight | null {
+  if (!payoutWeight) return null;
+
+  return {
+    domain: payoutWeight.domain,
+    rewardPoolId: safeBigInt(payoutWeight.rewardPoolId),
+    contentId: safeBigInt(payoutWeight.contentId),
+    roundId: safeBigInt(payoutWeight.roundId),
+    commitKey: payoutWeight.commitKey,
+    identityKey: payoutWeight.identityKey,
+    account: payoutWeight.account,
+    baseWeight: safeBigInt(payoutWeight.baseWeight),
+    independenceBps: payoutWeight.independenceBps,
+    effectiveWeight: safeBigInt(payoutWeight.effectiveWeight),
+    reasonHash: payoutWeight.reasonHash,
+  };
+}
+
+function buildPayoutProof(candidate: PonderQuestionRewardClaimCandidate) {
+  const payoutWeight = buildPayoutWeight(candidate.payoutWeight);
+  const payoutProof = candidate.payoutProof ?? null;
+  if (!payoutWeight || !payoutProof) return null;
+  return { payoutWeight, payoutProof };
 }
 
 export function useClaimableQuestionRewards() {
@@ -101,15 +128,32 @@ export function useClaimableQuestionRewards() {
 
   const candidates = useMemo(() => result?.data ?? [], [result?.data]);
   const bundleCandidates = useMemo(() => bundleResult?.data ?? [], [bundleResult?.data]);
-  const claimableContracts = useMemo(() => {
+  const claimableRequests = useMemo(() => {
     if (!address || !escrowAddress || candidates.length === 0) return [];
-    return candidates.map(candidate => ({
-      address: escrowAddress,
-      abi: QUESTION_REWARD_POOL_ESCROW_ABI,
-      functionName: "claimableQuestionReward" as const,
-      args: [safeBigInt(candidate.rewardPoolId), safeBigInt(candidate.roundId), address],
-    }));
+    return candidates.flatMap(candidate => {
+      const payoutProof = buildPayoutProof(candidate);
+      if (candidate.requiresPayoutProof && !payoutProof) return [];
+
+      const rewardPoolId = safeBigInt(candidate.rewardPoolId);
+      const roundId = safeBigInt(candidate.roundId);
+      const contract = payoutProof
+        ? {
+            address: escrowAddress,
+            abi: QUESTION_REWARD_POOL_ESCROW_ABI,
+            functionName: "claimableQuestionRewardWithPayoutWeight" as const,
+            args: [rewardPoolId, roundId, address, payoutProof.payoutWeight, payoutProof.payoutProof],
+          }
+        : {
+            address: escrowAddress,
+            abi: QUESTION_REWARD_POOL_ESCROW_ABI,
+            functionName: "claimableQuestionReward" as const,
+            args: [rewardPoolId, roundId, address],
+          };
+
+      return [{ candidate, payoutProof, contract }];
+    });
   }, [address, candidates, escrowAddress]);
+  const claimableContracts = useMemo(() => claimableRequests.map(request => request.contract), [claimableRequests]);
   const bundleClaimableContracts = useMemo(() => {
     if (!address || !escrowAddress || bundleCandidates.length === 0) return [];
     return bundleCandidates.map(candidate => ({
@@ -138,24 +182,30 @@ export function useClaimableQuestionRewards() {
   });
 
   const claimableItems = useMemo<ClaimableRewardItem[]>(() => {
-    if (!claimableResults || claimableResults.length !== candidates.length) return [];
-    return candidates.flatMap((candidate, index) => {
+    if (!claimableResults || claimableResults.length !== claimableRequests.length) return [];
+    return claimableRequests.flatMap(({ candidate, payoutProof }, index) => {
       const resultItem = claimableResults[index];
       const reward = resultItem?.status === "success" ? safeBigInt(resultItem.result) : 0n;
       if (reward <= 0n) return [];
+      const item = {
+        rewardPoolId: safeBigInt(candidate.rewardPoolId),
+        contentId: safeBigInt(candidate.contentId),
+        roundId: safeBigInt(candidate.roundId),
+        reward,
+        asset: getQuestionRewardAsset(candidate),
+        title: candidate.title,
+        claimType: "question_reward" as const,
+      };
+      if (!payoutProof) return [item];
       return [
         {
-          rewardPoolId: safeBigInt(candidate.rewardPoolId),
-          contentId: safeBigInt(candidate.contentId),
-          roundId: safeBigInt(candidate.roundId),
-          reward,
-          asset: getQuestionRewardAsset(candidate),
-          title: candidate.title,
-          claimType: "question_reward" as const,
+          ...item,
+          payoutWeight: payoutProof.payoutWeight,
+          payoutProof: payoutProof.payoutProof,
         },
       ];
     });
-  }, [candidates, claimableResults]);
+  }, [claimableRequests, claimableResults]);
 
   const bundleClaimableItems = useMemo<ClaimableRewardItem[]>(() => {
     if (!bundleClaimableResults || bundleClaimableResults.length !== bundleCandidates.length) return [];

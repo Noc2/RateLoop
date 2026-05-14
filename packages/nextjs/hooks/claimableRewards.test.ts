@@ -2,6 +2,7 @@ import {
   buildVoterParticipationClaimableRewards,
   calculateLastClaimAwarePoolShare,
   calculateRevealedLoserRebate,
+  getQuestionRewardClaimArgs,
   sortClaimableRewardItems,
 } from "./claimableRewards";
 import assert from "node:assert/strict";
@@ -185,4 +186,49 @@ test("sortClaimableRewardItems keeps frontend round credits ahead of the final f
       claimType: "frontend_registry_fee",
     },
   ]);
+});
+
+test("getQuestionRewardClaimArgs includes payout proof data when present", () => {
+  const payoutWeight = {
+    domain: 1,
+    rewardPoolId: 9n,
+    contentId: 5n,
+    roundId: 1n,
+    commitKey: `0x${"a".repeat(64)}` as const,
+    identityKey: `0x${"b".repeat(64)}` as const,
+    account: "0x3000000000000000000000000000000000000000" as const,
+    baseWeight: 10_000n,
+    independenceBps: 8_000,
+    effectiveWeight: 8_000n,
+    reasonHash: `0x${"c".repeat(64)}` as const,
+  };
+  const payoutProof = [`0x${"d".repeat(64)}` as const];
+
+  assert.deepEqual(
+    getQuestionRewardClaimArgs({
+      rewardPoolId: 9n,
+      contentId: 5n,
+      roundId: 1n,
+      reward: 2n,
+      asset: "USDC",
+      title: "Is this worth it?",
+      payoutWeight,
+      payoutProof,
+      claimType: "question_reward",
+    }),
+    [9n, 1n, payoutWeight, payoutProof],
+  );
+
+  assert.deepEqual(
+    getQuestionRewardClaimArgs({
+      rewardPoolId: 9n,
+      contentId: 5n,
+      roundId: 1n,
+      reward: 2n,
+      asset: "LREP",
+      title: "Is this worth it?",
+      claimType: "question_reward",
+    }),
+    [9n, 1n],
+  );
 });

@@ -472,6 +472,19 @@ test("expired pending reservations release held capacity for new operations", as
 });
 
 test("supported sponsored operation families are allowlisted", async () => {
+  const payoutWeight = {
+    domain: 1,
+    rewardPoolId: 1n,
+    contentId: 1n,
+    roundId: 1n,
+    commitKey: `0x${"a".repeat(64)}` as const,
+    identityKey: `0x${"b".repeat(64)}` as const,
+    account: WALLET,
+    baseWeight: 10_000n,
+    independenceBps: 10_000,
+    effectiveWeight: 10_000n,
+    reasonHash: `0x${"c".repeat(64)}` as const,
+  };
   const supportedCases = [
     [voteCall("0x07")],
     [
@@ -525,6 +538,7 @@ test("supported sponsored operation families are allowlisted", async () => {
     [encodeCall(rewardDistributorContract, "claimParticipationReward", [1n, 1n])],
     [encodeCall(rewardDistributorContract, "claimReward", [1n, 1n])],
     [encodeCall(rewardEscrowContract, "claimQuestionReward", [1n, 1n])],
+    [encodeCall(rewardEscrowContract, "claimQuestionReward", [1n, 1n, payoutWeight, []])],
     [encodeCall(rewardEscrowContract, "claimQuestionBundleReward", [1n, 0n])],
   ] as const;
 

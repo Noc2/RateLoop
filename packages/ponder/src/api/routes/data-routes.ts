@@ -19,6 +19,7 @@ import {
   questionRewardPool,
   questionRewardPoolClaim,
   questionRewardPoolRound,
+  roundPayoutSnapshot,
   raterFollow,
   raterHumanCredential,
   raterProfile,
@@ -47,8 +48,11 @@ import {
 } from "../reputation-utils.js";
 import { isValidAddress, safeBigInt, safeLimit, safeOffset } from "../utils.js";
 import { deriveEffectiveVoterStreak } from "../../streak-utils.js";
+import { resolveQuestionPayoutProof } from "../../payout-proofs.js";
 
 const VOTE_COOLDOWN_SECONDS = 24 * 60 * 60;
+const SNAPSHOT_STATUS_FINALIZED = 3;
+const PAYOUT_DOMAIN_QUESTION_REWARD = 1;
 
 const STREAK_MILESTONES = [
   { days: 7, baseBonus: 10 },
@@ -865,6 +869,11 @@ export function registerDataRoutes(app: ApiApp) {
         effectiveParticipantUnits:
           questionRewardPoolRound.effectiveParticipantUnits,
         totalClaimWeight: questionRewardPoolRound.totalClaimWeight,
+        correlationWeightRoot: questionRewardPoolRound.correlationWeightRoot,
+        payoutWeightRoot: roundPayoutSnapshot.weightRoot,
+        payoutArtifactUri: roundPayoutSnapshot.artifactUri,
+        commitKey: vote.commitKey,
+        identityKey: vote.identityKey,
         qualified: sql<boolean>`${questionRewardPoolRound.rewardPoolId} is not null`,
       })
       .from(vote)
@@ -885,6 +894,16 @@ export function registerDataRoutes(app: ApiApp) {
         and(
           eq(questionRewardPoolRound.rewardPoolId, questionRewardPool.id),
           eq(questionRewardPoolRound.roundId, vote.roundId),
+        ),
+      )
+      .leftJoin(
+        roundPayoutSnapshot,
+        and(
+          eq(roundPayoutSnapshot.domain, PAYOUT_DOMAIN_QUESTION_REWARD),
+          eq(roundPayoutSnapshot.rewardPoolId, questionRewardPool.id),
+          eq(roundPayoutSnapshot.contentId, questionRewardPool.contentId),
+          eq(roundPayoutSnapshot.roundId, vote.roundId),
+          eq(roundPayoutSnapshot.status, SNAPSHOT_STATUS_FINALIZED),
         ),
       )
       .where(
@@ -908,8 +927,36 @@ export function registerDataRoutes(app: ApiApp) {
       .limit(limit)
       .offset(offset);
 
+    const enrichedItems = await Promise.all(
+      items.map(async (item) => {
+        const requiresPayoutProof =
+          item.asset !== 0 &&
+          (item.correlationWeightRoot != null ||
+            item.payoutWeightRoot != null ||
+            item.payoutArtifactUri != null);
+        const payoutProof = requiresPayoutProof
+          ? await resolveQuestionPayoutProof({
+              artifactUri: item.payoutArtifactUri,
+              domain: PAYOUT_DOMAIN_QUESTION_REWARD,
+              rewardPoolId: item.rewardPoolId,
+              contentId: item.contentId,
+              roundId: item.roundId,
+              commitKey: item.commitKey,
+              identityKey: item.identityKey,
+            })
+          : null;
+
+        return {
+          ...item,
+          requiresPayoutProof,
+          payoutWeight: payoutProof?.payoutWeight ?? null,
+          payoutProof: payoutProof?.proof ?? null,
+        };
+      }),
+    );
+
     return jsonBig(c, {
-      items: items.map((item) => ({
+      items: enrichedItems.map((item) => ({
         ...item,
         currency: item.asset === 0 ? "LREP" : "USDC",
         displayCurrency: item.asset === 0 ? "LREP" : "USD",

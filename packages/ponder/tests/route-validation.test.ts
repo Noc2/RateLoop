@@ -274,6 +274,7 @@ function mockPonderModules<T>(result: T) {
     },
     questionRewardPoolRound: {
       allocation: "questionRewardPoolRound.allocation",
+      correlationWeightRoot: "questionRewardPoolRound.correlationWeightRoot",
       rewardPoolId: "questionRewardPoolRound.rewardPoolId",
       eligibleVoters: "questionRewardPoolRound.eligibleVoters",
       rawEligibleVoters: "questionRewardPoolRound.rawEligibleVoters",
@@ -281,6 +282,15 @@ function mockPonderModules<T>(result: T) {
         "questionRewardPoolRound.effectiveParticipantUnits",
       totalClaimWeight: "questionRewardPoolRound.totalClaimWeight",
       roundId: "questionRewardPoolRound.roundId",
+    },
+    roundPayoutSnapshot: {
+      artifactUri: "roundPayoutSnapshot.artifactUri",
+      contentId: "roundPayoutSnapshot.contentId",
+      domain: "roundPayoutSnapshot.domain",
+      rewardPoolId: "roundPayoutSnapshot.rewardPoolId",
+      roundId: "roundPayoutSnapshot.roundId",
+      status: "roundPayoutSnapshot.status",
+      weightRoot: "roundPayoutSnapshot.weightRoot",
     },
     ratingChange: {
       confidenceMass: "ratingChange.confidenceMass",
@@ -1388,6 +1398,91 @@ describe("registerDataRoutes", () => {
     expect(serialized).toContain("vote.revealed");
     expect(serialized).toContain("round.state");
     expect(serialized).toContain("questionRewardPool.startRoundId");
+  });
+
+  it("attaches payout proofs for finalized USDC bounty candidates", async () => {
+    const leaf = `0x${"d".repeat(64)}`;
+    const payoutWeight = {
+      domain: 1,
+      rewardPoolId: "1",
+      contentId: "2",
+      roundId: "3",
+      commitKey: `0x${"a".repeat(64)}`,
+      identityKey: `0x${"b".repeat(64)}`,
+      account: "0x0000000000000000000000000000000000000001",
+      baseWeight: "10000",
+      independenceBps: 10000,
+      effectiveWeight: "10000",
+      reasonHash: `0x${"c".repeat(64)}`,
+      leaf,
+    };
+    const artifactUri = `data:application/json,${encodeURIComponent(
+      JSON.stringify({
+        roundPayoutSnapshots: [
+          {
+            domain: 1,
+            rewardPoolId: "1",
+            contentId: "2",
+            roundId: "3",
+            leaves: [payoutWeight],
+          },
+        ],
+      }),
+    )}`;
+    mockPonderModules([
+      {
+        rewardPoolId: 1n,
+        contentId: 2n,
+        asset: 1,
+        roundId: 3n,
+        title: "USDC bounty",
+        allocation: 10_000n,
+        eligibleVoters: 1,
+        rawEligibleVoters: 1,
+        effectiveParticipantUnits: 10000,
+        totalClaimWeight: 10000n,
+        correlationWeightRoot: null,
+        payoutWeightRoot: leaf,
+        payoutArtifactUri: artifactUri,
+        commitKey: payoutWeight.commitKey,
+        identityKey: payoutWeight.identityKey,
+        qualified: true,
+      },
+    ]);
+    const { registerDataRoutes } = await import(
+      "../src/api/routes/data-routes.js"
+    );
+
+    const app = new Hono();
+    registerDataRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/question-reward-claim-candidates?voter=0x0000000000000000000000000000000000000001",
+    );
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.items[0]).toMatchObject({
+      rewardPoolId: "1",
+      contentId: "2",
+      roundId: "3",
+      currency: "USDC",
+      requiresPayoutProof: true,
+      payoutWeight: {
+        domain: 1,
+        rewardPoolId: "1",
+        contentId: "2",
+        roundId: "3",
+        commitKey: payoutWeight.commitKey,
+        identityKey: payoutWeight.identityKey,
+        account: payoutWeight.account,
+        baseWeight: "10000",
+        independenceBps: 10000,
+        effectiveWeight: "10000",
+        reasonHash: payoutWeight.reasonHash,
+      },
+      payoutProof: [],
+    });
   });
 });
 

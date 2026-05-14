@@ -21,6 +21,20 @@ export interface FrontendRegistryClaimableRewardItem {
   claimType: "frontend_registry_fee";
 }
 
+export interface QuestionRewardPayoutWeight {
+  domain: number;
+  rewardPoolId: bigint;
+  contentId: bigint;
+  roundId: bigint;
+  commitKey: `0x${string}`;
+  identityKey: `0x${string}`;
+  account: `0x${string}`;
+  baseWeight: bigint;
+  independenceBps: number;
+  effectiveWeight: bigint;
+  reasonHash: `0x${string}`;
+}
+
 export interface QuestionRewardPoolClaimableRewardItem {
   rewardPoolId: bigint;
   contentId: bigint;
@@ -28,6 +42,8 @@ export interface QuestionRewardPoolClaimableRewardItem {
   reward: bigint;
   asset: "LREP" | "USDC";
   title: string;
+  payoutWeight?: QuestionRewardPayoutWeight;
+  payoutProof?: `0x${string}`[];
   claimType: "question_reward";
 }
 
@@ -205,4 +221,12 @@ export function sortClaimableRewardItems(items: readonly ClaimableRewardItem[]) 
 
     return 0;
   });
+}
+
+export function getQuestionRewardClaimArgs(item: QuestionRewardPoolClaimableRewardItem) {
+  if (item.payoutWeight && item.payoutProof) {
+    return [item.rewardPoolId, item.roundId, item.payoutWeight, item.payoutProof] as const;
+  }
+
+  return [item.rewardPoolId, item.roundId] as const;
 }

@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import { IFrontendRegistry } from "../interfaces/IFrontendRegistry.sol";
-import { IClusterPayoutOracle } from "../interfaces/IClusterPayoutOracle.sol";
-import { ProtocolConfig } from "../ProtocolConfig.sol";
-import { RoundVotingEngine } from "../RoundVotingEngine.sol";
-import { RewardPool, RoundSnapshot } from "./QuestionRewardPoolEscrowTypes.sol";
-import { QuestionRewardPoolEscrowEligibilityLib } from "./QuestionRewardPoolEscrowEligibilityLib.sol";
-import { QuestionRewardPoolEscrowQualificationLib } from "./QuestionRewardPoolEscrowQualificationLib.sol";
-import { QuestionRewardPoolEscrowVoterLib } from "./QuestionRewardPoolEscrowVoterLib.sol";
+import {IFrontendRegistry} from "../interfaces/IFrontendRegistry.sol";
+import {IClusterPayoutOracle} from "../interfaces/IClusterPayoutOracle.sol";
+import {ProtocolConfig} from "../ProtocolConfig.sol";
+import {RoundVotingEngine} from "../RoundVotingEngine.sol";
+import {RewardPool, RoundSnapshot} from "./QuestionRewardPoolEscrowTypes.sol";
+import {QuestionRewardPoolEscrowEligibilityLib} from "./QuestionRewardPoolEscrowEligibilityLib.sol";
+import {QuestionRewardPoolEscrowQualificationLib} from "./QuestionRewardPoolEscrowQualificationLib.sol";
+import {QuestionRewardPoolEscrowVoterLib} from "./QuestionRewardPoolEscrowVoterLib.sol";
 
 library QuestionRewardPoolEscrowClaimLib {
     uint256 private constant BASE_PARTICIPATION_WEIGHT_BPS = 10_000;
@@ -165,7 +165,6 @@ library QuestionRewardPoolEscrowClaimLib {
         if (!revealed || votingEngine.roundUnrevealedCleanupRemaining(rewardPool.contentId, roundId) > 0) return 0;
 
         RoundSnapshot storage snapshot = roundSnapshots[rewardPoolId][roundId];
-        if (!snapshot.qualified || snapshot.claimedWeight >= snapshot.totalClaimWeight) return 0;
         uint256 baseClaimWeight = _roundClaimWeight(votingEngine, rewardPool.contentId, roundId, commitKey);
         uint256 claimWeight = _effectiveClusterQuestionClaimWeight(
             rewardPoolClusterPayoutOracle,
@@ -182,6 +181,37 @@ library QuestionRewardPoolEscrowClaimLib {
         );
         if (claimWeight == 0) return 0;
 
+        if (!snapshot.qualified) {
+            if (!_canPreviewNewQualification(rewardPool, roundId)) return 0;
+            (, bool canQualify,, uint256 effectiveParticipantUnits, uint256 totalClaimWeight,) = QuestionRewardPoolEscrowQualificationLib.previewRoundQualificationWithClusterSnapshot(
+                rewardPoolPayerIdentity,
+                rewardPoolPayerIdentityKey,
+                rewardPoolClusterPayoutOracle,
+                votingEngine,
+                rewardPool,
+                roundId,
+                payoutDomain
+            );
+            if (!canQualify) return 0;
+
+            uint256 allocation = _previewRoundAllocation(rewardPool);
+            if (allocation == 0 || allocation < effectiveParticipantUnits) return 0;
+            return _claimableWeighted(
+                votingEngine,
+                rewardPool.contentId,
+                roundId,
+                commitKey,
+                frontend,
+                allocation,
+                (allocation * rewardPool.frontendFeeBps) / bpsScale,
+                totalClaimWeight,
+                claimWeight,
+                0,
+                0,
+                0
+            );
+        }
+        if (snapshot.claimedWeight >= snapshot.totalClaimWeight) return 0;
         return _claimableWeighted(
             votingEngine,
             rewardPool.contentId,

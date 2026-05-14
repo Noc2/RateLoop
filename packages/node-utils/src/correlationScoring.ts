@@ -241,6 +241,33 @@ export function merkleRoot(values: readonly Hex[]): Hex {
   return level[0]!;
 }
 
+export function merkleProof(values: readonly Hex[], leaf: Hex): Hex[] {
+  let level = [...values].sort(compareHex);
+  let leafIndex = level.findIndex(
+    (value) => value.toLowerCase() === leaf.toLowerCase(),
+  );
+  if (leafIndex < 0) {
+    throw new Error("Leaf not found in Merkle tree");
+  }
+
+  const proof: Hex[] = [];
+  while (level.length > 1) {
+    const siblingIndex = leafIndex % 2 === 0 ? leafIndex + 1 : leafIndex - 1;
+    proof.push(level[siblingIndex] ?? level[leafIndex]!);
+
+    const next: Hex[] = [];
+    for (let index = 0; index < level.length; index += 2) {
+      const left = level[index]!;
+      const right = level[index + 1] ?? left;
+      next.push(hashSortedPair(left, right));
+    }
+    leafIndex = Math.floor(leafIndex / 2);
+    level = next;
+  }
+
+  return proof;
+}
+
 function buildClusters(votes: readonly CorrelationVoteInput[]): DisjointSet {
   const clusters = new DisjointSet(votes.length);
   const firstIndexByFeature = new Map<string, number>();

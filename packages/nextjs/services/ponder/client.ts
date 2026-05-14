@@ -416,6 +416,27 @@ export interface PonderQuestionRewardClaimCandidate {
   title: string;
   allocation: string | null;
   eligibleVoters: number | null;
+  rawEligibleVoters?: number | null;
+  effectiveParticipantUnits?: number | null;
+  totalClaimWeight?: string | null;
+  correlationWeightRoot?: `0x${string}` | null;
+  payoutWeightRoot?: `0x${string}` | null;
+  payoutArtifactUri?: string | null;
+  requiresPayoutProof?: boolean;
+  payoutWeight?: {
+    domain: number;
+    rewardPoolId: string;
+    contentId: string;
+    roundId: string;
+    commitKey: `0x${string}`;
+    identityKey: `0x${string}`;
+    account: `0x${string}`;
+    baseWeight: string;
+    independenceBps: number;
+    effectiveWeight: string;
+    reasonHash: `0x${string}`;
+  } | null;
+  payoutProof?: `0x${string}`[] | null;
   qualified: boolean;
   currency: PonderRewardCurrency;
   displayCurrency: "LREP" | "USD";

@@ -3,7 +3,11 @@
 import { useState } from "react";
 import { type Abi } from "viem";
 import { useTermsAcceptance } from "~~/contexts/TermsAcceptanceContext";
-import { type ClaimableRewardItem, sortClaimableRewardItems } from "~~/hooks/claimableRewards";
+import {
+  type ClaimableRewardItem,
+  getQuestionRewardClaimArgs,
+  sortClaimableRewardItems,
+} from "~~/hooks/claimableRewards";
 import { useDeployedContractInfo, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import { useGasBalanceStatus } from "~~/hooks/useGasBalanceStatus";
@@ -119,7 +123,7 @@ export function useClaimAll() {
       return {
         abi: questionRewardPoolEscrowInfo.abi as Abi,
         address: questionRewardPoolEscrowInfo.address as `0x${string}`,
-        args: [item.rewardPoolId, item.roundId],
+        args: getQuestionRewardClaimArgs(item),
         functionName: "claimQuestionReward",
       };
     }
@@ -254,7 +258,7 @@ export function useClaimAll() {
             await (writeQuestionRewardPoolEscrow as any)(
               {
                 functionName: "claimQuestionReward",
-                args: [item.rewardPoolId, item.roundId],
+                args: getQuestionRewardClaimArgs(item),
               },
               { getErrorMessage: getTransactionErrorMessage },
             );
