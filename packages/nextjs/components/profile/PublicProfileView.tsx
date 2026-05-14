@@ -1135,8 +1135,8 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
             <div>
               <h2 className="text-xl font-semibold text-base-content">Reputation context</h2>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-base-content/60">
-                Public follows, trust attestations, and verified-human launch progress are visible here. Verified-human
-                status does not boost rating reward weight.
+                Public follows and verified-human launch progress are visible here. Verified-human status does not boost
+                rating reward weight.
               </p>
             </div>
             <div className="rounded-full bg-base-content/[0.05] px-4 py-2 text-sm font-medium text-base-content/70">
@@ -1183,14 +1183,6 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
                 </div>
 
                 <div className="surface-card-nested rounded-2xl px-4 py-3">
-                  <div className="text-sm text-base-content/60">Trust attestations</div>
-                  <div className="mt-1 text-xl font-semibold">
-                    {rewardStatus.trust.activeInboundAttestationCount.toLocaleString()}
-                  </div>
-                  <div className="mt-1 text-sm text-base-content/55">Active inbound attestations</div>
-                </div>
-
-                <div className="surface-card-nested rounded-2xl px-4 py-3">
                   <div className="text-sm text-base-content/60">Launch reward progress</div>
                   <div className="mt-1 text-xl font-semibold">{formatLaunchCapSummary(rewardStatus.launchRewards)}</div>
                   <div className="mt-1 text-sm text-base-content/55">
@@ -1204,24 +1196,13 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
                 </div>
               </div>
 
-              <div className="mt-6 grid gap-3 lg:grid-cols-2">
+              <div className="mt-6">
                 <div className="surface-card-nested rounded-2xl px-4 py-3 text-sm text-base-content/70">
                   <div className="font-medium text-base-content/85">
                     Verified human {rewardStatus.humanCredential.status}
                   </div>
                   <div className="mt-2">
                     Reward weight is stake, timing, and RBTS score. Identity status does not multiply it.
-                  </div>
-                </div>
-
-                <div className="surface-card-nested rounded-2xl px-4 py-3 text-sm text-base-content/70">
-                  <div className="font-medium text-base-content/85">
-                    {rewardStatus.trust.activeSeed ? "Active trust seed" : "No active trust seed"}
-                  </div>
-                  <div className="mt-2">
-                    {rewardStatus.trust.activeSeed
-                      ? `Sunsets ${formatTimestamp(rewardStatus.trust.activeSeed.sunsetAt)}`
-                      : "Public trust context currently comes from inbound attestations only."}
                   </div>
                 </div>
               </div>

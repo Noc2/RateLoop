@@ -790,7 +790,6 @@ export interface PonderAccuracyLeaderboardReputation {
   raterTypeName: PonderRaterTypeName;
   humanCredentialStatus: PonderHumanCredentialStatus;
   participationLane: PonderParticipationLane;
-  activeTrustAttestationCount: number;
   followerCount: number;
   followingCount: number;
   [key: string]: unknown;
@@ -917,23 +916,6 @@ export interface PonderRaterParticipationStatusResponse {
     verifiedAt: string | null;
     expiresAt: string | null;
     evidenceHash: string | null;
-  };
-  trust: {
-    activeSeed: {
-      active: boolean;
-      seededAt: string;
-      sunsetAt: string;
-      seedRoot: string;
-    } | null;
-    activeInboundAttestationCount: number;
-    latestInboundAttestations: Array<{
-      issuer: string;
-      categoryId: string;
-      maxBoostBps: number;
-      expiresAt: string;
-      metadataHash: string;
-      issuedAt: string;
-    }>;
   };
   launchRewards: {
     eligible: boolean;

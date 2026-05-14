@@ -223,7 +223,6 @@ export interface CuryoAccuracyLeaderboardReputation {
   raterTypeName: CuryoRaterTypeName;
   humanCredentialStatus: CuryoHumanCredentialStatus;
   participationLane: CuryoParticipationLane;
-  activeTrustAttestationCount: number;
   followerCount: number;
   followingCount: number;
   [key: string]: unknown;
@@ -279,23 +278,6 @@ export interface CuryoRaterParticipationStatusResponse {
     verifiedAt: string | null;
     expiresAt: string | null;
     evidenceHash: string | null;
-  };
-  trust: {
-    activeSeed: {
-      active: boolean;
-      seededAt: string;
-      sunsetAt: string;
-      seedRoot: string;
-    } | null;
-    activeInboundAttestationCount: number;
-    latestInboundAttestations: Array<{
-      issuer: `0x${string}`;
-      categoryId: string;
-      maxBoostBps: number;
-      expiresAt: string;
-      metadataHash: `0x${string}`;
-      issuedAt: string;
-    }>;
   };
   launchRewards: {
     eligible: boolean;

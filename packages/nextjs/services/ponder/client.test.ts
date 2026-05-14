@@ -382,7 +382,6 @@ test("ponderApi.getAccuracyLeaderboard forwards includeReputation", async () => 
               raterTypeName: "Human",
               humanCredentialStatus: "verified",
               participationLane: "verified_human",
-              activeTrustAttestationCount: 4,
               followerCount: 3,
               followingCount: 2,
             },
@@ -475,11 +474,6 @@ test("ponderApi.getRaterParticipationStatus exposes expanded reputation blocks",
           expiresAt: null,
           evidenceHash: null,
         },
-        trust: {
-          activeSeed: null,
-          activeInboundAttestationCount: 4,
-          latestInboundAttestations: [],
-        },
         launchRewards: {
           eligible: true,
           qualifyingRatingCount: 6,
@@ -519,7 +513,6 @@ test("ponderApi.getRaterParticipationStatus exposes expanded reputation blocks",
 
     assert.equal(response.participationLane, "open");
     assert.equal(response.humanCredential.status, "missing");
-    assert.equal(response.trust.activeInboundAttestationCount, 4);
     assert.equal(response.launchRewards.remainingLaunchCap, "75");
     assert.equal(response.launchRewards.unlockableLaunchCap, "300");
     assert.equal(response.participationPolicy.baseRewardWeightBps, 10000);

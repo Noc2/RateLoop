@@ -298,9 +298,6 @@ export function AccuracyLeaderboard() {
                                     : "Open capped"}
                                 </span>
                                 <span className="rounded-full bg-base-content/[0.06] px-2 py-0.5">
-                                  {entry.reputation.activeTrustAttestationCount} trust
-                                </span>
-                                <span className="rounded-full bg-base-content/[0.06] px-2 py-0.5">
                                   {entry.reputation.participationLane === "verified_human"
                                     ? "Launch anchor"
                                     : "Participation open"}
