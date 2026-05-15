@@ -116,7 +116,7 @@ export const TermsAcceptanceModal = () => {
           <div className="divider my-2"></div>
 
           {/* Info notice */}
-          <div className="rounded-lg bg-warning/10 p-4 text-base text-base-content/60">
+          <div className="surface-card-nested rounded-lg p-4 text-base text-base-content/60">
             <p className="leading-relaxed">
               <strong className="font-semibold text-base-content">Smart Contract Risk:</strong> Smart contracts may
               contain bugs or vulnerabilities. By proceeding, you acknowledge that you understand the risks and accept
