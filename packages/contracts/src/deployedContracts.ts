@@ -23847,22 +23847,22 @@ const deployedContracts: GenericContractsDeclaration = {
           name: "isRoundPayoutSnapshotConsumed",
           inputs: [
             {
-              name: "domain",
+              name: "",
               type: "uint8",
               internalType: "uint8",
             },
             {
-              name: "rewardPoolId",
+              name: "",
               type: "uint256",
               internalType: "uint256",
             },
             {
-              name: "contentId",
+              name: "",
               type: "uint256",
               internalType: "uint256",
             },
             {
-              name: "roundId",
+              name: "",
               type: "uint256",
               internalType: "uint256",
             },
@@ -23874,7 +23874,7 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "bool",
             },
           ],
-          stateMutability: "view",
+          stateMutability: "pure",
         },
         {
           type: "function",
@@ -23904,30 +23904,6 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "address",
               internalType: "address",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "launchPayoutSnapshotConsumed",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bool",
-              internalType: "bool",
             },
           ],
           stateMutability: "view",
@@ -24099,6 +24075,11 @@ const deployedContracts: GenericContractsDeclaration = {
           outputs: [
             {
               name: "rater",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "oracle",
               type: "address",
               internalType: "address",
             },
