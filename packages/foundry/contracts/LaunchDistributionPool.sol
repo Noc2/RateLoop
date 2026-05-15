@@ -102,7 +102,6 @@ contract LaunchDistributionPool is
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => PendingEarnedRaterCredit))) public
         pendingEarnedRaterCredits;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) public earnedRewardCreditFinalized;
-    mapping(uint256 => mapping(uint256 => bool)) public launchPayoutSnapshotConsumed;
     LaunchRewardPolicy public launchRewardPolicy;
 
     event PoolDeposit(uint256 amount);
@@ -430,7 +429,6 @@ contract LaunchDistributionPool is
         if (!oracle.verifyPayoutWeight(payoutWeight, proof)) revert InvalidProof();
 
         earnedRewardCreditFinalized[contentId][roundId][commitKey] = true;
-        launchPayoutSnapshotConsumed[contentId][roundId] = true;
         uint256 effectiveCreditBps = payoutWeight.effectiveWeight;
         paidAmount = _recordEarnedRaterReward(
             pending.rater, contentId, roundId, commitKey, pending.scoreBps, pending.policy, effectiveCreditBps
@@ -577,13 +575,10 @@ contract LaunchDistributionPool is
         return _remainingVerifiedReferralPool();
     }
 
-    function isRoundPayoutSnapshotConsumed(uint8 domain, uint256 rewardPoolId, uint256 contentId, uint256 roundId)
-        external
-        view
-        returns (bool)
-    {
-        if (domain != PAYOUT_DOMAIN_LAUNCH_CREDIT || rewardPoolId != 0) return false;
-        return launchPayoutSnapshotConsumed[contentId][roundId];
+    function isRoundPayoutSnapshotConsumed(uint8, uint256, uint256, uint256) external pure returns (bool) {
+        // Launch credits are finalized per commit key, so a partially used root can still
+        // be rejected and replaced for pending credits that were never finalized.
+        return false;
     }
 
     function _assignLaunchCap(address rater, uint256 fullCap, LaunchRewardPolicy memory policy)

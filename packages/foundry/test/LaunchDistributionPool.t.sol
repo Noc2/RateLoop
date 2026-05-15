@@ -297,7 +297,7 @@ contract LaunchDistributionPoolTest is Test {
         assertEq(pool.qualifyingCreditBps(alice), 2_500);
         assertEq(pool.qualifyingRatingCount(alice), 0);
         assertTrue(pool.earnedRewardCreditFinalized(1, 1, _commitKey(1)));
-        assertTrue(pool.isRoundPayoutSnapshotConsumed(pool.PAYOUT_DOMAIN_LAUNCH_CREDIT(), 0, 1, 1));
+        assertFalse(pool.isRoundPayoutSnapshotConsumed(pool.PAYOUT_DOMAIN_LAUNCH_CREDIT(), 0, 1, 1));
     }
 
     function test_PendingLaunchCreditUsesRecordedOracleAfterRotation() public {
@@ -322,6 +322,62 @@ contract LaunchDistributionPoolTest is Test {
         assertEq(pool.qualifyingCreditBps(alice), 2_500);
         assertEq(pool.qualifyingRatingCount(alice), 0);
         assertTrue(pool.earnedRewardCreditFinalized(1, 1, _commitKey(1)));
+    }
+
+    function test_PartialLaunchCreditFinalizationDoesNotBlockRootReplacement() public {
+        ClusterPayoutOracle oracle = _configureLaunchOracle(1);
+        bytes32 aliceCommitKey = _commitKey(1);
+        bytes32 bobCommitKey = keccak256(abi.encode("bob", uint256(1)));
+
+        assertEq(
+            pool.recordEarnedRaterReward(
+                alice,
+                1,
+                1,
+                aliceCommitKey,
+                8_000,
+                3,
+                true,
+                pool.MIN_LAUNCH_CREDIT_STAKE(),
+                _singleAnchor(bytes32("anchor-a"))
+            ),
+            0
+        );
+        assertEq(
+            pool.recordEarnedRaterReward(
+                bob,
+                1,
+                1,
+                bobCommitKey,
+                8_000,
+                3,
+                true,
+                pool.MIN_LAUNCH_CREDIT_STAKE(),
+                _singleAnchor(bytes32("anchor-b"))
+            ),
+            0
+        );
+
+        IClusterPayoutOracle.PayoutWeight memory alicePayout =
+            _launchPayoutWeight(1, aliceCommitKey, alice, 2_500, keccak256("alice-clustered"));
+        _proposeAndFinalizeLaunchPayoutSnapshot(oracle, 1, alicePayout, keccak256("bad-launch-root"));
+
+        assertEq(pool.finalizeEarnedRaterRewardCredit(1, 1, aliceCommitKey, alicePayout, new bytes32[](0)), 0);
+        assertTrue(pool.earnedRewardCreditFinalized(1, 1, aliceCommitKey));
+        assertFalse(pool.isRoundPayoutSnapshotConsumed(pool.PAYOUT_DOMAIN_LAUNCH_CREDIT(), 0, 1, 1));
+
+        bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(pool.PAYOUT_DOMAIN_LAUNCH_CREDIT(), 0, 1, 1);
+        oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("replace-partial-root"));
+
+        IClusterPayoutOracle.PayoutWeight memory bobPayout =
+            _launchPayoutWeight(1, bobCommitKey, bob, 2_500, keccak256("bob-clustered"));
+        _proposeAndFinalizeLaunchPayoutSnapshot(oracle, 1, bobPayout, keccak256("replacement-launch-root"));
+
+        assertEq(pool.finalizeEarnedRaterRewardCredit(1, 1, bobCommitKey, bobPayout, new bytes32[](0)), 0);
+        assertTrue(pool.earnedRewardCreditFinalized(1, 1, bobCommitKey));
+
+        vm.expectRevert(LaunchDistributionPool.AlreadyClaimed.selector);
+        pool.finalizeEarnedRaterRewardCredit(1, 1, aliceCommitKey, alicePayout, new bytes32[](0));
     }
 
     function test_CorrelationOracleFractionalCreditsOnlyPayCompletedSlots() public {
