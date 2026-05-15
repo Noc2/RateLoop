@@ -108,7 +108,7 @@ test("thirdweb verifier route delegates valid requests and maps allowance decisi
         : {
             isAllowed: false,
             reason: "Quota exceeded.",
-            debugCode: "quota_exceeded",
+            debugCode: "free_tx_exhausted",
             summary: allowanceSummary,
           };
     },
