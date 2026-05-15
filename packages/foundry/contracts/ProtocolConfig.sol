@@ -3,6 +3,7 @@ pragma solidity ^0.8.24;
 
 import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import { IAdvisoryVoteRecorder } from "./interfaces/IAdvisoryVoteRecorder.sol";
 import { IRoundRewardDistributor } from "./interfaces/IRoundRewardDistributor.sol";
 import { RoundLib } from "./libraries/RoundLib.sol";
 import { RatingLib } from "./libraries/RatingLib.sol";
@@ -229,7 +230,9 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     }
 
     function setAdvisoryVoteRecorder(address value) external onlyRole(CONFIG_ROLE) {
-        if (value == address(0)) revert InvalidAddress();
+        if (value != address(0)) {
+            _validateAdvisoryVoteRecorder(value);
+        }
         advisoryVoteRecorder = value;
         emit AdvisoryVoteRecorderUpdated(value);
     }
@@ -412,6 +415,37 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         if (value == address(0)) revert InvalidAddress();
         participationPool = value;
         emit ParticipationPoolUpdated(value);
+    }
+
+    function _validateAdvisoryVoteRecorder(address value) internal view {
+        if (value.code.length == 0) revert InvalidAddress();
+        IAdvisoryVoteRecorder recorder = IAdvisoryVoteRecorder(value);
+
+        try recorder.protocolConfig() returns (address recorderConfig) {
+            if (recorderConfig != address(this)) revert InvalidConfig();
+        } catch {
+            revert InvalidConfig();
+        }
+
+        try recorder.advisoryCommitKeyByRater(0, 0, address(this)) returns (bytes32) { }
+        catch {
+            revert InvalidConfig();
+        }
+
+        try recorder.advisoryCommitKeyByIdentity(0, 0, bytes32(0)) returns (bytes32) { }
+        catch {
+            revert InvalidConfig();
+        }
+
+        try recorder.lastAdvisoryVoteTimestamp(0, address(this)) returns (uint256) { }
+        catch {
+            revert InvalidConfig();
+        }
+
+        try recorder.lastAdvisoryVoteTimestampByIdentity(0, bytes32(0)) returns (uint256) { }
+        catch {
+            revert InvalidConfig();
+        }
     }
 
     function _setConfig(uint256 epochDuration, uint256 maxDuration, uint256 minVoters, uint256 maxVoters) internal {

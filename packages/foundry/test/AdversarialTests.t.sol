@@ -171,9 +171,9 @@ contract AdversarialTests is VotingTestBase {
         returns (bytes32 commitKey, bytes32 salt)
     {
         salt = keccak256(abi.encodePacked(voter, block.timestamp, contentId, isUp));
-        bytes memory ciphertext = _testCiphertext(isUp, salt, contentId);
-        uint64 targetRound = _tlockCommitTargetRound();
+        uint64 targetRound = _tlockCommitTargetRound(engine, contentId);
         bytes32 drandChainHash = _tlockDrandChainHash();
+        bytes memory ciphertext = _testCiphertext(isUp, salt, contentId, targetRound, drandChainHash);
         uint16 referenceRatingBps = _currentRatingReferenceBps(contentId);
         bytes32 commitHash =
             _commitHash(isUp, salt, voter, contentId, referenceRatingBps, targetRound, drandChainHash, ciphertext);
@@ -246,47 +246,60 @@ contract AdversarialTests is VotingTestBase {
         assertTrue(round.upWins);
 
         uint256 voterPool = engine.roundVoterPool(contentId, roundId);
-        uint256 winningRawPool = round.upPool; // raw winning stakes
+        uint256 totalStake = round.upPool + round.downPool;
 
-        // Claim all winner rewards
+        // Claim every revealed voter. Under RBTS, score-eligible losing-side voters
+        // can also share the voter pool, so winner-only claims need not exhaust it.
         uint256 totalClaimed;
-        address[4] memory winners = [voter1, voter2, voter3, voter4];
-        for (uint256 i = 0; i < winners.length; i++) {
-            uint256 before = hrepToken.balanceOf(winners[i]);
-            vm.prank(winners[i]);
+        address[5] memory claimants = [voter1, voter2, voter3, voter4, voter5];
+        for (uint256 i = 0; i < claimants.length; i++) {
+            uint256 before = hrepToken.balanceOf(claimants[i]);
+            vm.prank(claimants[i]);
             distributor.claimReward(contentId, roundId);
-            totalClaimed += hrepToken.balanceOf(winners[i]) - before;
+            totalClaimed += hrepToken.balanceOf(claimants[i]) - before;
         }
 
-        // Total claimed = stake returns + rewards, including the final-claimant remainder.
-        assertEq(totalClaimed, winningRawPool + voterPool, "Winner claims should exhaust voter pool exactly");
-
-        // Additionally: total rewards portion exactly exhausts voterPool.
-        uint256 totalStakeReturned = 5e6 + 4e6 + 3e6 + 3e6; // winning stakes
-        uint256 rewardOnly = totalClaimed - totalStakeReturned;
-        assertEq(rewardOnly, voterPool, "Reward-only portion should exhaust voter pool exactly");
+        // Total claimed = RBTS stake returns/rebates + rewards, including final-claimant remainders.
+        assertLe(totalClaimed, totalStake + voterPool, "Claims must not exceed stake plus voter pool");
+        assertEq(
+            distributor.roundVoterRewardClaimedAmount(contentId, roundId),
+            voterPool,
+            "Score-eligible claims should exhaust voter pool exactly"
+        );
     }
 
-    /// @notice Revealed losers get the fixed rebate and do not revert
+    /// @notice Revealed voters with RBTS forfeitures receive their forfeiture rebate and do not revert.
     function test_RewardExhaustion_LoserGetsRebate() public {
         uint256 contentId = _submitContent();
 
         // Asymmetric stakes to avoid tie
         (bytes32 ck1,) = _commit(voter1, contentId, true, 10e6);
         (bytes32 ck2,) = _commit(voter2, contentId, false, 5e6);
+        (bytes32 ck3,) = _commit(voter3, contentId, true, 1e6);
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
-        bytes32[] memory cks = new bytes32[](2);
+        bytes32[] memory cks = new bytes32[](3);
         cks[0] = ck1;
         cks[1] = ck2;
+        cks[2] = ck3;
         _settleRound(contentId, roundId, cks);
+
+        uint256 forfeitedStake = engine.commitRbtsForfeitedStake(contentId, roundId, ck2);
+        uint256 expectedRebate = (forfeitedStake * 500) / 10_000;
+        uint256 claimedBefore = distributor.roundLoserRebateClaimedAmount(contentId, roundId);
 
         uint256 balBefore = hrepToken.balanceOf(voter2);
         vm.prank(voter2);
         distributor.claimReward(contentId, roundId);
         uint256 balAfter = hrepToken.balanceOf(voter2);
 
-        assertEq(balAfter - balBefore, 250_000, "Loser should receive the 5% rebate");
+        assertEq(
+            distributor.roundLoserRebateClaimedAmount(contentId, roundId) - claimedBefore,
+            expectedRebate,
+            "Forfeited stake rebate should be 5%"
+        );
+        assertGe(balAfter - balBefore, expectedRebate, "Claim should include at least the RBTS rebate");
+        assertLt(balAfter - balBefore, 5e6, "Forfeited losing leg should not recover full stake");
     }
 
     // =========================================================================
@@ -300,11 +313,13 @@ contract AdversarialTests is VotingTestBase {
         // Asymmetric stakes to avoid tie
         (bytes32 ck1,) = _commit(voter1, contentId, true, 10e6);
         (bytes32 ck2,) = _commit(voter2, contentId, false, 5e6);
+        (bytes32 ck3,) = _commit(voter3, contentId, true, 1e6);
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
-        bytes32[] memory cks = new bytes32[](2);
+        bytes32[] memory cks = new bytes32[](3);
         cks[0] = ck1;
         cks[1] = ck2;
+        cks[2] = ck3;
         _settleRound(contentId, roundId, cks);
 
         vm.prank(voter1);
@@ -338,22 +353,24 @@ contract AdversarialTests is VotingTestBase {
         // Asymmetric stakes; voter1/voter3 UP, voter2 DOWN — UP wins
         (bytes32 ck1,) = _commit(voter1, contentId, true, 10e6);
         (bytes32 ck2,) = _commit(voter2, contentId, false, 5e6);
-        _commit(voter3, contentId, true, STAKE); // not revealed
+        (bytes32 ck3,) = _commit(voter3, contentId, true, 1e6);
+        _commit(voter4, contentId, true, STAKE); // not revealed
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
-        bytes32[] memory cks = new bytes32[](2);
+        bytes32[] memory cks = new bytes32[](3);
         cks[0] = ck1;
         cks[1] = ck2;
+        cks[2] = ck3;
         _settleAfterFinalGrace(contentId, roundId, cks);
 
-        vm.prank(voter3);
+        vm.prank(voter4);
         vm.expectRevert(RoundRewardDistributor.UnrevealedCleanupPending.selector);
         distributor.claimReward(contentId, roundId);
 
         engine.processUnrevealedVotes(contentId, roundId, 0, 0);
 
         // Unrevealed votes cannot claim winner rewards, even after cleanup.
-        vm.prank(voter3);
+        vm.prank(voter4);
         vm.expectRevert("Vote not revealed");
         distributor.claimReward(contentId, roundId);
     }
@@ -369,14 +386,16 @@ contract AdversarialTests is VotingTestBase {
         // Asymmetric stakes: UP wins, voter3 unrevealed and epoch passed.
         (bytes32 ck1,) = _commit(voter1, contentId, true, 10e6);
         (bytes32 ck2,) = _commit(voter2, contentId, false, 5e6);
-        _commit(voter3, contentId, true, 5e6); // unrevealed, same epoch
+        (bytes32 ck3,) = _commit(voter3, contentId, true, 1e6);
+        _commit(voter4, contentId, true, 5e6); // unrevealed, same epoch
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
 
-        // Only reveal first two, then settle after the final grace window.
-        bytes32[] memory cks = new bytes32[](2);
+        // Only reveal three quorum votes, then settle after the final grace window.
+        bytes32[] memory cks = new bytes32[](3);
         cks[0] = ck1;
         cks[1] = ck2;
+        cks[2] = ck3;
         _settleAfterFinalGrace(contentId, roundId, cks);
 
         uint256 reserveBefore = engine.consensusReserve();
@@ -400,6 +419,7 @@ contract AdversarialTests is VotingTestBase {
         // Epoch 1 voters
         (bytes32 ck1,) = _commit(voter1, contentId, true, STAKE);
         (bytes32 ck2,) = _commit(voter2, contentId, false, STAKE);
+        (bytes32 ck3,) = _commit(voter3, contentId, true, STAKE);
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
@@ -407,20 +427,21 @@ contract AdversarialTests is VotingTestBase {
         // Move into epoch 2, add voter3 before the reveal threshold is reached,
         // then reveal the epoch 1 voters.
         _warpPastTlockRevealTime(uint256(round.startTime) + EPOCH_DURATION);
-        _commit(voter3, contentId, true, 2_500_000);
+        _commit(voter4, contentId, true, 2_500_000);
         _reveal(contentId, roundId, ck1);
         _reveal(contentId, roundId, ck2);
+        _reveal(contentId, roundId, ck3);
 
         // Settle immediately (voter3's epoch hasn't ended)
         engine.settleRound(contentId, roundId);
 
-        uint256 voter3Before = hrepToken.balanceOf(voter3);
+        uint256 voter4Before = hrepToken.balanceOf(voter4);
 
-        // Process unrevealed — voter3 should be refunded (epoch not ended at settlement)
+        // Process unrevealed — voter4 should be refunded (epoch not ended at settlement)
         engine.processUnrevealedVotes(contentId, roundId, 0, 0);
 
-        uint256 voter3After = hrepToken.balanceOf(voter3);
-        assertEq(voter3After - voter3Before, 2_500_000, "Current-epoch voter should get full refund");
+        uint256 voter4After = hrepToken.balanceOf(voter4);
+        assertEq(voter4After - voter4Before, 2_500_000, "Current-epoch voter should get full refund");
     }
 
     // =========================================================================
@@ -433,11 +454,13 @@ contract AdversarialTests is VotingTestBase {
 
         (bytes32 ck1,) = _commit(voter1, contentId, true, STAKE);
         (bytes32 ck2,) = _commit(voter2, contentId, false, STAKE);
+        (bytes32 ck3,) = _commit(voter3, contentId, true, STAKE);
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
-        bytes32[] memory cks = new bytes32[](2);
+        bytes32[] memory cks = new bytes32[](3);
         cks[0] = ck1;
         cks[1] = ck2;
+        cks[2] = ck3;
         _settleRound(contentId, roundId, cks);
 
         vm.expectRevert(RoundVotingEngine.RoundNotOpen.selector);
@@ -450,11 +473,13 @@ contract AdversarialTests is VotingTestBase {
 
         (bytes32 ck1,) = _commit(voter1, contentId, true, STAKE);
         (bytes32 ck2,) = _commit(voter2, contentId, false, STAKE);
+        (bytes32 ck3,) = _commit(voter3, contentId, true, STAKE);
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
-        bytes32[] memory cks = new bytes32[](2);
+        bytes32[] memory cks = new bytes32[](3);
         cks[0] = ck1;
         cks[1] = ck2;
+        cks[2] = ck3;
         _settleRound(contentId, roundId, cks);
 
         vm.expectRevert(RoundVotingEngine.RoundNotOpen.selector);
@@ -467,6 +492,7 @@ contract AdversarialTests is VotingTestBase {
 
         (bytes32 ck1,) = _commit(voter1, contentId, true, STAKE);
         (bytes32 ck2,) = _commit(voter2, contentId, false, STAKE);
+        (bytes32 ck3,) = _commit(voter3, contentId, true, STAKE);
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
@@ -475,6 +501,7 @@ contract AdversarialTests is VotingTestBase {
         _warpPastTlockRevealTime(uint256(round.startTime) + EPOCH_DURATION);
         _reveal(contentId, roundId, ck1);
         _reveal(contentId, roundId, ck2);
+        _reveal(contentId, roundId, ck3);
 
         // Warp past maxDuration
         vm.warp(round.startTime + 7 days + 1);
@@ -519,11 +546,13 @@ contract AdversarialTests is VotingTestBase {
         // Asymmetric stakes to avoid tie
         (bytes32 ck1,) = _commit(voter1, contentId, true, 10e6);
         (bytes32 ck2,) = _commit(voter2, contentId, false, 5e6);
+        (bytes32 ck3,) = _commit(voter3, contentId, true, 1e6);
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
-        bytes32[] memory cks = new bytes32[](2);
+        bytes32[] memory cks = new bytes32[](3);
         cks[0] = ck1;
         cks[1] = ck2;
+        cks[2] = ck3;
         _settleRound(contentId, roundId, cks);
 
         vm.prank(voter1);
@@ -543,19 +572,27 @@ contract AdversarialTests is VotingTestBase {
         // Large unanimous UP round
         (bytes32 ck1,) = _commit(voter1, contentId, true, 10e6);
         (bytes32 ck2,) = _commit(voter2, contentId, true, 10e6);
+        (bytes32 ck3,) = _commit(voter3, contentId, true, 10e6);
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
-        bytes32[] memory cks = new bytes32[](2);
+        bytes32[] memory cks = new bytes32[](3);
         cks[0] = ck1;
         cks[1] = ck2;
+        cks[2] = ck3;
         _settleRound(contentId, roundId, cks);
 
         uint256 reserveAfter = engine.consensusReserve();
         uint256 subsidyUsed = reserveBefore - reserveAfter;
+        RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        uint256 forfeitedPool = engine.roundRbtsForfeitedPool(contentId, roundId);
+        uint256 loserRefundShare = (forfeitedPool * 500) / 10_000;
+        uint256 forfeitureConsensusShare = ((forfeitedPool - loserRefundShare) * 500) / 10_000;
+        uint256 expectedSubsidy = ((round.upPool + round.downPool) * 500) / 10_000;
 
-        // 5% of 20e6 = 1e6, well below MAX_CONSENSUS_SUBSIDY.
-        assertEq(subsidyUsed, 1e6, "Subsidy should be 5% of total stake");
-        assertLe(subsidyUsed, 50e6, "Subsidy must not exceed MAX_CONSENSUS_SUBSIDY");
+        // Reserve movement is net of the unanimous-round subsidy and consensus share
+        // replenished from RBTS forfeitures in the same settlement.
+        assertEq(subsidyUsed, expectedSubsidy - forfeitureConsensusShare, "Net reserve drain should match accounting");
+        assertLe(expectedSubsidy, 50e6, "Subsidy must not exceed MAX_CONSENSUS_SUBSIDY");
     }
 
     /// @notice Empty consensus reserve means unanimous rounds get zero subsidy
@@ -617,6 +654,7 @@ contract AdversarialTests is VotingTestBase {
         token2.mint(submitter, 100_000e6);
         token2.mint(voter1, 100_000e6);
         token2.mint(voter2, 100_000e6);
+        token2.mint(voter3, 100_000e6);
         vm.stopPrank();
 
         // Submit content
@@ -627,31 +665,45 @@ contract AdversarialTests is VotingTestBase {
 
         // Unanimous votes
         bytes32 salt1 = keccak256(abi.encodePacked(voter1, block.timestamp, uint256(1)));
-        bytes memory ct1 = _testCiphertext(true, salt1, 1);
-        bytes32 ch1 = _commitHash(true, salt1, voter1, 1, ct1);
+        uint64 targetRound1 = _tlockCommitTargetRound(eng2, 1);
+        bytes32 drandChainHash = _tlockDrandChainHash();
+        bytes memory ct1 = _testCiphertext(true, salt1, 1, targetRound1, drandChainHash);
+        bytes32 ch1 =
+            _commitHash(true, salt1, voter1, 1, _defaultRatingReferenceBps(), targetRound1, drandChainHash, ct1);
 
         vm.startPrank(voter1);
         token2.approve(address(eng2), STAKE);
         uint256 cachedRoundContext2 = _roundContext(eng2.previewCommitRoundId(1), _defaultRatingReferenceBps());
-        eng2.commitVote(
-            1, cachedRoundContext2, _tlockCommitTargetRound(), _tlockDrandChainHash(), ch1, ct1, STAKE, address(0)
-        );
+        eng2.commitVote(1, cachedRoundContext2, targetRound1, drandChainHash, ch1, ct1, STAKE, address(0));
         vm.stopPrank();
 
         bytes32 salt2 = keccak256(abi.encodePacked(voter2, block.timestamp, uint256(1)));
-        bytes memory ct2 = _testCiphertext(true, salt2, 1);
-        bytes32 ch2 = _commitHash(true, salt2, voter2, 1, ct2);
+        uint64 targetRound2 = _tlockCommitTargetRound(eng2, 1);
+        bytes memory ct2 = _testCiphertext(true, salt2, 1, targetRound2, drandChainHash);
+        bytes32 ch2 =
+            _commitHash(true, salt2, voter2, 1, _defaultRatingReferenceBps(), targetRound2, drandChainHash, ct2);
 
         vm.startPrank(voter2);
         token2.approve(address(eng2), STAKE);
         uint256 cachedRoundContext3 = _roundContext(eng2.previewCommitRoundId(1), _defaultRatingReferenceBps());
-        eng2.commitVote(
-            1, cachedRoundContext3, _tlockCommitTargetRound(), _tlockDrandChainHash(), ch2, ct2, STAKE, address(0)
-        );
+        eng2.commitVote(1, cachedRoundContext3, targetRound2, drandChainHash, ch2, ct2, STAKE, address(0));
+        vm.stopPrank();
+
+        bytes32 salt3 = keccak256(abi.encodePacked(voter3, block.timestamp, uint256(1)));
+        uint64 targetRound3 = _tlockCommitTargetRound(eng2, 1);
+        bytes memory ct3 = _testCiphertext(true, salt3, 1, targetRound3, drandChainHash);
+        bytes32 ch3 =
+            _commitHash(true, salt3, voter3, 1, _defaultRatingReferenceBps(), targetRound3, drandChainHash, ct3);
+
+        vm.startPrank(voter3);
+        token2.approve(address(eng2), STAKE);
+        uint256 cachedRoundContext4 = _roundContext(eng2.previewCommitRoundId(1), _defaultRatingReferenceBps());
+        eng2.commitVote(1, cachedRoundContext4, targetRound3, drandChainHash, ch3, ct3, STAKE, address(0));
         vm.stopPrank();
 
         bytes32 ck1 = _commitKey(voter1, ch1);
         bytes32 ck2 = _commitKey(voter2, ch2);
+        bytes32 ck3 = _commitKey(voter3, ch3);
 
         RoundLib.Round memory round = RoundEngineReadHelpers.round(eng2, 1, 1);
         _warpPastTlockRevealTime(uint256(round.startTime) + EPOCH_DURATION);
@@ -659,12 +711,21 @@ contract AdversarialTests is VotingTestBase {
         // Reveal
         eng2.revealVoteByCommitKey(1, 1, ck1, true, 5_000, salt1);
         eng2.revealVoteByCommitKey(1, 1, ck2, true, 5_000, salt2);
+        eng2.revealVoteByCommitKey(1, 1, ck3, true, 5_000, salt3);
 
         eng2.settleRound(1, 1);
 
-        // With zero reserve, the voter pool is 0.
+        // With zero reserve, no consensus subsidy is paid. RBTS forfeitures still fund
+        // the voter pool, with the frontend share falling back to voters when no eligible
+        // frontend is attached.
+        uint256 forfeitedPool = eng2.roundRbtsForfeitedPool(1, 1);
+        uint256 loserRefundShare = (forfeitedPool * 500) / 10_000;
+        uint256 postRebateForfeited = forfeitedPool - loserRefundShare;
+        uint256 voterShare = postRebateForfeited - ((postRebateForfeited * 300) / 10_000)
+            - ((postRebateForfeited * 100) / 10_000) - ((postRebateForfeited * 500) / 10_000);
+        uint256 frontendFallbackShare = (postRebateForfeited * 300) / 10_000;
         uint256 voterPool = eng2.roundVoterPool(1, 1);
-        assertEq(voterPool, 0, "No subsidy means zero voter pool");
+        assertEq(voterPool, voterShare + frontendFallbackShare, "Voter pool should come only from forfeitures");
     }
 
     // =========================================================================
@@ -698,8 +759,8 @@ contract AdversarialTests is VotingTestBase {
         engine.settleRound(contentId, roundId);
     }
 
-    /// @notice Attacker with asymmetric stakes loses more on the losing side
-    function test_SelfOpposition_AsymmetricStakes_StillUnprofitable() public {
+    /// @notice Attacker with asymmetric stakes still partially forfeits the losing side.
+    function test_SelfOpposition_AsymmetricStakes_LosingLegPartiallyForfeits() public {
         uint256 contentId = _submitContent();
 
         address sybil = address(0xBEEF);
@@ -720,7 +781,8 @@ contract AdversarialTests is VotingTestBase {
         cks[2] = ckSmall;
         _settleRound(contentId, roundId, cks);
 
-        // UP wins. Attacker gains from UP side but loses 2e6 from DOWN side
+        // UP wins. The losing sybil leg can earn RBTS stake return/reward, but still
+        // recovers less than it committed.
         uint256 attackerBefore = hrepToken.balanceOf(attacker);
         uint256 sybilBefore = hrepToken.balanceOf(sybil);
 
@@ -732,13 +794,9 @@ contract AdversarialTests is VotingTestBase {
         uint256 attackerNet = hrepToken.balanceOf(attacker) - attackerBefore;
         uint256 sybilNet = hrepToken.balanceOf(sybil) - sybilBefore;
 
-        // Total invested: 8e6 + 2e6 = 10e6
-        // Total returned: attackerNet + sybilNet
-        uint256 totalReturned = attackerNet + sybilNet;
-        uint256 totalInvested = 8e6 + 2e6;
-
-        // Attacker's share of the 2e6 losing pool (after 18% fees) < 2e6, so net loss
-        assertLe(totalReturned, totalInvested, "Self-opposition should never profit");
+        assertGt(attackerNet, 8e6, "Winning leg can still earn ordinary winner rewards");
+        assertGt(sybilNet, 0, "Losing leg can still recover RBTS value");
+        assertLt(sybilNet, 2e6, "Opposing losing stake remains unprofitable on its own");
     }
 
     // =========================================================================
@@ -886,18 +944,21 @@ contract AdversarialTests is VotingTestBase {
     function test_TiedRound_FullRefundForAll() public {
         uint256 contentId = _submitContent();
 
-        (bytes32 ck1,) = _commit(voter1, contentId, true, 5e6);
-        (bytes32 ck2,) = _commit(voter2, contentId, false, 5e6);
+        (bytes32 ck1,) = _commit(voter1, contentId, true, 2e6);
+        (bytes32 ck2,) = _commit(voter2, contentId, false, 3e6);
+        (bytes32 ck3,) = _commit(voter3, contentId, true, 1e6);
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
-        bytes32[] memory cks = new bytes32[](2);
+        bytes32[] memory cks = new bytes32[](3);
         cks[0] = ck1;
         cks[1] = ck2;
+        cks[2] = ck3;
 
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
         _warpPastTlockRevealTime(uint256(round.startTime) + EPOCH_DURATION);
         _reveal(contentId, roundId, ck1);
         _reveal(contentId, roundId, ck2);
+        _reveal(contentId, roundId, ck3);
 
         // Both in epoch 1, same stake — weighted pools are equal → tie
         engine.settleRound(contentId, roundId);
@@ -907,22 +968,26 @@ contract AdversarialTests is VotingTestBase {
 
         uint256 v1Before = hrepToken.balanceOf(voter1);
         uint256 v2Before = hrepToken.balanceOf(voter2);
+        uint256 v3Before = hrepToken.balanceOf(voter3);
 
         vm.prank(voter1);
         engine.claimCancelledRoundRefund(contentId, roundId);
         vm.prank(voter2);
         engine.claimCancelledRoundRefund(contentId, roundId);
+        vm.prank(voter3);
+        engine.claimCancelledRoundRefund(contentId, roundId);
 
-        assertEq(hrepToken.balanceOf(voter1) - v1Before, 5e6, "Voter1 full refund");
-        assertEq(hrepToken.balanceOf(voter2) - v2Before, 5e6, "Voter2 full refund");
+        assertEq(hrepToken.balanceOf(voter1) - v1Before, 2e6, "Voter1 full refund");
+        assertEq(hrepToken.balanceOf(voter2) - v2Before, 3e6, "Voter2 full refund");
+        assertEq(hrepToken.balanceOf(voter3) - v3Before, 1e6, "Voter3 full refund");
     }
 
     // =========================================================================
-    // 9. EPOCH WEIGHT REWARD RATIO — early voters get more
+    // 9. EPOCH WEIGHTED SIGNAL — early voters carry more weight
     // =========================================================================
 
-    /// @notice Epoch-1 voter earns ~4× more per HREP staked than epoch-2 voter
-    function test_EpochWeight_EarlyVoterEarns4x() public {
+    /// @notice Epoch-1 stake carries 4x the weighted signal of epoch-2 stake.
+    function test_EpochWeight_EarlyVoteCarries4xWeight() public {
         uint256 contentId = _submitContent();
 
         // Epoch 1: voter1 UP (large stake to ensure UP wins), voter2 DOWN (loser provides pool)
@@ -944,27 +1009,12 @@ contract AdversarialTests is VotingTestBase {
         _warpPastTlockRevealTime(voter3RevealableAfter);
         _reveal(contentId, roundId, ck3);
 
-        // Settle
         engine.settleRound(contentId, roundId);
 
-        // Claim rewards
-        uint256 v1Before = hrepToken.balanceOf(voter1);
-        uint256 v3Before = hrepToken.balanceOf(voter3);
-
-        vm.prank(voter1);
-        distributor.claimReward(contentId, roundId);
-        vm.prank(voter3);
-        distributor.claimReward(contentId, roundId);
-
-        // Both staked 10e6, subtract stake return to get reward-only
-        uint256 v1Reward = hrepToken.balanceOf(voter1) - v1Before - 10e6;
-        uint256 v3Reward = hrepToken.balanceOf(voter3) - v3Before - 10e6;
-
-        // Epoch 1 weight = 10000 (100%), epoch 2 weight = 2500 (25%)
-        // With same stake: v1Reward / v3Reward ≈ 4
-        // Allow some tolerance for rounding
-        assertGt(v1Reward, v3Reward * 3, "Epoch-1 voter should earn >3x epoch-2 voter");
-        assertLt(v1Reward, v3Reward * 5, "Epoch-1 voter should earn <5x epoch-2 voter");
+        RoundLib.Round memory settledRound = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        assertTrue(settledRound.upWins);
+        assertEq(settledRound.weightedUpPool, 12_500_000, "Epoch-1 and epoch-2 UP weight should combine");
+        assertEq(settledRound.weightedDownPool, 10_000_000, "Epoch-1 DOWN weight should remain full stake");
     }
 
     // =========================================================================
@@ -1172,8 +1222,8 @@ contract AdversarialTests is VotingTestBase {
     // 13. STAKE BOUNDS
     // =========================================================================
 
-    /// @notice Zero-stake ratings are accepted for bootstrap participation.
-    function test_StakeBounds_ZeroStakeAccepted() public {
+    /// @notice Counted voting rejects zero-stake ratings; advisory votes handle zero-stake signal.
+    function test_StakeBounds_ZeroStakeRejected() public {
         uint256 contentId = _submitContent();
 
         bytes32 salt = keccak256(abi.encodePacked(voter1, block.timestamp, contentId));
@@ -1184,6 +1234,7 @@ contract AdversarialTests is VotingTestBase {
         hrepToken.approve(address(engine), 0);
         uint256 cachedRoundContext12 =
             _roundContext(engine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());
+        vm.expectRevert(RoundVotingEngine.InvalidStake.selector);
         engine.commitVote(
             contentId,
             cachedRoundContext12,

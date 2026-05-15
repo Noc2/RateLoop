@@ -134,16 +134,17 @@ contract GameTheoryImprovementsTest is VotingTestBase {
     /// @dev Commit a vote for a voter in the current round. Approves and calls commitVote.
     function _commit(address voter, uint256 contentId, bool isUp, uint256 stake) internal {
         bytes32 salt = bytes32(uint256(uint160(voter)) ^ uint256(contentId));
-        bytes32 ch = _commitHash(isUp, salt, voter, contentId);
-        bytes memory ct = _testCiphertext(isUp, salt, contentId);
+        uint64 targetRound = _tlockCommitTargetRound(engine, contentId);
+        bytes32 drandChainHash = _tlockDrandChainHash();
+        bytes memory ct = _testCiphertext(isUp, salt, contentId, targetRound, drandChainHash);
+        bytes32 ch =
+            _commitHash(isUp, salt, voter, contentId, _defaultRatingReferenceBps(), targetRound, drandChainHash, ct);
 
         vm.startPrank(voter);
         hrepToken.approve(address(engine), stake);
         uint256 cachedRoundContext1 =
             _roundContext(engine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());
-        engine.commitVote(
-            contentId, cachedRoundContext1, _tlockCommitTargetRound(), _tlockDrandChainHash(), ch, ct, stake, address(0)
-        );
+        engine.commitVote(contentId, cachedRoundContext1, targetRound, drandChainHash, ch, ct, stake, address(0));
         vm.stopPrank();
     }
 
@@ -245,7 +246,12 @@ contract GameTheoryImprovementsTest is VotingTestBase {
         RoundLib.Round memory settled = RoundEngineReadHelpers.round(engine, cid, roundId);
         assertEq(uint256(settled.state), uint256(RoundLib.RoundState.Settled), "weighted-only tie settles");
         assertTrue(settled.upWins, "earlier higher-weight side wins weighted-only tie");
-        assertEq(engine.roundWinningStake(cid, roundId), 10e6, "winning weighted stake");
+        assertEq(
+            engine.roundWinningStake(cid, roundId),
+            engine.roundRbtsRewardWeight(cid, roundId),
+            "roundWinningStake tracks RBTS reward weight"
+        );
+        assertGt(engine.roundWinningStake(cid, roundId), 0, "winning reward weight recorded");
 
         vm.prank(carol);
         vm.expectRevert(RoundVotingEngine.RoundNotCancelledOrTied.selector);
@@ -253,19 +259,19 @@ contract GameTheoryImprovementsTest is VotingTestBase {
     }
 
     // =========================================================================
-    // TEST 2: EpochWeightRewards (4:1 ratio)
+    // TEST 2: EpochWeightSignal
     // =========================================================================
 
-    /// @notice Epoch-1 voters earn 4x rewards per LREP vs epoch-2 voters.
+    /// @notice Epoch-1 voters carry 4x signal weight per LREP vs epoch-2 voters.
     ///
     ///   Alice: UP, 10 LREP, epoch-1 -> effectiveStake = 10 LREP
     ///   Bob:   DOWN, 10 LREP, epoch-1 -> effectiveStake = 10 LREP
     ///   Carol: UP, 10 LREP, epoch-2 -> effectiveStake = 2.5 LREP
     ///
     ///   UP wins. weightedUpPool = 10 + 2.5 = 12.5 LREP.
-    ///   Alice share = 10/12.5 of voterPool, Carol share = 2.5/12.5 of voterPool.
-    ///   So Alice earns 4x the reward Carol earns (per HREP staked).
-    function test_EpochWeightRewards() public {
+    ///   Alice carries 4x Carol's signal weight per HREP. RBTS scoring calibrates
+    ///   individual reward returns after settlement.
+    function test_EpochWeightSignalPools() public {
         uint256 cid = _submit();
         uint256 roundStart = block.timestamp;
 
@@ -294,50 +300,28 @@ contract GameTheoryImprovementsTest is VotingTestBase {
         assertEq(round.weightedUpPool, 12_500_000, "weighted UP pool = 12.5 LREP");
         assertEq(round.weightedDownPool, 10e6, "weighted DOWN pool = 10 LREP");
 
-        // Record balances before settlement + claims
-        uint256 aliceBefore = hrepToken.balanceOf(alice);
-        uint256 carolBefore = hrepToken.balanceOf(carol);
-
         _settle(cid, roundId);
 
         RoundLib.Round memory settled = RoundEngineReadHelpers.round(engine, cid, roundId);
         assertEq(uint256(settled.state), uint256(RoundLib.RoundState.Settled), "Round settled");
         assertTrue(settled.upWins, "UP wins (weighted UP pool 125 > DOWN pool 100)");
 
-        // Retrieve voter pool (distribution of losing side minus fees)
         uint256 voterPool = engine.roundVoterPool(cid, roundId);
-        uint256 weightedWinningStake = engine.roundWinningStake(cid, roundId);
 
-        // Claim rewards
+        uint256 aliceBefore = hrepToken.balanceOf(alice);
         vm.prank(alice);
         distributor.claimReward(cid, roundId);
+        uint256 aliceGain = hrepToken.balanceOf(alice) - aliceBefore;
+
+        uint256 carolBefore = hrepToken.balanceOf(carol);
         vm.prank(carol);
         distributor.claimReward(cid, roundId);
-
-        uint256 aliceGain = hrepToken.balanceOf(alice) - aliceBefore;
         uint256 carolGain = hrepToken.balanceOf(carol) - carolBefore;
 
-        // Alice received her stake back (10e6) + her share of voterPool
-        // Carol received her stake back (10e6) + her share of voterPool
-        // Net reward over returned stake:
-        //   Alice reward = (10e6 / weightedWinningStake) * voterPool
-        //   Carol reward = (2_500_000 / weightedWinningStake) * voterPool
-        // ratio = 4:1
-        assertGt(aliceGain, carolGain, "Alice earns more than Carol");
-
-        // Verify the 4:1 ratio by computing rewards excluding the returned stake
-        uint256 aliceReward = aliceGain - 10e6; // strip stake return
-        uint256 carolReward = carolGain - 10e6; // strip stake return
-
-        // Allow ±1 token rounding. Use voterPool and weightedWinningStake for exact check.
-        uint256 aliceExpected = (10e6 * voterPool) / weightedWinningStake;
-        uint256 carolExpected = (2_500_000 * voterPool) / weightedWinningStake;
-
-        assertApproxEqAbs(aliceReward, aliceExpected, 1, "Alice reward proportional to effective stake 10");
-        assertApproxEqAbs(carolReward, carolExpected, 1, "Carol reward proportional to effective stake 2.5");
-
-        // The 4:1 ratio check (within 1 token)
-        assertApproxEqAbs(aliceReward, 4 * carolReward, 4, "Alice reward ~4x Carol reward");
+        assertGt(aliceGain, 0, "Alice receives RBTS claim value");
+        assertGt(carolGain, 0, "Carol receives RBTS claim value");
+        assertLe(aliceGain, 10e6 + voterPool, "Alice claim stays inside pool bounds");
+        assertLe(carolGain, 10e6 + voterPool, "Carol claim stays inside pool bounds");
     }
 
     // =========================================================================

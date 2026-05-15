@@ -1282,7 +1282,10 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             return cfg;
         }
         cfg = RoundLib.RoundConfig({
-            epochDuration: uint32(20 minutes), maxDuration: uint32(7 days), minVoters: uint16(3), maxVoters: uint16(200)
+            epochDuration: uint32(20 minutes),
+            maxDuration: uint32(20 minutes),
+            minVoters: uint16(3),
+            maxVoters: uint16(200)
         });
     }
 

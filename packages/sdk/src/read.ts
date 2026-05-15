@@ -1,7 +1,8 @@
 import { CuryoApiError, CuryoSdkError } from "./errors";
 import type { CuryoClientConfig } from "./types";
 
-type QueryValue = string | number | boolean | undefined;
+type QueryScalar = string | number | boolean | bigint;
+type QueryValue = QueryScalar | readonly QueryScalar[] | undefined;
 type JsonRecord = Record<string, unknown>;
 
 export interface CuryoOpenRoundSummary {
@@ -135,19 +136,24 @@ export interface CuryoVoteItem {
 
 export interface CuryoFrontendItem {
   address: `0x${string}`;
-  eligible?: boolean;
-  slashed?: boolean;
-  stake?: string;
-  accumulatedFees?: string;
-  exitAvailableAt?: string | null;
+  operator: `0x${string}`;
+  stakedAmount: string;
+  eligible: boolean;
+  slashed: boolean;
+  exitAvailableAt: string | null;
+  totalFeesCredited: string;
+  totalFeesClaimed: string;
+  registeredAt: string;
   [key: string]: unknown;
 }
 
 export interface CuryoCategoryItem {
   id: string;
-  name?: string;
-  status?: number;
-  totalVotes?: number;
+  name: string;
+  slug: string;
+  createdAt: string;
+  totalVotes: number;
+  totalContent: number;
   [key: string]: unknown;
 }
 
@@ -352,16 +358,20 @@ export interface CuryoFollowResponse extends CuryoProfileSocialCounts {
 }
 
 export interface SearchContentParams {
+  contentIds?: readonly (string | number | bigint)[];
   status?: string;
   categoryId?: string;
   search?: string;
   submitter?: string;
+  submitters?: readonly string[];
   sortBy?:
     | "newest"
     | "oldest"
     | "highest_rated"
     | "lowest_rated"
-    | "most_votes";
+    | "most_votes"
+    | "highest_rewards"
+    | "relevance";
   limit?: number;
   offset?: number;
 }
@@ -525,8 +535,9 @@ async function request<T>(
   for (const [key, value] of Object.entries(
     (params ?? {}) as Record<string, QueryValue>,
   )) {
-    if (value !== undefined) {
-      url.searchParams.set(key, String(value));
+    const serializedValue = serializeQueryValue(value);
+    if (serializedValue != null) {
+      url.searchParams.set(key, serializedValue);
     }
   }
 
@@ -568,6 +579,13 @@ async function request<T>(
   }
 
   return parsed as T;
+}
+
+function serializeQueryValue(value: QueryValue): string | null {
+  if (value === undefined) return null;
+  if (!Array.isArray(value)) return String(value);
+  if (value.length === 0) return null;
+  return value.map((item) => String(item)).join(",");
 }
 
 function parseJson(body: string): unknown {

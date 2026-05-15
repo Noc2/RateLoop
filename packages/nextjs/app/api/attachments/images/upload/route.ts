@@ -3,7 +3,10 @@ import { type HandleUploadBody, handleUpload } from "@vercel/blob/client";
 import {
   createPendingImageAttachment,
   getAttachmentImageUrl,
+  getImageAttachment,
+  getImageAttachmentUploadMode,
   processCompletedImageUpload,
+  processCompletedLocalImageUpload,
 } from "~~/lib/attachments/imageAttachments";
 import {
   UPLOAD_IMAGE_ACTION,
@@ -125,10 +128,77 @@ async function authorizeUploadRequest(request: NextRequest, payload: UploadClien
   };
 }
 
-export async function POST(request: NextRequest): Promise<NextResponse> {
-  const body = (await request.json()) as HandleUploadBody;
+async function handleLocalUpload(request: NextRequest): Promise<NextResponse> {
+  if (getImageAttachmentUploadMode() !== "local") {
+    return NextResponse.json({ error: "Direct local image uploads are not enabled." }, { status: 400 });
+  }
 
   try {
+    const formData = await request.formData();
+    const clientPayload = formData.get("clientPayload");
+    const file = formData.get("file");
+
+    if (typeof clientPayload !== "string" || !(file instanceof File)) {
+      return NextResponse.json({ error: "Local image upload metadata is invalid." }, { status: 400 });
+    }
+
+    const payload = parseClientPayload(clientPayload);
+    const limited = await checkRateLimit(request, RATE_LIMIT, {
+      extraKeyParts: [
+        typeof payload.address === "string" ? payload.address : undefined,
+        typeof payload.attachmentId === "string" ? payload.attachmentId : undefined,
+      ],
+    });
+    if (limited) return limited;
+
+    const authorization = await authorizeUploadRequest(request, payload);
+    const normalized = authorization.normalized.payload;
+    const fileContentType = file.type.trim().toLowerCase();
+    if (fileContentType !== normalized.mimeType || file.size !== normalized.sizeBytes) {
+      throw new Error("Uploaded image does not match the signed upload metadata.");
+    }
+
+    await createPendingImageAttachment({
+      attachmentId: normalized.attachmentId,
+      clientRequestId: typeof payload.clientRequestId === "string" ? payload.clientRequestId : null,
+      filename: normalized.filename,
+      mimeType: normalized.mimeType,
+      sha256: normalized.sha256,
+      sizeBytes: normalized.sizeBytes,
+      uploader: authorization.identity,
+    });
+
+    await processCompletedLocalImageUpload({
+      attachmentId: normalized.attachmentId,
+      buffer: Buffer.from(await file.arrayBuffer()),
+      contentType: normalized.mimeType,
+    });
+
+    const attachment = await getImageAttachment(normalized.attachmentId);
+    return NextResponse.json({
+      attachmentId: normalized.attachmentId,
+      imageUrl: attachment?.status === "approved" ? getAttachmentImageUrl(request.url, normalized.attachmentId) : null,
+      status: attachment?.status ?? "processing",
+    });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Upload failed." }, { status: 400 });
+  }
+}
+
+export async function POST(request: NextRequest): Promise<NextResponse> {
+  try {
+    if (request.headers.get("content-type")?.toLowerCase().includes("multipart/form-data")) {
+      return handleLocalUpload(request);
+    }
+
+    if (getImageAttachmentUploadMode() === "local") {
+      return NextResponse.json(
+        { error: "Local image uploads are enabled. Refresh the page and try the upload again." },
+        { status: 400 },
+      );
+    }
+
+    const body = (await request.json()) as HandleUploadBody;
     const jsonResponse = await handleUpload({
       body,
       request,

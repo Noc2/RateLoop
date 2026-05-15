@@ -3,10 +3,15 @@ export const OWN_CONTENT_FEEDBACK_DISABLED_REASON = "You cannot give feedback on
 export function getContentFeedbackSubmitTooltip(params: {
   canSubmitDraft: boolean;
   hasCurrentRoundVote: boolean;
+  isFeedbackOpen: boolean;
   isOwnContent: boolean;
 }) {
   if (params.isOwnContent) {
     return OWN_CONTENT_FEEDBACK_DISABLED_REASON;
+  }
+
+  if (!params.isFeedbackOpen) {
+    return "Feedback is only open while voting is active.";
   }
 
   if (!params.hasCurrentRoundVote) {

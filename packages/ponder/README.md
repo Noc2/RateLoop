@@ -112,4 +112,4 @@ rm -rf packages/ponder/.ponder
 
 **BigInt serialization:** Always use `replaceBigInts()` from `"ponder"` before calling `c.json()` in API routes — `JSON.stringify` cannot serialize BigInt values.
 
-**Rate limiting behind proxies:** In production, set `RATE_LIMIT_TRUSTED_IP_HEADERS` only to headers your edge proxy overwrites, such as `x-forwarded-for` on Vercel/Railway behind a trusted proxy or `cf-connecting-ip` on Cloudflare. If you leave it unset, Ponder falls back to a request fingerprint instead of skipping rate limiting.
+**Rate limiting behind proxies:** In production, set `RATE_LIMIT_TRUSTED_IP_HEADERS` only to headers your edge proxy overwrites, such as `x-forwarded-for` on Vercel/Railway behind a trusted proxy or `cf-connecting-ip` on Cloudflare. Non-production routes fall back to a request fingerprint when it is unset; production custom API routes fail closed with `503` until trusted headers are configured.

@@ -7,7 +7,6 @@ import { Base64 } from "@openzeppelin/contracts/utils/Base64.sol";
 import { Strings } from "@openzeppelin/contracts/utils/Strings.sol";
 import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { HumanReputation } from "../../contracts/HumanReputation.sol";
 import { ContentRegistry } from "../../contracts/ContentRegistry.sol";
 import { ProtocolConfig } from "../../contracts/ProtocolConfig.sol";
 import { RaterRegistry } from "../../contracts/RaterRegistry.sol";
@@ -337,7 +336,10 @@ abstract contract ContentSubmissionTestBase {
             return cfg;
         }
         cfg = RoundLib.RoundConfig({
-            epochDuration: uint32(20 minutes), maxDuration: uint32(7 days), minVoters: uint16(3), maxVoters: uint16(200)
+            epochDuration: uint32(20 minutes),
+            maxDuration: uint32(20 minutes),
+            minVoters: uint16(3),
+            maxVoters: uint16(200)
         });
     }
 
@@ -498,7 +500,7 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
 
     struct DirectTestCommitRequest {
         RoundVotingEngine engine;
-        HumanReputation hrepToken;
+        IERC20 hrepToken;
         address voter;
         uint256 contentId;
         bool isUp;
@@ -716,11 +718,11 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
         view
         returns (TestCommitArtifacts memory artifacts)
     {
-        artifacts.ciphertext = _testCiphertext(isUp, salt, contentId);
         artifacts.roundId = _defaultTestCommitRoundId(contentId);
         artifacts.roundReferenceRatingBps = _currentRatingReferenceBps(contentId);
         artifacts.targetRound = _tlockCommitTargetRound();
         artifacts.drandChainHash = _tlockDrandChainHash();
+        artifacts.ciphertext = _testCiphertext(isUp, salt, contentId, artifacts.targetRound, artifacts.drandChainHash);
         artifacts.commitHash = _commitHash(
             isUp,
             salt,
@@ -760,6 +762,23 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
 
     function _tlockCommitTargetRound() internal view returns (uint64) {
         return _roundAtOrAfter(block.timestamp + _tlockEpochDuration(), _tlockDrandGenesisTime(), _tlockDrandPeriod());
+    }
+
+    function _tlockCommitTargetRound(RoundVotingEngine engine, uint256 contentId) internal view returns (uint64) {
+        return _tlockTargetRoundAt(_commitEpochEnd(engine, contentId));
+    }
+
+    function _commitEpochEnd(RoundVotingEngine engine, uint256 contentId) internal view returns (uint256) {
+        uint256 roundId = engine.previewCommitRoundId(contentId);
+        (uint48 startTime,,,,,,,,,,,,,) = engine.rounds(contentId, roundId);
+        uint256 epochDuration = _tlockEpochDuration();
+        if (startTime == 0) {
+            return block.timestamp + epochDuration;
+        }
+
+        uint256 elapsed = block.timestamp - uint256(startTime);
+        uint256 epochIdx = elapsed / epochDuration;
+        return uint256(startTime) + (epochIdx + 1) * epochDuration;
     }
 
     function _tlockTargetRoundAt(uint256 revealableAfter) internal view returns (uint64) {
@@ -908,6 +927,11 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
     {
         artifacts = _buildTestCommitArtifacts(voter, isUp, salt, contentId);
         artifacts.roundId = _previewTestCommitRoundId(engine, contentId);
+        if (engine != address(0)) {
+            artifacts.targetRound = _tlockCommitTargetRound(RoundVotingEngine(engine), contentId);
+            artifacts.ciphertext =
+                _testCiphertext(isUp, salt, contentId, artifacts.targetRound, artifacts.drandChainHash);
+        }
         artifacts.commitHash = _commitHash(
             isUp,
             salt,

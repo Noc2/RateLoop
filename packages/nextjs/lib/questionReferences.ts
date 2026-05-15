@@ -2,6 +2,13 @@ export const MAX_QUESTION_REFERENCE_COUNT = 3;
 
 const QUESTION_REFERENCE_PATTERN = /\[\[\s*question\s*:\s*([0-9]+)\s*(?:\|\s*([^\]\r\n]*?)\s*)?\]\]/gi;
 const POSITIVE_INTEGER_PATTERN = /^[0-9]+$/;
+const QUESTION_REFERENCE_ALLOWED_HOSTS = new Set([
+  "rateloop.xyz",
+  "www.rateloop.xyz",
+  "curyo.xyz",
+  "localhost",
+  "127.0.0.1",
+]);
 
 type QuestionReference = {
   contentId: string;
@@ -111,7 +118,7 @@ export function parseQuestionReferenceInput(value: string): string | null {
     if (isAbsoluteUrl && url.protocol !== "https:" && url.protocol !== "http:") {
       return null;
     }
-    if (isAbsoluteUrl && !["curyo.xyz", "localhost", "127.0.0.1"].includes(url.hostname)) {
+    if (isAbsoluteUrl && !QUESTION_REFERENCE_ALLOWED_HOSTS.has(url.hostname)) {
       return null;
     }
     if (url.pathname !== "/rate") return null;

@@ -52,6 +52,7 @@ const itWithSepoliaContentRegistryArtifact = chain4801?.ContentRegistry ? it : i
 const itWithMissingSepoliaPonderArtifacts = chain4801 && missingSepoliaPonderContracts.length > 0 ? it : it.skip;
 const itWithWorldChainPonderArtifacts = chain480 && missingWorldChainPonderContracts.length === 0 ? it : it.skip;
 const itWithHardhatArtifacts = chain31337 && missingHardhatPonderContracts.length === 0 ? it : it.skip;
+const itWithHardhatClusterPayoutOracleArtifact = chain31337?.ClusterPayoutOracle ? it : it.skip;
 const PONDER_CONFIG_TEST_TIMEOUT_MS = 30_000;
 const ORIGINAL_ENV = { ...process.env };
 const VALID_ENV = {
@@ -196,6 +197,21 @@ describe("ponder config", () => {
         PONDER_CONTENT_REGISTRY_START_BLOCK: String(expectedContentRegistryStartBlock + 1),
       }),
     ).rejects.toThrow("conflicts with ContentRegistry start block from shared deployment artifacts");
+  }, PONDER_CONFIG_TEST_TIMEOUT_MS);
+
+  itWithHardhatClusterPayoutOracleArtifact("wires the ClusterPayoutOracle contract", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { default: config } = await loadPonderConfig({
+      PONDER_NETWORK: "hardhat",
+      PONDER_RPC_URL_31337: "http://127.0.0.1:8545",
+    });
+    const loadedConfig = config as any;
+
+    expect(loadedConfig.contracts.ClusterPayoutOracle.network.hardhat.address).toBe(
+      chain31337!.ClusterPayoutOracle.address,
+    );
+    expect(loadedConfig.contracts.ClusterPayoutOracle.network.hardhat.startBlock).toBe(0);
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("using start block 0"));
   }, PONDER_CONFIG_TEST_TIMEOUT_MS);
 
   itWithMissingSepoliaPonderArtifacts("rejects non-local env address fallbacks when shared artifacts are missing", async () => {

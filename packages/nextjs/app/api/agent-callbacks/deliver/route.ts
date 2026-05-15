@@ -5,6 +5,19 @@ import { processDueAgentCallbackDeliveries } from "~~/lib/agent-callbacks";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+type AgentCallbackDeliverRouteTestOverrides = {
+  processDueAgentCallbackDeliveries?: typeof processDueAgentCallbackDeliveries;
+  randomUUID?: typeof randomUUID;
+};
+
+let agentCallbackDeliverRouteTestOverrides: AgentCallbackDeliverRouteTestOverrides | null = null;
+
+export function __setAgentCallbackDeliverRouteTestOverridesForTests(
+  overrides: AgentCallbackDeliverRouteTestOverrides | null,
+) {
+  agentCallbackDeliverRouteTestOverrides = overrides;
+}
+
 function readBearerToken(request: Request) {
   const authorization = request.headers.get("authorization") ?? "";
   return authorization.match(/^Bearer\s+(.+)$/i)?.[1]?.trim() ?? "";
@@ -26,9 +39,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
-  const result = await processDueAgentCallbackDeliveries({
+  const processDeliveries =
+    agentCallbackDeliverRouteTestOverrides?.processDueAgentCallbackDeliveries ?? processDueAgentCallbackDeliveries;
+  const createRandomUUID = agentCallbackDeliverRouteTestOverrides?.randomUUID ?? randomUUID;
+
+  const result = await processDeliveries({
     limit: parseLimit(request),
-    workerId: `route:${randomUUID()}`,
+    workerId: `route:${createRandomUUID()}`,
   });
 
   return NextResponse.json(result);

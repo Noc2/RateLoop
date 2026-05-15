@@ -56,6 +56,7 @@ contract LaunchDistributionPool is
 
     struct PendingEarnedRaterCredit {
         address rater;
+        address oracle;
         uint16 scoreBps;
         LaunchRewardPolicy policy;
         bool pending;
@@ -101,7 +102,7 @@ contract LaunchDistributionPool is
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => PendingEarnedRaterCredit))) public
         pendingEarnedRaterCredits;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) public earnedRewardCreditFinalized;
-    mapping(uint256 => mapping(uint256 => bool)) public launchPayoutSnapshotConsumed;
+    mapping(uint256 => mapping(uint256 => bool)) public earnedRaterRoundPayoutSnapshotConsumed;
     LaunchRewardPolicy public launchRewardPolicy;
 
     event PoolDeposit(uint256 amount);
@@ -412,11 +413,10 @@ contract LaunchDistributionPool is
         IClusterPayoutOracle.PayoutWeight calldata payoutWeight,
         bytes32[] calldata proof
     ) external nonReentrant returns (uint256 paidAmount) {
-        IClusterPayoutOracle oracle = clusterPayoutOracle;
-        if (address(oracle) == address(0)) revert SnapshotNotFinalized();
-
         PendingEarnedRaterCredit memory pending = pendingEarnedRaterCredits[contentId][roundId][commitKey];
         if (!pending.pending) revert InvalidAmount();
+        IClusterPayoutOracle oracle = IClusterPayoutOracle(pending.oracle);
+        if (address(oracle) == address(0)) revert SnapshotNotFinalized();
         if (earnedRewardCreditFinalized[contentId][roundId][commitKey]) revert AlreadyClaimed();
         if (
             payoutWeight.domain != PAYOUT_DOMAIN_LAUNCH_CREDIT || payoutWeight.rewardPoolId != 0
@@ -430,11 +430,13 @@ contract LaunchDistributionPool is
         if (!oracle.verifyPayoutWeight(payoutWeight, proof)) revert InvalidProof();
 
         earnedRewardCreditFinalized[contentId][roundId][commitKey] = true;
-        launchPayoutSnapshotConsumed[contentId][roundId] = true;
         uint256 effectiveCreditBps = payoutWeight.effectiveWeight;
         paidAmount = _recordEarnedRaterReward(
             pending.rater, contentId, roundId, commitKey, pending.scoreBps, pending.policy, effectiveCreditBps
         );
+        if (paidAmount > 0) {
+            earnedRaterRoundPayoutSnapshotConsumed[contentId][roundId] = true;
+        }
         emit EarnedRaterRewardCreditFinalized(
             pending.rater,
             contentId,
@@ -531,8 +533,10 @@ contract LaunchDistributionPool is
         uint16 scoreBps,
         LaunchRewardPolicy memory policy
     ) internal {
+        address oracle = address(clusterPayoutOracle);
+        if (oracle == address(0)) revert SnapshotNotFinalized();
         pendingEarnedRaterCredits[contentId][roundId][commitKey] = PendingEarnedRaterCredit({
-            rater: rater, scoreBps: scoreBps, policy: policy, pending: true
+            rater: rater, oracle: oracle, scoreBps: scoreBps, policy: policy, pending: true
         });
         emit EarnedRaterRewardCreditPending(rater, contentId, roundId, commitKey, scoreBps);
     }
@@ -581,7 +585,9 @@ contract LaunchDistributionPool is
         returns (bool)
     {
         if (domain != PAYOUT_DOMAIN_LAUNCH_CREDIT || rewardPoolId != 0) return false;
-        return launchPayoutSnapshotConsumed[contentId][roundId];
+        // Launch credits are finalized per commit key, so a partially used root can still
+        // be rejected and replaced until a finalized credit has paid non-revertible funds.
+        return earnedRaterRoundPayoutSnapshotConsumed[contentId][roundId];
     }
 
     function _assignLaunchCap(address rater, uint256 fullCap, LaunchRewardPolicy memory policy)

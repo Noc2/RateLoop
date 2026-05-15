@@ -18,8 +18,9 @@ const SmartContracts: NextPage = () => {
       <p>
         The upgradeable control-plane contracts use <strong>transparent proxies</strong> managed by timelock-owned proxy
         admins: ContentRegistry, ProtocolConfig, RoundVotingEngine, RoundRewardDistributor, FrontendRegistry, and
-        ProfileRegistry. Token, rater identity, launch distribution, participation, governance, and helper contracts are
-        intentionally non-upgradeable.
+        ProfileRegistry, plus the QuestionRewardPoolEscrow and FeedbackBonusEscrow custody contracts. Token, rater
+        identity, launch distribution, participation, governance, and helper contracts are intentionally
+        non-upgradeable.
       </p>
       <p>
         The Solidity sources live in{" "}
@@ -111,7 +112,7 @@ const SmartContracts: NextPage = () => {
             <tr>
               <td className="font-mono text-primary">QuestionRewardPoolEscrow</td>
               <td>Question-scoped LREP or USDC custody, voter rewards, and the frontend-operator reward share</td>
-              <td>No</td>
+              <td>Transparent</td>
             </tr>
             <tr>
               <td className="font-mono text-primary">FeedbackBonusEscrow</td>

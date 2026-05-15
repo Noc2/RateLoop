@@ -31,18 +31,51 @@ test("searchContent forwards query params to the hosted API", async () => {
   });
 
   const response = await read.searchContent({
+    contentIds: ["1", 2n],
     status: "1",
-    sortBy: "most_votes",
+    submitters: [
+      "0x1111111111111111111111111111111111111111",
+      "0x2222222222222222222222222222222222222222",
+    ],
+    sortBy: "highest_rewards",
     limit: 10,
     offset: 20,
   });
 
   assert.equal(response.total, 0);
   assert.match(requestedUrl, /\/content\?/);
+  assert.match(requestedUrl, /contentIds=1%2C2/);
   assert.match(requestedUrl, /status=1/);
-  assert.match(requestedUrl, /sortBy=most_votes/);
+  assert.match(
+    requestedUrl,
+    /submitters=0x1111111111111111111111111111111111111111%2C0x2222222222222222222222222222222222222222/,
+  );
+  assert.match(requestedUrl, /sortBy=highest_rewards/);
   assert.match(requestedUrl, /limit=10/);
   assert.match(requestedUrl, /offset=20/);
+});
+
+test("searchContent forwards relevance sorting", async () => {
+  let requestedUrl = "";
+  const read = createCuryoReadClient({
+    apiBaseUrl: "https://api.curyo.xyz",
+    fetchImpl: async (input: URL | RequestInfo) => {
+      requestedUrl = String(input);
+      return new Response(
+        JSON.stringify({ items: [], total: 0, limit: 10, offset: 0 }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        },
+      );
+    },
+    timeoutMs: 5_000,
+  });
+
+  await read.searchContent({ search: "rbts", sortBy: "relevance" });
+
+  assert.match(requestedUrl, /search=rbts/);
+  assert.match(requestedUrl, /sortBy=relevance/);
 });
 
 test("getProfiles joins addresses into the expected batch query", async () => {
@@ -113,6 +146,72 @@ test("getFollows and getFollowers request the public follow routes", async () =>
     requestedUrls[1] ?? "",
     /\/followers\/0x1111111111111111111111111111111111111111\?limit=10&offset=5$/,
   );
+});
+
+test("getCategories exposes current category fields", async () => {
+  const read = createCuryoReadClient({
+    apiBaseUrl: "https://api.curyo.xyz",
+    fetchImpl: async () =>
+      new Response(
+        JSON.stringify({
+          items: [
+            {
+              id: "1",
+              name: "Protocol",
+              slug: "protocol",
+              createdAt: "123",
+              totalVotes: 7,
+              totalContent: 3,
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        },
+      ),
+    timeoutMs: 5_000,
+  });
+
+  const response = await read.getCategories();
+
+  assert.equal(response.items[0]?.slug, "protocol");
+  assert.equal(response.items[0]?.totalContent, 3);
+});
+
+test("listFrontends exposes current frontend fields", async () => {
+  const read = createCuryoReadClient({
+    apiBaseUrl: "https://api.curyo.xyz",
+    fetchImpl: async () =>
+      new Response(
+        JSON.stringify({
+          items: [
+            {
+              address: "0x1111111111111111111111111111111111111111",
+              operator: "0x2222222222222222222222222222222222222222",
+              stakedAmount: "1000",
+              eligible: true,
+              slashed: false,
+              exitAvailableAt: null,
+              totalFeesCredited: "50",
+              totalFeesClaimed: "10",
+              registeredAt: "123",
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        },
+      ),
+    timeoutMs: 5_000,
+  });
+
+  const response = await read.listFrontends();
+
+  assert.equal(response.items[0]?.operator, "0x2222222222222222222222222222222222222222");
+  assert.equal(response.items[0]?.stakedAmount, "1000");
+  assert.equal(response.items[0]?.totalFeesCredited, "50");
 });
 
 test("getAccuracyLeaderboard can include reputation blocks", async () => {

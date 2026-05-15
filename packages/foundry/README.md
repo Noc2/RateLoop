@@ -35,10 +35,15 @@ auto-verification flow. Verify those contracts manually with
 
 Create a `.env` file (see `.env.example`):
 
-| Variable            | Description                                                 |
-| ------------------- | ----------------------------------------------------------- |
-| `ALCHEMY_API_KEY`   | Optional RPC provider key for testnet/mainnet deploys       |
-| `ETHERSCAN_API_KEY` | Optional explorer API key for Etherscan-compatible networks |
+| Variable                          | Description                                                                |
+| --------------------------------- | -------------------------------------------------------------------------- |
+| `ALCHEMY_API_KEY`                 | Optional RPC provider key for testnet/mainnet deploys                      |
+| `WORLDCHAIN_RPC_URL`              | Optional World Chain mainnet RPC override for live deploys                 |
+| `WORLDCHAIN_SEPOLIA_RPC_URL`      | Optional World Chain Sepolia RPC override for live deploys                 |
+| `NEXT_PUBLIC_WORLD_ID_APP_ID`     | World ID app ID required for live `RaterRegistry` deploys                  |
+| `NEXT_PUBLIC_WORLD_ID_ACTION`     | World ID action ID; defaults to `rateloop-human-credential-v1`             |
+| `WORLD_ID_EXTERNAL_NULLIFIER_HASH` | Optional deploy-script override for the action-derived external nullifier |
+| `ETHERSCAN_API_KEY`               | Optional explorer API key for Etherscan-compatible networks                |
 
 Localhost deploys use the standard Anvil private key directly, so `yarn deploy` does not need a keystore password
 when deploying to `localhost`.
@@ -52,7 +57,7 @@ Live-network deploys are keystore-based rather than private-key-based. Generate 
 contracts/
 ├── ContentRegistry.sol          # Question-first submission & lifecycle management
 ├── RoundVotingEngine.sol        # Core tlock voting logic, metadata-bound commits, and gated round settlement
-├── RoundRewardDistributor.sol   # Reward distribution to winning voters
+├── RoundRewardDistributor.sol   # Revealed-loser refund plus voter/consensus/frontend/treasury reward split
 ├── CategoryRegistry.sol         # Content category management
 ├── ProfileRegistry.sol          # User reputation & metadata
 ├── FrontendRegistry.sol         # Frontend operator fee tracking
@@ -79,9 +84,9 @@ scripts-js/                      # JS helpers for deployment & account managemen
 
 The upgradeable control-plane contracts are deployed behind **transparent upgradeable proxies** and use
 `AccessControlUpgradeable` for role-based permissions: `ContentRegistry`, `RoundVotingEngine`,
-`RoundRewardDistributor`, `ProtocolConfig`, `FrontendRegistry`, and `ProfileRegistry`. Token, identity,
-participation, governance, and helper contracts are intentionally non-upgradeable. For upgradeable implementation
-contracts, storage layout must be preserved across upgrades — never reorder, remove, or change types of existing
-storage variables.
+`RoundRewardDistributor`, `ProtocolConfig`, `FrontendRegistry`, `ProfileRegistry`, `QuestionRewardPoolEscrow`, and
+`FeedbackBonusEscrow`. Token, identity, participation, governance, and helper contracts are intentionally
+non-upgradeable. For upgradeable implementation contracts, storage layout must be preserved across upgrades — never
+reorder, remove, or change types of existing storage variables.
 
 Compiled ABIs and deployed addresses are generated into `packages/contracts/src/` and consumed via the `@rateloop/contracts` workspace package.

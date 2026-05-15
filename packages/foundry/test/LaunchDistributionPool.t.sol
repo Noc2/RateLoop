@@ -297,7 +297,106 @@ contract LaunchDistributionPoolTest is Test {
         assertEq(pool.qualifyingCreditBps(alice), 2_500);
         assertEq(pool.qualifyingRatingCount(alice), 0);
         assertTrue(pool.earnedRewardCreditFinalized(1, 1, _commitKey(1)));
-        assertTrue(pool.isRoundPayoutSnapshotConsumed(pool.PAYOUT_DOMAIN_LAUNCH_CREDIT(), 0, 1, 1));
+        assertFalse(pool.isRoundPayoutSnapshotConsumed(pool.PAYOUT_DOMAIN_LAUNCH_CREDIT(), 0, 1, 1));
+    }
+
+    function test_PendingLaunchCreditUsesRecordedOracleAfterRotation() public {
+        ClusterPayoutOracle recordedOracle = _configureLaunchOracle(1);
+
+        assertEq(_recordLaunchReward(alice, 1, bytes32("anchor-a")), 0);
+
+        IClusterPayoutOracle.PayoutWeight memory payout =
+            _launchPayoutWeight(1, _commitKey(1), alice, 2_500, keccak256("clustered"));
+
+        ClusterPayoutOracle currentOracle = _configureLaunchOracle(1);
+        _proposeAndFinalizeLaunchPayoutSnapshot(currentOracle, 1, payout, keccak256("rotated-oracle"));
+
+        vm.expectRevert(LaunchDistributionPool.InvalidProof.selector);
+        pool.finalizeEarnedRaterRewardCredit(1, 1, _commitKey(1), payout, new bytes32[](0));
+
+        _proposeAndFinalizeLaunchPayoutSnapshot(recordedOracle, 1, payout, keccak256("recorded-oracle"));
+
+        uint256 paidAfterSnapshot = pool.finalizeEarnedRaterRewardCredit(1, 1, _commitKey(1), payout, new bytes32[](0));
+
+        assertEq(paidAfterSnapshot, 0);
+        assertEq(pool.qualifyingCreditBps(alice), 2_500);
+        assertEq(pool.qualifyingRatingCount(alice), 0);
+        assertTrue(pool.earnedRewardCreditFinalized(1, 1, _commitKey(1)));
+    }
+
+    function test_PartialLaunchCreditFinalizationDoesNotBlockRootReplacement() public {
+        ClusterPayoutOracle oracle = _configureLaunchOracle(1);
+        bytes32 aliceCommitKey = _commitKey(1);
+        bytes32 bobCommitKey = keccak256(abi.encode("bob", uint256(1)));
+
+        assertEq(
+            pool.recordEarnedRaterReward(
+                alice,
+                1,
+                1,
+                aliceCommitKey,
+                8_000,
+                3,
+                true,
+                pool.MIN_LAUNCH_CREDIT_STAKE(),
+                _singleAnchor(bytes32("anchor-a"))
+            ),
+            0
+        );
+        assertEq(
+            pool.recordEarnedRaterReward(
+                bob,
+                1,
+                1,
+                bobCommitKey,
+                8_000,
+                3,
+                true,
+                pool.MIN_LAUNCH_CREDIT_STAKE(),
+                _singleAnchor(bytes32("anchor-b"))
+            ),
+            0
+        );
+
+        IClusterPayoutOracle.PayoutWeight memory alicePayout =
+            _launchPayoutWeight(1, aliceCommitKey, alice, 2_500, keccak256("alice-clustered"));
+        _proposeAndFinalizeLaunchPayoutSnapshot(oracle, 1, alicePayout, keccak256("bad-launch-root"));
+
+        assertEq(pool.finalizeEarnedRaterRewardCredit(1, 1, aliceCommitKey, alicePayout, new bytes32[](0)), 0);
+        assertTrue(pool.earnedRewardCreditFinalized(1, 1, aliceCommitKey));
+        assertFalse(pool.isRoundPayoutSnapshotConsumed(pool.PAYOUT_DOMAIN_LAUNCH_CREDIT(), 0, 1, 1));
+
+        bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(pool.PAYOUT_DOMAIN_LAUNCH_CREDIT(), 0, 1, 1);
+        oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("replace-partial-root"));
+
+        IClusterPayoutOracle.PayoutWeight memory bobPayout =
+            _launchPayoutWeight(1, bobCommitKey, bob, 2_500, keccak256("bob-clustered"));
+        _proposeAndFinalizeLaunchPayoutSnapshot(oracle, 1, bobPayout, keccak256("replacement-launch-root"));
+
+        assertEq(pool.finalizeEarnedRaterRewardCredit(1, 1, bobCommitKey, bobPayout, new bytes32[](0)), 0);
+        assertTrue(pool.earnedRewardCreditFinalized(1, 1, bobCommitKey));
+
+        vm.expectRevert(LaunchDistributionPool.AlreadyClaimed.selector);
+        pool.finalizeEarnedRaterRewardCredit(1, 1, aliceCommitKey, alicePayout, new bytes32[](0));
+    }
+
+    function test_PaidLaunchCreditFinalizationBlocksRootReplacement() public {
+        ClusterPayoutOracle oracle = _configureLaunchOracle(5);
+
+        uint256 paid;
+        for (uint256 roundId = 1; roundId < 5; roundId++) {
+            paid = _recordAndFinalizeLaunchOracleCredit(oracle, alice, roundId, pool.BPS_DENOMINATOR());
+            assertEq(paid, 0);
+            assertFalse(pool.isRoundPayoutSnapshotConsumed(pool.PAYOUT_DOMAIN_LAUNCH_CREDIT(), 0, 1, roundId));
+        }
+
+        paid = _recordAndFinalizeLaunchOracleCredit(oracle, alice, 5, pool.BPS_DENOMINATOR());
+        assertEq(paid, 250_000);
+        assertTrue(pool.isRoundPayoutSnapshotConsumed(pool.PAYOUT_DOMAIN_LAUNCH_CREDIT(), 0, 1, 5));
+
+        bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(pool.PAYOUT_DOMAIN_LAUNCH_CREDIT(), 0, 1, 5);
+        vm.expectRevert(ClusterPayoutOracle.SnapshotConsumed.selector);
+        oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("paid-launch-root"));
     }
 
     function test_CorrelationOracleFractionalCreditsOnlyPayCompletedSlots() public {
@@ -1042,7 +1141,8 @@ contract LaunchDistributionPoolTest is Test {
         oracle.proposeCorrelationEpoch(
             1, 1, toRoundId, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
         );
-        vm.warp(100);
+        ClusterPayoutOracle.CorrelationEpochSnapshot memory epoch = oracle.correlationEpochSnapshot(1);
+        vm.warp(uint256(epoch.proposedAt) + 2);
         oracle.finalizeCorrelationEpoch(1);
     }
 
@@ -1068,19 +1168,43 @@ contract LaunchDistributionPoolTest is Test {
             0
         );
 
-        IClusterPayoutOracle.PayoutWeight memory payout = IClusterPayoutOracle.PayoutWeight({
+        IClusterPayoutOracle.PayoutWeight memory payout =
+            _launchPayoutWeight(roundId, _commitKey(roundId), rater, effectiveWeight, keccak256("clustered"));
+        _proposeAndFinalizeLaunchPayoutSnapshot(
+            oracle, roundId, payout, keccak256(abi.encode("round-artifact", roundId))
+        );
+
+        paidAmount = pool.finalizeEarnedRaterRewardCredit(1, roundId, _commitKey(roundId), payout, new bytes32[](0));
+    }
+
+    function _launchPayoutWeight(
+        uint256 roundId,
+        bytes32 commitKey,
+        address rater,
+        uint16 effectiveWeight,
+        bytes32 reasonHash
+    ) internal view returns (IClusterPayoutOracle.PayoutWeight memory payout) {
+        payout = IClusterPayoutOracle.PayoutWeight({
             domain: pool.PAYOUT_DOMAIN_LAUNCH_CREDIT(),
             rewardPoolId: 0,
             contentId: 1,
             roundId: roundId,
-            commitKey: _commitKey(roundId),
+            commitKey: commitKey,
             identityKey: bytes32(0),
             account: rater,
             baseWeight: pool.BPS_DENOMINATOR(),
             independenceBps: effectiveWeight,
             effectiveWeight: effectiveWeight,
-            reasonHash: keccak256("clustered")
+            reasonHash: reasonHash
         });
+    }
+
+    function _proposeAndFinalizeLaunchPayoutSnapshot(
+        ClusterPayoutOracle oracle,
+        uint256 roundId,
+        IClusterPayoutOracle.PayoutWeight memory payout,
+        bytes32 artifactHash
+    ) internal {
         bytes32 leaf = oracle.payoutWeightLeaf(payout);
         oracle.proposeRoundPayoutSnapshot(
             IClusterPayoutOracle.RoundPayoutSnapshotInput({
@@ -1090,19 +1214,18 @@ contract LaunchDistributionPoolTest is Test {
                 roundId: roundId,
                 correlationEpochId: 1,
                 rawEligibleVoters: 1,
-                effectiveParticipantUnits: uint32(effectiveWeight),
-                totalClaimWeight: effectiveWeight,
+                effectiveParticipantUnits: uint32(payout.effectiveWeight),
+                totalClaimWeight: payout.effectiveWeight,
                 weightRoot: leaf,
                 reasonRoot: keccak256("reason-root"),
-                artifactHash: keccak256(abi.encode("round-artifact", roundId)),
+                artifactHash: artifactHash,
                 artifactURI: "ipfs://round"
             })
         );
         bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(pool.PAYOUT_DOMAIN_LAUNCH_CREDIT(), 0, 1, roundId);
-        vm.warp(100 + roundId * 2);
+        ClusterPayoutOracle.RoundPayoutProposal memory proposal = oracle.roundPayoutProposal(snapshotKey);
+        vm.warp(uint256(proposal.proposedAt) + 2);
         oracle.finalizeRoundPayoutSnapshot(snapshotKey);
-
-        paidAmount = pool.finalizeEarnedRaterRewardCredit(1, roundId, _commitKey(roundId), payout, new bytes32[](0));
     }
 
     function _verify(address account, bytes32 nullifier) internal {

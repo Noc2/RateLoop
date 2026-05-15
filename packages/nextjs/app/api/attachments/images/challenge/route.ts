@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getImageAttachmentUploadMode } from "~~/lib/attachments/imageAttachments";
 import {
   IMAGE_UPLOAD_CHALLENGE_TITLE,
   UPLOAD_IMAGE_ACTION,
@@ -36,5 +37,8 @@ export async function POST(request: NextRequest) {
     payloadHash: hashImageUploadChallengePayload(normalized.payload),
   });
 
-  return NextResponse.json(challenge);
+  return NextResponse.json({
+    ...challenge,
+    uploadMode: getImageAttachmentUploadMode(),
+  });
 }

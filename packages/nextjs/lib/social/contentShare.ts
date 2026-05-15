@@ -203,7 +203,7 @@ export function buildContentShareData(content: ContentShareContentInput, origin:
   const openRoundVoteCount = normalizeFiniteInteger(content.openRound?.voteCount);
   const voteLabel = `${totalVotes} vote${totalVotes === 1 ? "" : "s"}`;
   const title = truncateText(
-    rating ? `Rated ${rating.label}/10 on Curyo: ${contentTitle}` : `Rate this on Curyo: ${contentTitle}`,
+    rating ? `Rated ${rating.label}/10 on RateLoop: ${contentTitle}` : `Rate this on RateLoop: ${contentTitle}`,
     TITLE_MAX_LENGTH,
   );
   const description = truncateText(
@@ -214,8 +214,8 @@ export function buildContentShareData(content: ContentShareContentInput, origin:
   );
   const imageAlt = truncateText(
     rating
-      ? `Curyo social card for ${contentTitle}, showing a current rating of ${rating.label} out of 10.`
-      : `Curyo social card for ${contentTitle}, which has no community rating yet.`,
+      ? `RateLoop social card for ${contentTitle}, showing a current rating of ${rating.label} out of 10.`
+      : `RateLoop social card for ${contentTitle}, which has no community rating yet.`,
     ALT_MAX_LENGTH,
   );
 

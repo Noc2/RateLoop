@@ -122,7 +122,7 @@ contract SelectiveRevelationTest is VotingTestBase {
         returns (CommitArtifacts memory artifacts)
     {
         artifacts.salt = salt;
-        artifacts.targetRound = _tlockCommitTargetRound();
+        artifacts.targetRound = _tlockCommitTargetRound(engine, contentId);
         artifacts.drandChainHash = _tlockDrandChainHash();
         artifacts.ciphertext = _testCiphertext(isUp, salt, contentId, artifacts.targetRound, artifacts.drandChainHash);
         artifacts.commitHash = _commitHash(

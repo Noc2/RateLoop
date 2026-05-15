@@ -82,7 +82,7 @@ function RatingShareImage({ shareData }: { shareData: ContentShareData }) {
               border: "2px solid #f7fff5",
             }}
           />
-          <div style={{ fontSize: 32, fontWeight: 800, letterSpacing: 0 }}>Curyo</div>
+          <div style={{ fontSize: 32, fontWeight: 800, letterSpacing: 0 }}>RateLoop</div>
         </div>
         <div
           style={{
@@ -101,7 +101,7 @@ function RatingShareImage({ shareData }: { shareData: ContentShareData }) {
       <div style={{ display: "flex", flex: 1, gap: 44, alignItems: "center", paddingTop: 46 }}>
         <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
           <div style={{ color: "#50f29a", fontSize: 28, fontWeight: 800, marginBottom: 18 }}>
-            {hasRating ? "Current Curyo rating" : "Community rating pending"}
+            {hasRating ? "Current RateLoop rating" : "Community rating pending"}
           </div>
           <div
             style={{
@@ -235,7 +235,7 @@ function FallbackShareImage() {
         fontFamily: "Arial",
       }}
     >
-      <div style={{ color: "#50f29a", fontSize: 34, fontWeight: 800, marginBottom: 18 }}>Curyo</div>
+      <div style={{ color: "#50f29a", fontSize: 34, fontWeight: 800, marginBottom: 18 }}>RateLoop</div>
       <div style={{ fontSize: 86, fontWeight: 900, lineHeight: 1.02, maxWidth: 880 }}>Human reputation at stake</div>
       <div style={{ color: "#cbd7ca", fontSize: 34, marginTop: 28 }}>Get verified, stake LREP, and rate content.</div>
     </div>

@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { CuryoGovernorAbi } from "./abis";
+import { ClusterPayoutOracleAbi, CuryoGovernorAbi, QuestionRewardPoolEscrowAbi } from "./abis";
 import deployedContracts from "./deployedContracts";
 import { getSharedChainStartBlock, getSharedDeploymentAddress, getSharedDeploymentStartBlock } from "./deployments";
 
-type DeploymentContract = { address: `0x${string}`; deployedOnBlock?: number };
+type DeploymentContract = { address: `0x${string}`; abi: readonly unknown[]; deployedOnBlock?: number };
 type DeploymentChain = Record<string, DeploymentContract>;
 
 const deploymentsByChain = deployedContracts as Record<number, DeploymentChain>;
@@ -54,4 +54,57 @@ test("shared deployment helpers return undefined for unknown chains", () => {
 test("shared ABI exports include governance contracts present in shared deployments", () => {
   assert.ok(Array.isArray(CuryoGovernorAbi));
   assert.ok(CuryoGovernorAbi.length > 0);
+});
+
+test("standalone generated ABIs match shared deployment ABIs", () => {
+  for (const [chainId, chain] of Object.entries(deploymentsByChain)) {
+    const clusterPayoutOracle = chain.ClusterPayoutOracle;
+    if (clusterPayoutOracle) {
+      assert.deepEqual(
+        clusterPayoutOracle.abi,
+        ClusterPayoutOracleAbi,
+        `ClusterPayoutOracle ABI mismatch on chain ${chainId}`,
+      );
+    }
+
+    const questionRewardPoolEscrow = chain.QuestionRewardPoolEscrow;
+    if (questionRewardPoolEscrow) {
+      assert.deepEqual(
+        questionRewardPoolEscrow.abi,
+        QuestionRewardPoolEscrowAbi,
+        `QuestionRewardPoolEscrow ABI mismatch on chain ${chainId}`,
+      );
+    }
+  }
+});
+
+test("cluster payout oracle ABI exposes round payout rejection functions", () => {
+  const rejectFinalized = ClusterPayoutOracleAbi.find(
+    (item) => item.type === "function" && item.name === "rejectFinalizedRoundPayoutSnapshot",
+  );
+  const rejectProposed = ClusterPayoutOracleAbi.find(
+    (item) => item.type === "function" && item.name === "rejectRoundPayoutSnapshot",
+  );
+
+  assert.deepEqual(
+    rejectFinalized?.inputs.map((input) => input.type),
+    ["bytes32", "bytes32"],
+  );
+  assert.deepEqual(
+    rejectProposed?.inputs.map((input) => input.type),
+    ["bytes32", "bytes32"],
+  );
+});
+
+test("question reward pool escrow ABI exposes snapshot consumer view", () => {
+  const consumerView = QuestionRewardPoolEscrowAbi.find(
+    (item) => item.type === "function" && item.name === "isRoundPayoutSnapshotConsumed",
+  );
+
+  assert.deepEqual(
+    consumerView?.inputs.map((input) => input.type),
+    ["uint8", "uint256", "uint256", "uint256"],
+  );
+  assert.deepEqual(consumerView?.outputs.map((output) => output.type), ["bool"]);
+  assert.equal(consumerView?.stateMutability, "view");
 });

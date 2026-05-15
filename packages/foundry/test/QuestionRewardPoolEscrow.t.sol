@@ -2153,6 +2153,146 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         _claimQuestionRewardAndAssert(voter1, rewardPoolId, roundId);
     }
 
+    function testRewardPoolExcludesVoterCommittedAfterCloseInExistingRound() public {
+        RoundLib.RoundConfig memory roundConfig = RoundLib.RoundConfig({
+            epochDuration: uint32(EPOCH_DURATION), maxDuration: uint32(7 days), minVoters: 4, maxVoters: 4
+        });
+        uint256 contentId = _submitQuestionWithRoundConfig("post-close-commit-direct", roundConfig);
+        uint256 bountyClosesAt = block.timestamp + 1;
+        uint256 rewardPoolId = _createRewardPoolWithExpiry(contentId, REWARD_POOL_AMOUNT, 3, 1, bountyClosesAt);
+
+        address[] memory timelyVoters = _threeVoters();
+        bool[] memory timelyDirections = _directions(true, true, false);
+        bytes32[] memory timelySalts = new bytes32[](timelyVoters.length);
+        bytes32[] memory timelyCommitKeys = new bytes32[](timelyVoters.length);
+        for (uint256 i = 0; i < timelyVoters.length; i++) {
+            timelySalts[i] = keccak256(abi.encodePacked("post-close-direct-timely", timelyVoters[i], contentId, i));
+            timelyCommitKeys[i] = _commitTestVote(
+                DirectTestCommitRequest({
+                    engine: votingEngine,
+                    hrepToken: hrepToken,
+                    voter: timelyVoters[i],
+                    contentId: contentId,
+                    isUp: timelyDirections[i],
+                    stake: STAKE,
+                    frontend: address(0),
+                    salt: timelySalts[i]
+                })
+            );
+        }
+
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(votingEngine, contentId);
+        RoundLib.Round memory round = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
+        vm.warp(bountyClosesAt + 1);
+        bytes32 lateSalt = keccak256(abi.encodePacked("post-close-direct-late", voter4, contentId));
+        bytes32 lateCommitKey = _commitTestVoteTargetingRevealableAfter(
+            voter4, contentId, true, round.startTime + EPOCH_DURATION, lateSalt
+        );
+        assertGt(votingEngine.commitCommittedAt(contentId, roundId, lateCommitKey), bountyClosesAt);
+
+        _warpPastTlockRevealTime(votingEngine.lastCommitRevealableAfter(contentId, roundId));
+        for (uint256 i = 0; i < timelyVoters.length; i++) {
+            votingEngine.revealVoteByCommitKey(
+                contentId, roundId, timelyCommitKeys[i], timelyDirections[i], 5_000, timelySalts[i]
+            );
+        }
+        votingEngine.revealVoteByCommitKey(contentId, roundId, lateCommitKey, true, 5_000, lateSalt);
+        votingEngine.settleRound(contentId, roundId);
+
+        assertGt(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter1), 0);
+        assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter4), 0);
+    }
+
+    function testRewardPoolBundleExcludesCompleterCommittedAfterCloseInExistingRounds() public {
+        RoundLib.RoundConfig memory roundConfig = RoundLib.RoundConfig({
+            epochDuration: uint32(EPOCH_DURATION), maxDuration: uint32(7 days), minVoters: 4, maxVoters: 4
+        });
+        uint256[] memory contentIds = new uint256[](2);
+        contentIds[0] = _submitQuestionWithContextAndRoundConfig(
+            "https://example.com/post-close-bundle-a", "bundle-a", roundConfig
+        );
+        contentIds[1] = _submitQuestionWithContextAndRoundConfig(
+            "https://example.com/post-close-bundle-b", "bundle-b", roundConfig
+        );
+
+        uint256 bountyClosesAt = block.timestamp + 1;
+        uint256 bundleId =
+            _createSubmissionBundleWithClose(contentIds, funder, REWARD_ASSET_USDC, 20e6, 3, bountyClosesAt);
+
+        bytes32[3][2] memory timelySalts;
+        bytes32[3][2] memory timelyCommitKeys;
+        bytes32[2] memory lateSalts;
+        bytes32[2] memory lateCommitKeys;
+        uint256[2] memory roundIds;
+        address[3] memory timelyVoters = [voter1, voter2, voter3];
+        bool[3] memory timelyDirections = [true, true, false];
+
+        for (uint256 contentIndex = 0; contentIndex < contentIds.length; contentIndex++) {
+            for (uint256 voterIndex = 0; voterIndex < timelyVoters.length; voterIndex++) {
+                timelySalts[contentIndex][voterIndex] = keccak256(
+                    abi.encodePacked("post-close-bundle-timely", contentIds[contentIndex], timelyVoters[voterIndex])
+                );
+                timelyCommitKeys[contentIndex][voterIndex] = _commitTestVote(
+                    DirectTestCommitRequest({
+                        engine: votingEngine,
+                        hrepToken: hrepToken,
+                        voter: timelyVoters[voterIndex],
+                        contentId: contentIds[contentIndex],
+                        isUp: timelyDirections[voterIndex],
+                        stake: STAKE,
+                        frontend: address(0),
+                        salt: timelySalts[contentIndex][voterIndex]
+                    })
+                );
+            }
+            roundIds[contentIndex] = RoundEngineReadHelpers.activeRoundId(votingEngine, contentIds[contentIndex]);
+        }
+
+        vm.warp(bountyClosesAt + 1);
+        for (uint256 contentIndex = 0; contentIndex < contentIds.length; contentIndex++) {
+            lateSalts[contentIndex] =
+                keccak256(abi.encodePacked("post-close-bundle-late", voter4, contentIds[contentIndex]));
+            RoundLib.Round memory round =
+                RoundEngineReadHelpers.round(votingEngine, contentIds[contentIndex], roundIds[contentIndex]);
+            lateCommitKeys[contentIndex] = _commitTestVoteTargetingRevealableAfter(
+                voter4, contentIds[contentIndex], true, round.startTime + EPOCH_DURATION, lateSalts[contentIndex]
+            );
+            assertGt(
+                votingEngine.commitCommittedAt(
+                    contentIds[contentIndex], roundIds[contentIndex], lateCommitKeys[contentIndex]
+                ),
+                bountyClosesAt
+            );
+        }
+
+        _warpPastTlockRevealTime(votingEngine.lastCommitRevealableAfter(contentIds[1], roundIds[1]));
+        for (uint256 contentIndex = 0; contentIndex < contentIds.length; contentIndex++) {
+            for (uint256 voterIndex = 0; voterIndex < timelyVoters.length; voterIndex++) {
+                votingEngine.revealVoteByCommitKey(
+                    contentIds[contentIndex],
+                    roundIds[contentIndex],
+                    timelyCommitKeys[contentIndex][voterIndex],
+                    timelyDirections[voterIndex],
+                    5_000,
+                    timelySalts[contentIndex][voterIndex]
+                );
+            }
+            votingEngine.revealVoteByCommitKey(
+                contentIds[contentIndex],
+                roundIds[contentIndex],
+                lateCommitKeys[contentIndex],
+                true,
+                5_000,
+                lateSalts[contentIndex]
+            );
+            votingEngine.settleRound(contentIds[contentIndex], roundIds[contentIndex]);
+        }
+        rewardPoolEscrow.syncBundleQuestionTerminal(contentIds[1], roundIds[1]);
+
+        assertGt(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, voter1), 0);
+        assertEq(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, voter4), 0);
+    }
+
     function testCompletedPoolRefundRequiresGraceAndSweepsUnclaimedRewards() public {
         uint256 contentId = _submitQuestion("");
         uint256 expiresAt = block.timestamp + EPOCH_DURATION + 10;
@@ -3582,6 +3722,42 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.stopPrank();
 
         return keccak256(abi.encodePacked(voter, commitHash));
+    }
+
+    function _commitTestVoteTargetingRevealableAfter(
+        address voter,
+        uint256 contentId,
+        bool isUp,
+        uint256 revealableAfter,
+        bytes32 salt
+    ) internal returns (bytes32 commitKey) {
+        uint256 roundId = votingEngine.currentRoundId(contentId);
+        if (roundId == 0) {
+            roundId = _defaultTestCommitRoundId(contentId);
+        }
+        uint16 referenceRatingBps = _currentRatingReferenceBps(contentId);
+        uint64 targetRound = _tlockTargetRoundAt(revealableAfter);
+        bytes32 drandChainHash = _tlockDrandChainHash();
+        bytes memory ciphertext = _testCiphertext(isUp, salt, contentId, targetRound, drandChainHash);
+        bytes32 commitHash = TlockVoteLib.buildExpectedRbtsCommitHash(
+            isUp, 5_000, salt, voter, contentId, roundId, referenceRatingBps, targetRound, drandChainHash, ciphertext
+        );
+
+        vm.startPrank(voter);
+        hrepToken.approve(address(votingEngine), STAKE);
+        votingEngine.commitVote(
+            contentId,
+            _roundContext(roundId, referenceRatingBps),
+            targetRound,
+            drandChainHash,
+            commitHash,
+            ciphertext,
+            STAKE,
+            address(0)
+        );
+        vm.stopPrank();
+
+        return _commitKey(voter, commitHash);
     }
 
     /// @dev Settle without triggering bundle qualification on the test's `rewardPoolEscrow`.

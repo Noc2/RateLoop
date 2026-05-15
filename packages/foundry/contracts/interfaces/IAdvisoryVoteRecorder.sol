@@ -2,6 +2,8 @@
 pragma solidity ^0.8.24;
 
 interface IAdvisoryVoteRecorder {
+    function protocolConfig() external view returns (address);
+
     function advisoryCommitKeyByRater(uint256 contentId, uint256 roundId, address rater) external view returns (bytes32);
 
     function advisoryCommitKeyByIdentity(uint256 contentId, uint256 roundId, bytes32 identityKey)

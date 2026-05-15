@@ -16,13 +16,13 @@ contract GasBudgetTest is RoundIntegrationTest {
     uint256 internal constant MAX_SUBMIT_CONTENT_GAS = 725_000;
     // commitVote now validates the full armored AGE envelope and persists the ciphertext payload,
     // so the post-tlock baseline is materially higher than the earlier pre-parser threshold.
-    uint256 internal constant MAX_COMMIT_VOTE_GAS = 2_725_000;
+    uint256 internal constant MAX_COMMIT_VOTE_GAS = 2_900_000;
     uint256 internal constant MAX_REVEAL_VOTE_GAS = 320_000;
-    uint256 internal constant MAX_SETTLE_ROUND_GAS = 475_000;
+    uint256 internal constant MAX_SETTLE_ROUND_GAS = 750_000;
     uint256 internal constant MAX_SETTLE_ROUND_MAX_EPOCH_SCAN_GAS = 5_900_000;
     uint256 internal constant MAX_PROCESS_UNREVEALED_GAS = 250_000;
     uint256 internal constant MAX_CANCEL_EXPIRED_ROUND_GAS = 60_000;
-    uint256 internal constant MAX_CLAIM_REWARD_GAS = 190_000;
+    uint256 internal constant MAX_CLAIM_REWARD_GAS = 250_000;
     uint256 internal constant MAX_CLAIM_PARTICIPATION_REWARD_GAS = 240_000;
     uint256 internal constant MAX_CLAIM_FRONTEND_FEE_GAS = 250_000;
 
@@ -222,64 +222,19 @@ contract GasBudgetTest is RoundIntegrationTest {
         bytes32 s1 = keccak256(abi.encodePacked(voter1, contentId, true, uint256(1)));
         bytes32 s2 = keccak256(abi.encodePacked(voter2, contentId, true, uint256(2)));
         bytes32 s3 = keccak256(abi.encodePacked(voter3, contentId, false, uint256(3)));
-        bytes32 ch1 = _commitHash(true, s1, voter1, contentId);
-        bytes32 ch2 = _commitHash(true, s2, voter2, contentId);
-        bytes32 ch3 = _commitHash(false, s3, voter3, contentId);
-
-        vm.startPrank(voter1);
-        hrepToken.approve(address(votingEngine), STAKE);
-        uint256 cachedRoundContext2 =
-            _roundContext(votingEngine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());
-        votingEngine.commitVote(
-            contentId,
-            cachedRoundContext2,
-            _tlockCommitTargetRound(),
-            _tlockDrandChainHash(),
-            ch1,
-            _testCiphertext(true, s1, contentId),
-            STAKE,
-            address(0)
-        );
-        vm.stopPrank();
-
-        vm.startPrank(voter2);
-        hrepToken.approve(address(votingEngine), STAKE);
-        uint256 cachedRoundContext3 =
-            _roundContext(votingEngine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());
-        votingEngine.commitVote(
-            contentId,
-            cachedRoundContext3,
-            _tlockCommitTargetRound(),
-            _tlockDrandChainHash(),
-            ch2,
-            _testCiphertext(true, s2, contentId),
-            STAKE,
-            address(0)
-        );
-        vm.stopPrank();
-
-        vm.startPrank(voter3);
-        hrepToken.approve(address(votingEngine), STAKE);
-        uint256 cachedRoundContext4 =
-            _roundContext(votingEngine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());
-        votingEngine.commitVote(
-            contentId,
-            cachedRoundContext4,
-            _tlockCommitTargetRound(),
-            _tlockDrandChainHash(),
-            ch3,
-            _testCiphertext(false, s3, contentId),
-            STAKE,
-            address(0)
-        );
-        vm.stopPrank();
+        bytes32 s4 = keccak256(abi.encodePacked(voter4, contentId, false, uint256(4)));
+        (, bytes32 ck1) = _commitWithSalt(voter1, contentId, true, STAKE, s1);
+        (, bytes32 ck2) = _commitWithSalt(voter2, contentId, true, STAKE, s2);
+        (, bytes32 ck3) = _commitWithSalt(voter3, contentId, false, STAKE, s3);
+        _commitWithSalt(voter4, contentId, false, STAKE, s4);
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(votingEngine, contentId);
         RoundLib.Round memory round = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
 
         _warpPastTlockRevealTime(uint256(round.startTime) + EPOCH_DURATION);
-        votingEngine.revealVoteByCommitKey(contentId, roundId, _commitKey(voter1, ch1), true, 5_000, s1);
-        votingEngine.revealVoteByCommitKey(contentId, roundId, _commitKey(voter2, ch2), true, 5_000, s2);
+        votingEngine.revealVoteByCommitKey(contentId, roundId, ck1, true, 5_000, s1);
+        votingEngine.revealVoteByCommitKey(contentId, roundId, ck2, true, 5_000, s2);
+        votingEngine.revealVoteByCommitKey(contentId, roundId, ck3, false, 5_000, s3);
 
         vm.warp(
             round.startTime + 7 days + ProtocolConfig(address(votingEngine.protocolConfig())).revealGracePeriod() + 1

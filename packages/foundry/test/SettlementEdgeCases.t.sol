@@ -7,6 +7,7 @@ import { ContentRegistry } from "../contracts/ContentRegistry.sol";
 import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
 import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
 import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
+import { RewardMath } from "../contracts/libraries/RewardMath.sol";
 import { RoundLib } from "../contracts/libraries/RoundLib.sol";
 import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
 import { HumanReputation } from "../contracts/HumanReputation.sol";
@@ -173,6 +174,39 @@ contract SettlementEdgeCasesTest is VotingTestBase {
 
     function _reveal(uint256 contentId, uint256 roundId, bytes32 commitKey, bool isUp, bytes32 salt) internal {
         engine.revealVoteByCommitKey(contentId, roundId, commitKey, isUp, 5_000, salt);
+    }
+
+    function _commitKeyForVoter(RoundVotingEngine votingEngine, uint256 contentId, uint256 roundId, address voter)
+        internal
+        view
+        returns (bytes32)
+    {
+        return _commitKey(voter, votingEngine.voterCommitHash(contentId, roundId, voter));
+    }
+
+    function _expectedRbtsStakeReturn(RoundVotingEngine votingEngine, uint256 contentId, uint256 roundId, address voter)
+        internal
+        view
+        returns (uint256)
+    {
+        bytes32 commitKey = _commitKeyForVoter(votingEngine, contentId, roundId, voter);
+        uint256 returnedStake = votingEngine.commitRbtsStakeReturned(contentId, roundId, commitKey);
+        uint256 forfeitedStake = votingEngine.commitRbtsForfeitedStake(contentId, roundId, commitKey);
+        return returnedStake + RewardMath.calculateRevealedLoserRefund(forfeitedStake);
+    }
+
+    function _expectedRbtsVoterReward(RoundVotingEngine votingEngine, uint256 contentId, uint256 roundId, address voter)
+        internal
+        view
+        returns (uint256)
+    {
+        bytes32 commitKey = _commitKeyForVoter(votingEngine, contentId, roundId, voter);
+        uint256 rewardWeight = votingEngine.commitRbtsRewardWeight(contentId, roundId, commitKey);
+        return RewardMath.calculateVoterReward(
+            rewardWeight,
+            votingEngine.roundRbtsRewardWeight(contentId, roundId),
+            votingEngine.roundVoterPool(contentId, roundId)
+        );
     }
 
     function _submitContent() internal returns (uint256 contentId) {
@@ -592,7 +626,7 @@ contract SettlementEdgeCasesTest is VotingTestBase {
     }
 
     // =========================================================================
-    // 12. CONSENSUS RESERVE AT ZERO: unanimous round settles with zero subsidy
+    // 12. CONSENSUS RESERVE AT ZERO: unanimous round settles without initial subsidy
     // =========================================================================
 
     function test_Settle_Unanimous_ZeroReserve_SettlesWithZeroSubsidy() public {
@@ -610,8 +644,14 @@ contract SettlementEdgeCasesTest is VotingTestBase {
         RoundLib.Round memory settled = RoundEngineReadHelpers.round(engine2, contentId, roundId);
         assertEq(uint256(settled.state), uint256(RoundLib.RoundState.Settled));
 
-        // Voter pool should be 0 since reserve was 0
-        assertEq(engine2.roundVoterPool(contentId, roundId), 0);
+        uint256 forfeitedPool = engine2.roundRbtsForfeitedPool(contentId, roundId);
+        uint256 loserRefundShare = RewardMath.calculateRevealedLoserRefund(forfeitedPool);
+        (uint256 voterShare, uint256 frontendShare,, uint256 consensusShare) =
+            RewardMath.splitPool(forfeitedPool - loserRefundShare);
+
+        assertEq(engine2.consensusReserve(), consensusShare);
+        assertGt(forfeitedPool, 0, "RBTS forfeitures still fund the round with no reserve subsidy");
+        assertEq(engine2.roundVoterPool(contentId, roundId), voterShare + frontendShare);
     }
 
     // =========================================================================
@@ -761,7 +801,9 @@ contract SettlementEdgeCasesTest is VotingTestBase {
         rewardDistributor.claimReward(contentId, roundId);
 
         uint256 balanceAfter = hrepToken.balanceOf(voter3);
-        assertEq(balanceAfter - balanceBefore, STAKE / 20);
+        uint256 expectedStakeReturn = _expectedRbtsStakeReturn(engine, contentId, roundId, voter3);
+        uint256 expectedVoterReward = _expectedRbtsVoterReward(engine, contentId, roundId, voter3);
+        assertEq(balanceAfter - balanceBefore, expectedStakeReturn + expectedVoterReward);
     }
 
     // =========================================================================
@@ -840,10 +882,10 @@ contract SettlementEdgeCasesTest is VotingTestBase {
     }
 
     // =========================================================================
-    // 27. WINNER REWARD CLAIM: gets stake + reward
+    // 27. WINNER REWARD CLAIM: receives RBTS stake return and reward
     // =========================================================================
 
-    function test_RewardClaim_Winner_GetsStakePlusReward() public {
+    function test_RewardClaim_Winner_GetsRbtsClaimValue() public {
         (uint256 contentId, uint256 roundId) = _setupThreeVoterRound(true, true, false);
         engine.settleRound(contentId, roundId);
 
@@ -853,8 +895,9 @@ contract SettlementEdgeCasesTest is VotingTestBase {
         rewardDistributor.claimReward(contentId, roundId);
 
         uint256 balanceAfter = hrepToken.balanceOf(voter1);
-        // Winner gets at least their stake back + some reward from losing pool
-        assertGt(balanceAfter - balanceBefore, STAKE);
+        uint256 expectedStakeReturn = _expectedRbtsStakeReturn(engine, contentId, roundId, voter1);
+        uint256 expectedVoterReward = _expectedRbtsVoterReward(engine, contentId, roundId, voter1);
+        assertEq(balanceAfter - balanceBefore, expectedStakeReturn + expectedVoterReward);
     }
 
     // =========================================================================

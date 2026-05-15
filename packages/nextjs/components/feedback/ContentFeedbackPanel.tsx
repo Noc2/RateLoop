@@ -122,15 +122,17 @@ export function ContentFeedbackPanel({
   } as any);
   const hasCurrentRoundVote =
     hasOptimisticCurrentRoundVote || hasNonZeroCommit(myCommitHash) || hasNonZeroCommit(myAdvisoryCommitKey);
+  const isFeedbackOpen = isLoading ? Boolean(item?.openRound?.roundId) : Boolean(feedback.openRoundId);
   const canSubmitDraft = Boolean(item && bodyLength >= 4 && bodyLength <= CONTENT_FEEDBACK_BODY_MAX_LENGTH);
   const isOwnContent = Boolean(item?.isOwnContent);
-  const submitDisabled = !canSubmitDraft || isSubmitting || !hasCurrentRoundVote || isOwnContent;
+  const submitDisabled = !canSubmitDraft || isSubmitting || !isFeedbackOpen || !hasCurrentRoundVote || isOwnContent;
   const submitTooltip = getContentFeedbackSubmitTooltip({
     canSubmitDraft,
     hasCurrentRoundVote,
+    isFeedbackOpen,
     isOwnContent,
   });
-  const submitButtonToneClassName = hasCurrentRoundVote ? "vote-feedback" : "vote-light";
+  const submitButtonToneClassName = isFeedbackOpen && hasCurrentRoundVote ? "vote-feedback" : "vote-light";
   const ownHiddenCopy =
     feedback.ownHiddenCount > 0
       ? `${feedback.ownHiddenCount} hidden note${feedback.ownHiddenCount === 1 ? "" : "s"} from you`
@@ -149,7 +151,7 @@ export function ContentFeedbackPanel({
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!canSubmitDraft || !hasCurrentRoundVote || isOwnContent) return;
+    if (!canSubmitDraft || !isFeedbackOpen || !hasCurrentRoundVote || isOwnContent) return;
 
     if (!address) {
       notification.info("Sign in to add feedback.");

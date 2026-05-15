@@ -5,7 +5,8 @@ pragma solidity ^0.8.20;
 /// @notice Helpers for per-content round state transitions and timing.
 /// @dev Rounds replace global epochs. Each content item has independent rounds that
 ///      accumulate votes across 20-minute tlock epochs. Settlement triggers when ≥3
-///      votes are revealed. If 1 week passes below commit quorum the round cancels with refunds;
+///      votes are revealed. If the 20-minute voting window passes below commit quorum
+///      the round cancels with refunds;
 ///      once commit quorum exists, failure to reach reveal quorum can finalize as RevealFailed.
 ///      Tlock is the primary reveal mechanism — votes are encrypted to the epoch end time
 ///      and become decryptable via drand after each epoch window.
@@ -25,7 +26,7 @@ library RoundLib {
 
     struct RoundConfig {
         uint32 epochDuration; // Duration of each voting epoch (default: 20 minutes)
-        uint32 maxDuration; // Max time before round expires (default: 7 days)
+        uint32 maxDuration; // Max time before round expires (default: 20 minutes)
         uint16 minVoters; // Minimum revealed votes to trigger settlement (default: 3)
         uint16 maxVoters; // Gas safety cap (default: 200)
     }

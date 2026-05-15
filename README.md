@@ -196,7 +196,7 @@ yarn test:ts
 # Solidity unit tests
 yarn foundry:test
 
-# E2E smoke suite (Chromium only)
+# E2E default Chromium app suite
 yarn e2e
 
 # E2E lifecycle coverage (settlement, cancellation, dormancy)
@@ -212,7 +212,7 @@ yarn workspace @rateloop/nextjs e2e:full
 yarn e2e:ui
 ```
 
-CI runs the smoke, lifecycle, and keeper-backed E2E suites separately, so `yarn e2e` alone does not match full CI browser coverage.
+CI runs smoke, app, responsive, accessibility, lifecycle, and keeper-backed E2E suites separately on pushes and PRs. The scheduled workflow also runs browser-compatibility and mobile suites, so `yarn e2e` alone does not match full CI browser coverage.
 
 ### Run the Dead-Code Scan
 
