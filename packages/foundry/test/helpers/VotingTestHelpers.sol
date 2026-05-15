@@ -7,7 +7,6 @@ import { Base64 } from "@openzeppelin/contracts/utils/Base64.sol";
 import { Strings } from "@openzeppelin/contracts/utils/Strings.sol";
 import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { HumanReputation } from "../../contracts/HumanReputation.sol";
 import { ContentRegistry } from "../../contracts/ContentRegistry.sol";
 import { ProtocolConfig } from "../../contracts/ProtocolConfig.sol";
 import { RaterRegistry } from "../../contracts/RaterRegistry.sol";
@@ -501,7 +500,7 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
 
     struct DirectTestCommitRequest {
         RoundVotingEngine engine;
-        HumanReputation hrepToken;
+        IERC20 hrepToken;
         address voter;
         uint256 contentId;
         bool isUp;
