@@ -2018,15 +2018,10 @@ export function ContentSubmissionSection() {
 
   const bountyDetailsCard = (
     <div className="space-y-5">
-      <div className="flex items-start justify-between gap-3">
-        <p className="flex items-center gap-1.5 text-base font-medium text-base-content">
-          Bounty
-          <InfoTooltip text={bountyTooltipText} />
-        </p>
-        <span className="shrink-0 text-sm font-semibold text-base-content/60">
-          Min {formatSubmissionRewardAmount(minimumBountyAmount, rewardAsset)}
-        </span>
-      </div>
+      <p className="flex items-center gap-1.5 text-base font-medium text-base-content">
+        Bounty
+        <InfoTooltip text={bountyTooltipText} />
+      </p>
 
       <div className="surface-card-nested rounded-lg px-3 py-2">
         <p className="text-sm font-medium text-base-content">Mandatory spam protection</p>
@@ -2068,7 +2063,9 @@ export function ContentSubmissionSection() {
           className="grow bg-transparent"
           aria-label="Bounty amount"
         />
-        <span className="text-sm font-semibold text-base-content/50">{rewardAsset === "hrep" ? "LREP" : "USDC"}</span>
+        <span className="shrink-0 whitespace-nowrap text-sm font-semibold text-base-content/50">
+          Min {formatSubmissionRewardAmount(minimumBountyAmount, rewardAsset)}
+        </span>
       </label>
       {bountyStepAttempted && rewardAmountError ? <p className="text-base text-error">{rewardAmountError}</p> : null}
 
