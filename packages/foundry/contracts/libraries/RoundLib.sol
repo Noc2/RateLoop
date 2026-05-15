@@ -49,11 +49,14 @@ library RoundLib {
 
     /// @dev `revealableAfter` is dual-purpose to save a storage slot:
     ///      - while `revealed == false`: epoch-end timestamp (gates the earliest reveal call)
-    ///      - while `revealed == true`:  reveal timestamp (used by bounty/cleanup deadline checks)
-    ///      Every reader MUST gate its interpretation on `revealed`. See:
+    ///      - while `revealed == true`:  reveal timestamp (used by cleanup and legacy deadline checks)
+    ///      Every reader MUST gate its interpretation on `revealed`. New bounty
+    ///      eligibility reads RoundVotingEngine.commitCommittedAt instead, with this
+    ///      value kept only as a legacy fallback for records that predate that getter.
+    ///      See:
     ///        - RoundCleanupLib.processUnrevealedVotes (epoch-end semantics, guarded by !revealed)
-    ///        - QuestionRewardPoolEscrow._timelyRevealedCommitFrontend (reveal-time, guarded by revealed)
-    ///        - QuestionRewardPoolEscrowQualificationLib (reveal-time, guarded by revealed)
+    ///        - QuestionRewardPoolEscrow._timelyRevealedCommitFrontend (reveal-time fallback, guarded by revealed)
+    ///        - QuestionRewardPoolEscrowQualificationLib (reveal-time fallback, guarded by revealed)
     ///      DEPLOY POLICY: this dual semantics is in-place-upgrade unsafe. Existing-revealed
     ///      commits store reveal timestamps; a future implementation that interpreted the
     ///      field as epoch-end semantics on those records would silently corrupt cleanup and

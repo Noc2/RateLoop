@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import { IRaterIdentityRegistry } from "../interfaces/IRaterIdentityRegistry.sol";
-import { ProtocolConfig } from "../ProtocolConfig.sol";
-import { RoundVotingEngine } from "../RoundVotingEngine.sol";
+import {IRaterIdentityRegistry} from "../interfaces/IRaterIdentityRegistry.sol";
+import {ProtocolConfig} from "../ProtocolConfig.sol";
+import {RoundVotingEngine} from "../RoundVotingEngine.sol";
 
 library QuestionRewardPoolEscrowVoterLib {
     function timelyRevealedCommitFrontend(
@@ -17,8 +17,21 @@ library QuestionRewardPoolEscrowVoterLib {
         // iteration loops, and materializing the full ciphertext on every read is expensive.
         (address voter,, address commitFrontend, uint48 commitRevealedAt, bool commitRevealed,,) =
             votingEngine.commitCore(contentId, roundId, commitKey);
-        return
-            (voter != address(0) && commitRevealed && (closesAt == 0 || commitRevealedAt <= closesAt), commitFrontend);
+        uint48 committedAt = votingEngine.commitCommittedAt(contentId, roundId, commitKey);
+        return (
+            voter != address(0) && commitRevealed && committedByBountyClose(closesAt, committedAt, commitRevealedAt),
+            commitFrontend
+        );
+    }
+
+    function committedByBountyClose(uint64 closesAt, uint48 committedAt, uint48 revealedAt)
+        internal
+        pure
+        returns (bool)
+    {
+        if (closesAt == 0) return true;
+        uint48 eligibilityTimestamp = committedAt == 0 ? revealedAt : committedAt;
+        return eligibilityTimestamp <= closesAt;
     }
 
     function resolveCurrentRater(ProtocolConfig protocolConfig, address account)

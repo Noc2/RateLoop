@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
-import { ProtocolConfig } from "../ProtocolConfig.sol";
-import { RoundVotingEngine } from "../RoundVotingEngine.sol";
-import { IClusterPayoutOracle } from "../interfaces/IClusterPayoutOracle.sol";
-import { RoundLib } from "./RoundLib.sol";
-import { RewardPool, RoundSnapshot } from "./QuestionRewardPoolEscrowTypes.sol";
-import { QuestionRewardPoolEscrowEligibilityLib } from "./QuestionRewardPoolEscrowEligibilityLib.sol";
-import { QuestionRewardPoolEscrowVoterLib } from "./QuestionRewardPoolEscrowVoterLib.sol";
+import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import {ProtocolConfig} from "../ProtocolConfig.sol";
+import {RoundVotingEngine} from "../RoundVotingEngine.sol";
+import {IClusterPayoutOracle} from "../interfaces/IClusterPayoutOracle.sol";
+import {RoundLib} from "./RoundLib.sol";
+import {RewardPool, RoundSnapshot} from "./QuestionRewardPoolEscrowTypes.sol";
+import {QuestionRewardPoolEscrowEligibilityLib} from "./QuestionRewardPoolEscrowEligibilityLib.sol";
+import {QuestionRewardPoolEscrowVoterLib} from "./QuestionRewardPoolEscrowVoterLib.sol";
 
 library QuestionRewardPoolEscrowQualificationLib {
     using SafeCast for uint256;
@@ -376,9 +376,8 @@ library QuestionRewardPoolEscrowQualificationLib {
         (,, uint16 commitCount,,,,,,,,,,,) = ctx.votingEngine.rounds(ctx.contentId, ctx.roundId);
         for (uint256 i = 0; i < commitCount;) {
             bytes32 commitKey = ctx.votingEngine.getRoundCommitKey(ctx.contentId, ctx.roundId, i);
-            (address voter,,, uint48 revealedAt, bool revealed,,) =
-                ctx.votingEngine.commitCore(ctx.contentId, ctx.roundId, commitKey);
-            if (voter != address(0) && revealed && _revealedByBountyClose(ctx.bountyClosesAt, revealedAt)) {
+            (address voter, bool bountyEligibleTiming) = _readBountyEligibleRevealedCommit(ctx, commitKey);
+            if (bountyEligibleTiming) {
                 (bytes32 identityKey, address holder) = QuestionRewardPoolEscrowVoterLib.commitIdentity(
                     ctx.votingEngine, ctx.protocolConfig, ctx.contentId, ctx.roundId, commitKey, voter
                 );
@@ -408,6 +407,20 @@ library QuestionRewardPoolEscrowQualificationLib {
                 ++i;
             }
         }
+    }
+
+    function _readBountyEligibleRevealedCommit(QualificationContext memory ctx, bytes32 commitKey)
+        private
+        view
+        returns (address voter, bool bountyEligibleTiming)
+    {
+        uint48 revealedAt;
+        bool revealed;
+        (voter,,, revealedAt, revealed,,) = ctx.votingEngine.commitCore(ctx.contentId, ctx.roundId, commitKey);
+        if (voter == address(0) || !revealed) return (voter, false);
+        uint48 committedAt = ctx.votingEngine.commitCommittedAt(ctx.contentId, ctx.roundId, commitKey);
+        bountyEligibleTiming =
+            QuestionRewardPoolEscrowVoterLib.committedByBountyClose(ctx.bountyClosesAt, committedAt, revealedAt);
     }
 
     function _claimWeight(RoundVotingEngine votingEngine, uint256 contentId, uint256 roundId, bytes32 commitKey)
@@ -510,10 +523,6 @@ library QuestionRewardPoolEscrowQualificationLib {
         uint256 rewardPoolId
     ) private view returns (address) {
         return rewardPoolClusterPayoutOracle[rewardPoolId];
-    }
-
-    function _revealedByBountyClose(uint64 bountyClosesAt, uint48 revealedAt) private pure returns (bool) {
-        return bountyClosesAt == 0 || revealedAt <= bountyClosesAt;
     }
 
     function _isExcludedRater(

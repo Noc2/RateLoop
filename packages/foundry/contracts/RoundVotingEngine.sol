@@ -1,28 +1,28 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
-import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
+import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
-import { ContentRegistry } from "./ContentRegistry.sol";
-import { ProtocolConfig } from "./ProtocolConfig.sol";
-import { RoundLib } from "./libraries/RoundLib.sol";
-import { RatingLib } from "./libraries/RatingLib.sol";
-import { RoundSettlementSideEffectsLib } from "./libraries/RoundSettlementSideEffectsLib.sol";
-import { RoundSettlementDistributionLib } from "./libraries/RoundSettlementDistributionLib.sol";
-import { RoundCleanupLib } from "./libraries/RoundCleanupLib.sol";
-import { RoundRevealLib } from "./libraries/RoundRevealLib.sol";
-import { VotePreflightLib } from "./libraries/VotePreflightLib.sol";
-import { IFrontendRegistry } from "./interfaces/IFrontendRegistry.sol";
-import { ICategoryRegistry } from "./interfaces/ICategoryRegistry.sol";
-import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol";
-import { IRoundVotingEngine } from "./interfaces/IRoundVotingEngine.sol";
-import { IParticipationPool } from "./interfaces/IParticipationPool.sol";
+import {ContentRegistry} from "./ContentRegistry.sol";
+import {ProtocolConfig} from "./ProtocolConfig.sol";
+import {RoundLib} from "./libraries/RoundLib.sol";
+import {RatingLib} from "./libraries/RatingLib.sol";
+import {RoundSettlementSideEffectsLib} from "./libraries/RoundSettlementSideEffectsLib.sol";
+import {RoundSettlementDistributionLib} from "./libraries/RoundSettlementDistributionLib.sol";
+import {RoundCleanupLib} from "./libraries/RoundCleanupLib.sol";
+import {RoundRevealLib} from "./libraries/RoundRevealLib.sol";
+import {VotePreflightLib} from "./libraries/VotePreflightLib.sol";
+import {IFrontendRegistry} from "./interfaces/IFrontendRegistry.sol";
+import {ICategoryRegistry} from "./interfaces/ICategoryRegistry.sol";
+import {IRaterIdentityRegistry} from "./interfaces/IRaterIdentityRegistry.sol";
+import {IRoundVotingEngine} from "./interfaces/IRoundVotingEngine.sol";
+import {IParticipationPool} from "./interfaces/IParticipationPool.sol";
 
 interface IQuestionBundleRoundObserver {
     function recordBundleQuestionTerminal(uint256 contentId, uint256 roundId, bool settled) external;
@@ -581,6 +581,7 @@ contract RoundVotingEngine is
             isUp: false,
             epochIndex: epochIdx
         });
+        commitCommittedAt[contentId][roundId][commitKey] = block.timestamp.toUint48();
     }
 
     function _markFrontendEligibility(uint256 contentId, uint256 roundId, bytes32 commitKey, address frontend)
@@ -713,8 +714,8 @@ contract RoundVotingEngine is
         address bundleEscrow = registry.questionRewardPoolEscrow();
         if (bundleEscrow == address(0)) return;
 
-        try IQuestionBundleRoundObserver(bundleEscrow).recordBundleQuestionTerminal(contentId, roundId, settled) { }
-            catch { }
+        try IQuestionBundleRoundObserver(bundleEscrow).recordBundleQuestionTerminal(contentId, roundId, settled) {}
+            catch {}
     }
 
     // =========================================================================
@@ -1364,6 +1365,10 @@ contract RoundVotingEngine is
     mapping(uint256 => mapping(uint256 => uint64)) public roundRatingUpEvidence;
     mapping(uint256 => mapping(uint256 => uint64)) public roundRatingDownEvidence;
 
+    // Commit timestamp used for bounty eligibility. Added after existing storage slots
+    // so in-place upgrades do not shift older mappings.
+    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint48))) public commitCommittedAt;
+
     // --- Storage gap reserved for future upgrades ---
-    uint256[28] private __gap;
+    uint256[27] private __gap;
 }
