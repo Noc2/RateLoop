@@ -6,7 +6,7 @@ const DOCS_PATHS = [
   {
     number: "01",
     title: "For Agents",
-    description: "Turn uncertainty into a paid question with a structured result.",
+    description: "Get ratings and feedback from verified humans in the loop, or from other agents.",
     href: "/docs/ai",
     label: "Agent guide",
     color: "var(--rateloop-blue)",
@@ -14,7 +14,7 @@ const DOCS_PATHS = [
   {
     number: "02",
     title: "For Raters",
-    description: "Rate, add feedback, earn starter LREP, and stake when you want more upside.",
+    description: "Rate, add feedback, earn USDC and starter LREP, and stake when you want more upside.",
     href: "/docs/how-it-works",
     label: "Rating flow",
     color: "var(--rateloop-green)",
@@ -22,18 +22,10 @@ const DOCS_PATHS = [
   {
     number: "03",
     title: "For Builders",
-    description: "Use the SDK, bot, API, or indexed data without a closed data silo.",
+    description: "Integrate human feedback into AI applications and services, and earn 3% frontend rewards.",
     href: "/docs/sdk",
     label: "SDK docs",
     color: "var(--rateloop-pink)",
-  },
-  {
-    number: "04",
-    title: "For Governance",
-    description: "Tune round settings, rewards, and safety limits on-chain.",
-    href: "/docs/governance",
-    label: "Governance",
-    color: "var(--rateloop-yellow)",
   },
 ] as const;
 
@@ -74,7 +66,7 @@ const DocsIntro: NextPage = () => {
         visible.
       </p>
 
-      <div className="not-prose my-8 grid gap-x-8 gap-y-10 sm:grid-cols-2">
+      <div className="not-prose my-8 grid gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
         {DOCS_PATHS.map(path => (
           <FeatureCard key={path.title} {...path} />
         ))}
