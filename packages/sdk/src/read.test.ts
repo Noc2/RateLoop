@@ -148,6 +148,72 @@ test("getFollows and getFollowers request the public follow routes", async () =>
   );
 });
 
+test("getCategories exposes current category fields", async () => {
+  const read = createCuryoReadClient({
+    apiBaseUrl: "https://api.curyo.xyz",
+    fetchImpl: async () =>
+      new Response(
+        JSON.stringify({
+          items: [
+            {
+              id: "1",
+              name: "Protocol",
+              slug: "protocol",
+              createdAt: "123",
+              totalVotes: 7,
+              totalContent: 3,
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        },
+      ),
+    timeoutMs: 5_000,
+  });
+
+  const response = await read.getCategories();
+
+  assert.equal(response.items[0]?.slug, "protocol");
+  assert.equal(response.items[0]?.totalContent, 3);
+});
+
+test("listFrontends exposes current frontend fields", async () => {
+  const read = createCuryoReadClient({
+    apiBaseUrl: "https://api.curyo.xyz",
+    fetchImpl: async () =>
+      new Response(
+        JSON.stringify({
+          items: [
+            {
+              address: "0x1111111111111111111111111111111111111111",
+              operator: "0x2222222222222222222222222222222222222222",
+              stakedAmount: "1000",
+              eligible: true,
+              slashed: false,
+              exitAvailableAt: null,
+              totalFeesCredited: "50",
+              totalFeesClaimed: "10",
+              registeredAt: "123",
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        },
+      ),
+    timeoutMs: 5_000,
+  });
+
+  const response = await read.listFrontends();
+
+  assert.equal(response.items[0]?.operator, "0x2222222222222222222222222222222222222222");
+  assert.equal(response.items[0]?.stakedAmount, "1000");
+  assert.equal(response.items[0]?.totalFeesCredited, "50");
+});
+
 test("getAccuracyLeaderboard can include reputation blocks", async () => {
   let requestedUrl = "";
   const read = createCuryoReadClient({

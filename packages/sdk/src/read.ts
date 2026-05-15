@@ -136,19 +136,24 @@ export interface CuryoVoteItem {
 
 export interface CuryoFrontendItem {
   address: `0x${string}`;
-  eligible?: boolean;
-  slashed?: boolean;
-  stake?: string;
-  accumulatedFees?: string;
-  exitAvailableAt?: string | null;
+  operator: `0x${string}`;
+  stakedAmount: string;
+  eligible: boolean;
+  slashed: boolean;
+  exitAvailableAt: string | null;
+  totalFeesCredited: string;
+  totalFeesClaimed: string;
+  registeredAt: string;
   [key: string]: unknown;
 }
 
 export interface CuryoCategoryItem {
   id: string;
-  name?: string;
-  status?: number;
-  totalVotes?: number;
+  name: string;
+  slug: string;
+  createdAt: string;
+  totalVotes: number;
+  totalContent: number;
   [key: string]: unknown;
 }
 
