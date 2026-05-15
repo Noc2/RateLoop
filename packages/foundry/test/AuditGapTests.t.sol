@@ -387,13 +387,22 @@ contract AuditGapTests is VotingTestBase {
         uint256 v2After = hrepToken.balanceOf(voter2);
         assertTrue(v2After > v2Before, "Winner 2 should receive reward");
 
-        // 3. Loser refund (voter3 — revealed loser gets 5% rebate)
+        // 3. Loser claim (voter3 - revealed losing side gets its RBTS stake return/reward plus forfeiture rebate)
+        uint256 forfeitedStake = votingEngine.commitRbtsForfeitedStake(contentId, 1, ck3);
+        uint256 expectedRebate = (forfeitedStake * 500) / 10000;
+        uint256 claimedRebateBefore = rewardDistributor.roundLoserRebateClaimedAmount(contentId, 1);
+
         uint256 v3Before = hrepToken.balanceOf(voter3);
         vm.prank(voter3);
         rewardDistributor.claimReward(contentId, 1);
         uint256 v3After = hrepToken.balanceOf(voter3);
-        assertTrue(v3After > v3Before, "Revealed loser should receive 5% rebate");
-        assertEq(v3After - v3Before, STAKE * 500 / 10000, "Rebate should be 5% of stake");
+        assertTrue(v3After > v3Before, "Revealed losing-side voter should receive RBTS claim value");
+        assertEq(
+            rewardDistributor.roundLoserRebateClaimedAmount(contentId, 1) - claimedRebateBefore,
+            expectedRebate,
+            "Rebate should be 5% of forfeited stake"
+        );
+        assertLt(v3After - v3Before, STAKE, "Forfeited losing side should not recover full stake");
 
         // 4. Frontend fee (credited to FrontendRegistry, then claimed by operator)
         vm.prank(frontend);
@@ -585,10 +594,19 @@ contract AuditGapTests is VotingTestBase {
         uint256 reserveAfter = votingEngine.consensusReserve();
         assertTrue(reserveAfter < reserveBefore, "Consensus reserve should decrease");
 
-        // Expected subsidy: 5% of total stake (30 HREP), capped at 50 HREP
+        // Expected subsidy: 5% of total stake (30 HREP), capped at 50 HREP.
+        // The observed reserve decrease is net of the RBTS forfeiture consensus share
+        // replenished during the same settlement.
         uint256 totalStake = STAKE * 3;
         uint256 expectedSubsidy = (totalStake * 500) / 10000;
-        assertEq(reserveBefore - reserveAfter, expectedSubsidy, "Reserve decrease should match subsidy formula");
+        uint256 forfeitedPool = votingEngine.roundRbtsForfeitedPool(contentId, 1);
+        uint256 loserRefundShare = (forfeitedPool * 500) / 10000;
+        uint256 forfeitureConsensusShare = ((forfeitedPool - loserRefundShare) * 500) / 10000;
+        assertEq(
+            reserveBefore - reserveAfter,
+            expectedSubsidy - forfeitureConsensusShare,
+            "Reserve decrease should match net subsidy accounting"
+        );
 
         // Winners should be able to claim rewards
         uint256 v1Before = hrepToken.balanceOf(voter1);
