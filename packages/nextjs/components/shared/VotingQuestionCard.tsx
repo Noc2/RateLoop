@@ -576,7 +576,7 @@ export function VotingQuestionCard({
       maskRepeat: "no-repeat",
     };
     const dockSurfaceStyle = {
-      background: compact ? "var(--curyo-surface)" : VOTING_SURFACE_BACKGROUND,
+      background: compact ? "var(--curyo-surface-mobile-vote)" : VOTING_SURFACE_BACKGROUND,
     };
     const dockContentStyle = compact ? { paddingBottom: "env(safe-area-inset-bottom)" } : undefined;
     const dockShellClassName = compact ? "rounded-none" : "rounded-[2rem]";
