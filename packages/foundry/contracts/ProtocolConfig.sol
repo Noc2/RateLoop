@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import {IRoundRewardDistributor} from "./interfaces/IRoundRewardDistributor.sol";
-import {RoundLib} from "./libraries/RoundLib.sol";
-import {RatingLib} from "./libraries/RatingLib.sol";
+import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import { IRoundRewardDistributor } from "./interfaces/IRoundRewardDistributor.sol";
+import { RoundLib } from "./libraries/RoundLib.sol";
+import { RatingLib } from "./libraries/RatingLib.sol";
 
 /// @title ProtocolConfig
 /// @notice Governance-controlled configuration and address book for RoundVotingEngine.
@@ -42,6 +42,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     address public raterRegistry;
     address public launchDistributionPool;
     address public clusterPayoutOracle;
+    address public advisoryVoteRecorder;
 
     struct RoundConfigBounds {
         uint32 minEpochDuration;
@@ -55,7 +56,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     }
 
     /// @dev Reserved storage gap for future proxy-safe upgrades.
-    uint256[24] private __gap;
+    uint256[23] private __gap;
 
     event RewardDistributorUpdated(address rewardDistributor);
     event RewardDistributorAuthorizationUpdated(address rewardDistributor, bool authorized);
@@ -67,6 +68,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     event RaterRegistryUpdated(address raterRegistry);
     event LaunchDistributionPoolUpdated(address launchDistributionPool);
     event ClusterPayoutOracleUpdated(address clusterPayoutOracle);
+    event AdvisoryVoteRecorderUpdated(address advisoryVoteRecorder);
     event ConfigUpdated(uint256 epochDuration, uint256 maxDuration, uint256 minVoters, uint256 maxVoters);
     event DrandConfigUpdated(bytes32 drandChainHash, uint64 genesisTime, uint64 period);
     event RatingConfigUpdated(
@@ -224,6 +226,12 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         if (value == address(0)) revert InvalidAddress();
         clusterPayoutOracle = value;
         emit ClusterPayoutOracleUpdated(value);
+    }
+
+    function setAdvisoryVoteRecorder(address value) external onlyRole(CONFIG_ROLE) {
+        if (value == address(0)) revert InvalidAddress();
+        advisoryVoteRecorder = value;
+        emit AdvisoryVoteRecorderUpdated(value);
     }
 
     function setConfig(uint256 epochDuration, uint256 maxDuration, uint256 minVoters, uint256 maxVoters)

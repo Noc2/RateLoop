@@ -1,18 +1,18 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
-import {ContentRegistry} from "./ContentRegistry.sol";
-import {ProtocolConfig} from "./ProtocolConfig.sol";
-import {RoundVotingEngine} from "./RoundVotingEngine.sol";
-import {ILaunchDistributionPool} from "./interfaces/ILaunchDistributionPool.sol";
-import {IRaterIdentityRegistry} from "./interfaces/IRaterIdentityRegistry.sol";
-import {LaunchRaterRewardLib} from "./libraries/LaunchRaterRewardLib.sol";
-import {RobustBtsMath} from "./libraries/RobustBtsMath.sol";
-import {RoundLib} from "./libraries/RoundLib.sol";
-import {TlockVoteLib} from "./libraries/TlockVoteLib.sol";
-import {VotePreflightLib} from "./libraries/VotePreflightLib.sol";
+import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
+import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
+import { ContentRegistry } from "./ContentRegistry.sol";
+import { ProtocolConfig } from "./ProtocolConfig.sol";
+import { RoundVotingEngine } from "./RoundVotingEngine.sol";
+import { ILaunchDistributionPool } from "./interfaces/ILaunchDistributionPool.sol";
+import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol";
+import { LaunchRaterRewardLib } from "./libraries/LaunchRaterRewardLib.sol";
+import { RobustBtsMath } from "./libraries/RobustBtsMath.sol";
+import { RoundLib } from "./libraries/RoundLib.sol";
+import { TlockVoteLib } from "./libraries/TlockVoteLib.sol";
+import { VotePreflightLib } from "./libraries/VotePreflightLib.sol";
 
 /// @title AdvisoryVoteRecorder
 /// @notice Zero-stake commit-reveal votes that can bootstrap launch rewards without affecting round mechanics.
@@ -30,6 +30,7 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
     error NoCommit();
     error VoteNotRevealed();
     error AdvisoryRevealedAfterSettlement();
+    error AdvisoryRevealedAfterRealVote();
     error PendingCleanup();
     error NotEnoughVotes();
     error Paused();
@@ -502,9 +503,10 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
     }
 
     function _effectiveRevealableAfter(AdvisoryCommit storage advisoryCommit) internal view returns (uint256) {
-        (uint48 roundStart, RoundLib.RoundState state,,,,, uint48 settledAt) =
+        (uint48 roundStart, RoundLib.RoundState state,, uint16 revealedCount,,, uint48 settledAt) =
             votingEngine.roundCore(advisoryCommit.contentId, advisoryCommit.roundId);
         if (roundStart == 0 || state != RoundLib.RoundState.Open || settledAt != 0) revert RoundNotOpen();
+        if (revealedCount != 0) revert AdvisoryRevealedAfterRealVote();
 
         (uint32 epochDuration,,,) = votingEngine.roundConfigSnapshot(advisoryCommit.contentId, advisoryCommit.roundId);
         if (epochDuration == 0) {
@@ -534,7 +536,7 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
                     if (resolved.identityKey == advisoryCommit.identityKey && resolved.holder != address(0)) {
                         return resolved.holder;
                     }
-                } catch {}
+                } catch { }
             }
         }
         return advisoryCommit.voter;

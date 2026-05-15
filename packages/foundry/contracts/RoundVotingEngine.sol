@@ -1,28 +1,29 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
-import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
+import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
-import {ContentRegistry} from "./ContentRegistry.sol";
-import {ProtocolConfig} from "./ProtocolConfig.sol";
-import {RoundLib} from "./libraries/RoundLib.sol";
-import {RatingLib} from "./libraries/RatingLib.sol";
-import {RoundSettlementSideEffectsLib} from "./libraries/RoundSettlementSideEffectsLib.sol";
-import {RoundSettlementDistributionLib} from "./libraries/RoundSettlementDistributionLib.sol";
-import {RoundCleanupLib} from "./libraries/RoundCleanupLib.sol";
-import {RoundRevealLib} from "./libraries/RoundRevealLib.sol";
-import {VotePreflightLib} from "./libraries/VotePreflightLib.sol";
-import {IFrontendRegistry} from "./interfaces/IFrontendRegistry.sol";
-import {ICategoryRegistry} from "./interfaces/ICategoryRegistry.sol";
-import {IRaterIdentityRegistry} from "./interfaces/IRaterIdentityRegistry.sol";
-import {IRoundVotingEngine} from "./interfaces/IRoundVotingEngine.sol";
-import {IParticipationPool} from "./interfaces/IParticipationPool.sol";
+import { ContentRegistry } from "./ContentRegistry.sol";
+import { ProtocolConfig } from "./ProtocolConfig.sol";
+import { RoundLib } from "./libraries/RoundLib.sol";
+import { RatingLib } from "./libraries/RatingLib.sol";
+import { RoundSettlementSideEffectsLib } from "./libraries/RoundSettlementSideEffectsLib.sol";
+import { RoundSettlementDistributionLib } from "./libraries/RoundSettlementDistributionLib.sol";
+import { RoundCleanupLib } from "./libraries/RoundCleanupLib.sol";
+import { RoundRevealLib } from "./libraries/RoundRevealLib.sol";
+import { VotePreflightLib } from "./libraries/VotePreflightLib.sol";
+import { IFrontendRegistry } from "./interfaces/IFrontendRegistry.sol";
+import { ICategoryRegistry } from "./interfaces/ICategoryRegistry.sol";
+import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol";
+import { IRoundVotingEngine } from "./interfaces/IRoundVotingEngine.sol";
+import { IParticipationPool } from "./interfaces/IParticipationPool.sol";
+import { IAdvisoryVoteRecorder } from "./interfaces/IAdvisoryVoteRecorder.sol";
 
 interface IQuestionBundleRoundObserver {
     function recordBundleQuestionTerminal(uint256 contentId, uint256 roundId, bool settled) external;
@@ -438,6 +439,7 @@ contract RoundVotingEngine is
         IRaterIdentityRegistry roundRaterRegistry = _getRoundRaterRegistry(contentId, roundId);
         IRaterIdentityRegistry.ResolvedRater memory resolved =
             VotePreflightLib.validateVoterAndContent(roundRaterRegistry, registry, voter, contentId);
+        _validateNoAdvisoryConflict(contentId, roundId, voter, resolved.identityKey);
 
         bytes32 commitKey = VotePreflightLib.prepareCommit(
             voterCommitHash,
@@ -714,8 +716,8 @@ contract RoundVotingEngine is
         address bundleEscrow = registry.questionRewardPoolEscrow();
         if (bundleEscrow == address(0)) return;
 
-        try IQuestionBundleRoundObserver(bundleEscrow).recordBundleQuestionTerminal(contentId, roundId, settled) {}
-            catch {}
+        try IQuestionBundleRoundObserver(bundleEscrow).recordBundleQuestionTerminal(contentId, roundId, settled) { }
+            catch { }
     }
 
     // =========================================================================
@@ -1083,6 +1085,35 @@ contract RoundVotingEngine is
 
     function _getParticipationPool() internal view returns (IParticipationPool) {
         return IParticipationPool(protocolConfig.participationPool());
+    }
+
+    function _validateNoAdvisoryConflict(uint256 contentId, uint256 roundId, address voter, bytes32 identityKey)
+        internal
+        view
+    {
+        address advisoryRecorder = protocolConfig.advisoryVoteRecorder();
+        if (advisoryRecorder == address(0)) return;
+
+        IAdvisoryVoteRecorder recorder = IAdvisoryVoteRecorder(advisoryRecorder);
+        if (recorder.advisoryCommitKeyByRater(contentId, roundId, voter) != bytes32(0)) {
+            revert AlreadyCommitted();
+        }
+
+        uint256 lastAdvisoryVote = recorder.lastAdvisoryVoteTimestamp(contentId, voter);
+        if (identityKey != bytes32(0)) {
+            if (recorder.advisoryCommitKeyByIdentity(contentId, roundId, identityKey) != bytes32(0)) {
+                revert AlreadyCommitted();
+            }
+
+            uint256 lastIdentityAdvisoryVote = recorder.lastAdvisoryVoteTimestampByIdentity(contentId, identityKey);
+            if (lastIdentityAdvisoryVote > lastAdvisoryVote) {
+                lastAdvisoryVote = lastIdentityAdvisoryVote;
+            }
+        }
+
+        if (lastAdvisoryVote > 0 && block.timestamp < lastAdvisoryVote + VOTE_COOLDOWN) {
+            revert CooldownActive();
+        }
     }
 
     function _resolveClaimCommit(uint256 contentId, uint256 roundId, address account)

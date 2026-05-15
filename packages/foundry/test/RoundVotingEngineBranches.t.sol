@@ -107,6 +107,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         );
         protocolConfigAddress = address(engine.protocolConfig());
         advisoryRecorder = new AdvisoryVoteRecorder(address(engine), address(registry), owner);
+        ProtocolConfig(protocolConfigAddress).setAdvisoryVoteRecorder(address(advisoryRecorder));
 
         rewardDistributor = RoundRewardDistributor(
             address(
@@ -2211,6 +2212,94 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         (,,,, uint48 revealableAfter,,,,,) = advisoryRecorder.advisoryCommitCore(advisoryCommitKey);
         assertGe(revealableAfter, recordedAt + roundConfig.epochDuration, "uses custom long epoch floor");
         assertGt(revealableAfter, recordedAt + EPOCH, "does not leak on the global one-hour epoch");
+    }
+
+    function test_AdvisoryRevealAfterRealReveal_Reverts() public {
+        uint256 contentId = _submitContent();
+        uint64 targetRound = _tlockCommitTargetRound();
+        (bytes32 advisoryCommitKey, bytes32 advisorySalt) =
+            _recordAdvisoryWithTargetRound(voter1, contentId, "advisory-after-real", targetRound);
+        (bytes32 commitKey, bytes32 salt) =
+            _commitWithTargetRound(voter2, contentId, true, STAKE, targetRound, "real-before-advisory");
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+
+        vm.warp(_tlockRoundTimestamp(targetRound) + 1);
+        _reveal(contentId, roundId, commitKey, true, salt);
+
+        vm.expectRevert(AdvisoryVoteRecorder.AdvisoryRevealedAfterRealVote.selector);
+        advisoryRecorder.revealAdvisoryVote(advisoryCommitKey, true, 5_000, advisorySalt);
+    }
+
+    function test_RealCommitAfterAdvisoryCommit_Reverts() public {
+        uint256 contentId = _submitContent();
+        _recordAdvisory(voter1, contentId, "advisory-first");
+
+        uint256 roundId = engine.previewCommitRoundId(contentId);
+        uint16 referenceRatingBps = engine.previewCommitReferenceRatingBps(contentId);
+        uint64 targetRound = _tlockCommitTargetRound();
+        bytes32 drandChainHash = _tlockDrandChainHash();
+        bytes32 salt = keccak256(abi.encodePacked(voter1, block.timestamp, "real-after-advisory"));
+        bytes memory ciphertext = _testCiphertext(true, salt, contentId, targetRound, drandChainHash);
+        bytes32 commitHash = _commitHash(
+            true, salt, voter1, contentId, roundId, referenceRatingBps, targetRound, drandChainHash, ciphertext
+        );
+
+        vm.startPrank(voter1);
+        hrepToken.approve(address(engine), STAKE);
+        vm.expectRevert(RoundVotingEngine.AlreadyCommitted.selector);
+        engine.commitVote(
+            contentId,
+            _roundContext(roundId, referenceRatingBps),
+            targetRound,
+            drandChainHash,
+            commitHash,
+            ciphertext,
+            STAKE,
+            address(0)
+        );
+        vm.stopPrank();
+    }
+
+    function test_RealCommitAfterAdvisoryVoteCooldown_Reverts() public {
+        uint256 contentId = _submitContent();
+        _recordAdvisory(voter1, contentId, "advisory-cooldown");
+
+        (bytes32 ck2, bytes32 s2) = _commit(voter2, contentId, true, STAKE);
+        (bytes32 ck3, bytes32 s3) = _commit(voter3, contentId, true, STAKE);
+        (bytes32 ck4, bytes32 s4) = _commit(voter4, contentId, false, STAKE);
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+
+        RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        _warpPastTlockRevealTime(uint256(round.startTime) + EPOCH);
+        _reveal(contentId, roundId, ck2, true, s2);
+        _reveal(contentId, roundId, ck3, true, s3);
+        _reveal(contentId, roundId, ck4, false, s4);
+        engine.settleRound(contentId, roundId);
+
+        uint256 nextRoundId = engine.previewCommitRoundId(contentId);
+        uint16 referenceRatingBps = engine.previewCommitReferenceRatingBps(contentId);
+        uint64 targetRound = _tlockCommitTargetRound();
+        bytes32 drandChainHash = _tlockDrandChainHash();
+        bytes32 salt = keccak256(abi.encodePacked(voter1, block.timestamp, "real-after-advisory-cooldown"));
+        bytes memory ciphertext = _testCiphertext(true, salt, contentId, targetRound, drandChainHash);
+        bytes32 commitHash = _commitHash(
+            true, salt, voter1, contentId, nextRoundId, referenceRatingBps, targetRound, drandChainHash, ciphertext
+        );
+
+        vm.startPrank(voter1);
+        hrepToken.approve(address(engine), STAKE);
+        vm.expectRevert(RoundVotingEngine.CooldownActive.selector);
+        engine.commitVote(
+            contentId,
+            _roundContext(nextRoundId, referenceRatingBps),
+            targetRound,
+            drandChainHash,
+            commitHash,
+            ciphertext,
+            STAKE,
+            address(0)
+        );
+        vm.stopPrank();
     }
 
     function test_AdvisoryVoteCannotRevealAfterSettlement() public {

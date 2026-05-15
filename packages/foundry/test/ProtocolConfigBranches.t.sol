@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {Test} from "forge-std/Test.sol";
-import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import {ProtocolConfig} from "../contracts/ProtocolConfig.sol";
-import {RatingLib} from "../contracts/libraries/RatingLib.sol";
-import {RoundLib} from "../contracts/libraries/RoundLib.sol";
-import {deployInitializedProtocolConfig} from "./helpers/VotingTestHelpers.sol";
+import { Test } from "forge-std/Test.sol";
+import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
+import { RatingLib } from "../contracts/libraries/RatingLib.sol";
+import { RoundLib } from "../contracts/libraries/RoundLib.sol";
+import { deployInitializedProtocolConfig } from "./helpers/VotingTestHelpers.sol";
 
 contract MockRewardDistributorForConfig {
     address public votingEngine;
@@ -41,6 +41,7 @@ contract ProtocolConfigBranchesTest is Test {
         uint16 slashThresholdBps, uint16 minSlashSettledRounds, uint48 minSlashLowDuration, uint256 minSlashEvidence
     );
     event SubmissionRewardMinimumsUpdated(uint256 minHrepPool, uint256 minUsdcPool);
+    event AdvisoryVoteRecorderUpdated(address advisoryVoteRecorder);
     event RoundConfigBoundsUpdated(
         uint256 minEpochDuration,
         uint256 maxEpochDuration,
@@ -110,6 +111,25 @@ contract ProtocolConfigBranchesTest is Test {
 
         vm.expectRevert(ProtocolConfig.InvalidAddress.selector);
         config.setRaterRegistry(address(0));
+    }
+
+    function test_SetAdvisoryVoteRecorder_UpdatesAddressAndEmits() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+        address advisoryVoteRecorder = address(0xAD11CE);
+
+        vm.expectEmit(false, false, false, true);
+        emit AdvisoryVoteRecorderUpdated(advisoryVoteRecorder);
+
+        config.setAdvisoryVoteRecorder(advisoryVoteRecorder);
+
+        assertEq(config.advisoryVoteRecorder(), advisoryVoteRecorder);
+    }
+
+    function test_SetAdvisoryVoteRecorder_RejectsZeroAddress() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+
+        vm.expectRevert(ProtocolConfig.InvalidAddress.selector);
+        config.setAdvisoryVoteRecorder(address(0));
     }
 
     function test_InitializeWithTreasury_GovernanceCanRecoverTreasuryRoles() public {
