@@ -159,6 +159,7 @@ export async function POST(request: NextRequest) {
         contentId: payload.contentId,
         roundId: preparedPayload.roundId,
         address: payload.normalizedAddress,
+        chainId: preparedPayload.chainId,
       });
     } catch (error) {
       if (error instanceof ContentFeedbackVoterEligibilityError) {

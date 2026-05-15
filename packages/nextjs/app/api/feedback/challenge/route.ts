@@ -79,6 +79,7 @@ export async function POST(request: NextRequest) {
         contentId: normalized.payload.contentId,
         roundId,
         address: normalized.payload.normalizedAddress,
+        chainId: targetNetwork.id,
       });
     } catch (error) {
       if (error instanceof ContentFeedbackVoterEligibilityError) {

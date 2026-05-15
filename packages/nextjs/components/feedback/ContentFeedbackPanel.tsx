@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { zeroHash } from "viem";
 import { useAccount } from "wagmi";
 import { ArrowTopRightOnSquareIcon, ChatBubbleLeftEllipsisIcon, LockClosedIcon } from "@heroicons/react/24/outline";
 import { SafeExternalLink } from "~~/components/shared/SafeExternalLink";
@@ -20,6 +21,7 @@ import { notification } from "~~/utils/scaffold-eth";
 
 interface ContentFeedbackPanelProps {
   item: ContentItem | null;
+  hasOptimisticCurrentRoundVote?: boolean;
   variant?: "rail" | "sheet";
   onRequestConnect?: () => void;
 }
@@ -38,6 +40,10 @@ function formatFeedbackDate(value: string) {
     month: "short",
     day: "numeric",
   });
+}
+
+function hasNonZeroCommit(value: unknown) {
+  return typeof value === "string" && value !== zeroHash;
 }
 
 function FeedbackItem({ item }: { item: ContentFeedbackItem }) {
@@ -81,7 +87,12 @@ function FeedbackItem({ item }: { item: ContentFeedbackItem }) {
   );
 }
 
-export function ContentFeedbackPanel({ item, variant = "rail", onRequestConnect }: ContentFeedbackPanelProps) {
+export function ContentFeedbackPanel({
+  item,
+  hasOptimisticCurrentRoundVote = false,
+  variant = "rail",
+  onRequestConnect,
+}: ContentFeedbackPanelProps) {
   const { address } = useAccount();
   const { feedback, items, isLoading, isSubmitting, submitFeedback } = useContentFeedback(item?.id ?? null, address);
   const [feedbackType, setFeedbackType] = useState<ContentFeedbackType>("evidence");
@@ -102,9 +113,15 @@ export function ContentFeedbackPanel({ item, variant = "rail", onRequestConnect 
     watch: true,
     query: { enabled: Boolean(item && address && openRoundId > 0n) },
   } as any);
+  const { data: myAdvisoryCommitKey } = useScaffoldReadContract({
+    contractName: "AdvisoryVoteRecorder" as any,
+    functionName: "advisoryCommitKeyByRater" as any,
+    args: [item?.id ?? 0n, openRoundId, address] as any,
+    watch: true,
+    query: { enabled: Boolean(item && address && openRoundId > 0n) },
+  } as any);
   const hasCurrentRoundVote =
-    myCommitHash != null &&
-    (myCommitHash as unknown as string) !== "0x0000000000000000000000000000000000000000000000000000000000000000";
+    hasOptimisticCurrentRoundVote || hasNonZeroCommit(myCommitHash) || hasNonZeroCommit(myAdvisoryCommitKey);
   const canSubmitDraft = Boolean(item && bodyLength >= 4 && bodyLength <= CONTENT_FEEDBACK_BODY_MAX_LENGTH);
   const isOwnContent = Boolean(item?.isOwnContent);
   const submitDisabled = !canSubmitDraft || isSubmitting || !hasCurrentRoundVote || isOwnContent;

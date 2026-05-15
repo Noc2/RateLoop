@@ -16,6 +16,7 @@ interface VoteSignalRailProps {
   isCommitting: boolean;
   voteError?: string | null;
   cooldownSecondsRemaining: number;
+  hasOptimisticCurrentRoundVote?: boolean;
   isVoteEligibilityPending?: boolean;
   attentionToken?: number | null;
   onVote: (item: ContentItem, isUp: boolean) => void;
@@ -26,6 +27,7 @@ export function VoteSignalRail({
   isCommitting,
   voteError,
   cooldownSecondsRemaining,
+  hasOptimisticCurrentRoundVote = false,
   isVoteEligibilityPending = false,
   attentionToken,
   onVote,
@@ -81,7 +83,13 @@ export function VoteSignalRail({
         ) : null}
       </aside>
 
-      {primaryItem ? <ContentFeedbackPanel item={primaryItem} onRequestConnect={openConnectModal} /> : null}
+      {primaryItem ? (
+        <ContentFeedbackPanel
+          item={primaryItem}
+          hasOptimisticCurrentRoundVote={hasOptimisticCurrentRoundVote}
+          onRequestConnect={openConnectModal}
+        />
+      ) : null}
 
       <FooterLinks
         className="px-1"

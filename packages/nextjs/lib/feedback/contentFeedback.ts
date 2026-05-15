@@ -1,7 +1,10 @@
+import deployedContracts from "@rateloop/contracts/deployedContracts";
 import { ROUND_STATE, type RoundState } from "@rateloop/contracts/protocol";
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import { type Abi, type Address, createPublicClient, http, zeroHash } from "viem";
 import { db } from "~~/lib/db";
 import { contentFeedback } from "~~/lib/db/schema";
+import { getPrimaryServerTargetNetwork, getServerRpcOverrides, getServerTargetNetworkById } from "~~/lib/env/server";
 import {
   type ContentFeedbackHashInput,
   type ContentFeedbackHashMetadata,
@@ -51,6 +54,23 @@ export interface ContentFeedbackRoundContext {
 }
 
 type FeedbackRow = typeof contentFeedback.$inferSelect;
+type FeedbackVoteEligibilityParams = {
+  contentId: string;
+  roundId: string;
+  address: `0x${string}`;
+  chainId?: number;
+};
+type DeployedContractRecord = {
+  address: Address;
+  abi: Abi;
+};
+type DeployedContractsMap = Record<number, Record<string, DeployedContractRecord>>;
+type FeedbackVoteEligibilityTestOverrides = {
+  getVotes?: typeof ponderApi.getVotes;
+  hasOnchainFeedbackEligibleVote?: (params: FeedbackVoteEligibilityParams) => Promise<boolean>;
+};
+
+let feedbackVoteEligibilityTestOverrides: FeedbackVoteEligibilityTestOverrides | null = null;
 
 export class ContentFeedbackStorageUnavailableError extends Error {
   constructor() {
@@ -337,12 +357,93 @@ export function buildContentFeedbackChallengePayload(
   };
 }
 
-export async function assertContentFeedbackVoterEligibility(params: {
-  contentId: string;
-  roundId: string;
-  address: `0x${string}`;
-}): Promise<void> {
-  const votes = await ponderApi.getVotes({
+function resolveFeedbackVoteReadContext(chainId?: number) {
+  const targetNetwork =
+    typeof chainId === "number" ? getServerTargetNetworkById(chainId) : getPrimaryServerTargetNetwork();
+  if (!targetNetwork) {
+    return null;
+  }
+
+  const contractsForChain = (deployedContracts as unknown as Partial<DeployedContractsMap>)[targetNetwork.id];
+  const rpcOverrides = getServerRpcOverrides();
+  const rpcUrl = rpcOverrides?.[targetNetwork.id] ?? targetNetwork.rpcUrls.default.http[0];
+  if (!rpcUrl) {
+    return null;
+  }
+
+  return {
+    advisoryVoteRecorder: contractsForChain?.AdvisoryVoteRecorder,
+    publicClient: createPublicClient({
+      chain: targetNetwork,
+      transport: http(rpcUrl),
+    }),
+    votingEngine: contractsForChain?.RoundVotingEngine,
+  };
+}
+
+function isNonZeroBytes32(value: unknown) {
+  return typeof value === "string" && value !== zeroHash;
+}
+
+async function hasOnchainFeedbackEligibleVote(params: FeedbackVoteEligibilityParams): Promise<boolean> {
+  const context = resolveFeedbackVoteReadContext(params.chainId);
+  if (!context) {
+    return false;
+  }
+
+  const contentId = BigInt(params.contentId);
+  const roundId = BigInt(params.roundId);
+  const checks: Promise<unknown>[] = [];
+
+  if (context.votingEngine) {
+    checks.push(
+      context.publicClient.readContract({
+        address: context.votingEngine.address,
+        abi: context.votingEngine.abi,
+        functionName: "voterCommitHash",
+        args: [contentId, roundId, params.address],
+      }),
+    );
+  }
+
+  if (context.advisoryVoteRecorder) {
+    checks.push(
+      context.publicClient.readContract({
+        address: context.advisoryVoteRecorder.address,
+        abi: context.advisoryVoteRecorder.abi,
+        functionName: "advisoryCommitKeyByRater",
+        args: [contentId, roundId, params.address],
+      }),
+    );
+  }
+
+  if (checks.length === 0) {
+    return false;
+  }
+
+  try {
+    const results = await Promise.all(checks);
+    return results.some(isNonZeroBytes32);
+  } catch (error) {
+    console.warn("[content-feedback] Unable to verify vote eligibility on-chain.", {
+      address: params.address,
+      chainId: params.chainId,
+      contentId: params.contentId,
+      error,
+      roundId: params.roundId,
+    });
+    return false;
+  }
+}
+
+export function __setContentFeedbackVoteEligibilityTestOverridesForTests(
+  overrides: FeedbackVoteEligibilityTestOverrides | null,
+) {
+  feedbackVoteEligibilityTestOverrides = overrides;
+}
+
+export async function assertContentFeedbackVoterEligibility(params: FeedbackVoteEligibilityParams): Promise<void> {
+  const votes = await (feedbackVoteEligibilityTestOverrides?.getVotes ?? ponderApi.getVotes)({
     voter: params.address,
     contentId: params.contentId,
     roundId: params.roundId,
@@ -355,7 +456,12 @@ export async function assertContentFeedbackVoterEligibility(params: {
       normalizeWalletAddress(vote.voter) === params.address,
   );
   if (!hasVote) {
-    throw new ContentFeedbackVoterEligibilityError();
+    const hasOnchainVote = await (
+      feedbackVoteEligibilityTestOverrides?.hasOnchainFeedbackEligibleVote ?? hasOnchainFeedbackEligibleVote
+    )(params);
+    if (!hasOnchainVote) {
+      throw new ContentFeedbackVoterEligibilityError();
+    }
   }
 }
 

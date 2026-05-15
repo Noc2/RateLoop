@@ -1074,6 +1074,12 @@ const HomeInner = () => {
   );
 
   const primaryItemCooldownSeconds = primaryItem ? getContentCooldownSeconds(primaryItem.id) : 0;
+  const primaryHasOptimisticCurrentRoundVote = primaryItem
+    ? optimisticVotedContentIds.has(primaryItem.id.toString())
+    : false;
+  const feedbackSheetHasOptimisticCurrentRoundVote = feedbackSheetItem
+    ? optimisticVotedContentIds.has(feedbackSheetItem.id.toString())
+    : false;
   const primaryVoteEligibilityPending = primaryItem ? isVoteCooldownCheckPendingForContent(primaryItem.id) : false;
   const primaryAttentionToken =
     primaryItem && voteAttention?.contentId === primaryItem.id.toString() ? voteAttention.token : null;
@@ -1820,6 +1826,7 @@ const HomeInner = () => {
                 isCommitting={isCommitting}
                 voteError={voteError}
                 cooldownSecondsRemaining={primaryItemCooldownSeconds}
+                hasOptimisticCurrentRoundVote={primaryHasOptimisticCurrentRoundVote}
                 isVoteEligibilityPending={primaryVoteEligibilityPending}
                 attentionToken={primaryAttentionToken}
                 onVote={handleButtonVote}
@@ -1895,7 +1902,12 @@ const HomeInner = () => {
               </button>
             </div>
             <div className="min-h-0 overflow-y-auto p-3">
-              <ContentFeedbackPanel item={feedbackSheetItem} variant="sheet" onRequestConnect={openConnectModal} />
+              <ContentFeedbackPanel
+                item={feedbackSheetItem}
+                hasOptimisticCurrentRoundVote={feedbackSheetHasOptimisticCurrentRoundVote}
+                variant="sheet"
+                onRequestConnect={openConnectModal}
+              />
             </div>
           </div>
         </div>

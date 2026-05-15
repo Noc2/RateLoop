@@ -7,6 +7,8 @@ process.env.DATABASE_URL = "memory:";
 type ContentFeedbackModule = typeof import("./contentFeedback");
 type NormalizedContentFeedbackInput = import("./contentFeedback").NormalizedContentFeedbackInput;
 type ContentFeedbackRoundContext = import("./contentFeedback").ContentFeedbackRoundContext;
+type PonderVoteItem = import("~~/services/ponder/client").PonderVoteItem;
+type PonderVotesResponse = import("~~/services/ponder/client").PonderVotesResponse;
 type DbModule = typeof import("../db");
 type DbTestMemoryModule = typeof import("../db/testMemory");
 
@@ -34,6 +36,34 @@ function prepareFeedback(payload: NormalizedContentFeedbackInput, context: Conte
   });
 }
 
+function buildVotesResponse(items: PonderVoteItem[]): PonderVotesResponse {
+  return {
+    items,
+    limit: items.length,
+    offset: 0,
+    settledTotal: 0,
+    total: items.length,
+  };
+}
+
+function buildVoteItem(params: { contentId: string; roundId: string; voter: string }): PonderVoteItem {
+  return {
+    id: `${params.contentId}-${params.roundId}-${params.voter}`,
+    contentId: params.contentId,
+    roundId: params.roundId,
+    voter: params.voter,
+    isUp: null,
+    stake: "0",
+    epochIndex: 0,
+    revealed: false,
+    committedAt: "1000",
+    revealedAt: null,
+    roundStartTime: null,
+    roundState: ROUND_STATE.Open,
+    roundUpWins: null,
+  };
+}
+
 before(async () => {
   dbModule = await import("../db");
   dbTestMemory = await import("../db/testMemory");
@@ -42,10 +72,12 @@ before(async () => {
 });
 
 beforeEach(async () => {
+  contentFeedback.__setContentFeedbackVoteEligibilityTestOverridesForTests(null);
   await dbModule.dbClient.execute("DELETE FROM content_feedback");
 });
 
 after(() => {
+  contentFeedback.__setContentFeedbackVoteEligibilityTestOverridesForTests(null);
   dbModule.__setDatabaseResourcesForTests(null);
 });
 
@@ -157,6 +189,61 @@ test("builds round context from terminal and open rounds", () => {
   assert.equal(context.settlementComplete, false);
   assert.equal(context.terminalRoundIds.has("1"), true);
   assert.equal(context.terminalRoundIds.has("2"), false);
+});
+
+test("accepts feedback eligibility from indexed staked votes", async () => {
+  contentFeedback.__setContentFeedbackVoteEligibilityTestOverridesForTests({
+    getVotes: async () => buildVotesResponse([buildVoteItem({ contentId: "15", roundId: "2", voter: WALLET })]),
+    hasOnchainFeedbackEligibleVote: async () => false,
+  });
+
+  await assert.doesNotReject(() =>
+    contentFeedback.assertContentFeedbackVoterEligibility({
+      address: WALLET,
+      chainId: CHAIN_ID,
+      contentId: "15",
+      roundId: "2",
+    }),
+  );
+});
+
+test("accepts feedback eligibility from on-chain advisory votes", async () => {
+  let observedChainId: number | undefined;
+  contentFeedback.__setContentFeedbackVoteEligibilityTestOverridesForTests({
+    getVotes: async () => buildVotesResponse([]),
+    hasOnchainFeedbackEligibleVote: async params => {
+      observedChainId = params.chainId;
+      return params.contentId === "16" && params.roundId === "3" && params.address === WALLET;
+    },
+  });
+
+  await assert.doesNotReject(() =>
+    contentFeedback.assertContentFeedbackVoterEligibility({
+      address: WALLET,
+      chainId: CHAIN_ID,
+      contentId: "16",
+      roundId: "3",
+    }),
+  );
+  assert.equal(observedChainId, CHAIN_ID);
+});
+
+test("rejects feedback eligibility when neither indexed nor advisory votes exist", async () => {
+  contentFeedback.__setContentFeedbackVoteEligibilityTestOverridesForTests({
+    getVotes: async () => buildVotesResponse([]),
+    hasOnchainFeedbackEligibleVote: async () => false,
+  });
+
+  await assert.rejects(
+    () =>
+      contentFeedback.assertContentFeedbackVoterEligibility({
+        address: WALLET,
+        chainId: CHAIN_ID,
+        contentId: "17",
+        roundId: "4",
+      }),
+    contentFeedback.ContentFeedbackVoterEligibilityError,
+  );
 });
 
 test("public reads hide active round feedback while owner reads include it", async () => {
