@@ -4,8 +4,15 @@ import { useMemo, useRef, useState } from "react";
 import { upload } from "@vercel/blob/client";
 import { useSignMessage } from "wagmi";
 import { ArrowUpTrayIcon } from "@heroicons/react/24/outline";
+import {
+  IMAGE_ATTACHMENT_UPLOAD_PHASE_COPY,
+  type ImageAttachmentUploadPhase,
+  getBlobUploadProgress,
+  getImageAttachmentUploadProgress,
+} from "~~/components/submit/imageAttachmentUploadProgress";
 import { getMaxImageUploadSizeBytes } from "~~/lib/auth/imageUploadChallenge.shared";
 import { notification } from "~~/utils/scaffold-eth";
+import { isSignatureRejected } from "~~/utils/signatureErrors";
 
 type ImageAttachmentUploaderProps = {
   address?: string;
@@ -89,10 +96,17 @@ export function ImageAttachmentUploader({ address, disabled = false, onUploaded 
   const inputRef = useRef<HTMLInputElement>(null);
   const { signMessageAsync } = useSignMessage();
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadPhase, setUploadPhase] = useState<ImageAttachmentUploadPhase | null>(null);
   const [progress, setProgress] = useState(0);
 
   const maxSizeMb = useMemo(() => Math.floor(getMaxImageUploadSizeBytes() / (1024 * 1024)), []);
   const isDisabled = disabled || isUploading || !address;
+  const uploadPhaseCopy = uploadPhase ? IMAGE_ATTACHMENT_UPLOAD_PHASE_COPY[uploadPhase] : null;
+
+  const moveToUploadPhase = (phase: ImageAttachmentUploadPhase) => {
+    setUploadPhase(phase);
+    setProgress(current => Math.max(current, getImageAttachmentUploadProgress(phase)));
+  };
 
   const handleFile = async (file: File) => {
     if (!address) {
@@ -110,10 +124,12 @@ export function ImageAttachmentUploader({ address, disabled = false, onUploaded 
 
     const attachmentId = createAttachmentId();
     setIsUploading(true);
-    setProgress(1);
+    setUploadPhase("preparing");
+    setProgress(getImageAttachmentUploadProgress("preparing"));
 
     try {
       const sha256 = await sha256Hex(file);
+      moveToUploadPhase("requesting-challenge");
       const challengePayload = {
         address,
         attachmentId,
@@ -129,7 +145,9 @@ export function ImageAttachmentUploader({ address, disabled = false, onUploaded 
           body: JSON.stringify(challengePayload),
         }),
       );
+      moveToUploadPhase("waiting-for-signature");
       const signature = await signMessageAsync({ message: challenge.message });
+      moveToUploadPhase("uploading");
       const clientPayload = JSON.stringify({
         ...challengePayload,
         challengeId: challenge.challengeId,
@@ -141,9 +159,10 @@ export function ImageAttachmentUploader({ address, disabled = false, onUploaded 
         contentType: file.type,
         handleUploadUrl: "/api/attachments/images/upload",
         multipart: file.size > 5 * 1024 * 1024,
-        onUploadProgress: event => setProgress(Math.max(1, Math.min(99, event.percentage))),
+        onUploadProgress: event => setProgress(current => Math.max(current, getBlobUploadProgress(event.percentage))),
       });
 
+      moveToUploadPhase("processing");
       await fetch(`/api/attachments/images/${encodeURIComponent(attachmentId)}/process`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -158,9 +177,16 @@ export function ImageAttachmentUploader({ address, disabled = false, onUploaded 
       onUploaded(imageUrl);
       notification.success("Image uploaded and approved.");
     } catch (error) {
-      notification.error(error instanceof Error ? error.message : "Image upload failed.");
+      notification.error(
+        isSignatureRejected(error)
+          ? "Image upload canceled before the file was uploaded."
+          : error instanceof Error
+            ? error.message
+            : "Image upload failed.",
+      );
     } finally {
       setIsUploading(false);
+      setUploadPhase(null);
       setProgress(0);
       if (inputRef.current) {
         inputRef.current.value = "";
@@ -184,8 +210,22 @@ export function ImageAttachmentUploader({ address, disabled = false, onUploaded 
           JPG, PNG, or WEBP up to {maxSizeMb} MB. Images are moderated and become public question context.
         </span>
       </div>
-      {isUploading ? (
-        <progress className="progress progress-primary mt-3 h-2 w-full" value={progress} max={100} />
+      {isUploading && uploadPhaseCopy ? (
+        <div className="mt-3 space-y-1">
+          <div className="flex items-center justify-between gap-3 text-sm text-base-content/70">
+            <span role="status" aria-live="polite">
+              {uploadPhaseCopy.label}
+            </span>
+            <span className="font-mono text-xs">{progress}%</span>
+          </div>
+          <progress
+            aria-label={uploadPhaseCopy.label}
+            className="progress progress-primary h-2 w-full"
+            value={progress}
+            max={100}
+          />
+          <p className="text-xs text-base-content/55">{uploadPhaseCopy.description}</p>
+        </div>
       ) : null}
       <input
         ref={inputRef}
