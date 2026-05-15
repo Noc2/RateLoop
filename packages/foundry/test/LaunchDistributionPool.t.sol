@@ -380,6 +380,25 @@ contract LaunchDistributionPoolTest is Test {
         pool.finalizeEarnedRaterRewardCredit(1, 1, aliceCommitKey, alicePayout, new bytes32[](0));
     }
 
+    function test_PaidLaunchCreditFinalizationBlocksRootReplacement() public {
+        ClusterPayoutOracle oracle = _configureLaunchOracle(5);
+
+        uint256 paid;
+        for (uint256 roundId = 1; roundId < 5; roundId++) {
+            paid = _recordAndFinalizeLaunchOracleCredit(oracle, alice, roundId, pool.BPS_DENOMINATOR());
+            assertEq(paid, 0);
+            assertFalse(pool.isRoundPayoutSnapshotConsumed(pool.PAYOUT_DOMAIN_LAUNCH_CREDIT(), 0, 1, roundId));
+        }
+
+        paid = _recordAndFinalizeLaunchOracleCredit(oracle, alice, 5, pool.BPS_DENOMINATOR());
+        assertEq(paid, 250_000);
+        assertTrue(pool.isRoundPayoutSnapshotConsumed(pool.PAYOUT_DOMAIN_LAUNCH_CREDIT(), 0, 1, 5));
+
+        bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(pool.PAYOUT_DOMAIN_LAUNCH_CREDIT(), 0, 1, 5);
+        vm.expectRevert(ClusterPayoutOracle.SnapshotConsumed.selector);
+        oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("paid-launch-root"));
+    }
+
     function test_CorrelationOracleFractionalCreditsOnlyPayCompletedSlots() public {
         ClusterPayoutOracle oracle = _configureLaunchOracle(24);
 

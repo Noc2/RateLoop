@@ -102,6 +102,7 @@ contract LaunchDistributionPool is
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => PendingEarnedRaterCredit))) public
         pendingEarnedRaterCredits;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) public earnedRewardCreditFinalized;
+    mapping(uint256 => mapping(uint256 => bool)) public earnedRaterRoundPayoutSnapshotConsumed;
     LaunchRewardPolicy public launchRewardPolicy;
 
     event PoolDeposit(uint256 amount);
@@ -433,6 +434,9 @@ contract LaunchDistributionPool is
         paidAmount = _recordEarnedRaterReward(
             pending.rater, contentId, roundId, commitKey, pending.scoreBps, pending.policy, effectiveCreditBps
         );
+        if (paidAmount > 0) {
+            earnedRaterRoundPayoutSnapshotConsumed[contentId][roundId] = true;
+        }
         emit EarnedRaterRewardCreditFinalized(
             pending.rater,
             contentId,
@@ -575,10 +579,15 @@ contract LaunchDistributionPool is
         return _remainingVerifiedReferralPool();
     }
 
-    function isRoundPayoutSnapshotConsumed(uint8, uint256, uint256, uint256) external pure returns (bool) {
+    function isRoundPayoutSnapshotConsumed(uint8 domain, uint256 rewardPoolId, uint256 contentId, uint256 roundId)
+        external
+        view
+        returns (bool)
+    {
+        if (domain != PAYOUT_DOMAIN_LAUNCH_CREDIT || rewardPoolId != 0) return false;
         // Launch credits are finalized per commit key, so a partially used root can still
-        // be rejected and replaced for pending credits that were never finalized.
-        return false;
+        // be rejected and replaced until a finalized credit has paid non-revertible funds.
+        return earnedRaterRoundPayoutSnapshotConsumed[contentId][roundId];
     }
 
     function _assignLaunchCap(address rater, uint256 fullCap, LaunchRewardPolicy memory policy)
