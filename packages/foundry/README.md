@@ -84,9 +84,9 @@ scripts-js/                      # JS helpers for deployment & account managemen
 
 The upgradeable control-plane contracts are deployed behind **transparent upgradeable proxies** and use
 `AccessControlUpgradeable` for role-based permissions: `ContentRegistry`, `RoundVotingEngine`,
-`RoundRewardDistributor`, `ProtocolConfig`, `FrontendRegistry`, and `ProfileRegistry`. Token, identity,
-participation, governance, and helper contracts are intentionally non-upgradeable. For upgradeable implementation
-contracts, storage layout must be preserved across upgrades — never reorder, remove, or change types of existing
-storage variables.
+`RoundRewardDistributor`, `ProtocolConfig`, `FrontendRegistry`, `ProfileRegistry`, `QuestionRewardPoolEscrow`, and
+`FeedbackBonusEscrow`. Token, identity, participation, governance, and helper contracts are intentionally
+non-upgradeable. For upgradeable implementation contracts, storage layout must be preserved across upgrades — never
+reorder, remove, or change types of existing storage variables.
 
 Compiled ABIs and deployed addresses are generated into `packages/contracts/src/` and consumed via the `@rateloop/contracts` workspace package.
