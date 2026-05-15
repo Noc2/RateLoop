@@ -27,7 +27,7 @@ export interface CuryoAgentClientOptions {
 export interface CuryoAgentQuestionItem {
   title: string;
   description?: string;
-  contextUrl: string;
+  contextUrl?: string;
   categoryId: string | number | bigint;
   tags: string | string[];
   imageUrls?: string[];

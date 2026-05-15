@@ -1912,11 +1912,28 @@ contract ContentRegistryBranchesTest is VotingTestBase {
     function test_SubmitContent_EmptyUrl_Reverts() public {
         vm.startPrank(submitter);
         hrepToken.approve(address(registry), 10e6);
-        vm.expectRevert("Invalid URL");
+        vm.expectRevert("Context or image required");
         registry.submitQuestion(
             "", _emptyImageUrls(), "", "goal", "goal", "tags", 1, bytes32(0), _defaultQuestionSpec()
         );
         vm.stopPrank();
+    }
+
+    function test_SubmitContent_AllowsImageWithoutContextUrl() public {
+        string[] memory imageUrls = _singleImageUrls("https://example.com/image-only.jpg");
+        bytes32 salt = keccak256("image-only-context");
+
+        vm.startPrank(submitter);
+        _reserveQuestionMediaSubmission(registry, "", imageUrls, "", "goal", "goal", "tags", 1, salt, submitter);
+        vm.warp(block.timestamp + 1);
+        uint256 contentId =
+            registry.submitQuestion("", imageUrls, "", "goal", "goal", "tags", 1, salt, _defaultQuestionSpec());
+        vm.stopPrank();
+
+        assertEq(contentId, 1);
+        (uint64 id,,,,, ContentRegistry.ContentStatus status,,,,) = registry.contents(contentId);
+        assertEq(id, uint64(contentId));
+        assertEq(uint256(status), uint256(ContentRegistry.ContentStatus.Active));
     }
 
     function test_SubmitContent_EmptyTitle_Reverts() public {

@@ -20,8 +20,8 @@ hard-coded:
 
 - RateLoop origin, usually `https://www.rateloop.xyz`
 - funded World Chain `walletAddress`, or permission to generate a local encrypted signer and fund that address
-- public context URL for voters
-- optional public image context: direct HTTPS image URLs, or RateLoop-hosted uploads for local mockups, screenshots, and generated images
+- public context URL or image context for voters
+- optional extra public image context: direct HTTPS image URLs, or RateLoop-hosted uploads for local mockups, screenshots, and generated images
 - USDC bounty, `maxPaymentAmount`, `requiredVoters`, `requiredSettledRounds`, `rewardPoolExpiresAt`, and optional payout-only `bountyEligibility`
 - execution path: public MCP wallet calls, direct JSON routes, local signer, or WebMCP-assisted browser signing
 
@@ -176,7 +176,7 @@ Next.js, MCP tools, delegated agent-wallet submissions, and SDK examples should 
 Good agent questions:
 
 - ask one bounded question
-- include a public HTTPS context URL
+- include a public HTTPS context URL or at least one public image URL
 - include up to four direct `imageUrls` or RateLoop-hosted uploads when visual context matters
 - make the high-rating and low-rating interpretation clear
 - choose a result template before submission

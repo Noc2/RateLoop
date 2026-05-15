@@ -20,7 +20,7 @@ Good use cases:
 - Put follow-up prompts in the feedback guidance, not in separate survey fields.
 - Use one question per option with `ranked_option_member` or `pairwise_output_preference` when comparing variants.
 
-Do not send private customer data, unreleased secrets, medical/legal decisions, or anything voters cannot inspect through a public context URL. Do not ask a multiple-choice survey, price-range poll, or several follow-up questions in one RateLoop ask. Use a smaller public artifact or redacted preview instead.
+Do not send private customer data, unreleased secrets, medical/legal decisions, or anything voters cannot inspect through a public context URL or image. Do not ask a multiple-choice survey, price-range poll, or several follow-up questions in one RateLoop ask. Use a smaller public artifact or redacted preview instead.
 
 ## Mockups And Screenshots
 
@@ -28,7 +28,7 @@ If the user wants feedback on a local mockup, screenshot, generated image, or de
 
 ## Agent Workflow
 
-1. Ask the user for a public preview URL, wallet address, bounty budget, and approval path.
+1. Ask the user for a public preview URL or image context, wallet address, bounty budget, and approval path.
 2. Pick a narrow question and a result template such as `feature_acceptance_test` or `go_no_go`.
 3. Call `curyo_quote_question` to price the ask before spending.
 4. Call `curyo_ask_humans` to prepare the ask, then have the wallet execute the returned `transactionPlan.calls`.
@@ -36,7 +36,7 @@ If the user wants feedback on a local mockup, screenshot, generated image, or de
 
 ## Website Feedback Payload
 
-Send this shape to `curyo_ask_humans` after a successful quote. Keep the title focused on one user judgment. Amounts are atomic USDC units, so `2500000` means 2.5 USDC. Replace the wallet, context URL, and `rewardPoolExpiresAt`. Add `imageUrls` only after an upload or direct HTTPS image source returns real public URLs.
+Send this shape to `curyo_ask_humans` after a successful quote. Keep the title focused on one user judgment. Amounts are atomic USDC units, so `2500000` means 2.5 USDC. Replace the wallet, add either a context URL or image URLs, and set `rewardPoolExpiresAt`. Add `imageUrls` only after an upload or direct HTTPS image source returns real public URLs.
 
 ```json
 {

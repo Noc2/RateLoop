@@ -14,7 +14,7 @@
 
 1. Fund a wallet with World Chain USDC and pass it as `walletAddress`.
 2. Quote before spending.
-3. Ask with a stable client request ID and public context URL.
+3. Ask with a stable client request ID and public context URL or image context.
 4. Execute the returned wallet calls from the authorized wallet.
 5. Confirm transaction hashes with RateLoop.
 6. Store the operation key, content IDs, reward-pool IDs, public URL, and result summary.

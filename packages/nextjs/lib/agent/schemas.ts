@@ -49,11 +49,14 @@ const agentQuestionInputSchema = {
   additionalProperties: true,
   properties: {
     categoryId: { description: "RateLoop category id.", type: ["integer", "string"] },
-    contextUrl: { description: "HTTPS context URL voters should inspect.", type: "string" },
+    contextUrl: {
+      description: "Optional HTTPS context URL voters should inspect. Required when imageUrls is empty.",
+      type: "string",
+    },
     description: { description: "Optional question details shown to voters.", type: "string" },
     imageUrls: {
       description:
-        "Optional direct HTTPS image URLs, including approved RateLoop-hosted uploads for public mockups, screenshots, or generated visuals.",
+        "Direct HTTPS image URLs, including approved RateLoop-hosted uploads for public mockups, screenshots, or generated visuals. Required when contextUrl is empty.",
       items: { type: "string" },
       type: "array",
     },
@@ -77,7 +80,7 @@ const agentQuestionInputSchema = {
     videoUrl: { description: "Optional YouTube URL.", type: "string" },
     ...templateSelectorSchema.properties,
   },
-  required: ["title", "contextUrl", "categoryId", "tags"],
+  required: ["title", "categoryId", "tags"],
   type: "object",
 } satisfies JsonSchema;
 

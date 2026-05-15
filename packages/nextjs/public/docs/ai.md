@@ -6,7 +6,7 @@ The simple flow is:
 
 1. The agent drafts one focused public question.
 2. The user or scoped agent wallet approves a World Chain USDC bounty.
-3. Open raters inspect the public context URL and vote or leave feedback.
+3. Open raters inspect the public context URL or image context and vote or leave feedback.
 4. The agent polls RateLoop and stores the public result URL, answer, confidence, limitations, and objections.
 
 Good use cases:
@@ -20,7 +20,7 @@ Good use cases:
 - Source credibility checks
 - Go/no-go decisions before an agent takes action
 
-Do not use RateLoop for private secrets, emergency decisions, medical or legal advice, or tasks without a public context URL.
+Do not use RateLoop for private secrets, emergency decisions, medical or legal advice, or tasks without public evidence voters can inspect.
 Do not model RateLoop asks as multiple-choice surveys. Use one bounded rating question by default. When comparing variants, create one binary-rated bundle member per option and compare settled ratings later.
 
 ## Agent Raters
@@ -65,7 +65,7 @@ Main tools:
 
 ## Minimum Workflow
 
-1. Ask the user for a public context URL, wallet address, budget, and approval path.
+1. Ask the user for a public context URL or image context, wallet address, budget, and approval path.
 2. Choose a focused question, category, and result template.
 3. Call `curyo_quote_question`.
 4. Call `curyo_ask_humans` to prepare the ask.
@@ -78,8 +78,8 @@ Main tools:
 ## Required Inputs
 
 - `walletAddress`: user-controlled wallet or scoped agent wallet on World Chain.
-- `contextUrl`: public URL voters can inspect without secrets or login.
-- Optional `imageUrls`: up to four direct HTTPS image URLs. If the user has local mockups, screenshots, or generated visuals, recommend RateLoop's upload flow instead of making them find a third-party image host.
+- `contextUrl`: public URL voters can inspect without secrets or login, required unless `imageUrls` has at least one image.
+- `imageUrls`: required when there is no context URL; up to four direct HTTPS image URLs. If the user has local mockups, screenshots, or generated visuals, recommend RateLoop's upload flow instead of making them find a third-party image host.
 - `bounty.amount`: USDC budget in atomic units, for example `2500000` for 2.5 USDC.
 - `bounty.requiredVoters`: minimum eligible voters required by the bounty.
 - `bounty.requiredSettledRounds`: required settled rounds for the bounty, usually `1`.
@@ -93,7 +93,7 @@ Use `operationKey` for later status and result lookups. If you only have `chainI
 
 ## Copy-Paste Ask Shape
 
-Send this shape to `curyo_ask_humans` after a successful quote. Replace the wallet and context URL. Set `rewardPoolExpiresAt` to a future Unix timestamp appropriate for the review window. Add `imageUrls` only after an upload or direct HTTPS image source returns real public URLs.
+Send this shape to `curyo_ask_humans` after a successful quote. Replace the wallet and provide either a context URL or image URLs. Set `rewardPoolExpiresAt` to a future Unix timestamp appropriate for the review window. Add `imageUrls` only after an upload or direct HTTPS image source returns real public URLs.
 
 ```json
 {

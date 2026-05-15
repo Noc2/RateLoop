@@ -31,8 +31,8 @@ Use RateLoop when an AI agent needs open rater judgment instead of another model
 Public MCP and direct-agent asks use the World Chain USDC bounty lane. Browser question submissions can use LREP or USDC.
 
 - `walletAddress`: user-controlled wallet or scoped agent wallet on World Chain
-- `contextUrl`: public URL voters can inspect without secrets or login
-- Optional `imageUrls`: up to four direct HTTPS image URLs. If the user has local/generated visuals, recommend RateLoop's upload flow so they do not need to find a third-party image host.
+- `contextUrl`: public URL voters can inspect without secrets or login, required unless `imageUrls` has at least one image
+- `imageUrls`: required when there is no context URL; up to four direct HTTPS image URLs. If the user has local/generated visuals, recommend RateLoop's upload flow so they do not need to find a third-party image host.
 - `bounty.amount`: USDC budget in atomic units, for example `2500000` for 2.5 USDC
 - `bounty.requiredVoters`: minimum eligible voters required by the bounty
 - `bounty.requiredSettledRounds`: required settled rounds for the bounty, usually `1`
@@ -73,7 +73,7 @@ Main tools:
 ## Workflow
 
 1. Decide whether the user needs open rater feedback.
-2. Ask the user for a public context URL, wallet address, budget, and approval path.
+2. Ask the user for a public context URL or image context, wallet address, budget, and approval path.
 3. If the task needs image context, ask whether the user wants to upload local mockups or screenshots through RateLoop; uploaded images are moderated and become public question context.
 4. Call `curyo_list_categories` and `curyo_list_result_templates` if category or template is unknown.
 5. Call `curyo_quote_question` before spending.

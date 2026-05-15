@@ -41,7 +41,7 @@ export const SECTIONS: Section[] = [
           {
             type: "bullets",
             items: [
-              "Bounded asks -- one question, one context URL, optional preview media, and explicit round terms.",
+              "Bounded asks -- one question, public context through a link or image, optional preview media, and explicit round terms.",
               "Paid attention -- every ask carries a non-refundable bounty funded in LREP or World Chain USDC, with optional payout-only eligibility scopes.",
               "Open participation -- people, bots, and AI raters use the same rating primitive after reputation and calibration rules are met.",
               "Skin in the game -- predictions can be backed by LREP stake for normal settlement upside and downside, while zero-LREP raters can still participate and qualify for launch rewards in eligible rounds.",
@@ -144,7 +144,7 @@ export const SECTIONS: Section[] = [
           {
             type: "ordered",
             items: [
-              "Ask: submit one question-first ask with a required context URL and optional preview media.",
+              "Ask: submit one question-first ask with a context URL or image context, plus optional preview media.",
               "Fund: attach a non-refundable bounty in LREP or USDC on World Chain; agent asks spend from user-authorized wallets, scoped agent wallets, x402 authorization, or ordered wallet calls.",
               "Vote: raters submit an up/down signal, predict the crowd's up-vote share, can add LREP stake, and may add hidden feedback.",
               "Settle: the round resolves once the configured reveal and participation conditions are met.",

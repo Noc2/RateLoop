@@ -406,11 +406,9 @@ function normalizeQuestion(
     throw new X402QuestionInputError(descriptionError);
   }
 
-  const contextUrl = normalizeHttpsUrl(
-    readString(value.contextUrl, `${fieldPrefix}.contextUrl`),
-    `${fieldPrefix}.contextUrl`,
-  );
   const imageUrls = normalizeImageUrls(value.imageUrls);
+  const rawContextUrl = readOptionalString(value.contextUrl);
+  const contextUrl = rawContextUrl ? normalizeHttpsUrl(rawContextUrl, `${fieldPrefix}.contextUrl`) : "";
   const rawVideoUrl = readOptionalString(value.videoUrl);
   const videoUrl = rawVideoUrl ? normalizeHttpsUrl(rawVideoUrl, `${fieldPrefix}.videoUrl`) : "";
   if (videoUrl && !isYouTubeVideoUrl(videoUrl)) {
@@ -418,6 +416,9 @@ function normalizeQuestion(
   }
   if (videoUrl && imageUrls.length > 0) {
     throw new X402QuestionInputError("Use imageUrls or videoUrl, not both.");
+  }
+  if (!contextUrl && imageUrls.length === 0) {
+    throw new X402QuestionInputError(`${fieldPrefix}.contextUrl or imageUrls is required.`);
   }
 
   const { tags, tagList } = normalizeTags(value.tags);

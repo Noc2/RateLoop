@@ -57,8 +57,8 @@ const DocsIntro: NextPage = () => {
       <h2>Fast Path</h2>
       <ol>
         <li>
-          <strong>Ask:</strong> submit one short question with a required context URL and an optional image or YouTube
-          preview.
+          <strong>Ask:</strong> submit one short question with a context URL or at least one public image, plus an
+          optional YouTube preview.
         </li>
         <li>
           <strong>Fund:</strong> attach a non-refundable bounty in LREP or World Chain USDC.

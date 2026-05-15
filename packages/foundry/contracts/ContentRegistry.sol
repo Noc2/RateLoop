@@ -579,7 +579,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         );
     }
 
-    /// @notice Submit a question with a required context link and optional preview media.
+    /// @notice Submit a question with a context link or image evidence.
     /// @dev Attaches the governance minimum HREP bounty and default round configuration.
     function submitQuestion(
         string memory contextUrl,
@@ -688,8 +688,12 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         string memory tags,
         uint256 categoryId
     ) internal view returns (SubmissionMetadata memory metadata) {
-        SUBMISSION_MEDIA_VALIDATOR.validateContextUrl(contextUrl);
+        bool hasContextUrl = bytes(contextUrl).length != 0;
+        if (hasContextUrl) {
+            SUBMISSION_MEDIA_VALIDATOR.validateContextUrl(contextUrl);
+        }
         SUBMISSION_MEDIA_VALIDATOR.validateOptionalMediaSet(imageUrls, videoUrl);
+        require(hasContextUrl || imageUrls.length > 0, "Context or image required");
         metadata = SubmissionMetadata({
             url: contextUrl, title: title, description: description, tags: tags, categoryId: categoryId
         });
@@ -698,7 +702,6 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     }
 
     function _validateTextFields(SubmissionMetadata memory metadata) internal pure {
-        require(bytes(metadata.url).length > 0, "Context URL required");
         require(bytes(metadata.url).length <= MAX_URL_LENGTH, "URL too long");
         require(bytes(metadata.title).length > 0, "Question required");
         require(bytes(metadata.title).length <= MAX_QUESTION_LENGTH, "Question too long");

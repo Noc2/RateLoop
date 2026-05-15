@@ -101,7 +101,11 @@ export function lintAgentQuestion(
   if (description.length > 280) {
     pushFinding(findings, "warning", `${path}.description`, "Keep descriptions concise enough for voters to scan quickly.");
   }
-  if (!looksLikeHttpsUrl(question.contextUrl)) {
+  const hasContextUrl = typeof question.contextUrl === "string" && question.contextUrl.trim().length > 0;
+  const hasImageUrls = Array.isArray(question.imageUrls) && question.imageUrls.length > 0;
+  if (!hasContextUrl && !hasImageUrls) {
+    pushFinding(findings, "error", `${path}.contextUrl`, "Context URL or at least one image URL is required.");
+  } else if (hasContextUrl && !looksLikeHttpsUrl(question.contextUrl)) {
     pushFinding(findings, "error", `${path}.contextUrl`, "Context URL must be a public HTTPS URL.");
   }
   if (question.categoryId === undefined || question.categoryId === null || String(question.categoryId).trim() === "") {

@@ -255,10 +255,9 @@ const SmartContracts: NextPage = () => {
         emitted via events.
       </p>
       <p>
-        ContentRegistry validates submitted media links against CategoryRegistry before deriving the question submission
-        key from the submitted metadata. The docs now describe the question-first flow: a required context URL with
-        optional image or YouTube preview media, plus a mandatory non-refundable bounty attached at submission in LREP
-        or USDC.
+        ContentRegistry validates submitted evidence and media links against CategoryRegistry before deriving the
+        question submission key from the submitted metadata. The question-first flow accepts either a context URL or at
+        least one public image, plus a mandatory non-refundable bounty attached at submission in LREP or USDC.
       </p>
       <div className="not-prose overflow-x-auto my-6 rounded-xl bg-base-200">
         <table className="table table-zebra [&_th]:text-base [&_td]:text-base [&_.badge]:text-base [&_th]:bg-base-300">

@@ -41,6 +41,20 @@ test("parseX402QuestionRequest normalizes a valid paid question payload", () => 
   assert.deepEqual(payload.questions[0].imageUrls, ["https://example.com/preview.jpg"]);
 });
 
+test("parseX402QuestionRequest accepts image-only question context", () => {
+  const payload = parseX402QuestionRequest({
+    ...VALID_REQUEST,
+    question: {
+      ...VALID_REQUEST.question,
+      contextUrl: undefined,
+      imageUrls: ["https://example.com/mockup.png"],
+    },
+  });
+
+  assert.equal(payload.questions[0].contextUrl, "");
+  assert.deepEqual(payload.questions[0].imageUrls, ["https://example.com/mockup.png"]);
+});
+
 test("parseX402QuestionRequest accepts an omitted description", () => {
   const payload = parseX402QuestionRequest({
     ...VALID_REQUEST,
@@ -348,5 +362,20 @@ test("parseX402QuestionRequest rejects unsupported media combinations before pay
         },
       }),
     /Use imageUrls or videoUrl/,
+  );
+});
+
+test("parseX402QuestionRequest requires a context URL or image URL", () => {
+  assert.throws(
+    () =>
+      parseX402QuestionRequest({
+        ...VALID_REQUEST,
+        question: {
+          ...VALID_REQUEST.question,
+          contextUrl: undefined,
+          imageUrls: [],
+        },
+      }),
+    /contextUrl or imageUrls is required/,
   );
 });

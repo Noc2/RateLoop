@@ -29,6 +29,23 @@ describe("agent question linting", () => {
     });
   });
 
+  it("accepts public image context without a context URL", () => {
+    const findings = lintAgentAskRequest({
+      ...VALID_REQUEST,
+      question: {
+        ...VALID_REQUEST.question,
+        contextUrl: undefined,
+        imageUrls: ["https://example.com/mockup.png"],
+      },
+    });
+
+    expect(summarizeLintFindings(findings)).toEqual({
+      errorCount: 0,
+      ok: true,
+      warningCount: 0,
+    });
+  });
+
   it("rejects missing context, unknown templates, and non-idempotent requests", () => {
     const findings = lintAgentAskRequest({
       bounty: { amount: "0" },
@@ -49,6 +66,21 @@ describe("agent question linting", () => {
         expect.objectContaining({ level: "error", path: "question.templateId" }),
         expect.objectContaining({ level: "warning", path: "question.title" }),
       ]),
+    );
+  });
+
+  it("rejects asks without a context URL or image URL", () => {
+    const findings = lintAgentAskRequest({
+      ...VALID_REQUEST,
+      question: {
+        ...VALID_REQUEST.question,
+        contextUrl: undefined,
+        imageUrls: [],
+      },
+    });
+
+    expect(findings).toEqual(
+      expect.arrayContaining([expect.objectContaining({ level: "error", path: "question.contextUrl" })]),
     );
   });
 
