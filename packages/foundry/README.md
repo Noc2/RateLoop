@@ -57,7 +57,7 @@ Live-network deploys are keystore-based rather than private-key-based. Generate 
 contracts/
 ├── ContentRegistry.sol          # Question-first submission & lifecycle management
 ├── RoundVotingEngine.sol        # Core tlock voting logic, metadata-bound commits, and gated round settlement
-├── RoundRewardDistributor.sol   # Reward distribution to winning voters
+├── RoundRewardDistributor.sol   # Revealed-loser refund plus voter/consensus/frontend/treasury reward split
 ├── CategoryRegistry.sol         # Content category management
 ├── ProfileRegistry.sol          # User reputation & metadata
 ├── FrontendRegistry.sol         # Frontend operator fee tracking
