@@ -288,7 +288,11 @@ contract UpgradeTest is Test {
 
         vm.store(address(votingEngine), _doubleUintMappingSlot(54, contentId, roundId), bytes32(uint256(111)));
         vm.store(address(votingEngine), _doubleUintMappingSlot(55, contentId, roundId), bytes32(uint256(222)));
-        vm.store(address(votingEngine), _tripleUintBytes32MappingSlot(56, contentId, roundId, commitKey), bytes32(uint256(333)));
+        vm.store(
+            address(votingEngine),
+            _tripleUintBytes32MappingSlot(56, contentId, roundId, commitKey),
+            bytes32(uint256(333))
+        );
 
         assertEq(votingEngine.roundRatingUpEvidence(contentId, roundId), 111);
         assertEq(votingEngine.roundRatingDownEvidence(contentId, roundId), 222);

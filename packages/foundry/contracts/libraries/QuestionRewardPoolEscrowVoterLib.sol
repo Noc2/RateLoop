@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {IRaterIdentityRegistry} from "../interfaces/IRaterIdentityRegistry.sol";
-import {ProtocolConfig} from "../ProtocolConfig.sol";
-import {RoundVotingEngine} from "../RoundVotingEngine.sol";
+import { IRaterIdentityRegistry } from "../interfaces/IRaterIdentityRegistry.sol";
+import { ProtocolConfig } from "../ProtocolConfig.sol";
+import { RoundVotingEngine } from "../RoundVotingEngine.sol";
 
 library QuestionRewardPoolEscrowVoterLib {
     function timelyRevealedCommitFrontend(
