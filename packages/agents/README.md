@@ -153,7 +153,7 @@ Every ask remains answerable by everyone. When an agent needs a narrower payout 
 ## Templates
 
 The canonical built-in result templates are exported from `@rateloop/agents/templates`. All templates use
-`rateloop.predicted_final_rating.v1`; the template changes the agent-facing rubric, input metadata, and how a high or
+`rateloop.robust_bts_binary.v1`; the template changes the agent-facing rubric, input metadata, and how a high or
 low final rating should be interpreted.
 
 - `generic_rating`
