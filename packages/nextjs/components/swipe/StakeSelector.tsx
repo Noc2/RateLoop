@@ -301,14 +301,6 @@ export function StakeSelector({
               </div>
             </div>
 
-            <div className="mb-5 px-1">
-              <p className={metricLabelClassName}>Balance</p>
-              <p className={metricValueClassName}>
-                {balanceFormatted.toLocaleString(undefined, { maximumFractionDigits: 1 })}
-                <span className={metricUnitClassName}>{symbol}</span>
-              </p>
-            </div>
-
             <div className="mb-3 px-1">
               <div className="mb-4">
                 <p className={metricLabelClassName}>Stake amount</p>
