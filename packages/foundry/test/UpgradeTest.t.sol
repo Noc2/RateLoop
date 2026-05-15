@@ -281,6 +281,20 @@ contract UpgradeTest is Test {
         assertEq(votingEngineAdmin.owner(), governance);
     }
 
+    function test_VotingEngine_LateStorageLayoutSlotsStayStable() public {
+        uint256 contentId = 77;
+        uint256 roundId = 8;
+        bytes32 commitKey = keccak256("layout-commit");
+
+        vm.store(address(votingEngine), _doubleUintMappingSlot(54, contentId, roundId), bytes32(uint256(111)));
+        vm.store(address(votingEngine), _doubleUintMappingSlot(55, contentId, roundId), bytes32(uint256(222)));
+        vm.store(address(votingEngine), _tripleUintBytes32MappingSlot(56, contentId, roundId, commitKey), bytes32(uint256(333)));
+
+        assertEq(votingEngine.roundRatingUpEvidence(contentId, roundId), 111);
+        assertEq(votingEngine.roundRatingDownEvidence(contentId, roundId), 222);
+        assertEq(votingEngine.commitCommittedAt(contentId, roundId, commitKey), 333);
+    }
+
     // =========================================================================
     // RoundRewardDistributor upgrade tests
     // =========================================================================
@@ -441,5 +455,21 @@ contract UpgradeTest is Test {
 
     function _proxyAdmin(address proxy) internal view returns (ProxyAdmin) {
         return ProxyAdmin(address(uint160(uint256(vm.load(proxy, ERC1967_ADMIN_SLOT)))));
+    }
+
+    function _doubleUintMappingSlot(uint256 baseSlot, uint256 firstKey, uint256 secondKey)
+        internal
+        pure
+        returns (bytes32)
+    {
+        return keccak256(abi.encode(secondKey, keccak256(abi.encode(firstKey, baseSlot))));
+    }
+
+    function _tripleUintBytes32MappingSlot(uint256 baseSlot, uint256 firstKey, uint256 secondKey, bytes32 thirdKey)
+        internal
+        pure
+        returns (bytes32)
+    {
+        return keccak256(abi.encode(thirdKey, _doubleUintMappingSlot(baseSlot, firstKey, secondKey)));
     }
 }
