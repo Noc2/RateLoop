@@ -62,14 +62,14 @@ export function deriveAcceptedTlockTargetRound(params: {
 
     const minTargetRound = roundAtOrAfter(revealableAfterSeconds, drandGenesisTimeSeconds, drandPeriodSeconds);
     const maxTargetRound = roundAt(
-      revealableAfterSeconds + roundEpochDurationSeconds,
+      revealableAfterSeconds + drandPeriodSeconds,
       drandGenesisTimeSeconds,
       drandPeriodSeconds,
     );
 
     if (minTargetRound === 0n || maxTargetRound === 0n || minTargetRound > maxTargetRound) {
       throw new Error(
-        `No valid drand target round for revealableAfter=${revealableAfterSeconds.toString()}, epochDuration=${roundEpochDurationSeconds.toString()}`,
+        `No valid drand target round for revealableAfter=${revealableAfterSeconds.toString()}, period=${drandPeriodSeconds.toString()}`,
       );
     }
 

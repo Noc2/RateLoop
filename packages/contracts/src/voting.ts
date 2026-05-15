@@ -53,6 +53,8 @@ let tlockModulePromise: Promise<TlockModule> | undefined;
 export type VoteTlockRuntime = {
   client?: TlockClient;
   now?: () => number;
+  roundStartTimeSeconds?: bigint | number | null;
+  candidateTimestampOffsetsSeconds?: readonly number[];
   targetRound?: bigint | number;
   encryptFn?: TlockEncryptFn;
   decryptFn?: TlockDecryptFn;
@@ -476,7 +478,13 @@ async function createTlockVoteArtifacts(
   const targetRound =
     runtime.targetRound != null
       ? normalizeTlockTargetRound(runtime.targetRound)
-      : roundAtOrAfter(now() + epochDurationSeconds * 1000, chainInfo);
+      : deriveAcceptedTlockTargetRound(
+          now(),
+          epochDurationSeconds,
+          chainInfo,
+          runtime.roundStartTimeSeconds,
+          runtime.candidateTimestampOffsetsSeconds,
+        );
   const armored = await encryptFn(
     targetRound,
     Buffer.from(encodeRbtsVotePlaintext(isUp, predictedUpBps, salt)),
@@ -511,6 +519,99 @@ function roundAtOrAfter(
   }
 
   return Math.ceil((targetTimeMs - genesisTimeMs) / periodMs) + 1;
+}
+
+function roundAt(targetTimeMs: number, chainInfo: TlockChainInfo): number {
+  const genesisTimeMs = chainInfo.genesis_time * 1000;
+  const periodMs = chainInfo.period * 1000;
+  if (
+    !Number.isFinite(genesisTimeMs) ||
+    !Number.isFinite(periodMs) ||
+    periodMs <= 0
+  ) {
+    throw new Error("Invalid tlock chain timing");
+  }
+  if (targetTimeMs < genesisTimeMs) {
+    throw new Error("Cannot request a round before the genesis time");
+  }
+
+  return Math.floor((targetTimeMs - genesisTimeMs) / periodMs) + 1;
+}
+
+function normalizeRoundStartTimeMs(
+  roundStartTimeSeconds: VoteTlockRuntime["roundStartTimeSeconds"],
+): number | null {
+  if (roundStartTimeSeconds == null) return null;
+  const normalized =
+    typeof roundStartTimeSeconds === "bigint"
+      ? Number(roundStartTimeSeconds)
+      : Number(roundStartTimeSeconds);
+
+  if (!Number.isFinite(normalized) || normalized <= 0) return null;
+  return Math.floor(normalized) * 1000;
+}
+
+function deriveRevealableAfterMs(
+  commitTimeMs: number,
+  epochDurationSeconds: number,
+  roundStartTimeMs: number | null,
+): number {
+  const epochDurationMs = Math.max(1, Math.floor(epochDurationSeconds)) * 1000;
+  const anchorTimeMs = roundStartTimeMs ?? commitTimeMs;
+  const elapsedMs = Math.max(0, commitTimeMs - anchorTimeMs);
+  const epochIndex = Math.floor(elapsedMs / epochDurationMs);
+  return anchorTimeMs + (epochIndex + 1) * epochDurationMs;
+}
+
+function deriveAcceptedTlockTargetRound(
+  nowMs: number,
+  epochDurationSeconds: number,
+  chainInfo: TlockChainInfo,
+  roundStartTimeSeconds: VoteTlockRuntime["roundStartTimeSeconds"],
+  candidateTimestampOffsetsSeconds: readonly number[] = [0, 1],
+): number {
+  if (!Number.isFinite(nowMs)) {
+    throw new Error("Cannot use Infinity or NaN as a beacon time");
+  }
+
+  const roundStartTimeMs = normalizeRoundStartTimeMs(roundStartTimeSeconds);
+  const drandPeriodMs = Math.max(1, Math.floor(chainInfo.period)) * 1000;
+  let minAcceptedTargetRound = 0;
+  let maxAcceptedTargetRound = 0;
+
+  for (const offsetSeconds of candidateTimestampOffsetsSeconds) {
+    const commitTimeMs = nowMs + Math.floor(offsetSeconds) * 1000;
+    const revealableAfterMs = deriveRevealableAfterMs(
+      commitTimeMs,
+      epochDurationSeconds,
+      roundStartTimeMs,
+    );
+    const minTargetRound = roundAtOrAfter(revealableAfterMs, chainInfo);
+    const maxTargetRound = roundAt(revealableAfterMs + drandPeriodMs, chainInfo);
+
+    if (
+      minTargetRound <= 0 ||
+      maxTargetRound <= 0 ||
+      minTargetRound > maxTargetRound
+    ) {
+      throw new Error("No valid drand target round for the commit window");
+    }
+
+    minAcceptedTargetRound = Math.max(minAcceptedTargetRound, minTargetRound);
+    maxAcceptedTargetRound =
+      maxAcceptedTargetRound === 0
+        ? maxTargetRound
+        : Math.min(maxAcceptedTargetRound, maxTargetRound);
+  }
+
+  if (
+    minAcceptedTargetRound === 0 ||
+    minAcceptedTargetRound > maxAcceptedTargetRound
+  ) {
+    throw new Error("No shared drand target round for commit windows");
+  }
+
+  return minAcceptedTargetRound;
 }
 
 function normalizeTlockTargetRound(targetRound: bigint | number): number {

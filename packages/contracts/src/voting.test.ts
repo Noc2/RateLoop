@@ -488,6 +488,40 @@ test("createTlockVoteCommit rounds non-aligned tlock targets up to the next dran
   assert.equal(commit.targetRound, 402n);
 });
 
+test("createTlockVoteCommit targets the next active round epoch boundary", async () => {
+  const voter = "0x2222222222222222222222222222222222222222";
+  const commit = await createTlockVoteCommit(
+    {
+      voter,
+      isUp: true,
+      predictedUpBps: 6_900,
+      salt: ("0x" + "55".repeat(32)) as `0x${string}`,
+      contentId: 8n,
+      roundId: 4n,
+      roundReferenceRatingBps: 5_000,
+      epochDurationSeconds: 1200,
+    },
+    {
+      client: fakeClient,
+      now: () => fakeNow() + 1000 * 1000,
+      roundStartTimeSeconds: 1692803367,
+      encryptFn: async (targetRound) => {
+        return Buffer.from(
+          makeFakeArmoredTlockCiphertext({
+            targetRound: BigInt(targetRound),
+            drandChainHash:
+              "0x52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971",
+            plaintextMarker: "1:" + "55".repeat(32),
+          }).slice(2),
+          "hex",
+        ).toString("utf8");
+      },
+    },
+  );
+
+  assert.equal(commit.targetRound, 401n);
+});
+
 test("createTlockVoteCommit can encrypt to an explicit target round", async () => {
   const voter = "0x2222222222222222222222222222222222222222";
   const explicitTargetRound = 987_654n;

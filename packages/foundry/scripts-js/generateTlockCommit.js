@@ -185,7 +185,7 @@ function computeRevealableAfter(timestamp) {
 
 // Match TlockVoteLib.validateCommitData: the target must be between the
 // first drand round at/after revealableAfter and the last round within the
-// next epoch-duration window. Choose a round from the intersection of the
+// next drand-period window. Choose a round from the intersection of the
 // latest-block and next-block windows so both gas estimation and mining see
 // valid tlock metadata.
 let minAcceptedTargetRound = 0n;
@@ -204,7 +204,7 @@ for (const timestamp of [latestBlock.timestamp, latestBlock.timestamp + 1n]) {
     drandPeriod
   );
   const maxTargetRound = roundAt(
-    revealableAfter + epochDuration,
+    revealableAfter + drandPeriod,
     drandGenesisTime,
     drandPeriod
   );
@@ -214,7 +214,7 @@ for (const timestamp of [latestBlock.timestamp, latestBlock.timestamp + 1n]) {
     minTargetRound > maxTargetRound
   ) {
     throw new Error(
-      `No valid drand target round for revealableAfter=${revealableAfter}, epochDuration=${epochDuration}, genesis=${drandGenesisTime}, period=${drandPeriod}`
+      `No valid drand target round for revealableAfter=${revealableAfter}, genesis=${drandGenesisTime}, period=${drandPeriod}`
     );
   }
   if (minTargetRound > minAcceptedTargetRound)
