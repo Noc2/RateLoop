@@ -1,25 +1,26 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
-import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
+import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
-import { ContentRegistry } from "./ContentRegistry.sol";
-import { RoundVotingEngine } from "./RoundVotingEngine.sol";
-import { ProtocolConfig } from "./ProtocolConfig.sol";
-import { IClusterPayoutOracle } from "./interfaces/IClusterPayoutOracle.sol";
-import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol";
-import { RoundLib } from "./libraries/RoundLib.sol";
-import { QuestionRewardPoolEscrowBundleActionsLib } from "./libraries/QuestionRewardPoolEscrowBundleActionsLib.sol";
-import { QuestionRewardPoolEscrowClaimLib } from "./libraries/QuestionRewardPoolEscrowClaimLib.sol";
-import { QuestionRewardPoolEscrowEligibilityLib } from "./libraries/QuestionRewardPoolEscrowEligibilityLib.sol";
-import { QuestionRewardPoolEscrowQualificationLib } from "./libraries/QuestionRewardPoolEscrowQualificationLib.sol";
-import { QuestionRewardPoolEscrowPoolActionsLib } from "./libraries/QuestionRewardPoolEscrowPoolActionsLib.sol";
-import { QuestionRewardPoolEscrowTransferLib } from "./libraries/QuestionRewardPoolEscrowTransferLib.sol";
+import {ContentRegistry} from "./ContentRegistry.sol";
+import {RoundVotingEngine} from "./RoundVotingEngine.sol";
+import {ProtocolConfig} from "./ProtocolConfig.sol";
+import {IClusterPayoutOracle} from "./interfaces/IClusterPayoutOracle.sol";
+import {IRaterIdentityRegistry} from "./interfaces/IRaterIdentityRegistry.sol";
+import {IRoundPayoutSnapshotConsumer} from "./interfaces/IRoundPayoutSnapshotConsumer.sol";
+import {RoundLib} from "./libraries/RoundLib.sol";
+import {QuestionRewardPoolEscrowBundleActionsLib} from "./libraries/QuestionRewardPoolEscrowBundleActionsLib.sol";
+import {QuestionRewardPoolEscrowClaimLib} from "./libraries/QuestionRewardPoolEscrowClaimLib.sol";
+import {QuestionRewardPoolEscrowEligibilityLib} from "./libraries/QuestionRewardPoolEscrowEligibilityLib.sol";
+import {QuestionRewardPoolEscrowQualificationLib} from "./libraries/QuestionRewardPoolEscrowQualificationLib.sol";
+import {QuestionRewardPoolEscrowPoolActionsLib} from "./libraries/QuestionRewardPoolEscrowPoolActionsLib.sol";
+import {QuestionRewardPoolEscrowTransferLib} from "./libraries/QuestionRewardPoolEscrowTransferLib.sol";
 import {
     RewardPool,
     RoundSnapshot,
@@ -28,7 +29,7 @@ import {
     BundleRoundSetSnapshot,
     BOUNTY_ELIGIBILITY_OPEN
 } from "./libraries/QuestionRewardPoolEscrowTypes.sol";
-import { QuestionRewardPoolEscrowVoterLib } from "./libraries/QuestionRewardPoolEscrowVoterLib.sol";
+import {QuestionRewardPoolEscrowVoterLib} from "./libraries/QuestionRewardPoolEscrowVoterLib.sol";
 
 /// @title QuestionRewardPoolEscrow
 /// @notice Holds per-question USDC bounties and pays equal per-round rewards to revealed voters.
@@ -37,7 +38,8 @@ contract QuestionRewardPoolEscrow is
     Initializable,
     AccessControlUpgradeable,
     PausableUpgradeable,
-    ReentrancyGuardTransient
+    ReentrancyGuardTransient,
+    IRoundPayoutSnapshotConsumer
 {
     using SafeCast for uint256;
 
@@ -982,6 +984,19 @@ contract QuestionRewardPoolEscrow is
 
     function getRoundSnapshot(uint256 rewardPoolId, uint256 roundId) external view returns (RoundSnapshot memory) {
         return roundSnapshots[rewardPoolId][roundId];
+    }
+
+    function isRoundPayoutSnapshotConsumed(uint8 domain, uint256 rewardPoolId, uint256 contentId, uint256 roundId)
+        external
+        view
+        returns (bool)
+    {
+        if (domain != PAYOUT_DOMAIN_QUESTION_REWARD) return false;
+        RewardPool storage rewardPool = rewardPools[rewardPoolId];
+        if (rewardPool.id == 0 || rewardPool.contentId != contentId || !_usesClusterPayoutSnapshot(rewardPool)) {
+            return false;
+        }
+        return roundSnapshots[rewardPoolId][roundId].qualified;
     }
 
     function getRewardPoolEligibility(uint256 rewardPoolId)

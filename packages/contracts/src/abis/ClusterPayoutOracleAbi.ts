@@ -876,6 +876,29 @@ export const ClusterPayoutOracleAbi = [
   },
   {
     "type": "function",
+    "name": "rejectFinalizedRoundPayoutSnapshot",
+    "inputs": [
+      {
+        "name": "snapshotKey",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "consumer",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "reasonHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "renounceRole",
     "inputs": [
       {
@@ -1832,6 +1855,11 @@ export const ClusterPayoutOracleAbi = [
   {
     "type": "error",
     "name": "SnapshotChallenged",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "SnapshotConsumed",
     "inputs": []
   },
   {

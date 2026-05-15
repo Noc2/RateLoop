@@ -473,6 +473,40 @@ const actionTemplates: readonly GovernanceActionTemplate[] = [
     buildDescription: values => `Reject round payout root ${values.snapshotKey || "snapshot"}`,
   },
   {
+    id: "oracle-reject-finalized-round-payout",
+    group: "Cluster Payout Oracle",
+    label: "Recover finalized payout root",
+    mode: "proposal",
+    contractName: "ClusterPayoutOracle",
+    functionName: "rejectFinalizedRoundPayoutSnapshot",
+    description:
+      "Create a proposal to reject a finalized round payout root that has not yet been applied by its consumer.",
+    advanced: true,
+    fields: [
+      { key: "snapshotKey", label: "Snapshot key", type: "bytes32", required: true },
+      {
+        key: "consumer",
+        label: "Consumer contract",
+        type: "address",
+        required: true,
+        helperText: "Question bounties use the QuestionRewardPoolEscrow address for this check.",
+      },
+      {
+        key: "reasonHash",
+        label: "Reason hash",
+        type: "bytes32",
+        required: true,
+        helperText: "Hash of the public arbitration note voters can inspect off-chain.",
+      },
+    ],
+    buildArgs: (_, parser) => [
+      parser.bytes32("snapshotKey", "Snapshot key"),
+      parser.address("consumer", "Consumer contract"),
+      parser.bytes32("reasonHash", "Reason hash"),
+    ],
+    buildDescription: values => `Recover finalized round payout root ${values.snapshotKey || "snapshot"}`,
+  },
+  {
     id: "content-mark-dormant",
     group: "Content Registry",
     label: "Mark content dormant",

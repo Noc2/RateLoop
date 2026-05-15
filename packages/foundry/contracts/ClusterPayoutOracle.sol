@@ -8,6 +8,7 @@ import {MerkleProof} from "@openzeppelin/contracts/utils/cryptography/MerkleProo
 import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import {IClusterPayoutOracle} from "./interfaces/IClusterPayoutOracle.sol";
 import {IFrontendRegistry} from "./interfaces/IFrontendRegistry.sol";
+import {IRoundPayoutSnapshotConsumer} from "./interfaces/IRoundPayoutSnapshotConsumer.sol";
 
 /// @title ClusterPayoutOracle
 /// @notice Optimistic oracle for correlation epoch snapshots and per-round payout weights.
@@ -43,6 +44,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
     error SnapshotNotFinalizable();
     error SnapshotChallenged();
     error SnapshotFinalized();
+    error SnapshotConsumed();
     error InvalidProof();
 
     struct CorrelationEpochSnapshot {
@@ -386,6 +388,26 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
         uint256 bond = proposal.bond;
         proposal.bond = 0;
         if (bond > 0) _creditBond(challenger == address(0) ? bondRecipient : challenger, bond);
+        emit RoundPayoutSnapshotRejected(snapshotKey, msg.sender, reasonHash);
+    }
+
+    function rejectFinalizedRoundPayoutSnapshot(bytes32 snapshotKey, address consumer, bytes32 reasonHash)
+        external
+        onlyRole(ARBITER_ROLE)
+    {
+        if (consumer == address(0) || consumer.code.length == 0) revert InvalidAddress();
+        RoundPayoutProposal storage proposal = roundPayoutProposals[snapshotKey];
+        RoundPayoutSnapshot memory snapshot = proposal.snapshot;
+        if (snapshot.status == SnapshotStatus.None) revert SnapshotNotFound();
+        if (snapshot.status != SnapshotStatus.Finalized) revert SnapshotNotFinalizable();
+        if (IRoundPayoutSnapshotConsumer(consumer)
+                .isRoundPayoutSnapshotConsumed(
+                    snapshot.domain, snapshot.rewardPoolId, snapshot.contentId, snapshot.roundId
+                )) {
+            revert SnapshotConsumed();
+        }
+
+        proposal.snapshot.status = SnapshotStatus.Rejected;
         emit RoundPayoutSnapshotRejected(snapshotKey, msg.sender, reasonHash);
     }
 

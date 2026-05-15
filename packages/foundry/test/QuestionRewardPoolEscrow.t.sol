@@ -2286,6 +2286,44 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertEq(nextRoundToEvaluate, roundId + 1);
     }
 
+    function testGovernanceCanReplaceUnconsumedFinalizedClusterSnapshotMismatch() public {
+        ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
+        uint256 contentId = _submitQuestion("");
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+
+        uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+        IClusterPayoutOracle.PayoutWeight memory payoutWeight =
+            _clusterPayoutWeight(rewardPoolId, contentId, roundId, 0);
+        bytes32 weightRoot = oracle.payoutWeightLeaf(payoutWeight);
+        _finalizeClusterPayoutSnapshotWithRoot(oracle, rewardPoolId, contentId, roundId, 4, 30_000, 10_000, weightRoot);
+
+        vm.expectRevert("Cluster snapshot mismatch");
+        rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
+        assertFalse(rewardPoolEscrow.isRoundPayoutSnapshotConsumed(1, rewardPoolId, contentId, roundId));
+
+        bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(1, rewardPoolId, contentId, roundId);
+        oracle.rejectFinalizedRoundPayoutSnapshot(
+            snapshotKey, address(rewardPoolEscrow), keccak256("raw-eligible-voter-mismatch")
+        );
+        _finalizeClusterRoundPayoutSnapshotWithRoot(
+            oracle,
+            rewardPoolId,
+            contentId,
+            roundId,
+            uint64(roundId),
+            3,
+            30_000,
+            payoutWeight.effectiveWeight,
+            weightRoot
+        );
+
+        rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
+        assertTrue(rewardPoolEscrow.isRoundPayoutSnapshotConsumed(1, rewardPoolId, contentId, roundId));
+
+        vm.expectRevert(ClusterPayoutOracle.SnapshotConsumed.selector);
+        oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, address(rewardPoolEscrow), keccak256("already-applied"));
+    }
+
     function testRewardPoolCreatedBeforeClusterOracleKeepsStandardClaims() public {
         uint256 contentId = _submitQuestion("");
         uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
@@ -3344,7 +3382,41 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             })
         );
         bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(1, rewardPoolId, contentId, roundId);
-        vm.warp(block.timestamp + 1 hours + 1);
+        ClusterPayoutOracle.RoundPayoutProposal memory proposal = oracle.roundPayoutProposal(snapshotKey);
+        vm.warp(uint256(proposal.proposedAt) + uint256(oracle.challengeWindow()) + 1);
+        oracle.finalizeRoundPayoutSnapshot(snapshotKey);
+    }
+
+    function _finalizeClusterRoundPayoutSnapshotWithRoot(
+        ClusterPayoutOracle oracle,
+        uint256 rewardPoolId,
+        uint256 contentId,
+        uint256 roundId,
+        uint64 correlationEpochId,
+        uint32 rawEligibleVoters,
+        uint32 effectiveParticipantUnits,
+        uint256 totalClaimWeight,
+        bytes32 weightRoot
+    ) internal {
+        oracle.proposeRoundPayoutSnapshot(
+            IClusterPayoutOracle.RoundPayoutSnapshotInput({
+                domain: 1,
+                rewardPoolId: rewardPoolId,
+                contentId: contentId,
+                roundId: roundId,
+                correlationEpochId: correlationEpochId,
+                rawEligibleVoters: rawEligibleVoters,
+                effectiveParticipantUnits: effectiveParticipantUnits,
+                totalClaimWeight: totalClaimWeight,
+                weightRoot: weightRoot,
+                reasonRoot: keccak256("reason-root"),
+                artifactHash: keccak256("round-artifact"),
+                artifactURI: "ipfs://round"
+            })
+        );
+        bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(1, rewardPoolId, contentId, roundId);
+        ClusterPayoutOracle.RoundPayoutProposal memory proposal = oracle.roundPayoutProposal(snapshotKey);
+        vm.warp(uint256(proposal.proposedAt) + uint256(oracle.challengeWindow()) + 1);
         oracle.finalizeRoundPayoutSnapshot(snapshotKey);
     }
 

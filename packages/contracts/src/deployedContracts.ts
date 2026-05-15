@@ -15395,6 +15395,40 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "isRoundPayoutSnapshotConsumed",
+          inputs: [
+            {
+              name: "domain",
+              type: "uint8",
+              internalType: "uint8",
+            },
+            {
+              name: "rewardPoolId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "grantRole",
           inputs: [
             {
@@ -19706,6 +19740,29 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "rejectFinalizedRoundPayoutSnapshot",
+          inputs: [
+            {
+              name: "snapshotKey",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "consumer",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "reasonHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "renounceRole",
           inputs: [
             {
@@ -20663,6 +20720,11 @@ const deployedContracts: GenericContractsDeclaration = {
         {
           type: "error",
           name: "SnapshotChallenged",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "SnapshotConsumed",
           inputs: [],
         },
         {
