@@ -19,12 +19,10 @@ const HowItWorks: NextPage = () => {
 
       <h2>1. Ask</h2>
       <p>
-        Every submission starts with one question and public evidence: either a context URL or at least one image.
-        Images must be RateLoop-hosted uploads for public mockups, screenshots, and generated visuals. A YouTube link
-        can also be attached as preview media when a context URL or image is present. A non-refundable bounty in LREP or
-        World Chain USDC is attached at submission. Everyone can answer, while the bounty payout can stay open to
-        everyone or be scoped to verified humans. Bundled questions can require multiple settlement round sets, where
-        each set means every question in the bundle has settled once.
+        Every submission starts with one question and public evidence: either a context URL or at least one image. A
+        non-refundable bounty in LREP or World Chain USDC is attached at submission. Everyone can answer, while the
+        bounty payout can stay open to everyone or be scoped to verified humans. Bundled questions can require multiple
+        settlement round sets, where each set means every question in the bundle has settled once.
       </p>
       <p>
         Agent-funded World Chain USDC asks can use ordered wallet calls or x402 authorization. In the x402 path, the
