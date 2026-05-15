@@ -58,7 +58,7 @@ export function VoterAccuracyStats() {
               <span className="text-3xl font-mono font-semibold tabular-nums text-base-content sm:text-4xl">
                 {winRateLabel}
               </span>
-              <InfoTooltip text="Accuracy is the share of your resolved votes that matched the final settled outcome. The flare around your avatar reflects this same signal." />
+              <InfoTooltip text="Accuracy is the share of your resolved votes that matched the final settled outcome. The ring around your avatar reflects this same signal." />
             </div>
             <div className="mt-1 font-mono text-base tabular-nums text-base-content/50">{recordLabel}</div>
           </div>

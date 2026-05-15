@@ -752,8 +752,8 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
       notification.success("Avatar color updated!");
       refetchAvatarAccent();
     } catch (error: any) {
-      console.error("Avatar accent update failed:", error);
-      setAccentError(getProfileWriteErrorMessage(error, "Failed to update avatar color"));
+      console.error("Avatar gradient update failed:", error);
+      setAccentError(getProfileWriteErrorMessage(error, "Failed to update avatar gradient"));
     }
   }, [avatarAccentInput, refetchAvatarAccent, setAvatarAccent]);
 
@@ -775,8 +775,8 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
       notification.success("Avatar color reset!");
       refetchAvatarAccent();
     } catch (error: any) {
-      console.error("Avatar accent reset failed:", error);
-      setAccentError(getProfileWriteErrorMessage(error, "Failed to reset avatar color"));
+      console.error("Avatar gradient reset failed:", error);
+      setAccentError(getProfileWriteErrorMessage(error, "Failed to reset avatar gradient"));
     }
   }, [clearAvatarAccent, committedAvatarAccentHex, refetchAvatarAccent]);
 
@@ -1404,7 +1404,7 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
             className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 px-4 py-6 backdrop-blur-md"
             role="dialog"
             aria-modal="true"
-            aria-label="Edit avatar color"
+            aria-label="Edit avatar gradient"
             onClick={closeAvatarEditor}
           >
             <div
@@ -1413,9 +1413,9 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
             >
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h2 className="text-2xl font-semibold">Edit avatar color</h2>
+                  <h2 className="text-2xl font-semibold">Edit avatar gradient</h2>
                   <p className="mt-1 text-base text-base-content/60">
-                    Choose the color seed for your public avatar gradient.
+                    Choose the color seed for your public avatar ring.
                   </p>
                 </div>
                 <button
@@ -1442,7 +1442,7 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
               <div className="mt-6 grid gap-4 sm:grid-cols-[auto,minmax(0,1fr)] sm:items-center">
                 <input
                   type="color"
-                  aria-label="Avatar accent color picker"
+                  aria-label="Avatar gradient color picker"
                   className="h-12 w-20 cursor-pointer rounded-xl border border-base-300 bg-base-100 p-1"
                   value={avatarAccentPickerValue}
                   onChange={event => {
@@ -1453,7 +1453,7 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
                 />
                 <input
                   type="text"
-                  aria-label="Avatar accent hex"
+                  aria-label="Avatar gradient hex"
                   placeholder={DEFAULT_AVATAR_ACCENT_HEX}
                   className={`input input-bordered w-full bg-base-100 ${avatarAccentInputError ? "input-error" : ""}`}
                   value={avatarAccentInput}

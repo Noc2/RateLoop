@@ -161,7 +161,7 @@ export function useSetProfile() {
 }
 
 /**
- * Hook to fetch a user's avatar accent override from the ProfileRegistry contract.
+ * Hook to fetch a user's avatar gradient seed override from the ProfileRegistry contract.
  */
 export function useAvatarAccent(address?: string) {
   const {
@@ -198,13 +198,13 @@ export function useAvatarAccent(address?: string) {
 }
 
 /**
- * Hook to store an avatar accent override.
+ * Hook to store an avatar gradient seed override.
  */
 export function useSetAvatarAccent() {
   const { isPending, writeProfileRegistry } = useProfileRegistryWrite();
 
   const setAvatarAccent = async (rgb: number) => {
-    await writeProfileRegistry("setAvatarAccent", [BigInt(rgb)], "avatar color update");
+    await writeProfileRegistry("setAvatarAccent", [BigInt(rgb)], "avatar gradient update");
   };
 
   return {
@@ -214,13 +214,13 @@ export function useSetAvatarAccent() {
 }
 
 /**
- * Hook to clear an avatar accent override.
+ * Hook to clear an avatar gradient seed override.
  */
 export function useClearAvatarAccent() {
   const { isPending, writeProfileRegistry } = useProfileRegistryWrite();
 
   const clearAvatarAccent = async () => {
-    await writeProfileRegistry("clearAvatarAccent", [], "avatar color reset");
+    await writeProfileRegistry("clearAvatarAccent", [], "avatar gradient reset");
   };
 
   return {
