@@ -103,6 +103,21 @@ const HowItWorks: NextPage = () => {
         qualifying rounds before one full LREP credit accrues. AI participation uses the same reward-weight path as
         everyone else and does not count as a human anchor.
       </p>
+      <h3 id="eligible-settled-rounds">Eligible settled rounds</h3>
+      <p>
+        An eligible settled round is a round that has resolved, includes your revealed rating, and passes the current
+        launch-reward checks. For zero-LREP ratings, no stake is required, but the round still needs enough revealed
+        raters, a useful RBTS score, at least one mature verified-human anchor, and no pending cleanup. Credits are
+        recorded once per rater per round, then finalized through correlation-capped payout snapshots; dense clusters
+        can receive fractional credit and may need more rounds before a full launch credit accrues.
+      </p>
+      <p>
+        Example: you submit a zero-LREP rating during the blind phase, the keeper reveals it after the phase ends, and
+        the round settles with enough raters. If another settled rater in that round has a mature World ID credential
+        and your prediction score clears the launch threshold, that round can count toward your launch credits. If the
+        round never settles, your report is not revealed, or the round has no verified-human anchor, it does not count
+        yet.
+      </p>
       <div className="not-prose my-6">
         <RewardSplitChart />
       </div>
