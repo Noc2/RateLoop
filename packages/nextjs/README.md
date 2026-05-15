@@ -37,7 +37,7 @@ Run these from the monorepo root unless noted otherwise:
 | `yarn workspace @rateloop/nextjs e2e:full`         | Run the full local Playwright suite, including keeper coverage                             |
 | `yarn e2e:ui`                                      | Run E2E tests with interactive Playwright UI                                               |
 
-CI runs the smoke, lifecycle, and keeper-backed suites separately, so `yarn e2e` is only the smallest browser pass.
+CI runs smoke, app, responsive, accessibility, lifecycle, and keeper-backed suites separately on pushes and PRs. The scheduled workflow also runs browser-compatibility and mobile suites, so `yarn e2e` is only the default Chromium app pass.
 
 ## Demo Recorder
 
