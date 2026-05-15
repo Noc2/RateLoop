@@ -19,7 +19,10 @@ Thank you for your interest in contributing to RateLoop, an open rating protocol
 | Package | What lives here |
 |---|---|
 | `packages/foundry` | Solidity contracts, Foundry tests, deployment scripts |
+| `packages/contracts` | Generated ABIs, deployment metadata, and shared protocol helpers |
 | `packages/nextjs` | Next.js frontend, React components, hooks |
+| `packages/sdk` | TypeScript SDK for app, agent, and read APIs |
+| `packages/node-utils` | Shared Node.js utilities used by services and scripts |
 | `packages/ponder` | On-chain event indexer and API endpoints |
 | `packages/keeper` | Standalone keeper service for vote reveals |
 | `packages/agents` | Agent integration hub with examples, question guidance, and operator utilities |
