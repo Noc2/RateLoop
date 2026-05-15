@@ -36,7 +36,7 @@ If the user wants feedback on a local mockup, screenshot, generated image, or de
 
 ## Website Feedback Payload
 
-Send this shape to `curyo_ask_humans` after a successful quote. Keep the title focused on one user judgment. Amounts are atomic USDC units, so `2500000` means 2.5 USDC. Replace the wallet, add either a context URL or image URLs, and set `rewardPoolExpiresAt`. Add `imageUrls` only after an upload or direct HTTPS image source returns real public URLs.
+Send this shape to `curyo_ask_humans` after a successful quote. Keep the title focused on one user judgment. Amounts are atomic USDC units, so `2500000` means 2.5 USDC. Replace the wallet, add either a context URL or image URLs, and set `rewardPoolExpiresAt`. Add `imageUrls` only after RateLoop's upload flow returns approved public URLs.
 
 ```json
 {

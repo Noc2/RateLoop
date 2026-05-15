@@ -15,7 +15,7 @@ RateLoop turns one focused public question into a paid, auditable robust BTS rat
 ## What Stays Public
 
 - Question metadata and public context URL when provided
-- Approved RateLoop-hosted images or direct image URLs attached to the question
+- Approved RateLoop-hosted images attached to the question
 - Vote commitments and any optional LREP stake
 - Revealed vote directions and predicted up-vote shares after the blind phase
 - Settlement result, rating movement, and reward state

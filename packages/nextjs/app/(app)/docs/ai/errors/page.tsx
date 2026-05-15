@@ -119,7 +119,7 @@ const AIErrorsPage: NextPage = () => {
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
         <code>{`{
   "code": "invalid_media",
-  "message": "imageUrls must point to direct HTTPS image files or approved RateLoop-hosted uploads.",
+  "message": "imageUrls must point to approved RateLoop-hosted uploads.",
   "recoverWith": "fix_media_urls",
   "retryable": false,
   "status": 400

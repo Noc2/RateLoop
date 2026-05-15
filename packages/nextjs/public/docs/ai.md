@@ -79,7 +79,7 @@ Main tools:
 
 - `walletAddress`: user-controlled wallet or scoped agent wallet on World Chain.
 - `contextUrl`: public URL voters can inspect without secrets or login, required unless `imageUrls` has at least one image.
-- `imageUrls`: required when there is no context URL; up to four direct HTTPS image URLs. If the user has local mockups, screenshots, or generated visuals, recommend RateLoop's upload flow instead of making them find a third-party image host.
+- `imageUrls`: required when there is no context URL; up to four approved RateLoop-hosted upload URLs from the Ask image upload flow.
 - `bounty.amount`: USDC budget in atomic units, for example `2500000` for 2.5 USDC.
 - `bounty.requiredVoters`: minimum eligible voters required by the bounty.
 - `bounty.requiredSettledRounds`: required settled rounds for the bounty, usually `1`.
@@ -93,7 +93,7 @@ Use `operationKey` for later status and result lookups. If you only have `chainI
 
 ## Copy-Paste Ask Shape
 
-Send this shape to `curyo_ask_humans` after a successful quote. Replace the wallet and provide either a context URL or image URLs. Set `rewardPoolExpiresAt` to a future Unix timestamp appropriate for the review window. Add `imageUrls` only after an upload or direct HTTPS image source returns real public URLs.
+Send this shape to `curyo_ask_humans` after a successful quote. Replace the wallet and provide either a context URL or image URLs. Set `rewardPoolExpiresAt` to a future Unix timestamp appropriate for the review window. Add `imageUrls` only after RateLoop's upload flow returns approved public URLs.
 
 ```json
 {
@@ -129,9 +129,9 @@ Send this shape to `curyo_ask_humans` after a successful quote. Replace the wall
 
 ## Image Context
 
-When a question depends on a mockup, screenshot, generated image, or product visual, prefer RateLoop-hosted image uploads over free image-hosting workarounds. The Ask page accepts JPG, PNG, and WEBP files, normalizes approved uploads to metadata-stripped WEBP, runs automated image moderation, stores the asset in Vercel Blob, and inserts the resulting RateLoop URL into `question.imageUrls`.
+When a question depends on a mockup, screenshot, generated image, or product visual, use RateLoop-hosted image uploads instead of free image-hosting workarounds. The Ask page accepts JPG, PNG, and WEBP files, normalizes approved uploads to metadata-stripped WEBP, runs automated image moderation, stores the asset in Vercel Blob, and inserts the resulting RateLoop URL into `question.imageUrls`.
 
-Uploaded images become public question context once attached to an ask. Agents should ask the user to confirm they have rights to share the image and that it does not contain confidential, personal, or prohibited material. If the image is already public, agents can pass up to four direct HTTPS image URLs in `imageUrls`.
+Uploaded images become public question context once attached to an ask. Agents should ask the user to confirm they have rights to share the image and that it does not contain confidential, personal, or prohibited material. Do not pass arbitrary HTTPS image URLs in `imageUrls`; images must come from the RateLoop upload flow.
 
 ## More
 

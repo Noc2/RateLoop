@@ -145,7 +145,7 @@ const publicSetupInputs = [
   "RateLoop origin, usually https://www.rateloop.xyz for production or the preview origin the user wants to test",
   "A funded walletAddress on World Chain, or permission to create a local encrypted signer and fund that address",
   "A public context URL voters can open without secrets or a RateLoop login, unless the ask includes public image context",
-  "Image context: direct HTTPS image URLs, or RateLoop-hosted uploaded images when the user has local mockups, screenshots, or generated visuals",
+  "Image context: RateLoop-hosted uploaded images when the user has local mockups, screenshots, or generated visuals",
   "A bounded USDC budget: bounty.amount, maxPaymentAmount, requiredVoters, requiredSettledRounds, and rewardPoolExpiresAt",
   "The execution path: public MCP wallet calls, direct JSON routes, local signer, or WebMCP-assisted browser signing",
 ] as const;
@@ -289,15 +289,15 @@ const AIPage = async () => {
       <h2 id="image-context">Image Context</h2>
       <p>
         If the user wants humans to judge a mockup, screenshot, generated image, or product visual that is not already
-        public, recommend uploading it through RateLoop instead of sending the user to a generic image host. The Ask
-        page accepts JPG, PNG, and WEBP files, strips metadata by normalizing them to WEBP, runs automated image
-        moderation, stores the approved asset in Vercel Blob, and inserts the resulting RateLoop URL into{" "}
-        <code>question.imageUrls</code>.
+        public, use RateLoop uploads instead of sending the user to a generic image host. The Ask page accepts JPG, PNG,
+        and WEBP files, strips metadata by normalizing them to WEBP, runs automated image moderation, stores the
+        approved asset in Vercel Blob, and inserts the resulting RateLoop URL into <code>question.imageUrls</code>.
       </p>
       <p>
         Uploaded images become public question context once attached to an ask. Agents should ask the user to confirm
         they have rights to share the image and that it does not contain confidential, personal, or prohibited material.
-        If the image is already hosted publicly, pass up to four direct HTTPS image URLs in <code>imageUrls</code>.
+        Do not pass arbitrary HTTPS image URLs in <code>imageUrls</code>; images must come from the RateLoop upload
+        flow.
       </p>
 
       <h2 id="flow">Agent Flow</h2>
@@ -386,7 +386,7 @@ const AIPage = async () => {
         Send this shape to <code>curyo_ask_humans</code> or <code>POST /api/agent/asks</code> after a successful quote.
         Amounts are atomic USDC units, so <code>2500000</code> means 2.5 USDC. Replace the example wallet and set{" "}
         <code>rewardPoolExpiresAt</code> to a future Unix timestamp appropriate for the review window. Add{" "}
-        <code>imageUrls</code> only after an upload or direct HTTPS image source returns real public URLs.{" "}
+        <code>imageUrls</code> only after the RateLoop upload flow returns approved public URLs.{" "}
         <code>bountyEligibility</code> defaults to everyone; use 1 for verified humans.
       </p>
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">

@@ -21,7 +21,7 @@ hard-coded:
 - RateLoop origin, usually `https://www.rateloop.xyz`
 - funded World Chain `walletAddress`, or permission to generate a local encrypted signer and fund that address
 - public context URL or image context for voters
-- optional extra public image context: direct HTTPS image URLs, or RateLoop-hosted uploads for local mockups, screenshots, and generated images
+- optional extra public image context: RateLoop-hosted uploads for local mockups, screenshots, and generated images
 - USDC bounty, `maxPaymentAmount`, `requiredVoters`, `requiredSettledRounds`, `rewardPoolExpiresAt`, and optional payout-only `bountyEligibility`
 - execution path: public MCP wallet calls, direct JSON routes, local signer, or WebMCP-assisted browser signing
 
@@ -75,8 +75,8 @@ private Vercel Blob storage, normalizes it to metadata-stripped WEBP, runs autom
 RateLoop URL into `question.imageUrls`.
 
 Treat uploaded images as public ask context. Ask the user to confirm they have rights to share the image and that it
-does not contain confidential, personal, or prohibited material. If an image is already public, agents can pass up to
-four direct HTTPS image URLs in `imageUrls`.
+does not contain confidential, personal, or prohibited material. Do not pass arbitrary HTTPS image URLs in `imageUrls`;
+images must come from the RateLoop upload flow.
 
 ## Local Signer CLI
 
@@ -176,8 +176,8 @@ Next.js, MCP tools, delegated agent-wallet submissions, and SDK examples should 
 Good agent questions:
 
 - ask one bounded question
-- include a public HTTPS context URL or at least one public image URL
-- include up to four direct `imageUrls` or RateLoop-hosted uploads when visual context matters
+- include a public HTTPS context URL or at least one RateLoop-hosted upload URL
+- include up to four uploaded `imageUrls` when visual context matters
 - make the high-rating and low-rating interpretation clear
 - choose a result template before submission
 - use a stable `clientRequestId` so retries do not duplicate spend

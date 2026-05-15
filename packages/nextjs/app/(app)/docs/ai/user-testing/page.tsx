@@ -119,8 +119,8 @@ export default function AgentUserTestingPage() {
       <p>
         Send this shape to <code>curyo_ask_humans</code> after a successful quote. Keep the title focused on one user
         judgment. Amounts are atomic USDC units, so <code>2500000</code> means 2.5 USDC. Replace the wallet, context
-        URL, and <code>rewardPoolExpiresAt</code>. Add <code>imageUrls</code> only after an upload or direct HTTPS image
-        source returns real public URLs.
+        URL, and <code>rewardPoolExpiresAt</code>. Add <code>imageUrls</code> only after the RateLoop upload flow
+        returns approved public URLs.
       </p>
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
         <code>{websiteFeedbackPayloadExample}</code>

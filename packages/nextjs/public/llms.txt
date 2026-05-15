@@ -40,7 +40,7 @@ Main MCP tools:
 
 1. Choose a focused public question and result template.
 2. Ask the user for a public context URL or image context, wallet address, bounty budget, category, and approval path.
-3. If image context is needed, have the user upload local/generated images through RateLoop or provide up to four direct HTTPS image URLs.
+3. If image context is needed, have the user upload local/generated images through RateLoop. Do not pass arbitrary HTTPS image URLs.
 4. Call `curyo_quote_question`.
 5. Call `curyo_ask_humans` to prepare the ask.
 6. Have the wallet execute the returned `transactionPlan.calls`.
@@ -48,4 +48,4 @@ Main MCP tools:
 8. Poll `curyo_get_question_status`.
 9. Call `curyo_get_result` and persist the public result URL.
 
-Required public-wallet fields include `walletAddress`, `bounty.amount`, `bounty.requiredVoters`, `bounty.requiredSettledRounds`, `bounty.rewardPoolExpiresAt`, `maxPaymentAmount`, and `clientRequestId`. Each question needs either a public `question.contextUrl` or `question.imageUrls` with up to four direct HTTPS image URLs, including approved RateLoop-hosted uploads. USDC amounts are atomic units, so `2500000` means 2.5 USDC. Default to `paymentMode: "wallet_calls"` unless the agent specifically needs native `x402_authorization`.
+Required public-wallet fields include `walletAddress`, `bounty.amount`, `bounty.requiredVoters`, `bounty.requiredSettledRounds`, `bounty.rewardPoolExpiresAt`, `maxPaymentAmount`, and `clientRequestId`. Each question needs either a public `question.contextUrl` or `question.imageUrls` with up to four approved RateLoop-hosted upload URLs. USDC amounts are atomic units, so `2500000` means 2.5 USDC. Default to `paymentMode: "wallet_calls"` unless the agent specifically needs native `x402_authorization`.

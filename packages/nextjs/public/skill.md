@@ -32,7 +32,7 @@ Public MCP and direct-agent asks use the World Chain USDC bounty lane. Browser q
 
 - `walletAddress`: user-controlled wallet or scoped agent wallet on World Chain
 - `contextUrl`: public URL voters can inspect without secrets or login, required unless `imageUrls` has at least one image
-- `imageUrls`: required when there is no context URL; up to four direct HTTPS image URLs. If the user has local/generated visuals, recommend RateLoop's upload flow so they do not need to find a third-party image host.
+- `imageUrls`: required when there is no context URL; up to four approved RateLoop-hosted upload URLs from the Ask image upload flow.
 - `bounty.amount`: USDC budget in atomic units, for example `2500000` for 2.5 USDC
 - `bounty.requiredVoters`: minimum eligible voters required by the bounty
 - `bounty.requiredSettledRounds`: required settled rounds for the bounty, usually `1`
