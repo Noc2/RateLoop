@@ -15,7 +15,8 @@ type GetLrepOnboardingProps = {
 const DEFAULT_ELIGIBILITY_RATING_COUNT = 5;
 const DEFAULT_UNVERIFIED_EARNED_RATER_CAP_BPS = 2_500;
 const actionCardClassName = "surface-card flex h-full flex-col rounded-3xl p-6";
-const actionButtonClassName = "btn btn-primary mt-auto self-end gap-2";
+const actionButtonFooterClassName = "mt-auto flex justify-end pt-6";
+const actionButtonClassName = "btn btn-primary gap-2";
 const LAUNCH_CREDITS_TOOLTIP =
   "Settled zero-LREP ratings count toward starter LREP after they meet launch-reward checks.";
 const EARNED_RATER_CAP_TOOLTIP =
@@ -145,10 +146,12 @@ export function GetLrepOnboarding({ address }: GetLrepOnboardingProps) {
             />
             <ActionStat label="Credential" value={humanVerified ? "Active" : "Not verified"} />
           </div>
-          <Link href={`${SETTINGS_ROUTE}#identity`} className={actionButtonClassName}>
-            Verify as human
-            <ArrowRightIcon className="h-4 w-4" />
-          </Link>
+          <div className={actionButtonFooterClassName}>
+            <Link href={`${SETTINGS_ROUTE}#identity`} className={actionButtonClassName}>
+              Verify as human
+              <ArrowRightIcon className="h-4 w-4" />
+            </Link>
+          </div>
         </section>
 
         <section className={actionCardClassName}>
@@ -183,10 +186,12 @@ export function GetLrepOnboarding({ address }: GetLrepOnboardingProps) {
               detail={launchCapDetail}
             />
           </div>
-          <Link href={RATE_ROUTE} className={actionButtonClassName}>
-            Rate with 0 LREP
-            <ArrowRightIcon className="h-4 w-4" />
-          </Link>
+          <div className={actionButtonFooterClassName}>
+            <Link href={RATE_ROUTE} className={actionButtonClassName}>
+              Rate with 0 LREP
+              <ArrowRightIcon className="h-4 w-4" />
+            </Link>
+          </div>
         </section>
       </div>
     </div>
