@@ -40,9 +40,9 @@ function formatDurationLabel(seconds: number): string {
 
 const remainingPoolBps = BPS_SCALE - REWARD_SPLIT_BPS.revealedLoserRefund;
 const ROUND_CONFIG_BOUNDS = {
-  minEpochDurationSeconds: 5 * 60,
-  maxEpochDurationSeconds: 60 * 60,
-  minRoundDurationSeconds: 60 * 60,
+  minEpochDurationSeconds: 60,
+  maxEpochDurationSeconds: 7 * 24 * 60 * 60,
+  minRoundDurationSeconds: 60,
   maxRoundDurationSeconds: 30 * 24 * 60 * 60,
   minSettlementVoters: 3,
   maxSettlementVoters: 100,

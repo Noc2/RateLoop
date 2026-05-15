@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import { IRoundRewardDistributor } from "./interfaces/IRoundRewardDistributor.sol";
-import { RoundLib } from "./libraries/RoundLib.sol";
-import { RatingLib } from "./libraries/RatingLib.sol";
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import {IRoundRewardDistributor} from "./interfaces/IRoundRewardDistributor.sol";
+import {RoundLib} from "./libraries/RoundLib.sol";
+import {RatingLib} from "./libraries/RatingLib.sol";
 
 /// @title ProtocolConfig
 /// @notice Governance-controlled configuration and address book for RoundVotingEngine.
@@ -131,12 +131,15 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         }
 
         config = RoundLib.RoundConfig({
-            epochDuration: uint32(20 minutes), maxDuration: uint32(7 days), minVoters: uint16(3), maxVoters: uint16(200)
+            epochDuration: uint32(20 minutes),
+            maxDuration: uint32(20 minutes),
+            minVoters: uint16(3),
+            maxVoters: uint16(200)
         });
         roundConfigBounds = RoundConfigBounds({
-            minEpochDuration: uint32(5 minutes),
-            maxEpochDuration: uint32(60 minutes),
-            minRoundDuration: uint32(1 hours),
+            minEpochDuration: uint32(1 minutes),
+            maxEpochDuration: uint32(7 days),
+            minRoundDuration: uint32(1 minutes),
             maxRoundDuration: uint32(30 days),
             minSettlementVoters: uint16(3),
             maxSettlementVoters: uint16(100),
@@ -384,9 +387,8 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     }
 
     function _setRevealGracePeriod(uint256 value) internal {
-        uint256 minRevealGrace = roundConfigBounds.maxEpochDuration == 0
-            ? uint256(config.epochDuration)
-            : uint256(roundConfigBounds.maxEpochDuration);
+        uint256 minRevealGrace =
+            config.epochDuration == 0 ? uint256(roundConfigBounds.minEpochDuration) : uint256(config.epochDuration);
         if (value < minRevealGrace) revert InvalidConfig();
         // Upper bound: without it, an extreme value (e.g. type(uint256).max) would make
         // RevealFailed finalization unreachable and lock every in-flight stake indefinitely.
@@ -409,9 +411,9 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
             _validateRoundConfig(epochDuration, maxDuration, minVoters, maxVoters, roundConfigBounds);
         if (drandPeriod > nextConfig.epochDuration) revert InvalidConfig();
 
-        if (revealGracePeriod > 0 && revealGracePeriod < roundConfigBounds.maxEpochDuration) {
-            revealGracePeriod = roundConfigBounds.maxEpochDuration;
-            emit RevealGracePeriodUpdated(roundConfigBounds.maxEpochDuration);
+        if (revealGracePeriod > 0 && revealGracePeriod < nextConfig.epochDuration) {
+            revealGracePeriod = nextConfig.epochDuration;
+            emit RevealGracePeriodUpdated(nextConfig.epochDuration);
         }
 
         config = nextConfig;
@@ -443,9 +445,9 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         if (drandPeriod > bounds.minEpochDuration) revert InvalidConfig();
 
         roundConfigBounds = bounds;
-        if (revealGracePeriod > 0 && revealGracePeriod < maxEpochDuration) {
-            revealGracePeriod = maxEpochDuration;
-            emit RevealGracePeriodUpdated(maxEpochDuration);
+        if (revealGracePeriod > 0 && revealGracePeriod < config.epochDuration) {
+            revealGracePeriod = config.epochDuration;
+            emit RevealGracePeriodUpdated(config.epochDuration);
         }
         // Symmetric clamp on the other side: _setRevealGracePeriod caps values at
         // maxRoundDuration + 1 day. If governance shrinks maxRoundDuration here without
@@ -479,11 +481,12 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         uint256 minVoterCap,
         uint256 maxVoterCap
     ) internal pure returns (RoundConfigBounds memory bounds) {
-        if (minEpochDuration < 5 minutes || maxEpochDuration < minEpochDuration) {
+        if (minEpochDuration < 1 minutes || maxEpochDuration < minEpochDuration) {
             revert InvalidConfig();
         }
         if (maxEpochDuration > type(uint32).max) revert InvalidConfig();
-        if (minRoundDuration < maxEpochDuration || maxRoundDuration < minRoundDuration) revert InvalidConfig();
+        if (minRoundDuration < minEpochDuration || maxRoundDuration < minRoundDuration) revert InvalidConfig();
+        if (maxRoundDuration < maxEpochDuration) revert InvalidConfig();
         if (maxRoundDuration > type(uint32).max || maxRoundDuration > ABSOLUTE_MAX_ROUND_DURATION) {
             revert InvalidConfig();
         }
@@ -516,6 +519,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         }
         if (maxDuration < bounds.minRoundDuration || maxDuration > bounds.maxRoundDuration) revert InvalidConfig();
         if (epochDuration > type(uint32).max || maxDuration > type(uint32).max) revert InvalidConfig();
+        if (maxDuration < epochDuration) revert InvalidConfig();
         if (maxDuration / epochDuration > 2016) revert InvalidConfig();
         if (minVoters < bounds.minSettlementVoters || minVoters > bounds.maxSettlementVoters) revert InvalidConfig();
         if (maxVoters < bounds.minVoterCap || maxVoters > bounds.maxVoterCap) revert InvalidConfig();

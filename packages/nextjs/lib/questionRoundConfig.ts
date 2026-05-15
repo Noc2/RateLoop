@@ -36,9 +36,9 @@ export const DEFAULT_QUESTION_ROUND_CONFIG: QuestionRoundConfig = {
 };
 
 export const DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS: QuestionRoundConfigBounds = {
-  minEpochDuration: 5 * 60,
-  maxEpochDuration: 60 * 60,
-  minRoundDuration: 60 * 60,
+  minEpochDuration: 60,
+  maxEpochDuration: 7 * 24 * 60 * 60,
+  minRoundDuration: 60,
   maxRoundDuration: 30 * 24 * 60 * 60,
   minSettlementVoters: 3,
   maxSettlementVoters: 100,

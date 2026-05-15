@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import { Test } from "forge-std/Test.sol";
-import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
-import { RatingLib } from "../contracts/libraries/RatingLib.sol";
-import { RoundLib } from "../contracts/libraries/RoundLib.sol";
-import { deployInitializedProtocolConfig } from "./helpers/VotingTestHelpers.sol";
+import {Test} from "forge-std/Test.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {ProtocolConfig} from "../contracts/ProtocolConfig.sol";
+import {RatingLib} from "../contracts/libraries/RatingLib.sol";
+import {RoundLib} from "../contracts/libraries/RoundLib.sol";
+import {deployInitializedProtocolConfig} from "./helpers/VotingTestHelpers.sol";
 
 contract MockRewardDistributorForConfig {
     address public votingEngine;
@@ -254,7 +254,7 @@ contract ProtocolConfigBranchesTest is Test {
         config.setDrandConfig(QUICKNET_CHAIN_HASH, 101, 3);
 
         vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
-        config.setDrandConfig(QUICKNET_CHAIN_HASH, 1, 5 minutes + 1);
+        config.setDrandConfig(QUICKNET_CHAIN_HASH, 1, 1 minutes + 1);
     }
 
     function test_DefaultRatingAndSlashConfig_UseRedeployDefaults() public {
@@ -419,15 +419,26 @@ contract ProtocolConfigBranchesTest is Test {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
 
         ProtocolConfig.RoundConfigBounds memory bounds = config.getRoundConfigBounds();
-        assertEq(bounds.minEpochDuration, 5 minutes);
-        assertEq(bounds.maxEpochDuration, 60 minutes);
-        assertEq(bounds.minRoundDuration, 1 hours);
+        assertEq(bounds.minEpochDuration, 1 minutes);
+        assertEq(bounds.maxEpochDuration, 7 days);
+        assertEq(bounds.minRoundDuration, 1 minutes);
         assertEq(bounds.maxRoundDuration, 30 days);
         assertEq(config.ABSOLUTE_MAX_ROUND_DURATION(), 30 days);
         assertEq(bounds.minSettlementVoters, 3);
         assertEq(bounds.maxSettlementVoters, 100);
         assertEq(bounds.minVoterCap, 3);
         assertEq(bounds.maxVoterCap, 1_000);
+    }
+
+    function test_DefaultRoundConfig_UsesSingleBlindPhaseWindow() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+
+        (uint32 epochDuration, uint32 maxDuration, uint16 minVoters, uint16 maxVoters) = config.config();
+
+        assertEq(epochDuration, 20 minutes);
+        assertEq(maxDuration, 20 minutes);
+        assertEq(minVoters, 3);
+        assertEq(maxVoters, 200);
     }
 
     function test_ValidateRoundConfig_AcceptsGovernedCreatorChoice() public {
@@ -439,16 +450,27 @@ contract ProtocolConfigBranchesTest is Test {
         assertEq(roundCfg.maxDuration, 2 hours);
         assertEq(roundCfg.minVoters, 4);
         assertEq(roundCfg.maxVoters, 25);
+
+        roundCfg = config.validateRoundConfig(2 minutes, 2 minutes, 3, 25);
+        assertEq(roundCfg.epochDuration, 2 minutes);
+        assertEq(roundCfg.maxDuration, 2 minutes);
+
+        roundCfg = config.validateRoundConfig(3 days, 3 days, 5, 100);
+        assertEq(roundCfg.epochDuration, 3 days);
+        assertEq(roundCfg.maxDuration, 3 days);
     }
 
     function test_ValidateRoundConfig_RejectsOutsideGovernanceBounds() public {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
 
         vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
-        config.validateRoundConfig(4 minutes, 2 hours, 4, 25);
+        config.validateRoundConfig(30 seconds, 2 hours, 4, 25);
 
         vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
-        config.validateRoundConfig(10 minutes, 30 minutes, 4, 25);
+        config.validateRoundConfig(8 days, 8 days, 4, 25);
+
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.validateRoundConfig(10 minutes, 5 minutes, 4, 25);
 
         vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
         config.validateRoundConfig(10 minutes, 2 hours, 1, 25);
@@ -457,18 +479,26 @@ contract ProtocolConfigBranchesTest is Test {
         config.validateRoundConfig(10 minutes, 2 hours, 4, 3);
     }
 
-    function test_SetRoundConfigBounds_UpdatesRangeAndRevealGraceFloor() public {
+    function test_SetRoundConfigBounds_UpdatesRangeWithoutGlobalRevealGraceFloor() public {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
 
         vm.expectEmit(true, true, true, true);
-        emit RoundConfigBoundsUpdated(10 minutes, 2 hours, 2 hours, 14 days, 3, 50, 3, 500);
+        emit RoundConfigBoundsUpdated(10 minutes, 2 hours, 10 minutes, 14 days, 3, 50, 3, 500);
 
-        config.setRoundConfigBounds(10 minutes, 2 hours, 2 hours, 14 days, 3, 50, 3, 500);
+        config.setRoundConfigBounds(10 minutes, 2 hours, 10 minutes, 14 days, 3, 50, 3, 500);
 
         ProtocolConfig.RoundConfigBounds memory bounds = config.getRoundConfigBounds();
         assertEq(bounds.minEpochDuration, 10 minutes);
         assertEq(bounds.maxEpochDuration, 2 hours);
         assertEq(bounds.maxRoundDuration, 14 days);
+        assertEq(config.revealGracePeriod(), 60 minutes);
+    }
+
+    function test_SetConfig_RaisesRevealGraceToDefaultEpochDuration() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+
+        config.setConfig(2 hours, 2 hours, 3, 200);
+
         assertEq(config.revealGracePeriod(), 2 hours);
     }
 
@@ -476,25 +506,25 @@ contract ProtocolConfigBranchesTest is Test {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
         vm.warp(100);
 
-        config.setRoundConfigBounds(10 minutes, 60 minutes, 1 hours, 30 days, 3, 100, 3, 1_000);
+        config.setRoundConfigBounds(10 minutes, 60 minutes, 10 minutes, 30 days, 3, 100, 3, 1_000);
         config.setDrandConfig(QUICKNET_CHAIN_HASH, 1, uint64(10 minutes));
 
         vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
-        config.setRoundConfigBounds(5 minutes, 60 minutes, 1 hours, 30 days, 3, 100, 3, 1_000);
+        config.setRoundConfigBounds(5 minutes, 60 minutes, 5 minutes, 30 days, 3, 100, 3, 1_000);
     }
 
     function test_SetRoundConfigBounds_RejectsBoundsThatExcludeCurrentDefault() public {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
 
         vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
-        config.setRoundConfigBounds(5 minutes, 60 minutes, 1 hours, 1 days, 3, 100, 3, 1_000);
+        config.setRoundConfigBounds(1 minutes, 7 days, 1 minutes, 10 minutes, 3, 100, 3, 1_000);
     }
 
     function test_SetRoundConfigBounds_RejectsAbsoluteMaxRoundDuration() public {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
 
         vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
-        config.setRoundConfigBounds(5 minutes, 60 minutes, 1 hours, 30 days + 1, 3, 100, 3, 1_000);
+        config.setRoundConfigBounds(1 minutes, 7 days, 1 minutes, 30 days + 1, 3, 100, 3, 1_000);
     }
 
     function test_SetRaterRegistry() public {

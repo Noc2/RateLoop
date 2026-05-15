@@ -48,7 +48,7 @@ const DEFAULT_QUESTION_METADATA_HASH = "0xed39b36e9ce5c1bfc657909c2f687347be2de9
 const DEFAULT_RESULT_SPEC_HASH = "0x8e5f27bc3269c62c92754f76279bd83838462060fc6cd77411b7407027cfa11f" as const;
 const DEFAULT_SUBMISSION_ROUND_CONFIG: SubmissionRoundConfig = {
   epochDuration: 20 * 60,
-  maxDuration: 7 * 24 * 60 * 60,
+  maxDuration: 20 * 60,
   minVoters: 3,
   maxVoters: 200,
 };

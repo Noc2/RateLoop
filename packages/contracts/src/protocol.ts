@@ -20,7 +20,7 @@ export const ROUND_STATE_LABEL: Record<RoundState, string> = {
 
 export const DEFAULT_ROUND_CONFIG = {
   epochDurationSeconds: 20 * 60,
-  maxDurationSeconds: 7 * 24 * 60 * 60,
+  maxDurationSeconds: 20 * 60,
   minVoters: 3,
   maxVoters: 200,
 } as const;
