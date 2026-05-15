@@ -298,6 +298,42 @@ contract LaunchDistributionPoolTest is Test {
         assertTrue(pool.earnedRewardCreditFinalized(1, 1, _commitKey(1)));
     }
 
+    function test_CorrelationOracleFractionalCreditsOnlyPayCompletedSlots() public {
+        ClusterPayoutOracle oracle = _configureLaunchOracle(24);
+
+        uint256 paid;
+        for (uint256 roundId = 1; roundId < 20; roundId++) {
+            paid = _recordAndFinalizeLaunchOracleCredit(oracle, alice, roundId, 2_500);
+            assertEq(paid, 0);
+        }
+
+        paid = _recordAndFinalizeLaunchOracleCredit(oracle, alice, 20, 2_500);
+        assertEq(paid, 250_000);
+        assertEq(pool.qualifyingCreditBps(alice), 50_000);
+        assertEq(pool.qualifyingRatingCount(alice), 5);
+        assertEq(pool.rewardedRatingCount(alice), 1);
+        assertEq(pool.raterLaunchPaid(alice), 250_000);
+        assertEq(lrep.balanceOf(alice), 250_000);
+
+        for (uint256 roundId = 21; roundId < 24; roundId++) {
+            paid = _recordAndFinalizeLaunchOracleCredit(oracle, alice, roundId, 2_500);
+            assertEq(paid, 0);
+        }
+
+        assertEq(pool.qualifyingCreditBps(alice), 57_500);
+        assertEq(pool.qualifyingRatingCount(alice), 5);
+        assertEq(pool.rewardedRatingCount(alice), 1);
+        assertEq(pool.raterLaunchPaid(alice), 250_000);
+
+        paid = _recordAndFinalizeLaunchOracleCredit(oracle, alice, 24, 2_500);
+        assertEq(paid, 250_000);
+        assertEq(pool.qualifyingCreditBps(alice), 60_000);
+        assertEq(pool.qualifyingRatingCount(alice), 6);
+        assertEq(pool.rewardedRatingCount(alice), 2);
+        assertEq(pool.raterLaunchPaid(alice), 500_000);
+        assertEq(lrep.balanceOf(alice), 500_000);
+    }
+
     function test_RecordEarnedRaterRewardAppliesLowerUnverifiedCapWhenGovernanceSetsBps() public {
         ILaunchDistributionPool.LaunchRewardPolicy memory policy = _defaultPolicy();
         policy.unverifiedEarnedRaterCapBps = 2_500;
@@ -991,6 +1027,80 @@ contract LaunchDistributionPoolTest is Test {
             assertEq(_recordLaunchReward(rater, i + 1, anchorId), 0);
         }
         fifthReward = _recordLaunchReward(rater, 5, bytes32("anchor-a"));
+    }
+
+    function _configureLaunchOracle(uint64 toRoundId) internal returns (ClusterPayoutOracle oracle) {
+        MockLaunchOracleFrontendRegistry frontendRegistry = new MockLaunchOracleFrontendRegistry();
+        frontendRegistry.setEligible(address(this), true);
+        oracle = new ClusterPayoutOracle(address(this), address(frontendRegistry));
+        oracle.setOracleConfig(1, 0, address(this));
+        pool.setClusterPayoutOracle(address(oracle));
+
+        oracle.proposeCorrelationEpoch(
+            1, 1, toRoundId, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+        );
+        vm.warp(100);
+        oracle.finalizeCorrelationEpoch(1);
+    }
+
+    function _recordAndFinalizeLaunchOracleCredit(
+        ClusterPayoutOracle oracle,
+        address rater,
+        uint256 roundId,
+        uint16 effectiveWeight
+    ) internal returns (uint256 paidAmount) {
+        bytes32 anchorId = roundId % 2 == 0 ? bytes32("anchor-b") : bytes32("anchor-a");
+        assertEq(
+            pool.recordEarnedRaterReward(
+                rater,
+                1,
+                roundId,
+                _commitKey(roundId),
+                8_000,
+                3,
+                true,
+                pool.MIN_LAUNCH_CREDIT_STAKE(),
+                _singleAnchor(anchorId)
+            ),
+            0
+        );
+
+        IClusterPayoutOracle.PayoutWeight memory payout = IClusterPayoutOracle.PayoutWeight({
+            domain: pool.PAYOUT_DOMAIN_LAUNCH_CREDIT(),
+            rewardPoolId: 0,
+            contentId: 1,
+            roundId: roundId,
+            commitKey: _commitKey(roundId),
+            identityKey: bytes32(0),
+            account: rater,
+            baseWeight: pool.BPS_DENOMINATOR(),
+            independenceBps: effectiveWeight,
+            effectiveWeight: effectiveWeight,
+            reasonHash: keccak256("clustered")
+        });
+        bytes32 leaf = oracle.payoutWeightLeaf(payout);
+        oracle.proposeRoundPayoutSnapshot(
+            IClusterPayoutOracle.RoundPayoutSnapshotInput({
+                domain: pool.PAYOUT_DOMAIN_LAUNCH_CREDIT(),
+                rewardPoolId: 0,
+                contentId: 1,
+                roundId: roundId,
+                correlationEpochId: 1,
+                rawEligibleVoters: 1,
+                effectiveParticipantUnits: uint32(effectiveWeight),
+                totalClaimWeight: effectiveWeight,
+                weightRoot: leaf,
+                reasonRoot: keccak256("reason-root"),
+                artifactHash: keccak256(abi.encode("round-artifact", roundId)),
+                artifactURI: "ipfs://round"
+            })
+        );
+        bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(pool.PAYOUT_DOMAIN_LAUNCH_CREDIT(), 0, 1, roundId);
+        vm.warp(100 + roundId * 2);
+        oracle.finalizeRoundPayoutSnapshot(snapshotKey);
+
+        paidAmount =
+            pool.finalizeEarnedRaterRewardCredit(1, roundId, _commitKey(roundId), payout, new bytes32[](0));
     }
 
     function _verify(address account, bytes32 nullifier) internal {

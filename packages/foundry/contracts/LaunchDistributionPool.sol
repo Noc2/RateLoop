@@ -447,10 +447,13 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
         LaunchRewardPolicy memory policy,
         uint256 effectiveCreditBps
     ) internal returns (uint256 paidAmount) {
+        uint32 previousQualifyingCount = _fullQualifyingCreditCount(qualifyingCreditBps[rater]);
         uint256 updatedCreditBps = qualifyingCreditBps[rater] + effectiveCreditBps;
         qualifyingCreditBps[rater] = updatedCreditBps;
         uint32 qualifyingCount = _fullQualifyingCreditCount(updatedCreditBps);
         qualifyingRatingCount[rater] = qualifyingCount;
+        uint32 newlyCompletedCredits =
+            qualifyingCount > previousQualifyingCount ? qualifyingCount - previousQualifyingCount : 0;
         bool payoutEligible = qualifyingCount >= policy.eligibilityRatingCount
             && raterDistinctVerifiedAnchorCount[rater] >= policy.minDistinctVerifiedAnchors
             && raterDistinctAnchorRoundCount[rater] >= policy.minDistinctAnchorRounds;
@@ -467,7 +470,7 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
             payoutEligible
         );
 
-        if (!payoutEligible) return 0;
+        if (!payoutEligible || newlyCompletedCredits == 0) return 0;
 
         uint256 cap = raterLaunchCap[rater];
         if (!raterLaunchCapAssigned[rater]) {
@@ -478,17 +481,23 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
         }
 
         uint32 rewardedCount = rewardedRatingCount[rater];
-        if (rewardedCount >= policy.rewardingRatingCount || raterLaunchPaid[rater] >= cap) return 0;
+        uint32 targetRewardedCount = rewardedCount + newlyCompletedCredits;
+        if (targetRewardedCount > policy.rewardingRatingCount) targetRewardedCount = policy.rewardingRatingCount;
+        if (targetRewardedCount <= rewardedCount || raterLaunchPaid[rater] >= cap) return 0;
 
-        uint256 targetPaid = rewardedCount + 1 == policy.rewardingRatingCount
+        uint256 targetPaid = targetRewardedCount == policy.rewardingRatingCount
             ? cap
-            : (cap * uint256(rewardedCount + 1)) / policy.rewardingRatingCount;
+            : (cap * uint256(targetRewardedCount)) / policy.rewardingRatingCount;
+        if (targetPaid <= raterLaunchPaid[rater]) {
+            rewardedRatingCount[rater] = targetRewardedCount;
+            return 0;
+        }
         paidAmount = targetPaid - raterLaunchPaid[rater];
         uint256 remaining = _remainingEarnedRaterPool();
         if (paidAmount > remaining) paidAmount = remaining;
         if (paidAmount == 0) return 0;
 
-        rewardedRatingCount[rater] = rewardedCount + 1;
+        rewardedRatingCount[rater] = targetRewardedCount;
         raterLaunchPaid[rater] += paidAmount;
         earnedRaterDistributed += paidAmount;
         _pay(rater, paidAmount);
