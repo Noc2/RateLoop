@@ -25,7 +25,15 @@ import { getVisibleContentRating } from "~~/hooks/contentFeed/shared";
 import type { ContentItem } from "~~/hooks/useContentFeed";
 import type { SubmitterProfile } from "~~/hooks/useSubmitterProfiles";
 import { type ContentMediaItem, buildFallbackMediaItems, isDirectImageUrl } from "~~/lib/contentMedia";
-import { getActiveBountyClosesAt, shouldShowBountyExpiredStatus } from "~~/lib/vote/discoverFeedFilter";
+import {
+  getActiveBountyClosesAt,
+  getActiveFeedbackClosesAt,
+  getVisibleFeedbackBonusAmount,
+  getVisibleRewardPoolAmount,
+  hasActiveFeedbackBonus,
+  shouldShowBountyExpiredStatus,
+  shouldShowFeedbackClosedStatus,
+} from "~~/lib/vote/discoverFeedFilter";
 import { detectPlatform } from "~~/utils/platforms";
 
 const ShareContentModal = dynamic(
@@ -80,19 +88,19 @@ function getRewardDeadlineChips(item: ContentItem) {
   const feedbackSummary = item.feedbackBonusSummary;
 
   const activeBountyClosesAt = getActiveBountyClosesAt(item);
+  const activeFeedbackClosesAt = getActiveFeedbackClosesAt(item);
   const hasActiveBounty = Boolean(
     rewardSummary?.hasActiveBounty || (rewardSummary?.activeRewardPoolCount ?? 0) > 0 || activeBountyClosesAt,
   );
-  const hasActiveFeedback = Boolean(
-    feedbackSummary?.hasActiveFeedbackBonus || (feedbackSummary?.activePoolCount ?? 0) > 0,
-  );
+  const hasActiveFeedback = hasActiveFeedbackBonus(item);
+  const isFeedbackClosed = shouldShowFeedbackClosedStatus(item);
 
-  if (shouldShowBountyExpiredStatus(item)) {
+  if (!isFeedbackClosed && shouldShowBountyExpiredStatus(item)) {
     chips.push({
       label: "Bounty Expired",
       tone: "ended",
     });
-  } else if (hasActiveBounty) {
+  } else if (!isFeedbackClosed && hasActiveBounty) {
     if (activeBountyClosesAt) {
       chips.push({
         label: `Expires in ${formatDeadlineDistance(activeBountyClosesAt)}`,
@@ -104,14 +112,14 @@ function getRewardDeadlineChips(item: ContentItem) {
 
   if (feedbackSummary && hasActiveFeedback) {
     chips.push({
-      label: feedbackSummary.nextFeedbackClosesAt
-        ? `Feedback closes in ${formatDeadlineDistance(feedbackSummary.nextFeedbackClosesAt)}`
+      label: activeFeedbackClosesAt
+        ? `Feedback closes in ${formatDeadlineDistance(activeFeedbackClosesAt)}`
         : "Feedback active",
       tone: "active",
       tooltip: FEEDBACK_DEADLINE_TOOLTIP_TEXT,
     });
-  } else if ((feedbackSummary?.expiredPoolCount ?? 0) > 0) {
-    chips.push({ label: "Feedback ended", tone: "ended" });
+  } else if (isFeedbackClosed) {
+    chips.push({ label: "Feedback closed", tone: "ended" });
   }
 
   return chips;
@@ -485,9 +493,9 @@ function FeedContentMetaCard({
   const contextUrl = item.url.trim();
   const contextLabel = getSourceLabel(contextUrl);
   const hasContextLink = contextUrl.length > 0 && contextLabel.trim().length > 0;
-  const rewardPoolTotal = item.rewardPoolSummary?.totalAvailable ?? 0n;
+  const rewardPoolTotal = getVisibleRewardPoolAmount(item);
   const rewardPoolCurrency = item.rewardPoolSummary?.currency;
-  const feedbackBonusTotal = item.feedbackBonusSummary?.totalRemaining ?? 0n;
+  const feedbackBonusTotal = getVisibleFeedbackBonusAmount(item);
   const rewardDeadlineChips = getRewardDeadlineChips(item);
   const hideDockedActionButtons = isMobileViewport;
   const actionRowClassName = `flex items-center justify-between gap-3 ${compact ? "mt-3" : "mt-4"}`;

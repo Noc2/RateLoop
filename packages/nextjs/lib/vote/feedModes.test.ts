@@ -27,6 +27,7 @@ function makeContentItem(overrides: Partial<ContentItem> & Pick<ContentItem, "id
     thumbnailUrl: overrides.thumbnailUrl ?? null,
     contentMetadata: overrides.contentMetadata,
     rewardPoolSummary: overrides.rewardPoolSummary ?? null,
+    feedbackBonusSummary: overrides.feedbackBonusSummary ?? null,
   };
 }
 
@@ -208,6 +209,70 @@ test("highest rewards ranks funded content by available USD bounties", () => {
   assert.deepEqual(
     ranked.map(item => item.id),
     [2n, 1n],
+  );
+});
+
+test("highest rewards ignores closed feedback pools", () => {
+  const nowSeconds = 10_000;
+  const openRound = {
+    roundId: 1n,
+    voteCount: 1,
+    revealedCount: 0,
+    totalStake: 5_000_000n,
+    upPool: 0n,
+    downPool: 0n,
+    startTime: 9_000n,
+    estimatedSettlementTime: 11_000n,
+  };
+  const ranked = sortDiscoverFeed(
+    [
+      makeContentItem({
+        id: 1n,
+        url: "https://example.com/closed-feedback",
+        title: "Closed feedback",
+        rewardPoolSummary: {
+          totalFunded: 12_000_000n,
+          totalAvailable: 12_000_000n,
+          activeRewardPoolCount: 1,
+        },
+        feedbackBonusSummary: {
+          totalFunded: 100_000_000n,
+          totalRemaining: 100_000_000n,
+          totalAwarded: 0n,
+          activePoolCount: 1,
+          awardCount: 0,
+          hasActiveFeedbackBonus: true,
+          nextFeedbackClosesAt: 12_000n,
+        },
+      }),
+      makeContentItem({
+        id: 2n,
+        url: "https://example.com/active-feedback",
+        title: "Active feedback",
+        openRound,
+        rewardPoolSummary: {
+          totalFunded: 8_000_000n,
+          totalAvailable: 8_000_000n,
+          activeRewardPoolCount: 1,
+        },
+        feedbackBonusSummary: {
+          totalFunded: 20_000_000n,
+          totalRemaining: 20_000_000n,
+          totalAwarded: 0n,
+          activePoolCount: 1,
+          awardCount: 0,
+          hasActiveFeedbackBonus: true,
+          nextFeedbackClosesAt: 12_000n,
+        },
+      }),
+    ],
+    "highest_rewards",
+    nowSeconds,
+  );
+
+  assert.deepEqual(
+    ranked.map(item => item.id),
+    [2n],
   );
 });
 

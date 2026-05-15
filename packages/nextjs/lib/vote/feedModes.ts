@@ -2,6 +2,7 @@
 
 import type { ContentItem } from "~~/hooks/useContentFeed";
 import { DEFAULT_VOTING_CONFIG } from "~~/lib/contracts/roundVotingEngine";
+import { getVisibleFeedbackBonusAmount, getVisibleRewardPoolAmount } from "~~/lib/vote/discoverFeedFilter";
 
 export type DiscoverFeedMode = "for_you" | "trending" | "highest_rewards" | "contested" | "latest" | "near_settlement";
 
@@ -90,11 +91,8 @@ function getRoundCloseness(item: ContentItem): number {
   return 0;
 }
 
-function getRewardPoolAmount(item: ContentItem) {
-  return (
-    (item.rewardPoolSummary?.totalAvailable ?? item.rewardPoolSummary?.totalFunded ?? 0n) +
-    (item.feedbackBonusSummary?.totalRemaining ?? 0n)
-  );
+function getRewardPoolAmount(item: ContentItem, nowSeconds: number) {
+  return getVisibleRewardPoolAmount(item, nowSeconds) + getVisibleFeedbackBonusAmount(item, nowSeconds);
 }
 
 function getRoundMinVoters(item: ContentItem) {
@@ -105,9 +103,9 @@ function getRoundMaxDuration(item: ContentItem) {
   return item.openRound?.maxDuration ?? item.roundConfig?.maxDuration ?? DEFAULT_VOTING_CONFIG.maxDuration;
 }
 
-function compareRewardPoolAmountDesc(a: ContentItem, b: ContentItem) {
-  const aAmount = getRewardPoolAmount(a);
-  const bAmount = getRewardPoolAmount(b);
+function compareRewardPoolAmountDesc(a: ContentItem, b: ContentItem, nowSeconds: number) {
+  const aAmount = getRewardPoolAmount(a, nowSeconds);
+  const bAmount = getRewardPoolAmount(b, nowSeconds);
   if (aAmount === bAmount) return 0;
   return aAmount > bAmount ? -1 : 1;
 }
@@ -174,7 +172,7 @@ export function sortDiscoverFeed(items: ContentItem[], mode: Exclude<DiscoverFee
         return item.openRound !== null;
       }
       if (mode === "highest_rewards") {
-        return getRewardPoolAmount(item) > 0n;
+        return getRewardPoolAmount(item, nowSeconds) > 0n;
       }
       return true;
     })
@@ -197,7 +195,7 @@ export function sortDiscoverFeed(items: ContentItem[], mode: Exclude<DiscoverFee
         return compareCreatedAtDesc(a.item, b.item);
       }
       if (mode === "highest_rewards") {
-        const rewardDifference = compareRewardPoolAmountDesc(a.item, b.item);
+        const rewardDifference = compareRewardPoolAmountDesc(a.item, b.item, nowSeconds);
         if (rewardDifference !== 0) return rewardDifference;
 
         const activePoolDifference =

@@ -87,6 +87,53 @@ export function shouldShowBountyExpiredStatus(item: ContentItem, nowSeconds = Ma
   );
 }
 
+export function getActiveFeedbackClosesAt(item: ContentItem, nowSeconds = Math.floor(Date.now() / 1000)) {
+  const feedbackSummary = item.feedbackBonusSummary;
+  if (!feedbackSummary || feedbackSummary.totalRemaining <= 0n || !item.openRound) return null;
+
+  const closesAt = feedbackSummary.nextFeedbackClosesAt ?? 0n;
+  if (closesAt <= 0n || closesAt <= BigInt(nowSeconds)) return null;
+
+  return closesAt;
+}
+
+export function hasActiveFeedbackBonus(item: ContentItem, nowSeconds = Math.floor(Date.now() / 1000)) {
+  const feedbackSummary = item.feedbackBonusSummary;
+  if (!feedbackSummary || feedbackSummary.totalRemaining <= 0n || !item.openRound) return false;
+
+  const closesAt = feedbackSummary.nextFeedbackClosesAt ?? 0n;
+  if (closesAt > 0n && closesAt <= BigInt(nowSeconds)) return false;
+
+  return Boolean(
+    feedbackSummary.hasActiveFeedbackBonus ||
+      (feedbackSummary.activePoolCount ?? 0) > 0 ||
+      (feedbackSummary.nextFeedbackClosesAt && feedbackSummary.nextFeedbackClosesAt > BigInt(nowSeconds)),
+  );
+}
+
+export function shouldShowFeedbackClosedStatus(item: ContentItem, nowSeconds = Math.floor(Date.now() / 1000)) {
+  const feedbackSummary = item.feedbackBonusSummary;
+  if (!feedbackSummary) return false;
+
+  const hasFeedbackPool =
+    feedbackSummary.totalFunded > 0n ||
+    feedbackSummary.totalRemaining > 0n ||
+    (feedbackSummary.expiredPoolCount ?? 0) > 0;
+  return hasFeedbackPool && !hasActiveFeedbackBonus(item, nowSeconds);
+}
+
+export function getVisibleRewardPoolAmount(item: ContentItem, nowSeconds = Math.floor(Date.now() / 1000)) {
+  if (shouldShowBountyExpiredStatus(item, nowSeconds) || shouldShowFeedbackClosedStatus(item, nowSeconds)) {
+    return 0n;
+  }
+
+  return item.rewardPoolSummary?.totalAvailable ?? 0n;
+}
+
+export function getVisibleFeedbackBonusAmount(item: ContentItem, nowSeconds = Math.floor(Date.now() / 1000)) {
+  return hasActiveFeedbackBonus(item, nowSeconds) ? (item.feedbackBonusSummary?.totalRemaining ?? 0n) : 0n;
+}
+
 export function filterDiscoverCategoryItems(
   feed: ContentItem[],
   activeCategory: string,

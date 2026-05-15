@@ -9,7 +9,12 @@ import {
   DISCOVER_EXPIRED_BOUNTY_FILTER,
   filterDiscoverCategoryItems,
   getActiveBountyClosesAt,
+  getActiveFeedbackClosesAt,
+  getVisibleFeedbackBonusAmount,
+  getVisibleRewardPoolAmount,
+  hasActiveFeedbackBonus,
   shouldShowBountyExpiredStatus,
+  shouldShowFeedbackClosedStatus,
 } from "~~/lib/vote/discoverFeedFilter";
 import { rankForYouFeed } from "~~/lib/vote/forYouRanker";
 
@@ -346,6 +351,78 @@ test("bundle-only items show an expired bounty status when no per-question bount
 
   assert.equal(getActiveBountyClosesAt(item, 10_000), 12_000n);
   assert.equal(shouldShowBountyExpiredStatus(item, 10_000), true);
+});
+
+test("feedback bonuses are closed when no voting round is open", () => {
+  const item = makeContentItem({
+    id: 1n,
+    url: "https://example.com/feedback-closed",
+    title: "Feedback closed",
+    rewardPoolSummary: {
+      totalFunded: 12_000_000n,
+      totalAvailable: 12_000_000n,
+      activeRewardPoolCount: 1,
+      expiredRewardPoolCount: 0,
+      hasActiveBounty: true,
+    },
+    feedbackBonusSummary: {
+      totalFunded: 100_000_000n,
+      totalRemaining: 100_000_000n,
+      totalAwarded: 0n,
+      activePoolCount: 1,
+      expiredPoolCount: 0,
+      awardCount: 0,
+      hasActiveFeedbackBonus: true,
+      nextFeedbackClosesAt: 12_000n,
+    },
+  });
+
+  assert.equal(hasActiveFeedbackBonus(item, 10_000), false);
+  assert.equal(getActiveFeedbackClosesAt(item, 10_000), null);
+  assert.equal(shouldShowFeedbackClosedStatus(item, 10_000), true);
+  assert.equal(getVisibleRewardPoolAmount(item, 10_000), 0n);
+  assert.equal(getVisibleFeedbackBonusAmount(item, 10_000), 0n);
+});
+
+test("feedback bonuses stay active while a voting round is open", () => {
+  const item = makeContentItem({
+    id: 1n,
+    url: "https://example.com/feedback-active",
+    title: "Feedback active",
+    openRound: {
+      roundId: 1n,
+      voteCount: 1,
+      revealedCount: 0,
+      totalStake: 5_000_000n,
+      upPool: 0n,
+      downPool: 0n,
+      startTime: 9_000n,
+      estimatedSettlementTime: 11_000n,
+    },
+    rewardPoolSummary: {
+      totalFunded: 12_000_000n,
+      totalAvailable: 12_000_000n,
+      activeRewardPoolCount: 1,
+      expiredRewardPoolCount: 0,
+      hasActiveBounty: true,
+    },
+    feedbackBonusSummary: {
+      totalFunded: 100_000_000n,
+      totalRemaining: 100_000_000n,
+      totalAwarded: 0n,
+      activePoolCount: 1,
+      expiredPoolCount: 0,
+      awardCount: 0,
+      hasActiveFeedbackBonus: true,
+      nextFeedbackClosesAt: 12_000n,
+    },
+  });
+
+  assert.equal(hasActiveFeedbackBonus(item, 10_000), true);
+  assert.equal(getActiveFeedbackClosesAt(item, 10_000), 12_000n);
+  assert.equal(shouldShowFeedbackClosedStatus(item, 10_000), false);
+  assert.equal(getVisibleRewardPoolAmount(item, 10_000), 12_000_000n);
+  assert.equal(getVisibleFeedbackBonusAmount(item, 10_000), 100_000_000n);
 });
 
 test("filterDiscoverCategoryItems leaves moderation ownership to the feed layer", () => {
