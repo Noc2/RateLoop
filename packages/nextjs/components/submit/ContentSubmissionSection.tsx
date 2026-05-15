@@ -2467,7 +2467,7 @@ export function ContentSubmissionSection() {
               step={1}
               value={questionCount}
               onChange={event => handleQuestionCountChange(event.target.value)}
-              className="h-8 w-11 rounded-md border border-base-content/25 bg-base-100 px-2 text-center text-base font-semibold leading-none text-base-content shadow-inner outline-none transition-colors hover:border-base-content/40 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/25"
+              className="input h-8 w-11 rounded-md px-2 text-center text-base font-semibold leading-none text-base-content transition-colors"
               aria-label="Number of questions"
             />
           </label>
