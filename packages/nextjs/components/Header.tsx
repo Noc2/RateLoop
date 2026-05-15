@@ -842,7 +842,7 @@ export const Header = () => {
 
       {/* Desktop: left sidebar */}
       <aside
-        className={`fixed left-0 top-0 z-20 hidden h-screen w-52 shrink-0 flex-col items-stretch border-r py-4 shadow-[18px_0_48px_rgba(9,10,12,0.24)] backdrop-blur-xl xl:flex ${headerChromeSurfaceClassName} ${headerChromeBorderClassName}`}
+        className={`fixed left-0 top-0 z-20 hidden h-screen w-52 shrink-0 flex-col items-stretch py-4 shadow-[18px_0_48px_rgba(9,10,12,0.24)] backdrop-blur-xl xl:flex ${headerChromeSurfaceClassName}`}
       >
         <HeaderBrand brandIdPrefix="curyo-sidebar-logo" className="mb-4 shrink-0 px-4" />
         <div className="mb-4 w-full min-w-0 px-2.5">
