@@ -599,8 +599,8 @@ const SmartContracts: NextPage = () => {
       <h2>ProfileRegistry</h2>
       <p>
         On-chain user profiles with unique names (3&ndash;20 characters) and optional public self-reported audience
-        context. Profile settings also support an on-chain generated avatar color override. RaterRegistry provides the
-        optional identity and credential context used alongside public profile metadata.
+        context. Profile settings also support an on-chain generated avatar gradient seed override. RaterRegistry
+        provides the optional identity and credential context used alongside public profile metadata.
       </p>
       <h3>Key Functions</h3>
       <ul>
@@ -616,11 +616,11 @@ const SmartContracts: NextPage = () => {
         </li>
         <li>
           <code>setAvatarAccent(rgb)</code> and <code>clearAvatarAccent()</code> &mdash; Set or remove the generated
-          avatar color override.
+          avatar gradient seed override.
         </li>
         <li>
-          <code>getAvatarAccent(address)</code> &mdash; Read whether an avatar color override is set and the stored RGB
-          value.
+          <code>getAvatarAccent(address)</code> &mdash; Read whether an avatar gradient seed override is set and the
+          stored RGB value.
         </li>
       </ul>
 

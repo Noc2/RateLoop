@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1180" viewBox="0 0 1600 1180" role="img" aria-labelledby="title desc">
-  <title id="title">Curyo avatar system mockups</title>
-  <desc id="desc">Three proposed avatar directions where the center color carries identity and the white circular line shows accuracy.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1120" viewBox="0 0 1600 1120" role="img" aria-labelledby="title desc">
+  <title id="title">RateLoop logo-ring avatar mockups</title>
+  <desc id="desc">Avatar mockups where a logo-like continuous circle fills by voter accuracy and the multicolor ring palette is derived from the connected wallet address.</desc>
 
   <defs>
     <style>
@@ -10,26 +10,28 @@
 
       .panel {
         fill: #10131a;
-        stroke: #242a36;
+        stroke: #252c39;
         stroke-width: 1;
       }
 
-      .panel-recommended {
-        stroke: #ffffff;
-        stroke-opacity: 0.22;
+      .panel-soft {
+        fill: #0d1017;
+        stroke: #222836;
+        stroke-width: 1;
       }
 
       .title {
-        fill: #f6f1eb;
+        fill: #f7f3ee;
         font-family: Arial, Helvetica, sans-serif;
-        font-size: 44px;
+        font-size: 42px;
         font-weight: 720;
         letter-spacing: 0;
       }
 
       .subtitle,
       .body,
-      .label,
+      .column-label,
+      .wallet,
       .tiny {
         font-family: Arial, Helvetica, sans-serif;
         letter-spacing: 0;
@@ -37,350 +39,494 @@
 
       .subtitle {
         fill: #aeb7c6;
-        font-size: 20px;
-      }
-
-      .row-title {
-        fill: #fff8f1;
-        font-family: Arial, Helvetica, sans-serif;
-        font-size: 25px;
-        font-weight: 700;
+        font-size: 19px;
       }
 
       .body {
-        fill: #aeb7c6;
-        font-size: 17px;
+        fill: #9da7b8;
+        font-size: 16px;
       }
 
-      .label {
-        fill: #e8edf5;
-        font-size: 18px;
-        font-weight: 650;
+      .column-label {
+        fill: #dce4ef;
+        font-size: 15px;
+        font-weight: 700;
         text-anchor: middle;
+      }
+
+      .wallet {
+        fill: #f6f1eb;
+        font-size: 18px;
+        font-weight: 700;
       }
 
       .tiny {
         fill: #8f99aa;
-        font-size: 14px;
-        text-anchor: middle;
-      }
-
-      .badge {
-        fill: #1f252f;
-        stroke: #3a4354;
-        stroke-width: 1;
-      }
-
-      .badge-text {
-        fill: #f6f1eb;
-        font-family: Arial, Helvetica, sans-serif;
         font-size: 13px;
+      }
+
+      .accuracy-label {
+        fill: #dbe3ee;
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: 16px;
         font-weight: 700;
-        letter-spacing: 0;
         text-anchor: middle;
       }
 
-      .avatar-back {
+      .accuracy-note {
+        fill: #8390a3;
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: 12px;
+        text-anchor: middle;
+      }
+
+      .avatar-hit {
         fill: #080a0f;
       }
 
-      .avatar-disc {
-        fill: #11151d;
+      .avatar-outer {
+        fill: none;
+        stroke: #ffffff;
+        stroke-opacity: 0.07;
+        stroke-width: 1.25;
       }
 
       .avatar-rail {
         fill: none;
         stroke: #ffffff;
+        stroke-width: 10;
+        stroke-opacity: 0.08;
         stroke-linecap: round;
         stroke-linejoin: round;
       }
 
-      .rail-a {
-        stroke-opacity: 0.1;
-        stroke-width: 7;
-      }
-
-      .rail-b {
-        stroke: #2a303a;
-        stroke-opacity: 1;
-        stroke-width: 8;
-      }
-
-      .rail-c {
-        stroke-opacity: 0.12;
-        stroke-width: 6;
-      }
-
-      .avatar-progress {
+      .ring-active {
         fill: none;
-        stroke: #ffffff;
+        stroke-width: 10;
         stroke-linecap: round;
         stroke-linejoin: round;
-      }
-
-      .progress-a {
-        stroke-width: 7;
-      }
-
-      .progress-b {
-        stroke-width: 8;
-      }
-
-      .progress-c {
-        stroke-width: 6;
-      }
-
-      .avatar-core {
-        fill: currentColor;
-      }
-
-      .avatar-core-shadow {
-        fill: #000000;
-        opacity: 0.2;
-      }
-
-      .avatar-core-ring {
-        fill: none;
-        stroke: #ffffff;
-        stroke-opacity: 0.16;
-      }
-
-      .avatar-core-light {
-        fill: #ffffff;
-        opacity: 0.14;
+        filter: url(#ring-glow);
       }
 
       .swatch {
-        fill: currentColor;
         stroke: #ffffff;
-        stroke-opacity: 0.18;
-        stroke-width: 2;
+        stroke-opacity: 0.22;
+        stroke-width: 1;
+      }
+
+      .callout-line {
+        stroke: #ffffff;
+        stroke-opacity: 0.12;
+        stroke-width: 1;
       }
     </style>
 
-    <symbol id="avatar-a-base" viewBox="0 0 96 96">
-      <circle class="avatar-back" cx="48" cy="48" r="46" />
-      <circle class="avatar-rail rail-a" cx="48" cy="48" r="40" />
-      <circle class="avatar-core-shadow" cx="52" cy="48" r="22" />
-      <circle class="avatar-core" cx="52" cy="48" r="19.5" />
-      <circle class="avatar-core-light" cx="45" cy="40" r="7" />
-      <circle class="avatar-core-ring" cx="52" cy="48" r="19.5" stroke-width="1.4" />
+    <filter id="ring-glow" x="-35%" y="-35%" width="170%" height="170%">
+      <feDropShadow dx="0" dy="0" stdDeviation="1.8" flood-color="#ffffff" flood-opacity="0.18" />
+    </filter>
+
+    <linearGradient id="wallet-f71b44-ring" x1="12" y1="14" x2="84" y2="82" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#F7CE1B" />
+      <stop offset="24%" stop-color="#1BF751" />
+      <stop offset="50%" stop-color="#1B27F7" />
+      <stop offset="76%" stop-color="#F71BED" />
+      <stop offset="100%" stop-color="#F71B44" />
+    </linearGradient>
+
+    <linearGradient id="wallet-a7b3d2-ring" x1="16" y1="82" x2="86" y2="16" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#6A8ADC" />
+      <stop offset="25%" stop-color="#CF6ADC" />
+      <stop offset="50%" stop-color="#DC7E6A" />
+      <stop offset="75%" stop-color="#9DDC6A" />
+      <stop offset="100%" stop-color="#6ADADC" />
+    </linearGradient>
+
+    <linearGradient id="wallet-d54ee7-ring" x1="10" y1="48" x2="88" y2="48" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#D54EE7" />
+      <stop offset="25%" stop-color="#E7564E" />
+      <stop offset="50%" stop-color="#89E74E" />
+      <stop offset="75%" stop-color="#4EE7E2" />
+      <stop offset="100%" stop-color="#5D4EE7" />
+    </linearGradient>
+
+    <linearGradient id="wallet-8f2039-ring" x1="84" y1="18" x2="12" y2="84" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#C82D50" />
+      <stop offset="25%" stop-color="#C8BC2D" />
+      <stop offset="50%" stop-color="#2DC855" />
+      <stop offset="75%" stop-color="#2D57C8" />
+      <stop offset="100%" stop-color="#C82DAF" />
+    </linearGradient>
+
+    <symbol id="avatar-shell" viewBox="0 0 96 96">
+      <circle class="avatar-hit" cx="48" cy="48" r="45" />
+      <circle class="avatar-outer" cx="48" cy="48" r="43" />
+      <circle class="avatar-rail" cx="48" cy="48" r="37" pathLength="100" transform="rotate(-90 48 48)" />
     </symbol>
 
-    <symbol id="avatar-b-base" viewBox="0 0 96 96">
-      <circle class="avatar-disc" cx="48" cy="48" r="46" />
-      <circle cx="48" cy="48" r="43" fill="none" stroke="#ffffff" stroke-opacity="0.04" stroke-width="1.4" />
-      <circle class="avatar-rail rail-b" cx="48" cy="48" r="37" />
-      <circle class="avatar-core-shadow" cx="48" cy="48" r="25" />
-      <circle class="avatar-core" cx="48" cy="48" r="22.5" />
-      <circle class="avatar-core-light" cx="40" cy="39" r="7" />
-      <circle class="avatar-core-ring" cx="48" cy="48" r="22.5" stroke-width="1.6" />
-    </symbol>
-
-    <symbol id="avatar-c-base" viewBox="0 0 96 96">
-      <circle class="avatar-rail rail-c" cx="48" cy="48" r="40" />
-      <circle class="avatar-core-shadow" cx="50" cy="48" r="26" />
-      <circle class="avatar-core" cx="50" cy="48" r="23.5" />
-      <circle class="avatar-core-light" cx="41" cy="38" r="7" />
-      <circle class="avatar-core-ring" cx="50" cy="48" r="23.5" stroke-width="1.3" />
-    </symbol>
-
-    <symbol id="avatar-a-0" viewBox="0 0 96 96">
-      <use href="#avatar-a-base" />
-    </symbol>
-    <symbol id="avatar-a-25" viewBox="0 0 96 96">
-      <use href="#avatar-a-base" />
-      <path class="avatar-progress progress-a" d="M 74.77 18.27 A 40 40 0 0 0 18.27 21.23" />
-    </symbol>
-    <symbol id="avatar-a-50" viewBox="0 0 96 96">
-      <use href="#avatar-a-base" />
-      <path class="avatar-progress progress-a" d="M 74.77 18.27 A 40 40 0 0 0 21.23 77.73" />
-    </symbol>
-    <symbol id="avatar-a-72" viewBox="0 0 96 96">
-      <use href="#avatar-a-base" />
-      <path class="avatar-progress progress-a" d="M 74.77 18.27 A 40 40 0 1 0 72.18 79.86" />
-    </symbol>
-    <symbol id="avatar-a-75" viewBox="0 0 96 96">
-      <use href="#avatar-a-base" />
-      <path class="avatar-progress progress-a" d="M 74.77 18.27 A 40 40 0 1 0 77.73 74.77" />
-    </symbol>
-    <symbol id="avatar-a-100" viewBox="0 0 96 96">
-      <use href="#avatar-a-base" />
-      <circle class="avatar-progress progress-a" cx="48" cy="48" r="40" />
-    </symbol>
-
-    <symbol id="avatar-b-0" viewBox="0 0 96 96">
-      <use href="#avatar-b-base" />
-    </symbol>
-    <symbol id="avatar-b-25" viewBox="0 0 96 96">
-      <use href="#avatar-b-base" />
-      <path class="avatar-progress progress-b" d="M 72.76 20.50 A 37 37 0 0 0 20.50 23.24" />
-    </symbol>
-    <symbol id="avatar-b-50" viewBox="0 0 96 96">
-      <use href="#avatar-b-base" />
-      <path class="avatar-progress progress-b" d="M 72.76 20.50 A 37 37 0 0 0 23.24 75.50" />
-    </symbol>
-    <symbol id="avatar-b-75" viewBox="0 0 96 96">
-      <use href="#avatar-b-base" />
-      <path class="avatar-progress progress-b" d="M 72.76 20.50 A 37 37 0 1 0 75.50 72.76" />
-    </symbol>
-    <symbol id="avatar-b-100" viewBox="0 0 96 96">
-      <use href="#avatar-b-base" />
-      <circle class="avatar-progress progress-b" cx="48" cy="48" r="37" />
-    </symbol>
-
-    <symbol id="avatar-c-0" viewBox="0 0 96 96">
-      <use href="#avatar-c-base" />
-    </symbol>
-    <symbol id="avatar-c-25" viewBox="0 0 96 96">
-      <use href="#avatar-c-base" />
-      <path class="avatar-progress progress-c" d="M 74.77 18.27 A 40 40 0 0 0 18.27 21.23" />
-    </symbol>
-    <symbol id="avatar-c-50" viewBox="0 0 96 96">
-      <use href="#avatar-c-base" />
-      <path class="avatar-progress progress-c" d="M 74.77 18.27 A 40 40 0 0 0 21.23 77.73" />
-    </symbol>
-    <symbol id="avatar-c-75" viewBox="0 0 96 96">
-      <use href="#avatar-c-base" />
-      <path class="avatar-progress progress-c" d="M 74.77 18.27 A 40 40 0 1 0 77.73 74.77" />
-    </symbol>
-    <symbol id="avatar-c-100" viewBox="0 0 96 96">
-      <use href="#avatar-c-base" />
-      <circle class="avatar-progress progress-c" cx="48" cy="48" r="40" />
-    </symbol>
+    <mask id="acc-0" maskUnits="userSpaceOnUse" x="0" y="0" width="96" height="96">
+      <rect width="96" height="96" fill="black" />
+    </mask>
+    <mask id="acc-25" maskUnits="userSpaceOnUse" x="0" y="0" width="96" height="96">
+      <rect width="96" height="96" fill="black" />
+      <circle cx="48" cy="48" r="37" fill="none" stroke="#ffffff" stroke-width="16" pathLength="100" stroke-dasharray="25 100" stroke-linecap="round" transform="rotate(-90 48 48)" />
+    </mask>
+    <mask id="acc-50" maskUnits="userSpaceOnUse" x="0" y="0" width="96" height="96">
+      <rect width="96" height="96" fill="black" />
+      <circle cx="48" cy="48" r="37" fill="none" stroke="#ffffff" stroke-width="16" pathLength="100" stroke-dasharray="50 100" stroke-linecap="round" transform="rotate(-90 48 48)" />
+    </mask>
+    <mask id="acc-74" maskUnits="userSpaceOnUse" x="0" y="0" width="96" height="96">
+      <rect width="96" height="96" fill="black" />
+      <circle cx="48" cy="48" r="37" fill="none" stroke="#ffffff" stroke-width="16" pathLength="100" stroke-dasharray="74 100" stroke-linecap="round" transform="rotate(-90 48 48)" />
+    </mask>
+    <mask id="acc-100" maskUnits="userSpaceOnUse" x="0" y="0" width="96" height="96">
+      <rect width="96" height="96" fill="black" />
+      <circle cx="48" cy="48" r="37" fill="none" stroke="#ffffff" stroke-width="16" pathLength="100" stroke-dasharray="100 100" stroke-linecap="round" transform="rotate(-90 48 48)" />
+    </mask>
   </defs>
 
-  <rect class="canvas" width="1600" height="1180" />
+  <rect class="canvas" width="1600" height="1120" />
 
-  <text class="title" x="72" y="86">Avatar system mockups</text>
-  <text class="subtitle" x="72" y="122">Center color keeps the existing avatar color idea. White logo line = accuracy: 0% none, 50% half circle, 100% full circle.</text>
+  <text class="title" x="72" y="78">Logo-ring avatar mockups</text>
+  <text class="subtitle" x="72" y="112">A single continuous circle, like the RateLoop logo. Accuracy controls how much of the circle is filled; wallet address controls the multicolor gradient.</text>
 
-  <g transform="translate(72 170)">
-    <rect class="panel" x="0" y="0" width="1456" height="245" rx="20" />
-    <text class="row-title" x="36" y="48">A. Logo arc</text>
-    <text class="body" x="36" y="78">Alternative brand-forward direction.</text>
+  <g transform="translate(72 150)">
+    <rect class="panel" x="0" y="0" width="1456" height="755" rx="18" />
 
-    <g transform="translate(220 36)" color="#CC490F">
-      <use href="#avatar-a-0" width="124" height="124" />
-      <text class="label" x="62" y="166">0%</text>
-      <text class="tiny" x="62" y="188">no line</text>
+    <text class="column-label" x="414" y="46">0%</text>
+    <text class="column-label" x="594" y="46">25%</text>
+    <text class="column-label" x="774" y="46">50%</text>
+    <text class="column-label" x="954" y="46">74%</text>
+    <text class="column-label" x="1134" y="46">100%</text>
+
+    <g transform="translate(0 62)">
+      <line class="callout-line" x1="34" y1="0" x2="1422" y2="0" />
+      <g transform="translate(36 52)">
+        <text class="wallet" x="0" y="0">0xc1cd...71b44</text>
+        <text class="tiny" x="0" y="27">wallet seed f71b44</text>
+        <g transform="translate(0 48)">
+          <rect class="swatch" x="0" y="0" width="24" height="24" rx="12" fill="#F7CE1B" />
+          <rect class="swatch" x="31" y="0" width="24" height="24" rx="12" fill="#1BF751" />
+          <rect class="swatch" x="62" y="0" width="24" height="24" rx="12" fill="#1B27F7" />
+          <rect class="swatch" x="93" y="0" width="24" height="24" rx="12" fill="#F71BED" />
+          <rect class="swatch" x="124" y="0" width="24" height="24" rx="12" fill="#F71B44" />
+        </g>
+      </g>
+
+      <g transform="translate(354 10)">
+        <g transform="scale(1.25)">
+          <use href="#avatar-shell" />
+          <g mask="url(#acc-0)">
+            <circle class="ring-active" cx="48" cy="48" r="37" pathLength="100" transform="rotate(-90 48 48)" stroke="url(#wallet-f71b44-ring)" />
+          </g>
+        </g>
+        <text class="accuracy-label" x="60" y="145">empty</text>
+        <text class="accuracy-note" x="60" y="166">no wins yet</text>
+      </g>
+
+      <g transform="translate(534 10)">
+        <g transform="scale(1.25)">
+          <use href="#avatar-shell" />
+          <g mask="url(#acc-25)">
+            <circle class="ring-active" cx="48" cy="48" r="37" pathLength="100" transform="rotate(-90 48 48)" stroke="url(#wallet-f71b44-ring)" />
+          </g>
+        </g>
+        <text class="accuracy-label" x="60" y="145">quarter</text>
+        <text class="accuracy-note" x="60" y="166">low signal</text>
+      </g>
+
+      <g transform="translate(714 10)">
+        <g transform="scale(1.25)">
+          <use href="#avatar-shell" />
+          <g mask="url(#acc-50)">
+            <circle class="ring-active" cx="48" cy="48" r="37" pathLength="100" transform="rotate(-90 48 48)" stroke="url(#wallet-f71b44-ring)" />
+          </g>
+        </g>
+        <text class="accuracy-label" x="60" y="145">half</text>
+        <text class="accuracy-note" x="60" y="166">balanced</text>
+      </g>
+
+      <g transform="translate(894 10)">
+        <g transform="scale(1.25)">
+          <use href="#avatar-shell" />
+          <g mask="url(#acc-74)">
+            <circle class="ring-active" cx="48" cy="48" r="37" pathLength="100" transform="rotate(-90 48 48)" stroke="url(#wallet-f71b44-ring)" />
+          </g>
+        </g>
+        <text class="accuracy-label" x="60" y="145">logo C</text>
+        <text class="accuracy-note" x="60" y="166">strong read</text>
+      </g>
+
+      <g transform="translate(1074 10)">
+        <g transform="scale(1.25)">
+          <use href="#avatar-shell" />
+          <g mask="url(#acc-100)">
+            <circle class="ring-active" cx="48" cy="48" r="37" pathLength="100" transform="rotate(-90 48 48)" stroke="url(#wallet-f71b44-ring)" />
+          </g>
+        </g>
+        <text class="accuracy-label" x="60" y="145">full ring</text>
+        <text class="accuracy-note" x="60" y="166">perfect</text>
+      </g>
     </g>
-    <g transform="translate(390 36)" color="#CC490F">
-      <use href="#avatar-a-25" width="124" height="124" />
-      <text class="label" x="62" y="166">25%</text>
-      <text class="tiny" x="62" y="188">quarter</text>
+
+    <g transform="translate(0 240)">
+      <line class="callout-line" x1="34" y1="0" x2="1422" y2="0" />
+      <g transform="translate(36 52)">
+        <text class="wallet" x="0" y="0">0x6d9f...7b3d2</text>
+        <text class="tiny" x="0" y="27">wallet seed a7b3d2</text>
+        <g transform="translate(0 48)">
+          <rect class="swatch" x="0" y="0" width="24" height="24" rx="12" fill="#6A8ADC" />
+          <rect class="swatch" x="31" y="0" width="24" height="24" rx="12" fill="#CF6ADC" />
+          <rect class="swatch" x="62" y="0" width="24" height="24" rx="12" fill="#DC7E6A" />
+          <rect class="swatch" x="93" y="0" width="24" height="24" rx="12" fill="#9DDC6A" />
+          <rect class="swatch" x="124" y="0" width="24" height="24" rx="12" fill="#6ADADC" />
+        </g>
+      </g>
+
+      <g transform="translate(354 10)">
+        <g transform="scale(1.25)">
+          <use href="#avatar-shell" />
+          <g mask="url(#acc-0)">
+            <circle class="ring-active" cx="48" cy="48" r="37" pathLength="100" transform="rotate(-90 48 48)" stroke="url(#wallet-a7b3d2-ring)" />
+          </g>
+        </g>
+        <text class="accuracy-label" x="60" y="145">empty</text>
+        <text class="accuracy-note" x="60" y="166">no wins yet</text>
+      </g>
+
+      <g transform="translate(534 10)">
+        <g transform="scale(1.25)">
+          <use href="#avatar-shell" />
+          <g mask="url(#acc-25)">
+            <circle class="ring-active" cx="48" cy="48" r="37" pathLength="100" transform="rotate(-90 48 48)" stroke="url(#wallet-a7b3d2-ring)" />
+          </g>
+        </g>
+        <text class="accuracy-label" x="60" y="145">quarter</text>
+        <text class="accuracy-note" x="60" y="166">low signal</text>
+      </g>
+
+      <g transform="translate(714 10)">
+        <g transform="scale(1.25)">
+          <use href="#avatar-shell" />
+          <g mask="url(#acc-50)">
+            <circle class="ring-active" cx="48" cy="48" r="37" pathLength="100" transform="rotate(-90 48 48)" stroke="url(#wallet-a7b3d2-ring)" />
+          </g>
+        </g>
+        <text class="accuracy-label" x="60" y="145">half</text>
+        <text class="accuracy-note" x="60" y="166">balanced</text>
+      </g>
+
+      <g transform="translate(894 10)">
+        <g transform="scale(1.25)">
+          <use href="#avatar-shell" />
+          <g mask="url(#acc-74)">
+            <circle class="ring-active" cx="48" cy="48" r="37" pathLength="100" transform="rotate(-90 48 48)" stroke="url(#wallet-a7b3d2-ring)" />
+          </g>
+        </g>
+        <text class="accuracy-label" x="60" y="145">logo C</text>
+        <text class="accuracy-note" x="60" y="166">strong read</text>
+      </g>
+
+      <g transform="translate(1074 10)">
+        <g transform="scale(1.25)">
+          <use href="#avatar-shell" />
+          <g mask="url(#acc-100)">
+            <circle class="ring-active" cx="48" cy="48" r="37" pathLength="100" transform="rotate(-90 48 48)" stroke="url(#wallet-a7b3d2-ring)" />
+          </g>
+        </g>
+        <text class="accuracy-label" x="60" y="145">full ring</text>
+        <text class="accuracy-note" x="60" y="166">perfect</text>
+      </g>
     </g>
-    <g transform="translate(560 36)" color="#CC490F">
-      <use href="#avatar-a-50" width="124" height="124" />
-      <text class="label" x="62" y="166">50%</text>
-      <text class="tiny" x="62" y="188">half</text>
+
+    <g transform="translate(0 418)">
+      <line class="callout-line" x1="34" y1="0" x2="1422" y2="0" />
+      <g transform="translate(36 52)">
+        <text class="wallet" x="0" y="0">0x29b2...54ee7</text>
+        <text class="tiny" x="0" y="27">wallet seed d54ee7</text>
+        <g transform="translate(0 48)">
+          <rect class="swatch" x="0" y="0" width="24" height="24" rx="12" fill="#D54EE7" />
+          <rect class="swatch" x="31" y="0" width="24" height="24" rx="12" fill="#E7564E" />
+          <rect class="swatch" x="62" y="0" width="24" height="24" rx="12" fill="#89E74E" />
+          <rect class="swatch" x="93" y="0" width="24" height="24" rx="12" fill="#4EE7E2" />
+          <rect class="swatch" x="124" y="0" width="24" height="24" rx="12" fill="#5D4EE7" />
+        </g>
+      </g>
+
+      <g transform="translate(354 10)">
+        <g transform="scale(1.25)">
+          <use href="#avatar-shell" />
+          <g mask="url(#acc-0)">
+            <circle class="ring-active" cx="48" cy="48" r="37" pathLength="100" transform="rotate(-90 48 48)" stroke="url(#wallet-d54ee7-ring)" />
+          </g>
+        </g>
+        <text class="accuracy-label" x="60" y="145">empty</text>
+        <text class="accuracy-note" x="60" y="166">no wins yet</text>
+      </g>
+
+      <g transform="translate(534 10)">
+        <g transform="scale(1.25)">
+          <use href="#avatar-shell" />
+          <g mask="url(#acc-25)">
+            <circle class="ring-active" cx="48" cy="48" r="37" pathLength="100" transform="rotate(-90 48 48)" stroke="url(#wallet-d54ee7-ring)" />
+          </g>
+        </g>
+        <text class="accuracy-label" x="60" y="145">quarter</text>
+        <text class="accuracy-note" x="60" y="166">low signal</text>
+      </g>
+
+      <g transform="translate(714 10)">
+        <g transform="scale(1.25)">
+          <use href="#avatar-shell" />
+          <g mask="url(#acc-50)">
+            <circle class="ring-active" cx="48" cy="48" r="37" pathLength="100" transform="rotate(-90 48 48)" stroke="url(#wallet-d54ee7-ring)" />
+          </g>
+        </g>
+        <text class="accuracy-label" x="60" y="145">half</text>
+        <text class="accuracy-note" x="60" y="166">balanced</text>
+      </g>
+
+      <g transform="translate(894 10)">
+        <g transform="scale(1.25)">
+          <use href="#avatar-shell" />
+          <g mask="url(#acc-74)">
+            <circle class="ring-active" cx="48" cy="48" r="37" pathLength="100" transform="rotate(-90 48 48)" stroke="url(#wallet-d54ee7-ring)" />
+          </g>
+        </g>
+        <text class="accuracy-label" x="60" y="145">logo C</text>
+        <text class="accuracy-note" x="60" y="166">strong read</text>
+      </g>
+
+      <g transform="translate(1074 10)">
+        <g transform="scale(1.25)">
+          <use href="#avatar-shell" />
+          <g mask="url(#acc-100)">
+            <circle class="ring-active" cx="48" cy="48" r="37" pathLength="100" transform="rotate(-90 48 48)" stroke="url(#wallet-d54ee7-ring)" />
+          </g>
+        </g>
+        <text class="accuracy-label" x="60" y="145">full ring</text>
+        <text class="accuracy-note" x="60" y="166">perfect</text>
+      </g>
     </g>
-    <g transform="translate(730 36)" color="#CC490F">
-      <use href="#avatar-a-75" width="124" height="124" />
-      <text class="label" x="62" y="166">75%</text>
-      <text class="tiny" x="62" y="188">logo-like C</text>
-    </g>
-    <g transform="translate(900 36)" color="#CC490F">
-      <use href="#avatar-a-100" width="124" height="124" />
-      <text class="label" x="62" y="166">100%</text>
-      <text class="tiny" x="62" y="188">closed ring</text>
+
+    <g transform="translate(0 596)">
+      <line class="callout-line" x1="34" y1="0" x2="1422" y2="0" />
+      <g transform="translate(36 52)">
+        <text class="wallet" x="0" y="0">0x84f1...f2039</text>
+        <text class="tiny" x="0" y="27">wallet seed 8f2039</text>
+        <g transform="translate(0 48)">
+          <rect class="swatch" x="0" y="0" width="24" height="24" rx="12" fill="#C82D50" />
+          <rect class="swatch" x="31" y="0" width="24" height="24" rx="12" fill="#C8BC2D" />
+          <rect class="swatch" x="62" y="0" width="24" height="24" rx="12" fill="#2DC855" />
+          <rect class="swatch" x="93" y="0" width="24" height="24" rx="12" fill="#2D57C8" />
+          <rect class="swatch" x="124" y="0" width="24" height="24" rx="12" fill="#C82DAF" />
+        </g>
+      </g>
+
+      <g transform="translate(354 10)">
+        <g transform="scale(1.25)">
+          <use href="#avatar-shell" />
+          <g mask="url(#acc-0)">
+            <circle class="ring-active" cx="48" cy="48" r="37" pathLength="100" transform="rotate(-90 48 48)" stroke="url(#wallet-8f2039-ring)" />
+          </g>
+        </g>
+        <text class="accuracy-label" x="60" y="145">empty</text>
+        <text class="accuracy-note" x="60" y="166">no wins yet</text>
+      </g>
+
+      <g transform="translate(534 10)">
+        <g transform="scale(1.25)">
+          <use href="#avatar-shell" />
+          <g mask="url(#acc-25)">
+            <circle class="ring-active" cx="48" cy="48" r="37" pathLength="100" transform="rotate(-90 48 48)" stroke="url(#wallet-8f2039-ring)" />
+          </g>
+        </g>
+        <text class="accuracy-label" x="60" y="145">quarter</text>
+        <text class="accuracy-note" x="60" y="166">low signal</text>
+      </g>
+
+      <g transform="translate(714 10)">
+        <g transform="scale(1.25)">
+          <use href="#avatar-shell" />
+          <g mask="url(#acc-50)">
+            <circle class="ring-active" cx="48" cy="48" r="37" pathLength="100" transform="rotate(-90 48 48)" stroke="url(#wallet-8f2039-ring)" />
+          </g>
+        </g>
+        <text class="accuracy-label" x="60" y="145">half</text>
+        <text class="accuracy-note" x="60" y="166">balanced</text>
+      </g>
+
+      <g transform="translate(894 10)">
+        <g transform="scale(1.25)">
+          <use href="#avatar-shell" />
+          <g mask="url(#acc-74)">
+            <circle class="ring-active" cx="48" cy="48" r="37" pathLength="100" transform="rotate(-90 48 48)" stroke="url(#wallet-8f2039-ring)" />
+          </g>
+        </g>
+        <text class="accuracy-label" x="60" y="145">logo C</text>
+        <text class="accuracy-note" x="60" y="166">strong read</text>
+      </g>
+
+      <g transform="translate(1074 10)">
+        <g transform="scale(1.25)">
+          <use href="#avatar-shell" />
+          <g mask="url(#acc-100)">
+            <circle class="ring-active" cx="48" cy="48" r="37" pathLength="100" transform="rotate(-90 48 48)" stroke="url(#wallet-8f2039-ring)" />
+          </g>
+        </g>
+        <text class="accuracy-label" x="60" y="145">full ring</text>
+        <text class="accuracy-note" x="60" y="166">perfect</text>
+      </g>
     </g>
   </g>
 
-  <g transform="translate(72 445)">
-    <rect class="panel panel-recommended" x="0" y="0" width="1456" height="245" rx="20" />
-    <text class="row-title" x="36" y="48">B. Signal disc</text>
-    <text class="body" x="36" y="78">Implemented default.</text>
-    <rect class="badge" x="36" y="102" width="128" height="30" rx="15" />
-    <text class="badge-text" x="100" y="122">SELECTED</text>
+  <g transform="translate(72 940)">
+    <rect class="panel-soft" x="0" y="0" width="1456" height="128" rx="18" />
+    <text class="wallet" x="36" y="42">Small-size read</text>
+    <text class="body" x="36" y="70">The center stays empty at every size; the continuous ring carries both identity and accuracy.</text>
 
-    <g transform="translate(220 36)" color="#42D0B7">
-      <use href="#avatar-b-0" width="124" height="124" />
-      <text class="label" x="62" y="166">0%</text>
-      <text class="tiny" x="62" y="188">rail only</text>
+    <g transform="translate(520 28)">
+      <g transform="scale(0.35)">
+        <use href="#avatar-shell" />
+        <g mask="url(#acc-74)">
+          <circle class="ring-active" cx="48" cy="48" r="37" pathLength="100" transform="rotate(-90 48 48)" stroke="url(#wallet-f71b44-ring)" />
+        </g>
+      </g>
+      <text class="tiny" x="17" y="58" text-anchor="middle">24</text>
     </g>
-    <g transform="translate(390 36)" color="#42D0B7">
-      <use href="#avatar-b-25" width="124" height="124" />
-      <text class="label" x="62" y="166">25%</text>
-      <text class="tiny" x="62" y="188">high contrast</text>
-    </g>
-    <g transform="translate(560 36)" color="#42D0B7">
-      <use href="#avatar-b-50" width="124" height="124" />
-      <text class="label" x="62" y="166">50%</text>
-      <text class="tiny" x="62" y="188">compact</text>
-    </g>
-    <g transform="translate(730 36)" color="#42D0B7">
-      <use href="#avatar-b-75" width="124" height="124" />
-      <text class="label" x="62" y="166">75%</text>
-      <text class="tiny" x="62" y="188">badge read</text>
-    </g>
-    <g transform="translate(900 36)" color="#42D0B7">
-      <use href="#avatar-b-100" width="124" height="124" />
-      <text class="label" x="62" y="166">100%</text>
-      <text class="tiny" x="62" y="188">complete</text>
-    </g>
-  </g>
 
-  <g transform="translate(72 720)">
-    <rect class="panel" x="0" y="0" width="1456" height="245" rx="20" />
-    <text class="row-title" x="36" y="48">C. Minimal bead</text>
-    <text class="body" x="36" y="78">Most color-forward.</text>
+    <g transform="translate(600 20)">
+      <g transform="scale(0.5)">
+        <use href="#avatar-shell" />
+        <g mask="url(#acc-74)">
+          <circle class="ring-active" cx="48" cy="48" r="37" pathLength="100" transform="rotate(-90 48 48)" stroke="url(#wallet-a7b3d2-ring)" />
+        </g>
+      </g>
+      <text class="tiny" x="24" y="66" text-anchor="middle">32</text>
+    </g>
 
-    <g transform="translate(220 36)" color="#8D5CFF">
-      <use href="#avatar-c-0" width="124" height="124" />
-      <text class="label" x="62" y="166">0%</text>
-      <text class="tiny" x="62" y="188">quiet</text>
+    <g transform="translate(700 12)">
+      <g transform="scale(0.67)">
+        <use href="#avatar-shell" />
+        <g mask="url(#acc-74)">
+          <circle class="ring-active" cx="48" cy="48" r="37" pathLength="100" transform="rotate(-90 48 48)" stroke="url(#wallet-d54ee7-ring)" />
+        </g>
+      </g>
+      <text class="tiny" x="32" y="78" text-anchor="middle">48</text>
     </g>
-    <g transform="translate(390 36)" color="#8D5CFF">
-      <use href="#avatar-c-25" width="124" height="124" />
-      <text class="label" x="62" y="166">25%</text>
-      <text class="tiny" x="62" y="188">simple</text>
-    </g>
-    <g transform="translate(560 36)" color="#8D5CFF">
-      <use href="#avatar-c-50" width="124" height="124" />
-      <text class="label" x="62" y="166">50%</text>
-      <text class="tiny" x="62" y="188">balanced</text>
-    </g>
-    <g transform="translate(730 36)" color="#8D5CFF">
-      <use href="#avatar-c-75" width="124" height="124" />
-      <text class="label" x="62" y="166">75%</text>
-      <text class="tiny" x="62" y="188">logo echo</text>
-    </g>
-    <g transform="translate(900 36)" color="#8D5CFF">
-      <use href="#avatar-c-100" width="124" height="124" />
-      <text class="label" x="62" y="166">100%</text>
-      <text class="tiny" x="62" y="188">full signal</text>
-    </g>
-  </g>
 
-  <g transform="translate(72 1000)">
-    <text class="row-title" x="0" y="30">Color variants at 72%</text>
-    <text class="body" x="0" y="60">Only the center changes; the accuracy line stays white.</text>
+    <g transform="translate(830 0)">
+      <g transform="scale(1)">
+        <use href="#avatar-shell" />
+        <g mask="url(#acc-74)">
+          <circle class="ring-active" cx="48" cy="48" r="37" pathLength="100" transform="rotate(-90 48 48)" stroke="url(#wallet-8f2039-ring)" />
+        </g>
+      </g>
+      <text class="tiny" x="48" y="110" text-anchor="middle">96</text>
+    </g>
 
-    <g transform="translate(520 0)" color="#CC490F">
-      <use href="#avatar-a-72" width="88" height="88" />
-      <circle class="swatch" cx="110" cy="44" r="13" />
-      <text class="tiny" x="44" y="116">orange</text>
-    </g>
-    <g transform="translate(650 0)" color="#42D0B7">
-      <use href="#avatar-a-72" width="88" height="88" />
-      <circle class="swatch" cx="110" cy="44" r="13" />
-      <text class="tiny" x="44" y="116">teal</text>
-    </g>
-    <g transform="translate(780 0)" color="#3D7CFF">
-      <use href="#avatar-a-72" width="88" height="88" />
-      <circle class="swatch" cx="110" cy="44" r="13" />
-      <text class="tiny" x="44" y="116">blue</text>
-    </g>
-    <g transform="translate(910 0)" color="#8D5CFF">
-      <use href="#avatar-a-72" width="88" height="88" />
-      <circle class="swatch" cx="110" cy="44" r="13" />
-      <text class="tiny" x="44" y="116">violet</text>
-    </g>
-    <g transform="translate(1040 0)" color="#F2C94C">
-      <use href="#avatar-a-72" width="88" height="88" />
-      <circle class="swatch" cx="110" cy="44" r="13" />
-      <text class="tiny" x="44" y="116">gold</text>
+    <g transform="translate(1065 32)">
+      <circle cx="0" cy="20" r="5" fill="#ffffff" opacity="0.28" />
+      <text class="body" x="18" y="25">Optional faint rail keeps the zero state visible without adding an inner avatar mark.</text>
     </g>
   </g>
 </svg>
