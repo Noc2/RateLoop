@@ -4,6 +4,18 @@ import { sweepAgentLifecycleCallbacks } from "~~/lib/agent-callbacks/lifecycle";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+type AgentCallbackSweepRouteTestOverrides = {
+  sweepAgentLifecycleCallbacks?: typeof sweepAgentLifecycleCallbacks;
+};
+
+let agentCallbackSweepRouteTestOverrides: AgentCallbackSweepRouteTestOverrides | null = null;
+
+export function __setAgentCallbackSweepRouteTestOverridesForTests(
+  overrides: AgentCallbackSweepRouteTestOverrides | null,
+) {
+  agentCallbackSweepRouteTestOverrides = overrides;
+}
+
 function readBearerToken(request: Request) {
   const authorization = request.headers.get("authorization") ?? "";
   return authorization.match(/^Bearer\s+(.+)$/i)?.[1]?.trim() ?? "";
@@ -25,5 +37,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
-  return NextResponse.json(await sweepAgentLifecycleCallbacks({ limit: parseLimit(request) }));
+  const sweepCallbacks =
+    agentCallbackSweepRouteTestOverrides?.sweepAgentLifecycleCallbacks ?? sweepAgentLifecycleCallbacks;
+
+  return NextResponse.json(await sweepCallbacks({ limit: parseLimit(request) }));
 }

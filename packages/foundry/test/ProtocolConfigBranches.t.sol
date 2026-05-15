@@ -16,6 +16,45 @@ contract MockRewardDistributorForConfig {
     }
 }
 
+contract MockAdvisoryVoteRecorderForConfig {
+    address internal recorderProtocolConfig;
+    bool internal revertProtocolConfig;
+
+    constructor(address protocolConfig_, bool revertProtocolConfig_) {
+        recorderProtocolConfig = protocolConfig_;
+        revertProtocolConfig = revertProtocolConfig_;
+    }
+
+    function protocolConfig() external view returns (address) {
+        if (revertProtocolConfig) revert("mock protocol config");
+        return recorderProtocolConfig;
+    }
+
+    function advisoryCommitKeyByRater(uint256, uint256, address) external pure returns (bytes32) {
+        return bytes32(0);
+    }
+
+    function advisoryCommitKeyByIdentity(uint256, uint256, bytes32) external pure returns (bytes32) {
+        return bytes32(0);
+    }
+
+    function lastAdvisoryVoteTimestamp(uint256, address) external pure returns (uint256) {
+        return 0;
+    }
+
+    function lastAdvisoryVoteTimestampByIdentity(uint256, bytes32) external pure returns (uint256) {
+        return 0;
+    }
+}
+
+contract MockBrokenAdvisoryVoteRecorderForConfig {
+    address public protocolConfig;
+
+    constructor(address protocolConfig_) {
+        protocolConfig = protocolConfig_;
+    }
+}
+
 contract ProtocolConfigBranchesTest is Test {
     bytes32 internal constant QUICKNET_CHAIN_HASH = 0x52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971;
 
@@ -115,7 +154,7 @@ contract ProtocolConfigBranchesTest is Test {
 
     function test_SetAdvisoryVoteRecorder_UpdatesAddressAndEmits() public {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
-        address advisoryVoteRecorder = address(0xAD11CE);
+        address advisoryVoteRecorder = address(new MockAdvisoryVoteRecorderForConfig(address(config), false));
 
         vm.expectEmit(false, false, false, true);
         emit AdvisoryVoteRecorderUpdated(advisoryVoteRecorder);
@@ -125,11 +164,48 @@ contract ProtocolConfigBranchesTest is Test {
         assertEq(config.advisoryVoteRecorder(), advisoryVoteRecorder);
     }
 
-    function test_SetAdvisoryVoteRecorder_RejectsZeroAddress() public {
+    function test_SetAdvisoryVoteRecorder_AllowsEmergencyDisable() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+        address advisoryVoteRecorder = address(new MockAdvisoryVoteRecorderForConfig(address(config), false));
+        config.setAdvisoryVoteRecorder(advisoryVoteRecorder);
+
+        vm.expectEmit(false, false, false, true);
+        emit AdvisoryVoteRecorderUpdated(address(0));
+
+        config.setAdvisoryVoteRecorder(address(0));
+
+        assertEq(config.advisoryVoteRecorder(), address(0));
+    }
+
+    function test_SetAdvisoryVoteRecorder_RejectsNoCodeAddress() public {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
 
         vm.expectRevert(ProtocolConfig.InvalidAddress.selector);
-        config.setAdvisoryVoteRecorder(address(0));
+        config.setAdvisoryVoteRecorder(address(0xAD11CE));
+    }
+
+    function test_SetAdvisoryVoteRecorder_RejectsWrongProtocolConfig() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+        address advisoryVoteRecorder = address(new MockAdvisoryVoteRecorderForConfig(address(0xBEEF), false));
+
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.setAdvisoryVoteRecorder(advisoryVoteRecorder);
+    }
+
+    function test_SetAdvisoryVoteRecorder_RejectsRevertingProtocolConfig() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+        address advisoryVoteRecorder = address(new MockAdvisoryVoteRecorderForConfig(address(config), true));
+
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.setAdvisoryVoteRecorder(advisoryVoteRecorder);
+    }
+
+    function test_SetAdvisoryVoteRecorder_RejectsIncompleteRecorderInterface() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+        address advisoryVoteRecorder = address(new MockBrokenAdvisoryVoteRecorderForConfig(address(config)));
+
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.setAdvisoryVoteRecorder(advisoryVoteRecorder);
     }
 
     function test_InitializeWithTreasury_GovernanceCanRecoverTreasuryRoles() public {

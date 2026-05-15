@@ -116,7 +116,10 @@ cp packages/agents/.env.example packages/agents/.env
 | `CURYO_CHAIN_ID`                       | Optional chain guard; `local-ask` refuses mismatched RPCs                                               |
 | `CURYO_LOCAL_SIGNER_KEYSTORE_PATH`     | Encrypted local signer keystore path                                                                    |
 | `CURYO_LOCAL_SIGNER_KEYSTORE_PASSWORD` | Password for the local signer keystore; load from a secret source                                       |
+| `CURYO_LOCAL_SIGNER_PASSWORD_ENV`      | Name of an alternate environment variable that holds the keystore password                              |
 | `CURYO_LOCAL_SIGNER_PRIVATE_KEY`       | Ephemeral CI/test-wallet fallback; prefer a keystore for persistent funded wallets                      |
+| `CURYO_LOCAL_SIGNER_POLLING_INTERVAL_MS` | Optional receipt polling interval for local signer transaction waits                                  |
+| `CURYO_LOCAL_SIGNER_RECEIPT_TIMEOUT_MS` | Optional local signer transaction receipt timeout                                                      |
 | `CURYO_MCP_TOKEN`                      | Optional managed agent bearer token with quote, ask, read, and balance scopes                           |
 | `CURYO_MCP_API_URL`                    | Optional MCP endpoint override; tokenless SDK clients default to `${CURYO_API_BASE_URL}/api/mcp/public` |
 | `CURYO_MCP_PROTOCOL_VERSION`           | Optional MCP protocol version override                                                                  |
