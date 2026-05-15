@@ -275,13 +275,63 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         vm.stopPrank();
     }
 
+    function _commitWithTargetRound(
+        address voter,
+        uint256 contentId,
+        bool isUp,
+        uint256 stake,
+        uint64 targetRound,
+        string memory saltTag
+    ) internal returns (bytes32 commitKey, bytes32 salt) {
+        uint16 predictedUpBps = 5_000;
+        salt = keccak256(abi.encodePacked(voter, isUp, targetRound, block.timestamp, saltTag));
+        uint256 roundId = engine.previewCommitRoundId(contentId);
+        uint16 referenceRatingBps = engine.previewCommitReferenceRatingBps(contentId);
+        bytes32 drandChainHash = _tlockDrandChainHash();
+        bytes memory ciphertext = _testCiphertext(isUp, salt, contentId, targetRound, drandChainHash);
+        bytes32 commitHash = TlockVoteLib.buildExpectedRbtsCommitHash(
+            isUp,
+            predictedUpBps,
+            salt,
+            voter,
+            contentId,
+            roundId,
+            referenceRatingBps,
+            targetRound,
+            drandChainHash,
+            ciphertext
+        );
+
+        commitKey = _commitKey(voter, commitHash);
+
+        vm.startPrank(voter);
+        hrepToken.approve(address(engine), stake);
+        engine.commitVote(
+            contentId,
+            _roundContext(roundId, referenceRatingBps),
+            targetRound,
+            drandChainHash,
+            commitHash,
+            ciphertext,
+            stake,
+            address(0)
+        );
+        vm.stopPrank();
+    }
+
     function _recordAdvisory(address voter, uint256 contentId, string memory saltTag)
+        internal
+        returns (bytes32 advisoryCommitKey, bytes32 salt)
+    {
+        return _recordAdvisoryWithTargetRound(voter, contentId, saltTag, _tlockCommitTargetRound());
+    }
+
+    function _recordAdvisoryWithTargetRound(address voter, uint256 contentId, string memory saltTag, uint64 targetRound)
         internal
         returns (bytes32 advisoryCommitKey, bytes32 salt)
     {
         uint256 roundId = engine.previewCommitRoundId(contentId);
         uint16 referenceRatingBps = engine.previewCommitReferenceRatingBps(contentId);
-        uint64 targetRound = _tlockCommitTargetRound();
         bytes32 drandChainHash = _tlockDrandChainHash();
         salt = keccak256(abi.encodePacked(voter, block.timestamp, saltTag));
         bytes memory ciphertext = _testCiphertext(true, salt, contentId, targetRound, drandChainHash);
@@ -405,6 +455,59 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         _submitContentWithReservation(registry, url, "test goal", "test goal", "test", 0);
         vm.stopPrank();
         return registry.nextContentId() - 1;
+    }
+
+    function _submitContentWithRoundConfig(string memory url, RoundLib.RoundConfig memory roundConfig)
+        internal
+        returns (uint256 contentId)
+    {
+        string[] memory imageUrls = _emptyImageUrls();
+        string memory videoUrl = "";
+        string memory title = "test goal";
+        string memory description = "test goal";
+        string memory tags = "test";
+        uint256 categoryId = 1;
+
+        address rewardEscrow = _ensureDefaultQuestionRewardPoolEscrow(registry);
+        uint256 rewardAmount = _defaultSubmissionRewardAmount(registry);
+        ContentRegistry.SubmissionRewardTerms memory rewardTerms = _defaultSubmissionRewardTerms(registry);
+
+        vm.startPrank(submitter);
+        hrepToken.approve(rewardEscrow, rewardAmount);
+
+        (, bytes32 submissionKey) =
+            registry.previewQuestionSubmissionKey(url, imageUrls, videoUrl, title, description, tags, categoryId);
+        bytes32 salt = _contentSubmissionSalt(url, submitter);
+        bytes32 revealCommitment = _questionRevealCommitment(
+            submissionKey,
+            _submissionMediaHash(imageUrls, videoUrl),
+            title,
+            description,
+            tags,
+            categoryId,
+            salt,
+            submitter,
+            rewardTerms,
+            roundConfig,
+            _defaultQuestionSpec()
+        );
+
+        registry.reserveSubmission(revealCommitment);
+        vm.warp(block.timestamp + 1);
+        contentId = registry.submitQuestionWithRewardAndRoundConfig(
+            url,
+            imageUrls,
+            videoUrl,
+            title,
+            description,
+            tags,
+            categoryId,
+            salt,
+            rewardTerms,
+            roundConfig,
+            _defaultQuestionSpec()
+        );
+        vm.stopPrank();
     }
 
     /// @dev Register a frontend operator.
@@ -2072,6 +2175,42 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertTrue(revealed, "advisory vote revealed");
         round = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertEq(round.revealedCount, 0, "advisory reveal does not count toward quorum");
+    }
+
+    function test_AdvisoryPreRoundUsesShortCustomRoundConfig() public {
+        RoundLib.RoundConfig memory roundConfig =
+            RoundLib.RoundConfig({ epochDuration: 2 minutes, maxDuration: 2 minutes, minVoters: 3, maxVoters: 1000 });
+        uint256 contentId = _submitContentWithRoundConfig("https://example.com/advisory-short", roundConfig);
+
+        uint256 recordedAt = block.timestamp;
+        uint64 targetRound = _tlockTargetRoundAt(recordedAt + roundConfig.epochDuration);
+        (bytes32 advisoryCommitKey, bytes32 advisorySalt) =
+            _recordAdvisoryWithTargetRound(voter1, contentId, "advisory-short", targetRound);
+
+        (,,,, uint48 revealableAfter,,,,,) = advisoryRecorder.advisoryCommitCore(advisoryCommitKey);
+        assertGe(revealableAfter, recordedAt + roundConfig.epochDuration, "uses custom short epoch floor");
+        assertLt(revealableAfter, recordedAt + EPOCH, "does not inherit global one-hour epoch");
+
+        _commitWithTargetRound(voter2, contentId, true, STAKE, targetRound, "advisory-short-staked");
+        vm.warp(uint256(revealableAfter) + 1);
+
+        advisoryRecorder.revealAdvisoryVote(advisoryCommitKey, true, 5_000, advisorySalt);
+        (,,,,, bool revealed,,,,) = advisoryRecorder.advisoryCommitCore(advisoryCommitKey);
+        assertTrue(revealed, "advisory can reveal on the custom short epoch");
+    }
+
+    function test_AdvisoryPreRoundUsesLongCustomRoundConfig() public {
+        RoundLib.RoundConfig memory roundConfig =
+            RoundLib.RoundConfig({ epochDuration: 3 days, maxDuration: 3 days, minVoters: 3, maxVoters: 1000 });
+        uint256 contentId = _submitContentWithRoundConfig("https://example.com/advisory-long", roundConfig);
+
+        uint256 recordedAt = block.timestamp;
+        uint64 targetRound = _tlockTargetRoundAt(recordedAt + roundConfig.epochDuration);
+        (bytes32 advisoryCommitKey,) = _recordAdvisoryWithTargetRound(voter1, contentId, "advisory-long", targetRound);
+
+        (,,,, uint48 revealableAfter,,,,,) = advisoryRecorder.advisoryCommitCore(advisoryCommitKey);
+        assertGe(revealableAfter, recordedAt + roundConfig.epochDuration, "uses custom long epoch floor");
+        assertGt(revealableAfter, recordedAt + EPOCH, "does not leak on the global one-hour epoch");
     }
 
     function test_AdvisoryVoteCannotRevealAfterSettlement() public {
