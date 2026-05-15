@@ -66,8 +66,14 @@ ClusterPayoutOracle is governed by LREP holders and stores the challengeable
 roots used for USDC bounty and launch LREP claim weights. Registered frontend
 operators with the 1,000 LREP operator bond can propose deterministic
 correlation epoch and round payout roots. Other operators or auditors can
-recompute the artifact, challenge bad roots, and governance can arbitrate
-challenged roots with a public reason hash.
+recompute the artifact, challenge bad roots with a USDC ERC20 bond that defaults
+to 5 USDC (5_000_000 atomic units), and governance can arbitrate challenged
+roots with a public reason hash.
+
+The oracle is intentionally optimistic. The goal is not fully per-snapshot
+economic collateralization on-chain; it is public artifacts, challenge windows,
+governance arbitration, and frontend-operator accountability through possible
+slashing, reputation loss, and future-income loss.
 
 ## Rater Accountability
 

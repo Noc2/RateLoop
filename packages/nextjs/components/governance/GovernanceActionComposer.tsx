@@ -321,7 +321,7 @@ const actionTemplates: readonly GovernanceActionTemplate[] = [
     mode: "proposal",
     contractName: "ClusterPayoutOracle",
     functionName: "setOracleConfig",
-    description: "Create a proposal to update payout-root challenge timing, challenge bond, and bond recipient.",
+    description: "Create a proposal to update payout-root challenge timing, USDC challenge bond, and bond recipient.",
     fields: [
       {
         key: "challengeWindow",
@@ -332,11 +332,11 @@ const actionTemplates: readonly GovernanceActionTemplate[] = [
       },
       {
         key: "challengeBond",
-        label: "Challenge bond (wei)",
+        label: "Challenge bond (USDC atomic units)",
         type: "uint",
         required: true,
         helperText:
-          "Native-token anti-spam bond required from challengers. Proposers are backed by their frontend stake.",
+          "USDC anti-spam bond required from challengers. Default is 5 USDC (5_000_000 atomic units); proposers are backed by their 1,000 LREP frontend stake.",
       },
       {
         key: "bondRecipient",
@@ -354,7 +354,7 @@ const actionTemplates: readonly GovernanceActionTemplate[] = [
     buildDescription: values =>
       `Set ClusterPayoutOracle config: ${values.challengeWindow || "0"}s challenge window, ${
         values.challengeBond || "0"
-      } wei challenge bond`,
+      } USDC atomic-unit challenge bond`,
   },
   {
     id: "oracle-finalize-challenged-correlation-epoch",

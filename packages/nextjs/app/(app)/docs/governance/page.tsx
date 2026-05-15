@@ -110,14 +110,20 @@ const GovernanceDocs: NextPage = () => {
         Payout roots are proposed by registered frontend operators that have bonded{" "}
         <strong>{protocolDocFacts.frontendOperatorStakeLabel}</strong> in the FrontendRegistry. Operators publish the
         deterministic artifact URI and root from their registered wallet, then wait through the challenge window. Other
-        operators or auditors can recompute the artifact and challenge bad roots with the configured native-token
-        challenge bond.
+        operators or auditors can recompute the artifact and challenge bad roots with the configured USDC challenge
+        bond, which defaults to 5 USDC (5_000_000 atomic units).
       </p>
       <p>
         Governance controls oracle configuration, including the challenge window, challenger bond, frontend registry,
         and fallback bond recipient. It can also arbitrate challenged roots through proposals that either finalize a
         correct challenged root or reject an invalid one with a public reason hash, and can slash the proposing frontend
         through the FrontendRegistry if the on-chain-data computation was wrong.
+      </p>
+      <p>
+        The intended security model is optimistic rather than fully per-snapshot economically secured on-chain. Public
+        artifacts, challenge windows, governance arbitration, and the globally bonded frontend-operator set are meant to
+        make incorrect payout roots observable and punishable through frontend slashing, reputation loss, and future-fee
+        loss.
       </p>
 
       <h2 id="round-settings-bounds">Round Settings Bounds</h2>

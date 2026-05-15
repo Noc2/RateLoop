@@ -72,7 +72,7 @@ const SmartContracts: NextPage = () => {
               <td className="font-mono text-primary">ClusterPayoutOracle</td>
               <td>
                 Governance-managed optimistic correlation epoch and round payout snapshots proposed by bonded frontend
-                operators for USDC and launch LREP claims
+                operators for USDC and launch LREP claims, with USDC challenge bonds
               </td>
               <td>No</td>
             </tr>
@@ -460,9 +460,11 @@ const SmartContracts: NextPage = () => {
           <code>QuestionRewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId, payoutWeight, proof)</code> &mdash;
           Claim the USDC-backed bounty for a revealed voter after the round has a finalized correlation payout snapshot.
           Snapshot roots are proposed through <code>ClusterPayoutOracle</code> by registered frontend operators bonded
-          with 1,000 LREP, then finalized after the challenge window. New bounties default to a 3% frontend-operator
-          share, attributed from the vote commit; unpayable frontend shares remain with the voter claim. Bounty
-          eligibility and correlation caps only gate this payout path, not who can answer, reveal, or affect the result.
+          with 1,000 LREP, then finalized after the challenge window. Bad roots can be challenged with the configured
+          USDC ERC20 bond, which defaults to 5 USDC (5_000_000 atomic units). New bounties default to a 3%
+          frontend-operator share, attributed from the vote commit; unpayable frontend shares remain with the voter
+          claim. Bounty eligibility and correlation caps only gate this payout path, not who can answer, reveal, or
+          affect the result.
         </li>
         <li>
           <code>QuestionRewardPoolEscrow.claimQuestionBundleReward(bundleId, roundSetIndex)</code> &mdash; Claim a
@@ -556,7 +558,10 @@ const SmartContracts: NextPage = () => {
       <h2>FrontendRegistry</h2>
       <p>
         Manages frontend operator registration and fee distribution. Frontend operators stake a fixed 1,000 LREP and
-        receive {protocolDocFacts.frontendShareLabel} for each settled two-sided round they facilitated votes in.
+        receive {protocolDocFacts.frontendShareLabel} for each settled two-sided round they facilitated votes in. This
+        global operator bond also backs optimistic payout-root proposals; the oracle design relies on public artifacts,
+        challenge windows, governance arbitration, and possible slashing or future-income loss rather than fully
+        collateralizing each snapshot on-chain.
       </p>
       <h3>Key Functions</h3>
       <ul>
@@ -728,10 +733,11 @@ const SmartContracts: NextPage = () => {
           revealed ratings, verified-human anchored rounds, cross-round anchor diversity, bounded anchor fanout,
           round-level unverified-credit caps, aged anchor credentials, and finalized correlation payout snapshots before
           payout. Those roots are proposed by registered frontend operators and remain challengeable before claim paths
-          use them. Open raters can receive a governed partial earned-rater cap and unlock the full snapshotted cap by
-          later verifying the same wallet as a human, but verified humans still pass through the correlation scorer.
-          Per-identity stake caps, question-first submission guardrails, and claim gating apply around the reward
-          surfaces. Question submission is the same for humans, bots, and delegated agents.
+          use them; challengers post a USDC bond rather than native ETH. Open raters can receive a governed partial
+          earned-rater cap and unlock the full snapshotted cap by later verifying the same wallet as a human, but
+          verified humans still pass through the correlation scorer. Per-identity stake caps, question-first submission
+          guardrails, and claim gating apply around the reward surfaces. Question submission is the same for humans,
+          bots, and delegated agents.
         </li>
         <li>
           <strong>Governance Lock:</strong> Tokens are transfer-locked for 7 days when proposing or voting on
