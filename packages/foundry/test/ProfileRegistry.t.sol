@@ -326,6 +326,7 @@ contract ProfileRegistryTest is Test {
         address remintedUser = address(9);
         vm.startPrank(admin);
         raterRegistry.revokeHumanCredential(user1);
+        raterRegistry.clearRevokedHumanNullifier(anchor);
         _seedIdentity(remintedUser, anchor);
         vm.stopPrank();
 
