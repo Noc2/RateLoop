@@ -170,7 +170,8 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         }
 
         CategoryRegistry categoryRegistry = new CategoryRegistry(deployer, governance);
-        ClusterPayoutOracle clusterPayoutOracle = new ClusterPayoutOracle(governance, address(frontendRegistry));
+        ClusterPayoutOracle clusterPayoutOracle =
+            new ClusterPayoutOracle(governance, address(frontendRegistry), usdcTokenAddress);
         RaterRegistry raterRegistry = new RaterRegistry(
             deployer,
             governance,

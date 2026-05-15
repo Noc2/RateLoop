@@ -2,6 +2,8 @@
 pragma solidity ^0.8.24;
 
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {MerkleProof} from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import {IClusterPayoutOracle} from "./interfaces/IClusterPayoutOracle.sol";
@@ -10,8 +12,12 @@ import {IFrontendRegistry} from "./interfaces/IFrontendRegistry.sol";
 /// @title ClusterPayoutOracle
 /// @notice Optimistic oracle for correlation epoch snapshots and per-round payout weights.
 /// @dev Fully bonded frontend operators can propose deterministic scorer outputs. Finalized roots gate
-///      USDC/LREP payouts, but they do not affect voting settlement or the public rating result.
+///      USDC/LREP payouts, but they do not affect voting settlement or the public rating result. The oracle is
+///      intentionally not a fully per-snapshot economically secured oracle: proposers are accountable through the
+///      FrontendRegistry's global LREP bond, public artifacts, challenge windows, governance arbitration, slashing,
+///      reputation, and future fee loss. Challenge bonds are a USDC anti-spam mechanism.
 contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
+    using SafeERC20 for IERC20;
     using SafeCast for uint256;
 
     bytes32 public constant CONFIG_ROLE = keccak256("CONFIG_ROLE");
@@ -26,7 +32,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
     uint8 public constant PAYOUT_DOMAIN_LAUNCH_CREDIT = 2;
     uint64 public constant DEFAULT_CHALLENGE_WINDOW = 12 hours;
     uint64 public constant MAX_CHALLENGE_WINDOW = 3 days;
-    uint256 public constant DEFAULT_CHALLENGE_BOND = 0.01 ether;
+    uint256 public constant DEFAULT_CHALLENGE_BOND = 5e6;
 
     error InvalidAddress();
     error InvalidBond();
@@ -38,7 +44,6 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
     error SnapshotChallenged();
     error SnapshotFinalized();
     error InvalidProof();
-    error TransferFailed();
 
     struct CorrelationEpochSnapshot {
         uint64 epochId;
@@ -69,6 +74,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
     uint64 public challengeWindow;
     uint256 public challengeBond;
     address public bondRecipient;
+    IERC20 public immutable challengeBondToken;
     IFrontendRegistry public frontendRegistry;
 
     mapping(uint256 => CorrelationEpochSnapshot) private correlationEpochSnapshots;
@@ -123,8 +129,9 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
     );
     event RoundPayoutSnapshotRejected(bytes32 indexed snapshotKey, address indexed arbiter, bytes32 reasonHash);
 
-    constructor(address admin, address newFrontendRegistry) {
-        if (admin == address(0)) revert InvalidAddress();
+    constructor(address admin, address newFrontendRegistry, address newChallengeBondToken) {
+        if (admin == address(0) || newChallengeBondToken == address(0)) revert InvalidAddress();
+        challengeBondToken = IERC20(newChallengeBondToken);
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
         _grantRole(CONFIG_ROLE, admin);
         _grantRole(ARBITER_ROLE, admin);
@@ -135,7 +142,9 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
         emit OracleConfigUpdated(DEFAULT_CHALLENGE_WINDOW, DEFAULT_CHALLENGE_BOND, admin);
     }
 
-    receive() external payable {}
+    receive() external payable {
+        revert InvalidBond();
+    }
 
     function setOracleConfig(uint64 newChallengeWindow, uint256 newChallengeBond, address newBondRecipient)
         external
@@ -194,16 +203,18 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
     }
 
     function challengeCorrelationEpoch(uint64 epochId, bytes32 reasonHash) external payable {
+        if (msg.value != 0) revert InvalidBond();
         CorrelationEpochSnapshot storage snapshot = correlationEpochSnapshots[epochId];
         if (snapshot.status == SnapshotStatus.None) revert SnapshotNotFound();
         if (snapshot.status != SnapshotStatus.Proposed) revert SnapshotNotFinalizable();
         if (block.timestamp >= uint256(snapshot.proposedAt) + uint256(challengeWindow)) {
             revert SnapshotNotFinalizable();
         }
-        if (msg.value < challengeBond) revert InvalidBond();
+        uint256 bond = challengeBond;
+        if (bond > 0) challengeBondToken.safeTransferFrom(msg.sender, address(this), bond);
         snapshot.status = SnapshotStatus.Challenged;
         snapshot.challenger = msg.sender;
-        snapshot.bond += msg.value;
+        snapshot.bond += bond;
         emit CorrelationEpochChallenged(epochId, msg.sender, reasonHash);
     }
 
@@ -305,16 +316,18 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
     }
 
     function challengeRoundPayoutSnapshot(bytes32 snapshotKey, bytes32 reasonHash) external payable {
+        if (msg.value != 0) revert InvalidBond();
         RoundPayoutProposal storage proposal = roundPayoutProposals[snapshotKey];
         if (proposal.snapshot.status == SnapshotStatus.None) revert SnapshotNotFound();
         if (proposal.snapshot.status != SnapshotStatus.Proposed) revert SnapshotNotFinalizable();
         if (block.timestamp >= uint256(proposal.proposedAt) + uint256(challengeWindow)) {
             revert SnapshotNotFinalizable();
         }
-        if (msg.value < challengeBond) revert InvalidBond();
+        uint256 bond = challengeBond;
+        if (bond > 0) challengeBondToken.safeTransferFrom(msg.sender, address(this), bond);
         proposal.snapshot.status = SnapshotStatus.Challenged;
         proposal.challenger = msg.sender;
-        proposal.bond += msg.value;
+        proposal.bond += bond;
         emit RoundPayoutSnapshotChallenged(snapshotKey, msg.sender, reasonHash);
     }
 
@@ -377,20 +390,15 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
     }
 
     function withdrawBondCredit() external returns (uint256 amount) {
-        return withdrawBondCreditTo(payable(msg.sender));
+        return withdrawBondCreditTo(msg.sender);
     }
 
-    function withdrawBondCreditTo(address payable recipient) public returns (uint256 amount) {
+    function withdrawBondCreditTo(address recipient) public returns (uint256 amount) {
         if (recipient == address(0)) revert InvalidAddress();
         amount = pendingBondWithdrawals[msg.sender];
         if (amount == 0) revert InvalidBond();
         pendingBondWithdrawals[msg.sender] = 0;
-
-        (bool ok,) = recipient.call{value: amount}("");
-        if (!ok) {
-            pendingBondWithdrawals[msg.sender] = amount;
-            revert TransferFailed();
-        }
+        challengeBondToken.safeTransfer(recipient, amount);
         emit BondWithdrawn(msg.sender, recipient, amount);
     }
 

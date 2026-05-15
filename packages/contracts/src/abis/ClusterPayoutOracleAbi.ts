@@ -11,6 +11,11 @@ export const ClusterPayoutOracleAbi = [
         "name": "newFrontendRegistry",
         "type": "address",
         "internalType": "address"
+      },
+      {
+        "name": "newChallengeBondToken",
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "stateMutability": "nonpayable"
@@ -197,6 +202,19 @@ export const ClusterPayoutOracleAbi = [
         "name": "",
         "type": "uint256",
         "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "challengeBondToken",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract IERC20"
       }
     ],
     "stateMutability": "view"
@@ -1205,7 +1223,7 @@ export const ClusterPayoutOracleAbi = [
       {
         "name": "recipient",
         "type": "address",
-        "internalType": "address payable"
+        "internalType": "address"
       }
     ],
     "outputs": [
@@ -1802,6 +1820,17 @@ export const ClusterPayoutOracleAbi = [
   },
   {
     "type": "error",
+    "name": "SafeERC20FailedOperation",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "SnapshotChallenged",
     "inputs": []
   },
@@ -1823,11 +1852,6 @@ export const ClusterPayoutOracleAbi = [
   {
     "type": "error",
     "name": "SnapshotNotFound",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "TransferFailed",
     "inputs": []
   }
 ] as const;

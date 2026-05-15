@@ -3270,8 +3270,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
     function _enableClusterPayoutOracle() internal returns (ClusterPayoutOracle oracle) {
         oracle = _newEligibleClusterPayoutOracle();
-        oracle.setOracleConfig(1 hours, 0.01 ether, address(this));
-        vm.deal(address(this), 10 ether);
+        oracle.setOracleConfig(1 hours, 5e6, address(this));
         vm.prank(owner);
         protocolConfig.setClusterPayoutOracle(address(oracle));
     }
@@ -3279,7 +3278,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     function _newEligibleClusterPayoutOracle() internal returns (ClusterPayoutOracle oracle) {
         MockQuestionRewardOracleFrontendRegistry oracleFrontendRegistry = new MockQuestionRewardOracleFrontendRegistry();
         oracleFrontendRegistry.setEligible(address(this), true);
-        oracle = new ClusterPayoutOracle(address(this), address(oracleFrontendRegistry));
+        oracle = new ClusterPayoutOracle(address(this), address(oracleFrontendRegistry), address(usdc));
     }
 
     function _finalizeClusterPayoutSnapshot(

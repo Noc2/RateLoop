@@ -242,7 +242,7 @@ contract LaunchDistributionPoolTest is Test {
     function test_CorrelationOracleDelaysAndFractionalizesLaunchCredit() public {
         MockLaunchOracleFrontendRegistry frontendRegistry = new MockLaunchOracleFrontendRegistry();
         frontendRegistry.setEligible(address(this), true);
-        ClusterPayoutOracle oracle = new ClusterPayoutOracle(address(this), address(frontendRegistry));
+        ClusterPayoutOracle oracle = new ClusterPayoutOracle(address(this), address(frontendRegistry), address(lrep));
         oracle.setOracleConfig(1, 0, address(this));
         pool.setClusterPayoutOracle(address(oracle));
 
@@ -1032,7 +1032,7 @@ contract LaunchDistributionPoolTest is Test {
     function _configureLaunchOracle(uint64 toRoundId) internal returns (ClusterPayoutOracle oracle) {
         MockLaunchOracleFrontendRegistry frontendRegistry = new MockLaunchOracleFrontendRegistry();
         frontendRegistry.setEligible(address(this), true);
-        oracle = new ClusterPayoutOracle(address(this), address(frontendRegistry));
+        oracle = new ClusterPayoutOracle(address(this), address(frontendRegistry), address(lrep));
         oracle.setOracleConfig(1, 0, address(this));
         pool.setClusterPayoutOracle(address(oracle));
 
@@ -1099,8 +1099,7 @@ contract LaunchDistributionPoolTest is Test {
         vm.warp(100 + roundId * 2);
         oracle.finalizeRoundPayoutSnapshot(snapshotKey);
 
-        paidAmount =
-            pool.finalizeEarnedRaterRewardCredit(1, roundId, _commitKey(roundId), payout, new bytes32[](0));
+        paidAmount = pool.finalizeEarnedRaterRewardCredit(1, roundId, _commitKey(roundId), payout, new bytes32[](0));
     }
 
     function _verify(address account, bytes32 nullifier) internal {

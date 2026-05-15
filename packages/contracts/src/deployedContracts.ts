@@ -18840,6 +18840,11 @@ const deployedContracts: GenericContractsDeclaration = {
               type: "address",
               internalType: "address",
             },
+            {
+              name: "newChallengeBondToken",
+              type: "address",
+              internalType: "address",
+            },
           ],
           stateMutability: "nonpayable",
         },
@@ -19025,6 +19030,19 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "uint256",
               internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "challengeBondToken",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "contract IERC20",
             },
           ],
           stateMutability: "view",
@@ -20036,7 +20054,7 @@ const deployedContracts: GenericContractsDeclaration = {
             {
               name: "recipient",
               type: "address",
-              internalType: "address payable",
+              internalType: "address",
             },
           ],
           outputs: [
@@ -20633,6 +20651,17 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "error",
+          name: "SafeERC20FailedOperation",
+          inputs: [
+            {
+              name: "token",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+        },
+        {
+          type: "error",
           name: "SnapshotChallenged",
           inputs: [],
         },
@@ -20654,11 +20683,6 @@ const deployedContracts: GenericContractsDeclaration = {
         {
           type: "error",
           name: "SnapshotNotFound",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "TransferFailed",
           inputs: [],
         },
       ],
