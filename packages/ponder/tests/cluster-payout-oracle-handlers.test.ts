@@ -138,4 +138,91 @@ describe("ClusterPayoutOracle ponder handlers", () => {
       }),
     });
   });
+
+  it("updates correlation epoch lifecycle state", async () => {
+    const registeredHandlers = await loadHandlers();
+    const challenger = "0x00000000000000000000000000000000000000c1";
+
+    const cases = [
+      {
+        handler: "ClusterPayoutOracle:CorrelationEpochChallenged",
+        args: { epochId: 1n, challenger },
+        blockTimestamp: 1_900n,
+        expected: { challenger, status: 2, updatedAt: 1_900n },
+      },
+      {
+        handler: "ClusterPayoutOracle:CorrelationEpochFinalized",
+        args: { epochId: 1n },
+        blockTimestamp: 2_000n,
+        expected: { status: 3, finalizedAt: 2_000n, updatedAt: 2_000n },
+      },
+      {
+        handler: "ClusterPayoutOracle:CorrelationEpochRejected",
+        args: { epochId: 1n },
+        blockTimestamp: 2_100n,
+        expected: { status: 4, updatedAt: 2_100n },
+      },
+    ];
+
+    for (const testCase of cases) {
+      const { db, updates } = createDb();
+      await registeredHandlers.get(testCase.handler)!({
+        event: {
+          args: testCase.args,
+          block: { number: 12n, timestamp: testCase.blockTimestamp },
+        },
+        context: { db },
+      });
+
+      expect(updates).toContainEqual({
+        table: "correlationEpochSnapshot",
+        key: { id: 1n },
+        values: testCase.expected,
+      });
+    }
+  });
+
+  it("updates round payout snapshot lifecycle state", async () => {
+    const registeredHandlers = await loadHandlers();
+    const snapshotKey = `0x${"b".repeat(64)}`;
+    const challenger = "0x00000000000000000000000000000000000000c2";
+
+    const cases = [
+      {
+        handler: "ClusterPayoutOracle:RoundPayoutSnapshotChallenged",
+        args: { snapshotKey, challenger },
+        blockTimestamp: 2_200n,
+        expected: { challenger, status: 2, updatedAt: 2_200n },
+      },
+      {
+        handler: "ClusterPayoutOracle:RoundPayoutSnapshotFinalized",
+        args: { snapshotKey },
+        blockTimestamp: 2_300n,
+        expected: { status: 3, finalizedAt: 2_300n, updatedAt: 2_300n },
+      },
+      {
+        handler: "ClusterPayoutOracle:RoundPayoutSnapshotRejected",
+        args: { snapshotKey },
+        blockTimestamp: 2_400n,
+        expected: { status: 4, updatedAt: 2_400n },
+      },
+    ];
+
+    for (const testCase of cases) {
+      const { db, updates } = createDb();
+      await registeredHandlers.get(testCase.handler)!({
+        event: {
+          args: testCase.args,
+          block: { number: 13n, timestamp: testCase.blockTimestamp },
+        },
+        context: { db },
+      });
+
+      expect(updates).toContainEqual({
+        table: "roundPayoutSnapshot",
+        key: { id: snapshotKey },
+        values: testCase.expected,
+      });
+    }
+  });
 });
