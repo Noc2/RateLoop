@@ -858,7 +858,7 @@ export const ClusterPayoutOracleAbi = [
   },
   {
     "type": "function",
-    "name": "rejectRoundPayoutSnapshot",
+    "name": "rejectFinalizedRoundPayoutSnapshot",
     "inputs": [
       {
         "name": "snapshotKey",
@@ -876,17 +876,12 @@ export const ClusterPayoutOracleAbi = [
   },
   {
     "type": "function",
-    "name": "rejectFinalizedRoundPayoutSnapshot",
+    "name": "rejectRoundPayoutSnapshot",
     "inputs": [
       {
         "name": "snapshotKey",
         "type": "bytes32",
         "internalType": "bytes32"
-      },
-      {
-        "name": "consumer",
-        "type": "address",
-        "internalType": "address"
       },
       {
         "name": "reasonHash",
@@ -1027,6 +1022,11 @@ export const ClusterPayoutOracleAbi = [
             "internalType": "uint64"
           },
           {
+            "name": "consumer",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
             "name": "proposer",
             "type": "address",
             "internalType": "address"
@@ -1052,6 +1052,25 @@ export const ClusterPayoutOracleAbi = [
             "internalType": "uint256"
           }
         ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "roundPayoutSnapshotConsumer",
+    "inputs": [
+      {
+        "name": "",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "stateMutability": "view"
@@ -1119,6 +1138,24 @@ export const ClusterPayoutOracleAbi = [
       },
       {
         "name": "newBondRecipient",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setRoundPayoutSnapshotConsumer",
+    "inputs": [
+      {
+        "name": "domain",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "consumer",
         "type": "address",
         "internalType": "address"
       }
@@ -1616,6 +1653,25 @@ export const ClusterPayoutOracleAbi = [
         "type": "bytes32",
         "indexed": false,
         "internalType": "bytes32"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "RoundPayoutSnapshotConsumerUpdated",
+    "inputs": [
+      {
+        "name": "domain",
+        "type": "uint8",
+        "indexed": true,
+        "internalType": "uint8"
+      },
+      {
+        "name": "consumer",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
       }
     ],
     "anonymous": false

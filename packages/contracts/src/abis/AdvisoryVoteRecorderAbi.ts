@@ -656,6 +656,11 @@ export const AdvisoryVoteRecorderAbi = [
   },
   {
     "type": "error",
+    "name": "AdvisoryRevealedAfterRealVote",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "AdvisoryRevealedAfterSettlement",
     "inputs": []
   },

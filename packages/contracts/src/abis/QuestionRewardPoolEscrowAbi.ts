@@ -1042,40 +1042,6 @@ export const QuestionRewardPoolEscrowAbi = [
   },
   {
     "type": "function",
-    "name": "isRoundPayoutSnapshotConsumed",
-    "inputs": [
-      {
-        "name": "domain",
-        "type": "uint8",
-        "internalType": "uint8"
-      },
-      {
-        "name": "rewardPoolId",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "contentId",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "roundId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bool",
-        "internalType": "bool"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "grantRole",
     "inputs": [
       {
@@ -1153,6 +1119,40 @@ export const QuestionRewardPoolEscrowAbi = [
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "isRoundPayoutSnapshotConsumed",
+    "inputs": [
+      {
+        "name": "domain",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "rewardPoolId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "contentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "roundId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "function",

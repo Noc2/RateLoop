@@ -891,7 +891,7 @@ const deployedContracts: GenericContractsDeclaration = {
       deployedOnBlock: 9,
     },
     QuestionRewardPoolEscrowQualificationLib: {
-      address: "0x23e7c5a9be09e6737a3af668447b5dad47e0e91c",
+      address: "0x31c70032f279535693befb387da9aaf5b11a6a7c",
       abi: [
         {
           type: "function",
@@ -1314,7 +1314,7 @@ const deployedContracts: GenericContractsDeclaration = {
       deployedOnBlock: 11,
     },
     QuestionRewardPoolEscrowClaimLib: {
-      address: "0x90b8c52662387a29f9fbbeaa5f29f92ad77f1730",
+      address: "0x6f47bee87e4991f7570b50c3871cb55f5a7eeaba",
       abi: [
         {
           type: "function",
@@ -1577,7 +1577,7 @@ const deployedContracts: GenericContractsDeclaration = {
       deployedOnBlock: 12,
     },
     QuestionRewardPoolEscrowBundleLib: {
-      address: "0x3fb1b2de7a12e3f69a16429f3df567410f848cde",
+      address: "0xc502e22965543e9c3d89e76f7b341374624db291",
       abi: [
         {
           type: "function",
@@ -1612,7 +1612,7 @@ const deployedContracts: GenericContractsDeclaration = {
       deployedOnBlock: 13,
     },
     QuestionRewardPoolEscrowBundleActionsLib: {
-      address: "0x25cf32afa0fdbc909c2881c2f68c408a32a1b5ca",
+      address: "0xf29af25507450cdfd621f4221c7c503edf619feb",
       abi: [
         {
           type: "event",
@@ -12666,6 +12666,19 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "advisoryVoteRecorder",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "categoryRegistry",
           inputs: [],
           outputs: [
@@ -13399,6 +13412,19 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "setAdvisoryVoteRecorder",
+          inputs: [
+            {
+              name: "value",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "setCategoryRegistry",
           inputs: [
             {
@@ -13847,6 +13873,19 @@ const deployedContracts: GenericContractsDeclaration = {
             },
           ],
           stateMutability: "view",
+        },
+        {
+          type: "event",
+          name: "AdvisoryVoteRecorderUpdated",
+          inputs: [
+            {
+              name: "advisoryVoteRecorder",
+              type: "address",
+              indexed: false,
+              internalType: "address",
+            },
+          ],
+          anonymous: false,
         },
         {
           type: "event",
@@ -15424,40 +15463,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "isRoundPayoutSnapshotConsumed",
-          inputs: [
-            {
-              name: "domain",
-              type: "uint8",
-              internalType: "uint8",
-            },
-            {
-              name: "rewardPoolId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "contentId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "roundId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bool",
-              internalType: "bool",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
           name: "grantRole",
           inputs: [
             {
@@ -15535,6 +15540,40 @@ const deployedContracts: GenericContractsDeclaration = {
           ],
           outputs: [],
           stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "isRoundPayoutSnapshotConsumed",
+          inputs: [
+            {
+              name: "domain",
+              type: "uint8",
+              internalType: "uint8",
+            },
+            {
+              name: "rewardPoolId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
         },
         {
           type: "function",
@@ -16690,6 +16729,8 @@ const deployedContracts: GenericContractsDeclaration = {
           "lib/openzeppelin-contracts-upgradeable/contracts/access/AccessControlUpgradeable.sol",
         paused:
           "lib/openzeppelin-contracts-upgradeable/contracts/utils/PausableUpgradeable.sol",
+        isRoundPayoutSnapshotConsumed:
+          "contracts/interfaces/IRoundPayoutSnapshotConsumer.sol",
       },
       deployedOnBlock: 45,
     },
@@ -19751,7 +19792,7 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "rejectRoundPayoutSnapshot",
+          name: "rejectFinalizedRoundPayoutSnapshot",
           inputs: [
             {
               name: "snapshotKey",
@@ -19769,17 +19810,12 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "rejectFinalizedRoundPayoutSnapshot",
+          name: "rejectRoundPayoutSnapshot",
           inputs: [
             {
               name: "snapshotKey",
               type: "bytes32",
               internalType: "bytes32",
-            },
-            {
-              name: "consumer",
-              type: "address",
-              internalType: "address",
             },
             {
               name: "reasonHash",
@@ -19921,6 +19957,11 @@ const deployedContracts: GenericContractsDeclaration = {
                   internalType: "uint64",
                 },
                 {
+                  name: "consumer",
+                  type: "address",
+                  internalType: "address",
+                },
+                {
                   name: "proposer",
                   type: "address",
                   internalType: "address",
@@ -19946,6 +19987,25 @@ const deployedContracts: GenericContractsDeclaration = {
                   internalType: "uint256",
                 },
               ],
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "roundPayoutSnapshotConsumer",
+          inputs: [
+            {
+              name: "",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
             },
           ],
           stateMutability: "view",
@@ -20013,6 +20073,24 @@ const deployedContracts: GenericContractsDeclaration = {
             },
             {
               name: "newBondRecipient",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "setRoundPayoutSnapshotConsumer",
+          inputs: [
+            {
+              name: "domain",
+              type: "uint8",
+              internalType: "uint8",
+            },
+            {
+              name: "consumer",
               type: "address",
               internalType: "address",
             },
@@ -20510,6 +20588,25 @@ const deployedContracts: GenericContractsDeclaration = {
               type: "bytes32",
               indexed: false,
               internalType: "bytes32",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "RoundPayoutSnapshotConsumerUpdated",
+          inputs: [
+            {
+              name: "domain",
+              type: "uint8",
+              indexed: true,
+              internalType: "uint8",
+            },
+            {
+              name: "consumer",
+              type: "address",
+              indexed: true,
+              internalType: "address",
             },
           ],
           anonymous: false,
@@ -23747,6 +23844,40 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "isRoundPayoutSnapshotConsumed",
+          inputs: [
+            {
+              name: "domain",
+              type: "uint8",
+              internalType: "uint8",
+            },
+            {
+              name: "rewardPoolId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "launchAnchorCredentialAgeSeconds",
           inputs: [],
           outputs: [
@@ -23773,6 +23904,30 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "address",
               internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "launchPayoutSnapshotConsumed",
+          inputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
             },
           ],
           stateMutability: "view",
@@ -25579,6 +25734,8 @@ const deployedContracts: GenericContractsDeclaration = {
           "contracts/interfaces/ILaunchDistributionPool.sol",
         recordEarnedRaterReward:
           "contracts/interfaces/ILaunchDistributionPool.sol",
+        isRoundPayoutSnapshotConsumed:
+          "contracts/interfaces/IRoundPayoutSnapshotConsumer.sol",
         owner: "lib/openzeppelin-contracts/contracts/access/Ownable.sol",
         renounceOwnership:
           "lib/openzeppelin-contracts/contracts/access/Ownable.sol",
@@ -26244,6 +26401,11 @@ const deployedContracts: GenericContractsDeclaration = {
             },
           ],
           anonymous: false,
+        },
+        {
+          type: "error",
+          name: "AdvisoryRevealedAfterRealVote",
+          inputs: [],
         },
         {
           type: "error",

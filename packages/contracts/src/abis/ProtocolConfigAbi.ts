@@ -97,6 +97,19 @@ export const ProtocolConfigAbi = [
   },
   {
     "type": "function",
+    "name": "advisoryVoteRecorder",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "categoryRegistry",
     "inputs": [],
     "outputs": [
@@ -830,6 +843,19 @@ export const ProtocolConfigAbi = [
   },
   {
     "type": "function",
+    "name": "setAdvisoryVoteRecorder",
+    "inputs": [
+      {
+        "name": "value",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "setCategoryRegistry",
     "inputs": [
       {
@@ -1278,6 +1304,19 @@ export const ProtocolConfigAbi = [
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "event",
+    "name": "AdvisoryVoteRecorderUpdated",
+    "inputs": [
+      {
+        "name": "advisoryVoteRecorder",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
   },
   {
     "type": "event",
