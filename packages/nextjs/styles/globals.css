@@ -631,7 +631,7 @@ body {
 }
 
 .vote-btn.vote-feedback .vote-symbol {
-  color: var(--curyo-warm-white);
+  color: var(--curyo-action-content);
 }
 
 .vote-btn.vote-light .vote-symbol {
