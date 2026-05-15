@@ -243,7 +243,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         salt = keccak256(abi.encodePacked(voter, isUp, predictedUpBps, block.timestamp));
         uint256 roundId = engine.previewCommitRoundId(contentId);
         uint16 referenceRatingBps = engine.previewCommitReferenceRatingBps(contentId);
-        uint64 targetRound = _tlockCommitTargetRound();
+        uint64 targetRound = _tlockCommitTargetRound(engine, contentId);
         bytes32 drandChainHash = _tlockDrandChainHash();
         bytes memory ciphertext = _testCiphertext(isUp, salt, contentId, targetRound, drandChainHash);
         bytes32 commitHash = TlockVoteLib.buildExpectedRbtsCommitHash(
@@ -324,7 +324,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         internal
         returns (bytes32 advisoryCommitKey, bytes32 salt)
     {
-        return _recordAdvisoryWithTargetRound(voter, contentId, saltTag, _tlockCommitTargetRound());
+        return _recordAdvisoryWithTargetRound(voter, contentId, saltTag, _tlockCommitTargetRound(engine, contentId));
     }
 
     function _recordAdvisoryWithTargetRound(address voter, uint256 contentId, string memory saltTag, uint64 targetRound)

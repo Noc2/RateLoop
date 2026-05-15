@@ -126,24 +126,18 @@ contract FormalVerification_RoundLifecycleTest is VotingTestBase {
         returns (bytes32 commitKey, bytes32 salt)
     {
         salt = keccak256(abi.encodePacked(voter, block.timestamp, cid));
-        bytes memory ciphertext = _testCiphertext(up, salt, cid);
         uint16 referenceRatingBps = _currentRatingReferenceBps(cid);
-        bytes32 commitHash = _commitHash(
-            up, salt, voter, cid, referenceRatingBps, _tlockCommitTargetRound(), _tlockDrandChainHash(), ciphertext
-        );
+        uint64 targetRound = _tlockCommitTargetRound(engine, cid);
+        bytes32 drandChainHash = _tlockDrandChainHash();
+        bytes memory ciphertext = _testCiphertext(up, salt, cid, targetRound, drandChainHash);
+        bytes32 commitHash =
+            _commitHash(up, salt, voter, cid, referenceRatingBps, targetRound, drandChainHash, ciphertext);
         vm.prank(voter);
         hrepToken.approve(address(engine), stake);
         uint256 cachedRoundContext1 = _roundContext(engine.previewCommitRoundId(cid), referenceRatingBps);
         vm.prank(voter);
         engine.commitVote(
-            cid,
-            cachedRoundContext1,
-            _tlockCommitTargetRound(),
-            _tlockDrandChainHash(),
-            commitHash,
-            ciphertext,
-            stake,
-            address(0)
+            cid, cachedRoundContext1, targetRound, drandChainHash, commitHash, ciphertext, stake, address(0)
         );
         commitKey = keccak256(abi.encodePacked(voter, commitHash));
     }
