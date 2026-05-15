@@ -8,6 +8,7 @@ let route: RouteModule;
 const originalConsoleError = console.error;
 const originalConsoleInfo = console.info;
 const originalConsoleWarn = console.warn;
+const allowanceSummary = {} as never;
 
 function makeRequest(body: string | Record<string, unknown>, secret = "server-secret") {
   return new NextRequest("https://curyo.xyz/api/thirdweb/verify-transaction", {
@@ -31,7 +32,7 @@ beforeEach(() => {
   route.__setThirdwebVerifierRouteTestOverridesForTests({
     getThirdwebClientId: () => "client-1",
     getThirdwebServerVerifierSecret: () => "server-secret",
-    evaluateFreeTransactionAllowance: async () => ({ isAllowed: true }),
+    evaluateFreeTransactionAllowance: async () => ({ isAllowed: true, summary: allowanceSummary }),
   });
 });
 
@@ -63,7 +64,7 @@ test("thirdweb verifier route denies requests with a bad verifier secret", async
     getThirdwebServerVerifierSecret: () => "server-secret",
     evaluateFreeTransactionAllowance: async () => {
       evaluated = true;
-      return { isAllowed: true };
+      return { isAllowed: true, summary: allowanceSummary };
     },
   });
 
@@ -80,7 +81,7 @@ test("thirdweb verifier route denies client id mismatches before evaluating allo
     getThirdwebServerVerifierSecret: () => "server-secret",
     evaluateFreeTransactionAllowance: async () => {
       evaluated = true;
-      return { isAllowed: true };
+      return { isAllowed: true, summary: allowanceSummary };
     },
   });
 
@@ -103,12 +104,12 @@ test("thirdweb verifier route delegates valid requests and maps allowance decisi
     evaluateFreeTransactionAllowance: async requestBody => {
       evaluatedBodies.push(requestBody);
       return allowed
-        ? { isAllowed: true }
+        ? { isAllowed: true, summary: allowanceSummary }
         : {
             isAllowed: false,
             reason: "Quota exceeded.",
             debugCode: "quota_exceeded",
-            summary: {},
+            summary: allowanceSummary,
           };
     },
   });

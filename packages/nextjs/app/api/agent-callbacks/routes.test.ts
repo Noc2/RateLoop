@@ -10,6 +10,18 @@ let sweepRoute: SweepRouteModule;
 
 const env = process.env as Record<string, string | undefined>;
 const originalSecret = env.CURYO_AGENT_CALLBACK_DELIVERY_SECRET;
+const routeWorkerId = "00000000-0000-4000-8000-000000000000";
+const deliveryResult = { dead: 0, delivered: 1, leased: 0, released: 0, retrying: 0 };
+const sweepResult = {
+  emitted: {
+    bountyLowResponse: 0,
+    feedbackUnlocked: 0,
+    questionOpen: 0,
+    questionSettled: 0,
+    questionSettling: 0,
+  },
+  scanned: 1,
+};
 
 function makeRequest(path: string, headers: Record<string, string> = {}) {
   return new NextRequest(`https://curyo.xyz${path}`, {
@@ -26,11 +38,11 @@ before(async () => {
 beforeEach(() => {
   env.CURYO_AGENT_CALLBACK_DELIVERY_SECRET = "callback-secret";
   deliverRoute.__setAgentCallbackDeliverRouteTestOverridesForTests({
-    randomUUID: () => "test-worker",
-    processDueAgentCallbackDeliveries: async () => ({ delivered: 1, failed: 0 }),
+    randomUUID: () => routeWorkerId,
+    processDueAgentCallbackDeliveries: async () => deliveryResult,
   });
   sweepRoute.__setAgentCallbackSweepRouteTestOverridesForTests({
-    sweepAgentLifecycleCallbacks: async () => ({ swept: 1 }),
+    sweepAgentLifecycleCallbacks: async () => sweepResult,
   });
 });
 
@@ -62,10 +74,10 @@ test("agent callback deliver route rejects unconfigured and unauthorized request
 test("agent callback deliver route accepts bearer auth, clamps limit, and passes a route worker id", async () => {
   const calls: unknown[] = [];
   deliverRoute.__setAgentCallbackDeliverRouteTestOverridesForTests({
-    randomUUID: () => "test-worker",
+    randomUUID: () => routeWorkerId,
     processDueAgentCallbackDeliveries: async input => {
       calls.push(input);
-      return { delivered: 1, failed: 0 };
+      return deliveryResult;
     },
   });
 
@@ -76,8 +88,8 @@ test("agent callback deliver route accepts bearer auth, clamps limit, and passes
   );
 
   assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), { delivered: 1, failed: 0 });
-  assert.deepEqual(calls, [{ limit: 100, workerId: "route:test-worker" }]);
+  assert.deepEqual(await response.json(), deliveryResult);
+  assert.deepEqual(calls, [{ limit: 100, workerId: `route:${routeWorkerId}` }]);
 });
 
 test("agent callback sweep route rejects unconfigured and unauthorized requests", async () => {
@@ -100,7 +112,7 @@ test("agent callback sweep route accepts header auth and defaults invalid limits
   sweepRoute.__setAgentCallbackSweepRouteTestOverridesForTests({
     sweepAgentLifecycleCallbacks: async input => {
       calls.push(input);
-      return { swept: 1 };
+      return sweepResult;
     },
   });
 
@@ -111,6 +123,6 @@ test("agent callback sweep route accepts header auth and defaults invalid limits
   );
 
   assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), { swept: 1 });
+  assert.deepEqual(await response.json(), sweepResult);
   assert.deepEqual(calls, [{ limit: 25 }]);
 });
