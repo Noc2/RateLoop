@@ -196,7 +196,7 @@ yarn test:ts
 # Solidity unit tests
 yarn foundry:test
 
-# E2E smoke suite (Chromium only)
+# E2E default Chromium app suite
 yarn e2e
 
 # E2E lifecycle coverage (settlement, cancellation, dormancy)

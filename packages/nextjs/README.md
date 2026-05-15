@@ -31,7 +31,7 @@ Run these from the monorepo root unless noted otherwise:
 | `yarn workspace @rateloop/nextjs db:studio`        | Open the Drizzle studio UI                                                                 |
 | `yarn workspace @rateloop/nextjs whitepaper`       | Generate the whitepaper PDF                                                                |
 | `yarn workspace @rateloop/nextjs demo:record`      | Record the short Playwright product demo video                                             |
-| `yarn e2e`                                         | Run the Playwright smoke suite (Chromium)                                                  |
+| `yarn e2e`                                         | Run the default Playwright Chromium app suite                                              |
 | `yarn workspace @rateloop/nextjs e2e:ci:lifecycle` | Run lifecycle suites for settlement, cancellation, and dormancy                            |
 | `yarn workspace @rateloop/nextjs e2e:ci:keeper`    | Run keeper-backed settlement coverage                                                      |
 | `yarn workspace @rateloop/nextjs e2e:full`         | Run the full local Playwright suite, including keeper coverage                             |
