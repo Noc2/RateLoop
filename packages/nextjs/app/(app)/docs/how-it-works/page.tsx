@@ -81,80 +81,60 @@ const HowItWorks: NextPage = () => {
       <h2 id="on-chain-settlement">3. Settle Rewards</h2>
       <h3 id="lrep-stake-settlement">LREP stake settlement</h3>
       <p>
-        Revealed staked RBTS reports recover stake and share the LREP rater pool according to robust BTS score. A report
-        can earn through both the binary signal and the accuracy of its population prediction, while low-scoring stake
-        becomes the forfeited pool. Revealed forfeits can reclaim{" "}
-        <strong>{protocolDocFacts.revealedLoserRefundPercentLabel}</strong> of raw forfeited stake. The remaining pool
-        splits <strong>{protocolDocFacts.rewardSplitSummaryLabel}</strong>. Separately, the Launch Distribution Pool can
-        pay starter LREP for useful revealed ratings from rounds with at least one verified human anchor. A rater needs
-        two distinct verified-human anchors across qualifying rounds before earned launch payouts begin. Those launch
-        credits are finalized through correlation-capped payout snapshots, so tightly correlated accounts may need more
-        qualifying rounds before one full LREP credit accrues. AI participation uses the same reward-weight path as
-        everyone else and does not count as a human anchor.
+        Once a round settles, revealed raters can claim from the reward paths they qualified for. Claims are based on
+        what was revealed, how well the RBTS prediction scored, and whether the reward path has any extra eligibility
+        checks.
       </p>
-      <h3 id="eligible-settled-rounds">Eligible settled rounds</h3>
-      <p>
-        An eligible settled round is a round that has resolved, includes your revealed rating, and passes the current
-        launch-reward checks. For zero-LREP ratings, no stake is required, but the round still needs enough revealed
-        raters, a useful RBTS score, at least one mature verified-human anchor, and no pending cleanup. Credits are
-        recorded once per rater per round, then finalized through correlation-capped payout snapshots; dense clusters
-        can receive fractional credit and may need more rounds before a full launch credit accrues.
-      </p>
-      <p>
-        Example: you submit a zero-LREP rating during the blind phase, the keeper reveals it after the phase ends, and
-        the round settles with enough raters. If another settled rater in that round has a mature World ID credential
-        and your prediction score clears the launch threshold, that round can count toward your launch credits. If the
-        round never settles, your report is not revealed, or the round has no verified-human anchor, it does not count
-        yet.
-      </p>
+      <ul>
+        <li>High-scoring staked reports can recover their stake and share the rater allocation.</li>
+        <li>Low-scoring revealed reports can lose stake, with the loser rebate and pool split shown below.</li>
+        <li>Unrevealed reports do not earn from that round and can be cleaned up after the reveal grace period.</li>
+      </ul>
       <div className="not-prose my-6">
         <RewardSplitChart />
       </div>
-      <h3 id="stablecoin-bounties">Stablecoin bounties</h3>
       <p>
-        Bounties are separate from LREP stake settlement. They are scoped to the question or bundle, paid in the funding
-        asset, and can reward eligible revealed raters. Eligibility affects payout qualification only: non-eligible
-        raters can still answer, reveal, affect the open result, and leave feedback. Higher RBTS reward weight earns
-        more, while near misses can still earn a smaller payout for doing the work. For USDC rounds, settlement makes
-        the result readable first and a finalized correlation payout snapshot determines each claimant&apos;s effective
-        weight before funds move. A bundle payout is claimed per round set, so a rater must reveal on every bundled
-        question in that set.
-      </p>
-      <h3>Feedback bonuses</h3>
-      <p>
-        A Feedback Bonus is optional, USDC-only, and focused on making the result more useful to agents. The funder pays
-        to create the pool. The awarder pays gas when awarding a feedback hash. Recipients do not need to claim: the
-        award transaction transfers USDC directly.
-      </p>
-      <p>
-        Awards can only go to revealed raters who are not the funder or submitter identity. Any unawarded remainder
-        after the deadline goes to treasury.
+        Example: if the rater allocation for a settled round is 12 LREP and two winning reports have effective weights
+        of 3 and 1, they split that allocation as 9 LREP and 3 LREP. If their original stakes were returned, those
+        returned stakes are added to the claim.
       </p>
 
-      <h2 id="content-rating">4. Read the Result</h2>
+      <h3 id="eligible-settled-rounds">Launch LREP credits</h3>
+      <ul>
+        <li>Zero-LREP ratings can count toward starter LREP; staking is not required for launch credit.</li>
+        <li>
+          The round must settle, include your revealed rating, have enough revealed raters, and pass the current
+          launch-reward checks.
+        </li>
+        <li>Earned launch payouts begin after two distinct verified-human anchors across qualifying rounds.</li>
+        <li>Correlation snapshots can make dense clusters accrue fractional credit, so more rounds may be needed.</li>
+      </ul>
       <p>
-        New content shows <strong>N/A</strong> until at least one round settles. Raters do not vote to raise or lower a
-        visible starting score: they submit an absolute thumbs-up/down signal and a separate forecast of the revealed
-        crowd&apos;s thumbs-up share. Settlement updates the public rating from bounded binary signal evidence, with
-        LREP stake contributing only a capped confidence bonus. The forecast remains separate and is used for robust BTS
-        reward scoring.
+        Example: you make useful zero-LREP ratings in two settled rounds, and each round has a different mature
+        verified-human anchor. Those rounds can unlock earned launch LREP once the payout snapshots finalize. If both
+        ratings come from tightly correlated accounts, they may count fractionally and require more qualifying rounds.
       </p>
+
+      <h3 id="stablecoin-bounties">Bounties</h3>
+      <ul>
+        <li>Bounties are scoped to a question or bundle and paid in the funding asset.</li>
+        <li>Only eligible revealed raters can claim, but eligibility does not affect who can answer.</li>
+        <li>USDC bounty claims wait for a finalized correlation payout snapshot.</li>
+        <li>Bundle claims require revealing on every question in the claimed round set.</li>
+      </ul>
       <p>
-        Example: if Alice votes thumbs up with 10 LREP, Bob votes thumbs up with 3 LREP, and Carol votes thumbs down
-        with 3 LREP, settlement records 3.3 bounded up evidence units versus 1.3 bounded down units. The first public
-        rating appears above neutral, while USDC bounty and launch LREP claims can still wait for the finalized
-        correlation payout snapshot proposed by a registered frontend operator.
+        Example: if a 30 USDC rater allocation is claimable and three eligible raters have effective weights of 2, 1,
+        and 1, they claim 15 USDC, 7.5 USDC, and 7.5 USDC. In a two-question bundle, a rater who revealed on only one
+        question cannot claim that round set.
       </p>
-      <p>
-        Optional feedback stays hidden while the round is active and unlocks after settlement or another terminal round
-        state. Only raters can submit it. That gives agents both a score and useful notes they can store in their own
-        audit trail.
-      </p>
-      <p>
-        Agent result packages expose two scopes: <code>allAnswers</code> for the public open result and{" "}
-        <code>bountyEligibleAnswers</code> for the payout-eligible cohort, including the bounty policy and eligible-only
-        distribution when it is available from the indexer.
-      </p>
+
+      <h3>Feedback bonuses</h3>
+      <ul>
+        <li>Feedback bonuses are optional USDC pools for useful hidden feedback after settlement.</li>
+        <li>The award transaction pays the recipient directly, so there is no separate recipient claim.</li>
+        <li>Awards can only go to revealed raters who are not the funder or submitter identity.</li>
+        <li>Any unawarded remainder after the deadline goes to treasury.</li>
+      </ul>
 
       <h2 id="optional-identity">Optional Identity Signals</h2>
       <p>
