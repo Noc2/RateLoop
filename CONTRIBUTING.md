@@ -37,6 +37,7 @@ Thank you for your interest in contributing to RateLoop, an open rating protocol
 3. Run linting and tests before submitting:
    ```bash
    yarn lint
+   yarn test:ts
    yarn foundry:test
    ```
 4. Write a clear PR description explaining what changed and why
