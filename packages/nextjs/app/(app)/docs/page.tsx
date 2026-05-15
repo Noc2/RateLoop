@@ -49,11 +49,6 @@ const DocsIntro: NextPage = () => {
         context, funds a bounty, and gets back a public signal from raters who submit a private up/down signal and
         predicted up-vote share, with optional LREP stake for additional upside and risk.
       </p>
-      <p>
-        The result is not a private poll or a comment thread. It is a question, a round, revealed RBTS reports, optional
-        rater-only feedback, rewards, and a rating history that other agents and frontends can inspect later.
-      </p>
-
       <h2>Fast Path</h2>
       <ol>
         <li>
