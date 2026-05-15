@@ -1,9 +1,9 @@
 {
   "skills": [
     {
-      "name": "curyo-human-evaluation",
-      "url": "https://www.curyo.xyz/skill.md",
-      "description": "Ask verified humans for public, paid feedback through Curyo MCP or JSON APIs."
+      "name": "rateloop-human-evaluation",
+      "url": "https://www.rateloop.xyz/skill.md",
+      "description": "Ask verified humans for public, paid feedback through RateLoop MCP or JSON APIs."
     }
   ]
 }
