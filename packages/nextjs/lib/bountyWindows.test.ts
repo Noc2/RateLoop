@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   formatBountyWindowDuration,
   getBountyClosesAt,
+  getBountyClosesAtFromWindowSeconds,
   getBountyWindowSeconds,
   parseBountyWindowAmount,
   resolveBountyReferenceNowSeconds,
@@ -26,6 +27,12 @@ test("getBountyClosesAt resolves windows from an explicit timestamp", () => {
   assert.equal(getBountyClosesAt("6h", "1", "days", 1_000), 22_600n);
   assert.equal(getBountyClosesAt("custom", "3", "days", 1_000), 260_200n);
   assert.equal(getBountyClosesAt("custom", "0", "days", 1_000), 0n);
+});
+
+test("getBountyClosesAtFromWindowSeconds supports short synced windows", () => {
+  assert.equal(getBountyClosesAtFromWindowSeconds(120, 1_000), 1_120n);
+  assert.equal(getBountyClosesAtFromWindowSeconds(0, 1_000), 0n);
+  assert.equal(getBountyClosesAtFromWindowSeconds(null, 1_000), 0n);
 });
 
 test("resolveBountyReferenceNowSeconds prefers the chain timestamp when available", () => {

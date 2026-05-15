@@ -44,7 +44,14 @@ export function getBountyClosesAt(
   nowSeconds = Math.floor(Date.now() / 1000),
 ): bigint {
   const windowSeconds = getBountyWindowSeconds(preset, customAmount, customUnit);
-  return windowSeconds === null ? 0n : BigInt(nowSeconds + windowSeconds);
+  return getBountyClosesAtFromWindowSeconds(windowSeconds, nowSeconds);
+}
+
+export function getBountyClosesAtFromWindowSeconds(
+  windowSeconds: number | null,
+  nowSeconds = Math.floor(Date.now() / 1000),
+): bigint {
+  return windowSeconds === null || windowSeconds <= 0 ? 0n : BigInt(nowSeconds + windowSeconds);
 }
 
 export function resolveBountyReferenceNowSeconds(
