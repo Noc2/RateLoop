@@ -2834,6 +2834,27 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         );
     }
 
+    function test_Commit_TargetRoundCannotDelayLongCustomEpoch_Reverts() public {
+        vm.prank(owner);
+        _setTlockRoundConfig(ProtocolConfig(protocolConfigAddress), 7 days, 7 days, 3, 200);
+        uint256 contentId = _submitContent();
+
+        bytes32 salt = keccak256(abi.encodePacked(voter1, block.timestamp, "long target drift"));
+        bytes32 drandChainHash = _tlockDrandChainHash();
+        uint64 badTargetRound = _tlockTargetRoundAt(block.timestamp + 14 days);
+        bytes memory ciphertext = _testCiphertext(true, salt, contentId, badTargetRound, drandChainHash);
+        bytes32 commitHash = _commitHash(true, salt, contentId, badTargetRound, drandChainHash, ciphertext);
+
+        vm.prank(voter1);
+        hrepToken.approve(address(engine), STAKE);
+        uint256 roundContext = _roundContext(engine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());
+        vm.prank(voter1);
+        vm.expectRevert(RoundVotingEngine.TargetRoundOutOfWindow.selector);
+        engine.commitVote(
+            contentId, roundContext, badTargetRound, drandChainHash, commitHash, ciphertext, STAKE, address(0)
+        );
+    }
+
     function test_Commit_MaxVotersReached_Reverts() public {
         vm.prank(owner);
         // maxVoters=3 — after 3 commits the 4th is rejected

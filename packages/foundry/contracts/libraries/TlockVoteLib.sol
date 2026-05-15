@@ -111,7 +111,10 @@ library TlockVoteLib {
         if (revealableAfter < genesisTime) revert TargetRoundOutOfWindow();
 
         uint64 minTargetRound = _roundAtOrAfter(revealableAfter, genesisTime, period);
-        uint64 maxTargetRound = _roundAt(revealableAfter + epochDuration, genesisTime, period);
+        // Preserve one drand-period of scheduling tolerance without letting voters
+        // extend a custom blind epoch by another full epoch.
+        epochDuration;
+        uint64 maxTargetRound = _roundAt(revealableAfter + uint256(period), genesisTime, period);
         if (targetRound < minTargetRound || targetRound > maxTargetRound) revert TargetRoundOutOfWindow();
     }
 
