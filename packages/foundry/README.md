@@ -35,10 +35,15 @@ auto-verification flow. Verify those contracts manually with
 
 Create a `.env` file (see `.env.example`):
 
-| Variable            | Description                                                 |
-| ------------------- | ----------------------------------------------------------- |
-| `ALCHEMY_API_KEY`   | Optional RPC provider key for testnet/mainnet deploys       |
-| `ETHERSCAN_API_KEY` | Optional explorer API key for Etherscan-compatible networks |
+| Variable                          | Description                                                                |
+| --------------------------------- | -------------------------------------------------------------------------- |
+| `ALCHEMY_API_KEY`                 | Optional RPC provider key for testnet/mainnet deploys                      |
+| `WORLDCHAIN_RPC_URL`              | Optional World Chain mainnet RPC override for live deploys                 |
+| `WORLDCHAIN_SEPOLIA_RPC_URL`      | Optional World Chain Sepolia RPC override for live deploys                 |
+| `NEXT_PUBLIC_WORLD_ID_APP_ID`     | World ID app ID required for live `RaterRegistry` deploys                  |
+| `NEXT_PUBLIC_WORLD_ID_ACTION`     | World ID action ID; defaults to `rateloop-human-credential-v1`             |
+| `WORLD_ID_EXTERNAL_NULLIFIER_HASH` | Optional deploy-script override for the action-derived external nullifier |
+| `ETHERSCAN_API_KEY`               | Optional explorer API key for Etherscan-compatible networks                |
 
 Localhost deploys use the standard Anvil private key directly, so `yarn deploy` does not need a keystore password
 when deploying to `localhost`.
