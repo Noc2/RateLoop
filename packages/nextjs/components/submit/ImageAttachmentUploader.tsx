@@ -23,12 +23,18 @@ type ImageAttachmentUploaderProps = {
 type ChallengeResponse = {
   challengeId: string;
   message: string;
+  uploadMode?: "blob" | "local";
 };
 
 type StatusResponse = {
   error?: string;
   imageUrl?: string | null;
   status?: "uploading" | "processing" | "approved" | "blocked" | "failed" | "deleted";
+};
+
+type LocalUploadResponse = {
+  imageUrl?: string | null;
+  status?: StatusResponse["status"];
 };
 
 const SUPPORTED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
@@ -153,27 +159,42 @@ export function ImageAttachmentUploader({ address, disabled = false, onUploaded 
         challengeId: challenge.challengeId,
         signature,
       });
-      const blob = await upload(`question-attachments/${attachmentId}/original.${getFileExtension(file)}`, file, {
-        access: "private",
-        clientPayload,
-        contentType: file.type,
-        handleUploadUrl: "/api/attachments/images/upload",
-        multipart: file.size > 5 * 1024 * 1024,
-        onUploadProgress: event => setProgress(current => Math.max(current, getBlobUploadProgress(event.percentage))),
-      });
+      let imageUrl: string | null | undefined;
+
+      if (challenge.uploadMode === "local") {
+        const formData = new FormData();
+        formData.set("clientPayload", clientPayload);
+        formData.set("file", file);
+        const localUpload = await readJson<LocalUploadResponse>(
+          await fetch("/api/attachments/images/upload", {
+            method: "POST",
+            body: formData,
+          }),
+        );
+        imageUrl = localUpload.imageUrl;
+      } else {
+        const blob = await upload(`question-attachments/${attachmentId}/original.${getFileExtension(file)}`, file, {
+          access: "private",
+          clientPayload,
+          contentType: file.type,
+          handleUploadUrl: "/api/attachments/images/upload",
+          multipart: file.size > 5 * 1024 * 1024,
+          onUploadProgress: event => setProgress(current => Math.max(current, getBlobUploadProgress(event.percentage))),
+        });
+
+        await fetch(`/api/attachments/images/${encodeURIComponent(attachmentId)}/process`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            blobPathname: blob.pathname,
+            blobUrl: blob.url,
+            contentType: blob.contentType,
+          }),
+        }).catch(() => undefined);
+      }
 
       moveToUploadPhase("processing");
-      await fetch(`/api/attachments/images/${encodeURIComponent(attachmentId)}/process`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          blobPathname: blob.pathname,
-          blobUrl: blob.url,
-          contentType: blob.contentType,
-        }),
-      }).catch(() => undefined);
-
-      const imageUrl = await pollApprovedImageUrl(attachmentId);
+      imageUrl = imageUrl ?? (await pollApprovedImageUrl(attachmentId));
       onUploaded(imageUrl);
       notification.success("Image uploaded and approved.");
     } catch (error) {

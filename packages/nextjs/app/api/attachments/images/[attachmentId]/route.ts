@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { get } from "@vercel/blob";
-import { getImageAttachment } from "~~/lib/attachments/imageAttachments";
+import {
+  getImageAttachment,
+  isLocalImageAttachmentPathname,
+  readLocalImageAttachment,
+} from "~~/lib/attachments/imageAttachments";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,6 +25,32 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const attachment = await getImageAttachment(attachmentId);
   if (!attachment || attachment.status !== "approved" || !attachment.normalizedBlobPathname) {
     return new NextResponse("Not found", { status: 404 });
+  }
+
+  if (isLocalImageAttachmentPathname(attachment.normalizedBlobPathname)) {
+    const result = await readLocalImageAttachment(attachment.normalizedBlobPathname);
+    if (!result) {
+      return new NextResponse("Not found", { status: 404 });
+    }
+
+    if (request.headers.get("if-none-match") === result.etag) {
+      return new NextResponse(null, {
+        status: 304,
+        headers: {
+          ETag: result.etag,
+          "Cache-Control": "public, max-age=300, must-revalidate",
+        },
+      });
+    }
+
+    return new NextResponse(result.buffer, {
+      headers: {
+        "Content-Type": "image/webp",
+        "X-Content-Type-Options": "nosniff",
+        ETag: result.etag,
+        "Cache-Control": "public, max-age=300, must-revalidate",
+      },
+    });
   }
 
   const result = await get(attachment.normalizedBlobPathname, {
