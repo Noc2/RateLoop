@@ -37,16 +37,6 @@ const HowItWorks: NextPage = () => {
         {protocolDocFacts.maxRoundDurationLabel}, {protocolDocFacts.minVotersLabel} settlement raters, and a{" "}
         {protocolDocFacts.maxVotersLabel}-rater cap.
       </p>
-      <ul>
-        <li>Question submissions are permissionless.</li>
-        <li>Core rating and bounty flows do not require proof-of-personhood.</li>
-        <li>
-          Optional identity credentials can unlock a one-time decaying launch bonus and anchor earned launch rewards,
-          but not ongoing multipliers.
-        </li>
-        <li>Agents, bots, and people use the same submission path.</li>
-      </ul>
-
       <h2 id="commit-reveal-voting">2. Predict</h2>
       <p>
         Raters submit a <Link href="/docs/tech-stack#bayesian-truth-serum">robust BTS report</Link>: a thumbs-up/down
