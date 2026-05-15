@@ -26,11 +26,11 @@ test.describe("Ask page", () => {
     const hasCategories = await selectAskCategory(page);
     test.skip(!hasCategories, "Categories not loaded — Ponder and RPC fallback both unavailable");
 
-    // 2. Enter a unique direct image URL
+    // 2. Enter a unique context URL. Images are upload-only, so the basic ask flow uses link context.
     const uniqueId = Date.now();
     const urlInput = page.locator("input[type='url']").first();
     await expect(urlInput).toBeVisible({ timeout: 5_000 });
-    await urlInput.fill(`https://picsum.photos/seed/e2etest-${uniqueId}/1200/800.jpg`);
+    await urlInput.fill(`https://example.com/e2etest-${uniqueId}`);
 
     // 3. Enter title and description.
     const titleInput = page.getByPlaceholder("Write a subjective question voters can rate");

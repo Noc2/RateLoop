@@ -99,10 +99,9 @@ type MediaMode = "images" | "video";
 
 const MEDIA_URL_CONFIG = {
   contextPlaceholder: "Paste a source link, or add image context below",
-  imagePlaceholder: "Paste a direct image URL or upload one below",
   videoPlaceholder: "Paste a YouTube URL, e.g. https://youtube.com/watch?v=...",
   imageHint:
-    "Add at least one image when there is no context link. Use up to four direct image URLs or upload JPG, PNG, and WEBP files for RateLoop-hosted, moderated image context. Landscape images fit the voting content area best; aim for 16:9 and at least 1280x720 px.",
+    "Add at least one image when there is no context link. Upload up to four JPG, PNG, or WEBP files for RateLoop-hosted, moderated image context. Landscape images fit the voting content area best; aim for 16:9 and at least 1280x720 px.",
   videoHint: "Optional. Add one YouTube link as a preview; standard landscape videos fit the content area best.",
 };
 
@@ -523,7 +522,7 @@ export function ContentSubmissionSection() {
       return options.required
         ? expectedType === "video"
           ? "Add a YouTube URL before submitting."
-          : "Add at least one image URL before submitting."
+          : "Upload at least one image before submitting."
         : null;
     }
     if (trimmedValue.length > MAX_SUBMISSION_URL_LENGTH) {
@@ -551,34 +550,6 @@ export function ContentSubmissionSection() {
     return null;
   };
 
-  const validateImageUrl = (index: number, value: string, required = false) => {
-    const nextError = getMediaUrlValidationError(value, "images", { required });
-    setImageUrlErrors(prev => {
-      const next = [...prev];
-      next[index] = nextError;
-      return next;
-    });
-  };
-
-  const handleImageUrlChange = (index: number, value: string) => {
-    setImageUrls(prev => {
-      const next = prev.map((url, itemIndex) => (itemIndex === index ? value : url));
-      patchActiveQuestionDraft({ imageUrls: next });
-      return next;
-    });
-    validateImageUrl(index, value);
-  };
-
-  const handleAddImageUrl = () => {
-    if (imageUrls.length >= MAX_SUBMISSION_IMAGE_URLS) return;
-    setImageUrls(prev => {
-      const next = [...prev, ""];
-      patchActiveQuestionDraft({ imageUrls: next });
-      return next;
-    });
-    setImageUrlErrors(prev => [...prev, null]);
-  };
-
   const handleUploadedImageUrl = (uploadedImageUrl: string) => {
     const emptyIndex = imageUrls.findIndex(url => !url.trim());
     const next =
@@ -591,7 +562,7 @@ export function ContentSubmissionSection() {
     setMediaMode("images");
     setImageUrls(next);
     patchActiveQuestionDraft({ mediaMode: "images", imageUrls: next });
-    setImageUrlErrors(next.map((_, index) => imageUrlErrors[index] ?? null));
+    setImageUrlErrors(next.map(value => (value.trim() ? getMediaUrlValidationError(value, "images") : null)));
   };
 
   const handleRemoveImageUrl = (index: number) => {
@@ -2714,29 +2685,40 @@ export function ContentSubmissionSection() {
 
                   {mediaMode === "images" ? (
                     <div className="space-y-2">
-                      {imageUrls.map((imageUrl, index) => (
-                        <div key={index} className="flex gap-2">
-                          <input
-                            type="url"
-                            placeholder={urlConfig.imagePlaceholder}
-                            className={`input input-bordered min-w-0 flex-1 bg-base-100 ${
-                              imageUrlErrors[index] || (imageMediaMissing && index === 0) ? "input-error" : ""
+                      <ImageAttachmentUploader
+                        address={connectedAddress}
+                        disabled={imageUrls.filter(url => url.trim()).length >= MAX_SUBMISSION_IMAGE_URLS}
+                        onUploaded={handleUploadedImageUrl}
+                      />
+                      {imageUrls.map((imageUrl, index) =>
+                        imageUrl.trim() ? (
+                          <div
+                            key={`${imageUrl}-${index}`}
+                            className={`flex items-center gap-3 rounded-lg border bg-base-100 p-2 ${
+                              imageUrlErrors[index] ? "border-error" : "border-base-300"
                             }`}
-                            value={imageUrl}
-                            onChange={event => handleImageUrlChange(index, event.target.value)}
-                            onBlur={() => validateImageUrl(index, imageUrl, imageMediaMissing && index === 0)}
-                            maxLength={MAX_SUBMISSION_URL_LENGTH}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveImageUrl(index)}
-                            className="btn btn-outline btn-square"
-                            aria-label={imageUrls.length === 1 ? "Clear image URL" : "Remove image URL"}
                           >
-                            <XMarkIcon className="h-4 w-4" />
-                          </button>
-                        </div>
-                      ))}
+                            <img
+                              src={imageUrl}
+                              alt={`Uploaded image ${index + 1}`}
+                              className="h-14 w-20 rounded-md object-cover"
+                              loading="lazy"
+                            />
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-medium text-base-content">Uploaded image {index + 1}</p>
+                              <p className="truncate text-xs text-base-content/60">RateLoop-hosted image context</p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveImageUrl(index)}
+                              className="btn btn-outline btn-square btn-sm"
+                              aria-label={`Remove uploaded image ${index + 1}`}
+                            >
+                              <XMarkIcon className="h-4 w-4" />
+                            </button>
+                          </div>
+                        ) : null,
+                      )}
                       {imageUrlErrors.map((error, index) =>
                         error ? (
                           <p key={index} className="text-base text-error">
@@ -2745,21 +2727,8 @@ export function ContentSubmissionSection() {
                         ) : null,
                       )}
                       {imageMediaMissing && !imageUrlErrors.some(Boolean) ? (
-                        <p className="text-base text-error">Add at least one image URL before submitting.</p>
+                        <p className="text-base text-error">Upload at least one image before submitting.</p>
                       ) : null}
-                      <button
-                        type="button"
-                        onClick={handleAddImageUrl}
-                        disabled={imageUrls.length >= MAX_SUBMISSION_IMAGE_URLS}
-                        className="btn btn-outline btn-sm"
-                      >
-                        Add image
-                      </button>
-                      <ImageAttachmentUploader
-                        address={connectedAddress}
-                        disabled={imageUrls.filter(url => url.trim()).length >= MAX_SUBMISSION_IMAGE_URLS}
-                        onUploaded={handleUploadedImageUrl}
-                      />
                     </div>
                   ) : (
                     <div>
