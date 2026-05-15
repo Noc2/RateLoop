@@ -9,9 +9,11 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 
-test("resolveContentMetadata returns direct image URLs without fetching metadata", async () => {
-  assert.deepEqual(await resolveContentMetadata("https://example.com/photo.webp?size=large"), {
-    thumbnailUrl: "https://example.com/photo.webp?size=large",
+test("resolveContentMetadata returns uploaded image URLs without fetching metadata", async () => {
+  const uploadedImageUrl = "https://www.curyo.xyz/api/attachments/images/att_abcdefghijklmnop.webp";
+
+  assert.deepEqual(await resolveContentMetadata(uploadedImageUrl), {
+    thumbnailUrl: uploadedImageUrl,
   });
 });
 

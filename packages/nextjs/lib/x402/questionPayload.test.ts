@@ -6,6 +6,8 @@ import {
   parseX402QuestionRequest,
 } from "~~/lib/x402/questionPayload";
 
+const UPLOADED_IMAGE_URL = "https://www.curyo.xyz/api/attachments/images/att_abcdefghijklmnop.webp";
+
 const VALID_REQUEST = {
   bounty: {
     amount: "1000000",
@@ -20,7 +22,7 @@ const VALID_REQUEST = {
     categoryId: "5",
     contextUrl: "https://example.com/watch?v=abc123",
     description: "Vote based on the source material and the prompt.",
-    imageUrls: ["https://example.com/preview.jpg"],
+    imageUrls: [UPLOADED_IMAGE_URL],
     tags: ["Media", "Video"],
     title: "Is this clip worth watching?",
   },
@@ -38,7 +40,7 @@ test("parseX402QuestionRequest normalizes a valid paid question payload", () => 
   assert.equal(payload.bounty.bountyEligibility, 0);
   assert.equal(payload.roundConfig.epochDuration, 1200n);
   assert.equal(payload.questions[0].tags, "Media,Video");
-  assert.deepEqual(payload.questions[0].imageUrls, ["https://example.com/preview.jpg"]);
+  assert.deepEqual(payload.questions[0].imageUrls, [UPLOADED_IMAGE_URL]);
 });
 
 test("parseX402QuestionRequest accepts image-only question context", () => {
@@ -47,12 +49,26 @@ test("parseX402QuestionRequest accepts image-only question context", () => {
     question: {
       ...VALID_REQUEST.question,
       contextUrl: undefined,
-      imageUrls: ["https://example.com/mockup.png"],
+      imageUrls: [UPLOADED_IMAGE_URL],
     },
   });
 
   assert.equal(payload.questions[0].contextUrl, "");
-  assert.deepEqual(payload.questions[0].imageUrls, ["https://example.com/mockup.png"]);
+  assert.deepEqual(payload.questions[0].imageUrls, [UPLOADED_IMAGE_URL]);
+});
+
+test("parseX402QuestionRequest rejects arbitrary HTTPS image URLs", () => {
+  assert.throws(
+    () =>
+      parseX402QuestionRequest({
+        ...VALID_REQUEST,
+        question: {
+          ...VALID_REQUEST.question,
+          imageUrls: ["https://example.com/mockup.png"],
+        },
+      }),
+    /approved RateLoop-hosted uploads/,
+  );
 });
 
 test("parseX402QuestionRequest accepts an omitted description", () => {

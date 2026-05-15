@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { lintAgentAskRequest, summarizeLintFindings } from "../questions/lint.js";
 
+const UPLOADED_IMAGE_URL = "https://www.curyo.xyz/api/attachments/images/att_abcdefghijklmnop.webp";
+
 const VALID_REQUEST = {
   bounty: {
     amount: "1000000",
@@ -35,7 +37,7 @@ describe("agent question linting", () => {
       question: {
         ...VALID_REQUEST.question,
         contextUrl: undefined,
-        imageUrls: ["https://example.com/mockup.png"],
+        imageUrls: [UPLOADED_IMAGE_URL],
       },
     });
 
@@ -44,6 +46,20 @@ describe("agent question linting", () => {
       ok: true,
       warningCount: 0,
     });
+  });
+
+  it("rejects arbitrary HTTPS image URLs", () => {
+    const findings = lintAgentAskRequest({
+      ...VALID_REQUEST,
+      question: {
+        ...VALID_REQUEST.question,
+        imageUrls: ["https://example.com/mockup.png"],
+      },
+    });
+
+    expect(findings).toEqual(
+      expect.arrayContaining([expect.objectContaining({ level: "error", path: "question.imageUrls" })]),
+    );
   });
 
   it("rejects missing context, unknown templates, and non-idempotent requests", () => {

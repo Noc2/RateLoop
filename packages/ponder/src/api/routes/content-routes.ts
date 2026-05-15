@@ -222,12 +222,12 @@ function inferMediaTypeFromHost(urlHost: string): "image" | "video" {
     : "image";
 }
 
-const DIRECT_IMAGE_URL_PATTERN =
-  /^https:\/\/.+\.(?:avif|gif|jpe?g|png|webp)(?:[?#].*)?$/i;
+const UPLOADED_IMAGE_ATTACHMENT_URL_PATTERN =
+  /^https:\/\/[^/\s]+\/api\/attachments\/images\/att_[A-Za-z0-9_-]{16,80}\.webp(?:[?#]\S*)?$/;
 
 function isFallbackMediaUrl(item: { url?: string; urlHost?: string }) {
   if (!item.url) return false;
-  if (DIRECT_IMAGE_URL_PATTERN.test(item.url)) return true;
+  if (UPLOADED_IMAGE_ATTACHMENT_URL_PATTERN.test(item.url)) return true;
   return inferMediaTypeFromHost(item.urlHost ?? "") === "video";
 }
 

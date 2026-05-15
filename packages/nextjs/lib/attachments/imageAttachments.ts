@@ -307,10 +307,13 @@ export async function getImageAttachmentSubmissionValidationError(params: {
   imageUrls: readonly string[];
   ownerWalletAddress?: string | null;
 }): Promise<string | null> {
-  const attachmentIds = [
-    ...new Set(params.imageUrls.map(parseAttachmentIdFromImageUrl).filter((id): id is string => Boolean(id))),
-  ];
-  if (attachmentIds.length === 0) return null;
+  if (params.imageUrls.length === 0) return null;
+
+  const parsedAttachmentIds = params.imageUrls.map(parseAttachmentIdFromImageUrl);
+  if (parsedAttachmentIds.some(id => !id)) {
+    return "imageUrls must reference approved RateLoop-hosted uploads.";
+  }
+  const attachmentIds = [...new Set(parsedAttachmentIds as string[])];
 
   const ownerWalletAddress = params.ownerWalletAddress?.trim().toLowerCase() || null;
   const agentId = params.agentId?.trim() || null;

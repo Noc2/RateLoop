@@ -7,6 +7,7 @@ const FEATURE_ACCEPTANCE_TEMPLATE_ID = "feature_acceptance_test";
 const FEATURE_ACCEPTANCE_REQUIRED_INPUTS = ["expectedBehavior", "testSteps", "acceptanceCriteria"] as const;
 const AGENT_TRACE_REVIEW_TEMPLATE_ID = "agent_trace_review";
 const AGENT_TRACE_REVIEW_REQUIRED_INPUTS = ["traceId", "taskGoal", "reviewFocus"] as const;
+const UPLOADED_IMAGE_ATTACHMENT_PATH_PATTERN = /^\/api\/attachments\/images\/att_[A-Za-z0-9_-]{16,80}\.webp$/;
 const SURVEY_STYLE_PATTERN =
   /\b(multiple[-\s]?choice|answer options?|choose one|choose from|select one|select from|price range|pricing range)\b/i;
 const HIDDEN_CHOICE_TITLE_PATTERN = /\bwhich\s+(option|variant|candidate|direction|price|pricing|range)\b/i;
@@ -39,8 +40,14 @@ function tagCount(tags: unknown): number {
     .filter(Boolean).length;
 }
 
-function hasInvalidHttpsUrlList(value: unknown): boolean {
-  return !Array.isArray(value) || value.some(url => !looksLikeHttpsUrl(url));
+function looksLikeUploadedImageUrl(value: unknown): boolean {
+  if (typeof value !== "string" || !looksLikeHttpsUrl(value)) return false;
+  const parsed = new URL(value);
+  return !parsed.username && !parsed.password && UPLOADED_IMAGE_ATTACHMENT_PATH_PATTERN.test(parsed.pathname);
+}
+
+function hasInvalidUploadedImageUrlList(value: unknown): boolean {
+  return !Array.isArray(value) || value.some(url => !looksLikeUploadedImageUrl(url));
 }
 
 function pushFinding(
@@ -152,8 +159,8 @@ export function lintAgentQuestion(
       }
     }
   }
-  if (question.imageUrls !== undefined && hasInvalidHttpsUrlList(question.imageUrls)) {
-    pushFinding(findings, "error", `${path}.imageUrls`, "Image URLs must be an array of public HTTPS URLs.");
+  if (question.imageUrls !== undefined && hasInvalidUploadedImageUrlList(question.imageUrls)) {
+    pushFinding(findings, "error", `${path}.imageUrls`, "Image URLs must be approved RateLoop-hosted uploads.");
   }
   if (question.videoUrl && !looksLikeHttpsUrl(question.videoUrl)) {
     pushFinding(findings, "error", `${path}.videoUrl`, "Video URL must be a public HTTPS URL.");

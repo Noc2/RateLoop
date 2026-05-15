@@ -56,7 +56,7 @@ const agentQuestionInputSchema = {
     description: { description: "Optional question details shown to voters.", type: "string" },
     imageUrls: {
       description:
-        "Direct HTTPS image URLs, including approved RateLoop-hosted uploads for public mockups, screenshots, or generated visuals. Required when contextUrl is empty.",
+        "Approved RateLoop-hosted upload URLs for public mockups, screenshots, or generated visuals. Required when contextUrl is empty.",
       items: { type: "string" },
       type: "array",
     },

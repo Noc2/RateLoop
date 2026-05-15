@@ -4,7 +4,7 @@ import React from "react";
 import dynamic from "next/dynamic";
 import { GenericLinkCard } from "./embeds";
 import { ExternalLinkBehaviorProvider, SafeExternalLink } from "~~/components/shared/SafeExternalLink";
-import { isDirectImageUrl } from "~~/lib/contentMedia";
+import { isUploadedImageUrl } from "~~/lib/contentMedia";
 import { detectPlatform } from "~~/utils/platforms";
 
 const EmbedSpinner = () => (
@@ -94,7 +94,7 @@ export function ContentEmbed({
   const disableExternalNavigation = interactionMode === "vote";
   const platformInfo = detectPlatform(url);
 
-  if (isDirectImageUrl(url)) {
+  if (isUploadedImageUrl(url)) {
     const image = (
       <img
         src={url}

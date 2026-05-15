@@ -33,6 +33,16 @@ test("parses Curyo attachment ids from public image URLs", () => {
   assert.equal(parseAttachmentIdFromImageUrl("https://www.curyo.xyz/api/attachments/images/nope.png"), null);
 });
 
+test("rejects arbitrary HTTPS image URLs before submission", async () => {
+  assert.equal(
+    await getImageAttachmentSubmissionValidationError({
+      imageUrls: ["https://example.com/mockup.png"],
+      ownerWalletAddress: "0x00000000000000000000000000000000000000aa",
+    }),
+    "imageUrls must reference approved RateLoop-hosted uploads.",
+  );
+});
+
 test("rejects reused pending image attachment ids", async () => {
   const params = {
     attachmentId: "att_uniqueuploadid01",

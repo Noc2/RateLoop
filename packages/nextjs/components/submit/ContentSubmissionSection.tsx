@@ -40,7 +40,7 @@ import { MAX_CONTENT_DESCRIPTION_LENGTH } from "~~/lib/contentDescription";
 import {
   MAX_SUBMISSION_IMAGE_URLS,
   MAX_SUBMISSION_URL_LENGTH,
-  isDirectImageUrl,
+  isUploadedImageUrl,
   isYouTubeVideoUrl,
   normalizeSubmissionContextUrl,
   normalizeSubmissionMediaUrl,
@@ -540,8 +540,8 @@ export function ContentSubmissionSection() {
       return "This URL contains prohibited content and cannot be used";
     }
 
-    if (expectedType === "images" && !isDirectImageUrl(normalizedUrl)) {
-      return "Use a direct image URL ending in JPG, PNG, WEBP, GIF, or AVIF.";
+    if (expectedType === "images" && !isUploadedImageUrl(normalizedUrl)) {
+      return "Use an approved RateLoop image upload.";
     }
 
     if (expectedType === "video" && !isYouTubeVideoUrl(normalizedUrl)) {
@@ -643,12 +643,12 @@ export function ContentSubmissionSection() {
     Boolean(previewMediaUrl) &&
     (mediaMode === "video"
       ? !videoUrlError && isYouTubeVideoUrl(previewMediaUrl)
-      : !imageUrlErrors.some(Boolean) && isDirectImageUrl(previewMediaUrl));
+      : !imageUrlErrors.some(Boolean) && isUploadedImageUrl(previewMediaUrl));
   const previewUrl = hasValidPreviewMedia ? previewMediaUrl : normalizedContextUrl;
   const shouldUseContextLinkPreview = Boolean(normalizedContextUrl) && previewUrl === normalizedContextUrl;
   const shouldFetchContextPreviewMetadata =
     shouldUseContextLinkPreview &&
-    !isDirectImageUrl(normalizedContextUrl) &&
+    !isUploadedImageUrl(normalizedContextUrl) &&
     !isYouTubeVideoUrl(normalizedContextUrl) &&
     shouldFetchMetadataUrl(normalizedContextUrl);
   const { data: contextPreviewMetadataMap } = useQuery({

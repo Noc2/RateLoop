@@ -24,7 +24,7 @@ import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import { getVisibleContentRating } from "~~/hooks/contentFeed/shared";
 import type { ContentItem } from "~~/hooks/useContentFeed";
 import type { SubmitterProfile } from "~~/hooks/useSubmitterProfiles";
-import { type ContentMediaItem, buildFallbackMediaItems, isDirectImageUrl } from "~~/lib/contentMedia";
+import { type ContentMediaItem, buildFallbackMediaItems, isUploadedImageUrl } from "~~/lib/contentMedia";
 import {
   getActiveBountyClosesAt,
   getActiveFeedbackClosesAt,
@@ -156,7 +156,7 @@ function getPrimaryMediaItem(item: ContentItem): ContentMediaItem | null {
 function getMediaPlatformType(media: ContentMediaItem | null) {
   if (!media?.url) return "text";
   if (media.mediaType === "video") return "youtube";
-  if (isDirectImageUrl(media.url)) return "image";
+  if (isUploadedImageUrl(media.url)) return "image";
   return detectPlatform(media.url).type;
 }
 

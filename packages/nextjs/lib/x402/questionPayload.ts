@@ -29,7 +29,7 @@ const X402_MIN_REWARD_POOL_REQUIRED_VOTERS = 3n;
 const X402_MIN_REWARD_POOL_SETTLED_ROUNDS = 1n;
 const X402_MAX_QUESTION_BUNDLE_COUNT = 10;
 
-const DIRECT_IMAGE_URL_PATTERN = /^https:\/\/.+\.(?:avif|gif|jpe?g|png|webp)(?:[?#].*)?$/i;
+const UPLOADED_IMAGE_ATTACHMENT_PATH_PATTERN = /^\/api\/attachments\/images\/att_[A-Za-z0-9_-]{16,80}\.webp$/;
 const CLIENT_REQUEST_ID_PATTERN = /^[A-Za-z0-9._:-]{4,160}$/;
 
 export class X402QuestionInputError extends Error {
@@ -157,20 +157,32 @@ function isYouTubeVideoUrl(url: string): boolean {
   }
 }
 
+function isUploadedImageUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return (
+      parsed.protocol === "https:" &&
+      !parsed.username &&
+      !parsed.password &&
+      UPLOADED_IMAGE_ATTACHMENT_PATH_PATTERN.test(parsed.pathname)
+    );
+  } catch {
+    return false;
+  }
+}
+
 function normalizeImageUrls(value: unknown): string[] {
   if (value === undefined || value === null) {
     return [];
   }
   if (!Array.isArray(value)) {
-    throw new X402QuestionInputError("imageUrls must be an array of HTTPS URLs.");
+    throw new X402QuestionInputError("imageUrls must be an array of approved RateLoop-hosted upload URLs.");
   }
 
   const imageUrls = value.map((entry, index) => {
     const normalized = normalizeHttpsUrl(readString(entry, `imageUrls[${index}]`), `imageUrls[${index}]`);
-    if (!DIRECT_IMAGE_URL_PATTERN.test(normalized)) {
-      throw new X402QuestionInputError(
-        "imageUrls must point to direct HTTPS image files or approved RateLoop-hosted uploads.",
-      );
+    if (!isUploadedImageUrl(normalized)) {
+      throw new X402QuestionInputError("imageUrls must point to approved RateLoop-hosted uploads.");
     }
     return normalized;
   });

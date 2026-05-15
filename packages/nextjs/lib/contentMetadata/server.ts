@@ -1,5 +1,5 @@
 import type { ContentMetadataResult } from "./types";
-import { isDirectImageUrl } from "~~/lib/contentMedia";
+import { isUploadedImageUrl } from "~~/lib/contentMedia";
 import { getThumbnailUrl } from "~~/utils/platforms";
 
 const MAX_METADATA_BYTES = 256_000;
@@ -100,7 +100,7 @@ export async function resolveContentMetadata(url: string): Promise<ContentMetada
     return { thumbnailUrl: null };
   }
 
-  if (isDirectImageUrl(url)) {
+  if (isUploadedImageUrl(url)) {
     return { thumbnailUrl: url };
   }
 
