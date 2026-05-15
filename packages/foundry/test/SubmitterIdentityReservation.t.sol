@@ -118,7 +118,7 @@ contract SubmitterIdentityReservationTest is Test, ContentSubmissionTestBase {
         string memory title = "Is this supported?";
         string memory description = "Question submission identity should remain stable.";
         string memory tags = "identity";
-        string memory url = "https://example.com/identity-check.jpg";
+        string memory url = _submissionImageUrl("identity-check");
         bytes32 salt = keccak256("delegate-question-salt");
         string[] memory imageUrls = _singleImageUrls(url);
 

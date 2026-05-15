@@ -87,7 +87,7 @@ contract UserTransactionGasEstimatesTest is RoundIntegrationTest {
         hrepToken.approve(rewardEscrow, rewardAmount);
         vm.stopPrank();
 
-        string memory imageUrl = "https://example.com/gas-report.jpg";
+        string memory imageUrl = _submissionImageUrl("gas-report");
         string[] memory imageUrls = _singleImageUrls(imageUrl);
         (, bytes32 submissionKey) = registry.previewQuestionSubmissionKey(
             "https://example.com/context", imageUrls, "", "test goal", "test goal", "test", 1

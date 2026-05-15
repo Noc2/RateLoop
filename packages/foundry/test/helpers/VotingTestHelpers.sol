@@ -471,30 +471,15 @@ abstract contract ContentSubmissionTestBase {
     }
 
     function _submissionImageUrl(string memory url) internal pure returns (string memory) {
-        bytes memory urlBytes = bytes(url);
-        if (urlBytes.length == 0) return "https://example.com/test.jpg";
+        return _uploadedImageUrl(bytes(url).length == 0 ? "default-test-image" : url);
+    }
 
-        uint256 suffixOffset = urlBytes.length;
-        for (uint256 i = 0; i < urlBytes.length; i++) {
-            if (urlBytes[i] == "?" || urlBytes[i] == "#") {
-                suffixOffset = i;
-                break;
-            }
-        }
-        if (suffixOffset == urlBytes.length) return string.concat(url, ".jpg");
-
-        bytes memory suffix = ".jpg";
-        bytes memory out = new bytes(urlBytes.length + suffix.length);
-        for (uint256 i = 0; i < suffixOffset; i++) {
-            out[i] = urlBytes[i];
-        }
-        for (uint256 i = 0; i < suffix.length; i++) {
-            out[suffixOffset + i] = suffix[i];
-        }
-        for (uint256 i = suffixOffset; i < urlBytes.length; i++) {
-            out[i + suffix.length] = urlBytes[i];
-        }
-        return string(out);
+    function _uploadedImageUrl(string memory seed) internal pure returns (string memory) {
+        return string.concat(
+            "https://www.curyo.xyz/api/attachments/images/att_",
+            Strings.toHexString(uint256(keccak256(bytes(seed)))),
+            ".webp"
+        );
     }
 }
 

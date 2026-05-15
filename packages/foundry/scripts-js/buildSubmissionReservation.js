@@ -38,8 +38,8 @@ const DEFAULT_ROUND_CONFIG = {
 };
 
 const MAX_SUBMISSION_IMAGE_URLS = 4;
-const DIRECT_IMAGE_URL_PATTERN =
-  /^https:\/\/\S+\.(?:avif|gif|jpe?g|png|webp)(?:[?#]\S*)?$/i;
+const UPLOADED_IMAGE_URL_PATTERN =
+  /^https:\/\/\S+\/api\/attachments\/images\/att_[A-Za-z0-9_-]{16,80}\.webp(?:[?#]\S*)?$/;
 
 function isSupportedYouTubeUrl(value) {
   try {
@@ -92,7 +92,7 @@ function assertSupportedImageUrls(imageUrls, { allowEmpty = false } = {}) {
     process.exit(1);
   }
   const unsupportedImageUrl = imageUrls.find(
-    (item) => !DIRECT_IMAGE_URL_PATTERN.test(item)
+    (item) => !UPLOADED_IMAGE_URL_PATTERN.test(item)
   );
   if (unsupportedImageUrl) {
     console.error(`Unsupported image URL: ${unsupportedImageUrl}`);

@@ -385,7 +385,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
     // =========================================================================
 
     function test_SubmitQuestion_AllowsImageUrlWithCategory() public {
-        string memory url = "https://unmapped.example/reviews/widget-1.jpg";
+        string memory url = _uploadedImageUrl("widget-1");
         string memory title = "Does this product look useful?";
         string memory description = "A subjective product review question with a required image link.";
         string memory tags = "Products,Review";
@@ -546,8 +546,8 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
     function test_SubmitQuestion_AllowsMultipleOptionalImages() public {
         string[] memory imageUrls = new string[](2);
-        imageUrls[0] = "https://example.com/a.jpg";
-        imageUrls[1] = "https://example.com/b.webp";
+        imageUrls[0] = _uploadedImageUrl("multi-image-a");
+        imageUrls[1] = _uploadedImageUrl("multi-image-b");
         string memory title = "Which product image works better?";
         string memory description = "Compare the two images for usefulness.";
         string memory tags = "Products,Images";
@@ -594,11 +594,11 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
     function test_SubmitQuestion_RevertsWhenReservedMediaChanges() public {
         string[] memory reservedImageUrls = new string[](2);
-        reservedImageUrls[0] = "https://example.com/reserved-a.jpg";
-        reservedImageUrls[1] = "https://example.com/reserved-b.webp";
+        reservedImageUrls[0] = _uploadedImageUrl("reserved-a");
+        reservedImageUrls[1] = _uploadedImageUrl("reserved-b");
         string[] memory changedImageUrls = new string[](2);
         changedImageUrls[0] = reservedImageUrls[0];
-        changedImageUrls[1] = "https://example.com/changed-b.webp";
+        changedImageUrls[1] = _uploadedImageUrl("changed-b");
         string memory title = "Which media set is better?";
         string memory description = "The reservation should bind every image URL.";
         string memory tags = "Products,Images";
@@ -636,8 +636,8 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
     function test_SubmitQuestion_RevertsWhenReservedOptionalMediaChanges() public {
         string memory contextUrl = "https://example.com/context";
-        string[] memory reservedImageUrls = _singleImageUrls("https://example.com/reserved-preview.jpg");
-        string[] memory changedImageUrls = _singleImageUrls("https://example.com/changed-preview.jpg");
+        string[] memory reservedImageUrls = _singleImageUrls(_uploadedImageUrl("reserved-preview"));
+        string[] memory changedImageUrls = _singleImageUrls(_uploadedImageUrl("changed-preview"));
         string memory title = "Should this context be trusted?";
         string memory description = "The reservation should bind optional preview media.";
         string memory tags = "Context,Images";
@@ -1316,7 +1316,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
     function test_SubmitQuestion_RejectsMixedImagesAndVideo() public {
         string[] memory imageUrls = new string[](1);
-        imageUrls[0] = "https://example.com/a.jpg";
+        imageUrls[0] = _uploadedImageUrl("mixed-video-image");
 
         vm.expectRevert("Choose images or video");
         registry.previewQuestionSubmissionKey(
@@ -1333,7 +1333,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
     function test_SubmitQuestion_RejectsTooManyImages() public {
         string[] memory imageUrls = new string[](5);
         for (uint256 i = 0; i < imageUrls.length; i++) {
-            imageUrls[i] = "https://example.com/a.jpg";
+            imageUrls[i] = _uploadedImageUrl(string.concat("too-many-", vm.toString(i)));
         }
 
         vm.expectRevert("Too many images");
@@ -1531,7 +1531,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.expectRevert("Invalid URL");
         registry.submitQuestion(
             "https://safe.com@evil.com/context",
-            _singleImageUrls("https://example.com/1.jpg"),
+            _singleImageUrls(_uploadedImageUrl("valid-image-userinfo")),
             "",
             "goal",
             "goal",
@@ -1567,7 +1567,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.expectRevert("Invalid URL");
         registry.submitQuestion(
             "https://goo%67le.com/context",
-            _singleImageUrls("https://example.com/1.jpg"),
+            _singleImageUrls(_uploadedImageUrl("valid-image-percent-host")),
             "",
             "goal",
             "goal",
@@ -1585,7 +1585,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.expectRevert("Invalid URL");
         registry.submitQuestion(
             "https://example.com/<script>",
-            _singleImageUrls("https://example.com/1.jpg"),
+            _singleImageUrls(_uploadedImageUrl("valid-image-unsafe-context")),
             "",
             "goal",
             "goal",
@@ -1634,7 +1634,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.expectRevert("Invalid URL");
         registry.submitQuestion(
             "https:///context",
-            _singleImageUrls("https://example.com/1.jpg"),
+            _singleImageUrls(_uploadedImageUrl("valid-image-empty-host")),
             "",
             "goal",
             "goal",
@@ -1668,7 +1668,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.expectRevert("Category not registered");
         registry.submitQuestion(
             "https://example.com/context",
-            _singleImageUrls("https://example.com/1.jpg"),
+            _singleImageUrls(_uploadedImageUrl("valid-image-unregistered-category")),
             "",
             "goal",
             "goal",
@@ -1775,7 +1775,9 @@ contract ContentRegistryBranchesTest is VotingTestBase {
     }
 
     function test_SubmitContent_UrlTooLong_Reverts() public {
-        string memory longUrl = _validLengthUrl(2049, bytes("https://example.com/"), bytes(".jpg"));
+        string memory longUrl = _validLengthUrl(
+            2049, bytes("https://"), bytes(".example.com/api/attachments/images/att_abcdefghijklmnop.webp")
+        );
 
         vm.startPrank(submitter);
         hrepToken.approve(address(registry), 10e6);
@@ -1795,7 +1797,9 @@ contract ContentRegistryBranchesTest is VotingTestBase {
     }
 
     function test_SubmitQuestion_AllowsMaxLengthImageUrl() public view {
-        string memory maxUrl = _validLengthUrl(2048, bytes("https://example.com/"), bytes(".jpg"));
+        string memory maxUrl = _validLengthUrl(
+            2048, bytes("https://"), bytes(".example.com/api/attachments/images/att_abcdefghijklmnop.webp")
+        );
 
         registry.previewQuestionSubmissionKey(
             "https://example.com/context", _singleImageUrls(maxUrl), "", "Question?", "Context.", "tags", 1
@@ -1804,13 +1808,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
     function test_SubmitQuestion_AllowsPercentEncodedPath() public view {
         registry.previewQuestionSubmissionKey(
-            "https://example.com/a%20b",
-            _singleImageUrls("https://example.com/a%20b.jpg"),
-            "",
-            "Question?",
-            "Context.",
-            "tags",
-            1
+            "https://example.com/a%20b", _emptyImageUrls(), "", "Question?", "Context.", "tags", 1
         );
     }
 
@@ -1855,7 +1853,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.expectRevert("Question too long");
         registry.submitQuestion(
             "https://example.com/context",
-            _singleImageUrls("https://example.com/1.jpg"),
+            _singleImageUrls(_uploadedImageUrl("valid-image-long-title")),
             "",
             string(longGoal),
             string(longGoal),
@@ -1878,7 +1876,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.expectRevert("Tags too long");
         registry.submitQuestion(
             "https://example.com/context",
-            _singleImageUrls("https://example.com/1.jpg"),
+            _singleImageUrls(_uploadedImageUrl("valid-image-long-tags")),
             "",
             "goal",
             "goal",
@@ -1920,7 +1918,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
     }
 
     function test_SubmitContent_AllowsImageWithoutContextUrl() public {
-        string[] memory imageUrls = _singleImageUrls("https://example.com/image-only.jpg");
+        string[] memory imageUrls = _singleImageUrls(_uploadedImageUrl("image-only-context"));
         bytes32 salt = keccak256("image-only-context");
 
         vm.startPrank(submitter);
@@ -1942,7 +1940,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.expectRevert("Question required");
         registry.submitQuestion(
             "https://example.com/context",
-            _singleImageUrls("https://example.com/1.jpg"),
+            _singleImageUrls(_uploadedImageUrl("valid-image-empty-title")),
             "",
             "",
             "",
@@ -1960,7 +1958,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.expectRevert("Tags required");
         registry.submitQuestion(
             "https://example.com/context",
-            _singleImageUrls("https://example.com/1.jpg"),
+            _singleImageUrls(_uploadedImageUrl("valid-image-empty-tags")),
             "",
             "goal",
             "goal",

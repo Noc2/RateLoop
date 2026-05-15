@@ -198,12 +198,12 @@ IMAGE_URLS=(
   "[]"
   "[]"
   "[]"
-  '["https://picsum.photos/seed/curyo-media-hero-primary/1200/800.jpg","https://picsum.photos/seed/curyo-media-hero-detail/1200/800.jpg","https://picsum.photos/seed/curyo-media-hero-contrast/1200/800.jpg","https://picsum.photos/seed/curyo-media-hero-mobile/1200/800.jpg"]'
+  '["https://www.curyo.xyz/api/attachments/images/att_e2e_curyo-media-hero-primary.webp","https://www.curyo.xyz/api/attachments/images/att_e2e_curyo-media-hero-detail.webp","https://www.curyo.xyz/api/attachments/images/att_e2e_curyo-media-hero-contrast.webp","https://www.curyo.xyz/api/attachments/images/att_e2e_curyo-media-hero-mobile.webp"]'
   "[]"
   "[]"
   "[]"
   "[]"
-  '["https://picsum.photos/seed/curyo-product-photo/1200/800.jpg","https://picsum.photos/seed/curyo-product-photo-detail/1200/800.jpg"]'
+  '["https://www.curyo.xyz/api/attachments/images/att_e2e_curyo-product-photo.webp","https://www.curyo.xyz/api/attachments/images/att_e2e_curyo-product-photo-detail.webp"]'
   "[]"
 )
 

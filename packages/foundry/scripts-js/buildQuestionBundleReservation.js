@@ -10,8 +10,8 @@ const DEFAULT_QUESTION_METADATA_HASH =
 const DEFAULT_RESULT_SPEC_HASH =
   "0x8e5f27bc3269c62c92754f76279bd83838462060fc6cd77411b7407027cfa11f";
 const MAX_SUBMISSION_IMAGE_URLS = 4;
-const DIRECT_IMAGE_URL_PATTERN =
-  /^https:\/\/\S+\.(?:avif|gif|jpe?g|png|webp)(?:[?#]\S*)?$/i;
+const UPLOADED_IMAGE_URL_PATTERN =
+  /^https:\/\/\S+\/api\/attachments\/images\/att_[A-Za-z0-9_-]{16,80}\.webp(?:[?#]\S*)?$/;
 const DEFAULT_BOUNTY_ELIGIBILITY = 0;
 
 const abi = parseAbi([
@@ -95,7 +95,7 @@ function parseImageUrls(value) {
       fail(`Expected at most ${MAX_SUBMISSION_IMAGE_URLS} image URLs.`);
     }
     const unsupportedImageUrl = parsed.find(
-      (item) => !DIRECT_IMAGE_URL_PATTERN.test(item)
+      (item) => !UPLOADED_IMAGE_URL_PATTERN.test(item)
     );
     if (unsupportedImageUrl) {
       fail(`Unsupported image URL: ${unsupportedImageUrl}`);

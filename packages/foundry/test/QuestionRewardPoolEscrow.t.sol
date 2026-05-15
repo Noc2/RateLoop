@@ -52,7 +52,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     string internal constant QUESTION = "Would you recommend this hotel?";
     string internal constant DESCRIPTION = "Vote based on the overall stay quality.";
     string internal constant TAGS = "travel";
-    string internal constant DEFAULT_MEDIA_URL = "https://example.com/hotel-room.jpg";
+    string internal constant DEFAULT_MEDIA_URL = "hotel-room";
     uint256 internal constant CATEGORY_ID = 1;
     uint8 internal constant REWARD_ASSET_HREP = 0;
     uint8 internal constant REWARD_ASSET_USDC = 1;
@@ -323,7 +323,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         hrepToken.mint(openVoter3, 10_000e6);
         vm.stopPrank();
 
-        uint256 contentId = _submitQuestion("https://example.com/open-wallet-single.jpg");
+        uint256 contentId = _submitQuestion("open-wallet-single");
         uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
 
         address[] memory voters = new address[](3);
@@ -484,7 +484,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         RoundLib.RoundConfig memory roundConfig = RoundLib.RoundConfig({
             epochDuration: uint32(EPOCH_DURATION), maxDuration: uint32(7 days), minVoters: 5, maxVoters: 5
         });
-        uint256 contentId = _submitQuestionWithRoundConfig("https://example.com/t1.jpg", roundConfig);
+        uint256 contentId = _submitQuestionWithRoundConfig("t1", roundConfig);
 
         // Bootstrap a fifth voter (existing fixtures define voter1..voter4).
         address voter5 = address(0x55);
@@ -576,10 +576,10 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         });
         uint256[] memory contentIds = new uint256[](2);
         contentIds[0] = _submitQuestionWithContextAndRoundConfig(
-            "https://example.com/t1-bundle-a", "https://example.com/t1-a.jpg", roundConfig
+            "https://example.com/t1-bundle-a", "t1-a", roundConfig
         );
         contentIds[1] = _submitQuestionWithContextAndRoundConfig(
-            "https://example.com/t1-bundle-b", "https://example.com/t1-b.jpg", roundConfig
+            "https://example.com/t1-bundle-b", "t1-b", roundConfig
         );
 
         address voter5 = address(0x55);
@@ -626,7 +626,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     function testRefundableRewardPoolAmountUsesQuestionSelectedVoterCap() public {
         RoundLib.RoundConfig memory roundConfig =
             RoundLib.RoundConfig({epochDuration: 10 minutes, maxDuration: 1 hours, minVoters: 3, maxVoters: 4});
-        uint256 contentId = _submitQuestionWithRoundConfig("https://example.com/small-cap.jpg", roundConfig);
+        uint256 contentId = _submitQuestionWithRoundConfig("small-cap", roundConfig);
 
         uint256 rewardPoolId = _createRewardPool(contentId, 4, 3, 1);
 
@@ -637,7 +637,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     function testRewardPoolRejectsRequiredVotersAboveQuestionCap() public {
         RoundLib.RoundConfig memory roundConfig =
             RoundLib.RoundConfig({epochDuration: 10 minutes, maxDuration: 1 hours, minVoters: 3, maxVoters: 4});
-        uint256 contentId = _submitQuestionWithRoundConfig("https://example.com/impossible-cap.jpg", roundConfig);
+        uint256 contentId = _submitQuestionWithRoundConfig("impossible-cap", roundConfig);
 
         vm.startPrank(funder);
         usdc.approve(address(rewardPoolEscrow), REWARD_POOL_AMOUNT);
@@ -775,7 +775,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.stopPrank();
 
         string[] memory imageUrls = new string[](1);
-        imageUrls[0] = DEFAULT_MEDIA_URL;
+        imageUrls[0] = _submissionImageUrl(DEFAULT_MEDIA_URL);
         bytes32 salt = keccak256("stale-engine-reward");
         uint256 rewardAmount = _defaultSubmissionRewardAmount(registry);
         ContentRegistry.SubmissionRewardTerms memory rewardTerms = _defaultSubmissionRewardTerms(registry);
@@ -1109,10 +1109,10 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         });
         uint256[] memory contentIds = new uint256[](2);
         contentIds[0] = _submitQuestionWithContextAndRoundConfig(
-            "https://example.com/bundle-above-before-a", "https://example.com/bundle-above-before-a.jpg", roundConfig
+            "https://example.com/bundle-above-before-a", "bundle-above-before-a", roundConfig
         );
         contentIds[1] = _submitQuestionWithContextAndRoundConfig(
-            "https://example.com/bundle-above-before-b", "https://example.com/bundle-above-before-b.jpg", roundConfig
+            "https://example.com/bundle-above-before-b", "bundle-above-before-b", roundConfig
         );
         uint256 closesAt = block.timestamp + 2 * EPOCH_DURATION + 20;
         uint256 bundleId =
@@ -1137,10 +1137,10 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         });
         uint256[] memory contentIds = new uint256[](2);
         contentIds[0] = _submitQuestionWithContextAndRoundConfig(
-            "https://example.com/bundle-above-after-a", "https://example.com/bundle-above-after-a.jpg", roundConfig
+            "https://example.com/bundle-above-after-a", "bundle-above-after-a", roundConfig
         );
         contentIds[1] = _submitQuestionWithContextAndRoundConfig(
-            "https://example.com/bundle-above-after-b", "https://example.com/bundle-above-after-b.jpg", roundConfig
+            "https://example.com/bundle-above-after-b", "bundle-above-after-b", roundConfig
         );
         uint256 closesAt = block.timestamp + 2 * EPOCH_DURATION + 20;
         uint256 bundleId =
@@ -1172,10 +1172,10 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         });
         uint256[] memory contentIds = new uint256[](2);
         contentIds[0] = _submitQuestionWithContextAndRoundConfig(
-            "https://example.com/bundle-late-extra-a", "https://example.com/bundle-late-extra-a.jpg", roundConfig
+            "https://example.com/bundle-late-extra-a", "bundle-late-extra-a", roundConfig
         );
         contentIds[1] = _submitQuestionWithContextAndRoundConfig(
-            "https://example.com/bundle-late-extra-b", "https://example.com/bundle-late-extra-b.jpg", roundConfig
+            "https://example.com/bundle-late-extra-b", "bundle-late-extra-b", roundConfig
         );
         uint256 closesAt = block.timestamp + 2 * EPOCH_DURATION + 20;
         uint256 bundleId =
@@ -1520,10 +1520,10 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         });
         uint256[] memory contentIds = new uint256[](2);
         contentIds[0] = _submitQuestionWithContextAndRoundConfig(
-            "https://example.com/bundle-underfunded-a", "https://example.com/bundle-underfunded-a.jpg", roundConfig
+            "https://example.com/bundle-underfunded-a", "bundle-underfunded-a", roundConfig
         );
         contentIds[1] = _submitQuestionWithContextAndRoundConfig(
-            "https://example.com/bundle-underfunded-b", "https://example.com/bundle-underfunded-b.jpg", roundConfig
+            "https://example.com/bundle-underfunded-b", "bundle-underfunded-b", roundConfig
         );
 
         uint256 amount = 3;
@@ -1544,10 +1544,10 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         });
         uint256[] memory contentIds = new uint256[](2);
         contentIds[0] = _submitQuestionWithContextAndRoundConfig(
-            "https://example.com/bundle-funded-a", "https://example.com/bundle-funded-a.jpg", roundConfig
+            "https://example.com/bundle-funded-a", "bundle-funded-a", roundConfig
         );
         contentIds[1] = _submitQuestionWithContextAndRoundConfig(
-            "https://example.com/bundle-funded-b", "https://example.com/bundle-funded-b.jpg", roundConfig
+            "https://example.com/bundle-funded-b", "bundle-funded-b", roundConfig
         );
         uint256 bundleId = _createSubmissionBundle(contentIds, funder, REWARD_ASSET_USDC, 4, 3);
 
@@ -2020,7 +2020,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             epochDuration: uint32(EPOCH_DURATION), maxDuration: uint32(7 days), minVoters: 5, maxVoters: 5
         });
         uint256 contentId =
-            _submitQuestionWithRoundConfig("https://example.com/below-quorum-before-close.jpg", roundConfig);
+            _submitQuestionWithRoundConfig("below-quorum-before-close", roundConfig);
         uint256 expiresAt = block.timestamp + EPOCH_DURATION + 10;
         uint256 rewardPoolId = _createRewardPoolWithExpiry(contentId, REWARD_POOL_AMOUNT, 3, 1, expiresAt);
 
@@ -2049,7 +2049,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             epochDuration: uint32(EPOCH_DURATION), maxDuration: uint32(7 days), minVoters: 3, maxVoters: 4
         });
         uint256 contentId =
-            _submitQuestionWithRoundConfig("https://example.com/above-quorum-before-close.jpg", roundConfig);
+            _submitQuestionWithRoundConfig("above-quorum-before-close", roundConfig);
         uint256 expiresAt = block.timestamp + EPOCH_DURATION + 10;
         uint256 rewardPoolId = _createRewardPoolWithExpiry(contentId, REWARD_POOL_AMOUNT, 4, 1, expiresAt);
 
@@ -2067,7 +2067,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             epochDuration: uint32(EPOCH_DURATION), maxDuration: uint32(7 days), minVoters: 3, maxVoters: 4
         });
         uint256 contentId =
-            _submitQuestionWithRoundConfig("https://example.com/above-quorum-after-close.jpg", roundConfig);
+            _submitQuestionWithRoundConfig("above-quorum-after-close", roundConfig);
         uint256 expiresAt = block.timestamp + EPOCH_DURATION + 10;
         uint256 rewardPoolId = _createRewardPoolWithExpiry(contentId, REWARD_POOL_AMOUNT, 4, 1, expiresAt);
 
@@ -2093,7 +2093,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         RoundLib.RoundConfig memory roundConfig = RoundLib.RoundConfig({
             epochDuration: uint32(EPOCH_DURATION), maxDuration: uint32(7 days), minVoters: 3, maxVoters: 4
         });
-        uint256 contentId = _submitQuestionWithRoundConfig("https://example.com/min-quorum-late-extra.jpg", roundConfig);
+        uint256 contentId = _submitQuestionWithRoundConfig("min-quorum-late-extra", roundConfig);
         uint256 expiresAt = block.timestamp + EPOCH_DURATION + 10;
         uint256 rewardPoolId = _createRewardPoolWithExpiry(contentId, REWARD_POOL_AMOUNT, 3, 1, expiresAt);
 
@@ -2427,8 +2427,8 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
     function testBundleDoesNotFailOnUnsettledTerminalRound() public {
         uint256[] memory contentIds = new uint256[](2);
-        contentIds[0] = _submitQuestionWithContext("https://example.com/bundle-a", "https://example.com/bundle-a.jpg");
-        contentIds[1] = _submitQuestionWithContext("https://example.com/bundle-b", "https://example.com/bundle-b.jpg");
+        contentIds[0] = _submitQuestionWithContext("https://example.com/bundle-a", "bundle-a");
+        contentIds[1] = _submitQuestionWithContext("https://example.com/bundle-b", "bundle-b");
         uint256 bundleId = 1;
         uint8 rewardAsset = REWARD_ASSET_HREP;
         uint256 bountyClosesAt = block.timestamp + 30 days;
@@ -2509,7 +2509,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         string memory description = "Check that direct agent submissions fund escrow from the signer.";
         string memory tags = "agents,bounty";
         string[] memory imageUrls = new string[](1);
-        imageUrls[0] = "https://example.com/agent-funded-context.jpg";
+        imageUrls[0] = _submissionImageUrl("agent-funded-context");
         RoundLib.RoundConfig memory roundConfig = RoundLib.RoundConfig({
             epochDuration: uint32(EPOCH_DURATION), maxDuration: uint32(7 days), minVoters: 3, maxVoters: 200
         });
@@ -2830,8 +2830,8 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
     function _submitBundleQuestions() internal returns (uint256[] memory contentIds) {
         contentIds = new uint256[](2);
-        contentIds[0] = _submitQuestionWithContext("https://example.com/bundle-a", "https://example.com/bundle-a.jpg");
-        contentIds[1] = _submitQuestionWithContext("https://example.com/bundle-b", "https://example.com/bundle-b.jpg");
+        contentIds[0] = _submitQuestionWithContext("https://example.com/bundle-a", "bundle-a");
+        contentIds[1] = _submitQuestionWithContext("https://example.com/bundle-b", "bundle-b");
     }
 
     function _createSubmissionBundle(
@@ -2954,6 +2954,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         internal
         returns (uint256 contentId)
     {
+        mediaUrl = _submissionImageUrl(mediaUrl);
         string[] memory imageUrls = new string[](1);
         imageUrls[0] = mediaUrl;
         activeTlockContentRegistry = registry;
@@ -2984,6 +2985,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         string memory mediaUrl,
         RoundLib.RoundConfig memory roundConfig
     ) internal returns (uint256 contentId) {
+        mediaUrl = _submissionImageUrl(mediaUrl);
         string[] memory imageUrls = new string[](1);
         imageUrls[0] = mediaUrl;
         activeTlockContentRegistry = registry;
@@ -3041,7 +3043,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         question.description = "Review the supplied context and vote on whether the agent should continue.";
         question.tags = "agents,bounty";
         question.imageUrls = new string[](1);
-        question.imageUrls[0] = "https://example.com/x402-agent-question.jpg";
+        question.imageUrls[0] = _submissionImageUrl("x402-agent-question");
         question.roundConfig = RoundLib.RoundConfig({
             epochDuration: uint32(EPOCH_DURATION), maxDuration: uint32(7 days), minVoters: 3, maxVoters: 200
         });
@@ -3137,7 +3139,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     {
         string memory contextUrl = string(abi.encodePacked("https://example.com/", path));
         string[] memory imageUrls = new string[](1);
-        imageUrls[0] = string(abi.encodePacked(contextUrl, ".jpg"));
+        imageUrls[0] = _submissionImageUrl(path);
         RoundLib.RoundConfig memory roundConfig = RoundLib.RoundConfig({
             epochDuration: uint32(EPOCH_DURATION), maxDuration: uint32(7 days), minVoters: 3, maxVoters: 200
         });

@@ -316,7 +316,7 @@ contract AuditGapTests is VotingTestBase {
         vm.expectRevert(); // EnforcedPause
         registry.submitQuestion(
             "https://example.com/context",
-            _singleImageUrls("https://pause-test-6.com/image.jpg"),
+            _singleImageUrls(_submissionImageUrl("pause-test-6")),
             "",
             "goal",
             "goal",

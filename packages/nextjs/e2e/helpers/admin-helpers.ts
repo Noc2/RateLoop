@@ -52,10 +52,11 @@ const DEFAULT_SUBMISSION_ROUND_CONFIG: SubmissionRoundConfig = {
   minVoters: 3,
   maxVoters: 200,
 };
-const DIRECT_IMAGE_URL_PATTERN = /^https:\/\/\S+\.(?:avif|gif|jpe?g|png|webp)(?:[?#]\S*)?$/i;
+const UPLOADED_IMAGE_URL_PATTERN =
+  /^https:\/\/\S+\/api\/attachments\/images\/att_[A-Za-z0-9_-]{16,80}\.webp(?:[?#]\S*)?$/;
 
 function isSupportedImageUrl(url: string): boolean {
-  return DIRECT_IMAGE_URL_PATTERN.test(url);
+  return UPLOADED_IMAGE_URL_PATTERN.test(url);
 }
 
 function isSupportedYouTubeUrl(url: string): boolean {

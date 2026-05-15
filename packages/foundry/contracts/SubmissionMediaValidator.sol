@@ -56,9 +56,7 @@ contract SubmissionMediaValidator {
     }
 
     function _isSupportedImageUrl(string memory url) internal pure returns (bool) {
-        return _endsWithBeforeQuery(url, ".avif") || _endsWithBeforeQuery(url, ".gif")
-            || _endsWithBeforeQuery(url, ".jpg") || _endsWithBeforeQuery(url, ".jpeg")
-            || _endsWithBeforeQuery(url, ".png") || _endsWithBeforeQuery(url, ".webp");
+        return _hasUploadedImagePath(url);
     }
 
     function _isSupportedVideoUrl(string memory url) internal pure returns (bool) {
@@ -132,34 +130,53 @@ contract SubmissionMediaValidator {
         return (char >= "0" && char <= "9") || (char >= "A" && char <= "F") || (char >= "a" && char <= "f");
     }
 
-    function _endsWithBeforeQuery(string memory value, string memory suffix) internal pure returns (bool) {
+    function _hasUploadedImagePath(string memory value) internal pure returns (bool) {
         bytes memory valueBytes = bytes(value);
-        bytes memory suffixBytes = bytes(suffix);
-        uint256 end = valueBytes.length;
+        bytes memory schemeBytes = bytes("https://");
+        bytes memory pathPrefixBytes = bytes("/api/attachments/images/att_");
+        bytes memory suffixBytes = bytes(".webp");
+        uint256 pathStart;
 
-        for (uint256 i = 0; i < valueBytes.length; i++) {
+        if (valueBytes.length < schemeBytes.length + pathPrefixBytes.length + 16 + suffixBytes.length) return false;
+
+        for (uint256 i = schemeBytes.length; i < valueBytes.length; i++) {
+            if (valueBytes[i] == "/") {
+                pathStart = i;
+                break;
+            }
+            if (valueBytes[i] == "?" || valueBytes[i] == "#") {
+                return false;
+            }
+        }
+        if (pathStart == 0) return false;
+        if (valueBytes.length < pathStart + pathPrefixBytes.length + 16 + suffixBytes.length) return false;
+
+        for (uint256 i = 0; i < pathPrefixBytes.length; i++) {
+            if (valueBytes[pathStart + i] != pathPrefixBytes[i]) return false;
+        }
+
+        uint256 end = valueBytes.length;
+        for (uint256 i = pathStart + pathPrefixBytes.length; i < valueBytes.length; i++) {
             if (valueBytes[i] == "?" || valueBytes[i] == "#") {
                 end = i;
                 break;
             }
         }
+        if (end < pathStart + pathPrefixBytes.length + 16 + suffixBytes.length) return false;
 
-        if (end < suffixBytes.length) return false;
-        uint256 offset = end - suffixBytes.length;
-        // Require the suffix to appear in the path component (after at least one '/' past the scheme).
-        bool hasPathSeparator = false;
-        for (uint256 i = 8; i < offset; i++) {
-            if (valueBytes[i] == "/") {
-                hasPathSeparator = true;
-                break;
-            }
-        }
-        if (!hasPathSeparator) return false;
+        uint256 suffixOffset = end - suffixBytes.length;
         for (uint256 i = 0; i < suffixBytes.length; i++) {
-            if (_toLowerByte(valueBytes[offset + i]) != suffixBytes[i]) {
-                return false;
-            }
+            if (valueBytes[suffixOffset + i] != suffixBytes[i]) return false;
         }
+
+        uint256 idStart = pathStart + pathPrefixBytes.length;
+        uint256 idLength = suffixOffset - idStart;
+        if (idLength < 16 || idLength > 80) return false;
+
+        for (uint256 i = idStart; i < suffixOffset; i++) {
+            if (!_isAttachmentIdByte(valueBytes[i])) return false;
+        }
+
         return true;
     }
 
@@ -237,10 +254,8 @@ contract SubmissionMediaValidator {
             || char == "_" || char == "-";
     }
 
-    function _toLowerByte(bytes1 char) internal pure returns (bytes1) {
-        if (char >= 0x41 && char <= 0x5A) {
-            return bytes1(uint8(char) + 32);
-        }
-        return char;
+    function _isAttachmentIdByte(bytes1 char) internal pure returns (bool) {
+        return (char >= 0x30 && char <= 0x39) || (char >= 0x41 && char <= 0x5A) || (char >= 0x61 && char <= 0x7A)
+            || char == "_" || char == "-";
     }
 }

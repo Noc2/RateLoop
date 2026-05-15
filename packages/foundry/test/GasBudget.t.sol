@@ -11,9 +11,9 @@ import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
 import { FrontendRegistry } from "../contracts/FrontendRegistry.sol";
 
 contract GasBudgetTest is RoundIntegrationTest {
-    // Content submission validates media URLs and uses a live CategoryRegistry lookup,
+    // Content submission validates uploaded media URLs and uses a live CategoryRegistry lookup,
     // so the baseline is higher than the initial pre-media measurement.
-    uint256 internal constant MAX_SUBMIT_CONTENT_GAS = 700_000;
+    uint256 internal constant MAX_SUBMIT_CONTENT_GAS = 725_000;
     // commitVote now validates the full armored AGE envelope and persists the ciphertext payload,
     // so the post-tlock baseline is materially higher than the earlier pre-parser threshold.
     uint256 internal constant MAX_COMMIT_VOTE_GAS = 2_725_000;
@@ -56,7 +56,7 @@ contract GasBudgetTest is RoundIntegrationTest {
         hrepToken.approve(rewardEscrow, rewardAmount);
         vm.stopPrank();
 
-        string memory imageUrl = "https://example.com/gas-submit.jpg";
+        string memory imageUrl = _submissionImageUrl("gas-submit");
         string[] memory imageUrls = _singleImageUrls(imageUrl);
         (, bytes32 submissionKey) = registry.previewQuestionSubmissionKey(
             "https://example.com/context", imageUrls, "", "test goal", "test goal", "test", 1

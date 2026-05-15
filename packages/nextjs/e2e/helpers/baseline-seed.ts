@@ -31,6 +31,11 @@ const CATEGORY_REGISTRY_ABI = [
 ] as const;
 const categoryIdBySlug = new Map<string, bigint>();
 
+function uploadedImageUrl(seed: string): string {
+  const attachmentSuffix = `e2e_${seed.replace(/[^A-Za-z0-9_-]/g, "_")}`.slice(0, 72).padEnd(16, "0");
+  return `https://www.curyo.xyz/api/attachments/images/att_${attachmentSuffix}.webp`;
+}
+
 async function resolveCategoryIdBySlug(slug: string): Promise<bigint> {
   const cached = categoryIdBySlug.get(slug);
   if (cached !== undefined) return cached;
@@ -152,10 +157,10 @@ const BASELINE_CONTENT = [
   {
     url: "https://picsum.photos/seed/curyo-media-hero-primary/1200/800.jpg",
     imageUrls: [
-      "https://picsum.photos/seed/curyo-media-hero-primary/1200/800.jpg",
-      "https://picsum.photos/seed/curyo-media-hero-detail/1200/800.jpg",
-      "https://picsum.photos/seed/curyo-media-hero-contrast/1200/800.jpg",
-      "https://picsum.photos/seed/curyo-media-hero-mobile/1200/800.jpg",
+      uploadedImageUrl("curyo-media-hero-primary"),
+      uploadedImageUrl("curyo-media-hero-detail"),
+      uploadedImageUrl("curyo-media-hero-contrast"),
+      uploadedImageUrl("curyo-media-hero-mobile"),
     ],
     title: "Does this image set make the landing page feel credible?",
     description:
@@ -208,8 +213,8 @@ const BASELINE_CONTENT = [
   {
     url: "https://picsum.photos/seed/curyo-product-photo/1200/800.jpg",
     imageUrls: [
-      "https://picsum.photos/seed/curyo-product-photo/1200/800.jpg",
-      "https://picsum.photos/seed/curyo-product-photo-detail/1200/800.jpg",
+      uploadedImageUrl("curyo-product-photo"),
+      uploadedImageUrl("curyo-product-photo-detail"),
     ],
     title: "Does this product photo make the offer feel trustworthy?",
     description:

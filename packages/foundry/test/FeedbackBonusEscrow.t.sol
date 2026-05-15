@@ -90,7 +90,7 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
     string internal constant QUESTION = "Would you recommend this hotel?";
     string internal constant DESCRIPTION = "Vote based on the overall stay quality.";
     string internal constant TAGS = "travel";
-    string internal constant DEFAULT_MEDIA_URL = "https://example.com/hotel-room.jpg";
+    string internal constant DEFAULT_MEDIA_URL = "hotel-room";
     uint256 internal constant CATEGORY_ID = 1;
 
     function _tlockDrandChainHash() internal pure override returns (bytes32) {
@@ -622,6 +622,7 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
 
     function _submitQuestion(string memory url) internal returns (uint256 contentId) {
         string memory mediaUrl = bytes(url).length == 0 ? DEFAULT_MEDIA_URL : url;
+        mediaUrl = _submissionImageUrl(mediaUrl);
         string[] memory imageUrls = new string[](1);
         imageUrls[0] = mediaUrl;
         activeTlockContentRegistry = registry;
