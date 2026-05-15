@@ -24,8 +24,8 @@
   --color-neutral: #18181b;
   --color-neutral-content: #f5f5f5;
   --color-base-100: #000000;
-  --color-base-200: #101010;
-  --color-base-300: #171717;
+  --color-base-200: #121212;
+  --color-base-300: #1a1a1a;
   --color-base-content: #f5f5f5;
   --color-info: #a3a3a3;
   --color-success: #03cea4;
@@ -85,10 +85,10 @@
   --curyo-warm-white: #f5f5f5;
   --curyo-steel: #a3a3a3;
   --curyo-surface: #000000;
-  --curyo-surface-elevated: #101010;
-  --curyo-surface-elevated-hover: #171717;
+  --curyo-surface-elevated: #121212;
+  --curyo-surface-elevated-hover: #1a1a1a;
   --curyo-surface-mobile-vote: #151515;
-  --curyo-surface-nested: #262626;
+  --curyo-surface-nested: #202020;
   --curyo-control-idle: rgb(245 245 245 / 0.11);
   --curyo-control-idle-hover: rgb(245 245 245 / 0.18);
   --curyo-control-idle-muted: rgb(245 245 245 / 0.075);
@@ -99,8 +99,8 @@
   --curyo-warm-white-rgb: 245 245 245;
   --curyo-steel-rgb: 163 163 163;
   --curyo-surface-rgb: 0 0 0;
-  --curyo-surface-elevated-rgb: 16 16 16;
-  --curyo-surface-nested-rgb: 38 38 38;
+  --curyo-surface-elevated-rgb: 18 18 18;
+  --curyo-surface-nested-rgb: 32 32 32;
   --curyo-radius-card: 0.5rem;
   --curyo-radius-control: var(--curyo-radius-card);
   --curyo-radius-pill: 9999px;
@@ -507,7 +507,7 @@ body {
   position: relative;
   overflow: hidden;
   border-radius: var(--curyo-card-radius);
-  background: rgb(var(--curyo-surface-elevated-rgb) / 0.82);
+  background: var(--curyo-surface-elevated);
   border: none;
   box-shadow: none;
 }
@@ -518,14 +518,14 @@ body {
 
 .surface-card-nested {
   border-radius: var(--curyo-card-radius);
-  background: rgb(var(--curyo-surface-nested-rgb) / 0.98);
+  background: var(--curyo-surface-nested);
   border: none;
   box-shadow: none;
 }
 
 .surface-card .surface-card {
   border-radius: var(--curyo-card-radius);
-  background: rgb(var(--curyo-surface-nested-rgb) / 0.98);
+  background: var(--curyo-surface-nested);
   border: none;
   box-shadow: none;
 }
@@ -541,7 +541,7 @@ body {
 .card.bg-base-200,
 .modal-box.bg-base-200 {
   border-radius: var(--curyo-card-radius) !important;
-  background: rgb(var(--curyo-surface-elevated-rgb) / 0.98) !important;
+  background: var(--curyo-surface-elevated) !important;
   border: 1px solid rgb(245 245 245 / 0.1) !important;
 }
 
