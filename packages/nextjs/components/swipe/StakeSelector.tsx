@@ -30,7 +30,6 @@ interface StakeSelectorProps {
   onCancel: () => void;
 }
 
-const PRESET_AMOUNTS = [0, 1, 2.5, 5, 10];
 const MIN_COUNTED_STAKE_AMOUNT = 1;
 const MIN_PREDICTED_UP_PERCENT = 0;
 const MAX_PREDICTED_UP_PERCENT = 100;
@@ -38,6 +37,10 @@ const YOUR_VOTE_TOOLTIP =
   "Thumbs up means you think this content is useful for the question; thumbs down means it is unhelpful, broken, misleading, or unsafe.";
 const EXPECTED_CROWD_TOOLTIP =
   "Your forecast of what share of revealed raters will choose thumbs up this round. RBTS rewards this forecast against peer signals; it is separate from your own thumbs up/down vote.";
+const metricLabelClassName =
+  "inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-base-content/55";
+const metricValueClassName = "mt-1 text-2xl font-bold tabular-nums text-base-content";
+const metricUnitClassName = "ml-1 text-sm font-semibold text-base-content/55";
 
 function clampRating(value: number) {
   if (!Number.isFinite(value)) return 5;
@@ -156,7 +159,6 @@ export function StakeSelector({
   const confirmDisabled = isConfirming || cooldownActive || amount < 0 || (amount > 0 && amount > maxStake);
   const phaseHeadline = effectiveIsBlind ? "Private round" : "Post-epoch reveal";
   const phaseHeadlineClassName = effectiveIsBlind ? "text-primary" : "text-warning";
-  const selectedPresetClassName = "action-orange-control";
   const sliderClassName = "range range-primary range-sm w-full";
   const sliderStyle = { "--range-thumb": "var(--curyo-warm-white)" } as CSSProperties;
   const weightPercent = Math.round(
@@ -261,13 +263,13 @@ export function StakeSelector({
               <div className="mt-5 border-t border-base-content/10 pt-4">
                 <div className="flex items-end justify-between gap-3">
                   <div>
-                    <p className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-base-content/55">
+                    <p className={metricLabelClassName}>
                       <span>Crowd forecast</span>
                       <InfoTooltip text={EXPECTED_CROWD_TOOLTIP} position="bottom" />
                     </p>
-                    <p className="mt-1 text-2xl font-bold tabular-nums text-base-content">
+                    <p className={metricValueClassName}>
                       {predictedUpPercent.toFixed(0)}
-                      <span className="ml-1 text-sm font-semibold text-base-content/55">% up</span>
+                      <span className={metricUnitClassName}>% up</span>
                     </p>
                   </div>
                 </div>
@@ -299,28 +301,47 @@ export function StakeSelector({
               </div>
             </div>
 
-            <div className="mb-5 space-y-1 text-center text-base text-base-content/60">
-              <p>
-                Balance: {balanceFormatted.toLocaleString(undefined, { maximumFractionDigits: 0 })} {symbol}
+            <div className="mb-5 px-1">
+              <p className={metricLabelClassName}>Balance</p>
+              <p className={metricValueClassName}>
+                {balanceFormatted.toLocaleString(undefined, { maximumFractionDigits: 1 })}
+                <span className={metricUnitClassName}>{symbol}</span>
               </p>
             </div>
 
-            <div className="mb-5 flex flex-wrap justify-center gap-2">
-              {PRESET_AMOUNTS.filter(a => a === 0 || a <= maxStake).map(preset => (
-                <button
-                  key={preset}
-                  onClick={() => setAmount(preset)}
-                  className={`rounded-lg px-4 py-2 text-base font-medium transition-colors ${
-                    amount === preset ? selectedPresetClassName : "pill-inactive-muted"
-                  }`}
-                  disabled={isConfirming}
-                >
-                  {preset}
-                </button>
-              ))}
-            </div>
-
             <div className="mb-3 px-1">
+              <div className="mb-4">
+                <p className={metricLabelClassName}>Stake amount</p>
+                <p className={metricValueClassName}>
+                  {amount.toLocaleString(undefined, { maximumFractionDigits: 1 })}
+                  <span className={metricUnitClassName}>{symbol}</span>
+                  {isCapacityLimited && (
+                    <span
+                      className="tooltip tooltip-top ml-2 inline-block cursor-help align-middle"
+                      data-tip={`Max per rater for this ${contentLabel}: ${maxByCapacity} ${symbol} remaining (10 limit per round)`}
+                      role="img"
+                      aria-label={`Max per rater for this ${contentLabel}: ${maxByCapacity} ${symbol} remaining (10 limit per round)`}
+                    >
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="opacity-60"
+                        aria-hidden="true"
+                      >
+                        <circle cx="12" cy="12" r="10" />
+                        <path d="M12 16v-4" />
+                        <path d="M12 8h.01" />
+                      </svg>
+                    </span>
+                  )}
+                </p>
+              </div>
               <label htmlFor={stakeAmountInputId} className="sr-only">
                 Stake amount
               </label>
@@ -342,38 +363,6 @@ export function StakeSelector({
                 <span>0</span>
                 <span>{sliderMax}</span>
               </div>
-            </div>
-
-            <div className="my-5 text-center">
-              <span className="text-4xl font-bold tabular-nums">
-                {amount.toLocaleString(undefined, { maximumFractionDigits: 1 })}
-              </span>
-              <span className="ml-2 text-base text-base-content/60">{symbol}</span>
-              {isCapacityLimited && (
-                <span
-                  className="tooltip tooltip-top ml-2 inline-block cursor-help align-middle"
-                  data-tip={`Max per rater for this ${contentLabel}: ${maxByCapacity} ${symbol} remaining (10 limit per round)`}
-                  role="img"
-                  aria-label={`Max per rater for this ${contentLabel}: ${maxByCapacity} ${symbol} remaining (10 limit per round)`}
-                >
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="opacity-60"
-                    aria-hidden="true"
-                  >
-                    <circle cx="12" cy="12" r="10" />
-                    <path d="M12 16v-4" />
-                    <path d="M12 8h.01" />
-                  </svg>
-                </span>
-              )}
             </div>
 
             <div className="mb-4 border-t border-base-content/10 pt-4">
