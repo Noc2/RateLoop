@@ -5,7 +5,7 @@ import { ClusterPayoutOracleAbi, CuryoGovernorAbi, QuestionRewardPoolEscrowAbi }
 import deployedContracts from "./deployedContracts";
 import { getSharedChainStartBlock, getSharedDeploymentAddress, getSharedDeploymentStartBlock } from "./deployments";
 
-type DeploymentContract = { address: `0x${string}`; deployedOnBlock?: number };
+type DeploymentContract = { address: `0x${string}`; abi: readonly unknown[]; deployedOnBlock?: number };
 type DeploymentChain = Record<string, DeploymentContract>;
 
 const deploymentsByChain = deployedContracts as Record<number, DeploymentChain>;
