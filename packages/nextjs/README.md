@@ -130,7 +130,6 @@ Notes:
 ```text
 app/                          # Next.js App Router
 ├── api/                      # Server-side API routes
-├── debug/                    # Contract debugger
 ├── docs/                     # In-app documentation
 ├── ask/, rate/               # Question asking and rating flows
 └── profiles/, settings/      # User profile and preference routes
