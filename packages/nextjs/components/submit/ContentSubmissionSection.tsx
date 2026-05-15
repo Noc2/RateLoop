@@ -31,7 +31,7 @@ import {
   DEFAULT_BOUNTY_WINDOW_PRESET,
   DEFAULT_CUSTOM_BOUNTY_WINDOW_AMOUNT,
   DEFAULT_CUSTOM_BOUNTY_WINDOW_UNIT,
-  getBountyClosesAt,
+  getBountyClosesAtFromWindowSeconds,
   getBountyWindowSeconds,
   parseBountyWindowAmount,
   resolveBountyReferenceNowSeconds,
@@ -122,6 +122,15 @@ const MAX_QUESTION_BUNDLE_COUNT = 10;
 const MAX_CONTENT_TAGS_LENGTH = 256;
 const SECONDS_PER_MINUTE = 60;
 const SECONDS_PER_HOUR = 60 * SECONDS_PER_MINUTE;
+const ROUND_RESPONSE_WINDOW_PRESETS = [
+  { id: "2m", label: "2m", minutes: 2 },
+  { id: "5m", label: "5m", minutes: 5 },
+  { id: "20m", label: "20m", minutes: 20 },
+  { id: "1h", label: "1h", minutes: 60 },
+  { id: "24h", label: "24h", minutes: 24 * 60 },
+  { id: "3d", label: "3d", minutes: 3 * 24 * 60 },
+  { id: "7d", label: "7d", minutes: 7 * 24 * 60 },
+] as const;
 
 type QuestionDraft = {
   mediaMode: MediaMode;
@@ -347,16 +356,18 @@ export function ContentSubmissionSection() {
   const [customBountyWindowUnit, setCustomBountyWindowUnit] = useState<BountyWindowUnit>(
     DEFAULT_CUSTOM_BOUNTY_WINDOW_UNIT,
   );
+  const [bountyWindowOverridden, setBountyWindowOverridden] = useState(false);
   const [bountyExpiryReferenceTimeMs, setBountyExpiryReferenceTimeMs] = useState<number | null>(null);
   const [roundBlindMinutes, setRoundBlindMinutes] = useState(
     String(Number(DEFAULT_QUESTION_ROUND_CONFIG.epochDuration / 60n)),
   );
-  const [roundMaxDurationHours, setRoundMaxDurationHours] = useState(
-    String(Number(DEFAULT_QUESTION_ROUND_CONFIG.maxDuration / 3600n)),
+  const [roundMaxDurationMinutes, setRoundMaxDurationMinutes] = useState(
+    String(Number(DEFAULT_QUESTION_ROUND_CONFIG.maxDuration / 60n)),
   );
   const [roundMinVoters, setRoundMinVoters] = useState(String(DEFAULT_QUESTION_ROUND_CONFIG.minVoters));
   const [roundMaxVoters, setRoundMaxVoters] = useState(String(DEFAULT_QUESTION_ROUND_CONFIG.maxVoters));
   const [roundConfigTouched, setRoundConfigTouched] = useState(false);
+  const [roundMaxDurationOverridden, setRoundMaxDurationOverridden] = useState(false);
   const [settlementVotersOverridden, setSettlementVotersOverridden] = useState(false);
   const [showAdvancedRoundSettings, setShowAdvancedRoundSettings] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -377,7 +388,7 @@ export function ContentSubmissionSection() {
 
   useEffect(() => {
     setBountyExpiryReferenceTimeMs(Date.now());
-  }, [bountyWindowPreset, customBountyWindowAmount, customBountyWindowUnit]);
+  }, [bountyWindowOverridden, bountyWindowPreset, customBountyWindowAmount, customBountyWindowUnit, roundBlindMinutes]);
 
   useEffect(() => {
     if (!selectedCategory) return;
@@ -825,7 +836,7 @@ export function ContentSubmissionSection() {
   useEffect(() => {
     if (roundConfigTouched || !protocolRoundConfig) return;
     setRoundBlindMinutes(String(Math.max(1, Math.round(roundConfigDefaults.epochDuration / SECONDS_PER_MINUTE))));
-    setRoundMaxDurationHours(String(Math.max(1, Math.round(roundConfigDefaults.maxDuration / SECONDS_PER_HOUR))));
+    setRoundMaxDurationMinutes(String(Math.max(1, Math.round(roundConfigDefaults.maxDuration / SECONDS_PER_MINUTE))));
     setRoundMinVoters(syncedSettlementVoters);
     setRoundMaxVoters(String(roundConfigDefaults.maxVoters));
   }, [protocolRoundConfig, roundConfigDefaults, roundConfigTouched, syncedSettlementVoters]);
@@ -837,22 +848,24 @@ export function ContentSubmissionSection() {
   const selectedRewardAssetId = rewardAsset === "hrep" ? SUBMISSION_REWARD_ASSET_HREP : SUBMISSION_REWARD_ASSET_USDC;
   const selectedRewardAmount = useMemo(() => parseSubmissionRewardAmount(rewardAmount), [rewardAmount]);
   const parsedRoundBlindMinutes = parseWholeNumberInput(roundBlindMinutes);
-  const parsedRoundMaxDurationHours = parseWholeNumberInput(roundMaxDurationHours);
+  const parsedRoundMaxDurationMinutes = parseWholeNumberInput(roundMaxDurationMinutes);
   const parsedRoundMinVoters = parseWholeNumberInput(roundMinVoters);
   const parsedRoundMaxVoters = parseWholeNumberInput(roundMaxVoters);
+  const selectedRoundResponseWindowPreset =
+    ROUND_RESPONSE_WINDOW_PRESETS.find(option => option.minutes === parsedRoundBlindMinutes)?.id ?? "custom";
   const effectiveBlindMinutesForDurationCap =
     parsedRoundBlindMinutes >= roundBlindMinuteBounds.min && parsedRoundBlindMinutes <= roundBlindMinuteBounds.max
       ? parsedRoundBlindMinutes
       : roundBlindMinuteBounds.min;
-  const maxRoundDurationForSelectedBlindPhase = getQuestionRoundMaxDurationForEpoch(
-    effectiveBlindMinutesForDurationCap * SECONDS_PER_MINUTE,
-    roundConfigBounds.maxRoundDuration,
-  );
-  const roundMaxDurationHourBounds = useMemo(() => {
-    const min = Math.ceil(roundConfigBounds.minRoundDuration / SECONDS_PER_HOUR);
-    const max = Math.max(min, Math.floor(maxRoundDurationForSelectedBlindPhase / SECONDS_PER_HOUR));
+  const getRoundMaxDurationMinuteBoundsForBlind = (blindMinutes: number) => {
+    const blindSeconds = Math.max(1, Math.floor(blindMinutes)) * SECONDS_PER_MINUTE;
+    const maxDurationSeconds = getQuestionRoundMaxDurationForEpoch(blindSeconds, roundConfigBounds.maxRoundDuration);
+    const minSeconds = Math.max(roundConfigBounds.minRoundDuration, blindSeconds);
+    const min = Math.ceil(minSeconds / SECONDS_PER_MINUTE);
+    const max = Math.max(min, Math.floor(maxDurationSeconds / SECONDS_PER_MINUTE));
     return { min, max };
-  }, [maxRoundDurationForSelectedBlindPhase, roundConfigBounds.minRoundDuration]);
+  };
+  const roundMaxDurationMinuteBounds = getRoundMaxDurationMinuteBoundsForBlind(effectiveBlindMinutesForDurationCap);
   const roundMaxVoterBounds = useMemo(() => {
     const bundleAwareMaxVoters =
       questionCount > 1
@@ -873,14 +886,42 @@ export function ContentSubmissionSection() {
     setRoundConfigTouched(true);
     setValue(normalizedValue);
   };
+  const clampRoundMaxDurationForBlindMinutes = (blindMinutes: number) => {
+    const bounds = getRoundMaxDurationMinuteBoundsForBlind(blindMinutes);
+    setRoundMaxDurationMinutes(current => {
+      const currentValue = !roundMaxDurationOverridden ? blindMinutes : parseWholeNumberInput(current);
+      return String(Math.min(Math.max(currentValue, bounds.min), bounds.max));
+    });
+  };
+  const updateRoundBlindMinutesInput = (value: string) => {
+    const normalizedValue = normalizeWholeNumberInput(value);
+    if (normalizedValue === null) {
+      return;
+    }
+
+    setRoundConfigTouched(true);
+    setRoundBlindMinutes(normalizedValue);
+    if (normalizedValue !== "") {
+      clampRoundMaxDurationForBlindMinutes(parseWholeNumberInput(normalizedValue));
+    }
+  };
+  const clampRoundBlindMinutesInput = () => {
+    const clampedBlindMinutes = clampWholeNumberInput(
+      roundBlindMinutes,
+      roundBlindMinuteBounds.min,
+      roundBlindMinuteBounds.max,
+    );
+    setRoundBlindMinutes(clampedBlindMinutes);
+    clampRoundMaxDurationForBlindMinutes(parseWholeNumberInput(clampedBlindMinutes));
+  };
   const selectedRoundConfig = useMemo(
     () => ({
       epochDuration: BigInt(Math.max(0, parsedRoundBlindMinutes) * SECONDS_PER_MINUTE),
-      maxDuration: BigInt(Math.max(0, parsedRoundMaxDurationHours) * SECONDS_PER_HOUR),
+      maxDuration: BigInt(Math.max(0, parsedRoundMaxDurationMinutes) * SECONDS_PER_MINUTE),
       minVoters: BigInt(Math.max(0, parsedRoundMinVoters)),
       maxVoters: BigInt(Math.max(0, parsedRoundMaxVoters)),
     }),
-    [parsedRoundBlindMinutes, parsedRoundMaxDurationHours, parsedRoundMinVoters, parsedRoundMaxVoters],
+    [parsedRoundBlindMinutes, parsedRoundMaxDurationMinutes, parsedRoundMinVoters, parsedRoundMaxVoters],
   );
   const roundConfigValidationError = (() => {
     const epochDuration = Number(selectedRoundConfig.epochDuration);
@@ -897,8 +938,13 @@ export function ContentSubmissionSection() {
         roundConfigBounds.maxRoundDuration,
       )}.`;
     }
+    if (maxDuration < epochDuration) {
+      return "Max duration must be at least the blind response window.";
+    }
     if (!isQuestionRoundMaxDurationValidForEpoch(epochDuration, maxDuration)) {
-      return `Max duration can span at most ${QUESTION_ROUND_MAX_EPOCH_COUNT.toLocaleString()} blind phases; choose ${roundMaxDurationHourBounds.max}h or less for this blind phase.`;
+      return `Max duration can span at most ${QUESTION_ROUND_MAX_EPOCH_COUNT.toLocaleString()} blind phases; choose ${formatDurationLabel(
+        roundMaxDurationMinuteBounds.max * SECONDS_PER_MINUTE,
+      )} or less for this blind phase.`;
     }
     if (minVoters < roundConfigBounds.minSettlementVoters || minVoters > roundConfigBounds.maxSettlementVoters) {
       return `Settlement voters must be ${roundConfigBounds.minSettlementVoters}-${roundConfigBounds.maxSettlementVoters}.`;
@@ -965,18 +1011,28 @@ export function ContentSubmissionSection() {
     customBountyWindowAmount,
     customBountyWindowUnit,
   );
-  const estimatedBountyExpiresAtLabel = formatBountyExpiryDate(bountyWindowSeconds, bountyExpiryReferenceTimeMs);
+  const syncedBountyWindowSeconds =
+    parsedRoundBlindMinutes >= roundBlindMinuteBounds.min && parsedRoundBlindMinutes <= roundBlindMinuteBounds.max
+      ? parsedRoundBlindMinutes * SECONDS_PER_MINUTE
+      : null;
+  const effectiveBountyWindowSeconds = bountyWindowOverridden ? bountyWindowSeconds : syncedBountyWindowSeconds;
+  const estimatedBountyExpiresAtLabel = formatBountyExpiryDate(
+    effectiveBountyWindowSeconds,
+    bountyExpiryReferenceTimeMs,
+  );
   const parsedCustomBountyWindowAmount = parseBountyWindowAmount(customBountyWindowAmount);
   const customBountyWindowAmountMax =
     customBountyWindowUnit === "hours"
       ? Math.floor(Number.MAX_SAFE_INTEGER / SECONDS_PER_HOUR)
       : Math.floor(Number.MAX_SAFE_INTEGER / (24 * SECONDS_PER_HOUR));
   const rewardExpiryValidationError =
-    bountyWindowPreset === "custom" && parsedCustomBountyWindowAmount < 1
+    bountyWindowOverridden && bountyWindowPreset === "custom" && parsedCustomBountyWindowAmount < 1
       ? `Enter at least 1 ${customBountyWindowUnit === "hours" ? "hour" : "day"}.`
-      : bountyWindowPreset === "custom" && parsedCustomBountyWindowAmount > customBountyWindowAmountMax
+      : bountyWindowOverridden &&
+          bountyWindowPreset === "custom" &&
+          parsedCustomBountyWindowAmount > customBountyWindowAmountMax
         ? `Enter ${customBountyWindowAmountMax.toLocaleString()} ${customBountyWindowUnit} or fewer.`
-        : bountyWindowSeconds === null
+        : effectiveBountyWindowSeconds === null
           ? "Choose a bounty window."
           : null;
   const rewardExpiryError = bountyStepAttempted ? rewardExpiryValidationError : null;
@@ -1422,10 +1478,8 @@ export function ContentSubmissionSection() {
         ?.getBlock({ blockTag: "latest" })
         .then(block => block.timestamp)
         .catch(() => undefined);
-      const rewardPoolExpiresAt = getBountyClosesAt(
-        bountyWindowPreset,
-        customBountyWindowAmount,
-        customBountyWindowUnit,
+      const rewardPoolExpiresAt = getBountyClosesAtFromWindowSeconds(
+        effectiveBountyWindowSeconds,
         resolveBountyReferenceNowSeconds(latestBlockTimestamp),
       );
       if (rewardPoolExpiresAt <= 0n) {
@@ -1752,11 +1806,13 @@ export function ContentSubmissionSection() {
       setCustomSubcategory("");
       setRewardAmount("1");
       setRewardRequiredVoters("3");
+      setRewardRequiredRounds("1");
       setBountyWindowPreset(DEFAULT_BOUNTY_WINDOW_PRESET);
       setCustomBountyWindowAmount(DEFAULT_CUSTOM_BOUNTY_WINDOW_AMOUNT);
       setCustomBountyWindowUnit(DEFAULT_CUSTOM_BOUNTY_WINDOW_UNIT);
+      setBountyWindowOverridden(false);
       setRoundBlindMinutes(String(Math.max(1, Math.round(roundConfigDefaults.epochDuration / SECONDS_PER_MINUTE))));
-      setRoundMaxDurationHours(String(Math.max(1, Math.round(roundConfigDefaults.maxDuration / SECONDS_PER_HOUR))));
+      setRoundMaxDurationMinutes(String(Math.max(1, Math.round(roundConfigDefaults.maxDuration / SECONDS_PER_MINUTE))));
       setRoundMinVoters(
         getSyncedSettlementVotersForPaidCompleters(
           "3",
@@ -1766,6 +1822,7 @@ export function ContentSubmissionSection() {
       );
       setRoundMaxVoters(String(roundConfigDefaults.maxVoters));
       setRoundConfigTouched(false);
+      setRoundMaxDurationOverridden(false);
       setSettlementVotersOverridden(false);
       setShowAdvancedRoundSettings(false);
       setQuestionStepAttempted(false);
@@ -1914,14 +1971,16 @@ export function ContentSubmissionSection() {
   const roundSettingsTooltipText =
     "Governance sets the allowed range. Urgent bounties can use shorter rounds; broader questions can wait for more voters.";
   const blindPhaseTooltipText = [
-    "How long votes stay hidden before the round enters its open phase.",
-    `Current min: ${roundBlindMinuteBounds.min.toLocaleString()} minutes.`,
-    `Current max: ${roundBlindMinuteBounds.max.toLocaleString()} minutes.`,
+    "How long answers stay hidden before the result can be revealed and settled.",
+    `Current min: ${formatDurationLabel(roundBlindMinuteBounds.min * SECONDS_PER_MINUTE)}.`,
+    `Current max: ${formatDurationLabel(roundBlindMinuteBounds.max * SECONDS_PER_MINUTE)}.`,
   ].join(" ");
   const maxDurationTooltipText = [
     "How long the round can stay open before it expires without settlement.",
-    `Current min: ${roundMaxDurationHourBounds.min.toLocaleString()} hours.`,
-    `Current max: ${roundMaxDurationHourBounds.max.toLocaleString()} hours for the selected blind phase.`,
+    `Current min: ${formatDurationLabel(roundMaxDurationMinuteBounds.min * SECONDS_PER_MINUTE)}.`,
+    `Current max: ${formatDurationLabel(
+      roundMaxDurationMinuteBounds.max * SECONDS_PER_MINUTE,
+    )} for the selected blind phase.`,
   ].join(" ");
   const settlementVotersTooltipText = [
     "How many revealed voters are required before a round can settle and count for payout.",
@@ -1941,7 +2000,7 @@ export function ContentSubmissionSection() {
           `Current max: ${roundMaxVoterBounds.max.toLocaleString()}.`,
         ].join(" ");
   const bountyExpiryTooltipText =
-    "Bounty and paid feedback are active only inside this window. The question remains visible after the bounty closes.";
+    "Bounty and paid feedback match the blind response window by default. Override this if rewards should close at a different time.";
   const bountyEstimateTooltipText =
     selectedRewardAmount === null
       ? `Using the current minimum until the bounty amount is valid. ${formatFrontendFeePercent(frontendFeeBps)} may be reserved for an eligible frontend operator.`
@@ -2069,120 +2128,52 @@ export function ContentSubmissionSection() {
         </div>
 
         <div className="form-control">
-          <span className="label-text flex items-center gap-1.5">
-            Settlement rounds
-            <InfoTooltip text={requiredRoundsTooltipText} />
-          </span>
-          <input
-            type="number"
-            min={MIN_REWARD_POOL_SETTLED_ROUNDS}
-            max={MAX_REWARD_POOL_SETTLED_ROUNDS}
-            step={1}
-            inputMode="numeric"
-            value={rewardRequiredRounds}
-            onChange={e => {
-              const normalizedValue = normalizeWholeNumberInput(e.target.value);
-              if (normalizedValue !== null) {
-                setRewardRequiredRounds(normalizedValue);
-              }
-            }}
-            onBlur={() => {
-              setRewardRequiredRounds(current =>
-                clampWholeNumberInput(current, MIN_REWARD_POOL_SETTLED_ROUNDS, MAX_REWARD_POOL_SETTLED_ROUNDS),
-              );
-            }}
-            className={`input input-bordered bg-base-100 ${
-              bountyStepAttempted && rewardRequiredRoundsError ? "input-error" : ""
+          <div className="flex items-center gap-1.5">
+            <span className="label-text">Blind response window</span>
+            <InfoTooltip text={blindPhaseTooltipText} />
+          </div>
+          <div className="grid grid-cols-4 gap-2">
+            {ROUND_RESPONSE_WINDOW_PRESETS.map(option => (
+              <button
+                key={option.id}
+                type="button"
+                aria-pressed={selectedRoundResponseWindowPreset === option.id}
+                onClick={() => updateRoundBlindMinutesInput(String(option.minutes))}
+                className={`btn btn-sm ${
+                  selectedRoundResponseWindowPreset === option.id ? "btn-primary" : "btn-outline"
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+          <label
+            className={`mt-2 input input-bordered flex items-center gap-2 bg-base-100 ${
+              bountyStepAttempted && roundConfigValidationError ? "input-error" : ""
             }`}
-          />
+          >
+            <input
+              type="number"
+              min={roundBlindMinuteBounds.min}
+              max={roundBlindMinuteBounds.max}
+              step={1}
+              inputMode="numeric"
+              value={roundBlindMinutes}
+              onChange={e => updateRoundBlindMinutesInput(e.target.value)}
+              onBlur={clampRoundBlindMinutesInput}
+              className="grow bg-transparent"
+              aria-label="Custom blind response window"
+            />
+            <span className="text-sm font-semibold text-base-content/50">min</span>
+          </label>
         </div>
       </div>
       {bountyStepAttempted && rewardRequiredVotersError ? (
         <p className="text-base text-error">{rewardRequiredVotersError}</p>
       ) : null}
-      {bountyStepAttempted && rewardRequiredRoundsError ? (
-        <p className="text-base text-error">{rewardRequiredRoundsError}</p>
+      {bountyStepAttempted && roundConfigValidationError && !showAdvancedRoundSettings ? (
+        <p className="text-base text-error">{roundConfigValidationError}</p>
       ) : null}
-
-      <div className="space-y-2">
-        <p className="flex items-center gap-1.5 text-sm font-medium text-base-content/80">
-          Bounty window
-          <InfoTooltip text={bountyExpiryTooltipText} />
-        </p>
-        <div className="grid grid-cols-3 gap-2">
-          {BOUNTY_WINDOW_PRESETS.map(option => (
-            <button
-              key={option.id}
-              type="button"
-              aria-pressed={bountyWindowPreset === option.id}
-              onClick={() => setBountyWindowPreset(option.id)}
-              className={`btn btn-sm ${bountyWindowPreset === option.id ? "btn-primary" : "btn-outline"}`}
-            >
-              {option.label}
-            </button>
-          ))}
-          <button
-            type="button"
-            aria-pressed={bountyWindowPreset === "custom"}
-            onClick={() => setBountyWindowPreset("custom")}
-            className={`btn btn-sm ${bountyWindowPreset === "custom" ? "btn-primary" : "btn-outline"}`}
-          >
-            Custom
-          </button>
-        </div>
-        {bountyWindowPreset === "custom" ? (
-          <div className="grid gap-3 sm:grid-cols-[max-content_8rem] sm:items-end sm:gap-x-6">
-            <label
-              htmlFor="custom-bounty-window-amount"
-              className="grid gap-2 sm:grid-cols-[max-content_12rem] sm:items-center sm:gap-x-6"
-            >
-              <span className="label-text">Window length</span>
-              <input
-                id="custom-bounty-window-amount"
-                type="number"
-                min={1}
-                max={customBountyWindowAmountMax}
-                step={1}
-                inputMode="numeric"
-                value={customBountyWindowAmount}
-                onChange={e => {
-                  const normalizedValue = normalizeWholeNumberInput(e.target.value);
-                  if (normalizedValue !== null) {
-                    setCustomBountyWindowAmount(normalizedValue);
-                  }
-                }}
-                onBlur={() =>
-                  setCustomBountyWindowAmount(current => clampWholeNumberInput(current, 1, customBountyWindowAmountMax))
-                }
-                className={`input input-bordered bg-base-100 ${
-                  bountyStepAttempted && rewardExpiryError ? "input-error" : ""
-                }`}
-              />
-            </label>
-            <label className="form-control">
-              <span className="label-text">Unit</span>
-              <select
-                value={customBountyWindowUnit}
-                onChange={e => {
-                  const nextUnit = e.target.value as BountyWindowUnit;
-                  const nextMax =
-                    nextUnit === "hours"
-                      ? Math.floor(Number.MAX_SAFE_INTEGER / SECONDS_PER_HOUR)
-                      : Math.floor(Number.MAX_SAFE_INTEGER / (24 * SECONDS_PER_HOUR));
-
-                  setCustomBountyWindowUnit(nextUnit);
-                  setCustomBountyWindowAmount(current => clampWholeNumberInput(current, 1, nextMax));
-                }}
-                className="select select-bordered bg-base-100"
-              >
-                <option value="hours">Hours</option>
-                <option value="days">Days</option>
-              </select>
-            </label>
-          </div>
-        ) : null}
-        {bountyStepAttempted && rewardExpiryError ? <p className="text-base text-error">{rewardExpiryError}</p> : null}
-      </div>
 
       <div className="space-y-3 pt-2">
         <div className="surface-card-nested rounded-lg p-3">
@@ -2212,75 +2203,194 @@ export function ContentSubmissionSection() {
             <div id="advanced-round-settings" className="mt-4 grid gap-3 sm:grid-cols-2">
               <div className="form-control">
                 <div className="flex items-center gap-1.5">
-                  <label htmlFor="round-blind-minutes" className="label-text">
-                    Blind phase (minutes)
+                  <label htmlFor="reward-required-rounds" className="label-text">
+                    Settlement rounds
                   </label>
-                  <InfoTooltip text={blindPhaseTooltipText} />
+                  <InfoTooltip text={requiredRoundsTooltipText} />
                 </div>
                 <input
-                  id="round-blind-minutes"
+                  id="reward-required-rounds"
                   type="number"
-                  min={roundBlindMinuteBounds.min}
-                  max={roundBlindMinuteBounds.max}
+                  min={MIN_REWARD_POOL_SETTLED_ROUNDS}
+                  max={MAX_REWARD_POOL_SETTLED_ROUNDS}
                   step={1}
                   inputMode="numeric"
-                  value={roundBlindMinutes}
+                  value={rewardRequiredRounds}
                   onChange={e => {
-                    updateRoundWholeNumberInput(e.target.value, setRoundBlindMinutes);
+                    const normalizedValue = normalizeWholeNumberInput(e.target.value);
+                    if (normalizedValue !== null) {
+                      setRewardRequiredRounds(normalizedValue);
+                    }
                   }}
                   onBlur={() => {
-                    const clampedBlindMinutes = clampWholeNumberInput(
-                      roundBlindMinutes,
-                      roundBlindMinuteBounds.min,
-                      roundBlindMinuteBounds.max,
-                    );
-                    const maxDurationSeconds = getQuestionRoundMaxDurationForEpoch(
-                      Number(clampedBlindMinutes) * SECONDS_PER_MINUTE,
-                      roundConfigBounds.maxRoundDuration,
-                    );
-                    const maxDurationHours = Math.max(
-                      roundMaxDurationHourBounds.min,
-                      Math.floor(maxDurationSeconds / SECONDS_PER_HOUR),
-                    );
-
-                    setRoundBlindMinutes(clampedBlindMinutes);
-                    setRoundMaxDurationHours(current =>
-                      clampWholeNumberInput(current, roundMaxDurationHourBounds.min, maxDurationHours),
+                    setRewardRequiredRounds(current =>
+                      clampWholeNumberInput(current, MIN_REWARD_POOL_SETTLED_ROUNDS, MAX_REWARD_POOL_SETTLED_ROUNDS),
                     );
                   }}
                   className={`input input-bordered bg-base-100 ${
-                    bountyStepAttempted && roundConfigValidationError ? "input-error" : ""
+                    bountyStepAttempted && rewardRequiredRoundsError ? "input-error" : ""
                   }`}
                 />
               </div>
 
               <div className="form-control">
                 <div className="flex items-center gap-1.5">
-                  <label htmlFor="round-max-duration-hours" className="label-text">
-                    Max duration (hours)
+                  <label htmlFor="round-max-duration-minutes" className="label-text">
+                    Max duration
                   </label>
                   <InfoTooltip text={maxDurationTooltipText} />
                 </div>
                 <input
-                  id="round-max-duration-hours"
+                  id="round-max-duration-minutes"
                   type="number"
-                  min={roundMaxDurationHourBounds.min}
-                  max={roundMaxDurationHourBounds.max}
+                  min={roundMaxDurationMinuteBounds.min}
+                  max={roundMaxDurationMinuteBounds.max}
                   step={1}
                   inputMode="numeric"
-                  value={roundMaxDurationHours}
+                  value={roundMaxDurationMinutes}
                   onChange={e => {
-                    updateRoundWholeNumberInput(e.target.value, setRoundMaxDurationHours);
+                    const normalizedValue = normalizeWholeNumberInput(e.target.value);
+                    if (normalizedValue !== null) {
+                      setRoundConfigTouched(true);
+                      setRoundMaxDurationOverridden(true);
+                      setRoundMaxDurationMinutes(normalizedValue);
+                    }
                   }}
                   onBlur={() => {
-                    setRoundMaxDurationHours(current =>
-                      clampWholeNumberInput(current, roundMaxDurationHourBounds.min, roundMaxDurationHourBounds.max),
+                    setRoundConfigTouched(true);
+                    setRoundMaxDurationOverridden(true);
+                    setRoundMaxDurationMinutes(current =>
+                      clampWholeNumberInput(
+                        current,
+                        roundMaxDurationMinuteBounds.min,
+                        roundMaxDurationMinuteBounds.max,
+                      ),
                     );
                   }}
                   className={`input input-bordered bg-base-100 ${
                     bountyStepAttempted && roundConfigValidationError ? "input-error" : ""
                   }`}
                 />
+                <span className="mt-1 text-xs font-semibold text-base-content/50">minutes</span>
+              </div>
+
+              <div className="space-y-2 sm:col-span-2">
+                <p className="flex items-center gap-1.5 text-sm font-medium text-base-content/80">
+                  Bounty window
+                  <InfoTooltip text={bountyExpiryTooltipText} />
+                </p>
+                <div className="grid grid-cols-2 gap-2 sm:max-w-md">
+                  <button
+                    type="button"
+                    aria-pressed={!bountyWindowOverridden}
+                    onClick={() => setBountyWindowOverridden(false)}
+                    className={`btn btn-sm ${!bountyWindowOverridden ? "btn-primary" : "btn-outline"}`}
+                  >
+                    Match response window
+                  </button>
+                  <button
+                    type="button"
+                    aria-pressed={bountyWindowOverridden}
+                    onClick={() => setBountyWindowOverridden(true)}
+                    className={`btn btn-sm ${bountyWindowOverridden ? "btn-primary" : "btn-outline"}`}
+                  >
+                    Override
+                  </button>
+                </div>
+                {!bountyWindowOverridden ? (
+                  <p className="text-sm text-base-content/60">
+                    Current window: {formatDurationLabel((effectiveBountyWindowSeconds ?? 0) || 0)}
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-3 gap-2">
+                      {BOUNTY_WINDOW_PRESETS.map(option => (
+                        <button
+                          key={option.id}
+                          type="button"
+                          aria-pressed={bountyWindowPreset === option.id}
+                          onClick={() => {
+                            setBountyWindowOverridden(true);
+                            setBountyWindowPreset(option.id);
+                          }}
+                          className={`btn btn-sm ${bountyWindowPreset === option.id ? "btn-primary" : "btn-outline"}`}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        aria-pressed={bountyWindowPreset === "custom"}
+                        onClick={() => {
+                          setBountyWindowOverridden(true);
+                          setBountyWindowPreset("custom");
+                        }}
+                        className={`btn btn-sm ${bountyWindowPreset === "custom" ? "btn-primary" : "btn-outline"}`}
+                      >
+                        Custom
+                      </button>
+                    </div>
+                    {bountyWindowPreset === "custom" ? (
+                      <div className="grid gap-3 sm:grid-cols-[max-content_8rem] sm:items-end sm:gap-x-6">
+                        <label
+                          htmlFor="custom-bounty-window-amount"
+                          className="grid gap-2 sm:grid-cols-[max-content_12rem] sm:items-center sm:gap-x-6"
+                        >
+                          <span className="label-text">Window length</span>
+                          <input
+                            id="custom-bounty-window-amount"
+                            type="number"
+                            min={1}
+                            max={customBountyWindowAmountMax}
+                            step={1}
+                            inputMode="numeric"
+                            value={customBountyWindowAmount}
+                            onChange={e => {
+                              const normalizedValue = normalizeWholeNumberInput(e.target.value);
+                              if (normalizedValue !== null) {
+                                setBountyWindowOverridden(true);
+                                setCustomBountyWindowAmount(normalizedValue);
+                              }
+                            }}
+                            onBlur={() => {
+                              setBountyWindowOverridden(true);
+                              setCustomBountyWindowAmount(current =>
+                                clampWholeNumberInput(current, 1, customBountyWindowAmountMax),
+                              );
+                            }}
+                            className={`input input-bordered bg-base-100 ${
+                              bountyStepAttempted && rewardExpiryError ? "input-error" : ""
+                            }`}
+                          />
+                        </label>
+                        <label className="form-control">
+                          <span className="label-text">Unit</span>
+                          <select
+                            value={customBountyWindowUnit}
+                            onChange={e => {
+                              const nextUnit = e.target.value as BountyWindowUnit;
+                              const nextMax =
+                                nextUnit === "hours"
+                                  ? Math.floor(Number.MAX_SAFE_INTEGER / SECONDS_PER_HOUR)
+                                  : Math.floor(Number.MAX_SAFE_INTEGER / (24 * SECONDS_PER_HOUR));
+
+                              setBountyWindowOverridden(true);
+                              setCustomBountyWindowUnit(nextUnit);
+                              setCustomBountyWindowAmount(current => clampWholeNumberInput(current, 1, nextMax));
+                            }}
+                            className="select select-bordered bg-base-100"
+                          >
+                            <option value="hours">Hours</option>
+                            <option value="days">Days</option>
+                          </select>
+                        </label>
+                      </div>
+                    ) : null}
+                  </div>
+                )}
+                {bountyStepAttempted && rewardExpiryError ? (
+                  <p className="text-base text-error">{rewardExpiryError}</p>
+                ) : null}
               </div>
 
               <div className="form-control">
@@ -2367,6 +2477,9 @@ export function ContentSubmissionSection() {
 
           {showAdvancedRoundSettings && bountyStepAttempted && roundConfigValidationError ? (
             <p className="mt-3 text-base text-error">{roundConfigValidationError}</p>
+          ) : null}
+          {showAdvancedRoundSettings && bountyStepAttempted && rewardRequiredRoundsError ? (
+            <p className="mt-3 text-base text-error">{rewardRequiredRoundsError}</p>
           ) : null}
         </div>
       </div>
