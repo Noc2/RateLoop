@@ -25,7 +25,7 @@ import { getVisibleContentRating } from "~~/hooks/contentFeed/shared";
 import type { ContentItem } from "~~/hooks/useContentFeed";
 import type { SubmitterProfile } from "~~/hooks/useSubmitterProfiles";
 import { type ContentMediaItem, buildFallbackMediaItems, isDirectImageUrl } from "~~/lib/contentMedia";
-import { getActiveBountyClosesAt, isExpiredBountyItem } from "~~/lib/vote/discoverFeedFilter";
+import { getActiveBountyClosesAt, shouldShowBountyExpiredStatus } from "~~/lib/vote/discoverFeedFilter";
 import { detectPlatform } from "~~/utils/platforms";
 
 const ShareContentModal = dynamic(
@@ -87,7 +87,12 @@ function getRewardDeadlineChips(item: ContentItem) {
     feedbackSummary?.hasActiveFeedbackBonus || (feedbackSummary?.activePoolCount ?? 0) > 0,
   );
 
-  if (hasActiveBounty) {
+  if (shouldShowBountyExpiredStatus(item)) {
+    chips.push({
+      label: "Bounty Expired",
+      tone: "ended",
+    });
+  } else if (hasActiveBounty) {
     if (activeBountyClosesAt) {
       chips.push({
         label: `Expires in ${formatDeadlineDistance(activeBountyClosesAt)}`,
@@ -95,11 +100,6 @@ function getRewardDeadlineChips(item: ContentItem) {
         tooltip: BOUNTY_DEADLINE_TOOLTIP_TEXT,
       });
     }
-  } else if (isExpiredBountyItem(item)) {
-    chips.push({
-      label: "Bounty expired",
-      tone: "ended",
-    });
   }
 
   if (feedbackSummary && hasActiveFeedback) {
@@ -535,8 +535,10 @@ function FeedContentMetaCard({
         <div className={compact ? "space-y-2.5" : "space-y-3"}>
           <div className="flex min-w-0 items-center gap-2">
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-              <RewardPoolAmountDisplay amount={rewardPoolTotal} currency={rewardPoolCurrency} />
-              <FeedbackBonusAmountDisplay amount={feedbackBonusTotal} />
+              {rewardPoolTotal > 0n ? (
+                <RewardPoolAmountDisplay amount={rewardPoolTotal} currency={rewardPoolCurrency} />
+              ) : null}
+              {feedbackBonusTotal > 0n ? <FeedbackBonusAmountDisplay amount={feedbackBonusTotal} /> : null}
               {rewardDeadlineChips.map(chip => (
                 <div
                   key={chip.label}

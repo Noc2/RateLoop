@@ -8,6 +8,8 @@ import {
   DISCOVER_BROKEN_FILTER,
   DISCOVER_EXPIRED_BOUNTY_FILTER,
   filterDiscoverCategoryItems,
+  getActiveBountyClosesAt,
+  shouldShowBountyExpiredStatus,
 } from "~~/lib/vote/discoverFeedFilter";
 import { rankForYouFeed } from "~~/lib/vote/forYouRanker";
 
@@ -234,6 +236,116 @@ test("content with a newer active bounty is not treated as expired", () => {
     [1n],
   );
   assert.deepEqual(filterDiscoverCategoryItems(feed, DISCOVER_EXPIRED_BOUNTY_FILTER, undefined, 10_000), []);
+});
+
+test("stale active bounty deadlines are ignored when no bounty remains", () => {
+  const feed = [
+    makeContentItem({
+      id: 1n,
+      url: "https://example.com/empty-active",
+      title: "Empty active bounty",
+      rewardPoolSummary: {
+        totalFunded: 15_000_000n,
+        totalAvailable: 0n,
+        activeRewardPoolCount: 1,
+        expiredRewardPoolCount: 0,
+        hasActiveBounty: true,
+        nextBountyClosesAt: 12_000n,
+      },
+    }),
+    makeContentItem({
+      id: 2n,
+      url: "https://example.com/healthy",
+      title: "Healthy item",
+    }),
+  ];
+
+  assert.equal(getActiveBountyClosesAt(feed[0], 10_000), null);
+  assert.deepEqual(
+    filterDiscoverCategoryItems(feed, DISCOVER_ALL_FILTER, undefined, 10_000).map(item => item.id),
+    [2n],
+  );
+  assert.deepEqual(
+    filterDiscoverCategoryItems(feed, DISCOVER_EXPIRED_BOUNTY_FILTER, undefined, 10_000).map(item => item.id),
+    [1n],
+  );
+});
+
+test("bundle bounties with no remaining value are treated as expired", () => {
+  const feed = [
+    makeContentItem({
+      id: 1n,
+      url: "https://example.com/empty-bundle",
+      title: "Empty bundle bounty",
+      bundleId: 9n,
+      bundleIndex: 0,
+      bundle: {
+        id: 9n,
+        questionCount: 3,
+        requiredCompleters: 3,
+        requiredSettledRounds: 1,
+        completedRoundSetCount: 0,
+        totalRecordedQuestionRounds: 0,
+        claimedCount: 0,
+        fundedAmount: 15_000_000n,
+        unallocatedAmount: 0n,
+        allocatedAmount: 0n,
+        claimedAmount: 0n,
+        refundedAmount: 0n,
+        bountyClosesAt: 12_000n,
+        feedbackClosesAt: 0n,
+        expiresAt: 12_000n,
+        failed: false,
+        refunded: false,
+      },
+    }),
+  ];
+
+  assert.equal(getActiveBountyClosesAt(feed[0], 10_000), null);
+  assert.deepEqual(
+    filterDiscoverCategoryItems(feed, DISCOVER_EXPIRED_BOUNTY_FILTER, undefined, 10_000).map(item => item.id),
+    [1n],
+  );
+});
+
+test("bundle-only items show an expired bounty status when no per-question bounty is available", () => {
+  const item = makeContentItem({
+    id: 1n,
+    url: "https://example.com/bundle-only",
+    title: "Bundle-only bounty",
+    bundleId: 9n,
+    bundleIndex: 0,
+    rewardPoolSummary: {
+      totalFunded: 0n,
+      totalAvailable: 0n,
+      activeRewardPoolCount: 0,
+      expiredRewardPoolCount: 0,
+      hasActiveBounty: false,
+      nextBountyClosesAt: null,
+    },
+    bundle: {
+      id: 9n,
+      questionCount: 3,
+      requiredCompleters: 3,
+      requiredSettledRounds: 1,
+      completedRoundSetCount: 0,
+      totalRecordedQuestionRounds: 0,
+      claimedCount: 0,
+      fundedAmount: 30_000_000n,
+      unallocatedAmount: 30_000_000n,
+      allocatedAmount: 0n,
+      claimedAmount: 0n,
+      refundedAmount: 0n,
+      bountyClosesAt: 12_000n,
+      feedbackClosesAt: 12_000n,
+      expiresAt: 12_000n,
+      failed: false,
+      refunded: false,
+    },
+  });
+
+  assert.equal(getActiveBountyClosesAt(item, 10_000), 12_000n);
+  assert.equal(shouldShowBountyExpiredStatus(item, 10_000), true);
 });
 
 test("filterDiscoverCategoryItems leaves moderation ownership to the feed layer", () => {

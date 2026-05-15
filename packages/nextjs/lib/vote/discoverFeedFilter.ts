@@ -8,7 +8,13 @@ export const DISCOVER_EXPIRED_BOUNTY_FILTER = "Expired";
 
 function hasActiveBounty(item: ContentItem, nowSeconds: number) {
   const rewardSummary = item.rewardPoolSummary;
-  if (rewardSummary?.hasActiveBounty || (rewardSummary?.activeRewardPoolCount ?? 0) > 0) {
+  if (
+    rewardSummary &&
+    rewardSummary.totalAvailable > 0n &&
+    (rewardSummary.hasActiveBounty ||
+      (rewardSummary.activeRewardPoolCount ?? 0) > 0 ||
+      Boolean(rewardSummary.nextBountyClosesAt && rewardSummary.nextBountyClosesAt > BigInt(nowSeconds)))
+  ) {
     return true;
   }
 
@@ -25,7 +31,12 @@ function hasActiveBounty(item: ContentItem, nowSeconds: number) {
 
 export function getActiveBountyClosesAt(item: ContentItem, nowSeconds = Math.floor(Date.now() / 1000)) {
   const rewardSummary = item.rewardPoolSummary;
-  if (rewardSummary?.nextBountyClosesAt && rewardSummary.nextBountyClosesAt > BigInt(nowSeconds)) {
+  if (
+    rewardSummary &&
+    rewardSummary.totalAvailable > 0n &&
+    rewardSummary.nextBountyClosesAt &&
+    rewardSummary.nextBountyClosesAt > BigInt(nowSeconds)
+  ) {
     return rewardSummary.nextBountyClosesAt;
   }
 
@@ -43,19 +54,37 @@ export function getActiveBountyClosesAt(item: ContentItem, nowSeconds = Math.flo
 
 export function isExpiredBountyItem(item: ContentItem, nowSeconds = Math.floor(Date.now() / 1000)) {
   const rewardSummary = item.rewardPoolSummary;
-  const hasExpiredRewardPool = (rewardSummary?.expiredRewardPoolCount ?? 0) > 0;
+  const hasExpiredRewardPool = Boolean(
+    rewardSummary &&
+      (rewardSummary.totalFunded > 0n || rewardSummary.totalAvailable > 0n) &&
+      !hasActiveBounty(item, nowSeconds) &&
+      ((rewardSummary.expiredRewardPoolCount ?? 0) > 0 || rewardSummary.totalAvailable <= 0n),
+  );
   const bundle = item.bundle;
   const hasExpiredBundle = Boolean(
     bundle &&
       !bundle.failed &&
       !bundle.refunded &&
       bundle.completedRoundSetCount < bundle.requiredSettledRounds &&
-      bundle.unallocatedAmount + bundle.allocatedAmount - bundle.claimedAmount > 0n &&
-      (bundle.bountyClosesAt ?? 0n) > 0n &&
-      (bundle.bountyClosesAt ?? 0n) <= BigInt(nowSeconds),
+      bundle.fundedAmount > 0n &&
+      (bundle.unallocatedAmount + bundle.allocatedAmount - bundle.claimedAmount <= 0n ||
+        ((bundle.bountyClosesAt ?? 0n) > 0n && (bundle.bountyClosesAt ?? 0n) <= BigInt(nowSeconds))),
   );
 
   return (hasExpiredRewardPool || hasExpiredBundle) && !hasActiveBounty(item, nowSeconds);
+}
+
+export function shouldShowBountyExpiredStatus(item: ContentItem, nowSeconds = Math.floor(Date.now() / 1000)) {
+  if (isExpiredBountyItem(item, nowSeconds)) return true;
+
+  const bundle = item.bundle;
+  return Boolean(
+    bundle &&
+      !bundle.failed &&
+      !bundle.refunded &&
+      bundle.fundedAmount > 0n &&
+      (item.rewardPoolSummary?.totalAvailable ?? 0n) <= 0n,
+  );
 }
 
 export function filterDiscoverCategoryItems(

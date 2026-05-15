@@ -7,6 +7,7 @@ import { VOTING_SURFACE_BACKGROUND, VotingQuestionCard } from "~~/components/sha
 import { getVisibleContentRating, isContentItemActive } from "~~/hooks/contentFeed/shared";
 import type { ContentItem } from "~~/hooks/useContentFeed";
 import { useCuryoConnectModal } from "~~/hooks/useCuryoConnectModal";
+import { shouldShowBountyExpiredStatus } from "~~/lib/vote/discoverFeedFilter";
 
 interface VoteSignalRailProps {
   primaryItem: ContentItem | null;
@@ -35,6 +36,7 @@ export function VoteSignalRail({
     primaryItem?.bundleIndex !== null && primaryItem?.bundleIndex !== undefined ? primaryItem.bundleIndex + 1 : null;
   const bundleQuestionCount = primaryItem?.bundle?.questionCount ?? null;
   const isBundleQuestion = Boolean(primaryItem?.bundleId && bundleQuestionNumber && bundleQuestionCount);
+  const isBundleBountyExpired = Boolean(primaryItem && isBundleQuestion && shouldShowBountyExpiredStatus(primaryItem));
 
   return (
     <div className="flex w-full min-w-0 flex-col gap-3">
@@ -48,7 +50,11 @@ export function VoteSignalRail({
             <p className="font-semibold text-primary">
               Question {bundleQuestionNumber} of {bundleQuestionCount}
             </p>
-            <p className="mt-0.5">Answer every question in this bundle to qualify for the bounty.</p>
+            <p className="mt-0.5">
+              {isBundleBountyExpired
+                ? "The bounty for this bundle has expired."
+                : "Answer every question in this bundle to qualify for the bounty."}
+            </p>
           </div>
         ) : null}
         {primaryItem ? (
