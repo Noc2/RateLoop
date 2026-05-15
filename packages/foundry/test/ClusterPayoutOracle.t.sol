@@ -1,19 +1,21 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-import {Test} from "forge-std/Test.sol";
-import {ClusterPayoutOracle} from "../contracts/ClusterPayoutOracle.sol";
-import {IClusterPayoutOracle} from "../contracts/interfaces/IClusterPayoutOracle.sol";
-import {MockERC20} from "../contracts/mocks/MockERC20.sol";
+import { Test } from "forge-std/Test.sol";
+import { ClusterPayoutOracle } from "../contracts/ClusterPayoutOracle.sol";
+import { IClusterPayoutOracle } from "../contracts/interfaces/IClusterPayoutOracle.sol";
+import { MockERC20 } from "../contracts/mocks/MockERC20.sol";
 
 contract ClusterPayoutOracleTest is Test {
     uint256 internal constant CHALLENGE_BOND = 5e6;
 
     ClusterPayoutOracle internal oracle;
     MockFrontendRegistry internal frontendRegistry;
+    MockRoundPayoutSnapshotConsumer internal questionConsumer;
+    MockRoundPayoutSnapshotConsumer internal launchConsumer;
     MockERC20 internal usdc;
 
-    receive() external payable {}
+    receive() external payable { }
 
     function setUp() public {
         usdc = new MockERC20("USD Coin", "USDC", 6);
@@ -21,6 +23,10 @@ contract ClusterPayoutOracleTest is Test {
         frontendRegistry.setEligible(address(this), true);
         oracle = new ClusterPayoutOracle(address(this), address(frontendRegistry), address(usdc));
         oracle.setOracleConfig(1 hours, CHALLENGE_BOND, address(this));
+        questionConsumer = new MockRoundPayoutSnapshotConsumer();
+        launchConsumer = new MockRoundPayoutSnapshotConsumer();
+        oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), address(questionConsumer));
+        oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_LAUNCH_CREDIT(), address(launchConsumer));
         usdc.mint(address(this), 100e6);
         usdc.approve(address(oracle), type(uint256).max);
     }
@@ -62,7 +68,7 @@ contract ClusterPayoutOracleTest is Test {
 
     function test_ProposalsDoNotAcceptEthBonds() public {
         vm.expectRevert(ClusterPayoutOracle.InvalidBond.selector);
-        oracle.proposeCorrelationEpoch{value: 1}(
+        oracle.proposeCorrelationEpoch{ value: 1 }(
             1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
         );
     }
@@ -71,6 +77,31 @@ contract ClusterPayoutOracleTest is Test {
         uint64 maxChallengeWindow = oracle.MAX_CHALLENGE_WINDOW();
         vm.expectRevert(ClusterPayoutOracle.InvalidSnapshot.selector);
         oracle.setOracleConfig(maxChallengeWindow + 1, CHALLENGE_BOND, address(this));
+    }
+
+    function test_RoundPayoutSnapshotConsumersMustBeConfigured() public {
+        ClusterPayoutOracle unconfiguredOracle =
+            new ClusterPayoutOracle(address(this), address(frontendRegistry), address(usdc));
+        unconfiguredOracle.setOracleConfig(1 hours, CHALLENGE_BOND, address(this));
+        unconfiguredOracle.proposeCorrelationEpoch(
+            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+        );
+
+        vm.warp(1 hours + 2);
+        unconfiguredOracle.finalizeCorrelationEpoch(1);
+
+        IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
+        vm.expectRevert(ClusterPayoutOracle.InvalidAddress.selector);
+        unconfiguredOracle.proposeRoundPayoutSnapshot(input);
+    }
+
+    function test_SetRoundPayoutSnapshotConsumerRejectsInvalidConfig() public {
+        vm.expectRevert(ClusterPayoutOracle.InvalidSnapshot.selector);
+        oracle.setRoundPayoutSnapshotConsumer(99, address(questionConsumer));
+
+        uint8 questionRewardDomain = oracle.PAYOUT_DOMAIN_QUESTION_REWARD();
+        vm.expectRevert(ClusterPayoutOracle.InvalidAddress.selector);
+        oracle.setRoundPayoutSnapshotConsumer(questionRewardDomain, address(0xBEEF));
     }
 
     function test_OptimisticEpochAndRoundSnapshotFinalizeAndVerifyLeaf() public {
@@ -176,7 +207,7 @@ contract ClusterPayoutOracleTest is Test {
 
         vm.prank(challenger);
         vm.expectRevert(ClusterPayoutOracle.InvalidBond.selector);
-        oracle.challengeCorrelationEpoch{value: 1}(1, keccak256("bad-root"));
+        oracle.challengeCorrelationEpoch{ value: 1 }(1, keccak256("bad-root"));
     }
 
     function test_ArbiterCanFinalizeChallengedSnapshots() public {
@@ -375,8 +406,7 @@ contract ClusterPayoutOracleTest is Test {
         vm.warp(2 hours + 3);
         oracle.finalizeRoundPayoutSnapshot(snapshotKey);
 
-        MockRoundPayoutSnapshotConsumer consumer = new MockRoundPayoutSnapshotConsumer();
-        oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, address(consumer), keccak256("bad-finalized-root"));
+        oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("bad-finalized-root"));
 
         ClusterPayoutOracle.RoundPayoutProposal memory rejected = oracle.roundPayoutProposal(snapshotKey);
         assertEq(uint8(rejected.snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Rejected));
@@ -386,6 +416,7 @@ contract ClusterPayoutOracleTest is Test {
         ClusterPayoutOracle.RoundPayoutProposal memory replacement = oracle.roundPayoutProposal(snapshotKey);
         assertEq(uint8(replacement.snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Proposed));
         assertEq(replacement.artifactHash, keccak256("replacement-round-artifact"));
+        assertEq(replacement.consumer, address(questionConsumer));
     }
 
     function test_FinalizedRoundPayoutSnapshotRejectChecksConsumer() public {
@@ -403,14 +434,10 @@ contract ClusterPayoutOracleTest is Test {
         vm.warp(2 hours + 3);
         oracle.finalizeRoundPayoutSnapshot(snapshotKey);
 
-        vm.expectRevert(ClusterPayoutOracle.InvalidAddress.selector);
-        oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, address(0xBEEF), keccak256("no-consumer-code"));
-
-        MockRoundPayoutSnapshotConsumer consumer = new MockRoundPayoutSnapshotConsumer();
-        consumer.setConsumed(true);
+        questionConsumer.setConsumed(true);
 
         vm.expectRevert(ClusterPayoutOracle.SnapshotConsumed.selector);
-        oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, address(consumer), keccak256("consumed"));
+        oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("consumed"));
     }
 
     function test_LaunchSnapshotsUseZeroRewardPoolId() public {

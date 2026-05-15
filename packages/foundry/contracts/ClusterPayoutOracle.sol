@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {MerkleProof} from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
-import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
-import {IClusterPayoutOracle} from "./interfaces/IClusterPayoutOracle.sol";
-import {IFrontendRegistry} from "./interfaces/IFrontendRegistry.sol";
-import {IRoundPayoutSnapshotConsumer} from "./interfaces/IRoundPayoutSnapshotConsumer.sol";
+import { AccessControl } from "@openzeppelin/contracts/access/AccessControl.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { MerkleProof } from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
+import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import { IClusterPayoutOracle } from "./interfaces/IClusterPayoutOracle.sol";
+import { IFrontendRegistry } from "./interfaces/IFrontendRegistry.sol";
+import { IRoundPayoutSnapshotConsumer } from "./interfaces/IRoundPayoutSnapshotConsumer.sol";
 
 /// @title ClusterPayoutOracle
 /// @notice Optimistic oracle for correlation epoch snapshots and per-round payout weights.
@@ -66,6 +66,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
     struct RoundPayoutProposal {
         RoundPayoutSnapshot snapshot;
         uint64 proposedAt;
+        address consumer;
         address proposer;
         address challenger;
         bytes32 artifactHash;
@@ -81,10 +82,12 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
 
     mapping(uint256 => CorrelationEpochSnapshot) private correlationEpochSnapshots;
     mapping(bytes32 => RoundPayoutProposal) private roundPayoutProposals;
+    mapping(uint8 => address) public roundPayoutSnapshotConsumer;
     mapping(address => uint256) public pendingBondWithdrawals;
 
     event OracleConfigUpdated(uint64 challengeWindow, uint256 challengeBond, address bondRecipient);
     event FrontendRegistryUpdated(address indexed frontendRegistry);
+    event RoundPayoutSnapshotConsumerUpdated(uint8 indexed domain, address indexed consumer);
     event BondWithdrawalCredited(address indexed recipient, uint256 amount);
     event BondWithdrawn(address indexed account, address indexed recipient, uint256 amount);
     event CorrelationEpochProposed(
@@ -162,6 +165,13 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
 
     function setFrontendRegistry(address newFrontendRegistry) external onlyRole(CONFIG_ROLE) {
         _setFrontendRegistry(newFrontendRegistry);
+    }
+
+    function setRoundPayoutSnapshotConsumer(uint8 domain, address consumer) external onlyRole(CONFIG_ROLE) {
+        if (!_isPayoutDomain(domain)) revert InvalidSnapshot();
+        if (consumer == address(0) || consumer.code.length == 0) revert InvalidAddress();
+        roundPayoutSnapshotConsumer[domain] = consumer;
+        emit RoundPayoutSnapshotConsumerUpdated(domain, consumer);
     }
 
     function proposeCorrelationEpoch(
@@ -274,6 +284,8 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
         if (existing.snapshot.status != SnapshotStatus.None && existing.snapshot.status != SnapshotStatus.Rejected) {
             revert SnapshotExists();
         }
+        address consumer = roundPayoutSnapshotConsumer[input.domain];
+        if (consumer == address(0)) revert InvalidAddress();
 
         roundPayoutProposals[snapshotKey] = RoundPayoutProposal({
             snapshot: RoundPayoutSnapshot({
@@ -292,6 +304,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
                 status: SnapshotStatus.Proposed
             }),
             proposedAt: block.timestamp.toUint64(),
+            consumer: consumer,
             proposer: msg.sender,
             challenger: address(0),
             artifactHash: input.artifactHash,
@@ -391,15 +404,16 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
         emit RoundPayoutSnapshotRejected(snapshotKey, msg.sender, reasonHash);
     }
 
-    function rejectFinalizedRoundPayoutSnapshot(bytes32 snapshotKey, address consumer, bytes32 reasonHash)
+    function rejectFinalizedRoundPayoutSnapshot(bytes32 snapshotKey, bytes32 reasonHash)
         external
         onlyRole(ARBITER_ROLE)
     {
-        if (consumer == address(0) || consumer.code.length == 0) revert InvalidAddress();
         RoundPayoutProposal storage proposal = roundPayoutProposals[snapshotKey];
         RoundPayoutSnapshot memory snapshot = proposal.snapshot;
         if (snapshot.status == SnapshotStatus.None) revert SnapshotNotFound();
         if (snapshot.status != SnapshotStatus.Finalized) revert SnapshotNotFinalizable();
+        address consumer = proposal.consumer;
+        if (consumer == address(0)) revert InvalidAddress();
         if (IRoundPayoutSnapshotConsumer(consumer)
                 .isRoundPayoutSnapshotConsumed(
                     snapshot.domain, snapshot.rewardPoolId, snapshot.contentId, snapshot.roundId
@@ -499,15 +513,18 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
 
     function _validateRoundPayoutInput(RoundPayoutSnapshotInput calldata input) private pure {
         if (
-            input.domain != PAYOUT_DOMAIN_QUESTION_REWARD && input.domain != PAYOUT_DOMAIN_LAUNCH_CREDIT
-                || input.contentId == 0 || input.roundId == 0 || input.correlationEpochId == 0
-                || input.weightRoot == bytes32(0) || input.totalClaimWeight == 0
+            !_isPayoutDomain(input.domain) || input.contentId == 0 || input.roundId == 0
+                || input.correlationEpochId == 0 || input.weightRoot == bytes32(0) || input.totalClaimWeight == 0
                 || input.effectiveParticipantUnits > uint256(input.rawEligibleVoters) * BPS_DENOMINATOR
         ) {
             revert InvalidSnapshot();
         }
         if (input.domain == PAYOUT_DOMAIN_QUESTION_REWARD && input.rewardPoolId == 0) revert InvalidSnapshot();
         if (input.domain == PAYOUT_DOMAIN_LAUNCH_CREDIT && input.rewardPoolId != 0) revert InvalidSnapshot();
+    }
+
+    function _isPayoutDomain(uint8 domain) private pure returns (bool) {
+        return domain == PAYOUT_DOMAIN_QUESTION_REWARD || domain == PAYOUT_DOMAIN_LAUNCH_CREDIT;
     }
 
     function _creditBond(address to, uint256 amount) private {

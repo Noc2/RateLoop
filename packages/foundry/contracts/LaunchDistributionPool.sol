@@ -9,10 +9,16 @@ import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/Reentran
 import { RaterRegistry } from "./RaterRegistry.sol";
 import { IClusterPayoutOracle } from "./interfaces/IClusterPayoutOracle.sol";
 import { ILaunchDistributionPool } from "./interfaces/ILaunchDistributionPool.sol";
+import { IRoundPayoutSnapshotConsumer } from "./interfaces/IRoundPayoutSnapshotConsumer.sol";
 
 /// @title LaunchDistributionPool
 /// @notice Holds the 64M LREP launch allocation and releases it through earned, verified, and legacy paths.
-contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyGuardTransient {
+contract LaunchDistributionPool is
+    ILaunchDistributionPool,
+    IRoundPayoutSnapshotConsumer,
+    Ownable,
+    ReentrancyGuardTransient
+{
     using SafeERC20 for IERC20;
 
     error InvalidAddress();
@@ -95,6 +101,7 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => PendingEarnedRaterCredit))) public
         pendingEarnedRaterCredits;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) public earnedRewardCreditFinalized;
+    mapping(uint256 => mapping(uint256 => bool)) public launchPayoutSnapshotConsumed;
     LaunchRewardPolicy public launchRewardPolicy;
 
     event PoolDeposit(uint256 amount);
@@ -423,6 +430,7 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
         if (!oracle.verifyPayoutWeight(payoutWeight, proof)) revert InvalidProof();
 
         earnedRewardCreditFinalized[contentId][roundId][commitKey] = true;
+        launchPayoutSnapshotConsumed[contentId][roundId] = true;
         uint256 effectiveCreditBps = payoutWeight.effectiveWeight;
         paidAmount = _recordEarnedRaterReward(
             pending.rater, contentId, roundId, commitKey, pending.scoreBps, pending.policy, effectiveCreditBps
@@ -565,6 +573,15 @@ contract LaunchDistributionPool is ILaunchDistributionPool, Ownable, ReentrancyG
 
     function remainingVerifiedReferralPool() external view returns (uint256) {
         return _remainingVerifiedReferralPool();
+    }
+
+    function isRoundPayoutSnapshotConsumed(uint8 domain, uint256 rewardPoolId, uint256 contentId, uint256 roundId)
+        external
+        view
+        returns (bool)
+    {
+        if (domain != PAYOUT_DOMAIN_LAUNCH_CREDIT || rewardPoolId != 0) return false;
+        return launchPayoutSnapshotConsumed[contentId][roundId];
     }
 
     function _assignLaunchCap(address rater, uint256 fullCap, LaunchRewardPolicy memory policy)

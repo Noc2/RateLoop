@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {Test, stdStorage, StdStorage} from "forge-std/Test.sol";
-import {ClusterPayoutOracle} from "../contracts/ClusterPayoutOracle.sol";
-import {LaunchDistributionPool} from "../contracts/LaunchDistributionPool.sol";
-import {LoopReputation} from "../contracts/LoopReputation.sol";
-import {RaterRegistry} from "../contracts/RaterRegistry.sol";
-import {IClusterPayoutOracle} from "../contracts/interfaces/IClusterPayoutOracle.sol";
-import {ILaunchDistributionPool} from "../contracts/interfaces/ILaunchDistributionPool.sol";
-import {MockWorldIDRouter} from "../contracts/mocks/MockWorldIDRouter.sol";
+import { Test, stdStorage, StdStorage } from "forge-std/Test.sol";
+import { ClusterPayoutOracle } from "../contracts/ClusterPayoutOracle.sol";
+import { LaunchDistributionPool } from "../contracts/LaunchDistributionPool.sol";
+import { LoopReputation } from "../contracts/LoopReputation.sol";
+import { RaterRegistry } from "../contracts/RaterRegistry.sol";
+import { IClusterPayoutOracle } from "../contracts/interfaces/IClusterPayoutOracle.sol";
+import { ILaunchDistributionPool } from "../contracts/interfaces/ILaunchDistributionPool.sol";
+import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
 
 contract LaunchDistributionPoolTest is Test {
     using stdStorage for StdStorage;
@@ -244,6 +244,7 @@ contract LaunchDistributionPoolTest is Test {
         frontendRegistry.setEligible(address(this), true);
         ClusterPayoutOracle oracle = new ClusterPayoutOracle(address(this), address(frontendRegistry), address(lrep));
         oracle.setOracleConfig(1, 0, address(this));
+        oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_LAUNCH_CREDIT(), address(pool));
         pool.setClusterPayoutOracle(address(oracle));
 
         uint256 paidBeforeSnapshot = _recordLaunchReward(alice, 1, bytes32("anchor-a"));
@@ -296,6 +297,7 @@ contract LaunchDistributionPoolTest is Test {
         assertEq(pool.qualifyingCreditBps(alice), 2_500);
         assertEq(pool.qualifyingRatingCount(alice), 0);
         assertTrue(pool.earnedRewardCreditFinalized(1, 1, _commitKey(1)));
+        assertTrue(pool.isRoundPayoutSnapshotConsumed(pool.PAYOUT_DOMAIN_LAUNCH_CREDIT(), 0, 1, 1));
     }
 
     function test_CorrelationOracleFractionalCreditsOnlyPayCompletedSlots() public {
@@ -1034,6 +1036,7 @@ contract LaunchDistributionPoolTest is Test {
         frontendRegistry.setEligible(address(this), true);
         oracle = new ClusterPayoutOracle(address(this), address(frontendRegistry), address(lrep));
         oracle.setOracleConfig(1, 0, address(this));
+        oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_LAUNCH_CREDIT(), address(pool));
         pool.setClusterPayoutOracle(address(oracle));
 
         oracle.proposeCorrelationEpoch(

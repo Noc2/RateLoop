@@ -171,7 +171,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
 
         CategoryRegistry categoryRegistry = new CategoryRegistry(deployer, governance);
         ClusterPayoutOracle clusterPayoutOracle =
-            new ClusterPayoutOracle(governance, address(frontendRegistry), usdcTokenAddress);
+            new ClusterPayoutOracle(deployer, address(frontendRegistry), usdcTokenAddress);
         RaterRegistry raterRegistry = new RaterRegistry(
             deployer,
             governance,
@@ -224,6 +224,9 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         protocolConfig.setCategoryRegistry(address(categoryRegistry));
         protocolConfig.setRaterRegistry(address(raterRegistry));
         protocolConfig.setClusterPayoutOracle(address(clusterPayoutOracle));
+        clusterPayoutOracle.setRoundPayoutSnapshotConsumer(
+            clusterPayoutOracle.PAYOUT_DOMAIN_QUESTION_REWARD(), address(questionRewardPoolEscrow)
+        );
 
         profileRegistry.setRaterRegistry(address(raterRegistry));
 
@@ -249,6 +252,9 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         LaunchDistributionPool launchDistributionPool =
             new LaunchDistributionPool(address(lrepToken), address(raterRegistry), governance);
         launchDistributionPool.setClusterPayoutOracle(address(clusterPayoutOracle));
+        clusterPayoutOracle.setRoundPayoutSnapshotConsumer(
+            clusterPayoutOracle.PAYOUT_DOMAIN_LAUNCH_CREDIT(), address(launchDistributionPool)
+        );
         launchDistributionPool.setAuthorizedCaller(address(rewardDistributor), true);
         AdvisoryVoteRecorder advisoryVoteRecorder =
             new AdvisoryVoteRecorder(address(votingEngine), address(registry), governance);
@@ -312,6 +318,12 @@ contract DeployRateLoop is ScaffoldETHDeploy {
             categoryRegistry.renounceRole(categoryRegistry.ADMIN_ROLE(), deployer);
             raterRegistry.renounceRole(raterRegistry.ADMIN_ROLE(), deployer);
             raterRegistry.renounceRole(raterRegistry.SEEDER_ROLE(), deployer);
+            clusterPayoutOracle.grantRole(clusterPayoutOracle.DEFAULT_ADMIN_ROLE(), governance);
+            clusterPayoutOracle.grantRole(clusterPayoutOracle.CONFIG_ROLE(), governance);
+            clusterPayoutOracle.grantRole(clusterPayoutOracle.ARBITER_ROLE(), governance);
+            clusterPayoutOracle.renounceRole(clusterPayoutOracle.ARBITER_ROLE(), deployer);
+            clusterPayoutOracle.renounceRole(clusterPayoutOracle.CONFIG_ROLE(), deployer);
+            clusterPayoutOracle.renounceRole(clusterPayoutOracle.DEFAULT_ADMIN_ROLE(), deployer);
 
             TimelockController tc = TimelockController(payable(governance));
             tc.revokeRole(tc.PROPOSER_ROLE(), deployer);
