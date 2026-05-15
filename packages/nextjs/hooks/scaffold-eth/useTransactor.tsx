@@ -15,6 +15,10 @@ type TransactionFunc = (
   options?: TransactorFuncOptions,
 ) => Promise<Hash | undefined>;
 
+export function assertTransactionReceiptSucceeded(receipt: Pick<TransactionReceipt, "status">) {
+  if (receipt.status === "reverted") throw new Error("Transaction reverted");
+}
+
 /**
  * Custom notification content for TXs.
  */
@@ -101,25 +105,6 @@ export const useTransactor = (_walletClient?: WalletClient): TransactionFunc => 
 
       blockExplorerTxURL = chainId ? getBlockExplorerTxLink(chainId, transactionHash) : "";
 
-      // Local Anvil with automine: tx is mined instantly when accepted.
-      // The simulation already validated the tx, so skip receipt polling which is
-      // unreliable on local chains due to publicClient transport issues.
-      if (chainId === 31337) {
-        if (notificationId) {
-          notification.remove(notificationId);
-        }
-        void queryClient.invalidateQueries({ queryKey: FREE_TRANSACTION_ALLOWANCE_QUERY_KEY });
-        if (!options?.suppressSuccessToast) {
-          notification.success(
-            <TxnNotification message="Transaction completed successfully!" blockExplorerLink={blockExplorerTxURL} />,
-            {
-              icon: "🎉",
-            },
-          );
-        }
-        return transactionHash;
-      }
-
       if (!options?.suppressStatusToast) {
         notificationId = notification.loading(
           <TransactionStatusCallout
@@ -139,7 +124,7 @@ export const useTransactor = (_walletClient?: WalletClient): TransactionFunc => 
         notification.remove(notificationId);
       }
 
-      if (transactionReceipt.status === "reverted") throw new Error("Transaction reverted");
+      assertTransactionReceiptSucceeded(transactionReceipt);
 
       if (!options?.suppressSuccessToast) {
         notification.success(
