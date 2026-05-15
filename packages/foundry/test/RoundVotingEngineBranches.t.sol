@@ -1284,6 +1284,8 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     }
 
     function test_Reveal_BeforeCommittedDrandRound_Reverts() public {
+        // Align epoch end to a drand boundary so +1 is still inside the accepted target window.
+        vm.warp(T0 + 2);
         uint256 contentId = _submitContent();
 
         bytes32 salt = keccak256(abi.encodePacked(voter1, block.timestamp));

@@ -235,7 +235,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
 
         _seedCategories(categoryRegistry);
         lrepToken.setPredictionContracts(address(votingEngine), address(rewardDistributor));
-        protocolConfig.setConfig(20 minutes, 7 days, 3, 200);
+        protocolConfig.setConfig(20 minutes, 20 minutes, 3, 200);
 
         lrepToken.mint(deployer, CONSENSUS_POOL_AMOUNT);
         lrepToken.approve(address(votingEngine), CONSENSUS_POOL_AMOUNT);

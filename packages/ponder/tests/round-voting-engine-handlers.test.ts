@@ -42,9 +42,9 @@ vi.mock("ponder:schema", () => ({
 vi.mock("@rateloop/contracts/protocol", () => ({
   DEFAULT_ROUND_CONFIG: {
     epochDurationSeconds: 1200,
-    maxDurationSeconds: 604800,
+    maxDurationSeconds: 1200,
     minVoters: 3,
-    maxVoters: 1000,
+    maxVoters: 200,
   },
   ROUND_STATE: {
     Open: 0,

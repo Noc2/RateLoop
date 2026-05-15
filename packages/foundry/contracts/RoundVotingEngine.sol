@@ -39,7 +39,7 @@ interface IQuestionBundleRoundObserver {
 ///      Accepted tlock tradeoff: the contract enforces lightweight tlock metadata guardrails on chain but does not
 ///      prove that the ciphertext decrypts to the committed plaintext. Invalid or mismatched ciphertexts are handled
 ///      economically: unrevealed votes lose reward eligibility and their stake is forfeited after final reveal grace.
-///      If 1 week passes below commit quorum the round cancels with refunds; once commit quorum exists,
+///      If the 20-minute voting window passes below commit quorum the round cancels with refunds; once commit quorum exists,
 ///      any unrevealed vote can finalize as RevealFailed only after the round stops accepting votes
 ///      and the final reveal grace deadline has passed.
 ///      Epoch-weighting: epoch-1 (blind) = 100% reward weight; epoch-2+ (informed) = 25%.
