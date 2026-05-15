@@ -1936,8 +1936,8 @@ export function ContentSubmissionSection() {
     </div>
   );
 
-  const bountyTooltipText =
-    "Required for spam protection and non-refundable. Paid from your wallet into escrow when the question is submitted. Set the terms that eligible voters must satisfy before payout.";
+  const bountyAmountTooltipText =
+    "Every question needs a funded bounty. It discourages low-quality asks and rewards eligible voters.";
   const requiredVotersTooltipText =
     questionCount === 1
       ? `At least ${MIN_REWARD_POOL_REQUIRED_VOTERS} paid completers are required per round. Settlement voters match this by default unless changed in advanced round settings.`
@@ -1994,18 +1994,7 @@ export function ContentSubmissionSection() {
 
   const bountyDetailsCard = (
     <div className="space-y-5">
-      <p className="flex items-center gap-1.5 text-base font-medium text-base-content">
-        Bounty
-        <InfoTooltip text={bountyTooltipText} />
-      </p>
-
-      <div className="surface-card-nested rounded-lg px-3 py-2">
-        <p className="text-sm font-medium text-base-content">Mandatory spam protection</p>
-        <p className="mt-1 text-sm text-base-content/70">
-          Every question needs a funded bounty before submission. This raises the cost of low-quality asks and rewards
-          eligible voters for useful judgment.
-        </p>
-      </div>
+      <p className="flex items-center gap-1.5 text-base font-medium text-base-content">Bounty</p>
 
       <div className="grid grid-cols-2 gap-2">
         <button
@@ -2026,23 +2015,26 @@ export function ContentSubmissionSection() {
         </button>
       </div>
 
-      <label
-        className={`input input-bordered flex items-center gap-2 bg-base-100 ${
-          bountyStepAttempted && rewardAmountError ? "input-error" : ""
-        }`}
-      >
-        <input
-          type="text"
-          inputMode="decimal"
-          value={rewardAmount}
-          onChange={e => setRewardAmount(e.target.value)}
-          className="grow bg-transparent"
-          aria-label="Bounty amount"
-        />
-        <span className="shrink-0 whitespace-nowrap text-sm font-semibold text-base-content/50">
-          Min {formatSubmissionRewardAmount(minimumBountyAmount, rewardAsset)}
-        </span>
-      </label>
+      <div className="flex items-center gap-2">
+        <label
+          className={`input input-bordered flex min-w-0 flex-1 items-center gap-2 bg-base-100 ${
+            bountyStepAttempted && rewardAmountError ? "input-error" : ""
+          }`}
+        >
+          <input
+            type="text"
+            inputMode="decimal"
+            value={rewardAmount}
+            onChange={e => setRewardAmount(e.target.value)}
+            className="grow bg-transparent"
+            aria-label="Bounty amount"
+          />
+          <span className="shrink-0 whitespace-nowrap text-sm font-semibold text-base-content/50">
+            Min {formatSubmissionRewardAmount(minimumBountyAmount, rewardAsset)}
+          </span>
+        </label>
+        <InfoTooltip text={bountyAmountTooltipText} className="shrink-0" />
+      </div>
       {bountyStepAttempted && rewardAmountError ? <p className="text-base text-error">{rewardAmountError}</p> : null}
 
       <div className="space-y-2">
