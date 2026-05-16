@@ -1,4 +1,5 @@
 import { DocsTitle } from "~~/components/docs/DocsTitle";
+import { RewardPayoutPathsDiagram } from "~~/components/docs/RewardPayoutPathsDiagram";
 import { TokenAllocationChart } from "~~/components/docs/TokenAllocationChart";
 import { protocolDocFacts } from "~~/lib/docs/protocolFacts";
 import {
@@ -222,6 +223,7 @@ const Tokenomics = () => {
         <strong>{protocolDocFacts.revealedLoserRefundPercentLabel}</strong> of raw stake, and the remaining losing pool
         is split across accurate raters, frontend operators, consensus reserve, and treasury.
       </p>
+      <RewardPayoutPathsDiagram />
 
       <hr />
 
