@@ -99,9 +99,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         require(params.requiredSettledRounds >= 1, "Too few rounds");
         require(params.requiredSettledRounds <= MAX_REQUIRED_SETTLED_ROUNDS, "Too many rounds");
         require(params.amount >= params.requiredCompleters * params.requiredSettledRounds, "Amount too small");
-        require(
-            QuestionRewardPoolEscrowEligibilityLib.isValidPolicy(params.bountyEligibility), "Invalid eligibility"
-        );
+        require(QuestionRewardPoolEscrowEligibilityLib.isValidPolicy(params.bountyEligibility), "Invalid eligibility");
         QuestionRewardPoolEscrowBundleLib.requireFundingCoversMaxCompleters(
             registry, params.contentIds, params.amount, params.requiredSettledRounds
         );
@@ -123,9 +121,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             funderIdentity
         );
 
-        _registerBundleQuestions(
-            bundleQuestions, contentBundleId, contentBundleIndex, registry, protocolConfig, params
-        );
+        _registerBundleQuestions(bundleQuestions, contentBundleId, contentBundleIndex, registry, protocolConfig, params);
 
         emit QuestionBundleRewardCreated(
             params.bundleId,
@@ -381,12 +377,12 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         uint256 bundleRedirectedFrontendFee;
         (rewardAmount, reservedFrontendFee, frontendRecipient, bundleRedirectedFrontendFee) =
             QuestionRewardPoolEscrowTransferLib.settleClaimPayout(
-            _rewardToken(lrepToken, usdcToken, bundle.asset),
-            rewardRecipient,
-            rewardAmount,
-            frontendRecipient,
-            reservedFrontendFee
-        );
+                _rewardToken(lrepToken, usdcToken, bundle.asset),
+                rewardRecipient,
+                rewardAmount,
+                frontendRecipient,
+                reservedFrontendFee
+            );
         bundleRedirectedFrontendFee; // silence unused-local warnings; see comment above
 
         emit QuestionBundleRewardClaimed(

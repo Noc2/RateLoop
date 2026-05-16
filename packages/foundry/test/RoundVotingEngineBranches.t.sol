@@ -722,13 +722,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         bytes32 lastCommitPrevrandao = engine.roundLastCommitPrevrandao(contentId, roundId);
         bytes32 expectedSeed = keccak256(
             abi.encode(
-                block.chainid,
-                address(engine),
-                contentId,
-                roundId,
-                uint256(3),
-                revealedSetHash,
-                lastCommitPrevrandao
+                block.chainid, address(engine), contentId, roundId, uint256(3), revealedSetHash, lastCommitPrevrandao
             )
         );
 
@@ -1979,9 +1973,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         // Deferred IOU recorded.
         uint256 expectedBounty = (STAKE * 25) / 10_000; // REFUND_CLEANUP_INCENTIVE_BPS
         assertEq(
-            engine.roundDeferredCleanupBounty(contentId, roundId, keeper),
-            expectedBounty,
-            "deferred bounty recorded"
+            engine.roundDeferredCleanupBounty(contentId, roundId, keeper), expectedBounty, "deferred bounty recorded"
         );
 
         // Top up the reserve and drain the IOU.
@@ -1994,9 +1986,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         uint256 paid = engine.claimDeferredCleanupBounty(contentId, roundId);
         assertEq(paid, expectedBounty, "claim returns paid amount");
         assertEq(lrepToken.balanceOf(keeper) - keeperBefore, expectedBounty, "keeper paid");
-        assertEq(
-            engine.roundDeferredCleanupBounty(contentId, roundId, keeper), 0, "deferred bounty cleared"
-        );
+        assertEq(engine.roundDeferredCleanupBounty(contentId, roundId, keeper), 0, "deferred bounty cleared");
         assertEq(engine.consensusReserve(), 0, "reserve drained by claim");
     }
 

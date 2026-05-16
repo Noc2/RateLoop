@@ -268,8 +268,7 @@ contract RaterRegistryTest is Test {
         vm.prank(rater);
         registry.attestHumanCredentialWithProof(1, uint256(NULLIFIER_HASH), proof);
         assertEq(
-            registry.humanNullifierOwnerByProvider(RaterRegistry.HumanCredentialProvider.WorldId, NULLIFIER_HASH),
-            rater
+            registry.humanNullifierOwnerByProvider(RaterRegistry.HumanCredentialProvider.WorldId, NULLIFIER_HASH), rater
         );
 
         // Switch the rater to the Curyo seed provider while keeping the nullifier bytes the same.

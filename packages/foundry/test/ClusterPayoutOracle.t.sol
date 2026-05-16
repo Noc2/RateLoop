@@ -580,9 +580,7 @@ contract ClusterPayoutOracleProposerBondTest is Test {
     address internal bondRecipient;
     address internal proposer;
 
-    event ProposerBondUnrecoverable(
-        bytes32 indexed snapshotKey, address indexed proposer, uint256 missingAmount
-    );
+    event ProposerBondUnrecoverable(bytes32 indexed snapshotKey, address indexed proposer, uint256 missingAmount);
 
     receive() external payable { }
 
@@ -633,8 +631,7 @@ contract ClusterPayoutOracleProposerBondTest is Test {
 
         assertEq(oracle.pendingBondWithdrawals(proposer), 0, "proposer balance fully clawed back");
         assertEq(
-            oracle.pendingBondWithdrawals(bondRecipient), recipientBefore + PROPOSER_BOND,
-            "bond recipient credited"
+            oracle.pendingBondWithdrawals(bondRecipient), recipientBefore + PROPOSER_BOND, "bond recipient credited"
         );
         assertEq(oracle.readProposerBond(snapshotKey), 0, "proposerBond cleared");
     }
@@ -664,7 +661,8 @@ contract ClusterPayoutOracleProposerBondTest is Test {
         oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("no-bond"));
 
         assertEq(
-            oracle.pendingBondWithdrawals(bondRecipient), recipientBefore,
+            oracle.pendingBondWithdrawals(bondRecipient),
+            recipientBefore,
             "no recipient credit when proposerBond is zero"
         );
     }

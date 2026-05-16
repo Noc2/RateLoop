@@ -603,7 +603,9 @@ contract ProfileRegistryTest is Test {
 
         ProfileRegistry impl = new ProfileRegistry();
         ProfileRegistry separated = ProfileRegistry(
-            address(new ERC1967Proxy(address(impl), abi.encodeCall(ProfileRegistry.initialize, (deployAdmin, governance))))
+            address(
+                new ERC1967Proxy(address(impl), abi.encodeCall(ProfileRegistry.initialize, (deployAdmin, governance)))
+            )
         );
 
         assertTrue(separated.hasRole(separated.ADMIN_ROLE(), deployAdmin));
@@ -623,9 +625,7 @@ contract ProfileRegistryTest is Test {
 
         vm.prank(governance);
         vm.expectEmit(true, false, true, true);
-        emit ProfileRegistry.NameReleased(
-            user1, keccak256(bytes("alice")), governance
-        );
+        emit ProfileRegistry.NameReleased(user1, keccak256(bytes("alice")), governance);
         separated.releaseName(user1);
 
         assertFalse(separated.isNameTaken("alice"));

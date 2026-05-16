@@ -837,10 +837,10 @@ contract RoundVotingEngine is
         if (!RoundLib.isExpired(round, roundCfg.maxDuration)) revert RoundNotExpired();
         // Cancel-lockout requires BOTH commit quorum AND at least one HRC-verified commit. All-sybil
         // rounds (no HRC participation) stay refund-cancellable so they cannot be used to grief.
-        if (
-            round.voteCount >= _rbtsRevealQuorum(roundCfg.minVoters)
-                && roundHasHumanVerifiedCommit[contentId][roundId]
-        ) revert ThresholdReached();
+        if (round.voteCount >= _rbtsRevealQuorum(roundCfg.minVoters) && roundHasHumanVerifiedCommit[contentId][roundId])
+        {
+            revert ThresholdReached();
+        }
 
         round.state = RoundLib.RoundState.Cancelled;
 
@@ -1535,8 +1535,8 @@ contract RoundVotingEngine is
     // Per-round, per-keeper IOU for the refund-only cleanup bounty when the consensus reserve was
     // too low to pay it in full. Drained by `claimDeferredCleanupBounty`. Already counted toward
     // the per-round 5 LREP cap so a deferred sliver cannot be used to bypass the envelope.
-    mapping(uint256 contentId => mapping(uint256 roundId => mapping(address recipient => uint256 amount)))
-        public roundDeferredCleanupBounty;
+    mapping(uint256 contentId => mapping(uint256 roundId => mapping(address recipient => uint256 amount))) public
+        roundDeferredCleanupBounty;
 
     // --- Storage gap reserved for future upgrades ---
     uint256[24] private __gap;

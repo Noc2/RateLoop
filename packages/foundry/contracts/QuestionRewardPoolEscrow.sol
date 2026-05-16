@@ -780,38 +780,38 @@ contract QuestionRewardPoolEscrow is
             reservedFrontendFee = QuestionRewardPoolEscrowClaimLib.nextEqualShare(
                 snapshot.frontendFeeAllocation, snapshot.eligibleVoters, snapshot.claimedCount
             );
-            (grossAmount, rewardAmount, frontendFee, frontendRecipient) = QuestionRewardPoolEscrowClaimLib
-                .computeEqualShareClaimSplit(
-                votingEngine,
-                rewardPool.contentId,
-                roundId,
-                commitKey,
-                frontend,
-                EqualShareInputs({
-                    allocation: snapshot.allocation,
-                    frontendFeeAllocation: snapshot.frontendFeeAllocation,
-                    eligibleParticipants: snapshot.eligibleVoters,
-                    claimedCount: snapshot.claimedCount
-                })
-            );
+            (grossAmount, rewardAmount, frontendFee, frontendRecipient) =
+                QuestionRewardPoolEscrowClaimLib.computeEqualShareClaimSplit(
+                    votingEngine,
+                    rewardPool.contentId,
+                    roundId,
+                    commitKey,
+                    frontend,
+                    EqualShareInputs({
+                        allocation: snapshot.allocation,
+                        frontendFeeAllocation: snapshot.frontendFeeAllocation,
+                        eligibleParticipants: snapshot.eligibleVoters,
+                        claimedCount: snapshot.claimedCount
+                    })
+                );
         } else {
             (grossAmount, rewardAmount, frontendFee, frontendRecipient, reservedFrontendFee) =
-            QuestionRewardPoolEscrowClaimLib.computeWeightedClaimSplit(
-                votingEngine,
-                rewardPool.contentId,
-                roundId,
-                commitKey,
-                frontend,
-                claimWeight,
-                WeightedShareInputs({
-                    allocation: snapshot.allocation,
-                    frontendFeeAllocation: snapshot.frontendFeeAllocation,
-                    totalClaimWeight: snapshot.totalClaimWeight,
-                    claimedWeight: snapshot.claimedWeight,
-                    claimedAmount: snapshot.claimedAmount,
-                    frontendFeeClaimedAmount: snapshot.frontendFeeClaimedAmount
-                })
-            );
+                QuestionRewardPoolEscrowClaimLib.computeWeightedClaimSplit(
+                    votingEngine,
+                    rewardPool.contentId,
+                    roundId,
+                    commitKey,
+                    frontend,
+                    claimWeight,
+                    WeightedShareInputs({
+                        allocation: snapshot.allocation,
+                        frontendFeeAllocation: snapshot.frontendFeeAllocation,
+                        totalClaimWeight: snapshot.totalClaimWeight,
+                        claimedWeight: snapshot.claimedWeight,
+                        claimedAmount: snapshot.claimedAmount,
+                        frontendFeeClaimedAmount: snapshot.frontendFeeClaimedAmount
+                    })
+                );
         }
     }
 

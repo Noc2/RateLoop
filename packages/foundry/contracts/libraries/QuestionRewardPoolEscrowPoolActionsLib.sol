@@ -63,8 +63,8 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         CreateRewardPoolParams memory params
     ) external returns (uint256 rewardPoolId, uint256 updatedNextRewardPoolId) {
         uint256 fundedAmount = QuestionRewardPoolEscrowTransferLib.pullExactToken(
-            _rewardToken(lrepToken, usdcToken, params.asset), params.funder, params.amount
-        );
+                _rewardToken(lrepToken, usdcToken, params.asset), params.funder, params.amount
+            );
 
         rewardPoolId = nextRewardPoolId;
         updatedNextRewardPoolId = nextRewardPoolId + 1;
@@ -169,16 +169,13 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         emit RewardPoolEligibilitySet(rewardPoolId, params.bountyEligibility);
     }
 
-    function _validateStoreInputs(
-        ContentRegistry registry,
-        uint256 fundedAmount,
-        CreateRewardPoolParams memory params
-    ) private view {
+    function _validateStoreInputs(ContentRegistry registry, uint256 fundedAmount, CreateRewardPoolParams memory params)
+        private
+        view
+    {
         require(fundedAmount > 0, "Amount required");
         require(params.asset == REWARD_ASSET_LREP || params.asset == REWARD_ASSET_USDC, "Invalid asset");
-        require(
-            QuestionRewardPoolEscrowEligibilityLib.isValidPolicy(params.bountyEligibility), "Invalid eligibility"
-        );
+        require(QuestionRewardPoolEscrowEligibilityLib.isValidPolicy(params.bountyEligibility), "Invalid eligibility");
         require(registry.isContentActive(params.contentId), "Content not active");
         require(params.requiredVoters >= MIN_REQUIRED_VOTERS, "Too few voters");
         require(params.requiredVoters >= _requiredParticipantFloorForAmount(fundedAmount), "High-value floor");
@@ -192,9 +189,7 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         require(params.requiredVoters <= contentCfg.maxVoters, "Voters exceed max");
         require(contentCfg.maxVoters <= MAX_REWARD_POOL_ROUND_VOTERS, "Voters exceed max");
         if (!params.nonRefundable) {
-            require(
-                fundedAmount >= params.requiredSettledRounds * uint256(contentCfg.maxVoters), "Amount too small"
-            );
+            require(fundedAmount >= params.requiredSettledRounds * uint256(contentCfg.maxVoters), "Amount too small");
             require(params.bountyClosesAt > block.timestamp, "Bad close");
         }
     }

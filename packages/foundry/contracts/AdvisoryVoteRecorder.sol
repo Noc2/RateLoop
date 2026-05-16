@@ -163,11 +163,10 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
     ///        implement `IAdvisoryVoteRecorder.lastAdvisoryVoteTimestamp`.
     /// @param contentIds Parallel array of content ids whose cooldown to import.
     /// @param voters Parallel array of voter addresses.
-    function migrateAdvisoryCooldown(
-        address oldRecorder,
-        uint256[] calldata contentIds,
-        address[] calldata voters
-    ) external onlyOwner {
+    function migrateAdvisoryCooldown(address oldRecorder, uint256[] calldata contentIds, address[] calldata voters)
+        external
+        onlyOwner
+    {
         if (oldRecorder == address(0) || oldRecorder == address(this)) revert InvalidAddress();
         if (contentIds.length != voters.length) revert IndexOutOfBounds();
         IAdvisoryVoteRecorder source = IAdvisoryVoteRecorder(oldRecorder);
@@ -198,7 +197,9 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         uint256[] calldata contentIds,
         bytes32[] calldata identityKeys
     ) external onlyOwner {
-        if (oldRecorder == address(0) || oldRecorder == address(this)) revert InvalidAddress();
+        if (oldRecorder == address(0) || oldRecorder == address(this)) {
+            revert InvalidAddress();
+        }
         if (contentIds.length != identityKeys.length) revert IndexOutOfBounds();
         IAdvisoryVoteRecorder source = IAdvisoryVoteRecorder(oldRecorder);
         for (uint256 i = 0; i < contentIds.length; i++) {

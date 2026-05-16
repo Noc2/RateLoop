@@ -119,8 +119,8 @@ contract CuryoGovernor is
     ///      past quorum snapshots keep their original exclusion set and dust cannot block migration.
     function replaceExcludedHolder(address oldHolder, address newHolder) external onlyGovernance {
         if (
-            !poolsInitialized || !isExcludedHolder[oldHolder] || newHolder == address(0)
-                || isExcludedHolder[newHolder] || newHolder.code.length == 0
+            !poolsInitialized || !isExcludedHolder[oldHolder] || newHolder == address(0) || isExcludedHolder[newHolder]
+                || newHolder.code.length == 0
         ) {
             revert InvalidExcludedHolder();
         }
