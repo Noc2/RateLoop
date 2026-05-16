@@ -1,13 +1,21 @@
-import { DocsDiagramFrame, MiniPill } from "~~/components/docs/DocsDiagramPrimitives";
+import type { ReactNode } from "react";
+import { type DiagramAccent, DocsDiagramFrame, getDiagramAccentColor } from "~~/components/docs/DocsDiagramPrimitives";
 
-const rows = [
+const rows: Array<{
+  subject: string;
+  commit: string;
+  reveal: string;
+  settle: string;
+  payout: string;
+  tone: DiagramAccent;
+}> = [
   {
     subject: "Question, context, bounty",
     commit: "Public immediately",
     reveal: "Still public",
     settle: "Still public",
     payout: "Still public",
-    tone: "green" as const,
+    tone: "green",
   },
   {
     subject: "Commit metadata",
@@ -15,7 +23,7 @@ const rows = [
     reveal: "Used to match the reveal",
     settle: "Feeds settlement accounting",
     payout: "Referenced by claim paths",
-    tone: "blue" as const,
+    tone: "blue",
   },
   {
     subject: "RBTS report contents",
@@ -23,7 +31,7 @@ const rows = [
     reveal: "Up/down and predicted up % become public",
     settle: "Scores the revealed report",
     payout: "Payout weight can be capped",
-    tone: "pink" as const,
+    tone: "pink",
   },
   {
     subject: "Public rating result",
@@ -31,7 +39,7 @@ const rows = [
     reveal: "Waiting for reveal conditions",
     settle: "Public result is readable",
     payout: "Payout root cannot rewrite it",
-    tone: "green" as const,
+    tone: "green",
   },
   {
     subject: "USDC / launch LREP claims",
@@ -39,11 +47,24 @@ const rows = [
     reveal: "Not claimable",
     settle: "Settled round is required first",
     payout: "Claimable after finalized payout snapshot",
-    tone: "yellow" as const,
+    tone: "yellow",
   },
 ];
 
 const columns = ["Blind commit", "Reveal", "Settle result", "Finalize payout snapshot"] as const;
+
+function StatusText({ accent, children }: { accent: DiagramAccent; children: ReactNode }) {
+  return (
+    <span className="inline-flex items-start gap-2">
+      <span
+        className="mt-[0.45rem] h-1.5 w-1.5 shrink-0 rounded-full"
+        style={{ backgroundColor: getDiagramAccentColor(accent) }}
+        aria-hidden="true"
+      />
+      <span>{children}</span>
+    </span>
+  );
+}
 
 export function RoundVisibilityTimelineDiagram() {
   return (
@@ -66,7 +87,7 @@ export function RoundVisibilityTimelineDiagram() {
                 {row.subject}
               </div>
               <div className="rounded-lg border border-base-content/10 bg-base-content/[0.04] px-3 py-3 text-sm leading-5 text-base-content/62">
-                <MiniPill accent={row.tone}>{row.commit}</MiniPill>
+                <StatusText accent={row.tone}>{row.commit}</StatusText>
               </div>
               <div className="rounded-lg border border-base-content/10 bg-base-content/[0.04] px-3 py-3 text-sm leading-5 text-base-content/62">
                 {row.reveal}
