@@ -243,7 +243,7 @@ contract LaunchDistributionPoolTest is Test {
         MockLaunchOracleFrontendRegistry frontendRegistry = new MockLaunchOracleFrontendRegistry();
         frontendRegistry.setEligible(address(this), true);
         ClusterPayoutOracle oracle = new ClusterPayoutOracle(address(this), address(frontendRegistry), address(lrep));
-        oracle.setOracleConfig(1, 0, address(this));
+        oracle.setOracleConfig(1, 1e6, address(this));
         oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_LAUNCH_CREDIT(), address(pool));
         pool.setClusterPayoutOracle(address(oracle));
 
@@ -1134,7 +1134,7 @@ contract LaunchDistributionPoolTest is Test {
         MockLaunchOracleFrontendRegistry frontendRegistry = new MockLaunchOracleFrontendRegistry();
         frontendRegistry.setEligible(address(this), true);
         oracle = new ClusterPayoutOracle(address(this), address(frontendRegistry), address(lrep));
-        oracle.setOracleConfig(1, 0, address(this));
+        oracle.setOracleConfig(1, 1e6, address(this));
         oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_LAUNCH_CREDIT(), address(pool));
         pool.setClusterPayoutOracle(address(oracle));
 

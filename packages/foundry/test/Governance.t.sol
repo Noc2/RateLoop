@@ -511,6 +511,7 @@ contract GovernanceTest is Test {
 
     function test_GovernorCanReplaceDrainedExcludedHolder() public {
         address replacement = address(99);
+        vm.etch(replacement, hex"600160005260206000F3");
 
         vm.prank(mockFrontendRegistry);
         token.transfer(voter1, FRONTEND_REGISTRY_BALANCE);
@@ -540,6 +541,7 @@ contract GovernanceTest is Test {
 
     function test_GovernorReplacementPreservesHistoricalQuorum() public {
         address replacement = address(99);
+        vm.etch(replacement, hex"600160005260206000F3");
 
         vm.prank(mockFaucet);
         token.transfer(replacement, 20_000_000e6);
@@ -564,6 +566,7 @@ contract GovernanceTest is Test {
 
     function test_GovernorReplacementIgnoresDustVotes() public {
         address replacement = address(99);
+        vm.etch(replacement, hex"600160005260206000F3");
 
         vm.prank(deployer);
         token.mint(replacement, 1);
