@@ -46,9 +46,9 @@ export function AgentIntegrationSequenceDiagram() {
       title="Quote to Public Result"
       description="Agents can use the same public protocol path without a RateLoop account or custodial operator wallet."
     >
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {steps.map(step => (
-          <article key={step.number} className="flex min-h-60 flex-col rounded-lg bg-base-content/[0.07] p-3">
+          <article key={step.number} className="flex min-h-52 flex-col rounded-lg bg-base-content/[0.07] p-3">
             <StepNumber>{step.number}</StepNumber>
             <h4 className="mt-4 text-base font-semibold leading-snug text-base-content">{step.title}</h4>
             <p className="mt-3 text-sm leading-6 text-base-content/65">{step.body}</p>
