@@ -550,7 +550,7 @@ const SmartContracts: NextPage = () => {
           for eligible winning revealed voters, using the rate snapshotted at settlement.
         </li>
         <li>
-          <code>sweepStrandedHrepToTreasury()</code> &mdash; Governance-only recovery path for any LREP mistakenly sent
+          <code>sweepStrandedLrepToTreasury()</code> &mdash; Governance-only recovery path for any LREP mistakenly sent
           directly to the distributor.
         </li>
       </ul>

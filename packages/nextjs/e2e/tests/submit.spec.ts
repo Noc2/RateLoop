@@ -46,7 +46,7 @@ test.describe("Ask page", () => {
     await continueToBountyStep(page);
     await expect(page.getByRole("heading", { name: "Bounty" })).toBeVisible({ timeout: 5_000 });
     await expect(page.getByPlaceholder("Write a subjective question voters can rate")).toBeHidden();
-    await selectBountyRewardAsset(page, "hrep");
+    await selectBountyRewardAsset(page, "lrep");
 
     const submitBtn = page.getByRole("button", { name: /^Submit/i });
     await expect(submitBtn).toBeVisible({ timeout: 5_000 });

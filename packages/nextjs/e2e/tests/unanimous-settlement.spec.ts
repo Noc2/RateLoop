@@ -1,5 +1,5 @@
 import {
-  approveHREP,
+  approveLREP,
   commitVoteDirect,
   evmIncreaseTime,
   getActiveRoundId,
@@ -27,9 +27,9 @@ test.describe("Unanimous settlement (consensus reserve)", () => {
   test.describe.configure({ mode: "serial" });
 
   const VOTING_ENGINE = CONTRACT_ADDRESSES.RoundVotingEngine;
-  const HREP_TOKEN = CONTRACT_ADDRESSES.HumanReputation;
+  const LREP_TOKEN = CONTRACT_ADDRESSES.LoopReputation;
   const CONTENT_REGISTRY = CONTRACT_ADDRESSES.ContentRegistry;
-  const STAKE = BigInt(10e6); // 10 HREP each (above MIN_STAKE_FOR_RATING threshold)
+  const STAKE = BigInt(10e6); // 10 LREP each (above MIN_STAKE_FOR_RATING threshold)
   const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
   const EPOCH_DURATION = 300; // 5 min — contract minimum is 5 minutes
 
@@ -47,7 +47,7 @@ test.describe("Unanimous settlement (consensus reserve)", () => {
 
     const submitter = ANVIL_ACCOUNTS.account10;
 
-    const approved = await approveHREP(CONTENT_REGISTRY, BigInt(10e6), submitter.address, HREP_TOKEN);
+    const approved = await approveLREP(CONTENT_REGISTRY, BigInt(10e6), submitter.address, LREP_TOKEN);
     expect(approved).toBe(true);
 
     const uniqueId = Date.now();
@@ -96,7 +96,7 @@ test.describe("Unanimous settlement (consensus reserve)", () => {
     const commits: { commitKey: `0x${string}`; isUp: boolean; salt: `0x${string}` }[] = [];
 
     for (let i = 0; i < voters.length; i++) {
-      await approveHREP(VOTING_ENGINE, STAKE, voters[i].address, HREP_TOKEN);
+      await approveLREP(VOTING_ENGINE, STAKE, voters[i].address, LREP_TOKEN);
       const result = await commitVoteDirect(
         BigInt(contentId!),
         true, // UP

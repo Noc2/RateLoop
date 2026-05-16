@@ -15,7 +15,7 @@ import { notification } from "~~/utils/scaffold-eth";
 const FAUCET_ACCOUNT_INDEX = 0;
 
 // LREP token has 6 decimals
-const HREP_DECIMALS = 6;
+const LREP_DECIMALS = 6;
 const USDC_DECIMALS = 6;
 
 const localWalletClient = createWalletClient({
@@ -102,12 +102,12 @@ export const FaucetTrigger = ({
  */
 export const FaucetModal = () => {
   const [loading, setLoading] = useState(false);
-  const [hrepLoading, setHrepLoading] = useState(false);
+  const [lrepLoading, setLrepLoading] = useState(false);
   const [usdcLoading, setUsdcLoading] = useState(false);
   const [inputAddress, setInputAddress] = useState<AddressType>();
   const [faucetAddress, setFaucetAddress] = useState<AddressType>();
   const [sendValue, setSendValue] = useState("");
-  const [hrepAmount, setHrepAmount] = useState("1000");
+  const [lrepAmount, setLrepAmount] = useState("1000");
   const [usdcAmount, setUsdcAmount] = useState("1000");
   const [mockUsdcTokenAddress, setMockUsdcTokenAddress] = useState<AddressType>();
   const { chain: ConnectedChain, address: connectedAddress } = useAccount();
@@ -118,7 +118,7 @@ export const FaucetModal = () => {
   const queryClient = useQueryClient();
 
   // Get contract addresses from localhost deployment
-  const hrepTokenAddress = (deployedContracts as any)[31337]?.LoopReputation?.address as AddressType | undefined;
+  const lrepTokenAddress = (deployedContracts as any)[31337]?.LoopReputation?.address as AddressType | undefined;
   const directMockUsdcTokenAddress = (deployedContracts as any)[31337]?.MockERC20?.address as AddressType | undefined;
   const questionRewardPoolEscrowAddress = (deployedContracts as any)[31337]?.QuestionRewardPoolEscrow?.address as
     | AddressType
@@ -214,19 +214,19 @@ export const FaucetModal = () => {
     }
   };
 
-  const claimHREP = async () => {
-    if (!inputAddress || !hrepTokenAddress) {
+  const claimLREP = async () => {
+    if (!inputAddress || !lrepTokenAddress) {
       notification.error("Missing destination address or LoopReputation contract");
       return;
     }
 
     try {
-      setHrepLoading(true);
-      const amount = parseUnits(hrepAmount, HREP_DECIMALS);
+      setLrepLoading(true);
+      const amount = parseUnits(lrepAmount, LREP_DECIMALS);
 
       if (faucetAddress) {
         const txHash = await localWalletClient.writeContract({
-          address: hrepTokenAddress,
+          address: lrepTokenAddress,
           abi: localMintableTokenAbi,
           functionName: "transfer",
           args: [inputAddress, amount],
@@ -235,16 +235,16 @@ export const FaucetModal = () => {
         await localPublicClient.waitForTransactionReceipt({ hash: txHash });
       } else {
         notification.error("Missing faucet address");
-        setHrepLoading(false);
+        setLrepLoading(false);
         return;
       }
 
       queryClient.invalidateQueries();
-      notification.success(`Sent ${hrepAmount} LREP to ${inputAddress.slice(0, 6)}...${inputAddress.slice(-4)}`);
-      setHrepLoading(false);
+      notification.success(`Sent ${lrepAmount} LREP to ${inputAddress.slice(0, 6)}...${inputAddress.slice(-4)}`);
+      setLrepLoading(false);
     } catch (error: any) {
       notification.error(error?.message || "Failed to claim LREP tokens");
-      setHrepLoading(false);
+      setLrepLoading(false);
     }
   };
 
@@ -353,18 +353,18 @@ export const FaucetModal = () => {
                   type="number"
                   className="input input-bordered input-sm flex-1"
                   placeholder="Amount"
-                  value={hrepAmount}
-                  onChange={e => setHrepAmount(e.target.value)}
+                  value={lrepAmount}
+                  onChange={e => setLrepAmount(e.target.value)}
                   min="1"
                 />
                 <span className="self-center text-base font-medium">LREP</span>
               </div>
               <button
                 className="h-10 btn btn-primary btn-sm px-4 rounded-full w-full"
-                onClick={claimHREP}
-                disabled={hrepLoading || !hrepAmount || !inputAddress}
+                onClick={claimLREP}
+                disabled={lrepLoading || !lrepAmount || !inputAddress}
               >
-                {!hrepLoading ? (
+                {!lrepLoading ? (
                   <GiftIcon className="h-5 w-5" />
                 ) : (
                   <span className="loading loading-spinner loading-sm"></span>

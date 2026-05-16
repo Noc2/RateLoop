@@ -90,7 +90,7 @@ export function useRoundVote() {
   const { data: contentRegistryInfo, isLoading: isContentRegistryLoading } = useDeployedContractInfo({
     contractName: "ContentRegistry",
   } as any);
-  const { data: hrepInfo, isLoading: isHrepLoading } = useDeployedContractInfo({
+  const { data: lrepInfo, isLoading: isLrepLoading } = useDeployedContractInfo({
     contractName: REPUTATION_CONTRACT_NAME,
   });
   const publicClient = usePublicClient({ chainId: targetNetwork.id });
@@ -129,12 +129,12 @@ export function useRoundVote() {
       return false;
     }
 
-    if (isVotingEngineLoading || isContentRegistryLoading || isHrepLoading) {
+    if (isVotingEngineLoading || isContentRegistryLoading || isLrepLoading) {
       setError("Preparing vote. Try again in a moment.");
       return false;
     }
 
-    if (!votingEngineInfo?.address || !contentRegistryInfo?.address || !hrepInfo?.address) {
+    if (!votingEngineInfo?.address || !contentRegistryInfo?.address || !lrepInfo?.address) {
       setError("Voting is unavailable right now.");
       return false;
     }
@@ -238,12 +238,12 @@ export function useRoundVote() {
         setError("Preparing vote. Try again in a moment.");
         return false;
       }
-      const hrepAddress = hrepInfo.address as `0x${string}`;
+      const lrepAddress = lrepInfo.address as `0x${string}`;
       const votingEngineAddress = votingEngineInfo.address as `0x${string}`;
       const currentAllowance = isZeroStakeVote
         ? 0n
         : ((await publicClient.readContract({
-            address: hrepAddress,
+            address: lrepAddress,
             abi: LoopReputationAbi,
             functionName: "allowance",
             args: [address as Address, votingEngineAddress],
@@ -256,7 +256,7 @@ export function useRoundVote() {
         currentAllowance,
         drandChainHash,
         frontend,
-        hrepAddress,
+        lrepAddress,
         roundContext,
         stakeWei,
         targetRound,
@@ -310,7 +310,7 @@ export function useRoundVote() {
 
           try {
             const nonce = (await publicClient.readContract({
-              address: hrepAddress,
+              address: lrepAddress,
               abi: LoopReputationAbi,
               functionName: "nonces",
               args: [address as Address],
@@ -318,7 +318,7 @@ export function useRoundVote() {
             let permitTokenName = "Loop Reputation";
             try {
               permitTokenName = (await publicClient.readContract({
-                address: hrepAddress,
+                address: lrepAddress,
                 abi: LoopReputationAbi,
                 functionName: "name",
               })) as string;
@@ -332,7 +332,7 @@ export function useRoundVote() {
               domain: {
                 chainId: targetNetwork.id,
                 name: permitTokenName,
-                verifyingContract: hrepAddress,
+                verifyingContract: lrepAddress,
                 version: "1",
               },
               message: {

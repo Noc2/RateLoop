@@ -86,10 +86,10 @@ export function FrontendRegistration() {
 
   // Contract info
   const { data: frontendRegistryInfo } = useDeployedContractInfo({ contractName: "FrontendRegistry" });
-  const { data: hrepInfo } = useDeployedContractInfo({ contractName: REPUTATION_CONTRACT_NAME });
+  const { data: lrepInfo } = useDeployedContractInfo({ contractName: REPUTATION_CONTRACT_NAME });
   const { data: rewardDistributorInfo } = useDeployedContractInfo({ contractName: "RoundRewardDistributor" });
   const frontendRegistryAddress = frontendRegistryInfo?.address as `0x${string}` | undefined;
-  const hrepAddress = hrepInfo?.address as `0x${string}` | undefined;
+  const lrepAddress = lrepInfo?.address as `0x${string}` | undefined;
   const rewardDistributorAddress = rewardDistributorInfo?.address as `0x${string}` | undefined;
   const { writeContractAsync: writeRewardDistributor } = useScaffoldWriteContract({
     contractName: "RoundRewardDistributor",
@@ -116,14 +116,14 @@ export function FrontendRegistration() {
   });
 
   // Read LREP balance
-  const { data: hrepBalance, refetch: refetchCuryo } = useScaffoldReadContract({
+  const { data: lrepBalance, refetch: refetchCuryo } = useScaffoldReadContract({
     contractName: REPUTATION_CONTRACT_NAME,
     functionName: "balanceOf",
     args: [address],
   });
 
   // Write contracts
-  const { writeContractAsync: writeHrep } = useScaffoldWriteContract({ contractName: REPUTATION_CONTRACT_NAME });
+  const { writeContractAsync: writeLrep } = useScaffoldWriteContract({ contractName: REPUTATION_CONTRACT_NAME });
   const { writeContractAsync: writeFrontendRegistry } = useScaffoldWriteContract({ contractName: "FrontendRegistry" });
   // Separate hook with simulation disabled for register (follows an approve tx,
   // so the simulation may run against stale state before the approve is reflected).
@@ -142,11 +142,11 @@ export function FrontendRegistration() {
   const canCompleteDeregister = isExitPending && nowMs >= exitAvailableAt * 1000;
   const exitAvailableAtLabel = isExitPending ? new Date(exitAvailableAt * 1000).toLocaleString() : "";
   // Parse fees (LREP only)
-  const hrepFees = accumulatedFees ? Number(accumulatedFees) / 1e6 : 0;
-  const hasFees = hrepFees > 0;
+  const lrepFees = accumulatedFees ? Number(accumulatedFees) / 1e6 : 0;
+  const hasFees = lrepFees > 0;
 
   // LREP balance
-  const hrepFormatted = hrepBalance ? Number(hrepBalance) / 1e6 : 0;
+  const lrepFormatted = lrepBalance ? Number(lrepBalance) / 1e6 : 0;
   const {
     items: claimableRoundFees,
     totalClaimable: totalClaimableRoundFees,
@@ -202,7 +202,7 @@ export function FrontendRegistration() {
     if (!address || !frontendRegistryInfo || !frontendRegistryAddress) return;
     if (!ensureGasBalance()) return;
 
-    if (hrepFormatted < STAKE_AMOUNT) {
+    if (lrepFormatted < STAKE_AMOUNT) {
       notification.error("Insufficient LREP balance");
       return;
     }
@@ -211,12 +211,12 @@ export function FrontendRegistration() {
     try {
       const amountWei = BigInt(STAKE_AMOUNT * 1e6);
 
-      if (canUseSponsoredSubmitCalls && hrepInfo && hrepAddress) {
+      if (canUseSponsoredSubmitCalls && lrepInfo && lrepAddress) {
         await executeSponsoredCalls(
           [
             {
-              abi: hrepInfo.abi,
-              address: hrepAddress,
+              abi: lrepInfo.abi,
+              address: lrepAddress,
               args: [frontendRegistryAddress, amountWei],
               functionName: "approve",
             },
@@ -229,7 +229,7 @@ export function FrontendRegistration() {
           { atomicRequired: true },
         );
       } else {
-        await writeHrep({
+        await writeLrep({
           functionName: "approve",
           args: [frontendRegistryAddress, amountWei],
         });
@@ -341,7 +341,7 @@ export function FrontendRegistration() {
         });
       }
 
-      notification.success(`Claimed ${hrepFees.toFixed(2)} LREP!`);
+      notification.success(`Claimed ${lrepFees.toFixed(2)} LREP!`);
       refetchFees();
     } catch (e: any) {
       console.error("Claim failed:", e);
@@ -521,7 +521,7 @@ export function FrontendRegistration() {
             className="btn btn-submit w-full"
             onClick={handleRegister}
             disabled={
-              isRegistering || isAwaitingSponsoredSubmitCalls || isMissingGasBalance || hrepFormatted < STAKE_AMOUNT
+              isRegistering || isAwaitingSponsoredSubmitCalls || isMissingGasBalance || lrepFormatted < STAKE_AMOUNT
             }
           >
             {isRegistering ? (
@@ -669,7 +669,7 @@ export function FrontendRegistration() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-base text-base-content/60">LREP</p>
-                <p className="text-lg font-bold text-primary">{hrepFees.toFixed(2)}</p>
+                <p className="text-lg font-bold text-primary">{lrepFees.toFixed(2)}</p>
               </div>
               <button
                 className="btn btn-submit btn-sm"

@@ -11,7 +11,6 @@ const chain31337 = (deployedContracts as Record<number, Record<string, { address
 const reputationContract = chain31337.LoopReputation;
 
 export const CONTRACT_ADDRESSES = {
-  HumanReputation: reputationContract.address,
   LoopReputation: reputationContract.address,
   ContentRegistry: chain31337.ContentRegistry.address,
   RoundVotingEngine: chain31337.RoundVotingEngine.address,

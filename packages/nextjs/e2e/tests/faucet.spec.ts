@@ -8,7 +8,7 @@ test.describe("Dev faucet API", () => {
     const response = await request.post(`${E2E_BASE_URL}/api/dev-faucet`, {
       data: {
         address: ANVIL_ACCOUNTS.account1.address, // Account #1 has no pre-funded LREP
-        action: "mint-hrep",
+        action: "mint-lrep",
         amount: 100,
       },
     });

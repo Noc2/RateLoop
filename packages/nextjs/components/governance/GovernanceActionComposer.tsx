@@ -17,7 +17,7 @@ import {
 } from "~~/hooks/useGovernance";
 import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
 
-type ComposerFieldType = "address" | "uint" | "hrep" | "string" | "textarea" | "csv" | "bytes32";
+type ComposerFieldType = "address" | "uint" | "lrep" | "string" | "textarea" | "csv" | "bytes32";
 
 type ComposerField = {
   key: string;
@@ -31,7 +31,7 @@ type ComposerField = {
 type FieldParser = {
   address: (key: string, label: string) => Address;
   uint: (key: string, label: string) => bigint;
-  hrep: (key: string, label: string) => bigint;
+  lrep: (key: string, label: string) => bigint;
   bytes32: (key: string, label: string) => `0x${string}`;
   string: (key: string, label: string) => string;
   csv: (key: string) => string[];
@@ -92,7 +92,7 @@ function buildTreasuryGrantDescription(values: Record<string, string>) {
   ].join("\n");
 }
 
-function parsePreviewHrepAmount(value: string | undefined) {
+function parsePreviewLrepAmount(value: string | undefined) {
   const trimmed = value?.trim();
   if (!trimmed) return undefined;
 
@@ -104,7 +104,7 @@ function parsePreviewHrepAmount(value: string | undefined) {
   }
 }
 
-function formatHrepAmount(value: bigint | undefined) {
+function formatLrepAmount(value: bigint | undefined) {
   if (value === undefined) return "—";
 
   const formatted = formatUnits(value, 6);
@@ -156,9 +156,9 @@ const actionTemplates: readonly GovernanceActionTemplate[] = [
     contractName: "CuryoGovernor",
     functionName: "setProposalThreshold",
     description: "Create a proposal to update the LREP required to create new proposals.",
-    fields: [{ key: "threshold", label: "Proposal threshold (LREP)", type: "hrep", required: true }],
+    fields: [{ key: "threshold", label: "Proposal threshold (LREP)", type: "lrep", required: true }],
     buildArgs: (_, parser) => {
-      const threshold = parser.hrep("threshold", "Proposal threshold");
+      const threshold = parser.lrep("threshold", "Proposal threshold");
       if (threshold === 0n) throw new Error("Proposal threshold must be greater than zero.");
       return [threshold];
     },
@@ -196,7 +196,7 @@ const actionTemplates: readonly GovernanceActionTemplate[] = [
       {
         key: "amount",
         label: "Grant amount (LREP)",
-        type: "hrep",
+        type: "lrep",
         required: true,
         helperText: "Use a narrow amount that matches the requested ecosystem role.",
       },
@@ -237,7 +237,7 @@ const actionTemplates: readonly GovernanceActionTemplate[] = [
       },
     ],
     buildArgs: (_, parser) => {
-      const amount = parser.hrep("amount", "Grant amount");
+      const amount = parser.lrep("amount", "Grant amount");
       if (amount <= 0n) throw new Error("Grant amount must be greater than 0 LREP.");
       return [parser.address("recipient", "Recipient address"), amount];
     },
@@ -253,12 +253,12 @@ const actionTemplates: readonly GovernanceActionTemplate[] = [
     description: "Create a proposal to slash a frontend's stake and disable it.",
     fields: [
       { key: "frontend", label: "Frontend address", type: "address", required: true },
-      { key: "amount", label: "Slash amount (LREP)", type: "hrep", required: true },
+      { key: "amount", label: "Slash amount (LREP)", type: "lrep", required: true },
       { key: "reason", label: "Reason", type: "textarea", required: true },
     ],
     buildArgs: (_, parser) => [
       parser.address("frontend", "Frontend address"),
-      parser.hrep("amount", "Slash amount"),
+      parser.lrep("amount", "Slash amount"),
       parser.string("reason", "Reason"),
     ],
     buildDescription: values => `Slash frontend ${values.frontend || "address"} by ${values.amount || "0"} LREP`,
@@ -645,7 +645,7 @@ export function GovernanceActionComposer() {
   const activeProposalThreshold = proposalThreshold;
 
   const grantAmount = useMemo(
-    () => (isTreasuryGrant ? parsePreviewHrepAmount(formValues.amount) : undefined),
+    () => (isTreasuryGrant ? parsePreviewLrepAmount(formValues.amount) : undefined),
     [formValues.amount, isTreasuryGrant],
   );
 
@@ -672,7 +672,7 @@ export function GovernanceActionComposer() {
     isTreasuryGrant && grantAmount !== undefined && treasuryBalance !== undefined && grantAmount > treasuryBalance;
   const thresholdUpdateAmount = useMemo(
     () =>
-      selectedTemplate?.id === "governor-set-threshold" ? parsePreviewHrepAmount(formValues.threshold) : undefined,
+      selectedTemplate?.id === "governor-set-threshold" ? parsePreviewLrepAmount(formValues.threshold) : undefined,
     [formValues.threshold, selectedTemplate?.id],
   );
   const thresholdUpdateExceedsMax =
@@ -707,7 +707,7 @@ export function GovernanceActionComposer() {
       if (!/^\d+$/.test(value)) throw new Error(`${label} must be a whole number.`);
       return BigInt(value);
     },
-    hrep: (key, label) => {
+    lrep: (key, label) => {
       const value = formValues[key]?.trim() ?? "";
       try {
         return parseUnits(value, 6);
@@ -785,7 +785,7 @@ export function GovernanceActionComposer() {
           : undefined;
       const args = selectedTemplate.buildArgs(formValues, parser, proposalDescriptionHash);
       if (selectedTemplate.id === "governor-set-threshold" && thresholdUpdateExceedsMax) {
-        throw new Error(`Proposal threshold cannot exceed ${formatHrepAmount(maxProposalThreshold)}.`);
+        throw new Error(`Proposal threshold cannot exceed ${formatLrepAmount(maxProposalThreshold)}.`);
       }
 
       if (selectedTemplate.mode === "proposal") {
@@ -957,7 +957,7 @@ export function GovernanceActionComposer() {
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                     <div>
                       <p className="text-base text-base-content/50">Timelock treasury balance</p>
-                      <p className="font-mono text-base text-base-content/80">{formatHrepAmount(treasuryBalance)}</p>
+                      <p className="font-mono text-base text-base-content/80">{formatLrepAmount(treasuryBalance)}</p>
                     </div>
                     <div>
                       <p className="text-base text-base-content/50">Share of treasury</p>
@@ -996,7 +996,7 @@ export function GovernanceActionComposer() {
                 <div className="space-y-1 pt-2">
                   <p className="text-base text-base-content/50">
                     Maximum proposal threshold:{" "}
-                    <span className="font-mono text-base-content/80">{formatHrepAmount(maxProposalThreshold)}</span>
+                    <span className="font-mono text-base-content/80">{formatLrepAmount(maxProposalThreshold)}</span>
                   </p>
                   {thresholdUpdateExceedsMax && (
                     <p className="text-base text-warning">

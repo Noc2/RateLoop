@@ -1,4 +1,4 @@
-import { approveHREP, commitVoteDirect, submitContentDirect, waitForPonderIndexed } from "../helpers/admin-helpers";
+import { approveLREP, commitVoteDirect, submitContentDirect, waitForPonderIndexed } from "../helpers/admin-helpers";
 import { ANVIL_ACCOUNTS } from "../helpers/anvil-accounts";
 import { CONTRACT_ADDRESSES } from "../helpers/contracts";
 import { getContentList } from "../helpers/ponder-api";
@@ -21,7 +21,7 @@ import { expect, test } from "@playwright/test";
  */
 test.describe("Contract boundary conditions", () => {
   const VOTING_ENGINE = CONTRACT_ADDRESSES.RoundVotingEngine;
-  const HREP_TOKEN = CONTRACT_ADDRESSES.HumanReputation;
+  const LREP_TOKEN = CONTRACT_ADDRESSES.LoopReputation;
   const CONTENT_REGISTRY = CONTRACT_ADDRESSES.ContentRegistry;
   const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
@@ -29,7 +29,7 @@ test.describe("Contract boundary conditions", () => {
     const voter = ANVIL_ACCOUNTS.account3;
     const fractionalStake = BigInt(500_000); // 0.5 LREP
 
-    await approveHREP(VOTING_ENGINE, fractionalStake, voter.address, HREP_TOKEN);
+    await approveLREP(VOTING_ENGINE, fractionalStake, voter.address, LREP_TOKEN);
 
     // Use seeded content #1 (submitted by account #2)
     const result = await commitVoteDirect(BigInt(1), true, fractionalStake, ZERO_ADDRESS, voter.address, VOTING_ENGINE);
@@ -41,7 +41,7 @@ test.describe("Contract boundary conditions", () => {
     const aboveMaxStake = BigInt(11e6); // 11 LREP (MAX_STAKE = 10 LREP)
 
     // Approve the large amount
-    await approveHREP(VOTING_ENGINE, aboveMaxStake, voter.address, HREP_TOKEN);
+    await approveLREP(VOTING_ENGINE, aboveMaxStake, voter.address, LREP_TOKEN);
 
     // Use seeded content #1
     const result = await commitVoteDirect(BigInt(1), true, aboveMaxStake, ZERO_ADDRESS, voter.address, VOTING_ENGINE);
@@ -51,9 +51,9 @@ test.describe("Contract boundary conditions", () => {
   test("self-vote (submitter commits on own content) reverts", async () => {
     // Content #1 was submitted by account #2
     const submitter = ANVIL_ACCOUNTS.account2;
-    const stake = BigInt(1e6); // 1 HREP
+    const stake = BigInt(1e6); // 1 LREP
 
-    await approveHREP(VOTING_ENGINE, stake, submitter.address, HREP_TOKEN);
+    await approveLREP(VOTING_ENGINE, stake, submitter.address, LREP_TOKEN);
 
     const result = await commitVoteDirect(BigInt(1), true, stake, ZERO_ADDRESS, submitter.address, VOTING_ENGINE);
     expect(result.success, "Self-vote should revert with SelfVote").toBe(false);
@@ -64,7 +64,7 @@ test.describe("Contract boundary conditions", () => {
 
     // Ask a fresh question so we get a clean round with no existing votes
     const submitter = ANVIL_ACCOUNTS.account10;
-    await approveHREP(CONTENT_REGISTRY, BigInt(10e6), submitter.address, HREP_TOKEN);
+    await approveLREP(CONTENT_REGISTRY, BigInt(10e6), submitter.address, LREP_TOKEN);
 
     const uniqueId = Date.now();
     const submitted = await submitContentDirect(
@@ -94,8 +94,8 @@ test.describe("Contract boundary conditions", () => {
 
     // First commit should succeed
     const voter = ANVIL_ACCOUNTS.account4;
-    const stake = BigInt(1e6); // 1 HREP
-    await approveHREP(VOTING_ENGINE, stake * 2n, voter.address, HREP_TOKEN);
+    const stake = BigInt(1e6); // 1 LREP
+    await approveLREP(VOTING_ENGINE, stake * 2n, voter.address, LREP_TOKEN);
 
     const firstCommit = await commitVoteDirect(
       BigInt(freshContentId!),

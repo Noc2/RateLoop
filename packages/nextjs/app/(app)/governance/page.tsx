@@ -100,15 +100,15 @@ function GovernancePageInner() {
   }, []);
 
   // Check LREP balance
-  const { data: hrepBalance, isLoading: hrepBalanceLoading } = useScaffoldReadContract({
+  const { data: lrepBalance, isLoading: lrepBalanceLoading } = useScaffoldReadContract({
     contractName: REPUTATION_CONTRACT_NAME,
     functionName: "balanceOf",
     args: [address],
     query: { enabled: !!address },
   });
 
-  const hasResolvedBalance = !!address && !hrepBalanceLoading && hrepBalance !== undefined;
-  const hasZeroLrep = hasResolvedBalance && hrepBalance === 0n;
+  const hasResolvedBalance = !!address && !lrepBalanceLoading && lrepBalance !== undefined;
+  const hasZeroLrep = hasResolvedBalance && lrepBalance === 0n;
   const addressKey = address?.toLowerCase() ?? null;
   const shouldWaitForEntryRouting = Boolean(address) && !hashInitialized;
 
@@ -168,7 +168,7 @@ function GovernancePageInner() {
     );
   }
 
-  if (hrepBalanceLoading) {
+  if (lrepBalanceLoading) {
     return (
       <AppPageShell contentClassName="space-y-6">
         <div className="flex min-h-[40vh] flex-col items-center justify-center px-4 text-center">

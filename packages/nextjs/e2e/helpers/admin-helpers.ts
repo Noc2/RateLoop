@@ -39,7 +39,7 @@ type SubmissionMedia = { imageUrls: string[]; videoUrl: string };
 type SubmissionMediaInput = { imageUrls?: readonly string[]; videoUrl?: string };
 type SubmissionRoundConfig = { epochDuration: number; maxDuration: number; minVoters: number; maxVoters: number };
 const MAX_SUBMISSION_IMAGE_URLS = 4;
-const DEFAULT_SUBMISSION_REWARD_ASSET_HREP = 0;
+const DEFAULT_SUBMISSION_REWARD_ASSET_LREP = 0;
 const DEFAULT_SUBMISSION_REWARD_AMOUNT = 1_000_000n;
 const DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS = 3n;
 const DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS = 1n;
@@ -157,7 +157,7 @@ async function resolveProtocolConfigAddress(contractAddress: string): Promise<st
 
 async function resolveRegistryAddressGetter(
   contractAddress: string,
-  functionName: "hrepToken" | "questionRewardPoolEscrow",
+  functionName: "lrepToken" | "questionRewardPoolEscrow",
 ) {
   const { decodeFunctionResult, encodeFunctionData } = await import("viem");
   const abi = [
@@ -244,7 +244,7 @@ async function buildSubmissionReservation(
     imageUrls: media.imageUrls,
     questionMetadataHash: DEFAULT_QUESTION_METADATA_HASH,
     rewardAmount,
-    rewardAsset: DEFAULT_SUBMISSION_REWARD_ASSET_HREP,
+    rewardAsset: DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
     requiredSettledRounds: DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
     requiredVoters: DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS,
     resultSpecHash: DEFAULT_RESULT_SPEC_HASH,
@@ -796,7 +796,7 @@ export async function addCategory(
 /**
  * Register the caller as a frontend operator.
  * Calls FrontendRegistry.register().
- * Caller must have approved 1000 HREP to the FrontendRegistry.
+ * Caller must have approved 1000 LREP to the FrontendRegistry.
  */
 export async function registerFrontend(fromAddress: string, contractAddress: string): Promise<boolean> {
   const { encodeFunctionData } = await import("viem");
@@ -818,7 +818,7 @@ export async function registerFrontend(fromAddress: string, contractAddress: str
 
 /**
  * Ask a question directly via contract call.
- * Caller funds the mandatory non-refundable HREP bounty during submission.
+ * Caller funds the mandatory non-refundable LREP bounty during submission.
  * Returns true when the submission transaction succeeds.
  */
 export async function submitContentDirect(
@@ -851,13 +851,13 @@ export async function submitContentDirect(
   );
   if (!reservation) return false;
 
-  const [hrepTokenAddress, rewardEscrowAddress] = await Promise.all([
-    resolveRegistryAddressGetter(contractAddress, "hrepToken"),
+  const [lrepTokenAddress, rewardEscrowAddress] = await Promise.all([
+    resolveRegistryAddressGetter(contractAddress, "lrepToken"),
     resolveRegistryAddressGetter(contractAddress, "questionRewardPoolEscrow"),
   ]);
-  if (!hrepTokenAddress || !rewardEscrowAddress) return false;
+  if (!lrepTokenAddress || !rewardEscrowAddress) return false;
 
-  const rewardApproved = await approveHREP(rewardEscrowAddress, rewardAmount, fromAddress, hrepTokenAddress);
+  const rewardApproved = await approveLREP(rewardEscrowAddress, rewardAmount, fromAddress, lrepTokenAddress);
   if (!rewardApproved) return false;
 
   const reserveData = encodeFunctionData({
@@ -939,7 +939,7 @@ export async function submitContentDirect(
       resolvedCategoryId,
       reservation.salt,
       {
-        asset: DEFAULT_SUBMISSION_REWARD_ASSET_HREP,
+        asset: DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
         amount: rewardAmount,
         requiredVoters: DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS,
         requiredSettledRounds: DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
@@ -1155,9 +1155,9 @@ export async function markDormant(
 }
 
 /**
- * Revive dormant content by staking 5 HREP.
+ * Revive dormant content by staking 5 LREP.
  * Calls ContentRegistry.reviveContent(uint256 contentId).
- * Requires caller to have approved 5 HREP (5e6) to the ContentRegistry.
+ * Requires caller to have approved 5 LREP (5e6) to the ContentRegistry.
  */
 export async function reviveContent(
   contentId: number | bigint,
@@ -1182,10 +1182,10 @@ export async function reviveContent(
 }
 
 /**
- * Transfer HREP tokens from one address to another.
- * Calls HumanReputation.transfer(address to, uint256 amount).
+ * Transfer LREP tokens from one address to another.
+ * Calls LoopReputation.transfer(address to, uint256 amount).
  */
-export async function transferHREP(
+export async function transferLREP(
   toAddress: string,
   amount: bigint,
   fromAddress: string,
@@ -1213,9 +1213,9 @@ export async function transferHREP(
 
 /**
  * Approve ERC20 token spending.
- * Calls HumanReputation.approve(address spender, uint256 amount).
+ * Calls LoopReputation.approve(address spender, uint256 amount).
  */
-export async function approveHREP(
+export async function approveLREP(
   spender: string,
   amount: bigint,
   fromAddress: string,
@@ -1458,7 +1458,7 @@ async function buildVoteCommitSalt(
 /**
  * Commit a vote directly via contract call (tlock commit-reveal).
  * Encrypts vote direction with drand tlock and computes commitHash/commitKey.
- * Caller must have approved stakeAmount of HREP to the RoundVotingEngine.
+ * Caller must have approved stakeAmount of LREP to the RoundVotingEngine.
  *
  * Returns { success, commitKey, isUp, predictedUpBps, salt } for later reveal.
  */
@@ -2158,7 +2158,7 @@ export async function waitForPonderSync(
 
 /**
  * Withdraw accumulated frontend fees via FrontendRegistry.claimFees().
- * Must be called by the frontend operator address. Transfers HREP from
+ * Must be called by the frontend operator address. Transfers LREP from
  * the registry to the operator's wallet.
  */
 export async function claimFrontendFees(fromAddress: string, contractAddress: string): Promise<boolean> {

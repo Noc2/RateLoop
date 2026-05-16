@@ -1,5 +1,5 @@
 import {
-  approveHREP,
+  approveLREP,
   commitVoteDirect,
   evmIncreaseTime,
   evmSetTimestamp,
@@ -30,7 +30,7 @@ test.describe("Keeper-backed settlement lifecycle", () => {
   test.describe.configure({ mode: "serial" });
 
   const VOTING_ENGINE = CONTRACT_ADDRESSES.RoundVotingEngine;
-  const HREP_TOKEN = CONTRACT_ADDRESSES.HumanReputation;
+  const LREP_TOKEN = CONTRACT_ADDRESSES.LoopReputation;
   const CONTENT_REGISTRY = CONTRACT_ADDRESSES.ContentRegistry;
   const STAKE = BigInt(10e6);
   const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
@@ -58,7 +58,7 @@ test.describe("Keeper-backed settlement lifecycle", () => {
     await evmSetTimestamp(Math.floor(Date.now() / 1000) - CHAIN_TIME_OFFSET);
 
     const submitter = ANVIL_ACCOUNTS.account10;
-    const submitApproved = await approveHREP(CONTENT_REGISTRY, BigInt(10e6), submitter.address, HREP_TOKEN);
+    const submitApproved = await approveLREP(CONTENT_REGISTRY, BigInt(10e6), submitter.address, LREP_TOKEN);
     expect(submitApproved, "Content submission approval failed").toBe(true);
 
     const uniqueId = Date.now();
@@ -93,7 +93,7 @@ test.describe("Keeper-backed settlement lifecycle", () => {
     ];
 
     for (const voter of voters) {
-      const approved = await approveHREP(VOTING_ENGINE, STAKE, voter.account.address, HREP_TOKEN);
+      const approved = await approveLREP(VOTING_ENGINE, STAKE, voter.account.address, LREP_TOKEN);
       expect(approved, `Vote approval failed for ${voter.account.address}`).toBe(true);
 
       const commit = await commitVoteDirect(

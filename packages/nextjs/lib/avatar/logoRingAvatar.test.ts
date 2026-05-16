@@ -109,7 +109,7 @@ test("same avatar accent keeps the same ring gradient across addresses", () => {
   assert.equal(modelA.ring.gradientAngleDegrees, modelB.ring.gradientAngleDegrees);
 });
 
-test("logo-ring geometry stays fixed across HREP balances", () => {
+test("logo-ring geometry stays fixed across LREP balances", () => {
   const lowBalance = buildLogoRingAvatarModel(
     buildPayload({
       balance: "10000000",

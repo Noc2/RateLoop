@@ -1,4 +1,4 @@
-import { approveHREP, submitContentDirect, waitForPonderIndexed } from "./admin-helpers";
+import { approveLREP, submitContentDirect, waitForPonderIndexed } from "./admin-helpers";
 import { ANVIL_ACCOUNTS } from "./anvil-accounts";
 import { CONTRACT_ADDRESSES } from "./contracts";
 import { getContentList } from "./ponder-api";
@@ -15,7 +15,7 @@ type ContentListItem = {
 };
 
 type EnsureVoteableContentDeps = {
-  approveHREP: typeof approveHREP;
+  approveLREP: typeof approveLREP;
   submitContentDirect: typeof submitContentDirect;
   waitForPonderIndexed: typeof waitForPonderIndexed;
   getContentList: (params: { status: "all"; limit: number }) => Promise<{ items: ContentListItem[] }>;
@@ -26,7 +26,7 @@ type EnsureVoteableContentDeps = {
 };
 
 const defaultDeps: EnsureVoteableContentDeps = {
-  approveHREP,
+  approveLREP,
   submitContentDirect,
   waitForPonderIndexed,
   getContentList,
@@ -49,11 +49,11 @@ export async function ensureVoteableContentWithDeps(
   }
 
   const submitter = ANVIL_ACCOUNTS.account3.address;
-  const approved = await deps.approveHREP(
+  const approved = await deps.approveLREP(
     CONTRACT_ADDRESSES.ContentRegistry,
     SUBMIT_STAKE,
     submitter,
-    CONTRACT_ADDRESSES.HumanReputation,
+    CONTRACT_ADDRESSES.LoopReputation,
   );
   if (!approved) {
     return false;

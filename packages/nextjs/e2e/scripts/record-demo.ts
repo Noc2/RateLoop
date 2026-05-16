@@ -227,7 +227,7 @@ async function recordVoteScene(page: Page, searchQuery?: string): Promise<void> 
   await showCaption(
     page,
     "Blind vote with stake",
-    "This wallet already has a rater credential and HREP, so the demo can go straight into a live vote.",
+    "This wallet already has a rater credential and LREP, so the demo can go straight into a live vote.",
   );
   await pause(page, 1_600);
   await hideCaption(page);
@@ -237,9 +237,9 @@ async function recordVoteScene(page: Page, searchQuery?: string): Promise<void> 
   const stakeModal = page.locator("[role='dialog']").first();
   await stakeModal.waitFor({ state: "visible", timeout: 15_000 });
 
-  const oneHrepButton = stakeModal.getByRole("button", { name: /^1$/ });
-  if (await oneHrepButton.isVisible().catch(() => false)) {
-    await clickTarget(page, oneHrepButton, 250);
+  const oneLrepButton = stakeModal.getByRole("button", { name: /^1$/ });
+  if (await oneLrepButton.isVisible().catch(() => false)) {
+    await clickTarget(page, oneLrepButton, 250);
   }
 
   const confirmButton = stakeModal.getByRole("button", { name: /Stake \d+/i });

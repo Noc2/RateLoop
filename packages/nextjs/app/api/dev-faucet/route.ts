@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid wallet address" }, { status: 400 });
     }
 
-    if (!["mint-hrep", "mint-usdc"].includes(action)) {
+    if (!["mint-lrep", "mint-usdc"].includes(action)) {
       return NextResponse.json({ error: "Invalid action" }, { status: 400 });
     }
 
@@ -110,9 +110,9 @@ export async function POST(request: NextRequest) {
       transport: http(rpcUrl),
     });
 
-    if (action === "mint-hrep") {
-      const hrepAddress = contracts.LoopReputation?.address;
-      if (!hrepAddress) {
+    if (action === "mint-lrep") {
+      const lrepAddress = contracts.LoopReputation?.address;
+      if (!lrepAddress) {
         return NextResponse.json({ error: "LoopReputation not deployed on localhost" }, { status: 500 });
       }
 
@@ -123,7 +123,7 @@ export async function POST(request: NextRequest) {
       const mintAmount = parseUnits(requestedAmount.toString(), LREP_DECIMALS);
 
       const txHash = await walletClient.writeContract({
-        address: hrepAddress,
+        address: lrepAddress,
         abi: erc20FaucetAbi,
         functionName: "transfer",
         args: [address as `0x${string}`, mintAmount],
@@ -134,7 +134,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         success: true,
         txHash,
-        action: "mint-hrep",
+        action: "mint-lrep",
         amount: requestedAmount.toString(),
       });
     }

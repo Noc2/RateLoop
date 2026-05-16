@@ -54,7 +54,7 @@ export function buildRoundVoteTransactionPlan(params: {
   currentAllowance: bigint;
   drandChainHash: Hex;
   frontend: EvmAddress;
-  hrepAddress: EvmAddress;
+  lrepAddress: EvmAddress;
   roundContext: bigint;
   stakeWei: bigint;
   targetRound: bigint;
@@ -98,7 +98,7 @@ export function buildRoundVoteTransactionPlan(params: {
   if (needsApproval) {
     calls.push({
       abi: LoopReputationAbi as Abi,
-      address: params.hrepAddress,
+      address: params.lrepAddress,
       args: [params.votingEngineAddress, params.stakeWei] as const,
       functionName: "approve",
       kind: "approve",

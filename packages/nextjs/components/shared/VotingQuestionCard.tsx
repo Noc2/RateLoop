@@ -16,7 +16,7 @@ import { useRoundSnapshot } from "~~/hooks/useRoundSnapshot";
 import type { VotingConfig } from "~~/lib/contracts/roundVotingEngine";
 import { formatSubmissionRewardAmount, formatUsdAmount } from "~~/lib/questionRewardPools";
 import { formatVoteCooldownRemaining } from "~~/lib/vote/cooldown";
-import { describeOpenRoundActivity, formatHrepAmount, getRoundProgressMessaging } from "~~/lib/vote/voteIncentives";
+import { describeOpenRoundActivity, formatLrepAmount, getRoundProgressMessaging } from "~~/lib/vote/voteIncentives";
 
 interface VotingQuestionCardProps {
   contentId: bigint;
@@ -110,7 +110,7 @@ function LiveRoundActivity({
   const detailCopy =
     snapshot.phase !== "voting"
       ? snapshot.hasRound
-        ? `${formatHrepAmount(snapshot.totalStake, 0)} LREP locked in the last round`
+        ? `${formatLrepAmount(snapshot.totalStake, 0)} LREP locked in the last round`
         : ""
       : snapshot.isEpoch1
         ? condensed
@@ -119,7 +119,7 @@ function LiveRoundActivity({
             ? `Example bonus: ${blindDetail}.`
             : "Blind signals keep full reward weight."
         : condensed
-          ? (progress?.detailLabel ?? `${formatHrepAmount(snapshot.totalStake, 0)} LREP active`)
+          ? (progress?.detailLabel ?? `${formatLrepAmount(snapshot.totalStake, 0)} LREP active`)
           : describeOpenRoundActivity(snapshot);
   const supportCopy =
     snapshot.phase !== "voting"
@@ -219,7 +219,7 @@ function LiveRoundActivity({
           <p
             className={`font-semibold tabular-nums text-base-content ${condensed ? "mt-0.5 text-sm" : "mt-1 text-base"}`}
           >
-            {formatHrepAmount(snapshot.totalStake, 0)}
+            {formatLrepAmount(snapshot.totalStake, 0)}
           </p>
         </div>
       </div>
@@ -260,7 +260,7 @@ function RewardAmountDisplay({
 function getRewardPoolDisplay(amount: bigint, currency: RewardPoolCurrency | undefined) {
   if (currency === "LREP") {
     return {
-      amountLabel: formatSubmissionRewardAmount(amount, "hrep"),
+      amountLabel: formatSubmissionRewardAmount(amount, "lrep"),
       tooltip: LREP_REWARD_POOL_TOOLTIP_TEXT,
     };
   }

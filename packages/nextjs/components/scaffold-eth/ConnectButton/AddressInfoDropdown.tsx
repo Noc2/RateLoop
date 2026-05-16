@@ -36,7 +36,7 @@ const getMenuItemClass = (showText: boolean) =>
     ? "flex items-center justify-start gap-3 px-3 py-2.5 rounded-xl transition-colors text-base-content/60 hover:text-base-content hover:bg-base-200 w-full text-base font-medium"
     : "flex items-center justify-start gap-3 px-4 py-3 rounded-xl transition-colors text-base-content/60 hover:text-base-content hover:bg-base-200 w-full text-base font-medium";
 
-function formatHrepAmount(value: bigint | null | undefined) {
+function formatLrepAmount(value: bigint | null | undefined) {
   if (value == null) return "—";
   return (Number(value) / 1e6).toLocaleString(undefined, { maximumFractionDigits: 0 });
 }
@@ -108,10 +108,10 @@ function WalletSummaryDetails({
 
   const stakeParts: string[] = [];
   if (submissionStakedMicro > 0n) {
-    stakeParts.push(`${formatHrepAmount(submissionStakedMicro)} LREP submissions`);
+    stakeParts.push(`${formatLrepAmount(submissionStakedMicro)} LREP submissions`);
   }
   if (votingStakedMicro > 0n) {
-    let votingLabel = `${formatHrepAmount(votingStakedMicro)} LREP voting`;
+    let votingLabel = `${formatLrepAmount(votingStakedMicro)} LREP voting`;
     if (earliestReveal) {
       votingLabel += ` · reveals in ${earliestReveal}`;
     } else if (hasPendingReveals) {
@@ -120,19 +120,19 @@ function WalletSummaryDetails({
     stakeParts.push(votingLabel);
   }
   if (frontendStakedMicro > 0n) {
-    stakeParts.push(`${formatHrepAmount(frontendStakedMicro)} LREP frontend`);
+    stakeParts.push(`${formatLrepAmount(frontendStakedMicro)} LREP frontend`);
   }
   const stakeTooltip = stakeParts.join(" · ");
 
   return (
     <>
       <div className={balanceClassName}>
-        <span className="tabular-nums">{formatHrepAmount(liquidBalance)}</span>{" "}
+        <span className="tabular-nums">{formatLrepAmount(liquidBalance)}</span>{" "}
         <span className="text-base-content/52">LREP</span>
       </div>
       {showStaked ? (
         <div className={stakeClassName}>
-          <span className="tabular-nums">{formatHrepAmount(totalStakedMicro)}</span>
+          <span className="tabular-nums">{formatLrepAmount(totalStakedMicro)}</span>
           <span className="text-base-content/52">Staked</span>
           {stakeTooltip ? <InfoTooltip text={stakeTooltip} position="bottom" /> : null}
         </div>

@@ -12,13 +12,13 @@ import { useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaf
 import { useDelegation } from "~~/hooks/useDelegation";
 import { useRaterRegistryIdentity } from "~~/hooks/useRaterRegistryIdentity";
 import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
-import { formatHrepAmount } from "~~/lib/vote/voteIncentives";
+import { formatLrepAmount } from "~~/lib/vote/voteIncentives";
 import { notification } from "~~/utils/scaffold-eth";
 import { ZERO_ADDRESS } from "~~/utils/scaffold-eth/common";
 
 const LREP_DECIMALS = 6;
 
-function parseHrepAmount(value: string): bigint | null {
+function parseLrepAmount(value: string): bigint | null {
   const trimmedValue = value.trim();
   if (!trimmedValue) {
     return null;
@@ -45,13 +45,13 @@ export function DelegationSection() {
     writeContractAsync,
     refetch,
   } = useDelegation(address);
-  const { data: hrepBalance, refetch: refetchHrepBalance } = useScaffoldReadContract({
+  const { data: lrepBalance, refetch: refetchLrepBalance } = useScaffoldReadContract({
     contractName: REPUTATION_CONTRACT_NAME,
     functionName: "balanceOf",
     args: [address],
     query: { enabled: !!address },
   });
-  const { writeContractAsync: writeHrepContractAsync, isPending: isTransferPending } = useScaffoldWriteContract({
+  const { writeContractAsync: writeLrepContractAsync, isPending: isTransferPending } = useScaffoldWriteContract({
     contractName: REPUTATION_CONTRACT_NAME,
   });
 
@@ -64,17 +64,17 @@ export function DelegationSection() {
   const normalizedDelegateInput = delegateInput.trim();
   const isValidAddress = normalizedDelegateInput.length > 0 && isAddress(normalizedDelegateInput);
   const isSelfAddress = normalizedDelegateInput.toLowerCase() === address?.toLowerCase();
-  const hrepBalanceMicro = typeof hrepBalance === "bigint" ? hrepBalance : 0n;
-  const formattedBalance = formatHrepAmount(hrepBalanceMicro, 6);
+  const lrepBalanceMicro = typeof lrepBalance === "bigint" ? lrepBalance : 0n;
+  const formattedBalance = formatLrepAmount(lrepBalanceMicro, 6);
 
   const normalizedTransferAddress = transferAddressInput.trim();
-  const parsedTransferAmount = useMemo(() => parseHrepAmount(transferAmountInput), [transferAmountInput]);
+  const parsedTransferAmount = useMemo(() => parseLrepAmount(transferAmountInput), [transferAmountInput]);
   const hasTransferAmount = transferAmountInput.trim().length > 0;
   const isValidTransferAddress = normalizedTransferAddress.length > 0 && isAddress(normalizedTransferAddress);
   const isTransferSelfAddress = normalizedTransferAddress.toLowerCase() === address?.toLowerCase();
   const isTransferZeroAddress = normalizedTransferAddress.toLowerCase() === ZERO_ADDRESS.toLowerCase();
   const isValidTransferAmount = parsedTransferAmount !== null && parsedTransferAmount > 0n;
-  const exceedsTransferBalance = parsedTransferAmount !== null && parsedTransferAmount > hrepBalanceMicro;
+  const exceedsTransferBalance = parsedTransferAmount !== null && parsedTransferAmount > lrepBalanceMicro;
   const canSubmitTransfer =
     isValidTransferAddress &&
     !isTransferZeroAddress &&
@@ -156,13 +156,13 @@ export function DelegationSection() {
     setTransferError(null);
 
     try {
-      await writeHrepContractAsync({
+      await writeLrepContractAsync({
         functionName: "transfer",
         args: [normalizedTransferAddress as `0x${string}`, parsedTransferAmount],
       });
-      notification.success(`Sent ${formatHrepAmount(parsedTransferAmount, 6)} LREP`);
+      notification.success(`Sent ${formatLrepAmount(parsedTransferAmount, 6)} LREP`);
       setTransferAmountInput("");
-      await refetchHrepBalance();
+      await refetchLrepBalance();
       void queryClient.invalidateQueries();
     } catch (e: any) {
       console.error("Transfer LREP failed:", e);
@@ -360,12 +360,12 @@ export function DelegationSection() {
               type="button"
               className="btn btn-ghost btn-xs"
               onClick={() => {
-                setTransferAmountInput(formatUnits(hrepBalanceMicro, LREP_DECIMALS));
+                setTransferAmountInput(formatUnits(lrepBalanceMicro, LREP_DECIMALS));
                 if (transferError) {
                   setTransferError(null);
                 }
               }}
-              disabled={isTransferPending || hrepBalanceMicro === 0n}
+              disabled={isTransferPending || lrepBalanceMicro === 0n}
             >
               Max
             </button>

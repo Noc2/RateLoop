@@ -42,7 +42,7 @@ function safeBigInt(value: unknown): bigint {
 }
 
 function getQuestionRewardAsset(candidate: { asset?: number | null; currency?: string | null }) {
-  return candidate.currency === "LREP" || candidate.currency === "HREP" || candidate.asset === 0
+  return candidate.currency === "LREP" || candidate.currency === "LREP" || candidate.asset === 0
     ? ("LREP" as const)
     : ("USDC" as const);
 }
