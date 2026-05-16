@@ -1449,12 +1449,6 @@ contract RoundVotingEngine is
     // Frontend registry snapshot per round so historical fee claims do not depend on live registry replacement.
     mapping(uint256 => mapping(uint256 => address)) public roundFrontendRegistrySnapshot;
 
-    /// @dev Storage placeholder reserving the slot once occupied by the removed
-    ///      `contentHasSettledRound` mapping (slim 99792bbb). DO NOT remove or repurpose:
-    ///      preserves storage layout for any in-place proxy upgrade from a deployment that
-    ///      still has data in this slot.
-    mapping(uint256 => bool) private __deprecated_contentHasSettledRound;
-
     // Settled rounds with expired unrevealed votes must be cleaned before reward claims.
     mapping(uint256 => mapping(uint256 => uint256)) public roundUnrevealedCleanupRemaining;
 
