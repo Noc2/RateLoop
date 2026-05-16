@@ -91,6 +91,7 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
         uint256 frontendFee
     );
     event FeedbackBonusForfeited(uint256 indexed poolId, address indexed treasury, uint256 amount);
+    event FeedbackBonusFunderRefunded(uint256 indexed poolId, address indexed funder, uint256 amount);
     event DefaultFrontendFeeBpsUpdated(uint256 previousFrontendFeeBps, uint256 newFrontendFeeBps);
     event RaterRegistryUpdated(address raterRegistry);
     event VotingEngineUpdated(address votingEngine);
@@ -233,6 +234,11 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
         );
     }
 
+    /// @notice Sweep an expired feedback-bonus pool's remaining balance to the protocol treasury.
+    /// @dev L-Funds-2: if the protocol treasury is unset (paused/replaced ProtocolConfig),
+    ///      fall back to refunding the original funder instead of reverting. The primary intent
+    ///      remains treasury-forfeit; the funder-refund branch is a defense-in-depth fallback
+    ///      so a transiently-misconfigured ProtocolConfig cannot strand the funds.
     function forfeitExpiredFeedbackBonus(uint256 poolId)
         external
         nonReentrant
@@ -249,9 +255,15 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
         pool.remainingAmount = 0;
 
         address treasury = _protocolTreasury();
-        require(treasury != address(0), "Treasury not set");
-        usdcToken.safeTransfer(treasury, forfeitedAmount);
-        emit FeedbackBonusForfeited(poolId, treasury, forfeitedAmount);
+        if (treasury != address(0)) {
+            usdcToken.safeTransfer(treasury, forfeitedAmount);
+            emit FeedbackBonusForfeited(poolId, treasury, forfeitedAmount);
+        } else {
+            address funder = pool.funder;
+            require(funder != address(0), "No fallback recipient");
+            usdcToken.safeTransfer(funder, forfeitedAmount);
+            emit FeedbackBonusFunderRefunded(poolId, funder, forfeitedAmount);
+        }
     }
 
     /// @notice Recover an ERC-20 that is NOT the protocol's reward asset (USDC).
