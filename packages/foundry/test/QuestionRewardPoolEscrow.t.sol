@@ -199,7 +199,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         registry.setProtocolConfig(address(protocolConfig));
         registry.setCategoryRegistry(address(mockCategoryRegistry));
         registry.setQuestionRewardPoolEscrow(address(rewardPoolEscrow));
-        x402QuestionSubmitter = new X402QuestionSubmitter(registry, address(usdc), address(rewardPoolEscrow));
+        x402QuestionSubmitter = new X402QuestionSubmitter(registry, address(usdc), address(rewardPoolEscrow), owner);
         registry.grantRole(registry.X402_GATEWAY_ROLE(), address(x402QuestionSubmitter));
 
         frontendRegistry.setVotingEngine(address(votingEngine));
