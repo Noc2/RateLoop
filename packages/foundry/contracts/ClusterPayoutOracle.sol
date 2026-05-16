@@ -34,6 +34,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
     uint64 public constant DEFAULT_CHALLENGE_WINDOW = 12 hours;
     uint64 public constant MAX_CHALLENGE_WINDOW = 3 days;
     uint256 public constant DEFAULT_CHALLENGE_BOND = 5e6;
+    uint256 public constant MIN_CHALLENGE_BOND = 1e6;
 
     error InvalidAddress();
     error InvalidBond();
@@ -157,6 +158,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
     {
         if (newChallengeWindow == 0 || newChallengeWindow > MAX_CHALLENGE_WINDOW) revert InvalidSnapshot();
         if (newBondRecipient == address(0)) revert InvalidAddress();
+        if (newChallengeBond < MIN_CHALLENGE_BOND) revert InvalidBond();
         challengeWindow = newChallengeWindow;
         challengeBond = newChallengeBond;
         bondRecipient = newBondRecipient;
