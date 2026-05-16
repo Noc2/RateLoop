@@ -217,6 +217,16 @@ contract RoundVotingEngine is
     event RoundCancelled(uint256 indexed contentId, uint256 indexed roundId);
     event RoundTied(uint256 indexed contentId, uint256 indexed roundId);
     event RoundRevealFailed(uint256 indexed contentId, uint256 indexed roundId);
+    /// @notice Emitted when `_notifyBundleRoundTerminal` invocation of
+    ///         `recordBundleQuestionTerminal` on the bundle escrow reverts. The terminal signal
+    ///         is captured in `pendingBundleObserverReplay` so an admin can call
+    ///         `replayBundleObserverNotify` once the transient failure has been resolved.
+    event BundleObserverNotifyFailed(
+        uint256 indexed contentId, uint256 indexed roundId, bool settled, bytes lowLevelError
+    );
+    /// @notice Emitted when `replayBundleObserverNotify` successfully forwards a previously
+    ///         failed terminal signal to the bundle escrow.
+    event BundleObserverNotifyReplayed(uint256 indexed contentId, uint256 indexed roundId, bool settled);
     event CancelledRoundRefundClaimed(
         uint256 indexed contentId, uint256 indexed roundId, address indexed voter, uint256 amount
     );
@@ -716,8 +726,43 @@ contract RoundVotingEngine is
         address bundleEscrow = registry.questionRewardPoolEscrow();
         if (bundleEscrow == address(0)) return;
 
-        try IQuestionBundleRoundObserver(bundleEscrow).recordBundleQuestionTerminal(contentId, roundId, settled) { }
-            catch { }
+        try IQuestionBundleRoundObserver(bundleEscrow).recordBundleQuestionTerminal(contentId, roundId, settled) {
+            // Idempotent: clearing here keeps the replay flag honest in the (currently
+            // unreachable) case where a prior failure flagged the round before this call
+            // succeeded via a later code path.
+            if (pendingBundleObserverReplay[contentId][roundId]) {
+                delete pendingBundleObserverReplay[contentId][roundId];
+            }
+        } catch (bytes memory lowLevelError) {
+            // Capture the failure so off-chain observers and on-chain replay can detect and
+            // recover. The terminal-state transition on the engine has already happened, so
+            // reverting here would brick settlement; recording is the only sound option.
+            pendingBundleObserverReplay[contentId][roundId] = true;
+            emit BundleObserverNotifyFailed(contentId, roundId, settled, lowLevelError);
+        }
+    }
+
+    /// @notice Replay a previously failed bundle observer terminal notification.
+    /// @dev Gated on `DEFAULT_ADMIN_ROLE` because the bundle escrow trusts only the engine to
+    ///      drive its terminal-round accounting. `_recordBundleQuestionTerminal` is idempotent
+    ///      (it enforces strictly increasing `roundId` per bundle index), so calling this for
+    ///      a round that has since been observed via another path is a safe no-op aside from
+    ///      flag-clearing.
+    /// @param contentId Content whose round failed to notify.
+    /// @param roundId Round id that failed to notify.
+    /// @param settled Whether the round terminated in the Settled state. Must match the
+    ///        original failed notification — the caller is expected to derive this from the
+    ///        `BundleObserverNotifyFailed` event.
+    function replayBundleObserverNotify(uint256 contentId, uint256 roundId, bool settled)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
+        require(pendingBundleObserverReplay[contentId][roundId], "no pending replay");
+        address bundleEscrow = registry.questionRewardPoolEscrow();
+        if (bundleEscrow == address(0)) return;
+        IQuestionBundleRoundObserver(bundleEscrow).recordBundleQuestionTerminal(contentId, roundId, settled);
+        delete pendingBundleObserverReplay[contentId][roundId];
+        emit BundleObserverNotifyReplayed(contentId, roundId, settled);
     }
 
     // =========================================================================
@@ -1400,6 +1445,12 @@ contract RoundVotingEngine is
     // so in-place upgrades do not shift older mappings.
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint48))) public commitCommittedAt;
 
+    /// @notice Tracks bundle-observer terminal notifications that reverted on the escrow side.
+    /// @dev Appended after existing storage slots to preserve the upgradeable layout. Set true
+    ///      by `_notifyBundleRoundTerminal` on revert; cleared by `replayBundleObserverNotify`
+    ///      (or by a subsequent successful notification). Indexed by (contentId, roundId).
+    mapping(uint256 contentId => mapping(uint256 roundId => bool)) public pendingBundleObserverReplay;
+
     // --- Storage gap reserved for future upgrades ---
-    uint256[27] private __gap;
+    uint256[26] private __gap;
 }
