@@ -36,6 +36,13 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
     uint64 public constant MAX_CHALLENGE_WINDOW = 3 days;
     uint256 public constant DEFAULT_CHALLENGE_BOND = 5e6;
     uint256 public constant MIN_CHALLENGE_BOND = 1e6;
+    /// @dev Window after a round payout snapshot is finalized during which the arbiter can still
+    ///      reject it, even if a consumer has already paid one or more claims against the cached
+    ///      merkle root. Existing paid leaves stay paid (the consumer flips a `qualified` /
+    ///      `earnedRewardCreditRecorded` flag); the rejection blocks all FUTURE claims because
+    ///      the consumers' per-claim path calls `verifyPayoutWeight`, which returns false once the
+    ///      snapshot status moves off `Finalized`. M-Oracle-2 from 2026-05-16 audit.
+    uint64 public constant FINALIZATION_VETO_WINDOW = 7 days;
 
     error InvalidAddress();
     error InvalidBond();
@@ -411,6 +418,13 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         emit RoundPayoutSnapshotRejected(snapshotKey, msg.sender, reasonHash);
     }
 
+    /// @notice Reject a finalized round payout snapshot. Allowed in two cases:
+    ///         (a) the consumer reports the snapshot has not yet been consumed (fast-path, no time
+    ///             limit — already-paid leaves are not possible);
+    ///         (b) the rejection happens within `FINALIZATION_VETO_WINDOW` after finalization, even
+    ///             if the consumer reports the snapshot consumed. Already-paid leaves stay paid;
+    ///             future claims revert because `verifyPayoutWeight` returns false for non-finalized
+    ///             snapshots. M-Oracle-2 from 2026-05-16 audit.
     function rejectFinalizedRoundPayoutSnapshot(bytes32 snapshotKey, bytes32 reasonHash)
         external
         onlyRole(ARBITER_ROLE)
@@ -421,11 +435,19 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         if (snapshot.status != SnapshotStatus.Finalized) revert SnapshotNotFinalizable();
         address consumer = proposal.consumer;
         if (consumer == address(0)) revert InvalidAddress();
-        if (IRoundPayoutSnapshotConsumer(consumer)
-                .isRoundPayoutSnapshotConsumed(
+
+        bool withinVetoWindow =
+            block.timestamp <= uint256(snapshot.finalizedAt) + uint256(FINALIZATION_VETO_WINDOW);
+        if (!withinVetoWindow) {
+            // Outside the veto window the rejection is only safe if the consumer has not yet paid
+            // any claim against this snapshot's merkle root.
+            if (
+                IRoundPayoutSnapshotConsumer(consumer).isRoundPayoutSnapshotConsumed(
                     snapshot.domain, snapshot.rewardPoolId, snapshot.contentId, snapshot.roundId
-                )) {
-            revert SnapshotConsumed();
+                )
+            ) {
+                revert SnapshotConsumed();
+            }
         }
 
         proposal.snapshot.status = SnapshotStatus.Rejected;

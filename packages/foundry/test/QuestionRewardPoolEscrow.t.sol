@@ -2496,6 +2496,8 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
         assertTrue(rewardPoolEscrow.isRoundPayoutSnapshotConsumed(1, rewardPoolId, contentId, roundId));
 
+        // Past the finalization veto window, a consumed snapshot can no longer be rejected.
+        vm.warp(block.timestamp + oracle.FINALIZATION_VETO_WINDOW() + 1);
         vm.expectRevert(ClusterPayoutOracle.SnapshotConsumed.selector);
         oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("already-applied"));
     }

@@ -419,7 +419,7 @@ contract ClusterPayoutOracleTest is Test {
         assertEq(replacement.consumer, address(questionConsumer));
     }
 
-    function test_FinalizedRoundPayoutSnapshotRejectChecksConsumer() public {
+    function test_FinalizedRoundPayoutSnapshotRejectChecksConsumerAfterVetoWindow() public {
         oracle.proposeCorrelationEpoch(
             1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
         );
@@ -436,8 +436,34 @@ contract ClusterPayoutOracleTest is Test {
 
         questionConsumer.setConsumed(true);
 
+        // Past the veto window, the consumed flag locks rejection.
+        vm.warp(block.timestamp + oracle.FINALIZATION_VETO_WINDOW() + 1);
         vm.expectRevert(ClusterPayoutOracle.SnapshotConsumed.selector);
         oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("consumed"));
+    }
+
+    function test_FinalizedRoundPayoutSnapshotRejectAllowedWithinVetoWindowEvenIfConsumed() public {
+        oracle.proposeCorrelationEpoch(
+            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+        );
+        vm.warp(1 hours + 2);
+        oracle.finalizeCorrelationEpoch(1);
+
+        IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
+        oracle.proposeRoundPayoutSnapshot(input);
+        bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(
+            oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), input.rewardPoolId, input.contentId, input.roundId
+        );
+        vm.warp(2 hours + 3);
+        oracle.finalizeRoundPayoutSnapshot(snapshotKey);
+
+        questionConsumer.setConsumed(true);
+
+        // Within the veto window the arbiter can still reject even after a claim landed.
+        // Already-paid leaves stay paid; future claims revert via verifyPayoutWeight.
+        oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("consumed"));
+        ClusterPayoutOracle.RoundPayoutProposal memory rejected = oracle.roundPayoutProposal(snapshotKey);
+        assertEq(uint8(rejected.snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Rejected));
     }
 
     function test_FinalizedRoundPayoutSnapshotRejectUsesSnapshottedConsumerAfterRotation() public {
@@ -459,6 +485,9 @@ contract ClusterPayoutOracleTest is Test {
         oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), address(replacementConsumer));
         questionConsumer.setConsumed(true);
 
+        // Past the veto window the original consumer (snapshotted on the proposal) still gates
+        // the rejection; rotating to a fresh consumer does not bypass the consumed flag.
+        vm.warp(block.timestamp + oracle.FINALIZATION_VETO_WINDOW() + 1);
         vm.expectRevert(ClusterPayoutOracle.SnapshotConsumed.selector);
         oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("snapshotted-consumer"));
     }

@@ -243,7 +243,7 @@ contract LaunchDistributionPoolTest is Test {
         MockLaunchOracleFrontendRegistry frontendRegistry = new MockLaunchOracleFrontendRegistry();
         frontendRegistry.setEligible(address(this), true);
         ClusterPayoutOracle oracle = new ClusterPayoutOracle(address(this), address(frontendRegistry), address(lrep));
-        oracle.setOracleConfig(1, 1e6, address(this));
+        oracle.setOracleConfig(1, oracle.MIN_CHALLENGE_BOND(), address(this));
         oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_LAUNCH_CREDIT(), address(pool));
         pool.setClusterPayoutOracle(address(oracle));
 
@@ -395,6 +395,9 @@ contract LaunchDistributionPoolTest is Test {
         assertTrue(pool.isRoundPayoutSnapshotConsumed(pool.PAYOUT_DOMAIN_LAUNCH_CREDIT(), 0, 1, 5));
 
         bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(pool.PAYOUT_DOMAIN_LAUNCH_CREDIT(), 0, 1, 5);
+
+        // Past the finalization veto window, a consumed snapshot cannot be rejected.
+        vm.warp(block.timestamp + oracle.FINALIZATION_VETO_WINDOW() + 1);
         vm.expectRevert(ClusterPayoutOracle.SnapshotConsumed.selector);
         oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("paid-launch-root"));
     }
@@ -1134,7 +1137,7 @@ contract LaunchDistributionPoolTest is Test {
         MockLaunchOracleFrontendRegistry frontendRegistry = new MockLaunchOracleFrontendRegistry();
         frontendRegistry.setEligible(address(this), true);
         oracle = new ClusterPayoutOracle(address(this), address(frontendRegistry), address(lrep));
-        oracle.setOracleConfig(1, 1e6, address(this));
+        oracle.setOracleConfig(1, oracle.MIN_CHALLENGE_BOND(), address(this));
         oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_LAUNCH_CREDIT(), address(pool));
         pool.setClusterPayoutOracle(address(oracle));
 
