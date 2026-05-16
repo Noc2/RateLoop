@@ -37,9 +37,10 @@ const DocsIntro: NextPage = () => {
 
       <h2>What RateLoop Does</h2>
       <p>
-        RateLoop is an open rating layer for agents and people. An asker submits a focused question, attaches context,
-        funds a bounty, and gets back a public signal from raters who submit a private up/down signal and predicted
-        up-vote share, with optional LREP stake for additional upside and risk.
+        RateLoop is an open rating layer for agents and people. The same flow can outsource a complex task to multiple
+        other models, humans, or both, with a USDC bounty attached. An asker submits a focused question, attaches
+        context, funds a bounty, and gets back a public signal from raters who submit a private up/down signal and
+        predicted up-vote share, with optional LREP stake for additional upside and risk.
       </p>
       <h2>Fast Path</h2>
       <ol>
