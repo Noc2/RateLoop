@@ -15,7 +15,7 @@ import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol"
 import { ProfileRegistry } from "../contracts/ProfileRegistry.sol";
 import { FrontendRegistry } from "../contracts/FrontendRegistry.sol";
 import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
-import { HumanReputation } from "../contracts/HumanReputation.sol";
+import { LoopReputation } from "../contracts/LoopReputation.sol";
 import { IProfileRegistry } from "../contracts/interfaces/IProfileRegistry.sol";
 import { IRoundVotingEngine } from "../contracts/interfaces/IRoundVotingEngine.sol";
 import { RoundLib } from "../contracts/libraries/RoundLib.sol";
@@ -76,7 +76,7 @@ contract UpgradeTest is Test {
     ProxyAdmin public frontendRegistryAdmin;
     ProxyAdmin public protocolConfigAdmin;
 
-    HumanReputation public hrepToken;
+    LoopReputation public lrepToken;
     MockVotingEngineForUpgrade public mockVotingEngine;
 
     // Roles
@@ -89,7 +89,7 @@ contract UpgradeTest is Test {
         vm.startPrank(admin);
 
         // Deploy token
-        hrepToken = new HumanReputation(admin, governance);
+        lrepToken = new LoopReputation(admin, governance);
         mockVotingEngine = new MockVotingEngineForUpgrade();
 
         // --- ContentRegistry ---
@@ -97,7 +97,7 @@ contract UpgradeTest is Test {
         TransparentUpgradeableProxy crProxy = new TransparentUpgradeableProxy(
             address(crImpl),
             governance,
-            abi.encodeCall(ContentRegistry.initializeWithTreasury, (admin, governance, governance, address(hrepToken)))
+            abi.encodeCall(ContentRegistry.initializeWithTreasury, (admin, governance, governance, address(lrepToken)))
         );
         contentRegistry = ContentRegistry(address(crProxy));
         contentRegistryAdmin = _proxyAdmin(address(crProxy));
@@ -117,7 +117,7 @@ contract UpgradeTest is Test {
             governance,
             abi.encodeCall(
                 RoundVotingEngine.initialize,
-                (governance, address(hrepToken), address(contentRegistry), address(protocolConfig))
+                (governance, address(lrepToken), address(contentRegistry), address(protocolConfig))
             )
         );
         votingEngine = RoundVotingEngine(address(veProxy));
@@ -130,7 +130,7 @@ contract UpgradeTest is Test {
             governance,
             abi.encodeCall(
                 RoundRewardDistributor.initialize,
-                (governance, address(hrepToken), address(votingEngine), address(contentRegistry))
+                (governance, address(lrepToken), address(votingEngine), address(contentRegistry))
             )
         );
         rewardDistributor = RoundRewardDistributor(address(rdProxy));
@@ -149,7 +149,7 @@ contract UpgradeTest is Test {
         TransparentUpgradeableProxy frProxy = new TransparentUpgradeableProxy(
             address(frImpl),
             governance,
-            abi.encodeCall(FrontendRegistry.initialize, (admin, governance, address(hrepToken)))
+            abi.encodeCall(FrontendRegistry.initialize, (admin, governance, address(lrepToken)))
         );
         frontendRegistry = FrontendRegistry(address(frProxy));
         frontendRegistryAdmin = _proxyAdmin(address(frProxy));
@@ -181,7 +181,7 @@ contract UpgradeTest is Test {
     function test_ContentRegistry_CannotReinitialize() public {
         vm.prank(admin);
         vm.expectRevert(Initializable.InvalidInitialization.selector);
-        contentRegistry.initializeWithTreasury(admin, governance, governance, address(hrepToken));
+        contentRegistry.initializeWithTreasury(admin, governance, governance, address(lrepToken));
     }
 
     function test_ContentRegistry_StatePreservedAfterUpgrade() public {
@@ -194,7 +194,7 @@ contract UpgradeTest is Test {
 
         // Verify state preserved
         assertEq(contentRegistryAdmin.owner(), governance);
-        assertEq(address(contentRegistry.hrepToken()), address(hrepToken));
+        assertEq(address(contentRegistry.lrepToken()), address(lrepToken));
     }
 
     // =========================================================================
@@ -268,7 +268,7 @@ contract UpgradeTest is Test {
         address protocolConfigAddress = address(votingEngine.protocolConfig());
         vm.prank(admin);
         vm.expectRevert(Initializable.InvalidInitialization.selector);
-        votingEngine.initialize(governance, address(hrepToken), address(contentRegistry), protocolConfigAddress);
+        votingEngine.initialize(governance, address(lrepToken), address(contentRegistry), protocolConfigAddress);
     }
 
     function test_VotingEngine_StatePreservedAfterUpgrade() public {
@@ -286,11 +286,11 @@ contract UpgradeTest is Test {
         uint256 roundId = 8;
         bytes32 commitKey = keccak256("layout-commit");
 
-        vm.store(address(votingEngine), _doubleUintMappingSlot(54, contentId, roundId), bytes32(uint256(111)));
-        vm.store(address(votingEngine), _doubleUintMappingSlot(55, contentId, roundId), bytes32(uint256(222)));
+        vm.store(address(votingEngine), _doubleUintMappingSlot(53, contentId, roundId), bytes32(uint256(111)));
+        vm.store(address(votingEngine), _doubleUintMappingSlot(54, contentId, roundId), bytes32(uint256(222)));
         vm.store(
             address(votingEngine),
-            _tripleUintBytes32MappingSlot(56, contentId, roundId, commitKey),
+            _tripleUintBytes32MappingSlot(55, contentId, roundId, commitKey),
             bytes32(uint256(333))
         );
 
@@ -319,19 +319,19 @@ contract UpgradeTest is Test {
     function test_RewardDistributor_CannotReinitialize() public {
         vm.prank(admin);
         vm.expectRevert(Initializable.InvalidInitialization.selector);
-        rewardDistributor.initialize(governance, address(hrepToken), address(votingEngine), address(contentRegistry));
+        rewardDistributor.initialize(governance, address(lrepToken), address(votingEngine), address(contentRegistry));
     }
 
     function test_RewardDistributor_StatePreservedAfterUpgrade() public {
         assertEq(rewardDistributorAdmin.owner(), governance);
-        assertEq(address(rewardDistributor.hrepToken()), address(hrepToken));
+        assertEq(address(rewardDistributor.lrepToken()), address(lrepToken));
 
         RoundRewardDistributor newImpl = new RoundRewardDistributor();
         vm.prank(governance);
         rewardDistributorAdmin.upgradeAndCall(_proxy(address(rewardDistributor)), address(newImpl), "");
 
         assertEq(rewardDistributorAdmin.owner(), governance);
-        assertEq(address(rewardDistributor.hrepToken()), address(hrepToken));
+        assertEq(address(rewardDistributor.lrepToken()), address(lrepToken));
     }
 
     // =========================================================================
@@ -407,7 +407,7 @@ contract UpgradeTest is Test {
     function test_FrontendRegistry_CannotReinitialize() public {
         vm.prank(admin);
         vm.expectRevert(Initializable.InvalidInitialization.selector);
-        frontendRegistry.initialize(admin, governance, address(hrepToken));
+        frontendRegistry.initialize(admin, governance, address(lrepToken));
     }
 
     function test_FrontendRegistry_StatePreservedAfterUpgrade() public {
@@ -430,15 +430,15 @@ contract UpgradeTest is Test {
         // Each implementation should have _disableInitializers() in its constructor
         ContentRegistry crImpl = new ContentRegistry();
         vm.expectRevert(Initializable.InvalidInitialization.selector);
-        crImpl.initializeWithTreasury(admin, governance, governance, address(hrepToken));
+        crImpl.initializeWithTreasury(admin, governance, governance, address(lrepToken));
 
         RoundVotingEngine veImpl = new RoundVotingEngine();
         vm.expectRevert(Initializable.InvalidInitialization.selector);
-        veImpl.initialize(admin, governance, address(hrepToken), address(contentRegistry));
+        veImpl.initialize(admin, governance, address(lrepToken), address(contentRegistry));
 
         RoundRewardDistributor rdImpl = new RoundRewardDistributor();
         vm.expectRevert(Initializable.InvalidInitialization.selector);
-        rdImpl.initialize(governance, address(hrepToken), address(votingEngine), address(contentRegistry));
+        rdImpl.initialize(governance, address(lrepToken), address(votingEngine), address(contentRegistry));
 
         ProfileRegistry prImpl = new ProfileRegistry();
         vm.expectRevert(Initializable.InvalidInitialization.selector);
@@ -446,7 +446,7 @@ contract UpgradeTest is Test {
 
         FrontendRegistry frImpl = new FrontendRegistry();
         vm.expectRevert(Initializable.InvalidInitialization.selector);
-        frImpl.initialize(admin, governance, address(hrepToken));
+        frImpl.initialize(admin, governance, address(lrepToken));
 
         ProtocolConfig pcImpl = new ProtocolConfig();
         vm.expectRevert(Initializable.InvalidInitialization.selector);
