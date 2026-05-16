@@ -495,6 +495,10 @@ contract RoundVotingEngine is
             resolved.holder
         );
         _recordCommitAccounting(round, contentId, roundId, voter, resolved.identityKey, stakeAmount64, stakeAmount);
+        // M-Vote-1: bind the prevrandao of the last-commit block into the round so it can be mixed
+        // into the RBTS sampler seed at settlement. The last committer cannot grind their own
+        // block's prevrandao, so this removes the salt-grinding attack on the seed.
+        roundLastCommitPrevrandao[contentId][roundId] = bytes32(block.prevrandao);
 
         emit VoteCommitted(
             contentId, roundId, voter, commitHash, expectedReferenceRatingBps, targetRound, drandChainHash, stakeAmount
@@ -1229,12 +1233,15 @@ contract RoundVotingEngine is
             commitRbtsStakeReturned[contentId][roundId],
             commitRbtsForfeitedStake[contentId][roundId],
             commitIdentityKey[contentId][roundId],
-            contentId,
-            roundId,
-            revealedCount,
-            upWins,
-            MIN_RBTS_PARTICIPANTS,
-            RBTS_SCORE_SCALE_BPS
+            RoundRevealLib.ScoreRbtsParams({
+                contentId: contentId,
+                roundId: roundId,
+                revealedCount: revealedCount,
+                upWins: upWins,
+                minParticipants: MIN_RBTS_PARTICIPANTS,
+                scoreScaleBps: RBTS_SCORE_SCALE_BPS,
+                lastCommitPrevrandao: roundLastCommitPrevrandao[contentId][roundId]
+            })
         );
 
         rewardWeight = result.rewardWeight;
@@ -1451,6 +1458,13 @@ contract RoundVotingEngine is
     ///      (or by a subsequent successful notification). Indexed by (contentId, roundId).
     mapping(uint256 contentId => mapping(uint256 roundId => bool)) public pendingBundleObserverReplay;
 
+    // M-Vote-1 (audit 2026-05-16): block.prevrandao of the last-commit block per round.
+    // Mixed into the RBTS sampler seed so the seed is unguessable at commit time. The last
+    // committer cannot grind their own block's prevrandao -- it is supplied by the validator
+    // and only revealed after the block is mined. Appended after existing storage so in-place
+    // upgrades do not shift older mappings.
+    mapping(uint256 => mapping(uint256 => bytes32)) public roundLastCommitPrevrandao;
+
     // --- Storage gap reserved for future upgrades ---
-    uint256[26] private __gap;
+    uint256[25] private __gap;
 }

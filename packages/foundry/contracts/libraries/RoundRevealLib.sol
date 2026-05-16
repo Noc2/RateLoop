@@ -144,6 +144,16 @@ library RoundRevealLib {
         voter = commit.voter;
     }
 
+    struct ScoreRbtsParams {
+        uint256 contentId;
+        uint256 roundId;
+        uint256 revealedCount;
+        bool upWins;
+        uint16 minParticipants;
+        uint16 scoreScaleBps;
+        bytes32 lastCommitPrevrandao;
+    }
+
     function scoreRbtsRewards(
         bytes32[] storage commitKeys,
         mapping(bytes32 => RoundLib.Commit) storage roundCommits,
@@ -154,16 +164,11 @@ library RoundRevealLib {
         mapping(bytes32 => uint256) storage commitRbtsStakeReturned,
         mapping(bytes32 => uint256) storage commitRbtsForfeitedStake,
         mapping(bytes32 => bytes32) storage commitIdentityKey,
-        uint256 contentId,
-        uint256 roundId,
-        uint256 revealedCount,
-        bool upWins,
-        uint16 minParticipants,
-        uint16 scoreScaleBps
+        ScoreRbtsParams memory params
     ) external returns (ScoreRbtsResult memory result) {
-        if (revealedCount < minParticipants) revert NotEnoughVotes();
+        if (params.revealedCount < params.minParticipants) revert NotEnoughVotes();
 
-        bytes32[] memory revealedKeys = new bytes32[](revealedCount);
+        bytes32[] memory revealedKeys = new bytes32[](params.revealedCount);
         bytes32 revealedSetHash;
         uint256 revealedIndex;
         uint256 economicCount;
@@ -188,12 +193,17 @@ library RoundRevealLib {
                 ++i;
             }
         }
-        if (revealedIndex != revealedCount) revert NotEnoughVotes();
+        if (revealedIndex != params.revealedCount) revert NotEnoughVotes();
 
         RbtsRoundTotals memory totals;
 
-        result.scoreSeed = _rbtsScoreSeed(contentId, roundId, revealedCount, revealedSetHash);
-        for (uint256 i = 0; i < revealedCount;) {
+        // M-Vote-1: mix `block.prevrandao` of the LAST-COMMIT block into the seed. A salt-grinding
+        // attacker can bias `commitKey` ordering off-chain but cannot predict the prevrandao of
+        // their own commit block, so the seed becomes unguessable at commit time.
+        result.scoreSeed = _rbtsScoreSeed(
+            params.contentId, params.roundId, params.revealedCount, revealedSetHash, params.lastCommitPrevrandao
+        );
+        for (uint256 i = 0; i < params.revealedCount;) {
             bytes32 commitKey = revealedKeys[i];
             uint256 ownWeight = commitRbtsWeight[commitKey];
             uint16 scoreBps = _scoreRbtsCommitAt(
@@ -204,10 +214,10 @@ library RoundRevealLib {
                 revealedKeys,
                 result.scoreSeed,
                 i,
-                revealedCount
+                params.revealedCount
             );
 
-            if (ownWeight == 0 || economicCount < minParticipants) {
+            if (ownWeight == 0 || economicCount < params.minParticipants) {
                 if (ownWeight > 0) {
                     commitRbtsStakeReturned[commitKey] = roundCommits[commitKey].stakeAmount;
                 }
@@ -225,9 +235,9 @@ library RoundRevealLib {
                 commitKey,
                 ownWeight,
                 scoreBps,
-                upWins,
+                params.upWins,
                 totals,
-                scoreScaleBps
+                params.scoreScaleBps
             );
             unchecked {
                 ++i;
@@ -335,13 +345,32 @@ library RoundRevealLib {
         commitRbtsScoreBps[commitKey] = scoreBps;
     }
 
-    function _rbtsScoreSeed(uint256 contentId, uint256 roundId, uint256 scoreableCount, bytes32 revealedSetHash)
-        private
-        view
-        returns (bytes32 scoreSeed)
-    {
+    /// @notice Compute the RBTS sampler seed.
+    /// @dev The seed binds:
+    ///      - `block.chainid` and `address(this)` (cross-chain / cross-engine replay protection),
+    ///      - `contentId` / `roundId` (per-round uniqueness),
+    ///      - `scoreableCount` and `revealedSetHash` (the set the sampler ranges over),
+    ///      - `lastCommitPrevrandao` (M-Vote-1: the prevrandao of the block containing the
+    ///        last commit, which the last committer cannot grind because they cannot predict
+    ///        the prevrandao of their own block; this defeats salt-grinding attacks on
+    ///        `commitKey` ordering that previously allowed the last committer to steer the seed).
+    function _rbtsScoreSeed(
+        uint256 contentId,
+        uint256 roundId,
+        uint256 scoreableCount,
+        bytes32 revealedSetHash,
+        bytes32 lastCommitPrevrandao
+    ) private view returns (bytes32 scoreSeed) {
         scoreSeed = keccak256(
-            abi.encodePacked(block.chainid, address(this), contentId, roundId, scoreableCount, revealedSetHash)
+            abi.encode(
+                block.chainid,
+                address(this),
+                contentId,
+                roundId,
+                scoreableCount,
+                revealedSetHash,
+                lastCommitPrevrandao
+            )
         );
     }
 

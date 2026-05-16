@@ -718,8 +718,18 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         revealedSetHash = keccak256(abi.encodePacked(revealedSetHash, ck1));
         revealedSetHash = keccak256(abi.encodePacked(revealedSetHash, ck2));
         revealedSetHash = keccak256(abi.encodePacked(revealedSetHash, ck3));
+        // M-Vote-1: seed now mixes in the prevrandao of the last-commit block.
+        bytes32 lastCommitPrevrandao = engine.roundLastCommitPrevrandao(contentId, roundId);
         bytes32 expectedSeed = keccak256(
-            abi.encodePacked(block.chainid, address(engine), contentId, roundId, uint256(3), revealedSetHash)
+            abi.encode(
+                block.chainid,
+                address(engine),
+                contentId,
+                roundId,
+                uint256(3),
+                revealedSetHash,
+                lastCommitPrevrandao
+            )
         );
 
         Vm.Log[] memory logs = vm.getRecordedLogs();
