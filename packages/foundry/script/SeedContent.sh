@@ -28,6 +28,8 @@ SUBMISSION_BUNDLE_ROUND_MAX_VOTERS="100"
 DEFAULT_QUESTION_METADATA_HASH="0xed39b36e9ce5c1bfc657909c2f687347be2de998bc871eb8d33df17fdfa0d8cd"
 DEFAULT_RESULT_SPEC_HASH="0x8e5f27bc3269c62c92754f76279bd83838462060fc6cd77411b7407027cfa11f"
 VOTE_STAKE="5000000" # 5 LREP for votes
+# Local estimation can run against latest while Anvil mines the scheduled next timestamp.
+VOTE_COMMIT_GAS_LIMIT="6000000"
 
 # Check if localhost deployment exists
 if [ ! -f "$DEPLOY_JSON" ]; then
@@ -628,6 +630,16 @@ ZERO_ADDR="0x0000000000000000000000000000000000000000"
 echo "=== Adding votes from two accounts ==="
 echo ""
 
+PROTOCOL_CONFIG=$(cast call "$VOTING_ENGINE" "protocolConfig()(address)" --rpc-url "$RPC" 2>/dev/null || true)
+DRAND_GENESIS_TIME=""
+DRAND_PERIOD=""
+if [ -n "$PROTOCOL_CONFIG" ]; then
+  DRAND_GENESIS_TIME=$(cast call "$PROTOCOL_CONFIG" "drandGenesisTime()(uint64)" --rpc-url "$RPC" 2>/dev/null || true)
+  DRAND_PERIOD=$(cast call "$PROTOCOL_CONFIG" "drandPeriod()(uint64)" --rpc-url "$RPC" 2>/dev/null || true)
+  DRAND_GENESIS_TIME="${DRAND_GENESIS_TIME%% *}"
+  DRAND_PERIOD="${DRAND_PERIOD%% *}"
+fi
+
 # Voter accounts (indices 7 and 8 in KEYS array = accounts 9 and 10)
 VOTER1_KEY="${KEYS[7]}"
 VOTER2_KEY="${KEYS[8]}"
@@ -663,6 +675,37 @@ done
 
 # Helper: generate tlock ciphertext and submit commitVote
 # Usage: seed_commit <contentId> <isUp:true|false> <salt_hex> <private_key> [predictedUpBps]
+schedule_commit_block_timestamp() {
+  local latestTs
+  local pendingTs
+  local commitTs
+  local revealTs
+  local remainder
+
+  latestTs=$(cast block latest --field timestamp --rpc-url "$RPC")
+  pendingTs=$(cast block pending --field timestamp --rpc-url "$RPC" 2>/dev/null || true)
+
+  if [[ "$pendingTs" =~ ^[0-9]+$ ]] && [ "$pendingTs" -gt "$latestTs" ]; then
+    commitTs="$pendingTs"
+  else
+    commitTs=$((latestTs + 1))
+  fi
+
+  if [[ "$DRAND_GENESIS_TIME" =~ ^[0-9]+$ ]] && [[ "$DRAND_PERIOD" =~ ^[0-9]+$ ]] && [ "$DRAND_PERIOD" -gt 0 ]; then
+    revealTs=$((commitTs + SUBMISSION_ROUND_EPOCH_DURATION))
+    remainder=$(((revealTs - DRAND_GENESIS_TIME) % DRAND_PERIOD))
+    if [ "$remainder" -lt 0 ]; then
+      remainder=$((remainder + DRAND_PERIOD))
+    fi
+    if [ "$remainder" -ne 0 ]; then
+      commitTs=$((commitTs + DRAND_PERIOD - remainder))
+    fi
+  fi
+
+  cast rpc evm_setNextBlockTimestamp "$commitTs" --rpc-url "$RPC" > /dev/null 2>&1 || true
+  printf "%s" "$commitTs"
+}
+
 seed_commit() {
   local contentId="$1"
   local isUp="$2"
@@ -678,13 +721,15 @@ seed_commit() {
   local roundContext
   local artifacts
   local voterAddr
+  local commitTimestamp
 
   cast send "$TOKEN" "approve(address,uint256)" "$VOTING_ENGINE" "$VOTE_STAKE" \
     --private-key "$privKey" --rpc-url "$RPC" > /dev/null
 
   voterAddr=$(cast wallet address "$privKey")
+  commitTimestamp=$(schedule_commit_block_timestamp)
   artifacts=$(node "$SCRIPT_DIR/../scripts-js/generateTlockCommit.js" \
-    "$RPC" "$VOTING_ENGINE" "$REGISTRY" "$contentId" "$isUp" "0x${salt}" "$voterAddr" "$predictedUpBps") || {
+    "$RPC" "$VOTING_ENGINE" "$REGISTRY" "$contentId" "$isUp" "0x${salt}" "$voterAddr" "$predictedUpBps" "$commitTimestamp") || {
     echo "  (Failed to build tlock ciphertext)"
     return 1
   }
@@ -696,10 +741,11 @@ seed_commit() {
   expectedRoundId=$(printf '%s\n' "$artifacts" | sed -n '6p')
   roundContext=$(( (expectedRoundId << 16) | roundReferenceRatingBps ))
 
+  cast rpc evm_setNextBlockTimestamp "$commitTimestamp" --rpc-url "$RPC" > /dev/null 2>&1 || true
   cast send "$VOTING_ENGINE" \
     "commitVote(uint256,uint256,uint64,bytes32,bytes32,bytes,uint256,address)" \
     "$contentId" "$roundContext" "$targetRound" "$drandChainHash" "$commitHash" "$ciphertext" "$VOTE_STAKE" "$ZERO_ADDR" \
-    --private-key "$privKey" --rpc-url "$RPC" > /dev/null || { echo "  (Commit may have failed)"; return 1; }
+    --gas-limit "$VOTE_COMMIT_GAS_LIMIT" --private-key "$privKey" --rpc-url "$RPC" > /dev/null || { echo "  (Commit may have failed)"; return 1; }
 }
 
 # Use deterministic salts for reproducibility

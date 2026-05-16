@@ -8,10 +8,11 @@ import {
   parseAbi,
 } from "viem";
 import { mainnetClient, timelockEncrypt } from "tlock-js";
+import { deriveTlockCommitTargetRound } from "./tlockTargetRound.js";
 
 function usage() {
   console.error(
-    "Usage: node scripts-js/generateTlockCommit.js <rpcUrl> <votingEngine> <contentRegistry> <contentId> <isUp:true|false> <saltHex> <voterAddress> [predictedUpBps]"
+    "Usage: node scripts-js/generateTlockCommit.js <rpcUrl> <votingEngine> <contentRegistry> <contentId> <isUp:true|false> <saltHex> <voterAddress> [predictedUpBps] [commitTimestampSeconds]"
   );
   process.exit(1);
 }
@@ -25,6 +26,7 @@ const [
   saltArg,
   voterArg,
   predictedUpBpsArg,
+  commitTimestampArg,
 ] = process.argv.slice(2);
 
 if (
@@ -69,6 +71,8 @@ const salt = saltArg.startsWith("0x") ? saltArg : `0x${saltArg}`;
 const voter = getAddress(voterArg);
 const predictedUpBps =
   predictedUpBpsArg == null ? 5_000 : Number.parseInt(predictedUpBpsArg, 10);
+const commitTimestampOverride =
+  commitTimestampArg == null ? null : BigInt(commitTimestampArg);
 
 if (salt.length !== 66) {
   throw new Error("saltHex must be 32 bytes");
@@ -80,16 +84,8 @@ if (
 ) {
   throw new Error("predictedUpBps must be an integer from 0 to 10000");
 }
-
-function roundAt(timestamp, genesisTime, period) {
-  if (period <= 0n || timestamp < genesisTime) return 0n;
-  return (timestamp - genesisTime) / period + 1n;
-}
-
-function roundAtOrAfter(timestamp, genesisTime, period) {
-  if (period <= 0n || timestamp < genesisTime) return 0n;
-  const elapsed = timestamp - genesisTime;
-  return (elapsed + period - 1n) / period + 1n;
+if (commitTimestampOverride != null && commitTimestampOverride <= 0n) {
+  throw new Error("commitTimestampSeconds must be greater than zero");
 }
 
 const chainClient = createPublicClient({ transport: http(rpcUrl) });
@@ -168,73 +164,14 @@ if (epochDuration === 0n) {
   epochDuration = BigInt(contentEpochDuration);
 }
 
-if (epochDuration <= 0n) {
-  throw new Error("Round epochDuration must be greater than zero");
-}
-
-if (drandPeriod <= 0n) {
-  throw new Error("drandPeriod must be greater than zero");
-}
-
-function computeRevealableAfter(timestamp) {
-  const roundStartTime = activeRoundStartTime ?? timestamp;
-  const elapsed = timestamp > roundStartTime ? timestamp - roundStartTime : 0n;
-  const epochIndex = elapsed / epochDuration;
-  return roundStartTime + (epochIndex + 1n) * epochDuration;
-}
-
-// Match TlockVoteLib.validateCommitData: the target must be between the
-// first drand round at/after revealableAfter and the last round within the
-// next drand-period window. Choose a round from the intersection of the
-// latest-block and next-block windows so both gas estimation and mining see
-// valid tlock metadata.
-let minAcceptedTargetRound = 0n;
-let maxAcceptedTargetRound = 0n;
-for (const timestamp of [latestBlock.timestamp, latestBlock.timestamp + 1n]) {
-  const revealableAfter = computeRevealableAfter(timestamp);
-  if (revealableAfter < drandGenesisTime) {
-    throw new Error(
-      `Revealable timestamp ${revealableAfter} is before drand genesis ${drandGenesisTime}`
-    );
-  }
-
-  const minTargetRound = roundAtOrAfter(
-    revealableAfter,
-    drandGenesisTime,
-    drandPeriod
-  );
-  const maxTargetRound = roundAt(
-    revealableAfter + drandPeriod,
-    drandGenesisTime,
-    drandPeriod
-  );
-  if (
-    minTargetRound === 0n ||
-    maxTargetRound === 0n ||
-    minTargetRound > maxTargetRound
-  ) {
-    throw new Error(
-      `No valid drand target round for revealableAfter=${revealableAfter}, genesis=${drandGenesisTime}, period=${drandPeriod}`
-    );
-  }
-  if (minTargetRound > minAcceptedTargetRound)
-    minAcceptedTargetRound = minTargetRound;
-  if (maxAcceptedTargetRound === 0n || maxTargetRound < maxAcceptedTargetRound)
-    maxAcceptedTargetRound = maxTargetRound;
-}
-
-if (
-  minAcceptedTargetRound === 0n ||
-  minAcceptedTargetRound > maxAcceptedTargetRound
-) {
-  throw new Error(
-    `No shared drand target round for latest and next-block commit windows, min=${minAcceptedTargetRound}, max=${maxAcceptedTargetRound}`
-  );
-}
-const targetRound =
-  minAcceptedTargetRound + 1n <= maxAcceptedTargetRound
-    ? minAcceptedTargetRound + 1n
-    : minAcceptedTargetRound;
+const commitTimestamp = commitTimestampOverride ?? latestBlock.timestamp;
+const targetRound = deriveTlockCommitTargetRound({
+  commitTimestamp,
+  activeRoundStartTime,
+  epochDuration,
+  drandGenesisTime,
+  drandPeriod,
+});
 
 const plaintext = Buffer.alloc(36);
 plaintext[0] = 2;
