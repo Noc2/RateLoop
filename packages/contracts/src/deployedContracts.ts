@@ -7923,6 +7923,25 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "event",
+          name: "ConsensusReserveToppedUp",
+          inputs: [
+            {
+              name: "funder",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "amount",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
           name: "ConsensusSubsidyDistributed",
           inputs: [
             {

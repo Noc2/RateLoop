@@ -240,6 +240,7 @@ contract RoundVotingEngine is
     event CurrentEpochRefunded(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
     event TreasuryFeeDistributed(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
     event ConsensusReserveFunded(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
+    event ConsensusReserveToppedUp(address indexed funder, uint256 amount);
     event ConsensusSubsidyDistributed(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
@@ -274,6 +275,7 @@ contract RoundVotingEngine is
         lrepToken.safeTransferFrom(msg.sender, address(this), amount);
         accountedLrepBalance += amount;
         consensusReserve += amount;
+        emit ConsensusReserveToppedUp(msg.sender, amount);
     }
 
     /// @notice Recover LREP sent directly to this contract outside accounted protocol flows.
