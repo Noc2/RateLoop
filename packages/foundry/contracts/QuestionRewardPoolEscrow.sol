@@ -736,9 +736,17 @@ contract QuestionRewardPoolEscrow is
         snapshot.frontendFeeClaimedAmount += reservedFrontendFee;
         rewardPool.claimedAmount += grossAmount;
 
-        (rewardAmount, frontendFee, frontendRecipient) = _settleClaimPayout(
+        uint256 redirectedFrontendFee;
+        (rewardAmount, frontendFee, frontendRecipient, redirectedFrontendFee) = _settleClaimPayout(
             _rewardToken(rewardPool.asset), rewardRecipient, rewardAmount, frontendRecipient, frontendFee
         );
+        if (redirectedFrontendFee > 0) {
+            // M-Funds-1: the bucket was credited reservedFrontendFee at line above, but the
+            // frontend transfer failed and the amount was redirected to the voter. Decrement
+            // the bucket so later claimants' weighted share is computed against the actual
+            // remaining frontend balance, not the over-stated reservation.
+            snapshot.frontendFeeClaimedAmount -= redirectedFrontendFee;
+        }
         emit QuestionRewardClaimed(
             rewardPoolId,
             rewardPool.contentId,
@@ -759,7 +767,7 @@ contract QuestionRewardPoolEscrow is
         uint256 rewardAmount,
         address frontendRecipient,
         uint256 frontendFee
-    ) internal returns (uint256, uint256, address) {
+    ) internal returns (uint256, uint256, address, uint256) {
         return QuestionRewardPoolEscrowTransferLib.settleClaimPayout(
             rewardToken, rewardRecipient, rewardAmount, frontendRecipient, frontendFee
         );

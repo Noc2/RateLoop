@@ -21,19 +21,26 @@ library QuestionRewardPoolEscrowTransferLib {
         require(receivedAmount == amount, "Bad token");
     }
 
+    /// @notice Pay out a claim's voter share and frontend fee.
+    /// @dev If the frontend transfer fails (e.g. USDC blocklist, contract revert) the fee is
+    ///      redirected into the voter's reward and `redirectedFrontendFee` reports the amount
+    ///      that did NOT actually leave through the frontend bucket. Callers that track a
+    ///      `frontendFeeClaimedAmount` bucket must subtract this value back out, since the
+    ///      bucket was credited under the assumption the fee would be paid. See M-Funds-1.
     function settleClaimPayout(
         IERC20 rewardToken,
         address rewardRecipient,
         uint256 rewardAmount,
         address frontendRecipient,
         uint256 frontendFee
-    ) external returns (uint256, uint256, address) {
+    ) external returns (uint256, uint256, address, uint256 redirectedFrontendFee) {
         if (
             frontendFee > 0 && frontendRecipient != address(0)
                 && TokenTransferLib.tryTransfer(rewardToken, frontendRecipient, frontendFee)
         ) {
             // Frontend fee paid; nothing to redirect.
         } else {
+            redirectedFrontendFee = frontendFee;
             rewardAmount += frontendFee;
             frontendFee = 0;
             frontendRecipient = address(0);
@@ -41,7 +48,7 @@ library QuestionRewardPoolEscrowTransferLib {
         if (rewardAmount > 0) {
             rewardToken.safeTransfer(rewardRecipient, rewardAmount);
         }
-        return (rewardAmount, frontendFee, frontendRecipient);
+        return (rewardAmount, frontendFee, frontendRecipient, redirectedFrontendFee);
     }
 
     function transferResidue(IERC20 rewardToken, bool nonRefundable, address funder, address treasury, uint256 amount)
