@@ -6,6 +6,7 @@ import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy
 import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
 import { RatingLib } from "../contracts/libraries/RatingLib.sol";
 import { RoundLib } from "../contracts/libraries/RoundLib.sol";
+import { MockRaterIdentityRegistry } from "./mocks/MockRaterIdentityRegistry.sol";
 import { deployInitializedProtocolConfig } from "./helpers/VotingTestHelpers.sol";
 
 contract MockRewardDistributorForConfig {
@@ -136,8 +137,8 @@ contract ProtocolConfigBranchesTest is Test {
 
     function test_SetRaterRegistry_AllowsRotation() public {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
-        address raterRegistry = address(0xA11CE);
-        address replacementRaterRegistry = address(0xB0B);
+        address raterRegistry = address(new MockRaterIdentityRegistry());
+        address replacementRaterRegistry = address(new MockRaterIdentityRegistry());
 
         config.setRaterRegistry(raterRegistry);
         config.setRaterRegistry(replacementRaterRegistry);
@@ -625,7 +626,7 @@ contract ProtocolConfigBranchesTest is Test {
 
     function test_SetRaterRegistry() public {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
-        address raterRegistry = address(0xBEEF);
+        address raterRegistry = address(new MockRaterIdentityRegistry());
 
         config.setRaterRegistry(raterRegistry);
 
