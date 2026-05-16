@@ -94,6 +94,7 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
     event DefaultFrontendFeeBpsUpdated(uint256 previousFrontendFeeBps, uint256 newFrontendFeeBps);
     event RaterRegistryUpdated(address raterRegistry);
     event VotingEngineUpdated(address votingEngine);
+    event NonAssetTokenRecovered(address indexed token, address indexed to, uint256 amount);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -251,6 +252,21 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
         require(treasury != address(0), "Treasury not set");
         usdcToken.safeTransfer(treasury, forfeitedAmount);
         emit FeedbackBonusForfeited(poolId, treasury, forfeitedAmount);
+    }
+
+    /// @notice Recover an ERC-20 that is NOT the protocol's reward asset (USDC).
+    /// @dev Donations of non-asset tokens to the escrow are otherwise permanently stuck.
+    ///      USDC balances reflect per-pool funded/remaining accounting and are deliberately
+    ///      not sweepable through this path. L-Funds-1.
+    function recoverNonAssetToken(IERC20 token, address to, uint256 amount)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+        nonReentrant
+    {
+        require(address(token) != address(usdcToken), "Cannot recover protocol asset");
+        require(to != address(0), "Invalid recipient");
+        token.safeTransfer(to, amount);
+        emit NonAssetTokenRecovered(address(token), to, amount);
     }
 
     function setRaterRegistry(address raterRegistry_) external onlyRole(CONFIG_ROLE) {
