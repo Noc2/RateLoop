@@ -3,6 +3,7 @@ import type { NextPage } from "next";
 import { DocsTitle } from "~~/components/docs/DocsTitle";
 import { QuestionLifecycleDiagram } from "~~/components/docs/QuestionLifecycleDiagram";
 import { RewardSplitChart } from "~~/components/docs/RewardSplitChart";
+import { RoundVisibilityTimelineDiagram } from "~~/components/docs/RoundVisibilityTimelineDiagram";
 import { protocolDocFacts } from "~~/lib/docs/protocolFacts";
 import { getFreeTransactionLimit } from "~~/lib/env/server";
 
@@ -68,6 +69,7 @@ const HowItWorks: NextPage = () => {
         RBTS reports stay hidden through the commit-reveal flow until the blind phase ends. The keeper normally derives
         the reveal data after the epoch closes; users can self-reveal if the automatic path is delayed.
       </p>
+      <RoundVisibilityTimelineDiagram />
 
       <h3>Voting Rules</h3>
       <ul>
