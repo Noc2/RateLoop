@@ -551,7 +551,7 @@ contract LaunchDistributionPoolTest is Test {
         assertTrue(pool.raterFullLaunchCapUnlocked(alice));
 
         registry.revokeHumanCredential(alice);
-        registry.clearRevokedHumanNullifier(bytes32("shared-human"));
+        registry.clearRevokedHumanNullifier(RaterRegistry.HumanCredentialProvider.WorldId, bytes32("shared-human"));
         _verify(bob, bytes32("shared-human"));
         for (uint256 i = 0; i < 5; i++) {
             bytes32 anchorId = i % 2 == 0 ? bytes32("anchor-a") : bytes32("anchor-b");

@@ -134,7 +134,9 @@ contract RaterRegistryTest is Test {
             credential.evidenceHash,
             keccak256(abi.encodePacked("world-id-v3", block.chainid, address(worldIdRouter), uint256(1), signalHash))
         );
-        assertEq(registry.humanNullifierOwner(NULLIFIER_HASH), rater);
+        assertEq(
+            registry.humanNullifierOwnerByProvider(RaterRegistry.HumanCredentialProvider.WorldId, NULLIFIER_HASH), rater
+        );
         assertTrue(registry.hasActiveHumanCredential(rater));
     }
 
@@ -218,8 +220,13 @@ contract RaterRegistryTest is Test {
         RaterRegistry.HumanCredential memory credential = registry.getHumanCredential(rater);
         assertTrue(credential.revoked);
         assertFalse(registry.hasActiveHumanCredential(rater));
-        assertEq(registry.humanNullifierOwner(NULLIFIER_HASH), address(0));
-        assertTrue(registry.revokedHumanNullifier(NULLIFIER_HASH));
+        assertEq(
+            registry.humanNullifierOwnerByProvider(RaterRegistry.HumanCredentialProvider.WorldId, NULLIFIER_HASH),
+            address(0)
+        );
+        assertTrue(
+            registry.revokedHumanNullifierByProvider(RaterRegistry.HumanCredentialProvider.WorldId, NULLIFIER_HASH)
+        );
     }
 
     function test_RevokeHumanCredentialBlocksNullifierReuseUntilCleared() public {
@@ -240,11 +247,14 @@ contract RaterRegistryTest is Test {
         registry.attestHumanCredentialWithProof(1, uint256(NULLIFIER_HASH), proof);
 
         vm.prank(admin);
-        registry.clearRevokedHumanNullifier(NULLIFIER_HASH);
+        registry.clearRevokedHumanNullifier(RaterRegistry.HumanCredentialProvider.WorldId, NULLIFIER_HASH);
 
         vm.prank(otherRater);
         registry.attestHumanCredentialWithProof(1, uint256(NULLIFIER_HASH), proof);
-        assertEq(registry.humanNullifierOwner(NULLIFIER_HASH), otherRater);
+        assertEq(
+            registry.humanNullifierOwnerByProvider(RaterRegistry.HumanCredentialProvider.WorldId, NULLIFIER_HASH),
+            otherRater
+        );
     }
 
     function test_SeedHumanCredentialStoresCuryoSelfVerifiedAccountAsVerifiedHuman() public {
@@ -261,7 +271,12 @@ contract RaterRegistryTest is Test {
         assertEq(credential.scope, registry.CURYO_SELF_VERIFIED_SCOPE());
         assertEq(credential.expiresAt, expiresAt);
         assertEq(credential.evidenceHash, EVIDENCE_HASH);
-        assertEq(registry.humanNullifierOwner(CURYO_ANCHOR_ID), rater);
+        assertEq(
+            registry.humanNullifierOwnerByProvider(
+                RaterRegistry.HumanCredentialProvider.CuryoSelfVerifiedSeed, CURYO_ANCHOR_ID
+            ),
+            rater
+        );
         assertTrue(registry.hasActiveHumanCredential(rater));
     }
 

@@ -49,8 +49,14 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
 
     mapping(address => RaterProfile) private _profiles;
     mapping(address => HumanCredential) private _humanCredentials;
-    mapping(bytes32 => address) public humanNullifierOwner;
-    mapping(bytes32 => bool) public revokedHumanNullifier;
+    /// @dev Provider-namespaced ownership of nullifier hashes. Previously a single
+    ///      mapping was shared across providers, which allowed `SEEDER_ROLE` to
+    ///      squat any 32-byte value and block the legitimate owner of the same
+    ///      bytes from attesting under a different provider (L-Identity-1).
+    mapping(HumanCredentialProvider => mapping(bytes32 => address)) private _humanNullifierOwnerByProvider;
+    /// @dev Provider-namespaced revocation flag. Namespaced for the same
+    ///      cross-provider collision reason as `_humanNullifierOwnerByProvider`.
+    mapping(HumanCredentialProvider => mapping(bytes32 => bool)) private _revokedHumanNullifierByProvider;
     mapping(address => mapping(address => bool)) public isFollowing;
     mapping(address => uint256) public followingCount;
     mapping(address => uint256) public followerCount;
@@ -257,7 +263,7 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
             revert InvalidCredential();
         }
 
-        address currentOwner = humanNullifierOwner[storedNullifier];
+        address currentOwner = _humanNullifierOwnerByProvider[HumanCredentialProvider.WorldId][storedNullifier];
         if (currentOwner != address(0) && currentOwner != msg.sender) revert NullifierAlreadyAssigned();
 
         uint256 signalHash = worldIdSignalHash(msg.sender);
@@ -298,17 +304,25 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
 
         credential.revoked = true;
         bytes32 nullifierHash = credential.nullifierHash;
-        if (nullifierHash != bytes32(0) && humanNullifierOwner[nullifierHash] == rater) {
-            delete humanNullifierOwner[nullifierHash];
-            revokedHumanNullifier[nullifierHash] = true;
+        HumanCredentialProvider provider = credential.provider;
+        if (
+            nullifierHash != bytes32(0) && provider != HumanCredentialProvider.None
+                && _humanNullifierOwnerByProvider[provider][nullifierHash] == rater
+        ) {
+            delete _humanNullifierOwnerByProvider[provider][nullifierHash];
+            _revokedHumanNullifierByProvider[provider][nullifierHash] = true;
         }
 
         emit HumanCredentialRevoked(rater, nullifierHash);
     }
 
-    function clearRevokedHumanNullifier(bytes32 nullifierHash) external onlyRole(SEEDER_ROLE) {
+    function clearRevokedHumanNullifier(HumanCredentialProvider provider, bytes32 nullifierHash)
+        external
+        onlyRole(SEEDER_ROLE)
+    {
         if (nullifierHash == bytes32(0)) revert InvalidCredential();
-        revokedHumanNullifier[nullifierHash] = false;
+        if (provider == HumanCredentialProvider.None) revert InvalidCredential();
+        _revokedHumanNullifierByProvider[provider][nullifierHash] = false;
         emit HumanNullifierRevocationCleared(nullifierHash);
     }
 
@@ -318,6 +332,27 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
 
     function getHumanCredential(address rater) external view returns (HumanCredential memory) {
         return _humanCredentials[rater];
+    }
+
+    /// @notice Returns the address that owns a nullifier hash within a specific provider's namespace.
+    /// @dev Replaces the previous global `humanNullifierOwner(bytes32)` view. Ownership is per-provider
+    ///      so a value seeded under `CuryoSelfVerifiedSeed` does not collide with a WorldID nullifier of
+    ///      the same 32 bytes (L-Identity-1).
+    function humanNullifierOwnerByProvider(HumanCredentialProvider provider, bytes32 nullifierHash)
+        external
+        view
+        returns (address)
+    {
+        return _humanNullifierOwnerByProvider[provider][nullifierHash];
+    }
+
+    /// @notice Returns whether a nullifier hash has been revoked within a specific provider's namespace.
+    function revokedHumanNullifierByProvider(HumanCredentialProvider provider, bytes32 nullifierHash)
+        external
+        view
+        returns (bool)
+    {
+        return _revokedHumanNullifierByProvider[provider][nullifierHash];
     }
 
     function resolveRater(address actor) public view returns (ResolvedRater memory resolved) {
@@ -368,18 +403,22 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
         if (expiresAt <= block.timestamp) revert InvalidCredential();
         if (provider == HumanCredentialProvider.None) revert InvalidCredential();
         if (nullifierHash == bytes32(0) || scope == bytes32(0)) revert InvalidCredential();
-        if (revokedHumanNullifier[nullifierHash]) revert InvalidCredential();
+        if (_revokedHumanNullifierByProvider[provider][nullifierHash]) revert InvalidCredential();
 
         HumanCredential storage previous = _humanCredentials[rater];
         if (previous.nullifierHash != bytes32(0) && previous.nullifierHash != nullifierHash) {
-            if (humanNullifierOwner[previous.nullifierHash] == rater) {
-                delete humanNullifierOwner[previous.nullifierHash];
+            HumanCredentialProvider previousProvider = previous.provider;
+            if (
+                previousProvider != HumanCredentialProvider.None
+                    && _humanNullifierOwnerByProvider[previousProvider][previous.nullifierHash] == rater
+            ) {
+                delete _humanNullifierOwnerByProvider[previousProvider][previous.nullifierHash];
             }
         }
 
-        address currentOwner = humanNullifierOwner[nullifierHash];
+        address currentOwner = _humanNullifierOwnerByProvider[provider][nullifierHash];
         if (currentOwner != address(0) && currentOwner != rater) revert NullifierAlreadyAssigned();
-        humanNullifierOwner[nullifierHash] = rater;
+        _humanNullifierOwnerByProvider[provider][nullifierHash] = rater;
         _clearInboundDelegation(rater);
 
         _humanCredentials[rater] = HumanCredential({
