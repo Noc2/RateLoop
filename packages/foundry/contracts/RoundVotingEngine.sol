@@ -495,12 +495,12 @@ contract RoundVotingEngine is
             resolved.holder
         );
         _recordCommitAccounting(round, contentId, roundId, voter, resolved.identityKey, stakeAmount64, stakeAmount);
-        // M-Vote-1: bind the prevrandao of the last-commit block into the round so it can be mixed
-        // into the RBTS sampler seed at settlement. The last committer cannot grind their own
-        // block's prevrandao, so this removes the salt-grinding attack on the seed.
+        // Bind the prevrandao of the last-commit block into the round so it can be mixed into the
+        // RBTS sampler seed at settlement. The last committer cannot grind their own block's
+        // prevrandao, so this removes the salt-grinding attack on the seed.
         roundLastCommitPrevrandao[contentId][roundId] = bytes32(block.prevrandao);
-        // L-Vote-4: flag whether at least one commit in this round originated from an HRC-verified
-        // identity. `cancelExpiredRound` consults this flag to keep all-sybil rounds refund-cancellable.
+        // Flag whether at least one commit in this round originated from an HRC-verified identity.
+        // `cancelExpiredRound` consults this flag to keep all-sybil rounds refund-cancellable.
         if (resolved.hasActiveHumanCredential && !roundHasHumanVerifiedCommit[contentId][roundId]) {
             roundHasHumanVerifiedCommit[contentId][roundId] = true;
         }
@@ -779,11 +779,11 @@ contract RoundVotingEngine is
     // =========================================================================
 
     /// @notice Cancel an expired round that didn't reach the minimum voter threshold. Permissionless.
-    /// @dev L-Vote-4 (audit 2026-05-16): the min-RBTS-quorum lockout only engages once at least
-    ///      one commit in the round has originated from a human-credential-verified identity.
-    ///      A pure-sybil attacker (no HRC) reaching N >= 3 commits at min stake can no longer
-    ///      grief honest content into a `RevealFailed` cycle (~80 min @ ~3 HREP/cycle) -- the
-    ///      round remains refund-cancellable until any HRC voter participates.
+    /// @dev The min-RBTS-quorum lockout only engages once at least one commit in the round has
+    ///      originated from a human-credential-verified identity. A pure-sybil attacker (no HRC)
+    ///      reaching N >= 3 commits at min stake can no longer grief honest content into a
+    ///      `RevealFailed` cycle (~80 min @ ~3 HREP/cycle) -- the round remains
+    ///      refund-cancellable until any HRC voter participates.
     ///      Trade-off: this slightly weakens the "min-stake universal" property by one bit, but
     ///      eliminates the cheapest cancel-griefing vector. HRC voters are unaffected; the
     ///      moment any HRC commit lands the original lockout applies and the round proceeds
@@ -1460,27 +1460,24 @@ contract RoundVotingEngine is
     mapping(uint256 => mapping(uint256 => uint64)) public roundRatingUpEvidence;
     mapping(uint256 => mapping(uint256 => uint64)) public roundRatingDownEvidence;
 
-    // Commit timestamp used for bounty eligibility. Added after existing storage slots
-    // so in-place upgrades do not shift older mappings.
+    // Commit timestamp used for bounty eligibility.
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint48))) public commitCommittedAt;
 
     /// @notice Tracks bundle-observer terminal notifications that reverted on the escrow side.
-    /// @dev Appended after existing storage slots to preserve the upgradeable layout. Set true
-    ///      by `_notifyBundleRoundTerminal` on revert; cleared by `replayBundleObserverNotify`
-    ///      (or by a subsequent successful notification). Indexed by (contentId, roundId).
+    /// @dev Set true by `_notifyBundleRoundTerminal` on revert; cleared by
+    ///      `replayBundleObserverNotify` (or by a subsequent successful notification).
+    ///      Indexed by (contentId, roundId).
     mapping(uint256 contentId => mapping(uint256 roundId => bool)) public pendingBundleObserverReplay;
 
-    // M-Vote-1 (audit 2026-05-16): block.prevrandao of the last-commit block per round.
-    // Mixed into the RBTS sampler seed so the seed is unguessable at commit time. The last
-    // committer cannot grind their own block's prevrandao -- it is supplied by the validator
-    // and only revealed after the block is mined. Appended after existing storage so in-place
-    // upgrades do not shift older mappings.
+    // block.prevrandao of the last-commit block per round. Mixed into the RBTS sampler seed so
+    // the seed is unguessable at commit time. The last committer cannot grind their own block's
+    // prevrandao -- it is supplied by the validator and only revealed after the block is mined.
     mapping(uint256 => mapping(uint256 => bytes32)) public roundLastCommitPrevrandao;
 
-    // L-Vote-4 (audit 2026-05-16): true if at least one commit in this round originated from an
-    // address with an active human credential. `cancelExpiredRound` requires this flag before the
-    // min-RBTS-quorum cancel-lockout engages -- attacker-only rounds (all non-HRC sybils) remain
-    // refund-cancellable so they cannot grief honest content into a RevealFailed cycle.
+    // True if at least one commit in this round originated from an address with an active human
+    // credential. `cancelExpiredRound` requires this flag before the min-RBTS-quorum cancel-lockout
+    // engages -- attacker-only rounds (all non-HRC sybils) remain refund-cancellable so they
+    // cannot grief honest content into a RevealFailed cycle.
     mapping(uint256 => mapping(uint256 => bool)) public roundHasHumanVerifiedCommit;
 
     // --- Storage gap reserved for future upgrades ---

@@ -50,20 +50,17 @@ library RoundLib {
 
     /// @dev `revealableAfter` is dual-purpose to save a storage slot:
     ///      - while `revealed == false`: epoch-end timestamp (gates the earliest reveal call)
-    ///      - while `revealed == true`:  reveal timestamp (used by cleanup and legacy deadline checks)
-    ///      Every reader MUST gate its interpretation on `revealed`. New bounty
-    ///      eligibility reads RoundVotingEngine.commitCommittedAt instead, with this
-    ///      value kept only as a legacy fallback for records that predate that getter.
+    ///      - while `revealed == true`:  reveal timestamp (used by cleanup and deadline checks)
+    ///      Every reader MUST gate its interpretation on `revealed`. Bounty eligibility reads
+    ///      `RoundVotingEngine.commitCommittedAt`; this field still backs the reveal-time
+    ///      deadline checks listed below.
     ///      See:
     ///        - RoundCleanupLib.processUnrevealedVotes (epoch-end semantics, guarded by !revealed)
-    ///        - QuestionRewardPoolEscrow._timelyRevealedCommitFrontend (reveal-time fallback, guarded by revealed)
-    ///        - QuestionRewardPoolEscrowQualificationLib (reveal-time fallback, guarded by revealed)
-    ///      DEPLOY POLICY: this dual semantics is in-place-upgrade unsafe. Existing-revealed
-    ///      commits store reveal timestamps; a future implementation that interpreted the
-    ///      field as epoch-end semantics on those records would silently corrupt cleanup and
-    ///      bounty timing. RoundVotingEngine MUST be deployed behind a fresh proxy whenever
-    ///      `Commit` storage layout or this field's semantics change — the deploy script
-    ///      already follows this invariant; do not switch to in-place UUPS upgrades for the
+    ///        - QuestionRewardPoolEscrow._timelyRevealedCommitFrontend (reveal-time, guarded by revealed)
+    ///        - QuestionRewardPoolEscrowQualificationLib (reveal-time, guarded by revealed)
+    ///      Deploy policy: this dual semantics is in-place-upgrade unsafe — a future
+    ///      implementation that reinterpreted the field on revealed records would silently
+    ///      corrupt cleanup and bounty timing. Do not switch to in-place UUPS upgrades for the
     ///      voting engine without first introducing a `commitVersion` discriminant.
     struct Commit {
         address voter;
