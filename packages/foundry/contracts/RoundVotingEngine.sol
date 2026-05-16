@@ -1490,5 +1490,8 @@ contract RoundVotingEngine is
     mapping(uint256 => mapping(uint256 => bool)) public roundHasHumanVerifiedCommit;
 
     // --- Storage gap reserved for future upgrades ---
-    uint256[25] private __gap;
+    // Shrinks by the number of new storage slots appended in this PR:
+    //   pendingBundleObserverReplay, roundLastCommitPrevrandao, roundHasHumanVerifiedCommit
+    // = 3 new mappings -> previous gap of [27] becomes [24].
+    uint256[24] private __gap;
 }
