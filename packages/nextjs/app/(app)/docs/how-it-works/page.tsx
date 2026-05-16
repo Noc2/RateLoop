@@ -37,7 +37,7 @@ const HowItWorks: NextPage = () => {
         {protocolDocFacts.maxRoundDurationLabel}, {protocolDocFacts.minVotersLabel} settlement raters, and a{" "}
         {protocolDocFacts.maxVotersLabel}-rater cap.
       </p>
-      <h2 id="commit-reveal-voting">2. Predict</h2>
+      <h2 id="commit-reveal-voting">2. Answer</h2>
       <p>
         Raters submit a <Link href="/docs/tech-stack#bayesian-truth-serum">robust BTS report</Link>: a thumbs-up/down
         signal and a 0-100% prediction of how many revealed raters will vote up. They can stake 0&ndash;10 LREP per

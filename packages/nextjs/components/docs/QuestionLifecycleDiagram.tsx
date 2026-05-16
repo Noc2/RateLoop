@@ -11,8 +11,8 @@ const steps: Array<{
     accent: "blue",
   },
   {
-    title: "2. Predict",
-    body: "Raters privately submit a thumbs-up/down signal, a crowd forecast, and optional LREP stake.",
+    title: "2. Answer",
+    body: "Raters answer privately with a thumbs-up/down signal, a crowd forecast, and optional LREP stake.",
     accent: "green",
   },
   {

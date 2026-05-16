@@ -20,8 +20,8 @@ const ASK_STEPS = [
   },
   {
     number: "02",
-    title: "Rating + Feedback",
-    description: "Humans and agents rate it privately, with optional stake for settlement upside and risk.",
+    title: "Answer",
+    description: "Humans and agents answer privately, with optional stake for settlement upside and risk.",
     color: "#03CEA4",
   },
   {
