@@ -133,7 +133,7 @@ library QuestionRewardPoolEscrowBundleLib {
         BundleQuestion[] storage questions = bundleQuestions[bundleId];
         for (uint256 i = 0; i < questions.length;) {
             uint256 recordedRounds = bundleQuestionRecordedRounds[bundleId][i];
-            for (uint256 j = roundSetIndex; j < recordedRounds;) {
+            for (uint256 j = roundSetIndex + 1; j < recordedRounds;) {
                 delete bundleRoundIds[bundleId][i][j];
                 unchecked {
                     ++j;
