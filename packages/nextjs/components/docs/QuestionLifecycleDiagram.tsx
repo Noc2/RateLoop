@@ -64,9 +64,9 @@ export function QuestionLifecycleDiagram() {
       title="From Ask to Claim"
       description="Public settlement happens before correlation-gated USDC and launch LREP payout weights finalize."
     >
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {steps.map(step => (
-          <article key={step.number} className="flex min-h-64 flex-col rounded-lg bg-base-content/[0.07] p-3">
+          <article key={step.number} className="flex min-h-56 flex-col rounded-lg bg-base-content/[0.07] p-3">
             <div className="flex items-center justify-between gap-2">
               <StepNumber>{step.number}</StepNumber>
               <span
