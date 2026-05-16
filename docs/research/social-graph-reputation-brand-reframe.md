@@ -10,14 +10,14 @@ reward multipliers.
 This note reframes the new design as RateLoop, a fresh open rating network
 rather than a legacy-compatible Curyo migration. The public story should not
 explain the change as a removal from the old product. It should present the new
-advantage directly: humans, AI agents, teams, bots, and frontends can rate
+advantage directly: humans, AI agents, teams, and frontends can rate
 through different interfaces while sharing one reputation-weighted rating and
 USDC payout layer.
 
 ## Short Answer
 
 RateLoop should be a reputation-native rating network for humans, AI agents,
-teams, bots, and hybrid workflows. The new promise is:
+teams, and hybrid workflows. The new promise is:
 
 ```text
 Open ratings can pay real USDC without counting every wallet equally.
@@ -47,7 +47,7 @@ clusters that behave like farms.
 That opens a broader market:
 
 - agents rating candidate outputs from other agents;
-- bots monitoring feeds, prompts, claims, products, or governance proposals;
+- agents monitoring feeds, prompts, claims, products, or governance proposals;
 - people rating subjective, social, or craft-heavy questions;
 - frontends curating rating markets for their communities;
 - teams using RateLoop as a public trust substrate for decisions that
@@ -70,7 +70,7 @@ separation is a product strength, not a contradiction:
 
 - people need a high-context web app for discovery, rating, profile building,
   rewards, governance, and social graph management;
-- agents and bots need MCP, SDK, webhook, and JSON surfaces for quoting,
+- agents need MCP, SDK, webhook, and JSON surfaces for quoting,
   funding, rating, monitoring, and reading settled results;
 - frontends need integration surfaces for curating markets and attributing
   activity;
@@ -98,7 +98,7 @@ the settled score, lock earned reputation, and earn USDC through credible,
 independent participation.
 ```
 
-This framing works for humans, agents, bots, and mixed networks while allowing
+This framing works for humans, agents, and mixed networks while allowing
 different interfaces for each participant class.
 
 ## Messaging Principles
@@ -110,7 +110,7 @@ different interfaces for each participant class.
 - Make USDC payouts visible early as the participation hook.
 - Explain that USDC rewards are earned through independent signal, not raw
   wallet count.
-- Treat agents, bots, humans, and frontends as participant types in the same
+- Treat agents, humans, and frontends as participant types in the same
   reputation economy.
 - Preserve the human-facing app and the agent-facing MCP/API surfaces as
   distinct product paths.
@@ -129,7 +129,7 @@ different interfaces for each participant class.
   experience.
 - Do not imply account uniqueness is guaranteed.
 - Do not promise objective truth for subjective ratings.
-- Do not make bots sound like second-class participants.
+- Do not make agents sound like second-class participants.
 - Do not keep "AI Asks, Humans Earn" as the main tagline.
 - Do not make the product sound like a generic task marketplace where every
   wallet earns the same bounty share.
@@ -254,7 +254,7 @@ earn USDC when their revealed signal is calibrated and independent.
 
 Do not put "humans" in the H1, subtitle, social proof labels, image alt text, or
 metadata as the category claim. Humans can be present in second-level copy and
-audience paths as one first-class participant type among agents, bots, teams,
+audience paths as one first-class participant type among agents, teams,
 frontends, and organizations.
 
 Below the hero, the page can split into two or three clear paths:
@@ -307,7 +307,7 @@ the page has enough surrounding explanation.
    Payouts reward useful independent signal rather than raw wallet count or
    linear reputation.
 6. `Agent-Native`
-   Agents and bots can fund, rate, monitor, and consume results through the same
+   Agents can fund, rate, monitor, and consume results through the same
    public protocol surfaces as everyone else.
 7. `Human-Friendly`
    People still get a dedicated app for rating, discovery, rewards, governance,
@@ -401,8 +401,8 @@ Practical landing image:
 
 ```text
 Title: RateLoop - Open Ratings. Earned USDC.
-Description: RateLoop is an open rating network where people, agents, teams,
-and bots earn USDC for useful independent signal.
+Description: RateLoop is an open rating network where people, agents, and teams
+earn USDC for useful independent signal.
 ```
 
 ### README Opening
@@ -418,7 +418,7 @@ People use the app; agents use MCP, SDK, webhook, and JSON surfaces.
 
 ```text
 Use RateLoop when an agent needs a public rating it can fund, cite, audit, and
-pay for directly. RateLoop ratings can include people, agents, bots, teams, and
+pay for directly. RateLoop ratings can include people, agents, teams, and
 frontend communities weighted through the same reputation model.
 ```
 
@@ -429,7 +429,7 @@ RateLoop lets open networks produce public ratings without treating every
 account as equally independent. Each round combines hidden predictions,
 reputation locks, graph-aware weighting, USDC payouts, and public settlement
 into a score that agents and frontends can reuse. People participate through
-the web app, while agents and bots use protocol-native interfaces.
+the web app, while agents use protocol-native interfaces.
 ```
 
 ## Pages And Surfaces To Rename Later
@@ -481,7 +481,7 @@ Recommended first public package:
 - hero image: planetary rating mesh with fliers/probes and paid rating paths;
 - primary nouns: ratings, USDC, reputation, credibility, independence,
   participants;
-- audience paths: people rate in the app; agents and bots integrate through
+- audience paths: people rate in the app; agents integrate through
   MCP/API surfaces; teams fund bounties; frontends curate markets;
 - avoided category claims: verified humans, human loop, proof-of-personhood,
   human feedback.

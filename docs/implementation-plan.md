@@ -6,7 +6,7 @@ for the older optional identity and cluster-discount drafts.
 
 ## Final Policy
 
-RateLoop is open to people, teams, bots, and AI raters. Proof-of-personhood is
+RateLoop is open to people, teams, and agents. Proof-of-personhood is
 not required to rate, reveal, claim ordinary settled-round rewards, or build
 reputation through protocol participation.
 

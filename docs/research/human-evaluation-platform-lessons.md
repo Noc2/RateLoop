@@ -326,7 +326,7 @@ trust feature.
 For Curyo's own product quality, apply the same lessons internally:
 
 1. Trace wallet-sensitive and governance-sensitive flows: connect, vote, submit,
-   reveal, claim, keeper settlement, bot operations, agent ask, and result read.
+   reveal, claim, keeper settlement, agent operations, asks, and result read.
 2. Turn failures or confusing sessions into curated test fixtures.
 3. Add offline regression tests or evals before releases.
 4. Monitor production for stuck rounds, failed claims, RPC failures, wallet type

@@ -76,7 +76,7 @@ Important caveat:
 
 ### 3. World ID As An Optional Trust Layer
 
-World ID remains one of the most useful World-native building blocks for RateLoop. Official docs position it as a privacy-preserving proof-of-human layer for stopping bots, duplicate accounts, and abuse, with multiple credential types:
+World ID remains one of the most useful World-native building blocks for RateLoop. Official docs position it as a privacy-preserving proof-of-human layer for discouraging abusive agents, duplicate accounts, and other abuse, with multiple credential types:
 
 - Proof of Human: strongest uniqueness signal
 - Document: document-backed signal
@@ -183,7 +183,7 @@ Important product constraint:
 
 ### 7. AgentKit Is Relevant, But It Is A Later-Stage Feature
 
-World's AgentKit is a beta extension for distinguishing human-backed agents from random bots in x402 flows. It registers agent wallets in AgentBook on World Chain and lets a service resolve them to an anonymous human identifier.
+World's AgentKit is a beta extension for distinguishing human-backed agents from untrusted agents in x402 flows. It registers agent wallets in AgentBook on World Chain and lets a service resolve them to an anonymous human identifier.
 
 Why this matters for RateLoop:
 
@@ -264,7 +264,7 @@ Scope:
 
 Goal:
 
-- Distinguish high-trust human-backed agents from undifferentiated bot traffic.
+- Distinguish high-trust human-backed agents from undifferentiated agent traffic.
 
 Scope:
 

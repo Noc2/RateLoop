@@ -423,8 +423,8 @@ const SmartContracts: NextPage = () => {
           thumbs-up/down signal and a separate crowd forecast.
         </li>
         <li>
-          <code>commitVote(...)</code> &mdash; Lower-level integration path for bots, tests, and direct contract callers
-          that build the approve-plus-commit flow directly.
+          <code>commitVote(...)</code> &mdash; Lower-level integration path for agents, tests, and direct contract
+          callers that build the approve-plus-commit flow directly.
         </li>
         <li>
           <strong>VoteCommitted event:</strong> emits the commit hash, <code>targetRound</code>, and{" "}
@@ -738,8 +738,8 @@ const SmartContracts: NextPage = () => {
           use them; challengers post a USDC bond rather than native ETH. Open raters can receive a governed partial
           earned-rater cap and unlock the full snapshotted cap by later verifying the same wallet as a human, but
           verified humans still pass through the correlation scorer. Per-identity stake caps, question-first submission
-          guardrails, and claim gating apply around the reward surfaces. Question submission is the same for humans,
-          bots, and delegated agents.
+          guardrails, and claim gating apply around the reward surfaces. Question submission is the same for humans and
+          agents.
         </li>
         <li>
           <strong>Governance Lock:</strong> Tokens are transfer-locked for 7 days when proposing or voting on
