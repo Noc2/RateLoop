@@ -99,10 +99,15 @@ library RoundRevealLib {
         );
         if (params.commitKey != keccak256(abi.encodePacked(commit.voter, expectedHash))) revert HashMismatch();
 
+        // Cache the epoch-end key (stored in commit.revealableAfter prior to reveal)
+        // before flipping `revealed`, since after the flip the same field is
+        // repurposed as the reveal timestamp. Honor the "check revealed first"
+        // invariant for the dual-purpose slot.
+        uint256 epochEndKey = commit.revealableAfter;
         commit.revealed = true;
         commit.isUp = params.isUp;
 
-        unrevealedCountByEpoch[commit.revealableAfter]--;
+        unrevealedCountByEpoch[epochEndKey]--;
         commit.revealableAfter = block.timestamp.toUint48();
         round.revealedCount++;
 
