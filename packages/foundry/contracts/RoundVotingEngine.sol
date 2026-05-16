@@ -499,6 +499,11 @@ contract RoundVotingEngine is
         // into the RBTS sampler seed at settlement. The last committer cannot grind their own
         // block's prevrandao, so this removes the salt-grinding attack on the seed.
         roundLastCommitPrevrandao[contentId][roundId] = bytes32(block.prevrandao);
+        // L-Vote-4: flag whether at least one commit in this round originated from an HRC-verified
+        // identity. `cancelExpiredRound` consults this flag to keep all-sybil rounds refund-cancellable.
+        if (resolved.hasActiveHumanCredential && !roundHasHumanVerifiedCommit[contentId][roundId]) {
+            roundHasHumanVerifiedCommit[contentId][roundId] = true;
+        }
 
         emit VoteCommitted(
             contentId, roundId, voter, commitHash, expectedReferenceRatingBps, targetRound, drandChainHash, stakeAmount
@@ -774,13 +779,26 @@ contract RoundVotingEngine is
     // =========================================================================
 
     /// @notice Cancel an expired round that didn't reach the minimum voter threshold. Permissionless.
+    /// @dev L-Vote-4 (audit 2026-05-16): the min-RBTS-quorum lockout only engages once at least
+    ///      one commit in the round has originated from a human-credential-verified identity.
+    ///      A pure-sybil attacker (no HRC) reaching N >= 3 commits at min stake can no longer
+    ///      grief honest content into a `RevealFailed` cycle (~80 min @ ~3 HREP/cycle) -- the
+    ///      round remains refund-cancellable until any HRC voter participates.
+    ///      Trade-off: this slightly weakens the "min-stake universal" property by one bit, but
+    ///      eliminates the cheapest cancel-griefing vector. HRC voters are unaffected; the
+    ///      moment any HRC commit lands the original lockout applies and the round proceeds
+    ///      through the normal reveal/settle path.
     function cancelExpiredRound(uint256 contentId, uint256 roundId) external nonReentrant {
         RoundLib.Round storage round = rounds[contentId][roundId];
         if (round.state != RoundLib.RoundState.Open) revert RoundNotOpen();
         RoundLib.RoundConfig memory roundCfg = _getRoundConfig(contentId, roundId);
         if (!RoundLib.isExpired(round, roundCfg.maxDuration)) revert RoundNotExpired();
-        // Cannot cancel once the round has meaningful RBTS commit quorum.
-        if (round.voteCount >= _rbtsRevealQuorum(roundCfg.minVoters)) revert ThresholdReached();
+        // Cancel-lockout requires BOTH commit quorum AND at least one HRC-verified commit. All-sybil
+        // rounds (no HRC participation) stay refund-cancellable so they cannot be used to grief.
+        if (
+            round.voteCount >= _rbtsRevealQuorum(roundCfg.minVoters)
+                && roundHasHumanVerifiedCommit[contentId][roundId]
+        ) revert ThresholdReached();
 
         round.state = RoundLib.RoundState.Cancelled;
 
@@ -1464,6 +1482,12 @@ contract RoundVotingEngine is
     // and only revealed after the block is mined. Appended after existing storage so in-place
     // upgrades do not shift older mappings.
     mapping(uint256 => mapping(uint256 => bytes32)) public roundLastCommitPrevrandao;
+
+    // L-Vote-4 (audit 2026-05-16): true if at least one commit in this round originated from an
+    // address with an active human credential. `cancelExpiredRound` requires this flag before the
+    // min-RBTS-quorum cancel-lockout engages -- attacker-only rounds (all non-HRC sybils) remain
+    // refund-cancellable so they cannot grief honest content into a RevealFailed cycle.
+    mapping(uint256 => mapping(uint256 => bool)) public roundHasHumanVerifiedCommit;
 
     // --- Storage gap reserved for future upgrades ---
     uint256[25] private __gap;

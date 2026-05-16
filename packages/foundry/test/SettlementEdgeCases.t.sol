@@ -15,6 +15,7 @@ import { ParticipationPool } from "../contracts/ParticipationPool.sol";
 import { FrontendRegistry } from "../contracts/FrontendRegistry.sol";
 import { VotingTestBase } from "./helpers/VotingTestHelpers.sol";
 import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
+import { MockRaterIdentityRegistry } from "./mocks/MockRaterIdentityRegistry.sol";
 
 // =========================================================================
 // TEST CONTRACT: Settlement Edge Cases
@@ -31,6 +32,7 @@ contract SettlementEdgeCasesTest is VotingTestBase {
     RoundRewardDistributor public rewardDistributor;
     ParticipationPool public participationPool;
     FrontendRegistry public frontendRegistry;
+    MockRaterIdentityRegistry public raterRegistry;
 
     address public owner = address(1);
     address public submitter = address(2);
@@ -114,6 +116,11 @@ contract SettlementEdgeCasesTest is VotingTestBase {
         frontendRegistry.setVotingEngine(address(engine));
         frontendRegistry.addFeeCreditor(address(rewardDistributor));
         ProtocolConfig(address(engine.protocolConfig())).setFrontendRegistry(address(frontendRegistry));
+
+        // L-Vote-4: install a rater identity registry so individual voters can be flagged
+        // human-credentialed for tests that need the cancel-lockout to engage.
+        raterRegistry = new MockRaterIdentityRegistry();
+        ProtocolConfig(address(engine.protocolConfig())).setRaterRegistry(address(raterRegistry));
 
         participationPool = new ParticipationPool(address(hrepToken), owner);
         participationPool.setAuthorizedCaller(address(rewardDistributor), true);
@@ -471,6 +478,10 @@ contract SettlementEdgeCasesTest is VotingTestBase {
     function test_Cancel_ThresholdReached_Reverts() public {
         uint256 contentId = _submitContent();
 
+        // L-Vote-4: cancel-lockout requires both commit quorum AND ≥1 HRC-verified commit.
+        // Mark voter1 as HRC so the lockout engages on this otherwise-honest path.
+        raterRegistry.setHolder(voter1);
+
         (bytes32 ck1, bytes32 s1) = _commit(voter1, contentId, true, STAKE);
         (bytes32 ck2, bytes32 s2) = _commit(voter2, contentId, true, STAKE);
         (bytes32 ck3, bytes32 s3) = _commit(voter3, contentId, false, STAKE);
@@ -490,6 +501,29 @@ contract SettlementEdgeCasesTest is VotingTestBase {
         // Should revert because threshold was reached
         vm.expectRevert(RoundVotingEngine.ThresholdReached.selector);
         engine.cancelExpiredRound(contentId, roundId);
+    }
+
+    /// @notice L-Vote-4: when no HRC voter participates, an expired round at commit quorum is
+    ///         still refund-cancellable. Sybils cannot grief honest content into a RevealFailed
+    ///         cycle at 3× min-stake; the round simply cancels and refunds.
+    function test_Cancel_AllSybilQuorum_Cancellable() public {
+        uint256 contentId = _submitContent();
+
+        // No HRC seeding — every voter resolves to the address-identity fallback (non-HRC).
+        _commit(voter1, contentId, true, STAKE);
+        _commit(voter2, contentId, true, STAKE);
+        _commit(voter3, contentId, false, STAKE);
+
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        RoundLib.Round memory r0 = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        assertFalse(engine.roundHasHumanVerifiedCommit(contentId, roundId));
+
+        // Warp past maxDuration without revealing.
+        vm.warp(r0.startTime + 7 days + 1);
+
+        engine.cancelExpiredRound(contentId, roundId);
+        RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        assertEq(uint256(round.state), uint256(RoundLib.RoundState.Cancelled));
     }
 
     // =========================================================================
