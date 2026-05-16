@@ -77,13 +77,6 @@ contract QuestionRewardPoolEscrow is
     mapping(uint256 => mapping(uint256 => mapping(uint256 => uint64))) private bundleRoundIds;
     mapping(uint256 => mapping(uint256 => BundleRoundSetSnapshot)) private bundleRoundSetSnapshots;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) private bundleRoundSetRewardClaimed;
-    /// @dev Storage placeholder reserving the slot once occupied by the removed
-    ///      `rewardPoolFunderNullifier` mapping (slim 2820d934). DO NOT remove or repurpose:
-    ///      preserves storage layout for any in-place proxy upgrade from a deployment that
-    ///      still has data in this slot. The funder's nullifier was write-only after the M2-1
-    ///      payer-identity refactor; refunds use `RewardPool.funder` directly and exclusion
-    ///      uses `rewardPoolPayerNullifier` for gateway-mediated payments.
-    mapping(uint256 => uint256) private __deprecated_rewardPoolFunderNullifier;
     mapping(uint256 => address) private rewardPoolPayerIdentity;
     mapping(uint256 => bytes32) private rewardPoolPayerIdentityKey;
     mapping(uint256 => uint256) private contentBundleId;
