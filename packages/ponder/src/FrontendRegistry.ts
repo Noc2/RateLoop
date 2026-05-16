@@ -96,11 +96,11 @@ ponder.on(
 ponder.on(
   "FrontendRegistry:FeesCredited",
   async ({ event, context }) => {
-    const { frontend: addr, hrepAmount } = event.args;
+    const { frontend: addr, lrepAmount } = event.args;
     await context.db
       .update(frontend, { address: addr })
       .set((row) => ({
-        totalFeesCredited: row.totalFeesCredited + hrepAmount,
+        totalFeesCredited: row.totalFeesCredited + lrepAmount,
       }));
   },
 );
@@ -108,11 +108,11 @@ ponder.on(
 ponder.on(
   "FrontendRegistry:FeesClaimed",
   async ({ event, context }) => {
-    const { frontend: addr, hrepAmount } = event.args;
+    const { frontend: addr, lrepAmount } = event.args;
     await context.db
       .update(frontend, { address: addr })
       .set((row) => ({
-        totalFeesClaimed: row.totalFeesClaimed + hrepAmount,
+        totalFeesClaimed: row.totalFeesClaimed + lrepAmount,
       }));
   },
 );

@@ -306,7 +306,7 @@ function mockPonderModules<T>(result: T) {
     },
     rewardClaim: {
       claimedAt: "rewardClaim.claimedAt",
-      hrepReward: "rewardClaim.hrepReward",
+      lrepReward: "rewardClaim.lrepReward",
       stakePayer: "rewardClaim.stakePayer",
       stakeReturned: "rewardClaim.stakeReturned",
       voter: "rewardClaim.voter",
@@ -817,7 +817,7 @@ describe("registerLeaderboardRoutes", () => {
     const selection = serializeExpression(db.select.mock.calls[0]?.[0]);
     expect(selection).toContain("vote.voter");
     expect(selection).toContain("content.submitter");
-    expect(selection).toContain("rewardClaim.hrepReward");
+    expect(selection).toContain("rewardClaim.lrepReward");
     expect(selection).not.toContain("profile.totalVotes");
 
     const orderArg = queryBuilder.orderBy.mock.calls[0]?.[0];

@@ -185,7 +185,7 @@ describe("LaunchDistributionPool ponder handlers", () => {
         source: "launch",
         voter: "0x0000000000000000000000000000000000001234",
         stakeReturned: 0n,
-        hrepReward: 1_000_000n,
+        lrepReward: 1_000_000n,
         claimedAt: 600n,
       },
     });
@@ -368,7 +368,7 @@ describe("LaunchDistributionPool ponder handlers", () => {
         id: `0x${"ff".repeat(32)}-5`,
         source: "launch",
         voter: "0x0000000000000000000000000000000000001234",
-        hrepReward: 750_000n,
+        lrepReward: 750_000n,
         claimedAt: 730n,
       }),
     });
