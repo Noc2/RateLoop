@@ -55,7 +55,12 @@ contract CuryoGovernor is
     uint32 public constant MIN_VOTING_PERIOD_BLOCKS = 86_400;
     uint32 public constant MAX_VOTING_PERIOD_BLOCKS = 2_592_000;
     /// @notice Hard cap to keep quorum evaluation bounded and proposals cheap to evaluate.
-    uint256 public constant MAX_EXCLUDED_HOLDERS = 16;
+    /// @dev Each replacement appends (never removes) the prior holder so historical snapshots
+    ///      keep their exclusion set. The cap must therefore accommodate the lifetime number of
+    ///      pool migrations, not just the current active set. 64 leaves headroom for routine
+    ///      protocol-pool rotations without exhausting the slot before circulating supply growth
+    ///      pushes dynamic quorum out of reach.
+    uint256 public constant MAX_EXCLUDED_HOLDERS = 64;
     /// @notice Minimum blocks a proposer must wait between successful proposals (~1 day on World Chain blocks).
     uint256 public constant PROPOSAL_COOLDOWN_BLOCKS = 86_400;
     /// @notice Block number where each proposal was created.
