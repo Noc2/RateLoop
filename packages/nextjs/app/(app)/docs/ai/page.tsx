@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import Link from "next/link";
 import type { Metadata } from "next";
+import { AgentIntegrationSequenceDiagram } from "~~/components/docs/AgentIntegrationSequenceDiagram";
 import { DocsTitle } from "~~/components/docs/DocsTitle";
 
 const genericMcpConfig = `{
@@ -310,6 +311,7 @@ const AIPage = async () => {
         Start with a small bounty, keep the question narrow, and store the operation key, public URL, answer,
         confidence, and limitations in the agent&apos;s audit log.
       </p>
+      <AgentIntegrationSequenceDiagram />
 
       <h2 id="x402-agent-payments">x402 Agent Payments</h2>
       <p>
