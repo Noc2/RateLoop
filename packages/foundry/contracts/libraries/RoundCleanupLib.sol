@@ -23,6 +23,16 @@ library RoundCleanupLib {
     uint256 internal constant CLEANUP_INCENTIVE_BPS = 100; // 1%
     uint256 internal constant CLEANUP_INCENTIVE_MAX = 5e6; // 5 HREP
 
+    /// @notice Cleanup incentive rate applied to refunded stake (refunds go back to voters
+    ///         rather than to the treasury or consensus reserve, so the incentive on this
+    ///         portion is funded out of the engine's consensus reserve and capped by the
+    ///         per-round 5 HREP envelope shared with the forfeit-driven incentive).
+    /// @dev Tuned lower than `CLEANUP_INCENTIVE_BPS` (1%) because refunds carry no
+    ///      treasury / reserve credit to pay from. Set as a constant so future tuning is a
+    ///      one-line change; keep below `CLEANUP_INCENTIVE_BPS` to avoid making refund-only
+    ///      cleanups more attractive than forfeit-heavy ones.
+    uint256 internal constant REFUND_CLEANUP_INCENTIVE_BPS = 25; // 0.25%
+
     error RoundNotCancelledOrTied();
     error AlreadyClaimed();
     error NoCommit();
@@ -311,18 +321,33 @@ library RoundCleanupLib {
         }
 
         uint256 cleanupIncentivePaid = roundCleanupIncentivePaid[contentId][roundId];
-        cleanupIncentive = _cleanupIncentive(forfeitedToTreasury + addedToConsensusReserve, 5e6 - cleanupIncentivePaid);
+        cleanupIncentive = _cleanupIncentive(
+            forfeitedToTreasury + addedToConsensusReserve, refundedHrep, 5e6 - cleanupIncentivePaid
+        );
         if (cleanupIncentive > 0) {
             roundCleanupIncentivePaid[contentId][roundId] = cleanupIncentivePaid + cleanupIncentive;
+            // Drain the forfeit/reserve pots first (they're the natural source); whatever
+            // remains for refund-only rounds is paid out of the engine's consensus reserve
+            // so that refunded voters are not shorted by the keeper bounty.
+            uint256 remainingIncentive = cleanupIncentive;
             uint256 fromReserve =
-                addedToConsensusReserve < cleanupIncentive ? addedToConsensusReserve : cleanupIncentive;
+                addedToConsensusReserve < remainingIncentive ? addedToConsensusReserve : remainingIncentive;
             if (fromReserve > 0) {
                 addedToConsensusReserve -= fromReserve;
                 updatedConsensusReserve -= fromReserve;
+                remainingIncentive -= fromReserve;
             }
-            uint256 fromTreasuryForfeiture = cleanupIncentive - fromReserve;
+            uint256 fromTreasuryForfeiture =
+                forfeitedToTreasury < remainingIncentive ? forfeitedToTreasury : remainingIncentive;
             if (fromTreasuryForfeiture > 0) {
                 forfeitedToTreasury -= fromTreasuryForfeiture;
+                remainingIncentive -= fromTreasuryForfeiture;
+            }
+            if (remainingIncentive > 0) {
+                // Refund-only path: pay the keeper bounty out of the consensus reserve.
+                // The cap (`5e6 - cleanupIncentivePaid`) already constrains this to <=5 HREP
+                // per round, and `_cleanupIncentive` further caps by the available reserve.
+                updatedConsensusReserve -= remainingIncentive;
             }
             hrepToken.safeTransfer(cleanupCaller, cleanupIncentive);
         }
@@ -344,9 +369,20 @@ library RoundCleanupLib {
         }
     }
 
-    function _cleanupIncentive(uint256 forfeitedAmount, uint256 remainingCap) private pure returns (uint256 incentive) {
+    /// @notice Compute the keeper cleanup incentive for a batch.
+    /// @dev `forfeitedAmount` covers the treasury-forfeit + consensus-reserve contributions
+    ///      and is charged at `CLEANUP_INCENTIVE_BPS` (1%). Refunded stake is charged at the
+    ///      lower `REFUND_CLEANUP_INCENTIVE_BPS` (0.25%) because the incentive on that
+    ///      portion must come out of the engine's consensus reserve rather than from the
+    ///      cleaned-up funds themselves. Both contributions share the round's 5 HREP cap.
+    function _cleanupIncentive(uint256 forfeitedAmount, uint256 refundedAmount, uint256 remainingCap)
+        private
+        pure
+        returns (uint256 incentive)
+    {
         if (remainingCap == 0) return 0;
         incentive = forfeitedAmount * CLEANUP_INCENTIVE_BPS / 10_000;
+        incentive += refundedAmount * REFUND_CLEANUP_INCENTIVE_BPS / 10_000;
         if (incentive > CLEANUP_INCENTIVE_MAX) incentive = CLEANUP_INCENTIVE_MAX;
         if (incentive > remainingCap) incentive = remainingCap;
     }
