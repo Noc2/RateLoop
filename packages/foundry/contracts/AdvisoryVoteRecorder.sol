@@ -3,6 +3,7 @@ pragma solidity ^0.8.24;
 
 import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
+import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import { ContentRegistry } from "./ContentRegistry.sol";
 import { ProtocolConfig } from "./ProtocolConfig.sol";
 import { RoundVotingEngine } from "./RoundVotingEngine.sol";
@@ -18,6 +19,8 @@ import { VotePreflightLib } from "./libraries/VotePreflightLib.sol";
 /// @title AdvisoryVoteRecorder
 /// @notice Zero-stake commit-reveal votes that can bootstrap launch rewards without affecting round mechanics.
 contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
+    using SafeCast for uint256;
+
     error InvalidAddress();
     error InvalidCommitHash();
     error InvalidRound();
@@ -300,7 +303,7 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
             ciphertext: ciphertext,
             targetRound: targetRound,
             drandChainHash: drandChainHash,
-            revealableAfter: uint48(effectiveRevealableAfter),
+            revealableAfter: effectiveRevealableAfter.toUint48(),
             revealedAt: 0,
             roundReferenceRatingBps: roundReferenceRatingBps,
             predictedUpBps: 0,
