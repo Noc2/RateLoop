@@ -6,6 +6,7 @@ import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { MerkleProof } from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import { IClusterPayoutOracle } from "./interfaces/IClusterPayoutOracle.sol";
 import { IFrontendRegistry } from "./interfaces/IFrontendRegistry.sol";
 import { IRoundPayoutSnapshotConsumer } from "./interfaces/IRoundPayoutSnapshotConsumer.sol";
@@ -17,7 +18,7 @@ import { IRoundPayoutSnapshotConsumer } from "./interfaces/IRoundPayoutSnapshotC
 ///      intentionally not a fully per-snapshot economically secured oracle: proposers are accountable through the
 ///      FrontendRegistry's global LREP bond, public artifacts, challenge windows, governance arbitration, slashing,
 ///      reputation, and future fee loss. Challenge bonds are a USDC anti-spam mechanism.
-contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
+contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyGuard {
     using SafeERC20 for IERC20;
     using SafeCast for uint256;
 
@@ -216,7 +217,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
         );
     }
 
-    function challengeCorrelationEpoch(uint64 epochId, bytes32 reasonHash) external payable {
+    function challengeCorrelationEpoch(uint64 epochId, bytes32 reasonHash) external payable nonReentrant {
         if (msg.value != 0) revert InvalidBond();
         CorrelationEpochSnapshot storage snapshot = correlationEpochSnapshots[epochId];
         if (snapshot.status == SnapshotStatus.None) revert SnapshotNotFound();
@@ -225,10 +226,12 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
             revert SnapshotNotFinalizable();
         }
         uint256 bond = challengeBond;
-        if (bond > 0) challengeBondToken.safeTransferFrom(msg.sender, address(this), bond);
+        // CEI: write state before pulling the bond so a malicious bond token cannot
+        // observe a half-applied challenge mid-call.
         snapshot.status = SnapshotStatus.Challenged;
         snapshot.challenger = msg.sender;
         snapshot.bond += bond;
+        if (bond > 0) challengeBondToken.safeTransferFrom(msg.sender, address(this), bond);
         emit CorrelationEpochChallenged(epochId, msg.sender, reasonHash);
     }
 
@@ -332,7 +335,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
         );
     }
 
-    function challengeRoundPayoutSnapshot(bytes32 snapshotKey, bytes32 reasonHash) external payable {
+    function challengeRoundPayoutSnapshot(bytes32 snapshotKey, bytes32 reasonHash) external payable nonReentrant {
         if (msg.value != 0) revert InvalidBond();
         RoundPayoutProposal storage proposal = roundPayoutProposals[snapshotKey];
         if (proposal.snapshot.status == SnapshotStatus.None) revert SnapshotNotFound();
@@ -341,10 +344,12 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
             revert SnapshotNotFinalizable();
         }
         uint256 bond = challengeBond;
-        if (bond > 0) challengeBondToken.safeTransferFrom(msg.sender, address(this), bond);
+        // CEI: write state before pulling the bond so a malicious bond token cannot
+        // observe a half-applied challenge mid-call.
         proposal.snapshot.status = SnapshotStatus.Challenged;
         proposal.challenger = msg.sender;
         proposal.bond += bond;
+        if (bond > 0) challengeBondToken.safeTransferFrom(msg.sender, address(this), bond);
         emit RoundPayoutSnapshotChallenged(snapshotKey, msg.sender, reasonHash);
     }
 
