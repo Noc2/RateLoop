@@ -88,6 +88,8 @@ contract RoundVotingEngine is
     error IndexOutOfBounds();
     error UnrevealedPastEpochVotes();
     error NothingProcessed();
+    error NothingToClaim();
+    error ReserveEmpty();
 
     // --- Access Control Roles ---
     bytes32 internal constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
@@ -237,6 +239,16 @@ contract RoundVotingEngine is
     ///         unset or because the transfer reverted. Gives indexers a distinct signal
     ///         from the settled-round replenishment path (`UnrevealedStakeAddedToConsensusReserve`).
     event ForfeitedFundsFallbackToConsensusReserve(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
+    event DeferredCleanupBountyAccrued(
+        uint256 indexed contentId, uint256 indexed roundId, address indexed recipient, uint256 amount
+    );
+    event DeferredCleanupBountyClaimed(
+        uint256 indexed contentId,
+        uint256 indexed roundId,
+        address indexed recipient,
+        uint256 paidAmount,
+        uint256 remaining
+    );
     event CurrentEpochRefunded(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
     event TreasuryFeeDistributed(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
     event ConsensusReserveFunded(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
@@ -274,6 +286,34 @@ contract RoundVotingEngine is
         hrepToken.safeTransferFrom(msg.sender, address(this), amount);
         accountedHrepBalance += amount;
         consensusReserve += amount;
+    }
+
+    /// @notice Drain a previously-deferred refund-only cleanup bounty owed to `msg.sender`.
+    /// @dev When `processUnrevealedVotes` runs against a refund-eligible batch with the
+    ///      consensus reserve below the keeper bounty, the unpaid sliver is deferred per
+    ///      (round, keeper) instead of being silently discarded -- the processed commits have
+    ///      already had their stake zeroed, so a later `processUnrevealedVotes` over the same
+    ///      range cannot recompute the incentive. This function lets the original keeper
+    ///      collect the IOU once `addToConsensusReserve` has topped the reserve up. Pays the
+    ///      lesser of the pending IOU and the current reserve; the remainder stays claimable.
+    function claimDeferredCleanupBounty(uint256 contentId, uint256 roundId)
+        external
+        nonReentrant
+        returns (uint256 paidAmount)
+    {
+        uint256 pending = roundDeferredCleanupBounty[contentId][roundId][msg.sender];
+        if (pending == 0) revert NothingToClaim();
+        uint256 reserve = consensusReserve;
+        if (reserve == 0) revert ReserveEmpty();
+
+        paidAmount = pending > reserve ? reserve : pending;
+        uint256 remaining = pending - paidAmount;
+        roundDeferredCleanupBounty[contentId][roundId][msg.sender] = remaining;
+        consensusReserve = reserve - paidAmount;
+        accountedHrepBalance -= paidAmount;
+        hrepToken.safeTransfer(msg.sender, paidAmount);
+
+        emit DeferredCleanupBountyClaimed(contentId, roundId, msg.sender, paidAmount, remaining);
     }
 
     /// @notice Recover HREP sent directly to this contract outside accounted protocol flows.
@@ -1009,7 +1049,8 @@ contract RoundVotingEngine is
             uint256 refundedHrep,
             uint256 processedPastEpochCount,
             uint256 cleanupIncentive,
-            uint256 updatedConsensusReserve
+            uint256 updatedConsensusReserve,
+            uint256 deferredCleanupBounty
         ) = RoundCleanupLib.processUnrevealedVotes(
             round,
             commitKeys,
@@ -1051,6 +1092,15 @@ contract RoundVotingEngine is
 
         if (addedToConsensusReserve > 0) {
             emit UnrevealedStakeAddedToConsensusReserve(contentId, roundId, addedToConsensusReserve);
+        }
+
+        if (deferredCleanupBounty > 0) {
+            // Refund-only batch where the consensus reserve could not cover the keeper bounty
+            // in full. Record the IOU; keeper drains via `claimDeferredCleanupBounty` once the
+            // reserve has been topped up. No accountedHrepBalance change here -- the HREP has
+            // not left the contract yet.
+            roundDeferredCleanupBounty[contentId][roundId][msg.sender] += deferredCleanupBounty;
+            emit DeferredCleanupBountyAccrued(contentId, roundId, msg.sender, deferredCleanupBounty);
         }
 
         if (processedPastEpochCount > 0) {
@@ -1489,6 +1539,17 @@ contract RoundVotingEngine is
     // refund-cancellable so they cannot grief honest content into a RevealFailed cycle.
     mapping(uint256 => mapping(uint256 => bool)) public roundHasHumanVerifiedCommit;
 
+    // Codex PR #12 follow-up: per-round, per-keeper IOU for the refund-only cleanup bounty
+    // when the consensus reserve was too low to pay it in full. Drained by
+    // `claimDeferredCleanupBounty`. Already counted toward the per-round 5 HREP cap so a
+    // deferred sliver cannot be used to bypass the envelope.
+    mapping(uint256 contentId => mapping(uint256 roundId => mapping(address recipient => uint256 amount)))
+        public roundDeferredCleanupBounty;
+
     // --- Storage gap reserved for future upgrades ---
-    uint256[25] private __gap;
+    // Shrinks by the number of new storage slots appended after the original gap:
+    //   pendingBundleObserverReplay, roundLastCommitPrevrandao, roundHasHumanVerifiedCommit,
+    //   roundDeferredCleanupBounty
+    // = 4 new mappings -> previous gap of [27] becomes [23].
+    uint256[23] private __gap;
 }

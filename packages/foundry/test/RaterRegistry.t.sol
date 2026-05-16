@@ -257,6 +257,46 @@ contract RaterRegistryTest is Test {
         );
     }
 
+    function test_SwitchingProviderClearsOldProviderNullifierSlot() public {
+        // Codex PR #10 regression: when a rater re-attests under a different provider but reuses
+        // the same nullifier bytes, the old (provider, nullifier) slot was leaking. After a later
+        // revocation -- which only clears the current provider's slot -- a future attestation by
+        // someone else under the old provider would falsely revert with NullifierAlreadyAssigned.
+        bytes32 anchorId = NULLIFIER_HASH; // same bytes, different provider
+        uint256[8] memory proof;
+
+        vm.prank(rater);
+        registry.attestHumanCredentialWithProof(1, uint256(NULLIFIER_HASH), proof);
+        assertEq(
+            registry.humanNullifierOwnerByProvider(RaterRegistry.HumanCredentialProvider.WorldId, NULLIFIER_HASH),
+            rater
+        );
+
+        // Switch the rater to the Curyo seed provider while keeping the nullifier bytes the same.
+        vm.prank(admin);
+        registry.seedHumanCredential(rater, uint64(block.timestamp + 30 days), anchorId, EVIDENCE_HASH);
+
+        // The old WorldId slot must be cleared by the switch -- not waiting for a revoke.
+        assertEq(
+            registry.humanNullifierOwnerByProvider(RaterRegistry.HumanCredentialProvider.WorldId, NULLIFIER_HASH),
+            address(0)
+        );
+        assertEq(
+            registry.humanNullifierOwnerByProvider(
+                RaterRegistry.HumanCredentialProvider.CuryoSelfVerifiedSeed, anchorId
+            ),
+            rater
+        );
+
+        // A different rater can now claim the nullifier under the old provider.
+        vm.prank(otherRater);
+        registry.attestHumanCredentialWithProof(1, uint256(NULLIFIER_HASH), proof);
+        assertEq(
+            registry.humanNullifierOwnerByProvider(RaterRegistry.HumanCredentialProvider.WorldId, NULLIFIER_HASH),
+            otherRater
+        );
+    }
+
     function test_SeedHumanCredentialStoresCuryoSelfVerifiedAccountAsVerifiedHuman() public {
         uint64 expiresAt = uint64(block.timestamp + 180 days);
 

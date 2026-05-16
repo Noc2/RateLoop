@@ -406,7 +406,15 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
         if (_revokedHumanNullifierByProvider[provider][nullifierHash]) revert InvalidCredential();
 
         HumanCredential storage previous = _humanCredentials[rater];
-        if (previous.nullifierHash != bytes32(0) && previous.nullifierHash != nullifierHash) {
+        // Clean up the previous (provider, nullifier) slot when ANY part of the composite key
+        // changes -- including a provider switch that keeps the nullifier bytes the same. The
+        // earlier `previous.nullifierHash != nullifierHash` check alone leaked the old provider's
+        // slot, so a later revocation only cleared the new provider and the old provider's
+        // namespace stayed assigned to this rater (codex PR #10 review).
+        if (
+            previous.nullifierHash != bytes32(0)
+                && (previous.nullifierHash != nullifierHash || previous.provider != provider)
+        ) {
             HumanCredentialProvider previousProvider = previous.provider;
             if (
                 previousProvider != HumanCredentialProvider.None
