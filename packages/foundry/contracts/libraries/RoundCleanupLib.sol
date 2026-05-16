@@ -282,7 +282,8 @@ library RoundCleanupLib {
             uint256 refundedHrep,
             uint256 processedPastEpochCount,
             uint256 cleanupIncentive,
-            uint256 updatedConsensusReserve
+            uint256 updatedConsensusReserve,
+            uint256 deferredCleanupBounty
         )
     {
         uint256 len = commitKeys.length;
@@ -346,19 +347,27 @@ library RoundCleanupLib {
                 // Refund-only path: pay what we can out of the engine's consensus reserve.
                 // `_cleanupIncentive` only knows the per-round 5 HREP cap, not the live reserve
                 // balance, so for refund-only batches the residual can exceed the reserve --
-                // most commonly the zero-reserve case at protocol startup. Cap to what's
-                // available and shrink the bounty (and the per-round paid counter) in lockstep
-                // so the unpaid sliver can be claimed by a later batch if the reserve recovers
-                // (codex PR #10 review).
+                // most commonly the zero-reserve case at protocol startup. Pay what the reserve
+                // covers immediately; defer the rest as a per-(round, keeper) IOU that the
+                // keeper can later collect via `claimDeferredCleanupBounty` once the reserve
+                // has been topped up. The processed votes have already had their stake zeroed
+                // so a later batch on the same range cannot recompute this incentive
+                // (codex PR #12 review).
                 uint256 fromRefundReserve =
                     updatedConsensusReserve < remainingIncentive ? updatedConsensusReserve : remainingIncentive;
-                if (fromRefundReserve < remainingIncentive) {
-                    cleanupIncentive -= (remainingIncentive - fromRefundReserve);
-                }
                 updatedConsensusReserve -= fromRefundReserve;
+                if (fromRefundReserve < remainingIncentive) {
+                    deferredCleanupBounty = remainingIncentive - fromRefundReserve;
+                    cleanupIncentive -= deferredCleanupBounty;
+                }
+            }
+            // Count BOTH the immediately-paid and the deferred portions toward the per-round
+            // 5 HREP cap so deferral cannot be used to bypass the envelope across batches.
+            if (cleanupIncentive > 0 || deferredCleanupBounty > 0) {
+                roundCleanupIncentivePaid[contentId][roundId] =
+                    cleanupIncentivePaid + cleanupIncentive + deferredCleanupBounty;
             }
             if (cleanupIncentive > 0) {
-                roundCleanupIncentivePaid[contentId][roundId] = cleanupIncentivePaid + cleanupIncentive;
                 hrepToken.safeTransfer(cleanupCaller, cleanupIncentive);
             }
         }
