@@ -1,4 +1,6 @@
-const DEFAULT_NEW_ROUND_TARGET_BUFFER_SECONDS = 60;
+// First votes are checked against block.timestamp + epochDuration on-chain, so
+// any default buffer must stay inside the contract's drand-period tolerance.
+const DEFAULT_NEW_ROUND_TARGET_BUFFER_SECONDS = 0;
 
 function clampNewRoundTargetBufferSeconds(epochDurationSeconds: number, bufferSeconds: number) {
   const safeEpochDurationSeconds = Math.max(1, Math.floor(epochDurationSeconds));
@@ -6,7 +8,7 @@ function clampNewRoundTargetBufferSeconds(epochDurationSeconds: number, bufferSe
     return 0;
   }
 
-  return Math.min(Math.max(1, Math.floor(bufferSeconds)), safeEpochDurationSeconds - 1);
+  return Math.min(Math.max(0, Math.floor(bufferSeconds)), safeEpochDurationSeconds - 1);
 }
 
 export function deriveCommitVoteTargetTimeSeconds(params: {
