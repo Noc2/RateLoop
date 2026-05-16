@@ -1,8 +1,8 @@
 import Link from "next/link";
 import type { NextPage } from "next";
 import { DocsTitle } from "~~/components/docs/DocsTitle";
+import { QuestionLifecycleDiagram } from "~~/components/docs/QuestionLifecycleDiagram";
 import { RewardSplitChart } from "~~/components/docs/RewardSplitChart";
-import { VotingFlowDiagram } from "~~/components/docs/VotingFlowDiagram";
 import { protocolDocFacts } from "~~/lib/docs/protocolFacts";
 import { getFreeTransactionLimit } from "~~/lib/env/server";
 
@@ -35,6 +35,7 @@ const HowItWorks: NextPage = () => {
         {protocolDocFacts.maxRoundDurationLabel}, {protocolDocFacts.minVotersLabel} settlement raters, and a{" "}
         {protocolDocFacts.maxVotersLabel}-rater cap.
       </p>
+      <QuestionLifecycleDiagram />
       <h2 id="commit-reveal-voting">2. Predict</h2>
       <p>
         Raters submit a <Link href="/docs/tech-stack#bayesian-truth-serum">robust BTS report</Link>: a thumbs-up/down
@@ -43,9 +44,6 @@ const HowItWorks: NextPage = () => {
         while staked votes add normal settlement upside and risk. Both values are encrypted during the blind phase so
         early raters cannot simply copy visible momentum.
       </p>
-      <div className="not-prose">
-        <VotingFlowDiagram />
-      </div>
       <ol>
         <li>
           <strong>Commit:</strong> choose up or down, estimate the crowd&apos;s up-vote percentage, and optionally
