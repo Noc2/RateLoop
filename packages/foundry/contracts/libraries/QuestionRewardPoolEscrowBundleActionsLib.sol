@@ -13,7 +13,12 @@ import { QuestionRewardPoolEscrowClaimLib } from "./QuestionRewardPoolEscrowClai
 import { QuestionRewardPoolEscrowEligibilityLib } from "./QuestionRewardPoolEscrowEligibilityLib.sol";
 import { QuestionRewardPoolEscrowQualificationLib } from "./QuestionRewardPoolEscrowQualificationLib.sol";
 import { QuestionRewardPoolEscrowTransferLib } from "./QuestionRewardPoolEscrowTransferLib.sol";
-import { BundleReward, BundleQuestion, BundleRoundSetSnapshot } from "./QuestionRewardPoolEscrowTypes.sol";
+import {
+    BundleReward,
+    BundleQuestion,
+    BundleRoundSetSnapshot,
+    CreateSubmissionBundleParams
+} from "./QuestionRewardPoolEscrowTypes.sol";
 import { QuestionRewardPoolEscrowVoterLib } from "./QuestionRewardPoolEscrowVoterLib.sol";
 import { RoundLib } from "./RoundLib.sol";
 
@@ -82,57 +87,103 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         IERC20 hrepToken,
         IERC20 usdcToken,
         uint16 defaultFrontendFeeBps,
-        uint256 bundleId,
-        uint256[] calldata contentIds,
-        address funder,
-        uint8 asset,
-        uint256 amount,
-        uint256 requiredCompleters,
-        uint256 requiredSettledRounds,
-        uint256 bountyClosesAt,
-        uint256 feedbackClosesAt,
-        uint8 bountyEligibility
+        CreateSubmissionBundleParams memory params
     ) external returns (uint256 rewardPoolId) {
-        require(bundleId != 0, "Invalid bundle");
-        require(bundleRewards[bundleId].id == 0, "Bundle exists");
-        require(contentIds.length > 0, "No questions");
-        require(funder != address(0), "Invalid funder");
-        require(asset == REWARD_ASSET_HREP || asset == REWARD_ASSET_USDC, "Invalid asset");
-        require(requiredCompleters >= MIN_REQUIRED_VOTERS, "Too few voters");
-        require(requiredCompleters >= _requiredParticipantFloorForAmount(amount), "High-value floor");
-        require(requiredSettledRounds >= 1, "Too few rounds");
-        require(requiredSettledRounds <= MAX_REQUIRED_SETTLED_ROUNDS, "Too many rounds");
-        require(amount >= requiredCompleters * requiredSettledRounds, "Amount too small");
-        require(QuestionRewardPoolEscrowEligibilityLib.isValidPolicy(bountyEligibility), "Invalid eligibility");
-        QuestionRewardPoolEscrowBundleLib.requireFundingCoversMaxCompleters(
-            registry, contentIds, amount, requiredSettledRounds
+        require(params.bundleId != 0, "Invalid bundle");
+        require(bundleRewards[params.bundleId].id == 0, "Bundle exists");
+        require(params.contentIds.length > 0, "No questions");
+        require(params.funder != address(0), "Invalid funder");
+        require(params.asset == REWARD_ASSET_HREP || params.asset == REWARD_ASSET_USDC, "Invalid asset");
+        require(params.requiredCompleters >= MIN_REQUIRED_VOTERS, "Too few voters");
+        require(params.requiredCompleters >= _requiredParticipantFloorForAmount(params.amount), "High-value floor");
+        require(params.requiredSettledRounds >= 1, "Too few rounds");
+        require(params.requiredSettledRounds <= MAX_REQUIRED_SETTLED_ROUNDS, "Too many rounds");
+        require(params.amount >= params.requiredCompleters * params.requiredSettledRounds, "Amount too small");
+        require(
+            QuestionRewardPoolEscrowEligibilityLib.isValidPolicy(params.bountyEligibility), "Invalid eligibility"
         );
-        require(bountyClosesAt > block.timestamp, "Bad close");
-        uint256 normalizedFeedbackClosesAt = _normalizeFeedbackClosesAt(bountyClosesAt, feedbackClosesAt);
+        QuestionRewardPoolEscrowBundleLib.requireFundingCoversMaxCompleters(
+            registry, params.contentIds, params.amount, params.requiredSettledRounds
+        );
+        require(params.bountyClosesAt > block.timestamp, "Bad close");
+        uint256 normalizedFeedbackClosesAt = _normalizeFeedbackClosesAt(params.bountyClosesAt, params.feedbackClosesAt);
 
         uint256 fundedAmount = QuestionRewardPoolEscrowTransferLib.pullExactToken(
-            _rewardToken(hrepToken, usdcToken, asset), funder, amount
+            _rewardToken(hrepToken, usdcToken, params.asset), params.funder, params.amount
         );
-        (bytes32 funderIdentityKey, address funderIdentity) = _resolveFunderIdentity(protocolConfig, funder);
+        (bytes32 funderIdentityKey, address funderIdentity) = _resolveFunderIdentity(protocolConfig, params.funder);
 
-        BundleReward storage bundle = bundleRewards[bundleId];
-        bundle.id = bundleId.toUint64();
-        bundle.bountyClosesAt = bountyClosesAt.toUint64();
+        _writeBundleRecord(
+            bundleRewards[params.bundleId],
+            params,
+            fundedAmount,
+            normalizedFeedbackClosesAt,
+            defaultFrontendFeeBps,
+            funderIdentityKey,
+            funderIdentity
+        );
+
+        _registerBundleQuestions(
+            bundleQuestions, contentBundleId, contentBundleIndex, registry, protocolConfig, params
+        );
+
+        emit QuestionBundleRewardCreated(
+            params.bundleId,
+            params.funder,
+            funderIdentityKey,
+            fundedAmount,
+            params.requiredCompleters,
+            params.contentIds.length,
+            params.requiredSettledRounds,
+            block.timestamp,
+            params.bountyClosesAt,
+            normalizedFeedbackClosesAt,
+            defaultFrontendFeeBps,
+            params.asset,
+            params.bountyEligibility,
+            bundleRewards[params.bundleId].bountyEligibilityDataHash
+        );
+        emit QuestionBundleEligibilitySet(params.bundleId, params.bountyEligibility);
+        rewardPoolId = params.bundleId;
+    }
+
+    function _writeBundleRecord(
+        BundleReward storage bundle,
+        CreateSubmissionBundleParams memory params,
+        uint256 fundedAmount,
+        uint256 normalizedFeedbackClosesAt,
+        uint16 defaultFrontendFeeBps,
+        bytes32 funderIdentityKey,
+        address funderIdentity
+    ) private {
+        bundle.id = params.bundleId.toUint64();
+        bundle.bountyClosesAt = params.bountyClosesAt.toUint64();
         bundle.feedbackClosesAt = normalizedFeedbackClosesAt.toUint64();
-        bundle.funder = funder;
+        bundle.funder = params.funder;
         bundle.funderIdentity = funderIdentity;
-        bundle.asset = asset;
-        bundle.questionCount = uint32(contentIds.length);
-        bundle.requiredCompleters = uint32(requiredCompleters);
-        bundle.requiredSettledRounds = uint32(requiredSettledRounds);
+        bundle.asset = params.asset;
+        bundle.questionCount = uint32(params.contentIds.length);
+        bundle.requiredCompleters = uint32(params.requiredCompleters);
+        bundle.requiredSettledRounds = uint32(params.requiredSettledRounds);
         bundle.frontendFeeBps = defaultFrontendFeeBps;
-        bundle.bountyEligibility = bountyEligibility;
+        bundle.bountyEligibility = params.bountyEligibility;
         bundle.funderIdentityKey = funderIdentityKey;
         bundle.fundedAmount = fundedAmount;
         bundle.unallocatedAmount = fundedAmount;
         bundle.bountyEligibilityDataHash = QuestionRewardPoolEscrowEligibilityLib.eligibilityDataHash();
         bundle.nonRefundable = true;
+    }
 
+    function _registerBundleQuestions(
+        mapping(uint256 => BundleQuestion[]) storage bundleQuestions,
+        mapping(uint256 => uint256) storage contentBundleId,
+        mapping(uint256 => uint256) storage contentBundleIndex,
+        ContentRegistry registry,
+        ProtocolConfig protocolConfig,
+        CreateSubmissionBundleParams memory params
+    ) private {
+        uint256[] memory contentIds = params.contentIds;
+        uint256 bundleId = params.bundleId;
         for (uint256 i = 0; i < contentIds.length;) {
             uint256 contentId = contentIds[i];
             require(registry.isContentActive(contentId), "Content not active");
@@ -152,25 +203,6 @@ library QuestionRewardPoolEscrowBundleActionsLib {
                 ++i;
             }
         }
-
-        emit QuestionBundleRewardCreated(
-            bundleId,
-            funder,
-            funderIdentityKey,
-            fundedAmount,
-            requiredCompleters,
-            contentIds.length,
-            requiredSettledRounds,
-            block.timestamp,
-            bountyClosesAt,
-            normalizedFeedbackClosesAt,
-            defaultFrontendFeeBps,
-            asset,
-            bountyEligibility,
-            bundle.bountyEligibilityDataHash
-        );
-        emit QuestionBundleEligibilitySet(bundleId, bountyEligibility);
-        rewardPoolId = bundleId;
     }
 
     function recordBundleQuestionTerminal(

@@ -28,6 +28,7 @@ import {
     BundleReward,
     BundleQuestion,
     BundleRoundSetSnapshot,
+    CreateSubmissionBundleParams,
     BOUNTY_ELIGIBILITY_OPEN
 } from "./libraries/QuestionRewardPoolEscrowTypes.sol";
 import { QuestionRewardPoolEscrowVoterLib } from "./libraries/QuestionRewardPoolEscrowVoterLib.sol";
@@ -539,6 +540,19 @@ contract QuestionRewardPoolEscrow is
         _requireRegistryVotingEngine();
         require(funder != address(0), "Invalid funder");
 
+        CreateSubmissionBundleParams memory params = CreateSubmissionBundleParams({
+            bundleId: bundleId,
+            contentIds: contentIds,
+            funder: funder,
+            asset: asset,
+            amount: amount,
+            requiredCompleters: requiredCompleters,
+            requiredSettledRounds: requiredSettledRounds,
+            bountyClosesAt: bountyClosesAt,
+            feedbackClosesAt: feedbackClosesAt,
+            bountyEligibility: bountyEligibility
+        });
+
         rewardPoolId = QuestionRewardPoolEscrowBundleActionsLib.createSubmissionBundleFromRegistry(
             bundleRewards,
             bundleQuestions,
@@ -549,16 +563,7 @@ contract QuestionRewardPoolEscrow is
             hrepToken,
             usdcToken,
             defaultFrontendFeeBps,
-            bundleId,
-            contentIds,
-            funder,
-            asset,
-            amount,
-            requiredCompleters,
-            requiredSettledRounds,
-            bountyClosesAt,
-            feedbackClosesAt,
-            bountyEligibility
+            params
         );
     }
 
