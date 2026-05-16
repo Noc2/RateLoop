@@ -17,7 +17,12 @@ import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol"
 import { IRoundPayoutSnapshotConsumer } from "./interfaces/IRoundPayoutSnapshotConsumer.sol";
 import { RoundLib } from "./libraries/RoundLib.sol";
 import { QuestionRewardPoolEscrowBundleActionsLib } from "./libraries/QuestionRewardPoolEscrowBundleActionsLib.sol";
-import { QuestionRewardPoolEscrowClaimLib } from "./libraries/QuestionRewardPoolEscrowClaimLib.sol";
+import {
+    QuestionRewardPoolEscrowClaimLib,
+    EqualShareInputs,
+    WeightedShareInputs,
+    ClaimableQuestionRewardParams
+} from "./libraries/QuestionRewardPoolEscrowClaimLib.sol";
 import { QuestionRewardPoolEscrowEligibilityLib } from "./libraries/QuestionRewardPoolEscrowEligibilityLib.sol";
 import { QuestionRewardPoolEscrowQualificationLib } from "./libraries/QuestionRewardPoolEscrowQualificationLib.sol";
 import { QuestionRewardPoolEscrowPoolActionsLib } from "./libraries/QuestionRewardPoolEscrowPoolActionsLib.sol";
@@ -703,43 +708,12 @@ contract QuestionRewardPoolEscrow is
             hasCorrelationProof
         );
         require(claimWeight > 0, "No reward weight");
-        uint256 reservedFrontendFee;
         uint256 grossAmount;
         uint256 frontendFee;
         address frontendRecipient;
-        if (snapshot.totalClaimWeight == 0) {
-            reservedFrontendFee = QuestionRewardPoolEscrowClaimLib.nextEqualShare(
-                snapshot.frontendFeeAllocation, snapshot.eligibleVoters, snapshot.claimedCount
-            );
-            (grossAmount, rewardAmount, frontendFee, frontendRecipient) =
-                QuestionRewardPoolEscrowClaimLib.computeEqualShareClaimSplit(
-                    votingEngine,
-                    rewardPool.contentId,
-                    roundId,
-                    commitKey,
-                    frontend,
-                    snapshot.allocation,
-                    snapshot.frontendFeeAllocation,
-                    snapshot.eligibleVoters,
-                    snapshot.claimedCount
-                );
-        } else {
-            (grossAmount, rewardAmount, frontendFee, frontendRecipient, reservedFrontendFee) =
-                QuestionRewardPoolEscrowClaimLib.computeWeightedClaimSplit(
-                    votingEngine,
-                    rewardPool.contentId,
-                    roundId,
-                    commitKey,
-                    frontend,
-                    snapshot.allocation,
-                    snapshot.frontendFeeAllocation,
-                    snapshot.totalClaimWeight,
-                    claimWeight,
-                    snapshot.claimedWeight,
-                    snapshot.claimedAmount,
-                    snapshot.frontendFeeClaimedAmount
-                );
-        }
+        uint256 reservedFrontendFee;
+        (grossAmount, rewardAmount, frontendFee, frontendRecipient, reservedFrontendFee) =
+            _resolveClaimSplit(rewardPool, snapshot, roundId, commitKey, frontend, claimWeight);
         require(grossAmount > 0, "No reward");
 
         rewardClaimed[rewardPoolId][roundId][commitKey] = true;
@@ -786,6 +760,66 @@ contract QuestionRewardPoolEscrow is
         return QuestionRewardPoolEscrowTransferLib.settleClaimPayout(
             rewardToken, rewardRecipient, rewardAmount, frontendRecipient, frontendFee
         );
+    }
+
+    /// @dev Extracted out of `_claimQuestionReward` so the 9/12-arg library calls do not coexist
+    ///      with the rest of `_claimQuestionReward`'s ~14 locals on the same stack frame.
+    ///      Without this split, `forge coverage --ir-minimum` fails Yul ABI encoding.
+    function _resolveClaimSplit(
+        RewardPool storage rewardPool,
+        RoundSnapshot storage snapshot,
+        uint256 roundId,
+        bytes32 commitKey,
+        address frontend,
+        uint256 claimWeight
+    )
+        private
+        view
+        returns (
+            uint256 grossAmount,
+            uint256 rewardAmount,
+            uint256 frontendFee,
+            address frontendRecipient,
+            uint256 reservedFrontendFee
+        )
+    {
+        if (snapshot.totalClaimWeight == 0) {
+            reservedFrontendFee = QuestionRewardPoolEscrowClaimLib.nextEqualShare(
+                snapshot.frontendFeeAllocation, snapshot.eligibleVoters, snapshot.claimedCount
+            );
+            (grossAmount, rewardAmount, frontendFee, frontendRecipient) = QuestionRewardPoolEscrowClaimLib
+                .computeEqualShareClaimSplit(
+                votingEngine,
+                rewardPool.contentId,
+                roundId,
+                commitKey,
+                frontend,
+                EqualShareInputs({
+                    allocation: snapshot.allocation,
+                    frontendFeeAllocation: snapshot.frontendFeeAllocation,
+                    eligibleParticipants: snapshot.eligibleVoters,
+                    claimedCount: snapshot.claimedCount
+                })
+            );
+        } else {
+            (grossAmount, rewardAmount, frontendFee, frontendRecipient, reservedFrontendFee) =
+            QuestionRewardPoolEscrowClaimLib.computeWeightedClaimSplit(
+                votingEngine,
+                rewardPool.contentId,
+                roundId,
+                commitKey,
+                frontend,
+                claimWeight,
+                WeightedShareInputs({
+                    allocation: snapshot.allocation,
+                    frontendFeeAllocation: snapshot.frontendFeeAllocation,
+                    totalClaimWeight: snapshot.totalClaimWeight,
+                    claimedWeight: snapshot.claimedWeight,
+                    claimedAmount: snapshot.claimedAmount,
+                    frontendFeeClaimedAmount: snapshot.frontendFeeClaimedAmount
+                })
+            );
+        }
     }
 
     /// @notice Recover an ERC-20 that is NOT one of the protocol's reward assets (HREP/USDC).
@@ -1012,14 +1046,16 @@ contract QuestionRewardPoolEscrow is
             rewardPoolClusterPayoutOracle,
             votingEngine,
             votingEngine.protocolConfig(),
-            rewardPoolId,
-            roundId,
-            account,
             payoutWeight,
             proof,
-            BPS_SCALE,
-            REWARD_ASSET_USDC,
-            PAYOUT_DOMAIN_QUESTION_REWARD
+            ClaimableQuestionRewardParams({
+                rewardPoolId: rewardPoolId,
+                roundId: roundId,
+                account: account,
+                bpsScale: BPS_SCALE,
+                rewardAssetUsdc: REWARD_ASSET_USDC,
+                payoutDomain: PAYOUT_DOMAIN_QUESTION_REWARD
+            })
         );
     }
 

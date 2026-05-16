@@ -9,7 +9,7 @@ import { ProtocolConfig } from "../ProtocolConfig.sol";
 import { RoundVotingEngine } from "../RoundVotingEngine.sol";
 import { IRaterIdentityRegistry } from "../interfaces/IRaterIdentityRegistry.sol";
 import { QuestionRewardPoolEscrowBundleLib } from "./QuestionRewardPoolEscrowBundleLib.sol";
-import { QuestionRewardPoolEscrowClaimLib } from "./QuestionRewardPoolEscrowClaimLib.sol";
+import { QuestionRewardPoolEscrowClaimLib, EqualShareInputs } from "./QuestionRewardPoolEscrowClaimLib.sol";
 import { QuestionRewardPoolEscrowEligibilityLib } from "./QuestionRewardPoolEscrowEligibilityLib.sol";
 import { QuestionRewardPoolEscrowQualificationLib } from "./QuestionRewardPoolEscrowQualificationLib.sol";
 import { QuestionRewardPoolEscrowTransferLib } from "./QuestionRewardPoolEscrowTransferLib.sol";
@@ -359,10 +359,12 @@ library QuestionRewardPoolEscrowBundleActionsLib {
                 firstRoundId,
                 firstCommitKey,
                 frontend,
-                snapshot.allocation,
-                snapshot.frontendFeeAllocation,
-                snapshot.eligibleCompleters,
-                snapshot.claimedCount
+                EqualShareInputs({
+                    allocation: snapshot.allocation,
+                    frontendFeeAllocation: snapshot.frontendFeeAllocation,
+                    eligibleParticipants: snapshot.eligibleCompleters,
+                    claimedCount: snapshot.claimedCount
+                })
             );
         require(grossAmount > 0, "No reward");
 
@@ -456,10 +458,12 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             firstRoundId,
             firstCommitKey,
             frontend,
-            snapshot.allocation,
-            snapshot.frontendFeeAllocation,
-            snapshot.eligibleCompleters,
-            snapshot.claimedCount
+            EqualShareInputs({
+                allocation: snapshot.allocation,
+                frontendFeeAllocation: snapshot.frontendFeeAllocation,
+                eligibleParticipants: snapshot.eligibleCompleters,
+                claimedCount: snapshot.claimedCount
+            })
         );
     }
 
