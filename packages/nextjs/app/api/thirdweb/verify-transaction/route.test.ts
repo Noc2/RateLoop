@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import assert from "node:assert/strict";
 import { after, before, beforeEach, test } from "node:test";
+import { setThirdwebVerifierRouteTestOverrides } from "~~/lib/thirdweb/routeTestOverrides";
 
 type RouteModule = typeof import("./route");
 
@@ -29,7 +30,7 @@ beforeEach(() => {
   console.error = () => {};
   console.info = () => {};
   console.warn = () => {};
-  route.__setThirdwebVerifierRouteTestOverridesForTests({
+  setThirdwebVerifierRouteTestOverrides({
     getThirdwebClientId: () => "client-1",
     getThirdwebServerVerifierSecret: () => "server-secret",
     evaluateFreeTransactionAllowance: async () => ({ isAllowed: true, summary: allowanceSummary }),
@@ -37,14 +38,14 @@ beforeEach(() => {
 });
 
 after(() => {
-  route.__setThirdwebVerifierRouteTestOverridesForTests(null);
+  setThirdwebVerifierRouteTestOverrides(null);
   console.error = originalConsoleError;
   console.info = originalConsoleInfo;
   console.warn = originalConsoleWarn;
 });
 
 test("thirdweb verifier route denies when the server verifier secret is not configured", async () => {
-  route.__setThirdwebVerifierRouteTestOverridesForTests({
+  setThirdwebVerifierRouteTestOverrides({
     getThirdwebClientId: () => "client-1",
     getThirdwebServerVerifierSecret: () => "",
   });
@@ -59,7 +60,7 @@ test("thirdweb verifier route denies when the server verifier secret is not conf
 
 test("thirdweb verifier route denies requests with a bad verifier secret", async () => {
   let evaluated = false;
-  route.__setThirdwebVerifierRouteTestOverridesForTests({
+  setThirdwebVerifierRouteTestOverrides({
     getThirdwebClientId: () => "client-1",
     getThirdwebServerVerifierSecret: () => "server-secret",
     evaluateFreeTransactionAllowance: async () => {
@@ -76,7 +77,7 @@ test("thirdweb verifier route denies requests with a bad verifier secret", async
 
 test("thirdweb verifier route denies client id mismatches before evaluating allowance", async () => {
   let evaluated = false;
-  route.__setThirdwebVerifierRouteTestOverridesForTests({
+  setThirdwebVerifierRouteTestOverrides({
     getThirdwebClientId: () => "client-1",
     getThirdwebServerVerifierSecret: () => "server-secret",
     evaluateFreeTransactionAllowance: async () => {
@@ -98,7 +99,7 @@ test("thirdweb verifier route delegates valid requests and maps allowance decisi
   const body = { clientId: "client-1", chainId: 480, userOp: { sender: "0xsender" } };
   const evaluatedBodies: unknown[] = [];
   let allowed = false;
-  route.__setThirdwebVerifierRouteTestOverridesForTests({
+  setThirdwebVerifierRouteTestOverrides({
     getThirdwebClientId: () => "client-1",
     getThirdwebServerVerifierSecret: () => "server-secret",
     evaluateFreeTransactionAllowance: async requestBody => {

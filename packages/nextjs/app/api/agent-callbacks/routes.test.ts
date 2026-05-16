@@ -1,6 +1,10 @@
 import { NextRequest } from "next/server";
 import assert from "node:assert/strict";
 import { after, before, beforeEach, test } from "node:test";
+import {
+  setAgentCallbackDeliverRouteTestOverrides,
+  setAgentCallbackSweepRouteTestOverrides,
+} from "~~/lib/agent-callbacks/route-test-overrides";
 
 type DeliverRouteModule = typeof import("./deliver/route");
 type SweepRouteModule = typeof import("./sweep/route");
@@ -37,18 +41,18 @@ before(async () => {
 
 beforeEach(() => {
   env.CURYO_AGENT_CALLBACK_DELIVERY_SECRET = "callback-secret";
-  deliverRoute.__setAgentCallbackDeliverRouteTestOverridesForTests({
+  setAgentCallbackDeliverRouteTestOverrides({
     randomUUID: () => routeWorkerId,
     processDueAgentCallbackDeliveries: async () => deliveryResult,
   });
-  sweepRoute.__setAgentCallbackSweepRouteTestOverridesForTests({
+  setAgentCallbackSweepRouteTestOverrides({
     sweepAgentLifecycleCallbacks: async () => sweepResult,
   });
 });
 
 after(() => {
-  deliverRoute.__setAgentCallbackDeliverRouteTestOverridesForTests(null);
-  sweepRoute.__setAgentCallbackSweepRouteTestOverridesForTests(null);
+  setAgentCallbackDeliverRouteTestOverrides(null);
+  setAgentCallbackSweepRouteTestOverrides(null);
   if (originalSecret === undefined) {
     delete env.CURYO_AGENT_CALLBACK_DELIVERY_SECRET;
   } else {
@@ -73,7 +77,7 @@ test("agent callback deliver route rejects unconfigured and unauthorized request
 
 test("agent callback deliver route accepts bearer auth, clamps limit, and passes a route worker id", async () => {
   const calls: unknown[] = [];
-  deliverRoute.__setAgentCallbackDeliverRouteTestOverridesForTests({
+  setAgentCallbackDeliverRouteTestOverrides({
     randomUUID: () => routeWorkerId,
     processDueAgentCallbackDeliveries: async input => {
       calls.push(input);
@@ -109,7 +113,7 @@ test("agent callback sweep route rejects unconfigured and unauthorized requests"
 
 test("agent callback sweep route accepts header auth and defaults invalid limits", async () => {
   const calls: unknown[] = [];
-  sweepRoute.__setAgentCallbackSweepRouteTestOverridesForTests({
+  setAgentCallbackSweepRouteTestOverrides({
     sweepAgentLifecycleCallbacks: async input => {
       calls.push(input);
       return sweepResult;

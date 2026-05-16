@@ -5,18 +5,7 @@ import {
   type FreeTransactionAllowanceDecision,
   evaluateFreeTransactionAllowance,
 } from "~~/lib/thirdweb/freeTransactions";
-
-type ThirdwebVerifierRouteTestOverrides = {
-  evaluateFreeTransactionAllowance?: typeof evaluateFreeTransactionAllowance;
-  getThirdwebClientId?: typeof getThirdwebClientId;
-  getThirdwebServerVerifierSecret?: typeof getThirdwebServerVerifierSecret;
-};
-
-let thirdwebVerifierRouteTestOverrides: ThirdwebVerifierRouteTestOverrides | null = null;
-
-export function __setThirdwebVerifierRouteTestOverridesForTests(overrides: ThirdwebVerifierRouteTestOverrides | null) {
-  thirdwebVerifierRouteTestOverrides = overrides;
-}
+import { getThirdwebVerifierRouteTestOverrides } from "~~/lib/thirdweb/routeTestOverrides";
 
 function getVerifierRequestSummary(body: Record<string, unknown>) {
   const userOp = (body.userOp ?? {}) as {
@@ -45,8 +34,8 @@ function createDeniedResponse(reason: string) {
 }
 
 export async function POST(request: NextRequest) {
-  const configuredSecret =
-    thirdwebVerifierRouteTestOverrides?.getThirdwebServerVerifierSecret?.() ?? getThirdwebServerVerifierSecret();
+  const overrides = getThirdwebVerifierRouteTestOverrides();
+  const configuredSecret = overrides?.getThirdwebServerVerifierSecret?.() ?? getThirdwebServerVerifierSecret();
   const providedSecret = request.headers.get("x-thirdweb-verifier-secret");
 
   if (!configuredSecret) {
@@ -78,7 +67,7 @@ export async function POST(request: NextRequest) {
   const requestSummary = getVerifierRequestSummary(body);
   console.info("[thirdweb-verifier] request received", requestSummary);
 
-  const configuredClientId = thirdwebVerifierRouteTestOverrides?.getThirdwebClientId?.() ?? getThirdwebClientId();
+  const configuredClientId = overrides?.getThirdwebClientId?.() ?? getThirdwebClientId();
   if (configuredClientId && body.clientId !== configuredClientId) {
     console.warn("[thirdweb-verifier] denied request", {
       ...requestSummary,
@@ -89,8 +78,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const evaluateAllowance =
-      thirdwebVerifierRouteTestOverrides?.evaluateFreeTransactionAllowance ?? evaluateFreeTransactionAllowance;
+    const evaluateAllowance = overrides?.evaluateFreeTransactionAllowance ?? evaluateFreeTransactionAllowance;
     const decision = (await evaluateAllowance(body as never)) as FreeTransactionAllowanceDecision;
 
     if (!decision.isAllowed) {
