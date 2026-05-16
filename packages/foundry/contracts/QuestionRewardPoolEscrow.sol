@@ -231,7 +231,7 @@ contract QuestionRewardPoolEscrow is
         votingEngine = RoundVotingEngine(votingEngine_);
         raterRegistry = IRaterIdentityRegistry(raterRegistry_);
         nextRewardPoolId = 1;
-        defaultFrontendFeeBps = uint16(DEFAULT_FRONTEND_FEE_BPS);
+        defaultFrontendFeeBps = DEFAULT_FRONTEND_FEE_BPS.toUint16();
     }
 
     function createRewardPool(
