@@ -1,7 +1,7 @@
 import type { evaluateFreeTransactionAllowance } from "./freeTransactions";
 import type { getThirdwebClientId, getThirdwebServerVerifierSecret } from "~~/lib/env/server";
 
-export type ThirdwebVerifierRouteTestOverrides = {
+type ThirdwebVerifierRouteTestOverrides = {
   evaluateFreeTransactionAllowance?: typeof evaluateFreeTransactionAllowance;
   getThirdwebClientId?: typeof getThirdwebClientId;
   getThirdwebServerVerifierSecret?: typeof getThirdwebServerVerifierSecret;

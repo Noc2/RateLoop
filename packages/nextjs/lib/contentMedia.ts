@@ -45,7 +45,7 @@ export function normalizeSubmissionContextUrl(value: string): string | null {
   return canonicalizeUrl(sanitizedUrl);
 }
 
-export function normalizeUploadedImageUrl(value: string): string | null {
+function normalizeUploadedImageUrl(value: string): string | null {
   try {
     const parsed = new URL(value);
     if (parsed.username || parsed.password) return null;

@@ -15,7 +15,7 @@ export type RoundVoteContractCall = {
   value?: bigint;
 };
 
-export type CommitVoteArgs = readonly [
+type CommitVoteArgs = readonly [
   contentId: bigint,
   roundContext: bigint,
   targetRound: bigint,
@@ -26,7 +26,7 @@ export type CommitVoteArgs = readonly [
   frontend: EvmAddress,
 ];
 
-export type AdvisoryVoteArgs = readonly [
+type AdvisoryVoteArgs = readonly [
   contentId: bigint,
   roundContext: bigint,
   targetRound: bigint,
@@ -35,9 +35,9 @@ export type AdvisoryVoteArgs = readonly [
   ciphertext: Hex,
 ];
 
-export type CommitVoteWithPermitArgs = readonly [...CommitVoteArgs, permitDeadline: bigint, v: number, r: Hex, s: Hex];
+type CommitVoteWithPermitArgs = readonly [...CommitVoteArgs, permitDeadline: bigint, v: number, r: Hex, s: Hex];
 
-export type RoundVoteTransactionPlan = {
+type RoundVoteTransactionPlan = {
   advisoryVoteArgs: AdvisoryVoteArgs;
   calls: RoundVoteContractCall[];
   commitVoteArgs: CommitVoteArgs;

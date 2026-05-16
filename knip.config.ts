@@ -47,6 +47,7 @@ const config: KnipConfig = {
       ],
     },
     "packages/node-utils": {
+      entry: [...testEntries],
       project: ["src/**/*.ts"],
     },
     "packages/ponder": {

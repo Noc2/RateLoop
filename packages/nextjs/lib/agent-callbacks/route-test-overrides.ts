@@ -2,12 +2,12 @@ import type { processDueAgentCallbackDeliveries } from "./index";
 import type { sweepAgentLifecycleCallbacks } from "./lifecycle";
 import type { randomUUID } from "node:crypto";
 
-export type AgentCallbackDeliverRouteTestOverrides = {
+type AgentCallbackDeliverRouteTestOverrides = {
   processDueAgentCallbackDeliveries?: typeof processDueAgentCallbackDeliveries;
   randomUUID?: typeof randomUUID;
 };
 
-export type AgentCallbackSweepRouteTestOverrides = {
+type AgentCallbackSweepRouteTestOverrides = {
   sweepAgentLifecycleCallbacks?: typeof sweepAgentLifecycleCallbacks;
 };
 
