@@ -1,6 +1,6 @@
 # RateLoop — Ponder (Indexer & API)
 
-On-chain event indexer built with [Ponder](https://ponder.sh/). Listens to smart contract events, stores processed data including correlation payout snapshots, and exposes a REST API on port 42069 for consumption by the frontend, bot, and AI/MCP adapters.
+On-chain event indexer built with [Ponder](https://ponder.sh/). Listens to smart contract events, stores processed data including correlation payout snapshots, and exposes a REST API on port 42069 for consumption by the frontend, agent, and AI/MCP adapters.
 
 ## Quick Start
 

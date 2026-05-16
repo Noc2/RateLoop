@@ -282,7 +282,8 @@ library RoundCleanupLib {
             uint256 refundedLrep,
             uint256 processedPastEpochCount,
             uint256 cleanupIncentive,
-            uint256 updatedConsensusReserve
+            uint256 updatedConsensusReserve,
+            uint256 deferredCleanupBounty
         )
     {
         uint256 len = commitKeys.length;
@@ -325,7 +326,6 @@ library RoundCleanupLib {
             forfeitedToTreasury + addedToConsensusReserve, refundedLrep, 5e6 - cleanupIncentivePaid
         );
         if (cleanupIncentive > 0) {
-            roundCleanupIncentivePaid[contentId][roundId] = cleanupIncentivePaid + cleanupIncentive;
             // Drain the forfeit/reserve pots first (they're the natural source); whatever
             // remains for refund-only rounds is paid out of the engine's consensus reserve
             // so that refunded voters are not shorted by the keeper bounty.
@@ -344,12 +344,32 @@ library RoundCleanupLib {
                 remainingIncentive -= fromTreasuryForfeiture;
             }
             if (remainingIncentive > 0) {
-                // Refund-only path: pay the keeper bounty out of the consensus reserve.
-                // The cap (`5e6 - cleanupIncentivePaid`) already constrains this to <=5 LREP
-                // per round, and `_cleanupIncentive` further caps by the available reserve.
-                updatedConsensusReserve -= remainingIncentive;
+                // Refund-only path: pay what we can out of the engine's consensus reserve.
+                // `_cleanupIncentive` only knows the per-round 5 LREP cap, not the live reserve
+                // balance, so for refund-only batches the residual can exceed the reserve --
+                // most commonly the zero-reserve case at protocol startup. Pay what the reserve
+                // covers immediately; defer the rest as a per-(round, keeper) IOU that the
+                // keeper can later collect via `claimDeferredCleanupBounty` once the reserve
+                // has been topped up. The processed votes have already had their stake zeroed
+                // so a later batch on the same range cannot recompute this incentive
+                // (codex PR #12 review).
+                uint256 fromRefundReserve =
+                    updatedConsensusReserve < remainingIncentive ? updatedConsensusReserve : remainingIncentive;
+                updatedConsensusReserve -= fromRefundReserve;
+                if (fromRefundReserve < remainingIncentive) {
+                    deferredCleanupBounty = remainingIncentive - fromRefundReserve;
+                    cleanupIncentive -= deferredCleanupBounty;
+                }
             }
-            lrepToken.safeTransfer(cleanupCaller, cleanupIncentive);
+            // Count BOTH the immediately-paid and the deferred portions toward the per-round
+            // 5 LREP cap so deferral cannot be used to bypass the envelope across batches.
+            if (cleanupIncentive > 0 || deferredCleanupBounty > 0) {
+                roundCleanupIncentivePaid[contentId][roundId] =
+                    cleanupIncentivePaid + cleanupIncentive + deferredCleanupBounty;
+            }
+            if (cleanupIncentive > 0) {
+                lrepToken.safeTransfer(cleanupCaller, cleanupIncentive);
+            }
         }
 
         if (forfeitedToTreasury > 0) {

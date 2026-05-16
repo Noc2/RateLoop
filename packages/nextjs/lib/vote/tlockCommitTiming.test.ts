@@ -35,20 +35,21 @@ test("targets the following epoch when the next block can land on the boundary",
   assert.equal(deriveCommitVoteRuntimeNowMs(params), 2_201_000);
 });
 
-test("adds a confirmation buffer for the first vote in a new round", () => {
+test("keeps first-vote targets inside the contract tlock window", () => {
   const params = {
     latestBlockTimestampSeconds: 1_500,
     epochDurationSeconds: 1_200,
   };
 
-  assert.equal(deriveCommitVoteTargetTimeSeconds(params), 2_761);
-  assert.equal(deriveCommitVoteRuntimeNowMs(params), 1_561_000);
+  assert.equal(deriveCommitVoteTargetTimeSeconds(params), 2_701);
+  assert.equal(deriveCommitVoteRuntimeNowMs(params), 1_501_000);
 });
 
 test("caps the new round confirmation buffer below the epoch duration", () => {
   const params = {
     latestBlockTimestampSeconds: 1_500,
     epochDurationSeconds: 30,
+    newRoundTargetBufferSeconds: 60,
   };
 
   assert.equal(deriveCommitVoteTargetTimeSeconds(params), 1_560);

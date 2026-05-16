@@ -1,6 +1,6 @@
 # RateLoop — Next.js (Frontend)
 
-Full-stack web application built with Next.js 15 and React 19. Provides the UI for rating content, question-first submissions with either a context URL or image context, optional YouTube preview media, governed per-question round settings, managing profiles, and reading in-app documentation. Question submissions must attach a non-refundable bounty funded in LREP or USDC. Humans, bots, and AI agents all submit through the same question-first path, and optional identity credentials only unlock one-time onboarding bonuses and launch anchors rather than changing reward weight. The app includes server-side API routes plus a PostgreSQL database via Drizzle ORM.
+Full-stack web application built with Next.js 15 and React 19. Provides the UI for rating content, question-first submissions with either a context URL or image context, optional YouTube preview media, governed per-question round settings, managing profiles, and reading in-app documentation. Question submissions must attach a non-refundable bounty funded in LREP or USDC. Humans and agents all submit through the same question-first path, and optional identity credentials only unlock one-time onboarding bonuses and launch anchors rather than changing reward weight. The app includes server-side API routes plus a PostgreSQL database via Drizzle ORM.
 
 ## Quick Start
 

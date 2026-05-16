@@ -17,7 +17,12 @@ import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol"
 import { IRoundPayoutSnapshotConsumer } from "./interfaces/IRoundPayoutSnapshotConsumer.sol";
 import { RoundLib } from "./libraries/RoundLib.sol";
 import { QuestionRewardPoolEscrowBundleActionsLib } from "./libraries/QuestionRewardPoolEscrowBundleActionsLib.sol";
-import { QuestionRewardPoolEscrowClaimLib } from "./libraries/QuestionRewardPoolEscrowClaimLib.sol";
+import {
+    QuestionRewardPoolEscrowClaimLib,
+    EqualShareInputs,
+    WeightedShareInputs,
+    ClaimableQuestionRewardParams
+} from "./libraries/QuestionRewardPoolEscrowClaimLib.sol";
 import { QuestionRewardPoolEscrowEligibilityLib } from "./libraries/QuestionRewardPoolEscrowEligibilityLib.sol";
 import { QuestionRewardPoolEscrowQualificationLib } from "./libraries/QuestionRewardPoolEscrowQualificationLib.sol";
 import { QuestionRewardPoolEscrowPoolActionsLib } from "./libraries/QuestionRewardPoolEscrowPoolActionsLib.sol";
@@ -28,6 +33,8 @@ import {
     BundleReward,
     BundleQuestion,
     BundleRoundSetSnapshot,
+    CreateRewardPoolParams,
+    CreateSubmissionBundleParams,
     BOUNTY_ELIGIBILITY_OPEN
 } from "./libraries/QuestionRewardPoolEscrowTypes.sol";
 import { QuestionRewardPoolEscrowVoterLib } from "./libraries/QuestionRewardPoolEscrowVoterLib.sol";
@@ -378,6 +385,22 @@ contract QuestionRewardPoolEscrow is
         uint8 bountyEligibility
     ) private returns (uint256 rewardPoolId) {
         _requireCurrentRegistryEscrow();
+        CreateRewardPoolParams memory params = CreateRewardPoolParams({
+            contentId: contentId,
+            funder: msg.sender,
+            payer: address(0),
+            asset: REWARD_ASSET_USDC,
+            amount: amount,
+            requiredVoters: requiredVoters,
+            requiredSettledRounds: MIN_REQUIRED_SETTLED_ROUNDS,
+            bountyClosesAt: bountyClosesAt,
+            feedbackClosesAt: feedbackClosesAt,
+            bountyEligibility: bountyEligibility,
+            nonRefundable: false,
+            bountyKind: bountyKind,
+            relatedRoundId: relatedRoundId,
+            reasonHash: reasonHash
+        });
         (rewardPoolId, nextRewardPoolId) = QuestionRewardPoolEscrowPoolActionsLib.createRewardPool(
             rewardPools,
             rewardPoolPayerIdentity,
@@ -388,20 +411,7 @@ contract QuestionRewardPoolEscrow is
             usdcToken,
             defaultFrontendFeeBps,
             nextRewardPoolId,
-            contentId,
-            msg.sender,
-            address(0),
-            REWARD_ASSET_USDC,
-            amount,
-            requiredVoters,
-            MIN_REQUIRED_SETTLED_ROUNDS,
-            bountyClosesAt,
-            feedbackClosesAt,
-            bountyEligibility,
-            false,
-            bountyKind,
-            relatedRoundId,
-            reasonHash
+            params
         );
         _snapshotRewardPoolClusterPayoutOracle(rewardPoolId, REWARD_ASSET_USDC);
     }
@@ -532,6 +542,19 @@ contract QuestionRewardPoolEscrow is
         _requireRegistryVotingEngine();
         require(funder != address(0), "Invalid funder");
 
+        CreateSubmissionBundleParams memory params = CreateSubmissionBundleParams({
+            bundleId: bundleId,
+            contentIds: contentIds,
+            funder: funder,
+            asset: asset,
+            amount: amount,
+            requiredCompleters: requiredCompleters,
+            requiredSettledRounds: requiredSettledRounds,
+            bountyClosesAt: bountyClosesAt,
+            feedbackClosesAt: feedbackClosesAt,
+            bountyEligibility: bountyEligibility
+        });
+
         rewardPoolId = QuestionRewardPoolEscrowBundleActionsLib.createSubmissionBundleFromRegistry(
             bundleRewards,
             bundleQuestions,
@@ -542,16 +565,7 @@ contract QuestionRewardPoolEscrow is
             lrepToken,
             usdcToken,
             defaultFrontendFeeBps,
-            bundleId,
-            contentIds,
-            funder,
-            asset,
-            amount,
-            requiredCompleters,
-            requiredSettledRounds,
-            bountyClosesAt,
-            feedbackClosesAt,
-            bountyEligibility
+            params
         );
     }
 
@@ -568,6 +582,22 @@ contract QuestionRewardPoolEscrow is
         uint8 bountyEligibility,
         bool nonRefundable
     ) internal returns (uint256 rewardPoolId) {
+        CreateRewardPoolParams memory params = CreateRewardPoolParams({
+            contentId: contentId,
+            funder: funder,
+            payer: payer,
+            asset: asset,
+            amount: amount,
+            requiredVoters: requiredVoters,
+            requiredSettledRounds: requiredSettledRounds,
+            bountyClosesAt: bountyClosesAt,
+            feedbackClosesAt: feedbackClosesAt,
+            bountyEligibility: bountyEligibility,
+            nonRefundable: nonRefundable,
+            bountyKind: 0,
+            relatedRoundId: 0,
+            reasonHash: bytes32(0)
+        });
         (rewardPoolId, nextRewardPoolId) = QuestionRewardPoolEscrowPoolActionsLib.createRewardPool(
             rewardPools,
             rewardPoolPayerIdentity,
@@ -578,20 +608,7 @@ contract QuestionRewardPoolEscrow is
             usdcToken,
             defaultFrontendFeeBps,
             nextRewardPoolId,
-            contentId,
-            funder,
-            payer,
-            asset,
-            amount,
-            requiredVoters,
-            requiredSettledRounds,
-            bountyClosesAt,
-            feedbackClosesAt,
-            bountyEligibility,
-            nonRefundable,
-            0,
-            0,
-            bytes32(0)
+            params
         );
         _snapshotRewardPoolClusterPayoutOracle(rewardPoolId, asset);
     }
@@ -684,43 +701,12 @@ contract QuestionRewardPoolEscrow is
             hasCorrelationProof
         );
         require(claimWeight > 0, "No reward weight");
-        uint256 reservedFrontendFee;
         uint256 grossAmount;
         uint256 frontendFee;
         address frontendRecipient;
-        if (snapshot.totalClaimWeight == 0) {
-            reservedFrontendFee = QuestionRewardPoolEscrowClaimLib.nextEqualShare(
-                snapshot.frontendFeeAllocation, snapshot.eligibleVoters, snapshot.claimedCount
-            );
-            (grossAmount, rewardAmount, frontendFee, frontendRecipient) =
-                QuestionRewardPoolEscrowClaimLib.computeEqualShareClaimSplit(
-                    votingEngine,
-                    rewardPool.contentId,
-                    roundId,
-                    commitKey,
-                    frontend,
-                    snapshot.allocation,
-                    snapshot.frontendFeeAllocation,
-                    snapshot.eligibleVoters,
-                    snapshot.claimedCount
-                );
-        } else {
-            (grossAmount, rewardAmount, frontendFee, frontendRecipient, reservedFrontendFee) =
-                QuestionRewardPoolEscrowClaimLib.computeWeightedClaimSplit(
-                    votingEngine,
-                    rewardPool.contentId,
-                    roundId,
-                    commitKey,
-                    frontend,
-                    snapshot.allocation,
-                    snapshot.frontendFeeAllocation,
-                    snapshot.totalClaimWeight,
-                    claimWeight,
-                    snapshot.claimedWeight,
-                    snapshot.claimedAmount,
-                    snapshot.frontendFeeClaimedAmount
-                );
-        }
+        uint256 reservedFrontendFee;
+        (grossAmount, rewardAmount, frontendFee, frontendRecipient, reservedFrontendFee) =
+            _resolveClaimSplit(rewardPool, snapshot, roundId, commitKey, frontend, claimWeight);
         require(grossAmount > 0, "No reward");
 
         rewardClaimed[rewardPoolId][roundId][commitKey] = true;
@@ -767,6 +753,66 @@ contract QuestionRewardPoolEscrow is
         return QuestionRewardPoolEscrowTransferLib.settleClaimPayout(
             rewardToken, rewardRecipient, rewardAmount, frontendRecipient, frontendFee
         );
+    }
+
+    /// @dev Extracted out of `_claimQuestionReward` so the 9/12-arg library calls do not coexist
+    ///      with the rest of `_claimQuestionReward`'s ~14 locals on the same stack frame.
+    ///      Without this split, `forge coverage --ir-minimum` fails Yul ABI encoding.
+    function _resolveClaimSplit(
+        RewardPool storage rewardPool,
+        RoundSnapshot storage snapshot,
+        uint256 roundId,
+        bytes32 commitKey,
+        address frontend,
+        uint256 claimWeight
+    )
+        private
+        view
+        returns (
+            uint256 grossAmount,
+            uint256 rewardAmount,
+            uint256 frontendFee,
+            address frontendRecipient,
+            uint256 reservedFrontendFee
+        )
+    {
+        if (snapshot.totalClaimWeight == 0) {
+            reservedFrontendFee = QuestionRewardPoolEscrowClaimLib.nextEqualShare(
+                snapshot.frontendFeeAllocation, snapshot.eligibleVoters, snapshot.claimedCount
+            );
+            (grossAmount, rewardAmount, frontendFee, frontendRecipient) = QuestionRewardPoolEscrowClaimLib
+                .computeEqualShareClaimSplit(
+                votingEngine,
+                rewardPool.contentId,
+                roundId,
+                commitKey,
+                frontend,
+                EqualShareInputs({
+                    allocation: snapshot.allocation,
+                    frontendFeeAllocation: snapshot.frontendFeeAllocation,
+                    eligibleParticipants: snapshot.eligibleVoters,
+                    claimedCount: snapshot.claimedCount
+                })
+            );
+        } else {
+            (grossAmount, rewardAmount, frontendFee, frontendRecipient, reservedFrontendFee) =
+            QuestionRewardPoolEscrowClaimLib.computeWeightedClaimSplit(
+                votingEngine,
+                rewardPool.contentId,
+                roundId,
+                commitKey,
+                frontend,
+                claimWeight,
+                WeightedShareInputs({
+                    allocation: snapshot.allocation,
+                    frontendFeeAllocation: snapshot.frontendFeeAllocation,
+                    totalClaimWeight: snapshot.totalClaimWeight,
+                    claimedWeight: snapshot.claimedWeight,
+                    claimedAmount: snapshot.claimedAmount,
+                    frontendFeeClaimedAmount: snapshot.frontendFeeClaimedAmount
+                })
+            );
+        }
     }
 
     /// @notice Recover an ERC-20 that is NOT one of the protocol's reward assets (LREP/USDC).
@@ -993,14 +1039,16 @@ contract QuestionRewardPoolEscrow is
             rewardPoolClusterPayoutOracle,
             votingEngine,
             votingEngine.protocolConfig(),
-            rewardPoolId,
-            roundId,
-            account,
             payoutWeight,
             proof,
-            BPS_SCALE,
-            REWARD_ASSET_USDC,
-            PAYOUT_DOMAIN_QUESTION_REWARD
+            ClaimableQuestionRewardParams({
+                rewardPoolId: rewardPoolId,
+                roundId: roundId,
+                account: account,
+                bpsScale: BPS_SCALE,
+                rewardAssetUsdc: REWARD_ASSET_USDC,
+                payoutDomain: PAYOUT_DOMAIN_QUESTION_REWARD
+            })
         );
     }
 
@@ -1321,5 +1369,5 @@ contract QuestionRewardPoolEscrow is
         );
     }
 
-    uint256[50] private __gap;
+    uint256[51] private __gap;
 }

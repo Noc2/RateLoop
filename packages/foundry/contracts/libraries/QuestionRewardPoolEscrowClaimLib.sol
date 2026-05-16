@@ -10,6 +10,39 @@ import { QuestionRewardPoolEscrowEligibilityLib } from "./QuestionRewardPoolEscr
 import { QuestionRewardPoolEscrowQualificationLib } from "./QuestionRewardPoolEscrowQualificationLib.sol";
 import { QuestionRewardPoolEscrowVoterLib } from "./QuestionRewardPoolEscrowVoterLib.sol";
 
+/// @dev Equal-share inputs shared by `RoundSnapshot` (per-round) and
+///      `BundleRoundSetSnapshot` (per-bundle) callers. Packed into a single struct so
+///      `forge coverage --ir-minimum` does not blow the Yul ABI-encoder stack when
+///      these library calls happen from contexts with many other locals (notably
+///      `_claimQuestionReward`).
+struct EqualShareInputs {
+    uint256 allocation;
+    uint256 frontendFeeAllocation;
+    uint256 eligibleParticipants;
+    uint256 claimedCount;
+}
+
+/// @dev Scalar (non-storage / non-calldata) parameters for the
+///      `claimableQuestionReward*` library entry points. Packed into a struct so the
+///      external library signatures stay under the IR-minimum ABI-encoder stack budget.
+struct ClaimableQuestionRewardParams {
+    uint256 rewardPoolId;
+    uint256 roundId;
+    address account;
+    uint256 bpsScale;
+    uint8 rewardAssetUsdc;
+    uint8 payoutDomain;
+}
+
+struct WeightedShareInputs {
+    uint256 allocation;
+    uint256 frontendFeeAllocation;
+    uint256 totalClaimWeight;
+    uint256 claimedWeight;
+    uint256 claimedAmount;
+    uint256 frontendFeeClaimedAmount;
+}
+
 library QuestionRewardPoolEscrowClaimLib {
     uint256 private constant BASE_PARTICIPATION_WEIGHT_BPS = 10_000;
 
@@ -40,13 +73,11 @@ library QuestionRewardPoolEscrowClaimLib {
         uint256 roundId,
         bytes32 commitKey,
         address frontend,
-        uint256 allocation,
-        uint256 frontendFeeAllocation,
-        uint256 eligibleVoters,
-        uint256 claimedCount
+        EqualShareInputs memory inputs
     ) external view returns (uint256 grossAmount, uint256 voterReward, uint256 frontendFee, address frontendRecipient) {
-        grossAmount = _nextEqualShare(allocation, eligibleVoters, claimedCount);
-        uint256 reservedFrontendFee = _nextEqualShare(frontendFeeAllocation, eligibleVoters, claimedCount);
+        grossAmount = _nextEqualShare(inputs.allocation, inputs.eligibleParticipants, inputs.claimedCount);
+        uint256 reservedFrontendFee =
+            _nextEqualShare(inputs.frontendFeeAllocation, inputs.eligibleParticipants, inputs.claimedCount);
         (voterReward, frontendFee, frontendRecipient) =
             _computeClaimSplit(votingEngine, contentId, roundId, commitKey, frontend, grossAmount, reservedFrontendFee);
     }
@@ -57,13 +88,8 @@ library QuestionRewardPoolEscrowClaimLib {
         uint256 roundId,
         bytes32 commitKey,
         address frontend,
-        uint256 allocation,
-        uint256 frontendFeeAllocation,
-        uint256 totalClaimWeight,
         uint256 claimWeight,
-        uint256 claimedWeight,
-        uint256 claimedAmount,
-        uint256 frontendFeeClaimedAmount
+        WeightedShareInputs memory inputs
     )
         external
         view
@@ -75,9 +101,15 @@ library QuestionRewardPoolEscrowClaimLib {
             uint256 reservedFrontendFee
         )
     {
-        grossAmount = _nextWeightedShare(allocation, totalClaimWeight, claimWeight, claimedWeight, claimedAmount);
+        grossAmount = _nextWeightedShare(
+            inputs.allocation, inputs.totalClaimWeight, claimWeight, inputs.claimedWeight, inputs.claimedAmount
+        );
         reservedFrontendFee = _nextWeightedShare(
-            frontendFeeAllocation, totalClaimWeight, claimWeight, claimedWeight, frontendFeeClaimedAmount
+            inputs.frontendFeeAllocation,
+            inputs.totalClaimWeight,
+            claimWeight,
+            inputs.claimedWeight,
+            inputs.frontendFeeClaimedAmount
         );
         (voterReward, frontendFee, frontendRecipient) =
             _computeClaimSplit(votingEngine, contentId, roundId, commitKey, frontend, grossAmount, reservedFrontendFee);
@@ -120,18 +152,13 @@ library QuestionRewardPoolEscrowClaimLib {
         mapping(uint256 => address) storage rewardPoolClusterPayoutOracle,
         RoundVotingEngine votingEngine,
         ProtocolConfig protocolConfig,
-        uint256 rewardPoolId,
-        uint256 roundId,
-        address account,
         IClusterPayoutOracle.PayoutWeight calldata payoutWeight,
         bytes32[] calldata proof,
-        uint256 bpsScale,
-        uint8 rewardAssetUsdc,
-        uint8 payoutDomain
+        ClaimableQuestionRewardParams calldata params
     ) external view returns (uint256 claimableAmount) {
-        RewardPool storage rewardPool = rewardPools[rewardPoolId];
+        RewardPool storage rewardPool = rewardPools[params.rewardPoolId];
         if (rewardPool.id == 0 || rewardPool.refunded) return 0;
-        if (!_usesClusterPayoutSnapshot(rewardPoolClusterPayoutOracle, rewardPool, rewardAssetUsdc)) {
+        if (!_usesClusterPayoutSnapshot(rewardPoolClusterPayoutOracle, rewardPool, params.rewardAssetUsdc)) {
             return _claimableQuestionReward(
                 rewardPools,
                 roundSnapshots,
@@ -140,57 +167,59 @@ library QuestionRewardPoolEscrowClaimLib {
                 rewardPoolPayerIdentityKey,
                 votingEngine,
                 protocolConfig,
-                rewardPoolId,
-                roundId,
-                account,
-                bpsScale
+                params.rewardPoolId,
+                params.roundId,
+                params.account,
+                params.bpsScale
             );
         }
 
         (bytes32 identityKey, bytes32 commitKey, address rewardRecipient) = QuestionRewardPoolEscrowVoterLib.resolveRoundRewardClaim(
-            votingEngine, protocolConfig, rewardPool.contentId, roundId, account
+            votingEngine, protocolConfig, rewardPool.contentId, params.roundId, params.account
         );
         if (
-            commitKey == bytes32(0) || rewardClaimed[rewardPoolId][roundId][commitKey]
+            commitKey == bytes32(0) || rewardClaimed[params.rewardPoolId][params.roundId][commitKey]
                 || _isExcludedClaimant(
-                    rewardPool, rewardPoolPayerIdentity, rewardPoolPayerIdentityKey, identityKey, account
+                    rewardPool, rewardPoolPayerIdentity, rewardPoolPayerIdentityKey, identityKey, params.account
                 )
                 || !QuestionRewardPoolEscrowEligibilityLib.isAccountEligibleForBounty(
                     protocolConfig, rewardPool.bountyEligibility, rewardRecipient
                 )
         ) return 0;
         (bool revealed, address frontend) = QuestionRewardPoolEscrowVoterLib.timelyRevealedCommitFrontend(
-            votingEngine, rewardPool.contentId, roundId, commitKey, rewardPool.bountyClosesAt
+            votingEngine, rewardPool.contentId, params.roundId, commitKey, rewardPool.bountyClosesAt
         );
-        if (!revealed || votingEngine.roundUnrevealedCleanupRemaining(rewardPool.contentId, roundId) > 0) return 0;
+        if (!revealed || votingEngine.roundUnrevealedCleanupRemaining(rewardPool.contentId, params.roundId) > 0) {
+            return 0;
+        }
 
-        RoundSnapshot storage snapshot = roundSnapshots[rewardPoolId][roundId];
-        uint256 baseClaimWeight = _roundClaimWeight(votingEngine, rewardPool.contentId, roundId, commitKey);
+        RoundSnapshot storage snapshot = roundSnapshots[params.rewardPoolId][params.roundId];
+        uint256 baseClaimWeight = _roundClaimWeight(votingEngine, rewardPool.contentId, params.roundId, commitKey);
         uint256 claimWeight = _effectiveClusterQuestionClaimWeight(
             rewardPoolClusterPayoutOracle,
             rewardPool,
-            rewardPoolId,
-            roundId,
+            params.rewardPoolId,
+            params.roundId,
             identityKey,
             commitKey,
             rewardRecipient,
             baseClaimWeight,
             payoutWeight,
             proof,
-            payoutDomain
+            params.payoutDomain
         );
         if (claimWeight == 0) return 0;
 
         if (!snapshot.qualified) {
-            if (!_canPreviewNewQualification(rewardPool, roundId)) return 0;
+            if (!_canPreviewNewQualification(rewardPool, params.roundId)) return 0;
             (, bool canQualify,, uint256 effectiveParticipantUnits, uint256 totalClaimWeight,) = QuestionRewardPoolEscrowQualificationLib.previewRoundQualificationWithClusterSnapshot(
                 rewardPoolPayerIdentity,
                 rewardPoolPayerIdentityKey,
                 rewardPoolClusterPayoutOracle,
                 votingEngine,
                 rewardPool,
-                roundId,
-                payoutDomain
+                params.roundId,
+                params.payoutDomain
             );
             if (!canQualify) return 0;
 
@@ -199,11 +228,11 @@ library QuestionRewardPoolEscrowClaimLib {
             return _claimableWeighted(
                 votingEngine,
                 rewardPool.contentId,
-                roundId,
+                params.roundId,
                 commitKey,
                 frontend,
                 allocation,
-                (allocation * rewardPool.frontendFeeBps) / bpsScale,
+                (allocation * rewardPool.frontendFeeBps) / params.bpsScale,
                 totalClaimWeight,
                 claimWeight,
                 0,
@@ -215,7 +244,7 @@ library QuestionRewardPoolEscrowClaimLib {
         return _claimableWeighted(
             votingEngine,
             rewardPool.contentId,
-            roundId,
+            params.roundId,
             commitKey,
             frontend,
             snapshot.allocation,

@@ -100,6 +100,7 @@ export async function resolveRoundVoteRuntime(params: {
     baseTotalStake,
     baseVoteCount,
     now: () => runtimeNowMs,
+    roundStartTimeSeconds,
     roundId,
     roundReferenceRatingBps: roundReferenceRatingBps as number,
   };

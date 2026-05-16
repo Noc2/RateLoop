@@ -620,7 +620,7 @@ Remove or retire:
 
 Important caveat: removing Self means Curyo no longer has a hard uniqueness
 proof at onboarding. Sybil resistance must then come from slow reputation
-earning, graph independence, bot checks, payout caps, calibration rounds, and
+earning, graph independence, agent-risk checks, payout caps, calibration rounds, and
 cluster discounts. This redesign should not include any proof-of-personhood
 provider.
 
@@ -1011,7 +1011,7 @@ Add:
 - reputation profile;
 - category-specific credibility;
 - graph/independence explanation;
-- bot/graph risk labels for ratings;
+- agent/graph risk labels for ratings;
 - staking slider with clear max and burn risk;
 - predicted-rating vote control replacing binary up/down for the redesigned
   protocol;
@@ -1050,7 +1050,7 @@ This keeps voting thoughtful without punishing useful dissent.
    Curyo should not integrate Self.xyz, Human Passport, World ID, Semaphore, or
    any other proof-of-personhood provider in this redesign. Sybil resistance
    comes from slow reputation earning, calibration rounds, graph independence,
-   bot/risk signals, cluster payout caps, and epoch/category caps.
+   agent-risk signals, cluster payout caps, and epoch/category caps.
 
 2. Open rater network.
 
@@ -1250,7 +1250,7 @@ The best Curyo-native design is:
 - governance based on aged, earned, non-transferable reputation.
 
 This would make the protocol more user-friendly than passport-based onboarding
-while still raising the cost of bot and Sybil attacks over time. The main risk
+while still raising the cost of agent-driven and Sybil attacks over time. The main risk
 is bootstrap capture, so the first implementation should be conservative:
 low initial voting power, slow emissions, capped payouts, category separation,
 and heavy monitoring before reputation controls major governance decisions.
