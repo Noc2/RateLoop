@@ -325,7 +325,6 @@ library RoundCleanupLib {
             forfeitedToTreasury + addedToConsensusReserve, refundedHrep, 5e6 - cleanupIncentivePaid
         );
         if (cleanupIncentive > 0) {
-            roundCleanupIncentivePaid[contentId][roundId] = cleanupIncentivePaid + cleanupIncentive;
             // Drain the forfeit/reserve pots first (they're the natural source); whatever
             // remains for refund-only rounds is paid out of the engine's consensus reserve
             // so that refunded voters are not shorted by the keeper bounty.
@@ -344,12 +343,24 @@ library RoundCleanupLib {
                 remainingIncentive -= fromTreasuryForfeiture;
             }
             if (remainingIncentive > 0) {
-                // Refund-only path: pay the keeper bounty out of the consensus reserve.
-                // The cap (`5e6 - cleanupIncentivePaid`) already constrains this to <=5 HREP
-                // per round, and `_cleanupIncentive` further caps by the available reserve.
-                updatedConsensusReserve -= remainingIncentive;
+                // Refund-only path: pay what we can out of the engine's consensus reserve.
+                // `_cleanupIncentive` only knows the per-round 5 HREP cap, not the live reserve
+                // balance, so for refund-only batches the residual can exceed the reserve --
+                // most commonly the zero-reserve case at protocol startup. Cap to what's
+                // available and shrink the bounty (and the per-round paid counter) in lockstep
+                // so the unpaid sliver can be claimed by a later batch if the reserve recovers
+                // (codex PR #10 review).
+                uint256 fromRefundReserve =
+                    updatedConsensusReserve < remainingIncentive ? updatedConsensusReserve : remainingIncentive;
+                if (fromRefundReserve < remainingIncentive) {
+                    cleanupIncentive -= (remainingIncentive - fromRefundReserve);
+                }
+                updatedConsensusReserve -= fromRefundReserve;
             }
-            hrepToken.safeTransfer(cleanupCaller, cleanupIncentive);
+            if (cleanupIncentive > 0) {
+                roundCleanupIncentivePaid[contentId][roundId] = cleanupIncentivePaid + cleanupIncentive;
+                hrepToken.safeTransfer(cleanupCaller, cleanupIncentive);
+            }
         }
 
         if (forfeitedToTreasury > 0) {
