@@ -6,6 +6,7 @@ import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/Reentran
 import { ContentRegistry } from "./ContentRegistry.sol";
 import { ProtocolConfig } from "./ProtocolConfig.sol";
 import { RoundVotingEngine } from "./RoundVotingEngine.sol";
+import { IAdvisoryVoteRecorder } from "./interfaces/IAdvisoryVoteRecorder.sol";
 import { ILaunchDistributionPool } from "./interfaces/ILaunchDistributionPool.sol";
 import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol";
 import { LaunchRaterRewardLib } from "./libraries/LaunchRaterRewardLib.sol";
@@ -114,6 +115,12 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         uint256 paidAmount
     );
     event PausedUpdated(bool paused);
+    /// @notice Emitted once per (contentId, voter) pair that `migrateAdvisoryCooldown`
+    ///         successfully imports a non-zero cooldown timestamp from a previous recorder.
+    ///         Indexers can replay these to confirm a clean handover.
+    event AdvisoryCooldownMigrated(
+        address indexed oldRecorder, uint256 indexed contentId, address indexed voter, uint256 timestamp
+    );
 
     constructor(address _votingEngine, address _registry, address owner_) Ownable(owner_) {
         if (_votingEngine == address(0) || _registry == address(0) || owner_ == address(0)) revert InvalidAddress();
@@ -125,6 +132,81 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
     function setPaused(bool value) external onlyOwner {
         paused = value;
         emit PausedUpdated(value);
+    }
+
+    /// @notice One-shot migration that imports per-voter advisory cooldown timestamps from a
+    ///         predecessor recorder so cooldown windows are preserved across a rotation.
+    /// @dev Rotating the advisory recorder via `ProtocolConfig.setAdvisoryVoteRecorder` does
+    ///      not move the per-voter `lastAdvisoryVoteTimestamp` mappings to the new contract.
+    ///      Without this migration a voter who has just voted advisory on the old recorder
+    ///      can immediately re-vote on the new one, effectively bypassing the 24-hour
+    ///      advisory cooldown for one cycle.
+    ///
+    ///      Operational steps for governance:
+    ///        1. Deploy the new recorder.
+    ///        2. Call `migrateAdvisoryCooldown(oldRecorder, contentIds, voters)` on the new
+    ///           recorder (potentially in batches) with the (contentId, voter) pairs that
+    ///           have non-zero cooldowns on the old recorder.
+    ///        3. Optionally call the matching identity-keyed migration
+    ///           (`migrateAdvisoryCooldownByIdentity`) for sybil-resistant cooldowns.
+    ///        4. Only after migration is complete, call
+    ///           `protocolConfig.setAdvisoryVoteRecorder(newRecorder)` to redirect engine
+    ///           lookups at the new contract.
+    ///
+    ///      Each (contentId, voter) entry refuses to overwrite a non-zero timestamp already
+    ///      present in the new recorder — this prevents the same primitive from being abused
+    ///      later to *erase* a cooldown, while still permitting genuine migrations.
+    /// @param oldRecorder Address of the previous advisory recorder to read from. Must
+    ///        implement `IAdvisoryVoteRecorder.lastAdvisoryVoteTimestamp`.
+    /// @param contentIds Parallel array of content ids whose cooldown to import.
+    /// @param voters Parallel array of voter addresses.
+    function migrateAdvisoryCooldown(
+        address oldRecorder,
+        uint256[] calldata contentIds,
+        address[] calldata voters
+    ) external onlyOwner {
+        if (oldRecorder == address(0) || oldRecorder == address(this)) revert InvalidAddress();
+        if (contentIds.length != voters.length) revert IndexOutOfBounds();
+        IAdvisoryVoteRecorder source = IAdvisoryVoteRecorder(oldRecorder);
+        for (uint256 i = 0; i < contentIds.length; i++) {
+            uint256 contentId = contentIds[i];
+            address voter = voters[i];
+            // Refuse to overwrite — migration is one-way (import only). A non-zero local
+            // entry can mean either a previous migration call or a real advisory vote on
+            // this recorder; both must be preserved.
+            if (lastAdvisoryVoteTimestamp[contentId][voter] != 0) continue;
+            uint256 ts = source.lastAdvisoryVoteTimestamp(contentId, voter);
+            if (ts == 0) continue;
+            lastAdvisoryVoteTimestamp[contentId][voter] = ts;
+            emit AdvisoryCooldownMigrated(oldRecorder, contentId, voter, ts);
+        }
+    }
+
+    /// @notice Identity-keyed counterpart to `migrateAdvisoryCooldown`. Imports the
+    ///         per-identity advisory cooldown timestamps so sybil-resistant cooldowns are
+    ///         preserved across a recorder rotation.
+    /// @dev Same overwrite-protection semantics as `migrateAdvisoryCooldown`: a non-zero
+    ///      entry on the new recorder is preserved (cannot be erased via this function).
+    ///      The user-facing audit recommendation (L-Vote-5) focused on the voter-keyed
+    ///      mapping; this identity-keyed variant exists because `_validateAdvisoryCooldown`
+    ///      also consults the identity timestamp, so a complete migration must cover both.
+    function migrateAdvisoryCooldownByIdentity(
+        address oldRecorder,
+        uint256[] calldata contentIds,
+        bytes32[] calldata identityKeys
+    ) external onlyOwner {
+        if (oldRecorder == address(0) || oldRecorder == address(this)) revert InvalidAddress();
+        if (contentIds.length != identityKeys.length) revert IndexOutOfBounds();
+        IAdvisoryVoteRecorder source = IAdvisoryVoteRecorder(oldRecorder);
+        for (uint256 i = 0; i < contentIds.length; i++) {
+            uint256 contentId = contentIds[i];
+            bytes32 identityKey = identityKeys[i];
+            if (identityKey == bytes32(0)) continue;
+            if (lastAdvisoryVoteTimestampByIdentity[contentId][identityKey] != 0) continue;
+            uint256 ts = source.lastAdvisoryVoteTimestampByIdentity(contentId, identityKey);
+            if (ts == 0) continue;
+            lastAdvisoryVoteTimestampByIdentity[contentId][identityKey] = ts;
+        }
     }
 
     /// @notice Record a zero-stake advisory commit for the active round.
