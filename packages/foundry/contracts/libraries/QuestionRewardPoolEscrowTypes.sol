@@ -87,3 +87,40 @@ struct BundleRoundSetSnapshot {
     uint256 allocation;
     uint256 frontendFeeAllocation;
 }
+
+/// @dev Caller-supplied params for `QuestionRewardPoolEscrowPoolActionsLib.createRewardPool`.
+///      Packed into a struct for the same IR-minimum stack budget reason as
+///      `CreateSubmissionBundleParams` -- the previous 22-arg signature blew the stack.
+struct CreateRewardPoolParams {
+    uint256 contentId;
+    address funder;
+    address payer;
+    uint8 asset;
+    uint256 amount;
+    uint256 requiredVoters;
+    uint256 requiredSettledRounds;
+    uint256 bountyClosesAt;
+    uint256 feedbackClosesAt;
+    uint8 bountyEligibility;
+    bool nonRefundable;
+    uint8 bountyKind;
+    uint256 relatedRoundId;
+    bytes32 reasonHash;
+}
+
+/// @dev Caller-supplied params for `QuestionRewardPoolEscrowBundleActionsLib.createSubmissionBundleFromRegistry`.
+///      Packed into a struct so the lib entry point stays under the IR-minimum stack budget
+///      that `forge coverage --ir-minimum` enforces (the previous 19-arg signature blew the
+///      stack on Yul ABI encoding).
+struct CreateSubmissionBundleParams {
+    uint256 bundleId;
+    uint256[] contentIds;
+    address funder;
+    uint8 asset;
+    uint256 amount;
+    uint256 requiredCompleters;
+    uint256 requiredSettledRounds;
+    uint256 bountyClosesAt;
+    uint256 feedbackClosesAt;
+    uint8 bountyEligibility;
+}

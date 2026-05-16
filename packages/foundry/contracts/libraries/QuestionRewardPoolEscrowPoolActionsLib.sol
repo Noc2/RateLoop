@@ -10,7 +10,7 @@ import { RoundVotingEngine } from "../RoundVotingEngine.sol";
 import { QuestionRewardPoolEscrowEligibilityLib } from "./QuestionRewardPoolEscrowEligibilityLib.sol";
 import { QuestionRewardPoolEscrowTransferLib } from "./QuestionRewardPoolEscrowTransferLib.sol";
 import { QuestionRewardPoolEscrowVoterLib } from "./QuestionRewardPoolEscrowVoterLib.sol";
-import { RewardPool } from "./QuestionRewardPoolEscrowTypes.sol";
+import { RewardPool, CreateRewardPoolParams } from "./QuestionRewardPoolEscrowTypes.sol";
 import { RoundLib } from "./RoundLib.sol";
 
 library QuestionRewardPoolEscrowPoolActionsLib {
@@ -60,24 +60,11 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         IERC20 usdcToken,
         uint16 defaultFrontendFeeBps,
         uint256 nextRewardPoolId,
-        uint256 contentId,
-        address funder,
-        address payer,
-        uint8 asset,
-        uint256 amount,
-        uint256 requiredVoters,
-        uint256 requiredSettledRounds,
-        uint256 bountyClosesAt,
-        uint256 feedbackClosesAt,
-        uint8 bountyEligibility,
-        bool nonRefundable,
-        uint8 bountyKind,
-        uint256 relatedRoundId,
-        bytes32 reasonHash
+        CreateRewardPoolParams memory params
     ) external returns (uint256 rewardPoolId, uint256 updatedNextRewardPoolId) {
         uint256 fundedAmount = QuestionRewardPoolEscrowTransferLib.pullExactToken(
-                _rewardToken(hrepToken, usdcToken, asset), funder, amount
-            );
+            _rewardToken(hrepToken, usdcToken, params.asset), params.funder, params.amount
+        );
 
         rewardPoolId = nextRewardPoolId;
         updatedNextRewardPoolId = nextRewardPoolId + 1;
@@ -89,21 +76,14 @@ library QuestionRewardPoolEscrowPoolActionsLib {
             votingEngine,
             defaultFrontendFeeBps,
             rewardPoolId,
-            contentId,
-            funder,
-            payer,
-            asset,
             fundedAmount,
-            requiredVoters,
-            requiredSettledRounds,
-            bountyClosesAt,
-            feedbackClosesAt,
-            bountyEligibility,
-            nonRefundable
+            params
         );
 
-        if (bountyKind != 0) {
-            _setRewardPoolPurpose(rewardPools, rewardPoolId, bountyKind, relatedRoundId, reasonHash);
+        if (params.bountyKind != 0) {
+            _setRewardPoolPurpose(
+                rewardPools, rewardPoolId, params.bountyKind, params.relatedRoundId, params.reasonHash
+            );
         }
     }
 
@@ -128,107 +108,113 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         RoundVotingEngine votingEngine,
         uint16 defaultFrontendFeeBps,
         uint256 rewardPoolId,
-        uint256 contentId,
-        address funder,
-        address payer,
-        uint8 asset,
         uint256 fundedAmount,
-        uint256 requiredVoters,
-        uint256 requiredSettledRounds,
-        uint256 bountyClosesAt,
-        uint256 feedbackClosesAt,
-        uint8 bountyEligibility,
-        bool nonRefundable
+        CreateRewardPoolParams memory params
     ) private {
-        uint256 amount = fundedAmount;
-        require(amount > 0, "Amount required");
-        require(asset == REWARD_ASSET_HREP || asset == REWARD_ASSET_USDC, "Invalid asset");
-        require(QuestionRewardPoolEscrowEligibilityLib.isValidPolicy(bountyEligibility), "Invalid eligibility");
-        require(registry.isContentActive(contentId), "Content not active");
-        require(requiredVoters >= MIN_REQUIRED_VOTERS, "Too few voters");
-        require(requiredVoters >= _requiredParticipantFloorForAmount(amount), "High-value floor");
-        require(requiredSettledRounds >= MIN_REQUIRED_SETTLED_ROUNDS, "Too few rounds");
-        require(requiredSettledRounds <= MAX_REQUIRED_SETTLED_ROUNDS, "Too many rounds");
-        require(amount >= requiredSettledRounds * requiredVoters, "Amount too small");
-        if (bountyClosesAt != 0) {
-            require(bountyClosesAt > block.timestamp, "Bad close");
-        }
-        uint256 normalizedFeedbackClosesAt = _normalizeFeedbackClosesAt(bountyClosesAt, feedbackClosesAt);
-        RoundLib.RoundConfig memory contentCfg = registry.getContentRoundConfig(contentId);
-        require(requiredVoters <= contentCfg.maxVoters, "Voters exceed max");
-        require(contentCfg.maxVoters <= MAX_REWARD_POOL_ROUND_VOTERS, "Voters exceed max");
-        if (!nonRefundable) {
-            require(amount >= requiredSettledRounds * uint256(contentCfg.maxVoters), "Amount too small");
-            require(bountyClosesAt > block.timestamp, "Bad close");
-        }
+        _validateStoreInputs(registry, fundedAmount, params);
 
-        uint256 currentRoundId = votingEngine.currentRoundId(contentId);
-        uint256 startRoundId = currentRoundId == 0 ? 1 : currentRoundId + 1;
-        (address funderIdentity, bytes32 funderIdentityKey) =
-            _resolveFunderIdentity(votingEngine.protocolConfig(), funder);
-        address effectivePayer = payer == address(0) ? funder : payer;
-        (address payerIdentity, bytes32 payerIdentityKey) =
-            _resolveFunderIdentity(votingEngine.protocolConfig(), effectivePayer);
-        address submitterIdentity = registry.getSubmitterIdentity(contentId);
-        bytes32 submitterIdentityKey = registry.contentSubmitterIdentityKey(contentId);
-        if (submitterIdentityKey == bytes32(0) && submitterIdentity != address(0)) {
-            submitterIdentityKey = QuestionRewardPoolEscrowVoterLib.identityKeyForCurrentRater(
-                votingEngine.protocolConfig(), submitterIdentity
-            );
-        }
+        uint256 normalizedFeedbackClosesAt = _normalizeFeedbackClosesAt(params.bountyClosesAt, params.feedbackClosesAt);
+        uint256 startRoundId = _nextStartRoundId(votingEngine, params.contentId);
+        ProtocolConfig protocolConfig = votingEngine.protocolConfig();
 
-        rewardPools[rewardPoolId] = RewardPool({
-            id: rewardPoolId.toUint64(),
-            contentId: contentId.toUint64(),
-            startRoundId: startRoundId.toUint64(),
-            nextRoundToEvaluate: startRoundId.toUint64(),
-            challengedRoundId: 0,
-            bountyOpensAt: uint64(block.timestamp),
-            bountyClosesAt: bountyClosesAt.toUint64(),
-            claimDeadline: bountyClosesAt.toUint64(),
-            funder: funder,
-            funderIdentity: funderIdentity,
-            submitterIdentity: submitterIdentity,
-            funderIdentityKey: funderIdentityKey,
-            submitterIdentityKey: submitterIdentityKey,
-            asset: asset,
-            fundedAmount: fundedAmount,
-            unallocatedAmount: fundedAmount,
-            claimedAmount: 0,
-            requiredVoters: uint32(requiredVoters),
-            requiredSettledRounds: uint32(requiredSettledRounds),
-            qualifiedRounds: 0,
-            refunded: false,
-            unallocatedRefunded: false,
-            frontendFeeBps: defaultFrontendFeeBps,
-            bountyKind: 0,
-            bountyEligibility: bountyEligibility,
-            nonRefundable: nonRefundable,
-            reasonHash: bytes32(0),
-            bountyEligibilityDataHash: QuestionRewardPoolEscrowEligibilityLib.eligibilityDataHash()
-        });
+        (address funderIdentity, bytes32 funderIdentityKey) = _resolveFunderIdentity(protocolConfig, params.funder);
+        address effectivePayer = params.payer == address(0) ? params.funder : params.payer;
+        (address payerIdentity, bytes32 payerIdentityKey) = _resolveFunderIdentity(protocolConfig, effectivePayer);
+        (address submitterIdentity, bytes32 submitterIdentityKey) =
+            _resolveSubmitterIdentity(registry, protocolConfig, params.contentId);
+
+        RewardPool storage pool = rewardPools[rewardPoolId];
+        pool.id = rewardPoolId.toUint64();
+        pool.contentId = params.contentId.toUint64();
+        pool.startRoundId = startRoundId.toUint64();
+        pool.nextRoundToEvaluate = startRoundId.toUint64();
+        pool.bountyOpensAt = uint64(block.timestamp);
+        pool.bountyClosesAt = params.bountyClosesAt.toUint64();
+        pool.claimDeadline = params.bountyClosesAt.toUint64();
+        pool.funder = params.funder;
+        pool.funderIdentity = funderIdentity;
+        pool.submitterIdentity = submitterIdentity;
+        pool.funderIdentityKey = funderIdentityKey;
+        pool.submitterIdentityKey = submitterIdentityKey;
+        pool.asset = params.asset;
+        pool.fundedAmount = fundedAmount;
+        pool.unallocatedAmount = fundedAmount;
+        pool.requiredVoters = uint32(params.requiredVoters);
+        pool.requiredSettledRounds = uint32(params.requiredSettledRounds);
+        pool.frontendFeeBps = defaultFrontendFeeBps;
+        pool.bountyEligibility = params.bountyEligibility;
+        pool.nonRefundable = params.nonRefundable;
+        pool.bountyEligibilityDataHash = QuestionRewardPoolEscrowEligibilityLib.eligibilityDataHash();
         rewardPoolPayerIdentity[rewardPoolId] = payerIdentity;
         rewardPoolPayerIdentityKey[rewardPoolId] = payerIdentityKey;
 
         emit RewardPoolCreated(
             rewardPoolId,
-            contentId,
-            funder,
+            params.contentId,
+            params.funder,
             funderIdentityKey,
             fundedAmount,
-            requiredVoters,
-            requiredSettledRounds,
+            params.requiredVoters,
+            params.requiredSettledRounds,
             startRoundId,
             block.timestamp,
-            bountyClosesAt,
+            params.bountyClosesAt,
             normalizedFeedbackClosesAt,
             defaultFrontendFeeBps,
-            asset,
-            bountyEligibility,
-            rewardPools[rewardPoolId].bountyEligibilityDataHash,
-            nonRefundable
+            params.asset,
+            params.bountyEligibility,
+            pool.bountyEligibilityDataHash,
+            params.nonRefundable
         );
-        emit RewardPoolEligibilitySet(rewardPoolId, bountyEligibility);
+        emit RewardPoolEligibilitySet(rewardPoolId, params.bountyEligibility);
+    }
+
+    function _validateStoreInputs(
+        ContentRegistry registry,
+        uint256 fundedAmount,
+        CreateRewardPoolParams memory params
+    ) private view {
+        require(fundedAmount > 0, "Amount required");
+        require(params.asset == REWARD_ASSET_HREP || params.asset == REWARD_ASSET_USDC, "Invalid asset");
+        require(
+            QuestionRewardPoolEscrowEligibilityLib.isValidPolicy(params.bountyEligibility), "Invalid eligibility"
+        );
+        require(registry.isContentActive(params.contentId), "Content not active");
+        require(params.requiredVoters >= MIN_REQUIRED_VOTERS, "Too few voters");
+        require(params.requiredVoters >= _requiredParticipantFloorForAmount(fundedAmount), "High-value floor");
+        require(params.requiredSettledRounds >= MIN_REQUIRED_SETTLED_ROUNDS, "Too few rounds");
+        require(params.requiredSettledRounds <= MAX_REQUIRED_SETTLED_ROUNDS, "Too many rounds");
+        require(fundedAmount >= params.requiredSettledRounds * params.requiredVoters, "Amount too small");
+        if (params.bountyClosesAt != 0) {
+            require(params.bountyClosesAt > block.timestamp, "Bad close");
+        }
+        RoundLib.RoundConfig memory contentCfg = registry.getContentRoundConfig(params.contentId);
+        require(params.requiredVoters <= contentCfg.maxVoters, "Voters exceed max");
+        require(contentCfg.maxVoters <= MAX_REWARD_POOL_ROUND_VOTERS, "Voters exceed max");
+        if (!params.nonRefundable) {
+            require(
+                fundedAmount >= params.requiredSettledRounds * uint256(contentCfg.maxVoters), "Amount too small"
+            );
+            require(params.bountyClosesAt > block.timestamp, "Bad close");
+        }
+    }
+
+    function _nextStartRoundId(RoundVotingEngine votingEngine, uint256 contentId) private view returns (uint256) {
+        uint256 currentRoundId = votingEngine.currentRoundId(contentId);
+        return currentRoundId == 0 ? 1 : currentRoundId + 1;
+    }
+
+    function _resolveSubmitterIdentity(ContentRegistry registry, ProtocolConfig protocolConfig, uint256 contentId)
+        private
+        view
+        returns (address submitterIdentity, bytes32 submitterIdentityKey)
+    {
+        submitterIdentity = registry.getSubmitterIdentity(contentId);
+        submitterIdentityKey = registry.contentSubmitterIdentityKey(contentId);
+        if (submitterIdentityKey == bytes32(0) && submitterIdentity != address(0)) {
+            submitterIdentityKey =
+                QuestionRewardPoolEscrowVoterLib.identityKeyForCurrentRater(protocolConfig, submitterIdentity);
+        }
     }
 
     function _setRewardPoolPurpose(
