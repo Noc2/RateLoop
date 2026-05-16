@@ -28,6 +28,7 @@ import {
     BundleReward,
     BundleQuestion,
     BundleRoundSetSnapshot,
+    CreateRewardPoolParams,
     CreateSubmissionBundleParams,
     BOUNTY_ELIGIBILITY_OPEN
 } from "./libraries/QuestionRewardPoolEscrowTypes.sol";
@@ -386,6 +387,22 @@ contract QuestionRewardPoolEscrow is
         uint8 bountyEligibility
     ) private returns (uint256 rewardPoolId) {
         _requireCurrentRegistryEscrow();
+        CreateRewardPoolParams memory params = CreateRewardPoolParams({
+            contentId: contentId,
+            funder: msg.sender,
+            payer: address(0),
+            asset: REWARD_ASSET_USDC,
+            amount: amount,
+            requiredVoters: requiredVoters,
+            requiredSettledRounds: MIN_REQUIRED_SETTLED_ROUNDS,
+            bountyClosesAt: bountyClosesAt,
+            feedbackClosesAt: feedbackClosesAt,
+            bountyEligibility: bountyEligibility,
+            nonRefundable: false,
+            bountyKind: bountyKind,
+            relatedRoundId: relatedRoundId,
+            reasonHash: reasonHash
+        });
         (rewardPoolId, nextRewardPoolId) = QuestionRewardPoolEscrowPoolActionsLib.createRewardPool(
             rewardPools,
             rewardPoolPayerIdentity,
@@ -396,20 +413,7 @@ contract QuestionRewardPoolEscrow is
             usdcToken,
             defaultFrontendFeeBps,
             nextRewardPoolId,
-            contentId,
-            msg.sender,
-            address(0),
-            REWARD_ASSET_USDC,
-            amount,
-            requiredVoters,
-            MIN_REQUIRED_SETTLED_ROUNDS,
-            bountyClosesAt,
-            feedbackClosesAt,
-            bountyEligibility,
-            false,
-            bountyKind,
-            relatedRoundId,
-            reasonHash
+            params
         );
         _snapshotRewardPoolClusterPayoutOracle(rewardPoolId, REWARD_ASSET_USDC);
     }
@@ -580,6 +584,22 @@ contract QuestionRewardPoolEscrow is
         uint8 bountyEligibility,
         bool nonRefundable
     ) internal returns (uint256 rewardPoolId) {
+        CreateRewardPoolParams memory params = CreateRewardPoolParams({
+            contentId: contentId,
+            funder: funder,
+            payer: payer,
+            asset: asset,
+            amount: amount,
+            requiredVoters: requiredVoters,
+            requiredSettledRounds: requiredSettledRounds,
+            bountyClosesAt: bountyClosesAt,
+            feedbackClosesAt: feedbackClosesAt,
+            bountyEligibility: bountyEligibility,
+            nonRefundable: nonRefundable,
+            bountyKind: 0,
+            relatedRoundId: 0,
+            reasonHash: bytes32(0)
+        });
         (rewardPoolId, nextRewardPoolId) = QuestionRewardPoolEscrowPoolActionsLib.createRewardPool(
             rewardPools,
             rewardPoolPayerIdentity,
@@ -590,20 +610,7 @@ contract QuestionRewardPoolEscrow is
             usdcToken,
             defaultFrontendFeeBps,
             nextRewardPoolId,
-            contentId,
-            funder,
-            payer,
-            asset,
-            amount,
-            requiredVoters,
-            requiredSettledRounds,
-            bountyClosesAt,
-            feedbackClosesAt,
-            bountyEligibility,
-            nonRefundable,
-            0,
-            0,
-            bytes32(0)
+            params
         );
         _snapshotRewardPoolClusterPayoutOracle(rewardPoolId, asset);
     }
