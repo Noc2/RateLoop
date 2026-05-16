@@ -1,5 +1,6 @@
 import type { NextPage } from "next";
 import { DocsTitle } from "~~/components/docs/DocsTitle";
+import { ProtocolPiecesDiagram } from "~~/components/docs/ProtocolPiecesDiagram";
 import { protocolDocFacts } from "~~/lib/docs/protocolFacts";
 
 const contractsSourceHref = "https://github.com/Noc2/RateLoop/tree/main/packages/foundry/contracts";
@@ -37,6 +38,7 @@ const SmartContracts: NextPage = () => {
         </a>
         .
       </p>
+      <ProtocolPiecesDiagram />
       <div className="not-prose overflow-x-auto my-6 rounded-xl bg-base-200">
         <table className="table table-zebra [&_th]:text-base [&_td]:text-base [&_.badge]:text-base [&_th]:bg-base-300">
           <thead>
