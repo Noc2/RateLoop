@@ -718,8 +718,18 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         revealedSetHash = keccak256(abi.encodePacked(revealedSetHash, ck1));
         revealedSetHash = keccak256(abi.encodePacked(revealedSetHash, ck2));
         revealedSetHash = keccak256(abi.encodePacked(revealedSetHash, ck3));
+        // M-Vote-1: seed now mixes in the prevrandao of the last-commit block.
+        bytes32 lastCommitPrevrandao = engine.roundLastCommitPrevrandao(contentId, roundId);
         bytes32 expectedSeed = keccak256(
-            abi.encodePacked(block.chainid, address(engine), contentId, roundId, uint256(3), revealedSetHash)
+            abi.encode(
+                block.chainid,
+                address(engine),
+                contentId,
+                roundId,
+                uint256(3),
+                revealedSetHash,
+                lastCommitPrevrandao
+            )
         );
 
         Vm.Log[] memory logs = vm.getRecordedLogs();
@@ -995,6 +1005,10 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     function test_CancelExpired_RevertsIfThresholdAlreadyReached() public {
         uint256 contentId = _submitContent();
 
+        // L-Vote-4: cancel-lockout requires both commit quorum AND ≥1 HRC-verified commit.
+        // Mark voter1 as HRC so the lockout engages.
+        mockRaterIdentityRegistry.setHolder(voter1);
+
         (bytes32 ck1, bytes32 s1) = _commit(voter1, contentId, true, STAKE);
         (bytes32 ck2, bytes32 s2) = _commit(voter2, contentId, true, STAKE);
         (bytes32 ck3, bytes32 s3) = _commit(voter3, contentId, false, STAKE);
@@ -1017,11 +1031,57 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     function test_CancelExpired_RevertsIfCommitQuorumReachedWithoutReveals() public {
         uint256 contentId = _submitContent();
 
+        // L-Vote-4: cancel-lockout requires both commit quorum AND ≥1 HRC-verified commit.
+        mockRaterIdentityRegistry.setHolder(voter1);
+
         _commit(voter1, contentId, true, STAKE);
         _commit(voter2, contentId, false, STAKE);
         _commit(voter3, contentId, true, STAKE);
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+
+        vm.warp(block.timestamp + 7 days + 1);
+
+        vm.expectRevert(RoundVotingEngine.ThresholdReached.selector);
+        engine.cancelExpiredRound(contentId, roundId);
+    }
+
+    /// @notice L-Vote-4: if no HRC voter participates, an expired round at commit quorum is
+    ///         still refund-cancellable. Sybils cannot grief honest content into a RevealFailed
+    ///         cycle at 3× min-stake.
+    function test_CancelExpired_AllSybilQuorum_Cancellable() public {
+        uint256 contentId = _submitContent();
+
+        // No HRC seeding — all 3 voters are non-HRC.
+        _commit(voter1, contentId, true, STAKE);
+        _commit(voter2, contentId, false, STAKE);
+        _commit(voter3, contentId, true, STAKE);
+
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+
+        vm.warp(block.timestamp + 7 days + 1);
+
+        // No HRC commit -> cancel-lockout does not engage even at commit quorum 3.
+        engine.cancelExpiredRound(contentId, roundId);
+
+        RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        assertEq(uint256(round.state), uint256(RoundLib.RoundState.Cancelled));
+        assertFalse(engine.roundHasHumanVerifiedCommit(contentId, roundId));
+    }
+
+    /// @notice L-Vote-4: once any HRC voter has committed, subsequent non-HRC sybil commits
+    ///         still engage the cancel-lockout. The flag is sticky for the round.
+    function test_CancelExpired_HrcThenSybils_LockoutStillEngages() public {
+        uint256 contentId = _submitContent();
+
+        // voter1 is HRC, voters 2/3 are not.
+        mockRaterIdentityRegistry.setHolder(voter1);
+        _commit(voter1, contentId, true, STAKE);
+        _commit(voter2, contentId, false, STAKE);
+        _commit(voter3, contentId, true, STAKE);
+
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        assertTrue(engine.roundHasHumanVerifiedCommit(contentId, roundId));
 
         vm.warp(block.timestamp + 7 days + 1);
 

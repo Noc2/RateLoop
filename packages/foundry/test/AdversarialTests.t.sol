@@ -486,8 +486,21 @@ contract AdversarialTests is VotingTestBase {
         engine.cancelExpiredRound(contentId, roundId);
     }
 
-    /// @notice Cannot cancel a round that has reached the settlement threshold
+    /// @notice Cannot cancel a round that has reached the settlement threshold (L-Vote-4: when
+    ///         at least one HRC commit is present).
     function test_StateTransition_CannotCancelThresholdReachedRound() public {
+        // L-Vote-4: install a rater registry and seed voter1 as HRC so the cancel lockout
+        // engages once the round has commit quorum. Without an HRC commit the round would be
+        // refund-cancellable (the all-sybil escape valve) — that path is covered separately.
+        RaterRegistry identityRegistry = _deployRaterRegistry();
+        ProtocolConfig cfg = ProtocolConfig(address(engine.protocolConfig()));
+        vm.prank(owner);
+        cfg.setRaterRegistry(address(identityRegistry));
+        vm.prank(owner);
+        identityRegistry.seedHumanCredential(
+            voter1, uint64(block.timestamp + 365 days), keccak256("voter1"), keccak256("evidence")
+        );
+
         uint256 contentId = _submitContent();
 
         (bytes32 ck1,) = _commit(voter1, contentId, true, STAKE);
@@ -508,6 +521,27 @@ contract AdversarialTests is VotingTestBase {
 
         vm.expectRevert(RoundVotingEngine.ThresholdReached.selector);
         engine.cancelExpiredRound(contentId, roundId);
+    }
+
+    /// @notice L-Vote-4: with no HRC commit, commit-quorum sybils cannot grief the round into
+    ///         a RevealFailed cycle — the round remains refund-cancellable.
+    function test_StateTransition_CancelSucceedsWithSybilQuorumOnly() public {
+        uint256 contentId = _submitContent();
+
+        // No rater registry installed → all voters resolve as non-HRC.
+        _commit(voter1, contentId, true, STAKE);
+        _commit(voter2, contentId, false, STAKE);
+        _commit(voter3, contentId, true, STAKE);
+
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        assertFalse(engine.roundHasHumanVerifiedCommit(contentId, roundId));
+
+        vm.warp(round.startTime + 7 days + 1);
+
+        engine.cancelExpiredRound(contentId, roundId);
+        RoundLib.Round memory cancelled = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        assertEq(uint256(cancelled.state), uint256(RoundLib.RoundState.Cancelled));
     }
 
     /// @notice Cannot commit to a cancelled round (new round should be created)

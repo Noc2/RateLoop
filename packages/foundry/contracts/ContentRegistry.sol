@@ -279,6 +279,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     event ContentRoundConfigSet(
         uint256 indexed contentId, uint32 epochDuration, uint32 maxDuration, uint16 minVoters, uint16 maxVoters
     );
+    event VotingEngineRevoked(address indexed engine);
 
     /// @custom:oz-upgrades-unsafe-allow constructor state-variable-immutable
     constructor() {
@@ -326,6 +327,11 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     }
 
     /// @notice Set the VotingEngine address (can only be called by CONFIG_ROLE).
+    /// @dev Authorization for the previous engine is NOT cleared by this call; the canonical
+    ///      check in `_authorizeEngineCallback` rejects any non-canonical caller, so a rotated
+    ///      engine cannot mutate registry state. Operators should still follow up with
+    ///      `revokeVotingEngine(prevEngine)` to clear the per-engine grant for hygiene and to
+    ///      make off-chain monitoring of obsolete engines unambiguous.
     function setVotingEngine(address _votingEngine) external onlyRole(CONFIG_ROLE) {
         require(_votingEngine != address(0), "Invalid address");
         require(_votingEngine.code.length != 0, "No code");
@@ -338,6 +344,19 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         votingEngine = _votingEngine;
         votingEngineGeneration = nextGeneration;
         votingEngineCallbackGeneration[_votingEngine] = nextGeneration;
+    }
+
+    /// @notice Revoke callback authorization for a previously-registered voting engine.
+    /// @dev Belt-and-suspenders for the canonical-only check in `_authorizeEngineCallback`.
+    ///      Use after `setVotingEngine` rotates to a new engine and any in-flight rounds on
+    ///      the old engine have been drained. Cannot be used on the canonical engine — call
+    ///      `setVotingEngine` to rotate first.
+    function revokeVotingEngine(address engine) external onlyRole(CONFIG_ROLE) {
+        require(engine != address(0), "Invalid address");
+        require(engine != votingEngine, "Cannot revoke canonical engine");
+        require(votingEngineCallbackGeneration[engine] != 0, "Engine not authorized");
+        delete votingEngineCallbackGeneration[engine];
+        emit VotingEngineRevoked(engine);
     }
 
     /// @notice Set the CategoryRegistry address (can only be called by CONFIG_ROLE).
@@ -1020,21 +1039,24 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
 
     // --- VotingEngine callbacks ---
 
-    /// @dev Authorize a callback from a registered voting engine. Reverts if the caller is not
-    ///      a registered engine. Returns the caller's generation and whether it is stale relative
-    ///      to the most recent engine that settled `contentId` (in which case the caller should
-    ///      silent-no-op so a rotated engine does not corrupt newer-generation state).
-    function _authorizeEngineCallback(uint256 contentId) private view returns (uint256 callerGeneration, bool stale) {
+    /// @dev Authorize a callback from the canonical voting engine. Rejects any caller that is
+    ///      not `votingEngine` outright — a rotated (deauthorized-by-rotation) engine cannot
+    ///      mutate state even on content the new engine has not yet touched. Returns the
+    ///      canonical engine's generation so callers can stamp it onto per-content state.
+    function _authorizeEngineCallback(uint256) private view returns (uint256 callerGeneration) {
+        if (msg.sender != votingEngine) revert OnlyVotingEngine();
         callerGeneration = votingEngineCallbackGeneration[msg.sender];
+        // Defense-in-depth: if revokeVotingEngine were ever (incorrectly) used on the canonical
+        // engine, callerGeneration would be zero — fail closed.
         if (callerGeneration == 0) revert OnlyVotingEngine();
-        stale = callerGeneration < contentSettlementEngineGeneration[contentId];
     }
 
     /// @notice Called by VotingEngine to update raw activity timestamp after commits.
     /// @dev Vote commits refresh UI-facing activity without extending the dormancy window.
+    ///      Stamps the per-content generation so any pre-existing older-engine grants are
+    ///      shut out from this content even before `revokeVotingEngine` is called.
     function updateActivity(uint256 contentId) external {
-        (, bool stale) = _authorizeEngineCallback(contentId);
-        if (stale) return;
+        uint256 callerGeneration = _authorizeEngineCallback(contentId);
 
         address trackedEngine = contentRoundTrackingEngine[contentId];
         if (trackedEngine != address(0) && trackedEngine != msg.sender && _engineHasOpenRound(trackedEngine, contentId))
@@ -1043,14 +1065,19 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         }
         contentRoundTrackingEngine[contentId] = msg.sender;
         contents[contentId].lastActivityAt = uint48(block.timestamp);
+        if (callerGeneration > contentSettlementEngineGeneration[contentId]) {
+            contentSettlementEngineGeneration[contentId] = callerGeneration;
+        }
     }
 
     /// @notice Called by VotingEngine when content reaches milestone 0 through a settled round.
     function recordMeaningfulActivity(uint256 contentId) external {
-        (, bool stale) = _authorizeEngineCallback(contentId);
-        if (stale) return;
+        uint256 callerGeneration = _authorizeEngineCallback(contentId);
         contents[contentId].lastActivityAt = uint48(block.timestamp);
         dormancyAnchorAt[contentId] = block.timestamp;
+        if (callerGeneration > contentSettlementEngineGeneration[contentId]) {
+            contentSettlementEngineGeneration[contentId] = callerGeneration;
+        }
     }
 
     function updateRatingState(
@@ -1059,8 +1086,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         uint16 referenceRatingBps,
         RatingLib.RatingState calldata nextState
     ) external {
-        (uint256 callerGeneration, bool stale) = _authorizeEngineCallback(contentId);
-        if (stale) return;
+        uint256 callerGeneration = _authorizeEngineCallback(contentId);
 
         Content storage c = contents[contentId];
         require(c.id != 0, "Content does not exist");

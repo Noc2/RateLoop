@@ -6,6 +6,7 @@ import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/Reentran
 import { ContentRegistry } from "./ContentRegistry.sol";
 import { ProtocolConfig } from "./ProtocolConfig.sol";
 import { RoundVotingEngine } from "./RoundVotingEngine.sol";
+import { IAdvisoryVoteRecorder } from "./interfaces/IAdvisoryVoteRecorder.sol";
 import { ILaunchDistributionPool } from "./interfaces/ILaunchDistributionPool.sol";
 import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol";
 import { LaunchRaterRewardLib } from "./libraries/LaunchRaterRewardLib.sol";
@@ -36,6 +37,12 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
     error Paused();
     error IndexOutOfBounds();
     error MaxAdvisoryVotersReached();
+    /// @notice Reveal-time drand chain hash differs from the value used at commit-time.
+    /// @dev Surfaces silent desync between the ciphertext (encrypted under the commit-time
+    ///      chain hash) and the round snapshot — without this check the tlock decryption
+    ///      would simply fail off-chain and the voter would forfeit credit with no on-chain
+    ///      signal.
+    error DrandChainHashMismatch();
 
     RoundVotingEngine public immutable votingEngine;
     ContentRegistry public immutable registry;
@@ -63,6 +70,15 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         bool isUp;
         bool launchCreditClaimed;
         uint16 scoreBps;
+        /// @notice Drand chain hash actually used at commit-time to validate the ciphertext.
+        /// @dev When the round snapshot is empty at commit-time the recorder falls back to
+        ///      `protocolConfig.drandChainHash()` for preview-style commits. A later round
+        ///      snapshot (set when the round is opened) or a governance config change can
+        ///      desynchronize the ciphertext from the on-chain round metadata. Persisting the
+        ///      commit-time value lets `_assertRevealDrandChainHashUnchanged` reject reveals
+        ///      whose snapshot no longer matches, surfacing the inconsistency on-chain rather
+        ///      than letting it manifest as a silent tlock-decryption failure off-chain.
+        bytes32 usedChainHashAtCommit;
     }
 
     mapping(bytes32 => AdvisoryCommit) internal advisoryCommits;
@@ -99,6 +115,12 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         uint256 paidAmount
     );
     event PausedUpdated(bool paused);
+    /// @notice Emitted once per (contentId, voter) pair that `migrateAdvisoryCooldown`
+    ///         successfully imports a non-zero cooldown timestamp from a previous recorder.
+    ///         Indexers can replay these to confirm a clean handover.
+    event AdvisoryCooldownMigrated(
+        address indexed oldRecorder, uint256 indexed contentId, address indexed voter, uint256 timestamp
+    );
 
     constructor(address _votingEngine, address _registry, address owner_) Ownable(owner_) {
         if (_votingEngine == address(0) || _registry == address(0) || owner_ == address(0)) revert InvalidAddress();
@@ -110,6 +132,81 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
     function setPaused(bool value) external onlyOwner {
         paused = value;
         emit PausedUpdated(value);
+    }
+
+    /// @notice One-shot migration that imports per-voter advisory cooldown timestamps from a
+    ///         predecessor recorder so cooldown windows are preserved across a rotation.
+    /// @dev Rotating the advisory recorder via `ProtocolConfig.setAdvisoryVoteRecorder` does
+    ///      not move the per-voter `lastAdvisoryVoteTimestamp` mappings to the new contract.
+    ///      Without this migration a voter who has just voted advisory on the old recorder
+    ///      can immediately re-vote on the new one, effectively bypassing the 24-hour
+    ///      advisory cooldown for one cycle.
+    ///
+    ///      Operational steps for governance:
+    ///        1. Deploy the new recorder.
+    ///        2. Call `migrateAdvisoryCooldown(oldRecorder, contentIds, voters)` on the new
+    ///           recorder (potentially in batches) with the (contentId, voter) pairs that
+    ///           have non-zero cooldowns on the old recorder.
+    ///        3. Optionally call the matching identity-keyed migration
+    ///           (`migrateAdvisoryCooldownByIdentity`) for sybil-resistant cooldowns.
+    ///        4. Only after migration is complete, call
+    ///           `protocolConfig.setAdvisoryVoteRecorder(newRecorder)` to redirect engine
+    ///           lookups at the new contract.
+    ///
+    ///      Each (contentId, voter) entry refuses to overwrite a non-zero timestamp already
+    ///      present in the new recorder — this prevents the same primitive from being abused
+    ///      later to *erase* a cooldown, while still permitting genuine migrations.
+    /// @param oldRecorder Address of the previous advisory recorder to read from. Must
+    ///        implement `IAdvisoryVoteRecorder.lastAdvisoryVoteTimestamp`.
+    /// @param contentIds Parallel array of content ids whose cooldown to import.
+    /// @param voters Parallel array of voter addresses.
+    function migrateAdvisoryCooldown(
+        address oldRecorder,
+        uint256[] calldata contentIds,
+        address[] calldata voters
+    ) external onlyOwner {
+        if (oldRecorder == address(0) || oldRecorder == address(this)) revert InvalidAddress();
+        if (contentIds.length != voters.length) revert IndexOutOfBounds();
+        IAdvisoryVoteRecorder source = IAdvisoryVoteRecorder(oldRecorder);
+        for (uint256 i = 0; i < contentIds.length; i++) {
+            uint256 contentId = contentIds[i];
+            address voter = voters[i];
+            // Refuse to overwrite — migration is one-way (import only). A non-zero local
+            // entry can mean either a previous migration call or a real advisory vote on
+            // this recorder; both must be preserved.
+            if (lastAdvisoryVoteTimestamp[contentId][voter] != 0) continue;
+            uint256 ts = source.lastAdvisoryVoteTimestamp(contentId, voter);
+            if (ts == 0) continue;
+            lastAdvisoryVoteTimestamp[contentId][voter] = ts;
+            emit AdvisoryCooldownMigrated(oldRecorder, contentId, voter, ts);
+        }
+    }
+
+    /// @notice Identity-keyed counterpart to `migrateAdvisoryCooldown`. Imports the
+    ///         per-identity advisory cooldown timestamps so sybil-resistant cooldowns are
+    ///         preserved across a recorder rotation.
+    /// @dev Same overwrite-protection semantics as `migrateAdvisoryCooldown`: a non-zero
+    ///      entry on the new recorder is preserved (cannot be erased via this function).
+    ///      The user-facing audit recommendation (L-Vote-5) focused on the voter-keyed
+    ///      mapping; this identity-keyed variant exists because `_validateAdvisoryCooldown`
+    ///      also consults the identity timestamp, so a complete migration must cover both.
+    function migrateAdvisoryCooldownByIdentity(
+        address oldRecorder,
+        uint256[] calldata contentIds,
+        bytes32[] calldata identityKeys
+    ) external onlyOwner {
+        if (oldRecorder == address(0) || oldRecorder == address(this)) revert InvalidAddress();
+        if (contentIds.length != identityKeys.length) revert IndexOutOfBounds();
+        IAdvisoryVoteRecorder source = IAdvisoryVoteRecorder(oldRecorder);
+        for (uint256 i = 0; i < contentIds.length; i++) {
+            uint256 contentId = contentIds[i];
+            bytes32 identityKey = identityKeys[i];
+            if (identityKey == bytes32(0)) continue;
+            if (lastAdvisoryVoteTimestampByIdentity[contentId][identityKey] != 0) continue;
+            uint256 ts = source.lastAdvisoryVoteTimestampByIdentity(contentId, identityKey);
+            if (ts == 0) continue;
+            lastAdvisoryVoteTimestampByIdentity[contentId][identityKey] = ts;
+        }
     }
 
     /// @notice Record a zero-stake advisory commit for the active round.
@@ -189,7 +286,9 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         advisoryCommitKey = keccak256(abi.encodePacked(bytes1(0xa1), msg.sender, contentId, roundId, commitHash));
 
         uint256 epochEnd = _computeEpochEnd(startTime, epochDuration);
-        _validateCommitTlockData(contentId, roundId, ciphertext, targetRound, drandChainHash, epochEnd, epochDuration);
+        bytes32 usedChainHash = _validateCommitTlockData(
+            contentId, roundId, ciphertext, targetRound, drandChainHash, epochEnd, epochDuration
+        );
         uint256 targetRevealableAt = votingEngine.targetRoundRevealableTimestamp(contentId, roundId, targetRound);
         uint256 effectiveRevealableAfter = targetRevealableAt > epochEnd ? targetRevealableAt : epochEnd;
 
@@ -210,7 +309,8 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
             revealed: false,
             isUp: false,
             launchCreditClaimed: false,
-            scoreBps: 0
+            scoreBps: 0,
+            usedChainHashAtCommit: usedChainHash
         });
         advisoryCommitKeyByRater[contentId][roundId][msg.sender] = advisoryCommitKey;
         advisoryCommitKeyByIdentity[contentId][roundId][resolved.identityKey] = advisoryCommitKey;
@@ -238,6 +338,7 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         if (advisoryCommit.voter == address(0)) revert NoCommit();
         if (advisoryCommit.revealed) revert AlreadyRevealed();
         if (predictedUpBps > 10_000) revert HashMismatch();
+        _assertRevealDrandChainHashUnchanged(advisoryCommit);
 
         uint256 effectiveRevealableAfter = _effectiveRevealableAfter(advisoryCommit);
         if (block.timestamp < effectiveRevealableAfter) revert EpochNotEnded();
@@ -464,7 +565,7 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         bytes32 drandChainHash,
         uint256 epochEnd,
         uint32 epochDuration
-    ) internal view {
+    ) internal view returns (bytes32 usedChainHash) {
         (bytes32 expectedChainHash, uint64 genesisTime, uint64 period) =
             votingEngine.roundDrandConfig(contentId, roundId);
         if (expectedChainHash == bytes32(0) || genesisTime == 0 || period == 0) {
@@ -475,6 +576,28 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         TlockVoteLib.validateCommitData(
             ciphertext, targetRound, drandChainHash, expectedChainHash, epochEnd, epochDuration, genesisTime, period
         );
+        usedChainHash = expectedChainHash;
+    }
+
+    /// @notice Reject the reveal if the drand chain hash used at commit-time no longer matches
+    ///         the value the round snapshot would resolve to today.
+    /// @dev `_validateCommitTlockData` falls back to live `protocolConfig.drandChainHash` for
+    ///      preview commits (when the round snapshot is still empty). Once the round is opened
+    ///      its snapshot becomes authoritative, and a subsequent governance rotation of
+    ///      `protocolConfig.drandChainHash` would otherwise let a commit's ciphertext go
+    ///      undecryptable without any on-chain error — voters would silently forfeit credit.
+    ///      This check forces the inconsistency into a clear revert at reveal-time so callers
+    ///      and indexers can detect it. `usedChainHashAtCommit == bytes32(0)` is treated as
+    ///      "legacy commit recorded before this field existed" and skipped to preserve the
+    ///      reveal path for any in-flight commits at upgrade time.
+    function _assertRevealDrandChainHashUnchanged(AdvisoryCommit storage advisoryCommit) internal view {
+        bytes32 committed = advisoryCommit.usedChainHashAtCommit;
+        if (committed == bytes32(0)) return;
+        (bytes32 snapshotChainHash,,) = votingEngine.roundDrandConfig(advisoryCommit.contentId, advisoryCommit.roundId);
+        if (snapshotChainHash == bytes32(0)) {
+            snapshotChainHash = protocolConfig.drandChainHash();
+        }
+        if (snapshotChainHash != committed) revert DrandChainHashMismatch();
     }
 
     function _roundRaterRegistry(uint256 contentId, uint256 roundId) internal view returns (IRaterIdentityRegistry) {

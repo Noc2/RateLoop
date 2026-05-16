@@ -2016,7 +2016,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         bytes32 anchor = bytes32(uint256(uint160(submitter)));
         vm.startPrank(owner);
         raterRegistry.revokeHumanCredential(submitter);
-        raterRegistry.clearRevokedHumanNullifier(anchor);
+        raterRegistry.clearRevokedHumanNullifier(RaterRegistry.HumanCredentialProvider.CuryoSelfVerifiedSeed, anchor);
         _seedRaterIdentity(raterRegistry, remintedSubmitter, anchor);
         vm.stopPrank();
 
@@ -2076,7 +2076,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         registry.cancelContent(1);
     }
 
-    function test_SetVotingEngine_OldEngineCanSettleInFlightRoundOnly() public {
+    function test_SetVotingEngine_OldEngineCannotWriteRegistryStatePostRotation() public {
         vm.startPrank(submitter);
         hrepToken.approve(address(registry), 10e6);
         _submitContentWithReservation(registry, "https://example.com/in-flight-engine", "goal", "goal", "tags", 0);
@@ -2094,11 +2094,13 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         registry.unpause();
         vm.stopPrank();
 
-        // Stale engine retains its callback generation so it can finish settling its in-flight
-        // round; updateActivity is silently no-ops once a newer engine settles the content (the
-        // generation comparison handles that), so post-rotation it still completes for content
-        // that has not yet been settled by the replacement engine.
+        // Post-rotation, the old engine is no longer canonical. Callbacks from it now revert
+        // immediately rather than silently no-op (M-Identity-1 fix). The old engine can still
+        // execute its own state machine (settleRound) but the registry-side rating update is
+        // swallowed by the settlement-side-effects try/catch, so the rating stays at default.
+        uint16 ratingBefore = registry.getRating(1);
         vm.prank(address(votingEngine));
+        vm.expectRevert(ContentRegistry.OnlyVotingEngine.selector);
         registry.updateActivity(1);
 
         _warpPastTlockRevealTime(block.timestamp + 1 hours);
@@ -2107,7 +2109,9 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         votingEngine.revealVoteByCommitKey(1, roundId, ck3, false, 5_000, salt3);
         votingEngine.settleRound(1, roundId);
 
-        assertGt(registry.getRating(1), 5000);
+        // The old engine's rating-state callback reverted (caught by RoundSettlementSideEffectsLib),
+        // so the registry-side rating must remain unchanged.
+        assertEq(registry.getRating(1), ratingBefore);
     }
 
     function test_SetVotingEngine_ReplacementCannotOpenRoundWhileTrackedOldRoundOpen() public {
@@ -2320,6 +2324,136 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             )
         );
         vm.stopPrank();
+    }
+
+    // =========================================================================
+    // Engine deauthorization (M-Identity-1) regression
+    // =========================================================================
+
+    function test_SetVotingEngine_OldEngine_UpdateRatingState_RevertsOnFreshContent_AfterRotation() public {
+        // Submit content that the old engine has touched (commit), and a second piece of content
+        // the old engine has never settled. Pre-fix the second case is the security hole: the
+        // per-content stale check defaults to "not stale" for unsettled content, so the
+        // deauthorized engine could write rating state. Post-fix the call must revert
+        // immediately because the caller is no longer canonical.
+        vm.startPrank(submitter);
+        hrepToken.approve(address(registry), 10e6);
+        _submitContentWithReservation(registry, "https://example.com/old-engine-fresh", "g", "g", "t", 0);
+        vm.stopPrank();
+        uint256 freshContentId = 1;
+
+        RoundVotingEngine replacementEngine = _deployReplacementVotingEngine();
+        vm.startPrank(owner);
+        registry.pause();
+        registry.setVotingEngine(address(replacementEngine));
+        registry.unpause();
+        vm.stopPrank();
+
+        // The old engine attempts to write rating state on a content the new engine has not
+        // touched yet. Under the buggy pre-fix behavior this would succeed (per-content
+        // generation defaults to zero, so the stale check passes). Under the fix it reverts.
+        RatingLib.RatingState memory attackerState;
+        attackerState.ratingBps = 7500;
+        attackerState.conservativeRatingBps = 7500;
+        attackerState.lastUpdatedAt = uint48(block.timestamp);
+
+        vm.prank(address(votingEngine));
+        vm.expectRevert(ContentRegistry.OnlyVotingEngine.selector);
+        registry.updateRatingState(freshContentId, 1, 5000, attackerState);
+
+        // Sanity: the canonical (replacement) engine can still write to the same content.
+        vm.prank(address(replacementEngine));
+        registry.updateRatingState(freshContentId, 1, 5000, attackerState);
+        assertEq(registry.getRating(freshContentId), 7500);
+    }
+
+    function test_SetVotingEngine_OldEngine_UpdateActivity_RevertsAfterRotation() public {
+        vm.startPrank(submitter);
+        hrepToken.approve(address(registry), 10e6);
+        _submitContentWithReservation(registry, "https://example.com/old-engine-activity", "g", "g", "t", 0);
+        vm.stopPrank();
+
+        RoundVotingEngine replacementEngine = _deployReplacementVotingEngine();
+        vm.startPrank(owner);
+        registry.pause();
+        registry.setVotingEngine(address(replacementEngine));
+        registry.unpause();
+        vm.stopPrank();
+
+        vm.prank(address(votingEngine));
+        vm.expectRevert(ContentRegistry.OnlyVotingEngine.selector);
+        registry.updateActivity(1);
+
+        vm.prank(address(votingEngine));
+        vm.expectRevert(ContentRegistry.OnlyVotingEngine.selector);
+        registry.recordMeaningfulActivity(1);
+    }
+
+    function test_RevokeVotingEngine_ClearsAuthorizationAndEmitsEvent() public {
+        // Set up replacement engine so we have a non-canonical engine to revoke.
+        RoundVotingEngine replacementEngine = _deployReplacementVotingEngine();
+        vm.startPrank(owner);
+        registry.pause();
+        registry.setVotingEngine(address(replacementEngine));
+        registry.unpause();
+        vm.stopPrank();
+
+        address oldEngine = address(votingEngine);
+
+        vm.expectEmit(true, true, true, true, address(registry));
+        emit ContentRegistry.VotingEngineRevoked(oldEngine);
+        vm.prank(owner);
+        registry.revokeVotingEngine(oldEngine);
+
+        // After revoke, the old engine cannot call back even on content the replacement
+        // engine has never touched.
+        vm.startPrank(submitter);
+        hrepToken.approve(address(registry), 10e6);
+        _submitContentWithReservation(registry, "https://example.com/revoked-engine", "g", "g", "t", 0);
+        vm.stopPrank();
+
+        vm.prank(oldEngine);
+        vm.expectRevert(ContentRegistry.OnlyVotingEngine.selector);
+        registry.updateActivity(1);
+
+        RatingLib.RatingState memory attackerState;
+        attackerState.ratingBps = 7500;
+        attackerState.conservativeRatingBps = 7500;
+        attackerState.lastUpdatedAt = uint48(block.timestamp);
+        vm.prank(oldEngine);
+        vm.expectRevert(ContentRegistry.OnlyVotingEngine.selector);
+        registry.updateRatingState(1, 1, 5000, attackerState);
+    }
+
+    function test_RevokeVotingEngine_RejectsCanonicalEngine() public {
+        vm.prank(owner);
+        vm.expectRevert("Cannot revoke canonical engine");
+        registry.revokeVotingEngine(address(votingEngine));
+    }
+
+    function test_RevokeVotingEngine_RejectsZeroAddress() public {
+        vm.prank(owner);
+        vm.expectRevert("Invalid address");
+        registry.revokeVotingEngine(address(0));
+    }
+
+    function test_RevokeVotingEngine_RejectsUnauthorizedEngine() public {
+        vm.prank(owner);
+        vm.expectRevert("Engine not authorized");
+        registry.revokeVotingEngine(address(0xBEEF));
+    }
+
+    function test_RevokeVotingEngine_RequiresConfigRole() public {
+        RoundVotingEngine replacementEngine = _deployReplacementVotingEngine();
+        vm.startPrank(owner);
+        registry.pause();
+        registry.setVotingEngine(address(replacementEngine));
+        registry.unpause();
+        vm.stopPrank();
+
+        vm.prank(address(0xC0FFEE));
+        vm.expectRevert();
+        registry.revokeVotingEngine(address(votingEngine));
     }
 
     // =========================================================================
@@ -2643,7 +2777,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         bytes32 anchor = bytes32(uint256(uint160(submitter)));
         vm.startPrank(owner);
         raterRegistry.revokeHumanCredential(submitter);
-        raterRegistry.clearRevokedHumanNullifier(anchor);
+        raterRegistry.clearRevokedHumanNullifier(RaterRegistry.HumanCredentialProvider.CuryoSelfVerifiedSeed, anchor);
         _seedRaterIdentity(raterRegistry, remintedSubmitter, anchor);
         vm.stopPrank();
         vm.prank(owner);

@@ -5,6 +5,9 @@ import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/I
 import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import { IAdvisoryVoteRecorder } from "./interfaces/IAdvisoryVoteRecorder.sol";
 import { IRoundRewardDistributor } from "./interfaces/IRoundRewardDistributor.sol";
+import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol";
+import { ILaunchDistributionPool } from "./interfaces/ILaunchDistributionPool.sol";
+import { IClusterPayoutOracle } from "./interfaces/IClusterPayoutOracle.sol";
 import { RoundLib } from "./libraries/RoundLib.sol";
 import { RatingLib } from "./libraries/RatingLib.sol";
 
@@ -213,18 +216,21 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
 
     function setRaterRegistry(address value) external onlyRole(CONFIG_ROLE) {
         if (value == address(0)) revert InvalidAddress();
+        _validateRaterRegistry(value);
         raterRegistry = value;
         emit RaterRegistryUpdated(value);
     }
 
     function setLaunchDistributionPool(address value) external onlyRole(CONFIG_ROLE) {
         if (value == address(0)) revert InvalidAddress();
+        _validateLaunchDistributionPool(value);
         launchDistributionPool = value;
         emit LaunchDistributionPoolUpdated(value);
     }
 
     function setClusterPayoutOracle(address value) external onlyRole(CONFIG_ROLE) {
         if (value == address(0)) revert InvalidAddress();
+        _validateClusterPayoutOracle(value);
         clusterPayoutOracle = value;
         emit ClusterPayoutOracleUpdated(value);
     }
@@ -415,6 +421,30 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         if (value == address(0)) revert InvalidAddress();
         participationPool = value;
         emit ParticipationPoolUpdated(value);
+    }
+
+    function _validateRaterRegistry(address value) internal view {
+        if (value.code.length == 0) revert InvalidAddress();
+        try IRaterIdentityRegistry(value).addressIdentityKey(address(0)) returns (bytes32) { }
+        catch {
+            revert InvalidConfig();
+        }
+    }
+
+    function _validateLaunchDistributionPool(address value) internal view {
+        if (value.code.length == 0) revert InvalidAddress();
+        try ILaunchDistributionPool(value).launchAnchorCredentialAgeSeconds() returns (uint32) { }
+        catch {
+            revert InvalidConfig();
+        }
+    }
+
+    function _validateClusterPayoutOracle(address value) internal view {
+        if (value.code.length == 0) revert InvalidAddress();
+        try IClusterPayoutOracle(value).roundPayoutSnapshotKey(0, 0, 0, 0) returns (bytes32) { }
+        catch {
+            revert InvalidConfig();
+        }
     }
 
     function _validateAdvisoryVoteRecorder(address value) internal view {

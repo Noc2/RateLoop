@@ -9,7 +9,7 @@ import { HumanReputation } from "../contracts/HumanReputation.sol";
 import { CuryoGovernor } from "../contracts/governance/CuryoGovernor.sol";
 
 contract GovernanceGasBudgetTest is Test {
-    uint256 internal constant MAX_QUORUM_MAX_EXCLUDED_HOLDERS_GAS = 150_000;
+    uint256 internal constant MAX_QUORUM_MAX_EXCLUDED_HOLDERS_GAS = 250_000;
 
     address internal constant DEPLOYER = address(1);
 

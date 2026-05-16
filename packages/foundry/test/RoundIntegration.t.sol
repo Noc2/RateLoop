@@ -640,10 +640,13 @@ contract RoundIntegrationTest is VotingTestBase {
         rewardDistributor.claimReward(contentId, roundId);
         uint256 reward2 = hrepToken.balanceOf(voter2) - bal2Before;
 
-        // Both should get rewards; voter1 staked more (higher effective stake) → more reward
+        // Both winners receive rewards. Stake-proportionality only holds at equal RBTS scoring;
+        // with the M-Vote-1 prevrandao-mixed seed, the sampler can land in a configuration where
+        // the smaller-stake voter scores higher (and so out-earns the larger-stake voter). The
+        // robust invariant is that both winners get positive payouts and the total tracks the
+        // round's voter pool — proportional-to-stake-only is no longer a stable assertion.
         assertGt(reward1, 0, "Voter1 should receive reward");
         assertGt(reward2, 0, "Voter2 should receive reward");
-        assertGt(reward1, reward2, "Voter1 (larger stake) should receive more");
     }
 
     function test_MultipleWinners_FinalClaimantReceivesVoterPoolRemainder() public {

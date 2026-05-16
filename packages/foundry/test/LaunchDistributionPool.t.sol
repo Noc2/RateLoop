@@ -243,7 +243,7 @@ contract LaunchDistributionPoolTest is Test {
         MockLaunchOracleFrontendRegistry frontendRegistry = new MockLaunchOracleFrontendRegistry();
         frontendRegistry.setEligible(address(this), true);
         ClusterPayoutOracle oracle = new ClusterPayoutOracle(address(this), address(frontendRegistry), address(lrep));
-        oracle.setOracleConfig(1, 0, address(this));
+        oracle.setOracleConfig(1, oracle.MIN_CHALLENGE_BOND(), address(this));
         oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_LAUNCH_CREDIT(), address(pool));
         pool.setClusterPayoutOracle(address(oracle));
 
@@ -395,6 +395,9 @@ contract LaunchDistributionPoolTest is Test {
         assertTrue(pool.isRoundPayoutSnapshotConsumed(pool.PAYOUT_DOMAIN_LAUNCH_CREDIT(), 0, 1, 5));
 
         bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(pool.PAYOUT_DOMAIN_LAUNCH_CREDIT(), 0, 1, 5);
+
+        // Past the finalization veto window, a consumed snapshot cannot be rejected.
+        vm.warp(block.timestamp + oracle.FINALIZATION_VETO_WINDOW() + 1);
         vm.expectRevert(ClusterPayoutOracle.SnapshotConsumed.selector);
         oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("paid-launch-root"));
     }
@@ -551,7 +554,7 @@ contract LaunchDistributionPoolTest is Test {
         assertTrue(pool.raterFullLaunchCapUnlocked(alice));
 
         registry.revokeHumanCredential(alice);
-        registry.clearRevokedHumanNullifier(bytes32("shared-human"));
+        registry.clearRevokedHumanNullifier(RaterRegistry.HumanCredentialProvider.WorldId, bytes32("shared-human"));
         _verify(bob, bytes32("shared-human"));
         for (uint256 i = 0; i < 5; i++) {
             bytes32 anchorId = i % 2 == 0 ? bytes32("anchor-a") : bytes32("anchor-b");
@@ -1134,7 +1137,7 @@ contract LaunchDistributionPoolTest is Test {
         MockLaunchOracleFrontendRegistry frontendRegistry = new MockLaunchOracleFrontendRegistry();
         frontendRegistry.setEligible(address(this), true);
         oracle = new ClusterPayoutOracle(address(this), address(frontendRegistry), address(lrep));
-        oracle.setOracleConfig(1, 0, address(this));
+        oracle.setOracleConfig(1, oracle.MIN_CHALLENGE_BOND(), address(this));
         oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_LAUNCH_CREDIT(), address(pool));
         pool.setClusterPayoutOracle(address(oracle));
 

@@ -12,6 +12,10 @@ import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol"
 contract ProfileRegistry is IProfileRegistry, Initializable, AccessControlUpgradeable {
     // --- Access Control Roles ---
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
+    /// @dev Dedicated moderation role used to release names. Separated from ADMIN_ROLE so the temporary
+    ///      deploy admin cannot wipe usernames before role renouncement (L-Identity-2). Role admin is
+    ///      DEFAULT_ADMIN_ROLE, which is held by governance.
+    bytes32 public constant MODERATOR_ROLE = keccak256("MODERATOR_ROLE");
 
     // --- Constants ---
     uint256 public constant MIN_NAME_LENGTH = 3;
@@ -44,6 +48,9 @@ contract ProfileRegistry is IProfileRegistry, Initializable, AccessControlUpgrad
     event AvatarAccentCleared(address indexed user);
     event RaterRegistryUpdated(address raterRegistry);
     event ProfileNameReleased(address indexed user, string name);
+    /// @notice Emitted when a moderator releases a profile name. Includes the name hash and the releaser
+    ///         address so moderation actions are auditable on-chain (L-Identity-2).
+    event NameReleased(address indexed user, bytes32 nameHash, address indexed releaser);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -62,6 +69,9 @@ contract ProfileRegistry is IProfileRegistry, Initializable, AccessControlUpgrad
         // Governance gets all permanent roles
         _grantRole(DEFAULT_ADMIN_ROLE, _governance);
         _grantRole(ADMIN_ROLE, _governance);
+        // MODERATOR_ROLE is intentionally only granted to governance: the temporary deploy admin
+        // must not be able to release names before role renouncement (L-Identity-2).
+        _grantRole(MODERATOR_ROLE, _governance);
 
         // Admin gets only ADMIN_ROLE for initial cross-contract wiring
         if (_admin != _governance) {
@@ -79,8 +89,10 @@ contract ProfileRegistry is IProfileRegistry, Initializable, AccessControlUpgrad
     }
 
     /// @notice Release a profile name so it can be claimed again after the user loses eligibility.
+    /// @dev Gated by MODERATOR_ROLE (granted only to governance) so the temporary deploy admin cannot
+    ///      wipe usernames before role renouncement (L-Identity-2).
     /// @param user The profile owner whose name should be released.
-    function releaseName(address user) external onlyRole(ADMIN_ROLE) {
+    function releaseName(address user) external onlyRole(MODERATOR_ROLE) {
         require(user != address(0), "Invalid address");
 
         StoredProfile storage profile = _profiles[user];
@@ -96,6 +108,7 @@ contract ProfileRegistry is IProfileRegistry, Initializable, AccessControlUpgrad
         profile.updatedAt = block.timestamp;
 
         emit ProfileNameReleased(user, releasedName);
+        emit NameReleased(user, nameHash, msg.sender);
         emit ProfileUpdated(user, "", profile.selfReport);
     }
 

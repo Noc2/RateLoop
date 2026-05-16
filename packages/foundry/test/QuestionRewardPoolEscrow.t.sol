@@ -199,7 +199,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         registry.setProtocolConfig(address(protocolConfig));
         registry.setCategoryRegistry(address(mockCategoryRegistry));
         registry.setQuestionRewardPoolEscrow(address(rewardPoolEscrow));
-        x402QuestionSubmitter = new X402QuestionSubmitter(registry, address(usdc), address(rewardPoolEscrow));
+        x402QuestionSubmitter = new X402QuestionSubmitter(registry, address(usdc), address(rewardPoolEscrow), owner);
         registry.grantRole(registry.X402_GATEWAY_ROLE(), address(x402QuestionSubmitter));
 
         frontendRegistry.setVotingEngine(address(votingEngine));
@@ -2496,6 +2496,8 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
         assertTrue(rewardPoolEscrow.isRoundPayoutSnapshotConsumed(1, rewardPoolId, contentId, roundId));
 
+        // Past the finalization veto window, a consumed snapshot can no longer be rejected.
+        vm.warp(block.timestamp + oracle.FINALIZATION_VETO_WINDOW() + 1);
         vm.expectRevert(ClusterPayoutOracle.SnapshotConsumed.selector);
         oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("already-applied"));
     }

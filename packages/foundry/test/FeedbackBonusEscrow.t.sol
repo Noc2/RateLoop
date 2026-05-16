@@ -406,7 +406,7 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         bytes32 anchor = bytes32(uint256(uint160(funder)));
         vm.startPrank(owner);
         raterRegistry.revokeHumanCredential(funder);
-        raterRegistry.clearRevokedHumanNullifier(anchor);
+        raterRegistry.clearRevokedHumanNullifier(RaterRegistry.HumanCredentialProvider.CuryoSelfVerifiedSeed, anchor);
         _seedRaterIdentity(raterRegistry, voter1, anchor);
         vm.stopPrank();
 
@@ -424,7 +424,7 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         bytes32 anchor = bytes32(uint256(uint160(submitter)));
         vm.startPrank(owner);
         raterRegistry.revokeHumanCredential(submitter);
-        raterRegistry.clearRevokedHumanNullifier(anchor);
+        raterRegistry.clearRevokedHumanNullifier(RaterRegistry.HumanCredentialProvider.CuryoSelfVerifiedSeed, anchor);
         _seedRaterIdentity(raterRegistry, voter1, anchor);
         vm.stopPrank();
 
@@ -556,7 +556,7 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         bytes32 anchor = bytes32(uint256(uint160(voter1)));
         vm.startPrank(owner);
         raterRegistry.revokeHumanCredential(voter1);
-        raterRegistry.clearRevokedHumanNullifier(anchor);
+        raterRegistry.clearRevokedHumanNullifier(RaterRegistry.HumanCredentialProvider.CuryoSelfVerifiedSeed, anchor);
         _seedRaterIdentity(raterRegistry, voter1, anchor);
         vm.stopPrank();
 

@@ -299,17 +299,21 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
 
         _forceSettle(cid);
 
-        // losingPool = 1e6 -> voterPool ~0.8 HREP -> split among 4 colluders proportional to shares
-        uint256 totalProfit = 0;
+        // losingPool = 1e6 -> voterPool ~0.8 HREP -> split among 4 colluders proportional to shares.
+        // RBTS scoring (with the M-Vote-1 seed) can score some colluders below their stake; the
+        // bound we care about is total colluder *profit* (claimed payout minus original stake),
+        // which must stay strictly below 1 HREP. Allowing negative per-voter contributions keeps
+        // the assertion meaningful when individual payouts are sub-stake.
+        int256 totalProfit = 0;
         for (uint256 i = 0; i < 4; i++) {
             uint256 bal = hrepToken.balanceOf(v[i]);
             vm.prank(v[i]);
             distributor.claimReward(cid, rid);
             uint256 payout = hrepToken.balanceOf(v[i]) - bal;
-            totalProfit += payout - 10e6; // profit = payout - original stake
+            totalProfit += int256(payout) - int256(uint256(10e6));
         }
 
-        assertLt(totalProfit, 1e6, "Total colluder profit < 1 HREP - negligible");
+        assertLt(totalProfit, int256(uint256(1e6)), "Total colluder profit < 1 HREP - negligible");
     }
 
     // ==================== Test 5: Unanimous Round - Consensus Subsidy ====================

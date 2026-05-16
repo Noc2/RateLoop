@@ -21,6 +21,10 @@ import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
 contract MockRevertingLaunchDistributionPool {
     error LaunchCreditRejected();
 
+    function launchAnchorCredentialAgeSeconds() external pure returns (uint32) {
+        return 0;
+    }
+
     function recordEarnedRaterReward(
         address,
         uint256,

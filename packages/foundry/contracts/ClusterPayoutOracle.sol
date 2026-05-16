@@ -6,6 +6,7 @@ import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { MerkleProof } from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import { IClusterPayoutOracle } from "./interfaces/IClusterPayoutOracle.sol";
 import { IFrontendRegistry } from "./interfaces/IFrontendRegistry.sol";
 import { IRoundPayoutSnapshotConsumer } from "./interfaces/IRoundPayoutSnapshotConsumer.sol";
@@ -17,7 +18,7 @@ import { IRoundPayoutSnapshotConsumer } from "./interfaces/IRoundPayoutSnapshotC
 ///      intentionally not a fully per-snapshot economically secured oracle: proposers are accountable through the
 ///      FrontendRegistry's global LREP bond, public artifacts, challenge windows, governance arbitration, slashing,
 ///      reputation, and future fee loss. Challenge bonds are a USDC anti-spam mechanism.
-contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
+contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyGuard {
     using SafeERC20 for IERC20;
     using SafeCast for uint256;
 
@@ -34,6 +35,14 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
     uint64 public constant DEFAULT_CHALLENGE_WINDOW = 12 hours;
     uint64 public constant MAX_CHALLENGE_WINDOW = 3 days;
     uint256 public constant DEFAULT_CHALLENGE_BOND = 5e6;
+    uint256 public constant MIN_CHALLENGE_BOND = 1e6;
+    /// @dev Window after a round payout snapshot is finalized during which the arbiter can still
+    ///      reject it, even if a consumer has already paid one or more claims against the cached
+    ///      merkle root. Existing paid leaves stay paid (the consumer flips a `qualified` /
+    ///      `earnedRewardCreditRecorded` flag); the rejection blocks all FUTURE claims because
+    ///      the consumers' per-claim path calls `verifyPayoutWeight`, which returns false once the
+    ///      snapshot status moves off `Finalized`. M-Oracle-2 from 2026-05-16 audit.
+    uint64 public constant FINALIZATION_VETO_WINDOW = 7 days;
 
     error InvalidAddress();
     error InvalidBond();
@@ -71,7 +80,14 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
         address challenger;
         bytes32 artifactHash;
         string artifactURI;
+        // Accumulates challenge bonds posted against this proposal (paid out to proposer on
+        // dismissal, to challenger on rejection). Zero after finalize / reject.
         uint256 bond;
+        // Bond the proposer posted at proposal time. Today always zero (proposals are unbonded),
+        // but the slot is reserved so that a future proposer-bond mechanism (see M-Oracle-1
+        // mitigation) is auditable and clawback-able via rejectFinalizedRoundPayoutSnapshot.
+        // L-Integrations-1 from 2026-05-16 audit.
+        uint256 proposerBond;
     }
 
     uint64 public challengeWindow;
@@ -133,6 +149,13 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
         bytes32 indexed snapshotKey, address indexed arbiter, bytes32 reasonHash
     );
     event RoundPayoutSnapshotRejected(bytes32 indexed snapshotKey, address indexed arbiter, bytes32 reasonHash);
+    /// @notice Emitted when rejectFinalizedRoundPayoutSnapshot could not fully claw back the
+    ///         proposer's bond (because the proposer already withdrew some/all of their pending
+    ///         balance). Governance can act on this off-chain to recover residual liability.
+    ///         L-Integrations-1 from 2026-05-16 audit.
+    event ProposerBondUnrecoverable(
+        bytes32 indexed snapshotKey, address indexed proposer, uint256 missingAmount
+    );
 
     constructor(address admin, address newFrontendRegistry, address newChallengeBondToken) {
         if (admin == address(0) || newChallengeBondToken == address(0)) revert InvalidAddress();
@@ -157,6 +180,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
     {
         if (newChallengeWindow == 0 || newChallengeWindow > MAX_CHALLENGE_WINDOW) revert InvalidSnapshot();
         if (newBondRecipient == address(0)) revert InvalidAddress();
+        if (newChallengeBond < MIN_CHALLENGE_BOND) revert InvalidBond();
         challengeWindow = newChallengeWindow;
         challengeBond = newChallengeBond;
         bondRecipient = newBondRecipient;
@@ -214,7 +238,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
         );
     }
 
-    function challengeCorrelationEpoch(uint64 epochId, bytes32 reasonHash) external payable {
+    function challengeCorrelationEpoch(uint64 epochId, bytes32 reasonHash) external payable nonReentrant {
         if (msg.value != 0) revert InvalidBond();
         CorrelationEpochSnapshot storage snapshot = correlationEpochSnapshots[epochId];
         if (snapshot.status == SnapshotStatus.None) revert SnapshotNotFound();
@@ -223,10 +247,12 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
             revert SnapshotNotFinalizable();
         }
         uint256 bond = challengeBond;
-        if (bond > 0) challengeBondToken.safeTransferFrom(msg.sender, address(this), bond);
+        // CEI: write state before pulling the bond so a malicious bond token cannot
+        // observe a half-applied challenge mid-call.
         snapshot.status = SnapshotStatus.Challenged;
         snapshot.challenger = msg.sender;
         snapshot.bond += bond;
+        if (bond > 0) challengeBondToken.safeTransferFrom(msg.sender, address(this), bond);
         emit CorrelationEpochChallenged(epochId, msg.sender, reasonHash);
     }
 
@@ -309,7 +335,8 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
             challenger: address(0),
             artifactHash: input.artifactHash,
             artifactURI: input.artifactURI,
-            bond: 0
+            bond: 0,
+            proposerBond: 0
         });
 
         emit RoundPayoutSnapshotProposed(
@@ -330,7 +357,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
         );
     }
 
-    function challengeRoundPayoutSnapshot(bytes32 snapshotKey, bytes32 reasonHash) external payable {
+    function challengeRoundPayoutSnapshot(bytes32 snapshotKey, bytes32 reasonHash) external payable nonReentrant {
         if (msg.value != 0) revert InvalidBond();
         RoundPayoutProposal storage proposal = roundPayoutProposals[snapshotKey];
         if (proposal.snapshot.status == SnapshotStatus.None) revert SnapshotNotFound();
@@ -339,10 +366,12 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
             revert SnapshotNotFinalizable();
         }
         uint256 bond = challengeBond;
-        if (bond > 0) challengeBondToken.safeTransferFrom(msg.sender, address(this), bond);
+        // CEI: write state before pulling the bond so a malicious bond token cannot
+        // observe a half-applied challenge mid-call.
         proposal.snapshot.status = SnapshotStatus.Challenged;
         proposal.challenger = msg.sender;
         proposal.bond += bond;
+        if (bond > 0) challengeBondToken.safeTransferFrom(msg.sender, address(this), bond);
         emit RoundPayoutSnapshotChallenged(snapshotKey, msg.sender, reasonHash);
     }
 
@@ -358,7 +387,10 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
         }
         proposal.snapshot.status = SnapshotStatus.Finalized;
         proposal.snapshot.finalizedAt = block.timestamp.toUint64();
-        _creditBond(proposal.proposer, proposal.bond);
+        // Return the proposer's own bond plus any challenge bonds awarded to them on finalization.
+        // proposerBond is retained on the proposal slot so a later rejectFinalizedRoundPayoutSnapshot
+        // can attempt to claw it back (L-Integrations-1).
+        _creditBond(proposal.proposer, proposal.bond + proposal.proposerBond);
         proposal.bond = 0;
         emit RoundPayoutSnapshotFinalized(
             snapshotKey,
@@ -379,7 +411,8 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
         if (proposal.snapshot.status != SnapshotStatus.Challenged) revert SnapshotNotFinalizable();
         proposal.snapshot.status = SnapshotStatus.Finalized;
         proposal.snapshot.finalizedAt = block.timestamp.toUint64();
-        _creditBond(proposal.proposer, proposal.bond);
+        // See finalizeRoundPayoutSnapshot for the proposerBond rationale (L-Integrations-1).
+        _creditBond(proposal.proposer, proposal.bond + proposal.proposerBond);
         proposal.bond = 0;
         emit RoundPayoutSnapshotChallengeDismissed(snapshotKey, msg.sender, reasonHash);
         emit RoundPayoutSnapshotFinalized(
@@ -401,9 +434,23 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
         uint256 bond = proposal.bond;
         proposal.bond = 0;
         if (bond > 0) _creditBond(challenger == address(0) ? bondRecipient : challenger, bond);
+        // L-Integrations-1: the proposer's bond (if any) is forfeited on pre-finalize rejection
+        // and routed to bondRecipient. Today proposerBond is zero so this is a no-op.
+        uint256 proposerBondAmount = proposal.proposerBond;
+        if (proposerBondAmount > 0) {
+            proposal.proposerBond = 0;
+            _creditBond(bondRecipient, proposerBondAmount);
+        }
         emit RoundPayoutSnapshotRejected(snapshotKey, msg.sender, reasonHash);
     }
 
+    /// @notice Reject a finalized round payout snapshot. Allowed in two cases:
+    ///         (a) the consumer reports the snapshot has not yet been consumed (fast-path, no time
+    ///             limit — already-paid leaves are not possible);
+    ///         (b) the rejection happens within `FINALIZATION_VETO_WINDOW` after finalization, even
+    ///             if the consumer reports the snapshot consumed. Already-paid leaves stay paid;
+    ///             future claims revert because `verifyPayoutWeight` returns false for non-finalized
+    ///             snapshots. M-Oracle-2 from 2026-05-16 audit.
     function rejectFinalizedRoundPayoutSnapshot(bytes32 snapshotKey, bytes32 reasonHash)
         external
         onlyRole(ARBITER_ROLE)
@@ -414,14 +461,42 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl {
         if (snapshot.status != SnapshotStatus.Finalized) revert SnapshotNotFinalizable();
         address consumer = proposal.consumer;
         if (consumer == address(0)) revert InvalidAddress();
-        if (IRoundPayoutSnapshotConsumer(consumer)
-                .isRoundPayoutSnapshotConsumed(
+
+        bool withinVetoWindow =
+            block.timestamp <= uint256(snapshot.finalizedAt) + uint256(FINALIZATION_VETO_WINDOW);
+        if (!withinVetoWindow) {
+            // Outside the veto window the rejection is only safe if the consumer has not yet paid
+            // any claim against this snapshot's merkle root.
+            if (
+                IRoundPayoutSnapshotConsumer(consumer).isRoundPayoutSnapshotConsumed(
                     snapshot.domain, snapshot.rewardPoolId, snapshot.contentId, snapshot.roundId
-                )) {
-            revert SnapshotConsumed();
+                )
+            ) {
+                revert SnapshotConsumed();
+            }
         }
 
         proposal.snapshot.status = SnapshotStatus.Rejected;
+        // L-Integrations-1: attempt to claw back the proposer's bond. Today proposerBond is always
+        // zero so this is a no-op; the logic is here so a future proposer-bond mechanism is
+        // automatically accountable on post-finalization rejection. If the proposer already
+        // withdrew (partial or full), emit ProposerBondUnrecoverable for governance follow-up
+        // rather than reverting and stranding the rejection.
+        uint256 proposerBondAmount = proposal.proposerBond;
+        if (proposerBondAmount > 0) {
+            address proposer = proposal.proposer;
+            uint256 available = pendingBondWithdrawals[proposer];
+            uint256 clawback = available < proposerBondAmount ? available : proposerBondAmount;
+            if (clawback > 0) {
+                pendingBondWithdrawals[proposer] = available - clawback;
+                _creditBond(bondRecipient, clawback);
+            }
+            uint256 missing = proposerBondAmount - clawback;
+            if (missing > 0) {
+                emit ProposerBondUnrecoverable(snapshotKey, proposer, missing);
+            }
+            proposal.proposerBond = 0;
+        }
         emit RoundPayoutSnapshotRejected(snapshotKey, msg.sender, reasonHash);
     }
 

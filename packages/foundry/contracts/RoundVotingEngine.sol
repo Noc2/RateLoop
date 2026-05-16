@@ -217,6 +217,16 @@ contract RoundVotingEngine is
     event RoundCancelled(uint256 indexed contentId, uint256 indexed roundId);
     event RoundTied(uint256 indexed contentId, uint256 indexed roundId);
     event RoundRevealFailed(uint256 indexed contentId, uint256 indexed roundId);
+    /// @notice Emitted when `_notifyBundleRoundTerminal` invocation of
+    ///         `recordBundleQuestionTerminal` on the bundle escrow reverts. The terminal signal
+    ///         is captured in `pendingBundleObserverReplay` so an admin can call
+    ///         `replayBundleObserverNotify` once the transient failure has been resolved.
+    event BundleObserverNotifyFailed(
+        uint256 indexed contentId, uint256 indexed roundId, bool settled, bytes lowLevelError
+    );
+    /// @notice Emitted when `replayBundleObserverNotify` successfully forwards a previously
+    ///         failed terminal signal to the bundle escrow.
+    event BundleObserverNotifyReplayed(uint256 indexed contentId, uint256 indexed roundId, bool settled);
     event CancelledRoundRefundClaimed(
         uint256 indexed contentId, uint256 indexed roundId, address indexed voter, uint256 amount
     );
@@ -485,6 +495,15 @@ contract RoundVotingEngine is
             resolved.holder
         );
         _recordCommitAccounting(round, contentId, roundId, voter, resolved.identityKey, stakeAmount64, stakeAmount);
+        // M-Vote-1: bind the prevrandao of the last-commit block into the round so it can be mixed
+        // into the RBTS sampler seed at settlement. The last committer cannot grind their own
+        // block's prevrandao, so this removes the salt-grinding attack on the seed.
+        roundLastCommitPrevrandao[contentId][roundId] = bytes32(block.prevrandao);
+        // L-Vote-4: flag whether at least one commit in this round originated from an HRC-verified
+        // identity. `cancelExpiredRound` consults this flag to keep all-sybil rounds refund-cancellable.
+        if (resolved.hasActiveHumanCredential && !roundHasHumanVerifiedCommit[contentId][roundId]) {
+            roundHasHumanVerifiedCommit[contentId][roundId] = true;
+        }
 
         emit VoteCommitted(
             contentId, roundId, voter, commitHash, expectedReferenceRatingBps, targetRound, drandChainHash, stakeAmount
@@ -716,8 +735,43 @@ contract RoundVotingEngine is
         address bundleEscrow = registry.questionRewardPoolEscrow();
         if (bundleEscrow == address(0)) return;
 
-        try IQuestionBundleRoundObserver(bundleEscrow).recordBundleQuestionTerminal(contentId, roundId, settled) { }
-            catch { }
+        try IQuestionBundleRoundObserver(bundleEscrow).recordBundleQuestionTerminal(contentId, roundId, settled) {
+            // Idempotent: clearing here keeps the replay flag honest in the (currently
+            // unreachable) case where a prior failure flagged the round before this call
+            // succeeded via a later code path.
+            if (pendingBundleObserverReplay[contentId][roundId]) {
+                delete pendingBundleObserverReplay[contentId][roundId];
+            }
+        } catch (bytes memory lowLevelError) {
+            // Capture the failure so off-chain observers and on-chain replay can detect and
+            // recover. The terminal-state transition on the engine has already happened, so
+            // reverting here would brick settlement; recording is the only sound option.
+            pendingBundleObserverReplay[contentId][roundId] = true;
+            emit BundleObserverNotifyFailed(contentId, roundId, settled, lowLevelError);
+        }
+    }
+
+    /// @notice Replay a previously failed bundle observer terminal notification.
+    /// @dev Gated on `DEFAULT_ADMIN_ROLE` because the bundle escrow trusts only the engine to
+    ///      drive its terminal-round accounting. `_recordBundleQuestionTerminal` is idempotent
+    ///      (it enforces strictly increasing `roundId` per bundle index), so calling this for
+    ///      a round that has since been observed via another path is a safe no-op aside from
+    ///      flag-clearing.
+    /// @param contentId Content whose round failed to notify.
+    /// @param roundId Round id that failed to notify.
+    /// @param settled Whether the round terminated in the Settled state. Must match the
+    ///        original failed notification — the caller is expected to derive this from the
+    ///        `BundleObserverNotifyFailed` event.
+    function replayBundleObserverNotify(uint256 contentId, uint256 roundId, bool settled)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
+        require(pendingBundleObserverReplay[contentId][roundId], "no pending replay");
+        address bundleEscrow = registry.questionRewardPoolEscrow();
+        if (bundleEscrow == address(0)) return;
+        IQuestionBundleRoundObserver(bundleEscrow).recordBundleQuestionTerminal(contentId, roundId, settled);
+        delete pendingBundleObserverReplay[contentId][roundId];
+        emit BundleObserverNotifyReplayed(contentId, roundId, settled);
     }
 
     // =========================================================================
@@ -725,13 +779,26 @@ contract RoundVotingEngine is
     // =========================================================================
 
     /// @notice Cancel an expired round that didn't reach the minimum voter threshold. Permissionless.
+    /// @dev L-Vote-4 (audit 2026-05-16): the min-RBTS-quorum lockout only engages once at least
+    ///      one commit in the round has originated from a human-credential-verified identity.
+    ///      A pure-sybil attacker (no HRC) reaching N >= 3 commits at min stake can no longer
+    ///      grief honest content into a `RevealFailed` cycle (~80 min @ ~3 HREP/cycle) -- the
+    ///      round remains refund-cancellable until any HRC voter participates.
+    ///      Trade-off: this slightly weakens the "min-stake universal" property by one bit, but
+    ///      eliminates the cheapest cancel-griefing vector. HRC voters are unaffected; the
+    ///      moment any HRC commit lands the original lockout applies and the round proceeds
+    ///      through the normal reveal/settle path.
     function cancelExpiredRound(uint256 contentId, uint256 roundId) external nonReentrant {
         RoundLib.Round storage round = rounds[contentId][roundId];
         if (round.state != RoundLib.RoundState.Open) revert RoundNotOpen();
         RoundLib.RoundConfig memory roundCfg = _getRoundConfig(contentId, roundId);
         if (!RoundLib.isExpired(round, roundCfg.maxDuration)) revert RoundNotExpired();
-        // Cannot cancel once the round has meaningful RBTS commit quorum.
-        if (round.voteCount >= _rbtsRevealQuorum(roundCfg.minVoters)) revert ThresholdReached();
+        // Cancel-lockout requires BOTH commit quorum AND at least one HRC-verified commit. All-sybil
+        // rounds (no HRC participation) stay refund-cancellable so they cannot be used to grief.
+        if (
+            round.voteCount >= _rbtsRevealQuorum(roundCfg.minVoters)
+                && roundHasHumanVerifiedCommit[contentId][roundId]
+        ) revert ThresholdReached();
 
         round.state = RoundLib.RoundState.Cancelled;
 
@@ -1184,12 +1251,15 @@ contract RoundVotingEngine is
             commitRbtsStakeReturned[contentId][roundId],
             commitRbtsForfeitedStake[contentId][roundId],
             commitIdentityKey[contentId][roundId],
-            contentId,
-            roundId,
-            revealedCount,
-            upWins,
-            MIN_RBTS_PARTICIPANTS,
-            RBTS_SCORE_SCALE_BPS
+            RoundRevealLib.ScoreRbtsParams({
+                contentId: contentId,
+                roundId: roundId,
+                revealedCount: revealedCount,
+                upWins: upWins,
+                minParticipants: MIN_RBTS_PARTICIPANTS,
+                scoreScaleBps: RBTS_SCORE_SCALE_BPS,
+                lastCommitPrevrandao: roundLastCommitPrevrandao[contentId][roundId]
+            })
         );
 
         rewardWeight = result.rewardWeight;
@@ -1400,6 +1470,25 @@ contract RoundVotingEngine is
     // so in-place upgrades do not shift older mappings.
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint48))) public commitCommittedAt;
 
+    /// @notice Tracks bundle-observer terminal notifications that reverted on the escrow side.
+    /// @dev Appended after existing storage slots to preserve the upgradeable layout. Set true
+    ///      by `_notifyBundleRoundTerminal` on revert; cleared by `replayBundleObserverNotify`
+    ///      (or by a subsequent successful notification). Indexed by (contentId, roundId).
+    mapping(uint256 contentId => mapping(uint256 roundId => bool)) public pendingBundleObserverReplay;
+
+    // M-Vote-1 (audit 2026-05-16): block.prevrandao of the last-commit block per round.
+    // Mixed into the RBTS sampler seed so the seed is unguessable at commit time. The last
+    // committer cannot grind their own block's prevrandao -- it is supplied by the validator
+    // and only revealed after the block is mined. Appended after existing storage so in-place
+    // upgrades do not shift older mappings.
+    mapping(uint256 => mapping(uint256 => bytes32)) public roundLastCommitPrevrandao;
+
+    // L-Vote-4 (audit 2026-05-16): true if at least one commit in this round originated from an
+    // address with an active human credential. `cancelExpiredRound` requires this flag before the
+    // min-RBTS-quorum cancel-lockout engages -- attacker-only rounds (all non-HRC sybils) remain
+    // refund-cancellable so they cannot grief honest content into a RevealFailed cycle.
+    mapping(uint256 => mapping(uint256 => bool)) public roundHasHumanVerifiedCommit;
+
     // --- Storage gap reserved for future upgrades ---
-    uint256[27] private __gap;
+    uint256[25] private __gap;
 }

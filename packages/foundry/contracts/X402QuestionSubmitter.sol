@@ -3,6 +3,7 @@ pragma solidity ^0.8.24;
 
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 
 import { ContentRegistry } from "./ContentRegistry.sol";
 import { RoundLib } from "./libraries/RoundLib.sol";
@@ -33,7 +34,7 @@ interface IReceiveWithAuthorizationToken {
     ) external;
 }
 
-contract X402QuestionSubmitter {
+contract X402QuestionSubmitter is Ownable {
     using SafeERC20 for IERC20;
 
     uint8 internal constant REWARD_ASSET_USDC = 1;
@@ -47,13 +48,26 @@ contract X402QuestionSubmitter {
         uint256 indexed contentId, address indexed submitter, bytes32 indexed paymentNonce, uint256 amount
     );
 
-    constructor(ContentRegistry _registry, address _usdcToken, address _questionRewardPoolEscrow) {
+    constructor(
+        ContentRegistry _registry,
+        address _usdcToken,
+        address _questionRewardPoolEscrow,
+        address initialOwner
+    ) Ownable(initialOwner) {
         require(address(_registry) != address(0), "Invalid registry");
         require(_usdcToken != address(0), "Invalid USDC");
         require(_questionRewardPoolEscrow != address(0), "Invalid escrow");
         registry = _registry;
         usdcToken = IERC20(_usdcToken);
         questionRewardPoolEscrow = _questionRewardPoolEscrow;
+    }
+
+    /// @notice Recover ERC-20 tokens accidentally sent to this contract.
+    /// @dev Owner-only. The gateway has no business holding any token balance between
+    ///      payment and forward — any residue is by definition a mistake.
+    function rescueToken(IERC20 token, address to, uint256 amount) external onlyOwner {
+        require(to != address(0), "zero recipient");
+        token.safeTransfer(to, amount);
     }
 
     function submitQuestionWithX402Payment(

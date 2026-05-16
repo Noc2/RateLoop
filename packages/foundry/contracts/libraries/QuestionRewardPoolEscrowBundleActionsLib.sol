@@ -341,13 +341,19 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         }
         bundle.claimedAmount += grossAmount;
 
-        (rewardAmount, reservedFrontendFee, frontendRecipient) = QuestionRewardPoolEscrowTransferLib.settleClaimPayout(
+        // M-Funds-1: bundle path uses equal-share, so the bucket isn't accumulated across
+        // claimants — but we still consume the 4th return so the tuple matches and any future
+        // weighted-bundle path inherits the corrected accounting trivially.
+        uint256 bundleRedirectedFrontendFee;
+        (rewardAmount, reservedFrontendFee, frontendRecipient, bundleRedirectedFrontendFee) =
+            QuestionRewardPoolEscrowTransferLib.settleClaimPayout(
             _rewardToken(hrepToken, usdcToken, bundle.asset),
             rewardRecipient,
             rewardAmount,
             frontendRecipient,
             reservedFrontendFee
         );
+        bundleRedirectedFrontendFee; // silence unused-local warnings; see comment above
 
         emit QuestionBundleRewardClaimed(
             bundleId,

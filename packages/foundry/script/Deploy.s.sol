@@ -201,7 +201,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
             QuestionRewardPoolEscrow(address(questionRewardPoolEscrowProxy));
 
         X402QuestionSubmitter x402QuestionSubmitter =
-            new X402QuestionSubmitter(registry, usdcTokenAddress, address(questionRewardPoolEscrow));
+            new X402QuestionSubmitter(registry, usdcTokenAddress, address(questionRewardPoolEscrow), governance);
 
         TransparentUpgradeableProxy feedbackBonusEscrowProxy = new TransparentUpgradeableProxy(
             address(feedbackBonusEscrowImpl),

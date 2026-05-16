@@ -6,6 +6,7 @@ import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/ac
 import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
 import { ContentRegistry } from "./ContentRegistry.sol";
@@ -42,6 +43,7 @@ contract QuestionRewardPoolEscrow is
     IRoundPayoutSnapshotConsumer
 {
     using SafeCast for uint256;
+    using SafeERC20 for IERC20;
 
     bytes32 internal constant CONFIG_ROLE = keccak256("CONFIG_ROLE");
     bytes32 internal constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
@@ -149,6 +151,7 @@ contract QuestionRewardPoolEscrow is
     event RewardPoolRefunded(uint256 indexed rewardPoolId, address indexed funder, uint256 amount);
     event RewardPoolForfeited(uint256 indexed rewardPoolId, address indexed treasury, uint256 amount);
     event DefaultFrontendFeeBpsUpdated(uint256 previousFrontendFeeBps, uint256 newFrontendFeeBps);
+    event NonAssetTokenRecovered(address indexed token, address indexed to, uint256 amount);
     event RewardPoolPurposeSet(
         uint256 indexed rewardPoolId, uint8 indexed bountyKind, uint256 indexed challengedRoundId, bytes32 reasonHash
     );
@@ -736,9 +739,17 @@ contract QuestionRewardPoolEscrow is
         snapshot.frontendFeeClaimedAmount += reservedFrontendFee;
         rewardPool.claimedAmount += grossAmount;
 
-        (rewardAmount, frontendFee, frontendRecipient) = _settleClaimPayout(
+        uint256 redirectedFrontendFee;
+        (rewardAmount, frontendFee, frontendRecipient, redirectedFrontendFee) = _settleClaimPayout(
             _rewardToken(rewardPool.asset), rewardRecipient, rewardAmount, frontendRecipient, frontendFee
         );
+        if (redirectedFrontendFee > 0) {
+            // M-Funds-1: the bucket was credited reservedFrontendFee at line above, but the
+            // frontend transfer failed and the amount was redirected to the voter. Decrement
+            // the bucket so later claimants' weighted share is computed against the actual
+            // remaining frontend balance, not the over-stated reservation.
+            snapshot.frontendFeeClaimedAmount -= redirectedFrontendFee;
+        }
         emit QuestionRewardClaimed(
             rewardPoolId,
             rewardPool.contentId,
@@ -759,10 +770,28 @@ contract QuestionRewardPoolEscrow is
         uint256 rewardAmount,
         address frontendRecipient,
         uint256 frontendFee
-    ) internal returns (uint256, uint256, address) {
+    ) internal returns (uint256, uint256, address, uint256) {
         return QuestionRewardPoolEscrowTransferLib.settleClaimPayout(
             rewardToken, rewardRecipient, rewardAmount, frontendRecipient, frontendFee
         );
+    }
+
+    /// @notice Recover an ERC-20 that is NOT one of the protocol's reward assets (HREP/USDC).
+    /// @dev Donations of non-asset tokens to the escrow are otherwise permanently stuck. This
+    ///      function deliberately refuses to touch the protocol's own reward tokens: their
+    ///      balances reflect accumulated per-pool / per-bundle funded/claimed accounting that
+    ///      is not summarisable cheaply on-chain, so any "surplus" sweep would risk underfunding
+    ///      legitimate pending claims. L-Funds-1.
+    function recoverNonAssetToken(IERC20 token, address to, uint256 amount)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+        nonReentrant
+    {
+        require(address(token) != address(hrepToken), "Cannot recover protocol asset");
+        require(address(token) != address(usdcToken), "Cannot recover protocol asset");
+        require(to != address(0), "Invalid recipient");
+        token.safeTransfer(to, amount);
+        emit NonAssetTokenRecovered(address(token), to, amount);
     }
 
     function recordBundleQuestionTerminal(uint256 contentId, uint256 roundId, bool settled) external {
