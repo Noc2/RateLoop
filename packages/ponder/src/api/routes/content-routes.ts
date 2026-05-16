@@ -927,7 +927,7 @@ export function registerContentRoutes(app: ApiApp) {
     const [rewardSummary] = await db
       .select({
         total: sql<bigint>`coalesce(sum(
-          case when ${rewardClaim.voter} = ${address} then ${rewardClaim.hrepReward} else 0 end +
+          case when ${rewardClaim.voter} = ${address} then ${rewardClaim.lrepReward} else 0 end +
           case when ${rewardClaim.stakePayer} = ${address} then ${rewardClaim.stakeReturned} else 0 end
         ), 0)`,
       })

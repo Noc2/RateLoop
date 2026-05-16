@@ -34,13 +34,13 @@ interface IRoundVotingEngine {
             uint64 weightedDownPool
         );
 
-    /// @notice Transfer HREP reward tokens to a recipient. Only callable by RewardDistributor.
+    /// @notice Transfer LREP reward tokens to a recipient. Only callable by RewardDistributor.
     /// @param recipient The address to receive tokens.
-    /// @param hrepAmount The amount of HREP to transfer.
-    function transferReward(address recipient, uint256 hrepAmount) external;
+    /// @param lrepAmount The amount of LREP to transfer.
+    function transferReward(address recipient, uint256 lrepAmount) external;
 
-    /// @notice Add HREP to the consensus reserve (e.g. from slashed stakes).
+    /// @notice Add LREP to the consensus reserve (e.g. from slashed stakes).
     /// @dev Permissionless — caller must have approved this contract to spend `amount`.
-    /// @param amount Amount of HREP to add to the consensus reserve.
+    /// @param amount Amount of LREP to add to the consensus reserve.
     function addToConsensusReserve(uint256 amount) external;
 }

@@ -82,7 +82,7 @@ ponder.on(
         source: "launch",
         voter: rater,
         stakeReturned: 0n,
-        hrepReward: amount,
+        lrepReward: amount,
         claimedAt: event.block.timestamp,
       })
       .onConflictDoNothing();
@@ -230,7 +230,7 @@ ponder.on(
           source: "launch",
           voter: rater,
           stakeReturned: 0n,
-          hrepReward: catchUpPaid,
+          lrepReward: catchUpPaid,
           claimedAt: event.block.timestamp,
         })
         .onConflictDoNothing();
@@ -390,7 +390,7 @@ ponder.on(
         source: "launch",
         voter: account,
         stakeReturned: 0n,
-        hrepReward: amount,
+        lrepReward: amount,
         claimedAt: event.block.timestamp,
       })
       .onConflictDoNothing();
@@ -413,7 +413,7 @@ ponder.on(
         source: "launch",
         voter: referrer,
         stakeReturned: 0n,
-        hrepReward: amount,
+        lrepReward: amount,
         claimedAt: event.block.timestamp,
       })
       .onConflictDoNothing();
@@ -436,7 +436,7 @@ ponder.on(
         source: "launch",
         voter: account,
         stakeReturned: 0n,
-        hrepReward: amount,
+        lrepReward: amount,
         claimedAt: event.block.timestamp,
       })
       .onConflictDoNothing();

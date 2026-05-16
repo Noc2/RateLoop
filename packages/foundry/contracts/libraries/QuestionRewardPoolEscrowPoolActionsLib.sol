@@ -23,7 +23,7 @@ library QuestionRewardPoolEscrowPoolActionsLib {
     uint256 internal constant MIN_REWARD_POOL_PARTICIPANTS = 3;
     uint256 internal constant HIGH_VALUE_REWARD_POOL_THRESHOLD = 1_000e6;
     uint256 internal constant MIN_HIGH_VALUE_PARTICIPANTS = 5;
-    uint8 internal constant REWARD_ASSET_HREP = 0;
+    uint8 internal constant REWARD_ASSET_LREP = 0;
     uint8 internal constant REWARD_ASSET_USDC = 1;
 
     event RewardPoolCreated(
@@ -56,15 +56,15 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         mapping(uint256 => bytes32) storage rewardPoolPayerIdentityKey,
         ContentRegistry registry,
         RoundVotingEngine votingEngine,
-        IERC20 hrepToken,
+        IERC20 lrepToken,
         IERC20 usdcToken,
         uint16 defaultFrontendFeeBps,
         uint256 nextRewardPoolId,
         CreateRewardPoolParams memory params
     ) external returns (uint256 rewardPoolId, uint256 updatedNextRewardPoolId) {
         uint256 fundedAmount = QuestionRewardPoolEscrowTransferLib.pullExactToken(
-            _rewardToken(hrepToken, usdcToken, params.asset), params.funder, params.amount
-        );
+                _rewardToken(lrepToken, usdcToken, params.asset), params.funder, params.amount
+            );
 
         rewardPoolId = nextRewardPoolId;
         updatedNextRewardPoolId = nextRewardPoolId + 1;
@@ -169,16 +169,13 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         emit RewardPoolEligibilitySet(rewardPoolId, params.bountyEligibility);
     }
 
-    function _validateStoreInputs(
-        ContentRegistry registry,
-        uint256 fundedAmount,
-        CreateRewardPoolParams memory params
-    ) private view {
+    function _validateStoreInputs(ContentRegistry registry, uint256 fundedAmount, CreateRewardPoolParams memory params)
+        private
+        view
+    {
         require(fundedAmount > 0, "Amount required");
-        require(params.asset == REWARD_ASSET_HREP || params.asset == REWARD_ASSET_USDC, "Invalid asset");
-        require(
-            QuestionRewardPoolEscrowEligibilityLib.isValidPolicy(params.bountyEligibility), "Invalid eligibility"
-        );
+        require(params.asset == REWARD_ASSET_LREP || params.asset == REWARD_ASSET_USDC, "Invalid asset");
+        require(QuestionRewardPoolEscrowEligibilityLib.isValidPolicy(params.bountyEligibility), "Invalid eligibility");
         require(registry.isContentActive(params.contentId), "Content not active");
         require(params.requiredVoters >= MIN_REQUIRED_VOTERS, "Too few voters");
         require(params.requiredVoters >= _requiredParticipantFloorForAmount(fundedAmount), "High-value floor");
@@ -192,9 +189,7 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         require(params.requiredVoters <= contentCfg.maxVoters, "Voters exceed max");
         require(contentCfg.maxVoters <= MAX_REWARD_POOL_ROUND_VOTERS, "Voters exceed max");
         if (!params.nonRefundable) {
-            require(
-                fundedAmount >= params.requiredSettledRounds * uint256(contentCfg.maxVoters), "Amount too small"
-            );
+            require(fundedAmount >= params.requiredSettledRounds * uint256(contentCfg.maxVoters), "Amount too small");
             require(params.bountyClosesAt > block.timestamp, "Bad close");
         }
     }
@@ -246,8 +241,8 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         funderIdentityKey = QuestionRewardPoolEscrowVoterLib.identityKeyForCurrentRater(protocolConfig, funder);
     }
 
-    function _rewardToken(IERC20 hrepToken, IERC20 usdcToken, uint8 asset) private pure returns (IERC20 token) {
-        return asset == REWARD_ASSET_HREP ? hrepToken : usdcToken;
+    function _rewardToken(IERC20 lrepToken, IERC20 usdcToken, uint8 asset) private pure returns (IERC20 token) {
+        return asset == REWARD_ASSET_LREP ? lrepToken : usdcToken;
     }
 
     function _requiredParticipantFloorForAmount(uint256 amount) private pure returns (uint256) {

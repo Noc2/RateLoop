@@ -48,12 +48,9 @@ contract X402QuestionSubmitter is Ownable {
         uint256 indexed contentId, address indexed submitter, bytes32 indexed paymentNonce, uint256 amount
     );
 
-    constructor(
-        ContentRegistry _registry,
-        address _usdcToken,
-        address _questionRewardPoolEscrow,
-        address initialOwner
-    ) Ownable(initialOwner) {
+    constructor(ContentRegistry _registry, address _usdcToken, address _questionRewardPoolEscrow, address initialOwner)
+        Ownable(initialOwner)
+    {
         require(address(_registry) != address(0), "Invalid registry");
         require(_usdcToken != address(0), "Invalid USDC");
         require(_questionRewardPoolEscrow != address(0), "Invalid escrow");

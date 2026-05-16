@@ -1,5 +1,5 @@
 import {
-  approveHREP,
+  approveLREP,
   claimCancelledRoundRefund,
   commitVoteDirect,
   evmIncreaseTime,
@@ -20,7 +20,7 @@ test.describe("RevealFailed lifecycle", () => {
   test.describe.configure({ mode: "serial" });
 
   const VOTING_ENGINE = CONTRACT_ADDRESSES.RoundVotingEngine;
-  const HREP_TOKEN = CONTRACT_ADDRESSES.HumanReputation;
+  const LREP_TOKEN = CONTRACT_ADDRESSES.LoopReputation;
   const CONTENT_REGISTRY = CONTRACT_ADDRESSES.ContentRegistry;
   const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
   const STAKE = BigInt(10e6);
@@ -40,7 +40,7 @@ test.describe("RevealFailed lifecycle", () => {
     const keeper = ANVIL_ACCOUNTS.account1;
     const uniqueId = Date.now();
 
-    const submitApproved = await approveHREP(CONTENT_REGISTRY, BigInt(10e6), submitter.address, HREP_TOKEN);
+    const submitApproved = await approveLREP(CONTENT_REGISTRY, BigInt(10e6), submitter.address, LREP_TOKEN);
     expect(submitApproved, "Content submission approval failed").toBe(true);
 
     const submitted = await submitContentDirect(
@@ -76,7 +76,7 @@ test.describe("RevealFailed lifecycle", () => {
     const commits: { commitKey: `0x${string}`; isUp: boolean; salt: `0x${string}` }[] = [];
 
     for (const voter of voters) {
-      const approved = await approveHREP(VOTING_ENGINE, STAKE, voter.account.address, HREP_TOKEN);
+      const approved = await approveLREP(VOTING_ENGINE, STAKE, voter.account.address, LREP_TOKEN);
       expect(approved, `Vote approval failed for ${voter.account.address}`).toBe(true);
 
       const commit = await commitVoteDirect(
@@ -156,6 +156,6 @@ test.describe("RevealFailed lifecycle", () => {
 
     expect(refund).toBeTruthy();
     expect(refund.stakeReturned).toBe(STAKE.toString());
-    expect(refund.hrepReward).toBe("0");
+    expect(refund.lrepReward).toBe("0");
   });
 });

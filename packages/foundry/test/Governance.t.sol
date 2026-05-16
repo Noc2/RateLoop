@@ -6,11 +6,11 @@ import { TimelockController } from "@openzeppelin/contracts/governance/TimelockC
 import { IVotes } from "@openzeppelin/contracts/governance/utils/IVotes.sol";
 import { IGovernor } from "@openzeppelin/contracts/governance/IGovernor.sol";
 
-import { HumanReputation } from "../contracts/HumanReputation.sol";
+import { LoopReputation } from "../contracts/LoopReputation.sol";
 import { CuryoGovernor } from "../contracts/governance/CuryoGovernor.sol";
 
 contract GovernanceTest is Test {
-    HumanReputation public token;
+    LoopReputation public token;
     TimelockController public timelock;
     CuryoGovernor public governor;
 
@@ -48,8 +48,8 @@ contract GovernanceTest is Test {
     function setUp() public {
         vm.startPrank(deployer);
 
-        // Deploy HREP token (now has native ERC20Votes)
-        token = new HumanReputation(deployer, deployer);
+        // Deploy LREP token (now has native ERC20Votes)
+        token = new LoopReputation(deployer, deployer);
 
         // Grant MINTER_ROLE to deployer for testing
         token.grantRole(token.MINTER_ROLE(), deployer);
@@ -62,7 +62,7 @@ contract GovernanceTest is Test {
 
         timelock = new TimelockController(2 days, proposers, executors, deployer);
 
-        // Deploy Governor with HREP directly (no wrapper needed)
+        // Deploy Governor with LREP directly (no wrapper needed)
         governor = new CuryoGovernor(IVotes(address(token)), timelock);
 
         // Initialize protocol-controlled holders excluded from dynamic quorum
@@ -244,7 +244,7 @@ contract GovernanceTest is Test {
     }
 
     function test_GovernorProposalThreshold() public view {
-        // Bootstrap proposal threshold should be 1K HREP
+        // Bootstrap proposal threshold should be 1K LREP
         assertEq(governor.proposalThreshold(), 1_000e6);
     }
 
@@ -296,7 +296,7 @@ contract GovernanceTest is Test {
 
         // Deploy a fresh governor with almost all tokens locked
         vm.startPrank(deployer);
-        HumanReputation smallToken = new HumanReputation(deployer, deployer);
+        LoopReputation smallToken = new LoopReputation(deployer, deployer);
         smallToken.grantRole(smallToken.MINTER_ROLE(), deployer);
 
         TimelockController smallTimelock = new TimelockController(2 days, new address[](0), new address[](0), deployer);
@@ -849,7 +849,7 @@ contract GovernanceTest is Test {
         address governance = address(0xB);
 
         vm.prank(admin);
-        HumanReputation separateToken = new HumanReputation(admin, governance);
+        LoopReputation separateToken = new LoopReputation(admin, governance);
 
         // Cache role hashes to avoid nested external calls consuming vm.prank
         bytes32 defaultAdminRole = separateToken.DEFAULT_ADMIN_ROLE();
@@ -876,7 +876,7 @@ contract GovernanceTest is Test {
         address governance = address(0xB);
 
         vm.prank(admin);
-        HumanReputation separateToken = new HumanReputation(admin, governance);
+        LoopReputation separateToken = new LoopReputation(admin, governance);
 
         // Admin has only the temporary setup roles.
         assertFalse(separateToken.hasRole(separateToken.DEFAULT_ADMIN_ROLE(), admin));

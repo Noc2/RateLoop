@@ -27,7 +27,7 @@ ponder.on(
         voter,
         stakePayer,
         stakeReturned,
-        hrepReward: reward,
+        lrepReward: reward,
         claimedAt: event.block.timestamp,
       })
       .onConflictDoNothing();
@@ -112,7 +112,7 @@ ponder.on(
         source: "participation",
         voter,
         stakeReturned: 0n,
-        hrepReward: amount,
+        lrepReward: amount,
         claimedAt: event.block.timestamp,
       })
       .onConflictDoNothing();

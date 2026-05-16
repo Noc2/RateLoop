@@ -10,7 +10,7 @@ import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
 import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
 import { RoundLib } from "../contracts/libraries/RoundLib.sol";
 import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
-import { HumanReputation } from "../contracts/HumanReputation.sol";
+import { LoopReputation } from "../contracts/LoopReputation.sol";
 import { VotingTestBase, deployInitializedProtocolConfig } from "./helpers/VotingTestHelpers.sol";
 import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
 
@@ -57,7 +57,7 @@ contract MaliciousToken is ERC20 {
 }
 
 abstract contract SecurityHarnessBase is VotingTestBase {
-    function _deploySecurityHarness(HumanReputation token, address owner)
+    function _deploySecurityHarness(LoopReputation token, address owner)
         internal
         returns (ContentRegistry registry, RoundVotingEngine votingEngine)
     {
@@ -106,7 +106,7 @@ abstract contract SecurityHarnessBase is VotingTestBase {
         _setTlockRoundConfig(config, epochDuration, 7 days, 3, 200);
     }
 
-    function _fundConsensusReserve(HumanReputation token, RoundVotingEngine votingEngine, address owner) internal {
+    function _fundConsensusReserve(LoopReputation token, RoundVotingEngine votingEngine, address owner) internal {
         uint256 reserveAmount = 1_000_000e6;
         token.mint(owner, reserveAmount);
         token.approve(address(votingEngine), reserveAmount);
@@ -115,7 +115,7 @@ abstract contract SecurityHarnessBase is VotingTestBase {
 }
 
 contract SecurityReentrancyTest is SecurityHarnessBase {
-    HumanReputation hrepToken;
+    LoopReputation lrepToken;
     ContentRegistry registry;
     RoundVotingEngine votingEngine;
 
@@ -152,16 +152,16 @@ contract SecurityReentrancyTest is SecurityHarnessBase {
         vm.warp(1000);
         vm.startPrank(owner);
 
-        hrepToken = new HumanReputation(owner, owner);
-        hrepToken.grantRole(hrepToken.MINTER_ROLE(), owner);
-        (registry, votingEngine) = _deploySecurityHarness(hrepToken, owner);
+        lrepToken = new LoopReputation(owner, owner);
+        lrepToken.grantRole(lrepToken.MINTER_ROLE(), owner);
+        (registry, votingEngine) = _deploySecurityHarness(lrepToken, owner);
         _configureSecurityHarness(registry, votingEngine, treasury, EPOCH_DURATION);
-        _fundConsensusReserve(hrepToken, votingEngine, owner);
+        _fundConsensusReserve(lrepToken, votingEngine, owner);
 
         {
             address[5] memory users = [submitter, voter1, voter2, voter3, attacker];
             for (uint256 i = 0; i < users.length; i++) {
-                hrepToken.mint(users[i], 10_000e6);
+                lrepToken.mint(users[i], 10_000e6);
             }
         }
 
@@ -170,7 +170,7 @@ contract SecurityReentrancyTest is SecurityHarnessBase {
 
     function _submitContent() internal returns (uint256) {
         vm.startPrank(submitter);
-        hrepToken.approve(address(registry), 10e6);
+        lrepToken.approve(address(registry), 10e6);
         _submitContentWithReservation(registry, "https://example.com/1", "test goal", "test goal", "test", 0);
         vm.stopPrank();
         return 1;
@@ -187,7 +187,7 @@ contract SecurityReentrancyTest is SecurityHarnessBase {
         bytes32 drandChainHash = _tlockDrandChainHash();
         bytes32 commitHash = _commitHash(isUp, salt, voter, contentId, targetRound, drandChainHash, ciphertext);
         vm.startPrank(voter);
-        hrepToken.approve(address(votingEngine), STAKE);
+        lrepToken.approve(address(votingEngine), STAKE);
         uint256 cachedRoundContext1 =
             _roundContext(votingEngine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());
         votingEngine.commitVote(
@@ -274,7 +274,7 @@ contract SecurityReentrancyTest is SecurityHarnessBase {
 // ============================================================================
 
 contract SecurityPlainTransferTest is SecurityHarnessBase {
-    HumanReputation hrepToken;
+    LoopReputation lrepToken;
     ContentRegistry registry;
     RoundVotingEngine votingEngine;
 
@@ -306,21 +306,21 @@ contract SecurityPlainTransferTest is SecurityHarnessBase {
         vm.warp(1000);
         vm.startPrank(owner);
 
-        hrepToken = new HumanReputation(owner, owner);
-        hrepToken.grantRole(hrepToken.MINTER_ROLE(), owner);
-        (registry, votingEngine) = _deploySecurityHarness(hrepToken, owner);
+        lrepToken = new LoopReputation(owner, owner);
+        lrepToken.grantRole(lrepToken.MINTER_ROLE(), owner);
+        (registry, votingEngine) = _deploySecurityHarness(lrepToken, owner);
         _configureSecurityHarness(registry, votingEngine, treasury, EPOCH_DURATION);
-        _fundConsensusReserve(hrepToken, votingEngine, owner);
+        _fundConsensusReserve(lrepToken, votingEngine, owner);
 
-        hrepToken.mint(submitter, 10_000e6);
-        hrepToken.mint(voter, 10_000e6);
+        lrepToken.mint(submitter, 10_000e6);
+        lrepToken.mint(voter, 10_000e6);
 
         vm.stopPrank();
     }
 
     function _submitContent() internal returns (uint256) {
         vm.startPrank(submitter);
-        hrepToken.approve(address(registry), 10e6);
+        lrepToken.approve(address(registry), 10e6);
         _submitContentWithReservation(registry, "https://example.com/1", "test goal", "test goal", "test", 0);
         vm.stopPrank();
         return 1;
@@ -330,31 +330,31 @@ contract SecurityPlainTransferTest is SecurityHarnessBase {
         uint256 contentId = _submitContent();
 
         vm.prank(voter);
-        hrepToken.transfer(address(votingEngine), STAKE);
+        lrepToken.transfer(address(votingEngine), STAKE);
 
         assertEq(
             RoundEngineReadHelpers.activeRoundId(votingEngine, contentId), 0, "plain transfers do not create rounds"
         );
-        assertEq(hrepToken.balanceOf(address(votingEngine)), 1_000_000e6 + STAKE, "tokens transferred without vote");
+        assertEq(lrepToken.balanceOf(address(votingEngine)), 1_000_000e6 + STAKE, "tokens transferred without vote");
     }
 
     function test_GovernanceCanRecoverPlainTransferSurplus() public {
         _submitContent();
 
         vm.prank(voter);
-        hrepToken.transfer(address(votingEngine), STAKE);
+        lrepToken.transfer(address(votingEngine), STAKE);
 
-        uint256 treasuryBalanceBefore = hrepToken.balanceOf(treasury);
-        uint256 ownerBalanceBefore = hrepToken.balanceOf(owner);
+        uint256 treasuryBalanceBefore = lrepToken.balanceOf(treasury);
+        uint256 ownerBalanceBefore = lrepToken.balanceOf(owner);
         vm.prank(owner);
-        votingEngine.recoverSurplusHrep();
+        votingEngine.recoverSurplusLrep();
 
-        assertEq(hrepToken.balanceOf(treasury), treasuryBalanceBefore, "treasury unchanged");
-        assertEq(hrepToken.balanceOf(owner), ownerBalanceBefore + STAKE, "admin receives surplus");
-        assertEq(hrepToken.balanceOf(address(votingEngine)), 1_000_000e6, "engine keeps accounted reserve");
+        assertEq(lrepToken.balanceOf(treasury), treasuryBalanceBefore, "treasury unchanged");
+        assertEq(lrepToken.balanceOf(owner), ownerBalanceBefore + STAKE, "admin receives surplus");
+        assertEq(lrepToken.balanceOf(address(votingEngine)), 1_000_000e6, "engine keeps accounted reserve");
 
         vm.prank(owner);
-        votingEngine.recoverSurplusHrep();
+        votingEngine.recoverSurplusLrep();
     }
 }
 
@@ -363,7 +363,7 @@ contract SecurityPlainTransferTest is SecurityHarnessBase {
 // ============================================================================
 
 contract SecuritySettlementTimingTest is SecurityHarnessBase {
-    HumanReputation hrepToken;
+    LoopReputation lrepToken;
     ContentRegistry registry;
     RoundVotingEngine votingEngine;
 
@@ -399,16 +399,16 @@ contract SecuritySettlementTimingTest is SecurityHarnessBase {
         vm.warp(1000);
         vm.startPrank(owner);
 
-        hrepToken = new HumanReputation(owner, owner);
-        hrepToken.grantRole(hrepToken.MINTER_ROLE(), owner);
-        (registry, votingEngine) = _deploySecurityHarness(hrepToken, owner);
+        lrepToken = new LoopReputation(owner, owner);
+        lrepToken.grantRole(lrepToken.MINTER_ROLE(), owner);
+        (registry, votingEngine) = _deploySecurityHarness(lrepToken, owner);
         _configureSecurityHarness(registry, votingEngine, treasury, EPOCH_DURATION);
-        _fundConsensusReserve(hrepToken, votingEngine, owner);
+        _fundConsensusReserve(lrepToken, votingEngine, owner);
 
         {
             address[4] memory users = [submitter, voter1, voter2, voter3];
             for (uint256 i = 0; i < users.length; i++) {
-                hrepToken.mint(users[i], 10_000e6);
+                lrepToken.mint(users[i], 10_000e6);
             }
         }
 
@@ -417,7 +417,7 @@ contract SecuritySettlementTimingTest is SecurityHarnessBase {
 
     function _submitContent() internal returns (uint256) {
         vm.startPrank(submitter);
-        hrepToken.approve(address(registry), 10e6);
+        lrepToken.approve(address(registry), 10e6);
         _submitContentWithReservation(registry, "https://example.com/1", "test goal", "test goal", "test", 0);
         vm.stopPrank();
         return 1;
@@ -434,7 +434,7 @@ contract SecuritySettlementTimingTest is SecurityHarnessBase {
         bytes32 drandChainHash = _tlockDrandChainHash();
         bytes32 commitHash = _commitHash(isUp, salt, voter, contentId, targetRound, drandChainHash, ciphertext);
         vm.startPrank(voter);
-        hrepToken.approve(address(votingEngine), STAKE);
+        lrepToken.approve(address(votingEngine), STAKE);
         uint256 cachedRoundContext2 =
             _roundContext(votingEngine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());
         votingEngine.commitVote(
@@ -529,7 +529,7 @@ contract SecuritySettlementTimingTest is SecurityHarnessBase {
 // ============================================================================
 
 contract SecurityAccessControlTest is Test {
-    HumanReputation hrepToken;
+    LoopReputation lrepToken;
     ContentRegistry registry;
     RoundVotingEngine votingEngine;
     address protocolConfigAddress;
@@ -551,8 +551,8 @@ contract SecurityAccessControlTest is Test {
         vm.warp(1000);
         vm.startPrank(owner);
 
-        hrepToken = new HumanReputation(owner, owner);
-        hrepToken.grantRole(hrepToken.MINTER_ROLE(), owner);
+        lrepToken = new LoopReputation(owner, owner);
+        lrepToken.grantRole(lrepToken.MINTER_ROLE(), owner);
 
         ContentRegistry registryImpl = new ContentRegistry();
         RoundVotingEngine engineImpl = new RoundVotingEngine();
@@ -561,7 +561,7 @@ contract SecurityAccessControlTest is Test {
             address(
                 new ERC1967Proxy(
                     address(registryImpl),
-                    abi.encodeCall(ContentRegistry.initializeWithTreasury, (owner, owner, owner, address(hrepToken)))
+                    abi.encodeCall(ContentRegistry.initializeWithTreasury, (owner, owner, owner, address(lrepToken)))
                 )
             )
         );
@@ -572,7 +572,7 @@ contract SecurityAccessControlTest is Test {
                     address(engineImpl),
                     abi.encodeCall(
                         RoundVotingEngine.initialize,
-                        (owner, address(hrepToken), address(registry), address(deployInitializedProtocolConfig(owner)))
+                        (owner, address(lrepToken), address(registry), address(deployInitializedProtocolConfig(owner)))
                     )
                 )
             )
@@ -595,8 +595,8 @@ contract SecurityAccessControlTest is Test {
         CONFIG_ROLE_REGISTRY = registry.CONFIG_ROLE();
         TREASURY_ROLE_REGISTRY = registry.TREASURY_ROLE();
         PAUSER_ROLE_REGISTRY = registry.PAUSER_ROLE();
-        MINTER_ROLE_TOKEN = hrepToken.MINTER_ROLE();
-        CONFIG_ROLE_TOKEN = hrepToken.CONFIG_ROLE();
+        MINTER_ROLE_TOKEN = lrepToken.MINTER_ROLE();
+        CONFIG_ROLE_TOKEN = lrepToken.CONFIG_ROLE();
     }
 
     function _expectUnauthorized(address account, bytes32 role) internal {
@@ -715,25 +715,25 @@ contract SecurityAccessControlTest is Test {
         registry.unpause();
     }
 
-    // ── HumanReputation — MINTER_ROLE (1 test) ──
+    // ── LoopReputation — MINTER_ROLE (1 test) ──
 
     function test_ACL_Token_mint_Unauthorized() public {
         vm.prank(attacker);
         _expectUnauthorized(attacker, MINTER_ROLE_TOKEN);
-        hrepToken.mint(attacker, 1000e6);
+        lrepToken.mint(attacker, 1000e6);
     }
 
-    // ── HumanReputation — CONFIG_ROLE (2 tests) ──
+    // ── LoopReputation — CONFIG_ROLE (2 tests) ──
 
     function test_ACL_Token_setGovernor_Unauthorized() public {
         vm.prank(attacker);
         _expectUnauthorized(attacker, CONFIG_ROLE_TOKEN);
-        hrepToken.setGovernor(attacker);
+        lrepToken.setGovernor(attacker);
     }
 
-    function test_ACL_Token_setContentVotingContracts_Unauthorized() public {
+    function test_ACL_Token_setPredictionContracts_Unauthorized() public {
         vm.prank(attacker);
         _expectUnauthorized(attacker, CONFIG_ROLE_TOKEN);
-        hrepToken.setContentVotingContracts(attacker, attacker);
+        lrepToken.setPredictionContracts(attacker, attacker);
     }
 }

@@ -32,7 +32,7 @@ function deployInitializedProtocolConfig(address admin, address governance) retu
 abstract contract ContentSubmissionTestBase {
     Vm internal constant HEVM = Vm(address(uint160(uint256(keccak256("hevm cheat code")))));
     ContentRegistry internal activeTlockContentRegistry;
-    uint8 internal constant DEFAULT_SUBMISSION_REWARD_ASSET_HREP = 0;
+    uint8 internal constant DEFAULT_SUBMISSION_REWARD_ASSET_LREP = 0;
     uint256 internal constant DEFAULT_SUBMISSION_REWARD_POOL = 1e6;
     uint256 internal constant DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS = 3;
     uint256 internal constant DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS = 1;
@@ -193,7 +193,7 @@ abstract contract ContentSubmissionTestBase {
             );
         uint256 rewardAmount = _defaultSubmissionRewardAmount(reservation.registry);
         bytes32 revealCommitment = _questionReservationRevealCommitment(reservation, submissionKey, rewardAmount);
-        IERC20(reservation.registry.hrepToken()).approve(rewardEscrow, rewardAmount);
+        IERC20(reservation.registry.lrepToken()).approve(rewardEscrow, rewardAmount);
         reservation.registry.reserveSubmission(revealCommitment);
     }
 
@@ -204,7 +204,7 @@ abstract contract ContentSubmissionTestBase {
     ) internal view returns (bytes32) {
         ContentRegistry.SubmissionRewardTerms memory rewardTerms =
             ContentRegistry.SubmissionRewardTerms({
-                asset: DEFAULT_SUBMISSION_REWARD_ASSET_HREP,
+                asset: DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
                 amount: rewardAmount,
                 requiredVoters: DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS,
                 requiredSettledRounds: DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
@@ -241,7 +241,7 @@ abstract contract ContentSubmissionTestBase {
     ) internal view returns (bytes32) {
         uint256 rewardAmount = _defaultSubmissionRewardAmount(registry);
         ContentRegistry.SubmissionRewardTerms memory rewardTerms = ContentRegistry.SubmissionRewardTerms({
-            asset: DEFAULT_SUBMISSION_REWARD_ASSET_HREP,
+            asset: DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
             amount: rewardAmount,
             requiredVoters: DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS,
             requiredSettledRounds: DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
@@ -376,7 +376,7 @@ abstract contract ContentSubmissionTestBase {
     function _defaultSubmissionRewardAmount(ContentRegistry registry) internal view returns (uint256) {
         ProtocolConfig config = registry.protocolConfig();
         if (address(config) != address(0)) {
-            uint256 configuredMinimum = config.minSubmissionHrepPool();
+            uint256 configuredMinimum = config.minSubmissionLrepPool();
             if (configuredMinimum != 0) return configuredMinimum;
         }
         return DEFAULT_SUBMISSION_REWARD_POOL;
@@ -389,7 +389,7 @@ abstract contract ContentSubmissionTestBase {
     {
         uint256 rewardAmount = _defaultSubmissionRewardAmount(registry);
         return ContentRegistry.SubmissionRewardTerms({
-            asset: DEFAULT_SUBMISSION_REWARD_ASSET_HREP,
+            asset: DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
             amount: rewardAmount,
             requiredVoters: DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS,
             requiredSettledRounds: DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
@@ -500,7 +500,7 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
 
     struct DirectTestCommitRequest {
         RoundVotingEngine engine;
-        IERC20 hrepToken;
+        IERC20 lrepToken;
         address voter;
         uint256 contentId;
         bool isUp;
@@ -743,7 +743,7 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
         );
 
         vm.startPrank(request.voter);
-        request.hrepToken.approve(address(request.engine), request.stake);
+        request.lrepToken.approve(address(request.engine), request.stake);
         request.engine
             .commitVote(
                 request.contentId,

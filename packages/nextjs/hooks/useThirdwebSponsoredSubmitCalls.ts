@@ -27,7 +27,7 @@ import {
   thirdwebClient,
 } from "~~/services/thirdweb/client";
 
-export type ThirdwebContractCall = {
+type ThirdwebContractCall = {
   abi: Abi;
   address: `0x${string}`;
   functionName: string;
@@ -37,7 +37,7 @@ export type ThirdwebContractCall = {
 
 type ThirdwebBatchSponsorshipMode = "sponsored" | "self-funded";
 
-export type ExecuteContractCallBatchOptions = {
+type ExecuteContractCallBatchOptions = {
   atomicRequired?: boolean;
   action?: string;
   sponsorshipMode?: ThirdwebBatchSponsorshipMode;

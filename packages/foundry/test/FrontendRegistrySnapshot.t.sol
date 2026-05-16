@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 import { ContentRegistry } from "../contracts/ContentRegistry.sol";
-import { HumanReputation } from "../contracts/HumanReputation.sol";
+import { LoopReputation } from "../contracts/LoopReputation.sol";
 import { FrontendRegistry } from "../contracts/FrontendRegistry.sol";
 import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
 import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
@@ -17,7 +17,7 @@ import { VotingTestBase } from "./helpers/VotingTestHelpers.sol";
 /// @title FrontendRegistrySnapshotTest
 /// @notice Guards the settlement-time snapshot preservation for frontend registry rotations.
 contract FrontendRegistrySnapshotTest is VotingTestBase {
-    HumanReputation public hrepToken;
+    LoopReputation public lrepToken;
     ContentRegistry public registry;
     RoundVotingEngine public votingEngine;
     RoundRewardDistributor public rewardDistributor;
@@ -52,8 +52,8 @@ contract FrontendRegistrySnapshotTest is VotingTestBase {
 
         vm.startPrank(owner);
 
-        hrepToken = new HumanReputation(owner, owner);
-        hrepToken.grantRole(hrepToken.MINTER_ROLE(), owner);
+        lrepToken = new LoopReputation(owner, owner);
+        lrepToken.grantRole(lrepToken.MINTER_ROLE(), owner);
 
         ContentRegistry registryImpl = new ContentRegistry();
         RoundVotingEngine engineImpl = new RoundVotingEngine();
@@ -63,7 +63,7 @@ contract FrontendRegistrySnapshotTest is VotingTestBase {
             address(
                 new ERC1967Proxy(
                     address(registryImpl),
-                    abi.encodeCall(ContentRegistry.initializeWithTreasury, (owner, owner, owner, address(hrepToken)))
+                    abi.encodeCall(ContentRegistry.initializeWithTreasury, (owner, owner, owner, address(lrepToken)))
                 )
             )
         );
@@ -76,7 +76,7 @@ contract FrontendRegistrySnapshotTest is VotingTestBase {
                     address(engineImpl),
                     abi.encodeCall(
                         RoundVotingEngine.initialize,
-                        (owner, address(hrepToken), address(registry), address(protocolConfig))
+                        (owner, address(lrepToken), address(registry), address(protocolConfig))
                     )
                 )
             )
@@ -88,7 +88,7 @@ contract FrontendRegistrySnapshotTest is VotingTestBase {
                     address(distImpl),
                     abi.encodeCall(
                         RoundRewardDistributor.initialize,
-                        (owner, address(hrepToken), address(votingEngine), address(registry))
+                        (owner, address(lrepToken), address(votingEngine), address(registry))
                     )
                 )
             )
@@ -107,18 +107,18 @@ contract FrontendRegistrySnapshotTest is VotingTestBase {
         originalFrontendRegistry.addFeeCreditor(address(rewardDistributor));
         ProtocolConfig(address(protocolConfig)).setFrontendRegistry(address(originalFrontendRegistry));
 
-        hrepToken.mint(owner, 100_000e6);
-        hrepToken.mint(submitter, 10_000e6);
-        hrepToken.mint(voter1, 10_000e6);
-        hrepToken.mint(voter2, 10_000e6);
-        hrepToken.mint(voter3, 10_000e6);
-        hrepToken.mint(frontendOp, 5_000e6);
-        hrepToken.mint(replacementOnlyFrontend, 5_000e6);
+        lrepToken.mint(owner, 100_000e6);
+        lrepToken.mint(submitter, 10_000e6);
+        lrepToken.mint(voter1, 10_000e6);
+        lrepToken.mint(voter2, 10_000e6);
+        lrepToken.mint(voter3, 10_000e6);
+        lrepToken.mint(frontendOp, 5_000e6);
+        lrepToken.mint(replacementOnlyFrontend, 5_000e6);
 
         vm.stopPrank();
 
         vm.startPrank(frontendOp);
-        hrepToken.approve(address(originalFrontendRegistry), 1000e6);
+        lrepToken.approve(address(originalFrontendRegistry), 1000e6);
         originalFrontendRegistry.register();
         vm.stopPrank();
     }
@@ -142,7 +142,7 @@ contract FrontendRegistrySnapshotTest is VotingTestBase {
         vm.stopPrank();
 
         vm.startPrank(frontendOp);
-        hrepToken.approve(address(replacementRegistry), 1000e6);
+        lrepToken.approve(address(replacementRegistry), 1000e6);
         replacementRegistry.register();
         vm.stopPrank();
 
@@ -182,7 +182,7 @@ contract FrontendRegistrySnapshotTest is VotingTestBase {
         vm.stopPrank();
 
         vm.startPrank(replacementOnlyFrontend);
-        hrepToken.approve(address(replacementRegistry), 1000e6);
+        lrepToken.approve(address(replacementRegistry), 1000e6);
         replacementRegistry.register();
         vm.stopPrank();
 
@@ -205,7 +205,7 @@ contract FrontendRegistrySnapshotTest is VotingTestBase {
         bytes memory ciphertext = _testCiphertext(isUp, salt, contentId);
 
         vm.startPrank(voter);
-        hrepToken.approve(address(votingEngine), STAKE);
+        lrepToken.approve(address(votingEngine), STAKE);
         uint256 cachedRoundContext1 =
             _roundContext(votingEngine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());
         votingEngine.commitVote(
@@ -225,7 +225,7 @@ contract FrontendRegistrySnapshotTest is VotingTestBase {
 
     function _submitContent() internal returns (uint256 contentId) {
         vm.startPrank(submitter);
-        hrepToken.approve(address(registry), 10e6);
+        lrepToken.approve(address(registry), 10e6);
         _submitContentWithReservation(
             registry, "https://example.com/frontend-snapshot", "test goal", "test goal", "test", 1
         );
@@ -238,7 +238,7 @@ contract FrontendRegistrySnapshotTest is VotingTestBase {
         frontendRegistry = FrontendRegistry(
             address(
                 new ERC1967Proxy(
-                    address(impl), abi.encodeCall(FrontendRegistry.initialize, (owner, owner, address(hrepToken)))
+                    address(impl), abi.encodeCall(FrontendRegistry.initialize, (owner, owner, address(lrepToken)))
                 )
             )
         );

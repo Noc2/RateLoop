@@ -153,9 +153,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
     ///         proposer's bond (because the proposer already withdrew some/all of their pending
     ///         balance). Governance can act on this off-chain to recover residual liability.
     ///         L-Integrations-1 from 2026-05-16 audit.
-    event ProposerBondUnrecoverable(
-        bytes32 indexed snapshotKey, address indexed proposer, uint256 missingAmount
-    );
+    event ProposerBondUnrecoverable(bytes32 indexed snapshotKey, address indexed proposer, uint256 missingAmount);
 
     constructor(address admin, address newFrontendRegistry, address newChallengeBondToken) {
         if (admin == address(0) || newChallengeBondToken == address(0)) revert InvalidAddress();
@@ -462,16 +460,14 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         address consumer = proposal.consumer;
         if (consumer == address(0)) revert InvalidAddress();
 
-        bool withinVetoWindow =
-            block.timestamp <= uint256(snapshot.finalizedAt) + uint256(FINALIZATION_VETO_WINDOW);
+        bool withinVetoWindow = block.timestamp <= uint256(snapshot.finalizedAt) + uint256(FINALIZATION_VETO_WINDOW);
         if (!withinVetoWindow) {
             // Outside the veto window the rejection is only safe if the consumer has not yet paid
             // any claim against this snapshot's merkle root.
-            if (
-                IRoundPayoutSnapshotConsumer(consumer).isRoundPayoutSnapshotConsumed(
-                    snapshot.domain, snapshot.rewardPoolId, snapshot.contentId, snapshot.roundId
-                )
-            ) {
+            if (IRoundPayoutSnapshotConsumer(consumer)
+                    .isRoundPayoutSnapshotConsumed(
+                        snapshot.domain, snapshot.rewardPoolId, snapshot.contentId, snapshot.roundId
+                    )) {
                 revert SnapshotConsumed();
             }
         }

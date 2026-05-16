@@ -14,7 +14,7 @@ test.describe("Settings page", () => {
     const recipient = ANVIL_ACCOUNTS.account11.address;
     const transferAmount = "1.25";
     const transferAmountMicro = 1_250_000n;
-    const tokenAddress = CONTRACT_ADDRESSES.HumanReputation;
+    const tokenAddress = CONTRACT_ADDRESSES.LoopReputation;
 
     const senderBalanceBefore = await readTokenBalance(sender, tokenAddress);
     const recipientBalanceBefore = await readTokenBalance(recipient, tokenAddress);

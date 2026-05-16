@@ -5,7 +5,7 @@ import {
   getVoterLeaderboardSnapshot,
   resolveVoterLeaderboardSelection,
 } from "~~/lib/governance/voterLeaderboardSnapshot";
-import { readHrepBalances, readProfileRegistryProfiles } from "~~/lib/profileRegistry/server";
+import { readLrepBalances, readProfileRegistryProfiles } from "~~/lib/profileRegistry/server";
 import { isPonderAvailable } from "~~/services/ponder/client";
 import { checkRateLimit } from "~~/utils/rateLimit";
 
@@ -14,7 +14,7 @@ const MAX_LIMIT = 100;
 
 async function buildIncludedAddressFallback(address: string, chainId: number) {
   const [balances, profiles] = await Promise.all([
-    readHrepBalances([address], { chainId }),
+    readLrepBalances([address], { chainId }),
     readProfileRegistryProfiles([address], { chainId }),
   ]);
 
@@ -83,7 +83,7 @@ export async function GET(request: NextRequest) {
           limit,
         },
         {
-          readBalances: addresses => readHrepBalances(addresses, { chainId: parsedChainId! }),
+          readBalances: addresses => readLrepBalances(addresses, { chainId: parsedChainId! }),
         },
       );
       const profiles = await readProfileRegistryProfiles(selection.selectedAddresses, { chainId: parsedChainId! });

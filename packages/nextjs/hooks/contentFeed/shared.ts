@@ -190,7 +190,7 @@ function normalizeRewardPoolCurrency(
   if (normalizedCurrency === "LREP" || normalizedCurrency === "USDC" || normalizedCurrency === "MIXED") {
     return normalizedCurrency;
   }
-  if (normalizedCurrency === "HREP") return "LREP";
+  if (normalizedCurrency === "LREP") return "LREP";
 
   if (asset === 0 || asset === "0" || asset === 0n) return "LREP";
   if (asset === 1 || asset === "1" || asset === 1n) return "USDC";
@@ -210,7 +210,7 @@ function normalizeRewardPoolDisplayCurrency(
   ) {
     return normalizedDisplayCurrency;
   }
-  if (normalizedDisplayCurrency === "HREP") return "LREP";
+  if (normalizedDisplayCurrency === "LREP") return "LREP";
 
   if (currency === "LREP") return "LREP";
   if (currency === "MIXED") return "MIXED";

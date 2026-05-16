@@ -63,13 +63,13 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     bytes32 public constant X402_GATEWAY_ROLE = keccak256("X402_GATEWAY_ROLE");
 
     // --- Constants ---
-    uint256 internal constant REVIVAL_STAKE = 5e6; // 5 HREP (6 decimals)
+    uint256 internal constant REVIVAL_STAKE = 5e6; // 5 LREP (6 decimals)
     uint256 internal constant DORMANCY_PERIOD = 30 days;
     uint256 internal constant SUBMISSION_RESERVATION_PERIOD = 30 minutes;
     uint256 internal constant RESERVED_SUBMISSION_MIN_AGE = 1 seconds;
     uint256 internal constant DORMANT_EXCLUSIVE_REVIVAL_PERIOD = 1 days;
     uint8 internal constant MAX_REVIVALS = 2;
-    uint8 internal constant SUBMISSION_REWARD_ASSET_HREP = 0;
+    uint8 internal constant SUBMISSION_REWARD_ASSET_LREP = 0;
     uint8 internal constant SUBMISSION_REWARD_ASSET_USDC = 1;
     uint256 internal constant DEFAULT_MIN_SUBMISSION_REWARD_POOL = 1e6;
     uint256 internal constant MIN_SUBMISSION_REWARD_REQUIRED_VOTERS = 3;
@@ -156,7 +156,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     }
 
     // --- State ---
-    IERC20 public hrepToken;
+    IERC20 public lrepToken;
     address public votingEngine;
     ICategoryRegistry public categoryRegistry;
     address public bonusPool; // Cancellation fee sink (anti-spam), typically the treasury
@@ -287,21 +287,21 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         _disableInitializers();
     }
 
-    function initializeWithTreasury(address _admin, address _governance, address _treasuryAuthority, address _hrepToken)
+    function initializeWithTreasury(address _admin, address _governance, address _treasuryAuthority, address _lrepToken)
         public
         initializer
     {
-        _initialize(_admin, _governance, _treasuryAuthority, _hrepToken);
+        _initialize(_admin, _governance, _treasuryAuthority, _lrepToken);
     }
 
-    function _initialize(address _admin, address _governance, address _treasuryAuthority, address _hrepToken) internal {
+    function _initialize(address _admin, address _governance, address _treasuryAuthority, address _lrepToken) internal {
         __AccessControl_init();
         __Pausable_init();
 
         require(_admin != address(0), "Invalid admin");
         require(_governance != address(0), "Invalid governance");
         require(_treasuryAuthority != address(0), "Bad treasury");
-        require(_hrepToken != address(0), "Invalid HREP token");
+        require(_lrepToken != address(0), "Invalid LREP token");
 
         // Governance gets all permanent roles
         _grantRole(DEFAULT_ADMIN_ROLE, _governance);
@@ -319,7 +319,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             _grantRole(CONFIG_ROLE, _admin);
         }
 
-        hrepToken = IERC20(_hrepToken);
+        lrepToken = IERC20(_lrepToken);
         nextContentId = 1;
         nextQuestionBundleId = 1;
         treasury = _treasuryAuthority;
@@ -599,7 +599,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     }
 
     /// @notice Submit a question with a context link or image evidence.
-    /// @dev Attaches the governance minimum HREP bounty and default round configuration.
+    /// @dev Attaches the governance minimum LREP bounty and default round configuration.
     function submitQuestion(
         string memory contextUrl,
         string[] memory imageUrls,
@@ -612,8 +612,8 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         QuestionSpecCommitment memory spec
     ) public nonReentrant whenNotPaused returns (uint256) {
         SubmissionRewardTerms memory rewardTerms = SubmissionRewardTerms({
-            asset: SUBMISSION_REWARD_ASSET_HREP,
-            amount: _minimumSubmissionReward(SUBMISSION_REWARD_ASSET_HREP),
+            asset: SUBMISSION_REWARD_ASSET_LREP,
+            amount: _minimumSubmissionReward(SUBMISSION_REWARD_ASSET_LREP),
             requiredVoters: MIN_SUBMISSION_REWARD_REQUIRED_VOTERS,
             requiredSettledRounds: MIN_SUBMISSION_REWARD_SETTLED_ROUNDS,
             bountyClosesAt: 0,
@@ -992,7 +992,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         emit ContentDormant(contentId);
     }
 
-    /// @notice Revive dormant content by staking REVIVAL_STAKE HREP tokens.
+    /// @notice Revive dormant content by staking REVIVAL_STAKE LREP tokens.
     /// @dev Resets the activity timer. Max MAX_REVIVALS revivals per content.
     ///      Revival stake is sent to treasury (non-refundable).
     function reviveContent(uint256 contentId) external nonReentrant whenNotPaused {
@@ -1008,7 +1008,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
 
         // M-1/M-2 fix: send revival stake to treasury instead of leaving it unaccounted
         require(treasury != address(0), "Treasury not set");
-        hrepToken.safeTransferFrom(msg.sender, treasury, REVIVAL_STAKE);
+        lrepToken.safeTransferFrom(msg.sender, treasury, REVIVAL_STAKE);
 
         c.status = ContentStatus.Active;
         c.dormantCount++;
@@ -1257,7 +1257,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
 
     function _validateSubmissionReward(SubmissionRewardTerms memory rewardTerms) internal view {
         require(
-            rewardTerms.asset == SUBMISSION_REWARD_ASSET_HREP || rewardTerms.asset == SUBMISSION_REWARD_ASSET_USDC,
+            rewardTerms.asset == SUBMISSION_REWARD_ASSET_LREP || rewardTerms.asset == SUBMISSION_REWARD_ASSET_USDC,
             "Invalid reward asset"
         );
         require(rewardTerms.amount >= _minimumSubmissionReward(rewardTerms.asset), "Reward below minimum");
@@ -1295,8 +1295,8 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
 
     function _minimumSubmissionReward(uint8 rewardAsset) internal view returns (uint256 minimum) {
         if (address(protocolConfig) != address(0)) {
-            minimum = rewardAsset == SUBMISSION_REWARD_ASSET_HREP
-                ? protocolConfig.minSubmissionHrepPool()
+            minimum = rewardAsset == SUBMISSION_REWARD_ASSET_LREP
+                ? protocolConfig.minSubmissionLrepPool()
                 : protocolConfig.minSubmissionUsdcPool();
         }
         return minimum == 0 ? DEFAULT_MIN_SUBMISSION_REWARD_POOL : minimum;

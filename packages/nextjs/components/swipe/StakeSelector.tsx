@@ -13,7 +13,7 @@ import { useRaterIdentityStake, useRaterRegistryIdentity } from "~~/hooks/useRat
 import { useRoundSnapshot } from "~~/hooks/useRoundSnapshot";
 import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
 import type { OpenRoundFallbackData, VotingConfig } from "~~/lib/contracts/roundVotingEngine";
-import { estimateVoteReturn, formatHrepAmount } from "~~/lib/vote/voteIncentives";
+import { estimateVoteReturn, formatLrepAmount } from "~~/lib/vote/voteIncentives";
 
 interface StakeSelectorProps {
   isOpen: boolean;
@@ -106,7 +106,7 @@ export function StakeSelector({
 
   const { remainingCapacity } = useRaterIdentityStake(contentId, currentRoundId, identityKey);
 
-  const { data: hrepBalance } = useScaffoldReadContract({
+  const { data: lrepBalance } = useScaffoldReadContract({
     contractName: REPUTATION_CONTRACT_NAME,
     functionName: "balanceOf",
     args: [address],
@@ -148,7 +148,7 @@ export function StakeSelector({
     }
   };
 
-  const balanceFormatted = hrepBalance ? Number(hrepBalance) / 1e6 : 0;
+  const balanceFormatted = lrepBalance ? Number(lrepBalance) / 1e6 : 0;
   const capacityFormatted = remainingCapacity != null ? Number(remainingCapacity) / 1e6 : 10;
   const maxByBalance = Math.floor(balanceFormatted);
   const maxByCapacity = Math.floor(capacityFormatted);
@@ -403,19 +403,19 @@ export function StakeSelector({
                     <div className="flex items-center justify-between gap-3">
                       <span>Est. return if accurate</span>
                       <span className="font-semibold tabular-nums">
-                        {formatHrepAmount(openPhaseGrossReturnMicro)} {symbol}
+                        {formatLrepAmount(openPhaseGrossReturnMicro)} {symbol}
                       </span>
                     </div>
                     <div className="flex items-center justify-between gap-3">
                       <span>If missed but revealed</span>
                       <span className="font-semibold tabular-nums">
-                        {formatHrepAmount(openPhaseRevealedRefundMicro)} {symbol}
+                        {formatLrepAmount(openPhaseRevealedRefundMicro)} {symbol}
                       </span>
                     </div>
                     <div className="flex items-center justify-between gap-3">
                       <span>Live pools</span>
                       <span className="font-semibold tabular-nums">
-                        up {formatHrepAmount(upPool, 0)} · down {formatHrepAmount(downPool, 0)}
+                        up {formatLrepAmount(upPool, 0)} · down {formatLrepAmount(downPool, 0)}
                       </span>
                     </div>
                   </>

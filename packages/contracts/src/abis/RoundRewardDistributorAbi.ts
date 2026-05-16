@@ -391,19 +391,6 @@ export const RoundRewardDistributorAbi = [
   },
   {
     "type": "function",
-    "name": "hrepToken",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "contract IERC20"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "initialize",
     "inputs": [
       {
@@ -412,7 +399,7 @@ export const RoundRewardDistributorAbi = [
         "internalType": "address"
       },
       {
-        "name": "_hrepToken",
+        "name": "_lrepToken",
         "type": "address",
         "internalType": "address"
       },
@@ -429,6 +416,19 @@ export const RoundRewardDistributorAbi = [
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "lrepToken",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract IERC20"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -1296,7 +1296,7 @@ export const RoundRewardDistributorAbi = [
   },
   {
     "type": "function",
-    "name": "sweepStrandedHrepToTreasury",
+    "name": "sweepStrandedLrepToTreasury",
     "inputs": [],
     "outputs": [
       {
@@ -1936,7 +1936,7 @@ export const RoundRewardDistributorAbi = [
   },
   {
     "type": "event",
-    "name": "StrandedHrepSwept",
+    "name": "StrandedLrepSwept",
     "inputs": [
       {
         "name": "treasury",
@@ -2074,7 +2074,7 @@ export const RoundRewardDistributorAbi = [
   },
   {
     "type": "error",
-    "name": "NoStrandedHrep",
+    "name": "NoStrandedLrep",
     "inputs": []
   },
   {

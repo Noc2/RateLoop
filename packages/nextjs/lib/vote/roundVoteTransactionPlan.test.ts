@@ -5,7 +5,7 @@ import { buildCommitVoteWithPermitCall, buildRoundVoteTransactionPlan } from "~~
 const addresses = {
   advisoryVoteRecorder: "0x0000000000000000000000000000000000000003",
   frontend: "0x0000000000000000000000000000000000000004",
-  hrep: "0x0000000000000000000000000000000000000001",
+  lrep: "0x0000000000000000000000000000000000000001",
   votingEngine: "0x0000000000000000000000000000000000000002",
 } as const;
 
@@ -17,7 +17,7 @@ const baseParams = {
   currentAllowance: 0n,
   drandChainHash: "0x00000000000000000000000000000000000000000000000000000000000000bb",
   frontend: addresses.frontend,
-  hrepAddress: addresses.hrep,
+  lrepAddress: addresses.lrep,
   roundContext: 65536n,
   targetRound: 100n,
   votingEngineAddress: addresses.votingEngine,

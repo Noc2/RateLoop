@@ -21,7 +21,7 @@ library RoundSettlementDistributionLib {
     event TreasuryFeeFallbackToVoterPool(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
 
     function distribute(
-        IERC20 hrepToken,
+        IERC20 lrepToken,
         ProtocolConfig protocolConfig,
         RoundLib.Round storage round,
         mapping(uint256 => mapping(uint256 => uint256)) storage roundVoterPool,
@@ -71,7 +71,7 @@ library RoundSettlementDistributionLib {
 
             if (treasuryShare > 0) {
                 treasuryPaid =
-                    _transferTreasuryFee(hrepToken, protocolConfig, roundVoterPool, contentId, roundId, treasuryShare);
+                    _transferTreasuryFee(lrepToken, protocolConfig, roundVoterPool, contentId, roundId, treasuryShare);
             }
         }
 
@@ -114,7 +114,7 @@ library RoundSettlementDistributionLib {
     }
 
     function _transferTreasuryFee(
-        IERC20 hrepToken,
+        IERC20 lrepToken,
         ProtocolConfig protocolConfig,
         mapping(uint256 => mapping(uint256 => uint256)) storage roundVoterPool,
         uint256 contentId,
@@ -123,7 +123,7 @@ library RoundSettlementDistributionLib {
     ) private returns (uint256 paid) {
         address currentTreasury = protocolConfig.treasury();
         if (currentTreasury != address(0)) {
-            try TokenTransferLib.safeTransfer(hrepToken, currentTreasury, treasuryShare) {
+            try TokenTransferLib.safeTransfer(lrepToken, currentTreasury, treasuryShare) {
                 paid = treasuryShare;
                 emit TreasuryFeeDistributed(contentId, roundId, treasuryShare);
             } catch {

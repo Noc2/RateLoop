@@ -1035,7 +1035,7 @@ ponder.on(
         voter,
         stakePayer: voter,
         stakeReturned: amount,
-        hrepReward: 0n,
+        lrepReward: 0n,
         claimedAt: event.block.timestamp,
       })
       .onConflictDoNothing();

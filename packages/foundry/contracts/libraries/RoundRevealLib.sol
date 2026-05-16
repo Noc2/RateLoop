@@ -410,13 +410,7 @@ library RoundRevealLib {
     ) private view returns (bytes32 scoreSeed) {
         scoreSeed = keccak256(
             abi.encode(
-                block.chainid,
-                address(this),
-                contentId,
-                roundId,
-                committedCount,
-                committedSetHash,
-                lastCommitPrevrandao
+                block.chainid, address(this), contentId, roundId, committedCount, committedSetHash, lastCommitPrevrandao
             )
         );
     }

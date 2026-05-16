@@ -1,6 +1,6 @@
 import "../helpers/fetch-shim";
 import {
-  approveHREP,
+  approveLREP,
   claimFrontendFee,
   claimFrontendFees,
   commitVoteDirect,
@@ -15,7 +15,7 @@ import {
   settleRoundDirect,
   slashFrontend,
   submitContentDirect,
-  transferHREP,
+  transferLREP,
   waitForPonderIndexed,
 } from "../helpers/admin-helpers";
 import { ANVIL_ACCOUNTS, DEPLOYER } from "../helpers/anvil-accounts";
@@ -37,7 +37,7 @@ test.describe("Frontend fee claim lifecycle", () => {
   const REWARD_DISTRIBUTOR = CONTRACT_ADDRESSES.RoundRewardDistributor;
   const FRONTEND_REGISTRY = CONTRACT_ADDRESSES.FrontendRegistry;
   const CONTENT_REGISTRY = CONTRACT_ADDRESSES.ContentRegistry;
-  const HREP_TOKEN = CONTRACT_ADDRESSES.HumanReputation;
+  const LREP_TOKEN = CONTRACT_ADDRESSES.LoopReputation;
   const STAKE = BigInt(10e6);
   const FRONTEND_STAKE = BigInt(1000e6);
   const EPOCH_DURATION = 300;
@@ -67,11 +67,11 @@ test.describe("Frontend fee claim lifecycle", () => {
       }),
     });
 
-    const funded = await transferHREP(frontendAddress, FRONTEND_STAKE, DEPLOYER.address, HREP_TOKEN);
+    const funded = await transferLREP(frontendAddress, FRONTEND_STAKE, DEPLOYER.address, LREP_TOKEN);
     expect(funded, `Failed to fund frontend ${frontendAddress}`).toBe(true);
 
-    const approved = await approveHREP(FRONTEND_REGISTRY, FRONTEND_STAKE, frontendAddress, HREP_TOKEN);
-    expect(approved, `Failed to approve HREP for frontend ${frontendAddress}`).toBe(true);
+    const approved = await approveLREP(FRONTEND_REGISTRY, FRONTEND_STAKE, frontendAddress, LREP_TOKEN);
+    expect(approved, `Failed to approve LREP for frontend ${frontendAddress}`).toBe(true);
 
     const registered = await registerFrontend(frontendAddress, FRONTEND_REGISTRY);
     expect(registered, `Failed to register frontend ${frontendAddress}`).toBe(true);
@@ -85,7 +85,7 @@ test.describe("Frontend fee claim lifecycle", () => {
     roundId: bigint;
   }> {
     const submitter = ANVIL_ACCOUNTS.account10;
-    const submitApproved = await approveHREP(CONTENT_REGISTRY, BigInt(10e6), submitter.address, HREP_TOKEN);
+    const submitApproved = await approveLREP(CONTENT_REGISTRY, BigInt(10e6), submitter.address, LREP_TOKEN);
     expect(submitApproved, "Content submission approval failed").toBe(true);
 
     const submitted = await submitContentDirect(
@@ -121,7 +121,7 @@ test.describe("Frontend fee claim lifecycle", () => {
     const commits: { commitKey: `0x${string}`; isUp: boolean; salt: `0x${string}` }[] = [];
 
     for (const voter of voters) {
-      const approved = await approveHREP(VOTING_ENGINE, STAKE, voter.account.address, HREP_TOKEN);
+      const approved = await approveLREP(VOTING_ENGINE, STAKE, voter.account.address, LREP_TOKEN);
       expect(approved, `Vote approval failed for ${voter.account.address}`).toBe(true);
 
       const commit = await commitVoteDirect(
@@ -241,7 +241,7 @@ test.describe("Frontend fee claim lifecycle", () => {
     const accumulatedBefore = await getFrontendAccumulatedFees(frontendAddress, FRONTEND_REGISTRY);
     expect(accumulatedBefore, "Frontend should have accumulated fees to withdraw").toBeGreaterThan(0n);
 
-    const walletBefore = await readTokenBalance(frontendAddress, HREP_TOKEN);
+    const walletBefore = await readTokenBalance(frontendAddress, LREP_TOKEN);
 
     const withdrawn = await claimFrontendFees(frontendAddress, FRONTEND_REGISTRY);
     expect(withdrawn, "claimFees() should succeed for eligible frontend with fees").toBe(true);
@@ -250,8 +250,8 @@ test.describe("Frontend fee claim lifecycle", () => {
     const accumulatedAfter = await getFrontendAccumulatedFees(frontendAddress, FRONTEND_REGISTRY);
     expect(accumulatedAfter).toBe(0n);
 
-    // Operator wallet should have received the HREP
-    const walletAfter = await readTokenBalance(frontendAddress, HREP_TOKEN);
+    // Operator wallet should have received the LREP
+    const walletAfter = await readTokenBalance(frontendAddress, LREP_TOKEN);
     expect(walletAfter - walletBefore).toBe(accumulatedBefore);
 
     // Double withdrawal should revert (no fees remaining)

@@ -52,7 +52,7 @@ export function getActiveBountyClosesAt(item: ContentItem, nowSeconds = Math.flo
   return bountyClosesAt;
 }
 
-export function isExpiredBountyItem(item: ContentItem, nowSeconds = Math.floor(Date.now() / 1000)) {
+function isExpiredBountyItem(item: ContentItem, nowSeconds = Math.floor(Date.now() / 1000)) {
   const rewardSummary = item.rewardPoolSummary;
   const hasExpiredRewardPool = Boolean(
     rewardSummary &&

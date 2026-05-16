@@ -21,7 +21,7 @@ export function useWalletSummaryData(address?: Address) {
   const { activeStaked: votingStaked } = useVotingStakes(address);
   const { votes: activeVotes, earliestReveal, hasPendingReveals } = useActiveVotesWithDeadlines(address);
 
-  const { data: hrepBalance } = useScaffoldReadContract({
+  const { data: lrepBalance } = useScaffoldReadContract({
     contractName: REPUTATION_CONTRACT_NAME,
     functionName: "balanceOf",
     args: [address],
@@ -52,10 +52,10 @@ export function useWalletSummaryData(address?: Address) {
 
   const summary = useWalletDisplaySummary(
     address,
-    !address || hrepBalance === undefined
+    !address || lrepBalance === undefined
       ? null
       : {
-          liquidMicro: hrepBalance,
+          liquidMicro: lrepBalance,
           votingStakedMicro,
           submissionStakedMicro: toMicroUnits(totalSubmissionStake),
           frontendStakedMicro: frontendInfo?.[1] ?? 0n,
@@ -65,10 +65,10 @@ export function useWalletSummaryData(address?: Address) {
 
   return {
     activeVotes,
-    hrepBalance,
+    lrepBalance,
     earliestReveal,
     hasPendingReveals,
-    liquidBalance: getWalletDisplayLiquidMicro(summary, hrepBalance),
+    liquidBalance: getWalletDisplayLiquidMicro(summary, lrepBalance),
     summary,
   };
 }

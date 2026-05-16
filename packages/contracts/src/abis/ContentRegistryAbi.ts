@@ -493,19 +493,6 @@ export const ContentRegistryAbi = [
   },
   {
     "type": "function",
-    "name": "hrepToken",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "contract IERC20"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "initializeWithTreasury",
     "inputs": [
       {
@@ -524,7 +511,7 @@ export const ContentRegistryAbi = [
         "internalType": "address"
       },
       {
-        "name": "_hrepToken",
+        "name": "_lrepToken",
         "type": "address",
         "internalType": "address"
       }
@@ -566,6 +553,19 @@ export const ContentRegistryAbi = [
         "name": "",
         "type": "bool",
         "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "lrepToken",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract IERC20"
       }
     ],
     "stateMutability": "view"
@@ -777,6 +777,19 @@ export const ContentRegistryAbi = [
       },
       {
         "name": "account",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "revokeVotingEngine",
+    "inputs": [
+      {
+        "name": "engine",
         "type": "address",
         "internalType": "address"
       }
@@ -2178,6 +2191,19 @@ export const ContentRegistryAbi = [
         "name": "account",
         "type": "address",
         "indexed": false,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "VotingEngineRevoked",
+    "inputs": [
+      {
+        "name": "engine",
+        "type": "address",
+        "indexed": true,
         "internalType": "address"
       }
     ],

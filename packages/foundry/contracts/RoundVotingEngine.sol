@@ -103,7 +103,7 @@ contract RoundVotingEngine is
     uint16 internal constant RBTS_SCORE_SCALE_BPS = 10_000;
 
     // --- State ---
-    IERC20 internal hrepToken;
+    IERC20 internal lrepToken;
     ContentRegistry internal registry;
     ProtocolConfig public protocolConfig;
 
@@ -154,7 +154,7 @@ contract RoundVotingEngine is
     // Consensus subsidy reserve: pre-funded + replenished by 5% of each losing pool.
     // Pays out on unanimous rounds (losingPool == 0) to incentivize voting on obvious content.
     uint256 public consensusReserve;
-    uint256 internal accountedHrepBalance;
+    uint256 internal accountedLrepBalance;
 
     // Config snapshot per round: prevents governance config changes from affecting in-progress rounds
     mapping(uint256 => mapping(uint256 => RoundLib.RoundConfig)) public roundConfigSnapshot;
@@ -252,6 +252,7 @@ contract RoundVotingEngine is
     event CurrentEpochRefunded(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
     event TreasuryFeeDistributed(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
     event ConsensusReserveFunded(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
+    event ConsensusReserveToppedUp(address indexed funder, uint256 amount);
     event ConsensusSubsidyDistributed(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
@@ -259,7 +260,7 @@ contract RoundVotingEngine is
         _disableInitializers();
     }
 
-    function initialize(address _governance, address _hrepToken, address _registry, address _protocolConfig)
+    function initialize(address _governance, address _lrepToken, address _registry, address _protocolConfig)
         public
         initializer
     {
@@ -267,25 +268,26 @@ contract RoundVotingEngine is
         __Pausable_init();
 
         if (_governance == address(0)) revert InvalidAddress();
-        if (_hrepToken == address(0)) revert InvalidAddress();
+        if (_lrepToken == address(0)) revert InvalidAddress();
         if (_registry == address(0)) revert InvalidAddress();
         if (_protocolConfig == address(0)) revert InvalidAddress();
 
         _grantRole(DEFAULT_ADMIN_ROLE, _governance);
         _grantRole(PAUSER_ROLE, _governance);
 
-        hrepToken = IERC20(_hrepToken);
+        lrepToken = IERC20(_lrepToken);
         registry = ContentRegistry(_registry);
         protocolConfig = ProtocolConfig(_protocolConfig);
     }
 
-    /// @notice Add HREP to the consensus reserve.
+    /// @notice Add LREP to the consensus reserve.
     /// @dev Permissionless by design — treasury top-ups and slashed-stake routing both use this same path.
     function addToConsensusReserve(uint256 amount) external {
         if (amount == 0) revert InvalidStake();
-        hrepToken.safeTransferFrom(msg.sender, address(this), amount);
-        accountedHrepBalance += amount;
+        lrepToken.safeTransferFrom(msg.sender, address(this), amount);
+        accountedLrepBalance += amount;
         consensusReserve += amount;
+        emit ConsensusReserveToppedUp(msg.sender, amount);
     }
 
     /// @notice Drain a previously-deferred refund-only cleanup bounty owed to `msg.sender`.
@@ -310,27 +312,27 @@ contract RoundVotingEngine is
         uint256 remaining = pending - paidAmount;
         roundDeferredCleanupBounty[contentId][roundId][msg.sender] = remaining;
         consensusReserve = reserve - paidAmount;
-        accountedHrepBalance -= paidAmount;
-        hrepToken.safeTransfer(msg.sender, paidAmount);
+        accountedLrepBalance -= paidAmount;
+        lrepToken.safeTransfer(msg.sender, paidAmount);
 
         emit DeferredCleanupBountyClaimed(contentId, roundId, msg.sender, paidAmount, remaining);
     }
 
-    /// @notice Recover HREP sent directly to this contract outside accounted protocol flows.
+    /// @notice Recover LREP sent directly to this contract outside accounted protocol flows.
     /// @dev Admin-only and naturally reentrancy-safe: a re-entrant call would compute
-    ///      `balanceOf - accountedHrepBalance == 0` after the first transfer, draining nothing.
-    function recoverSurplusHrep() external {
+    ///      `balanceOf - accountedLrepBalance == 0` after the first transfer, draining nothing.
+    function recoverSurplusLrep() external {
         if (!hasRole(bytes32(0), msg.sender)) revert Unauthorized();
-        hrepToken.safeTransfer(msg.sender, hrepToken.balanceOf(address(this)) - accountedHrepBalance);
+        lrepToken.safeTransfer(msg.sender, lrepToken.balanceOf(address(this)) - accountedLrepBalance);
     }
 
-    /// @notice Transfer HREP reward tokens to a recipient. Only callable by RewardDistributor.
-    function transferReward(address recipient, uint256 hrepAmount) external {
+    /// @notice Transfer LREP reward tokens to a recipient. Only callable by RewardDistributor.
+    function transferReward(address recipient, uint256 lrepAmount) external {
         if (!protocolConfig.isRewardDistributorForEngine(msg.sender, address(this))) revert Unauthorized();
         if (recipient == address(0)) revert InvalidAddress();
-        if (hrepAmount > 0) {
-            accountedHrepBalance -= hrepAmount;
-            hrepToken.safeTransfer(recipient, hrepAmount);
+        if (lrepAmount > 0) {
+            accountedLrepBalance -= lrepAmount;
+            lrepToken.safeTransfer(recipient, lrepAmount);
         }
     }
 
@@ -428,7 +430,7 @@ contract RoundVotingEngine is
         bytes32 s
     ) external nonReentrant whenNotPaused {
         VotePreflightLib.permitStake(
-            address(hrepToken), msg.sender, address(this), stakeAmount, permitDeadline, v, r, s
+            address(lrepToken), msg.sender, address(this), stakeAmount, permitDeadline, v, r, s
         );
         _commitVote(
             msg.sender,
@@ -514,9 +516,9 @@ contract RoundVotingEngine is
         _validateCommitTlockData(
             contentId, roundId, ciphertext, targetRound, drandChainHash, epochEnd, roundCfg.epochDuration
         );
-        // Transfer HREP stake after all lightweight validation passes.
-        hrepToken.safeTransferFrom(voter, address(this), stakeAmount);
-        accountedHrepBalance += stakeAmount;
+        // Transfer LREP stake after all lightweight validation passes.
+        lrepToken.safeTransferFrom(voter, address(this), stakeAmount);
+        accountedLrepBalance += stakeAmount;
 
         _storeCommittedVote(
             contentId,
@@ -535,12 +537,12 @@ contract RoundVotingEngine is
             resolved.holder
         );
         _recordCommitAccounting(round, contentId, roundId, voter, resolved.identityKey, stakeAmount64, stakeAmount);
-        // M-Vote-1: bind the prevrandao of the last-commit block into the round so it can be mixed
-        // into the RBTS sampler seed at settlement. The last committer cannot grind their own
-        // block's prevrandao, so this removes the salt-grinding attack on the seed.
+        // Bind the prevrandao of the last-commit block into the round so it can be mixed into the
+        // RBTS sampler seed at settlement. The last committer cannot grind their own block's
+        // prevrandao, so this removes the salt-grinding attack on the seed.
         roundLastCommitPrevrandao[contentId][roundId] = bytes32(block.prevrandao);
-        // L-Vote-4: flag whether at least one commit in this round originated from an HRC-verified
-        // identity. `cancelExpiredRound` consults this flag to keep all-sybil rounds refund-cancellable.
+        // Flag whether at least one commit in this round originated from an HRC-verified identity.
+        // `cancelExpiredRound` consults this flag to keep all-sybil rounds refund-cancellable.
         if (resolved.hasActiveHumanCredential && !roundHasHumanVerifiedCommit[contentId][roundId]) {
             roundHasHumanVerifiedCommit[contentId][roundId] = true;
         }
@@ -819,11 +821,11 @@ contract RoundVotingEngine is
     // =========================================================================
 
     /// @notice Cancel an expired round that didn't reach the minimum voter threshold. Permissionless.
-    /// @dev L-Vote-4 (audit 2026-05-16): the min-RBTS-quorum lockout only engages once at least
-    ///      one commit in the round has originated from a human-credential-verified identity.
-    ///      A pure-sybil attacker (no HRC) reaching N >= 3 commits at min stake can no longer
-    ///      grief honest content into a `RevealFailed` cycle (~80 min @ ~3 HREP/cycle) -- the
-    ///      round remains refund-cancellable until any HRC voter participates.
+    /// @dev The min-RBTS-quorum lockout only engages once at least one commit in the round has
+    ///      originated from a human-credential-verified identity. A pure-sybil attacker (no HRC)
+    ///      reaching N >= 3 commits at min stake can no longer grief honest content into a
+    ///      `RevealFailed` cycle (~80 min @ ~3 LREP/cycle) -- the round remains
+    ///      refund-cancellable until any HRC voter participates.
     ///      Trade-off: this slightly weakens the "min-stake universal" property by one bit, but
     ///      eliminates the cheapest cancel-griefing vector. HRC voters are unaffected; the
     ///      moment any HRC commit lands the original lockout applies and the round proceeds
@@ -835,10 +837,10 @@ contract RoundVotingEngine is
         if (!RoundLib.isExpired(round, roundCfg.maxDuration)) revert RoundNotExpired();
         // Cancel-lockout requires BOTH commit quorum AND at least one HRC-verified commit. All-sybil
         // rounds (no HRC participation) stay refund-cancellable so they cannot be used to grief.
-        if (
-            round.voteCount >= _rbtsRevealQuorum(roundCfg.minVoters)
-                && roundHasHumanVerifiedCommit[contentId][roundId]
-        ) revert ThresholdReached();
+        if (round.voteCount >= _rbtsRevealQuorum(roundCfg.minVoters) && roundHasHumanVerifiedCommit[contentId][roundId])
+        {
+            revert ThresholdReached();
+        }
 
         round.state = RoundLib.RoundState.Cancelled;
 
@@ -940,7 +942,7 @@ contract RoundVotingEngine is
         _notifyBundleRoundTerminal(contentId, roundId, true);
 
         (uint256 updatedConsensusReserve, uint256 treasuryPaid) = RoundSettlementDistributionLib.distribute(
-            hrepToken,
+            lrepToken,
             protocolConfig,
             round,
             roundVoterPool,
@@ -957,7 +959,7 @@ contract RoundVotingEngine is
         );
         consensusReserve = updatedConsensusReserve;
         if (treasuryPaid > 0) {
-            accountedHrepBalance -= treasuryPaid;
+            accountedLrepBalance -= treasuryPaid;
         }
 
         IParticipationPool currentParticipationPool = _getParticipationPool();
@@ -1009,10 +1011,10 @@ contract RoundVotingEngine is
             cancelledRoundRefundClaimed[contentId][roundId],
             cancelledRoundRefundCommitClaimed[contentId][roundId],
             commits[contentId][roundId],
-            hrepToken,
+            lrepToken,
             commitKey
         );
-        accountedHrepBalance -= refundAmount;
+        accountedLrepBalance -= refundAmount;
 
         emit CancelledRoundRefundClaimed(contentId, roundId, refundRecipient, refundAmount);
     }
@@ -1046,7 +1048,7 @@ contract RoundVotingEngine is
         (
             uint256 forfeitedToTreasury,
             uint256 addedToConsensusReserve,
-            uint256 refundedHrep,
+            uint256 refundedLrep,
             uint256 processedPastEpochCount,
             uint256 cleanupIncentive,
             uint256 updatedConsensusReserve,
@@ -1058,7 +1060,7 @@ contract RoundVotingEngine is
             roundCleanupIncentivePaid,
             contentId,
             roundId,
-            hrepToken,
+            lrepToken,
             protocolConfig,
             consensusReserve,
             msg.sender,
@@ -1070,12 +1072,12 @@ contract RoundVotingEngine is
         if (updatedConsensusReserve != previousConsensusReserve) {
             consensusReserve = updatedConsensusReserve;
         }
-        uint256 paidOut = refundedHrep + cleanupIncentive;
+        uint256 paidOut = refundedLrep + cleanupIncentive;
         if (forfeitedToTreasury > 0 && updatedConsensusReserve == previousConsensusReserve + addedToConsensusReserve) {
             paidOut += forfeitedToTreasury;
         }
         if (paidOut > 0) {
-            accountedHrepBalance -= paidOut;
+            accountedLrepBalance -= paidOut;
         }
 
         if (forfeitedToTreasury > 0) {
@@ -1097,7 +1099,7 @@ contract RoundVotingEngine is
         if (deferredCleanupBounty > 0) {
             // Refund-only batch where the consensus reserve could not cover the keeper bounty
             // in full. Record the IOU; keeper drains via `claimDeferredCleanupBounty` once the
-            // reserve has been topped up. No accountedHrepBalance change here -- the HREP has
+            // reserve has been topped up. No accountedLrepBalance change here -- the LREP has
             // not left the contract yet.
             roundDeferredCleanupBounty[contentId][roundId][msg.sender] += deferredCleanupBounty;
             emit DeferredCleanupBountyAccrued(contentId, roundId, msg.sender, deferredCleanupBounty);
@@ -1111,8 +1113,8 @@ contract RoundVotingEngine is
             }
         }
 
-        if (refundedHrep > 0) {
-            emit CurrentEpochRefunded(contentId, roundId, refundedHrep);
+        if (refundedLrep > 0) {
+            emit CurrentEpochRefunded(contentId, roundId, refundedLrep);
         }
     }
     // =========================================================================
@@ -1499,12 +1501,6 @@ contract RoundVotingEngine is
     // Frontend registry snapshot per round so historical fee claims do not depend on live registry replacement.
     mapping(uint256 => mapping(uint256 => address)) public roundFrontendRegistrySnapshot;
 
-    /// @dev Storage placeholder reserving the slot once occupied by the removed
-    ///      `contentHasSettledRound` mapping (slim 99792bbb). DO NOT remove or repurpose:
-    ///      preserves storage layout for any in-place proxy upgrade from a deployment that
-    ///      still has data in this slot.
-    mapping(uint256 => bool) private __deprecated_contentHasSettledRound;
-
     // Settled rounds with expired unrevealed votes must be cleaned before reward claims.
     mapping(uint256 => mapping(uint256 => uint256)) public roundUnrevealedCleanupRemaining;
 
@@ -1516,40 +1512,32 @@ contract RoundVotingEngine is
     mapping(uint256 => mapping(uint256 => uint64)) public roundRatingUpEvidence;
     mapping(uint256 => mapping(uint256 => uint64)) public roundRatingDownEvidence;
 
-    // Commit timestamp used for bounty eligibility. Added after existing storage slots
-    // so in-place upgrades do not shift older mappings.
+    // Commit timestamp used for bounty eligibility.
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint48))) public commitCommittedAt;
 
     /// @notice Tracks bundle-observer terminal notifications that reverted on the escrow side.
-    /// @dev Appended after existing storage slots to preserve the upgradeable layout. Set true
-    ///      by `_notifyBundleRoundTerminal` on revert; cleared by `replayBundleObserverNotify`
-    ///      (or by a subsequent successful notification). Indexed by (contentId, roundId).
+    /// @dev Set true by `_notifyBundleRoundTerminal` on revert; cleared by
+    ///      `replayBundleObserverNotify` (or by a subsequent successful notification).
+    ///      Indexed by (contentId, roundId).
     mapping(uint256 contentId => mapping(uint256 roundId => bool)) public pendingBundleObserverReplay;
 
-    // M-Vote-1 (audit 2026-05-16): block.prevrandao of the last-commit block per round.
-    // Mixed into the RBTS sampler seed so the seed is unguessable at commit time. The last
-    // committer cannot grind their own block's prevrandao -- it is supplied by the validator
-    // and only revealed after the block is mined. Appended after existing storage so in-place
-    // upgrades do not shift older mappings.
+    // block.prevrandao of the last-commit block per round. Mixed into the RBTS sampler seed so
+    // the seed is unguessable at commit time. The last committer cannot grind their own block's
+    // prevrandao -- it is supplied by the validator and only revealed after the block is mined.
     mapping(uint256 => mapping(uint256 => bytes32)) public roundLastCommitPrevrandao;
 
-    // L-Vote-4 (audit 2026-05-16): true if at least one commit in this round originated from an
-    // address with an active human credential. `cancelExpiredRound` requires this flag before the
-    // min-RBTS-quorum cancel-lockout engages -- attacker-only rounds (all non-HRC sybils) remain
-    // refund-cancellable so they cannot grief honest content into a RevealFailed cycle.
+    // True if at least one commit in this round originated from an address with an active human
+    // credential. `cancelExpiredRound` requires this flag before the min-RBTS-quorum cancel-lockout
+    // engages -- attacker-only rounds (all non-HRC sybils) remain refund-cancellable so they
+    // cannot grief honest content into a RevealFailed cycle.
     mapping(uint256 => mapping(uint256 => bool)) public roundHasHumanVerifiedCommit;
 
-    // Codex PR #12 follow-up: per-round, per-keeper IOU for the refund-only cleanup bounty
-    // when the consensus reserve was too low to pay it in full. Drained by
-    // `claimDeferredCleanupBounty`. Already counted toward the per-round 5 HREP cap so a
-    // deferred sliver cannot be used to bypass the envelope.
-    mapping(uint256 contentId => mapping(uint256 roundId => mapping(address recipient => uint256 amount)))
-        public roundDeferredCleanupBounty;
+    // Per-round, per-keeper IOU for the refund-only cleanup bounty when the consensus reserve was
+    // too low to pay it in full. Drained by `claimDeferredCleanupBounty`. Already counted toward
+    // the per-round 5 LREP cap so a deferred sliver cannot be used to bypass the envelope.
+    mapping(uint256 contentId => mapping(uint256 roundId => mapping(address recipient => uint256 amount))) public
+        roundDeferredCleanupBounty;
 
     // --- Storage gap reserved for future upgrades ---
-    // Shrinks by the number of new storage slots appended after the original gap:
-    //   pendingBundleObserverReplay, roundLastCommitPrevrandao, roundHasHumanVerifiedCommit,
-    //   roundDeferredCleanupBounty
-    // = 4 new mappings -> previous gap of [27] becomes [23].
-    uint256[23] private __gap;
+    uint256[24] private __gap;
 }

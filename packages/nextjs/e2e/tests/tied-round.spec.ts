@@ -24,15 +24,15 @@ import { expect, test } from "@playwright/test";
  *
  * Strategy:
  * 1. Ask a fresh question directly to get a clean round with 0 votes
- * 2. 4 accounts vote on the SAME content via UI: 2 UP + 2 DOWN, all 1 HREP
+ * 2. 4 accounts vote on the SAME content via UI: 2 UP + 2 DOWN, all 1 LREP
  *    (UI voting uses commitVote correctly via hooks)
  * 3. Fast-forward past epoch → keeper reveals via keeper API → fast-forward → settle
  * 4. Verify round.state === 3 (Tied) and rating unchanged
  *
  * Account allocation:
  * - Account #10 — submits new content
- * - Accounts #3, #4 — vote UP (1 HREP each)
- * - Accounts #5, #6 — vote DOWN (1 HREP each)
+ * - Accounts #3, #4 — vote UP (1 LREP each)
+ * - Accounts #5, #6 — vote DOWN (1 LREP each)
  *
  * NOTE: Uses accounts that may already have cooldowns from settlement-lifecycle
  * and reward-claim tests. The test asks a fresh question directly to avoid

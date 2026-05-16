@@ -33,7 +33,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
     uint256 internal constant BPS_SCALE = 10_000;
     uint256 internal constant BUNDLE_CLAIM_GRACE = 7 days;
     uint256 internal constant BUNDLE_REFUND_GRACE = 98 days;
-    uint8 internal constant REWARD_ASSET_HREP = 0;
+    uint8 internal constant REWARD_ASSET_LREP = 0;
     uint8 internal constant REWARD_ASSET_USDC = 1;
 
     event QuestionBundleRewardCreated(
@@ -84,7 +84,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         mapping(uint256 => uint256) storage contentBundleIndex,
         ContentRegistry registry,
         ProtocolConfig protocolConfig,
-        IERC20 hrepToken,
+        IERC20 lrepToken,
         IERC20 usdcToken,
         uint16 defaultFrontendFeeBps,
         CreateSubmissionBundleParams memory params
@@ -93,15 +93,13 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         require(bundleRewards[params.bundleId].id == 0, "Bundle exists");
         require(params.contentIds.length > 0, "No questions");
         require(params.funder != address(0), "Invalid funder");
-        require(params.asset == REWARD_ASSET_HREP || params.asset == REWARD_ASSET_USDC, "Invalid asset");
+        require(params.asset == REWARD_ASSET_LREP || params.asset == REWARD_ASSET_USDC, "Invalid asset");
         require(params.requiredCompleters >= MIN_REQUIRED_VOTERS, "Too few voters");
         require(params.requiredCompleters >= _requiredParticipantFloorForAmount(params.amount), "High-value floor");
         require(params.requiredSettledRounds >= 1, "Too few rounds");
         require(params.requiredSettledRounds <= MAX_REQUIRED_SETTLED_ROUNDS, "Too many rounds");
         require(params.amount >= params.requiredCompleters * params.requiredSettledRounds, "Amount too small");
-        require(
-            QuestionRewardPoolEscrowEligibilityLib.isValidPolicy(params.bountyEligibility), "Invalid eligibility"
-        );
+        require(QuestionRewardPoolEscrowEligibilityLib.isValidPolicy(params.bountyEligibility), "Invalid eligibility");
         QuestionRewardPoolEscrowBundleLib.requireFundingCoversMaxCompleters(
             registry, params.contentIds, params.amount, params.requiredSettledRounds
         );
@@ -109,7 +107,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         uint256 normalizedFeedbackClosesAt = _normalizeFeedbackClosesAt(params.bountyClosesAt, params.feedbackClosesAt);
 
         uint256 fundedAmount = QuestionRewardPoolEscrowTransferLib.pullExactToken(
-            _rewardToken(hrepToken, usdcToken, params.asset), params.funder, params.amount
+            _rewardToken(lrepToken, usdcToken, params.asset), params.funder, params.amount
         );
         (bytes32 funderIdentityKey, address funderIdentity) = _resolveFunderIdentity(protocolConfig, params.funder);
 
@@ -123,9 +121,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             funderIdentity
         );
 
-        _registerBundleQuestions(
-            bundleQuestions, contentBundleId, contentBundleIndex, registry, protocolConfig, params
-        );
+        _registerBundleQuestions(bundleQuestions, contentBundleId, contentBundleIndex, registry, protocolConfig, params);
 
         emit QuestionBundleRewardCreated(
             params.bundleId,
@@ -281,7 +277,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         ContentRegistry registry,
         RoundVotingEngine votingEngine,
         ProtocolConfig protocolConfig,
-        IERC20 hrepToken,
+        IERC20 lrepToken,
         IERC20 usdcToken,
         uint256 bundleId,
         uint256 roundSetIndex
@@ -381,12 +377,12 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         uint256 bundleRedirectedFrontendFee;
         (rewardAmount, reservedFrontendFee, frontendRecipient, bundleRedirectedFrontendFee) =
             QuestionRewardPoolEscrowTransferLib.settleClaimPayout(
-            _rewardToken(hrepToken, usdcToken, bundle.asset),
-            rewardRecipient,
-            rewardAmount,
-            frontendRecipient,
-            reservedFrontendFee
-        );
+                _rewardToken(lrepToken, usdcToken, bundle.asset),
+                rewardRecipient,
+                rewardAmount,
+                frontendRecipient,
+                reservedFrontendFee
+            );
         bundleRedirectedFrontendFee; // silence unused-local warnings; see comment above
 
         emit QuestionBundleRewardClaimed(
@@ -476,7 +472,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         ContentRegistry registry,
         RoundVotingEngine votingEngine,
         ProtocolConfig protocolConfig,
-        IERC20 hrepToken,
+        IERC20 lrepToken,
         IERC20 usdcToken,
         uint256 bundleId
     ) external returns (uint256 refundAmount) {
@@ -513,12 +509,12 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         if (bundle.nonRefundable) {
             address treasury = votingEngine.protocolConfig().treasury();
             QuestionRewardPoolEscrowTransferLib.transferResidue(
-                _rewardToken(hrepToken, usdcToken, bundle.asset), true, bundle.funder, treasury, refundAmount
+                _rewardToken(lrepToken, usdcToken, bundle.asset), true, bundle.funder, treasury, refundAmount
             );
             emit QuestionBundleRewardForfeited(bundleId, treasury, refundAmount);
         } else {
             QuestionRewardPoolEscrowTransferLib.transferResidue(
-                _rewardToken(hrepToken, usdcToken, bundle.asset), false, bundle.funder, address(0), refundAmount
+                _rewardToken(lrepToken, usdcToken, bundle.asset), false, bundle.funder, address(0), refundAmount
             );
             emit QuestionBundleRewardRefunded(bundleId, bundle.funder, refundAmount);
         }
@@ -923,8 +919,8 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         }
     }
 
-    function _rewardToken(IERC20 hrepToken, IERC20 usdcToken, uint8 asset) private pure returns (IERC20 token) {
-        return asset == REWARD_ASSET_HREP ? hrepToken : usdcToken;
+    function _rewardToken(IERC20 lrepToken, IERC20 usdcToken, uint8 asset) private pure returns (IERC20 token) {
+        return asset == REWARD_ASSET_LREP ? lrepToken : usdcToken;
     }
 
     function _requiredParticipantFloorForAmount(uint256 amount) private pure returns (uint256) {

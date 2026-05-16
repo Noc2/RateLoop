@@ -17,7 +17,7 @@ contract VotingHandler is VotingTestBase {
     RoundVotingEngine public engine;
     RoundRewardDistributor public distributor;
     ContentRegistry public registry;
-    IERC20 public hrepToken;
+    IERC20 public lrepToken;
 
     // --- Actors ---
     address[] public voters;
@@ -82,14 +82,14 @@ contract VotingHandler is VotingTestBase {
         address _engine,
         address _distributor,
         address _registry,
-        address _hrepToken,
+        address _lrepToken,
         address[] memory _voters,
         uint256[] memory _contentIds
     ) {
         engine = RoundVotingEngine(_engine);
         distributor = RoundRewardDistributor(_distributor);
         registry = ContentRegistry(_registry);
-        hrepToken = IERC20(_hrepToken);
+        lrepToken = IERC20(_lrepToken);
         voters = _voters;
         contentIds = _contentIds;
     }
@@ -111,7 +111,7 @@ contract VotingHandler is VotingTestBase {
         if (existingContentId == 0 || status != ContentRegistry.ContentStatus.Active) return;
 
         // Skip if voter doesn't have enough balance
-        if (hrepToken.balanceOf(voter) < stakeAmount) return;
+        if (lrepToken.balanceOf(voter) < stakeAmount) return;
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
 
@@ -120,7 +120,7 @@ contract VotingHandler is VotingTestBase {
         bytes32 commitHash = _commitHash(isUp, salt, voter, contentId, ciphertext);
 
         vm.startPrank(voter);
-        hrepToken.approve(address(engine), stakeAmount);
+        lrepToken.approve(address(engine), stakeAmount);
         uint256 cachedRoundContext1 =
             _roundContext(engine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());
         try engine.commitVote(
@@ -256,11 +256,11 @@ contract VotingHandler is VotingTestBase {
         // Check if already claimed on-chain
         if (distributor.rewardClaimed(contentId, roundId, voter)) return;
 
-        uint256 balBefore = hrepToken.balanceOf(voter);
+        uint256 balBefore = lrepToken.balanceOf(voter);
 
         vm.prank(voter);
         try distributor.claimReward(contentId, roundId) {
-            uint256 balAfter = hrepToken.balanceOf(voter);
+            uint256 balAfter = lrepToken.balanceOf(voter);
             uint256 payout = balAfter - balBefore;
 
             record.claimed = true;
@@ -300,11 +300,11 @@ contract VotingHandler is VotingTestBase {
         // Check if already refunded on-chain
         if (engine.cancelledRoundRefundClaimed(contentId, roundId, voter)) return;
 
-        uint256 balBefore = hrepToken.balanceOf(voter);
+        uint256 balBefore = lrepToken.balanceOf(voter);
 
         vm.prank(voter);
         try engine.claimCancelledRoundRefund(contentId, roundId) {
-            uint256 balAfter = hrepToken.balanceOf(voter);
+            uint256 balAfter = lrepToken.balanceOf(voter);
             uint256 payout = balAfter - balBefore;
 
             record.claimed = true;
@@ -399,11 +399,11 @@ contract VotingHandler is VotingTestBase {
         uint256 count = bound(countSeed, 0, maxCount);
 
         uint256 voterBalancesBefore = _sumTrackedVoterBalances();
-        uint256 handlerBalanceBefore = hrepToken.balanceOf(address(this));
+        uint256 handlerBalanceBefore = lrepToken.balanceOf(address(this));
 
         try engine.processUnrevealedVotes(rec.contentId, rec.roundId, startIndex, count) {
             uint256 voterBalancesAfter = _sumTrackedVoterBalances();
-            uint256 handlerBalanceAfter = hrepToken.balanceOf(address(this));
+            uint256 handlerBalanceAfter = lrepToken.balanceOf(address(this));
             uint256 idx = roundRecordIndex[rec.contentId][rec.roundId] - 1;
 
             if (voterBalancesAfter > voterBalancesBefore) {
@@ -469,7 +469,7 @@ contract VotingHandler is VotingTestBase {
 
     function _sumTrackedVoterBalances() internal view returns (uint256 total) {
         for (uint256 i = 0; i < voters.length; i++) {
-            total += hrepToken.balanceOf(voters[i]);
+            total += lrepToken.balanceOf(voters[i]);
         }
     }
 

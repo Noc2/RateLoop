@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import { Test } from "forge-std/Test.sol";
 import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import { FrontendRegistry } from "../contracts/FrontendRegistry.sol";
-import { HumanReputation } from "../contracts/HumanReputation.sol";
+import { LoopReputation } from "../contracts/LoopReputation.sol";
 import { IFrontendRegistry } from "../contracts/interfaces/IFrontendRegistry.sol";
 import { IRoundVotingEngine } from "../contracts/interfaces/IRoundVotingEngine.sol";
 import { RoundLib } from "../contracts/libraries/RoundLib.sol";
@@ -72,7 +72,7 @@ contract MockRewardDistributor_FR {
 ///         creditFees boundaries, slash edge cases, access control negatives.
 contract FrontendRegistryCoverageTest is Test {
     FrontendRegistry public registry;
-    HumanReputation public hrepToken;
+    LoopReputation public lrepToken;
     MockVotingEngine_FR public votingEngine;
     MockRewardDistributor_FR public rewardDistributor;
 
@@ -90,8 +90,8 @@ contract FrontendRegistryCoverageTest is Test {
     function setUp() public {
         vm.startPrank(admin);
 
-        hrepToken = new HumanReputation(admin, admin);
-        hrepToken.grantRole(hrepToken.MINTER_ROLE(), admin);
+        lrepToken = new LoopReputation(admin, admin);
+        lrepToken.grantRole(lrepToken.MINTER_ROLE(), admin);
 
         votingEngine = new MockVotingEngine_FR();
         rewardDistributor = new MockRewardDistributor_FR(address(votingEngine));
@@ -101,7 +101,7 @@ contract FrontendRegistryCoverageTest is Test {
         registry = FrontendRegistry(
             address(
                 new ERC1967Proxy(
-                    address(impl), abi.encodeCall(FrontendRegistry.initialize, (admin, admin, address(hrepToken)))
+                    address(impl), abi.encodeCall(FrontendRegistry.initialize, (admin, admin, address(lrepToken)))
                 )
             )
         );
@@ -109,10 +109,10 @@ contract FrontendRegistryCoverageTest is Test {
         registry.setVotingEngine(address(votingEngine));
         registry.addFeeCreditor(feeCreditor);
 
-        hrepToken.mint(frontend1, 50_000e6);
-        hrepToken.mint(frontend2, 50_000e6);
-        hrepToken.mint(frontend3, 50_000e6);
-        hrepToken.mint(address(registry), 1_000_000e6);
+        lrepToken.mint(frontend1, 50_000e6);
+        lrepToken.mint(frontend2, 50_000e6);
+        lrepToken.mint(frontend3, 50_000e6);
+        lrepToken.mint(address(registry), 1_000_000e6);
 
         vm.stopPrank();
 
@@ -129,7 +129,7 @@ contract FrontendRegistryCoverageTest is Test {
         FrontendRegistry reg2 = FrontendRegistry(
             address(
                 new ERC1967Proxy(
-                    address(impl2), abi.encodeCall(FrontendRegistry.initialize, (admin, governance, address(hrepToken)))
+                    address(impl2), abi.encodeCall(FrontendRegistry.initialize, (admin, governance, address(lrepToken)))
                 )
             )
         );
@@ -148,7 +148,7 @@ contract FrontendRegistryCoverageTest is Test {
         FrontendRegistry impl2 = new FrontendRegistry();
         vm.expectRevert("Invalid admin");
         new ERC1967Proxy(
-            address(impl2), abi.encodeCall(FrontendRegistry.initialize, (address(0), admin, address(hrepToken)))
+            address(impl2), abi.encodeCall(FrontendRegistry.initialize, (address(0), admin, address(lrepToken)))
         );
         vm.stopPrank();
     }
@@ -158,7 +158,7 @@ contract FrontendRegistryCoverageTest is Test {
         FrontendRegistry impl2 = new FrontendRegistry();
         vm.expectRevert("Invalid governance");
         new ERC1967Proxy(
-            address(impl2), abi.encodeCall(FrontendRegistry.initialize, (admin, address(0), address(hrepToken)))
+            address(impl2), abi.encodeCall(FrontendRegistry.initialize, (admin, address(0), address(lrepToken)))
         );
         vm.stopPrank();
     }
@@ -177,7 +177,7 @@ contract FrontendRegistryCoverageTest is Test {
 
     function test_Register_AllowsAnyBondedOperator() public {
         vm.startPrank(frontend1);
-        hrepToken.approve(address(registry), STAKE);
+        lrepToken.approve(address(registry), STAKE);
         registry.register();
         vm.stopPrank();
 
@@ -187,7 +187,7 @@ contract FrontendRegistryCoverageTest is Test {
 
     function test_Register_SucceedsWithBond() public {
         vm.startPrank(frontend1);
-        hrepToken.approve(address(registry), STAKE);
+        lrepToken.approve(address(registry), STAKE);
         registry.register();
         vm.stopPrank();
 
@@ -197,7 +197,7 @@ contract FrontendRegistryCoverageTest is Test {
 
     function test_Register_AllowsIndependentFrontendWallet() public {
         vm.startPrank(frontend2);
-        hrepToken.approve(address(registry), STAKE);
+        lrepToken.approve(address(registry), STAKE);
         registry.register();
         vm.stopPrank();
 
@@ -207,12 +207,12 @@ contract FrontendRegistryCoverageTest is Test {
 
     function test_Register_IndependentFrontendWalletsRemainEligible() public {
         vm.startPrank(frontend2);
-        hrepToken.approve(address(registry), STAKE);
+        lrepToken.approve(address(registry), STAKE);
         registry.register();
         vm.stopPrank();
 
         vm.startPrank(frontend3);
-        hrepToken.approve(address(registry), STAKE);
+        lrepToken.approve(address(registry), STAKE);
         registry.register();
         vm.stopPrank();
 
@@ -226,14 +226,14 @@ contract FrontendRegistryCoverageTest is Test {
         FrontendRegistry unsetRegistry = FrontendRegistry(
             address(
                 new ERC1967Proxy(
-                    address(impl2), abi.encodeCall(FrontendRegistry.initialize, (admin, admin, address(hrepToken)))
+                    address(impl2), abi.encodeCall(FrontendRegistry.initialize, (admin, admin, address(lrepToken)))
                 )
             )
         );
         vm.stopPrank();
 
         vm.startPrank(frontend1);
-        hrepToken.approve(address(unsetRegistry), STAKE);
+        lrepToken.approve(address(unsetRegistry), STAKE);
         unsetRegistry.register();
         vm.stopPrank();
 
@@ -242,7 +242,7 @@ contract FrontendRegistryCoverageTest is Test {
 
     function test_Register_InsufficientApproval_Reverts() public {
         vm.startPrank(frontend1);
-        hrepToken.approve(address(registry), STAKE - 1);
+        lrepToken.approve(address(registry), STAKE - 1);
         vm.expectRevert();
         registry.register();
         vm.stopPrank();
@@ -250,9 +250,9 @@ contract FrontendRegistryCoverageTest is Test {
 
     function test_Register_InsufficientBalance_Reverts() public {
         address poorFrontend = address(99);
-        // Has no HREP tokens
+        // Has no LREP tokens
         vm.startPrank(poorFrontend);
-        hrepToken.approve(address(registry), STAKE);
+        lrepToken.approve(address(registry), STAKE);
         vm.expectRevert();
         registry.register();
         vm.stopPrank();
@@ -402,9 +402,9 @@ contract FrontendRegistryCoverageTest is Test {
 
         vm.prank(frontend1);
         registry.requestDeregister();
-        uint256 balanceBefore = hrepToken.balanceOf(frontend1);
+        uint256 balanceBefore = lrepToken.balanceOf(frontend1);
         _completeDeregister(frontend1);
-        uint256 balanceAfter = hrepToken.balanceOf(frontend1);
+        uint256 balanceAfter = lrepToken.balanceOf(frontend1);
 
         // No stake to return, no fees
         assertEq(balanceAfter - balanceBefore, 0);
@@ -471,7 +471,7 @@ contract FrontendRegistryCoverageTest is Test {
         assertFalse(registry.isEligible(frontend1));
 
         vm.startPrank(frontend1);
-        hrepToken.approve(address(registry), 100e6);
+        lrepToken.approve(address(registry), 100e6);
         registry.topUpStake(100e6);
         vm.stopPrank();
 
@@ -488,7 +488,7 @@ contract FrontendRegistryCoverageTest is Test {
         registry.slashFrontend(frontend1, 100e6, "test");
 
         vm.startPrank(frontend1);
-        hrepToken.approve(address(registry), 100e6);
+        lrepToken.approve(address(registry), 100e6);
         vm.expectRevert(bytes("Frontend is slashed"));
         registry.topUpStake(100e6);
         vm.stopPrank();
@@ -669,7 +669,7 @@ contract FrontendRegistryCoverageTest is Test {
         FrontendRegistry splitRoleRegistry = FrontendRegistry(
             address(
                 new ERC1967Proxy(
-                    address(impl2), abi.encodeCall(FrontendRegistry.initialize, (admin, governance, address(hrepToken)))
+                    address(impl2), abi.encodeCall(FrontendRegistry.initialize, (admin, governance, address(lrepToken)))
                 )
             )
         );
@@ -685,7 +685,7 @@ contract FrontendRegistryCoverageTest is Test {
         FrontendRegistry splitRoleRegistry = FrontendRegistry(
             address(
                 new ERC1967Proxy(
-                    address(impl2), abi.encodeCall(FrontendRegistry.initialize, (admin, governance, address(hrepToken)))
+                    address(impl2), abi.encodeCall(FrontendRegistry.initialize, (admin, governance, address(lrepToken)))
                 )
             )
         );
@@ -703,7 +703,7 @@ contract FrontendRegistryCoverageTest is Test {
         vm.prank(governance);
         splitRoleRegistry.addFeeCreditor(address(newCreditor));
         // Rotation revokes the prior creditor's role so a stale distributor can no longer
-        // call creditFees() and inflate accounting without sending backing HREP.
+        // call creditFees() and inflate accounting without sending backing LREP.
         assertFalse(splitRoleRegistry.hasRole(splitRoleRegistry.FEE_CREDITOR_ROLE(), feeCreditor));
         assertTrue(splitRoleRegistry.hasRole(splitRoleRegistry.FEE_CREDITOR_ROLE(), address(newCreditor)));
         assertEq(splitRoleRegistry.feeCreditor(), address(newCreditor));
@@ -715,7 +715,7 @@ contract FrontendRegistryCoverageTest is Test {
         FrontendRegistry splitRoleRegistry = FrontendRegistry(
             address(
                 new ERC1967Proxy(
-                    address(impl2), abi.encodeCall(FrontendRegistry.initialize, (admin, governance, address(hrepToken)))
+                    address(impl2), abi.encodeCall(FrontendRegistry.initialize, (admin, governance, address(lrepToken)))
                 )
             )
         );
@@ -731,7 +731,7 @@ contract FrontendRegistryCoverageTest is Test {
         FrontendRegistry splitRoleRegistry = FrontendRegistry(
             address(
                 new ERC1967Proxy(
-                    address(impl2), abi.encodeCall(FrontendRegistry.initialize, (admin, governance, address(hrepToken)))
+                    address(impl2), abi.encodeCall(FrontendRegistry.initialize, (admin, governance, address(lrepToken)))
                 )
             )
         );
@@ -749,7 +749,7 @@ contract FrontendRegistryCoverageTest is Test {
 
     function test_Register_EmitsFrontendRegistered() public {
         vm.startPrank(frontend1);
-        hrepToken.approve(address(registry), STAKE);
+        lrepToken.approve(address(registry), STAKE);
 
         vm.expectEmit(true, true, false, true);
         emit FrontendRegistry.FrontendRegistered(frontend1, frontend1, STAKE);
@@ -890,7 +890,7 @@ contract FrontendRegistryCoverageTest is Test {
 
     function _registerFrontend(address fe) internal {
         vm.startPrank(fe);
-        hrepToken.approve(address(registry), STAKE);
+        lrepToken.approve(address(registry), STAKE);
         registry.register();
         vm.stopPrank();
     }

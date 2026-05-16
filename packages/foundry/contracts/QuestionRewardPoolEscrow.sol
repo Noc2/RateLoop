@@ -41,7 +41,7 @@ import { QuestionRewardPoolEscrowVoterLib } from "./libraries/QuestionRewardPool
 
 /// @title QuestionRewardPoolEscrow
 /// @notice Holds per-question USDC bounties and pays equal per-round rewards to revealed voters.
-/// @dev Curyo 2 keeps HREP coherence penalties in the voting engine. Stablecoin payouts are participation rewards.
+/// @dev Curyo 2 keeps LREP coherence penalties in the voting engine. Stablecoin payouts are participation rewards.
 contract QuestionRewardPoolEscrow is
     Initializable,
     AccessControlUpgradeable,
@@ -62,13 +62,13 @@ contract QuestionRewardPoolEscrow is
     /// @notice Grace period voters have after bountyClosesAt to claim on a still-claimable bundle
     ///         before a third party can sweep the remainder back to the funder.
     uint256 internal constant BUNDLE_CLAIM_GRACE = 7 days;
-    uint8 internal constant REWARD_ASSET_HREP = 0;
+    uint8 internal constant REWARD_ASSET_LREP = 0;
     uint8 internal constant REWARD_ASSET_USDC = 1;
     uint8 internal constant PAYOUT_DOMAIN_QUESTION_REWARD = 1;
 
     error RewardPoolCursorNeedsAdvance();
 
-    IERC20 internal hrepToken;
+    IERC20 internal lrepToken;
     IERC20 internal usdcToken;
     ContentRegistry internal registry;
     RoundVotingEngine internal votingEngine;
@@ -84,13 +84,6 @@ contract QuestionRewardPoolEscrow is
     mapping(uint256 => mapping(uint256 => mapping(uint256 => uint64))) private bundleRoundIds;
     mapping(uint256 => mapping(uint256 => BundleRoundSetSnapshot)) private bundleRoundSetSnapshots;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) private bundleRoundSetRewardClaimed;
-    /// @dev Storage placeholder reserving the slot once occupied by the removed
-    ///      `rewardPoolFunderNullifier` mapping (slim 2820d934). DO NOT remove or repurpose:
-    ///      preserves storage layout for any in-place proxy upgrade from a deployment that
-    ///      still has data in this slot. The funder's nullifier was write-only after the M2-1
-    ///      payer-identity refactor; refunds use `RewardPool.funder` directly and exclusion
-    ///      uses `rewardPoolPayerNullifier` for gateway-mediated payments.
-    mapping(uint256 => uint256) private __deprecated_rewardPoolFunderNullifier;
     mapping(uint256 => address) private rewardPoolPayerIdentity;
     mapping(uint256 => bytes32) private rewardPoolPayerIdentityKey;
     mapping(uint256 => uint256) private contentBundleId;
@@ -213,14 +206,14 @@ contract QuestionRewardPoolEscrow is
 
     function initialize(
         address admin,
-        address hrepToken_,
+        address lrepToken_,
         address usdcToken_,
         address registry_,
         address votingEngine_,
         address raterRegistry_
     ) external initializer {
         require(admin != address(0), "Invalid admin");
-        require(hrepToken_ != address(0), "Invalid HREP token");
+        require(lrepToken_ != address(0), "Invalid LREP token");
         require(usdcToken_ != address(0), "Invalid token");
         require(registry_ != address(0), "Invalid registry");
         require(votingEngine_ != address(0), "Invalid engine");
@@ -232,7 +225,7 @@ contract QuestionRewardPoolEscrow is
         _grantRole(CONFIG_ROLE, admin);
         _grantRole(PAUSER_ROLE, admin);
 
-        hrepToken = IERC20(hrepToken_);
+        lrepToken = IERC20(lrepToken_);
         usdcToken = IERC20(usdcToken_);
         registry = ContentRegistry(registry_);
         votingEngine = RoundVotingEngine(votingEngine_);
@@ -414,7 +407,7 @@ contract QuestionRewardPoolEscrow is
             rewardPoolPayerIdentityKey,
             registry,
             votingEngine,
-            hrepToken,
+            lrepToken,
             usdcToken,
             defaultFrontendFeeBps,
             nextRewardPoolId,
@@ -569,7 +562,7 @@ contract QuestionRewardPoolEscrow is
             contentBundleIndex,
             registry,
             votingEngine.protocolConfig(),
-            hrepToken,
+            lrepToken,
             usdcToken,
             defaultFrontendFeeBps,
             params
@@ -611,7 +604,7 @@ contract QuestionRewardPoolEscrow is
             rewardPoolPayerIdentityKey,
             registry,
             votingEngine,
-            hrepToken,
+            lrepToken,
             usdcToken,
             defaultFrontendFeeBps,
             nextRewardPoolId,
@@ -787,42 +780,42 @@ contract QuestionRewardPoolEscrow is
             reservedFrontendFee = QuestionRewardPoolEscrowClaimLib.nextEqualShare(
                 snapshot.frontendFeeAllocation, snapshot.eligibleVoters, snapshot.claimedCount
             );
-            (grossAmount, rewardAmount, frontendFee, frontendRecipient) = QuestionRewardPoolEscrowClaimLib
-                .computeEqualShareClaimSplit(
-                votingEngine,
-                rewardPool.contentId,
-                roundId,
-                commitKey,
-                frontend,
-                EqualShareInputs({
-                    allocation: snapshot.allocation,
-                    frontendFeeAllocation: snapshot.frontendFeeAllocation,
-                    eligibleParticipants: snapshot.eligibleVoters,
-                    claimedCount: snapshot.claimedCount
-                })
-            );
+            (grossAmount, rewardAmount, frontendFee, frontendRecipient) =
+                QuestionRewardPoolEscrowClaimLib.computeEqualShareClaimSplit(
+                    votingEngine,
+                    rewardPool.contentId,
+                    roundId,
+                    commitKey,
+                    frontend,
+                    EqualShareInputs({
+                        allocation: snapshot.allocation,
+                        frontendFeeAllocation: snapshot.frontendFeeAllocation,
+                        eligibleParticipants: snapshot.eligibleVoters,
+                        claimedCount: snapshot.claimedCount
+                    })
+                );
         } else {
             (grossAmount, rewardAmount, frontendFee, frontendRecipient, reservedFrontendFee) =
-            QuestionRewardPoolEscrowClaimLib.computeWeightedClaimSplit(
-                votingEngine,
-                rewardPool.contentId,
-                roundId,
-                commitKey,
-                frontend,
-                claimWeight,
-                WeightedShareInputs({
-                    allocation: snapshot.allocation,
-                    frontendFeeAllocation: snapshot.frontendFeeAllocation,
-                    totalClaimWeight: snapshot.totalClaimWeight,
-                    claimedWeight: snapshot.claimedWeight,
-                    claimedAmount: snapshot.claimedAmount,
-                    frontendFeeClaimedAmount: snapshot.frontendFeeClaimedAmount
-                })
-            );
+                QuestionRewardPoolEscrowClaimLib.computeWeightedClaimSplit(
+                    votingEngine,
+                    rewardPool.contentId,
+                    roundId,
+                    commitKey,
+                    frontend,
+                    claimWeight,
+                    WeightedShareInputs({
+                        allocation: snapshot.allocation,
+                        frontendFeeAllocation: snapshot.frontendFeeAllocation,
+                        totalClaimWeight: snapshot.totalClaimWeight,
+                        claimedWeight: snapshot.claimedWeight,
+                        claimedAmount: snapshot.claimedAmount,
+                        frontendFeeClaimedAmount: snapshot.frontendFeeClaimedAmount
+                    })
+                );
         }
     }
 
-    /// @notice Recover an ERC-20 that is NOT one of the protocol's reward assets (HREP/USDC).
+    /// @notice Recover an ERC-20 that is NOT one of the protocol's reward assets (LREP/USDC).
     /// @dev Donations of non-asset tokens to the escrow are otherwise permanently stuck. This
     ///      function deliberately refuses to touch the protocol's own reward tokens: their
     ///      balances reflect accumulated per-pool / per-bundle funded/claimed accounting that
@@ -833,7 +826,7 @@ contract QuestionRewardPoolEscrow is
         onlyRole(DEFAULT_ADMIN_ROLE)
         nonReentrant
     {
-        require(address(token) != address(hrepToken), "Cannot recover protocol asset");
+        require(address(token) != address(lrepToken), "Cannot recover protocol asset");
         require(address(token) != address(usdcToken), "Cannot recover protocol asset");
         require(to != address(0), "Invalid recipient");
         token.safeTransfer(to, amount);
@@ -900,7 +893,7 @@ contract QuestionRewardPoolEscrow is
             registry,
             votingEngine,
             votingEngine.protocolConfig(),
-            hrepToken,
+            lrepToken,
             usdcToken,
             bundleId,
             roundSetIndex
@@ -937,7 +930,7 @@ contract QuestionRewardPoolEscrow is
             registry,
             votingEngine,
             votingEngine.protocolConfig(),
-            hrepToken,
+            lrepToken,
             usdcToken,
             bundleId
         );
@@ -1103,7 +1096,7 @@ contract QuestionRewardPoolEscrow is
     }
 
     function _rewardToken(uint8 asset) internal view returns (IERC20 token) {
-        return asset == REWARD_ASSET_HREP ? hrepToken : usdcToken;
+        return asset == REWARD_ASSET_LREP ? lrepToken : usdcToken;
     }
 
     function _requireRegistryVotingEngine() internal view {
@@ -1376,5 +1369,5 @@ contract QuestionRewardPoolEscrow is
         );
     }
 
-    uint256[50] private __gap;
+    uint256[51] private __gap;
 }

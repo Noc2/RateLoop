@@ -75,7 +75,7 @@ function truncateAddress(address: string) {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
-function formatHrepString(value: string | null | undefined) {
+function formatLrepString(value: string | null | undefined) {
   if (!value) return "0";
   return (Number(value) / 1e6).toLocaleString(undefined, { maximumFractionDigits: 0 });
 }
@@ -103,8 +103,8 @@ function formatLaunchEligibility(rewardStatus: PonderRaterParticipationStatusRes
 }
 
 function formatLaunchCapSummary(rewardStatus: PonderRaterParticipationStatusResponse["launchRewards"]) {
-  const activeCap = formatHrepString(rewardStatus.launchCap);
-  const fullCap = formatHrepString(rewardStatus.fullLaunchCap);
+  const activeCap = formatLrepString(rewardStatus.launchCap);
+  const fullCap = formatLrepString(rewardStatus.fullLaunchCap);
   if (rewardStatus.fullCapUnlocked || rewardStatus.unlockableLaunchCap === "0") {
     return `${activeCap} LREP cap`;
   }
@@ -1189,7 +1189,7 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
                     {rewardStatus.launchRewards.fullCapUnlocked ||
                     rewardStatus.launchRewards.unlockableLaunchCap === "0"
                       ? formatLaunchEligibility(rewardStatus.launchRewards)
-                      : `${formatLaunchEligibility(rewardStatus.launchRewards)}; verify to unlock ${formatHrepString(
+                      : `${formatLaunchEligibility(rewardStatus.launchRewards)}; verify to unlock ${formatLrepString(
                           rewardStatus.launchRewards.unlockableLaunchCap,
                         )} LREP`}
                   </div>
@@ -1251,13 +1251,13 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
                     <div className="surface-card-nested rounded-2xl px-4 py-3">
                       <div className="text-base text-base-content/60">Stake won</div>
                       <div className="mt-1 text-xl font-semibold text-success">
-                        {formatHrepString(stats.totalStakeWon)} LREP
+                        {formatLrepString(stats.totalStakeWon)} LREP
                       </div>
                     </div>
                     <div className="surface-card-nested rounded-2xl px-4 py-3">
                       <div className="text-base text-base-content/60">Stake lost</div>
                       <div className="mt-1 text-xl font-semibold text-error">
-                        {formatHrepString(stats.totalStakeLost)} LREP
+                        {formatLrepString(stats.totalStakeLost)} LREP
                       </div>
                     </div>
                   </div>
@@ -1388,7 +1388,7 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
                         <td>
                           <span className={`font-medium ${outcome.className}`}>{outcome.label}</span>
                         </td>
-                        <td className="text-right font-mono">{formatHrepString(vote.stake)} LREP</td>
+                        <td className="text-right font-mono">{formatLrepString(vote.stake)} LREP</td>
                         <td className="text-right text-base-content/55">{formatTimestamp(vote.committedAt)}</td>
                       </tr>
                     );

@@ -61,7 +61,7 @@ import {
   MIN_REWARD_POOL_REQUIRED_VOTERS,
   MIN_REWARD_POOL_SETTLED_ROUNDS,
   QUESTION_SUBMISSION_ABI,
-  SUBMISSION_REWARD_ASSET_HREP,
+  SUBMISSION_REWARD_ASSET_LREP,
   SUBMISSION_REWARD_ASSET_USDC,
   type SubmissionRewardAsset,
   formatSubmissionRewardAmount,
@@ -704,14 +704,14 @@ export function ContentSubmissionSection() {
   const { data: registryInfo, isLoading: isRegistryLoading } = useDeployedContractInfo({
     contractName: "ContentRegistry",
   });
-  const { data: hrepInfo, isLoading: isHrepLoading } = useDeployedContractInfo({
+  const { data: lrepInfo, isLoading: isLrepLoading } = useDeployedContractInfo({
     contractName: REPUTATION_CONTRACT_NAME,
   });
   const { data: rewardEscrowInfo, isLoading: isRewardEscrowLoading } = useDeployedContractInfo({
     contractName: "QuestionRewardPoolEscrow",
   });
   const registryAddress = registryInfo?.address as `0x${string}` | undefined;
-  const hrepAddress = hrepInfo?.address as `0x${string}` | undefined;
+  const lrepAddress = lrepInfo?.address as `0x${string}` | undefined;
   const rewardEscrowAddress = rewardEscrowInfo?.address as `0x${string}` | undefined;
   const { data: defaultFrontendFeeBps } = useScaffoldReadContract({
     contractName: "QuestionRewardPoolEscrow" as any,
@@ -721,9 +721,9 @@ export function ContentSubmissionSection() {
       staleTime: 300_000,
     },
   } as any);
-  const { data: minSubmissionHrepPool } = useScaffoldReadContract({
+  const { data: minSubmissionLrepPool } = useScaffoldReadContract({
     contractName: "ProtocolConfig" as any,
-    functionName: "minSubmissionHrepPool" as any,
+    functionName: "minSubmissionLrepPool" as any,
     watch: false,
     query: {
       staleTime: 300_000,
@@ -817,7 +817,7 @@ export function ContentSubmissionSection() {
     const max = Math.max(min, Math.floor(roundConfigBounds.maxEpochDuration / SECONDS_PER_MINUTE));
     return { min, max };
   }, [roundConfigBounds.maxEpochDuration, roundConfigBounds.minEpochDuration]);
-  const selectedRewardAssetId = rewardAsset === "hrep" ? SUBMISSION_REWARD_ASSET_HREP : SUBMISSION_REWARD_ASSET_USDC;
+  const selectedRewardAssetId = rewardAsset === "lrep" ? SUBMISSION_REWARD_ASSET_LREP : SUBMISSION_REWARD_ASSET_USDC;
   const selectedRewardAmount = useMemo(() => parseSubmissionRewardAmount(rewardAmount), [rewardAmount]);
   const parsedRoundBlindMinutes = parseWholeNumberInput(roundBlindMinutes);
   const parsedRoundMaxDurationMinutes = parseWholeNumberInput(roundMaxDurationMinutes);
@@ -944,9 +944,9 @@ export function ContentSubmissionSection() {
   const selectedRequiredSettledRounds = BigInt(Math.max(MIN_REWARD_POOL_SETTLED_ROUNDS, parsedRewardRequiredRounds));
   const bountyMinimumCoverageAmount = selectedRequiredVoters * selectedRequiredSettledRounds;
   const minimumRewardAmount =
-    rewardAsset === "hrep"
-      ? typeof minSubmissionHrepPool === "bigint"
-        ? minSubmissionHrepPool
+    rewardAsset === "lrep"
+      ? typeof minSubmissionLrepPool === "bigint"
+        ? minSubmissionLrepPool
         : DEFAULT_SUBMISSION_REWARD_POOL
       : typeof minSubmissionUsdcPool === "bigint"
         ? minSubmissionUsdcPool
@@ -1046,11 +1046,11 @@ export function ContentSubmissionSection() {
           ? `For a stronger signal, consider ${formatSubmissionRewardAmount(
               oneTokenPerMinimumVoterBounty,
               rewardAsset,
-            )} or more so the minimum cohort earns about 1 ${rewardAsset === "hrep" ? "LREP" : "USDC"} each.`
+            )} or more so the minimum cohort earns about 1 ${rewardAsset === "lrep" ? "LREP" : "USDC"} each.`
           : parsedRoundMaxVoters > Math.max(parsedRewardRequiredVoters, 1) * 3
             ? "A wide voter cap can dilute the per-voter payout if participation is high; use it when broader input matters more than payout density."
             : "These settings give a clear payout target for a small qualifying round.";
-  const rewardTokenAddress = rewardAsset === "hrep" ? hrepAddress : getDefaultUsdcAddress(targetNetwork.id);
+  const rewardTokenAddress = rewardAsset === "lrep" ? lrepAddress : getDefaultUsdcAddress(targetNetwork.id);
   const { refetch: refetchNextContentId } = useScaffoldReadContract({
     contractName: "ContentRegistry",
     functionName: "nextContentId",
@@ -1268,18 +1268,18 @@ export function ContentSubmissionSection() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (isRegistryLoading || isHrepLoading || isRewardEscrowLoading) {
+    if (isRegistryLoading || isLrepLoading || isRewardEscrowLoading) {
       notification.warning("Submission is still loading. Try again in a moment.");
       return;
     }
 
-    if (!registryInfo || !registryAddress || !hrepInfo || !hrepAddress || !rewardEscrowInfo || !rewardEscrowAddress) {
+    if (!registryInfo || !registryAddress || !lrepInfo || !lrepAddress || !rewardEscrowInfo || !rewardEscrowAddress) {
       notification.error("Submission is unavailable right now.");
       return;
     }
 
     if (!rewardTokenAddress) {
-      notification.error(`${rewardAsset === "hrep" ? "LREP" : "USDC"} funding is unavailable right now.`);
+      notification.error(`${rewardAsset === "lrep" ? "LREP" : "USDC"} funding is unavailable right now.`);
       return;
     }
 
@@ -1330,7 +1330,7 @@ export function ContentSubmissionSection() {
 
     let verifiedRewardTokenAddress = rewardTokenAddress;
     try {
-      const [activeRewardEscrowAddress, registryHrepAddress, registryVotingEngineAddress] = (await Promise.all([
+      const [activeRewardEscrowAddress, registryLrepAddress, registryVotingEngineAddress] = (await Promise.all([
         readContract(wagmiConfig, {
           address: registryAddress,
           abi: QUESTION_SUBMISSION_ABI,
@@ -1339,7 +1339,7 @@ export function ContentSubmissionSection() {
         readContract(wagmiConfig, {
           address: registryAddress,
           abi: QUESTION_SUBMISSION_ABI,
-          functionName: "hrepToken",
+          functionName: "lrepToken",
         }) as Promise<`0x${string}`>,
         readContract(wagmiConfig, {
           address: registryAddress,
@@ -1352,7 +1352,7 @@ export function ContentSubmissionSection() {
         notification.error("Bounty escrow is not active for this registry.");
         return;
       }
-      if (registryHrepAddress.toLowerCase() !== hrepAddress.toLowerCase()) {
+      if (registryLrepAddress.toLowerCase() !== lrepAddress.toLowerCase()) {
         notification.error("Configured LREP token does not match this registry.");
         return;
       }
@@ -1361,14 +1361,14 @@ export function ContentSubmissionSection() {
         return;
       }
 
-      verifiedRewardTokenAddress = rewardAsset === "hrep" ? hrepAddress : rewardTokenAddress;
+      verifiedRewardTokenAddress = rewardAsset === "lrep" ? lrepAddress : rewardTokenAddress;
     } catch {
       notification.error("Could not verify bounty escrow wiring.");
       return;
     }
 
     if (!verifiedRewardTokenAddress) {
-      notification.error(`${rewardAsset === "hrep" ? "LREP" : "USDC"} funding is unavailable right now.`);
+      notification.error(`${rewardAsset === "lrep" ? "LREP" : "USDC"} funding is unavailable right now.`);
       return;
     }
 
@@ -1473,7 +1473,7 @@ export function ContentSubmissionSection() {
         const spec = buildQuestionSpecHashes({
           bounty: {
             amount: selectedRewardAmount,
-            asset: rewardAsset === "hrep" ? "LREP" : "USDC",
+            asset: rewardAsset === "lrep" ? "LREP" : "USDC",
             bountyEligibility: selectedBountyEligibility.mode,
             requiredSettledRounds: selectedRequiredSettledRounds,
             requiredVoters: selectedRequiredVoters,
@@ -2007,9 +2007,9 @@ export function ContentSubmissionSection() {
         </button>
         <button
           type="button"
-          aria-pressed={rewardAsset === "hrep"}
-          onClick={() => setRewardAsset("hrep")}
-          className={`btn btn-sm ${rewardAsset === "hrep" ? "btn-primary" : "btn-outline"}`}
+          aria-pressed={rewardAsset === "lrep"}
+          onClick={() => setRewardAsset("lrep")}
+          className={`btn btn-sm ${rewardAsset === "lrep" ? "btn-primary" : "btn-outline"}`}
         >
           LREP
         </button>

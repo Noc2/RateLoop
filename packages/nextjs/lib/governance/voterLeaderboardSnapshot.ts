@@ -1,7 +1,7 @@
 import { rankVoterLeaderboardAddresses } from "./voterLeaderboard";
 import "server-only";
 import { getPrimaryServerTargetNetwork } from "~~/lib/env/server";
-import { readHrepBalances } from "~~/lib/profileRegistry/server";
+import { readLrepBalances } from "~~/lib/profileRegistry/server";
 import { ponderApi } from "~~/services/ponder/client";
 
 const VOTER_LEADERBOARD_CACHE_TTL_MS = 60_000;
@@ -26,7 +26,7 @@ interface VoterLeaderboardDeps {
   chainId: number | null;
   listTokenHolders: typeof ponderApi.getAllTokenHolders;
   now: () => number;
-  readBalances: typeof readHrepBalances;
+  readBalances: typeof readLrepBalances;
 }
 
 const cachedSnapshots = new Map<string, VoterLeaderboardSnapshot>();
@@ -38,7 +38,7 @@ function getDeps(overrides: Partial<VoterLeaderboardDeps> = {}): VoterLeaderboar
     chainId: overrides.chainId ?? getPrimaryServerTargetNetwork()?.id ?? null,
     listTokenHolders: overrides.listTokenHolders ?? ponderApi.getAllTokenHolders.bind(ponderApi),
     now: overrides.now ?? Date.now,
-    readBalances: overrides.readBalances ?? readHrepBalances,
+    readBalances: overrides.readBalances ?? readLrepBalances,
   };
 }
 
@@ -117,7 +117,7 @@ export async function resolveVoterLeaderboardSelection(
   },
   overrides: Partial<Pick<VoterLeaderboardDeps, "readBalances">> = {},
 ): Promise<VoterLeaderboardSelection> {
-  const readBalances = overrides.readBalances ?? readHrepBalances;
+  const readBalances = overrides.readBalances ?? readLrepBalances;
   const selectedAddresses = snapshot.rankedAddresses.slice(0, params.limit);
   const balances: Record<string, bigint> = {};
   const ranks: Record<string, number> = {};

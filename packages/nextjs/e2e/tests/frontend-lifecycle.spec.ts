@@ -1,12 +1,12 @@
 import {
-  approveHREP,
+  approveLREP,
   completeDeregisterFrontend,
   deregisterFrontend,
   evmIncreaseTime,
   getFrontendInfoOnChain,
   registerFrontend,
   slashFrontend,
-  transferHREP,
+  transferLREP,
   unslashFrontend,
   waitForPonderIndexed,
 } from "../helpers/admin-helpers";
@@ -31,7 +31,7 @@ test.describe("Frontend lifecycle", () => {
   test.describe.configure({ mode: "serial" });
 
   const FRONTEND_REGISTRY = CONTRACT_ADDRESSES.FrontendRegistry;
-  const HREP_TOKEN = CONTRACT_ADDRESSES.HumanReputation;
+  const LREP_TOKEN = CONTRACT_ADDRESSES.LoopReputation;
   const OPERATOR = ANVIL_ACCOUNTS.account8.address;
   let registered = false;
   let slashed = false;
@@ -57,15 +57,15 @@ test.describe("Frontend lifecycle", () => {
       }, 15_000);
     }
 
-    // Transfer HREP from deployer — need enough for the 1000 stake.
-    // After a prior slash + deregister, account #8 may have as few as ~500 HREP,
+    // Transfer LREP from deployer — need enough for the 1000 stake.
+    // After a prior slash + deregister, account #8 may have as few as ~500 LREP,
     // so transfer a full 1000 to guarantee sufficient balance.
-    const xferOk = await transferHREP(OPERATOR, BigInt(1000e6), DEPLOYER.address, HREP_TOKEN);
-    expect(xferOk, "Transferring HREP from deployer should succeed").toBe(true);
+    const xferOk = await transferLREP(OPERATOR, BigInt(1000e6), DEPLOYER.address, LREP_TOKEN);
+    expect(xferOk, "Transferring LREP from deployer should succeed").toBe(true);
 
-    // Approve HREP for FrontendRegistry (1000 HREP = 1000e6)
-    const approveOk = await approveHREP(FRONTEND_REGISTRY, BigInt(1000e6), OPERATOR, HREP_TOKEN);
-    expect(approveOk, "Approving HREP should succeed").toBe(true);
+    // Approve LREP for FrontendRegistry (1000 LREP = 1000e6)
+    const approveOk = await approveLREP(FRONTEND_REGISTRY, BigInt(1000e6), OPERATOR, LREP_TOKEN);
+    expect(approveOk, "Approving LREP should succeed").toBe(true);
 
     // Register as frontend operator
     const regOk = await registerFrontend(OPERATOR, FRONTEND_REGISTRY);
@@ -112,7 +112,7 @@ test.describe("Frontend lifecycle", () => {
     test.skip(!registered, "Frontend not registered in previous test");
     test.setTimeout(60_000);
 
-    // Slash 500 HREP
+    // Slash 500 LREP
     const slashOk = await slashFrontend(
       OPERATOR,
       BigInt(500e6),
@@ -135,7 +135,7 @@ test.describe("Frontend lifecycle", () => {
     const { frontend } = await getFrontend(OPERATOR);
     expect(frontend.slashed).toBe(true);
     expect(frontend.eligible).toBe(false);
-    // Stake reduced by 500 HREP (500e6)
+    // Stake reduced by 500 LREP (500e6)
     expect(BigInt(frontend.stakedAmount)).toBe(BigInt(500e6));
     slashed = true;
   });
