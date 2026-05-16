@@ -118,8 +118,10 @@ contract CuryoGovernor is
     /// @dev Timelock-only via Governor.onlyGovernance. The old holder remains excluded so
     ///      past quorum snapshots keep their original exclusion set and dust cannot block migration.
     function replaceExcludedHolder(address oldHolder, address newHolder) external onlyGovernance {
-        if (!poolsInitialized || !isExcludedHolder[oldHolder] || newHolder == address(0) || isExcludedHolder[newHolder])
-        {
+        if (
+            !poolsInitialized || !isExcludedHolder[oldHolder] || newHolder == address(0)
+                || isExcludedHolder[newHolder] || newHolder.code.length == 0
+        ) {
             revert InvalidExcludedHolder();
         }
         require(_excludedHolders.length < MAX_EXCLUDED_HOLDERS, "Too many excluded holders");
