@@ -80,7 +80,14 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         address challenger;
         bytes32 artifactHash;
         string artifactURI;
+        // Accumulates challenge bonds posted against this proposal (paid out to proposer on
+        // dismissal, to challenger on rejection). Zero after finalize / reject.
         uint256 bond;
+        // Bond the proposer posted at proposal time. Today always zero (proposals are unbonded),
+        // but the slot is reserved so that a future proposer-bond mechanism (see M-Oracle-1
+        // mitigation) is auditable and clawback-able via rejectFinalizedRoundPayoutSnapshot.
+        // L-Integrations-1 from 2026-05-16 audit.
+        uint256 proposerBond;
     }
 
     uint64 public challengeWindow;
@@ -142,6 +149,13 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         bytes32 indexed snapshotKey, address indexed arbiter, bytes32 reasonHash
     );
     event RoundPayoutSnapshotRejected(bytes32 indexed snapshotKey, address indexed arbiter, bytes32 reasonHash);
+    /// @notice Emitted when rejectFinalizedRoundPayoutSnapshot could not fully claw back the
+    ///         proposer's bond (because the proposer already withdrew some/all of their pending
+    ///         balance). Governance can act on this off-chain to recover residual liability.
+    ///         L-Integrations-1 from 2026-05-16 audit.
+    event ProposerBondUnrecoverable(
+        bytes32 indexed snapshotKey, address indexed proposer, uint256 missingAmount
+    );
 
     constructor(address admin, address newFrontendRegistry, address newChallengeBondToken) {
         if (admin == address(0) || newChallengeBondToken == address(0)) revert InvalidAddress();
@@ -321,7 +335,8 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
             challenger: address(0),
             artifactHash: input.artifactHash,
             artifactURI: input.artifactURI,
-            bond: 0
+            bond: 0,
+            proposerBond: 0
         });
 
         emit RoundPayoutSnapshotProposed(
@@ -372,7 +387,10 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         }
         proposal.snapshot.status = SnapshotStatus.Finalized;
         proposal.snapshot.finalizedAt = block.timestamp.toUint64();
-        _creditBond(proposal.proposer, proposal.bond);
+        // Return the proposer's own bond plus any challenge bonds awarded to them on finalization.
+        // proposerBond is retained on the proposal slot so a later rejectFinalizedRoundPayoutSnapshot
+        // can attempt to claw it back (L-Integrations-1).
+        _creditBond(proposal.proposer, proposal.bond + proposal.proposerBond);
         proposal.bond = 0;
         emit RoundPayoutSnapshotFinalized(
             snapshotKey,
@@ -393,7 +411,8 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         if (proposal.snapshot.status != SnapshotStatus.Challenged) revert SnapshotNotFinalizable();
         proposal.snapshot.status = SnapshotStatus.Finalized;
         proposal.snapshot.finalizedAt = block.timestamp.toUint64();
-        _creditBond(proposal.proposer, proposal.bond);
+        // See finalizeRoundPayoutSnapshot for the proposerBond rationale (L-Integrations-1).
+        _creditBond(proposal.proposer, proposal.bond + proposal.proposerBond);
         proposal.bond = 0;
         emit RoundPayoutSnapshotChallengeDismissed(snapshotKey, msg.sender, reasonHash);
         emit RoundPayoutSnapshotFinalized(
@@ -415,6 +434,13 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         uint256 bond = proposal.bond;
         proposal.bond = 0;
         if (bond > 0) _creditBond(challenger == address(0) ? bondRecipient : challenger, bond);
+        // L-Integrations-1: the proposer's bond (if any) is forfeited on pre-finalize rejection
+        // and routed to bondRecipient. Today proposerBond is zero so this is a no-op.
+        uint256 proposerBondAmount = proposal.proposerBond;
+        if (proposerBondAmount > 0) {
+            proposal.proposerBond = 0;
+            _creditBond(bondRecipient, proposerBondAmount);
+        }
         emit RoundPayoutSnapshotRejected(snapshotKey, msg.sender, reasonHash);
     }
 
@@ -451,6 +477,26 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         }
 
         proposal.snapshot.status = SnapshotStatus.Rejected;
+        // L-Integrations-1: attempt to claw back the proposer's bond. Today proposerBond is always
+        // zero so this is a no-op; the logic is here so a future proposer-bond mechanism is
+        // automatically accountable on post-finalization rejection. If the proposer already
+        // withdrew (partial or full), emit ProposerBondUnrecoverable for governance follow-up
+        // rather than reverting and stranding the rejection.
+        uint256 proposerBondAmount = proposal.proposerBond;
+        if (proposerBondAmount > 0) {
+            address proposer = proposal.proposer;
+            uint256 available = pendingBondWithdrawals[proposer];
+            uint256 clawback = available < proposerBondAmount ? available : proposerBondAmount;
+            if (clawback > 0) {
+                pendingBondWithdrawals[proposer] = available - clawback;
+                _creditBond(bondRecipient, clawback);
+            }
+            uint256 missing = proposerBondAmount - clawback;
+            if (missing > 0) {
+                emit ProposerBondUnrecoverable(snapshotKey, proposer, missing);
+            }
+            proposal.proposerBond = 0;
+        }
         emit RoundPayoutSnapshotRejected(snapshotKey, msg.sender, reasonHash);
     }
 
