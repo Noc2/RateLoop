@@ -1,22 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { processDueAgentCallbackDeliveries } from "~~/lib/agent-callbacks";
+import { getAgentCallbackDeliverRouteTestOverrides } from "~~/lib/agent-callbacks/route-test-overrides";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-type AgentCallbackDeliverRouteTestOverrides = {
-  processDueAgentCallbackDeliveries?: typeof processDueAgentCallbackDeliveries;
-  randomUUID?: typeof randomUUID;
-};
-
-let agentCallbackDeliverRouteTestOverrides: AgentCallbackDeliverRouteTestOverrides | null = null;
-
-export function __setAgentCallbackDeliverRouteTestOverridesForTests(
-  overrides: AgentCallbackDeliverRouteTestOverrides | null,
-) {
-  agentCallbackDeliverRouteTestOverrides = overrides;
-}
 
 function readBearerToken(request: Request) {
   const authorization = request.headers.get("authorization") ?? "";
@@ -39,9 +27,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
-  const processDeliveries =
-    agentCallbackDeliverRouteTestOverrides?.processDueAgentCallbackDeliveries ?? processDueAgentCallbackDeliveries;
-  const createRandomUUID = agentCallbackDeliverRouteTestOverrides?.randomUUID ?? randomUUID;
+  const overrides = getAgentCallbackDeliverRouteTestOverrides();
+  const processDeliveries = overrides?.processDueAgentCallbackDeliveries ?? processDueAgentCallbackDeliveries;
+  const createRandomUUID = overrides?.randomUUID ?? randomUUID;
 
   const result = await processDeliveries({
     limit: parseLimit(request),
