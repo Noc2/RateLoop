@@ -596,4 +596,38 @@ contract ProfileRegistryTest is Test {
         vm.expectRevert("No name to release");
         registry.releaseName(user1);
     }
+
+    function test_DeployAdminWithoutModeratorRoleCannotReleaseName() public {
+        address governance = address(0xC0DE);
+        address deployAdmin = address(0xDEAD);
+
+        ProfileRegistry impl = new ProfileRegistry();
+        ProfileRegistry separated = ProfileRegistry(
+            address(new ERC1967Proxy(address(impl), abi.encodeCall(ProfileRegistry.initialize, (deployAdmin, governance))))
+        );
+
+        assertTrue(separated.hasRole(separated.ADMIN_ROLE(), deployAdmin));
+        assertFalse(separated.hasRole(separated.MODERATOR_ROLE(), deployAdmin));
+        assertTrue(separated.hasRole(separated.MODERATOR_ROLE(), governance));
+
+        vm.prank(deployAdmin);
+        separated.setRaterRegistry(address(raterRegistry));
+
+        // user1 already has a seeded identity from setUp; create a profile on the new registry.
+        vm.prank(user1);
+        separated.setProfile("alice", "");
+
+        vm.prank(deployAdmin);
+        vm.expectRevert();
+        separated.releaseName(user1);
+
+        vm.prank(governance);
+        vm.expectEmit(true, false, true, true);
+        emit ProfileRegistry.NameReleased(
+            user1, keccak256(bytes("alice")), governance
+        );
+        separated.releaseName(user1);
+
+        assertFalse(separated.isNameTaken("alice"));
+    }
 }
