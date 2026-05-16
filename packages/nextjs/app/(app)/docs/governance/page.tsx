@@ -1,5 +1,6 @@
 import type { NextPage } from "next";
 import { DocsTitle } from "~~/components/docs/DocsTitle";
+import { OracleChallengeFlowDiagram } from "~~/components/docs/OracleChallengeFlowDiagram";
 import { protocolDocFacts } from "~~/lib/docs/protocolFacts";
 
 const GovernanceDocs: NextPage = () => {
@@ -113,6 +114,7 @@ const GovernanceDocs: NextPage = () => {
         operators or auditors can recompute the artifact and challenge bad roots with the configured USDC challenge
         bond, which defaults to 5 USDC (5_000_000 atomic units).
       </p>
+      <OracleChallengeFlowDiagram />
       <p>
         Governance controls oracle configuration, including the challenge window, challenger bond, frontend registry,
         and fallback bond recipient. It can also arbitrate challenged roots through proposals that either finalize a
