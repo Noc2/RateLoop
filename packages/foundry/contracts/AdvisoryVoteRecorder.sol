@@ -36,6 +36,12 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
     error Paused();
     error IndexOutOfBounds();
     error MaxAdvisoryVotersReached();
+    /// @notice Reveal-time drand chain hash differs from the value used at commit-time.
+    /// @dev Surfaces silent desync between the ciphertext (encrypted under the commit-time
+    ///      chain hash) and the round snapshot — without this check the tlock decryption
+    ///      would simply fail off-chain and the voter would forfeit credit with no on-chain
+    ///      signal.
+    error DrandChainHashMismatch();
 
     RoundVotingEngine public immutable votingEngine;
     ContentRegistry public immutable registry;
@@ -63,6 +69,15 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         bool isUp;
         bool launchCreditClaimed;
         uint16 scoreBps;
+        /// @notice Drand chain hash actually used at commit-time to validate the ciphertext.
+        /// @dev When the round snapshot is empty at commit-time the recorder falls back to
+        ///      `protocolConfig.drandChainHash()` for preview-style commits. A later round
+        ///      snapshot (set when the round is opened) or a governance config change can
+        ///      desynchronize the ciphertext from the on-chain round metadata. Persisting the
+        ///      commit-time value lets `_assertRevealDrandChainHashUnchanged` reject reveals
+        ///      whose snapshot no longer matches, surfacing the inconsistency on-chain rather
+        ///      than letting it manifest as a silent tlock-decryption failure off-chain.
+        bytes32 usedChainHashAtCommit;
     }
 
     mapping(bytes32 => AdvisoryCommit) internal advisoryCommits;
@@ -189,7 +204,9 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         advisoryCommitKey = keccak256(abi.encodePacked(bytes1(0xa1), msg.sender, contentId, roundId, commitHash));
 
         uint256 epochEnd = _computeEpochEnd(startTime, epochDuration);
-        _validateCommitTlockData(contentId, roundId, ciphertext, targetRound, drandChainHash, epochEnd, epochDuration);
+        bytes32 usedChainHash = _validateCommitTlockData(
+            contentId, roundId, ciphertext, targetRound, drandChainHash, epochEnd, epochDuration
+        );
         uint256 targetRevealableAt = votingEngine.targetRoundRevealableTimestamp(contentId, roundId, targetRound);
         uint256 effectiveRevealableAfter = targetRevealableAt > epochEnd ? targetRevealableAt : epochEnd;
 
@@ -210,7 +227,8 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
             revealed: false,
             isUp: false,
             launchCreditClaimed: false,
-            scoreBps: 0
+            scoreBps: 0,
+            usedChainHashAtCommit: usedChainHash
         });
         advisoryCommitKeyByRater[contentId][roundId][msg.sender] = advisoryCommitKey;
         advisoryCommitKeyByIdentity[contentId][roundId][resolved.identityKey] = advisoryCommitKey;
@@ -238,6 +256,7 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         if (advisoryCommit.voter == address(0)) revert NoCommit();
         if (advisoryCommit.revealed) revert AlreadyRevealed();
         if (predictedUpBps > 10_000) revert HashMismatch();
+        _assertRevealDrandChainHashUnchanged(advisoryCommit);
 
         uint256 effectiveRevealableAfter = _effectiveRevealableAfter(advisoryCommit);
         if (block.timestamp < effectiveRevealableAfter) revert EpochNotEnded();
@@ -464,7 +483,7 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         bytes32 drandChainHash,
         uint256 epochEnd,
         uint32 epochDuration
-    ) internal view {
+    ) internal view returns (bytes32 usedChainHash) {
         (bytes32 expectedChainHash, uint64 genesisTime, uint64 period) =
             votingEngine.roundDrandConfig(contentId, roundId);
         if (expectedChainHash == bytes32(0) || genesisTime == 0 || period == 0) {
@@ -475,6 +494,28 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         TlockVoteLib.validateCommitData(
             ciphertext, targetRound, drandChainHash, expectedChainHash, epochEnd, epochDuration, genesisTime, period
         );
+        usedChainHash = expectedChainHash;
+    }
+
+    /// @notice Reject the reveal if the drand chain hash used at commit-time no longer matches
+    ///         the value the round snapshot would resolve to today.
+    /// @dev `_validateCommitTlockData` falls back to live `protocolConfig.drandChainHash` for
+    ///      preview commits (when the round snapshot is still empty). Once the round is opened
+    ///      its snapshot becomes authoritative, and a subsequent governance rotation of
+    ///      `protocolConfig.drandChainHash` would otherwise let a commit's ciphertext go
+    ///      undecryptable without any on-chain error — voters would silently forfeit credit.
+    ///      This check forces the inconsistency into a clear revert at reveal-time so callers
+    ///      and indexers can detect it. `usedChainHashAtCommit == bytes32(0)` is treated as
+    ///      "legacy commit recorded before this field existed" and skipped to preserve the
+    ///      reveal path for any in-flight commits at upgrade time.
+    function _assertRevealDrandChainHashUnchanged(AdvisoryCommit storage advisoryCommit) internal view {
+        bytes32 committed = advisoryCommit.usedChainHashAtCommit;
+        if (committed == bytes32(0)) return;
+        (bytes32 snapshotChainHash,,) = votingEngine.roundDrandConfig(advisoryCommit.contentId, advisoryCommit.roundId);
+        if (snapshotChainHash == bytes32(0)) {
+            snapshotChainHash = protocolConfig.drandChainHash();
+        }
+        if (snapshotChainHash != committed) revert DrandChainHashMismatch();
     }
 
     function _roundRaterRegistry(uint256 contentId, uint256 roundId) internal view returns (IRaterIdentityRegistry) {
