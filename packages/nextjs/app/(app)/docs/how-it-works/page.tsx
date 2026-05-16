@@ -17,6 +17,7 @@ const HowItWorks: NextPage = () => {
         Ask a focused question, fund the round, let open raters submit private split ratings, then read the settled
         signal.
       </p>
+      <QuestionLifecycleDiagram />
 
       <h2>1. Ask</h2>
       <p>
@@ -36,7 +37,6 @@ const HowItWorks: NextPage = () => {
         {protocolDocFacts.maxRoundDurationLabel}, {protocolDocFacts.minVotersLabel} settlement raters, and a{" "}
         {protocolDocFacts.maxVotersLabel}-rater cap.
       </p>
-      <QuestionLifecycleDiagram />
       <h2 id="commit-reveal-voting">2. Predict</h2>
       <p>
         Raters submit a <Link href="/docs/tech-stack#bayesian-truth-serum">robust BTS report</Link>: a thumbs-up/down
