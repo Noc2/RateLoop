@@ -289,6 +289,52 @@ export const AdvisoryVoteRecorderAbi = [
   },
   {
     "type": "function",
+    "name": "migrateAdvisoryCooldown",
+    "inputs": [
+      {
+        "name": "oldRecorder",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "contentIds",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      },
+      {
+        "name": "voters",
+        "type": "address[]",
+        "internalType": "address[]"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "migrateAdvisoryCooldownByIdentity",
+    "inputs": [
+      {
+        "name": "oldRecorder",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "contentIds",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      },
+      {
+        "name": "identityKeys",
+        "type": "bytes32[]",
+        "internalType": "bytes32[]"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "owner",
     "inputs": [],
     "outputs": [
@@ -480,6 +526,37 @@ export const AdvisoryVoteRecorderAbi = [
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "event",
+    "name": "AdvisoryCooldownMigrated",
+    "inputs": [
+      {
+        "name": "oldRecorder",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "contentId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "voter",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "timestamp",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
   },
   {
     "type": "event",
@@ -681,6 +758,11 @@ export const AdvisoryVoteRecorderAbi = [
   },
   {
     "type": "error",
+    "name": "DrandChainHashMismatch",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "EpochNotEnded",
     "inputs": []
   },
@@ -775,6 +857,22 @@ export const AdvisoryVoteRecorderAbi = [
     "type": "error",
     "name": "RoundNotSettled",
     "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "SafeCastOverflowedUintDowncast",
+    "inputs": [
+      {
+        "name": "bits",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "value",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
   },
   {
     "type": "error",

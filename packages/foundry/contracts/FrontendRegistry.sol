@@ -39,13 +39,13 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     struct Frontend {
         address operator;
         uint64 stakedAmount;
-        uint128 hrepFees;
+        uint128 lrepFees;
         bool slashed;
         uint48 registeredAt;
     }
 
     // --- State ---
-    IERC20 public hrepToken;
+    IERC20 public lrepToken;
     IRoundVotingEngine public votingEngine;
 
     mapping(address => Frontend) public frontends;
@@ -66,9 +66,9 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     event FrontendExitRequested(address indexed frontend, uint256 availableAt);
     event FrontendDeregistered(address indexed frontend);
     event FrontendStakeToppedUp(address indexed frontend, uint256 amount, uint256 newStakedAmount);
-    event FeesCredited(address indexed frontend, uint256 hrepAmount);
-    event FeesClaimed(address indexed frontend, uint256 hrepAmount);
-    event FeesConfiscated(address indexed frontend, uint256 hrepAmount);
+    event FeesCredited(address indexed frontend, uint256 lrepAmount);
+    event FeesClaimed(address indexed frontend, uint256 lrepAmount);
+    event FeesConfiscated(address indexed frontend, uint256 lrepAmount);
     event VotingEngineUpdated(address votingEngine);
     event FeeCreditorUpdated(address indexed oldCreditor, address indexed newCreditor);
 
@@ -80,13 +80,13 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     /// @notice Initialize the frontend registry contract.
     /// @param _admin Address with temporary admin role for initial wiring.
     /// @param _governance Address with permanent governance roles (timelock).
-    /// @param _hrepToken LREP token address for staking and fee distribution.
-    function initialize(address _admin, address _governance, address _hrepToken) public initializer {
+    /// @param _lrepToken LREP token address for staking and fee distribution.
+    function initialize(address _admin, address _governance, address _lrepToken) public initializer {
         __AccessControl_init();
 
         require(_admin != address(0), "Invalid admin");
         require(_governance != address(0), "Invalid governance");
-        require(_hrepToken != address(0), "Invalid token");
+        require(_lrepToken != address(0), "Invalid token");
 
         // Governance gets all permanent roles
         _grantRole(DEFAULT_ADMIN_ROLE, _governance);
@@ -98,7 +98,7 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
             _grantRole(ADMIN_ROLE, _admin);
         }
 
-        hrepToken = IERC20(_hrepToken);
+        lrepToken = IERC20(_lrepToken);
     }
 
     // --- View Functions ---
@@ -110,9 +110,9 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     }
 
     /// @inheritdoc IFrontendRegistry
-    function getAccumulatedFees(address frontend) external view override returns (uint256 hrepFees) {
+    function getAccumulatedFees(address frontend) external view override returns (uint256 lrepFees) {
         Frontend storage f = frontends[frontend];
-        return uint256(f.hrepFees);
+        return uint256(f.lrepFees);
     }
 
     /// @inheritdoc IFrontendRegistry
@@ -179,12 +179,12 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     function register() external nonReentrant {
         require(frontends[msg.sender].operator == address(0), "Already registered");
 
-        hrepToken.safeTransferFrom(msg.sender, address(this), STAKE_AMOUNT);
+        lrepToken.safeTransferFrom(msg.sender, address(this), STAKE_AMOUNT);
 
         frontends[msg.sender] = Frontend({
             operator: msg.sender,
             stakedAmount: STAKE_AMOUNT.toUint64(),
-            hrepFees: 0,
+            lrepFees: 0,
             slashed: false,
             registeredAt: block.timestamp.toUint48()
         });
@@ -210,16 +210,16 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
         require(block.timestamp >= availableAt, "Unbonding period active");
 
         uint256 refund = uint256(f.stakedAmount);
-        uint256 pendingFees = uint256(f.hrepFees);
+        uint256 pendingFees = uint256(f.lrepFees);
         f.stakedAmount = 0;
-        f.hrepFees = 0;
+        f.lrepFees = 0;
         f.operator = address(0); // Allow re-registration
         delete frontendExitAvailableAt[msg.sender];
         _removeRegisteredFrontend(msg.sender);
 
         uint256 total = refund + pendingFees;
         if (total > 0) {
-            hrepToken.safeTransfer(msg.sender, total);
+            lrepToken.safeTransfer(msg.sender, total);
         }
 
         if (pendingFees > 0) {
@@ -236,15 +236,15 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
         if (frontendExitAvailableAt[msg.sender] != 0) revert FrontendExitPending();
         require(uint256(f.stakedAmount) >= STAKE_AMOUNT, "Frontend is underbonded");
 
-        uint256 hrepAmount = uint256(f.hrepFees);
+        uint256 lrepAmount = uint256(f.lrepFees);
 
-        require(hrepAmount > 0, "No fees to claim");
+        require(lrepAmount > 0, "No fees to claim");
 
-        f.hrepFees = 0;
+        f.lrepFees = 0;
 
-        hrepToken.safeTransfer(msg.sender, hrepAmount);
+        lrepToken.safeTransfer(msg.sender, lrepAmount);
 
-        emit FeesClaimed(msg.sender, hrepAmount);
+        emit FeesClaimed(msg.sender, lrepAmount);
     }
 
     // --- Fee Crediting (called by RoundVotingEngine) ---
@@ -252,24 +252,24 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     /// @inheritdoc IFrontendRegistry
     /// @dev No eligibility check here — commit-time eligibility is snapshotted in RoundVotingEngine.
     ///      Slashed or underbonded frontends cannot accrue newly claimed historical fees.
-    function creditFees(address frontend, uint256 hrepAmount) external override onlyRole(FEE_CREDITOR_ROLE) {
+    function creditFees(address frontend, uint256 lrepAmount) external override onlyRole(FEE_CREDITOR_ROLE) {
         require(msg.sender == feeCreditor && authorizedFeeCreditors[msg.sender], "Unauthorized fee creditor");
         _requireFeeCreditorForEngine(msg.sender, address(votingEngine));
-        require(hrepAmount <= MAX_FEE_CREDIT, "Fee credit too large");
+        require(lrepAmount <= MAX_FEE_CREDIT, "Fee credit too large");
         Frontend storage f = frontends[frontend];
         require(f.operator != address(0), "Frontend not registered");
         require(!f.slashed, "Frontend is slashed");
         require(uint256(f.stakedAmount) >= STAKE_AMOUNT, "Frontend is underbonded");
         if (frontendExitAvailableAt[frontend] != 0) revert FrontendExitPending();
-        f.hrepFees = (uint256(f.hrepFees) + hrepAmount).toUint128();
-        emit FeesCredited(frontend, hrepAmount);
+        f.lrepFees = (uint256(f.lrepFees) + lrepAmount).toUint128();
+        emit FeesCredited(frontend, lrepAmount);
     }
 
     /// @notice Restore stake after a partial slash so the frontend can earn fees again.
     /// @dev Slashed frontends cannot top up — governance must `unslashFrontend` first so the
     ///      slash signal is not silently neutralised by re-bonding before the violation is
     ///      adjudicated.
-    /// @param amount Additional HREP to bond.
+    /// @param amount Additional LREP to bond.
     function topUpStake(uint256 amount) external nonReentrant {
         Frontend storage f = frontends[msg.sender];
         require(f.operator != address(0), "Not registered");
@@ -281,7 +281,7 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
         uint256 missingStake = STAKE_AMOUNT - uint256(f.stakedAmount);
         require(amount <= missingStake, "Top-up exceeds requirement");
 
-        hrepToken.safeTransferFrom(msg.sender, address(this), amount);
+        lrepToken.safeTransferFrom(msg.sender, address(this), amount);
         f.stakedAmount += amount.toUint64();
 
         emit FrontendStakeToppedUp(msg.sender, amount, uint256(f.stakedAmount));
@@ -291,7 +291,7 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
 
     /// @notice Slash a frontend's stake (partial or full)
     /// @param frontend The frontend address to slash
-    /// @param amount Amount of HREP to slash
+    /// @param amount Amount of LREP to slash
     /// @param reason Reason for the slash
     function slashFrontend(address frontend, uint256 amount, string calldata reason)
         external
@@ -304,14 +304,14 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
         require(f.operator != address(0), "Frontend not registered");
         require(uint256(f.stakedAmount) >= amount, "Slash exceeds stake");
 
-        uint256 confiscatedFees = uint256(f.hrepFees);
+        uint256 confiscatedFees = uint256(f.lrepFees);
         f.stakedAmount -= amount.toUint64();
-        f.hrepFees = 0;
+        f.lrepFees = 0;
         f.slashed = true;
 
         uint256 totalToReserve = amount + confiscatedFees;
         if (totalToReserve > 0) {
-            hrepToken.forceApprove(address(votingEngine), totalToReserve);
+            lrepToken.forceApprove(address(votingEngine), totalToReserve);
             votingEngine.addToConsensusReserve(totalToReserve);
         }
 

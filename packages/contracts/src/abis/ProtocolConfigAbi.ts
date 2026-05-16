@@ -45,7 +45,7 @@ export const ProtocolConfigAbi = [
   },
   {
     "type": "function",
-    "name": "MIN_SUBMISSION_HREP_POOL_FLOOR",
+    "name": "MIN_SUBMISSION_LREP_POOL_FLOOR",
     "inputs": [],
     "outputs": [
       {
@@ -557,7 +557,7 @@ export const ProtocolConfigAbi = [
   },
   {
     "type": "function",
-    "name": "minSubmissionHrepPool",
+    "name": "minSubmissionLrepPool",
     "inputs": [],
     "outputs": [
       {
@@ -1163,7 +1163,7 @@ export const ProtocolConfigAbi = [
     "name": "setSubmissionRewardMinimums",
     "inputs": [
       {
-        "name": "minHrepPool",
+        "name": "minLrepPool",
         "type": "uint256",
         "internalType": "uint256"
       },
@@ -1761,7 +1761,7 @@ export const ProtocolConfigAbi = [
     "name": "SubmissionRewardMinimumsUpdated",
     "inputs": [
       {
-        "name": "minHrepPool",
+        "name": "minLrepPool",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"

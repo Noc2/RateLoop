@@ -101,7 +101,7 @@ contract RoundVotingEngine is
     uint16 internal constant RBTS_SCORE_SCALE_BPS = 10_000;
 
     // --- State ---
-    IERC20 internal hrepToken;
+    IERC20 internal lrepToken;
     ContentRegistry internal registry;
     ProtocolConfig public protocolConfig;
 
@@ -152,7 +152,7 @@ contract RoundVotingEngine is
     // Consensus subsidy reserve: pre-funded + replenished by 5% of each losing pool.
     // Pays out on unanimous rounds (losingPool == 0) to incentivize voting on obvious content.
     uint256 public consensusReserve;
-    uint256 internal accountedHrepBalance;
+    uint256 internal accountedLrepBalance;
 
     // Config snapshot per round: prevents governance config changes from affecting in-progress rounds
     mapping(uint256 => mapping(uint256 => RoundLib.RoundConfig)) public roundConfigSnapshot;
@@ -247,7 +247,7 @@ contract RoundVotingEngine is
         _disableInitializers();
     }
 
-    function initialize(address _governance, address _hrepToken, address _registry, address _protocolConfig)
+    function initialize(address _governance, address _lrepToken, address _registry, address _protocolConfig)
         public
         initializer
     {
@@ -255,42 +255,42 @@ contract RoundVotingEngine is
         __Pausable_init();
 
         if (_governance == address(0)) revert InvalidAddress();
-        if (_hrepToken == address(0)) revert InvalidAddress();
+        if (_lrepToken == address(0)) revert InvalidAddress();
         if (_registry == address(0)) revert InvalidAddress();
         if (_protocolConfig == address(0)) revert InvalidAddress();
 
         _grantRole(DEFAULT_ADMIN_ROLE, _governance);
         _grantRole(PAUSER_ROLE, _governance);
 
-        hrepToken = IERC20(_hrepToken);
+        lrepToken = IERC20(_lrepToken);
         registry = ContentRegistry(_registry);
         protocolConfig = ProtocolConfig(_protocolConfig);
     }
 
-    /// @notice Add HREP to the consensus reserve.
+    /// @notice Add LREP to the consensus reserve.
     /// @dev Permissionless by design — treasury top-ups and slashed-stake routing both use this same path.
     function addToConsensusReserve(uint256 amount) external {
         if (amount == 0) revert InvalidStake();
-        hrepToken.safeTransferFrom(msg.sender, address(this), amount);
-        accountedHrepBalance += amount;
+        lrepToken.safeTransferFrom(msg.sender, address(this), amount);
+        accountedLrepBalance += amount;
         consensusReserve += amount;
     }
 
-    /// @notice Recover HREP sent directly to this contract outside accounted protocol flows.
+    /// @notice Recover LREP sent directly to this contract outside accounted protocol flows.
     /// @dev Admin-only and naturally reentrancy-safe: a re-entrant call would compute
-    ///      `balanceOf - accountedHrepBalance == 0` after the first transfer, draining nothing.
-    function recoverSurplusHrep() external {
+    ///      `balanceOf - accountedLrepBalance == 0` after the first transfer, draining nothing.
+    function recoverSurplusLrep() external {
         if (!hasRole(bytes32(0), msg.sender)) revert Unauthorized();
-        hrepToken.safeTransfer(msg.sender, hrepToken.balanceOf(address(this)) - accountedHrepBalance);
+        lrepToken.safeTransfer(msg.sender, lrepToken.balanceOf(address(this)) - accountedLrepBalance);
     }
 
-    /// @notice Transfer HREP reward tokens to a recipient. Only callable by RewardDistributor.
-    function transferReward(address recipient, uint256 hrepAmount) external {
+    /// @notice Transfer LREP reward tokens to a recipient. Only callable by RewardDistributor.
+    function transferReward(address recipient, uint256 lrepAmount) external {
         if (!protocolConfig.isRewardDistributorForEngine(msg.sender, address(this))) revert Unauthorized();
         if (recipient == address(0)) revert InvalidAddress();
-        if (hrepAmount > 0) {
-            accountedHrepBalance -= hrepAmount;
-            hrepToken.safeTransfer(recipient, hrepAmount);
+        if (lrepAmount > 0) {
+            accountedLrepBalance -= lrepAmount;
+            lrepToken.safeTransfer(recipient, lrepAmount);
         }
     }
 
@@ -388,7 +388,7 @@ contract RoundVotingEngine is
         bytes32 s
     ) external nonReentrant whenNotPaused {
         VotePreflightLib.permitStake(
-            address(hrepToken), msg.sender, address(this), stakeAmount, permitDeadline, v, r, s
+            address(lrepToken), msg.sender, address(this), stakeAmount, permitDeadline, v, r, s
         );
         _commitVote(
             msg.sender,
@@ -474,9 +474,9 @@ contract RoundVotingEngine is
         _validateCommitTlockData(
             contentId, roundId, ciphertext, targetRound, drandChainHash, epochEnd, roundCfg.epochDuration
         );
-        // Transfer HREP stake after all lightweight validation passes.
-        hrepToken.safeTransferFrom(voter, address(this), stakeAmount);
-        accountedHrepBalance += stakeAmount;
+        // Transfer LREP stake after all lightweight validation passes.
+        lrepToken.safeTransferFrom(voter, address(this), stakeAmount);
+        accountedLrepBalance += stakeAmount;
 
         _storeCommittedVote(
             contentId,
@@ -782,7 +782,7 @@ contract RoundVotingEngine is
     /// @dev The min-RBTS-quorum lockout only engages once at least one commit in the round has
     ///      originated from a human-credential-verified identity. A pure-sybil attacker (no HRC)
     ///      reaching N >= 3 commits at min stake can no longer grief honest content into a
-    ///      `RevealFailed` cycle (~80 min @ ~3 HREP/cycle) -- the round remains
+    ///      `RevealFailed` cycle (~80 min @ ~3 LREP/cycle) -- the round remains
     ///      refund-cancellable until any HRC voter participates.
     ///      Trade-off: this slightly weakens the "min-stake universal" property by one bit, but
     ///      eliminates the cheapest cancel-griefing vector. HRC voters are unaffected; the
@@ -900,7 +900,7 @@ contract RoundVotingEngine is
         _notifyBundleRoundTerminal(contentId, roundId, true);
 
         (uint256 updatedConsensusReserve, uint256 treasuryPaid) = RoundSettlementDistributionLib.distribute(
-            hrepToken,
+            lrepToken,
             protocolConfig,
             round,
             roundVoterPool,
@@ -917,7 +917,7 @@ contract RoundVotingEngine is
         );
         consensusReserve = updatedConsensusReserve;
         if (treasuryPaid > 0) {
-            accountedHrepBalance -= treasuryPaid;
+            accountedLrepBalance -= treasuryPaid;
         }
 
         IParticipationPool currentParticipationPool = _getParticipationPool();
@@ -969,10 +969,10 @@ contract RoundVotingEngine is
             cancelledRoundRefundClaimed[contentId][roundId],
             cancelledRoundRefundCommitClaimed[contentId][roundId],
             commits[contentId][roundId],
-            hrepToken,
+            lrepToken,
             commitKey
         );
-        accountedHrepBalance -= refundAmount;
+        accountedLrepBalance -= refundAmount;
 
         emit CancelledRoundRefundClaimed(contentId, roundId, refundRecipient, refundAmount);
     }
@@ -1006,7 +1006,7 @@ contract RoundVotingEngine is
         (
             uint256 forfeitedToTreasury,
             uint256 addedToConsensusReserve,
-            uint256 refundedHrep,
+            uint256 refundedLrep,
             uint256 processedPastEpochCount,
             uint256 cleanupIncentive,
             uint256 updatedConsensusReserve
@@ -1017,7 +1017,7 @@ contract RoundVotingEngine is
             roundCleanupIncentivePaid,
             contentId,
             roundId,
-            hrepToken,
+            lrepToken,
             protocolConfig,
             consensusReserve,
             msg.sender,
@@ -1029,12 +1029,12 @@ contract RoundVotingEngine is
         if (updatedConsensusReserve != previousConsensusReserve) {
             consensusReserve = updatedConsensusReserve;
         }
-        uint256 paidOut = refundedHrep + cleanupIncentive;
+        uint256 paidOut = refundedLrep + cleanupIncentive;
         if (forfeitedToTreasury > 0 && updatedConsensusReserve == previousConsensusReserve + addedToConsensusReserve) {
             paidOut += forfeitedToTreasury;
         }
         if (paidOut > 0) {
-            accountedHrepBalance -= paidOut;
+            accountedLrepBalance -= paidOut;
         }
 
         if (forfeitedToTreasury > 0) {
@@ -1061,8 +1061,8 @@ contract RoundVotingEngine is
             }
         }
 
-        if (refundedHrep > 0) {
-            emit CurrentEpochRefunded(contentId, roundId, refundedHrep);
+        if (refundedLrep > 0) {
+            emit CurrentEpochRefunded(contentId, roundId, refundedLrep);
         }
     }
     // =========================================================================

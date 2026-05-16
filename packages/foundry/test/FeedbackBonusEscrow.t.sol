@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import { VotingTestBase } from "./helpers/VotingTestHelpers.sol";
 import { ContentRegistry } from "../contracts/ContentRegistry.sol";
-import { HumanReputation } from "../contracts/HumanReputation.sol";
+import { LoopReputation } from "../contracts/LoopReputation.sol";
 import { FeedbackBonusEscrow } from "../contracts/FeedbackBonusEscrow.sol";
 import { FrontendRegistry } from "../contracts/FrontendRegistry.sol";
 import { IFrontendRegistry } from "../contracts/interfaces/IFrontendRegistry.sol";
@@ -35,7 +35,7 @@ contract SlashedFrontendRegistryMock is IFrontendRegistry {
 
     function creditFees(address, uint256) external { }
 
-    function getAccumulatedFees(address) external pure returns (uint256 hrepFees) {
+    function getAccumulatedFees(address) external pure returns (uint256 lrepFees) {
         return 0;
     }
 
@@ -60,7 +60,7 @@ contract SlashedFrontendRegistryMock is IFrontendRegistry {
 }
 
 contract FeedbackBonusEscrowTest is VotingTestBase {
-    HumanReputation public hrepToken;
+    LoopReputation public lrepToken;
     ContentRegistry public registry;
     RoundVotingEngine public votingEngine;
     RoundRewardDistributor public rewardDistributor;
@@ -115,8 +115,8 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
 
         vm.startPrank(owner);
 
-        hrepToken = new HumanReputation(owner, owner);
-        hrepToken.grantRole(hrepToken.MINTER_ROLE(), owner);
+        lrepToken = new LoopReputation(owner, owner);
+        lrepToken.grantRole(lrepToken.MINTER_ROLE(), owner);
 
         ContentRegistry registryImpl = new ContentRegistry();
         RoundVotingEngine engineImpl = new RoundVotingEngine();
@@ -130,7 +130,7 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
             address(
                 new ERC1967Proxy(
                     address(registryImpl),
-                    abi.encodeCall(ContentRegistry.initializeWithTreasury, (owner, owner, owner, address(hrepToken)))
+                    abi.encodeCall(ContentRegistry.initializeWithTreasury, (owner, owner, owner, address(lrepToken)))
                 )
             )
         );
@@ -140,7 +140,7 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
                     address(engineImpl),
                     abi.encodeCall(
                         RoundVotingEngine.initialize,
-                        (owner, address(hrepToken), address(registry), address(protocolConfig))
+                        (owner, address(lrepToken), address(registry), address(protocolConfig))
                     )
                 )
             )
@@ -151,7 +151,7 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
                     address(distImpl),
                     abi.encodeCall(
                         RoundRewardDistributor.initialize,
-                        (owner, address(hrepToken), address(votingEngine), address(registry))
+                        (owner, address(lrepToken), address(votingEngine), address(registry))
                     )
                 )
             )
@@ -163,7 +163,7 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
             address(
                 new ERC1967Proxy(
                     address(frontendRegistryImpl),
-                    abi.encodeCall(FrontendRegistry.initialize, (owner, owner, address(hrepToken)))
+                    abi.encodeCall(FrontendRegistry.initialize, (owner, owner, address(lrepToken)))
                 )
             )
         );
@@ -175,7 +175,7 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
                         QuestionRewardPoolEscrow.initialize,
                         (
                             owner,
-                            address(hrepToken),
+                            address(lrepToken),
                             address(usdc),
                             address(registry),
                             address(votingEngine),
@@ -216,17 +216,17 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         _setTlockRoundConfig(protocolConfig, EPOCH_DURATION, 7 days, 3, 200);
 
         uint256 reserveAmount = 1_000_000e6;
-        hrepToken.mint(owner, reserveAmount);
-        hrepToken.approve(address(votingEngine), reserveAmount);
+        lrepToken.mint(owner, reserveAmount);
+        lrepToken.approve(address(votingEngine), reserveAmount);
         votingEngine.addToConsensusReserve(reserveAmount);
 
         address[7] memory humans = [submitter, funder, voter1, voter2, voter3, voter4, frontend1];
         for (uint256 i = 0; i < humans.length; i++) {
             _seedRaterIdentity(raterRegistry, humans[i], bytes32(uint256(uint160(humans[i]))));
-            hrepToken.mint(humans[i], 10_000e6);
+            lrepToken.mint(humans[i], 10_000e6);
             usdc.mint(humans[i], 1_000e6);
         }
-        hrepToken.mint(delegate1, 10_000e6);
+        lrepToken.mint(delegate1, 10_000e6);
 
         vm.stopPrank();
     }
@@ -261,7 +261,7 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
                     address(new RoundVotingEngine()),
                     abi.encodeCall(
                         RoundVotingEngine.initialize,
-                        (owner, address(hrepToken), address(registry), address(protocolConfig))
+                        (owner, address(lrepToken), address(registry), address(protocolConfig))
                     )
                 )
             )
@@ -689,7 +689,7 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
             commitKeys[i] = _commitTestVote(
                 DirectTestCommitRequest({
                     engine: votingEngine,
-                    hrepToken: hrepToken,
+                    lrepToken: lrepToken,
                     voter: voters[i],
                     contentId: contentId,
                     isUp: directions[i],
@@ -714,7 +714,7 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         TestCommitArtifacts memory artifacts =
             _buildTestCommitArtifacts(address(votingEngine), voter, true, salt, contentId);
         vm.startPrank(voter);
-        hrepToken.approve(address(votingEngine), STAKE);
+        lrepToken.approve(address(votingEngine), STAKE);
         uint256 cachedRoundContext1 =
             _roundContext(votingEngine.previewCommitRoundId(contentId), artifacts.roundReferenceRatingBps);
         vm.expectRevert(RoundVotingEngine.SelfVote.selector);
@@ -733,7 +733,7 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
 
     function _registerFrontend(address frontend) internal {
         vm.startPrank(frontend);
-        hrepToken.approve(address(frontendRegistry), frontendRegistry.STAKE_AMOUNT());
+        lrepToken.approve(address(frontendRegistry), frontendRegistry.STAKE_AMOUNT());
         frontendRegistry.register();
         vm.stopPrank();
     }

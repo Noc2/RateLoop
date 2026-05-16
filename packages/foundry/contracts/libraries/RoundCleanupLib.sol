@@ -21,12 +21,12 @@ library RoundCleanupLib {
     using SafeERC20 for IERC20;
 
     uint256 internal constant CLEANUP_INCENTIVE_BPS = 100; // 1%
-    uint256 internal constant CLEANUP_INCENTIVE_MAX = 5e6; // 5 HREP
+    uint256 internal constant CLEANUP_INCENTIVE_MAX = 5e6; // 5 LREP
 
     /// @notice Cleanup incentive rate applied to refunded stake (refunds go back to voters
     ///         rather than to the treasury or consensus reserve, so the incentive on this
     ///         portion is funded out of the engine's consensus reserve and capped by the
-    ///         per-round 5 HREP envelope shared with the forfeit-driven incentive).
+    ///         per-round 5 LREP envelope shared with the forfeit-driven incentive).
     /// @dev Tuned lower than `CLEANUP_INCENTIVE_BPS` (1%) because refunds carry no
     ///      treasury / reserve credit to pay from. Set as a constant so future tuning is a
     ///      one-line change; keep below `CLEANUP_INCENTIVE_BPS` to avoid making refund-only
@@ -236,7 +236,7 @@ library RoundCleanupLib {
         mapping(address => bool) storage refundClaims,
         mapping(bytes32 => bool) storage refundCommitClaims,
         mapping(bytes32 => RoundLib.Commit) storage roundCommits,
-        IERC20 hrepToken,
+        IERC20 lrepToken,
         bytes32 commitKey
     ) external returns (uint256 refundAmount, address commitVoter) {
         if (
@@ -258,7 +258,7 @@ library RoundCleanupLib {
         refundCommitClaims[commitKey] = true;
         refundClaims[commitVoter] = true;
 
-        hrepToken.safeTransfer(commitVoter, refundAmount);
+        lrepToken.safeTransfer(commitVoter, refundAmount);
     }
 
     function processUnrevealedVotes(
@@ -268,7 +268,7 @@ library RoundCleanupLib {
         mapping(uint256 => mapping(uint256 => uint256)) storage roundCleanupIncentivePaid,
         uint256 contentId,
         uint256 roundId,
-        IERC20 hrepToken,
+        IERC20 lrepToken,
         ProtocolConfig protocolConfig,
         uint256 consensusReserve,
         address cleanupCaller,
@@ -279,7 +279,7 @@ library RoundCleanupLib {
         returns (
             uint256 forfeitedToTreasury,
             uint256 addedToConsensusReserve,
-            uint256 refundedHrep,
+            uint256 refundedLrep,
             uint256 processedPastEpochCount,
             uint256 cleanupIncentive,
             uint256 updatedConsensusReserve
@@ -311,8 +311,8 @@ library RoundCleanupLib {
                         forfeitedToTreasury += amount;
                     }
                 } else {
-                    try TokenTransferLib.safeTransfer(hrepToken, commit.voter, amount) {
-                        refundedHrep += amount;
+                    try TokenTransferLib.safeTransfer(lrepToken, commit.voter, amount) {
+                        refundedLrep += amount;
                     } catch {
                         forfeitedToTreasury += amount;
                     }
@@ -322,7 +322,7 @@ library RoundCleanupLib {
 
         uint256 cleanupIncentivePaid = roundCleanupIncentivePaid[contentId][roundId];
         cleanupIncentive = _cleanupIncentive(
-            forfeitedToTreasury + addedToConsensusReserve, refundedHrep, 5e6 - cleanupIncentivePaid
+            forfeitedToTreasury + addedToConsensusReserve, refundedLrep, 5e6 - cleanupIncentivePaid
         );
         if (cleanupIncentive > 0) {
             roundCleanupIncentivePaid[contentId][roundId] = cleanupIncentivePaid + cleanupIncentive;
@@ -345,17 +345,17 @@ library RoundCleanupLib {
             }
             if (remainingIncentive > 0) {
                 // Refund-only path: pay the keeper bounty out of the consensus reserve.
-                // The cap (`5e6 - cleanupIncentivePaid`) already constrains this to <=5 HREP
+                // The cap (`5e6 - cleanupIncentivePaid`) already constrains this to <=5 LREP
                 // per round, and `_cleanupIncentive` further caps by the available reserve.
                 updatedConsensusReserve -= remainingIncentive;
             }
-            hrepToken.safeTransfer(cleanupCaller, cleanupIncentive);
+            lrepToken.safeTransfer(cleanupCaller, cleanupIncentive);
         }
 
         if (forfeitedToTreasury > 0) {
             address currentTreasury = protocolConfig.treasury();
             if (currentTreasury != address(0)) {
-                try TokenTransferLib.safeTransfer(hrepToken, currentTreasury, forfeitedToTreasury) { }
+                try TokenTransferLib.safeTransfer(lrepToken, currentTreasury, forfeitedToTreasury) { }
                 catch {
                     updatedConsensusReserve += forfeitedToTreasury;
                 }
@@ -364,7 +364,7 @@ library RoundCleanupLib {
             }
         }
 
-        if (forfeitedToTreasury == 0 && addedToConsensusReserve == 0 && refundedHrep == 0 && cleanupIncentive == 0) {
+        if (forfeitedToTreasury == 0 && addedToConsensusReserve == 0 && refundedLrep == 0 && cleanupIncentive == 0) {
             revert NothingProcessed();
         }
     }
@@ -374,7 +374,7 @@ library RoundCleanupLib {
     ///      and is charged at `CLEANUP_INCENTIVE_BPS` (1%). Refunded stake is charged at the
     ///      lower `REFUND_CLEANUP_INCENTIVE_BPS` (0.25%) because the incentive on that
     ///      portion must come out of the engine's consensus reserve rather than from the
-    ///      cleaned-up funds themselves. Both contributions share the round's 5 HREP cap.
+    ///      cleaned-up funds themselves. Both contributions share the round's 5 LREP cap.
     function _cleanupIncentive(uint256 forfeitedAmount, uint256 refundedAmount, uint256 remainingCap)
         private
         pure

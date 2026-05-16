@@ -53,7 +53,7 @@ contract GasBudgetTest is RoundIntegrationTest {
         _ensureDefaultSubmitterIdentity(registry, submitter);
         address rewardEscrow = _ensureDefaultQuestionRewardPoolEscrow(registry);
         vm.startPrank(submitter);
-        hrepToken.approve(rewardEscrow, rewardAmount);
+        lrepToken.approve(rewardEscrow, rewardAmount);
         vm.stopPrank();
 
         string memory imageUrl = _submissionImageUrl("gas-submit");
@@ -102,7 +102,7 @@ contract GasBudgetTest is RoundIntegrationTest {
         bytes memory ciphertext = _testCiphertext(true, salt, contentId);
 
         vm.startPrank(voter1);
-        hrepToken.approve(address(votingEngine), STAKE);
+        lrepToken.approve(address(votingEngine), STAKE);
         vm.stopPrank();
 
         uint256 gasUsed = _measureCallAs(
@@ -132,7 +132,7 @@ contract GasBudgetTest is RoundIntegrationTest {
         bytes memory ciphertext = _testCiphertext(true, salt, contentId);
 
         vm.startPrank(voter1);
-        hrepToken.approve(address(votingEngine), STAKE);
+        lrepToken.approve(address(votingEngine), STAKE);
         uint256 cachedRoundContext1 =
             _roundContext(votingEngine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());
         votingEngine.commitVote(
@@ -255,7 +255,7 @@ contract GasBudgetTest is RoundIntegrationTest {
         bytes32 commitHash = _commitHash(true, salt, voter1, contentId);
 
         vm.startPrank(voter1);
-        hrepToken.approve(address(votingEngine), STAKE);
+        lrepToken.approve(address(votingEngine), STAKE);
         uint256 cachedRoundContext5 =
             _roundContext(votingEngine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());
         votingEngine.commitVote(

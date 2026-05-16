@@ -19,7 +19,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     bytes32 public constant TREASURY_ROLE = keccak256("TREASURY_ROLE");
     bytes32 public constant TREASURY_ADMIN_ROLE = keccak256("TREASURY_ADMIN_ROLE");
     uint256 public constant ABSOLUTE_MAX_ROUND_DURATION = 30 days;
-    uint256 public constant MIN_SUBMISSION_HREP_POOL_FLOOR = 1e6;
+    uint256 public constant MIN_SUBMISSION_LREP_POOL_FLOOR = 1e6;
     uint256 public constant MIN_SUBMISSION_USDC_POOL_FLOOR = 1e6;
 
     error InvalidAddress();
@@ -37,7 +37,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     uint64 public drandPeriod;
     RatingLib.RatingConfig public ratingConfig;
     RatingLib.SlashConfig public slashConfig;
-    uint256 public minSubmissionHrepPool;
+    uint256 public minSubmissionLrepPool;
     uint256 public minSubmissionUsdcPool;
     RoundConfigBounds public roundConfigBounds;
     mapping(address => bool) private rewardDistributorAuthorized;
@@ -93,7 +93,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     event SlashConfigUpdated(
         uint16 slashThresholdBps, uint16 minSlashSettledRounds, uint48 minSlashLowDuration, uint256 minSlashEvidence
     );
-    event SubmissionRewardMinimumsUpdated(uint256 minHrepPool, uint256 minUsdcPool);
+    event SubmissionRewardMinimumsUpdated(uint256 minLrepPool, uint256 minUsdcPool);
     event RoundConfigBoundsUpdated(
         uint256 minEpochDuration,
         uint256 maxEpochDuration,
@@ -177,7 +177,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
             minSlashLowDuration: uint48(7 days),
             minSlashEvidence: 200e6
         });
-        minSubmissionHrepPool = MIN_SUBMISSION_HREP_POOL_FLOOR;
+        minSubmissionLrepPool = MIN_SUBMISSION_LREP_POOL_FLOOR;
         minSubmissionUsdcPool = MIN_SUBMISSION_USDC_POOL_FLOOR;
         _setTreasury(treasuryAuthority);
     }
@@ -317,13 +317,13 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         _setSlashConfig(slashThresholdBps, minSlashSettledRounds, minSlashLowDuration, minSlashEvidence);
     }
 
-    function setSubmissionRewardMinimums(uint256 minHrepPool, uint256 minUsdcPool) external onlyRole(CONFIG_ROLE) {
-        if (minHrepPool < MIN_SUBMISSION_HREP_POOL_FLOOR || minUsdcPool < MIN_SUBMISSION_USDC_POOL_FLOOR) {
+    function setSubmissionRewardMinimums(uint256 minLrepPool, uint256 minUsdcPool) external onlyRole(CONFIG_ROLE) {
+        if (minLrepPool < MIN_SUBMISSION_LREP_POOL_FLOOR || minUsdcPool < MIN_SUBMISSION_USDC_POOL_FLOOR) {
             revert InvalidConfig();
         }
-        minSubmissionHrepPool = minHrepPool;
+        minSubmissionLrepPool = minLrepPool;
         minSubmissionUsdcPool = minUsdcPool;
-        emit SubmissionRewardMinimumsUpdated(minHrepPool, minUsdcPool);
+        emit SubmissionRewardMinimumsUpdated(minLrepPool, minUsdcPool);
     }
 
     function getRatingConfig() external view returns (RatingLib.RatingConfig memory cfg) {

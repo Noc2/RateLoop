@@ -254,7 +254,7 @@ const deployedContracts: GenericContractsDeclaration = {
       deployedOnBlock: 3,
     },
     TlockVoteLib: {
-      address: "0x22983eb371c4ba098525f9e0fd84562edc412fa8",
+      address: "0x20d01e27629bb9d8dd0f4a0736925bca8abb6d0d",
       abi: [
         {
           type: "function",
@@ -712,7 +712,7 @@ const deployedContracts: GenericContractsDeclaration = {
       deployedOnBlock: 6,
     },
     RoundRevealLib: {
-      address: "0xc54fa424ed264e34172bdd9b6c2dc59a50cc0843",
+      address: "0xe8c069c84e98c604fb533f76351ea99162bf2f68",
       abi: [
         {
           type: "error",
@@ -770,7 +770,7 @@ const deployedContracts: GenericContractsDeclaration = {
       deployedOnBlock: 7,
     },
     RoundCleanupLib: {
-      address: "0xaed59e16124d9af38888f5edfef9a2d206ffd85e",
+      address: "0x0820d40f28f6108ddfa09ae34d5b20ff57d27162",
       abi: [
         {
           type: "error",
@@ -3953,19 +3953,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "hrepToken",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "contract IERC20",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
           name: "initializeWithTreasury",
           inputs: [
             {
@@ -3984,7 +3971,7 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "address",
             },
             {
-              name: "_hrepToken",
+              name: "_lrepToken",
               type: "address",
               internalType: "address",
             },
@@ -4026,6 +4013,19 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "bool",
               internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "lrepToken",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "contract IERC20",
             },
           ],
           stateMutability: "view",
@@ -4237,6 +4237,19 @@ const deployedContracts: GenericContractsDeclaration = {
             },
             {
               name: "account",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "revokeVotingEngine",
+          inputs: [
+            {
+              name: "engine",
               type: "address",
               internalType: "address",
             },
@@ -5644,6 +5657,19 @@ const deployedContracts: GenericContractsDeclaration = {
           anonymous: false,
         },
         {
+          type: "event",
+          name: "VotingEngineRevoked",
+          inputs: [
+            {
+              name: "engine",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+          ],
+          anonymous: false,
+        },
+        {
           type: "error",
           name: "AccessControlBadConfirmation",
           inputs: [],
@@ -6587,7 +6613,7 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "address",
             },
             {
-              name: "_hrepToken",
+              name: "_lrepToken",
               type: "address",
               internalType: "address",
             },
@@ -6640,6 +6666,30 @@ const deployedContracts: GenericContractsDeclaration = {
           type: "function",
           name: "paused",
           inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "pendingBundleObserverReplay",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
           outputs: [
             {
               name: "",
@@ -6730,7 +6780,7 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "recoverSurplusHrep",
+          name: "recoverSurplusLrep",
           inputs: [],
           outputs: [],
           stateMutability: "nonpayable",
@@ -6748,6 +6798,29 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "callerConfirmation",
               type: "address",
               internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "replayBundleObserverNotify",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "settled",
+              type: "bool",
+              internalType: "bool",
             },
           ],
           outputs: [],
@@ -7004,6 +7077,54 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "address",
               internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "roundHasHumanVerifiedCommit",
+          inputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "roundLastCommitPrevrandao",
+          inputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
             },
           ],
           stateMutability: "view",
@@ -7620,7 +7741,7 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "address",
             },
             {
-              name: "hrepAmount",
+              name: "lrepAmount",
               type: "uint256",
               internalType: "uint256",
             },
@@ -7687,6 +7808,62 @@ const deployedContracts: GenericContractsDeclaration = {
             },
           ],
           stateMutability: "view",
+        },
+        {
+          type: "event",
+          name: "BundleObserverNotifyFailed",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "settled",
+              type: "bool",
+              indexed: false,
+              internalType: "bool",
+            },
+            {
+              name: "lowLevelError",
+              type: "bytes",
+              indexed: false,
+              internalType: "bytes",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "BundleObserverNotifyReplayed",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "settled",
+              type: "bool",
+              indexed: false,
+              internalType: "bool",
+            },
+          ],
+          anonymous: false,
         },
         {
           type: "event",
@@ -9006,19 +9183,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "hrepToken",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "contract IERC20",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
           name: "initialize",
           inputs: [
             {
@@ -9027,7 +9191,7 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "address",
             },
             {
-              name: "_hrepToken",
+              name: "_lrepToken",
               type: "address",
               internalType: "address",
             },
@@ -9044,6 +9208,19 @@ const deployedContracts: GenericContractsDeclaration = {
           ],
           outputs: [],
           stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "lrepToken",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "contract IERC20",
+            },
+          ],
+          stateMutability: "view",
         },
         {
           type: "function",
@@ -9912,7 +10089,7 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "sweepStrandedHrepToTreasury",
+          name: "sweepStrandedLrepToTreasury",
           inputs: [],
           outputs: [
             {
@@ -10552,7 +10729,7 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "event",
-          name: "StrandedHrepSwept",
+          name: "StrandedLrepSwept",
           inputs: [
             {
               name: "treasury",
@@ -10690,7 +10867,7 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "error",
-          name: "NoStrandedHrep",
+          name: "NoStrandedLrep",
           inputs: [],
         },
         {
@@ -10995,7 +11172,7 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "address",
             },
             {
-              name: "hrepAmount",
+              name: "lrepAmount",
               type: "uint256",
               internalType: "uint256",
             },
@@ -11057,7 +11234,7 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "uint64",
             },
             {
-              name: "hrepFees",
+              name: "lrepFees",
               type: "uint128",
               internalType: "uint128",
             },
@@ -11086,7 +11263,7 @@ const deployedContracts: GenericContractsDeclaration = {
           ],
           outputs: [
             {
-              name: "hrepFees",
+              name: "lrepFees",
               type: "uint256",
               internalType: "uint256",
             },
@@ -11219,19 +11396,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "hrepToken",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "contract IERC20",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
           name: "initialFeeCreditorConfigured",
           inputs: [],
           outputs: [
@@ -11258,7 +11422,7 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "address",
             },
             {
-              name: "_hrepToken",
+              name: "_lrepToken",
               type: "address",
               internalType: "address",
             },
@@ -11294,6 +11458,19 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "bool",
               internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "lrepToken",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "contract IERC20",
             },
           ],
           stateMutability: "view",
@@ -11504,7 +11681,7 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "address",
             },
             {
-              name: "hrepAmount",
+              name: "lrepAmount",
               type: "uint256",
               indexed: false,
               internalType: "uint256",
@@ -11523,7 +11700,7 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "address",
             },
             {
-              name: "hrepAmount",
+              name: "lrepAmount",
               type: "uint256",
               indexed: false,
               internalType: "uint256",
@@ -11542,7 +11719,7 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "address",
             },
             {
-              name: "hrepAmount",
+              name: "lrepAmount",
               type: "uint256",
               indexed: false,
               internalType: "uint256",
@@ -11939,6 +12116,19 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "uint256",
               internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "MODERATOR_ROLE",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
             },
           ],
           stateMutability: "view",
@@ -12352,6 +12542,31 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "event",
+          name: "NameReleased",
+          inputs: [
+            {
+              name: "user",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "nameHash",
+              type: "bytes32",
+              indexed: false,
+              internalType: "bytes32",
+            },
+            {
+              name: "releaser",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
           name: "ProfileCreated",
           inputs: [
             {
@@ -12614,7 +12829,7 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "MIN_SUBMISSION_HREP_POOL_FLOOR",
+          name: "MIN_SUBMISSION_LREP_POOL_FLOOR",
           inputs: [],
           outputs: [
             {
@@ -13126,7 +13341,7 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "minSubmissionHrepPool",
+          name: "minSubmissionLrepPool",
           inputs: [],
           outputs: [
             {
@@ -13732,7 +13947,7 @@ const deployedContracts: GenericContractsDeclaration = {
           name: "setSubmissionRewardMinimums",
           inputs: [
             {
-              name: "minHrepPool",
+              name: "minLrepPool",
               type: "uint256",
               internalType: "uint256",
             },
@@ -14330,7 +14545,7 @@ const deployedContracts: GenericContractsDeclaration = {
           name: "SubmissionRewardMinimumsUpdated",
           inputs: [
             {
-              name: "minHrepPool",
+              name: "minLrepPool",
               type: "uint256",
               indexed: false,
               internalType: "uint256",
@@ -15513,7 +15728,7 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "address",
             },
             {
-              name: "hrepToken_",
+              name: "lrepToken_",
               type: "address",
               internalType: "address",
             },
@@ -15631,6 +15846,29 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "settled",
               type: "bool",
               internalType: "bool",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "recoverNonAssetToken",
+          inputs: [
+            {
+              name: "token",
+              type: "address",
+              internalType: "contract IERC20",
+            },
+            {
+              name: "to",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "amount",
+              type: "uint256",
+              internalType: "uint256",
             },
           ],
           outputs: [],
@@ -15801,6 +16039,31 @@ const deployedContracts: GenericContractsDeclaration = {
               type: "uint64",
               indexed: false,
               internalType: "uint64",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "NonAssetTokenRecovered",
+          inputs: [
+            {
+              name: "token",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "to",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "amount",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
             },
           ],
           anonymous: false,
@@ -16711,6 +16974,17 @@ const deployedContracts: GenericContractsDeclaration = {
             },
           ],
         },
+        {
+          type: "error",
+          name: "SafeERC20FailedOperation",
+          inputs: [
+            {
+              name: "token",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+        },
       ],
       inheritedFunctions: {
         DEFAULT_ADMIN_ROLE:
@@ -17204,6 +17478,29 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "recoverNonAssetToken",
+          inputs: [
+            {
+              name: "token",
+              type: "address",
+              internalType: "contract IERC20",
+            },
+            {
+              name: "to",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "amount",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "registry",
           inputs: [],
           outputs: [
@@ -17461,6 +17758,31 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "event",
+          name: "FeedbackBonusFunderRefunded",
+          inputs: [
+            {
+              name: "poolId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "funder",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "amount",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
           name: "FeedbackBonusPoolCreated",
           inputs: [
             {
@@ -17554,6 +17876,31 @@ const deployedContracts: GenericContractsDeclaration = {
               type: "uint64",
               indexed: false,
               internalType: "uint64",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "NonAssetTokenRecovered",
+          inputs: [
+            {
+              name: "token",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "to",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "amount",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
             },
           ],
           anonymous: false,
@@ -19049,6 +19396,19 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "FINALIZATION_VETO_WINDOW",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint64",
+              internalType: "uint64",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "MAX_CHALLENGE_WINDOW",
           inputs: [],
           outputs: [
@@ -19056,6 +19416,19 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "uint64",
               internalType: "uint64",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "MIN_CHALLENGE_BOND",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
             },
           ],
           stateMutability: "view",
@@ -19986,6 +20359,11 @@ const deployedContracts: GenericContractsDeclaration = {
                   type: "uint256",
                   internalType: "uint256",
                 },
+                {
+                  name: "proposerBond",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
               ],
             },
           ],
@@ -20469,6 +20847,31 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "event",
+          name: "ProposerBondUnrecoverable",
+          inputs: [
+            {
+              name: "snapshotKey",
+              type: "bytes32",
+              indexed: true,
+              internalType: "bytes32",
+            },
+            {
+              name: "proposer",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "missingAmount",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
           name: "RoleAdminChanged",
           inputs: [
             {
@@ -20818,6 +21221,11 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "error",
+          name: "ReentrancyGuardReentrantCall",
+          inputs: [],
+        },
+        {
+          type: "error",
           name: "SafeCastOverflowedUintDowncast",
           inputs: [
             {
@@ -21054,6 +21462,11 @@ const deployedContracts: GenericContractsDeclaration = {
           type: "function",
           name: "clearRevokedHumanNullifier",
           inputs: [
+            {
+              name: "provider",
+              type: "uint8",
+              internalType: "enum RaterRegistry.HumanCredentialProvider",
+            },
             {
               name: "nullifierHash",
               type: "bytes32",
@@ -21350,10 +21763,15 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "humanNullifierOwner",
+          name: "humanNullifierOwnerByProvider",
           inputs: [
             {
-              name: "",
+              name: "provider",
+              type: "uint8",
+              internalType: "enum RaterRegistry.HumanCredentialProvider",
+            },
+            {
+              name: "nullifierHash",
               type: "bytes32",
               internalType: "bytes32",
             },
@@ -21533,10 +21951,15 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "revokedHumanNullifier",
+          name: "revokedHumanNullifierByProvider",
           inputs: [
             {
-              name: "",
+              name: "provider",
+              type: "uint8",
+              internalType: "enum RaterRegistry.HumanCredentialProvider",
+            },
+            {
+              name: "nullifierHash",
               type: "bytes32",
               internalType: "bytes32",
             },
@@ -22135,6 +22558,11 @@ const deployedContracts: GenericContractsDeclaration = {
               type: "address",
               internalType: "address",
             },
+            {
+              name: "initialOwner",
+              type: "address",
+              internalType: "address",
+            },
           ],
           stateMutability: "nonpayable",
         },
@@ -22312,6 +22740,19 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "owner",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "questionRewardPoolEscrow",
           inputs: [],
           outputs: [
@@ -22335,6 +22776,36 @@ const deployedContracts: GenericContractsDeclaration = {
             },
           ],
           stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "renounceOwnership",
+          inputs: [],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "rescueToken",
+          inputs: [
+            {
+              name: "token",
+              type: "address",
+              internalType: "contract IERC20",
+            },
+            {
+              name: "to",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "amount",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
         },
         {
           type: "function",
@@ -22530,6 +23001,19 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "transferOwnership",
+          inputs: [
+            {
+              name: "newOwner",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "usdcToken",
           inputs: [],
           outputs: [
@@ -22540,6 +23024,25 @@ const deployedContracts: GenericContractsDeclaration = {
             },
           ],
           stateMutability: "view",
+        },
+        {
+          type: "event",
+          name: "OwnershipTransferred",
+          inputs: [
+            {
+              name: "previousOwner",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "newOwner",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+          ],
+          anonymous: false,
         },
         {
           type: "event",
@@ -22574,6 +23077,28 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "error",
+          name: "OwnableInvalidOwner",
+          inputs: [
+            {
+              name: "owner",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+        },
+        {
+          type: "error",
+          name: "OwnableUnauthorizedAccount",
+          inputs: [
+            {
+              name: "account",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+        },
+        {
+          type: "error",
           name: "SafeERC20FailedOperation",
           inputs: [
             {
@@ -22584,17 +23109,23 @@ const deployedContracts: GenericContractsDeclaration = {
           ],
         },
       ],
-      inheritedFunctions: {},
+      inheritedFunctions: {
+        owner: "lib/openzeppelin-contracts/contracts/access/Ownable.sol",
+        renounceOwnership:
+          "lib/openzeppelin-contracts/contracts/access/Ownable.sol",
+        transferOwnership:
+          "lib/openzeppelin-contracts/contracts/access/Ownable.sol",
+      },
       deployedOnBlock: 46,
     },
     ParticipationPool: {
-      address: "0x83B4e0d6ff93f3183D306Da23EfAE17773e6dFc0",
+      address: "0x8B03e92900E9d2251a93e6640A79353E3e10Df1C",
       abi: [
         {
           type: "constructor",
           inputs: [
             {
-              name: "_hrepToken",
+              name: "_lrepToken",
               type: "address",
               internalType: "address",
             },
@@ -22729,7 +23260,7 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "hrepToken",
+          name: "lrepToken",
           inputs: [],
           outputs: [
             {
@@ -23249,10 +23780,10 @@ const deployedContracts: GenericContractsDeclaration = {
         transferOwnership:
           "lib/openzeppelin-contracts/contracts/access/Ownable.sol",
       },
-      deployedOnBlock: 75,
+      deployedOnBlock: 76,
     },
     LaunchDistributionPool: {
-      address: "0x741050c1d044e23d3eBd2e85ad8b6cE5c17555c7",
+      address: "0x4f29f479D3e6c41aD3fC8C7c8D6f423Cb2784b8e",
       abi: [
         {
           type: "constructor",
@@ -23664,6 +24195,30 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "earnedRaterRoundPayoutSnapshotConsumed",
+          inputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "earnedRewardCreditFinalized",
           inputs: [
             {
@@ -23847,22 +24402,22 @@ const deployedContracts: GenericContractsDeclaration = {
           name: "isRoundPayoutSnapshotConsumed",
           inputs: [
             {
-              name: "",
+              name: "domain",
               type: "uint8",
               internalType: "uint8",
             },
             {
-              name: "",
+              name: "rewardPoolId",
               type: "uint256",
               internalType: "uint256",
             },
             {
-              name: "",
+              name: "contentId",
               type: "uint256",
               internalType: "uint256",
             },
             {
-              name: "",
+              name: "roundId",
               type: "uint256",
               internalType: "uint256",
             },
@@ -23874,7 +24429,7 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "bool",
             },
           ],
-          stateMutability: "pure",
+          stateMutability: "view",
         },
         {
           type: "function",
@@ -25723,10 +26278,10 @@ const deployedContracts: GenericContractsDeclaration = {
         transferOwnership:
           "lib/openzeppelin-contracts/contracts/access/Ownable.sol",
       },
-      deployedOnBlock: 77,
+      deployedOnBlock: 78,
     },
     AdvisoryVoteRecorder: {
-      address: "0x0E4B6314D9756D40EE0b3D68cF3999D29eEFb147",
+      address: "0x3Be63776630ac9f282109352C804E650d515C604",
       abi: [
         {
           type: "constructor",
@@ -26018,6 +26573,52 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "migrateAdvisoryCooldown",
+          inputs: [
+            {
+              name: "oldRecorder",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "contentIds",
+              type: "uint256[]",
+              internalType: "uint256[]",
+            },
+            {
+              name: "voters",
+              type: "address[]",
+              internalType: "address[]",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "migrateAdvisoryCooldownByIdentity",
+          inputs: [
+            {
+              name: "oldRecorder",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "contentIds",
+              type: "uint256[]",
+              internalType: "uint256[]",
+            },
+            {
+              name: "identityKeys",
+              type: "bytes32[]",
+              internalType: "bytes32[]",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "owner",
           inputs: [],
           outputs: [
@@ -26209,6 +26810,37 @@ const deployedContracts: GenericContractsDeclaration = {
             },
           ],
           stateMutability: "view",
+        },
+        {
+          type: "event",
+          name: "AdvisoryCooldownMigrated",
+          inputs: [
+            {
+              name: "oldRecorder",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "contentId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "voter",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "timestamp",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
         },
         {
           type: "event",
@@ -26410,6 +27042,11 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "error",
+          name: "DrandChainHashMismatch",
+          inputs: [],
+        },
+        {
+          type: "error",
           name: "EpochNotEnded",
           inputs: [],
         },
@@ -26507,6 +27144,22 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "error",
+          name: "SafeCastOverflowedUintDowncast",
+          inputs: [
+            {
+              name: "bits",
+              type: "uint8",
+              internalType: "uint8",
+            },
+            {
+              name: "value",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+        },
+        {
+          type: "error",
           name: "ThresholdReached",
           inputs: [],
         },
@@ -26523,7 +27176,7 @@ const deployedContracts: GenericContractsDeclaration = {
         transferOwnership:
           "lib/openzeppelin-contracts/contracts/access/Ownable.sol",
       },
-      deployedOnBlock: 80,
+      deployedOnBlock: 82,
     },
   },
 };

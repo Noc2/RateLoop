@@ -3,21 +3,21 @@ pragma solidity 0.8.28;
 
 import { Test } from "forge-std/Test.sol";
 import { ParticipationPool } from "../contracts/ParticipationPool.sol";
-import { HumanReputation } from "../contracts/HumanReputation.sol";
+import { LoopReputation } from "../contracts/LoopReputation.sol";
 
 /// @title Formal Verification: Participation Pool Sustainability
 /// @notice 10 scenarios stress-testing tier transitions, drainage rates, conservation,
 ///         cross-tier rewards, and graceful pool depletion.
 contract FormalVerification_ParticipationPoolTest is Test {
     ParticipationPool pool;
-    HumanReputation hrepToken;
+    LoopReputation lrepToken;
 
     address admin = address(1);
     address governance = address(2);
     address caller = address(3); // authorized caller
     address user = address(5);
 
-    uint256 constant POOL_AMOUNT = 12_000_000e6; // 12M HREP
+    uint256 constant POOL_AMOUNT = 12_000_000e6; // 12M LREP
     uint256 constant INITIAL_RATE = 9000; // 90%
     uint256 constant TIER0_BOUNDARY = 1_500_000e6; // 1.5M
     uint256 constant TIER1_BOUNDARY = 4_500_000e6; // 4.5M (1.5M + 3M)
@@ -26,15 +26,15 @@ contract FormalVerification_ParticipationPoolTest is Test {
 
     function setUp() public {
         vm.startPrank(admin);
-        hrepToken = new HumanReputation(admin, admin);
-        hrepToken.grantRole(hrepToken.MINTER_ROLE(), admin);
+        lrepToken = new LoopReputation(admin, admin);
+        lrepToken.grantRole(lrepToken.MINTER_ROLE(), admin);
 
-        pool = new ParticipationPool(address(hrepToken), governance);
+        pool = new ParticipationPool(address(lrepToken), governance);
         pool.setAuthorizedCaller(caller, true);
 
-        // Fund pool with 12M HREP
-        hrepToken.mint(admin, POOL_AMOUNT);
-        hrepToken.approve(address(pool), POOL_AMOUNT);
+        // Fund pool with 12M LREP
+        lrepToken.mint(admin, POOL_AMOUNT);
+        lrepToken.approve(address(pool), POOL_AMOUNT);
         pool.depositPool(POOL_AMOUNT);
 
         vm.stopPrank();
@@ -108,7 +108,7 @@ contract FormalVerification_ParticipationPoolTest is Test {
         uint256 dailyDrain = 1000 * rewardPerVote;
         assertEq(dailyDrain, 4_500e6, "Daily drain = 4.5K LREP");
 
-        // Tier 0 capacity: 1.5M HREP
+        // Tier 0 capacity: 1.5M LREP
         uint256 daysToExhaust = TIER0_BOUNDARY / dailyDrain;
         assertEq(daysToExhaust, 333, "Tier 0 survives ~333 days");
 
@@ -205,7 +205,7 @@ contract FormalVerification_ParticipationPoolTest is Test {
         // Reward with 10 LREP stake -> reward = 9 LREP at 90% rate
         _distributeStakeReward(user, 10e6);
 
-        assertEq(hrepToken.balanceOf(user), 9e6, "Full 9 LREP reward at tier 0 rate");
+        assertEq(lrepToken.balanceOf(user), 9e6, "Full 9 LREP reward at tier 0 rate");
 
         // After: totalDistributed = 1.5M - 5e6 + 9e6 = 1.5M + 4e6 (past boundary)
         assertEq(pool.totalDistributed(), TIER0_BOUNDARY + 4e6, "Past tier 0 boundary");
@@ -220,12 +220,12 @@ contract FormalVerification_ParticipationPoolTest is Test {
         _setPoolBalance(0);
         assertEq(pool.poolBalance(), 0, "Pool drained");
 
-        uint256 balBefore = hrepToken.balanceOf(user);
+        uint256 balBefore = lrepToken.balanceOf(user);
 
         // Reward attempt should silently do nothing
         _distributeStakeReward(user, 10e6);
 
-        assertEq(hrepToken.balanceOf(user), balBefore, "No tokens transferred");
+        assertEq(lrepToken.balanceOf(user), balBefore, "No tokens transferred");
         assertEq(pool.totalDistributed(), 0, "totalDistributed unchanged");
     }
 
@@ -245,7 +245,7 @@ contract FormalVerification_ParticipationPoolTest is Test {
         assertEq(pool.poolBalance(), 0, "all unreserved pool funds should be withdrawn");
         assertEq(pool.reservedBalance(), 7e6, "reserved accounting must remain intact");
         assertEq(pool.reservedRewards(caller), 7e6, "beneficiary reservation must remain intact");
-        assertEq(hrepToken.balanceOf(address(pool)), 7e6, "contract should retain reserved funds only");
+        assertEq(lrepToken.balanceOf(address(pool)), 7e6, "contract should retain reserved funds only");
     }
 
     function _distributeStakeReward(address recipient, uint256 stakeAmount) internal returns (uint256 paidAmount) {

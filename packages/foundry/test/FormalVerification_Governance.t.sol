@@ -5,14 +5,14 @@ import { Test } from "forge-std/Test.sol";
 import { TimelockController } from "@openzeppelin/contracts/governance/TimelockController.sol";
 import { IVotes } from "@openzeppelin/contracts/governance/utils/IVotes.sol";
 import { IGovernor } from "@openzeppelin/contracts/governance/IGovernor.sol";
-import { HumanReputation } from "../contracts/HumanReputation.sol";
+import { LoopReputation } from "../contracts/LoopReputation.sol";
 import { CuryoGovernor } from "../contracts/governance/CuryoGovernor.sol";
 
 /// @title Formal Verification: Governance Parameter Audit
 /// @notice 10 scenarios verifying early capture resistance, quorum scaling,
 ///         whale governance, timelock enforcement, and governance lock behavior.
 contract FormalVerification_GovernanceTest is Test {
-    HumanReputation token;
+    LoopReputation token;
     TimelockController timelock;
     CuryoGovernor governor;
 
@@ -32,7 +32,7 @@ contract FormalVerification_GovernanceTest is Test {
     function setUp() public {
         vm.startPrank(deployer);
 
-        token = new HumanReputation(deployer, deployer);
+        token = new LoopReputation(deployer, deployer);
         token.grantRole(token.MINTER_ROLE(), deployer);
 
         address[] memory empty = new address[](0);
@@ -75,25 +75,25 @@ contract FormalVerification_GovernanceTest is Test {
 
     // ==================== Test 1: Bootstrap Quorum Floor Dominates Early ====================
 
-    /// @notice 1000 users x 1000 HREP = 1M circulating. Dynamic quorum is 40K, but the 100K floor dominates.
+    /// @notice 1000 users x 1000 LREP = 1M circulating. Dynamic quorum is 40K, but the 100K floor dominates.
     function test_EarlyCapture_First1000Claimants() public {
-        // Simulate 1M circulating (1000 users x 1000 HREP) via single address
+        // Simulate 1M circulating (1000 users x 1000 LREP) via single address
         _mintCirculating(address(100), 1_000_000e6);
 
         vm.roll(block.number + 1);
 
         uint256 q = governor.quorum(block.number - 1);
         // circulating = 1M, dynamic quorum = 40K, bootstrap floor = 100K
-        assertEq(q, 100_000e6, "Bootstrap floor holds quorum at 100K HREP with 1M circulating");
+        assertEq(q, 100_000e6, "Bootstrap floor holds quorum at 100K LREP with 1M circulating");
 
-        // 100 users x 1000 HREP = 100K = quorum
+        // 100 users x 1000 LREP = 100K = quorum
         uint256 usersForQuorum = q / 1000e6;
         assertEq(usersForQuorum, 100, "A 100K bootstrap quorum still needs broad early participation");
     }
 
     // ==================== Test 2: Minimum Floor Prevents Tiny Capture ====================
 
-    /// @notice 10 users x 1000 HREP = 10K circulating. Dynamic quorum = 400, but floor = 100K.
+    /// @notice 10 users x 1000 LREP = 10K circulating. Dynamic quorum = 400, but floor = 100K.
     function test_EarlyCapture_MinFloor_TinyCirculating() public {
         // Only 10K circulating
         _mintCirculating(address(100), 10_000e6);
@@ -102,7 +102,7 @@ contract FormalVerification_GovernanceTest is Test {
 
         uint256 q = governor.quorum(block.number - 1);
         // circulating = 10K, dynamic = 4% of 10K = 400, floor = 100K
-        assertEq(q, 100_000e6, "Floor of 100K HREP enforced");
+        assertEq(q, 100_000e6, "Floor of 100K LREP enforced");
 
         // Quorum intentionally exceeds live circulation during bootstrap.
         assertGt(q, 10_000e6, "Bootstrap quorum intentionally exceeds tiny circulating supply");
@@ -147,14 +147,14 @@ contract FormalVerification_GovernanceTest is Test {
         // Circulating = 100M - 58M = 42M
         // Quorum = 4% of 42M = 1.68M
         uint256 q = governor.quorum(block.number - 1);
-        assertEq(q, 1_680_000e6, "Mature quorum = 1.68M HREP");
+        assertEq(q, 1_680_000e6, "Mature quorum = 1.68M LREP");
     }
 
-    // ==================== Test 5: Distributed Proposal Creation at 1K HREP Threshold ====================
+    // ==================== Test 5: Distributed Proposal Creation at 1K LREP Threshold ====================
 
-    /// @notice Distinct voters with 1K HREP can still create proposals; each proposer is rate-limited.
-    function test_ProposalSpam_1KHREPThreshold() public {
-        // Create 5 different proposers each with exactly 1K HREP (threshold)
+    /// @notice Distinct voters with 1K LREP can still create proposals; each proposer is rate-limited.
+    function test_ProposalSpam_1KLREPThreshold() public {
+        // Create 5 different proposers each with exactly 1K LREP (threshold)
         address[5] memory proposers;
         for (uint256 i = 0; i < 5; i++) {
             proposers[i] = address(uint160(200 + i));
@@ -170,7 +170,7 @@ contract FormalVerification_GovernanceTest is Test {
             assertEq(uint256(governor.state(pid)), uint256(IGovernor.ProposalState.Pending), "Proposal is Pending");
         }
 
-        assertEq(governor.proposalThreshold(), 1_000e6, "1K HREP proposal threshold");
+        assertEq(governor.proposalThreshold(), 1_000e6, "1K LREP proposal threshold");
         assertEq(governor.PROPOSAL_COOLDOWN_BLOCKS(), 86_400, "per-proposer cooldown active");
     }
 
@@ -330,7 +330,7 @@ contract FormalVerification_GovernanceTest is Test {
         // Set up a mock voting engine as an allowed content voting contract
         address mockVotingEngine = address(500);
         vm.prank(deployer);
-        token.setContentVotingContracts(mockVotingEngine, address(501));
+        token.setPredictionContracts(mockVotingEngine, address(501));
 
         address voter = address(200);
         _mintCirculating(voter, 1_000_000e6);
@@ -369,7 +369,7 @@ contract FormalVerification_GovernanceTest is Test {
         address arbitrarySpender = address(777);
 
         vm.prank(deployer);
-        token.setContentVotingContracts(mockVotingEngine, mockContentRegistry);
+        token.setPredictionContracts(mockVotingEngine, mockContentRegistry);
 
         address voter = address(200);
         _mintCirculating(voter, 1_000_000e6);

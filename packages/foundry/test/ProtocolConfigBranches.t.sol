@@ -80,7 +80,7 @@ contract ProtocolConfigBranchesTest is Test {
     event SlashConfigUpdated(
         uint16 slashThresholdBps, uint16 minSlashSettledRounds, uint48 minSlashLowDuration, uint256 minSlashEvidence
     );
-    event SubmissionRewardMinimumsUpdated(uint256 minHrepPool, uint256 minUsdcPool);
+    event SubmissionRewardMinimumsUpdated(uint256 minLrepPool, uint256 minUsdcPool);
     event AdvisoryVoteRecorderUpdated(address advisoryVoteRecorder);
     event RoundConfigBoundsUpdated(
         uint256 minEpochDuration,
@@ -104,35 +104,35 @@ contract ProtocolConfigBranchesTest is Test {
     function test_DefaultSubmissionRewardMinimums_UseHardFloors() public {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
 
-        assertEq(config.minSubmissionHrepPool(), config.MIN_SUBMISSION_HREP_POOL_FLOOR());
+        assertEq(config.minSubmissionLrepPool(), config.MIN_SUBMISSION_LREP_POOL_FLOOR());
         assertEq(config.minSubmissionUsdcPool(), config.MIN_SUBMISSION_USDC_POOL_FLOOR());
     }
 
     function test_SetSubmissionRewardMinimums_UpdatesAboveHardFloors() public {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
 
-        uint256 nextHrepMinimum = config.MIN_SUBMISSION_HREP_POOL_FLOOR() + 1e6;
+        uint256 nextLrepMinimum = config.MIN_SUBMISSION_LREP_POOL_FLOOR() + 1e6;
         uint256 nextUsdcMinimum = config.MIN_SUBMISSION_USDC_POOL_FLOOR() + 2e6;
 
         vm.expectEmit(true, true, true, true);
-        emit SubmissionRewardMinimumsUpdated(nextHrepMinimum, nextUsdcMinimum);
+        emit SubmissionRewardMinimumsUpdated(nextLrepMinimum, nextUsdcMinimum);
 
-        config.setSubmissionRewardMinimums(nextHrepMinimum, nextUsdcMinimum);
+        config.setSubmissionRewardMinimums(nextLrepMinimum, nextUsdcMinimum);
 
-        assertEq(config.minSubmissionHrepPool(), nextHrepMinimum);
+        assertEq(config.minSubmissionLrepPool(), nextLrepMinimum);
         assertEq(config.minSubmissionUsdcPool(), nextUsdcMinimum);
     }
 
     function test_SetSubmissionRewardMinimums_RejectsBelowHardFloors() public {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
-        uint256 hrepFloor = config.MIN_SUBMISSION_HREP_POOL_FLOOR();
+        uint256 lrepFloor = config.MIN_SUBMISSION_LREP_POOL_FLOOR();
         uint256 usdcFloor = config.MIN_SUBMISSION_USDC_POOL_FLOOR();
 
         vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
-        config.setSubmissionRewardMinimums(hrepFloor - 1, usdcFloor);
+        config.setSubmissionRewardMinimums(lrepFloor - 1, usdcFloor);
 
         vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
-        config.setSubmissionRewardMinimums(hrepFloor, usdcFloor - 1);
+        config.setSubmissionRewardMinimums(lrepFloor, usdcFloor - 1);
     }
 
     function test_SetRaterRegistry_AllowsRotation() public {

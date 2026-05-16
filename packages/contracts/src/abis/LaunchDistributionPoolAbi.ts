@@ -409,6 +409,30 @@ export const LaunchDistributionPoolAbi = [
   },
   {
     "type": "function",
+    "name": "earnedRaterRoundPayoutSnapshotConsumed",
+    "inputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "earnedRewardCreditFinalized",
     "inputs": [
       {
@@ -592,22 +616,22 @@ export const LaunchDistributionPoolAbi = [
     "name": "isRoundPayoutSnapshotConsumed",
     "inputs": [
       {
-        "name": "",
+        "name": "domain",
         "type": "uint8",
         "internalType": "uint8"
       },
       {
-        "name": "",
+        "name": "rewardPoolId",
         "type": "uint256",
         "internalType": "uint256"
       },
       {
-        "name": "",
+        "name": "contentId",
         "type": "uint256",
         "internalType": "uint256"
       },
       {
-        "name": "",
+        "name": "roundId",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -619,7 +643,7 @@ export const LaunchDistributionPoolAbi = [
         "internalType": "bool"
       }
     ],
-    "stateMutability": "pure"
+    "stateMutability": "view"
   },
   {
     "type": "function",

@@ -28,7 +28,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
     uint256 internal constant BPS_SCALE = 10_000;
     uint256 internal constant BUNDLE_CLAIM_GRACE = 7 days;
     uint256 internal constant BUNDLE_REFUND_GRACE = 98 days;
-    uint8 internal constant REWARD_ASSET_HREP = 0;
+    uint8 internal constant REWARD_ASSET_LREP = 0;
     uint8 internal constant REWARD_ASSET_USDC = 1;
 
     event QuestionBundleRewardCreated(
@@ -79,7 +79,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         mapping(uint256 => uint256) storage contentBundleIndex,
         ContentRegistry registry,
         ProtocolConfig protocolConfig,
-        IERC20 hrepToken,
+        IERC20 lrepToken,
         IERC20 usdcToken,
         uint16 defaultFrontendFeeBps,
         uint256 bundleId,
@@ -97,7 +97,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         require(bundleRewards[bundleId].id == 0, "Bundle exists");
         require(contentIds.length > 0, "No questions");
         require(funder != address(0), "Invalid funder");
-        require(asset == REWARD_ASSET_HREP || asset == REWARD_ASSET_USDC, "Invalid asset");
+        require(asset == REWARD_ASSET_LREP || asset == REWARD_ASSET_USDC, "Invalid asset");
         require(requiredCompleters >= MIN_REQUIRED_VOTERS, "Too few voters");
         require(requiredCompleters >= _requiredParticipantFloorForAmount(amount), "High-value floor");
         require(requiredSettledRounds >= 1, "Too few rounds");
@@ -111,7 +111,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         uint256 normalizedFeedbackClosesAt = _normalizeFeedbackClosesAt(bountyClosesAt, feedbackClosesAt);
 
         uint256 fundedAmount = QuestionRewardPoolEscrowTransferLib.pullExactToken(
-            _rewardToken(hrepToken, usdcToken, asset), funder, amount
+            _rewardToken(lrepToken, usdcToken, asset), funder, amount
         );
         (bytes32 funderIdentityKey, address funderIdentity) = _resolveFunderIdentity(protocolConfig, funder);
 
@@ -249,7 +249,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         ContentRegistry registry,
         RoundVotingEngine votingEngine,
         ProtocolConfig protocolConfig,
-        IERC20 hrepToken,
+        IERC20 lrepToken,
         IERC20 usdcToken,
         uint256 bundleId,
         uint256 roundSetIndex
@@ -347,7 +347,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         uint256 bundleRedirectedFrontendFee;
         (rewardAmount, reservedFrontendFee, frontendRecipient, bundleRedirectedFrontendFee) =
             QuestionRewardPoolEscrowTransferLib.settleClaimPayout(
-            _rewardToken(hrepToken, usdcToken, bundle.asset),
+            _rewardToken(lrepToken, usdcToken, bundle.asset),
             rewardRecipient,
             rewardAmount,
             frontendRecipient,
@@ -440,7 +440,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         ContentRegistry registry,
         RoundVotingEngine votingEngine,
         ProtocolConfig protocolConfig,
-        IERC20 hrepToken,
+        IERC20 lrepToken,
         IERC20 usdcToken,
         uint256 bundleId
     ) external returns (uint256 refundAmount) {
@@ -477,12 +477,12 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         if (bundle.nonRefundable) {
             address treasury = votingEngine.protocolConfig().treasury();
             QuestionRewardPoolEscrowTransferLib.transferResidue(
-                _rewardToken(hrepToken, usdcToken, bundle.asset), true, bundle.funder, treasury, refundAmount
+                _rewardToken(lrepToken, usdcToken, bundle.asset), true, bundle.funder, treasury, refundAmount
             );
             emit QuestionBundleRewardForfeited(bundleId, treasury, refundAmount);
         } else {
             QuestionRewardPoolEscrowTransferLib.transferResidue(
-                _rewardToken(hrepToken, usdcToken, bundle.asset), false, bundle.funder, address(0), refundAmount
+                _rewardToken(lrepToken, usdcToken, bundle.asset), false, bundle.funder, address(0), refundAmount
             );
             emit QuestionBundleRewardRefunded(bundleId, bundle.funder, refundAmount);
         }
@@ -887,8 +887,8 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         }
     }
 
-    function _rewardToken(IERC20 hrepToken, IERC20 usdcToken, uint8 asset) private pure returns (IERC20 token) {
-        return asset == REWARD_ASSET_HREP ? hrepToken : usdcToken;
+    function _rewardToken(IERC20 lrepToken, IERC20 usdcToken, uint8 asset) private pure returns (IERC20 token) {
+        return asset == REWARD_ASSET_LREP ? lrepToken : usdcToken;
     }
 
     function _requiredParticipantFloorForAmount(uint256 amount) private pure returns (uint256) {

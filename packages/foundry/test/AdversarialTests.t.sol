@@ -8,7 +8,7 @@ import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
 import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
 import { RaterRegistry } from "../contracts/RaterRegistry.sol";
 import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
-import { HumanReputation } from "../contracts/HumanReputation.sol";
+import { LoopReputation } from "../contracts/LoopReputation.sol";
 import { RoundLib } from "../contracts/libraries/RoundLib.sol";
 import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
 import { RewardMath } from "../contracts/libraries/RewardMath.sol";
@@ -21,7 +21,7 @@ import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
 ///         violations, double-claim vectors, cooldown bypass, consensus subsidy draining,
 ///         and processUnrevealedVotes edge cases.
 contract AdversarialTests is VotingTestBase {
-    HumanReputation hrepToken;
+    LoopReputation lrepToken;
     ContentRegistry registry;
     RoundVotingEngine engine;
     RoundRewardDistributor distributor;
@@ -62,8 +62,8 @@ contract AdversarialTests is VotingTestBase {
         vm.roll(100);
         vm.startPrank(owner);
 
-        hrepToken = new HumanReputation(owner, owner);
-        hrepToken.grantRole(hrepToken.MINTER_ROLE(), owner);
+        lrepToken = new LoopReputation(owner, owner);
+        lrepToken.grantRole(lrepToken.MINTER_ROLE(), owner);
 
         ContentRegistry registryImpl = new ContentRegistry();
         RoundVotingEngine engineImpl = new RoundVotingEngine();
@@ -73,7 +73,7 @@ contract AdversarialTests is VotingTestBase {
             address(
                 new ERC1967Proxy(
                     address(registryImpl),
-                    abi.encodeCall(ContentRegistry.initializeWithTreasury, (owner, owner, owner, address(hrepToken)))
+                    abi.encodeCall(ContentRegistry.initializeWithTreasury, (owner, owner, owner, address(lrepToken)))
                 )
             )
         );
@@ -84,7 +84,7 @@ contract AdversarialTests is VotingTestBase {
                     address(engineImpl),
                     abi.encodeCall(
                         RoundVotingEngine.initialize,
-                        (owner, address(hrepToken), address(registry), address(_deployProtocolConfig(owner)))
+                        (owner, address(lrepToken), address(registry), address(_deployProtocolConfig(owner)))
                     )
                 )
             )
@@ -96,7 +96,7 @@ contract AdversarialTests is VotingTestBase {
                     address(distImpl),
                     abi.encodeCall(
                         RoundRewardDistributor.initialize,
-                        (owner, address(hrepToken), address(engine), address(registry))
+                        (owner, address(lrepToken), address(engine), address(registry))
                     )
                 )
             )
@@ -119,16 +119,16 @@ contract AdversarialTests is VotingTestBase {
 
         // Fund consensus reserve
         uint256 reserveAmount = 1_000_000e6;
-        hrepToken.mint(owner, reserveAmount);
-        hrepToken.approve(address(engine), reserveAmount);
+        lrepToken.mint(owner, reserveAmount);
+        lrepToken.approve(address(engine), reserveAmount);
         engine.addToConsensusReserve(reserveAmount);
 
         // Fund actors
         address[6] memory users = [submitter, voter1, voter2, voter3, voter4, voter5];
         for (uint256 i = 0; i < users.length; i++) {
-            hrepToken.mint(users[i], 100_000e6);
+            lrepToken.mint(users[i], 100_000e6);
         }
-        hrepToken.mint(attacker, 100_000e6);
+        lrepToken.mint(attacker, 100_000e6);
 
         vm.stopPrank();
     }
@@ -139,7 +139,7 @@ contract AdversarialTests is VotingTestBase {
 
     function _submitContent() internal returns (uint256) {
         vm.startPrank(submitter);
-        hrepToken.approve(address(registry), 10e6);
+        lrepToken.approve(address(registry), 10e6);
         _submitContentWithReservation(registry, "https://example.com/adv", "test", "test", "test", 0);
         vm.stopPrank();
         return 1;
@@ -147,7 +147,7 @@ contract AdversarialTests is VotingTestBase {
 
     function _submitContent2() internal returns (uint256) {
         vm.startPrank(submitter);
-        hrepToken.approve(address(registry), 10e6);
+        lrepToken.approve(address(registry), 10e6);
         _submitContentWithReservation(registry, "https://example.com/adv2", "test", "test", "test", 0);
         vm.stopPrank();
         return 2;
@@ -178,7 +178,7 @@ contract AdversarialTests is VotingTestBase {
         bytes32 commitHash =
             _commitHash(isUp, salt, voter, contentId, referenceRatingBps, targetRound, drandChainHash, ciphertext);
         vm.startPrank(voter);
-        hrepToken.approve(address(engine), stake);
+        lrepToken.approve(address(engine), stake);
         uint256 cachedRoundContext1 = _roundContext(engine.previewCommitRoundId(contentId), referenceRatingBps);
         engine.commitVote(
             contentId, cachedRoundContext1, targetRound, drandChainHash, commitHash, ciphertext, stake, address(0)
@@ -253,10 +253,10 @@ contract AdversarialTests is VotingTestBase {
         uint256 totalClaimed;
         address[5] memory claimants = [voter1, voter2, voter3, voter4, voter5];
         for (uint256 i = 0; i < claimants.length; i++) {
-            uint256 before = hrepToken.balanceOf(claimants[i]);
+            uint256 before = lrepToken.balanceOf(claimants[i]);
             vm.prank(claimants[i]);
             distributor.claimReward(contentId, roundId);
-            totalClaimed += hrepToken.balanceOf(claimants[i]) - before;
+            totalClaimed += lrepToken.balanceOf(claimants[i]) - before;
         }
 
         // Total claimed = RBTS stake returns/rebates + rewards, including final-claimant remainders.
@@ -288,10 +288,10 @@ contract AdversarialTests is VotingTestBase {
         uint256 expectedRebate = (forfeitedStake * 500) / 10_000;
         uint256 claimedBefore = distributor.roundLoserRebateClaimedAmount(contentId, roundId);
 
-        uint256 balBefore = hrepToken.balanceOf(voter2);
+        uint256 balBefore = lrepToken.balanceOf(voter2);
         vm.prank(voter2);
         distributor.claimReward(contentId, roundId);
-        uint256 balAfter = hrepToken.balanceOf(voter2);
+        uint256 balAfter = lrepToken.balanceOf(voter2);
 
         assertEq(
             distributor.roundLoserRebateClaimedAmount(contentId, roundId) - claimedBefore,
@@ -435,12 +435,12 @@ contract AdversarialTests is VotingTestBase {
         // Settle immediately (voter3's epoch hasn't ended)
         engine.settleRound(contentId, roundId);
 
-        uint256 voter4Before = hrepToken.balanceOf(voter4);
+        uint256 voter4Before = lrepToken.balanceOf(voter4);
 
         // Process unrevealed — voter4 should be refunded (epoch not ended at settlement)
         engine.processUnrevealedVotes(contentId, roundId, 0, 0);
 
-        uint256 voter4After = hrepToken.balanceOf(voter4);
+        uint256 voter4After = lrepToken.balanceOf(voter4);
         assertEq(voter4After - voter4Before, 2_500_000, "Current-epoch voter should get full refund");
     }
 
@@ -633,7 +633,7 @@ contract AdversarialTests is VotingTestBase {
     function test_ConsensusSubsidy_EmptyReserve_ZeroSubsidy() public {
         // Deploy fresh setup with zero consensus reserve
         vm.startPrank(owner);
-        HumanReputation token2 = new HumanReputation(owner, owner);
+        LoopReputation token2 = new LoopReputation(owner, owner);
         token2.grantRole(token2.MINTER_ROLE(), owner);
 
         ContentRegistry reg2 = ContentRegistry(
@@ -773,7 +773,7 @@ contract AdversarialTests is VotingTestBase {
         // Attacker controls both accounts, but two reveals are not enough for RBTS settlement.
         address sybil = address(0xBEEF);
         vm.prank(owner);
-        hrepToken.mint(sybil, 100_000e6);
+        lrepToken.mint(sybil, 100_000e6);
 
         (bytes32 ckAttack,) = _commit(attacker, contentId, true, 5e6);
         (bytes32 ckSybil,) = _commit(sybil, contentId, false, 5e6);
@@ -799,7 +799,7 @@ contract AdversarialTests is VotingTestBase {
 
         address sybil = address(0xBEEF);
         vm.prank(owner);
-        hrepToken.mint(sybil, 100_000e6);
+        lrepToken.mint(sybil, 100_000e6);
 
         // Third honest voter to prevent tie
         (bytes32 ckHonest,) = _commit(voter1, contentId, true, STAKE);
@@ -817,16 +817,16 @@ contract AdversarialTests is VotingTestBase {
 
         // UP wins. The losing sybil leg can earn RBTS stake return/reward, but still
         // recovers less than it committed.
-        uint256 attackerBefore = hrepToken.balanceOf(attacker);
-        uint256 sybilBefore = hrepToken.balanceOf(sybil);
+        uint256 attackerBefore = lrepToken.balanceOf(attacker);
+        uint256 sybilBefore = lrepToken.balanceOf(sybil);
 
         vm.prank(attacker);
         distributor.claimReward(contentId, roundId);
         vm.prank(sybil);
         distributor.claimReward(contentId, roundId); // loser, gets fixed rebate
 
-        uint256 attackerNet = hrepToken.balanceOf(attacker) - attackerBefore;
-        uint256 sybilNet = hrepToken.balanceOf(sybil) - sybilBefore;
+        uint256 attackerNet = lrepToken.balanceOf(attacker) - attackerBefore;
+        uint256 sybilNet = lrepToken.balanceOf(sybil) - sybilBefore;
 
         assertGt(attackerNet, 8e6, "Winning leg can still earn ordinary winner rewards");
         assertGt(sybilNet, 0, "Losing leg can still recover RBTS value");
@@ -848,8 +848,8 @@ contract AdversarialTests is VotingTestBase {
         address delegate = address(0xA2);
 
         vm.startPrank(owner);
-        hrepToken.mint(holder, 100_000e6);
-        hrepToken.mint(delegate, 100_000e6);
+        lrepToken.mint(holder, 100_000e6);
+        lrepToken.mint(delegate, 100_000e6);
         vm.stopPrank();
 
         _delegateIdentity(identityRegistry, holder, delegate);
@@ -861,7 +861,7 @@ contract AdversarialTests is VotingTestBase {
         bytes32 commitHash = _commitHash(true, salt, holder, contentId);
         bytes memory ciphertext = _testCiphertext(true, salt, contentId);
         vm.startPrank(holder);
-        hrepToken.approve(address(engine), STAKE);
+        lrepToken.approve(address(engine), STAKE);
         uint256 cachedRoundContext4 =
             _roundContext(engine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());
         engine.commitVote(
@@ -878,7 +878,7 @@ contract AdversarialTests is VotingTestBase {
 
         // Delegate resolves to the same identity, so voting again on the same content is blocked.
         vm.startPrank(submitter);
-        hrepToken.approve(address(registry), 10e6);
+        lrepToken.approve(address(registry), 10e6);
         _submitContentWithReservation(registry, "https://example.com/adv3", "test", "test", "test", 0);
         vm.stopPrank();
 
@@ -887,7 +887,7 @@ contract AdversarialTests is VotingTestBase {
         bytes32 commitHash3 = _commitHash(false, salt3, delegate, contentId);
         bytes memory ciphertext3 = _testCiphertext(false, salt3, contentId);
         vm.startPrank(delegate);
-        hrepToken.approve(address(engine), STAKE);
+        lrepToken.approve(address(engine), STAKE);
         uint256 cachedRoundContext5 =
             _roundContext(engine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());
         vm.expectRevert(RoundVotingEngine.CooldownActive.selector);
@@ -915,8 +915,8 @@ contract AdversarialTests is VotingTestBase {
         address delegate = address(0xA2);
 
         vm.startPrank(owner);
-        hrepToken.mint(holder, 100_000e6);
-        hrepToken.mint(delegate, 100_000e6);
+        lrepToken.mint(holder, 100_000e6);
+        lrepToken.mint(delegate, 100_000e6);
         vm.stopPrank();
 
         _delegateIdentity(identityRegistry, holder, delegate);
@@ -954,7 +954,7 @@ contract AdversarialTests is VotingTestBase {
             ciphertext2
         );
         vm.startPrank(delegate);
-        hrepToken.approve(address(engine), STAKE);
+        lrepToken.approve(address(engine), STAKE);
         uint256 cachedRoundContext6 = _roundContext(engine.previewCommitRoundId(contentId), referenceRatingBps2);
         vm.expectRevert(RoundVotingEngine.CooldownActive.selector);
         engine.commitVote(
@@ -1000,9 +1000,9 @@ contract AdversarialTests is VotingTestBase {
         round = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertEq(uint8(round.state), uint8(RoundLib.RoundState.Tied));
 
-        uint256 v1Before = hrepToken.balanceOf(voter1);
-        uint256 v2Before = hrepToken.balanceOf(voter2);
-        uint256 v3Before = hrepToken.balanceOf(voter3);
+        uint256 v1Before = lrepToken.balanceOf(voter1);
+        uint256 v2Before = lrepToken.balanceOf(voter2);
+        uint256 v3Before = lrepToken.balanceOf(voter3);
 
         vm.prank(voter1);
         engine.claimCancelledRoundRefund(contentId, roundId);
@@ -1011,9 +1011,9 @@ contract AdversarialTests is VotingTestBase {
         vm.prank(voter3);
         engine.claimCancelledRoundRefund(contentId, roundId);
 
-        assertEq(hrepToken.balanceOf(voter1) - v1Before, 2e6, "Voter1 full refund");
-        assertEq(hrepToken.balanceOf(voter2) - v2Before, 3e6, "Voter2 full refund");
-        assertEq(hrepToken.balanceOf(voter3) - v3Before, 1e6, "Voter3 full refund");
+        assertEq(lrepToken.balanceOf(voter1) - v1Before, 2e6, "Voter1 full refund");
+        assertEq(lrepToken.balanceOf(voter2) - v2Before, 3e6, "Voter2 full refund");
+        assertEq(lrepToken.balanceOf(voter3) - v3Before, 1e6, "Voter3 full refund");
     }
 
     // =========================================================================
@@ -1064,7 +1064,7 @@ contract AdversarialTests is VotingTestBase {
         bytes memory ciphertext = _testCiphertext(true, salt, contentId);
 
         vm.startPrank(voter1);
-        hrepToken.approve(address(engine), STAKE);
+        lrepToken.approve(address(engine), STAKE);
         uint256 cachedRoundContext7 =
             _roundContext(engine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());
         engine.commitVote(
@@ -1096,7 +1096,7 @@ contract AdversarialTests is VotingTestBase {
         bytes memory ciphertext = _testCiphertext(true, salt, contentId);
 
         vm.startPrank(voter1);
-        hrepToken.approve(address(engine), STAKE);
+        lrepToken.approve(address(engine), STAKE);
         uint256 cachedRoundContext8 =
             _roundContext(engine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());
         engine.commitVote(
@@ -1131,7 +1131,7 @@ contract AdversarialTests is VotingTestBase {
         bytes memory ciphertext = _testCiphertext(true, salt, contentId);
 
         vm.startPrank(voter1);
-        hrepToken.approve(address(engine), STAKE);
+        lrepToken.approve(address(engine), STAKE);
         uint256 cachedRoundContext9 =
             _roundContext(engine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());
         engine.commitVote(
@@ -1169,7 +1169,7 @@ contract AdversarialTests is VotingTestBase {
         bytes32 commitHash = _commitHash(true, salt, voter1, contentId, targetRound, drandChainHash, opaqueCiphertext);
 
         vm.startPrank(voter1);
-        hrepToken.approve(address(engine), STAKE);
+        lrepToken.approve(address(engine), STAKE);
         uint256 cachedRoundContext10 =
             _roundContext(engine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());
         vm.expectRevert(RoundVotingEngine.InvalidCiphertext.selector);
@@ -1216,7 +1216,7 @@ contract AdversarialTests is VotingTestBase {
         vm.expectRevert(RoundVotingEngine.NothingProcessed.selector);
         engine.processUnrevealedVotes(contentId, roundId, 0, 0);
 
-        uint256 engineBalance = hrepToken.balanceOf(address(engine));
+        uint256 engineBalance = lrepToken.balanceOf(address(engine));
         uint256 obligations = engine.consensusReserve();
 
         assertGe(engineBalance, obligations, "Engine insolvent after full cycle");
@@ -1235,7 +1235,7 @@ contract AdversarialTests is VotingTestBase {
         bytes memory ciphertext = _testCiphertext(true, salt, contentId);
 
         vm.startPrank(submitter);
-        hrepToken.approve(address(engine), STAKE);
+        lrepToken.approve(address(engine), STAKE);
         uint256 cachedRoundContext11 =
             _roundContext(engine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());
         vm.expectRevert(RoundVotingEngine.SelfVote.selector);
@@ -1265,7 +1265,7 @@ contract AdversarialTests is VotingTestBase {
         bytes memory ciphertext = _testCiphertext(true, salt, contentId);
 
         vm.startPrank(voter1);
-        hrepToken.approve(address(engine), 0);
+        lrepToken.approve(address(engine), 0);
         uint256 cachedRoundContext12 =
             _roundContext(engine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());
         vm.expectRevert(RoundVotingEngine.InvalidStake.selector);
@@ -1292,7 +1292,7 @@ contract AdversarialTests is VotingTestBase {
         bytes memory ciphertext = _testCiphertext(true, salt, contentId);
 
         vm.startPrank(voter1);
-        hrepToken.approve(address(engine), tooMuch);
+        lrepToken.approve(address(engine), tooMuch);
         uint256 cachedRoundContext13 =
             _roundContext(engine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());
         vm.expectRevert(RoundVotingEngine.InvalidStake.selector);

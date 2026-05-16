@@ -188,7 +188,7 @@ export const FrontendRegistryAbi = [
         "internalType": "address"
       },
       {
-        "name": "hrepAmount",
+        "name": "lrepAmount",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -250,7 +250,7 @@ export const FrontendRegistryAbi = [
         "internalType": "uint64"
       },
       {
-        "name": "hrepFees",
+        "name": "lrepFees",
         "type": "uint128",
         "internalType": "uint128"
       },
@@ -279,7 +279,7 @@ export const FrontendRegistryAbi = [
     ],
     "outputs": [
       {
-        "name": "hrepFees",
+        "name": "lrepFees",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -412,19 +412,6 @@ export const FrontendRegistryAbi = [
   },
   {
     "type": "function",
-    "name": "hrepToken",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "contract IERC20"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "initialFeeCreditorConfigured",
     "inputs": [],
     "outputs": [
@@ -451,7 +438,7 @@ export const FrontendRegistryAbi = [
         "internalType": "address"
       },
       {
-        "name": "_hrepToken",
+        "name": "_lrepToken",
         "type": "address",
         "internalType": "address"
       }
@@ -487,6 +474,19 @@ export const FrontendRegistryAbi = [
         "name": "",
         "type": "bool",
         "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "lrepToken",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract IERC20"
       }
     ],
     "stateMutability": "view"
@@ -697,7 +697,7 @@ export const FrontendRegistryAbi = [
         "internalType": "address"
       },
       {
-        "name": "hrepAmount",
+        "name": "lrepAmount",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -716,7 +716,7 @@ export const FrontendRegistryAbi = [
         "internalType": "address"
       },
       {
-        "name": "hrepAmount",
+        "name": "lrepAmount",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -735,7 +735,7 @@ export const FrontendRegistryAbi = [
         "internalType": "address"
       },
       {
-        "name": "hrepAmount",
+        "name": "lrepAmount",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"

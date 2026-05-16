@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import { Test } from "forge-std/Test.sol";
 
-import { HumanReputation } from "../contracts/HumanReputation.sol";
+import { LoopReputation } from "../contracts/LoopReputation.sol";
 import { ContentRegistry } from "../contracts/ContentRegistry.sol";
 import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
 import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
@@ -13,7 +13,7 @@ import { ContentSubmissionTestBase, deployInitializedProtocolConfig } from "./he
 
 contract SubmitterIdentityReservationTest is Test, ContentSubmissionTestBase {
     ContentRegistry public registry;
-    HumanReputation public hrepToken;
+    LoopReputation public lrepToken;
     ProtocolConfig public protocolConfig;
     MockCategoryRegistry public mockCategoryRegistry;
     MockRaterIdentityRegistry public mockRaterIdentityRegistry;
@@ -27,15 +27,15 @@ contract SubmitterIdentityReservationTest is Test, ContentSubmissionTestBase {
 
         vm.startPrank(owner);
 
-        hrepToken = new HumanReputation(owner, owner);
-        hrepToken.grantRole(hrepToken.MINTER_ROLE(), owner);
+        lrepToken = new LoopReputation(owner, owner);
+        lrepToken.grantRole(lrepToken.MINTER_ROLE(), owner);
 
         ContentRegistry registryImpl = new ContentRegistry();
         registry = ContentRegistry(
             address(
                 new ERC1967Proxy(
                     address(registryImpl),
-                    abi.encodeCall(ContentRegistry.initializeWithTreasury, (owner, owner, owner, address(hrepToken)))
+                    abi.encodeCall(ContentRegistry.initializeWithTreasury, (owner, owner, owner, address(lrepToken)))
                 )
             )
         );
@@ -49,8 +49,8 @@ contract SubmitterIdentityReservationTest is Test, ContentSubmissionTestBase {
         protocolConfig.setRaterRegistry(address(mockRaterIdentityRegistry));
         registry.setProtocolConfig(address(protocolConfig));
 
-        hrepToken.mint(submitter, 100e6);
-        hrepToken.mint(delegate, 100e6);
+        lrepToken.mint(submitter, 100e6);
+        lrepToken.mint(delegate, 100e6);
 
         vm.stopPrank();
     }
@@ -60,7 +60,7 @@ contract SubmitterIdentityReservationTest is Test, ContentSubmissionTestBase {
         mockRaterIdentityRegistry.setHolder(submitter);
 
         vm.startPrank(submitter);
-        hrepToken.approve(address(registry), 10e6);
+        lrepToken.approve(address(registry), 10e6);
         uint256 contentId = _submitContentWithReservation(
             registry, "https://example.com/unchanged-identity", "goal", "goal", "tags", 0
         );

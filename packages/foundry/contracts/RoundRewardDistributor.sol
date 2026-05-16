@@ -38,7 +38,7 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
     error NotWinningSide();
     error NoParticipationRate();
     error NoCommit();
-    error NoStrandedHrep();
+    error NoStrandedLrep();
     error TreasuryNotSet();
     error InvalidParticipationSnapshot();
     error UnauthorizedCaller();
@@ -63,7 +63,7 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
     uint256 public constant STALE_REWARD_FINALIZATION_DELAY = 30 days;
 
     // --- State ---
-    IERC20 public hrepToken;
+    IERC20 public lrepToken;
     RoundVotingEngine public votingEngine;
     ContentRegistry public registry;
 
@@ -104,8 +104,8 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
     /// @notice Emitted when a settled-round claim pays out.
     /// @param voter Current SBT holder (or fallback EOA for non-SBT direct path) — receives `reward`.
     /// @param stakePayer Original `commit.voter` (typically a delegate) — receives `stakeReturned`.
-    /// @param stakeReturned HREP sent to `stakePayer` (winning stake refund OR loser rebate).
-    /// @param reward HREP sent to `voter` (voter-pool reward; 0 for losers).
+    /// @param stakeReturned LREP sent to `stakePayer` (winning stake refund OR loser rebate).
+    /// @param reward LREP sent to `voter` (voter-pool reward; 0 for losers).
     event RewardClaimed(
         uint256 indexed contentId,
         uint256 indexed roundId,
@@ -176,43 +176,43 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         uint256 rewardRateBps,
         uint256 totalReward
     );
-    event StrandedHrepSwept(address indexed treasury, uint256 amount);
+    event StrandedLrepSwept(address indexed treasury, uint256 amount);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
     }
 
-    function initialize(address _governance, address _hrepToken, address _votingEngine, address _registry)
+    function initialize(address _governance, address _lrepToken, address _votingEngine, address _registry)
         public
         initializer
     {
         __AccessControl_init();
 
         require(_governance != address(0), "Invalid governance");
-        require(_hrepToken != address(0), "Invalid HREP token");
+        require(_lrepToken != address(0), "Invalid LREP token");
         require(_votingEngine != address(0), "Invalid voting engine");
         require(_registry != address(0), "Invalid registry");
 
         _grantRole(DEFAULT_ADMIN_ROLE, _governance);
 
-        hrepToken = IERC20(_hrepToken);
+        lrepToken = IERC20(_lrepToken);
         votingEngine = RoundVotingEngine(_votingEngine);
         registry = ContentRegistry(_registry);
     }
 
-    /// @notice Sweep any HREP accidentally held by the distributor to the protocol treasury.
+    /// @notice Sweep any LREP accidentally held by the distributor to the protocol treasury.
     /// @dev Historical cancellation fees were mistakenly routed here in some deployments. This contract does not
     ///      custody live reward inventory, so governance can safely recover the full balance to treasury.
-    function sweepStrandedHrepToTreasury() external onlyRole(DEFAULT_ADMIN_ROLE) nonReentrant returns (uint256 amount) {
+    function sweepStrandedLrepToTreasury() external onlyRole(DEFAULT_ADMIN_ROLE) nonReentrant returns (uint256 amount) {
         address treasury = _protocolTreasury();
         if (treasury == address(0)) revert TreasuryNotSet();
 
-        amount = hrepToken.balanceOf(address(this));
-        if (amount == 0) revert NoStrandedHrep();
+        amount = lrepToken.balanceOf(address(this));
+        if (amount == 0) revert NoStrandedLrep();
 
-        hrepToken.safeTransfer(treasury, amount);
-        emit StrandedHrepSwept(treasury, amount);
+        lrepToken.safeTransfer(treasury, amount);
+        emit StrandedLrepSwept(treasury, amount);
     }
 
     /// @notice The voting engine is immutable for this distributor.
@@ -1070,7 +1070,7 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         }
 
         votingEngine.transferReward(address(this), fee);
-        hrepToken.forceApprove(address(votingEngine), fee);
+        lrepToken.forceApprove(address(votingEngine), fee);
         votingEngine.addToConsensusReserve(fee);
     }
 

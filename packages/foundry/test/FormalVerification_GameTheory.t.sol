@@ -7,7 +7,7 @@ import { ContentRegistry } from "../contracts/ContentRegistry.sol";
 import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
 import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
 import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
-import { HumanReputation } from "../contracts/HumanReputation.sol";
+import { LoopReputation } from "../contracts/LoopReputation.sol";
 import { RoundLib } from "../contracts/libraries/RoundLib.sol";
 import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
 import { RewardMath } from "../contracts/libraries/RewardMath.sol";
@@ -18,7 +18,7 @@ import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.so
 /// @notice 14 scenarios verifying honest voting profitability, collusion resistance,
 ///         consensus subsidy mechanics, settlement timing, and tied rounds.
 contract FormalVerification_GameTheoryTest is VotingTestBase {
-    HumanReputation hrepToken;
+    LoopReputation lrepToken;
     ContentRegistry registry;
     RoundVotingEngine engine;
     RoundRewardDistributor distributor;
@@ -43,8 +43,8 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
 
         vm.startPrank(owner);
 
-        hrepToken = new HumanReputation(owner, owner);
-        hrepToken.grantRole(hrepToken.MINTER_ROLE(), owner);
+        lrepToken = new LoopReputation(owner, owner);
+        lrepToken.grantRole(lrepToken.MINTER_ROLE(), owner);
 
         ContentRegistry regImpl = new ContentRegistry();
         RoundVotingEngine engImpl = new RoundVotingEngine();
@@ -54,7 +54,7 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
             address(
                 new ERC1967Proxy(
                     address(regImpl),
-                    abi.encodeCall(ContentRegistry.initializeWithTreasury, (owner, owner, owner, address(hrepToken)))
+                    abi.encodeCall(ContentRegistry.initializeWithTreasury, (owner, owner, owner, address(lrepToken)))
                 )
             )
         );
@@ -64,7 +64,7 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
                     address(engImpl),
                     abi.encodeCall(
                         RoundVotingEngine.initialize,
-                        (owner, address(hrepToken), address(registry), address(_deployProtocolConfig(owner)))
+                        (owner, address(lrepToken), address(registry), address(_deployProtocolConfig(owner)))
                     )
                 )
             )
@@ -75,7 +75,7 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
                     address(distImpl),
                     abi.encodeCall(
                         RoundRewardDistributor.initialize,
-                        (owner, address(hrepToken), address(engine), address(registry))
+                        (owner, address(lrepToken), address(engine), address(registry))
                     )
                 )
             )
@@ -93,15 +93,15 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
         // Config: epochDuration=1h, maxDuration=7d, minVoters=3, maxVoters=200
         _setTlockRoundConfig(ProtocolConfig(address(engine.protocolConfig())), 1 hours, MAX_DURATION, MIN_VOTERS, 200);
 
-        // Fund consensus reserve: 100K HREP
-        hrepToken.mint(owner, 100_000e6);
-        hrepToken.approve(address(engine), 100_000e6);
+        // Fund consensus reserve: 100K LREP
+        lrepToken.mint(owner, 100_000e6);
+        lrepToken.approve(address(engine), 100_000e6);
         engine.addToConsensusReserve(100_000e6);
 
         // Fund submitter and voters
-        hrepToken.mint(submitter, 100_000e6);
+        lrepToken.mint(submitter, 100_000e6);
         for (uint256 i = 0; i < 10; i++) {
-            hrepToken.mint(v[i], 100_000e6);
+            lrepToken.mint(v[i], 100_000e6);
         }
 
         vm.stopPrank();
@@ -114,7 +114,7 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
     function _submit() internal returns (uint256) {
         contentNonce++;
         vm.startPrank(submitter);
-        hrepToken.approve(address(registry), 10e6);
+        lrepToken.approve(address(registry), 10e6);
         uint256 id = _submitContentWithReservation(
             registry, string(abi.encodePacked("https://t.co/gt", vm.toString(contentNonce))), "Goal", "Goal", "tag", 0
         );
@@ -133,7 +133,7 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
         bytes32 commitHash =
             _commitHash(up, salt, voter, cid, _defaultRatingReferenceBps(), targetRound, drandChainHash, ciphertext);
         vm.prank(voter);
-        hrepToken.approve(address(engine), stake);
+        lrepToken.approve(address(engine), stake);
         uint256 cachedRoundContext1 = _roundContext(engine.previewCommitRoundId(cid), _defaultRatingReferenceBps());
         vm.prank(voter);
         engine.commitVote(
@@ -178,10 +178,10 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
     }
 
     function _claimPayout(address voter, uint256 cid, uint256 rid) internal returns (uint256 payout) {
-        uint256 bal = hrepToken.balanceOf(voter);
+        uint256 bal = lrepToken.balanceOf(voter);
         vm.prank(voter);
         distributor.claimReward(cid, rid);
-        payout = hrepToken.balanceOf(voter) - bal;
+        payout = lrepToken.balanceOf(voter) - bal;
     }
 
     // ==================== Test 1: Honest Voting Profitability ====================
@@ -222,7 +222,7 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
     // ==================== Test 2: Proportional Rewards ====================
 
     /// @notice 7 UP (varying stakes) vs 3 DOWN. Higher stake -> higher absolute reward.
-    /// @dev With bonding curve shares, early voters get more shares per HREP. Within the same
+    /// @dev With bonding curve shares, early voters get more shares per LREP. Within the same
     ///      direction, later voters with higher stakes still get higher absolute rewards because
     ///      the stake difference dominates the share discount. We verify monotonically increasing payouts.
     function test_HonestVoting_LargePool_7Up3Down() public {
@@ -285,7 +285,7 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
 
     // ==================== Test 4: Collusion at Threshold - Negligible Profit ====================
 
-    /// @notice 4 colluders UP (100 each) + 1 innocent DOWN (1). Profit < 1 HREP.
+    /// @notice 4 colluders UP (100 each) + 1 innocent DOWN (1). Profit < 1 LREP.
     function test_Threshold_CollusionNegligibleProfit() public {
         uint256 cid = _submit();
 
@@ -299,21 +299,21 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
 
         _forceSettle(cid);
 
-        // losingPool = 1e6 -> voterPool ~0.8 HREP -> split among 4 colluders proportional to shares.
+        // losingPool = 1e6 -> voterPool ~0.8 LREP -> split among 4 colluders proportional to shares.
         // RBTS scoring (with the M-Vote-1 seed) can score some colluders below their stake; the
         // bound we care about is total colluder *profit* (claimed payout minus original stake),
-        // which must stay strictly below 1 HREP. Allowing negative per-voter contributions keeps
+        // which must stay strictly below 1 LREP. Allowing negative per-voter contributions keeps
         // the assertion meaningful when individual payouts are sub-stake.
         int256 totalProfit = 0;
         for (uint256 i = 0; i < 4; i++) {
-            uint256 bal = hrepToken.balanceOf(v[i]);
+            uint256 bal = lrepToken.balanceOf(v[i]);
             vm.prank(v[i]);
             distributor.claimReward(cid, rid);
-            uint256 payout = hrepToken.balanceOf(v[i]) - bal;
+            uint256 payout = lrepToken.balanceOf(v[i]) - bal;
             totalProfit += int256(payout) - int256(uint256(10e6));
         }
 
-        assertLt(totalProfit, int256(uint256(1e6)), "Total colluder profit < 1 HREP - negligible");
+        assertLt(totalProfit, int256(uint256(1e6)), "Total colluder profit < 1 LREP - negligible");
     }
 
     // ==================== Test 5: Unanimous Round - Consensus Subsidy ====================
@@ -322,7 +322,7 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
     function test_UnanimousRound_ConsensusSubsidy() public {
         uint256 cid = _submit();
         uint256 reserveBefore = engine.consensusReserve();
-        uint256 submitterBefore = hrepToken.balanceOf(submitter);
+        uint256 submitterBefore = lrepToken.balanceOf(submitter);
 
         _vote(v[0], cid, true, 5e6);
         _vote(v[1], cid, true, 5e6);
@@ -342,7 +342,7 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
         assertGt(payout, 0, "Voter gets RBTS claim value");
         assertLe(payout, 5e6 + engine.roundVoterPool(cid, rid), "Voter claim stays inside pool bounds");
 
-        assertEq(hrepToken.balanceOf(submitter), submitterBefore, "Submitter receives no consensus subsidy");
+        assertEq(lrepToken.balanceOf(submitter), submitterBefore, "Submitter receives no consensus subsidy");
     }
 
     // ==================== Test 6: Same-Epoch Stake Weight ====================
@@ -446,8 +446,8 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
         uint256 cid = _submit();
 
         // Record starting balances (attacker uses v[0] and v[1])
-        uint256 attackerStartA = hrepToken.balanceOf(v[0]);
-        uint256 attackerStartB = hrepToken.balanceOf(v[1]);
+        uint256 attackerStartA = lrepToken.balanceOf(v[0]);
+        uint256 attackerStartB = lrepToken.balanceOf(v[1]);
 
         _vote(v[0], cid, true, 10e6); // attacker UP
         _vote(v[1], cid, false, 5e6); // attacker DOWN (manufactured dissent)
@@ -466,8 +466,8 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
         vm.prank(v[1]);
         distributor.claimReward(cid, rid);
 
-        uint256 attackerEndA = hrepToken.balanceOf(v[0]);
-        uint256 attackerEndB = hrepToken.balanceOf(v[1]);
+        uint256 attackerEndA = lrepToken.balanceOf(v[0]);
+        uint256 attackerEndB = lrepToken.balanceOf(v[1]);
         uint256 totalStart = attackerStartA + attackerStartB;
         uint256 totalEnd = attackerEndA + attackerEndB;
 
@@ -611,7 +611,7 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
         // Record starting balances
         uint256[10] memory startBals;
         for (uint256 i = 0; i < 10; i++) {
-            startBals[i] = hrepToken.balanceOf(v[i]);
+            startBals[i] = lrepToken.balanceOf(v[i]);
         }
 
         _vote(v[0], cid, true, 5e6);
@@ -637,7 +637,7 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
         for (uint256 i = 0; i < 10; i++) {
             vm.prank(v[i]);
             engine.claimCancelledRoundRefund(cid, rid);
-            assertEq(hrepToken.balanceOf(v[i]), startBals[i], "Full refund on tied round");
+            assertEq(lrepToken.balanceOf(v[i]), startBals[i], "Full refund on tied round");
         }
     }
 }

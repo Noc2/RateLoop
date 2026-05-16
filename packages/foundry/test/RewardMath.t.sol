@@ -240,13 +240,13 @@ contract RewardMathTest is Test {
     // ====================================================
 
     function test_ConsensusSubsidy_Normal() public view {
-        // 50 HREP total stake, 1M reserve → subsidy = 50 * 5% = 2.5 HREP
+        // 50 LREP total stake, 1M reserve → subsidy = 50 * 5% = 2.5 LREP
         uint256 subsidy = harness.calculateConsensusSubsidy(50e6, 1_000_000e6);
-        assertEq(subsidy, 2_500_000, "5% of 50 HREP = 2.5 HREP");
+        assertEq(subsidy, 2_500_000, "5% of 50 LREP = 2.5 LREP");
     }
 
     function test_ConsensusSubsidy_CappedByReserve() public view {
-        // 1000 HREP total stake, 10 HREP reserve → subsidy capped at 10 HREP
+        // 1000 LREP total stake, 10 LREP reserve → subsidy capped at 10 LREP
         uint256 subsidy = harness.calculateConsensusSubsidy(1000e6, 10e6);
         assertEq(subsidy, 10e6, "Should be capped by reserve balance");
     }
@@ -262,9 +262,9 @@ contract RewardMathTest is Test {
     }
 
     function test_ConsensusSubsidy_CappedByMaxSubsidy() public view {
-        // 2000 HREP total stake, 5% = 100 HREP desired, but cap is 50 HREP
+        // 2000 LREP total stake, 5% = 100 LREP desired, but cap is 50 LREP
         uint256 subsidy = harness.calculateConsensusSubsidy(2000e6, 1_000_000e6);
-        assertEq(subsidy, 50e6, "Subsidy capped at 50 HREP (MAX_CONSENSUS_SUBSIDY)");
+        assertEq(subsidy, 50e6, "Subsidy capped at 50 LREP (MAX_CONSENSUS_SUBSIDY)");
     }
 
     // ====================================================

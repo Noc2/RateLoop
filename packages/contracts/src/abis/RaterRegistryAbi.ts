@@ -154,6 +154,11 @@ export const RaterRegistryAbi = [
     "name": "clearRevokedHumanNullifier",
     "inputs": [
       {
+        "name": "provider",
+        "type": "uint8",
+        "internalType": "enum RaterRegistry.HumanCredentialProvider"
+      },
+      {
         "name": "nullifierHash",
         "type": "bytes32",
         "internalType": "bytes32"
@@ -449,10 +454,15 @@ export const RaterRegistryAbi = [
   },
   {
     "type": "function",
-    "name": "humanNullifierOwner",
+    "name": "humanNullifierOwnerByProvider",
     "inputs": [
       {
-        "name": "",
+        "name": "provider",
+        "type": "uint8",
+        "internalType": "enum RaterRegistry.HumanCredentialProvider"
+      },
+      {
+        "name": "nullifierHash",
         "type": "bytes32",
         "internalType": "bytes32"
       }
@@ -632,10 +642,15 @@ export const RaterRegistryAbi = [
   },
   {
     "type": "function",
-    "name": "revokedHumanNullifier",
+    "name": "revokedHumanNullifierByProvider",
     "inputs": [
       {
-        "name": "",
+        "name": "provider",
+        "type": "uint8",
+        "internalType": "enum RaterRegistry.HumanCredentialProvider"
+      },
+      {
+        "name": "nullifierHash",
         "type": "bytes32",
         "internalType": "bytes32"
       }

@@ -23,7 +23,7 @@ library QuestionRewardPoolEscrowPoolActionsLib {
     uint256 internal constant MIN_REWARD_POOL_PARTICIPANTS = 3;
     uint256 internal constant HIGH_VALUE_REWARD_POOL_THRESHOLD = 1_000e6;
     uint256 internal constant MIN_HIGH_VALUE_PARTICIPANTS = 5;
-    uint8 internal constant REWARD_ASSET_HREP = 0;
+    uint8 internal constant REWARD_ASSET_LREP = 0;
     uint8 internal constant REWARD_ASSET_USDC = 1;
 
     event RewardPoolCreated(
@@ -56,7 +56,7 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         mapping(uint256 => bytes32) storage rewardPoolPayerIdentityKey,
         ContentRegistry registry,
         RoundVotingEngine votingEngine,
-        IERC20 hrepToken,
+        IERC20 lrepToken,
         IERC20 usdcToken,
         uint16 defaultFrontendFeeBps,
         uint256 nextRewardPoolId,
@@ -76,7 +76,7 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         bytes32 reasonHash
     ) external returns (uint256 rewardPoolId, uint256 updatedNextRewardPoolId) {
         uint256 fundedAmount = QuestionRewardPoolEscrowTransferLib.pullExactToken(
-                _rewardToken(hrepToken, usdcToken, asset), funder, amount
+                _rewardToken(lrepToken, usdcToken, asset), funder, amount
             );
 
         rewardPoolId = nextRewardPoolId;
@@ -142,7 +142,7 @@ library QuestionRewardPoolEscrowPoolActionsLib {
     ) private {
         uint256 amount = fundedAmount;
         require(amount > 0, "Amount required");
-        require(asset == REWARD_ASSET_HREP || asset == REWARD_ASSET_USDC, "Invalid asset");
+        require(asset == REWARD_ASSET_LREP || asset == REWARD_ASSET_USDC, "Invalid asset");
         require(QuestionRewardPoolEscrowEligibilityLib.isValidPolicy(bountyEligibility), "Invalid eligibility");
         require(registry.isContentActive(contentId), "Content not active");
         require(requiredVoters >= MIN_REQUIRED_VOTERS, "Too few voters");
@@ -260,8 +260,8 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         funderIdentityKey = QuestionRewardPoolEscrowVoterLib.identityKeyForCurrentRater(protocolConfig, funder);
     }
 
-    function _rewardToken(IERC20 hrepToken, IERC20 usdcToken, uint8 asset) private pure returns (IERC20 token) {
-        return asset == REWARD_ASSET_HREP ? hrepToken : usdcToken;
+    function _rewardToken(IERC20 lrepToken, IERC20 usdcToken, uint8 asset) private pure returns (IERC20 token) {
+        return asset == REWARD_ASSET_LREP ? lrepToken : usdcToken;
     }
 
     function _requiredParticipantFloorForAmount(uint256 amount) private pure returns (uint256) {

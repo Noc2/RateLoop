@@ -14,7 +14,7 @@ import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol"
 import { RoundLib } from "../contracts/libraries/RoundLib.sol";
 import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
 import { TlockVoteLib } from "../contracts/libraries/TlockVoteLib.sol";
-import { HumanReputation } from "../contracts/HumanReputation.sol";
+import { LoopReputation } from "../contracts/LoopReputation.sol";
 import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
 import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
 
@@ -44,11 +44,10 @@ contract MockRevertingLaunchDistributionPool {
 contract RoundRewardDistributorBranchesTest is VotingTestBase {
     using stdStorage for StdStorage;
 
-    HumanReputation public hrepToken;
+    LoopReputation public lrepToken;
     ContentRegistry public registry;
     RoundVotingEngine public votingEngine;
     RoundRewardDistributor public rewardDistributor;
-    LoopReputation public lrepToken;
     RaterRegistry public raterRegistry;
     MockWorldIDRouter public worldIdRouter;
     LaunchDistributionPool public launchPool;
@@ -78,8 +77,8 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         vm.warp(T0);
         vm.startPrank(owner);
 
-        hrepToken = new HumanReputation(owner, owner);
-        hrepToken.grantRole(hrepToken.MINTER_ROLE(), owner);
+        lrepToken = new LoopReputation(owner, owner);
+        lrepToken.grantRole(lrepToken.MINTER_ROLE(), owner);
 
         ContentRegistry registryImpl = new ContentRegistry();
         RoundVotingEngine engineImpl = new RoundVotingEngine();
@@ -89,7 +88,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
             address(
                 new ERC1967Proxy(
                     address(registryImpl),
-                    abi.encodeCall(ContentRegistry.initializeWithTreasury, (owner, owner, owner, address(hrepToken)))
+                    abi.encodeCall(ContentRegistry.initializeWithTreasury, (owner, owner, owner, address(lrepToken)))
                 )
             )
         );
@@ -99,7 +98,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
                     address(engineImpl),
                     abi.encodeCall(
                         RoundVotingEngine.initialize,
-                        (owner, address(hrepToken), address(registry), address(_deployProtocolConfig(owner)))
+                        (owner, address(lrepToken), address(registry), address(_deployProtocolConfig(owner)))
                     )
                 )
             )
@@ -110,7 +109,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
                     address(distImpl),
                     abi.encodeCall(
                         RoundRewardDistributor.initialize,
-                        (owner, address(hrepToken), address(votingEngine), address(registry))
+                        (owner, address(lrepToken), address(votingEngine), address(registry))
                     )
                 )
             )
@@ -127,7 +126,6 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         // 4 params: epochDuration, maxDuration, minVoters, maxVoters
         _setTlockRoundConfig(config, EPOCH_DURATION, 7 days, 3, 200);
 
-        lrepToken = new LoopReputation(owner, owner);
         worldIdRouter = new MockWorldIDRouter();
         raterRegistry = new RaterRegistry(owner, owner, address(worldIdRouter), bytes32("rate-loop"), 1, 365 days);
         launchPool = new LaunchDistributionPool(address(lrepToken), address(raterRegistry), owner);
@@ -138,13 +136,13 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         config.setRaterRegistry(address(raterRegistry));
         config.setLaunchDistributionPool(address(launchPool));
 
-        hrepToken.mint(owner, 1_000_000e6);
-        hrepToken.approve(address(votingEngine), 500_000e6);
+        lrepToken.mint(owner, 1_000_000e6);
+        lrepToken.approve(address(votingEngine), 500_000e6);
         votingEngine.addToConsensusReserve(500_000e6);
 
         address[5] memory users = [submitter, voter1, voter2, voter3, keeper];
         for (uint256 i = 0; i < users.length; i++) {
-            hrepToken.mint(users[i], 10_000e6);
+            lrepToken.mint(users[i], 10_000e6);
         }
 
         vm.stopPrank();
@@ -162,7 +160,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         bytes32 ch = _commitHash(isUp, salt, voter, contentId);
         bytes memory ct = _testCiphertext(isUp, salt, contentId);
         vm.prank(voter);
-        hrepToken.approve(address(votingEngine), stake);
+        lrepToken.approve(address(votingEngine), stake);
         uint256 cachedRoundContext1 =
             _roundContext(votingEngine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());
         vm.prank(voter);
@@ -203,7 +201,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         commitKey = _commitKey(voter, commitHash);
 
         vm.startPrank(voter);
-        hrepToken.approve(address(votingEngine), stake);
+        lrepToken.approve(address(votingEngine), stake);
         votingEngine.commitVote(
             contentId,
             _roundContext(roundId, referenceRatingBps),
@@ -244,7 +242,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
 
     function _setupSettledRound() internal returns (uint256 contentId, uint256 roundId) {
         vm.startPrank(submitter);
-        hrepToken.approve(address(registry), 10e6);
+        lrepToken.approve(address(registry), 10e6);
         _submitContentWithReservation(registry, "https://example.com/1", "goal", "goal", "tags", 0);
         vm.stopPrank();
         contentId = 1;
@@ -266,7 +264,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         returns (uint256 contentId, uint256 roundId)
     {
         vm.startPrank(submitter);
-        hrepToken.approve(address(registry), 10e6);
+        lrepToken.approve(address(registry), 10e6);
         _submitContentWithReservation(registry, "https://example.com/prediction", "goal", "goal", "tags", 0);
         vm.stopPrank();
         contentId = 1;
@@ -336,7 +334,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
 
     function test_ClaimReward_RoundNotSettled_Reverts() public {
         vm.startPrank(submitter);
-        hrepToken.approve(address(registry), 10e6);
+        lrepToken.approve(address(registry), 10e6);
         _submitContentWithReservation(registry, "https://example.com/1", "goal", "goal", "tags", 0);
         vm.stopPrank();
 
@@ -364,10 +362,10 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
             keccak256(abi.encodePacked(voter3, votingEngine.voterCommitHash(contentId, roundId, voter3)));
         uint256 rbtsStakeReturned = votingEngine.commitRbtsStakeReturned(contentId, roundId, voter3CommitKey);
 
-        uint256 balBefore = hrepToken.balanceOf(voter3);
+        uint256 balBefore = lrepToken.balanceOf(voter3);
         vm.prank(voter3);
         rewardDistributor.claimReward(contentId, roundId);
-        uint256 balAfter = hrepToken.balanceOf(voter3);
+        uint256 balAfter = lrepToken.balanceOf(voter3);
 
         uint256 claimedAmount = balAfter - balBefore;
         assertGt(rbtsStakeReturned, 0, "RBTS returns scored stake");
@@ -380,24 +378,24 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         stdstore.target(address(votingEngine)).sig("roundRbtsScored(uint256,uint256)").with_key(contentId)
             .with_key(roundId).checked_write(false);
 
-        uint256 winnerBefore = hrepToken.balanceOf(voter1);
+        uint256 winnerBefore = lrepToken.balanceOf(voter1);
         vm.prank(voter1);
         rewardDistributor.claimReward(contentId, roundId);
-        assertGt(hrepToken.balanceOf(voter1), winnerBefore, "legacy winner receives stake and reward");
+        assertGt(lrepToken.balanceOf(voter1), winnerBefore, "legacy winner receives stake and reward");
 
-        uint256 loserBefore = hrepToken.balanceOf(voter3);
+        uint256 loserBefore = lrepToken.balanceOf(voter3);
         vm.prank(voter3);
         rewardDistributor.claimReward(contentId, roundId);
-        assertGt(hrepToken.balanceOf(voter3), loserBefore, "legacy loser receives rebate");
+        assertGt(lrepToken.balanceOf(voter3), loserBefore, "legacy loser receives rebate");
     }
 
     function test_ClaimReward_WinnerGetsReward() public {
         (uint256 contentId, uint256 roundId) = _setupSettledRound();
 
-        uint256 balBefore = hrepToken.balanceOf(voter1);
+        uint256 balBefore = lrepToken.balanceOf(voter1);
         vm.prank(voter1);
         rewardDistributor.claimReward(contentId, roundId);
-        uint256 balAfter = hrepToken.balanceOf(voter1);
+        uint256 balAfter = lrepToken.balanceOf(voter1);
 
         assertGt(balAfter, balBefore); // winner gets stake + reward
     }
@@ -412,7 +410,6 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         assertEq(launchPool.qualifyingRatingCount(voter1), 1);
         assertEq(launchPool.raterDistinctVerifiedAnchorCount(voter1), 1);
         assertEq(launchPool.raterDistinctAnchorRoundCount(voter1), 1);
-        assertEq(lrepToken.balanceOf(voter1), 0);
     }
 
     function test_ClaimReward_DoesNotRecordLaunchCreditWithFreshVerifiedHumanAnchor() public {
@@ -425,7 +422,6 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         assertEq(launchPool.qualifyingRatingCount(voter1), 0);
         assertEq(launchPool.raterDistinctVerifiedAnchorCount(voter1), 0);
         assertEq(launchPool.raterDistinctAnchorRoundCount(voter1), 0);
-        assertEq(lrepToken.balanceOf(voter1), 0);
     }
 
     function test_ClaimReward_RecordsLaunchCreditWithCuryoSeededHumanAnchor() public {
@@ -438,7 +434,6 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         assertEq(launchPool.qualifyingRatingCount(voter1), 1);
         assertEq(launchPool.raterDistinctVerifiedAnchorCount(voter1), 1);
         assertEq(launchPool.raterDistinctAnchorRoundCount(voter1), 1);
-        assertEq(lrepToken.balanceOf(voter1), 0);
     }
 
     function test_ClaimReward_RecordsLaunchCreditWhenAnchorExpiresAfterRoundStartBeforeClaim() public {
@@ -455,7 +450,6 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         assertEq(launchPool.qualifyingRatingCount(voter1), 1);
         assertEq(launchPool.raterDistinctVerifiedAnchorCount(voter1), 1);
         assertEq(launchPool.raterDistinctAnchorRoundCount(voter1), 1);
-        assertEq(lrepToken.balanceOf(voter1), 0);
     }
 
     function test_ClaimReward_DoesNotRecordLaunchCreditWithFreshCuryoSeededHumanAnchor() public {
@@ -468,12 +462,11 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         assertEq(launchPool.qualifyingRatingCount(voter1), 0);
         assertEq(launchPool.raterDistinctVerifiedAnchorCount(voter1), 0);
         assertEq(launchPool.raterDistinctAnchorRoundCount(voter1), 0);
-        assertEq(lrepToken.balanceOf(voter1), 0);
     }
 
     function test_ClaimReward_ZeroStakeCountedVoteRejectedBeforeLaunchCredit() public {
         vm.startPrank(submitter);
-        hrepToken.approve(address(registry), 10e6);
+        lrepToken.approve(address(registry), 10e6);
         _submitContentWithReservation(registry, "https://example.com/zero-stake-counted", "goal", "goal", "tags", 0);
         vm.stopPrank();
 
@@ -500,7 +493,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         );
 
         vm.startPrank(voter1);
-        hrepToken.approve(address(votingEngine), 0);
+        lrepToken.approve(address(votingEngine), 0);
         vm.expectRevert(RoundVotingEngine.InvalidStake.selector);
         votingEngine.commitVote(
             contentId,
@@ -549,7 +542,6 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         assertEq(launchPool.qualifyingRatingCount(voter1), 0);
         assertEq(launchPool.raterDistinctVerifiedAnchorCount(voter1), 0);
         assertEq(launchPool.raterDistinctAnchorRoundCount(voter1), 0);
-        assertEq(lrepToken.balanceOf(voter1), 0);
     }
 
     // =========================================================================
@@ -563,14 +555,14 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
             address(impl),
             abi.encodeCall(
                 RoundRewardDistributor.initialize,
-                (address(0), address(hrepToken), address(votingEngine), address(registry))
+                (address(0), address(lrepToken), address(votingEngine), address(registry))
             )
         );
     }
 
-    function test_Initialize_ZeroHrepToken_Reverts() public {
+    function test_Initialize_ZeroLrepToken_Reverts() public {
         RoundRewardDistributor impl = new RoundRewardDistributor();
-        vm.expectRevert("Invalid HREP token");
+        vm.expectRevert("Invalid LREP token");
         new ERC1967Proxy(
             address(impl),
             abi.encodeCall(
@@ -585,7 +577,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         new ERC1967Proxy(
             address(impl),
             abi.encodeCall(
-                RoundRewardDistributor.initialize, (owner, address(hrepToken), address(0), address(registry))
+                RoundRewardDistributor.initialize, (owner, address(lrepToken), address(0), address(registry))
             )
         );
     }
@@ -596,7 +588,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         new ERC1967Proxy(
             address(impl),
             abi.encodeCall(
-                RoundRewardDistributor.initialize, (owner, address(hrepToken), address(votingEngine), address(0))
+                RoundRewardDistributor.initialize, (owner, address(lrepToken), address(votingEngine), address(0))
             )
         );
     }
@@ -617,7 +609,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
                     address(engineImpl),
                     abi.encodeCall(
                         RoundVotingEngine.initialize,
-                        (owner, address(hrepToken), address(registry), address(_deployProtocolConfig(owner)))
+                        (owner, address(lrepToken), address(registry), address(_deployProtocolConfig(owner)))
                     )
                 )
             )
@@ -630,14 +622,14 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
                     address(impl),
                     abi.encodeCall(
                         RoundRewardDistributor.initialize,
-                        (owner, address(hrepToken), address(emptyOldEngine), address(registry))
+                        (owner, address(lrepToken), address(emptyOldEngine), address(registry))
                     )
                 )
             )
         );
         vm.prank(owner);
-        hrepToken.transfer(address(emptyOldEngine), 1);
-        assertEq(hrepToken.balanceOf(address(emptyOldEngine)), 1);
+        lrepToken.transfer(address(emptyOldEngine), 1);
+        assertEq(lrepToken.balanceOf(address(emptyOldEngine)), 1);
 
         vm.prank(owner);
         vm.expectRevert("Voting engine immutable");
@@ -666,48 +658,48 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
     }
 
     // =========================================================================
-    // stranded HREP recovery
+    // stranded LREP recovery
     // =========================================================================
 
-    function test_SweepStrandedHrepToTreasury_TransfersFullBalance() public {
+    function test_SweepStrandedLrepToTreasury_TransfersFullBalance() public {
         ProtocolConfig protocolConfig = ProtocolConfig(address(votingEngine.protocolConfig()));
         address updatedTreasury = address(101);
         vm.prank(owner);
         protocolConfig.setTreasury(updatedTreasury);
 
         vm.prank(owner);
-        hrepToken.mint(address(rewardDistributor), 7e6);
+        lrepToken.mint(address(rewardDistributor), 7e6);
 
-        uint256 treasuryBefore = hrepToken.balanceOf(updatedTreasury);
+        uint256 treasuryBefore = lrepToken.balanceOf(updatedTreasury);
 
         vm.prank(owner);
-        uint256 swept = rewardDistributor.sweepStrandedHrepToTreasury();
+        uint256 swept = rewardDistributor.sweepStrandedLrepToTreasury();
 
         assertEq(swept, 7e6);
-        assertEq(hrepToken.balanceOf(address(rewardDistributor)), 0);
-        assertEq(hrepToken.balanceOf(updatedTreasury), treasuryBefore + 7e6);
+        assertEq(lrepToken.balanceOf(address(rewardDistributor)), 0);
+        assertEq(lrepToken.balanceOf(updatedTreasury), treasuryBefore + 7e6);
     }
 
-    function test_SweepStrandedHrepToTreasury_UsesInitializedProtocolTreasury() public view {
+    function test_SweepStrandedLrepToTreasury_UsesInitializedProtocolTreasury() public view {
         assertEq(ProtocolConfig(address(votingEngine.protocolConfig())).treasury(), treasury);
     }
 
-    function test_SweepStrandedHrepToTreasury_NoBalance_Reverts() public {
-        vm.expectRevert(RoundRewardDistributor.NoStrandedHrep.selector);
+    function test_SweepStrandedLrepToTreasury_NoBalance_Reverts() public {
+        vm.expectRevert(RoundRewardDistributor.NoStrandedLrep.selector);
         vm.prank(owner);
-        rewardDistributor.sweepStrandedHrepToTreasury();
+        rewardDistributor.sweepStrandedLrepToTreasury();
     }
 
-    function test_SweepStrandedHrepToTreasury_NonAdmin_Reverts() public {
+    function test_SweepStrandedLrepToTreasury_NonAdmin_Reverts() public {
         vm.prank(owner);
-        hrepToken.mint(address(rewardDistributor), 1e6);
+        lrepToken.mint(address(rewardDistributor), 1e6);
 
         vm.expectRevert();
         vm.prank(voter1);
-        rewardDistributor.sweepStrandedHrepToTreasury();
+        rewardDistributor.sweepStrandedLrepToTreasury();
     }
 
-    function test_SweepStrandedHrepToTreasury_UsesProtocolTreasuryWhenRegistryDiffers() public {
+    function test_SweepStrandedLrepToTreasury_UsesProtocolTreasuryWhenRegistryDiffers() public {
         address registryTreasury = address(0xCAFE);
         vm.startPrank(owner);
         registry.setTreasury(registryTreasury);
@@ -715,15 +707,15 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         vm.stopPrank();
 
         vm.prank(owner);
-        hrepToken.mint(address(rewardDistributor), 2e6);
+        lrepToken.mint(address(rewardDistributor), 2e6);
 
-        uint256 protocolTreasuryBefore = hrepToken.balanceOf(treasury);
-        uint256 registryTreasuryBefore = hrepToken.balanceOf(registryTreasury);
+        uint256 protocolTreasuryBefore = lrepToken.balanceOf(treasury);
+        uint256 registryTreasuryBefore = lrepToken.balanceOf(registryTreasury);
 
         vm.prank(owner);
-        rewardDistributor.sweepStrandedHrepToTreasury();
+        rewardDistributor.sweepStrandedLrepToTreasury();
 
-        assertEq(hrepToken.balanceOf(treasury), protocolTreasuryBefore + 2e6);
-        assertEq(hrepToken.balanceOf(registryTreasury), registryTreasuryBefore);
+        assertEq(lrepToken.balanceOf(treasury), protocolTreasuryBefore + 2e6);
+        assertEq(lrepToken.balanceOf(registryTreasury), registryTreasuryBefore);
     }
 }

@@ -6,13 +6,13 @@ import { ContentRegistry } from "../contracts/ContentRegistry.sol";
 import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
 import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
 import { RoundLib } from "../contracts/libraries/RoundLib.sol";
-import { HumanReputation } from "../contracts/HumanReputation.sol";
+import { LoopReputation } from "../contracts/LoopReputation.sol";
 import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
 import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
 import { VotingTestBase } from "./helpers/VotingTestHelpers.sol";
 
 contract RoundVotingEngineDormancyTest is VotingTestBase {
-    HumanReputation public hrepToken;
+    LoopReputation public lrepToken;
     ContentRegistry public registry;
     RoundVotingEngine public engine;
 
@@ -30,8 +30,8 @@ contract RoundVotingEngineDormancyTest is VotingTestBase {
         vm.warp(T0);
         vm.startPrank(owner);
 
-        hrepToken = new HumanReputation(owner, owner);
-        hrepToken.grantRole(hrepToken.MINTER_ROLE(), owner);
+        lrepToken = new LoopReputation(owner, owner);
+        lrepToken.grantRole(lrepToken.MINTER_ROLE(), owner);
 
         ContentRegistry registryImpl = new ContentRegistry();
         RoundVotingEngine engineImpl = new RoundVotingEngine();
@@ -40,7 +40,7 @@ contract RoundVotingEngineDormancyTest is VotingTestBase {
             address(
                 new ERC1967Proxy(
                     address(registryImpl),
-                    abi.encodeCall(ContentRegistry.initializeWithTreasury, (owner, owner, owner, address(hrepToken)))
+                    abi.encodeCall(ContentRegistry.initializeWithTreasury, (owner, owner, owner, address(lrepToken)))
                 )
             )
         );
@@ -51,7 +51,7 @@ contract RoundVotingEngineDormancyTest is VotingTestBase {
                     address(engineImpl),
                     abi.encodeCall(
                         RoundVotingEngine.initialize,
-                        (owner, address(hrepToken), address(registry), address(_deployProtocolConfig(owner)))
+                        (owner, address(lrepToken), address(registry), address(_deployProtocolConfig(owner)))
                     )
                 )
             )
@@ -67,7 +67,7 @@ contract RoundVotingEngineDormancyTest is VotingTestBase {
 
         address[5] memory users = [submitter, voter1, voter2, voter3, voter4];
         for (uint256 i = 0; i < users.length; i++) {
-            hrepToken.mint(users[i], 10_000e6);
+            lrepToken.mint(users[i], 10_000e6);
         }
 
         vm.stopPrank();
@@ -105,7 +105,7 @@ contract RoundVotingEngineDormancyTest is VotingTestBase {
 
         vm.warp(T0 + 31 days);
         vm.startPrank(voter4);
-        hrepToken.approve(address(engine), STAKE);
+        lrepToken.approve(address(engine), STAKE);
         uint256 cachedRoundContext1 =
             _roundContext(engine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());
         vm.expectRevert(RoundVotingEngine.DormancyWindowElapsed.selector);
@@ -129,7 +129,7 @@ contract RoundVotingEngineDormancyTest is VotingTestBase {
 
     function _submitContent() internal returns (uint256 contentId) {
         vm.startPrank(submitter);
-        hrepToken.approve(address(registry), 10e6);
+        lrepToken.approve(address(registry), 10e6);
         _submitContentWithReservation(registry, "https://example.com/dormancy", "test goal", "test goal", "test", 0);
         vm.stopPrank();
         return 1;
@@ -140,7 +140,7 @@ contract RoundVotingEngineDormancyTest is VotingTestBase {
         bytes memory ciphertext = _testCiphertext(isUp, salt, contentId);
         bytes32 commitHash = _commitHash(isUp, salt, contentId, ciphertext);
         vm.startPrank(voter);
-        hrepToken.approve(address(engine), STAKE);
+        lrepToken.approve(address(engine), STAKE);
         uint256 cachedRoundContext2 =
             _roundContext(engine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());
         engine.commitVote(

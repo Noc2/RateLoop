@@ -8,7 +8,7 @@ import { ContentRegistry } from "../contracts/ContentRegistry.sol";
 import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
 import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
 import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
-import { HumanReputation } from "../contracts/HumanReputation.sol";
+import { LoopReputation } from "../contracts/LoopReputation.sol";
 import { RoundLib } from "../contracts/libraries/RoundLib.sol";
 import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
 import { RewardMath } from "../contracts/libraries/RewardMath.sol";
@@ -19,7 +19,7 @@ import { VotingTestBase } from "./helpers/VotingTestHelpers.sol";
 /// @title InvariantSolvency
 /// @notice Invariant tests for pool solvency (C-01), token conservation (C-02), and balance solvency (C-03).
 contract InvariantSolvency is VotingTestBase {
-    HumanReputation public hrepToken;
+    LoopReputation public lrepToken;
     ContentRegistry public registry;
     RoundVotingEngine public engine;
     RoundRewardDistributor public distributor;
@@ -30,7 +30,7 @@ contract InvariantSolvency is VotingTestBase {
     address public treasury = address(100);
 
     uint256 public constant NUM_VOTERS = 5;
-    uint256 public constant VOTER_FUND = 100_000e6; // 100K HREP each
+    uint256 public constant VOTER_FUND = 100_000e6; // 100K LREP each
     uint256 public constant EPOCH_DURATION = 10 minutes;
 
     address[] public voters;
@@ -44,8 +44,8 @@ contract InvariantSolvency is VotingTestBase {
 
         vm.startPrank(owner);
 
-        hrepToken = new HumanReputation(owner, owner);
-        hrepToken.grantRole(hrepToken.MINTER_ROLE(), owner);
+        lrepToken = new LoopReputation(owner, owner);
+        lrepToken.grantRole(lrepToken.MINTER_ROLE(), owner);
 
         ContentRegistry registryImpl = new ContentRegistry();
         RoundVotingEngine engineImpl = new RoundVotingEngine();
@@ -55,7 +55,7 @@ contract InvariantSolvency is VotingTestBase {
             address(
                 new ERC1967Proxy(
                     address(registryImpl),
-                    abi.encodeCall(ContentRegistry.initializeWithTreasury, (owner, owner, owner, address(hrepToken)))
+                    abi.encodeCall(ContentRegistry.initializeWithTreasury, (owner, owner, owner, address(lrepToken)))
                 )
             )
         );
@@ -66,7 +66,7 @@ contract InvariantSolvency is VotingTestBase {
                     address(engineImpl),
                     abi.encodeCall(
                         RoundVotingEngine.initialize,
-                        (owner, address(hrepToken), address(registry), address(_deployProtocolConfig(owner)))
+                        (owner, address(lrepToken), address(registry), address(_deployProtocolConfig(owner)))
                     )
                 )
             )
@@ -78,7 +78,7 @@ contract InvariantSolvency is VotingTestBase {
                     address(distImpl),
                     abi.encodeCall(
                         RoundRewardDistributor.initialize,
-                        (owner, address(hrepToken), address(engine), address(registry))
+                        (owner, address(lrepToken), address(engine), address(registry))
                     )
                 )
             )
@@ -95,23 +95,23 @@ contract InvariantSolvency is VotingTestBase {
 
         // Fund consensus reserve
         uint256 reserveAmount = 1_000_000e6;
-        hrepToken.mint(owner, reserveAmount);
-        hrepToken.approve(address(engine), reserveAmount);
+        lrepToken.mint(owner, reserveAmount);
+        lrepToken.approve(address(engine), reserveAmount);
         engine.addToConsensusReserve(reserveAmount);
 
         // Create voters
         for (uint256 i = 0; i < NUM_VOTERS; i++) {
             address voter = address(uint160(10 + i));
             voters.push(voter);
-            hrepToken.mint(voter, VOTER_FUND);
+            lrepToken.mint(voter, VOTER_FUND);
         }
 
         // Fund submitter and submit 2 content items
-        hrepToken.mint(submitter, 100e6);
+        lrepToken.mint(submitter, 100e6);
         vm.stopPrank();
 
         vm.startPrank(submitter);
-        hrepToken.approve(address(registry), 20e6);
+        lrepToken.approve(address(registry), 20e6);
         _submitContentWithReservation(registry, "https://example.com/inv1", "test", "test", "test", 0);
         _submitContentWithReservation(registry, "https://example.com/inv2", "test", "test", "test", 0);
         vm.stopPrank();
@@ -120,11 +120,11 @@ contract InvariantSolvency is VotingTestBase {
         contentIds.push(2);
 
         // Record initial total supply (after all minting)
-        initialTotalSupply = hrepToken.totalSupply();
+        initialTotalSupply = lrepToken.totalSupply();
 
         // Create handler
         handler = new VotingHandler(
-            address(engine), address(distributor), address(registry), address(hrepToken), voters, contentIds
+            address(engine), address(distributor), address(registry), address(lrepToken), voters, contentIds
         );
 
         // Target only the handler for invariant calls
@@ -167,7 +167,7 @@ contract InvariantSolvency is VotingTestBase {
 
         uint256 totalIn = handler.ghost_totalStaked();
         uint256 totalClaimedOut =
-            handler.ghost_totalClaimed() + handler.ghost_totalRefunded() + hrepToken.balanceOf(treasury);
+            handler.ghost_totalClaimed() + handler.ghost_totalRefunded() + lrepToken.balanceOf(treasury);
 
         // totalIn >= totalClaimedOut (can't pay out more than staked, ignoring consensus subsidy)
         // Allow for consensus subsidy which adds extra tokens from the reserve
@@ -189,7 +189,7 @@ contract InvariantSolvency is VotingTestBase {
     // =========================================================================
 
     function invariant_C03_BalanceSolvency() public view {
-        uint256 engineBalance = hrepToken.balanceOf(address(engine));
+        uint256 engineBalance = lrepToken.balanceOf(address(engine));
 
         // Compute minimum obligations: open round stakes + unclaimed rewards + consensus reserve
         uint256 obligations = engine.consensusReserve();
@@ -259,7 +259,7 @@ contract InvariantSolvency is VotingTestBase {
     // =========================================================================
 
     function invariant_TokenSupplyConserved() public view {
-        assertEq(hrepToken.totalSupply(), initialTotalSupply, "Token supply changed during invariant test");
+        assertEq(lrepToken.totalSupply(), initialTotalSupply, "Token supply changed during invariant test");
     }
 
     function _pendingRefundObligations(uint256 contentId, uint256 roundId, RoundLib.Round memory round)

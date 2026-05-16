@@ -7,7 +7,7 @@ import { ContentRegistry } from "../contracts/ContentRegistry.sol";
 import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
 import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
 import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
-import { HumanReputation } from "../contracts/HumanReputation.sol";
+import { LoopReputation } from "../contracts/LoopReputation.sol";
 import { RoundLib } from "../contracts/libraries/RoundLib.sol";
 import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
 import { VotingHandler } from "./handlers/VotingHandler.sol";
@@ -18,7 +18,7 @@ import { VotingTestBase } from "./helpers/VotingTestHelpers.sol";
 /// @notice Invariant: after settlement, content rating is always in [0,100].
 ///         UP-majority rounds produce rating >= 50.
 contract InvariantRating is VotingTestBase {
-    HumanReputation public hrepToken;
+    LoopReputation public lrepToken;
     ContentRegistry public registry;
     RoundVotingEngine public engine;
     RoundRewardDistributor public distributor;
@@ -41,8 +41,8 @@ contract InvariantRating is VotingTestBase {
 
         vm.startPrank(owner);
 
-        hrepToken = new HumanReputation(owner, owner);
-        hrepToken.grantRole(hrepToken.MINTER_ROLE(), owner);
+        lrepToken = new LoopReputation(owner, owner);
+        lrepToken.grantRole(lrepToken.MINTER_ROLE(), owner);
 
         ContentRegistry registryImpl = new ContentRegistry();
         RoundVotingEngine engineImpl = new RoundVotingEngine();
@@ -52,7 +52,7 @@ contract InvariantRating is VotingTestBase {
             address(
                 new ERC1967Proxy(
                     address(registryImpl),
-                    abi.encodeCall(ContentRegistry.initializeWithTreasury, (owner, owner, owner, address(hrepToken)))
+                    abi.encodeCall(ContentRegistry.initializeWithTreasury, (owner, owner, owner, address(lrepToken)))
                 )
             )
         );
@@ -63,7 +63,7 @@ contract InvariantRating is VotingTestBase {
                     address(engineImpl),
                     abi.encodeCall(
                         RoundVotingEngine.initialize,
-                        (owner, address(hrepToken), address(registry), address(_deployProtocolConfig(owner)))
+                        (owner, address(lrepToken), address(registry), address(_deployProtocolConfig(owner)))
                     )
                 )
             )
@@ -75,7 +75,7 @@ contract InvariantRating is VotingTestBase {
                     address(distImpl),
                     abi.encodeCall(
                         RoundRewardDistributor.initialize,
-                        (owner, address(hrepToken), address(engine), address(registry))
+                        (owner, address(lrepToken), address(engine), address(registry))
                     )
                 )
             )
@@ -92,23 +92,23 @@ contract InvariantRating is VotingTestBase {
 
         // Fund consensus reserve
         uint256 reserveAmount = 1_000_000e6;
-        hrepToken.mint(owner, reserveAmount);
-        hrepToken.approve(address(engine), reserveAmount);
+        lrepToken.mint(owner, reserveAmount);
+        lrepToken.approve(address(engine), reserveAmount);
         engine.addToConsensusReserve(reserveAmount);
 
         // Create voters
         for (uint256 i = 0; i < NUM_VOTERS; i++) {
             address voter = address(uint160(10 + i));
             voters.push(voter);
-            hrepToken.mint(voter, VOTER_FUND);
+            lrepToken.mint(voter, VOTER_FUND);
         }
 
         // Fund submitter and submit content
-        hrepToken.mint(submitter, 100e6);
+        lrepToken.mint(submitter, 100e6);
         vm.stopPrank();
 
         vm.startPrank(submitter);
-        hrepToken.approve(address(registry), 20e6);
+        lrepToken.approve(address(registry), 20e6);
         _submitContentWithReservation(registry, "https://example.com/rating1", "test", "test", "test", 0);
         _submitContentWithReservation(registry, "https://example.com/rating2", "test", "test", "test", 0);
         vm.stopPrank();
@@ -118,7 +118,7 @@ contract InvariantRating is VotingTestBase {
 
         // Create handler
         handler = new VotingHandler(
-            address(engine), address(distributor), address(registry), address(hrepToken), voters, contentIds
+            address(engine), address(distributor), address(registry), address(lrepToken), voters, contentIds
         );
 
         targetContract(address(handler));

@@ -3,7 +3,7 @@ export const ParticipationPoolAbi = [
     "type": "constructor",
     "inputs": [
       {
-        "name": "_hrepToken",
+        "name": "_lrepToken",
         "type": "address",
         "internalType": "address"
       },
@@ -138,7 +138,7 @@ export const ParticipationPoolAbi = [
   },
   {
     "type": "function",
-    "name": "hrepToken",
+    "name": "lrepToken",
     "inputs": [],
     "outputs": [
       {

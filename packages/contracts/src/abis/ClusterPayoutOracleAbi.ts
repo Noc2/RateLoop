@@ -117,6 +117,19 @@ export const ClusterPayoutOracleAbi = [
   },
   {
     "type": "function",
+    "name": "FINALIZATION_VETO_WINDOW",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "MAX_CHALLENGE_WINDOW",
     "inputs": [],
     "outputs": [
@@ -124,6 +137,19 @@ export const ClusterPayoutOracleAbi = [
         "name": "",
         "type": "uint64",
         "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MIN_CHALLENGE_BOND",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -1050,6 +1076,11 @@ export const ClusterPayoutOracleAbi = [
             "name": "bond",
             "type": "uint256",
             "internalType": "uint256"
+          },
+          {
+            "name": "proposerBond",
+            "type": "uint256",
+            "internalType": "uint256"
           }
         ]
       }
@@ -1534,6 +1565,31 @@ export const ClusterPayoutOracleAbi = [
   },
   {
     "type": "event",
+    "name": "ProposerBondUnrecoverable",
+    "inputs": [
+      {
+        "name": "snapshotKey",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "proposer",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "missingAmount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "RoleAdminChanged",
     "inputs": [
       {
@@ -1879,6 +1935,11 @@ export const ClusterPayoutOracleAbi = [
   {
     "type": "error",
     "name": "InvalidSnapshot",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ReentrancyGuardReentrantCall",
     "inputs": []
   },
   {
