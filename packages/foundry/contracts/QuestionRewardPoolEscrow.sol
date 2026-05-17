@@ -728,6 +728,13 @@ contract QuestionRewardPoolEscrow is
             // the bucket so later claimants' weighted share is computed against the actual
             // remaining frontend balance, not the over-stated reservation.
             snapshot.frontendFeeClaimedAmount -= redirectedFrontendFee;
+            // L-Funds-3: also shrink the frontend-fee total so the residue stays with future
+            // voters rather than being captured by the last claimant's frontend operator.
+            // `frontendFeeAllocation` and `frontendFeeClaimedAmount` decrement in lockstep, so
+            // the running "remaining for frontend" is unchanged while the residue carried by
+            // the weighted-share formula reduces. Pool solvency is preserved because the
+            // redirected amount is already part of the voter payout for this claim.
+            snapshot.frontendFeeAllocation -= redirectedFrontendFee;
         }
         emit QuestionRewardClaimed(
             rewardPoolId,
