@@ -98,6 +98,9 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
             _grantRole(ADMIN_ROLE, _admin);
         }
 
+        // FEE_CREDITOR_ROLE is administered by governance, not DEFAULT_ADMIN_ROLE.
+        _setRoleAdmin(FEE_CREDITOR_ROLE, GOVERNANCE_ROLE);
+
         lrepToken = IERC20(_lrepToken);
     }
 
