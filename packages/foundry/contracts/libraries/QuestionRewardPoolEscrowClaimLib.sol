@@ -180,7 +180,7 @@ library QuestionRewardPoolEscrowClaimLib {
         if (
             commitKey == bytes32(0) || rewardClaimed[params.rewardPoolId][params.roundId][commitKey]
                 || _isExcludedClaimant(
-                    rewardPool, rewardPoolPayerIdentity, rewardPoolPayerIdentityKey, identityKey, params.account
+                    rewardPool, rewardPoolPayerIdentity, rewardPoolPayerIdentityKey, identityKey, rewardRecipient
                 )
                 || !QuestionRewardPoolEscrowEligibilityLib.isAccountEligibleForBounty(
                     protocolConfig, rewardPool.bountyEligibility, rewardRecipient
@@ -313,7 +313,7 @@ library QuestionRewardPoolEscrowClaimLib {
         if (
             commitKey == bytes32(0)
                 || _isExcludedClaimant(
-                    rewardPool, rewardPoolPayerIdentity, rewardPoolPayerIdentityKey, identityKey, account
+                    rewardPool, rewardPoolPayerIdentity, rewardPoolPayerIdentityKey, identityKey, rewardRecipient
                 )
         ) {
             return 0;

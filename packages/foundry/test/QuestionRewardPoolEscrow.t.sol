@@ -1997,6 +1997,38 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         _claimQuestionRewardAndAssert(voter1, rewardPoolId, roundId);
     }
 
+    function testDelegatedFunderStaysExcludedAfterDelegateRotationAndRaterIdentityMigration() public {
+        address newDelegate = address(0xD1E);
+        uint256 contentId = _submitQuestion("");
+
+        vm.prank(owner);
+        lrepToken.mint(newDelegate, 10_000e6);
+
+        vm.prank(voter2);
+        raterIdentityRegistry.setDelegate(delegate1);
+        uint256 rewardPoolId = _createRewardPoolAs(delegate1, contentId, REWARD_POOL_AMOUNT, 3, 1);
+        vm.prank(voter2);
+        raterIdentityRegistry.removeDelegate();
+
+        MockRaterIdentityRegistry migratedRaterIdentityRegistry = _migrateRaterIdentitiesWithDifferentIds();
+        vm.prank(voter2);
+        migratedRaterIdentityRegistry.setDelegate(newDelegate);
+
+        address[] memory voters = new address[](4);
+        voters[0] = newDelegate;
+        voters[1] = voter1;
+        voters[2] = voter3;
+        voters[3] = voter4;
+        uint256 roundId = _settleRoundWith(voters, contentId, _directions(true, true, true, false));
+
+        assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, newDelegate), 0);
+        vm.prank(newDelegate);
+        vm.expectRevert("Excluded voter");
+        rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
+
+        _claimQuestionRewardAndAssert(voter1, rewardPoolId, roundId);
+    }
+
     function testQuestionRewardPaysRaterIdentityHolderWhenNewDelegateClaims() public {
         address newDelegate = address(0xD1E);
         uint256 contentId = _submitQuestion("");

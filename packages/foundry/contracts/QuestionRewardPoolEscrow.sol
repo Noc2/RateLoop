@@ -680,7 +680,7 @@ contract QuestionRewardPoolEscrow is
 
         (bytes32 identityKey, bytes32 commitKey, address rewardRecipient) =
             _resolveQuestionRewardClaim(rewardPool, roundId, msg.sender);
-        require(!_isExcludedClaimant(rewardPool, identityKey, msg.sender), "Excluded voter");
+        require(!_isExcludedClaimant(rewardPool, identityKey, rewardRecipient), "Excluded voter");
         require(_isQuestionBountyEligible(rewardPool, rewardRecipient), "Not bounty eligible");
         require(commitKey != bytes32(0), "No commit");
         require(!rewardClaimed[rewardPoolId][roundId][commitKey], "Already claimed");
