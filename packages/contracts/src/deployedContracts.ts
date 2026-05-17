@@ -2115,19 +2115,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "PREDICTION_LOCKER_ROLE",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
           name: "allowance",
           inputs: [
             {
@@ -2717,32 +2704,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "predictionRewardDistributor",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "predictionVotingEngine",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
           name: "renounceRole",
           inputs: [
             {
@@ -2783,24 +2744,6 @@ const deployedContracts: GenericContractsDeclaration = {
           inputs: [
             {
               name: "newGovernor",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "setPredictionContracts",
-          inputs: [
-            {
-              name: "votingEngine",
-              type: "address",
-              internalType: "address",
-            },
-            {
-              name: "rewardDistributor",
               type: "address",
               internalType: "address",
             },
@@ -3018,25 +2961,6 @@ const deployedContracts: GenericContractsDeclaration = {
           inputs: [
             {
               name: "governor",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "PredictionContractsSet",
-          inputs: [
-            {
-              name: "votingEngine",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "rewardDistributor",
               type: "address",
               indexed: true,
               internalType: "address",
@@ -6855,13 +6779,14 @@ const deployedContracts: GenericContractsDeclaration = {
               type: "uint256",
               internalType: "uint256",
             },
+          ],
+          outputs: [
             {
               name: "settled",
               type: "bool",
               internalType: "bool",
             },
           ],
-          outputs: [],
           stateMutability: "nonpayable",
         },
         {
@@ -15791,6 +15716,11 @@ const deployedContracts: GenericContractsDeclaration = {
                   internalType: "bool",
                 },
                 {
+                  name: "firstClaimPaid",
+                  type: "bool",
+                  internalType: "bool",
+                },
+                {
                   name: "eligibleVoters",
                   type: "uint32",
                   internalType: "uint32",
@@ -16031,6 +15961,24 @@ const deployedContracts: GenericContractsDeclaration = {
             },
             {
               name: "amount",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "recoverRejectedSnapshotRound",
+          inputs: [
+            {
+              name: "rewardPoolId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
               type: "uint256",
               internalType: "uint256",
             },
@@ -16594,6 +16542,37 @@ const deployedContracts: GenericContractsDeclaration = {
             },
             {
               name: "grossAmount",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "RejectedSnapshotRoundRecovered",
+          inputs: [
+            {
+              name: "rewardPoolId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "contentId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "allocationReturned",
               type: "uint256",
               indexed: false,
               internalType: "uint256",
@@ -22372,6 +22351,12 @@ const deployedContracts: GenericContractsDeclaration = {
               indexed: true,
               internalType: "bytes32",
             },
+            {
+              name: "provider",
+              type: "uint8",
+              indexed: true,
+              internalType: "enum RaterRegistry.HumanCredentialProvider",
+            },
           ],
           anonymous: false,
         },
@@ -22433,6 +22418,12 @@ const deployedContracts: GenericContractsDeclaration = {
               type: "bytes32",
               indexed: true,
               internalType: "bytes32",
+            },
+            {
+              name: "provider",
+              type: "uint8",
+              indexed: true,
+              internalType: "enum RaterRegistry.HumanCredentialProvider",
             },
           ],
           anonymous: false,

@@ -991,6 +991,11 @@ export const QuestionRewardPoolEscrowAbi = [
             "internalType": "bool"
           },
           {
+            "name": "firstClaimPaid",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
             "name": "eligibleVoters",
             "type": "uint32",
             "internalType": "uint32"
@@ -1231,6 +1236,24 @@ export const QuestionRewardPoolEscrowAbi = [
       },
       {
         "name": "amount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "recoverRejectedSnapshotRound",
+    "inputs": [
+      {
+        "name": "rewardPoolId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "roundId",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -1794,6 +1817,37 @@ export const QuestionRewardPoolEscrowAbi = [
       },
       {
         "name": "grossAmount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "RejectedSnapshotRoundRecovered",
+    "inputs": [
+      {
+        "name": "rewardPoolId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "contentId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "roundId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "allocationReturned",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"

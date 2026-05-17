@@ -898,6 +898,12 @@ export const RaterRegistryAbi = [
         "type": "bytes32",
         "indexed": true,
         "internalType": "bytes32"
+      },
+      {
+        "name": "provider",
+        "type": "uint8",
+        "indexed": true,
+        "internalType": "enum RaterRegistry.HumanCredentialProvider"
       }
     ],
     "anonymous": false
@@ -960,6 +966,12 @@ export const RaterRegistryAbi = [
         "type": "bytes32",
         "indexed": true,
         "internalType": "bytes32"
+      },
+      {
+        "name": "provider",
+        "type": "uint8",
+        "indexed": true,
+        "internalType": "enum RaterRegistry.HumanCredentialProvider"
       }
     ],
     "anonymous": false
