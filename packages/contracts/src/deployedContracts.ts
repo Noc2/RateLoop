@@ -15716,11 +15716,6 @@ const deployedContracts: GenericContractsDeclaration = {
                   internalType: "bool",
                 },
                 {
-                  name: "firstClaimPaid",
-                  type: "bool",
-                  internalType: "bool",
-                },
-                {
                   name: "eligibleVoters",
                   type: "uint32",
                   internalType: "uint32",
@@ -15764,6 +15759,11 @@ const deployedContracts: GenericContractsDeclaration = {
                   name: "frontendFeeClaimedAmount",
                   type: "uint256",
                   internalType: "uint256",
+                },
+                {
+                  name: "firstClaimPaid",
+                  type: "bool",
+                  internalType: "bool",
                 },
               ],
             },

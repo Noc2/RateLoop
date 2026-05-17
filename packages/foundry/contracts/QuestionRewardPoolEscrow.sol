@@ -869,7 +869,7 @@ contract QuestionRewardPoolEscrow is
 
         RoundSnapshot storage snapshot = roundSnapshots[rewardPoolId][roundId];
         require(snapshot.qualified, "Round not qualified");
-        require(!snapshot.firstClaimPaid, "Claims already paid");
+        require(!_snapshotHasPaidClaim(snapshot), "Claims already paid");
 
         address oracleAddr = rewardPoolClusterPayoutOracle[rewardPoolId];
         require(oracleAddr != address(0), "Oracle not pinned");
@@ -1123,10 +1123,13 @@ contract QuestionRewardPoolEscrow is
         }
         // M-Oracle-2-Followup (audit 2026-05-17): tracks whether any claim against this
         // snapshot has actually moved funds, matching the launch consumer's "first paid wei"
-        // semantics. Returning `qualified` here previously closed the arbiter's
-        // post-veto-window rejection branch the moment anyone called `qualifyRound`, even if
-        // no leaf had paid out yet — broke the M-Oracle-2 design intent.
-        return roundSnapshots[rewardPoolId][roundId].firstClaimPaid;
+        // semantics. Legacy pre-upgrade snapshots have no appended flag, so existing claim
+        // accounting also counts as paid.
+        return _snapshotHasPaidClaim(roundSnapshots[rewardPoolId][roundId]);
+    }
+
+    function _snapshotHasPaidClaim(RoundSnapshot storage snapshot) private view returns (bool) {
+        return snapshot.firstClaimPaid || snapshot.claimedCount != 0 || snapshot.claimedAmount != 0;
     }
 
     function getRewardPoolEligibility(uint256 rewardPoolId)

@@ -165,7 +165,6 @@ library QuestionRewardPoolEscrowQualificationLib {
 
         roundSnapshots[rewardPoolId][roundId] = RoundSnapshot({
             qualified: true,
-            firstClaimPaid: false,
             eligibleVoters: effectiveUnits.toUint32(),
             rawEligibleVoters: rawEligible.toUint32(),
             allocation: allocation,
@@ -174,7 +173,8 @@ library QuestionRewardPoolEscrowQualificationLib {
             totalClaimWeight: totalWeight,
             claimedWeight: 0,
             claimedAmount: 0,
-            frontendFeeClaimedAmount: 0
+            frontendFeeClaimedAmount: 0,
+            firstClaimPaid: false
         });
 
         effectiveParticipantUnits = effectiveUnits;
@@ -251,7 +251,6 @@ library QuestionRewardPoolEscrowQualificationLib {
 
         roundSnapshots[rewardPoolId][roundId] = RoundSnapshot({
             qualified: true,
-            firstClaimPaid: false,
             eligibleVoters: effectiveParticipantUnits.toUint32(),
             rawEligibleVoters: baseRawEligibleVoters.toUint32(),
             allocation: allocation,
@@ -260,7 +259,8 @@ library QuestionRewardPoolEscrowQualificationLib {
             totalClaimWeight: totalClaimWeight,
             claimedWeight: 0,
             claimedAmount: 0,
-            frontendFeeClaimedAmount: 0
+            frontendFeeClaimedAmount: 0,
+            firstClaimPaid: false
         });
 
         emit RewardPoolRoundQualified(

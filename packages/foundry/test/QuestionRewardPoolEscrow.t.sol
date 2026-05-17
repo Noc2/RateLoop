@@ -2515,6 +2515,24 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("already-applied"));
     }
 
+    function testRoundSnapshotStorageLayoutAppendsFirstClaimPaid() public {
+        uint256 contentId = _submitQuestion("");
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+        uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+
+        rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
+
+        bytes32 snapshotSlot = _roundSnapshotStorageSlot(rewardPoolId, roundId);
+        uint256 packedCounts = uint256(vm.load(address(rewardPoolEscrow), snapshotSlot));
+        assertEq(packedCounts, uint256(1) | (uint256(30_000) << 8) | (uint256(3) << 40));
+
+        bytes32 firstClaimPaidSlot = bytes32(uint256(snapshotSlot) + 8);
+        assertEq(uint256(vm.load(address(rewardPoolEscrow), firstClaimPaidSlot)), 0);
+
+        _claimQuestionRewardAndAssert(voter1, rewardPoolId, roundId);
+        assertEq(uint256(vm.load(address(rewardPoolEscrow), firstClaimPaidSlot)), 1);
+    }
+
     function testRewardPoolCreatedBeforeClusterOracleKeepsStandardClaims() public {
         uint256 contentId = _submitQuestion("");
         uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
@@ -4126,6 +4144,11 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         directions[1] = b;
         directions[2] = c;
         directions[3] = d;
+    }
+
+    function _roundSnapshotStorageSlot(uint256 rewardPoolId, uint256 roundId) internal pure returns (bytes32) {
+        bytes32 rewardPoolSnapshotSlot = keccak256(abi.encode(rewardPoolId, uint256(7)));
+        return keccak256(abi.encode(roundId, rewardPoolSnapshotSlot));
     }
 
     function _assertThresholdReachedAtLe(uint256 contentId, uint256 roundId, uint256 maxThresholdReachedAt)
