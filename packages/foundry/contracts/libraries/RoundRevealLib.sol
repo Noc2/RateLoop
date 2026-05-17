@@ -168,22 +168,23 @@ library RoundRevealLib {
     ) external returns (ScoreRbtsResult memory result) {
         if (params.revealedCount < params.minParticipants) revert NotEnoughVotes();
 
-        // M-Vote-2: hash and sample over the full COMMITTED set (every commitKey, revealed or
-        // not, in commit order) instead of over the revealed subset. This makes the sampler
-        // seed invariant under any (honest or adversarial) choice of which commits get
-        // revealed, eliminating the selective-reveal seed-grinding attack. Unrevealed commits
-        // are skipped (modular advance) when resolving the sampler indices below.
+        // M-Vote-2: the sampler SEED is hashed over the full COMMITTED set (every commitKey,
+        // revealed or not, in commit order), so selective reveal cannot grind the seed.
+        // M-Vote-4 (audit 2026-05-17): the sampler INDEX SPACE is the *revealed* set only,
+        // produced from a single-pass build of `revealedKeysMem` below. Each revealed voter
+        // is drawn uniformly at random; sybils placed before HRC commits can no longer
+        // absorb the sampler probability of their own unrevealed positions.
         uint256 committedCount = commitKeys.length;
-        bytes32[] memory committedKeysMem = new bytes32[](committedCount);
+        bytes32[] memory revealedKeysMem = new bytes32[](params.revealedCount);
         bytes32 committedSetHash;
-        uint256 revealedIndex;
+        uint256 revealedBuildIdx;
         uint256 economicCount;
         for (uint256 i = 0; i < committedCount;) {
             bytes32 commitKey = commitKeys[i];
-            committedKeysMem[i] = commitKey;
             committedSetHash = keccak256(abi.encodePacked(committedSetHash, commitKey));
             RoundLib.Commit storage revealedCommit = roundCommits[commitKey];
             if (revealedCommit.revealed) {
+                revealedKeysMem[revealedBuildIdx] = commitKey;
                 if (commitRbtsWeight[commitKey] > 0) {
                     unchecked {
                         ++economicCount;
@@ -192,14 +193,14 @@ library RoundRevealLib {
                     commitRbtsStakeReturned[commitKey] = revealedCommit.stakeAmount;
                 }
                 unchecked {
-                    ++revealedIndex;
+                    ++revealedBuildIdx;
                 }
             }
             unchecked {
                 ++i;
             }
         }
-        if (revealedIndex != params.revealedCount) revert NotEnoughVotes();
+        if (revealedBuildIdx != params.revealedCount) revert NotEnoughVotes();
 
         RbtsRoundTotals memory totals;
 
@@ -208,33 +209,26 @@ library RoundRevealLib {
         result.scoreSeed = _rbtsScoreSeed(
             params.contentId, params.roundId, committedCount, committedSetHash, params.lastCommitPrevrandao
         );
-        for (uint256 i = 0; i < committedCount;) {
-            bytes32 commitKey = committedKeysMem[i];
-            RoundLib.Commit storage commit = roundCommits[commitKey];
-            if (!commit.revealed) {
-                unchecked {
-                    ++i;
-                }
-                continue;
-            }
+        for (uint256 r = 0; r < params.revealedCount;) {
+            bytes32 commitKey = revealedKeysMem[r];
             uint256 ownWeight = commitRbtsWeight[commitKey];
             uint16 scoreBps = _scoreRbtsCommitAt(
                 roundCommits,
                 commitPredictedUpBps,
                 commitRbtsScoreBps,
                 commitIdentityKey,
-                committedKeysMem,
+                revealedKeysMem,
                 result.scoreSeed,
-                i,
-                committedCount
+                r,
+                params.revealedCount
             );
 
             if (ownWeight == 0 || economicCount < params.minParticipants) {
                 if (ownWeight > 0) {
-                    commitRbtsStakeReturned[commitKey] = commit.stakeAmount;
+                    commitRbtsStakeReturned[commitKey] = roundCommits[commitKey].stakeAmount;
                 }
                 unchecked {
-                    ++i;
+                    ++r;
                 }
                 continue;
             }
@@ -252,7 +246,7 @@ library RoundRevealLib {
                 params.scoreScaleBps
             );
             unchecked {
-                ++i;
+                ++r;
             }
         }
 
@@ -326,50 +320,25 @@ library RoundRevealLib {
         mapping(bytes32 => uint16) storage commitPredictedUpBps,
         mapping(bytes32 => uint16) storage commitRbtsScoreBps,
         mapping(bytes32 => bytes32) storage commitIdentityKey,
-        bytes32[] memory committedKeys,
+        bytes32[] memory revealedKeys,
         bytes32 scoreSeed,
-        uint256 ownIndex,
-        uint256 committedCount
+        uint256 ownRevealedIdx,
+        uint256 revealedCount
     ) private returns (uint16) {
-        bytes32 commitKey = committedKeys[ownIndex];
+        bytes32 commitKey = revealedKeys[ownRevealedIdx];
         bytes32 drawKey = _rbtsDrawKey(roundCommits, commitIdentityKey, commitKey);
 
-        // Sample over the committed index space, then advance forward modularly to the next
-        // revealed commit, skipping unrevealed positions. This keeps the seed and the initial
-        // sample reveal-independent while still drawing reference and peer from actual
-        // revealed commits.
-        uint256 referenceIndex = _rbtsOtherIndex(scoreSeed, drawKey, ownIndex, committedCount, 1);
-        referenceIndex = _advanceToRevealed(roundCommits, committedKeys, referenceIndex, ownIndex, type(uint256).max);
-        bytes32 referenceKey = committedKeys[referenceIndex];
-        uint256 peerIndex = _rbtsPeerIndex(scoreSeed, drawKey, ownIndex, referenceIndex, committedCount);
-        peerIndex = _advanceToRevealed(roundCommits, committedKeys, peerIndex, ownIndex, referenceIndex);
-        bytes32 peerKey = committedKeys[peerIndex];
+        // M-Vote-4 (audit 2026-05-17): sample directly over the revealed set produced by the
+        // first pass. Every revealed voter has equal probability of being drawn as reference
+        // or peer for any other revealed voter; the unrevealed set carries no sampler weight.
+        // The seed itself is still hashed over the full committed set (M-Vote-2), so selective
+        // reveal cannot grind it.
+        uint256 referenceIndex = _rbtsOtherIndex(scoreSeed, drawKey, ownRevealedIdx, revealedCount, 1);
+        bytes32 referenceKey = revealedKeys[referenceIndex];
+        uint256 peerIndex = _rbtsPeerIndex(scoreSeed, drawKey, ownRevealedIdx, referenceIndex, revealedCount);
+        bytes32 peerKey = revealedKeys[peerIndex];
         return
             _scoreRbtsCommit(roundCommits, commitPredictedUpBps, commitRbtsScoreBps, commitKey, referenceKey, peerKey);
-    }
-
-    /// @dev Modular forward scan for the next revealed commit, skipping `excludeA` and `excludeB`.
-    ///      Used to map a sampler index drawn over the committed set onto an actual revealed
-    ///      commit. Because `revealedCount >= minParticipants >= 3` and the two excludes leave
-    ///      at least one revealed candidate remaining, the loop always terminates inside
-    ///      `committedCount` steps. Worst-case cost is O(committedCount) per draw; bounded by
-    ///      `RoundConfig.maxVoters` (default 200).
-    function _advanceToRevealed(
-        mapping(bytes32 => RoundLib.Commit) storage roundCommits,
-        bytes32[] memory committedKeys,
-        uint256 startIndex,
-        uint256 excludeA,
-        uint256 excludeB
-    ) private view returns (uint256) {
-        uint256 committedCount = committedKeys.length;
-        uint256 idx = startIndex;
-        for (uint256 step = 0; step < committedCount; step++) {
-            if (idx != excludeA && idx != excludeB && roundCommits[committedKeys[idx]].revealed) {
-                return idx;
-            }
-            idx = idx + 1 == committedCount ? 0 : idx + 1;
-        }
-        revert NotEnoughVotes();
     }
 
     function _scoreRbtsCommit(
