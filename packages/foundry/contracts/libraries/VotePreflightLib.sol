@@ -2,6 +2,7 @@
 pragma solidity ^0.8.24;
 
 import { ContentRegistry } from "../ContentRegistry.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { IERC20Permit } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol";
 import { IFrontendRegistry } from "../interfaces/IFrontendRegistry.sol";
 import { IRaterIdentityRegistry } from "../interfaces/IRaterIdentityRegistry.sol";
@@ -87,6 +88,12 @@ library VotePreflightLib {
         }
     }
 
+    /// @notice Apply an ERC-2612 permit, tolerating a front-run that already consumed the nonce.
+    /// @dev If a frontrunner submits the same (or any) permit first, the user's nonce is consumed
+    ///      and a direct `permit` call would revert with `ERC20Permit: invalid signature`. As long
+    ///      as the post-call allowance is at least the requested amount, the commit can proceed
+    ///      regardless of who landed the permit on-chain. Reverts only if the allowance is still
+    ///      insufficient after the attempted permit. (L-Vote-7, audit 2026-05-17.)
     function permitStake(
         address token,
         address owner,
@@ -97,7 +104,13 @@ library VotePreflightLib {
         bytes32 r,
         bytes32 s
     ) external {
-        IERC20Permit(token).permit(owner, spender, amount, deadline, v, r, s);
+        try IERC20Permit(token).permit(owner, spender, amount, deadline, v, r, s) {
+            // Happy path: signature consumed cleanly.
+        } catch {
+            // Front-runner consumed the nonce, or the signature was otherwise rejected. Continue
+            // only if the existing allowance is sufficient.
+        }
+        require(IERC20(token).allowance(owner, spender) >= amount, "Insufficient allowance");
     }
 
     function prepareCommit(
