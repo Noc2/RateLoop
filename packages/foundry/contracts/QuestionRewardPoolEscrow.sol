@@ -152,6 +152,9 @@ contract QuestionRewardPoolEscrow is
     event RewardPoolForfeited(uint256 indexed rewardPoolId, address indexed treasury, uint256 amount);
     event DefaultFrontendFeeBpsUpdated(uint256 previousFrontendFeeBps, uint256 newFrontendFeeBps);
     event NonAssetTokenRecovered(address indexed token, address indexed to, uint256 amount);
+    event RejectedSnapshotRoundRecovered(
+        uint256 indexed rewardPoolId, uint256 indexed contentId, uint256 indexed roundId, uint256 allocationReturned
+    );
     event RewardPoolPurposeSet(
         uint256 indexed rewardPoolId, uint8 indexed bountyKind, uint256 indexed challengedRoundId, bytes32 reasonHash
     );
@@ -717,6 +720,12 @@ contract QuestionRewardPoolEscrow is
         snapshot.claimedAmount += grossAmount;
         snapshot.frontendFeeClaimedAmount += reservedFrontendFee;
         rewardPool.claimedAmount += grossAmount;
+        // M-Oracle-2-Followup: mark the snapshot as having moved funds. Matches the launch
+        // consumer's "first paid wei" semantics so the arbiter veto window outside the 7-day
+        // rejection bound stays open until an actual claim has paid.
+        if (!snapshot.firstClaimPaid) {
+            snapshot.firstClaimPaid = true;
+        }
 
         uint256 redirectedFrontendFee;
         (rewardAmount, frontendFee, frontendRecipient, redirectedFrontendFee) = _settleClaimPayout(
@@ -728,6 +737,13 @@ contract QuestionRewardPoolEscrow is
             // the bucket so later claimants' weighted share is computed against the actual
             // remaining frontend balance, not the over-stated reservation.
             snapshot.frontendFeeClaimedAmount -= redirectedFrontendFee;
+            // L-Funds-3: also shrink the frontend-fee total so the residue stays with future
+            // voters rather than being captured by the last claimant's frontend operator.
+            // `frontendFeeAllocation` and `frontendFeeClaimedAmount` decrement in lockstep, so
+            // the running "remaining for frontend" is unchanged while the residue carried by
+            // the weighted-share formula reduces. Pool solvency is preserved because the
+            // redirected amount is already part of the voter payout for this claim.
+            snapshot.frontendFeeAllocation -= redirectedFrontendFee;
         }
         emit QuestionRewardClaimed(
             rewardPoolId,
@@ -831,6 +847,45 @@ contract QuestionRewardPoolEscrow is
         require(to != address(0), "Invalid recipient");
         token.safeTransfer(to, amount);
         emit NonAssetTokenRecovered(address(token), to, amount);
+    }
+
+    /// @notice Recover a round's allocation after the arbiter rejected its cluster snapshot
+    ///         post-qualification but before any claim has paid out.
+    /// @dev If the arbiter calls `ClusterPayoutOracle.rejectFinalizedRoundPayoutSnapshot` after
+    ///      `qualifyRound` has run but before any voter has claimed (the case M-Oracle-2-Followup
+    ///      keeps reachable via the `firstClaimPaid` flag), the round's `allocation` is parked in
+    ///      `roundSnapshots[...]` while every subsequent claim reverts at the oracle's
+    ///      `verifyPayoutWeight` check. This function rolls back the qualification: returns
+    ///      `allocation` to `unallocatedAmount`, decrements `qualifiedRounds`, and resets the
+    ///      snapshot slot. `nextRoundToEvaluate` intentionally stays advanced so the same
+    ///      rejected snapshot cannot be re-qualified. (L-Oracle-1, audit 2026-05-17.)
+    function recoverRejectedSnapshotRound(uint256 rewardPoolId, uint256 roundId)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+        nonReentrant
+    {
+        RewardPool storage rewardPool = _getExistingRewardPool(rewardPoolId);
+        require(_usesClusterPayoutSnapshot(rewardPool), "Not cluster-snapshot pool");
+
+        RoundSnapshot storage snapshot = roundSnapshots[rewardPoolId][roundId];
+        require(snapshot.qualified, "Round not qualified");
+        require(!snapshot.firstClaimPaid, "Claims already paid");
+
+        address oracleAddr = rewardPoolClusterPayoutOracle[rewardPoolId];
+        require(oracleAddr != address(0), "Oracle not pinned");
+        IClusterPayoutOracle.RoundPayoutSnapshot memory oracleSnapshot = IClusterPayoutOracle(oracleAddr)
+            .getRoundPayoutSnapshot(PAYOUT_DOMAIN_QUESTION_REWARD, rewardPoolId, rewardPool.contentId, roundId);
+        require(oracleSnapshot.status == IClusterPayoutOracle.SnapshotStatus.Rejected, "Snapshot not rejected");
+
+        uint256 allocationToReturn = snapshot.allocation;
+        rewardPool.unallocatedAmount += allocationToReturn;
+        require(rewardPool.qualifiedRounds > 0, "No qualified rounds");
+        unchecked {
+            rewardPool.qualifiedRounds -= 1;
+        }
+        delete roundSnapshots[rewardPoolId][roundId];
+
+        emit RejectedSnapshotRoundRecovered(rewardPoolId, rewardPool.contentId, roundId, allocationToReturn);
     }
 
     function recordBundleQuestionTerminal(uint256 contentId, uint256 roundId, bool settled) external {
@@ -1066,7 +1121,12 @@ contract QuestionRewardPoolEscrow is
         if (rewardPool.id == 0 || rewardPool.contentId != contentId || !_usesClusterPayoutSnapshot(rewardPool)) {
             return false;
         }
-        return roundSnapshots[rewardPoolId][roundId].qualified;
+        // M-Oracle-2-Followup (audit 2026-05-17): tracks whether any claim against this
+        // snapshot has actually moved funds, matching the launch consumer's "first paid wei"
+        // semantics. Returning `qualified` here previously closed the arbiter's
+        // post-veto-window rejection branch the moment anyone called `qualifyRound`, even if
+        // no leaf had paid out yet — broke the M-Oracle-2 design intent.
+        return roundSnapshots[rewardPoolId][roundId].firstClaimPaid;
     }
 
     function getRewardPoolEligibility(uint256 rewardPoolId)

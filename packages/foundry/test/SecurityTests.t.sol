@@ -731,9 +731,4 @@ contract SecurityAccessControlTest is Test {
         lrepToken.setGovernor(attacker);
     }
 
-    function test_ACL_Token_setPredictionContracts_Unauthorized() public {
-        vm.prank(attacker);
-        _expectUnauthorized(attacker, CONFIG_ROLE_TOKEN);
-        lrepToken.setPredictionContracts(attacker, attacker);
-    }
 }

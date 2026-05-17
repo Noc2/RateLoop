@@ -1063,14 +1063,15 @@ export const RoundVotingEngineAbi = [
         "name": "roundId",
         "type": "uint256",
         "internalType": "uint256"
-      },
+      }
+    ],
+    "outputs": [
       {
         "name": "settled",
         "type": "bool",
         "internalType": "bool"
       }
     ],
-    "outputs": [],
     "stateMutability": "nonpayable"
   },
   {

@@ -314,9 +314,13 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         _grantRole(TREASURY_ADMIN_ROLE, _treasuryAuthority);
         _grantRole(TREASURY_ROLE, _treasuryAuthority);
 
-        // Admin gets only CONFIG_ROLE for initial cross-contract wiring
+        // Admin gets CONFIG_ROLE and PAUSER_ROLE for initial cross-contract wiring;
+        // PAUSER_ROLE lets the deploy script bracket the first setVotingEngine call with
+        // pause/unpause so first-set and rotation share the same observable surface
+        // (L-Identity-5, audit 2026-05-17). Both roles are renounced at the end of Deploy.
         if (_admin != _governance) {
             _grantRole(CONFIG_ROLE, _admin);
+            _grantRole(PAUSER_ROLE, _admin);
         }
 
         lrepToken = IERC20(_lrepToken);

@@ -108,19 +108,6 @@ export const LoopReputationAbi = [
   },
   {
     "type": "function",
-    "name": "PREDICTION_LOCKER_ROLE",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "allowance",
     "inputs": [
       {
@@ -710,32 +697,6 @@ export const LoopReputationAbi = [
   },
   {
     "type": "function",
-    "name": "predictionRewardDistributor",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "predictionVotingEngine",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "renounceRole",
     "inputs": [
       {
@@ -776,24 +737,6 @@ export const LoopReputationAbi = [
     "inputs": [
       {
         "name": "newGovernor",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "setPredictionContracts",
-    "inputs": [
-      {
-        "name": "votingEngine",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "rewardDistributor",
         "type": "address",
         "internalType": "address"
       }
@@ -1011,25 +954,6 @@ export const LoopReputationAbi = [
     "inputs": [
       {
         "name": "governor",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "PredictionContractsSet",
-    "inputs": [
-      {
-        "name": "votingEngine",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "rewardDistributor",
         "type": "address",
         "indexed": true,
         "internalType": "address"

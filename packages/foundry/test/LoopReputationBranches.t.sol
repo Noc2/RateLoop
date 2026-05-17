@@ -29,11 +29,10 @@ contract LoopReputationBranchesTest is Test {
         lrep.mint(user2, 1_000e6);
         vm.stopPrank();
 
-        // Set governor and voting contracts
-        vm.startPrank(governance);
+        // Set governor (prediction lock state was removed; transfer-lock tests still rely
+        // on the governor wiring for lockForGovernance).
+        vm.prank(governance);
         lrep.setGovernor(mockGovernor);
-        lrep.setPredictionContracts(mockVotingEngine, mockContentRegistry);
-        vm.stopPrank();
     }
 
     // =========================================================================

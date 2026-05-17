@@ -371,9 +371,11 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         }
         bundle.claimedAmount += grossAmount;
 
-        // M-Funds-1: bundle path uses equal-share, so the bucket isn't accumulated across
-        // claimants — but we still consume the 4th return so the tuple matches and any future
-        // weighted-bundle path inherits the corrected accounting trivially.
+        // M-Funds-1 / L-Funds-4: bundle path uses equal-share, so the bucket isn't accumulated
+        // across claimants — the fee redirect (if any) is absorbed into the voter's reward by
+        // `settleClaimPayout` and does not require a bucket adjustment. If a future weighted
+        // bundle path is added, that path must track `frontendFeeClaimedAmount` and apply the
+        // M-Funds-1 decrement; the unused-here local makes the missing accounting explicit.
         uint256 bundleRedirectedFrontendFee;
         (rewardAmount, reservedFrontendFee, frontendRecipient, bundleRedirectedFrontendFee) =
             QuestionRewardPoolEscrowTransferLib.settleClaimPayout(
@@ -383,7 +385,9 @@ library QuestionRewardPoolEscrowBundleActionsLib {
                 frontendRecipient,
                 reservedFrontendFee
             );
-        bundleRedirectedFrontendFee; // silence unused-local warnings; see comment above
+        // Equal-share bundle does not maintain a per-bundle frontend-fee bucket; the redirect is
+        // absorbed at payout time. Silence the unused-local while documenting intent.
+        bundleRedirectedFrontendFee;
 
         emit QuestionBundleRewardClaimed(
             bundleId,

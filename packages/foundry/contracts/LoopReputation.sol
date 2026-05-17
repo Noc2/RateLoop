@@ -8,15 +8,14 @@ import { ERC20Votes } from "@openzeppelin/contracts/token/ERC20/extensions/ERC20
 import { Nonces } from "@openzeppelin/contracts/utils/Nonces.sol";
 
 /// @title LoopReputation
-/// @notice Transferable capped reputation token for RateLoop governance and prediction locks.
-/// @dev Uses 6 decimals and keeps the old Curyo governance-lock behavior as the first migration step.
+/// @notice Transferable capped reputation token for RateLoop governance with a 7-day lock window.
+/// @dev Uses 6 decimals. Lock is engaged by the governor when an account casts a governance vote.
 contract LoopReputation is ERC20, ERC20Permit, ERC20Votes, AccessControl {
     uint8 private constant DECIMALS = 6;
     uint256 public constant MAX_SUPPLY = 100_000_000 * 10 ** DECIMALS;
 
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
     bytes32 public constant CONFIG_ROLE = keccak256("CONFIG_ROLE");
-    bytes32 public constant PREDICTION_LOCKER_ROLE = keccak256("PREDICTION_LOCKER_ROLE");
 
     uint256 public constant GOVERNANCE_LOCK_DURATION = 7 days;
 
@@ -28,12 +27,9 @@ contract LoopReputation is ERC20, ERC20Permit, ERC20Votes, AccessControl {
     mapping(address => GovernanceLock) private _governanceLock;
 
     address public governor;
-    address public predictionVotingEngine;
-    address public predictionRewardDistributor;
 
     event GovernanceLocked(address indexed account, uint256 amount, uint256 unlockTime);
     event GovernorSet(address indexed governor);
-    event PredictionContractsSet(address indexed votingEngine, address indexed rewardDistributor);
 
     constructor(address admin, address governance) ERC20("Loop Reputation", "LREP") ERC20Permit("Loop Reputation") {
         require(admin != address(0), "Invalid admin");
@@ -56,14 +52,6 @@ contract LoopReputation is ERC20, ERC20Permit, ERC20Votes, AccessControl {
         require(newGovernor != address(0), "Invalid address");
         governor = newGovernor;
         emit GovernorSet(newGovernor);
-    }
-
-    function setPredictionContracts(address votingEngine, address rewardDistributor) external onlyRole(CONFIG_ROLE) {
-        require(votingEngine != address(0), "Invalid voting engine");
-        require(rewardDistributor != address(0), "Invalid reward distributor");
-        predictionVotingEngine = votingEngine;
-        predictionRewardDistributor = rewardDistributor;
-        emit PredictionContractsSet(votingEngine, rewardDistributor);
     }
 
     function mint(address to, uint256 amount) external onlyRole(MINTER_ROLE) {

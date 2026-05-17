@@ -82,8 +82,10 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
         uint64 expiresAt,
         bytes32 evidenceHash
     );
-    event HumanCredentialRevoked(address indexed rater, bytes32 indexed nullifierHash);
-    event HumanNullifierRevocationCleared(bytes32 indexed nullifierHash);
+    event HumanCredentialRevoked(
+        address indexed rater, bytes32 indexed nullifierHash, HumanCredentialProvider indexed provider
+    );
+    event HumanNullifierRevocationCleared(bytes32 indexed nullifierHash, HumanCredentialProvider indexed provider);
     event ProfileFollowed(address indexed follower, address indexed target, uint64 followedAt);
     event ProfileUnfollowed(address indexed follower, address indexed target, uint64 unfollowedAt);
     event DelegateRequested(address indexed holder, address indexed delegate);
@@ -313,7 +315,7 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
             _revokedHumanNullifierByProvider[provider][nullifierHash] = true;
         }
 
-        emit HumanCredentialRevoked(rater, nullifierHash);
+        emit HumanCredentialRevoked(rater, nullifierHash, provider);
     }
 
     function clearRevokedHumanNullifier(HumanCredentialProvider provider, bytes32 nullifierHash)
@@ -323,7 +325,7 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
         if (nullifierHash == bytes32(0)) revert InvalidCredential();
         if (provider == HumanCredentialProvider.None) revert InvalidCredential();
         _revokedHumanNullifierByProvider[provider][nullifierHash] = false;
-        emit HumanNullifierRevocationCleared(nullifierHash);
+        emit HumanNullifierRevocationCleared(nullifierHash, provider);
     }
 
     function getProfile(address rater) external view returns (RaterProfile memory) {

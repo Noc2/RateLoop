@@ -2494,9 +2494,22 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         );
 
         rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
+        // M-Oracle-2-Followup: qualification alone no longer flips the consumed flag. The flag
+        // mirrors the launch consumer's "first paid wei" semantics so the arbiter's
+        // post-veto-window rejection branch stays open for forensic discovery until a real
+        // claim has moved funds.
+        assertFalse(rewardPoolEscrow.isRoundPayoutSnapshotConsumed(1, rewardPoolId, contentId, roundId));
+
+        // Claim one reward against the corrected snapshot. After the first paid wei, the
+        // consumer reports consumed and rejections outside the veto window must revert.
+        bytes32[] memory proof = new bytes32[](0);
+        vm.prank(voter1);
+        uint256 paid = rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId, payoutWeight, proof);
+        assertGt(paid, 0);
         assertTrue(rewardPoolEscrow.isRoundPayoutSnapshotConsumed(1, rewardPoolId, contentId, roundId));
 
-        // Past the finalization veto window, a consumed snapshot can no longer be rejected.
+        // Past the finalization veto window, a snapshot that has actually paid out can no
+        // longer be rejected.
         vm.warp(block.timestamp + oracle.FINALIZATION_VETO_WINDOW() + 1);
         vm.expectRevert(ClusterPayoutOracle.SnapshotConsumed.selector);
         oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("already-applied"));

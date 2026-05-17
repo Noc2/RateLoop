@@ -213,7 +213,11 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         );
         FeedbackBonusEscrow feedbackBonusEscrow = FeedbackBonusEscrow(address(feedbackBonusEscrowProxy));
 
+        // Bracket the first setVotingEngine call with pause/unpause so the deploy script
+        // exercises the same observable state as a future engine rotation (L-Identity-5).
+        registry.pause();
         registry.setVotingEngine(address(votingEngine));
+        registry.unpause();
         registry.setProtocolConfig(address(protocolConfig));
         registry.setCategoryRegistry(address(categoryRegistry));
         registry.setQuestionRewardPoolEscrow(address(questionRewardPoolEscrow));
@@ -234,7 +238,6 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         frontendRegistry.initializeFeeCreditor(address(rewardDistributor));
 
         _seedCategories(categoryRegistry);
-        lrepToken.setPredictionContracts(address(votingEngine), address(rewardDistributor));
         protocolConfig.setConfig(20 minutes, 20 minutes, 3, 200);
 
         lrepToken.mint(deployer, CONSENSUS_POOL_AMOUNT);
@@ -312,6 +315,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
             lrepToken.renounceRole(lrepToken.MINTER_ROLE(), deployer);
             lrepToken.renounceRole(lrepToken.CONFIG_ROLE(), deployer);
             registry.renounceRole(registry.CONFIG_ROLE(), deployer);
+            registry.renounceRole(registry.PAUSER_ROLE(), deployer);
             protocolConfig.renounceRole(protocolConfig.CONFIG_ROLE(), deployer);
             frontendRegistry.renounceRole(frontendRegistry.ADMIN_ROLE(), deployer);
             profileRegistry.renounceRole(profileRegistry.ADMIN_ROLE(), deployer);
