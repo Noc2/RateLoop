@@ -801,16 +801,18 @@ contract RoundVotingEngine is
     ///      flag-clearing.
     /// @param contentId Content whose round failed to notify.
     /// @param roundId Round id that failed to notify.
-    /// @param settled Whether the round terminated in the Settled state. Must match the
-    ///        original failed notification — the caller is expected to derive this from the
-    ///        `BundleObserverNotifyFailed` event.
-    function replayBundleObserverNotify(uint256 contentId, uint256 roundId, bool settled)
+    function replayBundleObserverNotify(uint256 contentId, uint256 roundId)
         external
         onlyRole(DEFAULT_ADMIN_ROLE)
+        returns (bool settled)
     {
         require(pendingBundleObserverReplay[contentId][roundId], "no pending replay");
         address bundleEscrow = registry.questionRewardPoolEscrow();
-        if (bundleEscrow == address(0)) return;
+        if (bundleEscrow == address(0)) return false;
+        // Derive `settled` from the engine's authoritative round state rather than accepting
+        // it from the admin caller, so a replay can never desync the escrow's bundle
+        // accounting from the engine's view of the round (I-Vote-3, audit 2026-05-17).
+        settled = rounds[contentId][roundId].state == RoundLib.RoundState.Settled;
         IQuestionBundleRoundObserver(bundleEscrow).recordBundleQuestionTerminal(contentId, roundId, settled);
         delete pendingBundleObserverReplay[contentId][roundId];
         emit BundleObserverNotifyReplayed(contentId, roundId, settled);
