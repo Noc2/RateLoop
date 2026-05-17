@@ -434,9 +434,7 @@ contract LaunchDistributionPool is
         paidAmount = _recordEarnedRaterReward(
             pending.rater, contentId, roundId, commitKey, pending.scoreBps, pending.policy, effectiveCreditBps
         );
-        if (paidAmount > 0) {
-            earnedRaterRoundPayoutSnapshotConsumed[contentId][roundId] = true;
-        }
+        earnedRaterRoundPayoutSnapshotConsumed[contentId][roundId] = true;
         emit EarnedRaterRewardCreditFinalized(
             pending.rater,
             contentId,
@@ -585,8 +583,8 @@ contract LaunchDistributionPool is
         returns (bool)
     {
         if (domain != PAYOUT_DOMAIN_LAUNCH_CREDIT || rewardPoolId != 0) return false;
-        // Launch credits are finalized per commit key, so a partially used root can still
-        // be rejected and replaced until a finalized credit has paid non-revertible funds.
+        // Finalizing any launch credit consumes the root because even zero-pay finalizations
+        // mutate the rater's future unlock state.
         return earnedRaterRoundPayoutSnapshotConsumed[contentId][roundId];
     }
 
