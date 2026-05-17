@@ -174,7 +174,8 @@ library QuestionRewardPoolEscrowQualificationLib {
             claimedWeight: 0,
             claimedAmount: 0,
             frontendFeeClaimedAmount: 0,
-            firstClaimPaid: false
+            firstClaimPaid: false,
+            clusterWeightRoot: bytes32(0)
         });
 
         effectiveParticipantUnits = effectiveUnits;
@@ -260,7 +261,8 @@ library QuestionRewardPoolEscrowQualificationLib {
             claimedWeight: 0,
             claimedAmount: 0,
             frontendFeeClaimedAmount: 0,
-            firstClaimPaid: false
+            firstClaimPaid: false,
+            clusterWeightRoot: payoutSnapshot.weightRoot
         });
 
         emit RewardPoolRoundQualified(

@@ -464,6 +464,11 @@ contract ClusterPayoutOracleTest is Test {
         oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("consumed"));
         ClusterPayoutOracle.RoundPayoutProposal memory rejected = oracle.roundPayoutProposal(snapshotKey);
         assertEq(uint8(rejected.snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Rejected));
+        assertTrue(oracle.rejectedRoundPayoutSnapshotConsumed(snapshotKey));
+
+        input.artifactHash = keccak256("replacement-after-consumed");
+        vm.expectRevert(ClusterPayoutOracle.SnapshotConsumed.selector);
+        oracle.proposeRoundPayoutSnapshot(input);
     }
 
     function test_FinalizedRoundPayoutSnapshotRejectUsesSnapshottedConsumerAfterRotation() public {

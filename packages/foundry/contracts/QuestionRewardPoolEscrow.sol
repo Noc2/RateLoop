@@ -1384,7 +1384,9 @@ contract QuestionRewardPoolEscrow is
             baseClaimWeight,
             payoutWeight,
             proof,
-            PAYOUT_DOMAIN_QUESTION_REWARD
+            PAYOUT_DOMAIN_QUESTION_REWARD,
+            roundSnapshots[rewardPoolId][roundId].clusterWeightRoot,
+            roundSnapshots[rewardPoolId][roundId].totalClaimWeight
         );
     }
 

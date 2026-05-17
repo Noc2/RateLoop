@@ -100,6 +100,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
     mapping(bytes32 => RoundPayoutProposal) private roundPayoutProposals;
     mapping(uint8 => address) public roundPayoutSnapshotConsumer;
     mapping(address => uint256) public pendingBondWithdrawals;
+    mapping(bytes32 => bool) public rejectedRoundPayoutSnapshotConsumed;
 
     event OracleConfigUpdated(uint64 challengeWindow, uint256 challengeBond, address bondRecipient);
     event FrontendRegistryUpdated(address indexed frontendRegistry);
@@ -308,6 +309,9 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         if (existing.snapshot.status != SnapshotStatus.None && existing.snapshot.status != SnapshotStatus.Rejected) {
             revert SnapshotExists();
         }
+        if (existing.snapshot.status == SnapshotStatus.Rejected && rejectedRoundPayoutSnapshotConsumed[snapshotKey]) {
+            revert SnapshotConsumed();
+        }
         address consumer = roundPayoutSnapshotConsumer[input.domain];
         if (consumer == address(0)) revert InvalidAddress();
 
@@ -461,18 +465,20 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         if (consumer == address(0)) revert InvalidAddress();
 
         bool withinVetoWindow = block.timestamp <= uint256(snapshot.finalizedAt) + uint256(FINALIZATION_VETO_WINDOW);
+        bool consumed = IRoundPayoutSnapshotConsumer(consumer)
+            .isRoundPayoutSnapshotConsumed(snapshot.domain, snapshot.rewardPoolId, snapshot.contentId, snapshot.roundId);
         if (!withinVetoWindow) {
             // Outside the veto window the rejection is only safe if the consumer has not yet paid
             // any claim against this snapshot's merkle root.
-            if (IRoundPayoutSnapshotConsumer(consumer)
-                    .isRoundPayoutSnapshotConsumed(
-                        snapshot.domain, snapshot.rewardPoolId, snapshot.contentId, snapshot.roundId
-                    )) {
+            if (consumed) {
                 revert SnapshotConsumed();
             }
         }
 
         proposal.snapshot.status = SnapshotStatus.Rejected;
+        if (consumed) {
+            rejectedRoundPayoutSnapshotConsumed[snapshotKey] = true;
+        }
         // L-Integrations-1: attempt to claw back the proposer's bond. Today proposerBond is always
         // zero so this is a no-op; the logic is here so a future proposer-bond mechanism is
         // automatically accountable on post-finalization rejection. If the proposer already

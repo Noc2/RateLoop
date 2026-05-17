@@ -206,7 +206,9 @@ library QuestionRewardPoolEscrowClaimLib {
             baseClaimWeight,
             payoutWeight,
             proof,
-            params.payoutDomain
+            params.payoutDomain,
+            snapshot.clusterWeightRoot,
+            snapshot.totalClaimWeight
         );
         if (claimWeight == 0) return 0;
 
@@ -268,7 +270,9 @@ library QuestionRewardPoolEscrowClaimLib {
         uint256 baseClaimWeight,
         IClusterPayoutOracle.PayoutWeight memory payoutWeight,
         bytes32[] memory proof,
-        uint8 payoutDomain
+        uint8 payoutDomain,
+        bytes32 expectedWeightRoot,
+        uint256 expectedTotalClaimWeight
     ) external view returns (uint256) {
         return _effectiveClusterQuestionClaimWeight(
             rewardPoolClusterPayoutOracle,
@@ -281,7 +285,9 @@ library QuestionRewardPoolEscrowClaimLib {
             baseClaimWeight,
             payoutWeight,
             proof,
-            payoutDomain
+            payoutDomain,
+            expectedWeightRoot,
+            expectedTotalClaimWeight
         );
     }
 
@@ -551,7 +557,9 @@ library QuestionRewardPoolEscrowClaimLib {
         uint256 baseClaimWeight,
         IClusterPayoutOracle.PayoutWeight memory payoutWeight,
         bytes32[] memory proof,
-        uint8 payoutDomain
+        uint8 payoutDomain,
+        bytes32 expectedWeightRoot,
+        uint256 expectedTotalClaimWeight
     ) private view returns (uint256) {
         require(
             payoutWeight.domain == payoutDomain && payoutWeight.rewardPoolId == rewardPoolId
@@ -561,10 +569,18 @@ library QuestionRewardPoolEscrowClaimLib {
                 && payoutWeight.effectiveWeight > 0,
             "Invalid cluster proof"
         );
-        require(
-            IClusterPayoutOracle(rewardPoolClusterPayoutOracle[rewardPool.id]).verifyPayoutWeight(payoutWeight, proof),
-            "Invalid cluster proof"
-        );
+        address oracle = rewardPoolClusterPayoutOracle[rewardPool.id];
+        require(IClusterPayoutOracle(oracle).verifyPayoutWeight(payoutWeight, proof), "Invalid cluster proof");
+        if (expectedWeightRoot != bytes32(0)) {
+            IClusterPayoutOracle.RoundPayoutSnapshot memory currentSnapshot = IClusterPayoutOracle(oracle)
+                .getRoundPayoutSnapshot(payoutDomain, rewardPoolId, rewardPool.contentId, roundId);
+            require(
+                currentSnapshot.status == IClusterPayoutOracle.SnapshotStatus.Finalized
+                    && currentSnapshot.weightRoot == expectedWeightRoot
+                    && currentSnapshot.totalClaimWeight == expectedTotalClaimWeight,
+                "Cluster snapshot changed"
+            );
+        }
         return payoutWeight.effectiveWeight;
     }
 
