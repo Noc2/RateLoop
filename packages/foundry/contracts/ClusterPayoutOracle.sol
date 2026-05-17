@@ -496,11 +496,15 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         emit RoundPayoutSnapshotRejected(snapshotKey, msg.sender, reasonHash);
     }
 
-    function withdrawBondCredit() external returns (uint256 amount) {
-        return withdrawBondCreditTo(msg.sender);
+    function withdrawBondCredit() external nonReentrant returns (uint256 amount) {
+        return _withdrawBondCreditTo(msg.sender);
     }
 
-    function withdrawBondCreditTo(address recipient) public returns (uint256 amount) {
+    function withdrawBondCreditTo(address recipient) external nonReentrant returns (uint256 amount) {
+        return _withdrawBondCreditTo(recipient);
+    }
+
+    function _withdrawBondCreditTo(address recipient) private returns (uint256 amount) {
         if (recipient == address(0)) revert InvalidAddress();
         amount = pendingBondWithdrawals[msg.sender];
         if (amount == 0) revert InvalidBond();
