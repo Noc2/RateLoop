@@ -105,8 +105,9 @@ library VotePreflightLib {
         bytes32 s
     ) external {
         try IERC20Permit(token).permit(owner, spender, amount, deadline, v, r, s) {
-            // Happy path: signature consumed cleanly.
-        } catch {
+        // Happy path: signature consumed cleanly.
+        }
+            catch {
             // Front-runner consumed the nonce, or the signature was otherwise rejected. Continue
             // only if the existing allowance is sufficient.
         }

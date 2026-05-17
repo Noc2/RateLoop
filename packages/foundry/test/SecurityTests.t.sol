@@ -730,5 +730,4 @@ contract SecurityAccessControlTest is Test {
         _expectUnauthorized(attacker, CONFIG_ROLE_TOKEN);
         lrepToken.setGovernor(attacker);
     }
-
 }
