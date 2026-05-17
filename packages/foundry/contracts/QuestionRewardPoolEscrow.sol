@@ -152,6 +152,9 @@ contract QuestionRewardPoolEscrow is
     event RewardPoolForfeited(uint256 indexed rewardPoolId, address indexed treasury, uint256 amount);
     event DefaultFrontendFeeBpsUpdated(uint256 previousFrontendFeeBps, uint256 newFrontendFeeBps);
     event NonAssetTokenRecovered(address indexed token, address indexed to, uint256 amount);
+    event RejectedSnapshotRoundRecovered(
+        uint256 indexed rewardPoolId, uint256 indexed contentId, uint256 indexed roundId, uint256 allocationReturned
+    );
     event RewardPoolPurposeSet(
         uint256 indexed rewardPoolId, uint8 indexed bountyKind, uint256 indexed challengedRoundId, bytes32 reasonHash
     );
@@ -844,6 +847,45 @@ contract QuestionRewardPoolEscrow is
         require(to != address(0), "Invalid recipient");
         token.safeTransfer(to, amount);
         emit NonAssetTokenRecovered(address(token), to, amount);
+    }
+
+    /// @notice Recover a round's allocation after the arbiter rejected its cluster snapshot
+    ///         post-qualification but before any claim has paid out.
+    /// @dev If the arbiter calls `ClusterPayoutOracle.rejectFinalizedRoundPayoutSnapshot` after
+    ///      `qualifyRound` has run but before any voter has claimed (the case M-Oracle-2-Followup
+    ///      keeps reachable via the `firstClaimPaid` flag), the round's `allocation` is parked in
+    ///      `roundSnapshots[...]` while every subsequent claim reverts at the oracle's
+    ///      `verifyPayoutWeight` check. This function rolls back the qualification: returns
+    ///      `allocation` to `unallocatedAmount`, decrements `qualifiedRounds`, and resets the
+    ///      snapshot slot. `nextRoundToEvaluate` intentionally stays advanced so the same
+    ///      rejected snapshot cannot be re-qualified. (L-Oracle-1, audit 2026-05-17.)
+    function recoverRejectedSnapshotRound(uint256 rewardPoolId, uint256 roundId)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+        nonReentrant
+    {
+        RewardPool storage rewardPool = _getExistingRewardPool(rewardPoolId);
+        require(_usesClusterPayoutSnapshot(rewardPool), "Not cluster-snapshot pool");
+
+        RoundSnapshot storage snapshot = roundSnapshots[rewardPoolId][roundId];
+        require(snapshot.qualified, "Round not qualified");
+        require(!snapshot.firstClaimPaid, "Claims already paid");
+
+        address oracleAddr = rewardPoolClusterPayoutOracle[rewardPoolId];
+        require(oracleAddr != address(0), "Oracle not pinned");
+        IClusterPayoutOracle.RoundPayoutSnapshot memory oracleSnapshot = IClusterPayoutOracle(oracleAddr)
+            .getRoundPayoutSnapshot(PAYOUT_DOMAIN_QUESTION_REWARD, rewardPoolId, rewardPool.contentId, roundId);
+        require(oracleSnapshot.status == IClusterPayoutOracle.SnapshotStatus.Rejected, "Snapshot not rejected");
+
+        uint256 allocationToReturn = snapshot.allocation;
+        rewardPool.unallocatedAmount += allocationToReturn;
+        require(rewardPool.qualifiedRounds > 0, "No qualified rounds");
+        unchecked {
+            rewardPool.qualifiedRounds -= 1;
+        }
+        delete roundSnapshots[rewardPoolId][roundId];
+
+        emit RejectedSnapshotRoundRecovered(rewardPoolId, rewardPool.contentId, roundId, allocationToReturn);
     }
 
     function recordBundleQuestionTerminal(uint256 contentId, uint256 roundId, bool settled) external {
