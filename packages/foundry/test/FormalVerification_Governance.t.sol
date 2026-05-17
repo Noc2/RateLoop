@@ -327,10 +327,9 @@ contract FormalVerification_GovernanceTest is Test {
 
     /// @notice Governance-locked tokens cannot be staked into content voting.
     function test_GovernanceLock_BlocksContentVoting() public {
-        // Set up a mock voting engine as an allowed content voting contract
+        // The transfer lock applies uniformly; pick any arbitrary recipient to stand in for
+        // a content voting contract.
         address mockVotingEngine = address(500);
-        vm.prank(deployer);
-        token.setPredictionContracts(mockVotingEngine, address(501));
 
         address voter = address(200);
         _mintCirculating(voter, 1_000_000e6);
@@ -367,9 +366,6 @@ contract FormalVerification_GovernanceTest is Test {
         address mockVotingEngine = address(500);
         address mockContentRegistry = address(501);
         address arbitrarySpender = address(777);
-
-        vm.prank(deployer);
-        token.setPredictionContracts(mockVotingEngine, mockContentRegistry);
 
         address voter = address(200);
         _mintCirculating(voter, 1_000_000e6);

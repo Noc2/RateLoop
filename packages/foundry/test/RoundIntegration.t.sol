@@ -1350,7 +1350,6 @@ contract RoundIntegrationTest is VotingTestBase {
         _setAcceptedDelegate(raterRegistry, voter1, delegate1);
         vm.startPrank(owner);
         lrepToken.setGovernor(owner);
-        lrepToken.setPredictionContracts(address(votingEngine), address(registry));
         lrepToken.lockForGovernance(delegate1, STAKE);
         vm.stopPrank();
 
