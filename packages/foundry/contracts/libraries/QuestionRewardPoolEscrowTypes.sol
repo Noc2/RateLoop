@@ -37,6 +37,11 @@ struct RewardPool {
 
 struct RoundSnapshot {
     bool qualified;
+    // M-Oracle-2-Followup (audit 2026-05-17): tracks whether at least one claim against this
+    // round has moved real funds. The arbiter's veto window outside the 7-day rejection bound
+    // tests this flag rather than `qualified`, so a snapshot that has been qualified but never
+    // drawn against can still be rejected by the arbiter for long-tail forensic discovery.
+    bool firstClaimPaid;
     uint32 eligibleVoters;
     uint32 rawEligibleVoters;
     uint256 allocation;

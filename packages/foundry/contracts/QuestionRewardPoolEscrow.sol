@@ -717,6 +717,12 @@ contract QuestionRewardPoolEscrow is
         snapshot.claimedAmount += grossAmount;
         snapshot.frontendFeeClaimedAmount += reservedFrontendFee;
         rewardPool.claimedAmount += grossAmount;
+        // M-Oracle-2-Followup: mark the snapshot as having moved funds. Matches the launch
+        // consumer's "first paid wei" semantics so the arbiter veto window outside the 7-day
+        // rejection bound stays open until an actual claim has paid.
+        if (!snapshot.firstClaimPaid) {
+            snapshot.firstClaimPaid = true;
+        }
 
         uint256 redirectedFrontendFee;
         (rewardAmount, frontendFee, frontendRecipient, redirectedFrontendFee) = _settleClaimPayout(
@@ -1073,7 +1079,12 @@ contract QuestionRewardPoolEscrow is
         if (rewardPool.id == 0 || rewardPool.contentId != contentId || !_usesClusterPayoutSnapshot(rewardPool)) {
             return false;
         }
-        return roundSnapshots[rewardPoolId][roundId].qualified;
+        // M-Oracle-2-Followup (audit 2026-05-17): tracks whether any claim against this
+        // snapshot has actually moved funds, matching the launch consumer's "first paid wei"
+        // semantics. Returning `qualified` here previously closed the arbiter's
+        // post-veto-window rejection branch the moment anyone called `qualifyRound`, even if
+        // no leaf had paid out yet — broke the M-Oracle-2 design intent.
+        return roundSnapshots[rewardPoolId][roundId].firstClaimPaid;
     }
 
     function getRewardPoolEligibility(uint256 rewardPoolId)
