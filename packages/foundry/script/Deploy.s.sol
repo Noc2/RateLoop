@@ -251,6 +251,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
 
         ParticipationPool participationPool = new ParticipationPool(address(lrepToken), governance);
         participationPool.setAuthorizedCaller(address(rewardDistributor), true);
+        protocolConfig.setParticipationPool(address(participationPool));
         console.log("ParticipationPool deployed without launch funding");
 
         LaunchDistributionPool launchDistributionPool =
