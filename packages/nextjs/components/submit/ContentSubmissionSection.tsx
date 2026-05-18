@@ -923,11 +923,11 @@ export function ContentSubmissionSection() {
     }
     if (maxVoters < roundMaxVoterBounds.min || maxVoters > roundMaxVoterBounds.max) {
       return questionCount > 1
-        ? `Voter cap must be ${roundMaxVoterBounds.min}-${roundMaxVoterBounds.max} for question bundles.`
-        : `Voter cap must be ${roundMaxVoterBounds.min}-${roundMaxVoterBounds.max}.`;
+        ? `Voter max per round must be ${roundMaxVoterBounds.min}-${roundMaxVoterBounds.max} for question bundles.`
+        : `Voter max per round must be ${roundMaxVoterBounds.min}-${roundMaxVoterBounds.max}.`;
     }
     if (maxVoters < minVoters) {
-      return "Voter cap must be at least the settlement voters.";
+      return "Voter max per round must be at least the settlement voters.";
     }
     return null;
   })();
@@ -968,7 +968,7 @@ export function ContentSubmissionSection() {
     parsedRewardRequiredVoters < MIN_REWARD_POOL_REQUIRED_VOTERS
       ? `Minimum is ${MIN_REWARD_POOL_REQUIRED_VOTERS} voters.`
       : selectedRequiredVoters > selectedRoundConfig.maxVoters
-        ? "Bounty voters cannot exceed the question voter cap."
+        ? "Voter min per round cannot exceed voter max per round."
         : null;
   const rewardRequiredVotersError = bountyStepAttempted ? rewardRequiredVotersValidationError : null;
   const rewardRequiredRoundsValidationError =
@@ -1041,14 +1041,14 @@ export function ContentSubmissionSection() {
     : rewardAmountError
       ? "Increase the bounty until the estimate is valid before submitting."
       : rewardRequiredVotersValidationError
-        ? "Lower minimum voters or raise the voter cap so the bounty can qualify."
+        ? "Lower voter min per round or raise voter max per round so the bounty can qualify."
         : estimatedMinimumVoterReward < 1_000_000n
           ? `For a stronger signal, consider ${formatSubmissionRewardAmount(
               oneTokenPerMinimumVoterBounty,
               rewardAsset,
             )} or more so the minimum cohort earns about 1 ${rewardAsset === "lrep" ? "LREP" : "USDC"} each.`
           : parsedRoundMaxVoters > Math.max(parsedRewardRequiredVoters, 1) * 3
-            ? "A wide voter cap can dilute the per-voter payout if participation is high; use it when broader input matters more than payout density."
+            ? "A wide voter max per round can dilute the per-voter payout if participation is high; use it when broader input matters more than payout density."
             : "These settings give a clear payout target for a small qualifying round.";
   const rewardTokenAddress = rewardAsset === "lrep" ? lrepAddress : getDefaultUsdcAddress(targetNetwork.id);
   const { refetch: refetchNextContentId } = useScaffoldReadContract({
@@ -1940,10 +1940,10 @@ export function ContentSubmissionSection() {
     "Every question needs a funded bounty. It discourages low-quality asks and rewards eligible voters.";
   const requiredVotersTooltipText =
     questionCount === 1
-      ? `At least ${MIN_REWARD_POOL_REQUIRED_VOTERS} paid completers are required per round. Settlement voters match this by default unless changed in advanced round settings.`
-      : `At least ${MIN_REWARD_POOL_REQUIRED_VOTERS} paid completers are required per round set. Each paid completer must answer every question in the bundle.`;
+      ? `Minimum eligible revealed voters required in a round before that round can receive the bounty payout. Counts do not roll over across rounds. Current min: ${MIN_REWARD_POOL_REQUIRED_VOTERS}.`
+      : `Minimum eligible completers required in a round set before that set can receive the bounty payout. Each completer must answer every question in the bundle. Current min: ${MIN_REWARD_POOL_REQUIRED_VOTERS}.`;
   const requiredRoundsTooltipText =
-    "Each settlement round set requires every bundled question to settle once. Paid completers can claim a reward for each completed set they fully answered.";
+    "Each settlement round set requires every bundled question to settle once. Eligible completers can claim a reward for each completed set they fully answered.";
   const roundSettingsTooltipText =
     "Governance sets the allowed range. Urgent bounties can use shorter rounds; broader questions can wait for more voters.";
   const blindPhaseTooltipText = [
@@ -1982,15 +1982,16 @@ export function ContentSubmissionSection() {
       ? `Using the current minimum until the bounty amount is valid. ${formatFrontendFeePercent(frontendFeeBps)} may be reserved for an eligible frontend operator.`
       : `${formatFrontendFeePercent(frontendFeeBps)} may be reserved for an eligible frontend operator.`;
   const minimumClaimEstimateLabel = questionCount === 1 ? "Per voter claim" : "Per completer claim";
-  const voterCapEstimateLabel = questionCount === 1 ? "If each round reaches cap" : "If every question reaches cap";
+  const voterCapEstimateLabel =
+    questionCount === 1 ? "If each round reaches voter max" : "If every question reaches voter max";
   const perPaidCompleterTooltipText =
     questionCount === 1
       ? "Estimated claim per eligible voter in each qualified settlement round. A voter can claim once for each round they revealed in."
       : "Estimated claim per paid completer for one completed settlement round set. A completer can claim once for each set they fully answered.";
   const voterCapEstimateTooltipText =
     questionCount === 1
-      ? "Estimated per voter claim if each qualifying settlement round fills the selected voter cap."
-      : "Estimated per completer claim if every bundled question in a round set fills the selected voter cap.";
+      ? "Estimated per voter claim if each qualifying settlement round fills the selected voter max."
+      : "Estimated per completer claim if every bundled question in a round set fills the selected voter max.";
 
   const bountyDetailsCard = (
     <div className="space-y-5">
@@ -2058,38 +2059,80 @@ export function ContentSubmissionSection() {
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
-        <div className="form-control">
-          <span className="label-text flex items-center gap-1.5">
-            Paid completers per round
-            <InfoTooltip text={requiredVotersTooltipText} />
-          </span>
-          <input
-            type="number"
-            min={rewardRequiredVotersBounds.min}
-            max={rewardRequiredVotersBounds.max}
-            step={1}
-            inputMode="numeric"
-            value={rewardRequiredVoters}
-            onChange={e => {
-              const normalizedValue = normalizeWholeNumberInput(e.target.value);
-              if (normalizedValue !== null) {
-                setRewardRequiredVoters(normalizedValue);
-                syncSettlementVotersToPaidCompleters(normalizedValue);
-              }
-            }}
-            onBlur={() => {
-              const clampedPaidCompleters = clampWholeNumberInput(
-                rewardRequiredVoters,
-                rewardRequiredVotersBounds.min,
-                rewardRequiredVotersBounds.max,
-              );
-              setRewardRequiredVoters(clampedPaidCompleters);
-              syncSettlementVotersToPaidCompleters(clampedPaidCompleters);
-            }}
-            className={`input input-bordered bg-base-100 ${
-              bountyStepAttempted && rewardRequiredVotersError ? "input-error" : ""
-            }`}
-          />
+        <div className="space-y-3">
+          <div className="form-control">
+            <span className="label-text flex items-center gap-1.5">
+              Voter min per round
+              <InfoTooltip text={requiredVotersTooltipText} />
+            </span>
+            <input
+              type="number"
+              min={rewardRequiredVotersBounds.min}
+              max={rewardRequiredVotersBounds.max}
+              step={1}
+              inputMode="numeric"
+              value={rewardRequiredVoters}
+              onChange={e => {
+                const normalizedValue = normalizeWholeNumberInput(e.target.value);
+                if (normalizedValue !== null) {
+                  setRewardRequiredVoters(normalizedValue);
+                  syncSettlementVotersToPaidCompleters(normalizedValue);
+                }
+              }}
+              onBlur={() => {
+                const clampedPaidCompleters = clampWholeNumberInput(
+                  rewardRequiredVoters,
+                  rewardRequiredVotersBounds.min,
+                  rewardRequiredVotersBounds.max,
+                );
+                setRewardRequiredVoters(clampedPaidCompleters);
+                syncSettlementVotersToPaidCompleters(clampedPaidCompleters);
+              }}
+              className={`input input-bordered bg-base-100 ${
+                bountyStepAttempted && rewardRequiredVotersError ? "input-error" : ""
+              }`}
+            />
+          </div>
+
+          <div className="form-control">
+            <div className="flex items-center gap-1.5">
+              <label htmlFor="round-voter-cap" className="label-text">
+                Voter max per round
+              </label>
+              <InfoTooltip text={voterCapTooltipText} />
+            </div>
+            <input
+              id="round-voter-cap"
+              type="number"
+              min={roundMaxVoterBounds.min}
+              max={roundMaxVoterBounds.max}
+              step={1}
+              inputMode="numeric"
+              value={roundMaxVoters}
+              onChange={e => {
+                updateRoundWholeNumberInput(e.target.value, setRoundMaxVoters);
+              }}
+              onBlur={() => {
+                const clampedMaxVoters = clampWholeNumberInput(
+                  roundMaxVoters,
+                  roundMaxVoterBounds.min,
+                  roundMaxVoterBounds.max,
+                );
+                const clampedPaidCompleters = clampWholeNumberInput(
+                  rewardRequiredVoters,
+                  MIN_REWARD_POOL_REQUIRED_VOTERS,
+                  Math.max(MIN_REWARD_POOL_REQUIRED_VOTERS, Number(clampedMaxVoters)),
+                );
+
+                setRoundMaxVoters(clampedMaxVoters);
+                setRewardRequiredVoters(clampedPaidCompleters);
+                syncSettlementVotersToPaidCompleters(clampedPaidCompleters);
+              }}
+              className={`input input-bordered bg-base-100 ${
+                bountyStepAttempted && roundConfigValidationError ? "input-error" : ""
+              }`}
+            />
+          </div>
         </div>
 
         <div className="form-control">
@@ -2159,9 +2202,6 @@ export function ContentSubmissionSection() {
               </button>
               <InfoTooltip text={roundSettingsTooltipText} />
             </div>
-            <span className="text-sm font-semibold text-base-content/50">
-              Default {formatDurationLabel(roundConfigDefaults.epochDuration)}
-            </span>
           </div>
 
           {showAdvancedRoundSettings ? (
@@ -2391,46 +2431,6 @@ export function ContentSubmissionSection() {
                         roundConfigBounds.maxSettlementVoters,
                       ),
                     );
-                  }}
-                  className={`input input-bordered bg-base-100 ${
-                    bountyStepAttempted && roundConfigValidationError ? "input-error" : ""
-                  }`}
-                />
-              </div>
-
-              <div className="form-control">
-                <div className="flex items-center gap-1.5">
-                  <label htmlFor="round-voter-cap" className="label-text">
-                    Voter cap
-                  </label>
-                  <InfoTooltip text={voterCapTooltipText} />
-                </div>
-                <input
-                  id="round-voter-cap"
-                  type="number"
-                  min={roundMaxVoterBounds.min}
-                  max={roundMaxVoterBounds.max}
-                  step={1}
-                  inputMode="numeric"
-                  value={roundMaxVoters}
-                  onChange={e => {
-                    updateRoundWholeNumberInput(e.target.value, setRoundMaxVoters);
-                  }}
-                  onBlur={() => {
-                    const clampedMaxVoters = clampWholeNumberInput(
-                      roundMaxVoters,
-                      roundMaxVoterBounds.min,
-                      roundMaxVoterBounds.max,
-                    );
-                    const clampedPaidCompleters = clampWholeNumberInput(
-                      rewardRequiredVoters,
-                      MIN_REWARD_POOL_REQUIRED_VOTERS,
-                      Math.max(MIN_REWARD_POOL_REQUIRED_VOTERS, Number(clampedMaxVoters)),
-                    );
-
-                    setRoundMaxVoters(clampedMaxVoters);
-                    setRewardRequiredVoters(clampedPaidCompleters);
-                    syncSettlementVotersToPaidCompleters(clampedPaidCompleters);
                   }}
                   className={`input input-bordered bg-base-100 ${
                     bountyStepAttempted && roundConfigValidationError ? "input-error" : ""
