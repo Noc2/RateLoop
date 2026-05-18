@@ -165,7 +165,7 @@ const TEMPLATE_DEFINITIONS = [
   },
   {
     id: "llm_answer_quality",
-    title: "LLM Answer Quality",
+    title: "AI Answer Quality",
     description:
       "Grade whether an AI answer is correct, complete, useful, and appropriate for the target user.",
     voteSemantics: {
@@ -200,7 +200,7 @@ const TEMPLATE_DEFINITIONS = [
   },
   {
     id: "rag_grounding_check",
-    title: "RAG Grounding Check",
+    title: "Source Support Check",
     description:
       "Judge whether an AI answer is supported by the supplied sources and does not add unsupported claims.",
     voteSemantics: {
@@ -213,7 +213,7 @@ const TEMPLATE_DEFINITIONS = [
       cautionRatingBps: 5600,
       reviseRatingBps: 4500,
     },
-    recommendedUse: ["rag_eval", "groundedness", "source_supported_answer"],
+    recommendedUse: ["source_support_eval", "source_supported_answer"],
     submissionPattern: "single_question",
     bundleStrategy: "independent",
     templateInputsSchema: {

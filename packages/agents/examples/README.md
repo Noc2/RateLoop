@@ -13,8 +13,8 @@ These examples keep one loop stable across runtimes:
 - `landing-pitch-review.ts`: canonical backend-worker loop using `@rateloop/sdk/agent`
 - `questions/landing-pitch-review.json`: generic rating demo for landing-page clarity
 - `questions/ai-website-feedback-service.json`: canonical AI website generation plus human feedback market-interest ask
-- `questions/llm-answer-quality.json`: LLM answer quality review
-- `questions/rag-grounding-check.json`: RAG groundedness review
+- `questions/ai-answer-quality.json`: AI answer quality review
+- `questions/source-support-check.json`: source-support answer check
 - `questions/claim-verification.json`: factual claim verification
 - `questions/source-credibility-check.json`: source credibility screening
 - `questions/action-go-no-go.json`: agent action gate

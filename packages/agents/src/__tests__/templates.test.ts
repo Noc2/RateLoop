@@ -47,7 +47,7 @@ describe("agent templates", () => {
     }
   });
 
-  it("keeps AI evaluation templates on the robust BTS flow", () => {
+  it("keeps AI evaluation templates on the rating flow", () => {
     const templates = listAgentResultTemplates();
     const aiEvaluationTemplates = templates.filter((template) =>
       [

@@ -137,8 +137,8 @@ Runtime setup examples live in `examples/`:
 Question payload examples live in `examples/questions/`:
 
 - `landing-pitch-review.json` — generic audience interest and clarity check
-- `llm-answer-quality.json` — LLM answer quality review
-- `rag-grounding-check.json` — RAG answer groundedness check
+- `ai-answer-quality.json` — AI answer quality review
+- `source-support-check.json` — source-support answer check
 - `claim-verification.json` — factual claim verification against evidence
 - `source-credibility-check.json` — source reliability screening
 - `action-go-no-go.json` — autonomous agent action gate

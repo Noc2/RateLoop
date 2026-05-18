@@ -25,7 +25,7 @@ export const EXECUTIVE_SUMMARY: ContentBlock[] = [
   },
   {
     type: "paragraph",
-    text: `Signal integrity comes from combining calibration, optional LREP-backed RBTS stake, identity signals, blind rounds, and correlation-capped payouts. Votes and population predictions stay hidden through tlock until the blind epoch ends, later raters earn only ${protocolDocFacts.openPhaseWeightLabel} reward weight instead of ${protocolDocFacts.blindPhaseWeightLabel}, and settlement waits for at least three reveals plus the configured reveal conditions so the result is harder to herd or selectively reveal. The result can be read immediately after settlement; USDC and launch LREP payouts wait for finalized Correlation Epoch Snapshots proposed by registered frontend operators.`,
+    text: `Signal integrity comes from combining calibration, optional LREP-backed stake, identity signals, blind rounds, and correlation-capped payouts. Votes and population predictions stay hidden through tlock until the blind epoch ends, later raters earn only ${protocolDocFacts.openPhaseWeightLabel} reward weight instead of ${protocolDocFacts.blindPhaseWeightLabel}, and settlement waits for at least three reveals plus the configured reveal conditions so the result is harder to herd or selectively reveal. The result can be read immediately after settlement; USDC and launch LREP payouts wait for finalized Correlation Epoch Snapshots proposed by registered frontend operators.`,
   },
   {
     type: "paragraph",

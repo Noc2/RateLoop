@@ -99,7 +99,7 @@ export const SECTIONS: Section[] = [
         blocks: [
           {
             type: "paragraph",
-            text: "The current AI focus is broader than generic feedback. RateLoop is designed to support LLM answer quality review, RAG grounding, claim verification, source credibility screening, autonomous action gates, feature acceptance tests, agent trace review, proposal review, and output preference comparisons while keeping the same predicted-rating primitive with optional LREP stake.",
+            text: "The current AI focus is broader than generic feedback. RateLoop is designed to support AI answer quality review, source support, claim verification, source credibility screening, autonomous action gates, feature acceptance tests, agent trace review, proposal review, and output preference comparisons while keeping the same predicted-rating primitive with optional LREP stake.",
           },
         ],
       },
@@ -172,7 +172,7 @@ export const SECTIONS: Section[] = [
               rows: [
                 ["Submitted", "Question, context, bounty, and round settings are recorded", "Immediate"],
                 [
-                  "Blind RBTS vote",
+                  "Blind rating vote",
                   "Open raters commit encrypted up/down signals and predicted-up percentages with optional 0-10 LREP stake",
                   `First ${protocolDocFacts.blindPhaseDurationLabel} epoch by default`,
                 ],
@@ -205,7 +205,7 @@ export const SECTIONS: Section[] = [
         blocks: [
           {
             type: "paragraph",
-            text: "New content shows N/A until the first settlement. Each round snapshots an internal rating prior on-chain, but raters submit an absolute binary signal plus a predicted-up percentage rather than voting to raise or lower a visible score. Settlement moves the public rating using bounded up/down signal evidence, while the predicted-up percentage stays separate for robust BTS reward scoring. The same settlement also powers structured result templates so an agent can read a machine-usable answer, not only a raw market state.",
+            text: "New content shows N/A until the first settlement. Each round snapshots an internal rating prior on-chain, but raters submit an absolute binary signal plus a predicted-up percentage rather than voting to raise or lower a visible score. Settlement moves the public rating using bounded up/down signal evidence, while the predicted-up percentage stays separate for reward scoring. The same settlement also powers structured result templates so an agent can read a machine-usable answer, not only a raw market state.",
           },
           {
             type: "bullets",
@@ -299,7 +299,7 @@ export const SECTIONS: Section[] = [
         blocks: [
           {
             type: "paragraph",
-            text: `RBTS reports are encrypted with tlock against the drand beacon, so early raters cannot see the up/down distribution they are contributing to. Once epoch-1 results are visible, later reports still count, but they earn only ${protocolDocFacts.openPhaseWeightLabel} reward weight compared with ${protocolDocFacts.blindPhaseWeightLabel} in the blind epoch. That ${protocolDocFacts.earlyVoterAdvantageLabel} ratio makes copying late less attractive than judging early.`,
+            text: `Private reports are encrypted with tlock against the drand beacon, so early raters cannot see the up/down distribution they are contributing to. Once epoch-1 results are visible, later reports still count, but they earn only ${protocolDocFacts.openPhaseWeightLabel} reward weight compared with ${protocolDocFacts.blindPhaseWeightLabel} in the blind epoch. That ${protocolDocFacts.earlyVoterAdvantageLabel} ratio makes copying late less attractive than judging early.`,
           },
         ],
       },
@@ -350,7 +350,7 @@ export const SECTIONS: Section[] = [
                 ["Symbol", "LREP"],
                 ["Max supply", LREP_MAX_SUPPLY_LABEL],
                 ["Decimals", "6"],
-                ["Primary role", "Stake-backed robust BTS reports and governance participation"],
+                ["Primary role", "Stake-backed rating reports and governance participation"],
               ],
             },
           },
@@ -375,7 +375,7 @@ export const SECTIONS: Section[] = [
           },
           {
             type: "paragraph",
-            text: `High-scoring RBTS reports recover more stake plus a share of the rater pool, while revealed forfeited stake can reclaim ${protocolDocFacts.revealedLoserRefundPercentLabel}. Tier-1 raters carry full blind-epoch weight and later raters carry ${protocolDocFacts.openPhaseWeightLabel} weight, so the same anti-herding logic shapes settlement. USDC bounty and launch LREP claims add a second step: a finalized correlation payout snapshot proposed by a registered frontend operator supplies effective claim weights before funds move, without changing the already-settled result.`,
+            text: `High-scoring reports recover more stake plus a share of the rater pool, while revealed forfeited stake can reclaim ${protocolDocFacts.revealedLoserRefundPercentLabel}. Tier-1 raters carry full blind-epoch weight and later raters carry ${protocolDocFacts.openPhaseWeightLabel} weight, so the same anti-herding logic shapes settlement. USDC bounty and launch LREP claims add a second step: a finalized correlation payout snapshot proposed by a registered frontend operator supplies effective claim weights before funds move, without changing the already-settled result.`,
           },
         ],
       },
@@ -529,10 +529,10 @@ export const SECTIONS: Section[] = [
           {
             type: "bullets",
             items: [
-              "`generic_rating` turns binary robust BTS reports into a general support signal.",
+              "`generic_rating` turns private rating reports into a general support signal.",
               "`go_no_go` maps up/down settlement to proceed, stop, or revise for action review flows.",
               "`ranked_option_member` lets an agent ask one question per option and compare settled outputs without inventing a new scoring system.",
-              "`llm_answer_quality`, `rag_grounding_check`, `claim_verification`, and `source_credibility_check` cover answer quality, grounding, factual support, and evidence reliability.",
+              "`llm_answer_quality`, `rag_grounding_check`, `claim_verification`, and `source_credibility_check` cover answer quality, source support, factual support, and evidence reliability.",
               "`agent_action_go_no_go`, `feature_acceptance_test`, `agent_trace_review`, and `proposal_review` cover action gates, public preview testing, trajectory/tool-call review, and proposal readiness.",
               "`pairwise_output_preference` supports AI/model output comparisons while preserving one anchored ask per judged candidate.",
             ],

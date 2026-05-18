@@ -1,5 +1,5 @@
 {
-  "clientRequestId": "llm-answer-quality-demo",
+  "clientRequestId": "ai-answer-quality-demo",
   "chainId": 480,
   "templateId": "llm_answer_quality",
   "maxPaymentAmount": "1000000",
