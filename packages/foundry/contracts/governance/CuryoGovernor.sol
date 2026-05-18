@@ -11,6 +11,7 @@ import { GovernorTimelockControl } from "@openzeppelin/contracts/governance/exte
 import { GovernorSettings } from "@openzeppelin/contracts/governance/extensions/GovernorSettings.sol";
 import { TimelockController } from "@openzeppelin/contracts/governance/TimelockController.sol";
 import { IVotes } from "@openzeppelin/contracts/governance/utils/IVotes.sol";
+import { Strings } from "@openzeppelin/contracts/utils/Strings.sol";
 
 interface IGovernanceLockableVotes is IVotes {
     function lockForGovernance(address account, uint256 amount) external;
@@ -261,7 +262,13 @@ contract CuryoGovernor is
         return weight;
     }
 
-    /// @dev Override propose to lock the proposal threshold amount for 7 days
+    /// @dev Override propose to lock the proposal threshold amount for 7 days.
+    ///      Binds the proposer's address into the description hash so the resulting
+    ///      proposalId is unique per proposer — preventing the OpenZeppelin Governor
+    ///      cancel-DoS where a griefer front-runs an honest proposer's submission with
+    ///      an identical (targets, values, calldatas, descriptionHash) tuple and then
+    ///      cancels, burning the honest proposer's cooldown and lock against a proposal
+    ///      they did not create (N-2 / OZ 4.9.1 Coinspect advisory).
     function propose(
         address[] memory targets,
         uint256[] memory values,
@@ -274,7 +281,10 @@ contract CuryoGovernor is
             revert ProposalCooldownActive(msg.sender, nextBlock);
         }
 
-        uint256 proposalId = super.propose(targets, values, calldatas, description);
+        string memory boundDescription =
+            string(abi.encodePacked(description, "#proposer=", Strings.toHexString(uint160(msg.sender), 20)));
+
+        uint256 proposalId = super.propose(targets, values, calldatas, boundDescription);
         proposalCreatedBlock[proposalId] = block.number;
         nextProposalBlock[msg.sender] = block.number + PROPOSAL_COOLDOWN_BLOCKS;
 
