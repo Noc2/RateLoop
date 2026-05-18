@@ -251,7 +251,9 @@ contract LaunchDistributionPoolTest is Test {
         assertEq(paidBeforeSnapshot, 0);
         assertEq(pool.qualifyingCreditBps(alice), 0);
         assertEq(pool.qualifyingRatingCount(alice), 0);
-        assertEq(pool.roundUnverifiedLaunchCreditCount(1, 1), 0);
+        // M-Funds-2: counter increments at record time for unverified raters even on the
+        // cluster-oracle path, so the cap gates storage growth uniformly.
+        assertEq(pool.roundUnverifiedLaunchCreditCount(1, 1), 1);
 
         oracle.proposeCorrelationEpoch(
             1, 1, 1, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
@@ -302,7 +304,12 @@ contract LaunchDistributionPoolTest is Test {
         assertTrue(pool.isRoundPayoutSnapshotConsumed(pool.PAYOUT_DOMAIN_LAUNCH_CREDIT(), 0, 1, 1));
     }
 
-    function test_PendingLaunchOracleCreditsDoNotReserveUnverifiedRoundSlots() public {
+    function test_PendingLaunchOracleCreditsReserveUnverifiedRoundSlotsAtRecordTime() public {
+        // M-Funds-2: the per-round unverified cap MUST gate pending credits at record time,
+        // not at finalize. Previously, when a cluster oracle was configured the counter never
+        // incremented at record and unbounded pendingEarnedRaterCredits entries could
+        // accumulate before the cap re-engaged at finalize. The fix moves the increment to
+        // record so the cap is the storage-growth gate uniformly.
         _configureLaunchOracle(1);
         bytes32 anchorId = bytes32("anchor-a");
         uint256 maxCredits = pool.MAX_UNVERIFIED_LAUNCH_CREDITS_PER_ROUND();
@@ -315,9 +322,11 @@ contract LaunchDistributionPoolTest is Test {
             );
 
             assertTrue(pool.earnedRewardCreditRecorded(60, 1, commitKey));
-            assertEq(pool.roundUnverifiedLaunchCreditCount(60, 1), 0);
+            assertEq(pool.roundUnverifiedLaunchCreditCount(60, 1), i + 1);
         }
 
+        // The (maxCredits + 1)th call must short-circuit (return 0 without writing) because the
+        // cap is already saturated.
         bytes32 extraCommitKey = keccak256("pending-extra");
         pool.recordEarnedRaterReward(
             address(0xBEEF),
@@ -331,8 +340,8 @@ contract LaunchDistributionPoolTest is Test {
             _singleAnchor(anchorId)
         );
 
-        assertTrue(pool.earnedRewardCreditRecorded(60, 1, extraCommitKey));
-        assertEq(pool.roundUnverifiedLaunchCreditCount(60, 1), 0);
+        assertFalse(pool.earnedRewardCreditRecorded(60, 1, extraCommitKey));
+        assertEq(pool.roundUnverifiedLaunchCreditCount(60, 1), maxCredits);
     }
 
     function test_PendingLaunchCreditUsesRecordedOracleAfterRotation() public {
@@ -427,7 +436,11 @@ contract LaunchDistributionPoolTest is Test {
             })
         );
 
-        vm.expectRevert(LaunchDistributionPool.AlreadyClaimed.selector);
+        // M-Funds-3: finalize clears `pendingEarnedRaterCredits`, so a re-finalize attempt
+        // now hits the `!pending.pending` guard (InvalidAmount) before reaching the
+        // earnedRewardCreditFinalized check (AlreadyClaimed). Both expressions prevent the
+        // double-finalize; the new revert is semantically tighter (the pending IOU is gone).
+        vm.expectRevert(LaunchDistributionPool.InvalidAmount.selector);
         pool.finalizeEarnedRaterRewardCredit(1, 1, aliceCommitKey, alicePayout, new bytes32[](0));
     }
 
