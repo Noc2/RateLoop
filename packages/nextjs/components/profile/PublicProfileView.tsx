@@ -1202,7 +1202,7 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
                     Verified human {rewardStatus.humanCredential.status}
                   </div>
                   <div className="mt-2">
-                    Reward weight is stake, timing, and RBTS score. Identity status does not multiply it.
+                    Reward weight is stake, timing, and prediction score. Identity status does not multiply it.
                   </div>
                 </div>
               </div>

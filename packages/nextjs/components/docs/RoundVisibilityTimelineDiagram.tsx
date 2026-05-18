@@ -26,7 +26,7 @@ const rows: Array<{
     tone: "blue",
   },
   {
-    subject: "RBTS report contents",
+    subject: "Private report contents",
     commit: "Hidden from other raters",
     reveal: "Up/down and predicted up % become public",
     settle: "Scores the revealed report",
@@ -71,7 +71,7 @@ export function RoundVisibilityTimelineDiagram() {
     <DocsDiagramFrame
       eyebrow="Round visibility"
       title="What Is Public vs Hidden During a Round"
-      description="The ask is public from the start. The hidden part is the RBTS report contents until reveal."
+      description="The ask is public from the start. The hidden part is the private report contents until reveal."
     >
       <div className="overflow-x-auto">
         <div className="grid min-w-[860px] grid-cols-[10rem_repeat(4,minmax(0,1fr))] gap-2">

@@ -36,7 +36,7 @@ const MAX_PREDICTED_UP_PERCENT = 100;
 const YOUR_VOTE_TOOLTIP =
   "Thumbs up means you think this content is useful for the question; thumbs down means it is unhelpful, broken, misleading, or unsafe.";
 const EXPECTED_CROWD_TOOLTIP =
-  "Your forecast of what share of revealed raters will choose thumbs up this round. RBTS rewards this forecast against peer signals; it is separate from your own thumbs up/down vote.";
+  "Your forecast of what share of revealed raters will choose thumbs up this round. This forecast helps determine rewards; it is separate from your own thumbs up/down vote.";
 const metricLabelClassName =
   "inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-base-content/55";
 const metricValueClassName = "mt-1 text-2xl font-bold tabular-nums text-base-content";
@@ -66,7 +66,7 @@ export function getInitialPredictedUpPercent(initialIsUp?: boolean) {
 }
 
 /**
- * Bottom-sheet modal to select stake amount before committing a private RBTS vote.
+ * Bottom-sheet modal to select stake amount before committing a private vote.
  */
 export function StakeSelector({
   isOpen,
@@ -178,7 +178,7 @@ export function StakeSelector({
         <motion.div
           role="dialog"
           aria-modal="true"
-          aria-label="Select reputation lock and private RBTS vote"
+          aria-label="Select reputation lock and private vote"
           aria-busy={isConfirming}
           className="fixed inset-0 z-50 flex items-end justify-center sm:items-center"
           initial={{ opacity: 0 }}
