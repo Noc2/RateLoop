@@ -49,7 +49,6 @@ library RoundSettlementDistributionLib {
                 updatedConsensusReserve += voterShare;
                 emit ConsensusReserveFunded(contentId, roundId, voterShare);
             }
-            roundWinningStake[contentId][roundId] = weightedWinningStake;
 
             if (consensusShare > 0) {
                 updatedConsensusReserve += consensusShare;

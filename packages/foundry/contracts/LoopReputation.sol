@@ -68,18 +68,23 @@ contract LoopReputation is ERC20, ERC20Permit, ERC20Votes, AccessControl {
         uint256 newUnlockTime = block.timestamp + GOVERNANCE_LOCK_DURATION;
         if (lock.unlockTime <= block.timestamp) {
             lock.amount = amount;
+            lock.unlockTime = newUnlockTime;
         } else {
             uint256 currentBalance = balanceOf(account);
             uint256 lockableBase = currentBalance > amount ? currentBalance : amount;
             uint256 lockableBalance = lockableBase > lock.amount ? lockableBase - lock.amount : 0;
             uint256 additionalLock = amount > lockableBalance ? lockableBalance : amount;
+            // N-3: Only extend the unlock window when new tokens are actually locked. Otherwise
+            // voting in a second proposal would re-anchor the timer on already-locked tokens,
+            // making any LREP that ever votes effectively semi-permanently locked under
+            // continuous governance cadence.
             if (additionalLock > 0) {
                 lock.amount += additionalLock;
+                lock.unlockTime = newUnlockTime;
             }
         }
-        lock.unlockTime = newUnlockTime;
 
-        emit GovernanceLocked(account, lock.amount, newUnlockTime);
+        emit GovernanceLocked(account, lock.amount, lock.unlockTime);
     }
 
     function getLockedBalance(address account) public view returns (uint256) {
@@ -124,6 +129,14 @@ contract LoopReputation is ERC20, ERC20Permit, ERC20Votes, AccessControl {
 
     function nonces(address owner) public view virtual override(ERC20Permit, Nonces) returns (uint256) {
         return super.nonces(owner);
+    }
+
+    /// @notice Signature-based delegation is disabled. The `_delegate` override forces
+    ///         self-delegation, so delegateBySig had no legitimate user-facing function but
+    ///         shared nonce space with `permit` — a captured delegate signature could burn
+    ///         the signer's next permit nonce (L-Identity-8).
+    function delegateBySig(address, uint256, uint256, uint8, bytes32, bytes32) public pure override {
+        revert("delegateBySig disabled");
     }
 
     function supportsInterface(bytes4 interfaceId) public view virtual override(AccessControl) returns (bool) {

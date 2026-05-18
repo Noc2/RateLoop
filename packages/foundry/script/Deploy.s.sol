@@ -213,14 +213,15 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         );
         FeedbackBonusEscrow feedbackBonusEscrow = FeedbackBonusEscrow(address(feedbackBonusEscrowProxy));
 
-        // Bracket the first setVotingEngine call with pause/unpause so the deploy script
-        // exercises the same observable state as a future engine rotation (L-Identity-5).
+        // Bracket the first setVotingEngine AND setQuestionRewardPoolEscrow calls with
+        // pause/unpause so the deploy script exercises the same observable state as a future
+        // rotation (L-Identity-5, L-Identity-7).
         registry.pause();
         registry.setVotingEngine(address(votingEngine));
+        registry.setQuestionRewardPoolEscrow(address(questionRewardPoolEscrow));
         registry.unpause();
         registry.setProtocolConfig(address(protocolConfig));
         registry.setCategoryRegistry(address(categoryRegistry));
-        registry.setQuestionRewardPoolEscrow(address(questionRewardPoolEscrow));
         registry.grantRole(registry.X402_GATEWAY_ROLE(), address(x402QuestionSubmitter));
 
         protocolConfig.setRewardDistributor(address(rewardDistributor));

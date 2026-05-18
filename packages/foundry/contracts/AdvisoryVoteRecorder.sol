@@ -264,7 +264,9 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         AdvisoryCommit storage advisoryCommit = advisoryCommits[advisoryCommitKey];
         if (advisoryCommit.voter == address(0)) revert NoCommit();
         if (advisoryCommit.revealed) revert AlreadyRevealed();
-        if (predictedUpBps > 10_000) revert HashMismatch();
+        // L-Vote-8: reject the 0%/100% prediction endpoints that collapse the BTS
+        // information score to peer-signal-only.
+        RobustBtsMath.requireValidUserPrediction(predictedUpBps);
         _assertRevealDrandChainHashUnchanged(advisoryCommit);
 
         uint256 effectiveRevealableAfter = _effectiveRevealableAfter(advisoryCommit);
@@ -339,15 +341,17 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
                 votingEngine.roundRbtsForfeitedPool(advisoryCommit.contentId, advisoryCommit.roundId)
             )
         );
-        bytes32 referenceKey =
-            _findRevealedCommitKey(advisoryCommit.contentId, advisoryCommit.roundId, voteCount, seed, bytes32(0));
-        bytes32 peerKey = _findRevealedCommitKey(
-            advisoryCommit.contentId,
-            advisoryCommit.roundId,
-            voteCount,
-            keccak256(abi.encodePacked(seed, referenceKey)),
-            referenceKey
-        );
+        // M-Vote-5 (audit 2026-05-18): mirror the M-Vote-4 fix on the engine. Build the
+        // revealed-and-staked subset once, then index directly into it for the reference and
+        // peer draws so that a sybil cluster of unrevealed commits cannot bias the sampler
+        // toward the first revealed commit after a contiguous unrevealed run.
+        bytes32[] memory revealedKeys = _buildRevealedKeySet(advisoryCommit.contentId, advisoryCommit.roundId, voteCount);
+        uint256 revealedLen = revealedKeys.length;
+        if (revealedLen < 2) revert NotEnoughVotes();
+        uint256 referenceIndex = uint256(seed) % revealedLen;
+        bytes32 referenceKey = revealedKeys[referenceIndex];
+        uint256 peerIndex = _advisoryPeerIndex(seed, referenceIndex, revealedLen);
+        bytes32 peerKey = revealedKeys[peerIndex];
         (,,,, bool peerRevealed, bool peerIsUp,) =
             votingEngine.commitCore(advisoryCommit.contentId, advisoryCommit.roundId, peerKey);
         if (!peerRevealed) revert NotEnoughVotes();
@@ -635,22 +639,50 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         return false;
     }
 
-    function _findRevealedCommitKey(
-        uint256 contentId,
-        uint256 roundId,
-        uint16 voteCount,
-        bytes32 seed,
-        bytes32 excludedKey
-    ) internal view returns (bytes32 commitKey) {
+    /// @notice Build the revealed-and-staked subset of the engine's committed set for a round.
+    /// @dev M-Vote-5 (audit 2026-05-18): the prior `_findRevealedCommitKey` did a forward scan
+    ///      over the committed set, which let a sybil cluster of contiguous unrevealed commits
+    ///      absorb the sampler probability mass for the first revealed commit after the run.
+    ///      Materializing the revealed subset once and indexing directly into it restores
+    ///      uniform sampling — mirroring the M-Vote-4 fix in `RoundRevealLib._scoreRbtsCommitAt`.
+    function _buildRevealedKeySet(uint256 contentId, uint256 roundId, uint16 voteCount)
+        internal
+        view
+        returns (bytes32[] memory revealedKeys)
+    {
         if (voteCount == 0) revert NotEnoughVotes();
-        uint256 startIndex = uint256(seed) % voteCount;
-        for (uint256 offset = 0; offset < voteCount; offset++) {
-            uint256 index = (startIndex + offset) % voteCount;
-            bytes32 candidate = votingEngine.getRoundCommitKey(contentId, roundId, index);
-            if (candidate == excludedKey) continue;
+        revealedKeys = new bytes32[](voteCount);
+        uint256 revealedIdx;
+        for (uint256 i = 0; i < voteCount;) {
+            bytes32 candidate = votingEngine.getRoundCommitKey(contentId, roundId, i);
             (, uint64 stakeAmount,,, bool revealed,,) = votingEngine.commitCore(contentId, roundId, candidate);
-            if (revealed && stakeAmount > 0) return candidate;
+            if (revealed && stakeAmount > 0) {
+                revealedKeys[revealedIdx] = candidate;
+                unchecked {
+                    ++revealedIdx;
+                }
+            }
+            unchecked {
+                ++i;
+            }
         }
-        revert NotEnoughVotes();
+        assembly {
+            mstore(revealedKeys, revealedIdx)
+        }
+    }
+
+    /// @notice Uniform peer-index draw excluding `referenceIndex` over the revealed set.
+    /// @dev Single-exclusion analogue of `RoundRevealLib._rbtsPeerIndex`. The advisory voter
+    ///      is not in the engine's revealed set (zero-stake parallel structure), so only the
+    ///      reference draw is excluded from the peer draw.
+    function _advisoryPeerIndex(bytes32 seed, uint256 referenceIndex, uint256 count)
+        internal
+        pure
+        returns (uint256)
+    {
+        // Deterministic sampler over the threshold-frozen revealed set.
+        // slither-disable-next-line weak-prng
+        uint256 drawn = uint256(keccak256(abi.encodePacked(seed, uint8(1)))) % (count - 1);
+        return drawn >= referenceIndex ? drawn + 1 : drawn;
     }
 }

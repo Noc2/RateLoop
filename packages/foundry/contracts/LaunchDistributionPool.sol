@@ -136,6 +136,16 @@ contract LaunchDistributionPool is
     event EarnedRaterRewardCreditPending(
         address indexed rater, uint256 indexed contentId, uint256 indexed roundId, bytes32 commitKey, uint16 scoreBps
     );
+    /// @notice Emitted when governance rescues a pending earned-rater credit whose oracle pin
+    ///         has become stale (cluster oracle was rotated). Resets the rater's per-round
+    ///         flags so they can re-record against the new oracle (M-Funds-3).
+    event StalePendingEarnedRaterCreditRescued(
+        address indexed rater,
+        uint256 indexed contentId,
+        uint256 indexed roundId,
+        bytes32 commitKey,
+        address staleOracle
+    );
     event EarnedRaterRewardCreditFinalized(
         address indexed rater,
         uint256 indexed contentId,
@@ -200,6 +210,28 @@ contract LaunchDistributionPool is
         if (newOracle == address(0)) revert InvalidAddress();
         clusterPayoutOracle = IClusterPayoutOracle(newOracle);
         emit ClusterPayoutOracleUpdated(newOracle);
+    }
+
+    /// @notice Governance rescue for pending earned-rater credits pinned to a now-stale oracle.
+    /// @dev M-Funds-3: when governance rotates `clusterPayoutOracle`, any
+    ///      `pendingEarnedRaterCredits` already recorded against the previous oracle become
+    ///      permanently un-finalizable (the new oracle won't accept proofs against the old
+    ///      root, the `pending.oracle` pin is fixed). This rescue drops a stale pending entry
+    ///      and resets the rater's per-round flags so they can re-record against the new
+    ///      oracle. Slot accounting (cap counter) is left intact — a stale pending entry
+    ///      still consumed a cap slot at record time, and rescue does not refund it.
+    function rescueStalePendingEarnedRaterCredit(uint256 contentId, uint256 roundId, bytes32 commitKey)
+        external
+        onlyOwner
+    {
+        PendingEarnedRaterCredit memory pending = pendingEarnedRaterCredits[contentId][roundId][commitKey];
+        if (!pending.pending) revert InvalidAmount();
+        if (earnedRewardCreditFinalized[contentId][roundId][commitKey]) revert AlreadyClaimed();
+        if (pending.oracle == address(clusterPayoutOracle)) revert InvalidAddress();
+        delete pendingEarnedRaterCredits[contentId][roundId][commitKey];
+        earnedRewardCreditRecorded[contentId][roundId][commitKey] = false;
+        raterRoundCreditRecorded[pending.rater][contentId][roundId] = false;
+        emit StalePendingEarnedRaterCreditRescued(pending.rater, contentId, roundId, commitKey, pending.oracle);
     }
 
     function setAuthorizedCaller(address caller, bool authorized) external onlyOwner {
@@ -347,7 +379,11 @@ contract LaunchDistributionPool is
 
         earnedRewardCreditRecorded[contentId][roundId][commitKey] = true;
         raterRoundCreditRecorded[rater][contentId][roundId] = true;
-        if (!raterVerified && !clusterProofRequired) {
+        // M-Funds-2: increment at record time regardless of clusterProofRequired so the cap
+        // gates storage growth uniformly. Previously the increment fired only when there was
+        // no cluster oracle, letting unbounded pending entries accumulate when a cluster oracle
+        // is configured (the mainnet shape).
+        if (!raterVerified) {
             roundUnverifiedLaunchCreditCount[contentId][roundId] += 1;
         }
         _recordAnchorRound(rater, contentId, roundId);
@@ -392,7 +428,8 @@ contract LaunchDistributionPool is
 
         earnedRewardCreditRecorded[contentId][roundId][advisoryCommitKey] = true;
         raterRoundCreditRecorded[rater][contentId][roundId] = true;
-        if (!raterVerified && !clusterProofRequired) {
+        // M-Funds-2: see recordEarnedRaterReward — increment unconditionally on !raterVerified.
+        if (!raterVerified) {
             roundUnverifiedLaunchCreditCount[contentId][roundId] += 1;
         }
         _recordAnchorRound(rater, contentId, roundId);
@@ -431,13 +468,15 @@ contract LaunchDistributionPool is
         }
         if (!oracle.verifyPayoutWeight(payoutWeight, proof)) revert InvalidProof();
 
-        if (!_hasActiveHumanCredential(pending.rater)) {
-            if (roundUnverifiedLaunchCreditCount[contentId][roundId] >= pending.policy.maxUnverifiedCreditsPerRound) {
-                revert InvalidAmount();
-            }
-            roundUnverifiedLaunchCreditCount[contentId][roundId] += 1;
-        }
+        // M-Funds-2: the cap is enforced at record time now, so no re-check or increment here.
+        // A rater who was unverified at record (and thus consumed a cap slot) keeps that slot
+        // regardless of verification flips between record and finalize.
         earnedRewardCreditFinalized[contentId][roundId][commitKey] = true;
+        // M-Funds-3: reclaim the pending entry now that it has been finalized. The slot
+        // (oracle, rater, scoreBps, policy) was a one-shot ticket; leaving it in storage
+        // strands gas and makes governance rotation of `clusterPayoutOracle` ambiguous about
+        // whether the entry should re-verify against the new oracle.
+        delete pendingEarnedRaterCredits[contentId][roundId][commitKey];
         uint256 effectiveCreditBps = payoutWeight.effectiveWeight;
         paidAmount = _recordEarnedRaterReward(
             pending.rater, contentId, roundId, commitKey, pending.scoreBps, pending.policy, effectiveCreditBps
@@ -510,10 +549,30 @@ contract LaunchDistributionPool is
         }
         paidAmount = targetPaid - raterLaunchPaid[rater];
         uint256 remaining = _remainingEarnedRaterPool();
-        if (paidAmount > remaining) paidAmount = remaining;
+        bool poolDepleted = paidAmount > remaining;
+        if (poolDepleted) paidAmount = remaining;
         if (paidAmount == 0) return 0;
 
-        rewardedRatingCount[rater] = targetRewardedCount;
+        // L-Funds-5: when the pool is depleted mid-slot, advance rewardedRatingCount only to
+        // the proportional position that the actually-paid amount represents, not all the way
+        // to targetRewardedCount. Otherwise the slot count irreversibly outpaces the paid
+        // total and the rater's remaining cap becomes locked even after the pool is refilled.
+        if (poolDepleted) {
+            uint256 newTotalPaid = raterLaunchPaid[rater] + paidAmount;
+            uint32 proportionalCount;
+            if (newTotalPaid >= cap) {
+                proportionalCount = policy.rewardingRatingCount;
+            } else if (cap > 0) {
+                proportionalCount = uint32((newTotalPaid * uint256(policy.rewardingRatingCount)) / cap);
+            } else {
+                proportionalCount = rewardedCount;
+            }
+            if (proportionalCount < rewardedCount) proportionalCount = rewardedCount;
+            if (proportionalCount > targetRewardedCount) proportionalCount = targetRewardedCount;
+            rewardedRatingCount[rater] = proportionalCount;
+        } else {
+            rewardedRatingCount[rater] = targetRewardedCount;
+        }
         raterLaunchPaid[rater] += paidAmount;
         earnedRaterDistributed += paidAmount;
         _pay(rater, paidAmount);

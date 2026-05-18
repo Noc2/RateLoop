@@ -22,6 +22,10 @@ function isLocalhostHostname(hostname: string): boolean {
   return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
 }
 
+function isVercelPreviewDeployment(): boolean {
+  return process.env.VERCEL_ENV === "preview";
+}
+
 function normalizeDatabaseUrl(rawUrl: string): string {
   try {
     const parsed = new URL(rawUrl);
@@ -91,7 +95,8 @@ export function resolveServerTargetNetworks(
   options?: { allowFoundryInProduction?: boolean },
 ): [SupportedTargetNetwork, ...SupportedTargetNetwork[]] | null {
   try {
-    const allowFoundryInProduction = options?.allowFoundryInProduction ?? allowLocalE2EProductionBuild;
+    const allowFoundryInProduction =
+      options?.allowFoundryInProduction ?? (allowLocalE2EProductionBuild || isVercelPreviewDeployment());
     const rpcOverrides = mergeRpcOverrides(
       RPC_OVERRIDES,
       resolveRpcOverrides({

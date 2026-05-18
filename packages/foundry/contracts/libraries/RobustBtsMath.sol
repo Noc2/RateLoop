@@ -6,10 +6,26 @@ pragma solidity ^0.8.20;
 library RobustBtsMath {
     uint16 internal constant BPS_SCALE = 10_000;
 
+    /// @notice Tightest user-facing prediction bounds. Predictions at exactly 0 or 10000 collapse
+    ///         `shadowPredictionBps` to a function of the peer signal alone, allowing a two-commit
+    ///         attacker to wipe the information half of honest voters' BTS scores (L-Vote-8).
+    ///         Internal helpers still accept the full [0, 10000] range because shadow values
+    ///         legitimately reach the endpoints by construction.
+    uint16 internal constant MIN_USER_PREDICTION_BPS = 100;
+    uint16 internal constant MAX_USER_PREDICTION_BPS = 9_900;
+
     error InvalidPrediction();
 
     function requireValidPrediction(uint16 predictedUpBps) internal pure {
         if (predictedUpBps > BPS_SCALE) revert InvalidPrediction();
+    }
+
+    /// @notice Stricter check used on user-supplied predictions at reveal time. Rejects the
+    ///         0 / 10000 endpoints where `shadowPredictionBps` becomes peer-signal-only.
+    function requireValidUserPrediction(uint16 predictedUpBps) internal pure {
+        if (predictedUpBps < MIN_USER_PREDICTION_BPS || predictedUpBps > MAX_USER_PREDICTION_BPS) {
+            revert InvalidPrediction();
+        }
     }
 
     function shadowPredictionBps(uint16 referencePredictionBps, bool signalIsUp) internal pure returns (uint16) {

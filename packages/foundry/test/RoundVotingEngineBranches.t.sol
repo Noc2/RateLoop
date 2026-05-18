@@ -2375,17 +2375,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         // Refund still happens.
         assertEq(lrepToken.balanceOf(voter4) - voter4Before, STAKE, "voter4 refunded");
         assertEq(lrepToken.balanceOf(keeper), keeperBefore, "keeper not paid");
-        assertEq(engine.roundDeferredCleanupBounty(contentId, roundId, keeper), 0, "no deferred bounty");
         assertEq(engine.consensusReserve(), reserveBefore, "refund-only cleanup must not drain reserve");
-    }
-
-    function test_ProcessUnrevealed_DeferredBountyClaimRevertsWhenNothingPending() public {
-        uint256 contentId = _submitContent();
-        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
-
-        vm.prank(keeper);
-        vm.expectRevert(RoundVotingEngine.NothingToClaim.selector);
-        engine.claimDeferredCleanupBounty(contentId, roundId);
     }
 
     function test_ProcessUnrevealed_SettledCleanupPaysIncentiveOncePerForfeiture() public {

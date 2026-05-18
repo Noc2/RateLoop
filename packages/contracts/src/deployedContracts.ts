@@ -648,7 +648,7 @@ const deployedContracts: GenericContractsDeclaration = {
       deployedOnBlock: 5,
     },
     RoundSettlementDistributionLib: {
-      address: "0xbfd5a76907de813c4b673e696a830c8f77dd697c",
+      address: "0x63881410af19d9263c27ae1be3ce5f0be9629b5d",
       abi: [
         {
           type: "event",
@@ -755,7 +755,7 @@ const deployedContracts: GenericContractsDeclaration = {
       deployedOnBlock: 6,
     },
     RoundRevealLib: {
-      address: "0xbeb534d5c30719c0d92522dc24d113de78e259f6",
+      address: "0x3e0d3f6e40c26be612c320823820c2917ebf1c8d",
       abi: [
         {
           type: "event",
@@ -934,7 +934,7 @@ const deployedContracts: GenericContractsDeclaration = {
       deployedOnBlock: 8,
     },
     RoundCleanupLib: {
-      address: "0x3d685d9899f8a3c1cb7b4a2887c63ce327bb8452",
+      address: "0x56a34f326b577013cfd50d7ae16ad7a7a42b8fb7",
       abi: [
         {
           type: "event",
@@ -1010,74 +1010,6 @@ const deployedContracts: GenericContractsDeclaration = {
             },
             {
               name: "amount",
-              type: "uint256",
-              indexed: false,
-              internalType: "uint256",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "DeferredCleanupBountyAccrued",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              indexed: true,
-              internalType: "uint256",
-            },
-            {
-              name: "roundId",
-              type: "uint256",
-              indexed: true,
-              internalType: "uint256",
-            },
-            {
-              name: "recipient",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "amount",
-              type: "uint256",
-              indexed: false,
-              internalType: "uint256",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "DeferredCleanupBountyClaimed",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              indexed: true,
-              internalType: "uint256",
-            },
-            {
-              name: "roundId",
-              type: "uint256",
-              indexed: true,
-              internalType: "uint256",
-            },
-            {
-              name: "recipient",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "paidAmount",
-              type: "uint256",
-              indexed: false,
-              internalType: "uint256",
-            },
-            {
-              name: "remaining",
               type: "uint256",
               indexed: false,
               internalType: "uint256",
@@ -1202,16 +1134,6 @@ const deployedContracts: GenericContractsDeclaration = {
         {
           type: "error",
           name: "NothingProcessed",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "NothingToClaim",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "ReserveEmpty",
           inputs: [],
         },
         {
@@ -2728,38 +2650,38 @@ const deployedContracts: GenericContractsDeclaration = {
           name: "delegateBySig",
           inputs: [
             {
-              name: "delegatee",
+              name: "",
               type: "address",
               internalType: "address",
             },
             {
-              name: "nonce",
+              name: "",
               type: "uint256",
               internalType: "uint256",
             },
             {
-              name: "expiry",
+              name: "",
               type: "uint256",
               internalType: "uint256",
             },
             {
-              name: "v",
+              name: "",
               type: "uint8",
               internalType: "uint8",
             },
             {
-              name: "r",
+              name: "",
               type: "bytes32",
               internalType: "bytes32",
             },
             {
-              name: "s",
+              name: "",
               type: "bytes32",
               internalType: "bytes32",
             },
           ],
           outputs: [],
-          stateMutability: "nonpayable",
+          stateMutability: "pure",
         },
         {
           type: "function",
@@ -6280,30 +6202,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "claimDeferredCleanupBounty",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "roundId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "paidAmount",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
           name: "commitCommittedAt",
           inputs: [
             {
@@ -7538,35 +7436,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "roundDeferredCleanupBounty",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "roundId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "recipient",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [
-            {
-              name: "amount",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
           name: "roundDrandConfig",
           inputs: [
             {
@@ -8582,74 +8451,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "event",
-          name: "DeferredCleanupBountyAccrued",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              indexed: true,
-              internalType: "uint256",
-            },
-            {
-              name: "roundId",
-              type: "uint256",
-              indexed: true,
-              internalType: "uint256",
-            },
-            {
-              name: "recipient",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "amount",
-              type: "uint256",
-              indexed: false,
-              internalType: "uint256",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "DeferredCleanupBountyClaimed",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              indexed: true,
-              internalType: "uint256",
-            },
-            {
-              name: "roundId",
-              type: "uint256",
-              indexed: true,
-              internalType: "uint256",
-            },
-            {
-              name: "recipient",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "paidAmount",
-              type: "uint256",
-              indexed: false,
-              internalType: "uint256",
-            },
-            {
-              name: "remaining",
-              type: "uint256",
-              indexed: false,
-              internalType: "uint256",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
           name: "ForfeitedFundsAddedToTreasury",
           inputs: [
             {
@@ -9369,17 +9170,7 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "error",
-          name: "NothingToClaim",
-          inputs: [],
-        },
-        {
-          type: "error",
           name: "ReentrancyGuardReentrantCall",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "ReserveEmpty",
           inputs: [],
         },
         {
@@ -20055,10 +19846,6 @@ const deployedContracts: GenericContractsDeclaration = {
           stateMutability: "nonpayable",
         },
         {
-          type: "receive",
-          stateMutability: "payable",
-        },
-        {
           type: "function",
           name: "ARBITER_ROLE",
           inputs: [],
@@ -20953,6 +20740,30 @@ const deployedContracts: GenericContractsDeclaration = {
           ],
           outputs: [],
           stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "rejectedCorrelationEpochRoots",
+          inputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
         },
         {
           type: "function",
@@ -26037,6 +25848,29 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "rescueStalePendingEarnedRaterCredit",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "commitKey",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "rewardedRatingCount",
           inputs: [
             {
@@ -26946,6 +26780,43 @@ const deployedContracts: GenericContractsDeclaration = {
               type: "uint256",
               indexed: false,
               internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "StalePendingEarnedRaterCreditRescued",
+          inputs: [
+            {
+              name: "rater",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "contentId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "commitKey",
+              type: "bytes32",
+              indexed: false,
+              internalType: "bytes32",
+            },
+            {
+              name: "staleOracle",
+              type: "address",
+              indexed: false,
+              internalType: "address",
             },
           ],
           anonymous: false,

@@ -253,38 +253,38 @@ export const LoopReputationAbi = [
     "name": "delegateBySig",
     "inputs": [
       {
-        "name": "delegatee",
+        "name": "",
         "type": "address",
         "internalType": "address"
       },
       {
-        "name": "nonce",
+        "name": "",
         "type": "uint256",
         "internalType": "uint256"
       },
       {
-        "name": "expiry",
+        "name": "",
         "type": "uint256",
         "internalType": "uint256"
       },
       {
-        "name": "v",
+        "name": "",
         "type": "uint8",
         "internalType": "uint8"
       },
       {
-        "name": "r",
+        "name": "",
         "type": "bytes32",
         "internalType": "bytes32"
       },
       {
-        "name": "s",
+        "name": "",
         "type": "bytes32",
         "internalType": "bytes32"
       }
     ],
     "outputs": [],
-    "stateMutability": "nonpayable"
+    "stateMutability": "pure"
   },
   {
     "type": "function",

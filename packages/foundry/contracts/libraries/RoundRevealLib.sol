@@ -81,7 +81,9 @@ library RoundRevealLib {
         if (round.state != RoundLib.RoundState.Open) revert RoundNotOpen();
         if (commit.voter == address(0)) revert NoCommit();
         if (commit.revealed) revert AlreadyRevealed();
-        RobustBtsMath.requireValidPrediction(params.predictedUpBps);
+        // L-Vote-8: stricter user-prediction bounds reject 0%/100% endpoints that would
+        // collapse the BTS information score to peer-signal-only.
+        RobustBtsMath.requireValidUserPrediction(params.predictedUpBps);
 
         uint256 revealNotBefore = commit.revealableAfter;
         if (params.targetRoundRevealableAt > revealNotBefore) {

@@ -83,8 +83,6 @@ contract RoundVotingEngine is
     error IndexOutOfBounds();
     error UnrevealedPastEpochVotes();
     error NothingProcessed();
-    error NothingToClaim();
-    error ReserveEmpty();
 
     // --- Access Control Roles ---
     bytes32 internal constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
@@ -236,16 +234,6 @@ contract RoundVotingEngine is
     ///         unset or because the transfer reverted. Gives indexers a distinct signal
     ///         from the settled-round replenishment path (`UnrevealedStakeAddedToConsensusReserve`).
     event ForfeitedFundsFallbackToConsensusReserve(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
-    event DeferredCleanupBountyAccrued(
-        uint256 indexed contentId, uint256 indexed roundId, address indexed recipient, uint256 amount
-    );
-    event DeferredCleanupBountyClaimed(
-        uint256 indexed contentId,
-        uint256 indexed roundId,
-        address indexed recipient,
-        uint256 paidAmount,
-        uint256 remaining
-    );
     event CurrentEpochRefunded(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
     event TreasuryFeeDistributed(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
     event ConsensusReserveFunded(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
@@ -285,23 +273,6 @@ contract RoundVotingEngine is
         accountedLrepBalance += amount;
         consensusReserve += amount;
         emit ConsensusReserveToppedUp(msg.sender, amount);
-    }
-
-    /// @notice Drain a previously-deferred cleanup bounty owed to `msg.sender`.
-    function claimDeferredCleanupBounty(uint256 contentId, uint256 roundId)
-        external
-        nonReentrant
-        returns (uint256 paidAmount)
-    {
-        (paidAmount, consensusReserve, accountedLrepBalance) = RoundCleanupLib.claimDeferredCleanupBounty(
-            roundDeferredCleanupBounty[contentId][roundId],
-            lrepToken,
-            consensusReserve,
-            accountedLrepBalance,
-            contentId,
-            roundId,
-            msg.sender
-        );
     }
 
     /// @notice Recover LREP sent directly to this contract outside accounted protocol flows.
@@ -1054,7 +1025,6 @@ contract RoundVotingEngine is
             commits[contentId][roundId],
             roundCleanupIncentivePaid,
             roundUnrevealedCleanupRemaining[contentId],
-            roundDeferredCleanupBounty[contentId][roundId],
             contentId,
             roundId,
             lrepToken,
@@ -1485,12 +1455,6 @@ contract RoundVotingEngine is
     // engages -- attacker-only rounds (all non-HRC sybils) remain refund-cancellable so they
     // cannot grief honest content into a RevealFailed cycle.
     mapping(uint256 => mapping(uint256 => bool)) public roundHasHumanVerifiedCommit;
-
-    // Per-round, per-keeper IOU for the refund-only cleanup bounty when the consensus reserve was
-    // too low to pay it in full. Drained by `claimDeferredCleanupBounty`. Already counted toward
-    // the per-round 5 LREP cap so a deferred sliver cannot be used to bypass the envelope.
-    mapping(uint256 contentId => mapping(uint256 roundId => mapping(address recipient => uint256 amount))) public
-        roundDeferredCleanupBounty;
 
     // Entropy captured when reveal quorum first closes the commit set; RBTS settlement uses this
     // stored value so the settlement caller cannot grind the sampler by reverting unfavorable runs.
