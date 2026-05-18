@@ -403,6 +403,7 @@ export function useRoundVote() {
         chainId: targetNetwork.id,
         contentId,
         identityKey,
+        votingEngineAddress,
       });
       void queryClient.invalidateQueries({ queryKey: FREE_TRANSACTION_ALLOWANCE_QUERY_KEY });
 

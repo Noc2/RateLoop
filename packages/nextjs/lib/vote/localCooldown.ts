@@ -17,6 +17,7 @@ interface LocalVoteCooldownRecord {
   contentId: string;
   identityKey?: string;
   savedAt: number;
+  votingEngineAddress?: string;
   /** @deprecated retained only to match cooldown entries written before RaterRegistry identities. */
   voterIdTokenId?: string;
 }
@@ -34,6 +35,7 @@ interface RecordLocalVoteCooldownParams extends VoteCooldownIdentity {
   contentId: bigint | string | number;
   nowSeconds?: number;
   storage?: StorageLike | null;
+  votingEngineAddress?: string | null;
 }
 
 interface GetLocalVoteCooldownsParams {
@@ -42,6 +44,7 @@ interface GetLocalVoteCooldownsParams {
   identities: readonly VoteCooldownIdentity[];
   nowSeconds: number;
   storage?: StorageLike | null;
+  votingEngineAddress?: string | null;
 }
 
 export function getDefaultStorage(): StorageLike | null {
@@ -97,6 +100,7 @@ function isRecord(value: unknown): value is LocalVoteCooldownRecord {
     Number.isFinite(record.savedAt) &&
     (record.address === undefined || typeof record.address === "string") &&
     (record.identityKey === undefined || typeof record.identityKey === "string") &&
+    (record.votingEngineAddress === undefined || typeof record.votingEngineAddress === "string") &&
     (record.voterIdTokenId === undefined || typeof record.voterIdTokenId === "string")
   );
 }
@@ -168,11 +172,13 @@ export function recordLocalVoteCooldown({
   storage = getDefaultStorage(),
   identityKey,
   voterIdTokenId,
+  votingEngineAddress,
 }: RecordLocalVoteCooldownParams) {
   const normalizedContentId = normalizeContentId(contentId);
   const normalizedAddress = normalizeAddress(address);
   const normalizedIdentityKey = normalizeIdentityKey(identityKey);
   const normalizedTokenId = normalizeTokenId(voterIdTokenId);
+  const normalizedVotingEngineAddress = normalizeAddress(votingEngineAddress);
   if (!normalizedContentId || (!normalizedAddress && !normalizedIdentityKey && !normalizedTokenId)) return;
 
   const committedAt = Math.floor(committedAtSeconds ?? nowSeconds);
@@ -186,9 +192,12 @@ export function recordLocalVoteCooldown({
     ...(normalizedAddress ? { address: normalizedAddress } : {}),
     ...(normalizedIdentityKey ? { identityKey: normalizedIdentityKey } : {}),
     ...(normalizedTokenId ? { voterIdTokenId: normalizedTokenId } : {}),
+    ...(normalizedVotingEngineAddress ? { votingEngineAddress: normalizedVotingEngineAddress } : {}),
   };
   const records = pruneRecords(readRecords(storage), nowSeconds).filter(record => {
     if (record.chainId !== chainId || record.contentId !== normalizedContentId) return true;
+    if (normalizedVotingEngineAddress && record.votingEngineAddress !== normalizedVotingEngineAddress) return true;
+    if (!normalizedVotingEngineAddress && record.votingEngineAddress !== undefined) return true;
     if (normalizedIdentityKey && record.identityKey === normalizedIdentityKey) return false;
     if (normalizedTokenId && record.voterIdTokenId === normalizedTokenId) return false;
     if (normalizedAddress && record.address === normalizedAddress) return false;
@@ -205,16 +214,19 @@ export function getLocalVoteCooldownsByContentId({
   identities,
   nowSeconds,
   storage = getDefaultStorage(),
+  votingEngineAddress,
 }: GetLocalVoteCooldownsParams) {
   const normalizedContentIds = contentIds
     ? new Set(contentIds.map(normalizeContentId).filter((value): value is string => value !== null))
     : null;
   const identitySets = buildIdentitySets(identities);
+  const normalizedVotingEngineAddress = normalizeAddress(votingEngineAddress);
   const cooldowns = new Map<string, number>();
   const records = pruneRecords(readRecords(storage), nowSeconds);
 
   for (const record of records) {
     if (record.chainId !== chainId) continue;
+    if (normalizedVotingEngineAddress && record.votingEngineAddress !== normalizedVotingEngineAddress) continue;
     if (normalizedContentIds && !normalizedContentIds.has(record.contentId)) continue;
     if (!matchesIdentity(record, identitySets)) continue;
 
