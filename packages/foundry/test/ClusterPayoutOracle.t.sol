@@ -329,7 +329,7 @@ contract ClusterPayoutOracleTest is Test {
         assertEq(usdc.balanceOf(recipient), 2 * CHALLENGE_BOND);
     }
 
-    function test_RejectedSnapshotsCanBeReplaced() public {
+    function test_RejectedSnapshotsCanBeReplacedWithDifferentRoot() public {
         oracle.proposeCorrelationEpoch(
             1, 1, 20, keccak256("bad-cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
         );
@@ -384,6 +384,10 @@ contract ClusterPayoutOracleTest is Test {
         input.reasonRoot = keccak256("replacement-reason-root");
         input.artifactHash = keccak256("replacement-round-artifact");
         input.artifactURI = "ipfs://round-replacement";
+        vm.expectRevert(ClusterPayoutOracle.InvalidSnapshot.selector);
+        oracle.proposeRoundPayoutSnapshot(input);
+
+        input.weightRoot = keccak256("replacement-weight-root");
         oracle.proposeRoundPayoutSnapshot(input);
 
         ClusterPayoutOracle.RoundPayoutProposal memory proposal = oracle.roundPayoutProposal(snapshotKey);
@@ -412,6 +416,10 @@ contract ClusterPayoutOracleTest is Test {
         assertEq(uint8(rejected.snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Rejected));
 
         input.artifactHash = keccak256("replacement-round-artifact");
+        vm.expectRevert(ClusterPayoutOracle.InvalidSnapshot.selector);
+        oracle.proposeRoundPayoutSnapshot(input);
+
+        input.weightRoot = keccak256("replacement-weight-root");
         oracle.proposeRoundPayoutSnapshot(input);
         ClusterPayoutOracle.RoundPayoutProposal memory replacement = oracle.roundPayoutProposal(snapshotKey);
         assertEq(uint8(replacement.snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Proposed));

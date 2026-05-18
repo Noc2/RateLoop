@@ -2550,7 +2550,9 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         IClusterPayoutOracle.PayoutWeight memory payoutWeight =
             _clusterPayoutWeight(rewardPoolId, contentId, roundId, 0);
         bytes32 weightRoot = oracle.payoutWeightLeaf(payoutWeight);
-        _finalizeClusterPayoutSnapshotWithRoot(oracle, rewardPoolId, contentId, roundId, 4, 30_000, 10_000, weightRoot);
+        _finalizeClusterPayoutSnapshotWithRoot(
+            oracle, rewardPoolId, contentId, roundId, 4, 30_000, 10_000, keccak256("bad-weight-root")
+        );
 
         vm.expectRevert("Cluster snapshot mismatch");
         rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
