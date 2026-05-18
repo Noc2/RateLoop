@@ -215,6 +215,7 @@ contract RoundVotingEngine is
         uint256 forfeitedPool,
         uint256 forfeitClaimants
     );
+    event RbtsSeedCaptured(uint256 indexed contentId, uint256 indexed roundId, bytes32 entropy);
     event RoundSettled(uint256 indexed contentId, uint256 indexed roundId, bool upWins, uint256 losingPool);
     event RoundCancelled(uint256 indexed contentId, uint256 indexed roundId);
     event RoundTied(uint256 indexed contentId, uint256 indexed roundId);
@@ -1314,6 +1315,21 @@ contract RoundVotingEngine is
         internal
         returns (uint256 rewardWeight, uint256 forfeitedPool, bytes32 scoreSeed)
     {
+        bytes32 settlementEntropy = roundRbtsSeedEntropy[contentId][roundId];
+        if (settlementEntropy == bytes32(0)) {
+            RoundLib.Round storage round = rounds[contentId][roundId];
+            settlementEntropy = keccak256(
+                abi.encode(
+                    "rateloop.rbts.legacy-seed.v1",
+                    block.chainid,
+                    address(this),
+                    contentId,
+                    roundId,
+                    round.thresholdReachedAt,
+                    round.voteCount
+                )
+            );
+        }
         RoundRevealLib.ScoreRbtsResult memory result = RoundRevealLib.scoreRbtsRewards(
             roundCommitHashes[contentId][roundId],
             commits[contentId][roundId],
@@ -1331,7 +1347,7 @@ contract RoundVotingEngine is
                 upWins: upWins,
                 minParticipants: MIN_RBTS_PARTICIPANTS,
                 scoreScaleBps: RBTS_SCORE_SCALE_BPS,
-                settlementPrevrandao: bytes32(block.prevrandao)
+                settlementEntropy: settlementEntropy
             })
         );
 
@@ -1346,6 +1362,28 @@ contract RoundVotingEngine is
         roundRbtsForfeitClaimants[contentId][roundId] = result.forfeitClaimants;
     }
 
+    function _captureRbtsSeed(uint256 contentId, uint256 roundId, uint48 thresholdReachedAt, bytes32 thresholdCommitKey)
+        internal
+    {
+        bytes32 previousBlockhash = block.number > 0 ? blockhash(block.number - 1) : bytes32(0);
+        bytes32 entropy = keccak256(
+            abi.encode(
+                "rateloop.rbts.threshold-seed.v1",
+                block.chainid,
+                address(this),
+                contentId,
+                roundId,
+                thresholdReachedAt,
+                block.number,
+                thresholdCommitKey,
+                previousBlockhash,
+                bytes32(block.prevrandao)
+            )
+        );
+        roundRbtsSeedEntropy[contentId][roundId] = entropy;
+        emit RbtsSeedCaptured(contentId, roundId, entropy);
+    }
+
     function _revealRbtsVoteInternal(
         uint256 contentId,
         uint256 roundId,
@@ -1358,6 +1396,7 @@ contract RoundVotingEngine is
         RoundLib.Commit storage commit = commits[contentId][roundId][commitKey];
         RoundLib.RoundConfig memory roundCfg = _getRoundConfig(contentId, roundId);
         uint256 targetRoundRevealableAt = _targetRoundRevealableAt(contentId, roundId, commit.targetRound);
+        bool thresholdAlreadyReached = round.thresholdReachedAt != 0;
         (
             uint256 eligibleFrontendStake,
             uint256 eligibleFrontendCount,
@@ -1386,6 +1425,9 @@ contract RoundVotingEngine is
         );
         roundStakeWithEligibleFrontend[contentId][roundId] = eligibleFrontendStake;
         roundEligibleFrontendCount[contentId][roundId] = eligibleFrontendCount;
+        if (!thresholdAlreadyReached && round.thresholdReachedAt != 0) {
+            _captureRbtsSeed(contentId, roundId, round.thresholdReachedAt, commitKey);
+        }
         commitPredictedUpBps[contentId][roundId][commitKey] = predictedUpBps;
         commitRbtsWeight[contentId][roundId][commitKey] = effectiveStake;
         if (isUp) {
@@ -1542,7 +1584,7 @@ contract RoundVotingEngine is
     ///      Indexed by (contentId, roundId).
     mapping(uint256 contentId => mapping(uint256 roundId => bool)) public pendingBundleObserverReplay;
 
-    // Deprecated compatibility slot. RBTS scoring now mixes settlement-block prevrandao instead
+    // Deprecated compatibility slot. RBTS scoring now mixes threshold-captured entropy instead
     // of a value overwritten by the final committer.
     mapping(uint256 => mapping(uint256 => bytes32)) public roundLastCommitPrevrandao;
 
@@ -1558,6 +1600,10 @@ contract RoundVotingEngine is
     mapping(uint256 contentId => mapping(uint256 roundId => mapping(address recipient => uint256 amount))) public
         roundDeferredCleanupBounty;
 
+    // Entropy captured when reveal quorum first closes the commit set; RBTS settlement uses this
+    // stored value so the settlement caller cannot grind the sampler by reverting unfavorable runs.
+    mapping(uint256 => mapping(uint256 => bytes32)) public roundRbtsSeedEntropy;
+
     // --- Storage gap reserved for future upgrades ---
-    uint256[24] private __gap;
+    uint256[23] private __gap;
 }

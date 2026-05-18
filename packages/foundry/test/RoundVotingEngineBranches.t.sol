@@ -696,7 +696,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertGt(engine.commitRbtsScoreBps(contentId, roundId, ck1), 0, "ck1 scored");
     }
 
-    function test_RbtsScoringSeed_UsesSettlementEntropyAndCommittedSet() public {
+    function test_RbtsScoringSeed_UsesCapturedEntropyAndCommittedSet() public {
         uint256 contentId = _submitContent();
 
         (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, true, 8_000, 10e6);
@@ -712,8 +712,8 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         engine.revealVoteByCommitKey(contentId, roundId, ck2, false, 5_000, s2);
         engine.revealVoteByCommitKey(contentId, roundId, ck3, true, 6_500, s3);
 
-        bytes32 settlementPrevrandao = keccak256("settlement-prevrandao");
-        vm.prevrandao(settlementPrevrandao);
+        bytes32 settlementEntropy = engine.roundRbtsSeedEntropy(contentId, roundId);
+        assertNotEq(settlementEntropy, bytes32(0), "threshold reveal captures RBTS entropy");
         vm.recordLogs();
         engine.settleRound(contentId, roundId);
 
@@ -723,7 +723,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         revealedSetHash = keccak256(abi.encodePacked(revealedSetHash, ck3));
         bytes32 expectedSeed = keccak256(
             abi.encode(
-                block.chainid, address(engine), contentId, roundId, uint256(3), revealedSetHash, settlementPrevrandao
+                block.chainid, address(engine), contentId, roundId, uint256(3), revealedSetHash, settlementEntropy
             )
         );
 
@@ -736,7 +736,62 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
                     && uint256(logs[i].topics[1]) == contentId && uint256(logs[i].topics[2]) == roundId
             ) {
                 (bytes32 scoreSeed,,,,) = abi.decode(logs[i].data, (bytes32, uint256, uint256, uint256, uint256));
-                assertEq(scoreSeed, expectedSeed, "score seed must use settlement entropy");
+                assertEq(scoreSeed, expectedSeed, "score seed must use captured entropy");
+                found = true;
+                break;
+            }
+        }
+        assertTrue(found, "RbtsRewardsScored event not emitted");
+    }
+
+    function test_RbtsScoringSeed_IgnoresSettlementPrevrandao() public {
+        uint256 contentId = _submitContent();
+
+        (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, true, 8_000, 10e6);
+        (bytes32 ck2, bytes32 s2) = _commitPrediction(voter2, contentId, false, 5_000, 3e6);
+        (bytes32 ck3, bytes32 s3) = _commitPrediction(voter3, contentId, true, 6_500, 3e6);
+
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        RoundLib.Round memory r0 = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        _warpPastTlockRevealTime(uint256(r0.startTime) + EPOCH);
+
+        engine.revealVoteByCommitKey(contentId, roundId, ck1, true, 8_000, s1);
+        engine.revealVoteByCommitKey(contentId, roundId, ck2, false, 5_000, s2);
+        engine.revealVoteByCommitKey(contentId, roundId, ck3, true, 6_500, s3);
+
+        bytes32 capturedEntropy = engine.roundRbtsSeedEntropy(contentId, roundId);
+        assertNotEq(capturedEntropy, bytes32(0), "threshold reveal captures RBTS entropy");
+
+        bytes32 settlementPrevrandao = keccak256("settlement-prevrandao");
+        vm.prevrandao(settlementPrevrandao);
+        vm.recordLogs();
+        engine.settleRound(contentId, roundId);
+
+        bytes32 revealedSetHash;
+        revealedSetHash = keccak256(abi.encodePacked(revealedSetHash, ck1));
+        revealedSetHash = keccak256(abi.encodePacked(revealedSetHash, ck2));
+        revealedSetHash = keccak256(abi.encodePacked(revealedSetHash, ck3));
+        bytes32 expectedSeed = keccak256(
+            abi.encode(block.chainid, address(engine), contentId, roundId, uint256(3), revealedSetHash, capturedEntropy)
+        );
+        bytes32 settlementSeed = keccak256(
+            abi.encode(
+                block.chainid, address(engine), contentId, roundId, uint256(3), revealedSetHash, settlementPrevrandao
+            )
+        );
+        assertNotEq(expectedSeed, settlementSeed, "test setup needs distinct settlement entropy");
+        assertEq(engine.roundRbtsSeedEntropy(contentId, roundId), capturedEntropy, "settlement keeps captured seed");
+
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        bytes32 expectedTopic = keccak256("RbtsRewardsScored(uint256,uint256,bytes32,uint256,uint256,uint256,uint256)");
+        bool found;
+        for (uint256 i = 0; i < logs.length; i++) {
+            if (
+                logs[i].emitter == address(engine) && logs[i].topics.length == 3 && logs[i].topics[0] == expectedTopic
+                    && uint256(logs[i].topics[1]) == contentId && uint256(logs[i].topics[2]) == roundId
+            ) {
+                (bytes32 scoreSeed,,,,) = abi.decode(logs[i].data, (bytes32, uint256, uint256, uint256, uint256));
+                assertEq(scoreSeed, expectedSeed, "score seed must ignore settlement prevrandao");
                 found = true;
                 break;
             }

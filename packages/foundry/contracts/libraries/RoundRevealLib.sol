@@ -151,7 +151,7 @@ library RoundRevealLib {
         bool upWins;
         uint16 minParticipants;
         uint16 scoreScaleBps;
-        bytes32 settlementPrevrandao;
+        bytes32 settlementEntropy;
     }
 
     function scoreRbtsRewards(
@@ -204,10 +204,10 @@ library RoundRevealLib {
 
         RbtsRoundTotals memory totals;
 
-        // Seed combines settlement-block prevrandao with M-Vote-2 (committed-set binding):
+        // Seed combines post-threshold entropy with M-Vote-2 (committed-set binding):
         // fixed after the commit set closes and invariant under selective reveal.
         result.scoreSeed = _rbtsScoreSeed(
-            params.contentId, params.roundId, committedCount, committedSetHash, params.settlementPrevrandao
+            params.contentId, params.roundId, committedCount, committedSetHash, params.settlementEntropy
         );
         for (uint256 r = 0; r < params.revealedCount;) {
             bytes32 commitKey = revealedKeysMem[r];
@@ -364,20 +364,21 @@ library RoundRevealLib {
     ///      - `contentId` / `roundId` (per-round uniqueness),
     ///      - `committedCount` and `committedSetHash` (M-Vote-2: the FULL committed set in
     ///        commit order, not the revealed subset; selective reveal cannot move the seed),
-    ///      - `settlementPrevrandao`, sampled after the commit set has closed so the last
-    ///        committer cannot overwrite the entropy while choosing their own commit key.
-    ///      Together the settlement entropy + M-Vote-2 make the seed fixed after commits close
+    ///      - `settlementEntropy`, captured when reveal quorum first closes the commit set so
+    ///        neither the last committer nor the settlement caller can overwrite the entropy while
+    ///        choosing whether to proceed.
+    ///      Together the post-threshold entropy + M-Vote-2 make the seed fixed after commits close
     ///      and invariant under any honest or adversarial reveal pattern.
     function _rbtsScoreSeed(
         uint256 contentId,
         uint256 roundId,
         uint256 committedCount,
         bytes32 committedSetHash,
-        bytes32 settlementPrevrandao
+        bytes32 settlementEntropy
     ) private view returns (bytes32 scoreSeed) {
         scoreSeed = keccak256(
             abi.encode(
-                block.chainid, address(this), contentId, roundId, committedCount, committedSetHash, settlementPrevrandao
+                block.chainid, address(this), contentId, roundId, committedCount, committedSetHash, settlementEntropy
             )
         );
     }
