@@ -1,4 +1,4 @@
-import { __setUrlSafetyDnsResolversForTests, isSafeUrl } from "./urlSafety";
+import { __setUrlSafetyDnsResolversForTests, isSafeUrl, resolvePublicUrlAddress } from "./urlSafety";
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 
@@ -39,4 +39,8 @@ test("isSafeUrl accepts public HTTPS hostnames with public DNS answers", async (
   });
 
   assert.equal(await isSafeUrl("https://example.com/callback"), true);
+  const resolved = await resolvePublicUrlAddress("https://example.com/callback");
+  assert.equal(resolved?.address, "93.184.216.34");
+  assert.equal(resolved?.family, 4);
+  assert.equal(resolved?.url.toString(), "https://example.com/callback");
 });

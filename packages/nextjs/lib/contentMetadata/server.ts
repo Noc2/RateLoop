@@ -1,9 +1,15 @@
 import type { ContentMetadataResult } from "./types";
 import { isUploadedImageUrl } from "~~/lib/contentMedia";
 import { getThumbnailUrl } from "~~/utils/platforms";
+import { fetchPublicHttpsUrl } from "~~/utils/safeFetch";
 
 const MAX_METADATA_BYTES = 256_000;
 const METADATA_TIMEOUT_MS = 3_500;
+let metadataFetch: typeof fetchPublicHttpsUrl = fetchPublicHttpsUrl;
+
+export function __setContentMetadataFetchForTests(fetchImpl: typeof fetchPublicHttpsUrl | null) {
+  metadataFetch = fetchImpl ?? fetchPublicHttpsUrl;
+}
 
 function isHttpsUrl(url: string): boolean {
   try {
@@ -69,13 +75,14 @@ async function readResponsePrefix(response: Response): Promise<string> {
 
 async function resolveGenericPageThumbnail(url: string): Promise<string | null> {
   try {
-    const response = await fetch(url, {
+    const response = await metadataFetch(url, {
       headers: {
         accept: "text/html,application/xhtml+xml",
         "user-agent": "CuryoBot/1.0 (+https://curyo.xyz)",
       },
+      maxResponseBytes: MAX_METADATA_BYTES,
       redirect: "manual",
-      signal: AbortSignal.timeout(METADATA_TIMEOUT_MS),
+      timeoutMs: METADATA_TIMEOUT_MS,
     });
     if (!response.ok) return null;
 

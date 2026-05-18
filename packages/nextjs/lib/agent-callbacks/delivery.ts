@@ -2,6 +2,7 @@ import { type AgentCallbackEventRecord, rowToCallbackEvent } from "./events";
 import { buildCallbackHeaders } from "./signing";
 import { assertSafeAgentCallbackUrl } from "./urlSafety";
 import { dbClient } from "~~/lib/db";
+import { type PublicHttpsFetchInit, fetchPublicHttpsUrl } from "~~/utils/safeFetch";
 
 const CALLBACK_DELIVERY_TIMEOUT_MS = 10_000;
 
@@ -24,13 +25,13 @@ export type FailAgentCallbackDeliveryInput = {
 
 export type DeliverLeasedCallbackEventInput = {
   event: AgentCallbackEventRecord;
-  fetchImpl?: typeof fetch;
+  fetchImpl?: (url: string, init?: PublicHttpsFetchInit) => Promise<Response>;
   now?: Date;
 };
 
 export type ProcessAgentCallbackDeliveriesInput = {
   baseDelayMs?: number;
-  fetchImpl?: typeof fetch;
+  fetchImpl?: (url: string, init?: PublicHttpsFetchInit) => Promise<Response>;
   leaseMs?: number;
   limit?: number;
   maxAttempts?: number;
@@ -188,13 +189,15 @@ export function buildCallbackDeliveryRequest(input: { event: AgentCallbackEventR
 export async function deliverLeasedAgentCallbackEvent(input: DeliverLeasedCallbackEventInput) {
   const request = buildCallbackDeliveryRequest({ event: input.event, now: input.now });
   const url = await assertSafeAgentCallbackUrl(request.url);
-  const fetchImpl = input.fetchImpl ?? fetch;
+  const fetchImpl = input.fetchImpl ?? fetchPublicHttpsUrl;
   const response = await fetchImpl(url, {
     body: request.body,
     headers: request.headers,
+    maxResponseBytes: 0,
     method: request.method,
     redirect: "manual",
     signal: AbortSignal.timeout(CALLBACK_DELIVERY_TIMEOUT_MS),
+    timeoutMs: CALLBACK_DELIVERY_TIMEOUT_MS,
   });
 
   return {

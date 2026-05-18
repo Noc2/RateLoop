@@ -1,12 +1,10 @@
-import { resolveContentMetadata } from "./server";
+import { __setContentMetadataFetchForTests, resolveContentMetadata } from "./server";
 import assert from "node:assert/strict";
 import { afterEach } from "node:test";
 import test from "node:test";
 
-const originalFetch = globalThis.fetch;
-
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  __setContentMetadataFetchForTests(null);
 });
 
 test("resolveContentMetadata returns uploaded image URLs without fetching metadata", async () => {
@@ -19,7 +17,7 @@ test("resolveContentMetadata returns uploaded image URLs without fetching metada
 
 test("resolveContentMetadata does not follow redirects when fetching page metadata", async () => {
   let observedRedirect: RequestRedirect | undefined;
-  globalThis.fetch = async (_input, init) => {
+  __setContentMetadataFetchForTests(async (_input, init) => {
     observedRedirect = init?.redirect;
     return new Response(null, {
       headers: {
@@ -28,10 +26,31 @@ test("resolveContentMetadata does not follow redirects when fetching page metada
       status: 302,
       statusText: "Found",
     });
-  };
+  });
 
   assert.deepEqual(await resolveContentMetadata("https://example.com/article"), {
     thumbnailUrl: null,
   });
   assert.equal(observedRedirect, "manual");
+});
+
+test("resolveContentMetadata uses the public HTTPS fetch guard for generic pages", async () => {
+  let observedUrl = "";
+  let observedMaxBytes: number | undefined;
+  __setContentMetadataFetchForTests(async (input, init) => {
+    observedUrl = input;
+    observedMaxBytes = init?.maxResponseBytes;
+    return new Response('<meta property="og:image" content="https://example.com/image.png">', {
+      headers: {
+        "content-type": "text/html",
+      },
+      status: 200,
+    });
+  });
+
+  assert.deepEqual(await resolveContentMetadata("https://example.com/article"), {
+    thumbnailUrl: "https://example.com/image.png",
+  });
+  assert.equal(observedUrl, "https://example.com/article");
+  assert.equal(observedMaxBytes, 256_000);
 });

@@ -5,6 +5,12 @@ export type UrlSafetyDnsResolvers = {
   resolve6(hostname: string): Promise<string[]>;
 };
 
+export type SafeUrlAddress = {
+  address: string;
+  family: 4 | 6;
+  url: URL;
+};
+
 const defaultDnsResolvers: UrlSafetyDnsResolvers = {
   resolve4: dnsResolve4,
   resolve6: dnsResolve6,
@@ -60,49 +66,59 @@ export function isPrivateIp(ip: string): boolean {
 }
 
 /**
- * Block URLs that could be used for SSRF (internal network probing).
+ * Resolve URLs that are allowed for public outbound fetches.
  * Rejects: non-HTTPS, IP-address hostnames, localhost, *.local, *.internal,
  * single-label hostnames (no dots), and hostnames that resolve to private IPs.
+ * Callers that fetch the URL should pin this resolved address for the outbound
+ * connection instead of resolving the hostname a second time.
  */
-export async function isSafeUrl(url: string): Promise<boolean> {
+export async function resolvePublicUrlAddress(url: string): Promise<SafeUrlAddress | null> {
   let parsed: URL;
   try {
     parsed = new URL(url);
   } catch {
-    return false;
+    return null;
   }
 
-  if (parsed.protocol !== "https:") return false;
+  if (parsed.protocol !== "https:") return null;
 
   const hostname = parsed.hostname.toLowerCase();
 
   // Reject localhost
-  if (hostname === "localhost") return false;
+  if (hostname === "localhost") return null;
 
   // Reject single-label hostnames (no dots — e.g. "internal-service")
-  if (!hostname.includes(".")) return false;
+  if (!hostname.includes(".")) return null;
 
   // Reject *.local and *.internal TLDs
-  if (hostname.endsWith(".local") || hostname.endsWith(".internal")) return false;
+  if (hostname.endsWith(".local") || hostname.endsWith(".internal")) return null;
 
   // Reject IPv4 addresses (e.g. 169.254.169.254)
-  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(hostname)) return false;
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(hostname)) return null;
 
   // Reject IPv6 addresses (bracketed in URLs, parsed hostname strips brackets)
-  if (hostname.startsWith("[") || hostname.includes(":")) return false;
+  if (hostname.startsWith("[") || hostname.includes(":")) return null;
 
-  // DNS rebinding protection: resolve hostname and reject private/reserved IPs.
-  // Note: TOCTOU race exists (fetch may resolve differently), but this raises
-  // the bar significantly against DNS rebinding attacks.
   try {
     const ipv4 = await dnsResolvers.resolve4(hostname).catch(() => [] as string[]);
     const ipv6 = await dnsResolvers.resolve6(hostname).catch(() => [] as string[]);
     const allIps = [...ipv4, ...ipv6];
-    if (allIps.length === 0) return false;
-    if (allIps.some(isPrivateIp)) return false;
+    if (allIps.length === 0) return null;
+    if (allIps.some(isPrivateIp)) return null;
+
+    if (ipv4.length > 0) {
+      return { address: ipv4[0], family: 4, url: parsed };
+    }
+    if (ipv6.length > 0) {
+      return { address: ipv6[0], family: 6, url: parsed };
+    }
   } catch {
-    return false;
+    return null;
   }
 
-  return true;
+  return null;
+}
+
+export async function isSafeUrl(url: string): Promise<boolean> {
+  return Boolean(await resolvePublicUrlAddress(url));
 }
