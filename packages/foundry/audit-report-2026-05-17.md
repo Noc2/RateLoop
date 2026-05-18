@@ -1,5 +1,9 @@
 # Curyo / RateLoop Smart Contract Security Audit — 2026-05-17
 
+> Status note, 2026-05-18: this is a point-in-time engineering audit artifact. The Medium findings
+> called out below have follow-up remediation code and tests in later commits; check the current
+> contracts and test suite before treating any finding here as still open.
+
 **Scope:** ~17.5k LOC of Solidity across `packages/foundry/contracts/`, focused on the delta since the May 16 audit (`982369d..HEAD` on `main`) — HREP→LREP rename, struct-packing refactors, SafeCast adoption, storage-placeholder removals, and the security-fix branch that closed all May 16 Mediums/Lows.
 **Method:** 4 parallel domain-focused review agents (funds-flow, voting/game-theory/MEV, identity/governance/upgrade, oracle/integrations/exploit-chains) plus a research agent surveying 2025-2026 exploit patterns relevant to commit-reveal voting / optimistic merkle oracles / EIP-3009 / UUPS proxies / L2 sequencer MEV.
 **Baseline:** prior audits at `audit-report-2026-05-04.md` (0 H/C/M/L) and `audit-report-2026-05-16.md` (0 H/C, 8 M, 12 L, 16 I — all addressed in `security-fixes-from-audit-2026-05-16`). Findings already covered there are excluded except where the corresponding fix is broken or incomplete.

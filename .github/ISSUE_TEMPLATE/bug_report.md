@@ -6,6 +6,9 @@ labels: bug
 assignees: ""
 ---
 
+> **Security issue?** Do not include vulnerability details in a public issue. Email
+> hawigxyz@proton.me instead.
+
 **Describe the bug**
 A clear and concise description of what the bug is.
 
