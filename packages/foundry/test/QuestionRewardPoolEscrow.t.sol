@@ -1935,15 +1935,18 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         uint256 roundId = _settleRoundWith(voters, contentId, directions);
 
         assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter1), 0);
-        assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, delegate1), 0);
+        assertGt(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, delegate1), 0);
 
         vm.prank(voter1);
         vm.expectRevert("Excluded voter");
         rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
 
+        uint256 holderBalanceBefore = usdc.balanceOf(voter3);
+        uint256 delegateBalanceBefore = usdc.balanceOf(delegate1);
         vm.prank(delegate1);
-        vm.expectRevert("Excluded voter");
-        rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
+        uint256 delegatedReward = rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
+        assertEq(usdc.balanceOf(voter3), holderBalanceBefore + delegatedReward);
+        assertEq(usdc.balanceOf(delegate1), delegateBalanceBefore);
 
         _claimQuestionRewardAndAssert(voter2, rewardPoolId, roundId);
     }

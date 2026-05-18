@@ -2771,9 +2771,10 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         vm.stopPrank();
     }
 
-    function test_Commit_RoundNotOpen_ExpiredRound_Reverts() public {
+    function test_Commit_AfterExpiredRound_StartsNewRound() public {
         uint256 contentId = _submitContent();
         _commit(voter1, contentId, true, STAKE);
+        uint256 expiredRoundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
 
         // Warp past 7-day max duration
         vm.warp(block.timestamp + 8 days);
@@ -2787,7 +2788,6 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         uint256 cachedRoundContext14 =
             _roundContext(engine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());
         vm.prank(voter2);
-        vm.expectRevert(RoundVotingEngine.RoundNotOpen.selector);
         engine.commitVote(
             contentId,
             cachedRoundContext14,
@@ -2798,6 +2798,12 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
             STAKE,
             address(0)
         );
+
+        RoundLib.Round memory cancelledRound = RoundEngineReadHelpers.round(engine, contentId, expiredRoundId);
+        uint256 newRoundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        assertEq(uint256(cancelledRound.state), uint256(RoundLib.RoundState.Cancelled));
+        assertEq(newRoundId, expiredRoundId + 1);
+        assertEq(engine.voterCommitHash(contentId, newRoundId, voter2), commitHash);
     }
 
     function test_Commit_EmptyCiphertext_Reverts() public {
