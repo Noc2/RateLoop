@@ -127,6 +127,39 @@ contract RoundVotingEngineDormancyTest is VotingTestBase {
         assertEq(uint256(openRound.state), uint256(RoundLib.RoundState.Open));
     }
 
+    function test_CommitAfterExpiredBelowQuorum_RevertsOnceDormancyElapsed() public {
+        uint256 contentId = _submitContent();
+
+        _commit(voter1, contentId, true);
+        _commit(voter2, contentId, false);
+
+        bytes32 salt = keccak256(abi.encodePacked(voter3, block.timestamp, contentId));
+        bytes memory ciphertext = _testCiphertext(true, salt, contentId);
+        bytes32 commitHash = _commitHash(true, salt, contentId, ciphertext);
+
+        vm.warp(T0 + 31 days);
+        vm.startPrank(voter3);
+        lrepToken.approve(address(engine), STAKE);
+        uint256 cachedRoundContext = _roundContext(engine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());
+        vm.expectRevert(RoundVotingEngine.DormancyWindowElapsed.selector);
+        engine.commitVote(
+            contentId,
+            cachedRoundContext,
+            _tlockCommitTargetRound(),
+            _tlockDrandChainHash(),
+            commitHash,
+            ciphertext,
+            STAKE,
+            address(0)
+        );
+        vm.stopPrank();
+
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        assertEq(roundId, 1, "dormancy should block opening a fresh round");
+        RoundLib.Round memory openRound = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        assertEq(uint256(openRound.state), uint256(RoundLib.RoundState.Open));
+    }
+
     function _submitContent() internal returns (uint256 contentId) {
         vm.startPrank(submitter);
         lrepToken.approve(address(registry), 10e6);

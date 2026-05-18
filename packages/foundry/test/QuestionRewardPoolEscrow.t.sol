@@ -1414,10 +1414,52 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         _settleRoundWith(voters, contentIds[0], directions);
         _settleRoundWith(voters, contentIds[1], directions);
 
-        assertEq(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, delegate1), 0);
+        assertGt(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, delegate1), 0);
+        uint256 holderBalanceBefore = usdc.balanceOf(voter3);
+        uint256 delegateBalanceBefore = usdc.balanceOf(delegate1);
         vm.prank(delegate1);
+        uint256 reward = rewardPoolEscrow.claimQuestionBundleReward(bundleId, 0);
+        assertEq(usdc.balanceOf(voter3), holderBalanceBefore + reward);
+        assertEq(usdc.balanceOf(delegate1), delegateBalanceBefore);
+    }
+
+    function testBundleDelegatedFunderStaysExcludedAfterDelegateRotationAndRaterIdentityMigration() public {
+        address newDelegate = address(0xD1E);
+        address voter5 = address(0x55);
+        raterIdentityRegistry.setHolder(voter5);
+        vm.prank(owner);
+        lrepToken.mint(voter5, 10_000e6);
+        vm.prank(owner);
+        lrepToken.mint(newDelegate, 10_000e6);
+
+        uint256[] memory contentIds = _submitBundleQuestions();
+        vm.prank(voter1);
+        raterIdentityRegistry.setDelegate(delegate1);
+        uint256 bundleId = _createSubmissionBundle(contentIds, delegate1, REWARD_ASSET_USDC, REWARD_POOL_AMOUNT, 3);
+        vm.prank(voter1);
+        raterIdentityRegistry.removeDelegate();
+
+        MockRaterIdentityRegistry migratedRaterIdentityRegistry = _migrateRaterIdentitiesWithDifferentIds();
+        vm.prank(voter1);
+        migratedRaterIdentityRegistry.setDelegate(newDelegate);
+
+        address[] memory voters = new address[](4);
+        voters[0] = newDelegate;
+        voters[1] = voter2;
+        voters[2] = voter4;
+        voters[3] = voter5;
+        bool[] memory directions = _directions(true, true, false, true);
+
+        _settleRoundWith(voters, contentIds[0], directions);
+        _settleRoundWith(voters, contentIds[1], directions);
+
+        assertEq(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, newDelegate), 0);
+        vm.prank(newDelegate);
         vm.expectRevert("Excluded voter");
         rewardPoolEscrow.claimQuestionBundleReward(bundleId, 0);
+
+        vm.prank(voter2);
+        assertGt(rewardPoolEscrow.claimQuestionBundleReward(bundleId, 0), 0);
     }
 
     function testBundleSubmitterNullifierStaysExcludedAfterRemintToDifferentAddress() public {

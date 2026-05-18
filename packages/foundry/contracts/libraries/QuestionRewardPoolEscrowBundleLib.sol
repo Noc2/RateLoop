@@ -189,20 +189,21 @@ library QuestionRewardPoolEscrowBundleLib {
         uint256 roundSetIndex,
         address account
     ) external view returns (bool) {
-        if (account == bundle.funder || account == bundle.funderIdentity) {
-            return true;
-        }
         BundleQuestion[] storage questions = bundleQuestions[bundleId];
         for (uint256 i = 0; i < questions.length;) {
             BundleQuestion storage question = questions[i];
             uint256 roundId = bundleRoundIds[bundleId][i][roundSetIndex];
-            address submitterIdentity = registry.getSubmitterIdentity(question.contentId);
-            bytes32 identityKey = QuestionRewardPoolEscrowVoterLib.identityKeyForRoundRater(
+            (bytes32 identityKey,, address rewardRecipient) = QuestionRewardPoolEscrowVoterLib.resolveRoundRewardClaim(
                 votingEngine, protocolConfig, question.contentId, roundId, account
             );
+            address claimant = rewardRecipient == address(0) ? account : rewardRecipient;
+            if (claimant == bundle.funder || claimant == bundle.funderIdentity) {
+                return true;
+            }
+            address submitterIdentity = registry.getSubmitterIdentity(question.contentId);
             if (QuestionRewardPoolEscrowQualificationLib.isExcludedRater(
                     identityKey,
-                    account,
+                    claimant,
                     bundle.funder,
                     bundle.funderIdentity,
                     bundle.funderIdentityKey,
