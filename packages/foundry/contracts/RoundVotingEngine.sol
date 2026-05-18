@@ -723,11 +723,13 @@ contract RoundVotingEngine is
         // If there's an active round, use it
         if (roundId > 0) {
             RoundLib.Round storage existingRound = rounds[contentId][roundId];
-            if (
-                existingRound.state == RoundLib.RoundState.Open
-                    && _canFinalizeRevealFailedRound(contentId, roundId, existingRound)
-            ) {
-                _markRoundRevealFailed(contentId, roundId, existingRound);
+            if (existingRound.state == RoundLib.RoundState.Open) {
+                RoundLib.RoundConfig memory activeRoundCfg = _getRoundConfig(contentId, roundId);
+                if (_canCancelExpiredRound(contentId, roundId, existingRound, activeRoundCfg)) {
+                    _markRoundCancelled(contentId, roundId, existingRound);
+                } else if (_canFinalizeRevealFailedRound(contentId, roundId, existingRound)) {
+                    _markRoundRevealFailed(contentId, roundId, existingRound);
+                }
             }
             if (!RoundLib.isTerminal(existingRound)) {
                 return roundId;
@@ -767,6 +769,12 @@ contract RoundVotingEngine is
         roundUnrevealedCleanupRemaining[contentId][roundId] = round.voteCount - round.revealedCount;
         _notifyBundleRoundTerminal(contentId, roundId, false);
         emit RoundRevealFailed(contentId, roundId);
+    }
+
+    function _markRoundCancelled(uint256 contentId, uint256 roundId, RoundLib.Round storage round) internal {
+        round.state = RoundLib.RoundState.Cancelled;
+        _notifyBundleRoundTerminal(contentId, roundId, false);
+        emit RoundCancelled(contentId, roundId);
     }
 
     function _notifyBundleRoundTerminal(uint256 contentId, uint256 roundId, bool settled) internal {
@@ -835,15 +843,11 @@ contract RoundVotingEngine is
         if (!RoundLib.isExpired(round, roundCfg.maxDuration)) revert RoundNotExpired();
         // Cancel-lockout requires BOTH commit quorum AND at least one HRC-verified commit. All-sybil
         // rounds (no HRC participation) stay refund-cancellable so they cannot be used to grief.
-        if (round.voteCount >= _rbtsRevealQuorum(roundCfg.minVoters) && roundHasHumanVerifiedCommit[contentId][roundId])
-        {
+        if (!_canCancelExpiredRound(contentId, roundId, round, roundCfg)) {
             revert ThresholdReached();
         }
 
-        round.state = RoundLib.RoundState.Cancelled;
-
-        _notifyBundleRoundTerminal(contentId, roundId, false);
-        emit RoundCancelled(contentId, roundId);
+        _markRoundCancelled(contentId, roundId, round);
     }
 
     /// @notice Finalize a round whose reveal quorum never materialized after commit quorum was already reached.
@@ -1180,7 +1184,11 @@ contract RoundVotingEngine is
         uint256 openRoundId = currentRoundId[contentId];
         if (openRoundId != 0) {
             RoundLib.Round storage round = rounds[contentId][openRoundId];
-            if (!RoundLib.isTerminal(round) && !_canFinalizeRevealFailedRound(contentId, openRoundId, round)) {
+            RoundLib.RoundConfig memory roundCfg = _getRoundConfig(contentId, openRoundId);
+            if (
+                !RoundLib.isTerminal(round) && !_canCancelExpiredRound(contentId, openRoundId, round, roundCfg)
+                    && !_canFinalizeRevealFailedRound(contentId, openRoundId, round)
+            ) {
                 return openRoundId;
             }
         }
@@ -1261,6 +1269,17 @@ contract RoundVotingEngine is
             roundId,
             MIN_RBTS_PARTICIPANTS
         );
+    }
+
+    function _canCancelExpiredRound(
+        uint256 contentId,
+        uint256 roundId,
+        RoundLib.Round storage round,
+        RoundLib.RoundConfig memory roundCfg
+    ) internal view returns (bool) {
+        if (!RoundLib.isExpired(round, roundCfg.maxDuration)) return false;
+        return
+            round.voteCount < _rbtsRevealQuorum(roundCfg.minVoters) || !roundHasHumanVerifiedCommit[contentId][roundId];
     }
 
     function _isSettlementRevealGraceElapsed(uint256 contentId, uint256 roundId, RoundLib.Round storage round)

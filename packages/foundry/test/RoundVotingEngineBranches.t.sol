@@ -984,6 +984,24 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertEq(uint256(round.state), uint256(RoundLib.RoundState.Cancelled));
     }
 
+    function test_CommitAfterExpiredBelowQuorum_StartsNewRound() public {
+        uint256 contentId = _submitContent();
+        _commit(voter1, contentId, true, STAKE);
+        _commit(voter2, contentId, false, STAKE);
+
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        vm.warp(uint256(round.startTime) + 7 days + 1);
+
+        _commit(voter3, contentId, true, STAKE);
+
+        RoundLib.Round memory cancelledRound = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        uint256 newRoundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        assertEq(uint256(cancelledRound.state), uint256(RoundLib.RoundState.Cancelled));
+        assertEq(newRoundId, roundId + 1, "new commits roll into a fresh round after below-quorum expiry");
+        assertTrue(engine.voterCommitHash(contentId, newRoundId, voter3) != bytes32(0));
+    }
+
     function test_CancelExpired_RevertsBeforeExpiry() public {
         uint256 contentId = _submitContent();
         _commit(voter1, contentId, true, STAKE);
