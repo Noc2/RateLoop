@@ -37,7 +37,10 @@ export function deriveAcceptedTlockTargetRound(params: {
   const drandPeriodSeconds = BigInt(params.drandPeriodSeconds);
   const roundStartTimeSeconds =
     params.roundStartTimeSeconds != null ? BigInt(Math.floor(params.roundStartTimeSeconds)) : null;
-  const candidateTimestampOffsetsSeconds = params.candidateTimestampOffsetsSeconds ?? [0, 1];
+  const candidateTimestampOffsetsSeconds =
+    params.candidateTimestampOffsetsSeconds && params.candidateTimestampOffsetsSeconds.length > 0
+      ? params.candidateTimestampOffsetsSeconds
+      : buildDefaultCandidateTimestampOffsetsSeconds(params.drandPeriodSeconds);
 
   if (drandPeriodSeconds <= 0n) {
     throw new Error("drandPeriodSeconds must be greater than zero");
@@ -88,6 +91,11 @@ export function deriveAcceptedTlockTargetRound(params: {
   }
 
   return minAcceptedTargetRound;
+}
+
+function buildDefaultCandidateTimestampOffsetsSeconds(drandPeriodSeconds: bigint | number): number[] {
+  const safePeriodSeconds = Math.max(1, Math.floor(Number(drandPeriodSeconds)));
+  return Array.from({ length: safePeriodSeconds }, (_, index) => index);
 }
 
 function deriveCommitRevealableAfterSeconds(params: {
