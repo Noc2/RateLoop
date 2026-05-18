@@ -761,15 +761,22 @@ contract RoundIntegrationTest is VotingTestBase {
         rewardDistributor.claimReward(contentId, roundId);
         assertGe(lrepToken.balanceOf(voter3) - loser3Before, individualRebate3);
 
-        uint256 loser4Before = lrepToken.balanceOf(voter4);
-        vm.prank(voter4);
-        rewardDistributor.claimReward(contentId, roundId);
-        assertGe(lrepToken.balanceOf(voter4) - loser4Before, aggregateRebate - (individualRebate2 + individualRebate3));
-
         if (!rewardDistributor.rewardClaimed(contentId, roundId, voter1)) {
             vm.prank(voter1);
             rewardDistributor.claimReward(contentId, roundId);
         }
+
+        uint256 claimedBeforeFinalLoser = rewardDistributor.roundLoserRebateClaimedAmount(contentId, roundId);
+        assertEq(
+            rewardDistributor.roundLoserRebateClaimedCount(contentId, roundId) + 1,
+            votingEngine.roundRbtsForfeitClaimants(contentId, roundId),
+            "voter4 should be the final forfeit claimant"
+        );
+
+        uint256 loser4Before = lrepToken.balanceOf(voter4);
+        vm.prank(voter4);
+        rewardDistributor.claimReward(contentId, roundId);
+        assertEq(lrepToken.balanceOf(voter4) - loser4Before, aggregateRebate - claimedBeforeFinalLoser);
 
         assertEq(
             rewardDistributor.roundLoserRebateClaimedCount(contentId, roundId),
