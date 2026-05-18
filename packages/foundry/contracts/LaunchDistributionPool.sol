@@ -347,7 +347,11 @@ contract LaunchDistributionPool is
 
         earnedRewardCreditRecorded[contentId][roundId][commitKey] = true;
         raterRoundCreditRecorded[rater][contentId][roundId] = true;
-        if (!raterVerified && !clusterProofRequired) {
+        // M-Funds-2: increment at record time regardless of clusterProofRequired so the cap
+        // gates storage growth uniformly. Previously the increment fired only when there was
+        // no cluster oracle, letting unbounded pending entries accumulate when a cluster oracle
+        // is configured (the mainnet shape).
+        if (!raterVerified) {
             roundUnverifiedLaunchCreditCount[contentId][roundId] += 1;
         }
         _recordAnchorRound(rater, contentId, roundId);
@@ -392,7 +396,8 @@ contract LaunchDistributionPool is
 
         earnedRewardCreditRecorded[contentId][roundId][advisoryCommitKey] = true;
         raterRoundCreditRecorded[rater][contentId][roundId] = true;
-        if (!raterVerified && !clusterProofRequired) {
+        // M-Funds-2: see recordEarnedRaterReward — increment unconditionally on !raterVerified.
+        if (!raterVerified) {
             roundUnverifiedLaunchCreditCount[contentId][roundId] += 1;
         }
         _recordAnchorRound(rater, contentId, roundId);
@@ -431,12 +436,9 @@ contract LaunchDistributionPool is
         }
         if (!oracle.verifyPayoutWeight(payoutWeight, proof)) revert InvalidProof();
 
-        if (!_hasActiveHumanCredential(pending.rater)) {
-            if (roundUnverifiedLaunchCreditCount[contentId][roundId] >= pending.policy.maxUnverifiedCreditsPerRound) {
-                revert InvalidAmount();
-            }
-            roundUnverifiedLaunchCreditCount[contentId][roundId] += 1;
-        }
+        // M-Funds-2: the cap is enforced at record time now, so no re-check or increment here.
+        // A rater who was unverified at record (and thus consumed a cap slot) keeps that slot
+        // regardless of verification flips between record and finalize.
         earnedRewardCreditFinalized[contentId][roundId][commitKey] = true;
         uint256 effectiveCreditBps = payoutWeight.effectiveWeight;
         paidAmount = _recordEarnedRaterReward(
