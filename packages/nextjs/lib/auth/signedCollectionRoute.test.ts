@@ -48,6 +48,10 @@ test("successful collection writes also issue read access for reloads", async ()
 
   assert.ok(readCookie?.value, "read session cookie should be set after a successful write");
   assert.ok(writeCookie?.value, "write session cookie should still be set for signed writes");
+  for (const scope of signedReadSessions.SIGNED_READ_SESSION_SCOPES) {
+    if (scope === "watchlist") continue;
+    assert.equal(response.cookies.get(signedReadSessions.SIGNED_READ_SESSION_COOKIE_NAMES[scope]), undefined);
+  }
   assert.equal(await signedReadSessions.verifySignedReadSession(readCookie.value, WALLET, "watchlist"), true);
   assert.equal(await signedWriteSessions.verifySignedWriteSession(writeCookie.value, WALLET, "watchlist"), true);
 });
@@ -64,5 +68,9 @@ test("existing write sessions still refresh read access", async () => {
 
   assert.ok(readCookie?.value, "read session cookie should be refreshed after a session write");
   assert.equal(writeCookie, undefined);
+  for (const scope of signedReadSessions.SIGNED_READ_SESSION_SCOPES) {
+    if (scope === "watchlist") continue;
+    assert.equal(response.cookies.get(signedReadSessions.SIGNED_READ_SESSION_COOKIE_NAMES[scope]), undefined);
+  }
   assert.equal(await signedReadSessions.verifySignedReadSession(readCookie.value, WALLET, "watchlist"), true);
 });

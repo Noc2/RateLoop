@@ -6,7 +6,7 @@ import {
 } from "~~/lib/auth/contentFeedbackChallenge";
 import {
   CONTENT_FEEDBACK_SIGNED_READ_SESSION_COOKIE_NAME,
-  setAllSignedReadSessionCookies,
+  setSignedReadSessionCookie,
   verifySignedReadSession,
 } from "~~/lib/auth/signedReadSessions";
 import { verifySignedActionChallenge } from "~~/lib/auth/signedRouteHelpers";
@@ -171,7 +171,7 @@ export async function POST(request: NextRequest) {
     const item = await addContentFeedback(preparedPayload, context);
     const response = NextResponse.json({ ok: true, item });
 
-    return setAllSignedReadSessionCookies(response, payload.normalizedAddress);
+    return setSignedReadSessionCookie(response, payload.normalizedAddress, "content_feedback");
   } catch (error) {
     if (error instanceof ContentFeedbackStorageUnavailableError) {
       return NextResponse.json({ error: "Feedback storage is not ready yet" }, { status: 503 });

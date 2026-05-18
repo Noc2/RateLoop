@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { issueSignedActionChallenge } from "~~/lib/auth/signedActions";
 import {
   type SignedReadSessionScope,
-  setAllSignedReadSessionCookies,
+  setSignedReadSessionCookie,
   verifySignedReadSession,
 } from "~~/lib/auth/signedReadSessions";
 import { verifySignedActionChallenge } from "~~/lib/auth/signedRouteHelpers";
@@ -186,7 +186,7 @@ export async function maybeIssueSignedCollectionWriteSession(
     scope: SignedWriteSessionScope;
   },
 ) {
-  await setAllSignedReadSessionCookies(response, params.walletAddress);
+  await setSignedReadSessionCookie(response, params.walletAddress, params.scope);
 
   if (!params.hasWriteSession) {
     await setAllSignedWriteSessionCookies(response, params.walletAddress);

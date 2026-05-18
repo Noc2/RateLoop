@@ -38,11 +38,20 @@ export const issueSignedReadSession = signedReadSessionStore.issueSession;
 export const verifySignedReadSession = signedReadSessionStore.verifySession;
 export const getSignedReadSessionCookie = signedReadSessionStore.getSessionCookie;
 
+export async function setSignedReadSessionCookie(
+  response: NextResponse,
+  walletAddress: `0x${string}`,
+  scope: SignedReadSessionScope,
+) {
+  const session = await issueSignedReadSession(walletAddress, scope);
+  response.cookies.set(getSignedReadSessionCookie(scope, session));
+  return response;
+}
+
 export async function setAllSignedReadSessionCookies(response: NextResponse, walletAddress: `0x${string}`) {
   await Promise.all(
     SIGNED_READ_SESSION_SCOPES.map(async scope => {
-      const session = await issueSignedReadSession(walletAddress, scope);
-      response.cookies.set(getSignedReadSessionCookie(scope, session));
+      await setSignedReadSessionCookie(response, walletAddress, scope);
     }),
   );
 
