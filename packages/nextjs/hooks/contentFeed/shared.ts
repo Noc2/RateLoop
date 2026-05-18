@@ -127,6 +127,7 @@ export interface ContentItem {
 export type FeedSort =
   | "newest"
   | "oldest"
+  | "bounty_first"
   | "highest_rewards"
   | "highest_rated"
   | "lowest_rated"
@@ -146,6 +147,7 @@ export interface UseContentFeedOptions {
   submitter?: string;
   submitters?: string[];
   status?: "all" | ContentStatus;
+  voteable?: boolean;
 }
 
 function buildNormalizedAddressSet(addresses: readonly string[] | undefined, fallbackAddress?: string): Set<string> {
@@ -686,6 +688,17 @@ export function sortRpcFeed(feed: ContentItem[], sortBy: FeedSort, searchQuery?:
         return Number(b.id - a.id);
       });
       break;
+    case "bounty_first":
+      items.sort((a, b) => {
+        const aAmount = getRewardPoolAmount(a);
+        const bAmount = getRewardPoolAmount(b);
+        const aHasReward = aAmount > 0n;
+        const bHasReward = bAmount > 0n;
+        if (aHasReward !== bHasReward) return aHasReward ? -1 : 1;
+        if (aAmount !== bAmount) return aAmount > bAmount ? -1 : 1;
+        return Number(b.id - a.id);
+      });
+      break;
     case "newest":
       items.sort((a, b) => Number(b.id - a.id));
       break;
@@ -742,7 +755,7 @@ export function isContentSearchQueryTooShort(value: string | undefined): boolean
 }
 
 export function filterRpcFeed(feed: ContentItem[], options: UseContentFeedOptions): ContentItem[] {
-  const { categoryId, contentIds, searchQuery, submitter, submitters } = options;
+  const { categoryId, contentIds, searchQuery, submitter, submitters, voteable } = options;
   if (isContentSearchQueryTooShort(searchQuery)) {
     return [];
   }
@@ -752,6 +765,10 @@ export function filterRpcFeed(feed: ContentItem[], options: UseContentFeedOption
   const contentIdSet = contentIds ? new Set(contentIds.map(id => id.toString())) : null;
 
   return feed.filter(item => {
+    if (voteable && !isContentItemActive(item)) {
+      return false;
+    }
+
     if (categoryId !== undefined && item.categoryId !== categoryId) {
       return false;
     }

@@ -49,6 +49,7 @@ export function useContentFeed(voterAddress?: string, options: UseContentFeedOpt
   const statusParam = status === "all" ? "all" : String(status);
   const submitter = options.submitter?.trim();
   const submitters = options.submitters;
+  const voteable = options.voteable ?? false;
   const normalizedOwnSubmitterAddresses = useMemo(() => {
     const values = new Set<string>();
 
@@ -150,11 +151,12 @@ export function useContentFeed(voterAddress?: string, options: UseContentFeedOpt
         contentIds,
         submitters: normalizedSubmitterFilters,
         searchQuery,
+        voteable,
       }),
     );
 
     return status === "all" ? items : items.filter(item => item.status === status);
-  }, [categoryId, contentIds, normalizedSubmitterFilters, rpcFeed, searchQuery, status]);
+  }, [categoryId, contentIds, normalizedSubmitterFilters, rpcFeed, searchQuery, status, voteable]);
   const sortedRpcFeed = useMemo(
     () => sortRpcFeed(filteredRpcFeed, sortBy, searchQuery),
     [filteredRpcFeed, searchQuery, sortBy],
@@ -179,6 +181,7 @@ export function useContentFeed(voterAddress?: string, options: UseContentFeedOpt
       searchQuery ?? "",
       contentIdsParam ?? "",
       statusParam,
+      voteable ? "voteable" : "all",
     ],
     ponderFn: async () => {
       if (shortSearchQueryBlocked) {
@@ -197,6 +200,7 @@ export function useContentFeed(voterAddress?: string, options: UseContentFeedOpt
         status: statusParam,
         submitter: normalizedSubmitterFilters.length === 1 ? normalizedSubmitterFilters[0] : undefined,
         submitters: normalizedSubmitterFilters.length > 1 ? normalizedSubmitterFilters.join(",") : undefined,
+        voteable: voteable ? "1" : undefined,
       };
 
       if (limit !== undefined) {

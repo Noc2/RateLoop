@@ -27,6 +27,8 @@ function makeContentItem(overrides: Partial<ContentItem> & Pick<ContentItem, "id
     isValidUrl: overrides.isValidUrl ?? true,
     thumbnailUrl: overrides.thumbnailUrl ?? null,
     contentMetadata: overrides.contentMetadata,
+    rewardPoolSummary: overrides.rewardPoolSummary,
+    feedbackBonusSummary: overrides.feedbackBonusSummary,
   };
 }
 
@@ -143,6 +145,47 @@ test("anonymous cold start still surfaces active, voteable content", () => {
         downPool: 0n,
         startTime: 9800n,
         estimatedSettlementTime: 10_900n,
+      },
+    }),
+  ];
+
+  const ranked = rankForYouFeed(items, {
+    nowSeconds: 10_000,
+    profile,
+    votedContentIds: new Set(),
+    watchedContentIds: new Set(),
+    followedWallets: new Set(),
+  });
+
+  assert.equal(ranked[0]?.id, 2n);
+});
+
+test("for-you ranking gives bounty-backed content a priority lift", () => {
+  localStorage.clear();
+  setStoredSignals([]);
+
+  const profile = buildInterestProfile({ feed: [], votes: [] });
+  const items = [
+    makeContentItem({
+      id: 1n,
+      url: "https://example.com/unpaid",
+      title: "Fresh unpaid",
+      createdAt: "9900",
+      lastActivityAt: "9900",
+      totalVotes: 0,
+    }),
+    makeContentItem({
+      id: 2n,
+      url: "https://example.com/funded",
+      title: "Funded",
+      createdAt: "9800",
+      lastActivityAt: "9800",
+      totalVotes: 0,
+      rewardPoolSummary: {
+        totalFunded: 5_000_000n,
+        totalAvailable: 5_000_000n,
+        activeRewardPoolCount: 1,
+        hasActiveBounty: true,
       },
     }),
   ];

@@ -95,6 +95,28 @@ test("sortRpcFeed orders bounty-backed items by available bounties", () => {
   );
 });
 
+test("sortRpcFeed keeps unpaid content after bounty-backed items for bounty-first feeds", () => {
+  const feed = [
+    buildItem(1n, "New unpaid", "No bounty", ["markets"]),
+    {
+      ...buildItem(2n, "Funded", "A funded question", ["markets"]),
+      rewardPoolSummary: {
+        totalFunded: 12_000_000n,
+        totalAvailable: 5_000_000n,
+        activeRewardPoolCount: 1,
+      },
+    },
+    buildItem(3n, "Older unpaid", "No bounty", ["markets"]),
+  ];
+
+  const sorted = sortRpcFeed(feed, "bounty_first");
+
+  assert.deepEqual(
+    sorted.map(item => item.id),
+    [2n, 3n, 1n],
+  );
+});
+
 test("sortRpcFeed includes open feedback bonuses in reward sorting", () => {
   const feed = [
     {
@@ -133,6 +155,19 @@ test("filterModeratedContentItems removes content blocked by the frontend policy
 
   assert.deepEqual(
     filterModeratedContentItems(feed).map(item => item.id),
+    [1n],
+  );
+});
+
+test("filterRpcFeed excludes inactive content when voteable content is requested", () => {
+  const active = buildItem(1n, "Active", "Can vote", ["markets"]);
+  const dormant = {
+    ...buildItem(2n, "Dormant", "Cannot vote", ["markets"]),
+    status: CONTENT_STATUS.Dormant,
+  };
+
+  assert.deepEqual(
+    filterRpcFeed([active, dormant], { voteable: true }).map(item => item.id),
     [1n],
   );
 });

@@ -3,6 +3,7 @@
 import type { ContentItem } from "~~/hooks/useContentFeed";
 import type { InterestProfile } from "~~/hooks/useInterestProfile";
 import { DEFAULT_VOTING_CONFIG } from "~~/lib/contracts/roundVotingEngine";
+import { getVisibleFeedbackBonusAmount, getVisibleRewardPoolAmount } from "~~/lib/vote/discoverFeedFilter";
 import { detectPlatform } from "~~/utils/platforms";
 
 interface RankForYouFeedOptions {
@@ -142,6 +143,13 @@ function getVoteAffinity(item: ContentItem, profile: InterestProfile) {
   return clamp01(direct * 0.28 + platformScore * 0.24 + categoryScore * 0.22 + tagScore * 0.16 + submitterScore * 0.1);
 }
 
+function getBountyOpportunityScore(item: ContentItem, nowSeconds: number) {
+  const amount = getVisibleRewardPoolAmount(item, nowSeconds) + getVisibleFeedbackBonusAmount(item, nowSeconds);
+  if (amount <= 0n) return 0;
+  const cappedAmount = amount > 100_000_000n ? 100_000_000n : amount;
+  return getLogScore(Number(cappedAmount) / 1_000_000, 100);
+}
+
 function getVoteOpportunityScore(item: ContentItem, nowSeconds: number, hasVoted: boolean) {
   const freshOpportunity = getFreshOpportunity(item, nowSeconds);
   const nearSettlement = getNearSettlementOpportunity(item, nowSeconds);
@@ -190,6 +198,7 @@ function scoreForYouItem(item: ContentItem, options: RankForYouFeedOptions) {
   const voteAffinity = getVoteAffinity(item, profile);
   const votePropensity = clamp01(voteAffinity * 0.72 + interest * 0.28 + getWatchFollowBoost(item, options) * 0.25);
   const voteOpportunity = getVoteOpportunityScore(item, nowSeconds, hasVoted);
+  const bountyOpportunity = getBountyOpportunityScore(item, nowSeconds);
   const quality = getQualityScore(item);
   const coldStartBlend = getColdStartBlend(item, nowSeconds);
   const watchFollowBoost = getWatchFollowBoost(item, options);
@@ -198,10 +207,22 @@ function scoreForYouItem(item: ContentItem, options: RankForYouFeedOptions) {
   let score: number;
   switch (profile.stage) {
     case "voter":
-      score = votePropensity * 0.4 + voteOpportunity * 0.28 + interest * 0.14 + quality * 0.1 + coldStartBlend * 0.08;
+      score =
+        votePropensity * 0.4 +
+        voteOpportunity * 0.28 +
+        interest * 0.12 +
+        quality * 0.08 +
+        bountyOpportunity * 0.08 +
+        coldStartBlend * 0.04;
       break;
     case "connected":
-      score = interest * 0.3 + voteOpportunity * 0.28 + watchFollowBoost * 0.18 + quality * 0.14 + coldStartBlend * 0.1;
+      score =
+        interest * 0.3 +
+        voteOpportunity * 0.28 +
+        watchFollowBoost * 0.16 +
+        quality * 0.1 +
+        bountyOpportunity * 0.08 +
+        coldStartBlend * 0.08;
       break;
     case "anonymous":
     default:
@@ -209,12 +230,18 @@ function scoreForYouItem(item: ContentItem, options: RankForYouFeedOptions) {
         score =
           coldStartBlend * 0.34 +
           voteOpportunity * 0.26 +
-          quality * 0.18 +
-          getFreshOpportunity(item, nowSeconds) * 0.14 +
-          exploration * 0.08;
+          quality * 0.14 +
+          bountyOpportunity * 0.12 +
+          getFreshOpportunity(item, nowSeconds) * 0.08 +
+          exploration * 0.06;
       } else {
         score =
-          interest * 0.34 + coldStartBlend * 0.22 + voteOpportunity * 0.2 + quality * 0.14 + watchFollowBoost * 0.1;
+          interest * 0.34 +
+          coldStartBlend * 0.2 +
+          voteOpportunity * 0.2 +
+          quality * 0.1 +
+          bountyOpportunity * 0.08 +
+          watchFollowBoost * 0.08;
       }
       break;
   }

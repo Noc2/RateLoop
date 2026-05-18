@@ -393,11 +393,12 @@ const HomeInner = () => {
     () => (effectiveRequestedActiveId !== null ? [effectiveRequestedActiveId] : undefined),
     [effectiveRequestedActiveId],
   );
-  const contentFeedSortBy =
-    !isSearchMode && activeScope === "all" && activeFeedMode === "highest_rewards"
+  const contentFeedSortBy = isSearchMode
+    ? effectiveSearchSortBy
+    : activeScope === "all" && activeFeedMode === "highest_rewards"
       ? "highest_rewards"
-      : isSearchMode
-        ? effectiveSearchSortBy
+      : activeScope === "all"
+        ? "bounty_first"
         : "newest";
 
   const {
@@ -414,6 +415,7 @@ const HomeInner = () => {
     searchQuery: searchQuery.trim() || undefined,
     sortBy: contentFeedSortBy,
     submitters: activeScope === "my_submissions" ? ownSubmitterAddresses : undefined,
+    voteable: true,
   });
   const feed = useMemo(
     () =>
@@ -432,6 +434,7 @@ const HomeInner = () => {
     keepPrevious: false,
     limit: 1,
     ownSubmitterAddresses,
+    voteable: true,
   });
   const requestedContentFeed = useMemo(
     () =>
