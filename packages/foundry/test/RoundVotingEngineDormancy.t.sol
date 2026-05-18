@@ -178,7 +178,7 @@ contract RoundVotingEngineDormancyTest is VotingTestBase {
     function _commit(address voter, uint256 contentId, bool isUp) internal {
         bytes32 salt = keccak256(abi.encodePacked(voter, block.timestamp));
         bytes memory ciphertext = _testCiphertext(isUp, salt, contentId);
-        bytes32 commitHash = _commitHash(isUp, salt, contentId, ciphertext);
+        bytes32 commitHash = _commitHash(isUp, salt, voter, contentId, ciphertext);
         vm.startPrank(voter);
         lrepToken.approve(address(engine), STAKE);
         uint256 cachedRoundContext2 =

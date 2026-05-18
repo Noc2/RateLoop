@@ -125,12 +125,95 @@ function computeVoteEpochIndex(
   return committedAt - roundStartTime < BigInt(epochDuration) ? 0 : 1;
 }
 
+function computeVoteEpochEnd(
+  committedAt: bigint,
+  roundStartTime: bigint,
+  epochDurationSeconds: number,
+): bigint {
+  const epochDuration = Math.trunc(epochDurationSeconds);
+  if (!Number.isFinite(epochDuration) || epochDuration <= 0) {
+    return committedAt;
+  }
+
+  const epochDurationBigInt = BigInt(epochDuration);
+  if (committedAt < roundStartTime) {
+    return roundStartTime + epochDurationBigInt;
+  }
+
+  const epochIndex = (committedAt - roundStartTime) / epochDurationBigInt;
+  return roundStartTime + (epochIndex + 1n) * epochDurationBigInt;
+}
+
 function roundReferenceFields(referenceRatingBps: number) {
   return {
     referenceRatingBps,
     ratingBps: referenceRatingBps,
     conservativeRatingBps: referenceRatingBps,
   };
+}
+
+async function resolveRoundVoteabilityStateAtCommit(params: {
+  context: any;
+  contentId: bigint;
+  roundId: bigint;
+  targetRound: bigint;
+  epochEnd: bigint;
+}) {
+  const engineAddress = firstContractAddress(
+    params.context.contracts?.RoundVotingEngine?.address,
+  );
+  if (!params.context.client?.readContract || !engineAddress) {
+    return {
+      hasHumanVerifiedCommit: false,
+      lastCommitRevealableAfter: params.epochEnd,
+      revealGracePeriod: null as bigint | null,
+    };
+  }
+
+  try {
+    const [hasHumanVerifiedCommit, targetRoundRevealableAt, revealGracePeriod] =
+      await Promise.all([
+        params.context.client.readContract({
+          abi: RoundVotingEngineAbi,
+          address: engineAddress,
+          functionName: "roundHasHumanVerifiedCommit",
+          args: [params.contentId, params.roundId],
+        }),
+        params.context.client.readContract({
+          abi: RoundVotingEngineAbi,
+          address: engineAddress,
+          functionName: "targetRoundRevealableTimestamp",
+          args: [params.contentId, params.roundId, params.targetRound],
+        }),
+        params.context.client.readContract({
+          abi: RoundVotingEngineAbi,
+          address: engineAddress,
+          functionName: "roundRevealGracePeriodSnapshot",
+          args: [params.contentId, params.roundId],
+        }),
+      ]);
+    const revealableAt =
+      typeof targetRoundRevealableAt === "bigint"
+        ? targetRoundRevealableAt
+        : BigInt(String(targetRoundRevealableAt));
+    const grace =
+      typeof revealGracePeriod === "bigint"
+        ? revealGracePeriod
+        : BigInt(String(revealGracePeriod));
+
+    return {
+      hasHumanVerifiedCommit: Boolean(hasHumanVerifiedCommit),
+      lastCommitRevealableAfter:
+        revealableAt > params.epochEnd ? revealableAt : params.epochEnd,
+      revealGracePeriod: grace > 0n ? grace : null,
+    };
+  } catch {
+    return {
+      hasHumanVerifiedCommit: false,
+      lastCommitRevealableAfter: params.epochEnd,
+      revealGracePeriod: null as bigint | null,
+    };
+  }
 }
 
 function shadowPredictionBps(
@@ -426,13 +509,28 @@ ponder.on("RoundVotingEngine:VoteCommitted", async ({ event, context }) => {
 
   // Upsert round record — VoteCommitted is the first event for a new round
   const existingRound = await context.db.find(round, { id: roundKey });
+  const roundStartTime = existingRound?.startTime ?? event.block.timestamp;
+  const epochDuration =
+    existingRound?.epochDuration ?? DEFAULT_ROUND_CONFIG.epochDurationSeconds;
   const epochIndex = existingRound
     ? computeVoteEpochIndex(
         event.block.timestamp,
-        existingRound.startTime ?? event.block.timestamp,
-        existingRound.epochDuration,
+        roundStartTime,
+        epochDuration,
       )
     : 0;
+  const epochEnd = computeVoteEpochEnd(
+    event.block.timestamp,
+    roundStartTime,
+    epochDuration,
+  );
+  const roundVoteabilityState = await resolveRoundVoteabilityStateAtCommit({
+    context,
+    contentId,
+    roundId,
+    targetRound,
+    epochEnd,
+  });
 
   if (!existingRound) {
     await context.db.insert(round).values({
@@ -453,12 +551,24 @@ ponder.on("RoundVotingEngine:VoteCommitted", async ({ event, context }) => {
       settledRounds: 0,
       lowSince: 0n,
       startTime: event.block.timestamp,
+      ...roundVoteabilityState,
       ...defaultRoundConfigFields(),
     });
   } else {
     await context.db.update(round, { id: roundKey }).set((row) => ({
       voteCount: row.voteCount + 1,
       totalStake: row.totalStake + stake,
+      hasHumanVerifiedCommit:
+        row.hasHumanVerifiedCommit ||
+        roundVoteabilityState.hasHumanVerifiedCommit,
+      lastCommitRevealableAfter:
+        row.lastCommitRevealableAfter === null ||
+        roundVoteabilityState.lastCommitRevealableAfter >
+          row.lastCommitRevealableAfter
+          ? roundVoteabilityState.lastCommitRevealableAfter
+          : row.lastCommitRevealableAfter,
+      revealGracePeriod:
+        roundVoteabilityState.revealGracePeriod ?? row.revealGracePeriod,
       ...roundReferenceFields(referenceRatingBps),
     }));
   }

@@ -281,7 +281,22 @@ function getVoteableContentCondition() {
               ${round.startTime} is not null
               and ${round.maxDuration} > 0
               and ${nowSeconds} >= ${round.startTime} + ${round.maxDuration}
-              and ${round.voteCount} < ${round.minVoters}
+              and (
+                ${round.voteCount} < ${round.minVoters}
+                or ${round.hasHumanVerifiedCommit} = false
+                or (
+                  ${round.revealedCount} < ${round.minVoters}
+                  and ${round.lastCommitRevealableAfter} is not null
+                  and ${round.revealGracePeriod} is not null
+                  and ${nowSeconds} >= (
+                    case
+                      when ${round.lastCommitRevealableAfter} > ${round.startTime} + ${round.maxDuration}
+                        then ${round.lastCommitRevealableAfter}
+                      else ${round.startTime} + ${round.maxDuration}
+                    end
+                  ) + ${round.revealGracePeriod}
+                )
+              )
             )
           )
       )

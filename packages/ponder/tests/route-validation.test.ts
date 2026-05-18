@@ -319,6 +319,8 @@ function mockPonderModules<T>(result: T) {
       downPool: "round.downPool",
       conservativeRatingBps: "round.conservativeRatingBps",
       effectiveEvidence: "round.effectiveEvidence",
+      hasHumanVerifiedCommit: "round.hasHumanVerifiedCommit",
+      lastCommitRevealableAfter: "round.lastCommitRevealableAfter",
       lowSince: "round.lowSince",
       maxDuration: "round.maxDuration",
       maxVoters: "round.maxVoters",
@@ -327,6 +329,7 @@ function mockPonderModules<T>(result: T) {
       roundId: "round.roundId",
       ratingBps: "round.ratingBps",
       referenceRatingBps: "round.referenceRatingBps",
+      revealGracePeriod: "round.revealGracePeriod",
       settledAt: "round.settledAt",
       settledRounds: "round.settledRounds",
       startTime: "round.startTime",
@@ -657,6 +660,9 @@ describe("registerContentRoutes", () => {
     expect(serializedWhere).toContain("round.maxVoters");
     expect(serializedWhere).toContain("round.revealedCount");
     expect(serializedWhere).toContain("round.minVoters");
+    expect(serializedWhere).toContain("round.hasHumanVerifiedCommit");
+    expect(serializedWhere).toContain("round.lastCommitRevealableAfter");
+    expect(serializedWhere).toContain("round.revealGracePeriod");
     expect(serializedWhere).toContain("advisoryVote.contentId");
     expect(serializedWhere).toContain("advisoryVote.roundId");
   });

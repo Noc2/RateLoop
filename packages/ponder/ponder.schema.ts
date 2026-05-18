@@ -131,6 +131,9 @@ export const round = onchainTable(
     rbtsForfeitClaimants: t.integer(),
     startTime: t.bigint(),
     settledAt: t.bigint(),
+    hasHumanVerifiedCommit: t.boolean().notNull().default(false),
+    lastCommitRevealableAfter: t.bigint(),
+    revealGracePeriod: t.bigint(),
   }),
   (table) => ({
     contentIdx: index().on(table.contentId),

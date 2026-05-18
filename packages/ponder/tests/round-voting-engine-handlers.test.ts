@@ -94,6 +94,9 @@ function createDb({
         conservativeRatingBps: 6400,
         epochDuration: 1200,
         startTime: 0n,
+        hasHumanVerifiedCommit: false,
+        lastCommitRevealableAfter: null,
+        revealGracePeriod: null,
         ...existingRound,
       }
     : null;
@@ -307,13 +310,22 @@ describe("RoundVotingEngine ponder handlers", () => {
 
   it("stores a late commit in the reduced reward epoch", async () => {
     const voter = "0x0000000000000000000000000000000000000001";
-    const { db, insertCalls } = createDb({
+    const readContract = vi.fn(async ({ functionName }: { functionName: string }) => {
+      if (functionName === "commitIdentityKey") return `0x${"00".repeat(32)}`;
+      if (functionName === "commitIdentityHolder") return "0x0000000000000000000000000000000000000000";
+      if (functionName === "roundHasHumanVerifiedCommit") return true;
+      if (functionName === "targetRoundRevealableTimestamp") return 2_000n;
+      if (functionName === "roundRevealGracePeriodSnapshot") return 3_600n;
+      return null;
+    });
+    const { db, insertCalls, updateCalls } = createDb({
       existingRound: {
         id: "7-2",
         startTime: 1_000n,
         epochDuration: 600,
         voteCount: 1,
         totalStake: 10n,
+        lastCommitRevealableAfter: 1_500n,
       },
     });
     const registeredHandlers = await loadHandlers();
@@ -341,7 +353,13 @@ describe("RoundVotingEngine ponder handlers", () => {
           logIndex: 9,
         },
       },
-      context: { db },
+      context: {
+        db,
+        client: { readContract },
+        contracts: {
+          RoundVotingEngine: { address: "0x0000000000000000000000000000000000000666" },
+        },
+      },
     });
 
     expect(insertCalls).toContainEqual({
@@ -352,6 +370,23 @@ describe("RoundVotingEngine ponder handlers", () => {
         committedAt: 1_601n,
         commitBlockNumber: 43n,
         commitLogIndex: 9,
+      }),
+    });
+    expect(readContract).toHaveBeenCalledWith(
+      expect.objectContaining({
+        functionName: "roundHasHumanVerifiedCommit",
+        args: [7n, 2n],
+      }),
+    );
+    expect(updateCalls).toContainEqual({
+      table: "round",
+      key: { id: "7-2" },
+      values: expect.objectContaining({
+        voteCount: 2,
+        totalStake: 20n,
+        hasHumanVerifiedCommit: true,
+        lastCommitRevealableAfter: 2_200n,
+        revealGracePeriod: 3_600n,
       }),
     });
   });

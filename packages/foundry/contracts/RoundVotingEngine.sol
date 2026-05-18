@@ -736,7 +736,15 @@ contract RoundVotingEngine is
     function _getOrCreateRound(uint256 contentId) internal returns (uint256) {
         uint256 roundId = currentRoundId[contentId];
         if (roundId > 0 && !RoundLib.isTerminal(rounds[contentId][roundId])) {
-            return roundId;
+            RoundLib.Round storage round = rounds[contentId][roundId];
+            RoundLib.RoundConfig memory roundCfg = _getRoundConfig(contentId, roundId);
+            if (_canCancelExpiredRound(contentId, roundId, round, roundCfg)) {
+                _markRoundCancelled(contentId, roundId, round);
+            } else if (_canFinalizeRevealFailedRound(contentId, roundId, round)) {
+                _markRoundRevealFailed(contentId, roundId, round);
+            } else {
+                return roundId;
+            }
         }
 
         roundId = RoundCreationLib.activateNewRound(currentRoundId, nextRoundId, rounds, contentId);
