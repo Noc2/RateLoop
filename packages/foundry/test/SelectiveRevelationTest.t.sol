@@ -294,6 +294,32 @@ contract SelectiveRevelationTest is VotingTestBase {
         assertGe(engine.consensusReserve(), reserveBefore, "unrevealed current-epoch vote should block subsidy");
     }
 
+    function test_PostThresholdRevealCannotEnterRbtsScoringSet() public {
+        uint256 contentId = _submitContent();
+
+        (bytes32 ck1, bytes32 s1) = _commit(voters[0], contentId, true, STAKE);
+        (bytes32 ck2, bytes32 s2) = _commit(voters[1], contentId, true, STAKE);
+        (bytes32 ck3, bytes32 s3) = _commit(voters[2], contentId, false, STAKE);
+        (bytes32 ck4, bytes32 s4) = _commit(voters[3], contentId, true, STAKE);
+
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        RoundLib.Round memory r = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        _warpPastTlockRevealTime(uint256(r.startTime) + EPOCH);
+
+        _reveal(contentId, roundId, ck1, true, s1);
+        _reveal(contentId, roundId, ck2, true, s2);
+        _reveal(contentId, roundId, ck3, false, s3);
+
+        vm.roll(block.number + 1);
+        vm.warp(block.timestamp + 1);
+        _reveal(contentId, roundId, ck4, true, s4);
+        engine.settleRound(contentId, roundId);
+
+        assertEq(engine.commitRbtsRewardWeight(contentId, roundId, ck4), 0, "late reveal has no RBTS reward");
+        assertEq(engine.commitRbtsStakeReturned(contentId, roundId, ck4), STAKE, "winning late reveal gets stake back");
+        assertEq(engine.commitRbtsForfeitedStake(contentId, roundId, ck4), 0, "winning late reveal not forfeited");
+    }
+
     // =========================================================================
     // GRACE PERIOD EXPIRY
     // =========================================================================

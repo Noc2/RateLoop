@@ -934,7 +934,7 @@ contract RoundVotingEngine is
         binaryLosingPool = upWins ? round.downPool : round.upPool;
 
         (weightedWinningStake, rbtsForfeitedPool, scoreSeed) =
-            _scoreRbtsRewards(contentId, roundId, round.revealedCount, upWins);
+            _scoreRbtsRewards(contentId, roundId, round.revealedCount, upWins, round.thresholdReachedAt);
         roundRbtsScored[contentId][roundId] = true;
 
         round.upWins = upWins;
@@ -1211,10 +1211,13 @@ contract RoundVotingEngine is
         return RoundCleanupLib.pastEpochUnrevealedCount(epochUnrevealedCount[contentId][roundId], round, roundCfg);
     }
 
-    function _scoreRbtsRewards(uint256 contentId, uint256 roundId, uint256 revealedCount, bool upWins)
-        internal
-        returns (uint256 rewardWeight, uint256 forfeitedPool, bytes32 scoreSeed)
-    {
+    function _scoreRbtsRewards(
+        uint256 contentId,
+        uint256 roundId,
+        uint256 revealedCount,
+        bool upWins,
+        uint48 thresholdReachedAt
+    ) internal returns (uint256 rewardWeight, uint256 forfeitedPool, bytes32 scoreSeed) {
         bytes32 settlementEntropy = RoundRevealLib.finalizeRbtsSeed(roundRbtsSeedEntropy, contentId, roundId);
         RoundRevealLib.ScoreRbtsResult memory result = RoundRevealLib.scoreRbtsRewards(
             roundCommitHashes[contentId][roundId],
@@ -1233,7 +1236,8 @@ contract RoundVotingEngine is
                 upWins: upWins,
                 minParticipants: MIN_RBTS_PARTICIPANTS,
                 scoreScaleBps: RBTS_SCORE_SCALE_BPS,
-                settlementEntropy: settlementEntropy
+                settlementEntropy: settlementEntropy,
+                thresholdReachedAt: thresholdReachedAt
             })
         );
 

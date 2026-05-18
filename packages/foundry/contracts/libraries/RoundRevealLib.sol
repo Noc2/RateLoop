@@ -156,6 +156,7 @@ library RoundRevealLib {
         uint16 minParticipants;
         uint16 scoreScaleBps;
         bytes32 settlementEntropy;
+        uint48 thresholdReachedAt;
     }
 
     function scoreRbtsRewards(
@@ -172,48 +173,58 @@ library RoundRevealLib {
     ) external returns (ScoreRbtsResult memory result) {
         if (params.revealedCount < params.minParticipants) revert NotEnoughVotes();
 
+        if (params.thresholdReachedAt == 0) revert NotEnoughVotes();
+
         // M-Vote-2: the sampler SEED is hashed over the full COMMITTED set (every commitKey,
         // revealed or not, in commit order), so selective reveal cannot grind the seed.
-        // M-Vote-4 (audit 2026-05-17): the sampler INDEX SPACE is the *revealed* set only,
-        // produced from a single-pass build of `revealedKeysMem` below. Each revealed voter
-        // is drawn uniformly at random; sybils placed before HRC commits can no longer
-        // absorb the sampler probability of their own unrevealed positions.
+        // The sampler INDEX SPACE is frozen to commits revealed no later than the threshold
+        // reveal timestamp, before the delayed blockhash seed becomes knowable.
         uint256 committedCount = commitKeys.length;
-        bytes32[] memory revealedKeysMem = new bytes32[](params.revealedCount);
+        bytes32[] memory revealedKeysMem = new bytes32[](committedCount);
         bytes32 committedSetHash;
         uint256 revealedBuildIdx;
         uint256 economicCount;
+        RbtsRoundTotals memory totals;
         for (uint256 i = 0; i < committedCount;) {
             bytes32 commitKey = commitKeys[i];
             committedSetHash = keccak256(abi.encodePacked(committedSetHash, commitKey));
             RoundLib.Commit storage revealedCommit = roundCommits[commitKey];
             if (revealedCommit.revealed) {
-                revealedKeysMem[revealedBuildIdx] = commitKey;
-                if (commitRbtsWeight[commitKey] > 0) {
-                    unchecked {
-                        ++economicCount;
+                if (revealedCommit.revealableAfter <= params.thresholdReachedAt) {
+                    revealedKeysMem[revealedBuildIdx] = commitKey;
+                    if (commitRbtsWeight[commitKey] > 0) {
+                        unchecked {
+                            ++economicCount;
+                        }
+                    } else if (revealedCommit.stakeAmount > 0) {
+                        commitRbtsStakeReturned[commitKey] = revealedCommit.stakeAmount;
                     }
-                } else if (revealedCommit.stakeAmount > 0) {
-                    commitRbtsStakeReturned[commitKey] = revealedCommit.stakeAmount;
-                }
-                unchecked {
-                    ++revealedBuildIdx;
+                    unchecked {
+                        ++revealedBuildIdx;
+                    }
+                } else {
+                    totals = _accountPostThresholdReveal(
+                        commitRbtsStakeReturned,
+                        commitRbtsForfeitedStake,
+                        commitKey,
+                        revealedCommit,
+                        params.upWins,
+                        totals
+                    );
                 }
             }
             unchecked {
                 ++i;
             }
         }
-        if (revealedBuildIdx != params.revealedCount) revert NotEnoughVotes();
-
-        RbtsRoundTotals memory totals;
+        if (revealedBuildIdx < params.minParticipants) revert NotEnoughVotes();
 
         // Seed combines post-threshold entropy with M-Vote-2 (committed-set binding):
         // fixed after the commit set closes and invariant under selective reveal.
         result.scoreSeed = _rbtsScoreSeed(
             params.contentId, params.roundId, committedCount, committedSetHash, params.settlementEntropy
         );
-        for (uint256 r = 0; r < params.revealedCount;) {
+        for (uint256 r = 0; r < revealedBuildIdx;) {
             bytes32 commitKey = revealedKeysMem[r];
             uint256 ownWeight = commitRbtsWeight[commitKey];
             uint16 scoreBps = _scoreRbtsCommitAt(
@@ -224,7 +235,7 @@ library RoundRevealLib {
                 revealedKeysMem,
                 result.scoreSeed,
                 r,
-                params.revealedCount
+                revealedBuildIdx
             );
 
             if (ownWeight == 0 || economicCount < params.minParticipants) {
@@ -377,6 +388,27 @@ library RoundRevealLib {
         return totals;
     }
 
+    function _accountPostThresholdReveal(
+        mapping(bytes32 => uint256) storage commitRbtsStakeReturned,
+        mapping(bytes32 => uint256) storage commitRbtsForfeitedStake,
+        bytes32 commitKey,
+        RoundLib.Commit storage commit,
+        bool upWins,
+        RbtsRoundTotals memory totals
+    ) private returns (RbtsRoundTotals memory) {
+        if (commit.stakeAmount == 0) return totals;
+        if (commit.isUp == upWins) {
+            commitRbtsStakeReturned[commitKey] = commit.stakeAmount;
+            return totals;
+        }
+        commitRbtsForfeitedStake[commitKey] = commit.stakeAmount;
+        totals.forfeitedPool += commit.stakeAmount;
+        unchecked {
+            ++totals.forfeitClaimants;
+        }
+        return totals;
+    }
+
     function _scoreRbtsCommitAt(
         mapping(bytes32 => RoundLib.Commit) storage roundCommits,
         mapping(bytes32 => uint16) storage commitPredictedUpBps,
@@ -460,8 +492,7 @@ library RoundRevealLib {
         pure
         returns (uint256)
     {
-        // Deterministic sampler over rater identities and the committed commit set; unrevealed
-        // commits are skipped at index-resolution time via `_advanceToRevealed`.
+        // Deterministic sampler over the threshold-frozen scoring set.
         // slither-disable-next-line weak-prng
         uint256 drawn = uint256(keccak256(abi.encodePacked(seed, drawKey, ownIndex, domain))) % (count - 1);
         return drawn >= ownIndex ? drawn + 1 : drawn;
@@ -472,8 +503,7 @@ library RoundRevealLib {
         pure
         returns (uint256)
     {
-        // Deterministic sampler over rater identities and the committed commit set; unrevealed
-        // commits are skipped at index-resolution time via `_advanceToRevealed`.
+        // Deterministic sampler over the threshold-frozen scoring set.
         // slither-disable-next-line weak-prng
         uint256 drawn = uint256(keccak256(abi.encodePacked(seed, drawKey, ownIndex, uint8(2)))) % (count - 2);
         uint256 firstExcluded = ownIndex < referenceIndex ? ownIndex : referenceIndex;
