@@ -41,10 +41,21 @@ const YOUR_VOTE_TOOLTIP =
   "Thumbs up means you think this content is useful for the question; thumbs down means it is unhelpful, broken, misleading, or unsafe.";
 const EXPECTED_CROWD_TOOLTIP =
   "Your forecast of what share of revealed raters will choose thumbs up this round. This forecast helps determine rewards; it is separate from your own thumbs up/down vote.";
+const ACCURACY_BASED_REWARDS_TOOLTIP =
+  "Calculated after reveal and settlement. If your private vote matches the final outcome, it can earn starter or launch rewards; the exact amount is not known yet.";
 const metricLabelClassName =
   "inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-base-content/55";
 const metricValueClassName = "mt-1 text-2xl font-bold tabular-nums text-base-content";
 const metricUnitClassName = "ml-1 text-sm font-semibold text-base-content/55";
+
+function AccuracyBasedRewardLabel() {
+  return (
+    <span className="inline-flex items-center justify-end gap-1.5 text-right font-semibold tabular-nums">
+      <span>Accuracy based</span>
+      <InfoTooltip text={ACCURACY_BASED_REWARDS_TOOLTIP} position="top" className="[&>svg]:h-3.5 [&>svg]:w-3.5" />
+    </span>
+  );
+}
 
 function clampRating(value: number) {
   if (!Number.isFinite(value)) return 5;
@@ -306,7 +317,7 @@ export function StakeSelector({
                     setHasAdjustedPrediction(true);
                     setPredictedUpPercent(Number(e.target.value));
                   }}
-                  className="range range-primary range-sm mt-4 w-full"
+                  className="crowd-forecast-range range range-sm mt-4 w-full"
                   style={sliderStyle}
                   disabled={formDisabled}
                   aria-label="Crowd thumbs-up forecast"
@@ -386,7 +397,7 @@ export function StakeSelector({
                     <>
                       <div className="flex items-center justify-between gap-3">
                         <span>Starter rewards</span>
-                        <span className="font-semibold tabular-nums">Accuracy based</span>
+                        <AccuracyBasedRewardLabel />
                       </div>
                       <div className="flex items-center justify-between gap-3">
                         <span>LREP at risk</span>
@@ -407,7 +418,7 @@ export function StakeSelector({
                       ) : (
                         <div className="flex items-center justify-between gap-3">
                           <span>Launch rewards</span>
-                          <span className="font-semibold tabular-nums">Accuracy based</span>
+                          <AccuracyBasedRewardLabel />
                         </div>
                       )}
                       <div className="flex items-center justify-between gap-3">

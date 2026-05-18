@@ -1015,6 +1015,20 @@ body {
   background: var(--rateloop-spectrum-gradient) !important;
 }
 
+.crowd-forecast-range {
+  --range-fill: 0;
+  --range-bg: transparent;
+  color: var(--curyo-warm-white);
+}
+
+.crowd-forecast-range::-webkit-slider-runnable-track {
+  background: var(--rateloop-spectrum-gradient) !important;
+}
+
+.crowd-forecast-range::-moz-range-track {
+  background: var(--rateloop-spectrum-gradient) !important;
+}
+
 /* Selected pills and tabs */
 .pill-active,
 .pill-filter-active {
