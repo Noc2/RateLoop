@@ -236,6 +236,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
 
         RoundLib.Round memory r2 = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
         if (r2.thresholdReachedAt > 0) {
+            vm.roll(block.number + 1);
             try votingEngine.settleRound(contentId, roundId) { } catch { }
         }
     }
@@ -280,7 +281,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         votingEngine.revealVoteByCommitKey(contentId, roundId, ck1, true, 8_000, s1);
         votingEngine.revealVoteByCommitKey(contentId, roundId, ck2, true, 8_000, s2);
         votingEngine.revealVoteByCommitKey(contentId, roundId, ck3, true, 7_000, s3);
-        votingEngine.settleRound(contentId, roundId);
+        _settleAfterRbtsSeed(votingEngine, contentId, roundId);
     }
 
     function _verifyHuman(address account, bytes32 nullifier) internal {

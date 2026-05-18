@@ -101,6 +101,7 @@ contract RoundVotingEngine is
     uint256 internal constant MAX_CIPHERTEXT_SIZE = 2_048; // 2 KB max ciphertext to prevent storage bloat
     uint16 internal constant MIN_RBTS_PARTICIPANTS = 3;
     uint16 internal constant RBTS_SCORE_SCALE_BPS = 10_000;
+    uint256 internal constant RBTS_SEED_BLOCK_FLAG = 1 << 255;
 
     // --- State ---
     IERC20 internal lrepToken;
@@ -885,6 +886,24 @@ contract RoundVotingEngine is
         _revealRbtsVoteInternal(contentId, roundId, commitKey, isUp, predictedUpBps, salt);
     }
 
+    /// @notice Refresh an expired pending RBTS settlement seed without using known blockhashes for scoring.
+    /// @dev If a captured seed block ages out of `blockhash`, any caller can capture a fresh block and settle
+    ///      from the next block onward. This preserves liveness without falling back to caller-chosen entropy.
+    function refreshRbtsSeed(uint256 contentId, uint256 roundId) external nonReentrant {
+        RoundLib.Round storage round = rounds[contentId][roundId];
+        if (round.state != RoundLib.RoundState.Open) revert RoundNotOpen();
+        RoundLib.RoundConfig memory roundCfg = _getRoundConfig(contentId, roundId);
+        if (round.revealedCount < _rbtsRevealQuorum(roundCfg.minVoters)) revert NotEnoughVotes();
+
+        uint256 seedWord = uint256(roundRbtsSeedEntropy[contentId][roundId]);
+        if (seedWord & RBTS_SEED_BLOCK_FLAG != 0) {
+            uint256 seedBlock = seedWord ^ RBTS_SEED_BLOCK_FLAG;
+            if (block.number <= seedBlock || blockhash(seedBlock) != bytes32(0)) revert RevealGraceActive();
+        }
+
+        _captureRbtsSeed(contentId, roundId);
+    }
+
     // =========================================================================
     // SETTLEMENT
     // =========================================================================
@@ -1317,6 +1336,26 @@ contract RoundVotingEngine is
         returns (uint256 rewardWeight, uint256 forfeitedPool, bytes32 scoreSeed)
     {
         bytes32 settlementEntropy = roundRbtsSeedEntropy[contentId][roundId];
+        uint256 seedWord = uint256(settlementEntropy);
+        if (seedWord & RBTS_SEED_BLOCK_FLAG != 0) {
+            uint256 seedBlock = seedWord ^ RBTS_SEED_BLOCK_FLAG;
+            if (block.number <= seedBlock) revert RevealGraceActive();
+            bytes32 seedBlockhash = blockhash(seedBlock);
+            if (seedBlockhash == bytes32(0)) revert RevealGraceActive();
+            settlementEntropy = keccak256(
+                abi.encode(
+                    "rateloop.rbts.delayed-seed.v1",
+                    block.chainid,
+                    address(this),
+                    contentId,
+                    roundId,
+                    seedBlock,
+                    seedBlockhash
+                )
+            );
+            roundRbtsSeedEntropy[contentId][roundId] = settlementEntropy;
+            emit RbtsSeedCaptured(contentId, roundId, settlementEntropy);
+        }
         if (settlementEntropy == bytes32(0)) {
             RoundLib.Round storage round = rounds[contentId][roundId];
             settlementEntropy = keccak256(
@@ -1363,26 +1402,10 @@ contract RoundVotingEngine is
         roundRbtsForfeitClaimants[contentId][roundId] = result.forfeitClaimants;
     }
 
-    function _captureRbtsSeed(uint256 contentId, uint256 roundId, uint48 thresholdReachedAt, bytes32 thresholdCommitKey)
-        internal
-    {
-        bytes32 previousBlockhash = block.number > 0 ? blockhash(block.number - 1) : bytes32(0);
-        bytes32 entropy = keccak256(
-            abi.encode(
-                "rateloop.rbts.threshold-seed.v1",
-                block.chainid,
-                address(this),
-                contentId,
-                roundId,
-                thresholdReachedAt,
-                block.number,
-                thresholdCommitKey,
-                previousBlockhash,
-                bytes32(block.prevrandao)
-            )
-        );
-        roundRbtsSeedEntropy[contentId][roundId] = entropy;
-        emit RbtsSeedCaptured(contentId, roundId, entropy);
+    function _captureRbtsSeed(uint256 contentId, uint256 roundId) internal {
+        bytes32 seedBlockMarker = bytes32(RBTS_SEED_BLOCK_FLAG | block.number);
+        roundRbtsSeedEntropy[contentId][roundId] = seedBlockMarker;
+        emit RbtsSeedCaptured(contentId, roundId, seedBlockMarker);
     }
 
     function _revealRbtsVoteInternal(
@@ -1427,7 +1450,7 @@ contract RoundVotingEngine is
         roundStakeWithEligibleFrontend[contentId][roundId] = eligibleFrontendStake;
         roundEligibleFrontendCount[contentId][roundId] = eligibleFrontendCount;
         if (!thresholdAlreadyReached && round.thresholdReachedAt != 0) {
-            _captureRbtsSeed(contentId, roundId, round.thresholdReachedAt, commitKey);
+            _captureRbtsSeed(contentId, roundId);
         }
         commitPredictedUpBps[contentId][roundId][commitKey] = predictedUpBps;
         commitRbtsWeight[contentId][roundId][commitKey] = effectiveStake;

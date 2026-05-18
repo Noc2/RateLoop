@@ -363,7 +363,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         votingEngine.revealVoteByCommitKey(contentId, roundId, ck1, true, 5_000, salt1);
         votingEngine.revealVoteByCommitKey(contentId, roundId, ck2, true, 5_000, salt2);
         votingEngine.revealVoteByCommitKey(contentId, roundId, ck3, false, 5_000, salt3);
-        votingEngine.settleRound(contentId, roundId);
+        _settleAfterRbtsSeed(votingEngine, contentId, roundId);
     }
 
     function _configureParticipationPoolSnapshots() internal {
@@ -2107,7 +2107,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         votingEngine.revealVoteByCommitKey(1, roundId, ck1, true, 5_000, salt1);
         votingEngine.revealVoteByCommitKey(1, roundId, ck2, true, 5_000, salt2);
         votingEngine.revealVoteByCommitKey(1, roundId, ck3, false, 5_000, salt3);
-        votingEngine.settleRound(1, roundId);
+        _settleAfterRbtsSeed(votingEngine, 1, roundId);
 
         // The old engine's rating-state callback reverted (caught by RoundSettlementSideEffectsLib),
         // so the registry-side rating must remain unchanged.
@@ -2185,7 +2185,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         votingEngine.revealVoteByCommitKey(1, roundId, ck2, true, 5_000, salt2);
         votingEngine.revealVoteByCommitKey(1, roundId, ck3, false, 5_000, salt3);
 
-        votingEngine.settleRound(1, roundId);
+        _settleAfterRbtsSeed(votingEngine, 1, roundId);
 
         assertEq(registry.getRating(1), 5200);
         assertEq(
@@ -2243,7 +2243,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         votingEngine.revealVoteByCommitKey(1, roundId, ck1, true, 5_000, salt1);
         votingEngine.revealVoteByCommitKey(1, roundId, ck2, true, 5_000, salt2);
         votingEngine.revealVoteByCommitKey(1, roundId, ck3, false, 5_000, salt3);
-        votingEngine.settleRound(1, roundId);
+        _settleAfterRbtsSeed(votingEngine, 1, roundId);
 
         assertEq(rewardDistributor.roundParticipationRewardPool(1, roundId), address(participationPool));
         assertEq(replacementDistributor.roundParticipationRewardPool(1, roundId), address(0));

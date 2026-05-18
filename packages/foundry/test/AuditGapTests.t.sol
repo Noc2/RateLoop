@@ -232,7 +232,7 @@ contract AuditGapTests is VotingTestBase {
         _reveal(voter2, contentId, 1, ck2, true, s2);
         _reveal(voter3, contentId, 1, ck3, false, s3);
 
-        votingEngine.settleRound(contentId, 1);
+        _settleAfterRbtsSeed(votingEngine, contentId, 1);
         RoundLib.Round memory round = RoundEngineReadHelpers.round(votingEngine, contentId, 1);
         assertTrue(round.state == RoundLib.RoundState.Settled, "Round should settle while paused");
     }
@@ -281,7 +281,7 @@ contract AuditGapTests is VotingTestBase {
 
         // Warp past final reveal grace so unrevealed votes are processable after settlement.
         vm.warp(block.timestamp + 7 days + 60 minutes + 1);
-        votingEngine.settleRound(contentId, 1);
+        _settleAfterRbtsSeed(votingEngine, contentId, 1);
 
         vm.prank(owner);
         votingEngine.pause();
@@ -366,7 +366,7 @@ contract AuditGapTests is VotingTestBase {
         vm.warp(block.timestamp + 60 minutes + 1);
 
         // Settle
-        votingEngine.settleRound(contentId, 1);
+        _settleAfterRbtsSeed(votingEngine, contentId, 1);
 
         // Verify round is settled
         RoundLib.Round memory round = RoundEngineReadHelpers.round(votingEngine, contentId, 1);
@@ -455,7 +455,7 @@ contract AuditGapTests is VotingTestBase {
         _reveal(voter3, contentId, 1, ck3, false, s3);
 
         vm.warp(block.timestamp + 7 days + 60 minutes + 1);
-        votingEngine.settleRound(contentId, 1);
+        _settleAfterRbtsSeed(votingEngine, contentId, 1);
 
         // count=0 should process all
         votingEngine.processUnrevealedVotes(contentId, 1, 0, 0);
@@ -476,7 +476,7 @@ contract AuditGapTests is VotingTestBase {
         _reveal(voter3, contentId, 1, ck3, false, s3);
 
         vm.warp(block.timestamp + 7 days + 60 minutes + 1);
-        votingEngine.settleRound(contentId, 1);
+        _settleAfterRbtsSeed(votingEngine, contentId, 1);
 
         // count=999 should clamp to array length and still succeed
         votingEngine.processUnrevealedVotes(contentId, 1, 0, 999);
@@ -497,7 +497,7 @@ contract AuditGapTests is VotingTestBase {
         _reveal(voter3, contentId, 1, ck3, false, s3);
 
         vm.warp(block.timestamp + 7 days + 60 minutes + 1);
-        votingEngine.settleRound(contentId, 1);
+        _settleAfterRbtsSeed(votingEngine, contentId, 1);
 
         // startIndex == array.length should revert
         vm.expectRevert(RoundVotingEngine.IndexOutOfBounds.selector);
@@ -519,7 +519,7 @@ contract AuditGapTests is VotingTestBase {
         _reveal(voter3, contentId, 1, ck3, false, s3);
 
         vm.warp(block.timestamp + 7 days + 60 minutes + 1);
-        votingEngine.settleRound(contentId, 1);
+        _settleAfterRbtsSeed(votingEngine, contentId, 1);
 
         // Process first 2 (both revealed, nothing to process)
         // Process last 2 (one revealed, one unrevealed)
@@ -589,7 +589,7 @@ contract AuditGapTests is VotingTestBase {
         _reveal(voter3, contentId, 1, ck3, true, s3);
 
         vm.warp(block.timestamp + 60 minutes + 1);
-        votingEngine.settleRound(contentId, 1);
+        _settleAfterRbtsSeed(votingEngine, contentId, 1);
 
         uint256 reserveAfter = votingEngine.consensusReserve();
         assertTrue(reserveAfter < reserveBefore, "Consensus reserve should decrease");
@@ -635,7 +635,7 @@ contract AuditGapTests is VotingTestBase {
         _reveal(voter3, contentId, 1, ck3, false, s3);
 
         vm.warp(block.timestamp + 60 minutes + 1);
-        votingEngine.settleRound(contentId, 1);
+        _settleAfterRbtsSeed(votingEngine, contentId, 1);
 
         // Claim all voter rewards
         vm.prank(voter1);

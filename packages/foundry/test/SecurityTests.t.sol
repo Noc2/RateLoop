@@ -251,7 +251,7 @@ contract SecurityReentrancyTest is SecurityHarnessBase {
         _revealFromCiphertext(contentId, roundId, ck3);
 
         // Settle
-        votingEngine.settleRound(contentId, roundId);
+        _settleAfterRbtsSeed(votingEngine, contentId, roundId);
 
         RoundLib.Round memory round2 = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
         assertTrue(
@@ -490,7 +490,7 @@ contract SecuritySettlementTimingTest is SecurityHarnessBase {
         _revealFromCiphertext(contentId, roundId, ck2);
         _revealFromCiphertext(contentId, roundId, ck3);
 
-        votingEngine.settleRound(contentId, roundId);
+        _settleAfterRbtsSeed(votingEngine, contentId, roundId);
 
         RoundLib.Round memory round2 = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
         assertTrue(
@@ -516,7 +516,7 @@ contract SecuritySettlementTimingTest is SecurityHarnessBase {
         _revealFromCiphertext(contentId, roundId, ck2);
         _revealFromCiphertext(contentId, roundId, ck3);
 
-        votingEngine.settleRound(contentId, roundId);
+        _settleAfterRbtsSeed(votingEngine, contentId, roundId);
 
         RoundLib.Round memory round2 = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
         assertEq(uint8(round2.state), uint8(RoundLib.RoundState.Settled), "Should settle as consensus");

@@ -152,7 +152,7 @@ contract FrontendRegistrySnapshotTest is VotingTestBase {
         votingEngine.revealVoteByCommitKey(contentId, roundId, ck2, true, 5_000, salt2);
         votingEngine.revealVoteByCommitKey(contentId, roundId, ck3, false, 5_000, salt3);
 
-        votingEngine.settleRound(contentId, roundId);
+        _settleAfterRbtsSeed(votingEngine, contentId, roundId);
 
         assertEq(votingEngine.roundFrontendRegistrySnapshot(contentId, roundId), address(originalRegistry));
 

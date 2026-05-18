@@ -217,6 +217,7 @@ contract VotingHandler is VotingTestBase {
         if (round.revealedCount < cfg.minVoters) return;
 
         uint256 reserveBefore = engine.consensusReserve();
+        vm.roll(block.number + 1);
         try engine.settleRound(contentId, roundId) {
             uint256 reserveAfter = engine.consensusReserve();
             if (reserveBefore > reserveAfter) {

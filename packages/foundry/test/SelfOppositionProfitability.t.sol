@@ -179,6 +179,7 @@ contract SelfOppositionProfitabilityTest is VotingTestBase {
         }
         RoundLib.Round memory r2 = RoundEngineReadHelpers.round(engine, cid, roundId);
         if (r2.thresholdReachedAt > 0) {
+            vm.roll(block.number + 1);
             try engine.settleRound(cid, roundId) { } catch { }
         }
     }

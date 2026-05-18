@@ -383,14 +383,14 @@ contract SettlementEdgeCasesTest is VotingTestBase {
     function test_Settle_AlreadySettled_Reverts() public {
         (uint256 contentId, uint256 roundId) = _setupThreeVoterRound(true, true, false);
 
-        engine.settleRound(contentId, roundId);
+        _settleAfterRbtsSeed(engine, contentId, roundId);
 
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertEq(uint256(round.state), uint256(RoundLib.RoundState.Settled));
 
         // Attempting to settle again should revert with RoundNotOpen
         vm.expectRevert(RoundVotingEngine.RoundNotOpen.selector);
-        engine.settleRound(contentId, roundId);
+        _settleAfterRbtsSeed(engine, contentId, roundId);
     }
 
     // =========================================================================
@@ -418,13 +418,13 @@ contract SettlementEdgeCasesTest is VotingTestBase {
         _reveal(contentId, roundId, ck4, false, s4);
 
         // First settle creates Tied state
-        engine.settleRound(contentId, roundId);
+        _settleAfterRbtsSeed(engine, contentId, roundId);
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertEq(uint256(round.state), uint256(RoundLib.RoundState.Tied));
 
         // Trying to settle again should revert
         vm.expectRevert(RoundVotingEngine.RoundNotOpen.selector);
-        engine.settleRound(contentId, roundId);
+        _settleAfterRbtsSeed(engine, contentId, roundId);
     }
 
     // =========================================================================
@@ -465,7 +465,7 @@ contract SettlementEdgeCasesTest is VotingTestBase {
 
     function test_Cancel_SettledRound_Reverts() public {
         (uint256 contentId, uint256 roundId) = _setupThreeVoterRound(true, true, false);
-        engine.settleRound(contentId, roundId);
+        _settleAfterRbtsSeed(engine, contentId, roundId);
 
         vm.expectRevert(RoundVotingEngine.RoundNotOpen.selector);
         engine.cancelExpiredRound(contentId, roundId);
@@ -534,7 +534,7 @@ contract SettlementEdgeCasesTest is VotingTestBase {
         // minVoters=3, exactly 3 revealed
         (uint256 contentId, uint256 roundId) = _setupThreeVoterRound(true, true, false);
 
-        engine.settleRound(contentId, roundId);
+        _settleAfterRbtsSeed(engine, contentId, roundId);
 
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertEq(uint256(round.state), uint256(RoundLib.RoundState.Settled));
@@ -561,7 +561,7 @@ contract SettlementEdgeCasesTest is VotingTestBase {
         vm.warp(block.timestamp + 7 days);
 
         vm.expectRevert(RoundVotingEngine.NotEnoughVotes.selector);
-        engine.settleRound(contentId, roundId);
+        _settleAfterRbtsSeed(engine, contentId, roundId);
     }
 
     // =========================================================================
@@ -572,7 +572,7 @@ contract SettlementEdgeCasesTest is VotingTestBase {
         (uint256 contentId, uint256 roundId) = _setupThreeVoterRound(true, true, false);
 
         // Settle immediately after threshold — no delay required
-        engine.settleRound(contentId, roundId);
+        _settleAfterRbtsSeed(engine, contentId, roundId);
 
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertEq(uint256(round.state), uint256(RoundLib.RoundState.Settled));
@@ -594,7 +594,7 @@ contract SettlementEdgeCasesTest is VotingTestBase {
 
         uint256 treasuryBefore = lrepToken.balanceOf(treasury);
 
-        engine.settleRound(contentId, roundId);
+        _settleAfterRbtsSeed(engine, contentId, roundId);
 
         uint256 treasuryAfter = lrepToken.balanceOf(treasury);
         // Treasury should receive some fee from the losing pool
@@ -622,7 +622,7 @@ contract SettlementEdgeCasesTest is VotingTestBase {
         _reveal(contentId, roundId, ck3, false, s3);
 
         // Should not revert even with very small losing pool
-        engine.settleRound(contentId, roundId);
+        _settleAfterRbtsSeed(engine, contentId, roundId);
 
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertEq(uint256(round.state), uint256(RoundLib.RoundState.Settled));
@@ -637,7 +637,7 @@ contract SettlementEdgeCasesTest is VotingTestBase {
 
         uint256 reserveBefore = engine.consensusReserve();
 
-        engine.settleRound(contentId, roundId);
+        _settleAfterRbtsSeed(engine, contentId, roundId);
 
         uint256 reserveAfter = engine.consensusReserve();
         // Reserve should decrease (subsidy paid out)
@@ -653,7 +653,7 @@ contract SettlementEdgeCasesTest is VotingTestBase {
 
         uint256 reserveBefore = engine.consensusReserve();
 
-        engine.settleRound(contentId, roundId);
+        _settleAfterRbtsSeed(engine, contentId, roundId);
 
         uint256 reserveAfter = engine.consensusReserve();
         assertLt(reserveAfter, reserveBefore);
@@ -673,7 +673,7 @@ contract SettlementEdgeCasesTest is VotingTestBase {
         uint256 roundId = _prepareUnanimousRoundOnEngine(engine2, lrepToken2, contentId);
 
         // Settle — should succeed even with zero reserve
-        engine2.settleRound(contentId, roundId);
+        _settleAfterRbtsSeed(engine2, contentId, roundId);
 
         RoundLib.Round memory settled = RoundEngineReadHelpers.round(engine2, contentId, roundId);
         assertEq(uint256(settled.state), uint256(RoundLib.RoundState.Settled));
@@ -757,7 +757,7 @@ contract SettlementEdgeCasesTest is VotingTestBase {
 
     function test_NewRound_AfterSettlement_Succeeds() public {
         (uint256 contentId, uint256 roundId) = _setupThreeVoterRound(true, true, false);
-        engine.settleRound(contentId, roundId);
+        _settleAfterRbtsSeed(engine, contentId, roundId);
 
         // Warp past 24h cooldown so voter can vote again
         vm.warp(block.timestamp + 24 hours + 1);
@@ -790,7 +790,7 @@ contract SettlementEdgeCasesTest is VotingTestBase {
         _reveal(contentId, roundId, ck3, true, s3);
         _reveal(contentId, roundId, ck4, false, s4);
 
-        engine.settleRound(contentId, roundId);
+        _settleAfterRbtsSeed(engine, contentId, roundId);
 
         // Warp past 24h cooldown
         vm.warp(block.timestamp + 24 hours + 1);
@@ -826,7 +826,7 @@ contract SettlementEdgeCasesTest is VotingTestBase {
 
     function test_RewardClaim_Loser_GetsRefund() public {
         (uint256 contentId, uint256 roundId) = _setupThreeVoterRound(true, true, false);
-        engine.settleRound(contentId, roundId);
+        _settleAfterRbtsSeed(engine, contentId, roundId);
 
         uint256 balanceBefore = lrepToken.balanceOf(voter3);
 
@@ -846,7 +846,7 @@ contract SettlementEdgeCasesTest is VotingTestBase {
 
     function test_RewardClaim_DoubleClaim_Reverts() public {
         (uint256 contentId, uint256 roundId) = _setupThreeVoterRound(true, true, false);
-        engine.settleRound(contentId, roundId);
+        _settleAfterRbtsSeed(engine, contentId, roundId);
 
         vm.prank(voter1);
         rewardDistributor.claimReward(contentId, roundId);
@@ -862,7 +862,7 @@ contract SettlementEdgeCasesTest is VotingTestBase {
 
     function test_RewardClaim_NonVoter_Reverts() public {
         (uint256 contentId, uint256 roundId) = _setupThreeVoterRound(true, true, false);
-        engine.settleRound(contentId, roundId);
+        _settleAfterRbtsSeed(engine, contentId, roundId);
 
         vm.prank(voter6); // Never voted
         vm.expectRevert("No vote found");
@@ -904,7 +904,7 @@ contract SettlementEdgeCasesTest is VotingTestBase {
         _reveal(contentId, roundId, ck3, true, s3);
         _reveal(contentId, roundId, ck4, false, s4);
 
-        engine.settleRound(contentId, roundId);
+        _settleAfterRbtsSeed(engine, contentId, roundId);
 
         uint256 balanceBefore = lrepToken.balanceOf(voter1);
 
@@ -921,7 +921,7 @@ contract SettlementEdgeCasesTest is VotingTestBase {
 
     function test_RewardClaim_Winner_GetsRbtsClaimValue() public {
         (uint256 contentId, uint256 roundId) = _setupThreeVoterRound(true, true, false);
-        engine.settleRound(contentId, roundId);
+        _settleAfterRbtsSeed(engine, contentId, roundId);
 
         uint256 balanceBefore = lrepToken.balanceOf(voter1);
 
@@ -954,7 +954,7 @@ contract SettlementEdgeCasesTest is VotingTestBase {
         _reveal(contentId, roundId, ck2, true, s2);
         _reveal(contentId, roundId, ck3, false, s3);
 
-        engine.settleRound(contentId, roundId);
+        _settleAfterRbtsSeed(engine, contentId, roundId);
 
         uint256 bal1Before = lrepToken.balanceOf(voter1);
         uint256 bal2Before = lrepToken.balanceOf(voter2);

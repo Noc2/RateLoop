@@ -707,7 +707,7 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
             votingEngine.revealVoteByCommitKey(contentId, roundId, commitKeys[i], directions[i], 5_000, salts[i]);
         }
 
-        votingEngine.settleRound(contentId, roundId);
+        _settleAfterRbtsSeed(votingEngine, contentId, roundId);
     }
 
     function _expectSelfVoteCommitRevert(address voter, uint256 contentId, bytes32 salt) internal {

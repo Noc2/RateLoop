@@ -205,7 +205,7 @@ contract AdversarialTests is VotingTestBase {
         for (uint256 i = 0; i < commitKeys.length; i++) {
             _reveal(contentId, roundId, commitKeys[i]);
         }
-        engine.settleRound(contentId, roundId);
+        _settleAfterRbtsSeed(engine, contentId, roundId);
     }
 
     function _settleAfterFinalGrace(uint256 contentId, uint256 roundId, bytes32[] memory commitKeys) internal {
@@ -214,7 +214,7 @@ contract AdversarialTests is VotingTestBase {
         for (uint256 i = 0; i < commitKeys.length; i++) {
             _reveal(contentId, roundId, commitKeys[i]);
         }
-        engine.settleRound(contentId, roundId);
+        _settleAfterRbtsSeed(engine, contentId, roundId);
     }
 
     // =========================================================================
@@ -433,7 +433,7 @@ contract AdversarialTests is VotingTestBase {
         _reveal(contentId, roundId, ck3);
 
         // Settle immediately (voter3's epoch hasn't ended)
-        engine.settleRound(contentId, roundId);
+        _settleAfterRbtsSeed(engine, contentId, roundId);
 
         uint256 voter4Before = lrepToken.balanceOf(voter4);
 
@@ -464,7 +464,7 @@ contract AdversarialTests is VotingTestBase {
         _settleRound(contentId, roundId, cks);
 
         vm.expectRevert(RoundVotingEngine.RoundNotOpen.selector);
-        engine.settleRound(contentId, roundId);
+        _settleAfterRbtsSeed(engine, contentId, roundId);
     }
 
     /// @notice Cannot cancel a settled round
@@ -747,7 +747,7 @@ contract AdversarialTests is VotingTestBase {
         eng2.revealVoteByCommitKey(1, 1, ck2, true, 5_000, salt2);
         eng2.revealVoteByCommitKey(1, 1, ck3, true, 5_000, salt3);
 
-        eng2.settleRound(1, 1);
+        _settleAfterRbtsSeed(eng2, 1, 1);
 
         // With zero reserve, no consensus subsidy is paid. RBTS forfeitures still fund
         // the voter pool, with the frontend share falling back to voters when no eligible
@@ -790,7 +790,7 @@ contract AdversarialTests is VotingTestBase {
         }
 
         vm.expectRevert(RoundVotingEngine.NotEnoughVotes.selector);
-        engine.settleRound(contentId, roundId);
+        _settleAfterRbtsSeed(engine, contentId, roundId);
     }
 
     /// @notice Attacker with asymmetric stakes still partially forfeits the losing side.
@@ -995,7 +995,7 @@ contract AdversarialTests is VotingTestBase {
         _reveal(contentId, roundId, ck3);
 
         // Both in epoch 1, same stake — weighted pools are equal → tie
-        engine.settleRound(contentId, roundId);
+        _settleAfterRbtsSeed(engine, contentId, roundId);
 
         round = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertEq(uint8(round.state), uint8(RoundLib.RoundState.Tied));
@@ -1043,7 +1043,7 @@ contract AdversarialTests is VotingTestBase {
         _warpPastTlockRevealTime(voter3RevealableAfter);
         _reveal(contentId, roundId, ck3);
 
-        engine.settleRound(contentId, roundId);
+        _settleAfterRbtsSeed(engine, contentId, roundId);
 
         RoundLib.Round memory settledRound = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertTrue(settledRound.upWins);

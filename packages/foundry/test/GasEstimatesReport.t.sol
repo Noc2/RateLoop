@@ -197,6 +197,7 @@ contract UserTransactionGasEstimatesTest is RoundIntegrationTest {
         _commitAllThenReveal(voters, contentId, directions, STAKE);
         uint256 roundId = votingEngine.currentRoundId(contentId);
 
+        vm.roll(block.number + 1);
         uint256 gasUsed =
             _measureCall(address(votingEngine), abi.encodeCall(RoundVotingEngine.settleRound, (contentId, roundId)));
         console2.log("settle_round_gas", gasUsed);

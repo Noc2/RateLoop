@@ -158,6 +158,7 @@ contract FormalVerification_RoundLifecycleTest is VotingTestBase {
         }
         RoundLib.Round memory r2 = RoundEngineReadHelpers.round(engine, cid, roundId);
         if (r2.thresholdReachedAt > 0) {
+            vm.roll(block.number + 1);
             try engine.settleRound(cid, roundId) { } catch { }
         }
     }
@@ -350,7 +351,7 @@ contract FormalVerification_RoundLifecycleTest is VotingTestBase {
         assertGt(afterReveal.thresholdReachedAt, 0, "Threshold reached after minVoters reveals");
 
         // Settlement succeeds immediately after minVoters revealed
-        engine.settleRound(cid, rid);
+        _settleAfterRbtsSeed(engine, cid, rid);
 
         RoundLib.Round memory settled = RoundEngineReadHelpers.round(engine, cid, rid);
         assertEq(uint256(settled.state), uint256(RoundLib.RoundState.Settled), "Settled after reveals");
@@ -380,7 +381,7 @@ contract FormalVerification_RoundLifecycleTest is VotingTestBase {
         assertGt(afterReveal.thresholdReachedAt, 0, "Threshold reached");
 
         // Settle immediately after reveals
-        engine.settleRound(cid, rid);
+        _settleAfterRbtsSeed(engine, cid, rid);
 
         RoundLib.Round memory afterSettle = RoundEngineReadHelpers.round(engine, cid, rid);
         assertEq(uint256(afterSettle.state), uint256(RoundLib.RoundState.Settled), "Consensus settled");
@@ -413,7 +414,7 @@ contract FormalVerification_RoundLifecycleTest is VotingTestBase {
         assertGt(afterReveal.thresholdReachedAt, 0, "Threshold reached");
 
         // Settle immediately after reveals
-        engine.settleRound(cid, rid);
+        _settleAfterRbtsSeed(engine, cid, rid);
 
         RoundLib.Round memory tied = RoundEngineReadHelpers.round(engine, cid, rid);
         assertEq(uint256(tied.state), uint256(RoundLib.RoundState.Tied), "Equal weighted stakes produce Tied state");

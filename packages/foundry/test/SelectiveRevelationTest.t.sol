@@ -198,7 +198,7 @@ contract SelectiveRevelationTest is VotingTestBase {
 
         // Settlement should revert — 7 unrevealed past-epoch votes remain within grace period
         vm.expectRevert(RoundVotingEngine.UnrevealedPastEpochVotes.selector);
-        engine.settleRound(contentId, roundId);
+        _settleAfterRbtsSeed(engine, contentId, roundId);
     }
 
     /// @notice Same scenario but all 10 votes are revealed — settlement succeeds.
@@ -224,7 +224,7 @@ contract SelectiveRevelationTest is VotingTestBase {
         }
 
         // Settlement succeeds
-        engine.settleRound(contentId, roundId);
+        _settleAfterRbtsSeed(engine, contentId, roundId);
 
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertEq(uint256(round.state), uint256(RoundLib.RoundState.Settled));
@@ -261,7 +261,7 @@ contract SelectiveRevelationTest is VotingTestBase {
         _reveal(contentId, roundId, ck3, false, s3);
 
         // Settlement succeeds — epoch-2 votes are in current epoch, don't block
-        engine.settleRound(contentId, roundId);
+        _settleAfterRbtsSeed(engine, contentId, roundId);
 
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertEq(uint256(round.state), uint256(RoundLib.RoundState.Settled));
@@ -286,7 +286,7 @@ contract SelectiveRevelationTest is VotingTestBase {
         _reveal(contentId, roundId, ck3, true, s3);
 
         uint256 reserveBefore = engine.consensusReserve();
-        engine.settleRound(contentId, roundId);
+        _settleAfterRbtsSeed(engine, contentId, roundId);
 
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertEq(uint256(round.state), uint256(RoundLib.RoundState.Settled));
@@ -321,7 +321,7 @@ contract SelectiveRevelationTest is VotingTestBase {
         _reveal(contentId, roundId, commitKeys[1], true, salts[1]);
         _reveal(contentId, roundId, commitKeys[2], false, salts[2]);
 
-        engine.settleRound(contentId, roundId);
+        _settleAfterRbtsSeed(engine, contentId, roundId);
 
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertEq(uint256(round.state), uint256(RoundLib.RoundState.Settled));
@@ -356,7 +356,7 @@ contract SelectiveRevelationTest is VotingTestBase {
         _reveal(contentId, roundId, commitKeys[2], true, salts[2]);
 
         uint256 reserveBefore = engine.consensusReserve();
-        engine.settleRound(contentId, roundId);
+        _settleAfterRbtsSeed(engine, contentId, roundId);
 
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertEq(uint256(round.state), uint256(RoundLib.RoundState.Settled));
@@ -389,7 +389,7 @@ contract SelectiveRevelationTest is VotingTestBase {
 
         // Settlement blocked — 1 unrevealed vote within grace period
         vm.expectRevert(RoundVotingEngine.UnrevealedPastEpochVotes.selector);
-        engine.settleRound(contentId, roundId);
+        _settleAfterRbtsSeed(engine, contentId, roundId);
     }
 
     // =========================================================================
@@ -423,7 +423,7 @@ contract SelectiveRevelationTest is VotingTestBase {
         assertEq(RoundEngineReadHelpers.round(engine, contentId, roundId).revealedCount, 3);
 
         // Settlement succeeds
-        engine.settleRound(contentId, roundId);
+        _settleAfterRbtsSeed(engine, contentId, roundId);
     }
 
     // =========================================================================
@@ -479,7 +479,7 @@ contract SelectiveRevelationTest is VotingTestBase {
         _reveal(contentId, roundId, commitKeys[1], true, salts[1]);
         _reveal(contentId, roundId, commitKeys[2], false, salts[2]);
 
-        engine.settleRound(contentId, roundId);
+        _settleAfterRbtsSeed(engine, contentId, roundId);
 
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertEq(uint256(round.state), uint256(RoundLib.RoundState.Settled));
@@ -512,10 +512,10 @@ contract SelectiveRevelationTest is VotingTestBase {
         _reveal(contentId, roundId, commitKeys[2], false, salts[2]);
 
         vm.expectRevert(RoundVotingEngine.UnrevealedPastEpochVotes.selector);
-        engine.settleRound(contentId, roundId);
+        _settleAfterRbtsSeed(engine, contentId, roundId);
 
         vm.warp(lastRevealableAfter + 2 hours + 1);
-        engine.settleRound(contentId, roundId);
+        _settleAfterRbtsSeed(engine, contentId, roundId);
 
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertEq(uint256(round.state), uint256(RoundLib.RoundState.Settled));
@@ -555,6 +555,6 @@ contract SelectiveRevelationTest is VotingTestBase {
 
         // Settlement blocked — epoch-2 has unrevealed vote within grace period
         vm.expectRevert(RoundVotingEngine.UnrevealedPastEpochVotes.selector);
-        engine.settleRound(contentId, roundId);
+        _settleAfterRbtsSeed(engine, contentId, roundId);
     }
 }

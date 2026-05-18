@@ -157,6 +157,7 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
         }
         RoundLib.Round memory r2 = RoundEngineReadHelpers.round(engine, cid, roundId);
         if (r2.thresholdReachedAt > 0) {
+            vm.roll(block.number + 1);
             try engine.settleRound(cid, roundId) { } catch { }
         }
     }
@@ -575,7 +576,7 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
         }
 
         // Settlement succeeds immediately after minVoters revealed
-        engine.settleRound(cid, rid);
+        _settleAfterRbtsSeed(engine, cid, rid);
 
         RoundLib.Round memory afterForce = RoundEngineReadHelpers.round(engine, cid, rid);
         assertEq(uint256(afterForce.state), uint256(RoundLib.RoundState.Settled), "Round settled after reveals");
@@ -599,7 +600,7 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
         vm.warp(block.timestamp + 1 hours + 1);
 
         vm.expectRevert(RoundVotingEngine.NotEnoughVotes.selector);
-        engine.settleRound(cid, rid);
+        _settleAfterRbtsSeed(engine, cid, rid);
     }
 
     // ==================== Test 14: Tied Round - Full Refund ====================

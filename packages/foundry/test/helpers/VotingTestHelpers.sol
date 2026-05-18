@@ -798,6 +798,11 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
         }
     }
 
+    function _settleAfterRbtsSeed(RoundVotingEngine engine, uint256 contentId, uint256 roundId) internal {
+        vm.roll(block.number + 1);
+        engine.settleRound(contentId, roundId);
+    }
+
     function _tlockDrandChainHash() internal view virtual returns (bytes32) {
         return activeTlockDrandChainHash;
     }

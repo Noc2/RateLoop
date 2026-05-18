@@ -160,7 +160,7 @@ contract GameTheoryImprovementsTest is VotingTestBase {
 
     /// @dev Settle the round. Caller must ensure minVoters have been revealed.
     function _settle(uint256 contentId, uint256 roundId) internal {
-        engine.settleRound(contentId, roundId);
+        _settleAfterRbtsSeed(engine, contentId, roundId);
     }
 
     // =========================================================================

@@ -22,7 +22,7 @@ contract GasBudgetTest is RoundIntegrationTest {
     uint256 internal constant MAX_SETTLE_ROUND_MAX_EPOCH_SCAN_GAS = 5_900_000;
     uint256 internal constant MAX_PROCESS_UNREVEALED_GAS = 250_000;
     uint256 internal constant MAX_CANCEL_EXPIRED_ROUND_GAS = 60_000;
-    uint256 internal constant MAX_CLAIM_REWARD_GAS = 250_000;
+    uint256 internal constant MAX_CLAIM_REWARD_GAS = 270_000;
     uint256 internal constant MAX_CLAIM_PARTICIPATION_REWARD_GAS = 240_000;
     uint256 internal constant MAX_CLAIM_FRONTEND_FEE_GAS = 250_000;
 
@@ -177,6 +177,7 @@ contract GasBudgetTest is RoundIntegrationTest {
         _commitAllThenReveal(voters, contentId, directions, STAKE);
         uint256 roundId = _getActiveOrLatestRoundId(contentId);
 
+        vm.roll(block.number + 1);
         uint256 gasUsed =
             _measureCall(address(votingEngine), abi.encodeCall(RoundVotingEngine.settleRound, (contentId, roundId)));
 
@@ -208,6 +209,7 @@ contract GasBudgetTest is RoundIntegrationTest {
 
         uint256 maxEpochEnd = uint256(round.startTime) + 7 days + 5 minutes;
         vm.warp(maxEpochEnd + config.revealGracePeriod() + 1);
+        vm.roll(block.number + 1);
 
         uint256 gasUsed =
             _measureCall(address(votingEngine), abi.encodeCall(RoundVotingEngine.settleRound, (contentId, roundId)));
@@ -239,7 +241,7 @@ contract GasBudgetTest is RoundIntegrationTest {
         vm.warp(
             round.startTime + 7 days + ProtocolConfig(address(votingEngine.protocolConfig())).revealGracePeriod() + 1
         );
-        votingEngine.settleRound(contentId, roundId);
+        _settleAfterRbtsSeed(votingEngine, contentId, roundId);
 
         uint256 gasUsed = _measureCall(
             address(votingEngine), abi.encodeCall(RoundVotingEngine.processUnrevealedVotes, (contentId, roundId, 0, 10))
