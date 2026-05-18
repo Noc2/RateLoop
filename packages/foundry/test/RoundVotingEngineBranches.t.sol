@@ -2277,6 +2277,8 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     function test_CommitAfterRevealFailedGrace_StartsNewRound() public {
         uint256 contentId = _submitContent();
 
+        mockRaterIdentityRegistry.setHolder(voter1);
+
         _commit(voter1, contentId, true, STAKE);
         _commit(voter2, contentId, false, STAKE);
         _commit(voter3, contentId, true, STAKE);

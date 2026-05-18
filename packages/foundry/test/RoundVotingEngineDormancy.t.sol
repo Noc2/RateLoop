@@ -10,11 +10,13 @@ import { LoopReputation } from "../contracts/LoopReputation.sol";
 import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
 import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
 import { VotingTestBase } from "./helpers/VotingTestHelpers.sol";
+import { MockRaterIdentityRegistry } from "./mocks/MockRaterIdentityRegistry.sol";
 
 contract RoundVotingEngineDormancyTest is VotingTestBase {
     LoopReputation public lrepToken;
     ContentRegistry public registry;
     RoundVotingEngine public engine;
+    MockRaterIdentityRegistry public raterIdentityRegistry;
 
     address public owner = address(1);
     address public submitter = address(2);
@@ -62,6 +64,8 @@ contract RoundVotingEngineDormancyTest is VotingTestBase {
         MockCategoryRegistry mockCategoryRegistry = new MockCategoryRegistry();
         mockCategoryRegistry.seedDefaultTestCategories();
         registry.setCategoryRegistry(address(mockCategoryRegistry));
+        raterIdentityRegistry = new MockRaterIdentityRegistry();
+        ProtocolConfig(address(engine.protocolConfig())).setRaterRegistry(address(raterIdentityRegistry));
 
         _setTlockRoundConfig(ProtocolConfig(address(engine.protocolConfig())), 1 hours, 7 days, 3, 1000);
 
@@ -75,6 +79,8 @@ contract RoundVotingEngineDormancyTest is VotingTestBase {
 
     function test_CommitAfterRevealFailedGrace_StartsNewRoundBeforeDormancyWindowElapses() public {
         uint256 contentId = _submitContent();
+
+        raterIdentityRegistry.setHolder(voter1);
 
         _commit(voter1, contentId, true);
         _commit(voter2, contentId, false);
@@ -94,6 +100,8 @@ contract RoundVotingEngineDormancyTest is VotingTestBase {
 
     function test_CommitAfterRevealFailedGrace_RevertsOnceDormancyElapsed() public {
         uint256 contentId = _submitContent();
+
+        raterIdentityRegistry.setHolder(voter1);
 
         _commit(voter1, contentId, true);
         _commit(voter2, contentId, false);
