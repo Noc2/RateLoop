@@ -535,15 +535,8 @@ library QuestionRewardPoolEscrowClaimLib {
         if (allocation > rewardPool.unallocatedAmount) return 0;
     }
 
-    function _roundClaimWeight(RoundVotingEngine votingEngine, uint256 contentId, uint256 roundId, bytes32 commitKey)
-        private
-        view
-        returns (uint256)
-    {
-        if (!votingEngine.roundRbtsScored(contentId, roundId)) {
-            return BASE_PARTICIPATION_WEIGHT_BPS;
-        }
-        return votingEngine.commitRbtsRewardWeight(contentId, roundId, commitKey);
+    function _roundClaimWeight(RoundVotingEngine, uint256, uint256, bytes32) private pure returns (uint256) {
+        return BASE_PARTICIPATION_WEIGHT_BPS;
     }
 
     function _effectiveClusterQuestionClaimWeight(

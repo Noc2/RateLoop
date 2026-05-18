@@ -533,15 +533,8 @@ library QuestionRewardPoolEscrowQualificationLib {
             QuestionRewardPoolEscrowVoterLib.committedByBountyClose(ctx.bountyClosesAt, committedAt, revealedAt);
     }
 
-    function _claimWeight(RoundVotingEngine votingEngine, uint256 contentId, uint256 roundId, bytes32 commitKey)
-        private
-        view
-        returns (uint256)
-    {
-        if (!votingEngine.roundRbtsScored(contentId, roundId)) {
-            return BPS_SCALE;
-        }
-        return votingEngine.commitRbtsRewardWeight(contentId, roundId, commitKey);
+    function _claimWeight(RoundVotingEngine, uint256, uint256, bytes32) private pure returns (uint256) {
+        return BPS_SCALE;
     }
 
     function _previewRoundAllocation(RewardPool storage rewardPool) private view returns (uint256 allocation) {

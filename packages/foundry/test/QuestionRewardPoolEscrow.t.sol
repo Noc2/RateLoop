@@ -245,7 +245,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertEq(usdc.balanceOf(address(rewardPoolEscrow)), 0);
     }
 
-    function testQuestionRewardsUsePredictionEffectiveWeights() public {
+    function testQuestionRewardsUseParticipationWeights() public {
         uint256 contentId = _submitQuestion("");
         uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
 
@@ -263,7 +263,9 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertGt(claimable1, 0);
         assertGt(claimable2, 0);
         assertGt(claimable3, 0);
-        assertTrue(claimable1 != claimable2 || claimable2 != claimable3);
+        assertEq(claimable1, REWARD_POOL_AMOUNT / 3);
+        assertEq(claimable2, REWARD_POOL_AMOUNT / 3);
+        assertEq(claimable3, REWARD_POOL_AMOUNT / 3);
 
         uint256 reward1 = _claimQuestionRewardAndAssert(voter1, rewardPoolId, roundId);
         uint256 reward2 = _claimQuestionRewardAndAssert(voter2, rewardPoolId, roundId);
@@ -2182,6 +2184,11 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.warp(expiresAt + 1);
         _settleAfterRbtsSeed(votingEngine, contentId, roundId);
 
+        rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
+        RoundSnapshot memory snapshot = rewardPoolEscrow.getRoundSnapshot(rewardPoolId, roundId);
+        assertEq(snapshot.rawEligibleVoters, 4);
+        assertEq(snapshot.eligibleVoters, 4 * 10_000);
+        assertEq(snapshot.totalClaimWeight, 4 * 10_000);
         assertGt(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter1), 0);
     }
 
@@ -2240,6 +2247,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         _settleAfterRbtsSeed(votingEngine, contentId, roundId);
 
         assertGt(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter1), 0);
+        assertEq(votingEngine.commitRbtsRewardWeight(contentId, roundId, lateCommitKeys[1]), 0);
         assertGt(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter4), 0);
 
         vm.prank(voter4);
@@ -3785,9 +3793,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         returns (IClusterPayoutOracle.PayoutWeight memory payoutWeight)
     {
         bytes32 commitKey = votingEngine.getRoundCommitKey(contentId, roundId, commitIndex);
-        uint256 baseWeight = votingEngine.roundRbtsScored(contentId, roundId)
-            ? votingEngine.commitRbtsRewardWeight(contentId, roundId, commitKey)
-            : 10_000;
+        uint256 baseWeight = 10_000;
         payoutWeight = IClusterPayoutOracle.PayoutWeight({
             domain: 1,
             rewardPoolId: rewardPoolId,

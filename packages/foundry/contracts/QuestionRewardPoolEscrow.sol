@@ -1209,11 +1209,8 @@ contract QuestionRewardPoolEscrow is
         );
     }
 
-    function _roundClaimWeight(uint256 contentId, uint256 roundId, bytes32 commitKey) internal view returns (uint256) {
-        if (!votingEngine.roundRbtsScored(contentId, roundId)) {
-            return BPS_SCALE;
-        }
-        return votingEngine.commitRbtsRewardWeight(contentId, roundId, commitKey);
+    function _roundClaimWeight(uint256, uint256, bytes32) internal pure returns (uint256) {
+        return BPS_SCALE;
     }
 
     function _effectiveQuestionClaimWeight(
