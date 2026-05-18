@@ -11,7 +11,6 @@ import { GovernorTimelockControl } from "@openzeppelin/contracts/governance/exte
 import { GovernorSettings } from "@openzeppelin/contracts/governance/extensions/GovernorSettings.sol";
 import { TimelockController } from "@openzeppelin/contracts/governance/TimelockController.sol";
 import { IVotes } from "@openzeppelin/contracts/governance/utils/IVotes.sol";
-import { Strings } from "@openzeppelin/contracts/utils/Strings.sol";
 
 interface IGovernanceLockableVotes is IVotes {
     function lockForGovernance(address account, uint256 amount) external;
@@ -263,12 +262,6 @@ contract CuryoGovernor is
     }
 
     /// @dev Override propose to lock the proposal threshold amount for 7 days.
-    ///      Binds the proposer's address into the description hash so the resulting
-    ///      proposalId is unique per proposer — preventing the OpenZeppelin Governor
-    ///      cancel-DoS where a griefer front-runs an honest proposer's submission with
-    ///      an identical (targets, values, calldatas, descriptionHash) tuple and then
-    ///      cancels, burning the honest proposer's cooldown and lock against a proposal
-    ///      they did not create (N-2 / OZ 4.9.1 Coinspect advisory).
     function propose(
         address[] memory targets,
         uint256[] memory values,
@@ -281,10 +274,7 @@ contract CuryoGovernor is
             revert ProposalCooldownActive(msg.sender, nextBlock);
         }
 
-        string memory boundDescription =
-            string(abi.encodePacked(description, "#proposer=", Strings.toHexString(uint160(msg.sender), 20)));
-
-        uint256 proposalId = super.propose(targets, values, calldatas, boundDescription);
+        uint256 proposalId = super.propose(targets, values, calldatas, description);
         proposalCreatedBlock[proposalId] = block.number;
         nextProposalBlock[msg.sender] = block.number + PROPOSAL_COOLDOWN_BLOCKS;
 
@@ -292,5 +282,26 @@ contract CuryoGovernor is
         reputationToken.lockForGovernance(msg.sender, proposalThreshold());
 
         return proposalId;
+    }
+
+    /// @notice Reject proposals whose description does not bind to the proposer's address.
+    /// @dev N-2: OZ's stock `_isValidDescriptionForProposer` accepts any description WITHOUT a
+    ///      `#proposer=0x...` suffix, which leaves the proposalId computation a pure function of
+    ///      (targets, values, calldatas, descriptionHash) and lets a griefer front-run an honest
+    ///      proposer's submission with an identical hash, then cancel — denying their slot and
+    ///      triggering their cooldown + 7d lock against a proposal they did not create
+    ///      (Coinspect / OZ 4.9.1 advisory). Mandating the suffix makes the proposalId unique
+    ///      per proposer while preserving the standard queue/execute descriptionHash contract.
+    function _isValidDescriptionForProposer(address proposer, string memory description)
+        internal
+        view
+        override
+        returns (bool)
+    {
+        uint256 length = bytes(description).length;
+        // 52 = bytes("#proposer=").length (10) + bytes("0x" + 40 hex chars) (42).
+        if (length < 52) return false;
+        if (bytes(description)[length - 52] != bytes1("#")) return false;
+        return super._isValidDescriptionForProposer(proposer, description);
     }
 }
