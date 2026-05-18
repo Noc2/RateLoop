@@ -170,9 +170,11 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         emit OracleConfigUpdated(DEFAULT_CHALLENGE_WINDOW, DEFAULT_CHALLENGE_BOND, admin);
     }
 
-    receive() external payable {
-        revert InvalidBond();
-    }
+    // N-5: Intentionally no receive() function. The contract holds no ETH balance;
+    // plain ETH sends already revert on missing receive(). A receive() { revert }
+    // would signal an intent that selfdestruct force-feed can violate, but no logic
+    // here reads address(this).balance so any forced ETH is dead weight rather than
+    // a state-corrupting input.
 
     function setOracleConfig(uint64 newChallengeWindow, uint256 newChallengeBond, address newBondRecipient)
         external
