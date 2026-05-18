@@ -13,7 +13,7 @@ import type { ContentOpenRoundSummary, RewardPoolCurrency } from "~~/hooks/conte
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 import { useParticipationRate } from "~~/hooks/useParticipationRate";
 import { useRoundSnapshot } from "~~/hooks/useRoundSnapshot";
-import type { VotingConfig } from "~~/lib/contracts/roundVotingEngine";
+import { type VotingConfig, isRoundAcceptingVotes } from "~~/lib/contracts/roundVotingEngine";
 import { formatSubmissionRewardAmount, formatUsdAmount } from "~~/lib/questionRewardPools";
 import { formatVoteCooldownRemaining } from "~~/lib/vote/cooldown";
 import { describeOpenRoundActivity, formatLrepAmount, getRoundProgressMessaging } from "~~/lib/vote/voteIncentives";
@@ -412,12 +412,17 @@ export function VotingQuestionCard({
   // Check if user already voted on this content in the current round
   const roundSnapshot = useRoundSnapshot(contentId, openRound ?? undefined, roundConfig ?? undefined);
   const { roundId, isRoundFull } = roundSnapshot;
+  const roundAcceptsVotes = isRoundAcceptingVotes(roundSnapshot);
   const cooldownActive = cooldownSecondsRemaining > 0;
   const cooldownLabel = formatVoteCooldownRemaining(cooldownSecondsRemaining);
+  const roundNotAcceptingMessage =
+    !roundAcceptsVotes && !isCommitting ? "This round is not accepting votes right now." : null;
   const displayError =
-    cooldownActive && error?.includes("You already voted on this content within the last") ? null : error;
+    cooldownActive && error?.includes("You already voted on this content within the last")
+      ? null
+      : (error ?? roundNotAcceptingMessage);
   const contentInactive = !isContentActive;
-  const voteActionDisabled = isCommitting || isVoteEligibilityPending || contentInactive;
+  const voteActionDisabled = isCommitting || isVoteEligibilityPending || contentInactive || !roundAcceptsVotes;
   const [isDetailsOpen, setIsDetailsOpen] = useState(isSignalVariant);
   const [isAttentionActive, setIsAttentionActive] = useState(false);
   const [showFundQuestionModal, setShowFundQuestionModal] = useState(false);

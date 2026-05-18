@@ -12,7 +12,11 @@ import { useParticipationRate } from "~~/hooks/useParticipationRate";
 import { useRaterIdentityStake, useRaterRegistryIdentity } from "~~/hooks/useRaterRegistryIdentity";
 import { useRoundSnapshot } from "~~/hooks/useRoundSnapshot";
 import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
-import type { OpenRoundFallbackData, VotingConfig } from "~~/lib/contracts/roundVotingEngine";
+import {
+  type OpenRoundFallbackData,
+  type VotingConfig,
+  isRoundAcceptingVotes,
+} from "~~/lib/contracts/roundVotingEngine";
 import { estimateVoteReturn, formatLrepAmount } from "~~/lib/vote/voteIncentives";
 
 interface StakeSelectorProps {
@@ -94,6 +98,7 @@ export function StakeSelector({
 
   const roundSnapshot = useRoundSnapshot(contentId, openRound ?? undefined, roundConfig ?? undefined);
   const { roundId: currentRoundId, phase, isEpoch1, upPool, downPool } = roundSnapshot;
+  const roundAcceptsVotes = isRoundAcceptingVotes(roundSnapshot);
   const effectiveIsBlind = phase !== "voting" || isEpoch1;
 
   const estimateSnapshot = useMemo(
@@ -156,7 +161,10 @@ export function StakeSelector({
   const sliderMax = Math.max(1, maxStake);
   const isCapacityLimited = amount > 0 && maxByCapacity < maxByBalance;
   const cooldownActive = cooldownSecondsRemaining > 0;
-  const confirmDisabled = isConfirming || cooldownActive || amount < 0 || (amount > 0 && amount > maxStake);
+  const formDisabled = isConfirming || !roundAcceptsVotes;
+  const confirmDisabled = formDisabled || cooldownActive || amount < 0 || (amount > 0 && amount > maxStake);
+  const roundNotAcceptingMessage =
+    !roundAcceptsVotes && !confirmError && !isConfirming ? "This round is not accepting votes right now." : null;
   const phaseHeadline = effectiveIsBlind ? "Private round" : "Post-epoch reveal";
   const phaseHeadlineClassName = effectiveIsBlind ? "text-primary" : "text-warning";
   const sliderClassName = "range range-primary range-sm w-full";
@@ -243,7 +251,7 @@ export function StakeSelector({
                   type="button"
                   onClick={() => handleSignalChange(true)}
                   className={`btn min-h-12 rounded-lg ${isUp ? "btn-success text-success-content" : "pill-inactive-muted"}`}
-                  disabled={isConfirming}
+                  disabled={formDisabled}
                   aria-pressed={isUp}
                 >
                   <HandThumbUpIcon className="h-5 w-5" />
@@ -253,7 +261,7 @@ export function StakeSelector({
                   type="button"
                   onClick={() => handleSignalChange(false)}
                   className={`btn min-h-12 rounded-lg ${!isUp ? "btn-error text-error-content" : "pill-inactive-muted"}`}
-                  disabled={isConfirming}
+                  disabled={formDisabled}
                   aria-pressed={!isUp}
                 >
                   <HandThumbDownIcon className="h-5 w-5" />
@@ -290,7 +298,7 @@ export function StakeSelector({
                   }}
                   className="range range-primary range-sm mt-4 w-full"
                   style={sliderStyle}
-                  disabled={isConfirming}
+                  disabled={formDisabled}
                   aria-label="Crowd thumbs-up forecast"
                   aria-valuetext={`${predictedUpPercent.toFixed(0)} percent up`}
                 />
@@ -348,7 +356,7 @@ export function StakeSelector({
                 onChange={e => setAmount(normalizeStakeSelectorAmount(Number(e.target.value)))}
                 className={sliderClassName}
                 style={sliderStyle}
-                disabled={isConfirming || maxStake < 1}
+                disabled={formDisabled || maxStake < 1}
                 aria-label="Stake amount"
               />
               <div className="mt-1 flex justify-between text-base text-base-content/60">
@@ -449,7 +457,9 @@ export function StakeSelector({
               </button>
             </div>
 
-            {confirmError && !isConfirming && <p className="mt-3 text-center text-base text-error">{confirmError}</p>}
+            {(confirmError || roundNotAcceptingMessage) && !isConfirming && (
+              <p className="mt-3 text-center text-base text-error">{confirmError ?? roundNotAcceptingMessage}</p>
+            )}
           </motion.div>
         </motion.div>
       )}

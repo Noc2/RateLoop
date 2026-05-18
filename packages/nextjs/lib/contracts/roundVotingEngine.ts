@@ -403,6 +403,16 @@ export function deriveRoundSnapshot(params: {
   };
 }
 
+export function isRoundAcceptingVotes(
+  snapshot: Pick<RoundSnapshot, "hasRound" | "phase" | "roundTimeRemaining" | "thresholdReachedAt">,
+) {
+  if (!snapshot.hasRound) {
+    return true;
+  }
+
+  return snapshot.phase === "voting" && snapshot.roundTimeRemaining > 0 && snapshot.thresholdReachedAt === 0;
+}
+
 export function isOptimisticRoundDeltaReflected(params: {
   roundId: bigint;
   round?: RoundData;

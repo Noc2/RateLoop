@@ -5,6 +5,7 @@ import {
   deriveRoundSnapshot,
   deriveVoteDeadlines,
   isOptimisticRoundDeltaReflected,
+  isRoundAcceptingVotes,
   mergeRoundDataWithFallback,
   parseRound,
   resolveFrontendCode,
@@ -215,6 +216,41 @@ test("deriveVoteDeadlines falls back to round expiry after epoch 1", () => {
 
   assert.equal(deadlines.epoch1Remaining, 0);
   assert.equal(deadlines.nextActionRemaining, deadlines.roundTimeRemaining);
+});
+
+test("isRoundAcceptingVotes allows active content to start a fresh round", () => {
+  const snapshot = deriveRoundSnapshot({
+    roundId: 0n,
+    config: DEFAULT_VOTING_CONFIG,
+    now: 1_500,
+  });
+
+  assert.equal(isRoundAcceptingVotes(snapshot), true);
+});
+
+test("isRoundAcceptingVotes rejects expired and threshold-reached open rounds", () => {
+  const openSnapshot = deriveRoundSnapshot({
+    roundId: 1n,
+    round: makeRound(),
+    config: DEFAULT_VOTING_CONFIG,
+    now: 1_500,
+  });
+  const expiredSnapshot = deriveRoundSnapshot({
+    roundId: 1n,
+    round: makeRound(),
+    config: DEFAULT_VOTING_CONFIG,
+    now: 1_000 + DEFAULT_VOTING_CONFIG.maxDuration,
+  });
+  const thresholdReachedSnapshot = deriveRoundSnapshot({
+    roundId: 1n,
+    round: makeRound({ thresholdReachedAt: 1_300n }),
+    config: DEFAULT_VOTING_CONFIG,
+    now: 1_500,
+  });
+
+  assert.equal(isRoundAcceptingVotes(openSnapshot), true);
+  assert.equal(isRoundAcceptingVotes(expiredSnapshot), false);
+  assert.equal(isRoundAcceptingVotes(thresholdReachedSnapshot), false);
 });
 
 test("vote helpers normalize stake and frontend codes", () => {
