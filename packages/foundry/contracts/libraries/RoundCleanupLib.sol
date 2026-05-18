@@ -172,6 +172,7 @@ library RoundCleanupLib {
         mapping(address => bytes32) storage roundVoterCommitHash,
         mapping(bytes32 => bytes32) storage roundIdentityCommitKey,
         mapping(bytes32 => address) storage roundCommitIdentityHolder,
+        mapping(address => bytes32) storage roundHolderCommitKey,
         IRaterIdentityRegistry identityRegistry,
         address account
     ) external view returns (bytes32 commitKey, address rewardRecipient) {
@@ -182,6 +183,12 @@ library RoundCleanupLib {
                 rewardRecipient = resolved.holder == address(0) ? account : resolved.holder;
                 return (commitKey, rewardRecipient);
             }
+        }
+        address holder = resolved.holder == address(0) ? account : resolved.holder;
+        commitKey = roundHolderCommitKey[holder];
+        if (commitKey != bytes32(0)) {
+            rewardRecipient = roundCommitIdentityHolder[commitKey];
+            return (commitKey, rewardRecipient == address(0) ? holder : rewardRecipient);
         }
 
         bytes32 directCommitHash = roundVoterCommitHash[account];
@@ -252,6 +259,7 @@ library RoundCleanupLib {
         mapping(bytes32 => bytes32) storage roundIdentityCommitKey,
         mapping(bytes32 => bytes32) storage roundCommitIdentityKey,
         mapping(bytes32 => address) storage roundCommitIdentityHolder,
+        mapping(address => bytes32) storage roundHolderCommitKey,
         bytes32 commitKey,
         bytes32 identityKey,
         address identityHolder
@@ -259,6 +267,9 @@ library RoundCleanupLib {
         roundIdentityCommitKey[identityKey] = commitKey;
         roundCommitIdentityKey[commitKey] = identityKey;
         roundCommitIdentityHolder[commitKey] = identityHolder;
+        if (identityHolder != address(0)) {
+            roundHolderCommitKey[identityHolder] = commitKey;
+        }
     }
 
     function recordCommitAccounting(

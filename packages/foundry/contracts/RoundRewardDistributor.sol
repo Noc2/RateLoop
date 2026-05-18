@@ -876,6 +876,12 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
                 return (commitKey, rewardRecipient);
             }
         }
+        address holder = resolved.holder == address(0) ? account : resolved.holder;
+        commitKey = votingEngine.holderCommitKey(contentId, roundId, holder);
+        if (commitKey != bytes32(0)) {
+            rewardRecipient = votingEngine.commitIdentityHolder(contentId, roundId, commitKey);
+            return (commitKey, rewardRecipient == address(0) ? holder : rewardRecipient);
+        }
 
         bytes32 directCommitHash = votingEngine.voterCommitHash(contentId, roundId, account);
         if (directCommitHash != bytes32(0)) {

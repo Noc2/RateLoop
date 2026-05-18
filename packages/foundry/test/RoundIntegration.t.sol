@@ -1596,6 +1596,50 @@ contract RoundIntegrationTest is VotingTestBase {
         assertEq(lrepToken.balanceOf(delegate2), newDelegateBalanceBefore, "new delegate is a relay, not a recipient");
     }
 
+    function test_SettledRound_IdentityChurnedHolderCanClaimViaNewDelegate() public {
+        uint256 contentId = _submitContent();
+
+        vm.prank(owner);
+        raterRegistry.seedHumanCredential(voter1, uint64(block.timestamp + 1), bytes32("identity-a"), bytes32("ev-a"));
+        _setAcceptedDelegate(raterRegistry, voter1, delegate1);
+
+        address[] memory voters = new address[](3);
+        voters[0] = delegate1;
+        voters[1] = voter2;
+        voters[2] = voter3;
+        bool[] memory dirs = new bool[](3);
+        dirs[0] = true;
+        dirs[1] = true;
+        dirs[2] = false;
+
+        uint256 holderBalanceBefore = lrepToken.balanceOf(voter1);
+        uint256 oldDelegateBalanceBefore = lrepToken.balanceOf(delegate1);
+        uint256 newDelegateBalanceBefore = lrepToken.balanceOf(delegate2);
+
+        uint256 roundId = _settleRoundWith(voters, contentId, dirs, STAKE);
+        uint256 expectedReturnedStake = _expectedRbtsReturnedStake(contentId, roundId, delegate1);
+        assertNotEq(votingEngine.holderCommitKey(contentId, roundId, voter1), bytes32(0));
+
+        vm.prank(voter1);
+        raterRegistry.removeDelegate();
+        vm.prank(owner);
+        raterRegistry.seedHumanCredential(
+            voter1, uint64(block.timestamp + 30 days), bytes32("identity-b"), bytes32("ev-b")
+        );
+        _setAcceptedDelegate(raterRegistry, voter1, delegate2);
+
+        vm.prank(delegate2);
+        rewardDistributor.claimReward(contentId, roundId);
+
+        assertEq(
+            lrepToken.balanceOf(delegate1),
+            oldDelegateBalanceBefore - STAKE + expectedReturnedStake,
+            "old delegate receives its RBTS stake return"
+        );
+        assertGt(lrepToken.balanceOf(voter1), holderBalanceBefore, "holder receives reward after identity churn");
+        assertEq(lrepToken.balanceOf(delegate2), newDelegateBalanceBefore, "new delegate is only a relay");
+    }
+
     /// @dev Once the rotated-delegate path has claimed the holder's reward, the ex-delegate
     ///      cannot replay the same commit through its EOA-keyed direct path.
     function test_SettledRound_RotatedDelegateBlocksExDelegateReplay() public {

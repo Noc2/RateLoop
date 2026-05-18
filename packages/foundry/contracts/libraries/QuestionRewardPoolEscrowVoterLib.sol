@@ -100,6 +100,19 @@ library QuestionRewardPoolEscrowVoterLib {
                 return (identityKey, commitKey, rewardRecipient);
             }
         }
+        address holder = rewardRecipient;
+        commitKey = votingEngine.holderCommitKey(contentId, roundId, holder);
+        if (commitKey != bytes32(0)) {
+            bytes32 holderCommitIdentityKey = votingEngine.commitIdentityKey(contentId, roundId, commitKey);
+            if (holderCommitIdentityKey != bytes32(0)) {
+                identityKey = holderCommitIdentityKey;
+            }
+            address holderCommitHolder = votingEngine.commitIdentityHolder(contentId, roundId, commitKey);
+            if (holderCommitHolder != address(0)) {
+                rewardRecipient = holderCommitHolder;
+            }
+            return (identityKey, commitKey, rewardRecipient);
+        }
 
         bytes32 directCommitHash = votingEngine.voterCommitHash(contentId, roundId, account);
         if (directCommitHash == bytes32(0)) {

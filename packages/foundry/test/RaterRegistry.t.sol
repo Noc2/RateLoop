@@ -296,6 +296,23 @@ contract RaterRegistryTest is Test {
         );
     }
 
+    function test_CredentialRefreshKeepsCanonicalIdentityKey() public {
+        vm.prank(admin);
+        registry.seedHumanCredential(rater, uint64(block.timestamp + 1), CURYO_ANCHOR_ID, EVIDENCE_HASH);
+
+        IRaterIdentityRegistry.ResolvedRater memory first = registry.resolveRater(rater);
+        assertEq(first.identityKey, CURYO_ANCHOR_ID);
+
+        vm.warp(block.timestamp + 2);
+        uint256[8] memory proof;
+        vm.prank(rater);
+        registry.attestHumanCredentialWithProof(1, uint256(NULLIFIER_HASH), proof);
+
+        IRaterIdentityRegistry.ResolvedRater memory refreshed = registry.resolveRater(rater);
+        assertEq(refreshed.humanNullifier, NULLIFIER_HASH);
+        assertEq(refreshed.identityKey, CURYO_ANCHOR_ID);
+    }
+
     function test_SeedHumanCredentialStoresCuryoSelfVerifiedAccountAsVerifiedHuman() public {
         uint64 expiresAt = uint64(block.timestamp + 180 days);
 

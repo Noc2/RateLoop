@@ -163,6 +163,7 @@ contract RoundVotingEngine is
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => bytes32))) public identityCommitKey;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => bytes32))) public commitIdentityKey;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => address))) public commitIdentityHolder;
+    mapping(uint256 => mapping(uint256 => mapping(address => bytes32))) public holderCommitKey;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint256))) public identityRoundStake;
 
     // Frontend fee aggregation (computed incrementally during revealVote for O(1) settlement)
@@ -695,6 +696,7 @@ contract RoundVotingEngine is
             identityCommitKey[contentId][roundId],
             commitIdentityKey[contentId][roundId],
             commitIdentityHolder[contentId][roundId],
+            holderCommitKey[contentId][roundId],
             commitKey,
             identityKey,
             identityHolder
@@ -1153,6 +1155,7 @@ contract RoundVotingEngine is
             voterCommitHash[contentId][roundId],
             identityCommitKey[contentId][roundId],
             commitIdentityHolder[contentId][roundId],
+            holderCommitKey[contentId][roundId],
             _getRoundRaterRegistry(contentId, roundId),
             account
         );

@@ -49,6 +49,7 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
 
     mapping(address => RaterProfile) private _profiles;
     mapping(address => HumanCredential) private _humanCredentials;
+    mapping(address => bytes32) private _canonicalHumanIdentityKey;
     /// @dev Provider-namespaced ownership of nullifier hashes. Previously a single
     ///      mapping was shared across providers, which allowed `SEEDER_ROLE` to
     ///      squat any 32-byte value and block the legitimate owner of the same
@@ -429,6 +430,9 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
         address currentOwner = _humanNullifierOwnerByProvider[provider][nullifierHash];
         if (currentOwner != address(0) && currentOwner != rater) revert NullifierAlreadyAssigned();
         _humanNullifierOwnerByProvider[provider][nullifierHash] = rater;
+        if (_canonicalHumanIdentityKey[rater] == bytes32(0)) {
+            _canonicalHumanIdentityKey[rater] = nullifierHash;
+        }
         _clearInboundDelegation(rater);
 
         _humanCredentials[rater] = HumanCredential({
@@ -455,7 +459,8 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
         HumanCredential storage credential = _humanCredentials[holder];
         if (credential.verified && !credential.revoked && credential.nullifierHash != bytes32(0)) {
             humanNullifier = credential.nullifierHash;
-            identityKey = humanNullifier;
+            identityKey = _canonicalHumanIdentityKey[holder];
+            if (identityKey == bytes32(0)) identityKey = humanNullifier;
             hasActiveCredential = credential.expiresAt > block.timestamp;
         } else {
             identityKey = addressIdentityKey(holder);
