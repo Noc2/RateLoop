@@ -165,6 +165,11 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "address",
             },
             {
+              name: "identityHolder",
+              type: "address",
+              internalType: "address",
+            },
+            {
               name: "identityKey",
               type: "bytes32",
               internalType: "bytes32",

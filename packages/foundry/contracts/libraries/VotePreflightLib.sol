@@ -20,6 +20,7 @@ library VotePreflightLib {
 
     struct CommitPreflightParams {
         address voter;
+        address identityHolder;
         uint256 contentId;
         uint256 roundId;
         bytes32 identityKey;
@@ -120,6 +121,7 @@ library VotePreflightLib {
         uint256 contentId,
         uint256 roundId,
         address voter,
+        address identityHolder,
         bytes32 identityKey,
         uint256 cooldownWindow
     ) external view {
@@ -131,6 +133,16 @@ library VotePreflightLib {
         }
 
         uint256 lastAdvisoryVote = recorder.lastAdvisoryVoteTimestamp(contentId, voter);
+        if (identityHolder != address(0) && identityHolder != voter) {
+            if (recorder.advisoryCommitKeyByRater(contentId, roundId, identityHolder) != bytes32(0)) {
+                revert AlreadyCommitted();
+            }
+
+            uint256 lastHolderAdvisoryVote = recorder.lastAdvisoryVoteTimestamp(contentId, identityHolder);
+            if (lastHolderAdvisoryVote > lastAdvisoryVote) {
+                lastAdvisoryVote = lastHolderAdvisoryVote;
+            }
+        }
         if (identityKey != bytes32(0)) {
             if (recorder.advisoryCommitKeyByIdentity(contentId, roundId, identityKey) != bytes32(0)) {
                 revert AlreadyCommitted();
@@ -152,6 +164,7 @@ library VotePreflightLib {
         mapping(
             uint256 => mapping(uint256 => mapping(bytes32 => bytes32))
         ) storage identityCommitKey,
+        mapping(uint256 => mapping(uint256 => mapping(address => bytes32))) storage holderCommitKey,
         mapping(uint256 => mapping(address => uint256)) storage lastVoteTimestamp,
         mapping(uint256 => mapping(bytes32 => uint256)) storage lastVoteTimestampByIdentity,
         mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint256))) storage identityRoundStake,
@@ -161,6 +174,7 @@ library VotePreflightLib {
             lastVoteTimestamp,
             lastVoteTimestampByIdentity,
             params.voter,
+            params.identityHolder,
             params.contentId,
             params.identityKey,
             params.cooldownWindow,
@@ -169,7 +183,9 @@ library VotePreflightLib {
         commitKey = _validateCommitCapacityAndKey(
             voterCommitHash,
             identityCommitKey,
+            holderCommitKey,
             params.voter,
+            params.identityHolder,
             params.contentId,
             params.roundId,
             params.identityKey,
@@ -191,12 +207,17 @@ library VotePreflightLib {
         mapping(uint256 => mapping(address => uint256)) storage lastVoteTimestamp,
         mapping(uint256 => mapping(bytes32 => uint256)) storage lastVoteTimestampByIdentity,
         address voter,
+        address identityHolder,
         uint256 contentId,
         bytes32 identityKey,
         uint256 cooldownWindow,
         uint256 timestamp
     ) private view {
         uint256 lastVote = lastVoteTimestamp[contentId][voter];
+        if (identityHolder != address(0) && identityHolder != voter) {
+            uint256 lastHolderVote = lastVoteTimestamp[contentId][identityHolder];
+            if (lastHolderVote > lastVote) lastVote = lastHolderVote;
+        }
         uint256 lastVoteByIdentity = lastVoteTimestampByIdentity[contentId][identityKey];
         if (lastVoteByIdentity > lastVote) lastVote = lastVoteByIdentity;
         if (lastVote > 0 && timestamp < lastVote + cooldownWindow) revert CooldownActive();
@@ -205,7 +226,9 @@ library VotePreflightLib {
     function _validateCommitCapacityAndKey(
         mapping(uint256 => mapping(uint256 => mapping(address => bytes32))) storage voterCommitHash,
         mapping(uint256 => mapping(uint256 => mapping(bytes32 => bytes32))) storage identityCommitKey,
+        mapping(uint256 => mapping(uint256 => mapping(address => bytes32))) storage holderCommitKey,
         address voter,
+        address identityHolder,
         uint256 contentId,
         uint256 roundId,
         bytes32 identityKey,
@@ -214,7 +237,16 @@ library VotePreflightLib {
         uint256 maxVoters
     ) private view returns (bytes32 commitKey) {
         if (voterCommitHash[contentId][roundId][voter] != bytes32(0)) revert AlreadyCommitted();
+        if (
+            identityHolder != address(0) && identityHolder != voter
+                && voterCommitHash[contentId][roundId][identityHolder] != bytes32(0)
+        ) {
+            revert AlreadyCommitted();
+        }
         if (identityKey != bytes32(0) && identityCommitKey[contentId][roundId][identityKey] != bytes32(0)) {
+            revert AlreadyCommitted();
+        }
+        if (identityHolder != address(0) && holderCommitKey[contentId][roundId][identityHolder] != bytes32(0)) {
             revert AlreadyCommitted();
         }
         if (roundVoteCount >= maxVoters) revert MaxVotersReached();

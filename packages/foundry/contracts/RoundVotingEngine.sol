@@ -500,17 +500,25 @@ contract RoundVotingEngine is
         IRaterIdentityRegistry.ResolvedRater memory resolved =
             VotePreflightLib.validateVoterAndContent(roundRaterRegistry, registry, voter, contentId);
         VotePreflightLib.validateNoAdvisoryConflict(
-            protocolConfig.advisoryVoteRecorder(), contentId, roundId, voter, resolved.identityKey, VOTE_COOLDOWN
+            protocolConfig.advisoryVoteRecorder(),
+            contentId,
+            roundId,
+            voter,
+            resolved.holder,
+            resolved.identityKey,
+            VOTE_COOLDOWN
         );
 
         bytes32 commitKey = VotePreflightLib.prepareCommit(
             voterCommitHash,
             identityCommitKey,
+            holderCommitKey,
             lastVoteTimestamp,
             lastVoteTimestampByIdentity,
             identityRoundStake,
             VotePreflightLib.CommitPreflightParams({
                 voter: voter,
+                identityHolder: resolved.holder,
                 contentId: contentId,
                 roundId: roundId,
                 identityKey: resolved.identityKey,
@@ -546,7 +554,9 @@ contract RoundVotingEngine is
             resolved.identityKey,
             resolved.holder
         );
-        _recordCommitAccounting(round, contentId, roundId, voter, resolved.identityKey, stakeAmount64, stakeAmount);
+        _recordCommitAccounting(
+            round, contentId, roundId, voter, resolved.holder, resolved.identityKey, stakeAmount64, stakeAmount
+        );
         // Flag whether at least one commit in this round originated from an HRC-verified identity.
         // `cancelExpiredRound` consults this flag to keep all-sybil rounds refund-cancellable.
         if (resolved.hasActiveHumanCredential && !roundHasHumanVerifiedCommit[contentId][roundId]) {
@@ -709,6 +719,7 @@ contract RoundVotingEngine is
         uint256 contentId,
         uint256 roundId,
         address voter,
+        address identityHolder,
         bytes32 identityKey,
         uint64 stakeAmount64,
         uint256 stakeAmount
@@ -722,6 +733,7 @@ contract RoundVotingEngine is
             contentId,
             roundId,
             voter,
+            identityHolder,
             identityKey,
             stakeAmount64,
             stakeAmount

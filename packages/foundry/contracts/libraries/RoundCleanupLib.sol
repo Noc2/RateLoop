@@ -277,10 +277,7 @@ library RoundCleanupLib {
         roundIdentityCommitKey[identityKey] = commitKey;
         roundCommitIdentityKey[commitKey] = identityKey;
         roundCommitIdentityHolder[commitKey] = identityHolder;
-        if (
-            identityHolder != address(0) && identityHolder != voter
-                && identityKey != VotePreflightLib.addressIdentityKey(identityHolder)
-        ) {
+        if (identityHolder != address(0) && identityHolder != voter) {
             roundHolderCommitKey[identityHolder] = commitKey;
         }
     }
@@ -294,6 +291,7 @@ library RoundCleanupLib {
         uint256 contentId,
         uint256 roundId,
         address voter,
+        address identityHolder,
         bytes32 identityKey,
         uint64 stakeAmount64,
         uint256 stakeAmount
@@ -302,6 +300,9 @@ library RoundCleanupLib {
         round.totalStake += stakeAmount64;
 
         contentLastVoteTimestamp[voter] = block.timestamp;
+        if (identityHolder != address(0) && identityHolder != voter) {
+            contentLastVoteTimestamp[identityHolder] = block.timestamp;
+        }
         contentLastVoteTimestampByIdentity[identityKey] = block.timestamp;
         contentRoundIdentityStake[roundId][identityKey] += stakeAmount;
 
