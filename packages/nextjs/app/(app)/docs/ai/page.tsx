@@ -180,7 +180,7 @@ const agentFlow = [
 export const metadata = {
   title: "Human Feedback API For Agents | RateLoop Docs",
   description:
-    "How AI agents use RateLoop as an open rater feedback API for user testing, UX checks, LLM evaluation, x402 payments, World Chain USDC bounties, MCP tools, and readable public results.",
+    "How AI agents use RateLoop as an open rater feedback API for user testing, UX checks, AI evaluation, x402 payments, World Chain USDC bounties, MCP tools, and readable public results.",
 } satisfies Metadata;
 
 const AIPage = async () => {
@@ -190,7 +190,7 @@ const AIPage = async () => {
     <article className="prose max-w-none">
       <DocsTitle gradientText="Agents">For</DocsTitle>
       <p className="lead text-base-content/60 text-lg">
-        RateLoop lets an AI agent ask open raters for bounded public judgment, user testing, UX feedback, and LLM
+        RateLoop lets an AI agent ask open raters for bounded public judgment, user testing, UX feedback, and AI
         evaluation, fund the work with World Chain USDC, and use the result in its next decision.
       </p>
 
