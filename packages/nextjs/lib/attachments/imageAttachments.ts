@@ -1,4 +1,4 @@
-import { del, get, put } from "@vercel/blob";
+import { del as deleteBlob, get as getBlob, put as putBlob } from "@vercel/blob";
 import { createHash } from "crypto";
 import { and, eq } from "drizzle-orm";
 import { mkdir, readFile, writeFile } from "fs/promises";
@@ -47,6 +47,28 @@ type ImageAttachmentUploadModeEnv = {
   BLOB_READ_WRITE_TOKEN?: string;
   NODE_ENV?: string;
 };
+
+type ImageAttachmentBlobDependencies = {
+  deleteBlob: typeof deleteBlob;
+  getBlob: typeof getBlob;
+  putBlob: typeof putBlob;
+};
+
+let imageAttachmentBlobTestOverrides: Partial<ImageAttachmentBlobDependencies> | null = null;
+
+function getImageAttachmentBlobDependencies(): ImageAttachmentBlobDependencies {
+  return {
+    deleteBlob: imageAttachmentBlobTestOverrides?.deleteBlob ?? deleteBlob,
+    getBlob: imageAttachmentBlobTestOverrides?.getBlob ?? getBlob,
+    putBlob: imageAttachmentBlobTestOverrides?.putBlob ?? putBlob,
+  };
+}
+
+export function __setImageAttachmentBlobTestOverridesForTests(
+  overrides: Partial<ImageAttachmentBlobDependencies> | null,
+) {
+  imageAttachmentBlobTestOverrides = overrides;
+}
 
 const OPENAI_MODERATION_MODEL = "omni-moderation-latest";
 const MAX_INPUT_PIXELS = 28_000_000;
@@ -206,7 +228,8 @@ export async function createPendingImageAttachment(params: CreatePendingImageAtt
 }
 
 async function readBlobBuffer(pathname: string) {
-  const result = await get(pathname, { access: "private", useCache: false });
+  const { getBlob: readBlob } = getImageAttachmentBlobDependencies();
+  const result = await readBlob(pathname, { access: "private", useCache: false });
   if (!result || result.statusCode !== 200 || !result.stream) {
     throw new Error("Uploaded image blob was not found.");
   }
@@ -317,6 +340,10 @@ async function markImageAttachmentProcessing(params: {
   return attachment ?? null;
 }
 
+function isCompletedImageUploadAlreadyAccepted(attachment: QuestionImageAttachment, blobPathname: string) {
+  return attachment.status !== "uploading" && attachment.originalBlobPathname === blobPathname;
+}
+
 async function processImageAttachmentBuffer(params: {
   attachmentId: string;
   buffer: Buffer;
@@ -390,16 +417,31 @@ export async function processCompletedImageUpload(params: {
   blobUrl: string;
   contentType: string;
 }) {
-  const attachment = await markImageAttachmentProcessing(params);
-
-  if (!attachment) {
-    await del(params.blobPathname).catch(() => undefined);
+  const existing = await getImageAttachment(params.attachmentId);
+  if (!existing) {
+    throw new Error("Image attachment is no longer accepting uploads.");
+  }
+  if (isCompletedImageUploadAlreadyAccepted(existing, params.blobPathname)) {
+    return;
+  }
+  if (existing.status !== "uploading") {
     throw new Error("Image attachment is no longer accepting uploads.");
   }
 
+  const { buffer } = await readBlobBuffer(params.blobPathname);
+  const attachment = await markImageAttachmentProcessing(params);
+
+  if (!attachment) {
+    const latest = await getImageAttachment(params.attachmentId);
+    if (latest && isCompletedImageUploadAlreadyAccepted(latest, params.blobPathname)) {
+      return;
+    }
+    throw new Error("Image attachment is no longer accepting uploads.");
+  }
+
+  const { deleteBlob: removeBlob, putBlob: writeBlob } = getImageAttachmentBlobDependencies();
   let completed = false;
   try {
-    const { buffer } = await readBlobBuffer(params.blobPathname);
     completed = await processImageAttachmentBuffer({
       attachmentId: params.attachmentId,
       buffer,
@@ -407,7 +449,7 @@ export async function processCompletedImageUpload(params: {
       expectedSha256: attachment.sha256,
       originalBlobPathname: params.blobPathname,
       saveNormalizedImage: normalizedBuffer =>
-        put(`question-attachments/${params.attachmentId}/image.webp`, normalizedBuffer, {
+        writeBlob(`question-attachments/${params.attachmentId}/image.webp`, normalizedBuffer, {
           access: "private",
           allowOverwrite: true,
           cacheControlMaxAge: 60 * 60 * 24 * 30,
@@ -416,7 +458,7 @@ export async function processCompletedImageUpload(params: {
     });
   } finally {
     if (completed) {
-      await del(params.blobPathname).catch(() => undefined);
+      await removeBlob(params.blobPathname).catch(() => undefined);
     }
   }
 }

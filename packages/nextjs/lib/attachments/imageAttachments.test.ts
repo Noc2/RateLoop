@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
 import {
+  __setImageAttachmentBlobTestOverridesForTests,
   createPendingImageAttachment,
   getAttachmentImageUrl,
   getImageAttachment,
@@ -12,6 +13,7 @@ import {
   getImageAttachmentUploadMode,
   isLocalImageAttachmentPathname,
   parseAttachmentIdFromImageUrl,
+  processCompletedImageUpload,
   processCompletedLocalImageUpload,
   readLocalImageAttachment,
 } from "~~/lib/attachments/imageAttachments";
@@ -29,8 +31,25 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  __setImageAttachmentBlobTestOverridesForTests(null);
   __setDatabaseResourcesForTests(null);
 });
+
+function blobGetResult(buffer: Buffer) {
+  return {
+    blob: null,
+    statusCode: 200,
+    stream: new Response(buffer).body,
+  } as unknown as Awaited<ReturnType<typeof import("@vercel/blob").get>>;
+}
+
+function missingBlobGetResult() {
+  return {
+    blob: null,
+    statusCode: 404,
+    stream: null,
+  } as unknown as Awaited<ReturnType<typeof import("@vercel/blob").get>>;
+}
 
 test("builds Curyo upload image URLs with a webp extension", () => {
   assert.equal(
@@ -115,6 +134,130 @@ test("processes local development image uploads without Vercel Blob", async () =
     }
     await rm(tempDir, { recursive: true, force: true });
   }
+});
+
+test("processes Vercel Blob image uploads without deleting duplicate completions", async () => {
+  const originalOpenAiKey = process.env.OPENAI_API_KEY;
+  const originalModerationMode = process.env.CURYO_IMAGE_MODERATION_MODE;
+  const attachmentId = "att_blobuploadimage001";
+  const originalPathname = `question-attachments/${attachmentId}/original.png`;
+  const normalizedPathname = `question-attachments/${attachmentId}/image.webp`;
+  let deleteCalls = 0;
+  let getCalls = 0;
+  let putCalls = 0;
+
+  __setImageAttachmentBlobTestOverridesForTests({
+    deleteBlob: async pathname => {
+      assert.equal(pathname, originalPathname);
+      deleteCalls += 1;
+    },
+    getBlob: async pathname => {
+      assert.equal(pathname, originalPathname);
+      getCalls += 1;
+      return blobGetResult(ONE_PIXEL_PNG);
+    },
+    putBlob: async pathname => {
+      assert.equal(pathname, normalizedPathname);
+      putCalls += 1;
+      return { pathname, url: null } as unknown as Awaited<ReturnType<typeof import("@vercel/blob").put>>;
+    },
+  });
+
+  try {
+    delete process.env.OPENAI_API_KEY;
+    process.env.CURYO_IMAGE_MODERATION_MODE = "disabled";
+
+    await createPendingImageAttachment({
+      attachmentId,
+      filename: "mockup.png",
+      mimeType: "image/png",
+      sha256: createHash("sha256").update(ONE_PIXEL_PNG).digest("hex"),
+      sizeBytes: ONE_PIXEL_PNG.length,
+      uploader: {
+        kind: "wallet",
+        ownerWalletAddress: "0x00000000000000000000000000000000000000aa",
+      },
+    });
+
+    await processCompletedImageUpload({
+      attachmentId,
+      blobPathname: originalPathname,
+      blobUrl: "https://blob.example/original.png",
+      contentType: "image/png",
+    });
+    await processCompletedImageUpload({
+      attachmentId,
+      blobPathname: originalPathname,
+      blobUrl: "https://blob.example/original.png",
+      contentType: "image/png",
+    });
+
+    const attachment = await getImageAttachment(attachmentId);
+    assert.equal(attachment?.status, "approved");
+    assert.equal(attachment?.originalBlobPathname, originalPathname);
+    assert.equal(attachment?.normalizedBlobPathname, normalizedPathname);
+    assert.equal(getCalls, 1);
+    assert.equal(putCalls, 1);
+    assert.equal(deleteCalls, 1);
+  } finally {
+    if (originalOpenAiKey === undefined) {
+      delete process.env.OPENAI_API_KEY;
+    } else {
+      process.env.OPENAI_API_KEY = originalOpenAiKey;
+    }
+    if (originalModerationMode === undefined) {
+      delete process.env.CURYO_IMAGE_MODERATION_MODE;
+    } else {
+      process.env.CURYO_IMAGE_MODERATION_MODE = originalModerationMode;
+    }
+  }
+});
+
+test("leaves uploading image attachments retryable when the blob is missing", async () => {
+  const attachmentId = "att_missingblobimage01";
+  const originalPathname = `question-attachments/${attachmentId}/missing.png`;
+  let deleteCalls = 0;
+  let getCalls = 0;
+
+  __setImageAttachmentBlobTestOverridesForTests({
+    deleteBlob: async () => {
+      deleteCalls += 1;
+    },
+    getBlob: async pathname => {
+      assert.equal(pathname, originalPathname);
+      getCalls += 1;
+      return missingBlobGetResult();
+    },
+  });
+
+  await createPendingImageAttachment({
+    attachmentId,
+    filename: "mockup.png",
+    mimeType: "image/png",
+    sha256: createHash("sha256").update(ONE_PIXEL_PNG).digest("hex"),
+    sizeBytes: ONE_PIXEL_PNG.length,
+    uploader: {
+      kind: "wallet",
+      ownerWalletAddress: "0x00000000000000000000000000000000000000aa",
+    },
+  });
+
+  await assert.rejects(
+    () =>
+      processCompletedImageUpload({
+        attachmentId,
+        blobPathname: originalPathname,
+        blobUrl: "https://blob.example/missing.png",
+        contentType: "image/png",
+      }),
+    /Uploaded image blob was not found/,
+  );
+
+  const attachment = await getImageAttachment(attachmentId);
+  assert.equal(attachment?.status, "uploading");
+  assert.equal(attachment?.originalBlobPathname, null);
+  assert.equal(getCalls, 1);
+  assert.equal(deleteCalls, 0);
 });
 
 test("rejects arbitrary HTTPS image URLs before submission", async () => {
