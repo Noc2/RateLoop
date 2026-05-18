@@ -289,52 +289,6 @@ export const AdvisoryVoteRecorderAbi = [
   },
   {
     "type": "function",
-    "name": "migrateAdvisoryCooldown",
-    "inputs": [
-      {
-        "name": "oldRecorder",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "contentIds",
-        "type": "uint256[]",
-        "internalType": "uint256[]"
-      },
-      {
-        "name": "voters",
-        "type": "address[]",
-        "internalType": "address[]"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "migrateAdvisoryCooldownByIdentity",
-    "inputs": [
-      {
-        "name": "oldRecorder",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "contentIds",
-        "type": "uint256[]",
-        "internalType": "uint256[]"
-      },
-      {
-        "name": "identityKeys",
-        "type": "bytes32[]",
-        "internalType": "bytes32[]"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
     "name": "owner",
     "inputs": [],
     "outputs": [
@@ -526,37 +480,6 @@ export const AdvisoryVoteRecorderAbi = [
       }
     ],
     "stateMutability": "view"
-  },
-  {
-    "type": "event",
-    "name": "AdvisoryCooldownMigrated",
-    "inputs": [
-      {
-        "name": "oldRecorder",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "contentId",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
-      },
-      {
-        "name": "voter",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "timestamp",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      }
-    ],
-    "anonymous": false
   },
   {
     "type": "event",

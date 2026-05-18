@@ -102,7 +102,6 @@ Add a negative test: rejection after `qualifyRound` but before any claim must su
 
 - **I-Vote-3** — `replayBundleObserverNotify` accepts `settled` as a parameter but does not cross-check against `Round.state`. Admin-role abuse only; derive `settled` from `rounds[contentId][roundId].state == Settled` instead of accepting it from caller. `RoundVotingEngine.sol:760-769`.
 - **I-Vote-4** — IOU under `claimDeferredCleanupBounty` has no time limit. The IOU competes with subsequent consensus-subsidy draws from the same `consensusReserve`; no FIFO/priority guarantee. Not exploitable in isolation; document the race or add a 90-day claim window with treasury reaping of unclaimed IOUs. `RoundVotingEngine.sol:301-319`.
-- **I-Vote-5** — `migrateAdvisoryCooldown` / `migrateAdvisoryCooldownByIdentity` correctness depends on operational ordering (migrate *before* `setAdvisoryVoteRecorder`). No on-chain enforcement of the ordering. Acceptable as a governance-procedure invariant. `AdvisoryVoteRecorder.sol:138-205`.
 
 ### Oracle / Integrations
 
