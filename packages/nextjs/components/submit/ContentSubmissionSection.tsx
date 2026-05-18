@@ -923,11 +923,11 @@ export function ContentSubmissionSection() {
     }
     if (maxVoters < roundMaxVoterBounds.min || maxVoters > roundMaxVoterBounds.max) {
       return questionCount > 1
-        ? `Voter max per round must be ${roundMaxVoterBounds.min}-${roundMaxVoterBounds.max} for question bundles.`
-        : `Voter max per round must be ${roundMaxVoterBounds.min}-${roundMaxVoterBounds.max}.`;
+        ? `Max voters per round must be ${roundMaxVoterBounds.min}-${roundMaxVoterBounds.max} for question bundles.`
+        : `Max voters per round must be ${roundMaxVoterBounds.min}-${roundMaxVoterBounds.max}.`;
     }
     if (maxVoters < minVoters) {
-      return "Voter max per round must be at least the settlement voters.";
+      return "Max voters per round must be at least the settlement voters.";
     }
     return null;
   })();
@@ -968,7 +968,7 @@ export function ContentSubmissionSection() {
     parsedRewardRequiredVoters < MIN_REWARD_POOL_REQUIRED_VOTERS
       ? `Minimum is ${MIN_REWARD_POOL_REQUIRED_VOTERS} voters.`
       : selectedRequiredVoters > selectedRoundConfig.maxVoters
-        ? "Voter min per round cannot exceed voter max per round."
+        ? "Min voters per round cannot exceed max voters per round."
         : null;
   const rewardRequiredVotersError = bountyStepAttempted ? rewardRequiredVotersValidationError : null;
   const rewardRequiredRoundsValidationError =
@@ -1041,14 +1041,14 @@ export function ContentSubmissionSection() {
     : rewardAmountError
       ? "Increase the bounty until the estimate is valid before submitting."
       : rewardRequiredVotersValidationError
-        ? "Lower voter min per round or raise voter max per round so the bounty can qualify."
+        ? "Lower min voters per round or raise max voters per round so the bounty can qualify."
         : estimatedMinimumVoterReward < 1_000_000n
           ? `For a stronger signal, consider ${formatSubmissionRewardAmount(
               oneTokenPerMinimumVoterBounty,
               rewardAsset,
             )} or more so the minimum cohort earns about 1 ${rewardAsset === "lrep" ? "LREP" : "USDC"} each.`
           : parsedRoundMaxVoters > Math.max(parsedRewardRequiredVoters, 1) * 3
-            ? "A wide voter max per round can dilute the per-voter payout if participation is high; use it when broader input matters more than payout density."
+            ? "A high max voters per round can dilute the per-voter payout if participation is high; use it when broader input matters more than payout density."
             : "These settings give a clear payout target for a small qualifying round.";
   const rewardTokenAddress = rewardAsset === "lrep" ? lrepAddress : getDefaultUsdcAddress(targetNetwork.id);
   const { refetch: refetchNextContentId } = useScaffoldReadContract({
@@ -2062,7 +2062,7 @@ export function ContentSubmissionSection() {
         <div className="space-y-3">
           <div className="form-control">
             <span className="label-text flex items-center gap-1.5">
-              Voter min per round
+              Min voters per round
               <InfoTooltip text={requiredVotersTooltipText} />
             </span>
             <input
@@ -2097,7 +2097,7 @@ export function ContentSubmissionSection() {
           <div className="form-control">
             <div className="flex items-center gap-1.5">
               <label htmlFor="round-voter-cap" className="label-text">
-                Voter max per round
+                Max voters per round
               </label>
               <InfoTooltip text={voterCapTooltipText} />
             </div>
