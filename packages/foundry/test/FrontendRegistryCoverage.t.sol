@@ -15,8 +15,14 @@ import { RoundLib } from "../contracts/libraries/RoundLib.sol";
 
 contract MockVotingEngine_FR is IRoundVotingEngine {
     uint256 public totalAddedToReserve;
+    LoopReputation public immutable lrepToken;
+
+    constructor(LoopReputation lrepToken_) {
+        lrepToken = lrepToken_;
+    }
 
     function addToConsensusReserve(uint256 amount) external override {
+        lrepToken.transferFrom(msg.sender, address(this), amount);
         totalAddedToReserve += amount;
     }
 
@@ -93,7 +99,7 @@ contract FrontendRegistryCoverageTest is Test {
         lrepToken = new LoopReputation(admin, admin);
         lrepToken.grantRole(lrepToken.MINTER_ROLE(), admin);
 
-        votingEngine = new MockVotingEngine_FR();
+        votingEngine = new MockVotingEngine_FR(lrepToken);
         rewardDistributor = new MockRewardDistributor_FR(address(votingEngine));
         feeCreditor = address(rewardDistributor);
 
