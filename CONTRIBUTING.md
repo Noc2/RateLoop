@@ -4,10 +4,10 @@ Thank you for your interest in contributing to RateLoop, an open rating protocol
 
 ## Getting Started
 
-1. Fork the repository
+1. Fork [Noc2/RateLoop](https://github.com/Noc2/RateLoop)
 2. Clone your fork and install dependencies:
    ```bash
-   git clone https://github.com/YOUR_USERNAME/RateLoop.git
+   git clone <your-fork-url>
    cd RateLoop
    corepack enable
    yarn install

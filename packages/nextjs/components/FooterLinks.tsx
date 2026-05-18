@@ -24,7 +24,7 @@ const FOOTER_LINKS: FooterLinkItem[] = [
   { href: "/legal/terms", label: "Terms" },
   { href: "/legal/privacy", label: "Privacy" },
   { href: "/legal/imprint", label: "Imprint" },
-  { href: "https://github.com/Noc2/CURYO", label: "GitHub", external: true },
+  { href: "https://github.com/Noc2/RateLoop", label: "GitHub", external: true },
 ];
 
 export function FooterLinks({
