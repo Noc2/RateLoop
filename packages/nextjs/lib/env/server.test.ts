@@ -11,6 +11,7 @@ import { afterEach, test } from "node:test";
 const env = process.env as Record<string, string | undefined>;
 const originalDatabaseUrl = env.DATABASE_URL;
 const originalPublicRpcUrl4801 = env.NEXT_PUBLIC_RPC_URL_4801;
+const originalVercelEnv = env.VERCEL_ENV;
 
 afterEach(() => {
   if (originalDatabaseUrl === undefined) {
@@ -23,6 +24,12 @@ afterEach(() => {
     delete env.NEXT_PUBLIC_RPC_URL_4801;
   } else {
     env.NEXT_PUBLIC_RPC_URL_4801 = originalPublicRpcUrl4801;
+  }
+
+  if (originalVercelEnv === undefined) {
+    delete env.VERCEL_ENV;
+  } else {
+    env.VERCEL_ENV = originalVercelEnv;
   }
 });
 
@@ -62,6 +69,16 @@ test("resolveServerTargetNetworks tolerates local-chain builds in explicit e2e p
   assert.deepEqual(
     networks?.map(network => network.id),
     [31337, 4801],
+  );
+});
+
+test("resolveServerTargetNetworks uses the local fallback for Vercel preview smoke builds", () => {
+  env.VERCEL_ENV = "preview";
+
+  const networks = resolveServerTargetNetworks(undefined, true);
+  assert.deepEqual(
+    networks?.map(network => network.id),
+    [31337],
   );
 });
 
