@@ -230,12 +230,28 @@ contract ProtocolConfigBranchesTest is Test {
         assertTrue(config.hasRole(config.TREASURY_ADMIN_ROLE(), treasuryAuthority));
         assertTrue(config.hasRole(config.TREASURY_ROLE(), treasuryAuthority));
         assertFalse(config.hasRole(config.TREASURY_ROLE(), governance));
+        assertEq(config.getRoleAdmin(config.TREASURY_ROLE()), config.TREASURY_ADMIN_ROLE());
+        assertEq(config.getRoleAdmin(config.TREASURY_ADMIN_ROLE()), config.DEFAULT_ADMIN_ROLE());
 
         bytes32 treasuryRole = config.TREASURY_ROLE();
+        bytes32 treasuryAdminRole = config.TREASURY_ADMIN_ROLE();
         vm.prank(governance);
         config.grantRole(treasuryRole, newTreasuryOperator);
 
         assertTrue(config.hasRole(treasuryRole, newTreasuryOperator));
+
+        vm.startPrank(treasuryAuthority);
+        vm.expectRevert();
+        config.revokeRole(treasuryAdminRole, governance);
+        vm.stopPrank();
+
+        vm.prank(governance);
+        config.revokeRole(treasuryAdminRole, governance);
+        assertFalse(config.hasRole(treasuryAdminRole, governance));
+
+        vm.prank(governance);
+        config.grantRole(treasuryAdminRole, governance);
+        assertTrue(config.hasRole(treasuryAdminRole, governance));
     }
 
     function test_SetDrandConfig_UpdatesStateAndEmits() public {

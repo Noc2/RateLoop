@@ -128,7 +128,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         _grantRole(DEFAULT_ADMIN_ROLE, governance);
         _grantRole(CONFIG_ROLE, governance);
         _setRoleAdmin(TREASURY_ROLE, TREASURY_ADMIN_ROLE);
-        _setRoleAdmin(TREASURY_ADMIN_ROLE, TREASURY_ADMIN_ROLE);
+        _setRoleAdmin(TREASURY_ADMIN_ROLE, DEFAULT_ADMIN_ROLE);
         _grantRole(TREASURY_ADMIN_ROLE, governance);
         _grantRole(TREASURY_ADMIN_ROLE, treasuryAuthority);
         _grantRole(TREASURY_ROLE, treasuryAuthority);

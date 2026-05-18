@@ -232,6 +232,7 @@ contract UpgradeTest is Test {
         assertTrue(protocolConfig.hasRole(protocolConfig.TREASURY_ADMIN_ROLE(), governance));
         assertTrue(protocolConfig.hasRole(protocolConfig.TREASURY_ROLE(), governance));
         assertEq(protocolConfig.getRoleAdmin(protocolConfig.TREASURY_ROLE()), protocolConfig.TREASURY_ADMIN_ROLE());
+        assertEq(protocolConfig.getRoleAdmin(protocolConfig.TREASURY_ADMIN_ROLE()), protocolConfig.DEFAULT_ADMIN_ROLE());
 
         ProtocolConfig newImpl = new ProtocolConfig();
         vm.prank(governance);
@@ -245,6 +246,7 @@ contract UpgradeTest is Test {
         assertTrue(protocolConfig.hasRole(protocolConfig.TREASURY_ADMIN_ROLE(), governance));
         assertTrue(protocolConfig.hasRole(protocolConfig.TREASURY_ROLE(), governance));
         assertEq(protocolConfig.getRoleAdmin(protocolConfig.TREASURY_ROLE()), protocolConfig.TREASURY_ADMIN_ROLE());
+        assertEq(protocolConfig.getRoleAdmin(protocolConfig.TREASURY_ADMIN_ROLE()), protocolConfig.DEFAULT_ADMIN_ROLE());
     }
 
     // =========================================================================

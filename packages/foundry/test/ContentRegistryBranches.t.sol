@@ -2844,12 +2844,28 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         assertTrue(reg2.hasRole(reg2.TREASURY_ADMIN_ROLE(), treasury));
         assertTrue(reg2.hasRole(reg2.TREASURY_ROLE(), treasury));
         assertFalse(reg2.hasRole(reg2.TREASURY_ROLE(), governance));
+        assertEq(reg2.getRoleAdmin(reg2.TREASURY_ROLE()), reg2.TREASURY_ADMIN_ROLE());
+        assertEq(reg2.getRoleAdmin(reg2.TREASURY_ADMIN_ROLE()), reg2.DEFAULT_ADMIN_ROLE());
 
         bytes32 treasuryRole = reg2.TREASURY_ROLE();
+        bytes32 treasuryAdminRole = reg2.TREASURY_ADMIN_ROLE();
         vm.prank(governance);
         reg2.grantRole(treasuryRole, newTreasuryOperator);
 
         assertTrue(reg2.hasRole(treasuryRole, newTreasuryOperator));
+
+        vm.startPrank(treasury);
+        vm.expectRevert();
+        reg2.revokeRole(treasuryAdminRole, governance);
+        vm.stopPrank();
+
+        vm.prank(governance);
+        reg2.revokeRole(treasuryAdminRole, governance);
+        assertFalse(reg2.hasRole(treasuryAdminRole, governance));
+
+        vm.prank(governance);
+        reg2.grantRole(treasuryAdminRole, governance);
+        assertTrue(reg2.hasRole(treasuryAdminRole, governance));
     }
 
     function test_SubmitContent_SeededCategory_Succeeds() public {
