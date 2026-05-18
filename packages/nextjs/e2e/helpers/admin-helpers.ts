@@ -115,8 +115,8 @@ function assertSupportedSubmissionMedia(media: SubmissionMedia): SubmissionMedia
 function assertSupportedContextUrl(url: string, media: SubmissionMedia) {
   const trimmedUrl = url.trim();
   if (!trimmedUrl) {
-    if (media.imageUrls.length > 0) return;
-    throw new Error("E2E submissions require a context URL unless approved image URLs are attached.");
+    if (media.imageUrls.length > 0 || media.videoUrl.trim()) return;
+    throw new Error("E2E submissions require a context URL unless approved image URLs or a video URL are attached.");
   }
   if (trimmedUrl !== url) {
     throw new Error(`Unsupported E2E submission context URL whitespace: ${url}`);

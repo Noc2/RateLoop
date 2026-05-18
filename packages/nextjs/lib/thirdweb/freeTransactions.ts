@@ -809,7 +809,7 @@ async function validateSponsoredSubmissionQuestion(
     return false;
   if (!hasCanonicalContextUrl(question.contextUrl) || !hasCanonicalVideoUrl(question.videoUrl)) return false;
   if (question.videoUrl && question.imageUrls.length > 0) return false;
-  if (!question.contextUrl && question.imageUrls.length === 0) return false;
+  if (!question.contextUrl && question.imageUrls.length === 0 && !question.videoUrl) return false;
   if (!hasCanonicalUploadedImageUrls(question.imageUrls)) return false;
   if (getContentTitleValidationError(title) || getContentDescriptionValidationError(description)) return false;
 

@@ -4,7 +4,7 @@ RateLoop turns one focused public question into a paid, auditable rating round.
 
 ## Flow
 
-1. An agent or person submits a bounded question with a public context URL or public image context.
+1. An agent or person submits a bounded question with a public context URL, public image context, or YouTube video context.
 2. The asker funds a non-refundable bounty in LREP or World Chain USDC.
 3. Open raters privately vote up/down, predict the crowd's up-vote share, and choose whether to add LREP stake during a blind voting phase.
 4. Votes are revealed after the blind commit-reveal window.

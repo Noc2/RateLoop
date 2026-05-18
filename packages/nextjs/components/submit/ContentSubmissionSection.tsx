@@ -99,11 +99,11 @@ const ShareModal = dynamic(() => import("~~/components/submit/ShareModal").then(
 type MediaMode = "images" | "video";
 
 const MEDIA_URL_CONFIG = {
-  contextPlaceholder: "Paste a source link, or add image context below",
+  contextPlaceholder: "Paste a source link, or add media context below",
   videoPlaceholder: "Paste a YouTube URL, e.g. https://youtube.com/watch?v=...",
   imageHint:
     "Add at least one image when there is no context link. Upload up to four JPG, PNG, or WEBP files for RateLoop-hosted, moderated image context. Landscape images fit the voting content area best; aim for 16:9 and at least 1280x720 px.",
-  videoHint: "Optional. Add one YouTube link as a preview; standard landscape videos fit the content area best.",
+  videoHint: "Add one YouTube link as public video context. Standard landscape videos fit the content area best.",
 };
 
 type SubmissionStep = "question" | "bounty";
@@ -1132,7 +1132,8 @@ export function ContentSubmissionSection() {
       draft.mediaMode === "images"
         ? nextImageUrlErrors.some(Boolean)
         : Boolean(nextVideoUrlError) || Boolean(draft.videoUrl.trim() && !submittedVideoUrl);
-    const hasContextOrImage = Boolean(submittedContextUrl) || submittedImageUrls.length > 0;
+    const hasContextOrMedia =
+      Boolean(submittedContextUrl) || submittedImageUrls.length > 0 || Boolean(submittedVideoUrl);
 
     if (applyErrors) {
       setImageUrlErrors(nextImageUrlErrors);
@@ -1146,7 +1147,7 @@ export function ContentSubmissionSection() {
       Boolean(draft.selectedCategory) &&
       Boolean(trimmedTitle) &&
       draft.selectedSubcategories.length > 0 &&
-      hasContextOrImage;
+      hasContextOrMedia;
     const hasQuestionErrors =
       !questionFieldsComplete ||
       Boolean(nextContextUrlError) ||
@@ -1847,10 +1848,16 @@ export function ContentSubmissionSection() {
   };
 
   const hasImageInput = imageUrls.some(url => url.trim());
-  const contextOrImageMissing =
-    questionStepAttempted && !normalizedContextUrl && normalizedImageUrls.length === 0 && !hasImageInput;
-  const imageMediaMissing = contextOrImageMissing && mediaMode === "images";
-  const videoMediaMissing = false;
+  const hasVideoInput = Boolean(videoUrl.trim());
+  const contextOrMediaMissing =
+    questionStepAttempted &&
+    !normalizedContextUrl &&
+    normalizedImageUrls.length === 0 &&
+    !hasImageInput &&
+    !normalizedVideoUrl &&
+    !hasVideoInput;
+  const imageMediaMissing = contextOrMediaMissing && mediaMode === "images";
+  const videoMediaMissing = contextOrMediaMissing && mediaMode === "video";
   const pageHeading = submissionStep === "question" ? "Submit Question" : "Bounty";
   const pageContext =
     submissionStep === "question"
@@ -2623,26 +2630,26 @@ export function ContentSubmissionSection() {
                 <div>
                   <label
                     className={`mb-2 flex items-center gap-1.5 text-base font-medium ${
-                      contextOrImageMissing || contextUrlError ? "text-error" : ""
+                      contextOrMediaMissing || contextUrlError ? "text-error" : ""
                     }`}
                   >
-                    Context Link <span className="font-normal text-base-content/60">(optional with images)</span>
-                    <InfoTooltip text="Use the canonical source, product page, article, proposal, or other HTTPS link that voters should judge. If there is no link, add at least one image below." />
+                    Context Link <span className="font-normal text-base-content/60">(optional with media)</span>
+                    <InfoTooltip text="Use the canonical source, product page, article, proposal, or other HTTPS link that voters should judge. If there is no link, add uploaded images or a YouTube link below." />
                   </label>
                   <input
                     type="url"
                     placeholder={urlConfig.contextPlaceholder}
                     className={`input input-bordered w-full bg-base-100 ${
-                      contextOrImageMissing || contextUrlError ? "input-error" : ""
+                      contextOrMediaMissing || contextUrlError ? "input-error" : ""
                     }`}
                     value={contextUrl}
                     onChange={e => handleContextUrlChange(e.target.value)}
                     onBlur={() => setContextUrlError(getContextUrlValidationError(contextUrl))}
                     maxLength={MAX_SUBMISSION_URL_LENGTH}
                   />
-                  {contextOrImageMissing && !contextUrlError ? (
+                  {contextOrMediaMissing && !contextUrlError ? (
                     <p className="mt-1 text-base text-error">
-                      Add a context link or at least one image before submitting.
+                      Add a context link, image, or YouTube video before submitting.
                     </p>
                   ) : null}
                   {contextUrlError ? <p className="mt-1 text-base text-error">{contextUrlError}</p> : null}

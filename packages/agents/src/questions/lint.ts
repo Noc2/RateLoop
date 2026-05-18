@@ -41,6 +41,26 @@ function looksLikeDirectImageUrl(value: unknown): boolean {
   }
 }
 
+function looksLikeYouTubeVideoUrl(value: unknown): boolean {
+  if (typeof value !== "string") return false;
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== "https:") return false;
+    const host = parsed.hostname.toLowerCase();
+    if (host === "youtu.be") return parsed.pathname.length > 1;
+    if (host === "www.youtube.com" && parsed.pathname.startsWith("/embed/")) {
+      return parsed.pathname.length > "/embed/".length;
+    }
+    return (
+      (host === "youtube.com" || host === "www.youtube.com" || host === "m.youtube.com") &&
+      parsed.pathname === "/watch" &&
+      parsed.searchParams.has("v")
+    );
+  } catch {
+    return false;
+  }
+}
+
 function tagCount(tags: unknown): number {
   if (Array.isArray(tags)) return tags.filter(tag => typeof tag === "string" && tag.trim()).length;
   if (typeof tags !== "string") return 0;
@@ -120,8 +140,9 @@ export function lintAgentQuestion(
   }
   const hasContextUrl = typeof question.contextUrl === "string" && question.contextUrl.trim().length > 0;
   const hasImageUrls = Array.isArray(question.imageUrls) && question.imageUrls.length > 0;
-  if (!hasContextUrl && !hasImageUrls) {
-    pushFinding(findings, "error", `${path}.contextUrl`, "Context URL or at least one image URL is required.");
+  const hasVideoUrl = typeof question.videoUrl === "string" && question.videoUrl.trim().length > 0;
+  if (!hasContextUrl && !hasImageUrls && !hasVideoUrl) {
+    pushFinding(findings, "error", `${path}.contextUrl`, "Context URL, image URL, or video URL is required.");
   } else if (hasContextUrl && !looksLikeHttpsUrl(question.contextUrl)) {
     pushFinding(findings, "error", `${path}.contextUrl`, "Context URL must be a public HTTPS URL.");
   } else if (hasContextUrl && looksLikeDirectImageUrl(question.contextUrl)) {
@@ -174,8 +195,8 @@ export function lintAgentQuestion(
   if (question.imageUrls !== undefined && hasInvalidUploadedImageUrlList(question.imageUrls)) {
     pushFinding(findings, "error", `${path}.imageUrls`, "Image URLs must be approved RateLoop-hosted uploads.");
   }
-  if (question.videoUrl && !looksLikeHttpsUrl(question.videoUrl)) {
-    pushFinding(findings, "error", `${path}.videoUrl`, "Video URL must be a public HTTPS URL.");
+  if (question.videoUrl && !looksLikeYouTubeVideoUrl(question.videoUrl)) {
+    pushFinding(findings, "error", `${path}.videoUrl`, "Video URL must be a supported YouTube HTTPS URL.");
   }
 
   return findings;

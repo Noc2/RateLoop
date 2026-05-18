@@ -20,7 +20,7 @@ hard-coded:
 
 - RateLoop origin, usually `https://www.rateloop.xyz`
 - funded World Chain `walletAddress`, or permission to generate a local encrypted signer and fund that address
-- public context URL or image context for voters
+- public context URL, image context, or YouTube video context for voters
 - optional extra public image context: RateLoop-hosted uploads for local mockups, screenshots, and generated images
 - USDC bounty, `maxPaymentAmount`, `requiredVoters`, `requiredSettledRounds`, `rewardPoolExpiresAt`, and optional payout-only `bountyEligibility`
 - execution path: public MCP wallet calls, direct JSON routes, local signer, or WebMCP-assisted browser signing
@@ -77,7 +77,7 @@ RateLoop URL into `question.imageUrls`.
 Treat uploaded images as public ask context. Ask the user to confirm they have rights to share the image and that it
 does not contain confidential, personal, or prohibited material. Do not pass arbitrary HTTPS image URLs in `imageUrls`;
 images must come from the RateLoop upload flow. Do not put direct image file links such as `.jpg`, `.png`, or `.webp`
-URLs in `contextUrl`; use a normal public page URL there, or omit it when approved `imageUrls` provide the visual
+URLs in `contextUrl`; use a normal public page URL there, or omit it when approved `imageUrls` or `videoUrl` provide the visual
 context.
 
 ## Local Signer CLI
@@ -110,21 +110,21 @@ If the ask payload already contains `walletAddress`, `local-ask` refuses to cont
 cp packages/agents/.env.example packages/agents/.env
 ```
 
-| Variable                               | Description                                                                                             |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `CURYO_API_BASE_URL`                   | Hosted RateLoop origin, for example `https://www.rateloop.xyz`                                          |
-| `CURYO_AGENT_WALLET_ADDRESS`           | Funded wallet address for tokenless public asks                                                         |
-| `CURYO_RPC_URL`                        | RPC URL used by `local-ask` to send returned transaction plan calls                                     |
-| `CURYO_CHAIN_ID`                       | Optional chain guard; `local-ask` refuses mismatched RPCs                                               |
-| `CURYO_LOCAL_SIGNER_KEYSTORE_PATH`     | Encrypted local signer keystore path                                                                    |
-| `CURYO_LOCAL_SIGNER_KEYSTORE_PASSWORD` | Password for the local signer keystore; load from a secret source                                       |
-| `CURYO_LOCAL_SIGNER_PASSWORD_ENV`      | Name of an alternate environment variable that holds the keystore password                              |
-| `CURYO_LOCAL_SIGNER_PRIVATE_KEY`       | Ephemeral CI/test-wallet fallback; prefer a keystore for persistent funded wallets                      |
-| `CURYO_LOCAL_SIGNER_POLLING_INTERVAL_MS` | Optional receipt polling interval for local signer transaction waits                                  |
-| `CURYO_LOCAL_SIGNER_RECEIPT_TIMEOUT_MS` | Optional local signer transaction receipt timeout                                                      |
-| `CURYO_MCP_TOKEN`                      | Optional managed agent bearer token with quote, ask, read, and balance scopes                           |
-| `CURYO_MCP_API_URL`                    | Optional MCP endpoint override; with `CURYO_MCP_TOKEN` SDK clients default to `/api/mcp`, otherwise `/api/mcp/public` |
-| `CURYO_MCP_PROTOCOL_VERSION`           | Optional MCP protocol version override                                                                  |
+| Variable                                 | Description                                                                                                           |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `CURYO_API_BASE_URL`                     | Hosted RateLoop origin, for example `https://www.rateloop.xyz`                                                        |
+| `CURYO_AGENT_WALLET_ADDRESS`             | Funded wallet address for tokenless public asks                                                                       |
+| `CURYO_RPC_URL`                          | RPC URL used by `local-ask` to send returned transaction plan calls                                                   |
+| `CURYO_CHAIN_ID`                         | Optional chain guard; `local-ask` refuses mismatched RPCs                                                             |
+| `CURYO_LOCAL_SIGNER_KEYSTORE_PATH`       | Encrypted local signer keystore path                                                                                  |
+| `CURYO_LOCAL_SIGNER_KEYSTORE_PASSWORD`   | Password for the local signer keystore; load from a secret source                                                     |
+| `CURYO_LOCAL_SIGNER_PASSWORD_ENV`        | Name of an alternate environment variable that holds the keystore password                                            |
+| `CURYO_LOCAL_SIGNER_PRIVATE_KEY`         | Ephemeral CI/test-wallet fallback; prefer a keystore for persistent funded wallets                                    |
+| `CURYO_LOCAL_SIGNER_POLLING_INTERVAL_MS` | Optional receipt polling interval for local signer transaction waits                                                  |
+| `CURYO_LOCAL_SIGNER_RECEIPT_TIMEOUT_MS`  | Optional local signer transaction receipt timeout                                                                     |
+| `CURYO_MCP_TOKEN`                        | Optional managed agent bearer token with quote, ask, read, and balance scopes                                         |
+| `CURYO_MCP_API_URL`                      | Optional MCP endpoint override; with `CURYO_MCP_TOKEN` SDK clients default to `/api/mcp`, otherwise `/api/mcp/public` |
+| `CURYO_MCP_PROTOCOL_VERSION`             | Optional MCP protocol version override                                                                                |
 
 ## Examples
 

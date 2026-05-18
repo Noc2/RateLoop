@@ -12,8 +12,7 @@ const DEFAULT_RESULT_SPEC_HASH =
 const MAX_SUBMISSION_IMAGE_URLS = 4;
 const UPLOADED_IMAGE_URL_PATTERN =
   /^https:\/\/\S+\/api\/attachments\/images\/att_[A-Za-z0-9_-]{16,80}\.webp(?:[?#]\S*)?$/;
-const DIRECT_IMAGE_URL_PATH_PATTERN =
-  /\.(?:avif|bmp|gif|jpe?g|png|svg|webp)$/i;
+const DIRECT_IMAGE_URL_PATH_PATTERN = /\.(?:avif|bmp|gif|jpe?g|png|svg|webp)$/i;
 const DEFAULT_BOUNTY_ELIGIBILITY = 0;
 
 const abi = parseAbi([
@@ -27,7 +26,7 @@ function fail(message) {
 
 function usage() {
   fail(
-    "Usage: node buildQuestionBundleReservation.js <submitter> <rewardAsset> <rewardAmount> <requiredVoters> <requiredSettledRounds> <bountyClosesAt> <feedbackClosesAt> <epochDuration> <maxDuration> <minVoters> <maxVoters> -- <contextUrl> <imageUrlsJson> <videoUrl> <title> <description|empty> <tags> <categoryId> <salt> [question args...]"
+    "Usage: node buildQuestionBundleReservation.js <submitter> <rewardAsset> <rewardAmount> <requiredVoters> <requiredSettledRounds> <bountyClosesAt> <feedbackClosesAt> <epochDuration> <maxDuration> <minVoters> <maxVoters> -- <contextUrl> <imageUrlsJson> <videoUrl> <title> <description|empty> <tags> <categoryId> <salt> [question args...]",
   );
 }
 
@@ -53,7 +52,9 @@ function assertSupportedContextUrl(value, { allowEmpty = false } = {}) {
   const trimmed = value.trim();
   if (!trimmed) {
     if (allowEmpty) return;
-    fail("Context URL must be provided unless image URLs are attached.");
+    fail(
+      "Context URL must be provided unless image URLs or a video URL are attached.",
+    );
   }
   if (trimmed !== value) {
     fail("Context URL must not include leading or trailing whitespace.");
@@ -112,7 +113,7 @@ function parseImageUrls(value) {
     if (
       !Array.isArray(parsed) ||
       parsed.some(
-        (item) => typeof item !== "string" || item.trim().length === 0
+        (item) => typeof item !== "string" || item.trim().length === 0,
       )
     ) {
       fail("Invalid image URL array JSON. Expected a JSON string array.");
@@ -121,7 +122,7 @@ function parseImageUrls(value) {
       fail(`Expected at most ${MAX_SUBMISSION_IMAGE_URLS} image URLs.`);
     }
     const unsupportedImageUrl = parsed.find(
-      (item) => !UPLOADED_IMAGE_URL_PATTERN.test(item)
+      (item) => !UPLOADED_IMAGE_URL_PATTERN.test(item),
     );
     if (unsupportedImageUrl) {
       fail(`Unsupported image URL: ${unsupportedImageUrl}`);
@@ -154,13 +155,15 @@ function parseQuestionArgs(questionArgs) {
     ] = questionArgs.slice(index, index + 8);
     const imageUrls = parseImageUrls(imageUrlsJson);
     const trimmedVideoUrl = videoUrl.trim();
-    assertSupportedContextUrl(contextUrl, { allowEmpty: imageUrls.length > 0 });
     if (trimmedVideoUrl && !isSupportedYouTubeUrl(trimmedVideoUrl)) {
       fail(`Unsupported video URL: ${trimmedVideoUrl}`);
     }
     if (trimmedVideoUrl && imageUrls.length > 0) {
       fail("Choose images or video, not both.");
     }
+    assertSupportedContextUrl(contextUrl, {
+      allowEmpty: imageUrls.length > 0 || Boolean(trimmedVideoUrl),
+    });
     assertBytes32(salt, "Salt");
 
     questions.push({
@@ -226,8 +229,8 @@ function buildSubmissionMediaHash(imageUrls, videoUrl) {
   return keccak256(
     encodeAbiParameters(
       [{ type: "string[]" }, { type: "string" }],
-      [imageUrls, videoUrl]
-    )
+      [imageUrls, videoUrl],
+    ),
   );
 }
 
@@ -260,16 +263,16 @@ function buildQuestionBundleHash(questions) {
           BigInt(index),
           DEFAULT_QUESTION_METADATA_HASH,
           DEFAULT_RESULT_SPEC_HASH,
-        ]
-      )
-    )
+        ],
+      ),
+    ),
   );
 
   return keccak256(
     encodeAbiParameters(
       [{ type: "string" }, { type: "bytes32[]" }],
-      ["curyo-question-bundle-v2", questionHashes]
-    )
+      ["curyo-question-bundle-v2", questionHashes],
+    ),
   );
 }
 
@@ -312,13 +315,13 @@ function buildQuestionBundleRevealCommitment({
         roundConfig.maxDuration,
         roundConfig.minVoters,
         roundConfig.maxVoters,
-      ]
-    )
+      ],
+    ),
   );
 }
 
 const { submitter, rewardTerms, roundConfig, questions } = parseArgs(
-  process.argv.slice(2)
+  process.argv.slice(2),
 );
 const bundleHash = buildQuestionBundleHash(questions);
 const revealCommitment = buildQuestionBundleRevealCommitment({

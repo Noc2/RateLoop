@@ -48,6 +48,24 @@ describe("agent question linting", () => {
     });
   });
 
+  it("accepts public video context without a context URL", () => {
+    const findings = lintAgentAskRequest({
+      ...VALID_REQUEST,
+      question: {
+        ...VALID_REQUEST.question,
+        contextUrl: undefined,
+        imageUrls: [],
+        videoUrl: "https://www.youtube.com/watch?v=jNQXAC9IVRw",
+      },
+    });
+
+    expect(summarizeLintFindings(findings)).toEqual({
+      errorCount: 0,
+      ok: true,
+      warningCount: 0,
+    });
+  });
+
   it("rejects arbitrary HTTPS image URLs", () => {
     const findings = lintAgentAskRequest({
       ...VALID_REQUEST,
@@ -99,7 +117,7 @@ describe("agent question linting", () => {
     );
   });
 
-  it("rejects asks without a context URL or image URL", () => {
+  it("rejects asks without public context media", () => {
     const findings = lintAgentAskRequest({
       ...VALID_REQUEST,
       question: {

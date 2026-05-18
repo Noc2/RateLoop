@@ -32,7 +32,7 @@ test.describe("Ask form validation", () => {
     await expect(page.getByText("Select a category before submitting.")).toBeVisible({ timeout: 5_000 });
   });
 
-  test("submit requires either a context link or image before submitting", async ({ connectedPage: page }) => {
+  test("submit requires public context media before submitting", async ({ connectedPage: page }) => {
     await page.goto("/ask");
 
     await expect(page.getByRole("heading", { name: "Submit Question" })).toBeVisible({ timeout: 15_000 });
@@ -42,7 +42,7 @@ test.describe("Ask form validation", () => {
 
     await continueToBountyStep(page);
 
-    await expect(page.getByText("Add a context link or at least one image before submitting.")).toBeVisible({
+    await expect(page.getByText("Add a context link, image, or YouTube video before submitting.")).toBeVisible({
       timeout: 5_000,
     });
   });

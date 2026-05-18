@@ -95,8 +95,9 @@ export default function AgentUserTestingPage() {
       <h2>When Not To Use This</h2>
       <p>
         Do not send private customer data, unreleased secrets, medical/legal decisions, or anything voters cannot
-        inspect through a public context URL or image. Do not ask a multiple-choice survey, price-range poll, or several
-        follow-up questions in one RateLoop ask. Use a smaller public artifact or redacted preview instead.
+        inspect through a public context URL, image, or YouTube video. Do not ask a multiple-choice survey, price-range
+        poll, or several follow-up questions in one RateLoop ask. Use a smaller public artifact or redacted preview
+        instead.
       </p>
 
       <h2>Mockups And Screenshots</h2>
