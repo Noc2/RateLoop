@@ -6,6 +6,10 @@ const COMMIT_KEY_1 =
   "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" as const;
 const COMMIT_KEY_2 =
   "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" as const;
+const ADVISORY_COMMIT_KEY =
+  "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc" as const;
+const QUESTION_REWARD_POOL_ESCROW =
+  "0x6666666666666666666666666666666666666666" as const;
 const TOO_EARLY_TLOCK_ERROR =
   "It's too early to decrypt the ciphertext - decryptable at round 27013021";
 const zeroHash = `0x${"0".repeat(64)}` as const;
@@ -245,6 +249,9 @@ function makeHarness(options: {
   };
   commitKeys?: readonly `0x${string}`[];
   commits?: Record<string, CommitData>;
+  questionRewardPoolEscrow?: `0x${string}`;
+  advisoryCommitKeys?: readonly `0x${string}`[];
+  advisoryCommitCores?: Record<string, unknown[]>;
   revealGracePeriod?: bigint;
   lastCommitRevealableAfter?: bigint;
 }) {
@@ -264,6 +271,8 @@ function makeHarness(options: {
   const dormancyEligible = options.dormancyEligible ?? false;
   const commitKeys = options.commitKeys ?? [];
   const commits = options.commits ?? {};
+  const advisoryCommitKeys = options.advisoryCommitKeys ?? [];
+  const advisoryCommitCores = options.advisoryCommitCores ?? {};
   const round = options.round;
 
   const publicClient = {
@@ -271,10 +280,10 @@ function makeHarness(options: {
     readContract: vi.fn(
       async ({
         functionName,
-        args,
+        args = [],
       }: {
         functionName: string;
-        args: readonly unknown[];
+        args?: readonly unknown[];
       }) => {
         switch (functionName) {
           case "nextContentId":
@@ -310,6 +319,29 @@ function makeHarness(options: {
                 )
               : (commits[String(args[2])] ??
                   makeCommit({ revealed: true, stakeAmount: 0n }));
+          case "questionRewardPoolEscrow":
+            return (
+              options.questionRewardPoolEscrow ??
+              "0x0000000000000000000000000000000000000000"
+            );
+          case "roundAdvisoryCommitCount":
+            return BigInt(advisoryCommitKeys.length);
+          case "getRoundAdvisoryCommitKey":
+            return advisoryCommitKeys[Number(args[2])] ?? zeroHash;
+          case "advisoryCommitCore":
+            return (
+              advisoryCommitCores[String(args[0])] ?? [
+                "0x0000000000000000000000000000000000000000",
+                0n,
+                0n,
+                0n,
+                false,
+                false,
+                false,
+                false,
+                true,
+              ]
+            );
           case "isDormancyEligible":
             return dormancyEligible;
           default:
@@ -375,6 +407,19 @@ function makeHarness(options: {
           round.state = 1;
           round.settledAt = now;
           return "0xsettled";
+        }
+
+        if (functionName === "syncBundleQuestionTerminal") {
+          return "0xsync";
+        }
+
+        if (functionName === "claimAdvisoryLaunchCredit") {
+          const commitKey = String(args[0]);
+          const core = advisoryCommitCores[commitKey];
+          if (core) {
+            core[8] = true;
+          }
+          return "0xadvisoryclaim";
         }
 
         if (functionName === "cancelExpiredRound") {
@@ -501,6 +546,92 @@ describe("resolveRounds", () => {
     expect(commits[COMMIT_KEY_1].revealed).toBe(true);
     expect(commits[COMMIT_KEY_2].revealed).toBe(true);
     expect(round.state).toBe(1);
+  });
+
+  it("syncs bundle question terminal after settling a round", async () => {
+    const round = makeRound({
+      state: 0,
+      voteCount: 3n,
+      revealedCount: 3n,
+    });
+    const { publicClient, walletClient } = makeHarness({
+      activeRoundId: 1n,
+      latestRoundId: 1n,
+      round,
+      questionRewardPoolEscrow: QUESTION_REWARD_POOL_ESCROW,
+      now: 1_000n,
+    });
+    const logger = makeLogger();
+
+    const result = await resolveRounds(
+      publicClient as any,
+      walletClient as any,
+      {} as any,
+      { address: ACCOUNT } as any,
+      logger as any,
+    );
+
+    expect(result.roundsSettled).toBe(1);
+    expect(walletClient.writeContract).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        functionName: "settleRound",
+        args: [1n, 1n],
+      }),
+    );
+    expect(walletClient.writeContract).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        address: QUESTION_REWARD_POOL_ESCROW,
+        functionName: "syncBundleQuestionTerminal",
+        args: [1n, 1n],
+      }),
+    );
+  });
+
+  it("claims revealed advisory launch credits after settlement", async () => {
+    const round = makeRound({
+      state: 0,
+      voteCount: 3n,
+      revealedCount: 3n,
+    });
+    const { publicClient, walletClient } = makeHarness({
+      activeRoundId: 1n,
+      latestRoundId: 1n,
+      round,
+      advisoryCommitKeys: [ADVISORY_COMMIT_KEY],
+      advisoryCommitCores: {
+        [ADVISORY_COMMIT_KEY]: [
+          VOTER,
+          1n,
+          1n,
+          0n,
+          true,
+          true,
+          false,
+          false,
+          false,
+        ],
+      },
+      now: 1_000n,
+    });
+    const logger = makeLogger();
+
+    const result = await resolveRounds(
+      publicClient as any,
+      walletClient as any,
+      {} as any,
+      { address: ACCOUNT } as any,
+      logger as any,
+    );
+
+    expect(result.advisoryLaunchCreditsClaimed).toBe(1);
+    expect(walletClient.writeContract).toHaveBeenCalledWith(
+      expect.objectContaining({
+        functionName: "claimAdvisoryLaunchCredit",
+        args: [ADVISORY_COMMIT_KEY],
+      }),
+    );
   });
 
   it("treats malformed tlock ciphertext metadata as a permanent failure without decrypting", async () => {
