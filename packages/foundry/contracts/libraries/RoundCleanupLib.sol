@@ -30,16 +30,6 @@ library RoundCleanupLib {
     uint256 internal constant CLEANUP_INCENTIVE_BPS = 100; // 1%
     uint256 internal constant CLEANUP_INCENTIVE_MAX = 5e6; // 5 LREP
 
-    /// @notice Cleanup incentive rate applied to refunded stake (refunds go back to voters
-    ///         rather than to the treasury or consensus reserve, so the incentive on this
-    ///         portion is funded out of the engine's consensus reserve and capped by the
-    ///         per-round 5 LREP envelope shared with the forfeit-driven incentive).
-    /// @dev Tuned lower than `CLEANUP_INCENTIVE_BPS` (1%) because refunds carry no
-    ///      treasury / reserve credit to pay from. Set as a constant so future tuning is a
-    ///      one-line change; keep below `CLEANUP_INCENTIVE_BPS` to avoid making refund-only
-    ///      cleanups more attractive than forfeit-heavy ones.
-    uint256 internal constant REFUND_CLEANUP_INCENTIVE_BPS = 25; // 0.25%
-
     error RoundNotCancelledOrTied();
     error AlreadyClaimed();
     error NoCommit();
@@ -548,13 +538,9 @@ library RoundCleanupLib {
         }
 
         uint256 cleanupIncentivePaid = roundCleanupIncentivePaid[contentId][roundId];
-        cleanupIncentive = _cleanupIncentive(
-            forfeitedToTreasury + addedToConsensusReserve, refundedLrep, 5e6 - cleanupIncentivePaid
-        );
+        cleanupIncentive = _cleanupIncentive(forfeitedToTreasury + addedToConsensusReserve, 5e6 - cleanupIncentivePaid);
         if (cleanupIncentive > 0) {
-            // Drain the forfeit/reserve pots first (they're the natural source); whatever
-            // remains for refund-only rounds is paid out of the engine's consensus reserve
-            // so that refunded voters are not shorted by the keeper bounty.
+            // Drain the forfeit/reserve pots that funded this incentive.
             uint256 remainingIncentive = cleanupIncentive;
             uint256 fromReserve =
                 addedToConsensusReserve < remainingIncentive ? addedToConsensusReserve : remainingIncentive;
@@ -569,26 +555,7 @@ library RoundCleanupLib {
                 forfeitedToTreasury -= fromTreasuryForfeiture;
                 remainingIncentive -= fromTreasuryForfeiture;
             }
-            if (remainingIncentive > 0) {
-                // Refund-only path: pay what we can out of the engine's consensus reserve.
-                // `_cleanupIncentive` only knows the per-round 5 LREP cap, not the live reserve
-                // balance, so for refund-only batches the residual can exceed the reserve --
-                // most commonly the zero-reserve case at protocol startup. Pay what the reserve
-                // covers immediately; defer the rest as a per-(round, keeper) IOU that the
-                // keeper can later collect via `claimDeferredCleanupBounty` once the reserve
-                // has been topped up. The processed votes have already had their stake zeroed
-                // so a later batch on the same range cannot recompute this incentive
-                // (codex PR #12 review).
-                uint256 fromRefundReserve =
-                    updatedConsensusReserve < remainingIncentive ? updatedConsensusReserve : remainingIncentive;
-                updatedConsensusReserve -= fromRefundReserve;
-                if (fromRefundReserve < remainingIncentive) {
-                    deferredCleanupBounty = remainingIncentive - fromRefundReserve;
-                    cleanupIncentive -= deferredCleanupBounty;
-                }
-            }
-            // Count BOTH the immediately-paid and the deferred portions toward the per-round
-            // 5 LREP cap so deferral cannot be used to bypass the envelope across batches.
+            // Count the paid incentive toward the per-round 5 LREP cap across batches.
             if (cleanupIncentive > 0 || deferredCleanupBounty > 0) {
                 roundCleanupIncentivePaid[contentId][roundId] =
                     cleanupIncentivePaid + cleanupIncentive + deferredCleanupBounty;
@@ -615,20 +582,10 @@ library RoundCleanupLib {
         }
     }
 
-    /// @notice Compute the keeper cleanup incentive for a batch.
-    /// @dev `forfeitedAmount` covers the treasury-forfeit + consensus-reserve contributions
-    ///      and is charged at `CLEANUP_INCENTIVE_BPS` (1%). Refunded stake is charged at the
-    ///      lower `REFUND_CLEANUP_INCENTIVE_BPS` (0.25%) because the incentive on that
-    ///      portion must come out of the engine's consensus reserve rather than from the
-    ///      cleaned-up funds themselves. Both contributions share the round's 5 LREP cap.
-    function _cleanupIncentive(uint256 forfeitedAmount, uint256 refundedAmount, uint256 remainingCap)
-        private
-        pure
-        returns (uint256 incentive)
-    {
+    /// @notice Compute the keeper cleanup incentive for forfeited stake or reserve replenishment.
+    function _cleanupIncentive(uint256 forfeitedAmount, uint256 remainingCap) private pure returns (uint256 incentive) {
         if (remainingCap == 0) return 0;
         incentive = forfeitedAmount * CLEANUP_INCENTIVE_BPS / 10_000;
-        incentive += refundedAmount * REFUND_CLEANUP_INCENTIVE_BPS / 10_000;
         if (incentive > CLEANUP_INCENTIVE_MAX) incentive = CLEANUP_INCENTIVE_MAX;
         if (incentive > remainingCap) incentive = remainingCap;
     }

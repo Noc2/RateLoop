@@ -286,14 +286,7 @@ contract RoundVotingEngine is
         emit ConsensusReserveToppedUp(msg.sender, amount);
     }
 
-    /// @notice Drain a previously-deferred refund-only cleanup bounty owed to `msg.sender`.
-    /// @dev When `processUnrevealedVotes` runs against a refund-eligible batch with the
-    ///      consensus reserve below the keeper bounty, the unpaid sliver is deferred per
-    ///      (round, keeper) instead of being silently discarded -- the processed commits have
-    ///      already had their stake zeroed, so a later `processUnrevealedVotes` over the same
-    ///      range cannot recompute the incentive. This function lets the original keeper
-    ///      collect the IOU once `addToConsensusReserve` has topped the reserve up. Pays the
-    ///      lesser of the pending IOU and the current reserve; the remainder stays claimable.
+    /// @notice Drain a previously-deferred cleanup bounty owed to `msg.sender`.
     function claimDeferredCleanupBounty(uint256 contentId, uint256 roundId)
         external
         nonReentrant
@@ -1189,8 +1182,9 @@ contract RoundVotingEngine is
         RoundLib.RoundConfig memory roundCfg
     ) internal view returns (bool) {
         if (!RoundLib.isExpired(round, roundCfg.maxDuration)) return false;
-        return
-            round.voteCount < _rbtsRevealQuorum(roundCfg.minVoters) || !roundHasHumanVerifiedCommit[contentId][roundId];
+        uint16 rbtsRevealQuorum = _rbtsRevealQuorum(roundCfg.minVoters);
+        if (round.revealedCount >= rbtsRevealQuorum) return false;
+        return round.voteCount < rbtsRevealQuorum || !roundHasHumanVerifiedCommit[contentId][roundId];
     }
 
     function _isSettlementRevealGraceElapsed(uint256 contentId, uint256 roundId, RoundLib.Round storage round)

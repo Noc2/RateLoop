@@ -1222,6 +1222,30 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertFalse(engine.roundHasHumanVerifiedCommit(contentId, roundId));
     }
 
+    function test_CancelExpired_AllSybilRevealQuorum_SettlementWins() public {
+        uint256 contentId = _submitContent();
+
+        (bytes32 ck1, bytes32 s1) = _commit(voter1, contentId, true, STAKE);
+        (bytes32 ck2, bytes32 s2) = _commit(voter2, contentId, false, STAKE);
+        (bytes32 ck3, bytes32 s3) = _commit(voter3, contentId, true, STAKE);
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+
+        RoundLib.Round memory startRound = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        _warpPastTlockRevealTime(uint256(startRound.startTime) + EPOCH);
+        _reveal(contentId, roundId, ck1, true, s1);
+        _reveal(contentId, roundId, ck2, false, s2);
+        _reveal(contentId, roundId, ck3, true, s3);
+
+        vm.warp(block.timestamp + 7 days + 1);
+        vm.expectRevert(RoundVotingEngine.ThresholdReached.selector);
+        engine.cancelExpiredRound(contentId, roundId);
+
+        _settleRoundAfterRbtsSeed(contentId, roundId);
+        RoundLib.Round memory settledRound = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        assertEq(uint256(settledRound.state), uint256(RoundLib.RoundState.Settled));
+        assertFalse(engine.roundHasHumanVerifiedCommit(contentId, roundId));
+    }
+
     /// @notice L-Vote-4: once any HRC voter has committed, subsequent non-HRC sybil commits
     ///         still engage the cancel-lockout. The flag is sticky for the round.
     function test_CancelExpired_HrcThenSybils_LockoutStillEngages() public {
@@ -2086,11 +2110,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertEq(voter4BalAfter - voter4BalBefore, STAKE);
     }
 
-    /// @notice Codex PR #12 follow-up: a refund-only batch run while the consensus reserve
-    ///         cannot cover the keeper bounty must still refund stakes and must defer the
-    ///         unpaid bounty as a per-(round, keeper) IOU rather than discard it. The keeper
-    ///         drains the IOU via `claimDeferredCleanupBounty` once the reserve is topped up.
-    function test_ProcessUnrevealed_DefersBountyWhenReserveBelowKeeperShare() public {
+    function test_ProcessUnrevealed_RefundOnlyCleanupPaysNoKeeperBounty() public {
         uint256 contentId = _submitContent();
 
         (bytes32 ck1, bytes32 s1) = _commit(voter1, contentId, true, STAKE);
@@ -2109,44 +2129,18 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         _reveal(contentId, roundId, ck3, false, s3);
         _settleRoundAfterRbtsSeed(contentId, roundId);
 
-        // Drain the consensus reserve directly (slot 27) so the refund-only keeper bounty
-        // cannot be paid in full from the reserve. accountedLrepBalance at slot 28 must
-        // shrink in lockstep so the engine's solvency check stays consistent.
-        uint256 reservePre = engine.consensusReserve();
-        vm.store(address(engine), bytes32(uint256(27)), bytes32(uint256(0)));
-        bytes32 accBalSlot = vm.load(address(engine), bytes32(uint256(28)));
-        require(uint256(accBalSlot) >= reservePre, "accounted bal below reserve");
-        vm.store(address(engine), bytes32(uint256(28)), bytes32(uint256(accBalSlot) - reservePre));
-        assertEq(engine.consensusReserve(), 0, "reserve drained for test");
-
         uint256 keeperBefore = lrepToken.balanceOf(keeper);
         uint256 voter4Before = lrepToken.balanceOf(voter4);
+        uint256 reserveBefore = engine.consensusReserve();
 
         vm.prank(keeper);
         engine.processUnrevealedVotes(contentId, roundId, 0, 0);
 
         // Refund still happens.
         assertEq(lrepToken.balanceOf(voter4) - voter4Before, STAKE, "voter4 refunded");
-        // Keeper not paid yet.
-        assertEq(lrepToken.balanceOf(keeper), keeperBefore, "keeper not paid live");
-        // Deferred IOU recorded.
-        uint256 expectedBounty = (STAKE * 25) / 10_000; // REFUND_CLEANUP_INCENTIVE_BPS
-        assertEq(
-            engine.roundDeferredCleanupBounty(contentId, roundId, keeper), expectedBounty, "deferred bounty recorded"
-        );
-
-        // Top up the reserve and drain the IOU.
-        vm.prank(owner);
-        lrepToken.mint(address(this), expectedBounty);
-        lrepToken.approve(address(engine), expectedBounty);
-        engine.addToConsensusReserve(expectedBounty);
-
-        vm.prank(keeper);
-        uint256 paid = engine.claimDeferredCleanupBounty(contentId, roundId);
-        assertEq(paid, expectedBounty, "claim returns paid amount");
-        assertEq(lrepToken.balanceOf(keeper) - keeperBefore, expectedBounty, "keeper paid");
-        assertEq(engine.roundDeferredCleanupBounty(contentId, roundId, keeper), 0, "deferred bounty cleared");
-        assertEq(engine.consensusReserve(), 0, "reserve drained by claim");
+        assertEq(lrepToken.balanceOf(keeper), keeperBefore, "keeper not paid");
+        assertEq(engine.roundDeferredCleanupBounty(contentId, roundId, keeper), 0, "no deferred bounty");
+        assertEq(engine.consensusReserve(), reserveBefore, "refund-only cleanup must not drain reserve");
     }
 
     function test_ProcessUnrevealed_DeferredBountyClaimRevertsWhenNothingPending() public {

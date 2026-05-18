@@ -283,7 +283,10 @@ function getVoteableContentCondition() {
               and ${nowSeconds} >= ${round.startTime} + ${round.maxDuration}
               and (
                 ${round.voteCount} < ${round.minVoters}
-                or ${round.hasHumanVerifiedCommit} = false
+                or (
+                  ${round.hasHumanVerifiedCommit} = false
+                  and ${round.revealedCount} < ${round.minVoters}
+                )
                 or (
                   ${round.revealedCount} < ${round.minVoters}
                   and ${round.lastCommitRevealableAfter} is not null
