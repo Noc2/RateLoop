@@ -345,7 +345,8 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         // revealed-and-staked subset once, then index directly into it for the reference and
         // peer draws so that a sybil cluster of unrevealed commits cannot bias the sampler
         // toward the first revealed commit after a contiguous unrevealed run.
-        bytes32[] memory revealedKeys = _buildRevealedKeySet(advisoryCommit.contentId, advisoryCommit.roundId, voteCount);
+        bytes32[] memory revealedKeys =
+            _buildRevealedKeySet(advisoryCommit.contentId, advisoryCommit.roundId, voteCount);
         uint256 revealedLen = revealedKeys.length;
         if (revealedLen < 2) revert NotEnoughVotes();
         uint256 referenceIndex = uint256(seed) % revealedLen;
@@ -639,12 +640,14 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         return false;
     }
 
-    /// @notice Build the revealed-and-staked subset of the engine's committed set for a round.
+    /// @notice Build the threshold-scored revealed-and-staked subset of the engine's committed set for a round.
     /// @dev M-Vote-5 (audit 2026-05-18): the prior `_findRevealedCommitKey` did a forward scan
     ///      over the committed set, which let a sybil cluster of contiguous unrevealed commits
     ///      absorb the sampler probability mass for the first revealed commit after the run.
     ///      Materializing the revealed subset once and indexing directly into it restores
     ///      uniform sampling — mirroring the M-Vote-4 fix in `RoundRevealLib._scoreRbtsCommitAt`.
+    ///      The RBTS scoring-weight check also excludes real votes revealed after threshold,
+    ///      including those that share the threshold timestamp in the same block.
     function _buildRevealedKeySet(uint256 contentId, uint256 roundId, uint16 voteCount)
         internal
         view
@@ -656,7 +659,8 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         for (uint256 i = 0; i < voteCount;) {
             bytes32 candidate = votingEngine.getRoundCommitKey(contentId, roundId, i);
             (, uint64 stakeAmount,,, bool revealed,,) = votingEngine.commitCore(contentId, roundId, candidate);
-            if (revealed && stakeAmount > 0) {
+            if (revealed && stakeAmount > 0 && votingEngine.commitRbtsScoringWeight(contentId, roundId, candidate) > 0)
+            {
                 revealedKeys[revealedIdx] = candidate;
                 unchecked {
                     ++revealedIdx;
@@ -675,11 +679,7 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
     /// @dev Single-exclusion analogue of `RoundRevealLib._rbtsPeerIndex`. The advisory voter
     ///      is not in the engine's revealed set (zero-stake parallel structure), so only the
     ///      reference draw is excluded from the peer draw.
-    function _advisoryPeerIndex(bytes32 seed, uint256 referenceIndex, uint256 count)
-        internal
-        pure
-        returns (uint256)
-    {
+    function _advisoryPeerIndex(bytes32 seed, uint256 referenceIndex, uint256 count) internal pure returns (uint256) {
         // Deterministic sampler over the threshold-frozen revealed set.
         // slither-disable-next-line weak-prng
         uint256 drawn = uint256(keccak256(abi.encodePacked(seed, uint8(1)))) % (count - 1);

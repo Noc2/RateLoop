@@ -70,9 +70,7 @@ contract AdvisoryRecorderSamplerTest is Test {
         ProtocolConfig protocolConfigImpl = new ProtocolConfig();
         ProtocolConfig protocolConfig = ProtocolConfig(
             address(
-                new ERC1967Proxy(
-                    address(protocolConfigImpl), abi.encodeCall(ProtocolConfig.initialize, (owner, owner))
-                )
+                new ERC1967Proxy(address(protocolConfigImpl), abi.encodeCall(ProtocolConfig.initialize, (owner, owner)))
             )
         );
 
@@ -97,6 +95,18 @@ contract AdvisoryRecorderSamplerTest is Test {
     // ---------------------------------------------------------------------
 
     function _mockCommit(uint256 index, bytes32 commitKey, bool revealed, uint64 stakeAmount) internal {
+        _mockCommitWithScoringWeight(
+            index, commitKey, revealed, stakeAmount, revealed && stakeAmount > 0 ? uint256(stakeAmount) : uint256(0)
+        );
+    }
+
+    function _mockCommitWithScoringWeight(
+        uint256 index,
+        bytes32 commitKey,
+        bool revealed,
+        uint64 stakeAmount,
+        uint256 scoringWeight
+    ) internal {
         vm.mockCall(
             engineAddress,
             abi.encodeWithSignature("getRoundCommitKey(uint256,uint256,uint256)", CONTENT_ID, ROUND_ID, index),
@@ -114,6 +124,13 @@ contract AdvisoryRecorderSamplerTest is Test {
                 true,
                 uint8(0)
             )
+        );
+        vm.mockCall(
+            engineAddress,
+            abi.encodeWithSignature(
+                "commitRbtsScoringWeight(uint256,uint256,bytes32)", CONTENT_ID, ROUND_ID, commitKey
+            ),
+            abi.encode(scoringWeight)
         );
     }
 
@@ -163,6 +180,23 @@ contract AdvisoryRecorderSamplerTest is Test {
         assertEq(revealedKeys[0], keys[0]);
         assertEq(revealedKeys[1], keys[2]);
         assertEq(revealedKeys[2], keys[4]);
+    }
+
+    function test_BuildRevealedKeySet_DropsPostThresholdReveals() public {
+        bytes32[4] memory keys;
+        for (uint256 i = 0; i < 4; i++) {
+            keys[i] = keccak256(abi.encodePacked("post-threshold", i));
+        }
+        _mockCommitWithScoringWeight(0, keys[0], true, 5e6, 5e6);
+        _mockCommitWithScoringWeight(1, keys[1], true, 5e6, 5e6);
+        _mockCommitWithScoringWeight(2, keys[2], true, 5e6, 5e6);
+        _mockCommitWithScoringWeight(3, keys[3], true, 5e6, 0);
+
+        bytes32[] memory revealedKeys = recorder.harnessBuildRevealedKeySet(CONTENT_ID, ROUND_ID, 4);
+        assertEq(revealedKeys.length, 3, "post-threshold reveal excluded");
+        assertEq(revealedKeys[0], keys[0]);
+        assertEq(revealedKeys[1], keys[1]);
+        assertEq(revealedKeys[2], keys[2]);
     }
 
     function test_BuildRevealedKeySet_ZeroVoteCountReverts() public {

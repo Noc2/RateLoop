@@ -1291,7 +1291,9 @@ contract RoundVotingEngine is
             RoundRevealLib.captureRbtsSeed(roundRbtsSeedEntropy, contentId, roundId);
         }
         commitPredictedUpBps[contentId][roundId][commitKey] = predictedUpBps;
-        commitRbtsWeight[contentId][roundId][commitKey] = effectiveStake;
+        if (!thresholdAlreadyReached) {
+            commitRbtsWeight[contentId][roundId][commitKey] = effectiveStake;
+        }
         if (isUp) {
             roundRatingUpEvidence[contentId][roundId] += ratingEvidenceWeight;
         } else {
@@ -1386,6 +1388,14 @@ contract RoundVotingEngine is
         scored = roundRbtsScored[contentId][roundId];
         rewardWeight = roundRbtsRewardWeight[contentId][roundId];
         forfeitedPool = roundRbtsForfeitedPool[contentId][roundId];
+    }
+
+    function commitRbtsScoringWeight(uint256 contentId, uint256 roundId, bytes32 commitKey)
+        external
+        view
+        returns (uint256)
+    {
+        return commitRbtsWeight[contentId][roundId][commitKey];
     }
 
     // --- Admin ---

@@ -179,8 +179,9 @@ library RoundRevealLib {
 
         // M-Vote-2: the sampler SEED is hashed over the full COMMITTED set (every commitKey,
         // revealed or not, in commit order), so selective reveal cannot grind the seed.
-        // The sampler INDEX SPACE is frozen to commits revealed no later than the threshold
-        // reveal timestamp, before the delayed blockhash seed becomes knowable.
+        // The sampler INDEX SPACE is frozen to commits whose RBTS weight was recorded before
+        // reveal threshold. This avoids block.timestamp ambiguity for post-threshold reveals
+        // included in the same block as the quorum-closing reveal.
         uint256 committedCount = commitKeys.length;
         bytes32[] memory revealedKeysMem = new bytes32[](committedCount);
         bytes32 committedSetHash;
@@ -192,14 +193,10 @@ library RoundRevealLib {
             committedSetHash = keccak256(abi.encodePacked(committedSetHash, commitKey));
             RoundLib.Commit storage revealedCommit = roundCommits[commitKey];
             if (revealedCommit.revealed) {
-                if (revealedCommit.revealableAfter <= params.thresholdReachedAt) {
+                if (commitRbtsWeight[commitKey] > 0) {
                     revealedKeysMem[revealedBuildIdx] = commitKey;
-                    if (commitRbtsWeight[commitKey] > 0) {
-                        unchecked {
-                            ++economicCount;
-                        }
-                    } else if (revealedCommit.stakeAmount > 0) {
-                        commitRbtsStakeReturned[commitKey] = revealedCommit.stakeAmount;
+                    unchecked {
+                        ++economicCount;
                     }
                     unchecked {
                         ++revealedBuildIdx;

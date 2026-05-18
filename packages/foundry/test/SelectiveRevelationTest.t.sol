@@ -310,11 +310,15 @@ contract SelectiveRevelationTest is VotingTestBase {
         _reveal(contentId, roundId, ck2, true, s2);
         _reveal(contentId, roundId, ck3, false, s3);
 
-        vm.roll(block.number + 1);
-        vm.warp(block.timestamp + 1);
+        // Same-block post-threshold reveals share the threshold timestamp, so the scoring
+        // set must be frozen by the pre-threshold weight marker instead.
         _reveal(contentId, roundId, ck4, true, s4);
+
+        vm.roll(block.number + 1);
         engine.settleRound(contentId, roundId);
 
+        assertGt(engine.commitRbtsScoringWeight(contentId, roundId, ck1), 0, "threshold reveal set scored");
+        assertEq(engine.commitRbtsScoringWeight(contentId, roundId, ck4), 0, "late reveal omitted from scoring set");
         assertEq(engine.commitRbtsRewardWeight(contentId, roundId, ck4), 0, "late reveal has no RBTS reward");
         assertEq(engine.commitRbtsStakeReturned(contentId, roundId, ck4), STAKE, "winning late reveal gets stake back");
         assertEq(engine.commitRbtsForfeitedStake(contentId, roundId, ck4), 0, "winning late reveal not forfeited");
