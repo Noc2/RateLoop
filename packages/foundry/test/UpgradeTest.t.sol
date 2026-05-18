@@ -15,6 +15,8 @@ import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol"
 import { ProfileRegistry } from "../contracts/ProfileRegistry.sol";
 import { FrontendRegistry } from "../contracts/FrontendRegistry.sol";
 import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
+import { QuestionRewardPoolEscrow } from "../contracts/QuestionRewardPoolEscrow.sol";
+import { FeedbackBonusEscrow } from "../contracts/FeedbackBonusEscrow.sol";
 import { LoopReputation } from "../contracts/LoopReputation.sol";
 import { IProfileRegistry } from "../contracts/interfaces/IProfileRegistry.sol";
 import { IRoundVotingEngine } from "../contracts/interfaces/IRoundVotingEngine.sol";
@@ -69,15 +71,20 @@ contract UpgradeTest is Test {
     ProfileRegistry public profileRegistry;
     FrontendRegistry public frontendRegistry;
     ProtocolConfig public protocolConfig;
+    QuestionRewardPoolEscrow public questionRewardPoolEscrow;
+    FeedbackBonusEscrow public feedbackBonusEscrow;
     ProxyAdmin public contentRegistryAdmin;
     ProxyAdmin public votingEngineAdmin;
     ProxyAdmin public rewardDistributorAdmin;
     ProxyAdmin public profileRegistryAdmin;
     ProxyAdmin public frontendRegistryAdmin;
     ProxyAdmin public protocolConfigAdmin;
+    ProxyAdmin public questionRewardPoolEscrowAdmin;
+    ProxyAdmin public feedbackBonusEscrowAdmin;
 
     LoopReputation public lrepToken;
     MockVotingEngineForUpgrade public mockVotingEngine;
+    MockRaterIdentityRegistry public raterRegistry;
 
     // Roles
     address public admin = address(1);
@@ -154,9 +161,48 @@ contract UpgradeTest is Test {
         frontendRegistry = FrontendRegistry(address(frProxy));
         frontendRegistryAdmin = _proxyAdmin(address(frProxy));
 
-        MockRaterIdentityRegistry raterRegistry = new MockRaterIdentityRegistry();
+        raterRegistry = new MockRaterIdentityRegistry();
         profileRegistry.setRaterRegistry(address(raterRegistry));
         raterRegistry.setHolder(address(10));
+
+        // --- QuestionRewardPoolEscrow ---
+        QuestionRewardPoolEscrow qrpImpl = new QuestionRewardPoolEscrow();
+        TransparentUpgradeableProxy qrpProxy = new TransparentUpgradeableProxy(
+            address(qrpImpl),
+            governance,
+            abi.encodeCall(
+                QuestionRewardPoolEscrow.initialize,
+                (
+                    governance,
+                    address(lrepToken),
+                    address(lrepToken),
+                    address(contentRegistry),
+                    address(votingEngine),
+                    address(raterRegistry)
+                )
+            )
+        );
+        questionRewardPoolEscrow = QuestionRewardPoolEscrow(address(qrpProxy));
+        questionRewardPoolEscrowAdmin = _proxyAdmin(address(qrpProxy));
+
+        // --- FeedbackBonusEscrow ---
+        FeedbackBonusEscrow fbeImpl = new FeedbackBonusEscrow();
+        TransparentUpgradeableProxy fbeProxy = new TransparentUpgradeableProxy(
+            address(fbeImpl),
+            governance,
+            abi.encodeCall(
+                FeedbackBonusEscrow.initialize,
+                (
+                    governance,
+                    address(lrepToken),
+                    address(contentRegistry),
+                    address(votingEngine),
+                    address(raterRegistry)
+                )
+            )
+        );
+        feedbackBonusEscrow = FeedbackBonusEscrow(address(fbeProxy));
+        feedbackBonusEscrowAdmin = _proxyAdmin(address(fbeProxy));
 
         vm.stopPrank();
     }
@@ -425,6 +471,94 @@ contract UpgradeTest is Test {
     }
 
     // =========================================================================
+    // QuestionRewardPoolEscrow upgrade tests
+    // =========================================================================
+
+    function test_QuestionRewardPoolEscrow_GovernanceCanUpgrade() public {
+        QuestionRewardPoolEscrow newImpl = new QuestionRewardPoolEscrow();
+        vm.prank(governance);
+        questionRewardPoolEscrowAdmin.upgradeAndCall(_proxy(address(questionRewardPoolEscrow)), address(newImpl), "");
+    }
+
+    function test_QuestionRewardPoolEscrow_UnauthorizedCannotUpgrade() public {
+        QuestionRewardPoolEscrow newImpl = new QuestionRewardPoolEscrow();
+        vm.prank(attacker);
+        vm.expectRevert();
+        questionRewardPoolEscrowAdmin.upgradeAndCall(_proxy(address(questionRewardPoolEscrow)), address(newImpl), "");
+    }
+
+    function test_QuestionRewardPoolEscrow_CannotReinitialize() public {
+        vm.prank(admin);
+        vm.expectRevert(Initializable.InvalidInitialization.selector);
+        questionRewardPoolEscrow.initialize(
+            governance,
+            address(lrepToken),
+            address(lrepToken),
+            address(contentRegistry),
+            address(votingEngine),
+            address(raterRegistry)
+        );
+    }
+
+    function test_QuestionRewardPoolEscrow_StatePreservedAfterUpgrade() public {
+        assertEq(questionRewardPoolEscrowAdmin.owner(), governance);
+        assertEq(questionRewardPoolEscrow.defaultFrontendFeeBps(), 300);
+        assertTrue(questionRewardPoolEscrow.hasRole(questionRewardPoolEscrow.DEFAULT_ADMIN_ROLE(), governance));
+
+        QuestionRewardPoolEscrow newImpl = new QuestionRewardPoolEscrow();
+        vm.prank(governance);
+        questionRewardPoolEscrowAdmin.upgradeAndCall(_proxy(address(questionRewardPoolEscrow)), address(newImpl), "");
+
+        assertEq(questionRewardPoolEscrowAdmin.owner(), governance);
+        assertEq(questionRewardPoolEscrow.defaultFrontendFeeBps(), 300);
+        assertTrue(questionRewardPoolEscrow.hasRole(questionRewardPoolEscrow.DEFAULT_ADMIN_ROLE(), governance));
+    }
+
+    // =========================================================================
+    // FeedbackBonusEscrow upgrade tests
+    // =========================================================================
+
+    function test_FeedbackBonusEscrow_GovernanceCanUpgrade() public {
+        FeedbackBonusEscrow newImpl = new FeedbackBonusEscrow();
+        vm.prank(governance);
+        feedbackBonusEscrowAdmin.upgradeAndCall(_proxy(address(feedbackBonusEscrow)), address(newImpl), "");
+    }
+
+    function test_FeedbackBonusEscrow_UnauthorizedCannotUpgrade() public {
+        FeedbackBonusEscrow newImpl = new FeedbackBonusEscrow();
+        vm.prank(attacker);
+        vm.expectRevert();
+        feedbackBonusEscrowAdmin.upgradeAndCall(_proxy(address(feedbackBonusEscrow)), address(newImpl), "");
+    }
+
+    function test_FeedbackBonusEscrow_CannotReinitialize() public {
+        vm.prank(admin);
+        vm.expectRevert(Initializable.InvalidInitialization.selector);
+        feedbackBonusEscrow.initialize(
+            governance, address(lrepToken), address(contentRegistry), address(votingEngine), address(raterRegistry)
+        );
+    }
+
+    function test_FeedbackBonusEscrow_StatePreservedAfterUpgrade() public {
+        vm.prank(governance);
+        feedbackBonusEscrow.setDefaultFrontendFeeBps(400);
+
+        assertEq(feedbackBonusEscrowAdmin.owner(), governance);
+        assertEq(feedbackBonusEscrow.defaultFrontendFeeBps(), 400);
+        assertEq(address(feedbackBonusEscrow.usdcToken()), address(lrepToken));
+        assertTrue(feedbackBonusEscrow.hasRole(feedbackBonusEscrow.DEFAULT_ADMIN_ROLE(), governance));
+
+        FeedbackBonusEscrow newImpl = new FeedbackBonusEscrow();
+        vm.prank(governance);
+        feedbackBonusEscrowAdmin.upgradeAndCall(_proxy(address(feedbackBonusEscrow)), address(newImpl), "");
+
+        assertEq(feedbackBonusEscrowAdmin.owner(), governance);
+        assertEq(feedbackBonusEscrow.defaultFrontendFeeBps(), 400);
+        assertEq(address(feedbackBonusEscrow.usdcToken()), address(lrepToken));
+        assertTrue(feedbackBonusEscrow.hasRole(feedbackBonusEscrow.DEFAULT_ADMIN_ROLE(), governance));
+    }
+
+    // =========================================================================
     // Implementation direct initialization protection
     // =========================================================================
 
@@ -453,6 +587,23 @@ contract UpgradeTest is Test {
         ProtocolConfig pcImpl = new ProtocolConfig();
         vm.expectRevert(Initializable.InvalidInitialization.selector);
         pcImpl.initialize(admin, governance);
+
+        QuestionRewardPoolEscrow qrpImpl = new QuestionRewardPoolEscrow();
+        vm.expectRevert(Initializable.InvalidInitialization.selector);
+        qrpImpl.initialize(
+            governance,
+            address(lrepToken),
+            address(lrepToken),
+            address(contentRegistry),
+            address(votingEngine),
+            address(raterRegistry)
+        );
+
+        FeedbackBonusEscrow fbeImpl = new FeedbackBonusEscrow();
+        vm.expectRevert(Initializable.InvalidInitialization.selector);
+        fbeImpl.initialize(
+            governance, address(lrepToken), address(contentRegistry), address(votingEngine), address(raterRegistry)
+        );
     }
 
     function _proxy(address proxy) internal pure returns (ITransparentUpgradeableProxy) {
