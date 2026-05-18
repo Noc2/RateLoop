@@ -36,8 +36,6 @@ library RoundCleanupLib {
     error NoStake();
     error VoteNotRevealed();
     error NothingProcessed();
-    error NothingToClaim();
-    error ReserveEmpty();
     error RoundNotSettledOrTied();
     error IndexOutOfBounds();
 
@@ -46,19 +44,9 @@ library RoundCleanupLib {
         uint256 indexed contentId, uint256 indexed roundId, bool settled, bytes lowLevelError
     );
     event BundleObserverNotifyReplayed(uint256 indexed contentId, uint256 indexed roundId, bool settled);
-    event DeferredCleanupBountyClaimed(
-        uint256 indexed contentId,
-        uint256 indexed roundId,
-        address indexed recipient,
-        uint256 paidAmount,
-        uint256 remaining
-    );
     event ForfeitedFundsAddedToTreasury(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
     event UnrevealedStakeAddedToConsensusReserve(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
     event ForfeitedFundsFallbackToConsensusReserve(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
-    event DeferredCleanupBountyAccrued(
-        uint256 indexed contentId, uint256 indexed roundId, address indexed recipient, uint256 amount
-    );
     event CurrentEpochRefunded(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
 
     function targetRoundRevealableAt(
@@ -340,29 +328,6 @@ library RoundCleanupLib {
         lrepToken.safeTransfer(commitVoter, refundAmount);
     }
 
-    function claimDeferredCleanupBounty(
-        mapping(address => uint256) storage deferredCleanupBounty,
-        IERC20 lrepToken,
-        uint256 consensusReserve,
-        uint256 accountedLrepBalance,
-        uint256 contentId,
-        uint256 roundId,
-        address recipient
-    ) external returns (uint256 paidAmount, uint256 updatedConsensusReserve, uint256 updatedAccountedLrepBalance) {
-        uint256 pending = deferredCleanupBounty[recipient];
-        if (pending == 0) revert NothingToClaim();
-        if (consensusReserve == 0) revert ReserveEmpty();
-
-        paidAmount = pending > consensusReserve ? consensusReserve : pending;
-        uint256 remaining = pending - paidAmount;
-        deferredCleanupBounty[recipient] = remaining;
-        updatedConsensusReserve = consensusReserve - paidAmount;
-        updatedAccountedLrepBalance = accountedLrepBalance - paidAmount;
-        lrepToken.safeTransfer(recipient, paidAmount);
-
-        emit DeferredCleanupBountyClaimed(contentId, roundId, recipient, paidAmount, remaining);
-    }
-
     function markRoundRevealFailed(
         RoundLib.Round storage round,
         mapping(uint256 => uint256) storage roundUnrevealedCleanupRemaining,
@@ -419,7 +384,6 @@ library RoundCleanupLib {
         mapping(bytes32 => RoundLib.Commit) storage roundCommits,
         mapping(uint256 => mapping(uint256 => uint256)) storage roundCleanupIncentivePaid,
         mapping(uint256 => uint256) storage roundUnrevealedCleanupRemaining,
-        mapping(address => uint256) storage roundDeferredCleanupBounty,
         uint256 contentId,
         uint256 roundId,
         IERC20 lrepToken,
@@ -445,8 +409,7 @@ library RoundCleanupLib {
             uint256 refundedLrep,
             uint256 processedPastEpochCount,
             uint256 cleanupIncentive,
-            uint256 nextConsensusReserve,
-            uint256 deferredCleanupBounty
+            uint256 nextConsensusReserve
         ) = processUnrevealedVotes(
             round,
             commitKeys,
@@ -484,11 +447,6 @@ library RoundCleanupLib {
             emit UnrevealedStakeAddedToConsensusReserve(contentId, roundId, addedToConsensusReserve);
         }
 
-        if (deferredCleanupBounty > 0) {
-            roundDeferredCleanupBounty[cleanupCaller] += deferredCleanupBounty;
-            emit DeferredCleanupBountyAccrued(contentId, roundId, cleanupCaller, deferredCleanupBounty);
-        }
-
         if (processedPastEpochCount > 0) {
             uint256 remaining = roundUnrevealedCleanupRemaining[roundId];
             if (remaining > 0) {
@@ -523,8 +481,7 @@ library RoundCleanupLib {
             uint256 refundedLrep,
             uint256 processedPastEpochCount,
             uint256 cleanupIncentive,
-            uint256 updatedConsensusReserve,
-            uint256 deferredCleanupBounty
+            uint256 updatedConsensusReserve
         )
     {
         uint256 len = commitKeys.length;
@@ -581,11 +538,8 @@ library RoundCleanupLib {
                 remainingIncentive -= fromTreasuryForfeiture;
             }
             // Count the paid incentive toward the per-round 5 LREP cap across batches.
-            if (cleanupIncentive > 0 || deferredCleanupBounty > 0) {
-                roundCleanupIncentivePaid[contentId][roundId] =
-                    cleanupIncentivePaid + cleanupIncentive + deferredCleanupBounty;
-            }
             if (cleanupIncentive > 0) {
+                roundCleanupIncentivePaid[contentId][roundId] = cleanupIncentivePaid + cleanupIncentive;
                 lrepToken.safeTransfer(cleanupCaller, cleanupIncentive);
             }
         }
