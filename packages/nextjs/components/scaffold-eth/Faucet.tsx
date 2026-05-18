@@ -79,6 +79,34 @@ type FaucetTriggerProps = {
   textClassName?: string;
 };
 
+async function resolveFundedLrepFaucetAddress(
+  lrepTokenAddress: AddressType | undefined,
+  requiredAmount = 1n,
+): Promise<AddressType | undefined> {
+  if (!lrepTokenAddress) return undefined;
+
+  const accounts = await localWalletClient.getAddresses();
+  const balances = await Promise.all(
+    accounts.map(async account => {
+      try {
+        const balance = await localPublicClient.readContract({
+          address: lrepTokenAddress,
+          abi: localMintableTokenAbi,
+          functionName: "balanceOf",
+          args: [account],
+        });
+        return { account, balance };
+      } catch {
+        return { account, balance: 0n };
+      }
+    }),
+  );
+
+  return balances
+    .filter(({ balance }) => balance >= requiredAmount)
+    .sort((left, right) => (left.balance === right.balance ? 0 : left.balance > right.balance ? -1 : 1))[0]?.account;
+}
+
 export const FaucetTrigger = ({
   className = "flex items-center justify-center xl:justify-start gap-3 xl:px-4 py-3 rounded-xl transition-colors text-base-content/60 hover:text-base-content hover:bg-base-200 w-full cursor-pointer",
   textClassName = "hidden xl:inline",
@@ -110,6 +138,7 @@ export const FaucetModal = () => {
   const [lrepAmount, setLrepAmount] = useState("1000");
   const [usdcAmount, setUsdcAmount] = useState("1000");
   const [mockUsdcTokenAddress, setMockUsdcTokenAddress] = useState<AddressType>();
+  const [lrepFaucetAddress, setLrepFaucetAddress] = useState<AddressType>();
   const { chain: ConnectedChain, address: connectedAddress } = useAccount();
 
   const isHardhat = ConnectedChain?.id === hardhat.id;
@@ -147,6 +176,33 @@ export const FaucetModal = () => {
     };
     getFaucetAddress();
   }, [isHardhat]);
+
+  useEffect(() => {
+    if (!isHardhat || !lrepTokenAddress) {
+      setLrepFaucetAddress(undefined);
+      return;
+    }
+
+    let active = true;
+    const getLrepFaucetAddress = async () => {
+      try {
+        const fundedAddress = await resolveFundedLrepFaucetAddress(lrepTokenAddress);
+        if (active) {
+          setLrepFaucetAddress(fundedAddress);
+        }
+      } catch {
+        if (active) {
+          setLrepFaucetAddress(undefined);
+        }
+      }
+    };
+
+    void getLrepFaucetAddress();
+
+    return () => {
+      active = false;
+    };
+  }, [lrepTokenAddress, isHardhat]);
 
   useEffect(() => {
     if (!isHardhat) {
@@ -223,20 +279,25 @@ export const FaucetModal = () => {
     try {
       setLrepLoading(true);
       const amount = parseUnits(lrepAmount, LREP_DECIMALS);
+      const fundedLrepFaucetAddress = await resolveFundedLrepFaucetAddress(lrepTokenAddress, amount);
 
-      if (faucetAddress) {
-        const txHash = await localWalletClient.writeContract({
-          address: lrepTokenAddress,
-          abi: localMintableTokenAbi,
-          functionName: "transfer",
-          args: [inputAddress, amount],
-          account: faucetAddress,
-        });
-        await localPublicClient.waitForTransactionReceipt({ hash: txHash });
-      } else {
-        notification.error("Missing faucet address");
+      if (!fundedLrepFaucetAddress) {
+        notification.error("No local faucet account has enough LREP. Redeploy local contracts or lower the amount.");
         setLrepLoading(false);
         return;
+      }
+
+      setLrepFaucetAddress(fundedLrepFaucetAddress);
+      const txHash = await localWalletClient.writeContract({
+        address: lrepTokenAddress,
+        abi: localMintableTokenAbi,
+        functionName: "transfer",
+        args: [inputAddress, amount],
+        account: fundedLrepFaucetAddress,
+      });
+      const receipt = await localPublicClient.waitForTransactionReceipt({ hash: txHash });
+      if (receipt.status === "reverted") {
+        throw new Error("LREP faucet transaction reverted");
       }
 
       queryClient.invalidateQueries();
@@ -312,7 +373,7 @@ export const FaucetModal = () => {
               <>
                 <div className="flex space-x-4">
                   <div>
-                    <span className="text-base font-bold">From:</span>
+                    <span className="text-base font-bold">ETH faucet:</span>
                     <Address address={faucetAddress} onlyEnsOrAddress />
                   </div>
                   <div>
@@ -347,7 +408,15 @@ export const FaucetModal = () => {
             {/* LREP Faucet Section */}
             <div className="bg-primary/10 rounded-xl p-4 space-y-3">
               <h4 className="font-semibold text-primary">Claim LREP Tokens</h4>
-              <p className="text-base text-base-content/60">Mint LREP tokens directly to your wallet for testing.</p>
+              <p className="text-base text-base-content/60">
+                Send local LREP tokens directly to your wallet for testing.
+              </p>
+              {lrepFaucetAddress ? (
+                <div className="flex items-center gap-2 text-sm text-base-content/60">
+                  <span>LREP source:</span>
+                  <Address address={lrepFaucetAddress} onlyEnsOrAddress />
+                </div>
+              ) : null}
               <div className="flex gap-2">
                 <input
                   type="number"
