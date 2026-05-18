@@ -44,7 +44,7 @@ const deployedContracts: GenericContractsDeclaration = {
       deployedOnBlock: 1,
     },
     VotePreflightLib: {
-      address: "0x03ada95187299fea3d622a6d744bf58cb3fab851",
+      address: "0x026a8bd225ee12bcbb7ee5bafbbfc861a8fbe1f2",
       abi: [
         {
           type: "function",
@@ -755,7 +755,7 @@ const deployedContracts: GenericContractsDeclaration = {
       deployedOnBlock: 6,
     },
     RoundRevealLib: {
-      address: "0x1c742cbf91698ea7a16d887d6e8d684d0356643a",
+      address: "0xbeb534d5c30719c0d92522dc24d113de78e259f6",
       abi: [
         {
           type: "event",
@@ -934,7 +934,7 @@ const deployedContracts: GenericContractsDeclaration = {
       deployedOnBlock: 8,
     },
     RoundCleanupLib: {
-      address: "0xb9024da93dc4712d68c0e0aa89e18ad13cc77f74",
+      address: "0x3d685d9899f8a3c1cb7b4a2887c63ce327bb8452",
       abi: [
         {
           type: "event",
