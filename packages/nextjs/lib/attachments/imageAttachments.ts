@@ -1,7 +1,7 @@
 import { del as deleteBlob, get as getBlob, put as putBlob } from "@vercel/blob";
 import { createHash } from "crypto";
 import { and, eq } from "drizzle-orm";
-import { mkdir, readFile, writeFile } from "fs/promises";
+import { mkdir, readFile, unlink, writeFile } from "fs/promises";
 import path from "path";
 import "server-only";
 import sharp from "sharp";
@@ -379,7 +379,7 @@ async function processImageAttachmentBuffer(params: {
     const status: ImageAttachmentStatus = moderation.status === "approved" ? "approved" : "blocked";
     const completedAt = nowDate();
 
-    await db
+    const updated = await db
       .update(questionImageAttachments)
       .set({
         normalizedBlobPathname: normalizedBlob.pathname,
@@ -397,7 +397,19 @@ async function processImageAttachmentBuffer(params: {
         error: moderation.status === "review_required" ? "Image requires moderation review before publication." : null,
         updatedAt: completedAt,
       })
-      .where(eq(questionImageAttachments.id, params.attachmentId));
+      .where(
+        and(
+          eq(questionImageAttachments.id, params.attachmentId),
+          eq(questionImageAttachments.status, "processing"),
+          eq(questionImageAttachments.originalBlobPathname, params.originalBlobPathname),
+        ),
+      )
+      .returning({ id: questionImageAttachments.id });
+
+    if (updated.length === 0) {
+      await deleteStoredImage(normalizedBlob.pathname);
+      throw new Error("Image attachment changed while processing.");
+    }
 
     return true;
   } catch (error) {
@@ -419,6 +431,39 @@ async function processImageAttachmentBuffer(params: {
 
     return false;
   }
+}
+
+async function markImageAttachmentProcessingFailed(params: {
+  attachmentId: string;
+  error: unknown;
+  originalBlobPathname: string;
+}) {
+  const failedAt = nowDate();
+  await db
+    .update(questionImageAttachments)
+    .set({
+      status: "failed",
+      error: params.error instanceof Error ? params.error.message : "Image processing failed.",
+      updatedAt: failedAt,
+    })
+    .where(
+      and(
+        eq(questionImageAttachments.id, params.attachmentId),
+        eq(questionImageAttachments.status, "processing"),
+        eq(questionImageAttachments.originalBlobPathname, params.originalBlobPathname),
+      ),
+    );
+}
+
+async function deleteStoredImage(pathname: string) {
+  if (isLocalImageAttachmentPathname(pathname)) {
+    const filePath = resolveLocalImageAttachmentPathname(pathname);
+    if (filePath) await unlink(filePath).catch(() => undefined);
+    return;
+  }
+
+  const { deleteBlob: removeBlob } = getImageAttachmentBlobDependencies();
+  await removeBlob(pathname).catch(() => undefined);
 }
 
 export async function processCompletedImageUpload(params: {
@@ -466,6 +511,13 @@ export async function processCompletedImageUpload(params: {
           contentType: "image/webp",
         }),
     });
+  } catch (error) {
+    await markImageAttachmentProcessingFailed({
+      attachmentId: params.attachmentId,
+      error,
+      originalBlobPathname: params.blobPathname,
+    });
+    throw error;
   } finally {
     if (completed) {
       await removeBlob(params.blobPathname).catch(() => undefined);

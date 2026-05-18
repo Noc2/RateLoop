@@ -173,7 +173,7 @@ export function ImageAttachmentUploader({ address, disabled = false, onUploaded 
         );
         imageUrl = localUpload.imageUrl;
       } else {
-        const blob = await upload(`question-attachments/${attachmentId}/original.${getFileExtension(file)}`, file, {
+        await upload(`question-attachments/${attachmentId}/original.${getFileExtension(file)}`, file, {
           access: "private",
           clientPayload,
           contentType: file.type,
@@ -181,16 +181,6 @@ export function ImageAttachmentUploader({ address, disabled = false, onUploaded 
           multipart: file.size > 5 * 1024 * 1024,
           onUploadProgress: event => setProgress(current => Math.max(current, getBlobUploadProgress(event.percentage))),
         });
-
-        await fetch(`/api/attachments/images/${encodeURIComponent(attachmentId)}/process`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            blobPathname: blob.pathname,
-            blobUrl: blob.url,
-            contentType: blob.contentType,
-          }),
-        }).catch(() => undefined);
       }
 
       moveToUploadPhase("processing");
