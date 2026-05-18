@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import deployedContracts from "@rateloop/contracts/deployedContracts";
 import { Address, AddressInput, Balance, EtherInput } from "@scaffold-ui/components";
 import { useQueryClient } from "@tanstack/react-query";
 import { Address as AddressType, createPublicClient, createWalletClient, http, parseUnits } from "viem";
 import { hardhat } from "viem/chains";
 import { useAccount } from "wagmi";
-import { GiftIcon } from "@heroicons/react/24/outline";
+import { GiftIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { useTransactor } from "~~/hooks/scaffold-eth";
 import { notification } from "~~/utils/scaffold-eth";
 
@@ -129,6 +129,7 @@ export const FaucetTrigger = ({
  * Faucet modal which lets you send ETH and claim LREP tokens on local testnet.
  */
 export const FaucetModal = () => {
+  const modalToggleRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(false);
   const [lrepLoading, setLrepLoading] = useState(false);
   const [usdcLoading, setUsdcLoading] = useState(false);
@@ -346,17 +347,28 @@ export const FaucetModal = () => {
     return null;
   }
 
+  const closeModal = () => {
+    if (modalToggleRef.current) {
+      modalToggleRef.current.checked = false;
+    }
+  };
+
   return (
     <div>
-      <input type="checkbox" id={FAUCET_MODAL_ID} className="modal-toggle" />
+      <input ref={modalToggleRef} type="checkbox" id={FAUCET_MODAL_ID} className="modal-toggle" />
       <label htmlFor={FAUCET_MODAL_ID} className="modal cursor-pointer">
         <label className="modal-box relative">
           {/* dummy input to capture event onclick on modal box */}
           <input className="h-0 w-0 absolute top-0 left-0" />
           <h3 className="text-xl font-bold mb-3">Local Testnet Faucet</h3>
-          <label htmlFor={FAUCET_MODAL_ID} className="btn btn-ghost btn-sm btn-circle absolute right-3 top-3">
-            ✕
-          </label>
+          <button
+            type="button"
+            onClick={closeModal}
+            className="btn btn-ghost btn-sm btn-circle absolute right-3 top-3"
+            aria-label="Close faucet"
+          >
+            <XMarkIcon className="h-5 w-5" />
+          </button>
           <div className="space-y-4">
             {/* Destination Address */}
             <div>

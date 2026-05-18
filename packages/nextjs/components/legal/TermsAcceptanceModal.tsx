@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ShieldCheckIcon } from "@heroicons/react/24/outline";
+import { ShieldCheckIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { ActionType, useTermsAcceptance } from "~~/contexts/TermsAcceptanceContext";
 
 const ACTION_TEXT: Record<NonNullable<ActionType>, { title: string; intro: string }> = {
@@ -61,7 +61,7 @@ export const TermsAcceptanceModal = () => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="card bg-base-200 shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+      <div className="card relative bg-base-200 shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
         <div className="card-body">
           {/* Close button */}
           <button
@@ -69,7 +69,7 @@ export const TermsAcceptanceModal = () => {
             className="btn btn-sm btn-circle btn-ghost absolute right-2 top-2"
             aria-label="Close"
           >
-            x
+            <XMarkIcon className="h-5 w-5" />
           </button>
 
           <div className="flex items-center gap-3 mb-2">

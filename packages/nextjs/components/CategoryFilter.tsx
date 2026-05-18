@@ -367,8 +367,8 @@ export function CategoryFilter({ categories, activeCategory, onSelect, pillClass
                       visibility: desktopLayout ? "visible" : "hidden",
                     }}
                   >
-                    <div className="p-2">
-                      <div className="relative">
+                    <div className="flex items-center gap-2 p-2">
+                      <div className="relative min-w-0 flex-1">
                         <label htmlFor={desktopSearchInputId} className="sr-only">
                           Search categories
                         </label>
@@ -386,6 +386,17 @@ export function CategoryFilter({ categories, activeCategory, onSelect, pillClass
                           autoFocus
                         />
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDropdownOpen(false);
+                          setSearch("");
+                        }}
+                        className="btn btn-ghost btn-xs btn-circle shrink-0"
+                        aria-label="Close categories"
+                      >
+                        <XMarkIcon className="h-4 w-4" />
+                      </button>
                     </div>
                     <ul
                       className="menu p-2 pt-0 overflow-y-auto"

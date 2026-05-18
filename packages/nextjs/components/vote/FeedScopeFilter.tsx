@@ -151,6 +151,19 @@ export function FeedScopeFilter({ value, groups, onChange, label = "View" }: Fee
           <XMarkIcon className="h-5 w-5" />
         </button>
       </div>
+      <div className="mb-2 hidden items-center justify-between gap-3 border-b border-base-content/10 pb-2 sm:flex">
+        <p className="min-w-0 truncate text-xs font-semibold uppercase tracking-[0.16em] text-base-content/55">
+          {label}
+        </p>
+        <button
+          type="button"
+          onClick={close}
+          className="btn btn-ghost btn-xs btn-circle shrink-0"
+          aria-label={`Close ${label} options`}
+        >
+          <XMarkIcon className="h-4 w-4" />
+        </button>
+      </div>
 
       <div className="space-y-3 sm:space-y-2">
         {groups.map(group => (

@@ -4,7 +4,7 @@ import { type CSSProperties, useEffect, useId, useMemo, useState } from "react";
 import { EPOCH_WEIGHT_BPS } from "@rateloop/contracts/protocol";
 import { AnimatePresence, motion } from "framer-motion";
 import { useAccount } from "wagmi";
-import { HandThumbDownIcon, HandThumbUpIcon } from "@heroicons/react/24/outline";
+import { HandThumbDownIcon, HandThumbUpIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 import { useContentLabel } from "~~/hooks/useCategoryRegistry";
@@ -205,7 +205,17 @@ export function StakeSelector({
             exit={{ y: 100, opacity: 0 }}
             transition={{ type: "spring", damping: 25, stiffness: 300 }}
           >
-            <h3 className="mb-3 text-center text-lg font-semibold">
+            <button
+              type="button"
+              onClick={onCancel}
+              className="btn btn-ghost btn-sm btn-circle absolute right-3 top-3 text-base-content/70 hover:text-base-content"
+              aria-label="Close vote dialog"
+              disabled={isConfirming}
+            >
+              <XMarkIcon className="h-5 w-5" />
+            </button>
+
+            <h3 className="mb-3 px-9 text-center text-lg font-semibold">
               Submit private vote
               <span
                 className="tooltip tooltip-bottom ml-1.5 inline-block cursor-help align-middle"
