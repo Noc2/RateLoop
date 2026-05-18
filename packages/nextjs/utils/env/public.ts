@@ -23,6 +23,7 @@ function isLocalhostUrl(value: string): boolean {
 // accessed with static property reads.
 const rawPublicEnv = {
   alchemyApiKey: optionalEnv(process.env.NEXT_PUBLIC_ALCHEMY_API_KEY),
+  allowUndeployedTargetNetworks: optionalEnv(process.env.NEXT_PUBLIC_ALLOW_UNDEPLOYED_TARGET_NETWORKS),
   enableRpcFallback: optionalEnv(process.env.NEXT_PUBLIC_ENABLE_RPC_FALLBACK),
   frontendCode: optionalEnv(process.env.NEXT_PUBLIC_FRONTEND_CODE),
   localE2EProductionBuild: optionalEnv(process.env.NEXT_PUBLIC_CURYO_E2E_PRODUCTION_BUILD),
@@ -78,8 +79,9 @@ const targetNetworkIds = targetNetworks.map(network => network.id);
 
 const deployedContractsByChain = deployedContracts as Record<number, Record<string, unknown> | undefined>;
 const missingDeployments = targetNetworkIds.filter(chainId => deployedContractsByChain[chainId] === undefined);
+const allowUndeployedTargetNetworks = rawPublicEnv.allowUndeployedTargetNetworks === "true";
 
-if (missingDeployments.length > 0) {
+if (!allowUndeployedTargetNetworks && missingDeployments.length > 0) {
   throw new Error(
     `Missing deployed contract definitions for chain IDs: ${missingDeployments.join(", ")}. Run yarn deploy for those chains before enabling them.`,
   );
@@ -87,7 +89,7 @@ if (missingDeployments.length > 0) {
 
 const missingRequiredContracts = listMissingRequiredTargetContracts(targetNetworkIds, deployedContractsByChain);
 
-if (missingRequiredContracts.length > 0) {
+if (!allowUndeployedTargetNetworks && missingRequiredContracts.length > 0) {
   throw new Error(
     `Missing required deployed contract definitions for target networks: ${missingRequiredContracts.join(", ")}. Run yarn deploy for those chains before enabling them.`,
   );
