@@ -14,6 +14,7 @@ loadEnvConfig(dirname(fileURLToPath(import.meta.url)));
 const isDev = process.env.NODE_ENV === "development";
 const isVercelDeployment = process.env.VERCEL === "1" || Boolean(process.env.VERCEL_ENV);
 const allowLocalE2EProductionBuild = isLocalE2EProductionBuildEnabled();
+const targetNetworksFallback = isDev || allowLocalE2EProductionBuild ? DEFAULT_DEV_TARGET_NETWORKS : undefined;
 const rpcOverrides = mergeRpcOverrides(
   RPC_OVERRIDES,
   resolveRpcOverrides({
@@ -26,7 +27,7 @@ const targetNetworks = resolveTargetNetworks(process.env.NEXT_PUBLIC_TARGET_NETW
   alchemyApiKey: process.env.NEXT_PUBLIC_ALCHEMY_API_KEY,
   allowFoundryInProduction: allowLocalE2EProductionBuild,
   production: !isDev,
-  fallback: isDev ? DEFAULT_DEV_TARGET_NETWORKS : undefined,
+  fallback: targetNetworksFallback,
   rpcOverrides,
 });
 

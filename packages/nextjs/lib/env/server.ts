@@ -91,6 +91,7 @@ export function resolveServerTargetNetworks(
   options?: { allowFoundryInProduction?: boolean },
 ): [SupportedTargetNetwork, ...SupportedTargetNetwork[]] | null {
   try {
+    const allowFoundryInProduction = options?.allowFoundryInProduction ?? allowLocalE2EProductionBuild;
     const rpcOverrides = mergeRpcOverrides(
       RPC_OVERRIDES,
       resolveRpcOverrides({
@@ -103,8 +104,8 @@ export function resolveServerTargetNetworks(
     return resolveTargetNetworks(rawValue, {
       alchemyApiKey: readEnv("NEXT_PUBLIC_ALCHEMY_API_KEY"),
       production,
-      fallback: !production ? DEFAULT_DEV_TARGET_NETWORKS : undefined,
-      allowFoundryInProduction: options?.allowFoundryInProduction ?? allowLocalE2EProductionBuild,
+      fallback: !production || allowFoundryInProduction ? DEFAULT_DEV_TARGET_NETWORKS : undefined,
+      allowFoundryInProduction,
       rpcOverrides,
     });
   } catch {

@@ -25,6 +25,25 @@ test("production builds can explicitly opt into the local Foundry chain", () => 
   );
 });
 
+test("production builds only use a local fallback when Foundry is explicitly allowed", () => {
+  assert.throws(
+    () =>
+      resolveTargetNetworks(undefined, {
+        fallback: `${chains.foundry.id}`,
+        production: true,
+      }),
+    /must not include the local Foundry chain in production/,
+  );
+
+  const [network] = resolveTargetNetworks(undefined, {
+    allowFoundryInProduction: true,
+    fallback: `${chains.foundry.id}`,
+    production: true,
+  });
+
+  assert.equal(network.id, chains.foundry.id);
+});
+
 test("target network parsing rejects chain IDs with non-numeric suffixes", () => {
   assert.throws(
     () =>

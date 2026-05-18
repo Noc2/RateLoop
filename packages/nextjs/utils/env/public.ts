@@ -66,11 +66,12 @@ function requireUrl(name: string, value: string | undefined, fallback?: string):
   return resolvedValue;
 }
 
+const allowLocalE2EProductionBuild = rawPublicEnv.localE2EProductionBuild === "true";
 const targetNetworks = resolveTargetNetworks(rawPublicEnv.targetNetworks, {
   alchemyApiKey: rawPublicEnv.alchemyApiKey,
-  allowFoundryInProduction: rawPublicEnv.localE2EProductionBuild === "true",
+  allowFoundryInProduction: allowLocalE2EProductionBuild,
   production: isProduction,
-  fallback: !isProduction ? DEFAULT_DEV_TARGET_NETWORKS : undefined,
+  fallback: !isProduction || allowLocalE2EProductionBuild ? DEFAULT_DEV_TARGET_NETWORKS : undefined,
   rpcOverrides,
 });
 const targetNetworkIds = targetNetworks.map(network => network.id);
