@@ -1039,6 +1039,11 @@ export const QuestionRewardPoolEscrowAbi = [
             "name": "firstClaimPaid",
             "type": "bool",
             "internalType": "bool"
+          },
+          {
+            "name": "clusterWeightRoot",
+            "type": "bytes32",
+            "internalType": "bytes32"
           }
         ]
       }
@@ -2389,17 +2394,6 @@ export const QuestionRewardPoolEscrowAbi = [
         "name": "value",
         "type": "uint256",
         "internalType": "uint256"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "SafeERC20FailedOperation",
-    "inputs": [
-      {
-        "name": "token",
-        "type": "address",
-        "internalType": "address"
       }
     ]
   }

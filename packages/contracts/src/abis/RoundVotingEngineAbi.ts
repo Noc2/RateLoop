@@ -948,6 +948,55 @@ export const RoundVotingEngineAbi = [
   },
   {
     "type": "function",
+    "name": "prepareAdvisoryRound",
+    "inputs": [
+      {
+        "name": "contentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "roundContext",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "roundId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "startTime",
+        "type": "uint48",
+        "internalType": "uint48"
+      },
+      {
+        "name": "epochDuration",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "maxDuration",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "maxVoters",
+        "type": "uint16",
+        "internalType": "uint16"
+      },
+      {
+        "name": "roundReferenceRatingBps",
+        "type": "uint16",
+        "internalType": "uint16"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "previewCommitReferenceRatingBps",
     "inputs": [
       {
@@ -1671,6 +1720,30 @@ export const RoundVotingEngineAbi = [
         "name": "",
         "type": "bool",
         "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "roundRbtsSeedEntropy",
+    "inputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
       }
     ],
     "stateMutability": "view"
@@ -2462,6 +2535,31 @@ export const RoundVotingEngineAbi = [
   },
   {
     "type": "event",
+    "name": "RbtsSeedCaptured",
+    "inputs": [
+      {
+        "name": "contentId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "roundId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "entropy",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "RbtsVoteRevealed",
     "inputs": [
       {
@@ -2937,11 +3035,6 @@ export const RoundVotingEngineAbi = [
   {
     "type": "error",
     "name": "CooldownActive",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "DormancyWindowElapsed",
     "inputs": []
   },
   {

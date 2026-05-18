@@ -44,7 +44,7 @@ const deployedContracts: GenericContractsDeclaration = {
       deployedOnBlock: 1,
     },
     VotePreflightLib: {
-      address: "0xd3cdf0b711e6a2e082d96d3bf54fe110e39dc1ac",
+      address: "0x07e746f896c9a75bf0b5d65d8ebb5dfc056c89f7",
       abi: [
         {
           type: "function",
@@ -138,6 +138,44 @@ const deployedContracts: GenericContractsDeclaration = {
               ],
             },
           ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "validateNoAdvisoryConflict",
+          inputs: [
+            {
+              name: "advisoryRecorder",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "voter",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "identityKey",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "cooldownWindow",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [],
           stateMutability: "view",
         },
         {
@@ -712,7 +750,7 @@ const deployedContracts: GenericContractsDeclaration = {
       deployedOnBlock: 6,
     },
     RoundRevealLib: {
-      address: "0xe8c069c84e98c604fb533f76351ea99162bf2f68",
+      address: "0x24912ad74ce4a627cdf8557d12f4fe4f44f62e7a",
       abi: [
         {
           type: "error",
@@ -770,11 +808,259 @@ const deployedContracts: GenericContractsDeclaration = {
       deployedOnBlock: 7,
     },
     RoundCleanupLib: {
-      address: "0x0820d40f28f6108ddfa09ae34d5b20ff57d27162",
+      address: "0xf8bbc29664eb69ddbea44d7f9afaacd338c5f28b",
       abi: [
+        {
+          type: "event",
+          name: "BundleObserverNotifyFailed",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "settled",
+              type: "bool",
+              indexed: false,
+              internalType: "bool",
+            },
+            {
+              name: "lowLevelError",
+              type: "bytes",
+              indexed: false,
+              internalType: "bytes",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "BundleObserverNotifyReplayed",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "settled",
+              type: "bool",
+              indexed: false,
+              internalType: "bool",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "CurrentEpochRefunded",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "amount",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "DeferredCleanupBountyAccrued",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "recipient",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "amount",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "DeferredCleanupBountyClaimed",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "recipient",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "paidAmount",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+            {
+              name: "remaining",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "ForfeitedFundsAddedToTreasury",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "amount",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "ForfeitedFundsFallbackToConsensusReserve",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "amount",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "RoundRevealFailed",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "UnrevealedStakeAddedToConsensusReserve",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "amount",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
         {
           type: "error",
           name: "AlreadyClaimed",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "IndexOutOfBounds",
           inputs: [],
         },
         {
@@ -794,8 +1080,39 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "error",
+          name: "NothingToClaim",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "ReserveEmpty",
+          inputs: [],
+        },
+        {
+          type: "error",
           name: "RoundNotCancelledOrTied",
           inputs: [],
+        },
+        {
+          type: "error",
+          name: "RoundNotSettledOrTied",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "SafeCastOverflowedUintDowncast",
+          inputs: [
+            {
+              name: "bits",
+              type: "uint8",
+              internalType: "uint8",
+            },
+            {
+              name: "value",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
         },
         {
           type: "error",
@@ -823,8 +1140,33 @@ const deployedContracts: GenericContractsDeclaration = {
       deployedOnBlock: 8,
     },
     QuestionRewardPoolEscrowTransferLib: {
-      address: "0xb99b5c07de9b854077123b9cc607d253e73d451a",
+      address: "0xf393b9200356e575011ef87fa601eb1b722385ab",
       abi: [
+        {
+          type: "event",
+          name: "NonAssetTokenRecovered",
+          inputs: [
+            {
+              name: "token",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "to",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "amount",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
         {
           type: "event",
           name: "RewardPoolForfeited",
@@ -891,7 +1233,7 @@ const deployedContracts: GenericContractsDeclaration = {
       deployedOnBlock: 9,
     },
     QuestionRewardPoolEscrowQualificationLib: {
-      address: "0x31c70032f279535693befb387da9aaf5b11a6a7c",
+      address: "0x0558880efc984c1e8871e76f3ac1f4bc9902c7a7",
       abi: [
         {
           type: "function",
@@ -1119,7 +1461,7 @@ const deployedContracts: GenericContractsDeclaration = {
       deployedOnBlock: 10,
     },
     QuestionRewardPoolEscrowPoolActionsLib: {
-      address: "0x3c9bc7e2f0620a34c4f96d9fad8d297fcbce9f92",
+      address: "0xe05726483f3fcbc34b02d8bcce65644c5094fca4",
       abi: [
         {
           type: "event",
@@ -1314,7 +1656,7 @@ const deployedContracts: GenericContractsDeclaration = {
       deployedOnBlock: 11,
     },
     QuestionRewardPoolEscrowClaimLib: {
-      address: "0x6f47bee87e4991f7570b50c3871cb55f5a7eeaba",
+      address: "0xaaa33313c0801c1453492961e8e09a59cf48c130",
       abi: [
         {
           type: "function",
@@ -1591,7 +1933,7 @@ const deployedContracts: GenericContractsDeclaration = {
       deployedOnBlock: 12,
     },
     QuestionRewardPoolEscrowBundleLib: {
-      address: "0xc502e22965543e9c3d89e76f7b341374624db291",
+      address: "0x7f3192271299cd7dcb6412300c8c7b97fd4098ce",
       abi: [
         {
           type: "function",
@@ -1626,7 +1968,7 @@ const deployedContracts: GenericContractsDeclaration = {
       deployedOnBlock: 13,
     },
     QuestionRewardPoolEscrowBundleActionsLib: {
-      address: "0xf29af25507450cdfd621f4221c7c503edf619feb",
+      address: "0x97c147f655b8aadbbea44b323f8e4f7abee16dae",
       abi: [
         {
           type: "event",
@@ -6663,6 +7005,55 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "prepareAdvisoryRound",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundContext",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "roundId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "startTime",
+              type: "uint48",
+              internalType: "uint48",
+            },
+            {
+              name: "epochDuration",
+              type: "uint32",
+              internalType: "uint32",
+            },
+            {
+              name: "maxDuration",
+              type: "uint32",
+              internalType: "uint32",
+            },
+            {
+              name: "maxVoters",
+              type: "uint16",
+              internalType: "uint16",
+            },
+            {
+              name: "roundReferenceRatingBps",
+              type: "uint16",
+              internalType: "uint16",
+            },
+          ],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "previewCommitReferenceRatingBps",
           inputs: [
             {
@@ -7386,6 +7777,30 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "bool",
               internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "roundRbtsSeedEntropy",
+          inputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
             },
           ],
           stateMutability: "view",
@@ -8177,6 +8592,31 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "event",
+          name: "RbtsSeedCaptured",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "entropy",
+              type: "bytes32",
+              indexed: false,
+              internalType: "bytes32",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
           name: "RbtsVoteRevealed",
           inputs: [
             {
@@ -8652,11 +9092,6 @@ const deployedContracts: GenericContractsDeclaration = {
         {
           type: "error",
           name: "CooldownActive",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "DormancyWindowElapsed",
           inputs: [],
         },
         {
@@ -15765,6 +16200,11 @@ const deployedContracts: GenericContractsDeclaration = {
                   type: "bool",
                   internalType: "bool",
                 },
+                {
+                  name: "clusterWeightRoot",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
               ],
             },
           ],
@@ -17114,17 +17554,6 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "value",
               type: "uint256",
               internalType: "uint256",
-            },
-          ],
-        },
-        {
-          type: "error",
-          name: "SafeERC20FailedOperation",
-          inputs: [
-            {
-              name: "token",
-              type: "address",
-              internalType: "address",
             },
           ],
         },
@@ -20341,6 +20770,25 @@ const deployedContracts: GenericContractsDeclaration = {
           ],
           outputs: [],
           stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "rejectedRoundPayoutSnapshotConsumed",
+          inputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
         },
         {
           type: "function",

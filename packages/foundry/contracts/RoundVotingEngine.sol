@@ -435,6 +435,44 @@ contract RoundVotingEngine is
         );
     }
 
+    /// @notice Open or roll the advisory commit round using the same lifecycle rules as staked commits.
+    /// @dev Only the configured AdvisoryVoteRecorder may call this. It intentionally does not
+    ///      record vote/stake accounting; it just materializes the round snapshot that a
+    ///      zero-stake advisory commit binds to.
+    function prepareAdvisoryRound(uint256 contentId, uint256 roundContext)
+        external
+        nonReentrant
+        whenNotPaused
+        returns (
+            uint256 roundId,
+            uint48 startTime,
+            uint32 epochDuration,
+            uint32 maxDuration,
+            uint16 maxVoters,
+            uint16 roundReferenceRatingBps
+        )
+    {
+        if (msg.sender != protocolConfig.advisoryVoteRecorder()) revert Unauthorized();
+
+        roundId = _getOrCreateRound(contentId);
+        if (roundId != roundContext >> 16) revert InvalidCommitHash();
+
+        RoundLib.Round storage round = rounds[contentId][roundId];
+        RoundLib.RoundConfig memory roundCfg = _getRoundConfig(contentId, roundId);
+        roundReferenceRatingBps = uint16(roundContext);
+        if (roundReferenceRatingBps != _getRoundReferenceRatingBps(contentId, roundId)) {
+            revert InvalidCommitHash();
+        }
+
+        if (!RoundLib.acceptsVotes(round, roundCfg.maxDuration)) revert RoundNotOpen();
+        if (round.thresholdReachedAt != 0) revert ThresholdReached();
+
+        startTime = round.startTime;
+        epochDuration = roundCfg.epochDuration;
+        maxDuration = roundCfg.maxDuration;
+        maxVoters = roundCfg.maxVoters;
+    }
+
     function _commitVote(
         address voter,
         uint256 contentId,

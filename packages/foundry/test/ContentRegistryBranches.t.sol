@@ -2677,8 +2677,9 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         uint64 targetRound = _tlockCommitTargetRound(votingEngine, 1);
         bytes32 drandChainHash = _tlockDrandChainHash();
         bytes memory ciphertext = _testCiphertext(true, salt, 1, targetRound, drandChainHash);
-        bytes32 commitHash =
-            _commitHash(true, salt, voter2, 1, nextRoundId, _defaultRatingReferenceBps(), targetRound, drandChainHash, ciphertext);
+        bytes32 commitHash = _commitHash(
+            true, salt, voter2, 1, nextRoundId, _defaultRatingReferenceBps(), targetRound, drandChainHash, ciphertext
+        );
 
         vm.startPrank(voter2);
         lrepToken.approve(address(votingEngine), STAKE);

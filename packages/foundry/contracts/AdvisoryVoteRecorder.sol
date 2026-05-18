@@ -17,7 +17,7 @@ import { TlockVoteLib } from "./libraries/TlockVoteLib.sol";
 import { VotePreflightLib } from "./libraries/VotePreflightLib.sol";
 
 /// @title AdvisoryVoteRecorder
-/// @notice Zero-stake commit-reveal votes that can bootstrap launch rewards without affecting round mechanics.
+/// @notice Zero-stake commit-reveal votes that can bootstrap launch rewards without affecting vote/stake accounting.
 contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
     using SafeCast for uint256;
 
@@ -82,6 +82,15 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         ///      whose snapshot no longer matches, surfacing the inconsistency on-chain rather
         ///      than letting it manifest as a silent tlock-decryption failure off-chain.
         bytes32 usedChainHashAtCommit;
+    }
+
+    struct PreparedAdvisoryRound {
+        uint256 roundId;
+        uint48 startTime;
+        uint32 epochDuration;
+        uint32 maxDuration;
+        uint16 maxVoters;
+        uint16 roundReferenceRatingBps;
     }
 
     mapping(bytes32 => AdvisoryCommit) internal advisoryCommits;
@@ -213,7 +222,7 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         }
     }
 
-    /// @notice Record a zero-stake advisory commit for the active round.
+    /// @notice Record a zero-stake advisory commit for the active or next voteable round.
     /// @dev Uses the same commit-hash preimage as RoundVotingEngine.commitVote.
     function recordAdvisoryVote(
         uint256 contentId,
@@ -230,50 +239,6 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         if (roundId == 0) revert InvalidRound();
         uint16 roundReferenceRatingBps = uint16(roundContext);
 
-        uint48 startTime;
-        uint32 epochDuration;
-        uint32 maxDuration;
-        uint16 maxVoters;
-        uint256 currentRoundId = votingEngine.currentRoundId(contentId);
-        if (currentRoundId == roundId) {
-            RoundLib.RoundState state;
-            uint16 voteCount;
-            uint16 revealedCount;
-            uint64 totalStake;
-            uint48 thresholdReachedAt;
-            uint48 settledAt;
-            (startTime, state, voteCount, revealedCount, totalStake, thresholdReachedAt, settledAt) =
-                votingEngine.roundCore(contentId, roundId);
-            voteCount;
-            revealedCount;
-            totalStake;
-            settledAt;
-            if (state != RoundLib.RoundState.Open) revert RoundNotOpen();
-            if (thresholdReachedAt != 0) revert ThresholdReached();
-
-            (epochDuration, maxDuration,, maxVoters) = votingEngine.roundConfigSnapshot(contentId, roundId);
-            if (startTime == 0 || block.timestamp >= uint256(startTime) + maxDuration) revert RoundNotOpen();
-            if (roundReferenceRatingBps != votingEngine.roundReferenceRatingBpsForRound(contentId, roundId)) {
-                revert InvalidCommitHash();
-            }
-        } else {
-            if (roundId != votingEngine.previewCommitRoundId(contentId)) revert InvalidRound();
-            if (roundReferenceRatingBps != votingEngine.previewCommitReferenceRatingBps(contentId)) {
-                revert InvalidCommitHash();
-            }
-            startTime = uint48(block.timestamp);
-            RoundLib.RoundConfig memory contentRoundConfig = registry.getContentRoundConfig(contentId);
-            epochDuration = contentRoundConfig.epochDuration;
-            maxDuration = contentRoundConfig.maxDuration;
-            maxVoters = contentRoundConfig.maxVoters;
-        }
-
-        if (maxDuration == 0 || epochDuration == 0 || maxVoters == 0) revert InvalidRound();
-        if (roundReferenceRatingBps == 0) {
-            revert InvalidCommitHash();
-        }
-        if (roundAdvisoryCommitKeys[contentId][roundId].length >= maxVoters) revert MaxAdvisoryVotersReached();
-
         IRaterIdentityRegistry identityRegistry = _roundRaterRegistry(contentId, roundId);
         IRaterIdentityRegistry.ResolvedRater memory resolved =
             VotePreflightLib.validateVoterAndContent(identityRegistry, registry, msg.sender, contentId);
@@ -287,11 +252,32 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         if (advisoryCommitKeyByIdentity[contentId][roundId][resolved.identityKey] != bytes32(0)) {
             revert AlreadyCommitted();
         }
+
+        PreparedAdvisoryRound memory preparedRound;
+        (
+            preparedRound.roundId,
+            preparedRound.startTime,
+            preparedRound.epochDuration,
+            preparedRound.maxDuration,
+            preparedRound.maxVoters,
+            preparedRound.roundReferenceRatingBps
+        ) = votingEngine.prepareAdvisoryRound(contentId, roundContext);
+        if (preparedRound.roundId != roundId) revert InvalidRound();
+        if (preparedRound.roundReferenceRatingBps != roundReferenceRatingBps || roundReferenceRatingBps == 0) {
+            revert InvalidCommitHash();
+        }
+        if (preparedRound.maxDuration == 0 || preparedRound.epochDuration == 0 || preparedRound.maxVoters == 0) {
+            revert InvalidRound();
+        }
+        if (roundAdvisoryCommitKeys[contentId][roundId].length >= preparedRound.maxVoters) {
+            revert MaxAdvisoryVotersReached();
+        }
+
         advisoryCommitKey = keccak256(abi.encodePacked(bytes1(0xa1), msg.sender, contentId, roundId, commitHash));
 
-        uint256 epochEnd = _computeEpochEnd(startTime, epochDuration);
+        uint256 epochEnd = _computeEpochEnd(preparedRound.startTime, preparedRound.epochDuration);
         bytes32 usedChainHash = _validateCommitTlockData(
-            contentId, roundId, ciphertext, targetRound, drandChainHash, epochEnd, epochDuration
+            contentId, roundId, ciphertext, targetRound, drandChainHash, epochEnd, preparedRound.epochDuration
         );
         uint256 targetRevealableAt = votingEngine.targetRoundRevealableTimestamp(contentId, roundId, targetRound);
         uint256 effectiveRevealableAfter = targetRevealableAt > epochEnd ? targetRevealableAt : epochEnd;

@@ -920,6 +920,25 @@ export const ClusterPayoutOracleAbi = [
   },
   {
     "type": "function",
+    "name": "rejectedRoundPayoutSnapshotConsumed",
+    "inputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "renounceRole",
     "inputs": [
       {
