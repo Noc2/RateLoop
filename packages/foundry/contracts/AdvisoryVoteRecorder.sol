@@ -264,7 +264,9 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         AdvisoryCommit storage advisoryCommit = advisoryCommits[advisoryCommitKey];
         if (advisoryCommit.voter == address(0)) revert NoCommit();
         if (advisoryCommit.revealed) revert AlreadyRevealed();
-        if (predictedUpBps > 10_000) revert HashMismatch();
+        // L-Vote-8: reject the 0%/100% prediction endpoints that collapse the BTS
+        // information score to peer-signal-only.
+        RobustBtsMath.requireValidUserPrediction(predictedUpBps);
         _assertRevealDrandChainHashUnchanged(advisoryCommit);
 
         uint256 effectiveRevealableAfter = _effectiveRevealableAfter(advisoryCommit);
