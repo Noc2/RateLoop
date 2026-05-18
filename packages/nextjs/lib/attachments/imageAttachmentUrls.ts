@@ -1,18 +1,13 @@
 const IMAGE_ATTACHMENT_PATH_PATTERN = /^\/api\/attachments\/images\/(att_[A-Za-z0-9_-]{16,80})\.webp$/;
 
-const DEFAULT_IMAGE_ATTACHMENT_ORIGINS = [
-  "https://www.rateloop.xyz",
-  "https://rateloop.xyz",
-  "https://www.curyo.xyz",
-  "https://curyo.xyz",
-] as const;
+const DEFAULT_IMAGE_ATTACHMENT_ORIGINS = ["https://www.rateloop.xyz", "https://rateloop.xyz"] as const;
 
 type UploadedImageAttachmentUrlOptions = {
   allowedOrigins?: readonly string[];
   allowLocalhostOrigins?: boolean;
 };
 
-export type UploadedImageAttachmentUrl = {
+type UploadedImageAttachmentUrl = {
   attachmentId: string;
   origin: string;
   url: string;
@@ -50,7 +45,7 @@ function shouldAllowLocalhostOrigins(options: UploadedImageAttachmentUrlOptions)
   );
 }
 
-export function getDefaultImageAttachmentAllowedOrigins() {
+function getDefaultImageAttachmentAllowedOrigins() {
   return [
     ...new Set(
       [
@@ -72,7 +67,7 @@ function getAllowedOrigins(options: UploadedImageAttachmentUrlOptions) {
   );
 }
 
-export function parseUploadedImageAttachmentUrl(
+function parseUploadedImageAttachmentUrl(
   value: string,
   options: UploadedImageAttachmentUrlOptions = {},
 ): UploadedImageAttachmentUrl | null {

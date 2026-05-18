@@ -514,12 +514,9 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
     ///      `protocolConfig.drandChainHash` would otherwise let a commit's ciphertext go
     ///      undecryptable without any on-chain error — voters would silently forfeit credit.
     ///      This check forces the inconsistency into a clear revert at reveal-time so callers
-    ///      and indexers can detect it. `usedChainHashAtCommit == bytes32(0)` is treated as
-    ///      "legacy commit recorded before this field existed" and skipped to preserve the
-    ///      reveal path for any in-flight commits at upgrade time.
+    ///      and indexers can detect it.
     function _assertRevealDrandChainHashUnchanged(AdvisoryCommit storage advisoryCommit) internal view {
         bytes32 committed = advisoryCommit.usedChainHashAtCommit;
-        if (committed == bytes32(0)) return;
         (bytes32 snapshotChainHash,,) = votingEngine.roundDrandConfig(advisoryCommit.contentId, advisoryCommit.roundId);
         if (snapshotChainHash == bytes32(0)) {
             snapshotChainHash = protocolConfig.drandChainHash();

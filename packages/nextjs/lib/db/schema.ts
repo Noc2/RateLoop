@@ -205,7 +205,7 @@ export const freeTransactionQuotas = pgTable(
   "free_transaction_quotas",
   {
     identityKey: text("identity_key").primaryKey(),
-    voterIdTokenId: text("voter_id_token_id").notNull(),
+    raterIdentityKey: text("voter_id_token_id").notNull(),
     chainId: integer("chain_id").notNull(),
     environment: text("environment").notNull(),
     lastWalletAddress: text("last_wallet_address").notNull(),
@@ -217,7 +217,7 @@ export const freeTransactionQuotas = pgTable(
   },
   table => ({
     tokenChainEnvUnique: uniqueIndex("free_transaction_quotas_token_chain_env_unique").on(
-      table.voterIdTokenId,
+      table.raterIdentityKey,
       table.chainId,
       table.environment,
     ),
@@ -233,7 +233,7 @@ export const freeTransactionReservations = pgTable(
   {
     operationKey: text("operation_key").primaryKey(),
     identityKey: text("identity_key").notNull(),
-    voterIdTokenId: text("voter_id_token_id").notNull(),
+    raterIdentityKey: text("voter_id_token_id").notNull(),
     chainId: integer("chain_id").notNull(),
     environment: text("environment").notNull(),
     walletAddress: text("wallet_address").notNull(),

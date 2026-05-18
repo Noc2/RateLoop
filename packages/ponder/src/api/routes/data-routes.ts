@@ -61,19 +61,11 @@ const STREAK_MILESTONES = [
 ];
 
 function voteMatchesVoter(address: `0x${string}`) {
-  return or(
-    eq(vote.voter, address),
-    eq(vote.identityHolder, address),
-    eq(vote.identityVoter, address),
-  );
+  return or(eq(vote.voter, address), eq(vote.identityHolder, address));
 }
 
 function voteMatchesAnyVoter(addresses: `0x${string}`[]) {
-  return or(
-    inArray(vote.voter, addresses),
-    inArray(vote.identityHolder, addresses),
-    inArray(vote.identityVoter, addresses),
-  );
+  return or(inArray(vote.voter, addresses), inArray(vote.identityHolder, addresses));
 }
 
 export function registerDataRoutes(app: ApiApp) {
@@ -740,7 +732,6 @@ export function registerDataRoutes(app: ApiApp) {
         voter: vote.voter,
         identityKey: vote.identityKey,
         identityHolder: vote.identityHolder,
-        identityVoter: vote.identityVoter,
         voterId: sql<null>`null`,
         commitHash: vote.commitHash,
         targetRound: vote.targetRound,

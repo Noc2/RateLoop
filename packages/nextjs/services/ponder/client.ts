@@ -832,7 +832,7 @@ export interface PonderVoteItem {
   contentId: string;
   roundId: string;
   voter: string;
-  identityVoter?: string | null;
+  identityHolder?: string | null;
   voterId?: string | null;
   commitHash?: string;
   targetRound?: string;

@@ -515,7 +515,7 @@ test("preparePermissionlessWalletQuestionSubmissionRequest rejects unapproved Ra
   const walletAddress = "0x00000000000000000000000000000000000000aa" as const;
   const payload = buildPayloadWithImageUrl(
     "pending-image-upload",
-    `https://www.curyo.xyz/api/attachments/images/${attachmentId}.webp`,
+    `https://www.rateloop.xyz/api/attachments/images/${attachmentId}.webp`,
   );
   await insertQuestionImageAttachment({
     id: attachmentId,
@@ -540,7 +540,7 @@ test("preparePermissionlessWalletQuestionSubmissionRequest rejects RateLoop-host
   const walletAddress = "0x00000000000000000000000000000000000000aa" as const;
   const payload = buildPayloadWithImageUrl(
     "foreign-image-upload",
-    `https://www.curyo.xyz/api/attachments/images/${attachmentId}.webp`,
+    `https://www.rateloop.xyz/api/attachments/images/${attachmentId}.webp`,
   );
   await insertQuestionImageAttachment({
     id: attachmentId,

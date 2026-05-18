@@ -55,7 +55,7 @@ const rewardEscrowContract = contractsForChain.QuestionRewardPoolEscrow;
 const rewardDistributorContract = contractsForChain.RoundRewardDistributor;
 const votingEngineContract = contractsForChain.RoundVotingEngine;
 const APPROVED_IMAGE_ID = "att_sponsoredimage01";
-const APPROVED_IMAGE_URL = `https://www.curyo.xyz/api/attachments/images/${APPROVED_IMAGE_ID}.webp`;
+const APPROVED_IMAGE_URL = `https://www.rateloop.xyz/api/attachments/images/${APPROVED_IMAGE_ID}.webp`;
 const submitQuestionWithRewardAndRoundConfigAbi = [
   {
     type: "function",

@@ -51,19 +51,19 @@ function missingBlobGetResult() {
   } as unknown as Awaited<ReturnType<typeof import("@vercel/blob").get>>;
 }
 
-test("builds Curyo upload image URLs with a webp extension", () => {
+test("builds RateLoop upload image URLs with a webp extension", () => {
   assert.equal(
-    getAttachmentImageUrl("https://www.curyo.xyz/ask", "att_abcdefghijklmnop"),
-    "https://www.curyo.xyz/api/attachments/images/att_abcdefghijklmnop.webp",
+    getAttachmentImageUrl("https://www.rateloop.xyz/ask", "att_abcdefghijklmnop"),
+    "https://www.rateloop.xyz/api/attachments/images/att_abcdefghijklmnop.webp",
   );
 });
 
-test("parses Curyo attachment ids from public upload image URLs", () => {
+test("parses RateLoop attachment ids from public upload image URLs", () => {
   assert.equal(
-    parseAttachmentIdFromImageUrl("https://www.curyo.xyz/api/attachments/images/att_abcdefghijklmnop.webp"),
+    parseAttachmentIdFromImageUrl("https://www.rateloop.xyz/api/attachments/images/att_abcdefghijklmnop.webp"),
     "att_abcdefghijklmnop",
   );
-  assert.equal(parseAttachmentIdFromImageUrl("https://www.curyo.xyz/api/attachments/images/nope.png"), null);
+  assert.equal(parseAttachmentIdFromImageUrl("https://www.rateloop.xyz/api/attachments/images/nope.png"), null);
   assert.equal(
     parseAttachmentIdFromImageUrl("https://evil.example/api/attachments/images/att_abcdefghijklmnop.webp"),
     null,
@@ -308,7 +308,7 @@ test("validates approved RateLoop-hosted image ownership before submission", asy
 
   assert.equal(
     await getImageAttachmentSubmissionValidationError({
-      imageUrls: ["https://www.curyo.xyz/api/attachments/images/att_abcdefghijklmnop.webp"],
+      imageUrls: ["https://www.rateloop.xyz/api/attachments/images/att_abcdefghijklmnop.webp"],
       ownerWalletAddress: "0x00000000000000000000000000000000000000AA",
     }),
     null,
@@ -322,7 +322,7 @@ test("validates approved RateLoop-hosted image ownership before submission", asy
   );
   assert.equal(
     await getImageAttachmentSubmissionValidationError({
-      imageUrls: ["https://www.curyo.xyz/api/attachments/images/att_abcdefghijklmnop.webp"],
+      imageUrls: ["https://www.rateloop.xyz/api/attachments/images/att_abcdefghijklmnop.webp"],
       ownerWalletAddress: "0x00000000000000000000000000000000000000bb",
     }),
     "imageUrls RateLoop-hosted uploads must belong to the submitting wallet or agent.",
@@ -348,14 +348,14 @@ test("allows approved RateLoop-hosted images owned by the submitting agent", asy
   assert.equal(
     await getImageAttachmentSubmissionValidationError({
       agentId: "agent-123",
-      imageUrls: ["https://www.curyo.xyz/api/attachments/images/att_agentownedupload.webp"],
+      imageUrls: ["https://www.rateloop.xyz/api/attachments/images/att_agentownedupload.webp"],
     }),
     null,
   );
   assert.equal(
     await getImageAttachmentSubmissionValidationError({
       agentId: "agent-456",
-      imageUrls: ["https://www.curyo.xyz/api/attachments/images/att_agentownedupload.webp"],
+      imageUrls: ["https://www.rateloop.xyz/api/attachments/images/att_agentownedupload.webp"],
     }),
     "imageUrls RateLoop-hosted uploads must belong to the submitting wallet or agent.",
   );

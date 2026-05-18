@@ -348,7 +348,6 @@ function mockPonderModules<T>(result: T) {
       contentId: "vote.contentId",
       identityHolder: "vote.identityHolder",
       identityKey: "vote.identityKey",
-      identityVoter: "vote.identityVoter",
       isUp: "vote.isUp",
       revealed: "vote.revealed",
       roundId: "vote.roundId",

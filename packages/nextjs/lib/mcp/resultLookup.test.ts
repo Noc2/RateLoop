@@ -342,7 +342,7 @@ test("curyo_get_result applies bundle bounty eligibility when loading eligible a
         {
           contentId: "789",
           id: "vote-1",
-          identityVoter: `0x${"a".repeat(40)}`,
+          identityHolder: `0x${"a".repeat(40)}`,
           isUp: true,
           revealed: true,
           roundId: "2",
@@ -352,7 +352,7 @@ test("curyo_get_result applies bundle bounty eligibility when loading eligible a
         {
           contentId: "789",
           id: "vote-2",
-          identityVoter: `0x${"b".repeat(40)}`,
+          identityHolder: `0x${"b".repeat(40)}`,
           isUp: false,
           revealed: true,
           roundId: "2",

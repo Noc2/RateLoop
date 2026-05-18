@@ -101,8 +101,6 @@ export type FreeTransactionAllowanceSummary = {
   exhausted: boolean;
   walletAddress: `0x${string}` | null;
   raterIdentityKey: string | null;
-  /** @deprecated use raterIdentityKey */
-  voterIdTokenId: string | null;
 };
 
 export type FreeTransactionAllowanceDecision =
@@ -438,7 +436,7 @@ async function ensureQuotaRow(
     .insert(freeTransactionQuotas)
     .values({
       identityKey,
-      voterIdTokenId: params.raterIdentityKey,
+      raterIdentityKey: params.raterIdentityKey,
       chainId: params.chainId,
       environment: params.environment,
       lastWalletAddress: params.walletAddress,
@@ -474,7 +472,6 @@ function buildQuotaSummary(params: {
     exhausted: used >= params.freeTxLimit,
     walletAddress: params.walletAddress,
     raterIdentityKey: params.raterIdentityKey,
-    voterIdTokenId: params.raterIdentityKey,
   } satisfies FreeTransactionAllowanceSummary;
 }
 
@@ -606,7 +603,6 @@ function buildUnverifiedSummary(params: { chainId: number; walletAddress: `0x${s
     exhausted: false,
     walletAddress: params.walletAddress,
     raterIdentityKey: null,
-    voterIdTokenId: null,
   } satisfies FreeTransactionAllowanceSummary;
 }
 
@@ -1320,7 +1316,7 @@ export async function evaluateFreeTransactionAllowance(
           .update(freeTransactionReservations)
           .set({
             identityKey,
-            voterIdTokenId: raterIdentityKey,
+            raterIdentityKey,
             chainId: body.chainId!,
             environment,
             walletAddress,
@@ -1337,7 +1333,7 @@ export async function evaluateFreeTransactionAllowance(
         await tx.insert(freeTransactionReservations).values({
           operationKey,
           identityKey,
-          voterIdTokenId: raterIdentityKey,
+          raterIdentityKey,
           chainId: body.chainId!,
           environment,
           walletAddress,
