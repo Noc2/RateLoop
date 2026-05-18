@@ -503,6 +503,7 @@ export interface PonderContentQuery {
 
 export interface PonderContentOpenRoundSummary {
   roundId: string;
+  state?: number;
   voteCount: number;
   revealedCount: number;
   totalStake: string;
@@ -522,6 +523,9 @@ export interface PonderContentOpenRoundSummary {
   maxDuration?: number;
   minVoters?: number;
   maxVoters?: number;
+  hasHumanVerifiedCommit?: boolean;
+  lastCommitRevealableAfter?: string | null;
+  revealGracePeriod?: string | null;
   estimatedSettlementTime: string | null;
 }
 

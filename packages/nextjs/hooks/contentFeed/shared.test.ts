@@ -207,6 +207,7 @@ test("mapContentItem keeps neutral protocol rating hidden until a round settles"
     ratingSettledRounds: 0,
     openRound: {
       roundId: "1",
+      state: 0,
       voteCount: 0,
       revealedCount: 0,
       totalStake: "0",
@@ -214,6 +215,9 @@ test("mapContentItem keeps neutral protocol rating hidden until a round settles"
       downPool: "0",
       referenceRatingBps: 5_000,
       settledRounds: 0,
+      hasHumanVerifiedCommit: false,
+      lastCommitRevealableAfter: "1200",
+      revealGracePeriod: "3600",
       startTime: null,
       estimatedSettlementTime: null,
     },
@@ -221,6 +225,10 @@ test("mapContentItem keeps neutral protocol rating hidden until a round settles"
 
   assert.equal(item.rating, 50);
   assert.equal(item.ratingSettledRounds, 0);
+  assert.equal(item.openRound?.state, 0);
+  assert.equal(item.openRound?.hasHumanVerifiedCommit, false);
+  assert.equal(item.openRound?.lastCommitRevealableAfter, 1200n);
+  assert.equal(item.openRound?.revealGracePeriod, 3600n);
   assert.equal(getVisibleContentRating(item), null);
 });
 

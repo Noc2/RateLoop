@@ -62,6 +62,18 @@ export function useRoundSnapshot(
     },
   } as any);
 
+  const { data: rawPreviewRoundId, isLoading: isPreviewRoundIdLoading } = useScaffoldReadContract({
+    contractName: "RoundVotingEngine" as any,
+    functionName: "previewCommitRoundId" as any,
+    args: [contentId] as any,
+    watch: true,
+    query: {
+      enabled: contentId !== undefined,
+      refetchInterval,
+    },
+  } as any);
+
+  const previewRoundId = (rawPreviewRoundId as unknown as bigint | undefined) ?? 0n;
   const parsedRound = parseRound(rawRoundData);
   const mergedRound = mergeRoundDataWithFallback({
     roundId: currentRoundId,
@@ -74,16 +86,24 @@ export function useRoundSnapshot(
     roundId: mergedRound.roundId,
   });
   const effectiveOptimisticDelta = optimisticDeltaReflected ? undefined : optimisticDelta;
-  const roundId = mergedRound.round?.state === 0 ? mergedRound.roundId : 0n;
+  const previewStartsNewRound = previewRoundId > 0n && (currentRoundId === 0n || previewRoundId !== currentRoundId);
+  const currentOpenRoundId = currentRoundId > 0n ? currentRoundId : 0n;
+  const roundId = previewStartsNewRound ? previewRoundId : currentOpenRoundId;
+  const round = roundId === mergedRound.roundId ? mergedRound.round : undefined;
   const fallbackConfig =
     fallbackRoundConfig ?? (fallbackOpenRound ? parseVotingConfig(fallbackOpenRound) : protocolConfig);
-  const config = roundId > 0n ? parseVotingConfig(rawRoundConfigSnapshot ?? fallbackConfig) : fallbackConfig;
+  const config =
+    currentOpenRoundId > 0n && roundId === currentOpenRoundId
+      ? parseVotingConfig(rawRoundConfigSnapshot ?? fallbackConfig)
+      : fallbackConfig;
 
   const snapshot = deriveRoundSnapshot({
     roundId,
-    round: roundId > 0n ? mergedRound.round : undefined,
+    round,
     config,
     optimisticDelta: effectiveOptimisticDelta,
+    previewRoundId,
+    previewStartsNewRound,
     now,
   });
 
@@ -98,8 +118,16 @@ export function useRoundSnapshot(
   return {
     ...snapshot,
     isLoading:
-      contentId !== undefined && (isRoundIdLoading || (roundId > 0n && (isRoundLoading || isRoundConfigLoading))),
-    isReady: contentId !== undefined && !isRoundIdLoading && !isRoundLoading && !isRoundConfigLoading,
+      contentId !== undefined &&
+      (isPreviewRoundIdLoading ||
+        isRoundIdLoading ||
+        (currentOpenRoundId > 0n && (isRoundLoading || isRoundConfigLoading))),
+    isReady:
+      contentId !== undefined &&
+      !isPreviewRoundIdLoading &&
+      !isRoundIdLoading &&
+      !isRoundLoading &&
+      !isRoundConfigLoading,
   };
 }
 

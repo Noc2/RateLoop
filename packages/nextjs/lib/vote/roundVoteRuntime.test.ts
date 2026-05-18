@@ -103,3 +103,38 @@ test("resolveRoundVoteRuntime keeps new-round targets fresh when latest is stale
   assert.equal(runtime.roundStartTimeSeconds, null);
   assert.equal(runtime.roundId, 3n);
 });
+
+test("resolveRoundVoteRuntime rejects non-votable preview states", async () => {
+  const publicClient = {
+    getBlock: async () => ({
+      number: 123n,
+      timestamp: 1_000n,
+    }),
+    readContract: async (args: Record<string, unknown>) => {
+      if (args.functionName === "previewCommitReferenceRatingBps") {
+        return 5_000;
+      }
+
+      if (args.functionName === "previewCommitRoundId") {
+        return 1n;
+      }
+
+      if (args.functionName === "roundConfigSnapshot") {
+        return [100, 3_600, 3, 1_000];
+      }
+
+      return [900n, 0, 3n, 3n, 0n, 0n, 0n, 0n, 0n, false, 0n, 950n, 0n, 0n];
+    },
+  };
+
+  await assert.rejects(
+    () =>
+      resolveRoundVoteRuntime({
+        publicClient: publicClient as never,
+        votingEngineAddress: "0x0000000000000000000000000000000000000001",
+        contentId: 7n,
+        fallbackEpochDuration: 1200,
+      }),
+    /RoundNotOpen/u,
+  );
+});
