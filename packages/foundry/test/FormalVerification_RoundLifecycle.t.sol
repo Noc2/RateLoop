@@ -12,6 +12,7 @@ import { RoundLib } from "../contracts/libraries/RoundLib.sol";
 import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
 import { VotingTestBase } from "./helpers/VotingTestHelpers.sol";
 import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
+import { MockRaterIdentityRegistry } from "./mocks/MockRaterIdentityRegistry.sol";
 
 /// @title Formal Verification: Round Lifecycle Edge Cases (Tlock Commit-Reveal)
 /// @notice 12 scenarios verifying epoch boundaries, expiry, concurrent rounds,
@@ -451,6 +452,11 @@ contract FormalVerification_RoundLifecycleTest is VotingTestBase {
         ProtocolConfig cfg = ProtocolConfig(address(engine.protocolConfig()));
         vm.prank(owner);
         _setTlockRoundConfig(cfg, EPOCH_DURATION, MAX_DURATION, 3, 200);
+
+        MockRaterIdentityRegistry mockRaterIdentityRegistry = new MockRaterIdentityRegistry();
+        mockRaterIdentityRegistry.setHolder(v[0]);
+        vm.prank(owner);
+        cfg.setRaterRegistry(address(mockRaterIdentityRegistry));
 
         uint256 cid = _submit();
 

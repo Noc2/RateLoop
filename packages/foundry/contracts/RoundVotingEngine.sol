@@ -1265,6 +1265,7 @@ contract RoundVotingEngine is
         view
         returns (bool)
     {
+        if (!roundHasHumanVerifiedCommit[contentId][roundId]) return false;
         return RoundCleanupLib.canFinalizeRevealFailedRound(
             round,
             roundConfigSnapshot[contentId],

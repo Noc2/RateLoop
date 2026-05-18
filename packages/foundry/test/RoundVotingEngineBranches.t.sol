@@ -2208,6 +2208,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     function test_FinalizeRevealFailedRound_SucceedsAfterFinalRevealGrace() public {
         uint256 contentId = _submitContent();
 
+        mockRaterIdentityRegistry.setHolder(voter1);
         (bytes32 ck1, bytes32 s1) = _commit(voter1, contentId, true, STAKE);
         _commit(voter2, contentId, false, STAKE);
         _commit(voter3, contentId, true, STAKE);
@@ -2237,9 +2238,31 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertEq(lrepToken.balanceOf(voter1), voter1BalBefore, "late reveals are not accepted after reveal failure");
     }
 
+    function test_FinalizeRevealFailed_AllSybilQuorum_StaysCancellable() public {
+        uint256 contentId = _submitContent();
+
+        _commit(voter1, contentId, true, STAKE);
+        _commit(voter2, contentId, false, STAKE);
+        _commit(voter3, contentId, true, STAKE);
+
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        uint256 finalDeadline = round.startTime + 7 days + ProtocolConfig(protocolConfigAddress).revealGracePeriod();
+
+        vm.warp(finalDeadline);
+        vm.expectRevert(RoundVotingEngine.RevealGraceActive.selector);
+        engine.finalizeRevealFailedRound(contentId, roundId);
+
+        engine.cancelExpiredRound(contentId, roundId);
+        RoundLib.Round memory cancelledRound = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        assertEq(uint256(cancelledRound.state), uint256(RoundLib.RoundState.Cancelled));
+        assertFalse(engine.roundHasHumanVerifiedCommit(contentId, roundId));
+    }
+
     function test_RevealFailed_RefundsRevealedAndForfeitsUnrevealed() public {
         uint256 contentId = _submitContent();
 
+        mockRaterIdentityRegistry.setHolder(voter1);
         (bytes32 ck1, bytes32 s1) = _commit(voter1, contentId, true, STAKE);
         _commit(voter2, contentId, false, STAKE);
         _commit(voter3, contentId, true, STAKE);
