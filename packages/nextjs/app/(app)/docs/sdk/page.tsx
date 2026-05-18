@@ -13,8 +13,8 @@ const SdkPage: NextPage = () => {
     <article className="prose max-w-none">
       <DocsTitle gradientText="SDK" />
       <p className="lead text-base-content/60 text-lg">
-        Use the RateLoop SDK to add hosted reads, frontend attribution, and RBTS vote transaction helpers to an existing
-        app.
+        Use the RateLoop SDK to add hosted reads, frontend attribution, and rating vote transaction helpers to an
+        existing app.
       </p>
 
       <h2>What It Covers</h2>
@@ -28,8 +28,8 @@ const SdkPage: NextPage = () => {
           operator records, including each question&apos;s selected round settings and rater reward status.
         </li>
         <li>
-          <strong>RBTS vote helpers</strong> for stake normalization, frontend-code resolution, tlock commit generation,
-          and drand metadata binding.
+          <strong>Rating vote helpers</strong> for stake normalization, frontend-code resolution, tlock commit
+          generation, and drand metadata binding.
         </li>
         <li>
           <strong>Wallet-agnostic output</strong> so approve and commit calls can be passed into wagmi, viem, thirdweb,
@@ -78,9 +78,9 @@ const participationStatus = await curyo.read.getRaterParticipationStatus(
 );`}</code>
       </pre>
 
-      <h2>RBTS Vote Integration</h2>
+      <h2>Rating Vote Integration</h2>
       <p>
-        For rating flows, the SDK helps you prepare the same private binary RBTS commit the{" "}
+        For rating flows, the SDK helps you prepare the same private rating commit the{" "}
         <a href={referenceAppSourceHref} target="_blank" rel="noopener noreferrer" className="link link-primary">
           reference app
         </a>{" "}

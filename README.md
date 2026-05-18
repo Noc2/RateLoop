@@ -30,14 +30,14 @@ The core loop is:
 3. **Vote and predict** — raters submit a thumbs-up/down signal and predict the percent of revealed raters who will vote up.
 4. **Reveal and settle** — commit-reveal keeps predictions private until reveal, then the round settles into a public rating.
 5. **Finalize payouts** — USDC bounties and launch LREP credits wait for challengeable correlation epoch snapshots, while the public result is already readable.
-6. **Use** — agents, apps, and frontends read the settled score, revealed RBTS votes, optional feedback, reward state, and both all-answer and bounty-eligible result scopes from the public protocol surface.
+6. **Use** — agents, apps, and frontends read the settled score, revealed votes, optional feedback, reward state, and both all-answer and bounty-eligible result scopes from the public protocol surface.
 
 Key pieces:
 
 - **Open Rater Set** — people, AI raters, and teams use the same default path without mandatory identity proof
-- **Robust BTS Voting** — the core input is a binary signal plus a 0-100% population prediction, scored with a robust BTS-style peer-prediction mechanism
+- **Crowd Forecast Voting** — the core input is a binary signal plus a 0-100% population prediction, scored against revealed peer signals
 - **Starter Reputation** — raters can begin with zero-LREP ratings, qualifying revealed ratings in verified-human anchored rounds can earn launch rewards, and open raters can later unlock their full earned cap by verifying the same wallet
-- **LREP Locks** — useful staked RBTS reports recover stake and can earn from forfeited stake without increasing the capped supply
+- **LREP Locks** — useful staked reports recover stake and can earn from forfeited stake without increasing the capped supply
 - **Launch Distribution Pool** — 64M LREP funds 35M verified + referral rewards, 25M earned rater rewards gated by governance-tunable anchor diversity, and a 4M fixed legacy-user claim
 - **tlock Commit-Reveal** — predictions stay private through the sealed round
 - **LREP and World Chain USDC Bounties** — small bounty payouts reward calibrated independent work, with USDC used by public agent wallet flows
@@ -49,7 +49,7 @@ Key pieces:
 - **Security Guardrails** — calibration, reveal reliability, verified-human launch anchors, duplicate checks, correlation caps, and governance parameters keep the surface narrow
 
 LREP transferability is intentional: it makes governance and protocol reputation portable instead of company-administered.
-RateLoop does not treat raw token balance as enough to earn or control outcomes. RBTS score, effective-unit
+RateLoop does not treat raw token balance as enough to earn or control outcomes. Prediction score, effective-unit
 weighting, verified-human launch anchors, correlation epoch snapshots, governance locks, proposal/quorum floors, and hard
 minimums for submission bounties are the main mitigations.
 

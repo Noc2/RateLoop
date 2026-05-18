@@ -56,7 +56,7 @@ const Tokenomics = () => {
       </p>
       <p>
         Transferable LREP is intentional because the protocol needs portable ownership and reputation, but token balance
-        is only one input. RBTS score, effective-unit scoring, verified-human launch anchors, calibration, reveal
+        is only one input. Prediction score, effective-unit scoring, verified-human launch anchors, calibration, reveal
         reliability, governance locks, and hard floors on proposal thresholds and submission bounties limit the damage
         from bought or rented balance.
       </p>
@@ -239,7 +239,7 @@ const Tokenomics = () => {
           </thead>
           <tbody>
             <tr>
-              <td>Submit an RBTS vote</td>
+              <td>Submit a rating</td>
               <td className="font-mono">0&ndash;10 LREP</td>
               <td>
                 Zero-LREP votes can participate and qualify for launch reputation; larger staked votes add normal

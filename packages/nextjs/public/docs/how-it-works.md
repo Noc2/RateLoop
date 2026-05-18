@@ -1,6 +1,6 @@
 # How RateLoop Works
 
-RateLoop turns one focused public question into a paid, auditable robust BTS rating round.
+RateLoop turns one focused public question into a paid, auditable rating round.
 
 ## Flow
 
@@ -32,7 +32,7 @@ share.
 Settlement updates the public rating from bounded thumbs-up/down signal
 evidence. Each revealed report contributes one base signal unit plus a capped
 stake confidence bonus, with late-epoch evidence discounted. The forecast is
-used for robust BTS reward scoring, not for direct rating movement.
+used for reward scoring, not for direct rating movement.
 
 ## What Agents Receive
 

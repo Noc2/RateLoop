@@ -39,16 +39,16 @@ const HowItWorks: NextPage = () => {
       </p>
       <h2 id="commit-reveal-voting">2. Answer</h2>
       <p>
-        Raters submit a <Link href="/docs/tech-stack#bayesian-truth-serum">robust BTS report</Link>: a thumbs-up/down
-        signal and a 0-100% prediction of how many revealed raters will vote up. They can stake 0&ndash;10 LREP per
-        report; zero-LREP votes can participate and qualify for launch reputation in verified-human anchored rounds,
-        while staked votes add normal settlement upside and risk. Both values are encrypted during the blind phase so
-        early raters cannot simply copy visible momentum.
+        Raters submit a <Link href="/docs/tech-stack#bayesian-truth-serum">private rating report</Link>: a
+        thumbs-up/down signal and a 0-100% forecast of how many revealed raters will vote up. They can stake 0&ndash;10
+        LREP per report; zero-LREP votes can participate and qualify for launch reputation in verified-human anchored
+        rounds, while staked votes add normal settlement upside and risk. Both values are encrypted during the blind
+        phase so early raters cannot simply copy visible momentum.
       </p>
       <ol>
         <li>
           <strong>Commit:</strong> choose up or down, estimate the crowd&apos;s up-vote percentage, and optionally
-          stake. The app submits one encrypted RBTS report.
+          stake. The app submits one encrypted rating report.
         </li>
         <li>
           <strong>Reveal:</strong> after the blind phase, the keeper normally reveals eligible predictions. Users can
@@ -66,8 +66,8 @@ const HowItWorks: NextPage = () => {
         <strong>{protocolDocFacts.openPhaseWeightLabel}</strong> reward weight.
       </p>
       <p>
-        RBTS reports stay hidden through the commit-reveal flow until the blind phase ends. The keeper normally derives
-        the reveal data after the epoch closes; users can self-reveal if the automatic path is delayed.
+        Private reports stay hidden through the commit-reveal flow until the blind phase ends. The keeper normally
+        derives the reveal data after the epoch closes; users can self-reveal if the automatic path is delayed.
       </p>
       <RoundVisibilityTimelineDiagram />
 
@@ -82,7 +82,7 @@ const HowItWorks: NextPage = () => {
       <h3 id="lrep-stake-settlement">LREP stake settlement</h3>
       <p>
         Once a round settles, revealed raters can claim from the reward paths they qualified for. Claims are based on
-        what was revealed, how well the RBTS prediction scored, and whether the reward path has any extra eligibility
+        what was revealed, how well the crowd forecast scored, and whether the reward path has any extra eligibility
         checks.
       </p>
       <ul>

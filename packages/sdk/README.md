@@ -13,7 +13,7 @@ Framework-agnostic frontend SDK foundations for integrating RateLoop into existi
 
 - `createCuryoClient(...)` for shared configuration
 - typed read helpers for indexed/hosted data
-- RBTS vote/frontend helpers for building transaction parameters, including the redeployed tlock metadata bindings
+- rating vote/frontend helpers for building transaction parameters, including the redeployed tlock metadata bindings
 - small, wallet-agnostic write helpers
 
 The exported helper names currently retain the Curyo namespace for compatibility while the package, docs, and public protocol are RateLoop.
