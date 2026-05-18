@@ -70,5 +70,7 @@ interface IClusterPayoutOracle {
         view
         returns (RoundPayoutSnapshot memory);
 
+    function rejectedRoundPayoutSnapshotRoots(bytes32 snapshotKey, bytes32 weightRoot) external view returns (bool);
+
     function verifyPayoutWeight(PayoutWeight calldata payout, bytes32[] calldata proof) external view returns (bool);
 }

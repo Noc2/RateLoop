@@ -873,9 +873,17 @@ contract QuestionRewardPoolEscrow is
 
         address oracleAddr = rewardPoolClusterPayoutOracle[rewardPoolId];
         require(oracleAddr != address(0), "Oracle not pinned");
-        IClusterPayoutOracle.RoundPayoutSnapshot memory oracleSnapshot = IClusterPayoutOracle(oracleAddr)
-            .getRoundPayoutSnapshot(PAYOUT_DOMAIN_QUESTION_REWARD, rewardPoolId, rewardPool.contentId, roundId);
-        require(oracleSnapshot.status == IClusterPayoutOracle.SnapshotStatus.Rejected, "Snapshot not rejected");
+        IClusterPayoutOracle oracle = IClusterPayoutOracle(oracleAddr);
+        IClusterPayoutOracle.RoundPayoutSnapshot memory oracleSnapshot =
+            oracle.getRoundPayoutSnapshot(PAYOUT_DOMAIN_QUESTION_REWARD, rewardPoolId, rewardPool.contentId, roundId);
+        bytes32 snapshotKey =
+            oracle.roundPayoutSnapshotKey(PAYOUT_DOMAIN_QUESTION_REWARD, rewardPoolId, rewardPool.contentId, roundId);
+        bool cachedRootRejected = oracleSnapshot.status == IClusterPayoutOracle.SnapshotStatus.Rejected
+            && oracleSnapshot.weightRoot == snapshot.clusterWeightRoot;
+        if (!cachedRootRejected) {
+            cachedRootRejected = oracle.rejectedRoundPayoutSnapshotRoots(snapshotKey, snapshot.clusterWeightRoot);
+        }
+        require(cachedRootRejected, "Snapshot not rejected");
 
         uint256 allocationToReturn = snapshot.allocation;
         rewardPool.unallocatedAmount += allocationToReturn;

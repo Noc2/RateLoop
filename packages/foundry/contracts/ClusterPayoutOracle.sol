@@ -101,6 +101,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
     mapping(uint8 => address) public roundPayoutSnapshotConsumer;
     mapping(address => uint256) public pendingBondWithdrawals;
     mapping(bytes32 => bool) public rejectedRoundPayoutSnapshotConsumed;
+    mapping(bytes32 => mapping(bytes32 => bool)) public rejectedRoundPayoutSnapshotRoots;
 
     event OracleConfigUpdated(uint64 challengeWindow, uint256 challengeBond, address bondRecipient);
     event FrontendRegistryUpdated(address indexed frontendRegistry);
@@ -432,6 +433,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         if (proposal.snapshot.status == SnapshotStatus.None) revert SnapshotNotFound();
         if (proposal.snapshot.status == SnapshotStatus.Finalized) revert SnapshotFinalized();
         proposal.snapshot.status = SnapshotStatus.Rejected;
+        rejectedRoundPayoutSnapshotRoots[snapshotKey][proposal.snapshot.weightRoot] = true;
         address challenger = proposal.challenger;
         uint256 bond = proposal.bond;
         proposal.bond = 0;
@@ -476,6 +478,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         }
 
         proposal.snapshot.status = SnapshotStatus.Rejected;
+        rejectedRoundPayoutSnapshotRoots[snapshotKey][snapshot.weightRoot] = true;
         if (consumed) {
             rejectedRoundPayoutSnapshotConsumed[snapshotKey] = true;
         }

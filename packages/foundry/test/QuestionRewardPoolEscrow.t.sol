@@ -2612,6 +2612,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
         bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(1, rewardPoolId, contentId, roundId);
         oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("replace-qualified-root"));
+        assertTrue(oracle.rejectedRoundPayoutSnapshotRoots(snapshotKey, originalRoot));
 
         IClusterPayoutOracle.PayoutWeight memory replacementWeight = payoutWeight;
         replacementWeight.effectiveWeight = payoutWeight.effectiveWeight / 2;
@@ -2633,6 +2634,11 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.prank(voter1);
         vm.expectRevert("Cluster snapshot changed");
         rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId, replacementWeight, proof);
+
+        vm.prank(owner);
+        rewardPoolEscrow.recoverRejectedSnapshotRound(rewardPoolId, roundId);
+        RoundSnapshot memory recovered = rewardPoolEscrow.getRoundSnapshot(rewardPoolId, roundId);
+        assertFalse(recovered.qualified);
     }
 
     function testRoundSnapshotStorageLayoutAppendsFirstClaimPaidAndClusterRoot() public {
