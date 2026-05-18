@@ -6,6 +6,7 @@ import {
   category,
   content,
   contentMedia,
+  advisoryVote,
   feedbackBonusPool,
   profile,
   questionBundleReward,
@@ -37,6 +38,8 @@ import {
 } from "../utils.js";
 
 type SqlCondition = ReturnType<typeof sql>;
+
+const CONTENT_STATUS_ACTIVE = 0;
 
 function voteMatchesVoter(address: `0x${string}`) {
   return or(eq(vote.voter, address), eq(vote.identityHolder, address), eq(vote.identityVoter, address));
@@ -124,6 +127,10 @@ function getRewardAvailableAmount() {
   ), 0)`;
 }
 
+function getRewardPriority() {
+  return sql<number>`case when ${getRewardAvailableAmount()} > 0 then 1 else 0 end`;
+}
+
 function getRatedContentPriority() {
   return sql<number>`case when ${content.ratingSettledRounds} > 0 then 1 else 0 end`;
 }
@@ -132,6 +139,13 @@ function getContentOrderBy(sortBy: string) {
   switch (sortBy) {
     case "oldest":
       return [asc(content.createdAt), asc(content.id)];
+    case "bounty_first":
+      return [
+        desc(getRewardPriority()),
+        desc(getRewardAvailableAmount()),
+        desc(content.createdAt),
+        desc(content.id),
+      ];
     case "highest_rewards":
       return [
         desc(getRewardAvailableAmount()),
@@ -174,6 +188,14 @@ function getSearchOrderBy(
   switch (sortBy) {
     case "oldest":
       return [desc(searchRank), asc(content.createdAt), asc(content.id)];
+    case "bounty_first":
+      return [
+        desc(searchRank),
+        desc(getRewardPriority()),
+        desc(getRewardAvailableAmount()),
+        desc(content.createdAt),
+        desc(content.id),
+      ];
     case "highest_rewards":
       return [
         desc(searchRank),
@@ -211,6 +233,60 @@ function getSearchOrderBy(
     default:
       return [desc(searchRank), desc(content.createdAt), desc(content.id)];
   }
+}
+
+function parseOptionalBooleanFlag(value: string | undefined) {
+  if (value === undefined) return null;
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "1" || normalized === "true" || normalized === "yes") return true;
+  if (normalized === "0" || normalized === "false" || normalized === "no") return false;
+  return undefined;
+}
+
+function getRoundAdvisoryCommitCount() {
+  return sql<number>`coalesce((
+    select count(*)
+    from ${advisoryVote}
+    where ${advisoryVote.contentId} = ${round.contentId}
+      and ${advisoryVote.roundId} = ${round.roundId}
+  ), 0)`;
+}
+
+function getVoteableContentCondition() {
+  const nowSeconds = BigInt(Math.floor(Date.now() / 1000));
+  return sql<boolean>`(
+    ${content.status} = ${CONTENT_STATUS_ACTIVE}
+    and (
+      not exists (
+        select 1
+        from ${round}
+        where ${round.contentId} = ${content.id}
+          and ${round.state} = ${ROUND_STATE.Open}
+      )
+      or exists (
+        select 1
+        from ${round}
+        where ${round.contentId} = ${content.id}
+          and ${round.state} = ${ROUND_STATE.Open}
+          and (
+            (
+              ${round.startTime} is not null
+              and ${round.maxDuration} > 0
+              and ${nowSeconds} < ${round.startTime} + ${round.maxDuration}
+              and ${round.voteCount} < ${round.maxVoters}
+              and ${round.revealedCount} < ${round.minVoters}
+              and ${getRoundAdvisoryCommitCount()} < ${round.maxVoters}
+            )
+            or (
+              ${round.startTime} is not null
+              and ${round.maxDuration} > 0
+              and ${nowSeconds} >= ${round.startTime} + ${round.maxDuration}
+              and ${round.voteCount} < ${round.minVoters}
+            )
+          )
+      )
+    )
+  )`;
 }
 
 function inferMediaTypeFromHost(urlHost: string): "image" | "video" {
@@ -390,9 +466,11 @@ export function registerContentRoutes(app: ApiApp) {
     const submitterQuery = c.req.query("submitter");
     const submittersQuery = c.req.query("submitters");
     const sortBy = c.req.query("sortBy") ?? "newest";
+    const voteable = parseOptionalBooleanFlag(c.req.query("voteable"));
     const limit = safeLimit(c.req.query("limit"), 50, 200);
     const offset = safeOffset(c.req.query("offset"));
     if (Number.isNaN(offset)) return c.json({ error: "Invalid offset" }, 400);
+    if (voteable === undefined) return c.json({ error: "Invalid voteable filter" }, 400);
     if (requestedSearch && search === null) {
       return jsonBig(c, {
         items: [],
@@ -420,6 +498,9 @@ export function registerContentRoutes(app: ApiApp) {
     }
     if (sortBy === "highest_rewards") {
       conditions.push(sql<boolean>`${getRewardAvailableAmount()} > 0`);
+    }
+    if (voteable === true) {
+      conditions.push(getVoteableContentCondition());
     }
     if (categoryId) {
       const parsed = safeBigInt(categoryId);

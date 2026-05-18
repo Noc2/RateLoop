@@ -59,10 +59,12 @@ function mockPonderModules<T>(result: T) {
   vi.doMock("ponder:schema", () => ({
     advisoryVote: {
       committedAt: "advisoryVote.committedAt",
+      contentId: "advisoryVote.contentId",
       creditedAt: "advisoryVote.creditedAt",
       launchCreditClaimed: "advisoryVote.launchCreditClaimed",
       paidAmount: "advisoryVote.paidAmount",
       revealed: "advisoryVote.revealed",
+      roundId: "advisoryVote.roundId",
       voter: "advisoryVote.voter",
     },
     category: {
@@ -318,6 +320,9 @@ function mockPonderModules<T>(result: T) {
       conservativeRatingBps: "round.conservativeRatingBps",
       effectiveEvidence: "round.effectiveEvidence",
       lowSince: "round.lowSince",
+      maxDuration: "round.maxDuration",
+      maxVoters: "round.maxVoters",
+      minVoters: "round.minVoters",
       revealedCount: "round.revealedCount",
       roundId: "round.roundId",
       ratingBps: "round.ratingBps",
@@ -594,6 +599,83 @@ describe("registerContentRoutes", () => {
     expect(serializedOrderBy).toContain("questionRewardPool.claimedAmount");
     expect(serializedOrderBy).toContain("feedbackBonusPool.remainingAmount");
     expect(serializedOrderBy).toContain("content.createdAt");
+  });
+
+  it("can sort content with bounties first without hiding unpaid content", async () => {
+    const { queryBuilder } = mockPonderModules([{ id: 1n }]);
+    mockSharedModule();
+    const { registerContentRoutes } = await import(
+      "../src/api/routes/content-routes.js"
+    );
+
+    const app = new Hono();
+    registerContentRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/content?sortBy=bounty_first",
+    );
+
+    expect(response.status).toBe(200);
+
+    const serializedWhere = serializeExpression(
+      queryBuilder.where.mock.calls[0]?.[0],
+    );
+    expect(serializedWhere).not.toContain("questionRewardPool.unallocatedAmount");
+
+    const serializedOrderBy = serializeExpression(
+      queryBuilder.orderBy.mock.calls[0] ?? [],
+    );
+    expect(serializedOrderBy).toContain("case when");
+    expect(serializedOrderBy).toContain("questionRewardPool.unallocatedAmount");
+    expect(serializedOrderBy).toContain("feedbackBonusPool.remainingAmount");
+  });
+
+  it("adds voteable round lifecycle predicates when requested", async () => {
+    const { queryBuilder } = mockPonderModules([{ id: 1n }]);
+    mockSharedModule();
+    const { registerContentRoutes } = await import(
+      "../src/api/routes/content-routes.js"
+    );
+
+    const app = new Hono();
+    registerContentRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/content?status=all&voteable=1",
+    );
+
+    expect(response.status).toBe(200);
+
+    const serializedWhere = serializeExpression(
+      queryBuilder.where.mock.calls[0]?.[0],
+    );
+    expect(serializedWhere).toContain("content.status");
+    expect(serializedWhere).toContain("round.state");
+    expect(serializedWhere).toContain("round.startTime");
+    expect(serializedWhere).toContain("round.maxDuration");
+    expect(serializedWhere).toContain("round.voteCount");
+    expect(serializedWhere).toContain("round.maxVoters");
+    expect(serializedWhere).toContain("round.revealedCount");
+    expect(serializedWhere).toContain("round.minVoters");
+    expect(serializedWhere).toContain("advisoryVote.contentId");
+    expect(serializedWhere).toContain("advisoryVote.roundId");
+  });
+
+  it("rejects invalid voteable filters before querying the database", async () => {
+    const { db } = mockPonderModules([]);
+    mockSharedModule();
+    const { registerContentRoutes } = await import(
+      "../src/api/routes/content-routes.js"
+    );
+
+    const app = new Hono();
+    registerContentRoutes(app);
+
+    const response = await app.request("http://localhost/content?voteable=maybe");
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "Invalid voteable filter" });
+    expect(db.select).not.toHaveBeenCalled();
   });
 
   it("supports filtering content by multiple raw submitter wallets", async () => {
