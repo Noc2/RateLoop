@@ -67,7 +67,6 @@ contract RoundVotingEngine is
     error RoundNotExpired();
     error RoundNotSettledOrTied();
     error RoundNotCancelledOrTied();
-    error DormancyWindowElapsed();
     error ThresholdReached();
     error RevealGraceActive();
 
@@ -451,24 +450,6 @@ contract RoundVotingEngine is
         if (commitHash == bytes32(0)) revert InvalidCommitHash();
 
         uint64 stakeAmount64 = stakeAmount.toUint64();
-
-        // Get or create active round
-        uint256 currentOpenRoundId = currentRoundId[contentId];
-        if (currentOpenRoundId == 0 || RoundLib.isTerminal(rounds[contentId][currentOpenRoundId])) {
-            if (registry.isDormancyEligible(contentId)) revert DormancyWindowElapsed();
-        } else {
-            RoundLib.Round storage currentRound = rounds[contentId][currentOpenRoundId];
-            // If this commit would auto-finalize the stale open round and roll into a fresh round,
-            // finalize it first so the registry can observe that no open round remains.
-            RoundLib.RoundConfig memory currentRoundCfg = _getRoundConfig(contentId, currentOpenRoundId);
-            if (_canCancelExpiredRound(contentId, currentOpenRoundId, currentRound, currentRoundCfg)) {
-                _markRoundCancelled(contentId, currentOpenRoundId, currentRound);
-                if (registry.isDormancyEligible(contentId)) revert DormancyWindowElapsed();
-            } else if (_canFinalizeRevealFailedRound(contentId, currentOpenRoundId, currentRound)) {
-                _markRoundRevealFailed(contentId, currentOpenRoundId, currentRound);
-                if (registry.isDormancyEligible(contentId)) revert DormancyWindowElapsed();
-            }
-        }
 
         uint256 roundId = _getOrCreateRound(contentId);
         uint256 expectedRoundId = roundContext >> 16;

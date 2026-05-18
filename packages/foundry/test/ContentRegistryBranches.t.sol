@@ -2659,7 +2659,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         assertEq(uint256(status), uint256(ContentRegistry.ContentStatus.Dormant));
     }
 
-    function test_CommitVote_DormancyEligibleContent_CannotStartNewRoundAfterCancellation() public {
+    function test_CommitVote_DormancyEligibleContent_CanStartNewRoundAfterCancellation() public {
         vm.startPrank(submitter);
         lrepToken.approve(address(registry), 10e6);
         _submitContentWithReservation(registry, "https://example.com/dormancy-guard", "goal", "goal", "tags", 0);
@@ -2673,24 +2673,32 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         votingEngine.cancelExpiredRound(1, roundId);
 
         bytes32 salt = keccak256(abi.encodePacked(voter2, block.timestamp));
-        bytes memory ciphertext = _testCiphertext(true, salt, 1);
-        bytes32 commitHash = _commitHash(true, salt, voter2, 1, ciphertext);
+        uint256 nextRoundId = votingEngine.previewCommitRoundId(1);
+        uint64 targetRound = _tlockCommitTargetRound(votingEngine, 1);
+        bytes32 drandChainHash = _tlockDrandChainHash();
+        bytes memory ciphertext = _testCiphertext(true, salt, 1, targetRound, drandChainHash);
+        bytes32 commitHash =
+            _commitHash(true, salt, voter2, 1, nextRoundId, _defaultRatingReferenceBps(), targetRound, drandChainHash, ciphertext);
 
         vm.startPrank(voter2);
         lrepToken.approve(address(votingEngine), STAKE);
-        uint256 cachedRoundContext3 = _roundContext(votingEngine.previewCommitRoundId(1), _defaultRatingReferenceBps());
-        vm.expectRevert(RoundVotingEngine.DormancyWindowElapsed.selector);
         votingEngine.commitVote(
             1,
-            cachedRoundContext3,
-            _tlockCommitTargetRound(),
-            _tlockDrandChainHash(),
+            _roundContext(nextRoundId, _defaultRatingReferenceBps()),
+            targetRound,
+            drandChainHash,
             commitHash,
             ciphertext,
             STAKE,
             address(0)
         );
         vm.stopPrank();
+
+        uint256 newRoundId = RoundEngineReadHelpers.activeRoundId(votingEngine, 1);
+        assertEq(newRoundId, roundId + 1, "active content should remain voteable after dormancy window");
+        RoundLib.Round memory newRound = RoundEngineReadHelpers.round(votingEngine, 1, newRoundId);
+        assertEq(uint256(newRound.state), uint256(RoundLib.RoundState.Open));
+        assertEq(newRound.voteCount, 1);
     }
 
     function test_MarkDormant_ReleasesUrlForResubmission() public {

@@ -98,7 +98,7 @@ contract RoundVotingEngineDormancyTest is VotingTestBase {
         assertEq(newRoundId, roundId + 1, "new commits should still roll into a fresh round before dormancy");
     }
 
-    function test_CommitAfterRevealFailedGrace_RevertsOnceDormancyElapsed() public {
+    function test_CommitAfterRevealFailedGrace_StartsNewRoundAfterDormancyWindowElapses() public {
         uint256 contentId = _submitContent();
 
         raterIdentityRegistry.setHolder(voter1);
@@ -108,64 +108,63 @@ contract RoundVotingEngineDormancyTest is VotingTestBase {
         _commit(voter3, contentId, true);
 
         bytes32 salt = keccak256(abi.encodePacked(voter4, block.timestamp, contentId));
-        bytes memory ciphertext = _testCiphertext(true, salt, contentId);
-        bytes32 commitHash = _commitHash(true, salt, contentId, ciphertext);
 
         vm.warp(T0 + 31 days);
+        TestCommitArtifacts memory artifacts = _buildTestCommitArtifacts(address(engine), voter4, true, salt, contentId);
         vm.startPrank(voter4);
         lrepToken.approve(address(engine), STAKE);
-        uint256 cachedRoundContext1 =
-            _roundContext(engine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());
-        vm.expectRevert(RoundVotingEngine.DormancyWindowElapsed.selector);
         engine.commitVote(
             contentId,
-            cachedRoundContext1,
-            _tlockCommitTargetRound(),
-            _tlockDrandChainHash(),
-            commitHash,
-            ciphertext,
+            _roundContext(artifacts.roundId, artifacts.roundReferenceRatingBps),
+            artifacts.targetRound,
+            artifacts.drandChainHash,
+            artifacts.commitHash,
+            artifacts.ciphertext,
             STAKE,
             address(0)
         );
         vm.stopPrank();
 
-        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
-        assertEq(roundId, 1, "dormancy should block opening a fresh round");
-        RoundLib.Round memory openRound = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        uint256 newRoundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        assertEq(newRoundId, 2, "dormancy eligibility should not block fresh voting rounds");
+        RoundLib.Round memory oldRound = RoundEngineReadHelpers.round(engine, contentId, 1);
+        assertEq(uint256(oldRound.state), uint256(RoundLib.RoundState.RevealFailed));
+        RoundLib.Round memory openRound = RoundEngineReadHelpers.round(engine, contentId, newRoundId);
         assertEq(uint256(openRound.state), uint256(RoundLib.RoundState.Open));
+        assertEq(openRound.voteCount, 1);
     }
 
-    function test_CommitAfterExpiredBelowQuorum_RevertsOnceDormancyElapsed() public {
+    function test_CommitAfterExpiredBelowQuorum_StartsNewRoundAfterDormancyWindowElapses() public {
         uint256 contentId = _submitContent();
 
         _commit(voter1, contentId, true);
         _commit(voter2, contentId, false);
 
         bytes32 salt = keccak256(abi.encodePacked(voter3, block.timestamp, contentId));
-        bytes memory ciphertext = _testCiphertext(true, salt, contentId);
-        bytes32 commitHash = _commitHash(true, salt, contentId, ciphertext);
 
         vm.warp(T0 + 31 days);
+        TestCommitArtifacts memory artifacts = _buildTestCommitArtifacts(address(engine), voter3, true, salt, contentId);
         vm.startPrank(voter3);
         lrepToken.approve(address(engine), STAKE);
-        uint256 cachedRoundContext = _roundContext(engine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());
-        vm.expectRevert(RoundVotingEngine.DormancyWindowElapsed.selector);
         engine.commitVote(
             contentId,
-            cachedRoundContext,
-            _tlockCommitTargetRound(),
-            _tlockDrandChainHash(),
-            commitHash,
-            ciphertext,
+            _roundContext(artifacts.roundId, artifacts.roundReferenceRatingBps),
+            artifacts.targetRound,
+            artifacts.drandChainHash,
+            artifacts.commitHash,
+            artifacts.ciphertext,
             STAKE,
             address(0)
         );
         vm.stopPrank();
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
-        assertEq(roundId, 1, "dormancy should block opening a fresh round");
+        assertEq(roundId, 2, "expired below-quorum round should roll forward despite dormancy eligibility");
+        RoundLib.Round memory cancelledRound = RoundEngineReadHelpers.round(engine, contentId, 1);
+        assertEq(uint256(cancelledRound.state), uint256(RoundLib.RoundState.Cancelled));
         RoundLib.Round memory openRound = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertEq(uint256(openRound.state), uint256(RoundLib.RoundState.Open));
+        assertEq(openRound.voteCount, 1);
     }
 
     function _submitContent() internal returns (uint256 contentId) {
