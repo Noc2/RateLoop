@@ -753,6 +753,31 @@ const deployedContracts: GenericContractsDeclaration = {
       address: "0x24912ad74ce4a627cdf8557d12f4fe4f44f62e7a",
       abi: [
         {
+          type: "event",
+          name: "RbtsSeedCaptured",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "entropy",
+              type: "bytes32",
+              indexed: false,
+              internalType: "bytes32",
+            },
+          ],
+          anonymous: false,
+        },
+        {
           type: "error",
           name: "AlreadyRevealed",
           inputs: [],
@@ -780,6 +805,11 @@ const deployedContracts: GenericContractsDeclaration = {
         {
           type: "error",
           name: "NotEnoughVotes",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "RevealGraceActive",
           inputs: [],
         },
         {
@@ -7140,6 +7170,24 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "refreshRbtsSeed",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "renounceRole",
           inputs: [
             {
@@ -7484,30 +7532,6 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "bool",
               internalType: "bool",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "roundLastCommitPrevrandao",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
             },
           ],
           stateMutability: "view",
@@ -20792,6 +20816,30 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "rejectedRoundPayoutSnapshotRoots",
+          inputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "renounceRole",
           inputs: [
             {
@@ -21876,6 +21924,8 @@ const deployedContracts: GenericContractsDeclaration = {
       inheritedFunctions: {
         getRoundPayoutSnapshot: "contracts/interfaces/IClusterPayoutOracle.sol",
         isRoundPayoutSnapshotFinalized:
+          "contracts/interfaces/IClusterPayoutOracle.sol",
+        rejectedRoundPayoutSnapshotRoots:
           "contracts/interfaces/IClusterPayoutOracle.sol",
         roundPayoutSnapshotKey: "contracts/interfaces/IClusterPayoutOracle.sol",
         verifyPayoutWeight: "contracts/interfaces/IClusterPayoutOracle.sol",
