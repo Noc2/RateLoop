@@ -160,7 +160,7 @@ export function GetLrepOnboarding({ address }: GetLrepOnboardingProps) {
               <ChartBarSquareIcon className="h-6 w-6" />
             </div>
           </div>
-          <h2 className="mt-5 text-2xl font-semibold text-base-content">Rate with 0 LREP</h2>
+          <h2 className="mt-5 text-2xl font-semibold text-base-content">Earn LREP by voting</h2>
           <p className="mt-3 text-base leading-7 text-base-content/65">
             Submit private ratings without staking;{" "}
             <Link href={ELIGIBLE_SETTLED_ROUNDS_DOCS_HREF} className="link link-primary">
@@ -188,7 +188,7 @@ export function GetLrepOnboarding({ address }: GetLrepOnboardingProps) {
           </div>
           <div className={actionButtonFooterClassName}>
             <Link href={RATE_ROUTE} className={actionButtonClassName}>
-              Rate with 0 LREP
+              Earn LREP by voting
               <ArrowRightIcon className="h-4 w-4" />
             </Link>
           </div>
