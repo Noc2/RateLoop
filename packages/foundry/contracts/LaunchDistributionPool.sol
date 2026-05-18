@@ -136,6 +136,16 @@ contract LaunchDistributionPool is
     event EarnedRaterRewardCreditPending(
         address indexed rater, uint256 indexed contentId, uint256 indexed roundId, bytes32 commitKey, uint16 scoreBps
     );
+    /// @notice Emitted when governance rescues a pending earned-rater credit whose oracle pin
+    ///         has become stale (cluster oracle was rotated). Resets the rater's per-round
+    ///         flags so they can re-record against the new oracle (M-Funds-3).
+    event StalePendingEarnedRaterCreditRescued(
+        address indexed rater,
+        uint256 indexed contentId,
+        uint256 indexed roundId,
+        bytes32 commitKey,
+        address staleOracle
+    );
     event EarnedRaterRewardCreditFinalized(
         address indexed rater,
         uint256 indexed contentId,
@@ -200,6 +210,28 @@ contract LaunchDistributionPool is
         if (newOracle == address(0)) revert InvalidAddress();
         clusterPayoutOracle = IClusterPayoutOracle(newOracle);
         emit ClusterPayoutOracleUpdated(newOracle);
+    }
+
+    /// @notice Governance rescue for pending earned-rater credits pinned to a now-stale oracle.
+    /// @dev M-Funds-3: when governance rotates `clusterPayoutOracle`, any
+    ///      `pendingEarnedRaterCredits` already recorded against the previous oracle become
+    ///      permanently un-finalizable (the new oracle won't accept proofs against the old
+    ///      root, the `pending.oracle` pin is fixed). This rescue drops a stale pending entry
+    ///      and resets the rater's per-round flags so they can re-record against the new
+    ///      oracle. Slot accounting (cap counter) is left intact — a stale pending entry
+    ///      still consumed a cap slot at record time, and rescue does not refund it.
+    function rescueStalePendingEarnedRaterCredit(uint256 contentId, uint256 roundId, bytes32 commitKey)
+        external
+        onlyOwner
+    {
+        PendingEarnedRaterCredit memory pending = pendingEarnedRaterCredits[contentId][roundId][commitKey];
+        if (!pending.pending) revert InvalidAmount();
+        if (earnedRewardCreditFinalized[contentId][roundId][commitKey]) revert AlreadyClaimed();
+        if (pending.oracle == address(clusterPayoutOracle)) revert InvalidAddress();
+        delete pendingEarnedRaterCredits[contentId][roundId][commitKey];
+        earnedRewardCreditRecorded[contentId][roundId][commitKey] = false;
+        raterRoundCreditRecorded[pending.rater][contentId][roundId] = false;
+        emit StalePendingEarnedRaterCreditRescued(pending.rater, contentId, roundId, commitKey, pending.oracle);
     }
 
     function setAuthorizedCaller(address caller, bool authorized) external onlyOwner {
@@ -440,6 +472,11 @@ contract LaunchDistributionPool is
         // A rater who was unverified at record (and thus consumed a cap slot) keeps that slot
         // regardless of verification flips between record and finalize.
         earnedRewardCreditFinalized[contentId][roundId][commitKey] = true;
+        // M-Funds-3: reclaim the pending entry now that it has been finalized. The slot
+        // (oracle, rater, scoreBps, policy) was a one-shot ticket; leaving it in storage
+        // strands gas and makes governance rotation of `clusterPayoutOracle` ambiguous about
+        // whether the entry should re-verify against the new oracle.
+        delete pendingEarnedRaterCredits[contentId][roundId][commitKey];
         uint256 effectiveCreditBps = payoutWeight.effectiveWeight;
         paidAmount = _recordEarnedRaterReward(
             pending.rater, contentId, roundId, commitKey, pending.scoreBps, pending.policy, effectiveCreditBps
