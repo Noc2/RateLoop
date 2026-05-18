@@ -64,8 +64,8 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         CreateRewardPoolParams memory params
     ) external returns (uint256 rewardPoolId, uint256 updatedNextRewardPoolId) {
         uint256 fundedAmount = QuestionRewardPoolEscrowTransferLib.pullExactToken(
-                _rewardToken(lrepToken, usdcToken, params.asset), params.funder, params.amount
-            );
+            _rewardToken(lrepToken, usdcToken, params.asset), params.funder, params.amount
+        );
 
         rewardPoolId = nextRewardPoolId;
         updatedNextRewardPoolId = nextRewardPoolId + 1;
