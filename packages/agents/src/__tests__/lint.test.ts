@@ -62,6 +62,20 @@ describe("agent question linting", () => {
     );
   });
 
+  it("rejects direct image file context URLs", () => {
+    const findings = lintAgentAskRequest({
+      ...VALID_REQUEST,
+      question: {
+        ...VALID_REQUEST.question,
+        contextUrl: "https://example.com/mockup.png",
+      },
+    });
+
+    expect(findings).toEqual(
+      expect.arrayContaining([expect.objectContaining({ level: "error", path: "question.contextUrl" })]),
+    );
+  });
+
   it("rejects missing context, unknown templates, and non-idempotent requests", () => {
     const findings = lintAgentAskRequest({
       bounty: { amount: "0" },

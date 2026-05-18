@@ -71,6 +71,20 @@ test("parseX402QuestionRequest rejects arbitrary HTTPS image URLs", () => {
   );
 });
 
+test("parseX402QuestionRequest rejects direct image file context URLs", () => {
+  assert.throws(
+    () =>
+      parseX402QuestionRequest({
+        ...VALID_REQUEST,
+        question: {
+          ...VALID_REQUEST.question,
+          contextUrl: "https://example.com/mockup.webp?variant=1",
+        },
+      }),
+    /public HTTPS page URL/,
+  );
+});
+
 test("parseX402QuestionRequest rejects uploaded image paths on untrusted origins", () => {
   assert.throws(
     () =>

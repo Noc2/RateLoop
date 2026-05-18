@@ -12,6 +12,8 @@ const DEFAULT_RESULT_SPEC_HASH =
 const MAX_SUBMISSION_IMAGE_URLS = 4;
 const UPLOADED_IMAGE_URL_PATTERN =
   /^https:\/\/\S+\/api\/attachments\/images\/att_[A-Za-z0-9_-]{16,80}\.webp(?:[?#]\S*)?$/;
+const DIRECT_IMAGE_URL_PATH_PATTERN =
+  /\.(?:avif|bmp|gif|jpe?g|png|svg|webp)$/i;
 const DEFAULT_BOUNTY_ELIGIBILITY = 0;
 
 const abi = parseAbi([
@@ -36,6 +38,30 @@ function assertHttpsUrl(value, label) {
       throw new Error("invalid");
   } catch {
     fail(`${label} must be a valid HTTPS URL.`);
+  }
+}
+
+function isDirectImageUrl(value) {
+  try {
+    return DIRECT_IMAGE_URL_PATH_PATTERN.test(new URL(value).pathname);
+  } catch {
+    return false;
+  }
+}
+
+function assertSupportedContextUrl(value, { allowEmpty = false } = {}) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    if (allowEmpty) return;
+    fail("Context URL must be provided unless image URLs are attached.");
+  }
+  if (trimmed !== value) {
+    fail("Context URL must not include leading or trailing whitespace.");
+  }
+
+  assertHttpsUrl(trimmed, "Context URL");
+  if (isDirectImageUrl(trimmed)) {
+    fail("Context URL must be a public page URL, not a direct image file URL.");
   }
 }
 
@@ -128,7 +154,7 @@ function parseQuestionArgs(questionArgs) {
     ] = questionArgs.slice(index, index + 8);
     const imageUrls = parseImageUrls(imageUrlsJson);
     const trimmedVideoUrl = videoUrl.trim();
-    assertHttpsUrl(contextUrl, "Context URL");
+    assertSupportedContextUrl(contextUrl, { allowEmpty: imageUrls.length > 0 });
     if (trimmedVideoUrl && !isSupportedYouTubeUrl(trimmedVideoUrl)) {
       fail(`Unsupported video URL: ${trimmedVideoUrl}`);
     }

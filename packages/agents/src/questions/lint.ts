@@ -8,6 +8,7 @@ const FEATURE_ACCEPTANCE_REQUIRED_INPUTS = ["expectedBehavior", "testSteps", "ac
 const AGENT_TRACE_REVIEW_TEMPLATE_ID = "agent_trace_review";
 const AGENT_TRACE_REVIEW_REQUIRED_INPUTS = ["traceId", "taskGoal", "reviewFocus"] as const;
 const UPLOADED_IMAGE_ATTACHMENT_PATH_PATTERN = /^\/api\/attachments\/images\/att_[A-Za-z0-9_-]{16,80}\.webp$/;
+const DIRECT_IMAGE_URL_PATH_PATTERN = /\.(?:avif|bmp|gif|jpe?g|png|svg|webp)$/i;
 const SURVEY_STYLE_PATTERN =
   /\b(multiple[-\s]?choice|answer options?|choose one|choose from|select one|select from|price range|pricing range)\b/i;
 const HIDDEN_CHOICE_TITLE_PATTERN = /\bwhich\s+(option|variant|candidate|direction|price|pricing|range)\b/i;
@@ -26,6 +27,15 @@ function looksLikeHttpsUrl(value: unknown): boolean {
   if (typeof value !== "string") return false;
   try {
     return new URL(value).protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function looksLikeDirectImageUrl(value: unknown): boolean {
+  if (typeof value !== "string") return false;
+  try {
+    return DIRECT_IMAGE_URL_PATH_PATTERN.test(new URL(value).pathname);
   } catch {
     return false;
   }
@@ -114,6 +124,8 @@ export function lintAgentQuestion(
     pushFinding(findings, "error", `${path}.contextUrl`, "Context URL or at least one image URL is required.");
   } else if (hasContextUrl && !looksLikeHttpsUrl(question.contextUrl)) {
     pushFinding(findings, "error", `${path}.contextUrl`, "Context URL must be a public HTTPS URL.");
+  } else if (hasContextUrl && looksLikeDirectImageUrl(question.contextUrl)) {
+    pushFinding(findings, "error", `${path}.contextUrl`, "Context URL must be a page URL. Upload images through imageUrls.");
   }
   if (question.categoryId === undefined || question.categoryId === null || String(question.categoryId).trim() === "") {
     pushFinding(findings, "error", `${path}.categoryId`, "Category id is required.");

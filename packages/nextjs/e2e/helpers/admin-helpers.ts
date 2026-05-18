@@ -54,9 +54,18 @@ const DEFAULT_SUBMISSION_ROUND_CONFIG: SubmissionRoundConfig = {
 };
 const UPLOADED_IMAGE_URL_PATTERN =
   /^https:\/\/\S+\/api\/attachments\/images\/att_[A-Za-z0-9_-]{16,80}\.webp(?:[?#]\S*)?$/;
+const DIRECT_IMAGE_URL_PATH_PATTERN = /\.(?:avif|bmp|gif|jpe?g|png|svg|webp)$/i;
 
 function isSupportedImageUrl(url: string): boolean {
   return UPLOADED_IMAGE_URL_PATTERN.test(url);
+}
+
+function isDirectImageUrl(url: string): boolean {
+  try {
+    return DIRECT_IMAGE_URL_PATH_PATTERN.test(new URL(url).pathname);
+  } catch {
+    return false;
+  }
 }
 
 function isSupportedYouTubeUrl(url: string): boolean {
@@ -101,6 +110,28 @@ function assertSupportedSubmissionMedia(media: SubmissionMedia): SubmissionMedia
   }
 
   return media;
+}
+
+function assertSupportedContextUrl(url: string, media: SubmissionMedia) {
+  const trimmedUrl = url.trim();
+  if (!trimmedUrl) {
+    if (media.imageUrls.length > 0) return;
+    throw new Error("E2E submissions require a context URL unless approved image URLs are attached.");
+  }
+  if (trimmedUrl !== url) {
+    throw new Error(`Unsupported E2E submission context URL whitespace: ${url}`);
+  }
+
+  try {
+    const parsed = new URL(trimmedUrl);
+    if (parsed.protocol !== "https:") throw new Error("invalid protocol");
+  } catch {
+    throw new Error(`Unsupported E2E submission context URL: ${url}`);
+  }
+
+  if (isDirectImageUrl(trimmedUrl)) {
+    throw new Error(`Unsupported E2E submission direct image context URL: ${url}`);
+  }
 }
 
 async function rpcRequest<T = any>(method: string, params: unknown[]): Promise<T | null> {
@@ -836,6 +867,7 @@ export async function submitContentDirect(
   const { encodeFunctionData } = await import("viem");
   const resolvedCategoryId = BigInt(categoryId);
   const media = toSubmissionMedia(url, mediaInput);
+  assertSupportedContextUrl(url, media);
   const resolvedRoundConfig = await resolveSubmissionRoundConfig(contractAddress, roundConfig);
   const reservation = await buildSubmissionReservation(
     url,

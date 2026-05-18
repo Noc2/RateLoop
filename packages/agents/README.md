@@ -76,7 +76,9 @@ RateLoop URL into `question.imageUrls`.
 
 Treat uploaded images as public ask context. Ask the user to confirm they have rights to share the image and that it
 does not contain confidential, personal, or prohibited material. Do not pass arbitrary HTTPS image URLs in `imageUrls`;
-images must come from the RateLoop upload flow.
+images must come from the RateLoop upload flow. Do not put direct image file links such as `.jpg`, `.png`, or `.webp`
+URLs in `contextUrl`; use a normal public page URL there, or omit it when approved `imageUrls` provide the visual
+context.
 
 ## Local Signer CLI
 

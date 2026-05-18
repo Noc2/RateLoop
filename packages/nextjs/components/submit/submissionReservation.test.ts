@@ -12,11 +12,13 @@ const ADDRESS = "0x00000000000000000000000000000000000000aa" as const;
 const CHAIN_ID = 4801;
 const SUBMISSION_KEY = "0x1111111111111111111111111111111111111111111111111111111111111111" as const;
 const SALT = "0x2222222222222222222222222222222222222222222222222222222222222222" as const;
+const UPLOADED_IMAGE_URL = "https://www.curyo.xyz/api/attachments/images/att_abcdefghijklmnop.webp";
+const EXTRA_UPLOADED_IMAGE_URL = "https://www.curyo.xyz/api/attachments/images/att_extraabcdefghijkl.webp";
 const DEFAULT_DRAFT = {
   categoryId: 1n,
-  contextUrl: "https://example.com/demo.jpg",
+  contextUrl: "https://example.com/demo",
   description: "first description",
-  imageUrls: ["https://example.com/demo.jpg"],
+  imageUrls: [UPLOADED_IMAGE_URL],
   questionMetadataHash: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" as const,
   rewardPoolExpiresAt: 0n,
   feedbackClosesAt: 0n,
@@ -127,7 +129,7 @@ test("buildSubmissionRevealCommitment changes when media changes", () => {
   const edited = buildSubmissionRevealCommitment(
     {
       ...DEFAULT_DRAFT,
-      imageUrls: [...DEFAULT_DRAFT.imageUrls, "https://example.com/extra.jpg"],
+      imageUrls: [...DEFAULT_DRAFT.imageUrls, EXTRA_UPLOADED_IMAGE_URL],
     },
     SALT,
     ADDRESS,

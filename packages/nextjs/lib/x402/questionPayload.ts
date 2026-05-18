@@ -12,6 +12,7 @@ import {
   getContentTitleValidationError,
 } from "~~/lib/moderation/submissionValidation";
 import { findBlockedContentTags } from "~~/lib/moderation/submissionValidation";
+import { normalizeSubmissionContextUrl } from "~~/lib/contentMedia";
 import {
   DEFAULT_QUESTION_ROUND_CONFIG,
   type QuestionRoundConfig,
@@ -136,6 +137,14 @@ function normalizeHttpsUrl(value: string, fieldName: string): string {
     if (error instanceof X402QuestionInputError) throw error;
     throw new X402QuestionInputError(`${fieldName} must be a valid HTTPS URL.`);
   }
+}
+
+function normalizeQuestionContextUrl(value: string, fieldName: string): string {
+  const normalized = normalizeSubmissionContextUrl(normalizeHttpsUrl(value, fieldName));
+  if (!normalized) {
+    throw new X402QuestionInputError(`${fieldName} must be a public HTTPS page URL. Upload images through imageUrls.`);
+  }
+  return normalized;
 }
 
 function isYouTubeVideoUrl(url: string): boolean {
@@ -410,7 +419,7 @@ function normalizeQuestion(
 
   const imageUrls = normalizeImageUrls(value.imageUrls);
   const rawContextUrl = readOptionalString(value.contextUrl);
-  const contextUrl = rawContextUrl ? normalizeHttpsUrl(rawContextUrl, `${fieldPrefix}.contextUrl`) : "";
+  const contextUrl = rawContextUrl ? normalizeQuestionContextUrl(rawContextUrl, `${fieldPrefix}.contextUrl`) : "";
   const rawVideoUrl = readOptionalString(value.videoUrl);
   const videoUrl = rawVideoUrl ? normalizeHttpsUrl(rawVideoUrl, `${fieldPrefix}.videoUrl`) : "";
   if (videoUrl && !isYouTubeVideoUrl(videoUrl)) {

@@ -31,11 +31,6 @@ const CATEGORY_REGISTRY_ABI = [
 ] as const;
 const categoryIdBySlug = new Map<string, bigint>();
 
-function uploadedImageUrl(seed: string): string {
-  const attachmentSuffix = `e2e_${seed.replace(/[^A-Za-z0-9_-]/g, "_")}`.slice(0, 72).padEnd(16, "0");
-  return `https://www.curyo.xyz/api/attachments/images/att_${attachmentSuffix}.webp`;
-}
-
 async function resolveCategoryIdBySlug(slug: string): Promise<bigint> {
   const cached = categoryIdBySlug.get(slug);
   if (cached !== undefined) return cached;
@@ -65,10 +60,10 @@ const BASELINE_CONTENT = [
     submitter: ANVIL_ACCOUNTS.account2.address,
   },
   {
-    url: "https://picsum.photos/seed/curyo-workspace/1200/800.jpg",
-    title: "Can an agent trust this workspace photo?",
+    url: "https://example.com/curyo-workspace-listing",
+    title: "Can an agent trust this workspace listing?",
     description:
-      "Judge whether the image gives enough visual evidence for an agent to rate a remote-work listing as calm and credible.",
+      "Judge whether the listing gives enough public evidence for an agent to rate a remote-work offer as calm and credible.",
     tags: "Workspace,Authenticity,Trust",
     categorySlug: "media",
     bountyAmount: 2_500_000n,
@@ -85,8 +80,8 @@ const BASELINE_CONTENT = [
     submitter: ANVIL_ACCOUNTS.account4.address,
   },
   {
-    url: "https://picsum.photos/seed/curyo-product-label/1200/800.jpg",
-    title: "Would an agent overrate this product label on mobile?",
+    url: "https://example.com/curyo-product-label",
+    title: "Would an agent overrate this product page on mobile?",
     description:
       "Focus on whether hierarchy, contrast, and key details stay readable enough for a shopping agent to recommend the item on mobile.",
     tags: "Products,Mobile,Clarity",
@@ -95,7 +90,7 @@ const BASELINE_CONTENT = [
     submitter: ANVIL_ACCOUNTS.account5.address,
   },
   {
-    url: "https://picsum.photos/seed/curyo-cafe-review/1200/800.jpg",
+    url: "https://example.com/curyo-cafe-review",
     title: "Would this review help a travel agent recommend the cafe?",
     description:
       "Judge whether the evidence about noise, service, seating, and price is specific enough for a local recommendation agent.",
@@ -105,10 +100,10 @@ const BASELINE_CONTENT = [
     submitter: ANVIL_ACCOUNTS.account6.address,
   },
   {
-    url: "https://picsum.photos/seed/curyo-hotel-room/1200/800.jpg",
-    title: "Does this hotel photo look trustworthy enough to book?",
+    url: "https://example.com/curyo-hotel-room",
+    title: "Does this hotel listing look trustworthy enough to book?",
     description:
-      "Use the visible room condition and context to judge whether a booking agent should treat this listing as clean, credible, and comfortable.",
+      "Use the listing details and context to judge whether a booking agent should treat this stay as clean, credible, and comfortable.",
     tags: "Booking,Travel,Trust",
     categorySlug: "places-travel",
     bountyAmount: 3_000_000n,
@@ -135,7 +130,7 @@ const BASELINE_CONTENT = [
     submitter: ANVIL_ACCOUNTS.account9.address,
   },
   {
-    url: "https://picsum.photos/seed/curyo-event-poster/1200/800.jpg",
+    url: "https://example.com/curyo-launch-poster",
     title: "Would founders understand this launch poster at a glance?",
     description:
       "Judge whether the headline, date, and purpose are clear enough for rapid launch-page or event validation.",
@@ -145,7 +140,7 @@ const BASELINE_CONTENT = [
     submitter: ANVIL_ACCOUNTS.account10.address,
   },
   {
-    url: "https://picsum.photos/seed/curyo-weeknight-dinner/1200/800.jpg",
+    url: "https://example.com/curyo-weeknight-dinner",
     title: "Is this answer actually useful for a busy household?",
     description:
       "Treat the plan like an AI-generated recommendation and judge whether it balances prep time, nutrition, cleanup, and ingredient availability.",
@@ -155,17 +150,11 @@ const BASELINE_CONTENT = [
     submitter: ANVIL_ACCOUNTS.account2.address,
   },
   {
-    url: "https://picsum.photos/seed/curyo-media-hero-primary/1200/800.jpg",
-    imageUrls: [
-      uploadedImageUrl("curyo-media-hero-primary"),
-      uploadedImageUrl("curyo-media-hero-detail"),
-      uploadedImageUrl("curyo-media-hero-contrast"),
-      uploadedImageUrl("curyo-media-hero-mobile"),
-    ],
-    title: "Does this image set make the landing page feel credible?",
+    url: "https://example.com/curyo-landing-gallery",
+    title: "Does this landing page make the offer feel credible?",
     description:
-      "Judge whether the gallery gives a product agent enough focus, contrast, and variety to support a trustworthy launch page.",
-    tags: "Landing Page,Credibility,Images",
+      "Judge whether the landing page gives a product agent enough focus, contrast, and detail to support a trustworthy launch.",
+    tags: "Landing Page,Credibility,Design",
     categorySlug: "design",
     bountyAmount: 12_000_000n,
     submitter: ANVIL_ACCOUNTS.account3.address,
@@ -181,10 +170,10 @@ const BASELINE_CONTENT = [
     submitter: ANVIL_ACCOUNTS.account4.address,
   },
   {
-    url: "https://picsum.photos/seed/curyo-street-guide/1200/800.jpg",
-    title: "Does this street view help an agent judge the neighborhood?",
+    url: "https://example.com/curyo-neighborhood-guide",
+    title: "Does this neighborhood guide help an agent judge the area?",
     description:
-      "Use the image as local context and judge whether it makes a neighborhood guide feel welcoming, safe, and credible.",
+      "Use the local context and judge whether it makes a neighborhood guide feel welcoming, safe, and credible.",
     tags: "Neighborhood,Local Context,Trust",
     categorySlug: "places-travel",
     bountyAmount: 7_000_000n,
@@ -211,14 +200,10 @@ const BASELINE_CONTENT = [
     submitter: ANVIL_ACCOUNTS.account7.address,
   },
   {
-    url: "https://picsum.photos/seed/curyo-product-photo/1200/800.jpg",
-    imageUrls: [
-      uploadedImageUrl("curyo-product-photo"),
-      uploadedImageUrl("curyo-product-photo-detail"),
-    ],
-    title: "Does this product photo make the offer feel trustworthy?",
+    url: "https://example.com/curyo-product-offer",
+    title: "Does this product offer page feel trustworthy?",
     description:
-      "Focus on scale, detail, lighting, and whether the photo gives a shopping or research agent enough signal to compare the offer.",
+      "Focus on specifications, scale cues, evidence quality, and whether the page gives a shopping or research agent enough signal to compare the offer.",
     tags: "Products,Trust,Research",
     categorySlug: "products",
     bountyAmount: 9_000_000n,
@@ -243,7 +228,7 @@ const BASELINE_COMMITS = [
     isUp: true,
   },
   {
-    title: "Can an agent trust this workspace photo?",
+    title: "Can an agent trust this workspace listing?",
     voter: ANVIL_ACCOUNTS.account9.address,
     isUp: true,
   },
@@ -294,7 +279,7 @@ export async function ensureBaselineSeedData(): Promise<void> {
       categoryId,
       item.submitter,
       CONTRACT_ADDRESSES.ContentRegistry,
-      "imageUrls" in item ? { imageUrls: item.imageUrls } : undefined,
+      undefined,
       item.bountyAmount,
     );
     if (!submitted) {

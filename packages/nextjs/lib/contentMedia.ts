@@ -4,6 +4,7 @@ import { canonicalizeUrl, detectPlatform } from "~~/utils/platforms";
 
 export const MAX_SUBMISSION_IMAGE_URLS = 4;
 export const MAX_SUBMISSION_URL_LENGTH = 2048;
+const DIRECT_IMAGE_URL_PATH_PATTERN = /\.(?:avif|bmp|gif|jpe?g|png|svg|webp)$/i;
 
 export type ContentMediaType = "image" | "video";
 
@@ -21,6 +22,15 @@ export function isUploadedImageUrl(url: string): boolean {
 
 export function isYouTubeVideoUrl(url: string): boolean {
   return detectPlatform(url).type === "youtube";
+}
+
+export function isDirectImageUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return DIRECT_IMAGE_URL_PATH_PATTERN.test(parsed.pathname);
+  } catch {
+    return false;
+  }
 }
 
 function getContentMediaType(url: string): ContentMediaType | null {
@@ -41,6 +51,7 @@ export function normalizeSubmissionMediaUrl(value: string): string | null {
 export function normalizeSubmissionContextUrl(value: string): string | null {
   const sanitizedUrl = sanitizeExternalUrl(value);
   if (!sanitizedUrl) return null;
+  if (isDirectImageUrl(sanitizedUrl)) return null;
   return canonicalizeUrl(sanitizedUrl);
 }
 

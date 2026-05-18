@@ -42,6 +42,7 @@ import {
   MAX_SUBMISSION_URL_LENGTH,
   isUploadedImageUrl,
   isYouTubeVideoUrl,
+  isDirectImageUrl,
   normalizeSubmissionContextUrl,
   normalizeSubmissionMediaUrl,
 } from "~~/lib/contentMedia";
@@ -502,6 +503,10 @@ export function ContentSubmissionSection() {
     const urlCheck = containsBlockedUrl(sanitizedUrl);
     if (urlCheck.blocked) {
       return "This URL contains prohibited content and cannot be used";
+    }
+
+    if (isDirectImageUrl(sanitizedUrl)) {
+      return "Image links are not supported as context links. Upload the image below instead.";
     }
 
     return normalizeSubmissionContextUrl(trimmedValue) ? null : "Please enter a valid HTTPS URL";

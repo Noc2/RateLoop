@@ -50,7 +50,7 @@ const agentQuestionInputSchema = {
   properties: {
     categoryId: { description: "RateLoop category id.", type: ["integer", "string"] },
     contextUrl: {
-      description: "Optional HTTPS context URL voters should inspect. Required when imageUrls is empty.",
+      description: "Optional HTTPS page URL voters should inspect. Do not use direct image file URLs; use imageUrls for uploaded images. Required when imageUrls is empty.",
       type: "string",
     },
     description: { description: "Optional question details shown to voters.", type: "string" },

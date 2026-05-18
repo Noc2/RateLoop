@@ -40,6 +40,8 @@ const DEFAULT_ROUND_CONFIG = {
 const MAX_SUBMISSION_IMAGE_URLS = 4;
 const UPLOADED_IMAGE_URL_PATTERN =
   /^https:\/\/\S+\/api\/attachments\/images\/att_[A-Za-z0-9_-]{16,80}\.webp(?:[?#]\S*)?$/;
+const DIRECT_IMAGE_URL_PATH_PATTERN =
+  /\.(?:avif|bmp|gif|jpe?g|png|svg|webp)$/i;
 
 function isSupportedYouTubeUrl(value) {
   try {
@@ -78,6 +80,33 @@ function assertHttpsUrl(value, label) {
       throw new Error("invalid");
   } catch {
     console.error(`${label} must be a valid HTTPS URL.`);
+    process.exit(1);
+  }
+}
+
+function isDirectImageUrl(value) {
+  try {
+    return DIRECT_IMAGE_URL_PATH_PATTERN.test(new URL(value).pathname);
+  } catch {
+    return false;
+  }
+}
+
+function assertSupportedContextUrl(value, { allowEmpty = false } = {}) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    if (allowEmpty) return;
+    console.error("Context URL must be provided unless image URLs are attached.");
+    process.exit(1);
+  }
+  if (trimmed !== value) {
+    console.error("Context URL must not include leading or trailing whitespace.");
+    process.exit(1);
+  }
+
+  assertHttpsUrl(trimmed, "Context URL");
+  if (isDirectImageUrl(trimmed)) {
+    console.error("Context URL must be a public page URL, not a direct image file URL.");
     process.exit(1);
   }
 }
@@ -164,7 +193,7 @@ function parseArgs(rawArgs) {
       rpcUrl,
       registry,
       submitter,
-      contextUrl: media.videoUrl || media.imageUrls[0],
+      contextUrl: media.videoUrl ? media.videoUrl : "",
       media,
       title,
       description,
@@ -295,7 +324,7 @@ const publicClient = createPublicClient({
 const roundConfig =
   roundConfigOverride ??
   (await resolveDefaultRoundConfig(publicClient, registry));
-assertHttpsUrl(contextUrl, "Context URL");
+assertSupportedContextUrl(contextUrl, { allowEmpty: media.imageUrls.length > 0 });
 const [, submissionKey] = await publicClient.readContract({
   address: registry,
   abi: parseAbi([

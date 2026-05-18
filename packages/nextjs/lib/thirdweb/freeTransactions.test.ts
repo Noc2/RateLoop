@@ -601,6 +601,13 @@ test("validates sponsored ContentRegistry submit question media", async () => {
   assert.equal(invalidImageDecision.isAllowed, false);
   if (invalidImageDecision.isAllowed) return;
   assert.equal(invalidImageDecision.debugCode, "unsupported_operation");
+
+  const invalidContextImageDecision = await freeTransactions.evaluateFreeTransactionAllowance(
+    buildRequest([submitQuestionWithRewardCall({ contextUrl: "https://example.com/question-a.jpg" })]) as never,
+  );
+  assert.equal(invalidContextImageDecision.isAllowed, false);
+  if (invalidContextImageDecision.isAllowed) return;
+  assert.equal(invalidContextImageDecision.debugCode, "unsupported_operation");
 });
 
 test("validates sponsored ContentRegistry submit question text and tags", async () => {
