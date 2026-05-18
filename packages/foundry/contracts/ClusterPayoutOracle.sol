@@ -102,6 +102,10 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
     mapping(address => uint256) public pendingBondWithdrawals;
     mapping(bytes32 => bool) public rejectedRoundPayoutSnapshotConsumed;
     mapping(bytes32 => mapping(bytes32 => bool)) public rejectedRoundPayoutSnapshotRoots;
+    /// @notice Tracks rejected correlation-epoch clusterRoots so an identical re-proposal
+    ///         is blocked at proposeCorrelationEpoch — mirrors rejectedRoundPayoutSnapshotRoots
+    ///         for the correlation-epoch path (L-Oracle-4).
+    mapping(uint256 => mapping(bytes32 => bool)) public rejectedCorrelationEpochRoots;
 
     event OracleConfigUpdated(uint64 challengeWindow, uint256 challengeBond, address bondRecipient);
     event FrontendRegistryUpdated(address indexed frontendRegistry);
@@ -218,6 +222,8 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         if (existing.status != SnapshotStatus.None && existing.status != SnapshotStatus.Rejected) {
             revert SnapshotExists();
         }
+        // L-Oracle-4: block identical re-proposal of a previously rejected clusterRoot.
+        if (rejectedCorrelationEpochRoots[epochId][clusterRoot]) revert InvalidSnapshot();
 
         correlationEpochSnapshots[epochId] = CorrelationEpochSnapshot({
             epochId: epochId,
@@ -292,6 +298,8 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         if (snapshot.status == SnapshotStatus.None) revert SnapshotNotFound();
         if (snapshot.status == SnapshotStatus.Finalized) revert SnapshotFinalized();
         snapshot.status = SnapshotStatus.Rejected;
+        // L-Oracle-4: blacklist the rejected root so identical re-proposal reverts.
+        rejectedCorrelationEpochRoots[epochId][snapshot.clusterRoot] = true;
         address challenger = snapshot.challenger;
         uint256 bond = snapshot.bond;
         snapshot.bond = 0;
