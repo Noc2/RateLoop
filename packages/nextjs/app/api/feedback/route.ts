@@ -145,7 +145,7 @@ export async function POST(request: NextRequest) {
       return challengeFailure;
     }
 
-    const context = await resolveContentFeedbackRoundContext(payload.contentId);
+    const context = await resolveContentFeedbackRoundContext(payload.contentId, preparedPayload.chainId);
     if (
       !context.currentRoundId ||
       context.currentRoundId !== preparedPayload.roundId ||

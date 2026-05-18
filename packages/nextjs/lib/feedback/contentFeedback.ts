@@ -66,8 +66,11 @@ type DeployedContractRecord = {
 };
 type DeployedContractsMap = Record<number, Record<string, DeployedContractRecord>>;
 type FeedbackVoteEligibilityTestOverrides = {
+  getAllRounds?: typeof ponderApi.getAllRounds;
+  getContentById?: typeof ponderApi.getContentById;
   getVotes?: typeof ponderApi.getVotes;
   hasOnchainFeedbackEligibleVote?: (params: FeedbackVoteEligibilityParams) => Promise<boolean>;
+  resolveOnchainOpenRoundId?: (params: { contentId: string; chainId?: number }) => Promise<string | null>;
 };
 
 let feedbackVoteEligibilityTestOverrides: FeedbackVoteEligibilityTestOverrides | null = null;
@@ -305,13 +308,79 @@ export function buildContentFeedbackRoundContext(
   };
 }
 
-export async function resolveContentFeedbackRoundContext(contentId: string): Promise<ContentFeedbackRoundContext> {
+function getRoundState(rawRound: unknown): number | null {
+  if (Array.isArray(rawRound)) {
+    return toFiniteNumber(rawRound[1]);
+  }
+  if (rawRound && typeof rawRound === "object" && "state" in rawRound) {
+    return toFiniteNumber((rawRound as { state?: unknown }).state);
+  }
+  return null;
+}
+
+function toFiniteNumber(value: unknown): number | null {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+async function resolveOnchainOpenRoundId(contentId: string, chainId?: number): Promise<string | null> {
+  const override = feedbackVoteEligibilityTestOverrides?.resolveOnchainOpenRoundId;
+  if (override) {
+    return override({ contentId, chainId });
+  }
+
+  const context = resolveFeedbackVoteReadContext(chainId);
+  if (!context?.votingEngine) {
+    return null;
+  }
+
+  try {
+    const contentIdBigInt = BigInt(contentId);
+    const roundId = (await context.publicClient.readContract({
+      address: context.votingEngine.address,
+      abi: context.votingEngine.abi,
+      functionName: "currentRoundId",
+      args: [contentIdBigInt],
+    })) as bigint;
+
+    if (roundId <= 0n) {
+      return null;
+    }
+
+    const round = await context.publicClient.readContract({
+      address: context.votingEngine.address,
+      abi: context.votingEngine.abi,
+      functionName: "rounds",
+      args: [contentIdBigInt, roundId],
+    });
+
+    return getRoundState(round) === ROUND_STATE.Open ? roundId.toString() : null;
+  } catch (error) {
+    console.warn("[content-feedback] Unable to resolve open round on-chain.", {
+      chainId,
+      contentId,
+      error,
+    });
+    return null;
+  }
+}
+
+export async function resolveContentFeedbackRoundContext(
+  contentId: string,
+  chainId?: number,
+): Promise<ContentFeedbackRoundContext> {
   const [contentResponse, rounds] = await Promise.all([
-    ponderApi.getContentById(contentId),
-    ponderApi.getAllRounds({ contentId }),
+    (feedbackVoteEligibilityTestOverrides?.getContentById ?? ponderApi.getContentById)(contentId),
+    (feedbackVoteEligibilityTestOverrides?.getAllRounds ?? ponderApi.getAllRounds)({ contentId }),
   ]);
 
-  return buildContentFeedbackRoundContext(rounds, contentResponse.content.openRound?.roundId ?? null);
+  const context = buildContentFeedbackRoundContext(rounds, contentResponse.content.openRound?.roundId ?? null);
+  if (context.openRoundId) {
+    return context;
+  }
+
+  const onchainOpenRoundId = await resolveOnchainOpenRoundId(contentId, chainId);
+  return onchainOpenRoundId ? buildContentFeedbackRoundContext(rounds, onchainOpenRoundId) : context;
 }
 
 export function buildPreparedContentFeedbackInput(

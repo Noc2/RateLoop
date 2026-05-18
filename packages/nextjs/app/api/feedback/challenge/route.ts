@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Feedback chain is not configured" }, { status: 503 });
     }
 
-    const context = await resolveContentFeedbackRoundContext(normalized.payload.contentId);
+    const context = await resolveContentFeedbackRoundContext(normalized.payload.contentId, targetNetwork.id);
     const roundId = context.openRoundId;
     if (!roundId || context.currentRoundId !== roundId) {
       return NextResponse.json({ error: "Feedback is only open while voting is active" }, { status: 409 });
