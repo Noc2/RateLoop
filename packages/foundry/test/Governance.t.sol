@@ -5,6 +5,7 @@ import { Test } from "forge-std/Test.sol";
 import { TimelockController } from "@openzeppelin/contracts/governance/TimelockController.sol";
 import { IVotes } from "@openzeppelin/contracts/governance/utils/IVotes.sol";
 import { IGovernor } from "@openzeppelin/contracts/governance/IGovernor.sol";
+import { Strings } from "@openzeppelin/contracts/utils/Strings.sol";
 
 import { LoopReputation } from "../contracts/LoopReputation.sol";
 import { CuryoGovernor } from "../contracts/governance/CuryoGovernor.sol";
@@ -44,6 +45,12 @@ contract GovernanceTest is Test {
     uint256 public constant TOTAL_MINTED = FAUCET_BALANCE + PARTICIPATION_BALANCE + REWARD_BALANCE + ENGINE_BALANCE
         + TREASURY_BALANCE + CONTENT_REGISTRY_BALANCE + FRONTEND_REGISTRY_BALANCE + QUESTION_REWARD_ESCROW_BALANCE
         + 6_000_000 * 1e6;
+
+    /// @dev Binds a description to a proposer using the suffix enforced by
+    ///      CuryoGovernor._isValidDescriptionForProposer (audit N-2: cancel-DoS fix).
+    function _boundDescription(string memory description, address proposer) internal pure returns (string memory) {
+        return string.concat(description, "#proposer=", Strings.toHexString(uint160(proposer), 20));
+    }
 
     function setUp() public {
         vm.startPrank(deployer);
@@ -105,7 +112,7 @@ contract GovernanceTest is Test {
         bytes[] memory calldatas = new bytes[](1);
 
         vm.prank(voter1);
-        uint256 proposalId = governor.propose(targets, values, calldatas, "Test");
+        uint256 proposalId = governor.propose(targets, values, calldatas, _boundDescription("Test", voter1));
 
         // Move past voting delay
         vm.roll(block.number + governor.votingDelay() + 1);
@@ -134,7 +141,7 @@ contract GovernanceTest is Test {
         bytes[] memory calldatas = new bytes[](1);
 
         vm.prank(voter1);
-        uint256 proposalId = governor.propose(targets, values, calldatas, "Test");
+        uint256 proposalId = governor.propose(targets, values, calldatas, _boundDescription("Test", voter1));
 
         vm.roll(block.number + governor.votingDelay() + 1);
 
@@ -160,7 +167,7 @@ contract GovernanceTest is Test {
 
         vm.prank(voter1);
         vm.expectRevert("Insufficient balance for governance lock");
-        governor.propose(targets, values, calldatas, "Transferred away threshold");
+        governor.propose(targets, values, calldatas, _boundDescription("Transferred away threshold", voter1));
     }
 
     function test_GovernanceLocking_VoteRejectsPostSnapshotTransfer() public {
@@ -172,7 +179,7 @@ contract GovernanceTest is Test {
         bytes[] memory calldatas = new bytes[](1);
 
         vm.prank(voter1);
-        uint256 proposalId = governor.propose(targets, values, calldatas, "Test");
+        uint256 proposalId = governor.propose(targets, values, calldatas, _boundDescription("Test", voter1));
 
         vm.roll(block.number + governor.votingDelay() + 1);
 
@@ -195,7 +202,7 @@ contract GovernanceTest is Test {
         bytes[] memory calldatas = new bytes[](1);
 
         vm.prank(voter1);
-        uint256 proposalId = governor.propose(targets, values, calldatas, "Test");
+        uint256 proposalId = governor.propose(targets, values, calldatas, _boundDescription("Test", voter1));
 
         vm.roll(block.number + governor.votingDelay() + 1);
 
@@ -439,7 +446,7 @@ contract GovernanceTest is Test {
         bytes[] memory calldatas = new bytes[](1);
         calldatas[0] = abi.encodeCall(CuryoGovernor.initializePools, (holders));
 
-        string memory description = "Recover bootstrap";
+        string memory description = _boundDescription("Recover bootstrap", voter1);
         vm.prank(voter1);
         uint256 proposalId = freshGovernor.propose(targets, values, calldatas, description);
 
@@ -487,7 +494,7 @@ contract GovernanceTest is Test {
 
         vm.prank(mockTreasury);
         vm.expectRevert(abi.encodeWithSelector(CuryoGovernor.ExcludedHolderCannotGovern.selector, mockTreasury));
-        governor.propose(targets, values, calldatas, "Excluded treasury proposal");
+        governor.propose(targets, values, calldatas, _boundDescription("Excluded treasury proposal", mockTreasury));
     }
 
     function test_GovernorExcludedHolderCannotVote() public {
@@ -500,7 +507,7 @@ contract GovernanceTest is Test {
         bytes[] memory calldatas = new bytes[](1);
 
         vm.prank(voter1);
-        uint256 proposalId = governor.propose(targets, values, calldatas, "User proposal");
+        uint256 proposalId = governor.propose(targets, values, calldatas, _boundDescription("User proposal", voter1));
 
         vm.roll(block.number + governor.votingDelay() + 1);
 
@@ -685,7 +692,7 @@ contract GovernanceTest is Test {
         bytes[] memory calldatas = new bytes[](1);
 
         vm.prank(voter1);
-        uint256 proposalId = freshGovernor.propose(targets, values, calldatas, "Test");
+        uint256 proposalId = freshGovernor.propose(targets, values, calldatas, _boundDescription("Test", voter1));
         assertTrue(proposalId != 0);
     }
 
@@ -716,6 +723,9 @@ contract GovernanceTest is Test {
 
         bytes[] memory calldatas = new bytes[](1);
         calldatas[0] = callData;
+
+        // Bind description to the voter1 proposer per CuryoGovernor's N-2 cancel-DoS fix.
+        description = _boundDescription(description, voter1);
 
         vm.prank(voter1);
         uint256 proposalId = governor.propose(targets, values, calldatas, description);
@@ -755,7 +765,7 @@ contract GovernanceTest is Test {
         bytes[] memory calldatas = new bytes[](1);
         calldatas[0] = ""; // No-op
 
-        string memory description = "Test Proposal #1";
+        string memory description = _boundDescription("Test Proposal #1", voter1);
 
         vm.prank(voter1);
         uint256 proposalId = governor.propose(targets, values, calldatas, description);
@@ -778,17 +788,17 @@ contract GovernanceTest is Test {
         calldatas[0] = "";
 
         vm.prank(voter1);
-        governor.propose(targets, values, calldatas, "Cooldown proposal #1");
+        governor.propose(targets, values, calldatas, _boundDescription("Cooldown proposal #1", voter1));
 
         uint256 nextBlock = governor.nextProposalBlock(voter1);
         vm.prank(voter1);
         vm.expectRevert(abi.encodeWithSelector(CuryoGovernor.ProposalCooldownActive.selector, voter1, nextBlock));
-        governor.propose(targets, values, calldatas, "Cooldown proposal #2");
+        governor.propose(targets, values, calldatas, _boundDescription("Cooldown proposal #2", voter1));
 
         vm.roll(nextBlock);
 
         vm.prank(voter1);
-        uint256 proposalId = governor.propose(targets, values, calldatas, "Cooldown proposal #2");
+        uint256 proposalId = governor.propose(targets, values, calldatas, _boundDescription("Cooldown proposal #2", voter1));
 
         assertTrue(proposalId != 0);
     }
@@ -804,7 +814,7 @@ contract GovernanceTest is Test {
         values[0] = 0;
         bytes[] memory calldatas = new bytes[](1);
         calldatas[0] = "";
-        string memory description = "Test Proposal #1";
+        string memory description = _boundDescription("Test Proposal #1", voter1);
 
         vm.prank(voter1);
         uint256 proposalId = governor.propose(targets, values, calldatas, description);
@@ -916,7 +926,7 @@ contract GovernanceTest is Test {
         bytes[] memory calldatas = new bytes[](1);
         // No-op for this test (in real scenario, would be a protocol config change)
         calldatas[0] = abi.encodeWithSignature("getMinDelay()");
-        string memory description = "Governance Test: Read timelock delay";
+        string memory description = _boundDescription("Governance Test: Read timelock delay", voter1);
 
         // 1. Create proposal
         vm.prank(voter1);

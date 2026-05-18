@@ -5,6 +5,7 @@ import { Test } from "forge-std/Test.sol";
 import { TimelockController } from "@openzeppelin/contracts/governance/TimelockController.sol";
 import { IVotes } from "@openzeppelin/contracts/governance/utils/IVotes.sol";
 import { IGovernor } from "@openzeppelin/contracts/governance/IGovernor.sol";
+import { Strings } from "@openzeppelin/contracts/utils/Strings.sol";
 import { LoopReputation } from "../contracts/LoopReputation.sol";
 import { CuryoGovernor } from "../contracts/governance/CuryoGovernor.sol";
 
@@ -64,13 +65,19 @@ contract FormalVerification_GovernanceTest is Test {
         token.transfer(to, amount);
     }
 
+    /// @dev Binds a description to a proposer using the suffix enforced by
+    ///      CuryoGovernor._isValidDescriptionForProposer (audit N-2: cancel-DoS fix).
+    function _boundDescription(string memory description, address proposer) internal pure returns (string memory) {
+        return string.concat(description, "#proposer=", Strings.toHexString(uint160(proposer), 20));
+    }
+
     function _propose(address proposer, string memory desc) internal returns (uint256) {
         address[] memory targets = new address[](1);
         targets[0] = address(timelock);
         uint256[] memory values = new uint256[](1);
         bytes[] memory calldatas = new bytes[](1);
         vm.prank(proposer);
-        return governor.propose(targets, values, calldatas, desc);
+        return governor.propose(targets, values, calldatas, _boundDescription(desc, proposer));
     }
 
     // ==================== Test 1: Bootstrap Quorum Floor Dominates Early ====================
@@ -262,8 +269,9 @@ contract FormalVerification_GovernanceTest is Test {
         uint256[] memory values = new uint256[](1);
         bytes[] memory calldatas = new bytes[](1);
 
+        string memory description = _boundDescription("Timelock test", voter);
         vm.prank(voter);
-        uint256 pid = governor.propose(targets, values, calldatas, "Timelock test");
+        uint256 pid = governor.propose(targets, values, calldatas, description);
 
         vm.roll(block.number + governor.votingDelay() + 1);
 
@@ -274,7 +282,7 @@ contract FormalVerification_GovernanceTest is Test {
         assertEq(uint256(governor.state(pid)), uint256(IGovernor.ProposalState.Succeeded));
 
         // Queue the proposal
-        bytes32 descHash = keccak256(bytes("Timelock test"));
+        bytes32 descHash = keccak256(bytes(description));
         governor.queue(targets, values, calldatas, descHash);
         assertEq(uint256(governor.state(pid)), uint256(IGovernor.ProposalState.Queued));
 
