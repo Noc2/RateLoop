@@ -325,6 +325,9 @@ contract DeployRateLoop is ScaffoldETHDeploy {
             clusterPayoutOracle.grantRole(clusterPayoutOracle.DEFAULT_ADMIN_ROLE(), governance);
             clusterPayoutOracle.grantRole(clusterPayoutOracle.CONFIG_ROLE(), governance);
             clusterPayoutOracle.grantRole(clusterPayoutOracle.ARBITER_ROLE(), governance);
+            clusterPayoutOracle.setOracleConfig(
+                clusterPayoutOracle.challengeWindow(), clusterPayoutOracle.challengeBond(), governance
+            );
             clusterPayoutOracle.renounceRole(clusterPayoutOracle.ARBITER_ROLE(), deployer);
             clusterPayoutOracle.renounceRole(clusterPayoutOracle.CONFIG_ROLE(), deployer);
             clusterPayoutOracle.renounceRole(clusterPayoutOracle.DEFAULT_ADMIN_ROLE(), deployer);
