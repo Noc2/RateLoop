@@ -80,11 +80,22 @@ export async function resolveRoundVoteRuntime(params: {
       }),
     ]);
     const parsedRound = parseRound(round);
+    const parsedConfig = parseVotingConfig(roundConfig);
 
     if (parsedRound?.state === 0 && parsedRound.startTime > 0n) {
+      const revealQuorum = Math.max(parsedConfig.minVoters, 3);
+      const isClosed =
+        parsedRound.thresholdReachedAt > 0n ||
+        Number(parsedRound.revealedCount) >= revealQuorum ||
+        parsedRound.voteCount >= BigInt(parsedConfig.maxVoters) ||
+        runtimeTimestampSeconds >= Number(parsedRound.startTime) + parsedConfig.maxDuration;
+      if (isClosed) {
+        throw new Error("RoundNotOpen");
+      }
+
       baseTotalStake = parsedRound.totalStake;
       baseVoteCount = parsedRound.voteCount;
-      epochDuration = parseVotingConfig(roundConfig).epochDuration;
+      epochDuration = parsedConfig.epochDuration;
       roundStartTimeSeconds = Number(parsedRound.startTime);
     }
   }

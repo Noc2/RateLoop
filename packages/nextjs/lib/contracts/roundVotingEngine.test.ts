@@ -1,9 +1,11 @@
 import { RoundData } from "../../types/votingTypes";
 import {
+  COMMIT_AVAILABILITY_STATUS,
   DEFAULT_VOTING_CONFIG,
   buildStakeAmountWei,
   deriveRoundSnapshot,
   deriveVoteDeadlines,
+  getRoundVoteUnavailableMessage,
   isOptimisticRoundDeltaReflected,
   isRoundAcceptingVotes,
   mergeRoundDataWithFallback,
@@ -251,6 +253,38 @@ test("isRoundAcceptingVotes rejects expired and threshold-reached open rounds", 
   assert.equal(isRoundAcceptingVotes(openSnapshot), true);
   assert.equal(isRoundAcceptingVotes(expiredSnapshot), false);
   assert.equal(isRoundAcceptingVotes(thresholdReachedSnapshot), false);
+});
+
+test("isRoundAcceptingVotes follows contract availability when an expired round can roll over", () => {
+  const snapshot = deriveRoundSnapshot({
+    roundId: 2n,
+    config: DEFAULT_VOTING_CONFIG,
+    previewRoundId: 2n,
+    previewStartsNewRound: true,
+    now: 1_500,
+  });
+
+  assert.equal(snapshot.willStartNewRound, true);
+  assert.equal(isRoundAcceptingVotes(snapshot), true);
+});
+
+test("getRoundVoteUnavailableMessage explains keeper-gated states", () => {
+  const snapshot = deriveRoundSnapshot({
+    roundId: 1n,
+    round: makeRound(),
+    config: DEFAULT_VOTING_CONFIG,
+    commitAvailability: {
+      canCommit: false,
+      status: COMMIT_AVAILABILITY_STATUS.WaitingForRevealGrace,
+      roundId: 1n,
+      referenceRatingBps: 5_000,
+      willStartNewRound: false,
+    },
+    now: 1_500,
+  });
+
+  assert.match(getRoundVoteUnavailableMessage(snapshot) ?? "", /waiting for reveal grace/u);
+  assert.equal(isRoundAcceptingVotes(snapshot), false);
 });
 
 test("vote helpers normalize stake and frontend codes", () => {

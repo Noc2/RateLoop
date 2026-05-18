@@ -160,6 +160,7 @@ export async function attachOpenRoundSummary<T extends { id: bigint }>(items: T[
     .select({
       contentId: round.contentId,
       roundId: round.roundId,
+      state: round.state,
       voteCount: round.voteCount,
       revealedCount: round.revealedCount,
       totalStake: round.totalStake,
@@ -179,6 +180,9 @@ export async function attachOpenRoundSummary<T extends { id: bigint }>(items: T[
       maxDuration: round.maxDuration,
       minVoters: round.minVoters,
       maxVoters: round.maxVoters,
+      hasHumanVerifiedCommit: round.hasHumanVerifiedCommit,
+      lastCommitRevealableAfter: round.lastCommitRevealableAfter,
+      revealGracePeriod: round.revealGracePeriod,
     })
     .from(round)
     .where(and(inArray(round.contentId, contentIds), eq(round.state, ROUND_STATE.Open)))
@@ -206,6 +210,7 @@ export async function attachOpenRoundSummary<T extends { id: bigint }>(items: T[
       openRound: openRound
         ? {
             roundId: openRound.roundId,
+            state: openRound.state,
             voteCount: openRound.voteCount,
             revealedCount: openRound.revealedCount,
             totalStake: openRound.totalStake,
@@ -225,6 +230,9 @@ export async function attachOpenRoundSummary<T extends { id: bigint }>(items: T[
             maxDuration: openRound.maxDuration,
             minVoters: openRound.minVoters,
             maxVoters: openRound.maxVoters,
+            hasHumanVerifiedCommit: openRound.hasHumanVerifiedCommit,
+            lastCommitRevealableAfter: openRound.lastCommitRevealableAfter,
+            revealGracePeriod: openRound.revealGracePeriod,
             estimatedSettlementTime: getEstimatedSettlementTime(openRound.startTime, openRound.epochDuration),
           }
         : null,

@@ -14,6 +14,7 @@ export interface VotingConfig {
 
 export interface OpenRoundFallbackData {
   roundId: bigint;
+  state?: number;
   voteCount: number;
   revealedCount: number;
   totalStake: bigint;
@@ -21,6 +22,10 @@ export interface OpenRoundFallbackData {
   downPool: bigint;
   upCount?: number;
   downCount?: number;
+  thresholdReachedAt?: bigint;
+  hasHumanVerifiedCommit?: boolean;
+  lastCommitRevealableAfter?: bigint | null;
+  revealGracePeriod?: bigint | null;
   startTime: bigint | null;
   epochDuration?: number;
   maxDuration?: number;
@@ -34,6 +39,25 @@ export interface OptimisticRoundDelta {
   roundId?: bigint;
   baseVoteCount?: bigint;
   baseTotalStake?: bigint;
+}
+
+export const COMMIT_AVAILABILITY_STATUS = {
+  Open: 0,
+  StartsNextRound: 1,
+  RoundFull: 2,
+  WaitingForSettlement: 3,
+  WaitingForRevealGrace: 4,
+  ContentInactive: 5,
+} as const;
+
+export type CommitAvailabilityStatus = (typeof COMMIT_AVAILABILITY_STATUS)[keyof typeof COMMIT_AVAILABILITY_STATUS];
+
+export interface CommitAvailability {
+  canCommit: boolean;
+  status: CommitAvailabilityStatus;
+  roundId: bigint;
+  referenceRatingBps: number;
+  willStartNewRound: boolean;
 }
 
 interface RoundTiming {
@@ -96,6 +120,8 @@ export interface RoundSnapshot {
     upWins: boolean;
     thresholdReachedAt: number;
   };
+  commitAvailability?: CommitAvailability;
+  willStartNewRound: boolean;
 }
 
 export const DEFAULT_VOTING_CONFIG: VotingConfig = {
@@ -243,7 +269,7 @@ export function mergeRoundDataWithFallback(params: {
     roundId: resolvedRoundId,
     round: {
       startTime: preferPositiveBigInt(round?.startTime, fallback.startTime),
-      state: round?.state ?? ROUND_STATE.Open,
+      state: round?.state ?? fallback.state ?? ROUND_STATE.Open,
       voteCount: maxBigInt(round?.voteCount ?? 0n, fallbackVoteCount),
       revealedCount: maxBigInt(round?.revealedCount ?? 0n, fallbackRevealedCount),
       totalStake: maxBigInt(round?.totalStake ?? 0n, fallback.totalStake),
@@ -253,7 +279,7 @@ export function mergeRoundDataWithFallback(params: {
       downCount: maxBigInt(round?.downCount ?? 0n, fallbackDownCount),
       upWins: round?.upWins ?? false,
       settledAt: round?.settledAt ?? 0n,
-      thresholdReachedAt: round?.thresholdReachedAt ?? 0n,
+      thresholdReachedAt: round?.thresholdReachedAt ?? fallback.thresholdReachedAt ?? 0n,
       weightedUpPool: round?.weightedUpPool ?? 0n,
       weightedDownPool: round?.weightedDownPool ?? 0n,
     },
@@ -331,6 +357,9 @@ export function deriveRoundSnapshot(params: {
   round?: RoundData;
   config: VotingConfig;
   optimisticDelta?: OptimisticRoundDelta;
+  commitAvailability?: CommitAvailability;
+  previewRoundId?: bigint;
+  previewStartsNewRound?: boolean;
   now: number;
 }): RoundSnapshot {
   const round = params.round;
@@ -352,6 +381,46 @@ export function deriveRoundSnapshot(params: {
     epochDuration: params.config.epochDuration,
     maxDuration: params.config.maxDuration,
   });
+  const previewRoundId = params.previewRoundId ?? 0n;
+  const commitAvailability =
+    params.commitAvailability ??
+    (params.previewStartsNewRound && previewRoundId > 0n
+      ? {
+          canCommit: true,
+          status: COMMIT_AVAILABILITY_STATUS.StartsNextRound,
+          roundId: previewRoundId,
+          referenceRatingBps: 0,
+          willStartNewRound: true,
+        }
+      : hasRound
+        ? {
+            canCommit:
+              state === ROUND_STATE.Open &&
+              timing.roundTimeRemaining > 0 &&
+              thresholdReachedAt === 0 &&
+              revealedCount < settlementQuorum &&
+              voteCount < params.config.maxVoters,
+            status:
+              thresholdReachedAt !== 0 || revealedCount >= settlementQuorum
+                ? COMMIT_AVAILABILITY_STATUS.WaitingForSettlement
+                : voteCount >= params.config.maxVoters
+                  ? COMMIT_AVAILABILITY_STATUS.RoundFull
+                  : state === ROUND_STATE.Open && timing.roundTimeRemaining <= 0
+                    ? COMMIT_AVAILABILITY_STATUS.WaitingForRevealGrace
+                    : COMMIT_AVAILABILITY_STATUS.Open,
+            roundId: params.roundId,
+            referenceRatingBps: 0,
+            willStartNewRound: false,
+          }
+        : params.roundId > 0n
+          ? {
+              canCommit: false,
+              status: COMMIT_AVAILABILITY_STATUS.WaitingForSettlement,
+              roundId: params.roundId,
+              referenceRatingBps: 0,
+              willStartNewRound: false,
+            }
+          : undefined);
 
   return {
     roundId: params.roundId,
@@ -400,17 +469,45 @@ export function deriveRoundSnapshot(params: {
       upWins: round?.upWins ?? false,
       thresholdReachedAt,
     },
+    commitAvailability,
+    willStartNewRound: Boolean(commitAvailability?.canCommit && commitAvailability.willStartNewRound),
   };
 }
 
 export function isRoundAcceptingVotes(
-  snapshot: Pick<RoundSnapshot, "hasRound" | "phase" | "roundTimeRemaining" | "thresholdReachedAt">,
+  snapshot: Pick<RoundSnapshot, "hasRound" | "phase" | "roundTimeRemaining" | "thresholdReachedAt"> & {
+    commitAvailability?: Pick<CommitAvailability, "canCommit">;
+  },
 ) {
+  if (snapshot.commitAvailability) {
+    return snapshot.commitAvailability.canCommit;
+  }
+
   if (!snapshot.hasRound) {
     return true;
   }
 
   return snapshot.phase === "voting" && snapshot.roundTimeRemaining > 0 && snapshot.thresholdReachedAt === 0;
+}
+
+export function getRoundVoteUnavailableMessage(
+  snapshot: Pick<
+    RoundSnapshot,
+    "commitAvailability" | "hasRound" | "phase" | "roundTimeRemaining" | "thresholdReachedAt"
+  >,
+) {
+  switch (snapshot.commitAvailability?.status) {
+    case COMMIT_AVAILABILITY_STATUS.RoundFull:
+      return "This round has reached the maximum number of voters. A new round will start after resolution.";
+    case COMMIT_AVAILABILITY_STATUS.WaitingForSettlement:
+      return "This round is waiting to be settled. Voting resumes after it is settled, cancelled, or finalized.";
+    case COMMIT_AVAILABILITY_STATUS.WaitingForRevealGrace:
+      return "This round has expired and is waiting for reveal grace or finalization. Voting resumes after resolution.";
+    case COMMIT_AVAILABILITY_STATUS.ContentInactive:
+      return "This content is no longer active for voting.";
+    default:
+      return isRoundAcceptingVotes(snapshot) ? null : "This round is not accepting votes right now.";
+  }
 }
 
 export function isOptimisticRoundDeltaReflected(params: {

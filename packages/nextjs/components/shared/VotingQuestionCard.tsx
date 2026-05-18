@@ -13,7 +13,12 @@ import type { ContentOpenRoundSummary, RewardPoolCurrency } from "~~/hooks/conte
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 import { useParticipationRate } from "~~/hooks/useParticipationRate";
 import { useRoundSnapshot } from "~~/hooks/useRoundSnapshot";
-import { type VotingConfig, isRoundAcceptingVotes } from "~~/lib/contracts/roundVotingEngine";
+import {
+  COMMIT_AVAILABILITY_STATUS,
+  type VotingConfig,
+  getRoundVoteUnavailableMessage,
+  isRoundAcceptingVotes,
+} from "~~/lib/contracts/roundVotingEngine";
 import { formatSubmissionRewardAmount, formatUsdAmount } from "~~/lib/questionRewardPools";
 import { formatVoteCooldownRemaining } from "~~/lib/vote/cooldown";
 import { describeOpenRoundActivity, formatLrepAmount, getRoundProgressMessaging } from "~~/lib/vote/voteIncentives";
@@ -416,8 +421,8 @@ export function VotingQuestionCard({
   const roundAcceptsVotes = isRoundAcceptingVotes(roundSnapshot);
   const cooldownActive = cooldownSecondsRemaining > 0;
   const cooldownLabel = formatVoteCooldownRemaining(cooldownSecondsRemaining);
-  const roundNotAcceptingMessage =
-    !roundAcceptsVotes && !isCommitting ? "This round is not accepting votes right now." : null;
+  const roundUnavailableMessage = getRoundVoteUnavailableMessage(roundSnapshot);
+  const roundNotAcceptingMessage = !roundAcceptsVotes && !isCommitting ? roundUnavailableMessage : null;
   const displayError = resolveVotingQuestionCardDisplayError({
     cooldownActive,
     error,
@@ -444,6 +449,14 @@ export function VotingQuestionCard({
     myCommitHash != null &&
     (myCommitHash as unknown as string) !== "0x0000000000000000000000000000000000000000000000000000000000000000";
   const usesDockStatusText = isDockVariant;
+  const commitAvailabilityStatus = roundSnapshot.commitAvailability?.status;
+  const isRoundFullStatus = isRoundFull || commitAvailabilityStatus === COMMIT_AVAILABILITY_STATUS.RoundFull;
+  const resolvingStatusLabel =
+    commitAvailabilityStatus === COMMIT_AVAILABILITY_STATUS.WaitingForSettlement
+      ? "Settling"
+      : commitAvailabilityStatus === COMMIT_AVAILABILITY_STATUS.WaitingForRevealGrace
+        ? "Resolving"
+        : null;
 
   const centerStatusContent = contentInactive ? (
     <HoverTooltip text="This content is no longer active for voting." position="bottom">
@@ -506,9 +519,9 @@ export function VotingQuestionCard({
           </span>
         )}
       </HoverTooltip>
-    ) : isRoundFull ? (
+    ) : isRoundFullStatus ? (
       <HoverTooltip
-        text="This round has reached the maximum number of voters. A new round will start after resolution."
+        text={roundUnavailableMessage ?? "This round has reached the maximum number of voters."}
         position="bottom"
       >
         {usesDockStatusText ? (
@@ -518,6 +531,18 @@ export function VotingQuestionCard({
         ) : (
           <span className={STATUS_PILL_CLASS_NAME}>
             <span className="text-base text-base-content/65">Round full</span>
+          </span>
+        )}
+      </HoverTooltip>
+    ) : resolvingStatusLabel ? (
+      <HoverTooltip text={roundUnavailableMessage ?? "This round is waiting for resolution."} position="bottom">
+        {usesDockStatusText ? (
+          <span className={`${DOCK_STATUS_TEXT_CLASS_NAME} text-[0.95rem] leading-tight text-base-content/68`}>
+            {resolvingStatusLabel}
+          </span>
+        ) : (
+          <span className={STATUS_PILL_CLASS_NAME}>
+            <span className="text-base text-base-content/65">{resolvingStatusLabel}</span>
           </span>
         )}
       </HoverTooltip>
