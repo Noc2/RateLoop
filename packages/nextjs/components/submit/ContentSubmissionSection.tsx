@@ -40,9 +40,9 @@ import { MAX_CONTENT_DESCRIPTION_LENGTH } from "~~/lib/contentDescription";
 import {
   MAX_SUBMISSION_IMAGE_URLS,
   MAX_SUBMISSION_URL_LENGTH,
+  isDirectImageUrl,
   isUploadedImageUrl,
   isYouTubeVideoUrl,
-  isDirectImageUrl,
   normalizeSubmissionContextUrl,
   normalizeSubmissionMediaUrl,
 } from "~~/lib/contentMedia";

@@ -7,12 +7,12 @@ import {
 } from "~~/lib/agent/questionSpecs";
 import { findAgentResultTemplate } from "~~/lib/agent/templates";
 import { normalizeUploadedImageAttachmentUrl } from "~~/lib/attachments/imageAttachmentUrls";
+import { normalizeSubmissionContextUrl } from "~~/lib/contentMedia";
 import {
   getContentDescriptionValidationError,
   getContentTitleValidationError,
 } from "~~/lib/moderation/submissionValidation";
 import { findBlockedContentTags } from "~~/lib/moderation/submissionValidation";
-import { normalizeSubmissionContextUrl } from "~~/lib/contentMedia";
 import {
   DEFAULT_QUESTION_ROUND_CONFIG,
   type QuestionRoundConfig,
