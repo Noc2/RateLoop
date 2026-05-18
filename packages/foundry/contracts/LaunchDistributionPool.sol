@@ -101,6 +101,7 @@ contract LaunchDistributionPool is
     mapping(uint256 => mapping(uint256 => uint16)) public roundUnverifiedLaunchCreditCount;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => PendingEarnedRaterCredit))) public
         pendingEarnedRaterCredits;
+    mapping(uint256 => mapping(uint256 => mapping(bytes32 => bytes32[]))) internal pendingEarnedRaterCreditAnchorIds;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) public earnedRewardCreditFinalized;
     mapping(uint256 => mapping(uint256 => bool)) public earnedRaterRoundPayoutSnapshotConsumed;
     LaunchRewardPolicy public launchRewardPolicy;
@@ -229,6 +230,7 @@ contract LaunchDistributionPool is
         if (earnedRewardCreditFinalized[contentId][roundId][commitKey]) revert AlreadyClaimed();
         if (pending.oracle == address(clusterPayoutOracle)) revert InvalidAddress();
         delete pendingEarnedRaterCredits[contentId][roundId][commitKey];
+        delete pendingEarnedRaterCreditAnchorIds[contentId][roundId][commitKey];
         earnedRewardCreditRecorded[contentId][roundId][commitKey] = false;
         raterRoundCreditRecorded[pending.rater][contentId][roundId] = false;
         emit StalePendingEarnedRaterCreditRescued(pending.rater, contentId, roundId, commitKey, pending.oracle);
@@ -386,14 +388,13 @@ contract LaunchDistributionPool is
         if (!raterVerified) {
             roundUnverifiedLaunchCreditCount[contentId][roundId] += 1;
         }
-        _recordAnchorRound(rater, contentId, roundId);
-        _recordVerifiedAnchors(policy, rater, verifiedAnchorIds);
-
         if (clusterProofRequired) {
-            _storePendingEarnedRaterCredit(rater, contentId, roundId, commitKey, scoreBps, policy);
+            _storePendingEarnedRaterCredit(rater, contentId, roundId, commitKey, scoreBps, policy, verifiedAnchorIds);
             return 0;
         }
 
+        _recordAnchorRound(rater, contentId, roundId);
+        _recordVerifiedAnchors(policy, rater, verifiedAnchorIds);
         return _recordEarnedRaterReward(rater, contentId, roundId, commitKey, scoreBps, policy, BPS_DENOMINATOR);
     }
 
@@ -432,14 +433,15 @@ contract LaunchDistributionPool is
         if (!raterVerified) {
             roundUnverifiedLaunchCreditCount[contentId][roundId] += 1;
         }
-        _recordAnchorRound(rater, contentId, roundId);
-        _recordVerifiedAnchors(policy, rater, verifiedAnchorIds);
-
         if (clusterProofRequired) {
-            _storePendingEarnedRaterCredit(rater, contentId, roundId, advisoryCommitKey, scoreBps, policy);
+            _storePendingEarnedRaterCredit(
+                rater, contentId, roundId, advisoryCommitKey, scoreBps, policy, verifiedAnchorIds
+            );
             return (true, 0);
         }
 
+        _recordAnchorRound(rater, contentId, roundId);
+        _recordVerifiedAnchors(policy, rater, verifiedAnchorIds);
         paidAmount =
             _recordEarnedRaterReward(rater, contentId, roundId, advisoryCommitKey, scoreBps, policy, BPS_DENOMINATOR);
         return (true, paidAmount);
@@ -472,11 +474,16 @@ contract LaunchDistributionPool is
         // A rater who was unverified at record (and thus consumed a cap slot) keeps that slot
         // regardless of verification flips between record and finalize.
         earnedRewardCreditFinalized[contentId][roundId][commitKey] = true;
+        _recordAnchorRound(pending.rater, contentId, roundId);
+        _recordPendingVerifiedAnchors(
+            pending.policy, pending.rater, pendingEarnedRaterCreditAnchorIds[contentId][roundId][commitKey]
+        );
         // M-Funds-3: reclaim the pending entry now that it has been finalized. The slot
         // (oracle, rater, scoreBps, policy) was a one-shot ticket; leaving it in storage
         // strands gas and makes governance rotation of `clusterPayoutOracle` ambiguous about
         // whether the entry should re-verify against the new oracle.
         delete pendingEarnedRaterCredits[contentId][roundId][commitKey];
+        delete pendingEarnedRaterCreditAnchorIds[contentId][roundId][commitKey];
         uint256 effectiveCreditBps = payoutWeight.effectiveWeight;
         paidAmount = _recordEarnedRaterReward(
             pending.rater, contentId, roundId, commitKey, pending.scoreBps, pending.policy, effectiveCreditBps
@@ -596,13 +603,23 @@ contract LaunchDistributionPool is
         uint256 roundId,
         bytes32 commitKey,
         uint16 scoreBps,
-        LaunchRewardPolicy memory policy
+        LaunchRewardPolicy memory policy,
+        bytes32[] calldata verifiedAnchorIds
     ) internal {
         address oracle = address(clusterPayoutOracle);
         if (oracle == address(0)) revert SnapshotNotFinalized();
         pendingEarnedRaterCredits[contentId][roundId][commitKey] = PendingEarnedRaterCredit({
             rater: rater, oracle: oracle, scoreBps: scoreBps, policy: policy, pending: true
         });
+
+        delete pendingEarnedRaterCreditAnchorIds[contentId][roundId][commitKey];
+        bytes32[] storage pendingAnchors = pendingEarnedRaterCreditAnchorIds[contentId][roundId][commitKey];
+        uint256 anchorCount = verifiedAnchorIds.length;
+        for (uint256 i = 0; i < anchorCount; i++) {
+            bytes32 anchorId = verifiedAnchorIds[i];
+            if (anchorId == bytes32(0) || _isDuplicateAnchor(verifiedAnchorIds, i)) continue;
+            pendingAnchors.push(anchorId);
+        }
         emit EarnedRaterRewardCreditPending(rater, contentId, roundId, commitKey, scoreBps);
     }
 
@@ -815,6 +832,27 @@ contract LaunchDistributionPool is
         }
     }
 
+    function _recordPendingVerifiedAnchors(
+        LaunchRewardPolicy memory policy,
+        address rater,
+        bytes32[] storage verifiedAnchorIds
+    ) internal {
+        uint256 anchorCount = verifiedAnchorIds.length;
+        for (uint256 i = 0; i < anchorCount; i++) {
+            bytes32 anchorId = verifiedAnchorIds[i];
+            if (anchorId == bytes32(0) || _isDuplicatePendingAnchor(verifiedAnchorIds, i)) continue;
+            if (raterVerifiedAnchorSeen[rater][anchorId]) continue;
+            if (verifiedAnchorDistinctRaterCount[anchorId] >= policy.maxDistinctRatersPerVerifiedAnchor) continue;
+
+            raterVerifiedAnchorSeen[rater][anchorId] = true;
+            if (!verifiedAnchorRaterSeen[anchorId][rater]) {
+                verifiedAnchorRaterSeen[anchorId][rater] = true;
+                verifiedAnchorDistinctRaterCount[anchorId] += 1;
+            }
+            raterDistinctVerifiedAnchorCount[rater] += 1;
+        }
+    }
+
     function _countDistinctAvailableAnchors(
         LaunchRewardPolicy memory policy,
         address rater,
@@ -850,6 +888,18 @@ contract LaunchDistributionPool is
     }
 
     function _isDuplicateAnchor(bytes32[] calldata verifiedAnchorIds, uint256 index) internal pure returns (bool) {
+        bytes32 anchorId = verifiedAnchorIds[index];
+        for (uint256 i = 0; i < index; i++) {
+            if (verifiedAnchorIds[i] == anchorId) return true;
+        }
+        return false;
+    }
+
+    function _isDuplicatePendingAnchor(bytes32[] storage verifiedAnchorIds, uint256 index)
+        internal
+        view
+        returns (bool)
+    {
         bytes32 anchorId = verifiedAnchorIds[index];
         for (uint256 i = 0; i < index; i++) {
             if (verifiedAnchorIds[i] == anchorId) return true;

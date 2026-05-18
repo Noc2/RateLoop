@@ -251,6 +251,9 @@ contract LaunchDistributionPoolTest is Test {
         assertEq(paidBeforeSnapshot, 0);
         assertEq(pool.qualifyingCreditBps(alice), 0);
         assertEq(pool.qualifyingRatingCount(alice), 0);
+        assertEq(pool.raterDistinctVerifiedAnchorCount(alice), 0);
+        assertEq(pool.raterDistinctAnchorRoundCount(alice), 0);
+        assertEq(pool.verifiedAnchorDistinctRaterCount(bytes32("anchor-a")), 0);
         // M-Funds-2: counter increments at record time for unverified raters even on the
         // cluster-oracle path, so the cap gates storage growth uniformly.
         assertEq(pool.roundUnverifiedLaunchCreditCount(1, 1), 1);
@@ -299,6 +302,9 @@ contract LaunchDistributionPoolTest is Test {
         assertEq(paidAfterSnapshot, 0);
         assertEq(pool.qualifyingCreditBps(alice), 2_500);
         assertEq(pool.qualifyingRatingCount(alice), 0);
+        assertEq(pool.raterDistinctVerifiedAnchorCount(alice), 1);
+        assertEq(pool.raterDistinctAnchorRoundCount(alice), 1);
+        assertEq(pool.verifiedAnchorDistinctRaterCount(bytes32("anchor-a")), 1);
         assertEq(pool.roundUnverifiedLaunchCreditCount(1, 1), 1);
         assertTrue(pool.earnedRewardCreditFinalized(1, 1, _commitKey(1)));
         assertTrue(pool.isRoundPayoutSnapshotConsumed(pool.PAYOUT_DOMAIN_LAUNCH_CREDIT(), 0, 1, 1));
@@ -357,6 +363,9 @@ contract LaunchDistributionPoolTest is Test {
 
         vm.expectRevert(LaunchDistributionPool.InvalidProof.selector);
         pool.finalizeEarnedRaterRewardCredit(1, 1, _commitKey(1), payout, new bytes32[](0));
+        assertEq(pool.raterDistinctVerifiedAnchorCount(alice), 0);
+        assertEq(pool.raterDistinctAnchorRoundCount(alice), 0);
+        assertEq(pool.verifiedAnchorDistinctRaterCount(bytes32("anchor-a")), 0);
 
         _proposeAndFinalizeLaunchPayoutSnapshot(recordedOracle, 1, payout, keccak256("recorded-oracle"));
 
@@ -366,6 +375,30 @@ contract LaunchDistributionPoolTest is Test {
         assertEq(pool.qualifyingCreditBps(alice), 2_500);
         assertEq(pool.qualifyingRatingCount(alice), 0);
         assertTrue(pool.earnedRewardCreditFinalized(1, 1, _commitKey(1)));
+    }
+
+    function test_RescueStalePendingLaunchCreditLeavesDeferredAnchorsUntouched() public {
+        _configureLaunchOracle(1);
+        bytes32 commitKey = _commitKey(80);
+
+        pool.recordEarnedRaterReward(
+            alice, 80, 1, commitKey, 8_000, 3, true, pool.MIN_LAUNCH_CREDIT_STAKE(), _singleAnchor(bytes32("anchor-a"))
+        );
+
+        assertTrue(pool.earnedRewardCreditRecorded(80, 1, commitKey));
+        assertEq(pool.raterDistinctVerifiedAnchorCount(alice), 0);
+        assertEq(pool.raterDistinctAnchorRoundCount(alice), 0);
+        assertEq(pool.verifiedAnchorDistinctRaterCount(bytes32("anchor-a")), 0);
+
+        _configureLaunchOracle(1);
+        pool.rescueStalePendingEarnedRaterCredit(80, 1, commitKey);
+
+        assertFalse(pool.earnedRewardCreditRecorded(80, 1, commitKey));
+        assertFalse(pool.raterRoundCreditRecorded(alice, 80, 1));
+        assertEq(pool.roundUnverifiedLaunchCreditCount(80, 1), 1);
+        assertEq(pool.raterDistinctVerifiedAnchorCount(alice), 0);
+        assertEq(pool.raterDistinctAnchorRoundCount(alice), 0);
+        assertEq(pool.verifiedAnchorDistinctRaterCount(bytes32("anchor-a")), 0);
     }
 
     function test_PartialLaunchCreditFinalizationBlocksRootReplacement() public {
@@ -837,6 +870,34 @@ contract LaunchDistributionPoolTest is Test {
         assertTrue(fifthRecorded);
         assertEq(paid, 250_000);
         assertEq(pool.qualifyingRatingCount(alice), 5);
+    }
+
+    function test_PendingAdvisoryLaunchCreditDefersAnchorsUntilFinalize() public {
+        ClusterPayoutOracle oracle = _configureLaunchOracle(1);
+        bytes32 advisoryCommitKey = bytes32("advisory-pending");
+
+        (bool recorded, uint256 paidBeforeSnapshot) = pool.recordAdvisoryRaterReward(
+            alice, 1, 1, advisoryCommitKey, 8_000, 3, true, _singleAnchor(bytes32("anchor-a"))
+        );
+
+        assertTrue(recorded);
+        assertEq(paidBeforeSnapshot, 0);
+        assertEq(pool.raterDistinctVerifiedAnchorCount(alice), 0);
+        assertEq(pool.raterDistinctAnchorRoundCount(alice), 0);
+        assertEq(pool.verifiedAnchorDistinctRaterCount(bytes32("anchor-a")), 0);
+
+        IClusterPayoutOracle.PayoutWeight memory payout =
+            _launchPayoutWeight(1, advisoryCommitKey, alice, pool.BPS_DENOMINATOR(), keccak256("advisory"));
+        _proposeAndFinalizeLaunchPayoutSnapshot(oracle, 1, payout, keccak256("advisory-launch-root"));
+
+        uint256 paidAfterSnapshot =
+            pool.finalizeEarnedRaterRewardCredit(1, 1, advisoryCommitKey, payout, new bytes32[](0));
+
+        assertEq(paidAfterSnapshot, 0);
+        assertEq(pool.qualifyingRatingCount(alice), 1);
+        assertEq(pool.raterDistinctVerifiedAnchorCount(alice), 1);
+        assertEq(pool.raterDistinctAnchorRoundCount(alice), 1);
+        assertEq(pool.verifiedAnchorDistinctRaterCount(bytes32("anchor-a")), 1);
     }
 
     function test_RecordAdvisoryRaterRewardDoesNotDoubleCreditSameRaterRound() public {
