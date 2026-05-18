@@ -17,6 +17,7 @@ import { type VotingConfig, isRoundAcceptingVotes } from "~~/lib/contracts/round
 import { formatSubmissionRewardAmount, formatUsdAmount } from "~~/lib/questionRewardPools";
 import { formatVoteCooldownRemaining } from "~~/lib/vote/cooldown";
 import { describeOpenRoundActivity, formatLrepAmount, getRoundProgressMessaging } from "~~/lib/vote/voteIncentives";
+import { resolveVotingQuestionCardDisplayError } from "~~/lib/vote/votingQuestionCardStatus";
 
 interface VotingQuestionCardProps {
   contentId: bigint;
@@ -417,10 +418,11 @@ export function VotingQuestionCard({
   const cooldownLabel = formatVoteCooldownRemaining(cooldownSecondsRemaining);
   const roundNotAcceptingMessage =
     !roundAcceptsVotes && !isCommitting ? "This round is not accepting votes right now." : null;
-  const displayError =
-    cooldownActive && error?.includes("You already voted on this content within the last")
-      ? null
-      : (error ?? roundNotAcceptingMessage);
+  const displayError = resolveVotingQuestionCardDisplayError({
+    cooldownActive,
+    error,
+    roundNotAcceptingMessage,
+  });
   const contentInactive = !isContentActive;
   const voteActionDisabled = isCommitting || isVoteEligibilityPending || contentInactive || !roundAcceptsVotes;
   const [isDetailsOpen, setIsDetailsOpen] = useState(isSignalVariant);
