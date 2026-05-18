@@ -1,3 +1,4 @@
+import { questionImageAttachments } from "../db/schema";
 import deployedContracts from "@rateloop/contracts/deployedContracts";
 import assert from "node:assert/strict";
 import { after, before, beforeEach, test } from "node:test";
@@ -53,6 +54,8 @@ const profileRegistryContract = contractsForChain.ProfileRegistry;
 const rewardEscrowContract = contractsForChain.QuestionRewardPoolEscrow;
 const rewardDistributorContract = contractsForChain.RoundRewardDistributor;
 const votingEngineContract = contractsForChain.RoundVotingEngine;
+const APPROVED_IMAGE_ID = "att_sponsoredimage01";
+const APPROVED_IMAGE_URL = `https://www.curyo.xyz/api/attachments/images/${APPROVED_IMAGE_ID}.webp`;
 const submitQuestionWithRewardAndRoundConfigAbi = [
   {
     type: "function",
@@ -207,6 +210,72 @@ const voteCall = (voteMarker: `0x${string}`) =>
     WALLET,
   ]);
 
+function submitQuestionWithRewardCall(
+  overrides: Partial<{
+    contextUrl: string;
+    description: string;
+    imageUrls: string[];
+    tags: string;
+    title: string;
+    videoUrl: string;
+  }> = {},
+) {
+  const question = {
+    contextUrl: "https://example.com/product",
+    description: "Vote based on the source material.",
+    imageUrls: [] as string[],
+    tags: "Products,Value",
+    title: "Is this product worth recommending?",
+    videoUrl: "",
+    ...overrides,
+  };
+
+  return encodeCall(
+    { address: contentRegistryContract.address, abi: submitQuestionWithRewardAndRoundConfigAbi },
+    "submitQuestionWithRewardAndRoundConfig",
+    [
+      question.contextUrl,
+      question.imageUrls,
+      question.videoUrl,
+      question.title,
+      question.description,
+      question.tags,
+      1n,
+      `0x${"5".repeat(64)}`,
+      {
+        asset: 0,
+        amount: 1_000_000n,
+        requiredVoters: 3n,
+        requiredSettledRounds: 1n,
+        bountyClosesAt: 0n,
+        feedbackClosesAt: 0n,
+        bountyEligibility: 0,
+      },
+      { epochDuration: 1200, maxDuration: 604800, minVoters: 3, maxVoters: 200 },
+      {
+        questionMetadataHash: `0x${"6".repeat(64)}`,
+        resultSpecHash: `0x${"7".repeat(64)}`,
+      },
+    ],
+  );
+}
+
+async function insertApprovedImageAttachment(params: { id?: string; ownerWalletAddress?: `0x${string}` }) {
+  const now = new Date();
+  await dbModule.db.insert(questionImageAttachments).values({
+    id: params.id ?? APPROVED_IMAGE_ID,
+    uploaderKind: "wallet",
+    ownerWalletAddress: params.ownerWalletAddress ?? WALLET,
+    originalFilename: "mockup.png",
+    mimeType: "image/webp",
+    sizeBytes: 1024,
+    status: "approved",
+    moderationStatus: "approved",
+    createdAt: now,
+    updatedAt: now,
+  });
+}
+
 function createStoreUnavailableError() {
   return new Error("database offline", {
     cause: {
@@ -255,6 +324,7 @@ beforeEach(async () => {
 
   await dbModule.dbClient.execute("DELETE FROM free_transaction_reservations");
   await dbModule.dbClient.execute("DELETE FROM free_transaction_quotas");
+  await dbModule.dbClient.execute("DELETE FROM question_image_attachments");
 });
 
 after(() => {
@@ -493,36 +563,7 @@ test("supported sponsored operation families are allowlisted", async () => {
     ],
     [encodeCall(lrepContract, "approve", [votingEngineContract.address, 1_000_000n]), voteCall("0x08")],
     [encodeCall(contentRegistryContract, "cancelReservedSubmission", [`0x${"2".repeat(64)}`])],
-    [
-      encodeCall(
-        { address: contentRegistryContract.address, abi: submitQuestionWithRewardAndRoundConfigAbi },
-        "submitQuestionWithRewardAndRoundConfig",
-        [
-          "https://example.com/product",
-          ["https://example.com/question-a.jpg"],
-          "",
-          "Is this product worth recommending?",
-          "Vote based on the image.",
-          "Products,Value",
-          1n,
-          `0x${"5".repeat(64)}`,
-          {
-            asset: 0,
-            amount: 1_000_000n,
-            requiredVoters: 3n,
-            requiredSettledRounds: 1n,
-            bountyClosesAt: 0n,
-            feedbackClosesAt: 0n,
-            bountyEligibility: 0,
-          },
-          { epochDuration: 1200, maxDuration: 604800, minVoters: 3, maxVoters: 200 },
-          {
-            questionMetadataHash: `0x${"6".repeat(64)}`,
-            resultSpecHash: `0x${"7".repeat(64)}`,
-          },
-        ],
-      ),
-    ],
+    [submitQuestionWithRewardCall()],
     [encodeCall(frontendRegistryContract, "register")],
     [encodeCall(frontendRegistryContract, "claimFees")],
     [
@@ -549,6 +590,57 @@ test("supported sponsored operation families are allowlisted", async () => {
     await dbModule.dbClient.execute("DELETE FROM free_transaction_reservations");
     await dbModule.dbClient.execute("DELETE FROM free_transaction_quotas");
   }
+});
+
+test("validates sponsored ContentRegistry submit question media", async () => {
+  const invalidImageDecision = await freeTransactions.evaluateFreeTransactionAllowance(
+    buildRequest([
+      submitQuestionWithRewardCall({ contextUrl: "", imageUrls: ["https://example.com/question-a.jpg"] }),
+    ]) as never,
+  );
+  assert.equal(invalidImageDecision.isAllowed, false);
+  if (invalidImageDecision.isAllowed) return;
+  assert.equal(invalidImageDecision.debugCode, "unsupported_operation");
+});
+
+test("validates sponsored ContentRegistry submit question text and tags", async () => {
+  const blockedTitleDecision = await freeTransactions.evaluateFreeTransactionAllowance(
+    buildRequest([submitQuestionWithRewardCall({ title: "NSFW highlights" })]) as never,
+  );
+  assert.equal(blockedTitleDecision.isAllowed, false);
+  if (blockedTitleDecision.isAllowed) return;
+  assert.equal(blockedTitleDecision.debugCode, "unsupported_operation");
+
+  const blockedTagsDecision = await freeTransactions.evaluateFreeTransactionAllowance(
+    buildRequest([submitQuestionWithRewardCall({ tags: "Products,nsfw" })]) as never,
+  );
+  assert.equal(blockedTagsDecision.isAllowed, false);
+  if (blockedTagsDecision.isAllowed) return;
+  assert.equal(blockedTagsDecision.debugCode, "unsupported_operation");
+});
+
+test("validates sponsored ContentRegistry uploaded image ownership and origin", async () => {
+  await insertApprovedImageAttachment({});
+
+  const allowedImageDecision = await freeTransactions.evaluateFreeTransactionAllowance(
+    buildRequest([submitQuestionWithRewardCall({ contextUrl: "", imageUrls: [APPROVED_IMAGE_URL] })]) as never,
+  );
+  assert.equal(allowedImageDecision.isAllowed, true);
+
+  await dbModule.dbClient.execute("DELETE FROM free_transaction_reservations");
+  await dbModule.dbClient.execute("DELETE FROM free_transaction_quotas");
+
+  const untrustedOriginDecision = await freeTransactions.evaluateFreeTransactionAllowance(
+    buildRequest([
+      submitQuestionWithRewardCall({
+        contextUrl: "",
+        imageUrls: [`https://evil.example/api/attachments/images/${APPROVED_IMAGE_ID}.webp`],
+      }),
+    ]) as never,
+  );
+  assert.equal(untrustedOriginDecision.isAllowed, false);
+  if (untrustedOriginDecision.isAllowed) return;
+  assert.equal(untrustedOriginDecision.debugCode, "unsupported_operation");
 });
 
 test("rejects token approvals to unsupported spenders", async () => {

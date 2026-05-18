@@ -17,6 +17,15 @@ import {
   parseEventLogs,
   toHex,
 } from "viem";
+import { parseTags } from "~~/constants/categories";
+import { getImageAttachmentSubmissionValidationError } from "~~/lib/attachments/imageAttachments";
+import {
+  MAX_SUBMISSION_IMAGE_URLS,
+  isUploadedImageUrl,
+  isYouTubeVideoUrl,
+  normalizeSubmissionContextUrl,
+  normalizeSubmissionMediaUrl,
+} from "~~/lib/contentMedia";
 import { db } from "~~/lib/db";
 import { freeTransactionQuotas, freeTransactionReservations } from "~~/lib/db/schema";
 import {
@@ -25,6 +34,11 @@ import {
   getServerRpcOverrides,
   getServerTargetNetworkById,
 } from "~~/lib/env/server";
+import {
+  findBlockedContentTags,
+  getContentDescriptionValidationError,
+  getContentTitleValidationError,
+} from "~~/lib/moderation/submissionValidation";
 import { buildFreeTransactionOperationKey } from "~~/lib/thirdweb/freeTransactionOperation";
 import { isFreeTransactionStoreUnavailableError } from "~~/lib/thirdweb/freeTransactionStoreFallback";
 
@@ -116,6 +130,7 @@ export type FreeTransactionAllowanceDecision =
 const DEFAULT_DENY_REASON = "Transaction not sponsored.";
 const FREE_TX_EXHAUSTED_REASON = "Free transactions used up. Add ETH to continue.";
 const NO_RATER_IDENTITY_REASON = "Verify your ID to unlock free transactions.";
+const MAX_CONTENT_TAGS_LENGTH = 256;
 const FREE_TRANSACTION_RESERVATION_TTL_MS = 5 * 60_000;
 const FREE_TRANSACTION_IDEMPOTENCY_WINDOW_MS = 2 * 60_000;
 const USER_OPERATION_RECEIPT_EVENT_ABI = parseAbi([
@@ -692,10 +707,160 @@ function isApprovalToAllowedSpender(callData: Hex, allowedSpenders: ReadonlySet<
   }
 }
 
-function validateSponsoredCalls(
+type SponsoredSubmissionQuestion = {
+  contextUrl: string;
+  description: string;
+  imageUrls: string[];
+  tags: string;
+  title: string;
+  videoUrl: string;
+};
+
+function getTupleField(value: unknown, key: string, index: number) {
+  if (Array.isArray(value)) return value[index];
+  if (value && typeof value === "object") return (value as Record<string, unknown>)[key];
+  return undefined;
+}
+
+function readStringField(value: unknown) {
+  return typeof value === "string" ? value : null;
+}
+
+function readStringArrayField(value: unknown) {
+  return Array.isArray(value) && value.every(item => typeof item === "string") ? (value as string[]) : null;
+}
+
+function readSponsoredSubmissionQuestionFromArgs(args: readonly unknown[]): SponsoredSubmissionQuestion | null {
+  const contextUrl = readStringField(args[0]);
+  const imageUrls = readStringArrayField(args[1]);
+  const videoUrl = readStringField(args[2]);
+  const title = readStringField(args[3]);
+  const description = readStringField(args[4]);
+  const tags = readStringField(args[5]);
+
+  if (
+    contextUrl === null ||
+    imageUrls === null ||
+    videoUrl === null ||
+    title === null ||
+    description === null ||
+    tags === null
+  ) {
+    return null;
+  }
+
+  return { contextUrl, description, imageUrls, tags, title, videoUrl };
+}
+
+function readSponsoredSubmissionQuestionFromTuple(value: unknown): SponsoredSubmissionQuestion | null {
+  const contextUrl = readStringField(getTupleField(value, "contextUrl", 0));
+  const imageUrls = readStringArrayField(getTupleField(value, "imageUrls", 1));
+  const videoUrl = readStringField(getTupleField(value, "videoUrl", 2));
+  const title = readStringField(getTupleField(value, "title", 3));
+  const description = readStringField(getTupleField(value, "description", 4));
+  const tags = readStringField(getTupleField(value, "tags", 5));
+
+  if (
+    contextUrl === null ||
+    imageUrls === null ||
+    videoUrl === null ||
+    title === null ||
+    description === null ||
+    tags === null
+  ) {
+    return null;
+  }
+
+  return { contextUrl, description, imageUrls, tags, title, videoUrl };
+}
+
+function hasCanonicalContextUrl(value: string) {
+  if (!value) return true;
+  return normalizeSubmissionContextUrl(value) === value;
+}
+
+function hasCanonicalVideoUrl(value: string) {
+  if (!value) return true;
+  const normalized = normalizeSubmissionMediaUrl(value);
+  return normalized === value && isYouTubeVideoUrl(normalized);
+}
+
+function hasCanonicalUploadedImageUrls(imageUrls: readonly string[]) {
+  if (imageUrls.length > MAX_SUBMISSION_IMAGE_URLS) return false;
+
+  return imageUrls.every(url => {
+    const normalized = normalizeSubmissionMediaUrl(url);
+    return normalized === url && isUploadedImageUrl(normalized);
+  });
+}
+
+async function validateSponsoredSubmissionQuestion(
+  question: SponsoredSubmissionQuestion,
+  walletAddress: `0x${string}`,
+) {
+  const title = question.title.trim();
+  const description = question.description.trim();
+  const tags = question.tags.trim();
+
+  if (!title || title !== question.title) return false;
+  if (description !== question.description) return false;
+  if (!tags || tags !== question.tags || tags.length > MAX_CONTENT_TAGS_LENGTH) return false;
+  if (question.contextUrl.trim() !== question.contextUrl || question.videoUrl.trim() !== question.videoUrl)
+    return false;
+  if (!hasCanonicalContextUrl(question.contextUrl) || !hasCanonicalVideoUrl(question.videoUrl)) return false;
+  if (question.videoUrl && question.imageUrls.length > 0) return false;
+  if (!question.contextUrl && question.imageUrls.length === 0) return false;
+  if (!hasCanonicalUploadedImageUrls(question.imageUrls)) return false;
+  if (getContentTitleValidationError(title) || getContentDescriptionValidationError(description)) return false;
+
+  const parsedTags = parseTags(tags);
+  if (parsedTags.length === 0 || parsedTags.length > 3 || findBlockedContentTags(parsedTags).length > 0) {
+    return false;
+  }
+
+  const imageValidationError = await getImageAttachmentSubmissionValidationError({
+    imageUrls: question.imageUrls,
+    ownerWalletAddress: walletAddress,
+  });
+  return imageValidationError === null;
+}
+
+async function validateSponsoredContentRegistryCall(
+  functionName: string,
+  args: readonly unknown[],
+  walletAddress: `0x${string}`,
+) {
+  if (functionName === "cancelReservedSubmission" || functionName === "reserveSubmission") {
+    return true;
+  }
+
+  if (functionName === "submitQuestion" || functionName === "submitQuestionWithRewardAndRoundConfig") {
+    const question = readSponsoredSubmissionQuestionFromArgs(args);
+    return question ? validateSponsoredSubmissionQuestion(question, walletAddress) : false;
+  }
+
+  if (functionName === "submitQuestionBundleWithRewardAndRoundConfig") {
+    const questions = args[0];
+    if (!Array.isArray(questions) || questions.length === 0) return false;
+
+    for (const value of questions) {
+      const question = readSponsoredSubmissionQuestionFromTuple(value);
+      if (!question || !(await validateSponsoredSubmissionQuestion(question, walletAddress))) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  return false;
+}
+
+async function validateSponsoredCalls(
   chainId: number,
   calls: readonly NormalizedVerifierCall[],
-): { ok: true } | { ok: false; debugCode: "target_not_allowlisted" | "unsupported_operation" } {
+  walletAddress: `0x${string}`,
+): Promise<{ ok: true } | { ok: false; debugCode: "target_not_allowlisted" | "unsupported_operation" }> {
   const contracts = getContractsForChain(chainId);
   const contractsByAddress = getContractsByAddress(chainId);
   const frontendRegistry = contracts?.FrontendRegistry;
@@ -751,13 +916,7 @@ function validateSponsoredCalls(
       case "LoopReputation":
         return { ok: false, debugCode: "unsupported_operation" };
       case "ContentRegistry":
-        if (
-          functionName === "cancelReservedSubmission" ||
-          functionName === "reserveSubmission" ||
-          functionName === "submitQuestion" ||
-          functionName === "submitQuestionWithRewardAndRoundConfig" ||
-          functionName === "submitQuestionBundleWithRewardAndRoundConfig"
-        ) {
+        if (await validateSponsoredContentRegistryCall(functionName, args, walletAddress)) {
           continue;
         }
         return { ok: false, debugCode: "unsupported_operation" };
@@ -1017,7 +1176,8 @@ export async function evaluateFreeTransactionAllowance(
     };
   }
 
-  const validatedCalls = validateSponsoredCalls(body.chainId, calls);
+  const walletAddress = normalizeAddress(sender);
+  const validatedCalls = await validateSponsoredCalls(body.chainId, calls, walletAddress);
   if (!validatedCalls.ok) {
     return {
       isAllowed: false,
@@ -1035,7 +1195,6 @@ export async function evaluateFreeTransactionAllowance(
     };
   }
 
-  const walletAddress = normalizeAddress(sender);
   const raterIdentityKey = await (freeTransactionTestOverrides?.resolveRaterIdentityKey ?? resolveRaterIdentityKey)(
     walletAddress,
     body.chainId,
