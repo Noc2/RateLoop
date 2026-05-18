@@ -26,7 +26,7 @@ function fail(message) {
 
 function usage() {
   fail(
-    "Usage: node buildQuestionBundleReservation.js <submitter> <rewardAsset> <rewardAmount> <requiredVoters> <requiredSettledRounds> <bountyClosesAt> <feedbackClosesAt> <epochDuration> <maxDuration> <minVoters> <maxVoters> -- <contextUrl> <imageUrlsJson> <videoUrl> <title> <description|empty> <tags> <categoryId> <salt> [question args...]",
+    "Usage: node buildQuestionBundleReservation.js <submitter> <rewardAsset> <rewardAmount> <requiredVoters> <requiredSettledRounds> <bountyClosesAt> <feedbackClosesAt> <epochDuration> <maxDuration> <minVoters> <maxVoters> -- <contextUrl> <imageUrlsJson> <videoUrl> <title> <description|empty> <tags> <categoryId> <salt> [question args...]"
   );
 }
 
@@ -53,7 +53,7 @@ function assertSupportedContextUrl(value, { allowEmpty = false } = {}) {
   if (!trimmed) {
     if (allowEmpty) return;
     fail(
-      "Context URL must be provided unless image URLs or a video URL are attached.",
+      "Context URL must be provided unless image URLs or a video URL are attached."
     );
   }
   if (trimmed !== value) {
@@ -113,7 +113,7 @@ function parseImageUrls(value) {
     if (
       !Array.isArray(parsed) ||
       parsed.some(
-        (item) => typeof item !== "string" || item.trim().length === 0,
+        (item) => typeof item !== "string" || item.trim().length === 0
       )
     ) {
       fail("Invalid image URL array JSON. Expected a JSON string array.");
@@ -122,7 +122,7 @@ function parseImageUrls(value) {
       fail(`Expected at most ${MAX_SUBMISSION_IMAGE_URLS} image URLs.`);
     }
     const unsupportedImageUrl = parsed.find(
-      (item) => !UPLOADED_IMAGE_URL_PATTERN.test(item),
+      (item) => !UPLOADED_IMAGE_URL_PATTERN.test(item)
     );
     if (unsupportedImageUrl) {
       fail(`Unsupported image URL: ${unsupportedImageUrl}`);
@@ -229,8 +229,8 @@ function buildSubmissionMediaHash(imageUrls, videoUrl) {
   return keccak256(
     encodeAbiParameters(
       [{ type: "string[]" }, { type: "string" }],
-      [imageUrls, videoUrl],
-    ),
+      [imageUrls, videoUrl]
+    )
   );
 }
 
@@ -263,16 +263,16 @@ function buildQuestionBundleHash(questions) {
           BigInt(index),
           DEFAULT_QUESTION_METADATA_HASH,
           DEFAULT_RESULT_SPEC_HASH,
-        ],
-      ),
-    ),
+        ]
+      )
+    )
   );
 
   return keccak256(
     encodeAbiParameters(
       [{ type: "string" }, { type: "bytes32[]" }],
-      ["curyo-question-bundle-v2", questionHashes],
-    ),
+      ["curyo-question-bundle-v2", questionHashes]
+    )
   );
 }
 
@@ -315,13 +315,13 @@ function buildQuestionBundleRevealCommitment({
         roundConfig.maxDuration,
         roundConfig.minVoters,
         roundConfig.maxVoters,
-      ],
-    ),
+      ]
+    )
   );
 }
 
 const { submitter, rewardTerms, roundConfig, questions } = parseArgs(
-  process.argv.slice(2),
+  process.argv.slice(2)
 );
 const bundleHash = buildQuestionBundleHash(questions);
 const revealCommitment = buildQuestionBundleRevealCommitment({
