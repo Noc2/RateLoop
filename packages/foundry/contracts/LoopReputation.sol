@@ -68,18 +68,23 @@ contract LoopReputation is ERC20, ERC20Permit, ERC20Votes, AccessControl {
         uint256 newUnlockTime = block.timestamp + GOVERNANCE_LOCK_DURATION;
         if (lock.unlockTime <= block.timestamp) {
             lock.amount = amount;
+            lock.unlockTime = newUnlockTime;
         } else {
             uint256 currentBalance = balanceOf(account);
             uint256 lockableBase = currentBalance > amount ? currentBalance : amount;
             uint256 lockableBalance = lockableBase > lock.amount ? lockableBase - lock.amount : 0;
             uint256 additionalLock = amount > lockableBalance ? lockableBalance : amount;
+            // N-3: Only extend the unlock window when new tokens are actually locked. Otherwise
+            // voting in a second proposal would re-anchor the timer on already-locked tokens,
+            // making any LREP that ever votes effectively semi-permanently locked under
+            // continuous governance cadence.
             if (additionalLock > 0) {
                 lock.amount += additionalLock;
+                lock.unlockTime = newUnlockTime;
             }
         }
-        lock.unlockTime = newUnlockTime;
 
-        emit GovernanceLocked(account, lock.amount, newUnlockTime);
+        emit GovernanceLocked(account, lock.amount, lock.unlockTime);
     }
 
     function getLockedBalance(address account) public view returns (uint256) {
