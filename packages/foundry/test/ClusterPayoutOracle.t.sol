@@ -475,6 +475,10 @@ contract ClusterPayoutOracleTest is Test {
         assertTrue(oracle.rejectedRoundPayoutSnapshotConsumed(snapshotKey));
 
         input.artifactHash = keccak256("replacement-after-consumed");
+        vm.expectRevert(ClusterPayoutOracle.InvalidSnapshot.selector);
+        oracle.proposeRoundPayoutSnapshot(input);
+
+        input.weightRoot = keccak256("replacement-after-consumed-root");
         vm.expectRevert(ClusterPayoutOracle.SnapshotConsumed.selector);
         oracle.proposeRoundPayoutSnapshot(input);
     }

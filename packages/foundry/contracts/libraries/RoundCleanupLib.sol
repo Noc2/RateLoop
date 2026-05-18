@@ -191,6 +191,15 @@ library RoundCleanupLib {
             return (commitKey, rewardRecipient == address(0) ? holder : rewardRecipient);
         }
 
+        if (holder != account) {
+            bytes32 holderCommitHash = roundVoterCommitHash[holder];
+            if (holderCommitHash != bytes32(0)) {
+                commitKey = keccak256(abi.encodePacked(holder, holderCommitHash));
+                rewardRecipient = roundCommitIdentityHolder[commitKey];
+                return (commitKey, rewardRecipient == address(0) ? holder : rewardRecipient);
+            }
+        }
+
         bytes32 directCommitHash = roundVoterCommitHash[account];
         if (directCommitHash != bytes32(0)) {
             commitKey = keccak256(abi.encodePacked(account, directCommitHash));
@@ -262,12 +271,16 @@ library RoundCleanupLib {
         mapping(address => bytes32) storage roundHolderCommitKey,
         bytes32 commitKey,
         bytes32 identityKey,
-        address identityHolder
+        address identityHolder,
+        address voter
     ) external {
         roundIdentityCommitKey[identityKey] = commitKey;
         roundCommitIdentityKey[commitKey] = identityKey;
         roundCommitIdentityHolder[commitKey] = identityHolder;
-        if (identityHolder != address(0)) {
+        if (
+            identityHolder != address(0) && identityHolder != voter
+                && identityKey != VotePreflightLib.addressIdentityKey(identityHolder)
+        ) {
             roundHolderCommitKey[identityHolder] = commitKey;
         }
     }

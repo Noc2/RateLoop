@@ -699,7 +699,8 @@ contract RoundVotingEngine is
             holderCommitKey[contentId][roundId],
             commitKey,
             identityKey,
-            identityHolder
+            identityHolder,
+            voter
         );
     }
 
@@ -1159,6 +1160,14 @@ contract RoundVotingEngine is
             _getRoundRaterRegistry(contentId, roundId),
             account
         );
+    }
+
+    function resolveClaimCommit(uint256 contentId, uint256 roundId, address account)
+        external
+        view
+        returns (bytes32 commitKey, address rewardRecipient)
+    {
+        return _resolveClaimCommit(contentId, roundId, account);
     }
 
     function _canFinalizeRevealFailedRound(uint256 contentId, uint256 roundId, RoundLib.Round storage round)

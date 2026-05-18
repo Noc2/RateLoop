@@ -13,7 +13,6 @@ import { ProtocolConfig } from "./ProtocolConfig.sol";
 import { IFrontendRegistry } from "./interfaces/IFrontendRegistry.sol";
 import { IParticipationPool } from "./interfaces/IParticipationPool.sol";
 import { ILaunchDistributionPool } from "./interfaces/ILaunchDistributionPool.sol";
-import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol";
 import { FrontendFeeDustLib } from "./libraries/FrontendFeeDustLib.sol";
 import { LaunchRaterRewardLib } from "./libraries/LaunchRaterRewardLib.sol";
 import { RoundLib } from "./libraries/RoundLib.sol";
@@ -868,49 +867,7 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         view
         returns (bytes32 commitKey, address rewardRecipient)
     {
-        IRaterIdentityRegistry.ResolvedRater memory resolved = _resolveRater(contentId, roundId, account);
-        if (resolved.identityKey != bytes32(0)) {
-            commitKey = votingEngine.identityCommitKey(contentId, roundId, resolved.identityKey);
-            if (commitKey != bytes32(0)) {
-                rewardRecipient = resolved.holder == address(0) ? account : resolved.holder;
-                return (commitKey, rewardRecipient);
-            }
-        }
-        address holder = resolved.holder == address(0) ? account : resolved.holder;
-        commitKey = votingEngine.holderCommitKey(contentId, roundId, holder);
-        if (commitKey != bytes32(0)) {
-            rewardRecipient = votingEngine.commitIdentityHolder(contentId, roundId, commitKey);
-            return (commitKey, rewardRecipient == address(0) ? holder : rewardRecipient);
-        }
-
-        bytes32 directCommitHash = votingEngine.voterCommitHash(contentId, roundId, account);
-        if (directCommitHash != bytes32(0)) {
-            commitKey = keccak256(abi.encodePacked(account, directCommitHash));
-            rewardRecipient = votingEngine.commitIdentityHolder(contentId, roundId, commitKey);
-            return (commitKey, rewardRecipient == address(0) ? account : rewardRecipient);
-        }
-
-        return (bytes32(0), account);
-    }
-
-    function _resolveRater(uint256 contentId, uint256 roundId, address account)
-        internal
-        view
-        returns (IRaterIdentityRegistry.ResolvedRater memory resolved)
-    {
-        address registryAddress = votingEngine.roundRaterRegistrySnapshot(contentId, roundId);
-        if (registryAddress == address(0)) registryAddress = votingEngine.protocolConfig().raterRegistry();
-        if (registryAddress != address(0)) {
-            resolved = IRaterIdentityRegistry(registryAddress).resolveRater(account);
-            if (resolved.identityKey != bytes32(0)) return resolved;
-        }
-        resolved = IRaterIdentityRegistry.ResolvedRater({
-            holder: account,
-            identityKey: keccak256(abi.encodePacked("rateloop.address-identity-v1", account)),
-            humanNullifier: bytes32(0),
-            hasActiveHumanCredential: false,
-            delegated: false
-        });
+        return votingEngine.resolveClaimCommit(contentId, roundId, account);
     }
 
     function _readRound(uint256 contentId, uint256 roundId) internal view returns (RoundLib.Round memory round) {

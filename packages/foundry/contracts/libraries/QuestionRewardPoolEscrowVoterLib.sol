@@ -114,6 +114,22 @@ library QuestionRewardPoolEscrowVoterLib {
             return (identityKey, commitKey, rewardRecipient);
         }
 
+        if (holder != account) {
+            bytes32 holderCommitHash = votingEngine.voterCommitHash(contentId, roundId, holder);
+            if (holderCommitHash != bytes32(0)) {
+                commitKey = keccak256(abi.encodePacked(holder, holderCommitHash));
+                bytes32 holderDirectIdentityKey = votingEngine.commitIdentityKey(contentId, roundId, commitKey);
+                if (holderDirectIdentityKey != bytes32(0)) {
+                    identityKey = holderDirectIdentityKey;
+                }
+                address holderDirectCommitHolder = votingEngine.commitIdentityHolder(contentId, roundId, commitKey);
+                if (holderDirectCommitHolder != address(0)) {
+                    rewardRecipient = holderDirectCommitHolder;
+                }
+                return (identityKey, commitKey, rewardRecipient);
+            }
+        }
+
         bytes32 directCommitHash = votingEngine.voterCommitHash(contentId, roundId, account);
         if (directCommitHash == bytes32(0)) {
             return (identityKey, bytes32(0), rewardRecipient);

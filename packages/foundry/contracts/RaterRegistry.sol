@@ -430,7 +430,9 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
         address currentOwner = _humanNullifierOwnerByProvider[provider][nullifierHash];
         if (currentOwner != address(0) && currentOwner != rater) revert NullifierAlreadyAssigned();
         _humanNullifierOwnerByProvider[provider][nullifierHash] = rater;
-        if (_canonicalHumanIdentityKey[rater] == bytes32(0)) {
+        if (
+            _canonicalHumanIdentityKey[rater] == bytes32(0) || provider == HumanCredentialProvider.CuryoSelfVerifiedSeed
+        ) {
             _canonicalHumanIdentityKey[rater] = nullifierHash;
         }
         _clearInboundDelegation(rater);

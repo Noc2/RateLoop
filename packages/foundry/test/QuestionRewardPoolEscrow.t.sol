@@ -2193,12 +2193,21 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         uint256 expiresAt = block.timestamp + EPOCH_DURATION + 10;
         uint256 rewardPoolId = _createRewardPoolWithExpiry(contentId, REWARD_POOL_AMOUNT, 4, 1, expiresAt);
 
-        (uint256 roundId, bytes32 lateCommitKey, bytes32 lateSalt, bool lateDirection) =
-            _revealThresholdAndReturnUnrevealed(contentId);
-        _assertThresholdReachedAtLe(contentId, roundId, expiresAt);
+        (
+            uint256 roundId,
+            bytes32[2] memory lateCommitKeys,
+            bytes32[2] memory lateSalts,
+            bool[2] memory lateDirections
+        ) = _revealBelowThresholdAndReturnUnrevealedPair(contentId);
+        assertEq(RoundEngineReadHelpers.round(votingEngine, contentId, roundId).thresholdReachedAt, 0);
 
         vm.warp(expiresAt + 1);
-        votingEngine.revealVoteByCommitKey(contentId, roundId, lateCommitKey, lateDirection, 5_000, lateSalt);
+        for (uint256 i = 0; i < lateCommitKeys.length; i++) {
+            votingEngine.revealVoteByCommitKey(
+                contentId, roundId, lateCommitKeys[i], lateDirections[i], 5_000, lateSalts[i]
+            );
+        }
+        assertGt(RoundEngineReadHelpers.round(votingEngine, contentId, roundId).thresholdReachedAt, expiresAt);
         _settleAfterRbtsSeed(votingEngine, contentId, roundId);
 
         assertGt(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter1), 0);
@@ -2213,12 +2222,21 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         uint256 expiresAt = block.timestamp + EPOCH_DURATION + 10;
         uint256 rewardPoolId = _createRewardPoolWithExpiry(contentId, REWARD_POOL_AMOUNT, 3, 1, expiresAt);
 
-        (uint256 roundId, bytes32 lateCommitKey, bytes32 lateSalt, bool lateDirection) =
-            _revealThresholdAndReturnUnrevealed(contentId);
-        _assertThresholdReachedAtLe(contentId, roundId, expiresAt);
+        (
+            uint256 roundId,
+            bytes32[2] memory lateCommitKeys,
+            bytes32[2] memory lateSalts,
+            bool[2] memory lateDirections
+        ) = _revealBelowThresholdAndReturnUnrevealedPair(contentId);
+        assertEq(RoundEngineReadHelpers.round(votingEngine, contentId, roundId).thresholdReachedAt, 0);
 
         vm.warp(expiresAt + 1);
-        votingEngine.revealVoteByCommitKey(contentId, roundId, lateCommitKey, lateDirection, 5_000, lateSalt);
+        for (uint256 i = 0; i < lateCommitKeys.length; i++) {
+            votingEngine.revealVoteByCommitKey(
+                contentId, roundId, lateCommitKeys[i], lateDirections[i], 5_000, lateSalts[i]
+            );
+        }
+        assertGt(RoundEngineReadHelpers.round(votingEngine, contentId, roundId).thresholdReachedAt, expiresAt);
         _settleAfterRbtsSeed(votingEngine, contentId, roundId);
 
         assertGt(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter1), 0);
@@ -4128,6 +4146,52 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         lateCommitKey = commitKeys[voters.length - 1];
         lateSalt = salts[voters.length - 1];
         lateDirection = directions[voters.length - 1];
+    }
+
+    function _revealBelowThresholdAndReturnUnrevealedPair(uint256 contentId)
+        internal
+        returns (
+            uint256 roundId,
+            bytes32[2] memory lateCommitKeys,
+            bytes32[2] memory lateSalts,
+            bool[2] memory lateDirections
+        )
+    {
+        address[] memory voters = _fourVoters();
+        bool[] memory directions = _directions(true, true, false, true);
+        bytes32[] memory salts = new bytes32[](voters.length);
+        bytes32[] memory commitKeys = new bytes32[](voters.length);
+
+        for (uint256 i = 0; i < voters.length; i++) {
+            salts[i] = keccak256(abi.encodePacked("late-pair", voters[i], contentId, directions[i], i));
+            commitKeys[i] = _commitTestVote(
+                DirectTestCommitRequest({
+                    engine: votingEngine,
+                    lrepToken: lrepToken,
+                    voter: voters[i],
+                    contentId: contentId,
+                    isUp: directions[i],
+                    stake: STAKE,
+                    frontend: address(0),
+                    salt: salts[i]
+                })
+            );
+        }
+
+        roundId = RoundEngineReadHelpers.activeRoundId(votingEngine, contentId);
+        RoundLib.Round memory round = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
+        _warpPastTlockRevealTime(uint256(round.startTime) + EPOCH_DURATION);
+
+        for (uint256 i = 0; i < voters.length - 2; i++) {
+            votingEngine.revealVoteByCommitKey(contentId, roundId, commitKeys[i], directions[i], 5_000, salts[i]);
+        }
+
+        for (uint256 i = 0; i < lateCommitKeys.length; i++) {
+            uint256 sourceIndex = i + voters.length - lateCommitKeys.length;
+            lateCommitKeys[i] = commitKeys[sourceIndex];
+            lateSalts[i] = salts[sourceIndex];
+            lateDirections[i] = directions[sourceIndex];
+        }
     }
 
     function _mockSettledRound(uint256 contentId, uint256 roundId, uint16 revealedCount) internal {
