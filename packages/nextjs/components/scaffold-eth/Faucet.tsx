@@ -203,6 +203,7 @@ export const FaucetModal = () => {
       active = false;
     };
   }, [lrepTokenAddress, isHardhat]);
+  }, [lrepTokenAddress, isHardhat]);
 
   useEffect(() => {
     if (!isHardhat) {
