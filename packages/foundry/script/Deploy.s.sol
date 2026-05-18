@@ -38,6 +38,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
     uint256 public constant TREASURY_AMOUNT = 32_000_000 * 1e6;
     uint256 public constant PARTICIPATION_POOL_AMOUNT = 0;
     uint256 public constant LAUNCH_DISTRIBUTION_AMOUNT = TOTAL_SUPPLY_CAP - CONSENSUS_POOL_AMOUNT - TREASURY_AMOUNT;
+    bytes32 internal constant ERC1967_ADMIN_SLOT = bytes32(uint256(keccak256("eip1967.proxy.admin")) - 1);
 
     address internal constant WORLD_CHAIN_MAINNET_USDC = 0x79A02482A880bCE3F13e09Da970dC34db4CD24d1;
     address internal constant WORLD_CHAIN_SEPOLIA_USDC = 0x66145f38cBAC35Ca6F1Dfb4914dF98F1614aeA88;
@@ -296,14 +297,24 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         if (address(timelock) != address(0)) deployments.push(Deployment("TimelockController", address(timelock)));
         if (address(governor) != address(0)) deployments.push(Deployment("CuryoGovernor", address(governor)));
         deployments.push(Deployment("FrontendRegistry", address(frontendRegistryProxy)));
+        deployments.push(Deployment("FrontendRegistryProxyAdmin", _proxyAdmin(address(frontendRegistryProxy))));
         deployments.push(Deployment("ProfileRegistry", address(profileRegistryProxy)));
+        deployments.push(Deployment("ProfileRegistryProxyAdmin", _proxyAdmin(address(profileRegistryProxy))));
         deployments.push(Deployment("ContentRegistry", address(registryProxy)));
+        deployments.push(Deployment("ContentRegistryProxyAdmin", _proxyAdmin(address(registryProxy))));
         deployments.push(Deployment("RoundVotingEngine", address(votingEngineProxy)));
+        deployments.push(Deployment("RoundVotingEngineProxyAdmin", _proxyAdmin(address(votingEngineProxy))));
         deployments.push(Deployment("ProtocolConfig", address(protocolConfigProxy)));
+        deployments.push(Deployment("ProtocolConfigProxyAdmin", _proxyAdmin(address(protocolConfigProxy))));
         deployments.push(Deployment("RoundRewardDistributor", address(rewardDistributorProxy)));
+        deployments.push(Deployment("RoundRewardDistributorProxyAdmin", _proxyAdmin(address(rewardDistributorProxy))));
         deployments.push(Deployment("QuestionRewardPoolEscrow", address(questionRewardPoolEscrowProxy)));
+        deployments.push(
+            Deployment("QuestionRewardPoolEscrowProxyAdmin", _proxyAdmin(address(questionRewardPoolEscrowProxy)))
+        );
         deployments.push(Deployment("X402QuestionSubmitter", address(x402QuestionSubmitter)));
         deployments.push(Deployment("FeedbackBonusEscrow", address(feedbackBonusEscrowProxy)));
+        deployments.push(Deployment("FeedbackBonusEscrowProxyAdmin", _proxyAdmin(address(feedbackBonusEscrowProxy))));
         deployments.push(Deployment("CategoryRegistry", address(categoryRegistry)));
         deployments.push(Deployment("ClusterPayoutOracle", address(clusterPayoutOracle)));
         deployments.push(Deployment("RaterRegistry", address(raterRegistry)));
@@ -363,6 +374,10 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         console.log("LaunchDistributionPool:", address(launchDistributionPool));
         console.log("AdvisoryVoteRecorder:", address(advisoryVoteRecorder));
         console.log("Governance:", governance);
+    }
+
+    function _proxyAdmin(address proxy) internal view returns (address) {
+        return address(uint160(uint256(vm.load(proxy, ERC1967_ADMIN_SLOT))));
     }
 
     function _resolveWorldChainUsdcAddress() internal view returns (address) {
