@@ -337,6 +337,7 @@ contract LaunchDistributionPool is
         if (earnedRewardCreditRecorded[contentId][roundId][commitKey]) return 0;
         if (raterRoundCreditRecorded[rater][contentId][roundId]) return 0;
         bool raterVerified = _hasActiveHumanCredential(rater);
+        bool clusterProofRequired = address(clusterPayoutOracle) != address(0);
         if (
             !raterVerified
                 && roundUnverifiedLaunchCreditCount[contentId][roundId] >= policy.maxUnverifiedCreditsPerRound
@@ -346,13 +347,13 @@ contract LaunchDistributionPool is
 
         earnedRewardCreditRecorded[contentId][roundId][commitKey] = true;
         raterRoundCreditRecorded[rater][contentId][roundId] = true;
-        if (!raterVerified) {
+        if (!raterVerified && !clusterProofRequired) {
             roundUnverifiedLaunchCreditCount[contentId][roundId] += 1;
         }
         _recordAnchorRound(rater, contentId, roundId);
         _recordVerifiedAnchors(policy, rater, verifiedAnchorIds);
 
-        if (address(clusterPayoutOracle) != address(0)) {
+        if (clusterProofRequired) {
             _storePendingEarnedRaterCredit(rater, contentId, roundId, commitKey, scoreBps, policy);
             return 0;
         }
@@ -381,6 +382,7 @@ contract LaunchDistributionPool is
         if (earnedRewardCreditRecorded[contentId][roundId][advisoryCommitKey]) return (false, 0);
         if (raterRoundCreditRecorded[rater][contentId][roundId]) return (false, 0);
         bool raterVerified = _hasActiveHumanCredential(rater);
+        bool clusterProofRequired = address(clusterPayoutOracle) != address(0);
         if (
             !raterVerified
                 && roundUnverifiedLaunchCreditCount[contentId][roundId] >= policy.maxUnverifiedCreditsPerRound
@@ -390,13 +392,13 @@ contract LaunchDistributionPool is
 
         earnedRewardCreditRecorded[contentId][roundId][advisoryCommitKey] = true;
         raterRoundCreditRecorded[rater][contentId][roundId] = true;
-        if (!raterVerified) {
+        if (!raterVerified && !clusterProofRequired) {
             roundUnverifiedLaunchCreditCount[contentId][roundId] += 1;
         }
         _recordAnchorRound(rater, contentId, roundId);
         _recordVerifiedAnchors(policy, rater, verifiedAnchorIds);
 
-        if (address(clusterPayoutOracle) != address(0)) {
+        if (clusterProofRequired) {
             _storePendingEarnedRaterCredit(rater, contentId, roundId, advisoryCommitKey, scoreBps, policy);
             return (true, 0);
         }
@@ -429,6 +431,12 @@ contract LaunchDistributionPool is
         }
         if (!oracle.verifyPayoutWeight(payoutWeight, proof)) revert InvalidProof();
 
+        if (!_hasActiveHumanCredential(pending.rater)) {
+            if (roundUnverifiedLaunchCreditCount[contentId][roundId] >= pending.policy.maxUnverifiedCreditsPerRound) {
+                revert InvalidAmount();
+            }
+            roundUnverifiedLaunchCreditCount[contentId][roundId] += 1;
+        }
         earnedRewardCreditFinalized[contentId][roundId][commitKey] = true;
         uint256 effectiveCreditBps = payoutWeight.effectiveWeight;
         paidAmount = _recordEarnedRaterReward(

@@ -251,6 +251,7 @@ contract LaunchDistributionPoolTest is Test {
         assertEq(paidBeforeSnapshot, 0);
         assertEq(pool.qualifyingCreditBps(alice), 0);
         assertEq(pool.qualifyingRatingCount(alice), 0);
+        assertEq(pool.roundUnverifiedLaunchCreditCount(1, 1), 0);
 
         oracle.proposeCorrelationEpoch(
             1, 1, 1, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
@@ -296,8 +297,42 @@ contract LaunchDistributionPoolTest is Test {
         assertEq(paidAfterSnapshot, 0);
         assertEq(pool.qualifyingCreditBps(alice), 2_500);
         assertEq(pool.qualifyingRatingCount(alice), 0);
+        assertEq(pool.roundUnverifiedLaunchCreditCount(1, 1), 1);
         assertTrue(pool.earnedRewardCreditFinalized(1, 1, _commitKey(1)));
         assertTrue(pool.isRoundPayoutSnapshotConsumed(pool.PAYOUT_DOMAIN_LAUNCH_CREDIT(), 0, 1, 1));
+    }
+
+    function test_PendingLaunchOracleCreditsDoNotReserveUnverifiedRoundSlots() public {
+        _configureLaunchOracle(1);
+        bytes32 anchorId = bytes32("anchor-a");
+        uint256 maxCredits = pool.MAX_UNVERIFIED_LAUNCH_CREDITS_PER_ROUND();
+
+        for (uint256 i = 0; i < maxCredits; i++) {
+            address rater = address(uint160(0x7000 + i));
+            bytes32 commitKey = keccak256(abi.encode("pending", i));
+            pool.recordEarnedRaterReward(
+                rater, 60, 1, commitKey, 8_000, 3, true, pool.MIN_LAUNCH_CREDIT_STAKE(), _singleAnchor(anchorId)
+            );
+
+            assertTrue(pool.earnedRewardCreditRecorded(60, 1, commitKey));
+            assertEq(pool.roundUnverifiedLaunchCreditCount(60, 1), 0);
+        }
+
+        bytes32 extraCommitKey = keccak256("pending-extra");
+        pool.recordEarnedRaterReward(
+            address(0xBEEF),
+            60,
+            1,
+            extraCommitKey,
+            8_000,
+            3,
+            true,
+            pool.MIN_LAUNCH_CREDIT_STAKE(),
+            _singleAnchor(anchorId)
+        );
+
+        assertTrue(pool.earnedRewardCreditRecorded(60, 1, extraCommitKey));
+        assertEq(pool.roundUnverifiedLaunchCreditCount(60, 1), 0);
     }
 
     function test_PendingLaunchCreditUsesRecordedOracleAfterRotation() public {
