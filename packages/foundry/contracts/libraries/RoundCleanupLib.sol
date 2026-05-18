@@ -3,8 +3,10 @@ pragma solidity ^0.8.24;
 
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
 import { ProtocolConfig } from "../ProtocolConfig.sol";
+import { ContentRegistry } from "../ContentRegistry.sol";
 import { IRaterIdentityRegistry } from "../interfaces/IRaterIdentityRegistry.sol";
 import { RoundLib } from "./RoundLib.sol";
 import { TlockVoteLib } from "./TlockVoteLib.sol";
@@ -15,10 +17,15 @@ interface IRoundCleanupActivityRegistry {
     function updateActivity(uint256 contentId) external;
 }
 
+interface IQuestionBundleRoundObserver {
+    function recordBundleQuestionTerminal(uint256 contentId, uint256 roundId, bool settled) external;
+}
+
 /// @title RoundCleanupLib
 /// @notice Shared refund and cleanup paths extracted from RoundVotingEngine to reduce runtime size.
 library RoundCleanupLib {
     using SafeERC20 for IERC20;
+    using SafeCast for uint256;
 
     uint256 internal constant CLEANUP_INCENTIVE_BPS = 100; // 1%
     uint256 internal constant CLEANUP_INCENTIVE_MAX = 5e6; // 5 LREP
@@ -39,6 +46,30 @@ library RoundCleanupLib {
     error NoStake();
     error VoteNotRevealed();
     error NothingProcessed();
+    error NothingToClaim();
+    error ReserveEmpty();
+    error RoundNotSettledOrTied();
+    error IndexOutOfBounds();
+
+    event RoundRevealFailed(uint256 indexed contentId, uint256 indexed roundId);
+    event BundleObserverNotifyFailed(
+        uint256 indexed contentId, uint256 indexed roundId, bool settled, bytes lowLevelError
+    );
+    event BundleObserverNotifyReplayed(uint256 indexed contentId, uint256 indexed roundId, bool settled);
+    event DeferredCleanupBountyClaimed(
+        uint256 indexed contentId,
+        uint256 indexed roundId,
+        address indexed recipient,
+        uint256 paidAmount,
+        uint256 remaining
+    );
+    event ForfeitedFundsAddedToTreasury(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
+    event UnrevealedStakeAddedToConsensusReserve(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
+    event ForfeitedFundsFallbackToConsensusReserve(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
+    event DeferredCleanupBountyAccrued(
+        uint256 indexed contentId, uint256 indexed roundId, address indexed recipient, uint256 amount
+    );
+    event CurrentEpochRefunded(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
 
     function targetRoundRevealableAt(
         mapping(uint256 => bytes32) storage roundDrandChainHashSnapshot,
@@ -173,6 +204,39 @@ library RoundCleanupLib {
         return (bytes32(0), account);
     }
 
+    function commitCore(mapping(bytes32 => RoundLib.Commit) storage roundCommits, bytes32 commitKey)
+        external
+        view
+        returns (
+            address voter,
+            uint64 stakeAmount,
+            address frontend,
+            uint48 revealableAfter,
+            bool revealed,
+            bool isUp,
+            uint8 epochIndex
+        )
+    {
+        RoundLib.Commit storage c = roundCommits[commitKey];
+        return (c.voter, c.stakeAmount, c.frontend, c.revealableAfter, c.revealed, c.isUp, c.epochIndex);
+    }
+
+    function commitRevealData(mapping(bytes32 => RoundLib.Commit) storage roundCommits, bytes32 commitKey)
+        external
+        view
+        returns (
+            bytes memory ciphertext,
+            uint64 targetRound,
+            bytes32 drandChainHash,
+            uint48 revealableAfter,
+            bool revealed,
+            uint64 stakeAmount
+        )
+    {
+        RoundLib.Commit storage c = roundCommits[commitKey];
+        return (c.ciphertext, c.targetRound, c.drandChainHash, c.revealableAfter, c.revealed, c.stakeAmount);
+    }
+
     function recordCommitIndexes(
         bytes32[] storage roundCommitHashes,
         mapping(uint256 => uint256) storage epochUnrevealedCount,
@@ -261,6 +325,168 @@ library RoundCleanupLib {
         lrepToken.safeTransfer(commitVoter, refundAmount);
     }
 
+    function claimDeferredCleanupBounty(
+        mapping(address => uint256) storage deferredCleanupBounty,
+        IERC20 lrepToken,
+        uint256 consensusReserve,
+        uint256 accountedLrepBalance,
+        uint256 contentId,
+        uint256 roundId,
+        address recipient
+    ) external returns (uint256 paidAmount, uint256 updatedConsensusReserve, uint256 updatedAccountedLrepBalance) {
+        uint256 pending = deferredCleanupBounty[recipient];
+        if (pending == 0) revert NothingToClaim();
+        if (consensusReserve == 0) revert ReserveEmpty();
+
+        paidAmount = pending > consensusReserve ? consensusReserve : pending;
+        uint256 remaining = pending - paidAmount;
+        deferredCleanupBounty[recipient] = remaining;
+        updatedConsensusReserve = consensusReserve - paidAmount;
+        updatedAccountedLrepBalance = accountedLrepBalance - paidAmount;
+        lrepToken.safeTransfer(recipient, paidAmount);
+
+        emit DeferredCleanupBountyClaimed(contentId, roundId, recipient, paidAmount, remaining);
+    }
+
+    function markRoundRevealFailed(
+        RoundLib.Round storage round,
+        mapping(uint256 => uint256) storage roundUnrevealedCleanupRemaining,
+        mapping(uint256 => bool) storage pendingBundleObserverReplay,
+        ContentRegistry registry,
+        uint256 contentId,
+        uint256 roundId
+    ) external {
+        round.state = RoundLib.RoundState.RevealFailed;
+        round.settledAt = block.timestamp.toUint48();
+        roundUnrevealedCleanupRemaining[roundId] = round.voteCount - round.revealedCount;
+        notifyBundleRoundTerminal(pendingBundleObserverReplay, registry, contentId, roundId, false);
+        emit RoundRevealFailed(contentId, roundId);
+    }
+
+    function notifyBundleRoundTerminal(
+        mapping(uint256 => bool) storage pendingBundleObserverReplay,
+        ContentRegistry registry,
+        uint256 contentId,
+        uint256 roundId,
+        bool settled
+    ) public {
+        address bundleEscrow = registry.questionRewardPoolEscrow();
+        if (bundleEscrow == address(0)) return;
+
+        try IQuestionBundleRoundObserver(bundleEscrow).recordBundleQuestionTerminal(contentId, roundId, settled) {
+            if (pendingBundleObserverReplay[roundId]) {
+                delete pendingBundleObserverReplay[roundId];
+            }
+        } catch (bytes memory lowLevelError) {
+            pendingBundleObserverReplay[roundId] = true;
+            emit BundleObserverNotifyFailed(contentId, roundId, settled, lowLevelError);
+        }
+    }
+
+    function replayBundleObserverNotify(
+        mapping(uint256 => bool) storage pendingBundleObserverReplay,
+        ContentRegistry registry,
+        uint256 contentId,
+        uint256 roundId,
+        bool settled
+    ) external {
+        require(pendingBundleObserverReplay[roundId], "no pending replay");
+        address bundleEscrow = registry.questionRewardPoolEscrow();
+        if (bundleEscrow == address(0)) return;
+        IQuestionBundleRoundObserver(bundleEscrow).recordBundleQuestionTerminal(contentId, roundId, settled);
+        delete pendingBundleObserverReplay[roundId];
+        emit BundleObserverNotifyReplayed(contentId, roundId, settled);
+    }
+
+    function processUnrevealedVotesForEngine(
+        RoundLib.Round storage round,
+        bytes32[] storage commitKeys,
+        mapping(bytes32 => RoundLib.Commit) storage roundCommits,
+        mapping(uint256 => mapping(uint256 => uint256)) storage roundCleanupIncentivePaid,
+        mapping(uint256 => uint256) storage roundUnrevealedCleanupRemaining,
+        mapping(address => uint256) storage roundDeferredCleanupBounty,
+        uint256 contentId,
+        uint256 roundId,
+        IERC20 lrepToken,
+        ProtocolConfig protocolConfig,
+        uint256 consensusReserve,
+        uint256 accountedLrepBalance,
+        address cleanupCaller,
+        uint256 startIndex,
+        uint256 count
+    ) external returns (uint256 updatedConsensusReserve, uint256 updatedAccountedLrepBalance) {
+        if (
+            round.state != RoundLib.RoundState.Settled && round.state != RoundLib.RoundState.Tied
+                && round.state != RoundLib.RoundState.RevealFailed
+        ) {
+            revert RoundNotSettledOrTied();
+        }
+
+        if (startIndex >= commitKeys.length) revert IndexOutOfBounds();
+
+        (
+            uint256 forfeitedToTreasury,
+            uint256 addedToConsensusReserve,
+            uint256 refundedLrep,
+            uint256 processedPastEpochCount,
+            uint256 cleanupIncentive,
+            uint256 nextConsensusReserve,
+            uint256 deferredCleanupBounty
+        ) = processUnrevealedVotes(
+            round,
+            commitKeys,
+            roundCommits,
+            roundCleanupIncentivePaid,
+            contentId,
+            roundId,
+            lrepToken,
+            protocolConfig,
+            consensusReserve,
+            cleanupCaller,
+            startIndex,
+            count
+        );
+
+        updatedConsensusReserve = nextConsensusReserve;
+        updatedAccountedLrepBalance = accountedLrepBalance;
+        uint256 paidOut = refundedLrep + cleanupIncentive;
+        if (forfeitedToTreasury > 0 && nextConsensusReserve == consensusReserve + addedToConsensusReserve) {
+            paidOut += forfeitedToTreasury;
+        }
+        if (paidOut > 0) {
+            updatedAccountedLrepBalance -= paidOut;
+        }
+
+        if (forfeitedToTreasury > 0) {
+            if (nextConsensusReserve == consensusReserve + addedToConsensusReserve) {
+                emit ForfeitedFundsAddedToTreasury(contentId, roundId, forfeitedToTreasury);
+            } else {
+                emit ForfeitedFundsFallbackToConsensusReserve(contentId, roundId, forfeitedToTreasury);
+            }
+        }
+
+        if (addedToConsensusReserve > 0) {
+            emit UnrevealedStakeAddedToConsensusReserve(contentId, roundId, addedToConsensusReserve);
+        }
+
+        if (deferredCleanupBounty > 0) {
+            roundDeferredCleanupBounty[cleanupCaller] += deferredCleanupBounty;
+            emit DeferredCleanupBountyAccrued(contentId, roundId, cleanupCaller, deferredCleanupBounty);
+        }
+
+        if (processedPastEpochCount > 0) {
+            uint256 remaining = roundUnrevealedCleanupRemaining[roundId];
+            if (remaining > 0) {
+                roundUnrevealedCleanupRemaining[roundId] =
+                    processedPastEpochCount >= remaining ? 0 : remaining - processedPastEpochCount;
+            }
+        }
+
+        if (refundedLrep > 0) {
+            emit CurrentEpochRefunded(contentId, roundId, refundedLrep);
+        }
+    }
+
     function processUnrevealedVotes(
         RoundLib.Round storage round,
         bytes32[] storage commitKeys,
@@ -275,7 +501,7 @@ library RoundCleanupLib {
         uint256 startIndex,
         uint256 count
     )
-        external
+        public
         returns (
             uint256 forfeitedToTreasury,
             uint256 addedToConsensusReserve,

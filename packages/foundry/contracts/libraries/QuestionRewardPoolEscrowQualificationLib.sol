@@ -58,6 +58,12 @@ library QuestionRewardPoolEscrowQualificationLib {
         bytes32 submitterIdentityKey;
     }
 
+    struct AdvanceCursorParams {
+        uint256 maxRounds;
+        uint8 rewardAssetUsdc;
+        uint8 payoutDomain;
+    }
+
     function previewRoundQualification(QualificationContext memory ctx)
         internal
         view
@@ -95,6 +101,38 @@ library QuestionRewardPoolEscrowQualificationLib {
             if (startedAt == 0 || (bountyClosesAt != 0 && startedAt > bountyClosesAt)) return;
         }
         revert RewardPoolCursorNeedsAdvance();
+    }
+
+    function advanceQualificationCursor(
+        mapping(uint256 => address) storage rewardPoolPayerIdentity,
+        mapping(uint256 => bytes32) storage rewardPoolPayerIdentityKey,
+        mapping(uint256 => address) storage rewardPoolClusterPayoutOracle,
+        RoundVotingEngine votingEngine,
+        RewardPool storage rewardPool,
+        AdvanceCursorParams memory params
+    ) external returns (uint256 skipped, uint256 nextRoundToEvaluate) {
+        require(params.maxRounds > 0, "No rounds");
+
+        nextRoundToEvaluate = rewardPool.nextRoundToEvaluate;
+        while (skipped < params.maxRounds) {
+            (bool roundFinished, bool canQualify,) = _roundQualificationStatus(
+                rewardPoolPayerIdentity,
+                rewardPoolPayerIdentityKey,
+                rewardPoolClusterPayoutOracle,
+                votingEngine,
+                rewardPool,
+                nextRoundToEvaluate,
+                params.rewardAssetUsdc,
+                params.payoutDomain
+            );
+            if (!roundFinished || canQualify) break;
+            nextRoundToEvaluate++;
+            skipped++;
+        }
+
+        if (skipped > 0) {
+            rewardPool.nextRoundToEvaluate = nextRoundToEvaluate.toUint64();
+        }
     }
 
     function qualifyRound(
@@ -321,6 +359,74 @@ library QuestionRewardPoolEscrowQualificationLib {
         uint256 roundId,
         uint8 payoutDomain
     ) external view returns (bool roundFinished, bool canQualify, uint256 eligibleVoters) {
+        return _clusterRoundQualificationStatus(
+            rewardPoolPayerIdentity,
+            rewardPoolPayerIdentityKey,
+            rewardPoolClusterPayoutOracle,
+            votingEngine,
+            rewardPool,
+            roundId,
+            payoutDomain
+        );
+    }
+
+    function _roundQualificationStatus(
+        mapping(uint256 => address) storage rewardPoolPayerIdentity,
+        mapping(uint256 => bytes32) storage rewardPoolPayerIdentityKey,
+        mapping(uint256 => address) storage rewardPoolClusterPayoutOracle,
+        RoundVotingEngine votingEngine,
+        RewardPool storage rewardPool,
+        uint256 roundId,
+        uint8 rewardAssetUsdc,
+        uint8 payoutDomain
+    ) private view returns (bool roundFinished, bool canQualify, uint256 eligibleVoters) {
+        (, RoundLib.RoundState state,,,,,,,,,,,,) = votingEngine.rounds(rewardPool.contentId, roundId);
+        if (state == RoundLib.RoundState.Open) return (false, false, 0);
+        if (state != RoundLib.RoundState.Settled) return (true, false, 0);
+
+        if (rewardPool.asset == rewardAssetUsdc && rewardPoolClusterPayoutOracle[rewardPool.id] != address(0)) {
+            return _clusterRoundQualificationStatus(
+                rewardPoolPayerIdentity,
+                rewardPoolPayerIdentityKey,
+                rewardPoolClusterPayoutOracle,
+                votingEngine,
+                rewardPool,
+                roundId,
+                payoutDomain
+            );
+        }
+
+        uint256 effectiveParticipantUnits;
+        (, canQualify,, effectiveParticipantUnits,,) = previewRoundQualification(
+            QualificationContext({
+                votingEngine: votingEngine,
+                protocolConfig: votingEngine.protocolConfig(),
+                rewardId: rewardPool.id,
+                contentId: rewardPool.contentId,
+                roundId: roundId,
+                bountyClosesAt: rewardPool.bountyClosesAt,
+                requiredVoters: rewardPool.requiredVoters,
+                bountyEligibility: rewardPool.bountyEligibility,
+                funder: rewardPool.funder,
+                funderIdentity: rewardPoolPayerIdentity[rewardPool.id],
+                funderIdentityKey: rewardPoolPayerIdentityKey[rewardPool.id],
+                submitterIdentity: rewardPool.submitterIdentity,
+                submitterIdentityKey: rewardPool.submitterIdentityKey
+            })
+        );
+        if (canQualify) canQualify = _previewRoundAllocation(rewardPool) >= effectiveParticipantUnits;
+        return (true, canQualify, effectiveParticipantUnits);
+    }
+
+    function _clusterRoundQualificationStatus(
+        mapping(uint256 => address) storage rewardPoolPayerIdentity,
+        mapping(uint256 => bytes32) storage rewardPoolPayerIdentityKey,
+        mapping(uint256 => address) storage rewardPoolClusterPayoutOracle,
+        RoundVotingEngine votingEngine,
+        RewardPool storage rewardPool,
+        uint256 roundId,
+        uint8 payoutDomain
+    ) private view returns (bool roundFinished, bool canQualify, uint256 eligibleVoters) {
         (bool roundSettled,, uint256 rawEligibleVoters,,,) = _previewRoundQualificationWithClusterSnapshot(
             rewardPoolPayerIdentity,
             rewardPoolPayerIdentityKey,

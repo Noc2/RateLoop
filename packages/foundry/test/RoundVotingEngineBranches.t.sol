@@ -764,7 +764,6 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         (bytes32 ck3, bytes32 s3) = _commitPrediction(voter3, contentId, true, 6_500, 3e6);
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
-        assertEq(engine.roundLastCommitPrevrandao(contentId, roundId), bytes32(0), "last-commit entropy is deprecated");
         RoundLib.Round memory r0 = RoundEngineReadHelpers.round(engine, contentId, roundId);
         _warpPastTlockRevealTime(uint256(r0.startTime) + EPOCH);
 

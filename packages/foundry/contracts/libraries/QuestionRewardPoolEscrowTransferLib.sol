@@ -12,6 +12,7 @@ library QuestionRewardPoolEscrowTransferLib {
 
     event RewardPoolRefunded(uint256 indexed rewardPoolId, address indexed funder, uint256 amount);
     event RewardPoolForfeited(uint256 indexed rewardPoolId, address indexed treasury, uint256 amount);
+    event NonAssetTokenRecovered(address indexed token, address indexed to, uint256 amount);
 
     function pullExactToken(IERC20 token, address funder, uint256 amount) external returns (uint256 receivedAmount) {
         uint256 balanceBefore = token.balanceOf(address(this));
@@ -74,6 +75,16 @@ library QuestionRewardPoolEscrowTransferLib {
             _transferResidue(rewardToken, false, funder, address(0), amount);
             emit RewardPoolRefunded(rewardPoolId, funder, amount);
         }
+    }
+
+    function recoverNonAssetToken(IERC20 token, IERC20 lrepToken, IERC20 usdcToken, address to, uint256 amount)
+        external
+    {
+        require(address(token) != address(lrepToken), "Cannot recover protocol asset");
+        require(address(token) != address(usdcToken), "Cannot recover protocol asset");
+        require(to != address(0), "Invalid recipient");
+        token.safeTransfer(to, amount);
+        emit NonAssetTokenRecovered(address(token), to, amount);
     }
 
     function _transferResidue(IERC20 rewardToken, bool nonRefundable, address funder, address treasury, uint256 amount)

@@ -6,7 +6,6 @@ import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/ac
 import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
 import { ContentRegistry } from "./ContentRegistry.sol";
@@ -50,7 +49,6 @@ contract QuestionRewardPoolEscrow is
     IRoundPayoutSnapshotConsumer
 {
     using SafeCast for uint256;
-    using SafeERC20 for IERC20;
 
     bytes32 internal constant CONFIG_ROLE = keccak256("CONFIG_ROLE");
     bytes32 internal constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
@@ -631,20 +629,17 @@ contract QuestionRewardPoolEscrow is
         external
         returns (uint256 skipped, uint256 nextRoundToEvaluate)
     {
-        require(maxRounds > 0, "No rounds");
         RewardPool storage rewardPool = _getIncompleteRewardPoolForQualification(rewardPoolId);
-
-        nextRoundToEvaluate = rewardPool.nextRoundToEvaluate;
-        while (skipped < maxRounds) {
-            (bool roundFinished, bool canQualify,) = _roundQualificationStatus(rewardPool, nextRoundToEvaluate);
-            if (!roundFinished || canQualify) break;
-            nextRoundToEvaluate++;
-            skipped++;
-        }
-
-        if (skipped > 0) {
-            rewardPool.nextRoundToEvaluate = nextRoundToEvaluate.toUint64();
-        }
+        return QuestionRewardPoolEscrowQualificationLib.advanceQualificationCursor(
+            rewardPoolPayerIdentity,
+            rewardPoolPayerIdentityKey,
+            rewardPoolClusterPayoutOracle,
+            votingEngine,
+            rewardPool,
+            QuestionRewardPoolEscrowQualificationLib.AdvanceCursorParams({
+                maxRounds: maxRounds, rewardAssetUsdc: REWARD_ASSET_USDC, payoutDomain: PAYOUT_DOMAIN_QUESTION_REWARD
+            })
+        );
     }
 
     function claimQuestionReward(uint256 rewardPoolId, uint256 roundId)
@@ -729,7 +724,11 @@ contract QuestionRewardPoolEscrow is
 
         uint256 redirectedFrontendFee;
         (rewardAmount, frontendFee, frontendRecipient, redirectedFrontendFee) = _settleClaimPayout(
-            _rewardToken(rewardPool.asset), rewardRecipient, rewardAmount, frontendRecipient, frontendFee
+            rewardPool.asset == REWARD_ASSET_LREP ? lrepToken : usdcToken,
+            rewardRecipient,
+            rewardAmount,
+            frontendRecipient,
+            frontendFee
         );
         if (redirectedFrontendFee > 0) {
             // M-Funds-1: the bucket was credited reservedFrontendFee at line above, but the
@@ -842,11 +841,7 @@ contract QuestionRewardPoolEscrow is
         onlyRole(DEFAULT_ADMIN_ROLE)
         nonReentrant
     {
-        require(address(token) != address(lrepToken), "Cannot recover protocol asset");
-        require(address(token) != address(usdcToken), "Cannot recover protocol asset");
-        require(to != address(0), "Invalid recipient");
-        token.safeTransfer(to, amount);
-        emit NonAssetTokenRecovered(address(token), to, amount);
+        QuestionRewardPoolEscrowTransferLib.recoverNonAssetToken(token, lrepToken, usdcToken, to, amount);
     }
 
     /// @notice Recover a round's allocation after the arbiter rejected its cluster snapshot
@@ -1000,66 +995,14 @@ contract QuestionRewardPoolEscrow is
     }
 
     function refundExpiredRewardPool(uint256 rewardPoolId) external nonReentrant returns (uint256 refundAmount) {
-        RewardPool storage rewardPool = _getExistingRewardPool(rewardPoolId);
-        if (rewardPool.qualifiedRounds >= rewardPool.requiredSettledRounds || rewardPool.unallocatedRefunded) {
-            refundAmount = _refundCompleteRewardPool(rewardPoolId, rewardPool);
-        } else {
-            require(rewardPool.bountyClosesAt != 0 && block.timestamp > rewardPool.bountyClosesAt, "Not expired");
-            refundAmount = _refundUnallocatedRewardPool(rewardPoolId, rewardPool);
-        }
+        return QuestionRewardPoolEscrowPoolActionsLib.refundExpiredRewardPool(
+            rewardPools, votingEngine, lrepToken, usdcToken, rewardPoolId, BUNDLE_CLAIM_GRACE
+        );
     }
 
     function refundInactiveRewardPool(uint256 rewardPoolId) external nonReentrant returns (uint256 refundAmount) {
-        RewardPool storage rewardPool = _getExistingRewardPool(rewardPoolId);
-        require(!registry.isContentActive(rewardPool.contentId), "Content active");
-        // If the content is Dormant, the original submitter still has an exclusive 24-hour
-        // revival window. Forfeiting during that window would let anyone atomically combine
-        // markDormant + refundInactiveRewardPool to strip the bounty before the submitter
-        // can recover it. Wait until the revival window closes. Cancelled / non-dormant
-        // content has dormantKeyReleasableAt == 0 so this check is a no-op there.
-        require(block.timestamp > registry.dormantKeyReleasableAt(rewardPool.contentId), "Revival active");
-        refundAmount = _refundUnallocatedRewardPool(rewardPoolId, rewardPool);
-    }
-
-    function _refundUnallocatedRewardPool(uint256 rewardPoolId, RewardPool storage rewardPool)
-        internal
-        returns (uint256 refundAmount)
-    {
-        require(!rewardPool.refunded, "Already refunded");
-        require(!rewardPool.unallocatedRefunded, "Already refunded");
-        require(rewardPool.qualifiedRounds < rewardPool.requiredSettledRounds, "Bounty complete");
-        _requireNoPendingFinishedRound(rewardPool);
-        refundAmount = rewardPool.unallocatedAmount;
-        require(refundAmount > 0, "No refund");
-        rewardPool.unallocatedRefunded = true;
-        rewardPool.unallocatedAmount = 0;
-        rewardPool.fundedAmount -= refundAmount;
-        _transferRewardPoolResidue(rewardPoolId, rewardPool, refundAmount);
-    }
-
-    function _refundCompleteRewardPool(uint256 rewardPoolId, RewardPool storage rewardPool)
-        internal
-        returns (uint256 refundAmount)
-    {
-        uint256 claimDeadline = rewardPool.claimDeadline;
-        require(claimDeadline != 0, "Grace");
-        require(block.timestamp > claimDeadline + BUNDLE_CLAIM_GRACE, "Grace");
-
-        refundAmount = rewardPool.fundedAmount - rewardPool.claimedAmount;
-        require(refundAmount > 0, "No refund");
-        rewardPool.refunded = true;
-        rewardPool.claimDeadline = 0;
-        _transferRewardPoolResidue(rewardPoolId, rewardPool, refundAmount);
-    }
-
-    function _transferRewardPoolResidue(uint256 rewardPoolId, RewardPool storage rewardPool, uint256 amount) internal {
-        QuestionRewardPoolEscrowTransferLib.transferRewardPoolResidue(
-            _rewardToken(rewardPool.asset),
-            votingEngine,
-            rewardPoolId,
-            rewardPool.funder,
-            rewardPool.nonRefundable,
-            amount
+        return QuestionRewardPoolEscrowPoolActionsLib.refundInactiveRewardPool(
+            rewardPools, registry, votingEngine, lrepToken, usdcToken, rewardPoolId
         );
     }
 
@@ -1166,10 +1109,6 @@ contract QuestionRewardPoolEscrow is
         _unpause();
     }
 
-    function _rewardToken(uint8 asset) internal view returns (IERC20 token) {
-        return asset == REWARD_ASSET_LREP ? lrepToken : usdcToken;
-    }
-
     function _requireRegistryVotingEngine() internal view {
         require(registry.votingEngine() == address(votingEngine), "Stale engine");
     }
@@ -1258,95 +1197,6 @@ contract QuestionRewardPoolEscrow is
                 || rewardPool.qualifiedRounds >= rewardPool.requiredSettledRounds
         ) return false;
         return roundId >= rewardPool.startRoundId && roundId == rewardPool.nextRoundToEvaluate;
-    }
-
-    function _previewRoundQualification(RewardPool storage rewardPool, uint256 roundId)
-        internal
-        view
-        returns (
-            bool roundSettled,
-            bool canQualify,
-            uint256 rawEligibleVoters,
-            uint256 effectiveParticipantUnits,
-            uint256 totalClaimWeight,
-            uint48 settledAt
-        )
-    {
-        if (_usesClusterPayoutSnapshot(rewardPool)) {
-            return QuestionRewardPoolEscrowQualificationLib.previewRoundQualificationWithClusterSnapshot(
-                rewardPoolPayerIdentity,
-                rewardPoolPayerIdentityKey,
-                rewardPoolClusterPayoutOracle,
-                votingEngine,
-                rewardPool,
-                roundId,
-                PAYOUT_DOMAIN_QUESTION_REWARD
-            );
-        }
-
-        (roundSettled, canQualify, rawEligibleVoters, effectiveParticipantUnits, totalClaimWeight, settledAt) =
-            QuestionRewardPoolEscrowQualificationLib.previewRoundQualification(
-                QuestionRewardPoolEscrowQualificationLib.QualificationContext({
-                    votingEngine: votingEngine,
-                    protocolConfig: votingEngine.protocolConfig(),
-                    rewardId: rewardPool.id,
-                    contentId: rewardPool.contentId,
-                    roundId: roundId,
-                    bountyClosesAt: rewardPool.bountyClosesAt,
-                    requiredVoters: rewardPool.requiredVoters,
-                    bountyEligibility: rewardPool.bountyEligibility,
-                    funder: rewardPool.funder,
-                    // Use payer identity for exclusion checks so gateway-mediated payments
-                    // (e.g. X402) correctly exclude the actual human payer, not the gateway contract.
-                    funderIdentity: rewardPoolPayerIdentity[rewardPool.id],
-                    funderIdentityKey: rewardPoolPayerIdentityKey[rewardPool.id],
-                    submitterIdentity: rewardPool.submitterIdentity,
-                    submitterIdentityKey: rewardPool.submitterIdentityKey
-                })
-            );
-    }
-
-    function _roundQualificationStatus(RewardPool storage rewardPool, uint256 roundId)
-        internal
-        view
-        returns (bool roundFinished, bool canQualify, uint256 eligibleVoters)
-    {
-        (, RoundLib.RoundState state,,,,,,,,,,,,) = votingEngine.rounds(rewardPool.contentId, roundId);
-        if (state == RoundLib.RoundState.Open) return (false, false, 0);
-        if (state != RoundLib.RoundState.Settled) return (true, false, 0);
-
-        if (_usesClusterPayoutSnapshot(rewardPool)) {
-            return QuestionRewardPoolEscrowQualificationLib.clusterRoundQualificationStatus(
-                rewardPoolPayerIdentity,
-                rewardPoolPayerIdentityKey,
-                rewardPoolClusterPayoutOracle,
-                votingEngine,
-                rewardPool,
-                roundId,
-                PAYOUT_DOMAIN_QUESTION_REWARD
-            );
-        }
-
-        uint256 effectiveParticipantUnits;
-        (, canQualify,, effectiveParticipantUnits,,) = _previewRoundQualification(rewardPool, roundId);
-        if (canQualify) canQualify = _previewRoundAllocation(rewardPool) >= effectiveParticipantUnits;
-        return (true, canQualify, effectiveParticipantUnits);
-    }
-
-    function _requireNoPendingFinishedRound(RewardPool storage rewardPool) internal view {
-        uint256 nextRoundToEvaluate = rewardPool.nextRoundToEvaluate;
-        QuestionRewardPoolEscrowQualificationLib.requireNoPendingFinishedRound(
-            votingEngine, rewardPool.contentId, nextRoundToEvaluate, rewardPool.bountyClosesAt
-        );
-    }
-
-    function _previewRoundAllocation(RewardPool storage rewardPool) internal view returns (uint256 allocation) {
-        if (rewardPool.qualifiedRounds >= rewardPool.requiredSettledRounds) return 0;
-        uint256 remainingRounds = uint256(rewardPool.requiredSettledRounds) - rewardPool.qualifiedRounds;
-        allocation = remainingRounds == 1
-            ? rewardPool.unallocatedAmount
-            : rewardPool.fundedAmount / rewardPool.requiredSettledRounds;
-        if (allocation > rewardPool.unallocatedAmount) return 0;
     }
 
     function _timelyRevealedCommitFrontend(uint256 contentId, uint256 roundId, bytes32 commitKey, uint64 closesAt)

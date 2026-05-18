@@ -4,6 +4,7 @@ pragma solidity ^0.8.24;
 import { ContentRegistry } from "../ContentRegistry.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { IERC20Permit } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol";
+import { IAdvisoryVoteRecorder } from "../interfaces/IAdvisoryVoteRecorder.sol";
 import { IFrontendRegistry } from "../interfaces/IFrontendRegistry.sol";
 import { IRaterIdentityRegistry } from "../interfaces/IRaterIdentityRegistry.sol";
 
@@ -112,6 +113,38 @@ library VotePreflightLib {
             // only if the existing allowance is sufficient.
         }
         require(IERC20(token).allowance(owner, spender) >= amount, "Insufficient allowance");
+    }
+
+    function validateNoAdvisoryConflict(
+        address advisoryRecorder,
+        uint256 contentId,
+        uint256 roundId,
+        address voter,
+        bytes32 identityKey,
+        uint256 cooldownWindow
+    ) external view {
+        if (advisoryRecorder == address(0)) return;
+
+        IAdvisoryVoteRecorder recorder = IAdvisoryVoteRecorder(advisoryRecorder);
+        if (recorder.advisoryCommitKeyByRater(contentId, roundId, voter) != bytes32(0)) {
+            revert AlreadyCommitted();
+        }
+
+        uint256 lastAdvisoryVote = recorder.lastAdvisoryVoteTimestamp(contentId, voter);
+        if (identityKey != bytes32(0)) {
+            if (recorder.advisoryCommitKeyByIdentity(contentId, roundId, identityKey) != bytes32(0)) {
+                revert AlreadyCommitted();
+            }
+
+            uint256 lastIdentityAdvisoryVote = recorder.lastAdvisoryVoteTimestampByIdentity(contentId, identityKey);
+            if (lastIdentityAdvisoryVote > lastAdvisoryVote) {
+                lastAdvisoryVote = lastIdentityAdvisoryVote;
+            }
+        }
+
+        if (lastAdvisoryVote > 0 && block.timestamp < lastAdvisoryVote + cooldownWindow) {
+            revert CooldownActive();
+        }
     }
 
     function prepareCommit(

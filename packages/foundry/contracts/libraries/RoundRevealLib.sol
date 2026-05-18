@@ -16,6 +16,7 @@ library RoundRevealLib {
     uint64 internal constant RATING_EVIDENCE_BASE_UNIT = 1_000_000;
     uint64 internal constant RATING_EVIDENCE_STAKE_BONUS_CAP = 10_000_000;
     uint64 internal constant RATING_EVIDENCE_MAX_STAKE_BONUS = 1_000_000;
+    uint256 internal constant RBTS_SEED_BLOCK_FLAG = 1 << 255;
 
     error RoundNotOpen();
     error NoCommit();
@@ -23,6 +24,9 @@ library RoundRevealLib {
     error EpochNotEnded();
     error HashMismatch();
     error NotEnoughVotes();
+    error RevealGraceActive();
+
+    event RbtsSeedCaptured(uint256 indexed contentId, uint256 indexed roundId, bytes32 entropy);
 
     struct RevealRbtsParams {
         uint256 currentEligibleFrontendStake;
@@ -258,10 +262,68 @@ library RoundRevealLib {
         result.forfeitClaimants = totals.forfeitClaimants;
     }
 
+    function captureRbtsSeed(
+        mapping(uint256 => mapping(uint256 => bytes32)) storage roundRbtsSeedEntropy,
+        uint256 contentId,
+        uint256 roundId
+    ) external {
+        _captureRbtsSeed(roundRbtsSeedEntropy, contentId, roundId);
+    }
+
+    function refreshRbtsSeed(
+        mapping(uint256 => mapping(uint256 => bytes32)) storage roundRbtsSeedEntropy,
+        uint256 contentId,
+        uint256 roundId
+    ) external {
+        uint256 seedWord = uint256(roundRbtsSeedEntropy[contentId][roundId]);
+        if (seedWord < RBTS_SEED_BLOCK_FLAG) revert RevealGraceActive();
+        uint256 seedBlock = seedWord ^ RBTS_SEED_BLOCK_FLAG;
+        if (block.number <= seedBlock || blockhash(seedBlock) != bytes32(0)) revert RevealGraceActive();
+        _captureRbtsSeed(roundRbtsSeedEntropy, contentId, roundId);
+    }
+
+    function finalizeRbtsSeed(
+        mapping(uint256 => mapping(uint256 => bytes32)) storage roundRbtsSeedEntropy,
+        uint256 contentId,
+        uint256 roundId
+    ) external returns (bytes32 settlementEntropy) {
+        settlementEntropy = roundRbtsSeedEntropy[contentId][roundId];
+        uint256 seedWord = uint256(settlementEntropy);
+        if (seedWord < RBTS_SEED_BLOCK_FLAG) return settlementEntropy;
+
+        uint256 seedBlock = seedWord ^ RBTS_SEED_BLOCK_FLAG;
+        if (block.number <= seedBlock) revert RevealGraceActive();
+        bytes32 seedBlockhash = blockhash(seedBlock);
+        if (seedBlockhash == bytes32(0)) revert RevealGraceActive();
+        settlementEntropy = keccak256(
+            abi.encode(
+                "rateloop.rbts.delayed-seed.v1",
+                block.chainid,
+                address(this),
+                contentId,
+                roundId,
+                seedBlock,
+                seedBlockhash
+            )
+        );
+        roundRbtsSeedEntropy[contentId][roundId] = settlementEntropy;
+        emit RbtsSeedCaptured(contentId, roundId, settlementEntropy);
+    }
+
     function _effectiveStake(uint64 stakeAmount, uint8 epochIndex) private pure returns (uint64) {
         if (stakeAmount == 0) return 0;
         uint256 epochWeightBps = RoundLib.epochWeightBps(epochIndex);
         return ((uint256(stakeAmount) * epochWeightBps) / 10_000).toUint64();
+    }
+
+    function _captureRbtsSeed(
+        mapping(uint256 => mapping(uint256 => bytes32)) storage roundRbtsSeedEntropy,
+        uint256 contentId,
+        uint256 roundId
+    ) private {
+        bytes32 seedBlockMarker = bytes32(RBTS_SEED_BLOCK_FLAG | block.number);
+        roundRbtsSeedEntropy[contentId][roundId] = seedBlockMarker;
+        emit RbtsSeedCaptured(contentId, roundId, seedBlockMarker);
     }
 
     function _ratingEvidenceWeight(uint64 stakeAmount, uint8 epochIndex) private pure returns (uint64) {

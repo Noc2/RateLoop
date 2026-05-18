@@ -8,6 +8,7 @@ import { ContentRegistry } from "../ContentRegistry.sol";
 import { ProtocolConfig } from "../ProtocolConfig.sol";
 import { RoundVotingEngine } from "../RoundVotingEngine.sol";
 import { QuestionRewardPoolEscrowEligibilityLib } from "./QuestionRewardPoolEscrowEligibilityLib.sol";
+import { QuestionRewardPoolEscrowQualificationLib } from "./QuestionRewardPoolEscrowQualificationLib.sol";
 import { QuestionRewardPoolEscrowTransferLib } from "./QuestionRewardPoolEscrowTransferLib.sol";
 import { QuestionRewardPoolEscrowVoterLib } from "./QuestionRewardPoolEscrowVoterLib.sol";
 import { RewardPool, CreateRewardPoolParams } from "./QuestionRewardPoolEscrowTypes.sol";
@@ -98,6 +99,37 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         if (clusterPayoutOracle == address(0)) return;
         rewardPoolClusterPayoutOracle[rewardPoolId] = clusterPayoutOracle;
         emit RewardPoolClusterPayoutOracleSnapshotted(rewardPoolId, clusterPayoutOracle);
+    }
+
+    function refundExpiredRewardPool(
+        mapping(uint256 => RewardPool) storage rewardPools,
+        RoundVotingEngine votingEngine,
+        IERC20 lrepToken,
+        IERC20 usdcToken,
+        uint256 rewardPoolId,
+        uint256 claimGrace
+    ) external returns (uint256 refundAmount) {
+        RewardPool storage rewardPool = _getExistingRewardPool(rewardPools, rewardPoolId);
+        if (rewardPool.qualifiedRounds >= rewardPool.requiredSettledRounds || rewardPool.unallocatedRefunded) {
+            return _refundCompleteRewardPool(votingEngine, lrepToken, usdcToken, rewardPoolId, rewardPool, claimGrace);
+        }
+
+        require(rewardPool.bountyClosesAt != 0 && block.timestamp > rewardPool.bountyClosesAt, "Not expired");
+        return _refundUnallocatedRewardPool(votingEngine, lrepToken, usdcToken, rewardPoolId, rewardPool);
+    }
+
+    function refundInactiveRewardPool(
+        mapping(uint256 => RewardPool) storage rewardPools,
+        ContentRegistry registry,
+        RoundVotingEngine votingEngine,
+        IERC20 lrepToken,
+        IERC20 usdcToken,
+        uint256 rewardPoolId
+    ) external returns (uint256 refundAmount) {
+        RewardPool storage rewardPool = _getExistingRewardPool(rewardPools, rewardPoolId);
+        require(!registry.isContentActive(rewardPool.contentId), "Content active");
+        require(block.timestamp > registry.dormantKeyReleasableAt(rewardPool.contentId), "Revival active");
+        return _refundUnallocatedRewardPool(votingEngine, lrepToken, usdcToken, rewardPoolId, rewardPool);
     }
 
     function _storeRewardPool(
@@ -229,6 +261,73 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         rewardPool.reasonHash = reasonHash;
 
         emit RewardPoolPurposeSet(rewardPoolId, bountyKind, challengedRoundId, reasonHash);
+    }
+
+    function _refundUnallocatedRewardPool(
+        RoundVotingEngine votingEngine,
+        IERC20 lrepToken,
+        IERC20 usdcToken,
+        uint256 rewardPoolId,
+        RewardPool storage rewardPool
+    ) private returns (uint256 refundAmount) {
+        require(!rewardPool.refunded, "Already refunded");
+        require(!rewardPool.unallocatedRefunded, "Already refunded");
+        require(rewardPool.qualifiedRounds < rewardPool.requiredSettledRounds, "Bounty complete");
+        QuestionRewardPoolEscrowQualificationLib.requireNoPendingFinishedRound(
+            votingEngine, rewardPool.contentId, rewardPool.nextRoundToEvaluate, rewardPool.bountyClosesAt
+        );
+        refundAmount = rewardPool.unallocatedAmount;
+        require(refundAmount > 0, "No refund");
+        rewardPool.unallocatedRefunded = true;
+        rewardPool.unallocatedAmount = 0;
+        rewardPool.fundedAmount -= refundAmount;
+        _transferRewardPoolResidue(votingEngine, lrepToken, usdcToken, rewardPoolId, rewardPool, refundAmount);
+    }
+
+    function _refundCompleteRewardPool(
+        RoundVotingEngine votingEngine,
+        IERC20 lrepToken,
+        IERC20 usdcToken,
+        uint256 rewardPoolId,
+        RewardPool storage rewardPool,
+        uint256 claimGrace
+    ) private returns (uint256 refundAmount) {
+        uint256 claimDeadline = rewardPool.claimDeadline;
+        require(claimDeadline != 0, "Grace");
+        require(block.timestamp > claimDeadline + claimGrace, "Grace");
+
+        refundAmount = rewardPool.fundedAmount - rewardPool.claimedAmount;
+        require(refundAmount > 0, "No refund");
+        rewardPool.refunded = true;
+        rewardPool.claimDeadline = 0;
+        _transferRewardPoolResidue(votingEngine, lrepToken, usdcToken, rewardPoolId, rewardPool, refundAmount);
+    }
+
+    function _transferRewardPoolResidue(
+        RoundVotingEngine votingEngine,
+        IERC20 lrepToken,
+        IERC20 usdcToken,
+        uint256 rewardPoolId,
+        RewardPool storage rewardPool,
+        uint256 amount
+    ) private {
+        QuestionRewardPoolEscrowTransferLib.transferRewardPoolResidue(
+            _rewardToken(lrepToken, usdcToken, rewardPool.asset),
+            votingEngine,
+            rewardPoolId,
+            rewardPool.funder,
+            rewardPool.nonRefundable,
+            amount
+        );
+    }
+
+    function _getExistingRewardPool(mapping(uint256 => RewardPool) storage rewardPools, uint256 rewardPoolId)
+        private
+        view
+        returns (RewardPool storage rewardPool)
+    {
+        rewardPool = rewardPools[rewardPoolId];
+        require(rewardPool.id != 0, "Bounty not found");
     }
 
     function _resolveFunderIdentity(ProtocolConfig protocolConfig, address funder)
