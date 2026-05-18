@@ -174,7 +174,7 @@ const SmartContracts: NextPage = () => {
           <strong>Supply cap:</strong> Distribution and reward recycling stay bounded by <code>MAX_SUPPLY</code>.
         </li>
         <li>
-          <strong>RBTS staking:</strong> The production UI can approve optional LREP stake and submits a private up/down
+          <strong>Rating stake:</strong> The production UI can approve optional LREP stake and submits a private up/down
           signal plus expected up-vote percentage through <code>commitVote()</code>. Zero-LREP votes can participate
           through the advisory recorder and qualify for launch reputation; only staked votes carry normal settlement
           economics.
@@ -416,7 +416,7 @@ const SmartContracts: NextPage = () => {
             RoundVotingEngine.commitVote(contentId, roundContext, targetRound, drandChainHash, commitHash, ciphertext,
             stakeAmount, frontend)
           </code>{" "}
-          &mdash; Default robust BTS flow. Locks LREP and records the tlock-encrypted up/down signal plus expected
+          &mdash; Default private rating flow. Locks LREP and records the tlock-encrypted up/down signal plus expected
           up-vote percentage. The report is hidden until the epoch ends. The redeployed contract rejects malformed or
           non-armored ciphertexts, binds the canonical internal rating prior into the round context, and binds the
           reveal-target metadata on-chain. The prior is not a user-facing vote target; raters submit an absolute
@@ -435,8 +435,8 @@ const SmartContracts: NextPage = () => {
         </li>
         <li>
           <code>revealVoteByCommitKey(contentId, roundId, commitKey, isUp, predictedUpBps, salt)</code> &mdash; Reveal a
-          previously committed RBTS report after the epoch ends. This remains the keeper-assisted/self-reveal path: the
-          keeper normally performs off-chain drand/tlock decryption after validating the stored stanza metadata and
+          previously committed rating report after the epoch ends. This remains the keeper-assisted/self-reveal path:
+          the keeper normally performs off-chain drand/tlock decryption after validating the stored stanza metadata and
           submits the reveal, but any caller that knows the plaintext <code>(isUp, predictedUpBps, salt)</code> can
           submit it. The production UI keeps this mostly hidden, but connected users also have a small manual fallback
           link if an auto-reveal appears delayed. The chain binds the reveal to the exact submitted ciphertext via{" "}
@@ -448,7 +448,7 @@ const SmartContracts: NextPage = () => {
           <code>settleRound(contentId, roundId)</code> &mdash; Settle the current round once at least{" "}
           <code>max(minVoters, 3)</code> votes from the round snapshot are revealed and all past-epoch votes have been
           revealed (or their {protocolDocFacts.revealGracePeriodLabel} reveal grace period has expired). Determines
-          winners based on epoch-weighted stakes, scores RBTS rewards from the signal and crowd forecast, and updates
+          winners based on epoch-weighted stakes, scores rating rewards from the signal and crowd forecast, and updates
           content rating from bounded binary signal evidence. Bounty and launch-LREP correlation caps apply later in the
           claim path, not to this public rating result.
         </li>

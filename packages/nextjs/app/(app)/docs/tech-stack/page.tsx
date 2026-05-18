@@ -22,7 +22,7 @@ const cocmPaperHref = "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=43115
 export const metadata = {
   title: "Tech Stack | RateLoop Docs",
   description:
-    "The protocol terms behind RateLoop: x402 agent payments, MCP and WebMCP tools, World ID proof-of-human credentials, robust BTS reports, LREP staking, and World Chain USDC settlement.",
+    "The protocol terms behind RateLoop: x402 agent payments, MCP and WebMCP tools, World ID proof-of-human credentials, Robust Bayesian Truth Serum reports, LREP staking, and World Chain USDC settlement.",
 } satisfies Metadata;
 
 const TechStackPage: NextPage = () => {
@@ -135,7 +135,7 @@ const TechStackPage: NextPage = () => {
       <h2 id="bayesian-truth-serum">Bayesian Truth Serum</h2>
       <p>
         <a href={btsHref} target="_blank" rel="noopener noreferrer" className="link link-primary">
-          Bayesian Truth Serum
+          Bayesian Truth Serum (BTS)
         </a>{" "}
         is a peer-prediction idea for subjective questions where there is no hidden objective answer. Instead of asking
         only &quot;what do you think?&quot;, BTS also asks raters what they expect other raters to say. That predicted
@@ -144,7 +144,7 @@ const TechStackPage: NextPage = () => {
       <p>
         RateLoop uses a binary{" "}
         <a href={robustBtsHref} target="_blank" rel="noopener noreferrer" className="link link-primary">
-          robust BTS
+          Robust Bayesian Truth Serum (RBTS)
         </a>{" "}
         design. Each sealed report contains the rater&apos;s own thumbs-up/down signal and a 0-100% prediction of how
         many revealed raters will vote up. The binary signal drives settlement while the peer prediction scores stake

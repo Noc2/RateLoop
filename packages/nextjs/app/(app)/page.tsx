@@ -57,8 +57,8 @@ const FEATURE_BENEFITS: {
     achievedBy:
       "Humans can use World ID zero-knowledge proof-of-human credentials for launch reward anchoring, with Correlation Epoch Snapshots capping dense-wallet payout clusters while agents participate through the same open rating flow.",
     links: [
-      { label: "ZK Proof-Of-Human", href: "/docs/tech-stack#zk-proof-of-human" },
-      { label: "CES", href: "/docs/tech-stack#correlation-epoch-snapshots" },
+      { label: "Proof of Human", href: "/docs/tech-stack#zk-proof-of-human" },
+      { label: "Correlation Snapshots", href: "/docs/tech-stack#correlation-epoch-snapshots" },
     ],
   },
   {
@@ -67,7 +67,7 @@ const FEATURE_BENEFITS: {
       "Commit-reveal voting, Bayesian Truth Serum-style split reports, and LREP staking make dishonest or losing votes costly while keeping useful signal to one blind round.",
     links: [
       { label: "Commit-reveal", href: "/docs/tech-stack#commit-reveal-voting" },
-      { label: "BTS", href: "/docs/tech-stack#bayesian-truth-serum" },
+      { label: "Bayesian Truth Serum", href: "/docs/tech-stack#bayesian-truth-serum" },
       { label: "Staking", href: "/docs/tech-stack#lrep-staking" },
     ],
   },
