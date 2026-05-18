@@ -537,10 +537,6 @@ contract RoundVotingEngine is
             resolved.holder
         );
         _recordCommitAccounting(round, contentId, roundId, voter, resolved.identityKey, stakeAmount64, stakeAmount);
-        // Bind the prevrandao of the last-commit block into the round so it can be mixed into the
-        // RBTS sampler seed at settlement. The last committer cannot grind their own block's
-        // prevrandao, so this removes the salt-grinding attack on the seed.
-        roundLastCommitPrevrandao[contentId][roundId] = bytes32(block.prevrandao);
         // Flag whether at least one commit in this round originated from an HRC-verified identity.
         // `cancelExpiredRound` consults this flag to keep all-sybil rounds refund-cancellable.
         if (resolved.hasActiveHumanCredential && !roundHasHumanVerifiedCommit[contentId][roundId]) {
@@ -1312,7 +1308,7 @@ contract RoundVotingEngine is
                 upWins: upWins,
                 minParticipants: MIN_RBTS_PARTICIPANTS,
                 scoreScaleBps: RBTS_SCORE_SCALE_BPS,
-                lastCommitPrevrandao: roundLastCommitPrevrandao[contentId][roundId]
+                settlementPrevrandao: bytes32(block.prevrandao)
             })
         );
 
@@ -1523,9 +1519,8 @@ contract RoundVotingEngine is
     ///      Indexed by (contentId, roundId).
     mapping(uint256 contentId => mapping(uint256 roundId => bool)) public pendingBundleObserverReplay;
 
-    // block.prevrandao of the last-commit block per round. Mixed into the RBTS sampler seed so
-    // the seed is unguessable at commit time. The last committer cannot grind their own block's
-    // prevrandao -- it is supplied by the validator and only revealed after the block is mined.
+    // Deprecated compatibility slot. RBTS scoring now mixes settlement-block prevrandao instead
+    // of a value overwritten by the final committer.
     mapping(uint256 => mapping(uint256 => bytes32)) public roundLastCommitPrevrandao;
 
     // True if at least one commit in this round originated from an address with an active human

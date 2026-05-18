@@ -151,7 +151,7 @@ library RoundRevealLib {
         bool upWins;
         uint16 minParticipants;
         uint16 scoreScaleBps;
-        bytes32 lastCommitPrevrandao;
+        bytes32 settlementPrevrandao;
     }
 
     function scoreRbtsRewards(
@@ -204,10 +204,10 @@ library RoundRevealLib {
 
         RbtsRoundTotals memory totals;
 
-        // Seed combines M-Vote-1 (prevrandao binding) with M-Vote-2 (committed-set binding):
-        // unguessable at commit time AND invariant under selective reveal.
+        // Seed combines settlement-block prevrandao with M-Vote-2 (committed-set binding):
+        // fixed after the commit set closes and invariant under selective reveal.
         result.scoreSeed = _rbtsScoreSeed(
-            params.contentId, params.roundId, committedCount, committedSetHash, params.lastCommitPrevrandao
+            params.contentId, params.roundId, committedCount, committedSetHash, params.settlementPrevrandao
         );
         for (uint256 r = 0; r < params.revealedCount;) {
             bytes32 commitKey = revealedKeysMem[r];
@@ -364,22 +364,20 @@ library RoundRevealLib {
     ///      - `contentId` / `roundId` (per-round uniqueness),
     ///      - `committedCount` and `committedSetHash` (M-Vote-2: the FULL committed set in
     ///        commit order, not the revealed subset; selective reveal cannot move the seed),
-    ///      - `lastCommitPrevrandao` (M-Vote-1: the prevrandao of the block containing the
-    ///        last commit, which the last committer cannot grind because they cannot predict
-    ///        the prevrandao of their own block; this defeats salt-grinding attacks on
-    ///        `commitKey` ordering that previously allowed the last committer to steer the seed).
-    ///      Together M-Vote-1 + M-Vote-2 make the seed both unguessable at commit time AND
-    ///      invariant under any honest or adversarial reveal pattern.
+    ///      - `settlementPrevrandao`, sampled after the commit set has closed so the last
+    ///        committer cannot overwrite the entropy while choosing their own commit key.
+    ///      Together the settlement entropy + M-Vote-2 make the seed fixed after commits close
+    ///      and invariant under any honest or adversarial reveal pattern.
     function _rbtsScoreSeed(
         uint256 contentId,
         uint256 roundId,
         uint256 committedCount,
         bytes32 committedSetHash,
-        bytes32 lastCommitPrevrandao
+        bytes32 settlementPrevrandao
     ) private view returns (bytes32 scoreSeed) {
         scoreSeed = keccak256(
             abi.encode(
-                block.chainid, address(this), contentId, roundId, committedCount, committedSetHash, lastCommitPrevrandao
+                block.chainid, address(this), contentId, roundId, committedCount, committedSetHash, settlementPrevrandao
             )
         );
     }

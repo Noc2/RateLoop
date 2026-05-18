@@ -641,7 +641,7 @@ contract RoundIntegrationTest is VotingTestBase {
         uint256 reward2 = lrepToken.balanceOf(voter2) - bal2Before;
 
         // Both winners receive rewards. Stake-proportionality only holds at equal RBTS scoring;
-        // with the M-Vote-1 prevrandao-mixed seed, the sampler can land in a configuration where
+        // with the post-commit prevrandao-mixed seed, the sampler can land in a configuration where
         // the smaller-stake voter scores higher (and so out-earns the larger-stake voter). The
         // robust invariant is that both winners get positive payouts and the total tracks the
         // round's voter pool — proportional-to-stake-only is no longer a stable assertion.

@@ -696,7 +696,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertGt(engine.commitRbtsScoreBps(contentId, roundId, ck1), 0, "ck1 scored");
     }
 
-    function test_RbtsScoringSeed_UsesRevealedCommitSetOnly() public {
+    function test_RbtsScoringSeed_UsesSettlementEntropyAndCommittedSet() public {
         uint256 contentId = _submitContent();
 
         (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, true, 8_000, 10e6);
@@ -704,6 +704,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         (bytes32 ck3, bytes32 s3) = _commitPrediction(voter3, contentId, true, 6_500, 3e6);
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        assertEq(engine.roundLastCommitPrevrandao(contentId, roundId), bytes32(0), "last-commit entropy is deprecated");
         RoundLib.Round memory r0 = RoundEngineReadHelpers.round(engine, contentId, roundId);
         _warpPastTlockRevealTime(uint256(r0.startTime) + EPOCH);
 
@@ -711,6 +712,8 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         engine.revealVoteByCommitKey(contentId, roundId, ck2, false, 5_000, s2);
         engine.revealVoteByCommitKey(contentId, roundId, ck3, true, 6_500, s3);
 
+        bytes32 settlementPrevrandao = keccak256("settlement-prevrandao");
+        vm.prevrandao(settlementPrevrandao);
         vm.recordLogs();
         engine.settleRound(contentId, roundId);
 
@@ -718,11 +721,9 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         revealedSetHash = keccak256(abi.encodePacked(revealedSetHash, ck1));
         revealedSetHash = keccak256(abi.encodePacked(revealedSetHash, ck2));
         revealedSetHash = keccak256(abi.encodePacked(revealedSetHash, ck3));
-        // M-Vote-1: seed now mixes in the prevrandao of the last-commit block.
-        bytes32 lastCommitPrevrandao = engine.roundLastCommitPrevrandao(contentId, roundId);
         bytes32 expectedSeed = keccak256(
             abi.encode(
-                block.chainid, address(engine), contentId, roundId, uint256(3), revealedSetHash, lastCommitPrevrandao
+                block.chainid, address(engine), contentId, roundId, uint256(3), revealedSetHash, settlementPrevrandao
             )
         );
 
@@ -735,7 +736,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
                     && uint256(logs[i].topics[1]) == contentId && uint256(logs[i].topics[2]) == roundId
             ) {
                 (bytes32 scoreSeed,,,,) = abi.decode(logs[i].data, (bytes32, uint256, uint256, uint256, uint256));
-                assertEq(scoreSeed, expectedSeed, "score seed must be independent of settlement block entropy");
+                assertEq(scoreSeed, expectedSeed, "score seed must use settlement entropy");
                 found = true;
                 break;
             }
