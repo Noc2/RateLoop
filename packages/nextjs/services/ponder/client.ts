@@ -1028,7 +1028,7 @@ export const ponderApi = {
 
     while (items.length < safeRequestedLimit) {
       const remaining = safeRequestedLimit - items.length;
-      const page = await this.getContent({
+      const page = await ponderApi.getContent({
         ...params,
         limit: String(Math.min(PONDER_PAGE_LIMIT, remaining)),
         offset: String(offset),
@@ -1059,7 +1059,7 @@ export const ponderApi = {
 
   async getAllRounds(params?: { contentId?: string; state?: string; submitter?: string }) {
     return getAllPages(offset =>
-      this.getRounds({
+      ponderApi.getRounds({
         ...params,
         limit: String(PONDER_PAGE_LIMIT),
         offset: String(offset),
@@ -1076,7 +1076,7 @@ export const ponderApi = {
 
   async getAllSubmitterSettledRounds(submitter: string) {
     return getAllPages(offset =>
-      this.getSubmitterSettledRounds(submitter, {
+      ponderApi.getSubmitterSettledRounds(submitter, {
         limit: String(PONDER_PAGE_LIMIT),
         offset: String(offset),
       }),
@@ -1085,7 +1085,7 @@ export const ponderApi = {
 
   async getAllContent(params?: Omit<PonderContentQuery, "limit" | "offset">) {
     return getAllPages(offset =>
-      this.getContent({
+      ponderApi.getContent({
         ...params,
         limit: String(PONDER_PAGE_LIMIT),
         offset: String(offset),
@@ -1116,7 +1116,7 @@ export const ponderApi = {
   },
 
   async getAllFollows(address: string) {
-    const firstPage = await this.getFollows(address, {
+    const firstPage = await ponderApi.getFollows(address, {
       limit: String(PONDER_PAGE_LIMIT),
       offset: "0",
     });
@@ -1129,7 +1129,7 @@ export const ponderApi = {
     let offset = firstPage.items.length;
 
     while (offset < firstPage.count) {
-      const page = await this.getFollows(address, {
+      const page = await ponderApi.getFollows(address, {
         limit: String(PONDER_PAGE_LIMIT),
         offset: String(offset),
       });
@@ -1179,7 +1179,7 @@ export const ponderApi = {
 
   async getAllTokenHolders() {
     return getAllPages(offset =>
-      this.getTokenHolders({
+      ponderApi.getTokenHolders({
         limit: String(PONDER_PAGE_LIMIT),
         offset: String(offset),
       }),
@@ -1306,7 +1306,7 @@ export const ponderApi = {
 
     while (items.length < safeRequestedLimit) {
       const remaining = safeRequestedLimit - items.length;
-      const page = await this.getVotes({
+      const page = await ponderApi.getVotes({
         ...params,
         limit: String(Math.min(PONDER_PAGE_LIMIT, remaining)),
         offset: String(offset),
@@ -1333,7 +1333,7 @@ export const ponderApi = {
 
   async getAllVotes(params?: { voter?: string; contentId?: string; roundId?: string; state?: string }) {
     return getAllPages(offset =>
-      this.getVotes({
+      ponderApi.getVotes({
         ...params,
         limit: String(PONDER_PAGE_LIMIT),
         offset: String(offset),
