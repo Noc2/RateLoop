@@ -420,6 +420,19 @@ export async function resolveRounds(
         // --- 2. SETTLE: If threshold reached (enough RBTS votes revealed) ---
         const rbtsRevealQuorum =
           roundConfig.minVoters > 3n ? roundConfig.minVoters : 3n;
+        let roundHasHumanVerifiedCommit: boolean | undefined;
+        const readRoundHasHumanVerifiedCommit = async () => {
+          if (roundHasHumanVerifiedCommit === undefined) {
+            roundHasHumanVerifiedCommit = (await publicClient.readContract({
+              address: engineAddr,
+              abi: RoundVotingEngineAbi,
+              functionName: "roundHasHumanVerifiedCommit",
+              args: [contentId, activeRoundId],
+            })) as boolean;
+          }
+          return roundHasHumanVerifiedCommit;
+        };
+
         if (
           round.state === RoundState.Open &&
           round.revealedCount >= rbtsRevealQuorum
@@ -485,7 +498,7 @@ export async function resolveRounds(
           round.revealedCount < rbtsRevealQuorum
         ) {
           try {
-            const [lastCommitRevealableAfter, revealGracePeriod] =
+            const [lastCommitRevealableAfter, revealGracePeriod, hasHumanVerifiedCommit] =
               await Promise.all([
                 publicClient.readContract({
                   address: engineAddr,
@@ -499,6 +512,7 @@ export async function resolveRounds(
                   contentId,
                   activeRoundId,
                 ),
+                readRoundHasHumanVerifiedCommit(),
               ]);
 
             const revealFailedEligibleAt =
@@ -508,6 +522,7 @@ export async function resolveRounds(
                 : round.startTime + roundConfig.maxDuration + revealGracePeriod;
 
             if (
+              hasHumanVerifiedCommit &&
               lastCommitRevealableAfter > 0n &&
               now >= revealFailedEligibleAt
             ) {
@@ -538,27 +553,33 @@ export async function resolveRounds(
           }
         }
 
-        // --- 4. CANCEL: Open rounds past maxDuration deadline without commit quorum ---
+        // --- 4. CANCEL: Open rounds past maxDuration that cannot enter reveal-failed settlement ---
         if (
           round.state === RoundState.Open &&
-          round.voteCount < roundConfig.minVoters &&
+          round.revealedCount < rbtsRevealQuorum &&
           round.startTime > 0n &&
           now >= round.startTime + roundConfig.maxDuration
         ) {
           try {
-            await writeContractAndConfirm(publicClient, walletClient, {
-              chain,
-              account,
-              address: engineAddr,
-              abi: RoundVotingEngineAbi,
-              functionName: "cancelExpiredRound",
-              args: [contentId, activeRoundId],
-            });
-            logger.info("Cancelled expired round", {
-              contentId: Number(contentId),
-              roundId: Number(activeRoundId),
-            });
-            result.roundsCancelled++;
+            const hasHumanVerifiedCommit =
+              round.voteCount < rbtsRevealQuorum
+                ? true
+                : await readRoundHasHumanVerifiedCommit();
+            if (round.voteCount < rbtsRevealQuorum || !hasHumanVerifiedCommit) {
+              await writeContractAndConfirm(publicClient, walletClient, {
+                chain,
+                account,
+                address: engineAddr,
+                abi: RoundVotingEngineAbi,
+                functionName: "cancelExpiredRound",
+                args: [contentId, activeRoundId],
+              });
+              logger.info("Cancelled expired round", {
+                contentId: Number(contentId),
+                roundId: Number(activeRoundId),
+              });
+              result.roundsCancelled++;
+            }
           } catch (err: unknown) {
             const reason = getRevertReason(err);
             if (!isExpectedRevert(reason)) {
