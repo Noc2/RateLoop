@@ -512,10 +512,30 @@ contract LaunchDistributionPool is
         }
         paidAmount = targetPaid - raterLaunchPaid[rater];
         uint256 remaining = _remainingEarnedRaterPool();
-        if (paidAmount > remaining) paidAmount = remaining;
+        bool poolDepleted = paidAmount > remaining;
+        if (poolDepleted) paidAmount = remaining;
         if (paidAmount == 0) return 0;
 
-        rewardedRatingCount[rater] = targetRewardedCount;
+        // L-Funds-5: when the pool is depleted mid-slot, advance rewardedRatingCount only to
+        // the proportional position that the actually-paid amount represents, not all the way
+        // to targetRewardedCount. Otherwise the slot count irreversibly outpaces the paid
+        // total and the rater's remaining cap becomes locked even after the pool is refilled.
+        if (poolDepleted) {
+            uint256 newTotalPaid = raterLaunchPaid[rater] + paidAmount;
+            uint32 proportionalCount;
+            if (newTotalPaid >= cap) {
+                proportionalCount = policy.rewardingRatingCount;
+            } else if (cap > 0) {
+                proportionalCount = uint32((newTotalPaid * uint256(policy.rewardingRatingCount)) / cap);
+            } else {
+                proportionalCount = rewardedCount;
+            }
+            if (proportionalCount < rewardedCount) proportionalCount = rewardedCount;
+            if (proportionalCount > targetRewardedCount) proportionalCount = targetRewardedCount;
+            rewardedRatingCount[rater] = proportionalCount;
+        } else {
+            rewardedRatingCount[rater] = targetRewardedCount;
+        }
         raterLaunchPaid[rater] += paidAmount;
         earnedRaterDistributed += paidAmount;
         _pay(rater, paidAmount);
