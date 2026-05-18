@@ -12,8 +12,21 @@ import { RoundLib } from "../contracts/libraries/RoundLib.sol";
 /// @title Mock RoundVotingEngine for testing FrontendRegistry
 contract MockVotingEngine is IRoundVotingEngine {
     uint256 public totalAddedToReserve;
+    LoopReputation public immutable lrepToken;
+    bool public pullReserve = true;
+
+    constructor(LoopReputation lrepToken_) {
+        lrepToken = lrepToken_;
+    }
+
+    function setPullReserve(bool value) external {
+        pullReserve = value;
+    }
 
     function addToConsensusReserve(uint256 amount) external override {
+        if (pullReserve) {
+            lrepToken.transferFrom(msg.sender, address(this), amount);
+        }
         totalAddedToReserve += amount;
     }
 
@@ -91,7 +104,7 @@ contract FrontendRegistryTest is Test {
         lrepToken.grantRole(lrepToken.MINTER_ROLE(), admin);
 
         // Deploy mock voting engine
-        votingEngine = new MockVotingEngine();
+        votingEngine = new MockVotingEngine(lrepToken);
         rewardDistributor = new MockRewardDistributor(address(votingEngine));
         feeCreditor = address(rewardDistributor);
 
@@ -744,7 +757,7 @@ contract FrontendRegistryTest is Test {
     // --- Admin Functions Tests ---
 
     function test_SetVotingEngine() public {
-        address newVotingEngine = address(100);
+        address newVotingEngine = address(new MockVotingEngine(lrepToken));
 
         vm.prank(admin);
         registry.removeFeeCreditor(feeCreditor);
@@ -758,7 +771,7 @@ contract FrontendRegistryTest is Test {
     }
 
     function test_SetVotingEngine_RevokesHistoricalFeeCreditor() public {
-        address newVotingEngine = address(100);
+        address newVotingEngine = address(new MockVotingEngine(lrepToken));
 
         vm.startPrank(frontend1);
         lrepToken.approve(address(registry), STAKE);
@@ -775,6 +788,24 @@ contract FrontendRegistryTest is Test {
         vm.prank(feeCreditor);
         vm.expectRevert();
         registry.creditFees(frontend1, 100e6);
+    }
+
+    function test_SetVotingEngine_RejectsNoCode() public {
+        vm.prank(admin);
+        vm.expectRevert("Invalid voting engine");
+        registry.setVotingEngine(address(100));
+    }
+
+    function test_SetVotingEngine_SameEngineDoesNotClearFeeCreditor() public {
+        assertEq(registry.feeCreditor(), feeCreditor);
+        assertTrue(registry.hasRole(registry.FEE_CREDITOR_ROLE(), feeCreditor));
+
+        vm.prank(admin);
+        registry.setVotingEngine(address(votingEngine));
+
+        assertEq(address(registry.votingEngine()), address(votingEngine));
+        assertEq(registry.feeCreditor(), feeCreditor);
+        assertTrue(registry.hasRole(registry.FEE_CREDITOR_ROLE(), feeCreditor));
     }
 
     function test_RevertSetVotingEngineZeroAddress() public {
@@ -810,6 +841,19 @@ contract FrontendRegistryTest is Test {
         vm.prank(admin);
         vm.expectRevert("VotingEngine not set");
         noEngineRegistry.slashFrontend(frontend1, STAKE / 2, "Test");
+    }
+
+    function test_SlashFrontendRequiresReserveTransfer() public {
+        vm.startPrank(frontend1);
+        lrepToken.approve(address(registry), STAKE);
+        registry.register();
+        vm.stopPrank();
+
+        votingEngine.setPullReserve(false);
+
+        vm.prank(admin);
+        vm.expectRevert("Reserve transfer failed");
+        registry.slashFrontend(frontend1, STAKE / 2, "Test");
     }
 
     function test_AddAndRemoveFeeCreditor() public {

@@ -314,8 +314,15 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
 
         uint256 totalToReserve = amount + confiscatedFees;
         if (totalToReserve > 0) {
+            uint256 balanceBefore = lrepToken.balanceOf(address(this));
             lrepToken.forceApprove(address(votingEngine), totalToReserve);
             votingEngine.addToConsensusReserve(totalToReserve);
+            lrepToken.forceApprove(address(votingEngine), 0);
+            uint256 balanceAfter = lrepToken.balanceOf(address(this));
+            require(
+                balanceBefore >= balanceAfter && balanceBefore - balanceAfter == totalToReserve,
+                "Reserve transfer failed"
+            );
         }
 
         if (confiscatedFees > 0) {
@@ -342,6 +349,8 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     /// @param _votingEngine New voting engine address
     function setVotingEngine(address _votingEngine) external onlyRole(ADMIN_ROLE) {
         require(_votingEngine != address(0), "Invalid voting engine");
+        require(_votingEngine.code.length != 0, "Invalid voting engine");
+        if (address(votingEngine) == _votingEngine) return;
         address oldCreditor = feeCreditor;
         if (oldCreditor != address(0)) {
             feeCreditor = address(0);
