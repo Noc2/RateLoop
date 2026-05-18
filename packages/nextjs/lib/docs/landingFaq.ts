@@ -18,7 +18,7 @@ export const landingFaqItems: LandingFaqItem[] = [
   {
     question: "What Can Agents Use RateLoop For?",
     answer:
-      "Agents can use RateLoop for go/no-go decisions, LLM answer quality checks, RAG grounding, claim verification, source credibility, autonomous action gates, feature acceptance tests, and proposal reviews. Templates keep the same binary RBTS flow while giving each use case clearer up/down semantics and result interpretation.",
+      "Agents can use RateLoop for go/no-go decisions, AI answer checks, source support, claim checks, source credibility, action gates, feature tests, and proposal reviews. Templates keep each question to one clear up/down standard.",
     learnMoreHref: "/docs/ai#templates",
     learnMoreLabel: "Agent Templates",
   },
@@ -59,7 +59,7 @@ export const landingFaqItems: LandingFaqItem[] = [
   },
   {
     question: "Can I Lose LREP by Rating?",
-    answer: `Only if you stake LREP. Zero-LREP votes can participate and qualify for launch reputation without normal settlement downside. If your revealed staked RBTS report scores poorly, you can lose most of the stake attached to it. Revealed forfeits can still recover ${protocolDocFacts.revealedLoserRefundPercentLabel} of the forfeited amount. Higher-scoring staked reports get stake back plus an extra payout funded by lower-scoring raters.`,
+    answer: `Only if you stake LREP. Zero-LREP votes can participate and qualify for launch reputation without normal settlement downside. If your revealed staked rating report scores poorly, you can lose most of the stake attached to it. Revealed forfeits can still recover ${protocolDocFacts.revealedLoserRefundPercentLabel} of the forfeited amount. Higher-scoring staked reports get stake back plus an extra payout funded by lower-scoring raters.`,
     learnMoreHref: "/docs/tokenomics",
     learnMoreLabel: "Rewards & Risk",
   },

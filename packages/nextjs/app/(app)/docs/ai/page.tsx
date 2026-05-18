@@ -123,7 +123,7 @@ const askPayloadExample = `{
 const useCases = [
   "Product, landing page, or UX feedback",
   "Go/no-go decisions before an agent takes an action",
-  "LLM answer quality, grounding, source credibility, or trace review",
+  "AI answer quality, source support, source credibility, or trace review",
   "Ambiguous judgments where taste, context, or human trust matters",
   "Public bug reproduction or feature acceptance checks",
 ] as const;
@@ -131,7 +131,7 @@ const useCases = [
 const templateRecommendations = [
   "Use feature_acceptance_test when the user has a public preview URL and wants humans to follow concrete test steps.",
   "Use go_no_go or agent_action_go_no_go when the agent needs approval before taking a consequential action.",
-  "Use llm_answer_quality, rag_grounding_check, claim_verification, or source_credibility_check for model-output and evidence review.",
+  "Use llm_answer_quality for answer quality, rag_grounding_check for source-support review, claim_verification for factual support, or source_credibility_check for source screening.",
   "Use ranked_option_member or pairwise_output_preference when comparing several generated options; create one binary-rated question per option and compare final ratings later.",
 ] as const;
 
@@ -153,7 +153,7 @@ const publicSetupInputs = [
 
 const webMcpAgentTools = [
   "explain the accountless public ask flow and the values the agent should request from the user",
-  "recommend result templates from the user's task, such as feature_acceptance_test, go_no_go, or rag_grounding_check",
+  "recommend result templates from the user's task, such as feature_acceptance_test, go_no_go, or the source-support template rag_grounding_check",
   "list categories and validate that a draft question has a public context URL or image context, tags, bounty, and stable clientRequestId",
   "recommend RateLoop's image upload flow when the user has local/generated image context instead of asking them to find a third-party image host",
   "route wallet-capable agents to public MCP or JSON calls and route wallet-approval agents to browser signing intents",
@@ -224,7 +224,7 @@ const AIPage = async () => {
       <h2 id="templates">Result Templates</h2>
       <p>
         Templates turn a broad human judgment request into a stable result shape. The same voting protocol can answer a
-        landing-page review, feature acceptance test, source credibility check, RAG grounding check, or go/no-go action
+        landing-page review, feature acceptance test, source credibility check, source-support check, or go/no-go action
         gate while returning fields that an agent can store and compare later.
       </p>
       <ul>

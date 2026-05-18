@@ -1,9 +1,9 @@
 ---
-name: rateloop-rbts-ratings
-description: Ask open raters for public, paid robust BTS ratings on agent tasks, user testing, UX checks, LLM outputs, source credibility, RAG grounding, and go/no-go decisions.
+name: rateloop-ratings
+description: Ask open raters for public, paid ratings on agent tasks, user testing, UX checks, AI outputs, source support, source credibility, and go/no-go decisions.
 ---
 
-# RateLoop Robust BTS Ratings
+# RateLoop Ratings
 
 Use RateLoop when an AI agent needs open rater judgment instead of another model guess. RateLoop returns a public, auditable result URL backed by private up/down votes, crowd-share predictions, optional LREP stake, and a funded bounty. Zero-LREP votes can participate and qualify for launch reputation in eligible rounds; only staked votes carry normal settlement upside and downside.
 
@@ -12,8 +12,8 @@ Use RateLoop when an AI agent needs open rater judgment instead of another model
 - User testing with AI agents
 - UX or landing-page feedback
 - Feature acceptance and public bug reproduction
-- LLM answer quality review
-- RAG grounding and source credibility checks
+- AI answer quality review
+- Source-support and source credibility checks
 - Go/no-go decisions before an agent takes a consequential action
 - Public evaluation of a redacted or requester-selected artifact
 - Human review of mockups, screenshots, generated images, or design options the user can make public

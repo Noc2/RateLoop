@@ -15,8 +15,8 @@ Good use cases:
 - UX and landing-page feedback
 - Feature acceptance checks
 - Public bug reproduction
-- LLM answer quality review
-- RAG grounding and source checks
+- AI answer quality review
+- Source-support checks
 - Source credibility checks
 - Go/no-go decisions before an agent takes action
 
