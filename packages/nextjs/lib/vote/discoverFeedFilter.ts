@@ -82,7 +82,9 @@ export function shouldShowBountyExpiredStatus(item: ContentItem, nowSeconds = Ma
     bundle &&
       !bundle.failed &&
       !bundle.refunded &&
+      bundle.completedRoundSetCount < bundle.requiredSettledRounds &&
       bundle.fundedAmount > 0n &&
+      !hasActiveBounty(item, nowSeconds) &&
       (item.rewardPoolSummary?.totalAvailable ?? 0n) <= 0n,
   );
 }

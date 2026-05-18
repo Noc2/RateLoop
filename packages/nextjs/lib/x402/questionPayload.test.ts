@@ -57,6 +57,22 @@ test("parseX402QuestionRequest accepts image-only question context", () => {
   assert.deepEqual(payload.questions[0].imageUrls, [UPLOADED_IMAGE_URL]);
 });
 
+test("parseX402QuestionRequest accepts video-only question context", () => {
+  const payload = parseX402QuestionRequest({
+    ...VALID_REQUEST,
+    question: {
+      ...VALID_REQUEST.question,
+      contextUrl: undefined,
+      imageUrls: [],
+      videoUrl: "https://www.youtube.com/watch?v=abc123",
+    },
+  });
+
+  assert.equal(payload.questions[0].contextUrl, "");
+  assert.deepEqual(payload.questions[0].imageUrls, []);
+  assert.equal(payload.questions[0].videoUrl, "https://www.youtube.com/watch?v=abc123");
+});
+
 test("parseX402QuestionRequest rejects arbitrary HTTPS image URLs", () => {
   assert.throws(
     () =>
@@ -409,7 +425,7 @@ test("parseX402QuestionRequest rejects unsupported media combinations before pay
   );
 });
 
-test("parseX402QuestionRequest requires a context URL or image URL", () => {
+test("parseX402QuestionRequest requires public context media", () => {
   assert.throws(
     () =>
       parseX402QuestionRequest({
@@ -420,6 +436,6 @@ test("parseX402QuestionRequest requires a context URL or image URL", () => {
           imageUrls: [],
         },
       }),
-    /contextUrl or imageUrls is required/,
+    /contextUrl, imageUrls, or videoUrl is required/,
   );
 });

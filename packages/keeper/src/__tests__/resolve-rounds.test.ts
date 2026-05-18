@@ -254,6 +254,7 @@ function makeHarness(options: {
   advisoryCommitCores?: Record<string, unknown[]>;
   revealGracePeriod?: bigint;
   lastCommitRevealableAfter?: bigint;
+  roundHasHumanVerifiedCommit?: boolean;
 }) {
   const roundConfig = options.roundConfig || {
     epochDuration: 1200n,
@@ -309,6 +310,8 @@ function makeHarness(options: {
                   : max;
               }, 0n)
             );
+          case "roundHasHumanVerifiedCommit":
+            return options.roundHasHumanVerifiedCommit ?? true;
           case "getRoundCommitKey":
             return commitKeys[Number(args[2])] ?? zeroHash;
           case "commitRevealData":
@@ -1041,6 +1044,58 @@ describe("resolveRounds", () => {
     expect(result.roundsCancelled).toBe(1);
     expect(walletClient.writeContract).toHaveBeenCalledWith(
       expect.objectContaining({ functionName: "cancelExpiredRound" }),
+    );
+  });
+
+  it("cancels an expired quorum round with no human verified commit", async () => {
+    timelockDecrypt.mockReset();
+
+    const round = makeRound({
+      state: 0,
+      voteCount: 3n,
+      revealedCount: 0n,
+    });
+    round.startTime = 100n;
+    const { publicClient, walletClient } = makeHarness({
+      activeRoundId: 1n,
+      latestRoundId: 1n,
+      round,
+      roundConfig: {
+        epochDuration: 1200n,
+        maxDuration: 900n,
+        minVoters: 3n,
+        maxVoters: 1000n,
+      },
+      now: 1_000n,
+      roundHasHumanVerifiedCommit: false,
+      revealGracePeriod: 60n,
+      lastCommitRevealableAfter: 200n,
+    });
+    const logger = makeLogger();
+
+    const result = await resolveRounds(
+      publicClient as any,
+      walletClient as any,
+      {} as any,
+      { address: ACCOUNT } as any,
+      logger as any,
+    );
+
+    expect(result).toMatchObject({
+      roundsCancelled: 1,
+      roundsRevealFailedFinalized: 0,
+    });
+    expect(publicClient.readContract).toHaveBeenCalledWith(
+      expect.objectContaining({
+        functionName: "roundHasHumanVerifiedCommit",
+        args: [1n, 1n],
+      }),
+    );
+    expect(walletClient.writeContract).toHaveBeenCalledWith(
+      expect.objectContaining({ functionName: "cancelExpiredRound" }),
+    );
+    expect(walletClient.writeContract).not.toHaveBeenCalledWith(
+      expect.objectContaining({ functionName: "finalizeRevealFailedRound" }),
     );
   });
 

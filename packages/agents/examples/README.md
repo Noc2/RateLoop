@@ -63,7 +63,7 @@ transaction hashes to `curyo_confirm_ask_transactions`. Example bounty amounts a
 `curyo_get_agent_balance`, use signed callbacks, and rely on Curyo-enforced per-ask or daily caps.
 
 The public MCP config is enough for accountless use. In a chat-hosted runtime, the agent should ask the user for the
-funded `walletAddress`, the public context URL or image context, the bounty budget, and whether the user wants to approve spend through a
+funded `walletAddress`, the public context URL, image context, or YouTube video context, the bounty budget, and whether the user wants to approve spend through a
 browser signing link or let a local signer execute the returned calls. Creating a Curyo account is optional and only
 needed for managed policies, saved tokens, callbacks, balance tooling, or audit exports.
 

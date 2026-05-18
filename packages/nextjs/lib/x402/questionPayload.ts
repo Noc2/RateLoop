@@ -428,8 +428,8 @@ function normalizeQuestion(
   if (videoUrl && imageUrls.length > 0) {
     throw new X402QuestionInputError("Use imageUrls or videoUrl, not both.");
   }
-  if (!contextUrl && imageUrls.length === 0) {
-    throw new X402QuestionInputError(`${fieldPrefix}.contextUrl or imageUrls is required.`);
+  if (!contextUrl && imageUrls.length === 0 && !videoUrl) {
+    throw new X402QuestionInputError(`${fieldPrefix}.contextUrl, imageUrls, or videoUrl is required.`);
   }
 
   const { tags, tagList } = normalizeTags(value.tags);

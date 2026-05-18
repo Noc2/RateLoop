@@ -22,6 +22,7 @@ import {
   isContentItemActive,
   isContentSearchQueryTooShort,
 } from "~~/hooks/contentFeed/shared";
+import { useDeployedContractInfo } from "~~/hooks/scaffold-eth";
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import { useCategoryPopularity } from "~~/hooks/useCategoryPopularity";
 import { useCategoryRegistry } from "~~/hooks/useCategoryRegistry";
@@ -71,6 +72,7 @@ import { resolveStableSessionFeedOrder } from "~~/lib/vote/stableFeedOrder";
 import { type VoteView, getVoteViewGroups, isActivityViewOption } from "~~/lib/vote/viewOptions";
 import { buildRecommendationSignalContext, trackRecommendationSignal } from "~~/utils/recommendationTracker";
 import { notification } from "~~/utils/scaffold-eth";
+import { contracts } from "~~/utils/scaffold-eth/contract";
 
 const VotingGuide = dynamic(() => import("~~/components/onboarding/VotingGuide").then(m => m.VotingGuide), {
   ssr: false,
@@ -225,6 +227,15 @@ const HomeInner = () => {
 
   const { address } = useAccount();
   const { targetNetwork } = useTargetNetwork();
+  const { data: localCooldownVotingEngineInfo } = useDeployedContractInfo({
+    contractName: "RoundVotingEngine" as any,
+    chainId: targetNetwork.id as any,
+  });
+  const configuredLocalCooldownVotingEngineAddress = (
+    contracts?.[targetNetwork.id]?.RoundVotingEngine as { address?: string } | undefined
+  )?.address;
+  const localCooldownVotingEngineAddress =
+    localCooldownVotingEngineInfo?.address ?? configuredLocalCooldownVotingEngineAddress ?? null;
   const normalizedAddress = address?.toLowerCase();
   const { isMobileHeaderVisible, mobileHeaderHeight, setIsMobileHeaderVisible, setMobileHeaderVoteControls } =
     useMobileHeaderVisibility();
@@ -459,8 +470,15 @@ const HomeInner = () => {
       chainId: targetNetwork.id,
       identities: localVoteCooldownIdentities,
       nowSeconds,
+      votingEngineAddress: localCooldownVotingEngineAddress,
     });
-  }, [localVoteCooldownIdentities, localVoteCooldownVersion, nowSeconds, targetNetwork.id]);
+  }, [
+    localCooldownVotingEngineAddress,
+    localVoteCooldownIdentities,
+    localVoteCooldownVersion,
+    nowSeconds,
+    targetNetwork.id,
+  ]);
   const voteCooldownByContentId = useMemo(() => {
     const cooldowns = new Map(localVoteCooldownByContentId);
 

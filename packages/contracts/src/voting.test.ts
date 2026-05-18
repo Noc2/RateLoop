@@ -488,6 +488,75 @@ test("createTlockVoteCommit rounds non-aligned tlock targets up to the next dran
   assert.equal(commit.targetRound, 402n);
 });
 
+test("createTlockVoteCommit tolerates a first vote mined two seconds later", async () => {
+  const voter = "0x2222222222222222222222222222222222222222";
+  const targetRounds: number[] = [];
+  const commit = await createTlockVoteCommit(
+    {
+      voter,
+      isUp: true,
+      predictedUpBps: 6_900,
+      salt: ("0x" + "44".repeat(32)) as `0x${string}`,
+      contentId: 8n,
+      roundId: 4n,
+      roundReferenceRatingBps: 5_000,
+      epochDurationSeconds: 1200,
+    },
+    {
+      client: fakeClient,
+      now: fakeNow,
+      encryptFn: async (targetRound) => {
+        targetRounds.push(targetRound);
+        return Buffer.from(
+          makeFakeArmoredTlockCiphertext({
+            targetRound: BigInt(targetRound),
+            drandChainHash:
+              "0x52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971",
+            plaintextMarker: "1:" + "44".repeat(32),
+          }).slice(2),
+          "hex",
+        ).toString("utf8");
+      },
+    },
+  );
+
+  assert.deepEqual(targetRounds, [402]);
+  assert.equal(commit.targetRound, 402n);
+});
+
+test("createTlockVoteCommit rejects windows without a shared drift-safe target", async () => {
+  const voter = "0x2222222222222222222222222222222222222222";
+  await assert.rejects(
+    createTlockVoteCommit(
+      {
+        voter,
+        isUp: true,
+        predictedUpBps: 6_900,
+        salt: ("0x" + "44".repeat(32)) as `0x${string}`,
+        contentId: 8n,
+        roundId: 4n,
+        roundReferenceRatingBps: 5_000,
+        epochDurationSeconds: 1199,
+      },
+      {
+        client: fakeClient,
+        now: fakeNow,
+        encryptFn: async (targetRound) =>
+          Buffer.from(
+            makeFakeArmoredTlockCiphertext({
+              targetRound: BigInt(targetRound),
+              drandChainHash:
+                "0x52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971",
+              plaintextMarker: "1:" + "44".repeat(32),
+            }).slice(2),
+            "hex",
+          ).toString("utf8"),
+      },
+    ),
+    /No shared drand target round/,
+  );
+});
+
 test("createTlockVoteCommit targets the next active round epoch boundary", async () => {
   const voter = "0x2222222222222222222222222222222222222222";
   const commit = await createTlockVoteCommit(

@@ -183,7 +183,7 @@ test("ponderApi.getContentWindow respects hasMore when search totals are omitted
   }
 });
 
-test("ponderApi.getAllRounds paginates every round for a content item", async () => {
+test("ponderApi.getAllRounds paginates every round for a content item when called without object binding", async () => {
   const originalGetRounds = ponderApi.getRounds;
   const offsets: string[] = [];
   const submitters: Array<string | undefined> = [];
@@ -203,7 +203,8 @@ test("ponderApi.getAllRounds paginates every round for a content item", async ()
   };
 
   try {
-    const rounds = await ponderApi.getAllRounds({
+    const getAllRounds = ponderApi.getAllRounds;
+    const rounds = await getAllRounds({
       contentId: "7",
       state: "2",
       submitter: "0x0000000000000000000000000000000000000001",

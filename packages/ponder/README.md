@@ -96,7 +96,7 @@ The REST API is built with Hono. Key routes:
 | `GET /profile/:address`                 | User profile and reputation                             |
 | `GET /categories`                       | List content categories                                 |
 
-Bounty tables track gross funding, voter payouts, and the default eligible frontend-operator share separately so API consumers can display both voter rewards and operator fees. Bundle bounties are indexed as round sets: each set records one settled round per bundled question, its allocation, and per-voter claims. Feedback Bonus tables stay separate: they index USDC pools, awarded feedback hashes, direct voter payments, frontend shares, and treasury forfeits. Content submission events now revolve around the required context URL plus optional preview media, so indexers and clients can treat the source link as the canonical entry point for discovery and previews.
+Bounty tables track gross funding, voter payouts, and the default eligible frontend-operator share separately so API consumers can display both voter rewards and operator fees. Bundle bounties are indexed as round sets: each set records one settled round per bundled question, its allocation, and per-voter claims. Feedback Bonus tables stay separate: they index USDC pools, awarded feedback hashes, direct voter payments, frontend shares, and treasury forfeits. Content submission events now revolve around public context from a URL, images, or YouTube video, so indexers and clients can treat those fields as the canonical entry point for discovery and previews.
 
 Routes `/health` and `/status` are reserved by Ponder.
 

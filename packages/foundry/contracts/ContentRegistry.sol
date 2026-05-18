@@ -602,7 +602,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         );
     }
 
-    /// @notice Submit a question with a context link or image evidence.
+    /// @notice Submit a question with a context link, image evidence, or video evidence.
     /// @dev Attaches the governance minimum LREP bounty and default round configuration.
     function submitQuestion(
         string memory contextUrl,
@@ -716,7 +716,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             SUBMISSION_MEDIA_VALIDATOR.validateContextUrl(contextUrl);
         }
         SUBMISSION_MEDIA_VALIDATOR.validateOptionalMediaSet(imageUrls, videoUrl);
-        require(hasContextUrl || imageUrls.length > 0, "Context or image required");
+        require(hasContextUrl || imageUrls.length > 0 || bytes(videoUrl).length != 0, "Context or media required");
         metadata = SubmissionMetadata({
             url: contextUrl, title: title, description: description, tags: tags, categoryId: categoryId
         });

@@ -6,7 +6,7 @@ The simple flow is:
 
 1. The agent drafts one focused public question.
 2. The user or scoped agent wallet approves a World Chain USDC bounty.
-3. Open raters inspect the public context URL or image context and vote or leave feedback.
+3. Open raters inspect the public context URL, image context, or YouTube video context and vote or leave feedback.
 4. The agent polls RateLoop and stores the public result URL, answer, confidence, limitations, and objections.
 
 Good use cases:
@@ -65,7 +65,7 @@ Main tools:
 
 ## Minimum Workflow
 
-1. Ask the user for a public context URL or image context, wallet address, budget, and approval path.
+1. Ask the user for a public context URL, image context, or YouTube video context, wallet address, budget, and approval path.
 2. Choose a focused question, category, and result template.
 3. Call `curyo_quote_question`.
 4. Call `curyo_ask_humans` to prepare the ask.
@@ -78,7 +78,7 @@ Main tools:
 ## Required Inputs
 
 - `walletAddress`: user-controlled wallet or scoped agent wallet on World Chain.
-- `contextUrl`: public URL voters can inspect without secrets or login, required unless `imageUrls` has at least one image.
+- `contextUrl`: public URL voters can inspect without secrets or login, required unless `imageUrls` has at least one image or `videoUrl` has a YouTube link.
 - `imageUrls`: required when there is no context URL; up to four approved RateLoop-hosted upload URLs from the Ask image upload flow.
 - `bounty.amount`: USDC budget in atomic units, for example `2500000` for 2.5 USDC.
 - `bounty.requiredVoters`: minimum eligible voters required by the bounty.
@@ -93,7 +93,7 @@ Use `operationKey` for later status and result lookups. If you only have `chainI
 
 ## Copy-Paste Ask Shape
 
-Send this shape to `curyo_ask_humans` after a successful quote. Replace the wallet and provide either a context URL or image URLs. Set `rewardPoolExpiresAt` to a future Unix timestamp appropriate for the review window. Add `imageUrls` only after RateLoop's upload flow returns approved public URLs.
+Send this shape to `curyo_ask_humans` after a successful quote. Replace the wallet and provide a context URL, image URLs, or a YouTube `videoUrl`. Set `rewardPoolExpiresAt` to a future Unix timestamp appropriate for the review window. Add `imageUrls` only after RateLoop's upload flow returns approved public URLs.
 
 ```json
 {

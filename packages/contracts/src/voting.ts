@@ -568,7 +568,7 @@ function deriveAcceptedTlockTargetRound(
   epochDurationSeconds: number,
   chainInfo: TlockChainInfo,
   roundStartTimeSeconds: VoteTlockRuntime["roundStartTimeSeconds"],
-  candidateTimestampOffsetsSeconds: readonly number[] = [0, 1],
+  candidateTimestampOffsetsSeconds?: readonly number[],
 ): number {
   if (!Number.isFinite(nowMs)) {
     throw new Error("Cannot use Infinity or NaN as a beacon time");
@@ -576,10 +576,14 @@ function deriveAcceptedTlockTargetRound(
 
   const roundStartTimeMs = normalizeRoundStartTimeMs(roundStartTimeSeconds);
   const drandPeriodMs = Math.max(1, Math.floor(chainInfo.period)) * 1000;
+  const candidateOffsets =
+    candidateTimestampOffsetsSeconds && candidateTimestampOffsetsSeconds.length > 0
+      ? candidateTimestampOffsetsSeconds
+      : buildDefaultCandidateTimestampOffsetsSeconds(chainInfo.period);
   let minAcceptedTargetRound = 0;
   let maxAcceptedTargetRound = 0;
 
-  for (const offsetSeconds of candidateTimestampOffsetsSeconds) {
+  for (const offsetSeconds of candidateOffsets) {
     const commitTimeMs = nowMs + Math.floor(offsetSeconds) * 1000;
     const revealableAfterMs = deriveRevealableAfterMs(
       commitTimeMs,
@@ -612,6 +616,13 @@ function deriveAcceptedTlockTargetRound(
   }
 
   return minAcceptedTargetRound;
+}
+
+function buildDefaultCandidateTimestampOffsetsSeconds(
+  drandPeriodSeconds: number,
+): number[] {
+  const safePeriodSeconds = Math.max(1, Math.floor(drandPeriodSeconds));
+  return Array.from({ length: safePeriodSeconds }, (_, index) => index);
 }
 
 function normalizeTlockTargetRound(targetRound: bigint | number): number {

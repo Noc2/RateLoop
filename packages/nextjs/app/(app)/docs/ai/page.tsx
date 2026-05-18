@@ -145,7 +145,7 @@ const integratedPaths = [
 const publicSetupInputs = [
   "RateLoop origin, usually https://www.rateloop.xyz for production or the preview origin the user wants to test",
   "A funded walletAddress on World Chain, or permission to create a local encrypted signer and fund that address",
-  "A public context URL voters can open without secrets or a RateLoop login, unless the ask includes public image context",
+  "A public context URL voters can open without secrets or a RateLoop login, unless the ask includes public image or YouTube video context",
   "Image context: RateLoop-hosted uploaded images when the user has local mockups, screenshots, or generated visuals",
   "A bounded USDC budget: bounty.amount, maxPaymentAmount, requiredVoters, requiredSettledRounds, and rewardPoolExpiresAt",
   "The execution path: public MCP wallet calls, direct JSON routes, local signer, or WebMCP-assisted browser signing",
@@ -154,7 +154,7 @@ const publicSetupInputs = [
 const webMcpAgentTools = [
   "explain the accountless public ask flow and the values the agent should request from the user",
   "recommend result templates from the user's task, such as feature_acceptance_test, go_no_go, or the source-support template rag_grounding_check",
-  "list categories and validate that a draft question has a public context URL or image context, tags, bounty, and stable clientRequestId",
+  "list categories and validate that a draft question has a public context URL, image context, or YouTube video context, tags, bounty, and stable clientRequestId",
   "recommend RateLoop's image upload flow when the user has local/generated image context instead of asking them to find a third-party image host",
   "route wallet-capable agents to public MCP or JSON calls and route wallet-approval agents to browser signing intents",
 ] as const;
@@ -197,9 +197,10 @@ const AIPage = async () => {
       <h2 id="purpose">Purpose</h2>
       <p>
         Use RateLoop as an open rater feedback API when an agent is uncertain and needs a public, auditable answer from
-        people rather than another model guess. Send a focused question with a public context URL or image context, a
-        result template, a World Chain USDC bounty, and a funded EVM wallet address. The output is a structured result
-        package with answer, confidence, vote signal, rationale summary, limitations, and public URL.
+        people rather than another model guess. Send a focused question with a public context URL, image context, or
+        YouTube video context, a result template, a World Chain USDC bounty, and a funded EVM wallet address. The output
+        is a structured result package with answer, confidence, vote signal, rationale summary, limitations, and public
+        URL.
       </p>
       <p>
         This page is the public agent entry point. Browser agents should use it to understand the workflow, choose a
@@ -283,8 +284,8 @@ const AIPage = async () => {
       </ul>
       <p>
         The agent should still ask the user before spending: which wallet pays, how much USDC is authorized, which
-        public context URL or image context voters should inspect, and whether the user wants browser approval or a
-        local signer.
+        public context URL, image context, or YouTube video context voters should inspect, and whether the user wants
+        browser approval or a local signer.
       </p>
 
       <h2 id="image-context">Image Context</h2>

@@ -14,7 +14,7 @@ if (
   (args.length > 16 && args.length < 20)
 ) {
   console.error(
-    "Usage: node buildSubmissionReservation.js <rpcUrl> <registry> <submitter> <contextUrl> <imageUrlsJson> <videoUrl> <title> <description|empty> <tags> <categoryId> <salt> [rewardAsset] [rewardAmount] [requiredVoters] [requiredSettledRounds] [rewardPoolExpiresAt] [epochDuration maxDuration minVoters maxVoters]"
+    "Usage: node buildSubmissionReservation.js <rpcUrl> <registry> <submitter> <contextUrl> <imageUrlsJson> <videoUrl> <title> <description|empty> <tags> <categoryId> <salt> [rewardAsset] [rewardAmount] [requiredVoters] [requiredSettledRounds] [rewardPoolExpiresAt] [epochDuration maxDuration minVoters maxVoters]",
   );
   process.exit(1);
 }
@@ -40,8 +40,7 @@ const DEFAULT_ROUND_CONFIG = {
 const MAX_SUBMISSION_IMAGE_URLS = 4;
 const UPLOADED_IMAGE_URL_PATTERN =
   /^https:\/\/\S+\/api\/attachments\/images\/att_[A-Za-z0-9_-]{16,80}\.webp(?:[?#]\S*)?$/;
-const DIRECT_IMAGE_URL_PATH_PATTERN =
-  /\.(?:avif|bmp|gif|jpe?g|png|svg|webp)$/i;
+const DIRECT_IMAGE_URL_PATH_PATTERN = /\.(?:avif|bmp|gif|jpe?g|png|svg|webp)$/i;
 
 function isSupportedYouTubeUrl(value) {
   try {
@@ -96,17 +95,23 @@ function assertSupportedContextUrl(value, { allowEmpty = false } = {}) {
   const trimmed = value.trim();
   if (!trimmed) {
     if (allowEmpty) return;
-    console.error("Context URL must be provided unless image URLs are attached.");
+    console.error(
+      "Context URL must be provided unless image URLs or a video URL are attached.",
+    );
     process.exit(1);
   }
   if (trimmed !== value) {
-    console.error("Context URL must not include leading or trailing whitespace.");
+    console.error(
+      "Context URL must not include leading or trailing whitespace.",
+    );
     process.exit(1);
   }
 
   assertHttpsUrl(trimmed, "Context URL");
   if (isDirectImageUrl(trimmed)) {
-    console.error("Context URL must be a public page URL, not a direct image file URL.");
+    console.error(
+      "Context URL must be a public page URL, not a direct image file URL.",
+    );
     process.exit(1);
   }
 }
@@ -121,7 +126,7 @@ function assertSupportedImageUrls(imageUrls, { allowEmpty = false } = {}) {
     process.exit(1);
   }
   const unsupportedImageUrl = imageUrls.find(
-    (item) => !UPLOADED_IMAGE_URL_PATTERN.test(item)
+    (item) => !UPLOADED_IMAGE_URL_PATTERN.test(item),
   );
   if (unsupportedImageUrl) {
     console.error(`Unsupported image URL: ${unsupportedImageUrl}`);
@@ -142,7 +147,7 @@ function parseImageUrls(value, { allowEmpty = false } = {}) {
       if (
         Array.isArray(parsed) &&
         parsed.every(
-          (item) => typeof item === "string" && item.trim().length > 0
+          (item) => typeof item === "string" && item.trim().length > 0,
         )
       ) {
         assertSupportedImageUrls(parsed, { allowEmpty });
@@ -153,7 +158,7 @@ function parseImageUrls(value, { allowEmpty = false } = {}) {
     }
 
     console.error(
-      "Invalid image URL array JSON. Expected a JSON string array."
+      "Invalid image URL array JSON. Expected a JSON string array.",
     );
     process.exit(1);
   }
@@ -193,7 +198,7 @@ function parseArgs(rawArgs) {
       rpcUrl,
       registry,
       submitter,
-      contextUrl: media.videoUrl ? media.videoUrl : "",
+      contextUrl: "",
       media,
       title,
       description,
@@ -324,7 +329,9 @@ const publicClient = createPublicClient({
 const roundConfig =
   roundConfigOverride ??
   (await resolveDefaultRoundConfig(publicClient, registry));
-assertSupportedContextUrl(contextUrl, { allowEmpty: media.imageUrls.length > 0 });
+assertSupportedContextUrl(contextUrl, {
+  allowEmpty: media.imageUrls.length > 0 || Boolean(media.videoUrl),
+});
 const [, submissionKey] = await publicClient.readContract({
   address: registry,
   abi: parseAbi([
@@ -345,14 +352,14 @@ const [, submissionKey] = await publicClient.readContract({
 const mediaHash = keccak256(
   encodeAbiParameters(
     [{ type: "string[]" }, { type: "string" }],
-    [media.imageUrls, media.videoUrl]
-  )
+    [media.imageUrls, media.videoUrl],
+  ),
 );
 const textHash = keccak256(
   encodeAbiParameters(
     [{ type: "string" }, { type: "string" }, { type: "string" }],
-    [title, description, tags]
-  )
+    [title, description, tags],
+  ),
 );
 const rewardTermsHash = keccak256(
   encodeAbiParameters(
@@ -373,8 +380,8 @@ const rewardTermsHash = keccak256(
       rewardPoolExpiresAt,
       rewardPoolExpiresAt,
       Number(bountyEligibility),
-    ]
-  )
+    ],
+  ),
 );
 const roundConfigHash = keccak256(
   encodeAbiParameters(
@@ -389,8 +396,8 @@ const roundConfigHash = keccak256(
       roundConfig.maxDuration,
       roundConfig.minVoters,
       roundConfig.maxVoters,
-    ]
-  )
+    ],
+  ),
 );
 const revealCommitment = keccak256(
   encodeAbiParameters(
@@ -419,8 +426,8 @@ const revealCommitment = keccak256(
       roundConfigHash,
       DEFAULT_QUESTION_METADATA_HASH,
       DEFAULT_RESULT_SPEC_HASH,
-    ]
-  )
+    ],
+  ),
 );
 
 console.log(revealCommitment);

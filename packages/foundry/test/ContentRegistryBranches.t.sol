@@ -452,40 +452,23 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.stopPrank();
     }
 
-    function test_SubmitQuestion_AllowsYouTubeVideoWithCategory() public {
+    function test_SubmitQuestion_AllowsYouTubeVideoWithoutContextUrl() public {
         string memory url = "https://www.youtube.com/watch?v=jNQXAC9IVRw";
         string memory title = "Is this video clear?";
         string memory description = "A subjective video review question.";
         string memory tags = "Video,Review";
         uint256 categoryId = 5;
-        bytes32 salt = keccak256("youtube-question-url");
+        bytes32 salt = keccak256("youtube-question-without-context-url");
 
         vm.startPrank(submitter);
         lrepToken.approve(address(registry), 10e6);
         string[] memory imageUrls = _emptyImageUrls();
         bytes32 submissionKey = _reserveQuestionMediaSubmission(
-            registry,
-            "https://example.com/context",
-            imageUrls,
-            url,
-            title,
-            description,
-            tags,
-            categoryId,
-            salt,
-            submitter
+            registry, "", imageUrls, url, title, description, tags, categoryId, salt, submitter
         );
         vm.warp(block.timestamp + 1);
         uint256 id = registry.submitQuestion(
-            "https://example.com/context",
-            imageUrls,
-            url,
-            title,
-            description,
-            tags,
-            categoryId,
-            salt,
-            _defaultQuestionSpec()
+            "", imageUrls, url, title, description, tags, categoryId, salt, _defaultQuestionSpec()
         );
         vm.stopPrank();
 
@@ -1910,7 +1893,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
     function test_SubmitContent_EmptyUrl_Reverts() public {
         vm.startPrank(submitter);
         lrepToken.approve(address(registry), 10e6);
-        vm.expectRevert("Context or image required");
+        vm.expectRevert("Context or media required");
         registry.submitQuestion(
             "", _emptyImageUrls(), "", "goal", "goal", "tags", 1, bytes32(0), _defaultQuestionSpec()
         );

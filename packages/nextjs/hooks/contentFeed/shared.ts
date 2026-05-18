@@ -19,6 +19,7 @@ const LIKELY_URL_SEARCH_PATTERN = /^[a-z0-9.-]+\.[a-z]{2,}(?:[/?#:].*)?$/i;
 
 export interface ContentOpenRoundSummary {
   roundId: bigint;
+  state?: number;
   voteCount: number;
   revealedCount: number;
   totalStake: bigint;
@@ -38,6 +39,9 @@ export interface ContentOpenRoundSummary {
   maxDuration?: number;
   minVoters?: number;
   maxVoters?: number;
+  hasHumanVerifiedCommit?: boolean;
+  lastCommitRevealableAfter?: bigint | null;
+  revealGracePeriod?: bigint | null;
   estimatedSettlementTime: bigint | null;
 }
 
@@ -290,6 +294,7 @@ export function mapContentItem(
     roundMaxVoters?: string | number | null;
     openRound?: {
       roundId: string;
+      state?: number;
       voteCount: number;
       revealedCount: number;
       totalStake: string;
@@ -309,6 +314,9 @@ export function mapContentItem(
       maxDuration?: number;
       minVoters?: number;
       maxVoters?: number;
+      hasHumanVerifiedCommit?: boolean;
+      lastCommitRevealableAfter?: string | null;
+      revealGracePeriod?: string | null;
       estimatedSettlementTime: string | null;
     } | null;
     rewardPoolSummary?: {
@@ -360,6 +368,7 @@ export function mapContentItem(
   const mappedOpenRound = item.openRound
     ? {
         roundId: BigInt(item.openRound.roundId),
+        state: item.openRound.state,
         voteCount: item.openRound.voteCount,
         revealedCount: item.openRound.revealedCount,
         totalStake: BigInt(item.openRound.totalStake),
@@ -382,6 +391,11 @@ export function mapContentItem(
         maxDuration: numberOrDefault(item.openRound.maxDuration, roundConfig.maxDuration),
         minVoters: numberOrDefault(item.openRound.minVoters, roundConfig.minVoters),
         maxVoters: numberOrDefault(item.openRound.maxVoters, roundConfig.maxVoters),
+        hasHumanVerifiedCommit: item.openRound.hasHumanVerifiedCommit,
+        lastCommitRevealableAfter: item.openRound.lastCommitRevealableAfter
+          ? BigInt(item.openRound.lastCommitRevealableAfter)
+          : null,
+        revealGracePeriod: item.openRound.revealGracePeriod ? BigInt(item.openRound.revealGracePeriod) : null,
         estimatedSettlementTime: item.openRound.estimatedSettlementTime
           ? BigInt(item.openRound.estimatedSettlementTime)
           : null,

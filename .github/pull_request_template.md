@@ -15,6 +15,10 @@ Describe how you tested your changes:
 - [ ] Type check passes (`yarn next:check-types`)
 - [ ] Tested locally with `yarn start`
 
+## Security
+
+- [ ] This PR does not disclose a private vulnerability. If it fixes a sensitive issue, coordinate disclosure via hawigxyz@proton.me.
+
 ## Related Issues
 
 Closes #

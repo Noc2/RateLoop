@@ -7,6 +7,7 @@ process.env.DATABASE_URL = "memory:";
 type ContentFeedbackModule = typeof import("./contentFeedback");
 type NormalizedContentFeedbackInput = import("./contentFeedback").NormalizedContentFeedbackInput;
 type ContentFeedbackRoundContext = import("./contentFeedback").ContentFeedbackRoundContext;
+type PonderRoundItem = import("~~/services/ponder/client").PonderRoundItem;
 type PonderVoteItem = import("~~/services/ponder/client").PonderVoteItem;
 type PonderVotesResponse = import("~~/services/ponder/client").PonderVotesResponse;
 type DbModule = typeof import("../db");
@@ -61,6 +62,31 @@ function buildVoteItem(params: { contentId: string; roundId: string; voter: stri
     roundStartTime: null,
     roundState: ROUND_STATE.Open,
     roundUpWins: null,
+  };
+}
+
+function buildRoundItem(params: { contentId?: string; roundId: string; state: number }): PonderRoundItem {
+  return {
+    id: `${params.contentId ?? "1"}-${params.roundId}`,
+    contentId: params.contentId ?? "1",
+    roundId: params.roundId,
+    state: params.state,
+    voteCount: 0,
+    revealedCount: 0,
+    totalStake: "0",
+    upPool: "0",
+    downPool: "0",
+    upCount: 0,
+    downCount: 0,
+    upWins: null,
+    losingPool: null,
+    startTime: null,
+    settledAt: null,
+    title: null,
+    description: null,
+    url: null,
+    submitter: null,
+    categoryId: null,
   };
 }
 
@@ -189,6 +215,61 @@ test("builds round context from terminal and open rounds", () => {
   assert.equal(context.settlementComplete, false);
   assert.equal(context.terminalRoundIds.has("1"), true);
   assert.equal(context.terminalRoundIds.has("2"), false);
+});
+
+test("resolves open feedback round from on-chain fallback when ponder is stale", async () => {
+  let observedContentId: string | undefined;
+  let observedChainId: number | undefined;
+  contentFeedback.__setContentFeedbackVoteEligibilityTestOverridesForTests({
+    getContentById: async () => ({ content: { openRound: null } }) as any,
+    getAllRounds: async () => [buildRoundItem({ contentId: "18", roundId: "1", state: ROUND_STATE.Settled })],
+    resolveOnchainOpenRoundId: async params => {
+      observedContentId = params.contentId;
+      observedChainId = params.chainId;
+      return "3";
+    },
+  });
+
+  const context = await contentFeedback.resolveContentFeedbackRoundContext("18", CHAIN_ID);
+
+  assert.equal(context.openRoundId, "3");
+  assert.equal(context.currentRoundId, "3");
+  assert.equal(context.terminalRoundIds.has("1"), true);
+  assert.equal(context.settlementComplete, false);
+  assert.equal(observedContentId, "18");
+  assert.equal(observedChainId, CHAIN_ID);
+});
+
+test("keeps ponder open round ahead of on-chain fallback", async () => {
+  let fallbackCalled = false;
+  contentFeedback.__setContentFeedbackVoteEligibilityTestOverridesForTests({
+    getContentById: async () => ({ content: { openRound: { roundId: "2" } } }) as any,
+    getAllRounds: async () => [buildRoundItem({ contentId: "19", roundId: "2", state: ROUND_STATE.Open })],
+    resolveOnchainOpenRoundId: async () => {
+      fallbackCalled = true;
+      return "3";
+    },
+  });
+
+  const context = await contentFeedback.resolveContentFeedbackRoundContext("19", CHAIN_ID);
+
+  assert.equal(context.openRoundId, "2");
+  assert.equal(context.currentRoundId, "2");
+  assert.equal(fallbackCalled, false);
+});
+
+test("preserves stale ponder context when no on-chain open round exists", async () => {
+  contentFeedback.__setContentFeedbackVoteEligibilityTestOverridesForTests({
+    getContentById: async () => ({ content: { openRound: null } }) as any,
+    getAllRounds: async () => [buildRoundItem({ contentId: "20", roundId: "4", state: ROUND_STATE.Settled })],
+    resolveOnchainOpenRoundId: async () => null,
+  });
+
+  const context = await contentFeedback.resolveContentFeedbackRoundContext("20", CHAIN_ID);
+
+  assert.equal(context.openRoundId, null);
+  assert.equal(context.currentRoundId, "4");
+  assert.equal(context.settlementComplete, true);
 });
 
 test("accepts feedback eligibility from indexed staked votes", async () => {

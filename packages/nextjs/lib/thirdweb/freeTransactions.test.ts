@@ -593,6 +593,19 @@ test("supported sponsored operation families are allowlisted", async () => {
 });
 
 test("validates sponsored ContentRegistry submit question media", async () => {
+  const allowedVideoOnlyDecision = await freeTransactions.evaluateFreeTransactionAllowance(
+    buildRequest([
+      submitQuestionWithRewardCall({
+        contextUrl: "",
+        videoUrl: "https://www.youtube.com/watch?v=jNQXAC9IVRw",
+      }),
+    ]) as never,
+  );
+  assert.equal(allowedVideoOnlyDecision.isAllowed, true);
+
+  await dbModule.dbClient.execute("DELETE FROM free_transaction_reservations");
+  await dbModule.dbClient.execute("DELETE FROM free_transaction_quotas");
+
   const invalidImageDecision = await freeTransactions.evaluateFreeTransactionAllowance(
     buildRequest([
       submitQuestionWithRewardCall({ contextUrl: "", imageUrls: ["https://example.com/question-a.jpg"] }),

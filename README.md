@@ -94,10 +94,16 @@ Built with Next.js, Foundry, Ponder, thirdweb, wagmi, viem, Drizzle ORM, and Pos
 ### Setup
 
 ```bash
-git clone https://github.com/Noc2/RateLoop.git
+git clone --recurse-submodules https://github.com/Noc2/RateLoop.git
 cd RateLoop
 corepack enable
 yarn install
+```
+
+If you already cloned without submodules, initialize them with:
+
+```bash
+git submodule update --init --recursive
 ```
 
 For World Chain mainnet deployment, see [packages/foundry/README.md](packages/foundry/README.md).
@@ -237,6 +243,9 @@ Additional local interface:
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+Please do not open public issues for suspected vulnerabilities. Report security issues privately to
+[hawigxyz@proton.me](mailto:hawigxyz@proton.me); see [SECURITY.md](SECURITY.md).
 
 ## License
 

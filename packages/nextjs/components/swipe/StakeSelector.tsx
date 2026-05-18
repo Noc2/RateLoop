@@ -15,6 +15,7 @@ import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
 import {
   type OpenRoundFallbackData,
   type VotingConfig,
+  getRoundVoteUnavailableMessage,
   isRoundAcceptingVotes,
 } from "~~/lib/contracts/roundVotingEngine";
 import { estimateVoteReturn, formatLrepAmount } from "~~/lib/vote/voteIncentives";
@@ -174,8 +175,9 @@ export function StakeSelector({
   const cooldownActive = cooldownSecondsRemaining > 0;
   const formDisabled = isConfirming || !roundAcceptsVotes;
   const confirmDisabled = formDisabled || cooldownActive || amount < 0 || (amount > 0 && amount > maxStake);
+  const roundUnavailableMessage = getRoundVoteUnavailableMessage(roundSnapshot);
   const roundNotAcceptingMessage =
-    !roundAcceptsVotes && !confirmError && !isConfirming ? "This round is not accepting votes right now." : null;
+    !roundAcceptsVotes && !confirmError && !isConfirming ? roundUnavailableMessage : null;
   const phaseHeadline = effectiveIsBlind ? "Private round" : "Post-epoch reveal";
   const phaseHeadlineClassName = effectiveIsBlind ? "text-primary" : "text-warning";
   const sliderClassName = "range range-primary range-sm w-full";

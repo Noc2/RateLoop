@@ -6,6 +6,9 @@ labels: enhancement
 assignees: ""
 ---
 
+> **Security issue?** Do not include vulnerability details in a public issue. Email
+> hawigxyz@proton.me instead.
+
 **Is your feature request related to a problem?**
 A clear and concise description of what the problem is. Ex. "I'm always frustrated when..."
 

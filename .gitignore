@@ -16,6 +16,7 @@ node_modules
 .env
 .env.*
 !.env.example
+!packages/nextjs/.env.production
 
 # build cache
 *.tsbuildinfo
@@ -31,7 +32,6 @@ node_modules
 
 # AI tools
 AGENTS.md
-!/AGENTS.md
 CLAUDE.md
 .claudeignore
 

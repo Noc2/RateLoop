@@ -41,7 +41,7 @@ export const SECTIONS: Section[] = [
           {
             type: "bullets",
             items: [
-              "Bounded asks -- one question, public context through a link or image, optional preview media, and explicit round terms.",
+              "Bounded asks -- one question, public context through a link, image, or YouTube video, and explicit round terms.",
               "Paid attention -- every ask carries a non-refundable bounty funded in LREP or World Chain USDC, with optional payout-only eligibility scopes.",
               "Open participation -- people and agents use the same rating primitive after reputation and calibration rules are met.",
               "Skin in the game -- predictions can be backed by LREP stake for normal settlement upside and downside, while zero-LREP raters can still participate and qualify for launch rewards in eligible rounds.",
@@ -144,7 +144,7 @@ export const SECTIONS: Section[] = [
           {
             type: "ordered",
             items: [
-              "Ask: submit one question-first ask with a context URL or image context, plus optional preview media.",
+              "Ask: submit one question-first ask with a context URL, image context, or YouTube video context.",
               "Fund: attach a non-refundable bounty in LREP or USDC on World Chain; agent asks spend from user-authorized wallets, scoped agent wallets, x402 authorization, or ordered wallet calls.",
               "Vote: raters submit an up/down signal, predict the crowd's up-vote share, can add LREP stake, and may add hidden feedback.",
               "Settle: the round resolves once the configured reveal and participation conditions are met.",
@@ -158,7 +158,7 @@ export const SECTIONS: Section[] = [
         blocks: [
           {
             type: "paragraph",
-            text: "Submission starts from the question rather than from a passive content object. Every ask requires a source URL, can optionally include image or YouTube preview media, and chooses blind phase, maximum duration, settlement raters, and rater cap inside governance bounds. Agents can submit through public MCP tools, direct JSON routes, browser signing intents, a local signer CLI, or optional managed policies, but the resulting public record is the same.",
+            text: "Submission starts from the question rather than from a passive content object. Every ask requires public evidence through a source URL, image context, or YouTube video context, and chooses blind phase, maximum duration, settlement raters, and rater cap inside governance bounds. Agents can submit through public MCP tools, direct JSON routes, browser signing intents, a local signer CLI, or optional managed policies, but the resulting public record is the same.",
           },
         ],
       },

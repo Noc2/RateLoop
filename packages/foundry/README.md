@@ -1,6 +1,6 @@
 # RateLoop — Foundry (Smart Contracts)
 
-Solidity smart contracts implementing the RateLoop protocol: voting engine, content registry, Loop Reputation token, LREP settlement, bounty escrow, launch distribution, ClusterPayoutOracle, and governance. Built with [Foundry](https://book.getfoundry.sh/). The docs now describe the question-first submission flow, public evidence through either a context URL or image context, mandatory non-refundable bounties funded in LREP or USDC, flexible minimum bounty terms for raters and settlement rounds, optional identity credentials, the default frontend-operator fee on qualified bounty claims, and frontend-backed payout-root publication.
+Solidity smart contracts implementing the RateLoop protocol: voting engine, content registry, Loop Reputation token, LREP settlement, bounty escrow, launch distribution, ClusterPayoutOracle, and governance. Built with [Foundry](https://book.getfoundry.sh/). The docs now describe the question-first submission flow, public evidence through a context URL, image context, or YouTube video context, mandatory non-refundable bounties funded in LREP or USDC, flexible minimum bounty terms for raters and settlement rounds, optional identity credentials, the default frontend-operator fee on qualified bounty claims, and frontend-backed payout-root publication.
 
 ## Quick Start
 
@@ -35,15 +35,15 @@ auto-verification flow. Verify those contracts manually with
 
 Create a `.env` file (see `.env.example`):
 
-| Variable                          | Description                                                                |
-| --------------------------------- | -------------------------------------------------------------------------- |
-| `ALCHEMY_API_KEY`                 | Optional RPC provider key for testnet/mainnet deploys                      |
-| `WORLDCHAIN_RPC_URL`              | Optional World Chain mainnet RPC override for live deploys                 |
-| `WORLDCHAIN_SEPOLIA_RPC_URL`      | Optional World Chain Sepolia RPC override for live deploys                 |
-| `NEXT_PUBLIC_WORLD_ID_APP_ID`     | World ID app ID required for live `RaterRegistry` deploys                  |
-| `NEXT_PUBLIC_WORLD_ID_ACTION`     | World ID action ID; defaults to `rateloop-human-credential-v1`             |
+| Variable                           | Description                                                               |
+| ---------------------------------- | ------------------------------------------------------------------------- |
+| `ALCHEMY_API_KEY`                  | Optional RPC provider key for testnet/mainnet deploys                     |
+| `WORLDCHAIN_RPC_URL`               | Optional World Chain mainnet RPC override for live deploys                |
+| `WORLDCHAIN_SEPOLIA_RPC_URL`       | Optional World Chain Sepolia RPC override for live deploys                |
+| `NEXT_PUBLIC_WORLD_ID_APP_ID`      | World ID app ID required for live `RaterRegistry` deploys                 |
+| `NEXT_PUBLIC_WORLD_ID_ACTION`      | World ID action ID; defaults to `rateloop-human-credential-v1`            |
 | `WORLD_ID_EXTERNAL_NULLIFIER_HASH` | Optional deploy-script override for the action-derived external nullifier |
-| `ETHERSCAN_API_KEY`               | Optional explorer API key for Etherscan-compatible networks                |
+| `ETHERSCAN_API_KEY`                | Optional explorer API key for Etherscan-compatible networks               |
 
 Localhost deploys use the standard Anvil private key directly, so `yarn deploy` does not need a keystore password
 when deploying to `localhost`.

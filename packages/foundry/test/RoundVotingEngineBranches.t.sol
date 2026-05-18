@@ -54,6 +54,11 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     uint256 public constant STAKE = 5e6; // 5 LREP
     uint256 public constant T0 = 1_000_000; // setUp warp time
     uint256 public constant EPOCH = 1 hours; // epochDuration
+    uint8 internal constant COMMIT_STATUS_OPEN = 0;
+    uint8 internal constant COMMIT_STATUS_STARTS_NEXT_ROUND = 1;
+    uint8 internal constant COMMIT_STATUS_ROUND_FULL = 2;
+    uint8 internal constant COMMIT_STATUS_WAITING_FOR_SETTLEMENT = 3;
+    uint8 internal constant COMMIT_STATUS_WAITING_FOR_REVEAL_GRACE = 4;
     bytes32 internal constant PERMIT_TYPEHASH =
         keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)");
 
@@ -177,6 +182,35 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     // =========================================================================
     // TEST HELPERS
     // =========================================================================
+
+    function _previewCommitAvailability(uint256 contentId)
+        internal
+        view
+        returns (bool canCommit, uint8 status, uint256 roundId, uint16 referenceRatingBps, bool willStartNewRound)
+    {
+        uint256 currentRoundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        uint256 previewRoundId = engine.previewCommitRoundId(contentId);
+        if (currentRoundId == 0 || previewRoundId != currentRoundId) {
+            status = COMMIT_STATUS_STARTS_NEXT_ROUND;
+        } else {
+            RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, currentRoundId);
+            RoundLib.RoundConfig memory cfg = RoundEngineReadHelpers.roundConfig(engine, contentId, currentRoundId);
+            uint16 revealQuorum = cfg.minVoters < 3 ? 3 : cfg.minVoters;
+            if (round.thresholdReachedAt != 0 || round.revealedCount >= revealQuorum) {
+                status = COMMIT_STATUS_WAITING_FOR_SETTLEMENT;
+            } else if (round.voteCount >= cfg.maxVoters) {
+                status = COMMIT_STATUS_ROUND_FULL;
+            } else if (round.startTime > 0 && block.timestamp >= uint256(round.startTime) + cfg.maxDuration) {
+                status = COMMIT_STATUS_WAITING_FOR_REVEAL_GRACE;
+            } else {
+                status = COMMIT_STATUS_OPEN;
+            }
+        }
+        canCommit = status == COMMIT_STATUS_OPEN || status == COMMIT_STATUS_STARTS_NEXT_ROUND;
+        roundId = previewRoundId;
+        referenceRatingBps = engine.previewCommitReferenceRatingBps(contentId);
+        willStartNewRound = status == COMMIT_STATUS_STARTS_NEXT_ROUND;
+    }
 
     /// @dev Commit a vote in test mode and return (commitKey, salt).
     function _commit(address voter, uint256 contentId, bool isUp, uint256 stake)
@@ -604,6 +638,118 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     // =========================================================================
     // 1. BASIC ROUND LIFECYCLE: commit -> reveal -> settle (3 voters, epoch 1)
     // =========================================================================
+
+    function test_PreviewCommitAvailability_NoRound_StartsNextRound() public {
+        uint256 contentId = _submitContent();
+
+        (bool canCommit, uint8 status, uint256 roundId, uint16 referenceRatingBps, bool willStartNewRound) =
+            _previewCommitAvailability(contentId);
+
+        assertTrue(canCommit);
+        assertEq(status, COMMIT_STATUS_STARTS_NEXT_ROUND);
+        assertEq(roundId, 1);
+        assertEq(referenceRatingBps, _defaultRatingReferenceBps());
+        assertTrue(willStartNewRound);
+    }
+
+    function test_PreviewCommitAvailability_OpenRound_AcceptsCurrentRound() public {
+        uint256 contentId = _submitContent();
+        _commit(voter1, contentId, true, STAKE);
+
+        (bool canCommit, uint8 status, uint256 roundId, uint16 referenceRatingBps, bool willStartNewRound) =
+            _previewCommitAvailability(contentId);
+
+        assertTrue(canCommit);
+        assertEq(status, COMMIT_STATUS_OPEN);
+        assertEq(roundId, 1);
+        assertEq(referenceRatingBps, _defaultRatingReferenceBps());
+        assertFalse(willStartNewRound);
+    }
+
+    function test_PreviewCommitAvailability_ExpiredAllSybilQuorum_StartsNextRound() public {
+        uint256 contentId = _submitContent();
+
+        _commit(voter1, contentId, true, STAKE);
+        _commit(voter2, contentId, true, STAKE);
+        _commit(voter3, contentId, false, STAKE);
+
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        RoundLib.Round memory r0 = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        assertFalse(engine.roundHasHumanVerifiedCommit(contentId, roundId));
+
+        vm.warp(uint256(r0.startTime) + 7 days + 1);
+
+        (bool canCommit, uint8 status, uint256 nextPreviewRoundId,, bool willStartNewRound) =
+            _previewCommitAvailability(contentId);
+
+        assertTrue(canCommit);
+        assertEq(status, COMMIT_STATUS_STARTS_NEXT_ROUND);
+        assertEq(nextPreviewRoundId, 2);
+        assertEq(engine.previewCommitRoundId(contentId), 2);
+        assertTrue(willStartNewRound);
+
+        _commit(voter4, contentId, true, STAKE);
+
+        RoundLib.Round memory cancelledRound = RoundEngineReadHelpers.round(engine, contentId, 1);
+        assertEq(uint256(cancelledRound.state), uint256(RoundLib.RoundState.Cancelled));
+        RoundLib.Round memory openRound = RoundEngineReadHelpers.round(engine, contentId, 2);
+        assertEq(uint256(openRound.state), uint256(RoundLib.RoundState.Open));
+        assertEq(openRound.voteCount, 1);
+    }
+
+    function test_PreviewCommitAvailability_RoundFull_BlocksCurrentRound() public {
+        RoundLib.RoundConfig memory roundConfig =
+            RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 7 days, minVoters: 3, maxVoters: 3 });
+        uint256 contentId = _submitContentWithRoundConfig("https://example.com/full-round", roundConfig);
+
+        _commit(voter1, contentId, true, STAKE);
+        _commit(voter2, contentId, true, STAKE);
+        _commit(voter3, contentId, false, STAKE);
+
+        (bool canCommit, uint8 status, uint256 roundId,, bool willStartNewRound) = _previewCommitAvailability(contentId);
+
+        assertFalse(canCommit);
+        assertEq(status, COMMIT_STATUS_ROUND_FULL);
+        assertEq(roundId, 1);
+        assertFalse(willStartNewRound);
+    }
+
+    function test_PreviewCommitAvailability_ThresholdReached_WaitsForSettlement() public {
+        (uint256 contentId, uint256 roundId) = _setupThreeVoterRound(true, true, false);
+
+        (bool canCommit, uint8 status, uint256 previewRoundId,, bool willStartNewRound) =
+            _previewCommitAvailability(contentId);
+
+        assertFalse(canCommit);
+        assertEq(status, COMMIT_STATUS_WAITING_FOR_SETTLEMENT);
+        assertEq(previewRoundId, roundId);
+        assertFalse(willStartNewRound);
+    }
+
+    function test_PreviewCommitAvailability_ExpiredHumanQuorum_WaitsForRevealGrace() public {
+        mockRaterIdentityRegistry.setHolder(voter1);
+        mockRaterIdentityRegistry.setHolder(voter2);
+        mockRaterIdentityRegistry.setHolder(voter3);
+        uint256 contentId = _submitContent();
+
+        _commit(voter1, contentId, true, STAKE);
+        _commit(voter2, contentId, true, STAKE);
+        _commit(voter3, contentId, false, STAKE);
+
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        RoundLib.Round memory r0 = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        assertTrue(engine.roundHasHumanVerifiedCommit(contentId, roundId));
+
+        vm.warp(uint256(r0.startTime) + 7 days + 1);
+
+        (bool canCommit, uint8 status, uint256 previewRoundId,, bool willStartNewRound) =
+            _previewCommitAvailability(contentId);
+
+        assertFalse(canCommit);
+        assertEq(status, COMMIT_STATUS_WAITING_FOR_REVEAL_GRACE);
+        assertEq(previewRoundId, roundId);
+        assertFalse(willStartNewRound);
+    }
 
     function test_CommitVoteWithPermit_Succeeds() public {
         uint256 permitVoterKey = 0xA11CE;

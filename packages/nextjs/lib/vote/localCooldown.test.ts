@@ -63,6 +63,48 @@ test("local vote cooldown cache matches rater identity keys across linked addres
   assert.equal(cooldowns.get("9"), VOTE_COOLDOWN_SECONDS - 30);
 });
 
+test("local vote cooldown cache is scoped to the voting engine deployment when provided", () => {
+  const storage = new MemoryStorage();
+  const nowSeconds = 1_000_000;
+  const address = "0xabc0000000000000000000000000000000000000";
+
+  recordLocalVoteCooldown({
+    address,
+    chainId: 31337,
+    contentId: 18n,
+    nowSeconds,
+    storage,
+  });
+  recordLocalVoteCooldown({
+    address,
+    chainId: 31337,
+    contentId: 19n,
+    nowSeconds,
+    storage,
+    votingEngineAddress: "0x1111111111111111111111111111111111111111",
+  });
+  recordLocalVoteCooldown({
+    address,
+    chainId: 31337,
+    contentId: 20n,
+    nowSeconds,
+    storage,
+    votingEngineAddress: "0x2222222222222222222222222222222222222222",
+  });
+
+  const cooldowns = getLocalVoteCooldownsByContentId({
+    chainId: 31337,
+    contentIds: [18n, 19n, 20n],
+    identities: [{ address }],
+    nowSeconds: nowSeconds + 60,
+    storage,
+    votingEngineAddress: "0x2222222222222222222222222222222222222222",
+  });
+
+  assert.deepEqual(Array.from(cooldowns.keys()), ["20"]);
+  assert.equal(cooldowns.get("20"), VOTE_COOLDOWN_SECONDS - 60);
+});
+
 test("local vote cooldown cache ignores expired entries and other chains", () => {
   const storage = new MemoryStorage();
   const nowSeconds = 1_000_000;
