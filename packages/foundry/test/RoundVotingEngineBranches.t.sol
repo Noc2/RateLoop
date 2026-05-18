@@ -351,6 +351,58 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         );
     }
 
+    function _expectCommitVoteRevert(
+        address voter,
+        uint256 contentId,
+        bool isUp,
+        uint256 stake,
+        string memory saltTag,
+        bytes4 selector
+    ) internal {
+        uint256 roundId = engine.previewCommitRoundId(contentId);
+        uint16 referenceRatingBps = engine.previewCommitReferenceRatingBps(contentId);
+        uint64 targetRound = _tlockCommitTargetRound(engine, contentId);
+        bytes32 drandChainHash = _tlockDrandChainHash();
+        bytes32 salt = keccak256(abi.encodePacked(voter, isUp, block.timestamp, saltTag));
+        bytes memory ciphertext = _testCiphertext(isUp, salt, contentId, targetRound, drandChainHash);
+        bytes32 commitHash = TlockVoteLib.buildExpectedRbtsCommitHash(
+            isUp, 5_000, salt, voter, contentId, roundId, referenceRatingBps, targetRound, drandChainHash, ciphertext
+        );
+
+        vm.startPrank(voter);
+        lrepToken.approve(address(engine), stake);
+        vm.expectRevert(selector);
+        engine.commitVote(
+            contentId,
+            _roundContext(roundId, referenceRatingBps),
+            targetRound,
+            drandChainHash,
+            commitHash,
+            ciphertext,
+            stake,
+            address(0)
+        );
+        vm.stopPrank();
+    }
+
+    function _expectAdvisoryRevert(address voter, uint256 contentId, string memory saltTag, bytes4 selector) internal {
+        uint256 roundId = engine.previewCommitRoundId(contentId);
+        uint16 referenceRatingBps = engine.previewCommitReferenceRatingBps(contentId);
+        uint64 targetRound = _tlockCommitTargetRound(engine, contentId);
+        bytes32 drandChainHash = _tlockDrandChainHash();
+        bytes32 salt = keccak256(abi.encodePacked(voter, block.timestamp, saltTag));
+        bytes memory ciphertext = _testCiphertext(true, salt, contentId, targetRound, drandChainHash);
+        bytes32 commitHash = _commitHash(
+            true, salt, voter, contentId, roundId, referenceRatingBps, targetRound, drandChainHash, ciphertext
+        );
+
+        vm.prank(voter);
+        vm.expectRevert(selector);
+        advisoryRecorder.recordAdvisoryVote(
+            contentId, _roundContext(roundId, referenceRatingBps), targetRound, drandChainHash, commitHash, ciphertext
+        );
+    }
+
     function _signPermit(uint256 privateKey, address tokenOwner, uint256 value, uint256 deadline)
         internal
         view
@@ -1334,6 +1386,44 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
             address(0)
         );
         vm.stopPrank();
+    }
+
+    function test_CommitAfterDelegateAddressIdentityChurn_RevertsAlreadyCommitted() public {
+        uint256 contentId = _submitContent();
+        vm.prank(voter1);
+        mockRaterIdentityRegistry.setDelegate(delegate1);
+        _commit(delegate1, contentId, true, STAKE);
+
+        mockRaterIdentityRegistry.mint(voter1, 42);
+        vm.warp(block.timestamp + 25 hours);
+
+        _expectCommitVoteRevert(
+            voter1,
+            contentId,
+            false,
+            STAKE,
+            "direct-after-delegate-identity-churn",
+            RoundVotingEngine.AlreadyCommitted.selector
+        );
+    }
+
+    function test_DelegateCommitAfterHolderAddressIdentityChurn_RevertsAlreadyCommitted() public {
+        uint256 contentId = _submitContent();
+        _commit(voter1, contentId, true, STAKE);
+
+        mockRaterIdentityRegistry.mint(voter1, 42);
+        vm.prank(voter1);
+        mockRaterIdentityRegistry.setDelegate(delegate1);
+        vm.warp(block.timestamp + 25 hours);
+
+        _expectCommitVoteRevert(
+            delegate1,
+            contentId,
+            false,
+            STAKE,
+            "delegate-after-direct-identity-churn",
+            RoundVotingEngine.AlreadyCommitted.selector
+        );
     }
 
     function test_CommitSameNullifierAfterRemint_SameRound_RevertsAlreadyCommitted() public {
@@ -2621,6 +2711,42 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         vm.stopPrank();
     }
 
+    function test_RealCommitAfterDelegateAdvisoryIdentityChurn_RevertsAlreadyCommitted() public {
+        uint256 contentId = _submitContent();
+        vm.prank(voter1);
+        mockRaterIdentityRegistry.setDelegate(delegate1);
+        _recordAdvisory(delegate1, contentId, "delegate-advisory-before-identity");
+
+        mockRaterIdentityRegistry.mint(voter1, 42);
+        vm.warp(block.timestamp + 25 hours);
+
+        _expectCommitVoteRevert(
+            voter1,
+            contentId,
+            false,
+            STAKE,
+            "real-after-delegate-advisory-identity-churn",
+            RoundVotingEngine.AlreadyCommitted.selector
+        );
+    }
+
+    function test_AdvisoryAfterDelegateRealCommitIdentityChurn_RevertsAlreadyCommitted() public {
+        uint256 contentId = _submitContent();
+        vm.prank(voter1);
+        mockRaterIdentityRegistry.setDelegate(delegate1);
+        _commit(delegate1, contentId, true, STAKE);
+
+        mockRaterIdentityRegistry.mint(voter1, 42);
+        vm.warp(block.timestamp + 25 hours);
+
+        _expectAdvisoryRevert(
+            voter1,
+            contentId,
+            "advisory-after-delegate-real-identity-churn",
+            AdvisoryVoteRecorder.AlreadyCommitted.selector
+        );
+    }
+
     function test_RealCommitAfterAdvisoryVoteCooldown_Reverts() public {
         uint256 contentId = _submitContent();
         _recordAdvisory(voter1, contentId, "advisory-cooldown");
@@ -2784,6 +2910,40 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         vm.expectRevert(AdvisoryVoteRecorder.AlreadyCommitted.selector);
         advisoryRecorder.recordAdvisoryVote(
             contentId, roundContext, targetRound, drandChainHash, delegateCommitHash, delegateCiphertext
+        );
+    }
+
+    function test_AdvisoryAfterDelegateAddressIdentityChurn_RevertsAlreadyCommitted() public {
+        uint256 contentId = _submitContent();
+        vm.prank(voter1);
+        mockRaterIdentityRegistry.setDelegate(delegate1);
+        _recordAdvisory(delegate1, contentId, "delegate-before-human");
+
+        mockRaterIdentityRegistry.mint(voter1, 42);
+        vm.warp(block.timestamp + 25 hours);
+
+        _expectAdvisoryRevert(
+            voter1,
+            contentId,
+            "direct-after-delegate-advisory-identity-churn",
+            AdvisoryVoteRecorder.AlreadyCommitted.selector
+        );
+    }
+
+    function test_DelegateAdvisoryAfterHolderAddressIdentityChurn_RevertsAlreadyCommitted() public {
+        uint256 contentId = _submitContent();
+        _recordAdvisory(voter1, contentId, "holder-before-human");
+
+        mockRaterIdentityRegistry.mint(voter1, 42);
+        vm.prank(voter1);
+        mockRaterIdentityRegistry.setDelegate(delegate1);
+        vm.warp(block.timestamp + 25 hours);
+
+        _expectAdvisoryRevert(
+            delegate1,
+            contentId,
+            "delegate-after-holder-advisory-identity-churn",
+            AdvisoryVoteRecorder.AlreadyCommitted.selector
         );
     }
 
