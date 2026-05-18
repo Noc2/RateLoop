@@ -313,7 +313,7 @@ test("bundle bounties with no remaining value are treated as expired", () => {
   );
 });
 
-test("bundle-only items show an expired bounty status when no per-question bounty is available", () => {
+test("bundle-only items keep the active bounty status when the bundle bounty is still open", () => {
   const item = makeContentItem({
     id: 1n,
     url: "https://example.com/bundle-only",
@@ -350,7 +350,7 @@ test("bundle-only items show an expired bounty status when no per-question bount
   });
 
   assert.equal(getActiveBountyClosesAt(item, 10_000), 12_000n);
-  assert.equal(shouldShowBountyExpiredStatus(item, 10_000), true);
+  assert.equal(shouldShowBountyExpiredStatus(item, 10_000), false);
 });
 
 test("feedback bonuses are closed when no voting round is open", () => {
