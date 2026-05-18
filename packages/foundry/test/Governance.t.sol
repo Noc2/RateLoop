@@ -52,6 +52,25 @@ contract GovernanceTest is Test {
         return string.concat(description, "#proposer=", Strings.toHexString(uint160(proposer), 20));
     }
 
+    function _emptyTimelockProposal()
+        internal
+        view
+        returns (address[] memory targets, uint256[] memory values, bytes[] memory calldatas)
+    {
+        targets = new address[](1);
+        targets[0] = address(timelock);
+        values = new uint256[](1);
+        calldatas = new bytes[](1);
+    }
+
+    function _expectRestrictedProposalDescription(string memory description) internal {
+        (address[] memory targets, uint256[] memory values, bytes[] memory calldatas) = _emptyTimelockProposal();
+
+        vm.prank(voter1);
+        vm.expectRevert(abi.encodeWithSelector(IGovernor.GovernorRestrictedProposer.selector, voter1));
+        governor.propose(targets, values, calldatas, description);
+    }
+
     function setUp() public {
         vm.startPrank(deployer);
 
@@ -775,6 +794,20 @@ contract GovernanceTest is Test {
         assertEq(governor.nextProposalBlock(voter1), block.number + governor.PROPOSAL_COOLDOWN_BLOCKS());
     }
 
+    function test_CreateProposal_RequiresExactProposerSuffixMarker() public {
+        vm.roll(block.number + 1);
+
+        _expectRestrictedProposalDescription(
+            string.concat("Wrong marker#otherxxx=", Strings.toHexString(uint160(voter1), 20))
+        );
+    }
+
+    function test_CreateProposal_RequiresValidProposerSuffixAddress() public {
+        vm.roll(block.number + 1);
+
+        _expectRestrictedProposalDescription("Bad address#proposer=0x00000000000000000000000000000000000000zz");
+    }
+
     function test_ProposerCooldownBlocksRapidRepeat() public {
         vm.roll(block.number + 1);
 
@@ -798,7 +831,8 @@ contract GovernanceTest is Test {
         vm.roll(nextBlock);
 
         vm.prank(voter1);
-        uint256 proposalId = governor.propose(targets, values, calldatas, _boundDescription("Cooldown proposal #2", voter1));
+        uint256 proposalId =
+            governor.propose(targets, values, calldatas, _boundDescription("Cooldown proposal #2", voter1));
 
         assertTrue(proposalId != 0);
     }

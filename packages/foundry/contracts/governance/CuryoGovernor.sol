@@ -11,6 +11,7 @@ import { GovernorTimelockControl } from "@openzeppelin/contracts/governance/exte
 import { GovernorSettings } from "@openzeppelin/contracts/governance/extensions/GovernorSettings.sol";
 import { TimelockController } from "@openzeppelin/contracts/governance/TimelockController.sol";
 import { IVotes } from "@openzeppelin/contracts/governance/utils/IVotes.sol";
+import { Strings } from "@openzeppelin/contracts/utils/Strings.sol";
 
 interface IGovernanceLockableVotes is IVotes {
     function lockForGovernance(address account, uint256 amount) external;
@@ -63,6 +64,10 @@ contract CuryoGovernor is
     uint256 public constant MAX_EXCLUDED_HOLDERS = 64;
     /// @notice Minimum blocks a proposer must wait between successful proposals (~1 day on World Chain blocks).
     uint256 public constant PROPOSAL_COOLDOWN_BLOCKS = 86_400;
+    bytes10 private constant PROPOSER_SUFFIX_MARKER = "#proposer=";
+    uint256 private constant PROPOSER_SUFFIX_MARKER_LENGTH = 10;
+    uint256 private constant PROPOSER_SUFFIX_ADDRESS_LENGTH = 42;
+    uint256 private constant PROPOSER_SUFFIX_LENGTH = PROPOSER_SUFFIX_MARKER_LENGTH + PROPOSER_SUFFIX_ADDRESS_LENGTH;
     /// @notice Block number where each proposal was created.
     mapping(uint256 => uint256) public proposalCreatedBlock;
     /// @notice Earliest block where each proposer may submit another proposal.
@@ -294,14 +299,22 @@ contract CuryoGovernor is
     ///      per proposer while preserving the standard queue/execute descriptionHash contract.
     function _isValidDescriptionForProposer(address proposer, string memory description)
         internal
-        view
+        pure
         override
         returns (bool)
     {
         uint256 length = bytes(description).length;
         // 52 = bytes("#proposer=").length (10) + bytes("0x" + 40 hex chars) (42).
-        if (length < 52) return false;
-        if (bytes(description)[length - 52] != bytes1("#")) return false;
-        return super._isValidDescriptionForProposer(proposer, description);
+        if (length < PROPOSER_SUFFIX_LENGTH) return false;
+
+        bytes memory descriptionBytes = bytes(description);
+        uint256 markerStart = length - PROPOSER_SUFFIX_LENGTH;
+        for (uint256 i = 0; i < PROPOSER_SUFFIX_MARKER_LENGTH; i++) {
+            if (descriptionBytes[markerStart + i] != PROPOSER_SUFFIX_MARKER[i]) return false;
+        }
+
+        (bool success, address recovered) =
+            Strings.tryParseAddress(description, length - PROPOSER_SUFFIX_ADDRESS_LENGTH, length);
+        return success && recovered == proposer;
     }
 }
