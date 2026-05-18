@@ -5,6 +5,7 @@ import { mkdir, readFile, writeFile } from "fs/promises";
 import path from "path";
 import "server-only";
 import sharp from "sharp";
+import { parseAttachmentIdFromUploadedImageUrl } from "~~/lib/attachments/imageAttachmentUrls";
 import { db } from "~~/lib/db";
 import { type QuestionImageAttachment, questionImageAttachments } from "~~/lib/db/schema";
 
@@ -116,6 +117,21 @@ function getAttachmentImagePath(attachmentId: string) {
   return `${IMAGE_ATTACHMENT_ROUTE_PREFIX}/${attachmentId}.${IMAGE_ATTACHMENT_PUBLIC_EXTENSION}`;
 }
 
+function getConfiguredAttachmentBaseUrl() {
+  const rawValue =
+    process.env.APP_URL?.trim() ||
+    process.env.NEXT_PUBLIC_APP_URL?.trim() ||
+    (process.env.VERCEL_URL?.trim() ? `https://${process.env.VERCEL_URL.trim()}` : "");
+  if (!rawValue) return null;
+
+  try {
+    const parsed = new URL(rawValue);
+    return parsed.protocol === "http:" || parsed.protocol === "https:" ? parsed.toString().replace(/\/$/, "") : null;
+  } catch {
+    return null;
+  }
+}
+
 function hasBlobReadWriteToken(env: ImageAttachmentUploadModeEnv = process.env) {
   return Boolean(env.BLOB_READ_WRITE_TOKEN?.trim());
 }
@@ -148,7 +164,7 @@ function resolveLocalImageAttachmentPathname(pathname: string) {
 }
 
 export function getAttachmentImageUrl(requestUrl: string, attachmentId: string) {
-  return new URL(getAttachmentImagePath(attachmentId), requestUrl).toString();
+  return new URL(getAttachmentImagePath(attachmentId), getConfiguredAttachmentBaseUrl() ?? requestUrl).toString();
 }
 
 export function getImageAttachmentUploadMode(env: ImageAttachmentUploadModeEnv = process.env): "blob" | "local" {
@@ -156,13 +172,7 @@ export function getImageAttachmentUploadMode(env: ImageAttachmentUploadModeEnv =
 }
 
 export function parseAttachmentIdFromImageUrl(value: string): string | null {
-  try {
-    const parsed = new URL(value);
-    const match = parsed.pathname.match(/^\/api\/attachments\/images\/(att_[A-Za-z0-9_-]{16,80})\.webp$/);
-    return match?.[1] ?? null;
-  } catch {
-    return null;
-  }
+  return parseAttachmentIdFromUploadedImageUrl(value);
 }
 
 export function validateImageAttachmentBlobPathname(attachmentId: string, blobPathname: string) {

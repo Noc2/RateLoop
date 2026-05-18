@@ -1,10 +1,9 @@
+import { normalizeUploadedImageAttachmentUrl } from "~~/lib/attachments/imageAttachmentUrls";
 import { sanitizeExternalUrl } from "~~/utils/externalUrl";
 import { canonicalizeUrl, detectPlatform } from "~~/utils/platforms";
 
 export const MAX_SUBMISSION_IMAGE_URLS = 4;
 export const MAX_SUBMISSION_URL_LENGTH = 2048;
-
-const UPLOADED_IMAGE_ATTACHMENT_PATH_PATTERN = /^\/api\/attachments\/images\/att_[A-Za-z0-9_-]{16,80}\.webp$/;
 
 export type ContentMediaType = "image" | "video";
 
@@ -46,18 +45,7 @@ export function normalizeSubmissionContextUrl(value: string): string | null {
 }
 
 function normalizeUploadedImageUrl(value: string): string | null {
-  try {
-    const parsed = new URL(value);
-    if (parsed.username || parsed.password) return null;
-    if (!UPLOADED_IMAGE_ATTACHMENT_PATH_PATTERN.test(parsed.pathname)) return null;
-    if (parsed.protocol === "https:") return parsed.toString();
-    if (parsed.protocol === "http:" && ["localhost", "127.0.0.1", "::1", "[::1]"].includes(parsed.hostname)) {
-      return parsed.toString();
-    }
-    return null;
-  } catch {
-    return null;
-  }
+  return normalizeUploadedImageAttachmentUrl(value);
 }
 
 export function buildFallbackMediaItems(url: string | null | undefined): ContentMediaItem[] {

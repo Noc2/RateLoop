@@ -71,6 +71,20 @@ test("parseX402QuestionRequest rejects arbitrary HTTPS image URLs", () => {
   );
 });
 
+test("parseX402QuestionRequest rejects uploaded image paths on untrusted origins", () => {
+  assert.throws(
+    () =>
+      parseX402QuestionRequest({
+        ...VALID_REQUEST,
+        question: {
+          ...VALID_REQUEST.question,
+          imageUrls: ["https://evil.example/api/attachments/images/att_abcdefghijklmnop.webp"],
+        },
+      }),
+    /approved RateLoop-hosted uploads/,
+  );
+});
+
 test("parseX402QuestionRequest accepts an omitted description", () => {
   const payload = parseX402QuestionRequest({
     ...VALID_REQUEST,

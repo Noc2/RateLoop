@@ -6,6 +6,7 @@ import {
   DEFAULT_AGENT_TEMPLATE_VERSION,
 } from "~~/lib/agent/questionSpecs";
 import { findAgentResultTemplate } from "~~/lib/agent/templates";
+import { normalizeUploadedImageAttachmentUrl } from "~~/lib/attachments/imageAttachmentUrls";
 import {
   getContentDescriptionValidationError,
   getContentTitleValidationError,
@@ -29,7 +30,6 @@ const X402_MIN_REWARD_POOL_REQUIRED_VOTERS = 3n;
 const X402_MIN_REWARD_POOL_SETTLED_ROUNDS = 1n;
 const X402_MAX_QUESTION_BUNDLE_COUNT = 10;
 
-const UPLOADED_IMAGE_ATTACHMENT_PATH_PATTERN = /^\/api\/attachments\/images\/att_[A-Za-z0-9_-]{16,80}\.webp$/;
 const CLIENT_REQUEST_ID_PATTERN = /^[A-Za-z0-9._:-]{4,160}$/;
 
 export class X402QuestionInputError extends Error {
@@ -158,17 +158,7 @@ function isYouTubeVideoUrl(url: string): boolean {
 }
 
 function isUploadedImageUrl(url: string): boolean {
-  try {
-    const parsed = new URL(url);
-    return (
-      parsed.protocol === "https:" &&
-      !parsed.username &&
-      !parsed.password &&
-      UPLOADED_IMAGE_ATTACHMENT_PATH_PATTERN.test(parsed.pathname)
-    );
-  } catch {
-    return false;
-  }
+  return Boolean(normalizeUploadedImageAttachmentUrl(url));
 }
 
 function normalizeImageUrls(value: unknown): string[] {

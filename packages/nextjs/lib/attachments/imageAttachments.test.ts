@@ -64,6 +64,10 @@ test("parses Curyo attachment ids from public upload image URLs", () => {
     "att_abcdefghijklmnop",
   );
   assert.equal(parseAttachmentIdFromImageUrl("https://www.curyo.xyz/api/attachments/images/nope.png"), null);
+  assert.equal(
+    parseAttachmentIdFromImageUrl("https://evil.example/api/attachments/images/att_abcdefghijklmnop.webp"),
+    null,
+  );
 });
 
 test("uses local image upload mode in development when Vercel Blob is not configured", () => {
@@ -308,6 +312,13 @@ test("validates approved RateLoop-hosted image ownership before submission", asy
       ownerWalletAddress: "0x00000000000000000000000000000000000000AA",
     }),
     null,
+  );
+  assert.equal(
+    await getImageAttachmentSubmissionValidationError({
+      imageUrls: ["https://evil.example/api/attachments/images/att_abcdefghijklmnop.webp"],
+      ownerWalletAddress: "0x00000000000000000000000000000000000000AA",
+    }),
+    "imageUrls must reference approved RateLoop-hosted uploads.",
   );
   assert.equal(
     await getImageAttachmentSubmissionValidationError({
