@@ -126,6 +126,14 @@ contract LoopReputation is ERC20, ERC20Permit, ERC20Votes, AccessControl {
         return super.nonces(owner);
     }
 
+    /// @notice Signature-based delegation is disabled. The `_delegate` override forces
+    ///         self-delegation, so delegateBySig had no legitimate user-facing function but
+    ///         shared nonce space with `permit` — a captured delegate signature could burn
+    ///         the signer's next permit nonce (L-Identity-8).
+    function delegateBySig(address, uint256, uint256, uint8, bytes32, bytes32) public pure override {
+        revert("delegateBySig disabled");
+    }
+
     function supportsInterface(bytes4 interfaceId) public view virtual override(AccessControl) returns (bool) {
         return super.supportsInterface(interfaceId);
     }
