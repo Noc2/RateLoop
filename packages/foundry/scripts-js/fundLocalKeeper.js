@@ -43,6 +43,12 @@ export function parseEnvFile(raw) {
   return values;
 }
 
+function resolveRpcUrl(env) {
+  const value = env.RPC_URL?.trim();
+  if (!value || value === "localhost") return DEFAULT_LOCAL_RPC_URL;
+  return value;
+}
+
 export function resolveKeeperFundingConfig(env) {
   const keeperPrivateKey = env.KEEPER_PRIVATE_KEY?.trim();
   const keeperAddress = env.KEEPER_ADDRESS?.trim();
@@ -50,7 +56,7 @@ export function resolveKeeperFundingConfig(env) {
   if (keeperPrivateKey) {
     return {
       enabled: true,
-      rpcUrl: env.RPC_URL?.trim() || DEFAULT_LOCAL_RPC_URL,
+      rpcUrl: resolveRpcUrl(env),
       keeperAddress: privateKeyToAccount(keeperPrivateKey).address,
       deployerPrivateKey:
         env.LOCALHOST_DEPLOYER_PRIVATE_KEY?.trim() ||
@@ -71,7 +77,7 @@ export function resolveKeeperFundingConfig(env) {
 
     return {
       enabled: true,
-      rpcUrl: env.RPC_URL?.trim() || DEFAULT_LOCAL_RPC_URL,
+      rpcUrl: resolveRpcUrl(env),
       keeperAddress,
       deployerPrivateKey:
         env.LOCALHOST_DEPLOYER_PRIVATE_KEY?.trim() ||

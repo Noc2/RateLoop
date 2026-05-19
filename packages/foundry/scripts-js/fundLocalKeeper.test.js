@@ -47,6 +47,16 @@ test("resolveKeeperFundingConfig derives the keeper address from private key", (
   );
 });
 
+test("resolveKeeperFundingConfig normalizes the Foundry localhost alias for viem", () => {
+  const config = resolveKeeperFundingConfig({
+    KEEPER_PRIVATE_KEY: ANVIL_ACCOUNT_TWO_PRIVATE_KEY,
+    RPC_URL: "localhost",
+  });
+
+  assert.equal(config.enabled, true);
+  assert.equal(config.rpcUrl, DEFAULT_LOCAL_RPC_URL);
+});
+
 test("resolveKeeperFundingConfig skips when no keeper wallet is configured", () => {
   assert.deepEqual(resolveKeeperFundingConfig({}), { enabled: false });
 });
