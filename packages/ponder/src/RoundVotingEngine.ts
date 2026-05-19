@@ -309,6 +309,46 @@ function rbtsCommitKey(voter: `0x${string}`, commitHash: `0x${string}`) {
   return keccak256(encodePacked(["address", "bytes32"], [voter, commitHash]));
 }
 
+async function resolveRbtsScoringWeights(params: {
+  context: any;
+  contentId: bigint;
+  roundId: bigint;
+  roundVotes: {
+    id: string;
+    commitKey: `0x${string}`;
+    rbtsWeight?: bigint | null;
+  }[];
+}) {
+  const weights = new Map<string, bigint>();
+  const engineAddress = firstContractAddress(
+    params.context.contracts?.RoundVotingEngine?.address,
+  );
+  if (!params.context.client?.readContract || !engineAddress) {
+    for (const roundVote of params.roundVotes) {
+      weights.set(roundVote.id, roundVote.rbtsWeight ?? 0n);
+    }
+    return weights;
+  }
+
+  await Promise.all(
+    params.roundVotes.map(async (roundVote) => {
+      try {
+        const weight = await params.context.client.readContract({
+          abi: RoundVotingEngineAbi,
+          address: engineAddress,
+          functionName: "commitRbtsScoringWeight",
+          args: [params.contentId, params.roundId, roundVote.commitKey],
+        });
+        weights.set(roundVote.id, BigInt(String(weight)));
+      } catch {
+        weights.set(roundVote.id, 0n);
+      }
+    }),
+  );
+
+  return weights;
+}
+
 function rbtsOtherIndex({
   scoreSeed,
   commitKey,
@@ -835,8 +875,15 @@ ponder.on("RoundVotingEngine:RbtsRewardsScored", async ({ event, context }) => {
         asc(vote.id),
       );
 
+    const scoringWeights = await resolveRbtsScoringWeights({
+      context,
+      contentId,
+      roundId,
+      roundVotes,
+    });
+
     const scoringSet = roundVotes.filter(
-      (roundVote) => (roundVote.rbtsWeight ?? 0n) > 0n,
+      (roundVote) => (scoringWeights.get(roundVote.id) ?? 0n) > 0n,
     );
     if (scoringSet.length < 3) {
       for (const roundVote of roundVotes) {
@@ -868,7 +915,7 @@ ponder.on("RoundVotingEngine:RbtsRewardsScored", async ({ event, context }) => {
         continue;
       }
 
-      const ownWeight = roundVote.rbtsWeight ?? 0n;
+      const ownWeight = scoringWeights.get(roundVote.id) ?? 0n;
       const stake = roundVote.stake ?? 0n;
 
       const drawKey = nonZeroIdentityKey(roundVote.identityKey, roundVote.voter);
@@ -965,7 +1012,7 @@ ponder.on("RoundVotingEngine:RbtsRewardsScored", async ({ event, context }) => {
     }
 
     for (const roundVote of roundVotes) {
-      if ((roundVote.rbtsWeight ?? 0n) > 0n) continue;
+      if ((scoringWeights.get(roundVote.id) ?? 0n) > 0n) continue;
       await context.db.update(vote, { id: roundVote.id }).set({
         rbtsRewardWeight: 0n,
         rbtsStakeReturned:

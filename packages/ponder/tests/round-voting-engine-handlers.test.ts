@@ -829,4 +829,138 @@ describe("RoundVotingEngine ponder handlers", () => {
     expect(positiveSpreadCount).toBeGreaterThan(0);
     expect(negativeSpreadCount).toBeGreaterThan(0);
   });
+
+  it("excludes post-threshold reveals from the indexed RBTS scoring set", async () => {
+    const voter1 = "0x0000000000000000000000000000000000000001";
+    const voter2 = "0x0000000000000000000000000000000000000002";
+    const voter3 = "0x0000000000000000000000000000000000000003";
+    const voter4 = "0x0000000000000000000000000000000000000004";
+    const commitHash1 = `0x${"11".repeat(32)}` as `0x${string}`;
+    const commitHash2 = `0x${"22".repeat(32)}` as `0x${string}`;
+    const commitHash3 = `0x${"33".repeat(32)}` as `0x${string}`;
+    const commitHash4 = `0x${"44".repeat(32)}` as `0x${string}`;
+    const commitKey1 = rbtsCommitKey(voter1, commitHash1);
+    const commitKey2 = rbtsCommitKey(voter2, commitHash2);
+    const commitKey3 = rbtsCommitKey(voter3, commitHash3);
+    const commitKey4 = rbtsCommitKey(voter4, commitHash4);
+    const scoringWeights = new Map([
+      [commitKey1, 25n],
+      [commitKey2, 25n],
+      [commitKey3, 25n],
+      [commitKey4, 0n],
+    ]);
+    const readContract = vi.fn(async ({ functionName, args }: { functionName: string; args: unknown[] }) => {
+      if (functionName === "commitRbtsScoringWeight") {
+        return scoringWeights.get(args[2] as `0x${string}`) ?? 0n;
+      }
+      return null;
+    });
+    const { db, updateCalls } = createDb({
+      existingRound: {
+        id: "7-2",
+        rbtsRewardWeight: 50n,
+      },
+      roundVotes: [
+        {
+          id: `7-2-${voter1}`,
+          voter: voter1,
+          commitKey: commitKey1,
+          commitHash: commitHash1,
+          revealed: true,
+          isUp: true,
+          predictedUpBps: 8000,
+          rbtsWeight: 25n,
+          stake: 25n,
+        },
+        {
+          id: `7-2-${voter2}`,
+          voter: voter2,
+          commitKey: commitKey2,
+          commitHash: commitHash2,
+          revealed: true,
+          isUp: true,
+          predictedUpBps: 7000,
+          rbtsWeight: 25n,
+          stake: 25n,
+        },
+        {
+          id: `7-2-${voter3}`,
+          voter: voter3,
+          commitKey: commitKey3,
+          commitHash: commitHash3,
+          revealed: true,
+          isUp: false,
+          predictedUpBps: 3000,
+          rbtsWeight: 25n,
+          stake: 25n,
+        },
+        {
+          id: `7-2-${voter4}`,
+          voter: voter4,
+          commitKey: commitKey4,
+          commitHash: commitHash4,
+          revealed: true,
+          isUp: true,
+          predictedUpBps: 6500,
+          rbtsWeight: 25n,
+          stake: 25n,
+        },
+      ],
+    });
+    const registeredHandlers = await loadHandlers();
+    const handler = registeredHandlers.get(
+      "RoundVotingEngine:RbtsRewardsScored",
+    );
+
+    expect(handler).toBeDefined();
+
+    await handler!({
+      event: {
+        args: {
+          contentId: 7n,
+          roundId: 2n,
+          scoreSeed: `0x${"01".repeat(32)}`,
+          rewardWeight: 50n,
+          rewardClaimants: 2n,
+          forfeitedPool: 5n,
+          forfeitClaimants: 1n,
+        },
+        block: {
+          number: 45n,
+          timestamp: 2_100n,
+        },
+      },
+      context: {
+        db,
+        client: { readContract },
+        contracts: {
+          RoundVotingEngine: { address: "0x0000000000000000000000000000000000000666" },
+        },
+      },
+    });
+
+    expect(readContract).toHaveBeenCalledWith(
+      expect.objectContaining({
+        functionName: "commitRbtsScoringWeight",
+        args: [7n, 2n, commitKey4],
+      }),
+    );
+    const postThresholdUpdate = updateCalls.find(
+      (call) => call.table === "vote" && call.key.id === `7-2-${voter4}`,
+    );
+    expect(postThresholdUpdate).toBeDefined();
+    expect(postThresholdUpdate?.values).toMatchObject({
+      rbtsRewardWeight: 0n,
+      rbtsStakeReturned: 25n,
+      rbtsForfeitedStake: 0n,
+    });
+    expect(postThresholdUpdate?.values.rbtsScoreBps).toBeUndefined();
+
+    for (const voter of [voter1, voter2, voter3]) {
+      const update = updateCalls.find(
+        (call) => call.table === "vote" && call.key.id === `7-2-${voter}`,
+      );
+      expect(update?.values.rbtsScoreBps).toEqual(expect.any(Number));
+    }
+  });
 });
