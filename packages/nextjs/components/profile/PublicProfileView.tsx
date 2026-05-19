@@ -1171,14 +1171,6 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
                 </div>
 
                 <div className="surface-card-nested rounded-2xl px-4 py-3">
-                  <div className="text-sm text-base-content/60">Public follows</div>
-                  <div className="mt-1 text-xl font-semibold">
-                    {social.followerCount.toLocaleString()} / {social.followingCount.toLocaleString()}
-                  </div>
-                  <div className="mt-1 text-sm text-base-content/55">Followers / following</div>
-                </div>
-
-                <div className="surface-card-nested rounded-2xl px-4 py-3">
                   <div className="text-sm text-base-content/60">Launch reward progress</div>
                   <div className="mt-1 text-xl font-semibold">{formatLaunchCapSummary(rewardStatus.launchRewards)}</div>
                   <div className="mt-1 text-sm text-base-content/55">
