@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   getInitialPredictedUpPercent,
   normalizeStakeSelectorAmount,
+  normalizeStakeSelectorPredictedUpPercent,
   normalizeStakeSelectorRating,
 } from "~~/components/swipe/StakeSelector";
 
@@ -43,4 +44,13 @@ test("getInitialPredictedUpPercent starts from the chosen binary signal", () => 
   assert.equal(getInitialPredictedUpPercent(true), 60);
   assert.equal(getInitialPredictedUpPercent(false), 40);
   assert.equal(getInitialPredictedUpPercent(undefined), 50);
+});
+
+test("normalizeStakeSelectorPredictedUpPercent matches reveal bounds", () => {
+  assert.equal(normalizeStakeSelectorPredictedUpPercent(0), 1);
+  assert.equal(normalizeStakeSelectorPredictedUpPercent(1), 1);
+  assert.equal(normalizeStakeSelectorPredictedUpPercent(50), 50);
+  assert.equal(normalizeStakeSelectorPredictedUpPercent(99), 99);
+  assert.equal(normalizeStakeSelectorPredictedUpPercent(100), 99);
+  assert.equal(normalizeStakeSelectorPredictedUpPercent(Number.NaN), 50);
 });

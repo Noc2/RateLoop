@@ -6,6 +6,7 @@ import {
   stringToHex,
   type Address,
 } from "viem";
+import { USER_PREDICTION_BPS, USER_PREDICTION_PERCENT } from "./protocol";
 
 export type VoteSalt = `0x${string}`;
 export type VoteCiphertext = `0x${string}`;
@@ -72,8 +73,10 @@ const AGE_MAC_LENGTH = 32;
 const MIN_TLOCK_STANZA_BODY_LENGTH = 80;
 const MIN_ENCRYPTED_BODY_LENGTH = 65;
 const ROUND_REFERENCE_RATING_MASK = 0xffffn;
-export const MIN_PREDICTED_UP_BPS = 0;
-export const MAX_PREDICTED_UP_BPS = 10_000;
+export const MIN_PREDICTED_UP_BPS = USER_PREDICTION_BPS.min;
+export const MAX_PREDICTED_UP_BPS = USER_PREDICTION_BPS.max;
+export const MIN_PREDICTED_UP_PERCENT = USER_PREDICTION_PERCENT.min;
+export const MAX_PREDICTED_UP_PERCENT = USER_PREDICTION_PERCENT.max;
 const RBTS_PLAINTEXT_VERSION = 2;
 
 export function normalizePredictedUpBps(predictedUpBps: number): number {
@@ -82,7 +85,7 @@ export function normalizePredictedUpBps(predictedUpBps: number): number {
     predictedUpBps < MIN_PREDICTED_UP_BPS ||
     predictedUpBps > MAX_PREDICTED_UP_BPS
   ) {
-    throw new Error("predictedUpBps must be an integer from 0 to 10000");
+    throw new Error("predictedUpBps must be an integer from 100 to 9900");
   }
 
   return predictedUpBps;
@@ -91,10 +94,10 @@ export function normalizePredictedUpBps(predictedUpBps: number): number {
 export function predictionPercentToBps(predictedUpPercent: number): number {
   if (
     !Number.isFinite(predictedUpPercent) ||
-    predictedUpPercent < 0 ||
-    predictedUpPercent > 100
+    predictedUpPercent < MIN_PREDICTED_UP_PERCENT ||
+    predictedUpPercent > MAX_PREDICTED_UP_PERCENT
   ) {
-    throw new Error("predicted up percentage must be from 0 to 100");
+    throw new Error("predicted up percentage must be from 1 to 99");
   }
 
   return normalizePredictedUpBps(Math.round(predictedUpPercent * 100));

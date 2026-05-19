@@ -239,17 +239,25 @@ test("buildCommitHash includes the tlock round metadata", () => {
 });
 
 test("prediction helpers normalize the RBTS percentage scale", () => {
-  assert.equal(predictionPercentToBps(0), 0);
+  assert.equal(predictionPercentToBps(1), 100);
   assert.equal(predictionPercentToBps(69), 6_900);
-  assert.equal(predictionPercentToBps(100), 10_000);
+  assert.equal(predictionPercentToBps(99), 9_900);
   assert.equal(bpsToPredictionPercent(8_875), 88.75);
   assert.throws(
-    () => predictionPercentToBps(-1),
-    /predicted up percentage must be from 0 to 100/,
+    () => predictionPercentToBps(0),
+    /predicted up percentage must be from 1 to 99/,
+  );
+  assert.throws(
+    () => predictionPercentToBps(100),
+    /predicted up percentage must be from 1 to 99/,
+  );
+  assert.throws(
+    () => predictionPercentToBps(0.99),
+    /predicted up percentage must be from 1 to 99/,
   );
   assert.throws(
     () => predictionPercentToBps(101),
-    /predicted up percentage must be from 0 to 100/,
+    /predicted up percentage must be from 1 to 99/,
   );
 });
 

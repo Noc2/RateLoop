@@ -1,7 +1,7 @@
 "use client";
 
 import { type CSSProperties, useEffect, useId, useMemo, useState } from "react";
-import { EPOCH_WEIGHT_BPS } from "@rateloop/contracts/protocol";
+import { EPOCH_WEIGHT_BPS, USER_PREDICTION_PERCENT } from "@rateloop/contracts/protocol";
 import { AnimatePresence, motion } from "framer-motion";
 import { useAccount } from "wagmi";
 import { HandThumbDownIcon, HandThumbUpIcon, XMarkIcon } from "@heroicons/react/24/outline";
@@ -36,8 +36,8 @@ interface StakeSelectorProps {
 }
 
 const MIN_COUNTED_STAKE_AMOUNT = 1;
-const MIN_PREDICTED_UP_PERCENT = 0;
-const MAX_PREDICTED_UP_PERCENT = 100;
+const MIN_PREDICTED_UP_PERCENT = USER_PREDICTION_PERCENT.min;
+const MAX_PREDICTED_UP_PERCENT = USER_PREDICTION_PERCENT.max;
 const YOUR_VOTE_TOOLTIP =
   "Thumbs up means you think this content is useful for the question; thumbs down means it is unhelpful, broken, misleading, or unsafe.";
 const EXPECTED_CROWD_TOOLTIP =
@@ -73,6 +73,11 @@ export function normalizeStakeSelectorRating(currentRating: number | null | unde
 export function normalizeStakeSelectorAmount(stakeAmount: number) {
   if (!Number.isFinite(stakeAmount) || stakeAmount <= 0) return 0;
   return stakeAmount < MIN_COUNTED_STAKE_AMOUNT ? MIN_COUNTED_STAKE_AMOUNT : stakeAmount;
+}
+
+export function normalizeStakeSelectorPredictedUpPercent(predictedUpPercent: number) {
+  if (!Number.isFinite(predictedUpPercent)) return getInitialPredictedUpPercent();
+  return Math.min(MAX_PREDICTED_UP_PERCENT, Math.max(MIN_PREDICTED_UP_PERCENT, Math.round(predictedUpPercent)));
 }
 
 export function getInitialPredictedUpPercent(initialIsUp?: boolean) {
@@ -319,7 +324,7 @@ export function StakeSelector({
                   value={predictedUpPercent}
                   onChange={e => {
                     setHasAdjustedPrediction(true);
-                    setPredictedUpPercent(Number(e.target.value));
+                    setPredictedUpPercent(normalizeStakeSelectorPredictedUpPercent(Number(e.target.value)));
                   }}
                   className="crowd-forecast-range range range-sm mt-4 w-full"
                   style={sliderStyle}
@@ -328,8 +333,8 @@ export function StakeSelector({
                   aria-valuetext={`${predictedUpPercent.toFixed(0)} percent up`}
                 />
                 <div className="mt-1 flex justify-between text-xs text-base-content/55">
-                  <span>0%</span>
-                  <span>100%</span>
+                  <span>{MIN_PREDICTED_UP_PERCENT}%</span>
+                  <span>{MAX_PREDICTED_UP_PERCENT}%</span>
                 </div>
               </div>
             </div>
@@ -465,7 +470,7 @@ export function StakeSelector({
                 Cancel
               </button>
               <button
-                onClick={() => onConfirm(amount, isUp, predictedUpPercent)}
+                onClick={() => onConfirm(amount, isUp, normalizeStakeSelectorPredictedUpPercent(predictedUpPercent))}
                 className="btn flex-1 action-orange-control"
                 disabled={confirmDisabled}
               >

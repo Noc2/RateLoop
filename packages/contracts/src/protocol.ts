@@ -1,5 +1,15 @@
 export const BPS_SCALE = 10_000 as const;
 
+export const USER_PREDICTION_BPS = {
+  min: 100,
+  max: 9_900,
+} as const;
+
+export const USER_PREDICTION_PERCENT = {
+  min: USER_PREDICTION_BPS.min / 100,
+  max: USER_PREDICTION_BPS.max / 100,
+} as const;
+
 export const ROUND_STATE = {
   Open: 0,
   Settled: 1,
