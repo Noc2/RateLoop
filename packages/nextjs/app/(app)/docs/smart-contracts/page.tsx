@@ -138,7 +138,7 @@ const SmartContracts: NextPage = () => {
             </tr>
             <tr>
               <td className="font-mono text-primary">RewardMath</td>
-              <td>Library: 5% revealed-loser rebate, 91/3/1/5 remaining-pool split, and reward calculations</td>
+              <td>Library: RBTS score-spread settlement, forfeited-pool routing, and reward calculations</td>
               <td>&mdash;</td>
             </tr>
             <tr>
@@ -545,12 +545,13 @@ const SmartContracts: NextPage = () => {
       </p>
       <ul>
         <li>
-          <code>claimReward(contentId, roundId)</code> &mdash; Claim settled-round voter payouts. Winners receive stake
-          plus winnings; revealed losers receive a fixed {protocolDocFacts.revealedLoserRefundPercentLabel} rebate.
+          <code>claimReward(contentId, roundId)</code> &mdash; Claim settled-round voter payouts. Positive RBTS score
+          spreads receive full stake plus their share of the 96% voter share of forfeited stake; negative spreads
+          forfeit without a revealed-loser rebate.
         </li>
         <li>
           <code>claimParticipationReward(contentId, roundId)</code> &mdash; Claim the optional LREP participation reward
-          for eligible winning revealed voters, using the rate snapshotted at settlement.
+          for eligible scored economic voters, using the rate snapshotted at settlement.
         </li>
         <li>
           <code>sweepStrandedLrepToTreasury()</code> &mdash; Governance-only recovery path for any LREP mistakenly sent
@@ -698,8 +699,9 @@ const SmartContracts: NextPage = () => {
       <h3>RewardMath</h3>
       <ul>
         <li>
-          <code>splitPoolAfterLoserRefund(losingPool)</code> &mdash; Reserve a 5% rebate for revealed losers, then split
-          the remaining pool into 96% voters / 3% frontend / 1% treasury.
+          RBTS score-spread settlement compares each revealed report&apos;s scoreBps with the stake-weighted mean score.
+          Positive spreads receive full stake plus the 96% voter share of forfeited stake; negative spreads forfeit
+          without a revealed-loser rebate.
         </li>
         <li>
           <code>calculateVoterReward(shares, totalWinningShares, voterPool)</code> &mdash; Share-proportional reward

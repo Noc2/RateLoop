@@ -1,6 +1,5 @@
 import {
   protocolDocFacts,
-  whitepaperRewardSplitRows,
   whitepaperRoundConfigBoundsRows,
   whitepaperSettlementConfigRows,
 } from "../../lib/docs/protocolFacts";
@@ -367,15 +366,19 @@ export const SECTIONS: Section[] = [
             type: "table",
             data: {
               headers: ["Recipient", "Share"],
-              rows: whitepaperRewardSplitRows.map(([recipient, share]) => [
-                recipient === "Content-specific rater pool" ? "Accurate raters (content-specific)" : recipient,
-                share,
-              ]),
+              rows: [
+                ["Positive score-spread reports", "Full stake plus pro-rata share of the 96% voter share"],
+                ["Negative score-spread reports", "Forfeit according to distance below the stake-weighted mean score"],
+                ["Frontend rail", "3% of forfeited stake when an eligible frontend exists"],
+                ["Treasury rail", "1% of forfeited stake with voter-pool fallback if unavailable"],
+                ["Unrevealed reports", "No RBTS payout; cleanup can forfeit after the reveal grace path"],
+                ["Revealed-loser rebate", "None for RBTS score-spread settlement"],
+              ],
             },
           },
           {
             type: "paragraph",
-            text: `High-scoring reports recover more stake plus a share of the rater pool, while revealed forfeited stake can reclaim ${protocolDocFacts.revealedLoserRefundPercentLabel}. Tier-1 raters carry full blind-epoch weight and later raters carry ${protocolDocFacts.openPhaseWeightLabel} weight, so the same anti-herding logic shapes settlement. USDC bounty and launch LREP claims add a second step: a finalized correlation payout snapshot proposed by a registered frontend operator supplies effective claim weights before funds move, without changing the already-settled result.`,
+            text: `RBTS settlement stores each revealed report's scoreBps, computes the stake-weighted mean score, and compares every staked report with that mean. Positive spreads recover full stake plus a pro-rata share of the 96% voter share of forfeited negative-spread stake; negative spreads forfeit, with no revealed-loser rebate. Tier-1 raters carry full blind-epoch weight and later raters carry ${protocolDocFacts.openPhaseWeightLabel} weight, so the same anti-herding logic shapes settlement. USDC bounty and launch LREP claims add a second step: a finalized correlation payout snapshot proposed by a registered frontend operator supplies effective claim weights before funds move, without changing the already-settled result.`,
           },
         ],
       },

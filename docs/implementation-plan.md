@@ -103,8 +103,11 @@ confidence bonus on top of one base signal unit:
 - Base signal evidence: `1.0` unit per revealed report.
 - Stake evidence bonus: linear up to `+1.0` unit at `10 LREP`.
 - Epoch timing: the same blind/open epoch weight discounts late evidence.
-- Settlement rewards and stake return continue to use the existing
-  stake-weighted RBTS reward weight.
+- Settlement rewards use competitive RBTS score-spread accounting: store each
+  report's `scoreBps`, compute the stake-weighted mean score, let positive
+  spreads recover full stake plus a share of the 96% voter share of forfeited
+  negative-spread stake, and let negative spreads forfeit without a
+  revealed-loser rebate.
 
 This keeps the rating closer to binary Robust BTS: users report their own
 binary signal plus their forecast of others, and the score is not a relative
@@ -126,8 +129,10 @@ Example:
    It does not jump straight to the maximum because one report is down and the
    rating model smooths limited evidence.
 7. The RBTS reward score is computed separately from each rater's signal and
-   crowd forecast. That score controls score-based stake return, ordinary LREP
-   rater-pool rewards, and earned launch-credit quality.
+   crowd forecast. That score is compared with the stake-weighted mean score:
+   positive spreads receive full stake plus a pro-rata share of the 96% voter
+   share of forfeited stake, negative spreads forfeit, and earned launch-credit
+   quality still uses the score.
 
 USDC bounty payouts and earned launch LREP credits now use challengeable
 Correlation Epoch Snapshots. A keeper or indexer computes a reproducible,

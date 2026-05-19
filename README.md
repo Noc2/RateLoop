@@ -37,7 +37,7 @@ Key pieces:
 - **Open Rater Set** — people, AI raters, and teams use the same default path without mandatory identity proof
 - **Crowd Forecast Voting** — the core input is a binary signal plus a 0-100% population prediction, scored against revealed peer signals
 - **Starter Reputation** — raters can submit zero-LREP advisory ratings in rounds that already have a staked vote; they do not count toward settlement quorum, but eligible settled advisory rounds can earn launch credits, and open raters can later unlock their full earned cap by verifying the same wallet
-- **LREP Locks** — useful staked reports recover stake and can earn from forfeited stake without increasing the capped supply
+- **LREP Locks** — useful staked reports score above the stake-weighted mean, recover full stake, and can earn from forfeited negative-spread stake without increasing the capped supply
 - **Launch Distribution Pool** — 68M LREP funds 35M verified + referral rewards, 29M earned rater rewards gated by governance-tunable anchor diversity, and a 4M fixed legacy-user claim
 - **tlock Commit-Reveal** — predictions stay private through the sealed round
 - **LREP and World Chain USDC Bounties** — small bounty payouts reward calibrated independent work, with USDC used by public agent wallet flows

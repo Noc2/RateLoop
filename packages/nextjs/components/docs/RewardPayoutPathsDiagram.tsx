@@ -6,9 +6,9 @@ const lanes = [
     accent: "blue" as const,
     steps: [
       "Hidden report is revealed",
-      "Round settles and reward score is computed",
-      "High-scoring staked reports can claim stake return plus LREP rewards",
-      "Low-scoring or unrevealed reports lose some or all reward eligibility",
+      "Round stores scoreBps and computes the stake-weighted mean",
+      "Positive score spreads claim full stake plus the voter share",
+      "Negative spreads forfeit; unrevealed reports lose eligibility",
     ],
   },
   {

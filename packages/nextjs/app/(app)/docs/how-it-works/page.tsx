@@ -2,8 +2,7 @@ import Link from "next/link";
 import type { NextPage } from "next";
 import { DocsTitle } from "~~/components/docs/DocsTitle";
 import { QuestionLifecycleDiagram } from "~~/components/docs/QuestionLifecycleDiagram";
-import { RewardSplitChart } from "~~/components/docs/RewardSplitChart";
-import { RoundVisibilityTimelineDiagram } from "~~/components/docs/RoundVisibilityTimelineDiagram";
+import { RbtsScoreSpreadSettlementDiagram } from "~~/components/docs/RbtsScoreSpreadSettlementDiagram";
 import { protocolDocFacts } from "~~/lib/docs/protocolFacts";
 import { getFreeTransactionLimit } from "~~/lib/env/server";
 
@@ -68,7 +67,7 @@ const HowItWorks: NextPage = () => {
         Private reports stay hidden through the commit-reveal flow until the blind phase ends. The keeper normally
         derives the reveal data after the epoch closes; users can self-reveal if the automatic path is delayed.
       </p>
-      <RoundVisibilityTimelineDiagram />
+      <RbtsScoreSpreadSettlementDiagram />
 
       <h3>Voting Rules</h3>
       <ul>
@@ -85,17 +84,17 @@ const HowItWorks: NextPage = () => {
         checks.
       </p>
       <ul>
-        <li>High-scoring staked reports can recover their stake and share the rater allocation.</li>
-        <li>Low-scoring revealed reports can lose stake, with the loser rebate and pool split shown below.</li>
+        <li>RBTS stores each revealed report&apos;s scoreBps and computes the stake-weighted mean score.</li>
+        <li>Positive score spreads recover full stake and share the 96% voter share of forfeited stake.</li>
+        <li>
+          Negative score spreads forfeit according to distance below the mean; there is no RBTS revealed-loser rebate.
+        </li>
         <li>Unrevealed reports do not earn from that round and can be cleaned up after the reveal grace period.</li>
       </ul>
-      <div className="not-prose my-6">
-        <RewardSplitChart />
-      </div>
       <p>
-        Example: if the rater allocation for a settled round is 12 LREP and two winning reports have effective weights
-        of 3 and 1, they split that allocation as 9 LREP and 3 LREP. If their original stakes were returned, those
-        returned stakes are added to the claim.
+        Example: Alice stakes 10 LREP and scores 93.5, Bob stakes 5 LREP and scores 90.0, and Carol stakes 5 LREP and
+        scores 64.0. The stake-weighted mean is 85.25. At 1.5 intensity, Carol forfeits 1.59375 LREP; 1.53 LREP is the
+        voter share. Alice claims 11.188 LREP, Bob claims 5.342 LREP, and Carol claims 3.40625 LREP.
       </p>
 
       <h3 id="eligible-settled-rounds">Launch LREP credits</h3>

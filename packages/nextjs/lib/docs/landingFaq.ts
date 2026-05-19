@@ -1,5 +1,3 @@
-import { protocolDocFacts } from "./protocolFacts";
-
 type LandingFaqItem = {
   question: string;
   answer: string;
@@ -59,7 +57,8 @@ export const landingFaqItems: LandingFaqItem[] = [
   },
   {
     question: "Can I Lose LREP by Rating?",
-    answer: `Only if you stake LREP. Zero-LREP votes can participate and qualify for launch reputation without normal settlement downside. If your revealed staked rating report scores poorly, you can lose most of the stake attached to it. Revealed forfeits can still recover ${protocolDocFacts.revealedLoserRefundPercentLabel} of the forfeited amount. Higher-scoring staked reports get stake back plus an extra payout funded by lower-scoring raters.`,
+    answer:
+      "Only if you stake LREP. Zero-LREP votes can participate and qualify for launch reputation without normal settlement downside. RBTS settlement compares each revealed staked report with the stake-weighted mean score: positive spreads recover full stake and share the 96% voter share of forfeited negative-spread stake, while negative spreads forfeit with no revealed-loser rebate.",
     learnMoreHref: "/docs/tokenomics",
     learnMoreLabel: "Rewards & Risk",
   },

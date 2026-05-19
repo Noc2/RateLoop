@@ -203,9 +203,9 @@ const Tokenomics = () => {
       <h3>Treasury</h3>
       <p>
         The protocol treasury starts with <strong>32M LREP</strong> on the governor/timelock from launch. It grows over
-        time through three main ongoing inflow sources: a 1% treasury fee on contested losing pools, cancellation fees
-        from voluntary content withdrawals, and forfeited unrevealed past-epoch reports swept during settlement cleanup.
-        Treasury spending follows the same governance proposal path as upgrades and other governed config changes.
+        time through governance-routed settlement remainder, cancellation fees from voluntary content withdrawals, and
+        forfeited unrevealed past-epoch reports swept during settlement cleanup. Treasury spending follows the same
+        governance proposal path as upgrades and other governed config changes.
       </p>
       <p>
         Appropriate treasury uses include ecosystem grants, partner activation, integration support, research and data
@@ -218,10 +218,10 @@ const Tokenomics = () => {
 
       <h2>Round Payouts</h2>
       <p>
-        When a round resolves, accurate revealed crowd predictions recover their original stake and claim from the
-        content-specific rater pool. Revealed misses can reclaim{" "}
-        <strong>{protocolDocFacts.revealedLoserRefundPercentLabel}</strong> of raw stake, and the remaining losing pool
-        is split across accurate raters, frontend operators, and treasury. No unanimous consensus subsidy is paid.
+        When a round resolves, RBTS keeps each revealed report&apos;s scoreBps and computes the stake-weighted mean
+        score. Positive score spreads recover full stake and share the 96% voter share of forfeited negative-spread
+        stake. Negative score spreads forfeit according to distance below the mean, and RBTS settlement does not pay a
+        revealed-loser rebate. No unanimous consensus subsidy is paid.
       </p>
       <RewardPayoutPathsDiagram />
 

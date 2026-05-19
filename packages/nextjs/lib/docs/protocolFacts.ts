@@ -4,15 +4,10 @@ import {
   DEFAULT_ROUND_CONFIG,
   EPOCH_WEIGHT_BPS,
   PLATFORM_REWARD_SPLIT_BPS,
-  REWARD_SPLIT_BPS,
 } from "@rateloop/contracts/protocol";
 
 function formatPercent(value: number): string {
   return `${value.toFixed(2).replace(/\.?0+$/, "")}%`;
-}
-
-function formatFactor(value: number, digits = 3): string {
-  return value.toFixed(digits).replace(/\.?0+$/, "");
 }
 
 function percentFromBps(bps: number): number {
@@ -38,7 +33,6 @@ function formatDurationLabel(seconds: number): string {
   return `${seconds} seconds`;
 }
 
-const remainingPoolBps = BPS_SCALE - REWARD_SPLIT_BPS.revealedLoserRefund;
 const ROUND_CONFIG_BOUNDS = {
   minEpochDurationSeconds: 60,
   maxEpochDurationSeconds: 7 * 24 * 60 * 60,
@@ -49,10 +43,6 @@ const ROUND_CONFIG_BOUNDS = {
   minVoterCap: 3,
   maxVoterCap: 1_000,
 } as const;
-
-function effectiveRawSharePercent(bucketBps: number): number {
-  return percentFromBps((remainingPoolBps * bucketBps) / BPS_SCALE);
-}
 
 export const protocolDocFacts = {
   governanceProposalThresholdLabel: "1,000 LREP hard floor",
@@ -85,63 +75,21 @@ export const protocolDocFacts = {
   )}-${formatDurationLabel(ROUND_CONFIG_BOUNDS.maxRoundDurationSeconds)} max duration, ${
     ROUND_CONFIG_BOUNDS.minSettlementVoters
   }-${ROUND_CONFIG_BOUNDS.maxSettlementVoters} settlement raters, ${ROUND_CONFIG_BOUNDS.minVoterCap}-${ROUND_CONFIG_BOUNDS.maxVoterCap.toLocaleString()} rater cap`,
-  revealedLoserRefundPercentLabel: formatPercent(percentFromBps(REWARD_SPLIT_BPS.revealedLoserRefund)),
-  revealedLoserRefundLabel: `${formatPercent(percentFromBps(REWARD_SPLIT_BPS.revealedLoserRefund))} of raw losing stake`,
-  revealedLoserRefundShortLabel: `${formatPercent(percentFromBps(REWARD_SPLIT_BPS.revealedLoserRefund))} of raw`,
-  remainingPoolLabel: formatPercent(percentFromBps(remainingPoolBps)),
-  voterPoolNetSharePercentLabel: formatPercent(percentFromBps(REWARD_SPLIT_BPS.voter)),
-  submitterNetSharePercentLabel: "0%",
   frontendNetSharePercentLabel: formatPercent(percentFromBps(PLATFORM_REWARD_SPLIT_BPS.frontend)),
-  treasuryNetSharePercentLabel: formatPercent(percentFromBps(REWARD_SPLIT_BPS.treasury)),
-  voterPoolShareLabel: `${formatPercent(percentFromBps(REWARD_SPLIT_BPS.voter))} of the remaining ${formatPercent(percentFromBps(remainingPoolBps))}`,
-  submitterShareLabel: `0% of the remaining ${formatPercent(percentFromBps(remainingPoolBps))}`,
-  frontendShareLabel: `${formatPercent(percentFromBps(PLATFORM_REWARD_SPLIT_BPS.frontend))} of the remaining ${formatPercent(percentFromBps(remainingPoolBps))}`,
-  treasuryShareLabel: `${formatPercent(percentFromBps(REWARD_SPLIT_BPS.treasury))} of the remaining ${formatPercent(percentFromBps(remainingPoolBps))}`,
-  voterPoolShortLabel: `${formatPercent(percentFromBps(REWARD_SPLIT_BPS.voter))} of remaining`,
-  submitterShortLabel: "0% of remaining",
-  frontendShortLabel: `${formatPercent(percentFromBps(PLATFORM_REWARD_SPLIT_BPS.frontend))} of remaining`,
-  treasuryShortLabel: `${formatPercent(percentFromBps(REWARD_SPLIT_BPS.treasury))} of remaining`,
-  voterPoolEffectiveRawPercentLabel: formatPercent(effectiveRawSharePercent(REWARD_SPLIT_BPS.voter)),
-  voterPoolEffectiveRawFactorLabel: formatFactor(effectiveRawSharePercent(REWARD_SPLIT_BPS.voter) / 100),
-  rewardSplitSummaryLabel: `${formatPercent(percentFromBps(REWARD_SPLIT_BPS.voter))} raters / ${formatPercent(percentFromBps(PLATFORM_REWARD_SPLIT_BPS.frontend))} frontend / ${formatPercent(percentFromBps(REWARD_SPLIT_BPS.treasury))} treasury`,
+  frontendShareLabel: formatPercent(percentFromBps(PLATFORM_REWARD_SPLIT_BPS.frontend)),
   blindPhaseWeightLabel: formatPercent(percentFromBps(EPOCH_WEIGHT_BPS.blind)),
   openPhaseWeightLabel: formatPercent(percentFromBps(EPOCH_WEIGHT_BPS.informed)),
   earlyVoterAdvantageLabel: `${EPOCH_WEIGHT_BPS.blind / EPOCH_WEIGHT_BPS.informed}:1`,
 } as const;
 
 const rewardSplitTableRows: [string, string][] = [
-  ["Revealed missed predictions", protocolDocFacts.revealedLoserRefundLabel],
-  ["Content-specific rater pool", protocolDocFacts.voterPoolShareLabel],
-  ["Frontend operators", protocolDocFacts.frontendShareLabel],
-  ["Treasury", protocolDocFacts.treasuryShareLabel],
+  ["Positive score-spread reports", "Full stake plus pro-rata share of the 96% voter share"],
+  ["Negative score-spread reports", "Forfeit according to distance below the stake-weighted mean score"],
+  ["Frontend rail", "3% of forfeited stake when an eligible frontend exists, otherwise voter-pool fallback"],
+  ["Treasury rail", "1% of forfeited stake with voter-pool fallback if treasury transfer is unavailable"],
+  ["Unrevealed reports", "No RBTS payout after cleanup eligibility"],
+  ["Revealed-loser rebate", "None for RBTS score-spread settlement"],
 ];
-
-export const rewardSplitChartSlices = [
-  {
-    label: "Revealed loser rebate",
-    value: percentFromBps(REWARD_SPLIT_BPS.revealedLoserRefund),
-    displayValue: protocolDocFacts.revealedLoserRefundShortLabel,
-    color: "#7E8996",
-  },
-  {
-    label: "Voter pool (content-specific)",
-    value: effectiveRawSharePercent(REWARD_SPLIT_BPS.voter),
-    displayValue: protocolDocFacts.voterPoolShortLabel,
-    color: "#359EEE",
-  },
-  {
-    label: "Frontend operators",
-    value: effectiveRawSharePercent(PLATFORM_REWARD_SPLIT_BPS.frontend),
-    displayValue: protocolDocFacts.frontendShortLabel,
-    color: "rgba(239, 71, 111, 0.72)",
-  },
-  {
-    label: "Treasury",
-    value: effectiveRawSharePercent(REWARD_SPLIT_BPS.treasury),
-    displayValue: protocolDocFacts.treasuryShortLabel,
-    color: "rgba(245, 245, 245, 0.55)",
-  },
-] as const;
 
 export const whitepaperRewardSplitRows: string[][] = rewardSplitTableRows.map(([recipient, share]) => [
   recipient,
