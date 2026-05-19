@@ -430,6 +430,7 @@ contract RoundVotingEngine is
         }
 
         if (!RoundLib.acceptsVotes(round, roundCfg.maxDuration)) revert RoundNotOpen();
+        if (block.timestamp >= uint256(round.startTime) + uint256(roundCfg.epochDuration)) revert RoundNotOpen();
         if (round.voteCount == 0 || round.totalStake == 0) revert RoundNotOpen();
         if (round.thresholdReachedAt != 0) revert ThresholdReached();
 

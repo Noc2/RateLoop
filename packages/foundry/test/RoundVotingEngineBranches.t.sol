@@ -2751,6 +2751,24 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertEq(advisoryRecorder.roundAdvisoryCommitCount(contentId, staleRoundId), 0, "advisory not indexed");
     }
 
+    function test_AdvisoryVoteAtBlindEpochBoundary_RevertsWhileRoundOpen() public {
+        vm.prank(owner);
+        _setTlockRoundConfig(ProtocolConfig(protocolConfigAddress), 1 hours, 7 days, 3, 1000);
+
+        uint256 contentId = _submitContent();
+        _openStakedRound(voter2, contentId, "advisory-boundary-open");
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
+
+        vm.warp(uint256(round.startTime) + 1 hours - 1);
+        _recordAdvisory(voter1, contentId, "advisory-before-boundary");
+        assertEq(advisoryRecorder.roundAdvisoryCommitCount(contentId, roundId), 1, "pre-boundary advisory accepted");
+
+        vm.warp(uint256(round.startTime) + 1 hours);
+        _expectAdvisoryRevert(voter3, contentId, "advisory-at-boundary", RoundVotingEngine.RoundNotOpen.selector);
+        assertEq(advisoryRecorder.roundAdvisoryCommitCount(contentId, roundId), 1, "boundary advisory rejected");
+    }
+
     function test_AdvisoryVoteDormantContent_RevertsWithoutOpeningRound() public {
         uint256 contentId = _submitContent();
         vm.warp(block.timestamp + 31 days);
