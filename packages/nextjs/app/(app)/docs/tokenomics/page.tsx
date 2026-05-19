@@ -55,13 +55,6 @@ const Tokenomics = () => {
         Supply is fixed at <strong>100 million LREP</strong>. The full supply is minted at launch into
         protocol-controlled pools, with no team allocation or token sale.
       </p>
-      <p>
-        Transferable LREP is intentional because the protocol needs portable ownership and reputation, but token balance
-        is only one input. Prediction score, effective-unit scoring, verified-human launch anchors, calibration, reveal
-        reliability, governance locks, and hard floors on proposal thresholds and submission bounties limit the damage
-        from bought or rented balance.
-      </p>
-
       <hr />
 
       <h2>Token Distribution</h2>
