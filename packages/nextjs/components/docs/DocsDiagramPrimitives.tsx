@@ -21,7 +21,7 @@ export function DocsDiagramFrame({
   children,
   className = "",
 }: {
-  eyebrow: string;
+  eyebrow?: ReactNode;
   title: string;
   description?: ReactNode;
   children: ReactNode;
@@ -31,8 +31,10 @@ export function DocsDiagramFrame({
     <figure className={`not-prose my-6 rounded-lg bg-base-200 p-4 text-base-content ${className}`.trim()}>
       <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
         <div className="min-w-0">
-          <p className="font-mono text-xs font-semibold uppercase tracking-wider text-base-content/45">{eyebrow}</p>
-          <h3 className="mt-1 text-xl font-semibold leading-tight text-base-content">{title}</h3>
+          {eyebrow ? (
+            <p className="font-mono text-xs font-semibold uppercase tracking-wider text-base-content/45">{eyebrow}</p>
+          ) : null}
+          <h3 className={`${eyebrow ? "mt-1 " : ""}text-xl font-semibold leading-tight text-base-content`}>{title}</h3>
         </div>
         {description ? (
           <figcaption className="max-w-xl text-sm leading-6 text-base-content/62 sm:text-right">

@@ -40,7 +40,7 @@ const settlementFacts = [
 
 export function RbtsScoreSpreadSettlementDiagram() {
   return (
-    <DocsDiagramFrame eyebrow="LREP stake settlement" title="Score Spreads Compete Against The Weighted Mean">
+    <DocsDiagramFrame title="LREP Example">
       <div className="grid gap-4">
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
           {settlementFacts.map(([label, value]) => (
