@@ -400,10 +400,9 @@ contract RoundVotingEngine is
         );
     }
 
-    /// @notice Open or roll the advisory commit round using the same lifecycle rules as staked commits.
+    /// @notice Bind an advisory commit to the current staked open round.
     /// @dev Only the configured AdvisoryVoteRecorder may call this. It intentionally does not
-    ///      record vote/stake accounting; it just materializes the round snapshot that a
-    ///      zero-stake advisory commit binds to.
+    ///      record vote/stake accounting; zero-stake advisory commits cannot open or roll rounds.
     function prepareAdvisoryRound(uint256 contentId, uint256 roundContext)
         external
         nonReentrant
@@ -419,7 +418,8 @@ contract RoundVotingEngine is
     {
         if (msg.sender != protocolConfig.advisoryVoteRecorder()) revert Unauthorized();
 
-        roundId = _getOrCreateRound(contentId);
+        roundId = currentRoundId[contentId];
+        if (roundId == 0) revert RoundNotOpen();
         if (roundId != roundContext >> 16) revert InvalidCommitHash();
 
         RoundLib.Round storage round = rounds[contentId][roundId];
@@ -430,6 +430,7 @@ contract RoundVotingEngine is
         }
 
         if (!RoundLib.acceptsVotes(round, roundCfg.maxDuration)) revert RoundNotOpen();
+        if (round.voteCount == 0 || round.totalStake == 0) revert RoundNotOpen();
         if (round.thresholdReachedAt != 0) revert ThresholdReached();
 
         startTime = round.startTime;

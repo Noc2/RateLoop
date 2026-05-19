@@ -366,6 +366,20 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         return _recordAdvisoryWithTargetRound(voter, contentId, saltTag, _tlockCommitTargetRound(engine, contentId));
     }
 
+    function _openStakedRound(address voter, uint256 contentId, string memory saltTag)
+        internal
+        returns (uint64 targetRound)
+    {
+        targetRound = _tlockCommitTargetRound(engine, contentId);
+        _commitWithTargetRound(voter, contentId, true, STAKE, targetRound, saltTag);
+    }
+
+    function _openStakedRoundWithTarget(address voter, uint256 contentId, uint64 targetRound, string memory saltTag)
+        internal
+    {
+        _commitWithTargetRound(voter, contentId, true, STAKE, targetRound, saltTag);
+    }
+
     function _recordAdvisoryWithTargetRound(address voter, uint256 contentId, string memory saltTag, uint64 targetRound)
         internal
         returns (bytes32 advisoryCommitKey, bytes32 salt)
@@ -2673,12 +2687,14 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         );
     }
 
-    function test_AdvisoryVoteOpensRoundWithoutVoteStakeAccounting() public {
+    function test_AdvisoryVoteRequiresExistingStakedRoundWithoutVoteStakeAccounting() public {
         uint256 contentId = _submitContent();
-        uint256 roundId = engine.previewCommitRoundId(contentId);
+        _expectAdvisoryRevert(voter1, contentId, "advisory-no-staked-round", RoundVotingEngine.RoundNotOpen.selector);
+
+        uint64 targetRound = _openStakedRound(voter2, contentId, "advisory-staked-open");
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
         uint16 referenceRatingBps = engine.previewCommitReferenceRatingBps(contentId);
         uint256 roundContext = _roundContext(roundId, referenceRatingBps);
-        uint64 targetRound = _tlockCommitTargetRound();
         bytes32 drandChainHash = _tlockDrandChainHash();
         bytes32 salt = keccak256(abi.encodePacked(voter1, block.timestamp, "advisory"));
         bytes memory ciphertext = _testCiphertext(true, salt, contentId, targetRound, drandChainHash);
@@ -2691,17 +2707,16 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
             contentId, roundContext, targetRound, drandChainHash, commitHash, ciphertext
         );
 
-        assertEq(RoundEngineReadHelpers.activeRoundId(engine, contentId), roundId, "advisory vote opens the round");
+        assertEq(RoundEngineReadHelpers.activeRoundId(engine, contentId), roundId, "advisory vote uses open round");
         assertEq(advisoryRecorder.roundAdvisoryCommitCount(contentId, roundId), 1, "advisory commit indexed");
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertGt(round.startTime, 0, "round start snapshotted");
-        assertEq(round.voteCount, 0, "advisory commit is not a counted vote");
-        assertEq(round.totalStake, 0, "advisory commit has no stake");
+        assertEq(round.voteCount, 1, "advisory commit is not a counted vote");
+        assertEq(round.totalStake, STAKE, "advisory commit has no stake");
 
         vm.expectRevert(AdvisoryVoteRecorder.EpochNotEnded.selector);
         advisoryRecorder.revealAdvisoryVote(advisoryCommitKey, true, 5_000, salt);
 
-        _commit(voter2, contentId, true, STAKE);
         round = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertEq(round.voteCount, 1, "only staked commit counts");
         assertEq(round.totalStake, STAKE, "only staked commit contributes stake");
@@ -2714,7 +2729,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertEq(round.revealedCount, 0, "advisory reveal does not count toward quorum");
     }
 
-    function test_AdvisoryVoteAfterExpiredBelowQuorum_RollsStaleRoundAndRecordsNextRound() public {
+    function test_AdvisoryVoteAfterExpiredBelowQuorum_RevertsWithoutRollingStaleRound() public {
         vm.prank(owner);
         _setTlockRoundConfig(ProtocolConfig(protocolConfigAddress), 1 hours, 1 hours, 3, 1000);
 
@@ -2726,19 +2741,14 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         RoundLib.Round memory staleRound = RoundEngineReadHelpers.round(engine, contentId, staleRoundId);
         vm.warp(uint256(staleRound.startTime) + 1 hours);
 
-        (bytes32 advisoryCommitKey,) = _recordAdvisory(voter3, contentId, "advisory-rolls-stale");
+        _expectAdvisoryRevert(
+            voter3, contentId, "advisory-does-not-roll-stale", RoundVotingEngine.InvalidCommitHash.selector
+        );
 
         staleRound = RoundEngineReadHelpers.round(engine, contentId, staleRoundId);
-        assertEq(uint256(staleRound.state), uint256(RoundLib.RoundState.Cancelled), "stale round cancelled");
-        uint256 nextRoundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
-        assertEq(nextRoundId, staleRoundId + 1, "advisory vote opens the next round");
-        assertEq(advisoryRecorder.roundAdvisoryCommitCount(contentId, nextRoundId), 1, "advisory indexed on next");
-
-        (,, uint256 recordedRoundId,,,,,,,) = advisoryRecorder.advisoryCommitCore(advisoryCommitKey);
-        assertEq(recordedRoundId, nextRoundId, "commit bound to next round");
-        RoundLib.Round memory nextRound = RoundEngineReadHelpers.round(engine, contentId, nextRoundId);
-        assertEq(nextRound.voteCount, 0, "advisory rollover has no counted votes");
-        assertEq(nextRound.totalStake, 0, "advisory rollover has no staked total");
+        assertEq(uint256(staleRound.state), uint256(RoundLib.RoundState.Open), "advisory does not roll stale round");
+        assertEq(RoundEngineReadHelpers.activeRoundId(engine, contentId), staleRoundId, "no new round opened");
+        assertEq(advisoryRecorder.roundAdvisoryCommitCount(contentId, staleRoundId), 0, "advisory not indexed");
     }
 
     function test_AdvisoryVoteDormantContent_RevertsWithoutOpeningRound() public {
@@ -2772,6 +2782,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
         uint256 recordedAt = block.timestamp;
         uint64 targetRound = _tlockTargetRoundAt(recordedAt + roundConfig.epochDuration);
+        _openStakedRoundWithTarget(voter2, contentId, targetRound, "advisory-short-staked-open");
         (bytes32 advisoryCommitKey, bytes32 advisorySalt) =
             _recordAdvisoryWithTargetRound(voter1, contentId, "advisory-short", targetRound);
 
@@ -2779,7 +2790,6 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertGe(revealableAfter, recordedAt + roundConfig.epochDuration, "uses custom short epoch floor");
         assertLt(revealableAfter, recordedAt + EPOCH, "does not inherit global one-hour epoch");
 
-        _commitWithTargetRound(voter2, contentId, true, STAKE, targetRound, "advisory-short-staked");
         vm.warp(uint256(revealableAfter) + 1);
 
         advisoryRecorder.revealAdvisoryVote(advisoryCommitKey, true, 5_000, advisorySalt);
@@ -2794,6 +2804,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
         uint256 recordedAt = block.timestamp;
         uint64 targetRound = _tlockTargetRoundAt(recordedAt + roundConfig.epochDuration);
+        _openStakedRoundWithTarget(voter2, contentId, targetRound, "advisory-long-staked-open");
         (bytes32 advisoryCommitKey,) = _recordAdvisoryWithTargetRound(voter1, contentId, "advisory-long", targetRound);
 
         (,,,, uint48 revealableAfter,,,,,) = advisoryRecorder.advisoryCommitCore(advisoryCommitKey);
@@ -2804,10 +2815,10 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     function test_AdvisoryRevealAfterRealReveal_Reverts() public {
         uint256 contentId = _submitContent();
         uint64 targetRound = _tlockCommitTargetRound();
-        (bytes32 advisoryCommitKey, bytes32 advisorySalt) =
-            _recordAdvisoryWithTargetRound(voter1, contentId, "advisory-after-real", targetRound);
         (bytes32 commitKey, bytes32 salt) =
             _commitWithTargetRound(voter2, contentId, true, STAKE, targetRound, "real-before-advisory");
+        (bytes32 advisoryCommitKey, bytes32 advisorySalt) =
+            _recordAdvisoryWithTargetRound(voter1, contentId, "advisory-after-real", targetRound);
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
 
         vm.warp(_tlockRoundTimestamp(targetRound) + 1);
@@ -2819,6 +2830,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
     function test_RealCommitAfterAdvisoryCommit_Reverts() public {
         uint256 contentId = _submitContent();
+        _openStakedRound(voter2, contentId, "real-after-advisory-open");
         _recordAdvisory(voter1, contentId, "advisory-first");
 
         uint256 roundId = engine.previewCommitRoundId(contentId);
@@ -2849,6 +2861,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
     function test_RealCommitAfterDelegateAdvisoryIdentityChurn_RevertsAlreadyCommitted() public {
         uint256 contentId = _submitContent();
+        _openStakedRound(voter2, contentId, "delegate-advisory-open");
         vm.prank(voter1);
         mockRaterIdentityRegistry.setDelegate(delegate1);
         _recordAdvisory(delegate1, contentId, "delegate-advisory-before-identity");
@@ -2885,9 +2898,11 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
     function test_RealCommitAfterAdvisoryVoteCooldown_Reverts() public {
         uint256 contentId = _submitContent();
-        _recordAdvisory(voter1, contentId, "advisory-cooldown");
+        uint64 openedTargetRound = _tlockCommitTargetRound(engine, contentId);
+        (bytes32 ck2, bytes32 s2) =
+            _commitWithTargetRound(voter2, contentId, true, STAKE, openedTargetRound, "advisory-cooldown-open");
+        _recordAdvisoryWithTargetRound(voter1, contentId, "advisory-cooldown", openedTargetRound);
 
-        (bytes32 ck2, bytes32 s2) = _commit(voter2, contentId, true, STAKE);
         (bytes32 ck3, bytes32 s3) = _commit(voter3, contentId, true, STAKE);
         (bytes32 ck4, bytes32 s4) = _commit(voter4, contentId, false, STAKE);
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
@@ -2927,9 +2942,9 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
     function test_AdvisoryVoteCannotRevealAfterSettlement() public {
         uint256 contentId = _submitContent();
+        (bytes32 ck2, bytes32 s2) = _commit(voter2, contentId, true, STAKE);
         (bytes32 advisoryCommitKey, bytes32 advisorySalt) = _recordAdvisory(voter1, contentId, "late-advisory");
 
-        (bytes32 ck2, bytes32 s2) = _commit(voter2, contentId, true, STAKE);
         (bytes32 ck3, bytes32 s3) = _commit(voter3, contentId, true, STAKE);
         (bytes32 ck4, bytes32 s4) = _commit(voter4, contentId, false, STAKE);
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
@@ -2951,6 +2966,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         _setTlockRoundConfig(ProtocolConfig(protocolConfigAddress), 1 hours, 7 days, 3, 3);
 
         uint256 contentId = _submitContent();
+        _openStakedRound(voter4, contentId, "advisory-cap-open");
         _recordAdvisory(voter1, contentId, "advisory-cap-1");
         _recordAdvisory(voter2, contentId, "advisory-cap-2");
         _recordAdvisory(voter3, contentId, "advisory-cap-3");
@@ -2959,13 +2975,13 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         uint16 referenceRatingBps = engine.previewCommitReferenceRatingBps(contentId);
         uint64 targetRound = _tlockCommitTargetRound();
         bytes32 drandChainHash = _tlockDrandChainHash();
-        bytes32 salt = keccak256(abi.encodePacked(voter4, block.timestamp, "advisory-cap-4"));
+        bytes32 salt = keccak256(abi.encodePacked(voter5, block.timestamp, "advisory-cap-4"));
         bytes memory ciphertext = _testCiphertext(true, salt, contentId, targetRound, drandChainHash);
         bytes32 commitHash = _commitHash(
-            true, salt, voter4, contentId, roundId, referenceRatingBps, targetRound, drandChainHash, ciphertext
+            true, salt, voter5, contentId, roundId, referenceRatingBps, targetRound, drandChainHash, ciphertext
         );
 
-        vm.prank(voter4);
+        vm.prank(voter5);
         vm.expectRevert(AdvisoryVoteRecorder.MaxAdvisoryVotersReached.selector);
         advisoryRecorder.recordAdvisoryVote(
             contentId, _roundContext(roundId, referenceRatingBps), targetRound, drandChainHash, commitHash, ciphertext
@@ -2980,6 +2996,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         mockRaterIdentityRegistry.mint(voter1, 42);
 
         uint256 contentId = _submitContent();
+        _openStakedRound(voter2, contentId, "advisory-preflight-open");
         uint256 roundId = engine.previewCommitRoundId(contentId);
         uint16 referenceRatingBps = engine.previewCommitReferenceRatingBps(contentId);
         uint256 roundContext = _roundContext(roundId, referenceRatingBps);
@@ -3051,6 +3068,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
     function test_AdvisoryAfterDelegateAddressIdentityChurn_RevertsAlreadyCommitted() public {
         uint256 contentId = _submitContent();
+        _openStakedRound(voter2, contentId, "delegate-before-human-open");
         vm.prank(voter1);
         mockRaterIdentityRegistry.setDelegate(delegate1);
         _recordAdvisory(delegate1, contentId, "delegate-before-human");
@@ -3068,6 +3086,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
     function test_DelegateAdvisoryAfterHolderAddressIdentityChurn_RevertsAlreadyCommitted() public {
         uint256 contentId = _submitContent();
+        _openStakedRound(voter2, contentId, "holder-before-human-open");
         _recordAdvisory(voter1, contentId, "holder-before-human");
 
         mockRaterIdentityRegistry.mint(voter1, 42);

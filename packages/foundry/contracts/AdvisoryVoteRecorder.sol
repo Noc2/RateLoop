@@ -141,7 +141,7 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         emit PausedUpdated(value);
     }
 
-    /// @notice Record a zero-stake advisory commit for the active or next voteable round.
+    /// @notice Record a zero-stake advisory commit for the active staked voteable round.
     /// @dev Uses the same commit-hash preimage as RoundVotingEngine.commitVote.
     function recordAdvisoryVote(
         uint256 contentId,
