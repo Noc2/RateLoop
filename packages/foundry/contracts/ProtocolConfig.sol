@@ -445,6 +445,10 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         catch {
             revert InvalidConfig();
         }
+        try IClusterPayoutOracle(value).roundPayoutSnapshotProposedAt(0, 0, 0, 0) returns (uint64) { }
+        catch {
+            revert InvalidConfig();
+        }
     }
 
     function _validateAdvisoryVoteRecorder(address value) internal view {

@@ -101,6 +101,7 @@ contract LaunchDistributionPool is
     mapping(uint256 => mapping(uint256 => uint16)) public roundUnverifiedLaunchCreditCount;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => PendingEarnedRaterCredit))) public
         pendingEarnedRaterCredits;
+    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint64))) public pendingEarnedRaterCreditReadyAt;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => bytes32[]))) internal pendingEarnedRaterCreditAnchorIds;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) public earnedRewardCreditFinalized;
     mapping(uint256 => mapping(uint256 => bool)) public earnedRaterRoundPayoutSnapshotConsumed;
@@ -231,6 +232,7 @@ contract LaunchDistributionPool is
         if (earnedRewardCreditFinalized[contentId][roundId][commitKey]) revert AlreadyClaimed();
         if (pending.oracle == address(clusterPayoutOracle)) revert InvalidAddress();
         delete pendingEarnedRaterCredits[contentId][roundId][commitKey];
+        delete pendingEarnedRaterCreditReadyAt[contentId][roundId][commitKey];
         delete pendingEarnedRaterCreditAnchorIds[contentId][roundId][commitKey];
         earnedRewardCreditRecorded[contentId][roundId][commitKey] = false;
         raterRoundCreditRecorded[pending.rater][contentId][roundId] = false;
@@ -470,6 +472,11 @@ contract LaunchDistributionPool is
             revert InvalidProof();
         }
         if (!oracle.verifyPayoutWeight(payoutWeight, proof)) revert InvalidProof();
+        if (!_roundPayoutSnapshotProposedAfter(
+                oracle, contentId, roundId, pendingEarnedRaterCreditReadyAt[contentId][roundId][commitKey]
+            )) {
+            revert InvalidProof();
+        }
 
         // M-Funds-2: the cap is enforced at record time now, so no re-check or increment here.
         // A rater who was unverified at record (and thus consumed a cap slot) keeps that slot
@@ -484,6 +491,7 @@ contract LaunchDistributionPool is
         // strands gas and makes governance rotation of `clusterPayoutOracle` ambiguous about
         // whether the entry should re-verify against the new oracle.
         delete pendingEarnedRaterCredits[contentId][roundId][commitKey];
+        delete pendingEarnedRaterCreditReadyAt[contentId][roundId][commitKey];
         delete pendingEarnedRaterCreditAnchorIds[contentId][roundId][commitKey];
         uint256 effectiveCreditBps = payoutWeight.effectiveWeight;
         paidAmount = _recordEarnedRaterReward(
@@ -612,6 +620,7 @@ contract LaunchDistributionPool is
         pendingEarnedRaterCredits[contentId][roundId][commitKey] = PendingEarnedRaterCredit({
             rater: rater, oracle: oracle, scoreBps: scoreBps, policy: policy, pending: true
         });
+        pendingEarnedRaterCreditReadyAt[contentId][roundId][commitKey] = uint64(block.timestamp);
 
         delete pendingEarnedRaterCreditAnchorIds[contentId][roundId][commitKey];
         bytes32[] storage pendingAnchors = pendingEarnedRaterCreditAnchorIds[contentId][roundId][commitKey];
@@ -888,6 +897,22 @@ contract LaunchDistributionPool is
         return bytes32(0);
     }
 
+    function _roundPayoutSnapshotProposedAfter(
+        IClusterPayoutOracle oracle,
+        uint256 contentId,
+        uint256 roundId,
+        uint64 readyAt
+    ) private view returns (bool) {
+        if (readyAt == 0) return false;
+        try oracle.roundPayoutSnapshotProposedAt(PAYOUT_DOMAIN_LAUNCH_CREDIT, 0, contentId, roundId) returns (
+            uint64 proposedAt
+        ) {
+            return proposedAt >= readyAt;
+        } catch {
+            return false;
+        }
+    }
+
     function _validateRaterRegistry(address newRegistry) private view {
         if (newRegistry == address(0) || newRegistry.code.length == 0) revert InvalidAddress();
         try RaterRegistry(newRegistry).getHumanCredential(address(0)) returns (RaterRegistry.HumanCredential memory) { }
@@ -900,6 +925,13 @@ contract LaunchDistributionPool is
         if (newOracle == address(0) || newOracle.code.length == 0) revert InvalidAddress();
         try IClusterPayoutOracle(newOracle).roundPayoutSnapshotKey(PAYOUT_DOMAIN_LAUNCH_CREDIT, 0, 0, 0) returns (
             bytes32
+        ) { }
+        catch {
+            revert InvalidAddress();
+        }
+        try IClusterPayoutOracle(newOracle)
+            .roundPayoutSnapshotProposedAt(PAYOUT_DOMAIN_LAUNCH_CREDIT, 0, 0, 0) returns (
+            uint64
         ) { }
         catch {
             revert InvalidAddress();

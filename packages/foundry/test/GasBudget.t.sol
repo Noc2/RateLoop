@@ -18,7 +18,8 @@ contract GasBudgetTest is RoundIntegrationTest {
     // so the post-tlock baseline is materially higher than the earlier pre-parser threshold.
     uint256 internal constant MAX_COMMIT_VOTE_GAS = 2_900_000;
     uint256 internal constant MAX_REVEAL_VOTE_GAS = 320_000;
-    uint256 internal constant MAX_SETTLE_ROUND_GAS = 750_000;
+    // Settlement records cluster-payout source readiness for clean rounds, adding one bounded SSTORE.
+    uint256 internal constant MAX_SETTLE_ROUND_GAS = 775_000;
     uint256 internal constant MAX_SETTLE_ROUND_MAX_EPOCH_SCAN_GAS = 5_900_000;
     uint256 internal constant MAX_PROCESS_UNREVEALED_GAS = 250_000;
     uint256 internal constant MAX_CANCEL_EXPIRED_ROUND_GAS = 60_000;

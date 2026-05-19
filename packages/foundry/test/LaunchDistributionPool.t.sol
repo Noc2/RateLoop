@@ -404,6 +404,20 @@ contract LaunchDistributionPoolTest is Test {
         pool.finalizeEarnedRaterRewardCredit(1, 1, _commitKey(1), payout, new bytes32[](0));
     }
 
+    function test_LaunchCreditRejectsSnapshotProposedBeforePendingCredit() public {
+        ClusterPayoutOracle oracle = _configureLaunchOracle(1);
+
+        IClusterPayoutOracle.PayoutWeight memory payout =
+            _launchPayoutWeight(1, _commitKey(1), alice, 2_500, keccak256("clustered"));
+        _proposeAndFinalizeLaunchPayoutSnapshot(oracle, 1, payout, keccak256("early-snapshot"));
+
+        assertEq(_recordLaunchReward(alice, 1, bytes32("anchor-a")), 0);
+        assertGt(pool.pendingEarnedRaterCreditReadyAt(1, 1, _commitKey(1)), 0);
+
+        vm.expectRevert(LaunchDistributionPool.InvalidProof.selector);
+        pool.finalizeEarnedRaterRewardCredit(1, 1, _commitKey(1), payout, new bytes32[](0));
+    }
+
     function test_PendingLaunchOracleCreditsReserveUnverifiedRoundSlotsAtRecordTime() public {
         // M-Funds-2: the per-round unverified cap MUST gate pending credits at record time,
         // not at finalize. Previously, when a cluster oracle was configured the counter never

@@ -2660,6 +2660,42 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertEq(nextRoundToEvaluate, roundId);
     }
 
+    function testClusterRewardPoolRejectsSnapshotProposedBeforeCleanupComplete() public {
+        ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
+        uint256 contentId = _submitQuestion("");
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+
+        uint256 roundId = _settleRoundWithOneUnrevealed(contentId);
+        assertEq(votingEngine.roundClusterPayoutReadyAt(contentId, roundId), 0);
+
+        _finalizeClusterPayoutSnapshot(oracle, rewardPoolId, contentId, roundId, 3, 30_000, 10_000);
+        votingEngine.processUnrevealedVotes(contentId, roundId, 0, 0);
+        assertGt(votingEngine.roundClusterPayoutReadyAt(contentId, roundId), 0);
+
+        vm.expectRevert("Cluster source stale");
+        rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
+
+        (uint256 skipped, uint256 nextRoundToEvaluate) = rewardPoolEscrow.advanceQualificationCursor(rewardPoolId, 1);
+        assertEq(skipped, 0);
+        assertEq(nextRoundToEvaluate, roundId);
+    }
+
+    function testClusterRewardPoolAcceptsSnapshotProposedAfterCleanupComplete() public {
+        ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
+        uint256 contentId = _submitQuestion("");
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+
+        uint256 roundId = _settleRoundWithOneUnrevealed(contentId);
+        votingEngine.processUnrevealedVotes(contentId, roundId, 0, 0);
+        assertGt(votingEngine.roundClusterPayoutReadyAt(contentId, roundId), 0);
+
+        _finalizeClusterPayoutSnapshot(oracle, rewardPoolId, contentId, roundId, 3, 30_000, 10_000);
+
+        rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
+        RoundSnapshot memory snapshot = rewardPoolEscrow.getRoundSnapshot(rewardPoolId, roundId);
+        assertTrue(snapshot.qualified);
+    }
+
     function testClusterRewardPoolCanSkipFinalizedBelowFloorSnapshot() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         uint256 contentId = _submitQuestion("");

@@ -257,13 +257,7 @@ library QuestionRewardPoolEscrowQualificationLib {
         require(votingEngine.roundUnrevealedCleanupRemaining(rewardPool.contentId, roundId) == 0, "Cleanup pending");
 
         IClusterPayoutOracle.RoundPayoutSnapshot memory payoutSnapshot = _finalizedQuestionPayoutSnapshot(
-            rewardPoolClusterPayoutOracle, rewardPoolId, rewardPool.contentId, roundId, payoutDomain
-        );
-        require(
-            IClusterPayoutOracle(_clusterPayoutOracleAddress(rewardPoolClusterPayoutOracle, rewardPoolId))
-                .roundPayoutSnapshotConsumerFor(payoutDomain, rewardPoolId, rewardPool.contentId, roundId)
-            == address(this),
-            "Cluster consumer mismatch"
+            rewardPoolClusterPayoutOracle, votingEngine, rewardPoolId, rewardPool.contentId, roundId, payoutDomain
         );
         require(payoutSnapshot.rawEligibleVoters == baseRawEligibleVoters, "Cluster snapshot mismatch");
 
@@ -599,11 +593,12 @@ library QuestionRewardPoolEscrowQualificationLib {
             if (payoutSnapshot.status != IClusterPayoutOracle.SnapshotStatus.Finalized) {
                 return (roundSettled, false, rawEligibleVoters, 0, 0, settledAt);
             }
-            if (
-                IClusterPayoutOracle(clusterPayoutOracle)
-                        .roundPayoutSnapshotConsumerFor(payoutDomain, rewardPool.id, rewardPool.contentId, roundId)
-                    != address(this)
-            ) {
+            if (!_questionPayoutSnapshotConsumerMatches(clusterPayoutOracle, rewardPool, roundId, payoutDomain)) {
+                return (roundSettled, false, rawEligibleVoters, 0, 0, settledAt);
+            }
+            if (!_questionPayoutSnapshotSourceReady(
+                    clusterPayoutOracle, votingEngine, rewardPool, roundId, payoutDomain
+                )) {
                 return (roundSettled, false, rawEligibleVoters, 0, 0, settledAt);
             }
             if (payoutSnapshot.rawEligibleVoters != rawEligibleVoters) {
@@ -624,14 +619,61 @@ library QuestionRewardPoolEscrowQualificationLib {
 
     function _finalizedQuestionPayoutSnapshot(
         mapping(uint256 => address) storage rewardPoolClusterPayoutOracle,
+        RoundVotingEngine votingEngine,
         uint256 rewardPoolId,
         uint256 contentId,
         uint256 roundId,
         uint8 payoutDomain
     ) private view returns (IClusterPayoutOracle.RoundPayoutSnapshot memory payoutSnapshot) {
-        payoutSnapshot = IClusterPayoutOracle(_clusterPayoutOracleAddress(rewardPoolClusterPayoutOracle, rewardPoolId))
-            .getRoundPayoutSnapshot(payoutDomain, rewardPoolId, contentId, roundId);
+        address clusterPayoutOracle = _clusterPayoutOracleAddress(rewardPoolClusterPayoutOracle, rewardPoolId);
+        IClusterPayoutOracle oracle = IClusterPayoutOracle(clusterPayoutOracle);
+        payoutSnapshot = oracle.getRoundPayoutSnapshot(payoutDomain, rewardPoolId, contentId, roundId);
         require(payoutSnapshot.status == IClusterPayoutOracle.SnapshotStatus.Finalized, "Cluster snapshot pending");
+        require(
+            oracle.roundPayoutSnapshotConsumerFor(payoutDomain, rewardPoolId, contentId, roundId) == address(this),
+            "Cluster consumer mismatch"
+        );
+        uint64 readyAt = votingEngine.roundClusterPayoutReadyAt(contentId, roundId);
+        require(readyAt != 0, "Cluster source pending");
+        require(
+            oracle.roundPayoutSnapshotProposedAt(payoutDomain, rewardPoolId, contentId, roundId) >= readyAt,
+            "Cluster source stale"
+        );
+    }
+
+    function _questionPayoutSnapshotConsumerMatches(
+        address clusterPayoutOracle,
+        RewardPool storage rewardPool,
+        uint256 roundId,
+        uint8 payoutDomain
+    ) private view returns (bool) {
+        try IClusterPayoutOracle(clusterPayoutOracle)
+            .roundPayoutSnapshotConsumerFor(payoutDomain, rewardPool.id, rewardPool.contentId, roundId) returns (
+            address consumer
+        ) {
+            return consumer == address(this);
+        } catch {
+            return false;
+        }
+    }
+
+    function _questionPayoutSnapshotSourceReady(
+        address clusterPayoutOracle,
+        RoundVotingEngine votingEngine,
+        RewardPool storage rewardPool,
+        uint256 roundId,
+        uint8 payoutDomain
+    ) private view returns (bool) {
+        uint64 readyAt = votingEngine.roundClusterPayoutReadyAt(rewardPool.contentId, roundId);
+        if (readyAt == 0) return false;
+        try IClusterPayoutOracle(clusterPayoutOracle)
+            .roundPayoutSnapshotProposedAt(payoutDomain, rewardPool.id, rewardPool.contentId, roundId) returns (
+            uint64 proposedAt
+        ) {
+            return proposedAt >= readyAt;
+        } catch {
+            return false;
+        }
     }
 
     function _clusterPayoutOracleAddress(

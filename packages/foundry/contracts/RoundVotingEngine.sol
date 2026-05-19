@@ -928,6 +928,9 @@ contract RoundVotingEngine is
         round.upWins = upWins;
         round.state = RoundLib.RoundState.Settled;
         round.settledAt = block.timestamp.toUint48();
+        if (unrevealedPastEpochCount == 0) {
+            roundClusterPayoutReadyAt[contentId][roundId] = round.settledAt;
+        }
         _notifyBundleRoundTerminal(contentId, roundId, true);
 
         (uint256 updatedConsensusReserve, uint256 treasuryPaid) = RoundSettlementDistributionLib.distribute(
@@ -1021,8 +1024,9 @@ contract RoundVotingEngine is
         external
         nonReentrant
     {
+        RoundLib.Round storage round = rounds[contentId][roundId];
         (consensusReserve, accountedLrepBalance) = RoundCleanupLib.processUnrevealedVotesForEngine(
-            rounds[contentId][roundId],
+            round,
             roundCommitHashes[contentId][roundId],
             commits[contentId][roundId],
             roundCleanupIncentivePaid,
@@ -1037,6 +1041,12 @@ contract RoundVotingEngine is
             startIndex,
             count
         );
+        if (
+            round.state == RoundLib.RoundState.Settled && roundUnrevealedCleanupRemaining[contentId][roundId] == 0
+                && roundClusterPayoutReadyAt[contentId][roundId] == 0
+        ) {
+            roundClusterPayoutReadyAt[contentId][roundId] = block.timestamp.toUint48();
+        }
     }
     // =========================================================================
     // INTERNAL HELPERS
@@ -1472,6 +1482,12 @@ contract RoundVotingEngine is
     // stored value so the settlement caller cannot grind the sampler by reverting unfavorable runs.
     mapping(uint256 => mapping(uint256 => bytes32)) public roundRbtsSeedEntropy;
 
+    /// @notice Timestamp when a settled round's payout source became fully auditable.
+    /// @dev For rounds without stale unrevealed votes this equals `settledAt`; otherwise it is
+    ///      set when the cleanup queue reaches zero. Oracle consumers reject roots proposed
+    ///      before this timestamp so the optimistic challenge window only runs on complete data.
+    mapping(uint256 contentId => mapping(uint256 roundId => uint48)) public roundClusterPayoutReadyAt;
+
     // --- Storage gap reserved for future upgrades ---
-    uint256[23] private __gap;
+    uint256[22] private __gap;
 }

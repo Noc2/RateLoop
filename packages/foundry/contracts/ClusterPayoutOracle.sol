@@ -574,6 +574,15 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         return roundPayoutProposals[snapshotKey].consumer;
     }
 
+    function roundPayoutSnapshotProposedAt(uint8 domain, uint256 rewardPoolId, uint256 contentId, uint256 roundId)
+        external
+        view
+        returns (uint64)
+    {
+        bytes32 snapshotKey = roundPayoutSnapshotKey(domain, rewardPoolId, contentId, roundId);
+        return roundPayoutProposals[snapshotKey].proposedAt;
+    }
+
     function roundPayoutProposal(bytes32 snapshotKey) external view returns (RoundPayoutProposal memory) {
         return roundPayoutProposals[snapshotKey];
     }
