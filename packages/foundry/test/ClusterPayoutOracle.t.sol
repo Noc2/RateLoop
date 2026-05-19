@@ -157,6 +157,107 @@ contract ClusterPayoutOracleTest is Test {
         assertEq(snapshot.totalClaimWeight, 2_500);
     }
 
+    function test_EmptyRoundPayoutSnapshotFinalizesButCannotVerifyClaims() public {
+        oracle.proposeCorrelationEpoch(
+            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+        );
+        vm.warp(1 hours + 2);
+        oracle.finalizeCorrelationEpoch(1);
+
+        IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
+        input.rawEligibleVoters = 0;
+        input.effectiveParticipantUnits = 0;
+        input.totalClaimWeight = 0;
+        input.weightRoot = bytes32(0);
+
+        oracle.proposeRoundPayoutSnapshot(input);
+        bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(input.domain, input.rewardPoolId, input.contentId, input.roundId);
+        vm.warp(block.timestamp + 1 hours + 1);
+        oracle.finalizeRoundPayoutSnapshot(snapshotKey);
+
+        IClusterPayoutOracle.RoundPayoutSnapshot memory snapshot =
+            oracle.getRoundPayoutSnapshot(input.domain, input.rewardPoolId, input.contentId, input.roundId);
+        assertEq(uint8(snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Finalized));
+        assertEq(snapshot.totalClaimWeight, 0);
+        assertEq(snapshot.weightRoot, bytes32(0));
+
+        IClusterPayoutOracle.PayoutWeight memory payout = IClusterPayoutOracle.PayoutWeight({
+            domain: input.domain,
+            rewardPoolId: input.rewardPoolId,
+            contentId: input.contentId,
+            roundId: input.roundId,
+            commitKey: keccak256("commit"),
+            identityKey: keccak256("identity"),
+            account: address(0xBEEF),
+            baseWeight: 10_000,
+            independenceBps: 0,
+            effectiveWeight: 1,
+            reasonHash: keccak256("empty")
+        });
+        bytes32[] memory proof = new bytes32[](0);
+        assertFalse(oracle.verifyPayoutWeight(payout, proof));
+    }
+
+    function test_RoundPayoutSnapshotRejectsInconsistentEmptyShape() public {
+        oracle.proposeCorrelationEpoch(
+            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+        );
+        vm.warp(1 hours + 2);
+        oracle.finalizeCorrelationEpoch(1);
+
+        IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
+        input.totalClaimWeight = 0;
+        input.effectiveParticipantUnits = 0;
+        input.weightRoot = keccak256("non-empty-root");
+        vm.expectRevert(ClusterPayoutOracle.InvalidSnapshot.selector);
+        oracle.proposeRoundPayoutSnapshot(input);
+
+        input = _defaultRoundPayoutInput(1);
+        input.totalClaimWeight = 0;
+        input.effectiveParticipantUnits = 1;
+        input.weightRoot = bytes32(0);
+        vm.expectRevert(ClusterPayoutOracle.InvalidSnapshot.selector);
+        oracle.proposeRoundPayoutSnapshot(input);
+
+        input = _defaultRoundPayoutInput(1);
+        input.effectiveParticipantUnits = 25_000;
+        input.totalClaimWeight = 2_500;
+        input.weightRoot = bytes32(0);
+        vm.expectRevert(ClusterPayoutOracle.InvalidSnapshot.selector);
+        oracle.proposeRoundPayoutSnapshot(input);
+
+        input = _defaultRoundPayoutInput(1);
+        input.effectiveParticipantUnits = 0;
+        input.totalClaimWeight = 2_500;
+        input.weightRoot = keccak256("non-empty-root");
+        vm.expectRevert(ClusterPayoutOracle.InvalidSnapshot.selector);
+        oracle.proposeRoundPayoutSnapshot(input);
+    }
+
+    function test_RejectedEmptyRoundPayoutSnapshotBlacklistsEmptyRoot() public {
+        oracle.proposeCorrelationEpoch(
+            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+        );
+        vm.warp(1 hours + 2);
+        oracle.finalizeCorrelationEpoch(1);
+
+        IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
+        input.rawEligibleVoters = 0;
+        input.effectiveParticipantUnits = 0;
+        input.totalClaimWeight = 0;
+        input.weightRoot = bytes32(0);
+
+        oracle.proposeRoundPayoutSnapshot(input);
+        bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(input.domain, input.rewardPoolId, input.contentId, input.roundId);
+        oracle.challengeRoundPayoutSnapshot(snapshotKey, keccak256("bad-empty-root"));
+        oracle.rejectRoundPayoutSnapshot(snapshotKey, keccak256("bad-empty-root"));
+
+        assertTrue(oracle.rejectedRoundPayoutSnapshotRoots(snapshotKey, bytes32(0)));
+
+        vm.expectRevert(ClusterPayoutOracle.InvalidSnapshot.selector);
+        oracle.proposeRoundPayoutSnapshot(input);
+    }
+
     function test_ChallengedEpochCannotFinalizeUntilArbiterRejectsIt() public {
         oracle.proposeCorrelationEpoch(
             1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"

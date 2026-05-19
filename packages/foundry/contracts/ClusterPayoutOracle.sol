@@ -574,6 +574,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
             roundPayoutSnapshotKey(payout.domain, payout.rewardPoolId, payout.contentId, payout.roundId);
         RoundPayoutSnapshot memory snapshot = roundPayoutProposals[snapshotKey].snapshot;
         if (snapshot.status != SnapshotStatus.Finalized) return false;
+        if (snapshot.totalClaimWeight == 0 || snapshot.weightRoot == bytes32(0)) return false;
         if (payout.independenceBps > BPS_DENOMINATOR) return false;
         if (payout.effectiveWeight > payout.baseWeight) return false;
 
@@ -609,10 +610,16 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
     function _validateRoundPayoutInput(RoundPayoutSnapshotInput calldata input) private pure {
         if (
             !_isPayoutDomain(input.domain) || input.contentId == 0 || input.roundId == 0
-                || input.correlationEpochId == 0 || input.weightRoot == bytes32(0) || input.totalClaimWeight == 0
+                || input.correlationEpochId == 0
                 || input.effectiveParticipantUnits > uint256(input.rawEligibleVoters) * BPS_DENOMINATOR
         ) {
             revert InvalidSnapshot();
+        }
+        bool emptyPayout = input.totalClaimWeight == 0;
+        if (emptyPayout) {
+            if (input.effectiveParticipantUnits != 0 || input.weightRoot != bytes32(0)) revert InvalidSnapshot();
+        } else {
+            if (input.effectiveParticipantUnits == 0 || input.weightRoot == bytes32(0)) revert InvalidSnapshot();
         }
         if (input.domain == PAYOUT_DOMAIN_QUESTION_REWARD && input.rewardPoolId == 0) revert InvalidSnapshot();
         if (input.domain == PAYOUT_DOMAIN_LAUNCH_CREDIT && input.rewardPoolId != 0) revert InvalidSnapshot();

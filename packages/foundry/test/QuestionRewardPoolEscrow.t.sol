@@ -2595,6 +2595,49 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertEq(nextRoundToEvaluate, roundId + 1);
     }
 
+    function testClusterRewardPoolCanSkipFinalizedEmptySnapshot() public {
+        ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
+        uint256 contentId = _submitQuestion("");
+        uint256 rewardPoolId = _createRewardPoolWithEligibility(
+            contentId, REWARD_POOL_AMOUNT, 3, 1, BOUNTY_ELIGIBILITY_VERIFIED_HUMAN
+        );
+
+        address[] memory unverifiedVoters = _voters(address(20), address(21), address(22));
+        vm.startPrank(owner);
+        for (uint256 i = 0; i < unverifiedVoters.length; i++) {
+            lrepToken.mint(unverifiedVoters[i], 10_000e6);
+        }
+        vm.stopPrank();
+
+        uint256 roundId = _settleRoundWith(unverifiedVoters, contentId, _directions(true, true, false));
+        _finalizeClusterPayoutSnapshotWithRoot(oracle, rewardPoolId, contentId, roundId, 0, 0, 0, bytes32(0));
+
+        vm.expectRevert("Too few eligible voters");
+        rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
+
+        (uint256 skipped, uint256 nextRoundToEvaluate) = rewardPoolEscrow.advanceQualificationCursor(rewardPoolId, 1);
+        assertEq(skipped, 1);
+        assertEq(nextRoundToEvaluate, roundId + 1);
+
+        RoundSnapshot memory skippedSnapshot = rewardPoolEscrow.getRoundSnapshot(rewardPoolId, roundId);
+        assertFalse(skippedSnapshot.qualified);
+        assertEq(skippedSnapshot.allocation, 0);
+        assertFalse(rewardPoolEscrow.isRoundPayoutSnapshotConsumed(1, rewardPoolId, contentId, roundId));
+    }
+
+    function testClusterRewardPoolDoesNotSkipEmptySnapshotWithRawMismatch() public {
+        ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
+        uint256 contentId = _submitQuestion("");
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+
+        uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+        _finalizeClusterPayoutSnapshotWithRoot(oracle, rewardPoolId, contentId, roundId, 0, 0, 0, bytes32(0));
+
+        (uint256 skipped, uint256 nextRoundToEvaluate) = rewardPoolEscrow.advanceQualificationCursor(rewardPoolId, 1);
+        assertEq(skipped, 0);
+        assertEq(nextRoundToEvaluate, roundId);
+    }
+
     function testGovernanceCanReplaceUnconsumedFinalizedClusterSnapshotMismatch() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         uint256 contentId = _submitQuestion("");
