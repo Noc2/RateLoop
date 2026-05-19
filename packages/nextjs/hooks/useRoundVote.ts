@@ -2,7 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { LoopReputationAbi, packVoteRoundContext } from "@rateloop/contracts";
-import { ContentRegistryAbi } from "@rateloop/contracts/abis";
+import { AdvisoryVoteRecorderAbi, ContentRegistryAbi } from "@rateloop/contracts/abis";
 import { buildCommitVoteParams } from "@rateloop/sdk/vote";
 import { useQueryClient } from "@tanstack/react-query";
 import { type Address, parseSignature } from "viem";
@@ -26,6 +26,10 @@ import {
 import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
 import { DEFAULT_VOTING_CONFIG, type VotingConfig } from "~~/lib/contracts/roundVotingEngine";
 import { getGasBalanceErrorMessage, isFreeTransactionExhaustedError } from "~~/lib/transactionErrors";
+import {
+  getAdvisoryVoteUnavailableMessage,
+  parseAdvisoryCommitAvailability,
+} from "~~/lib/vote/advisoryVoteAvailability";
 import { recordLocalVoteCooldown } from "~~/lib/vote/localCooldown";
 import { normalizeRoundVoteError } from "~~/lib/vote/roundVoteErrors";
 import { resolveRoundVoteRuntime } from "~~/lib/vote/roundVoteRuntime";
@@ -37,6 +41,10 @@ import {
 import scaffoldConfig from "~~/scaffold.config";
 import { getParsedErrorWithAllAbis } from "~~/utils/scaffold-eth/contract";
 import { isSignatureRejected } from "~~/utils/signatureErrors";
+
+type RoundVoteCommitRuntime = Awaited<ReturnType<typeof resolveRoundVoteRuntime>> & {
+  targetRound?: bigint | number;
+};
 
 interface RoundVoteParams {
   contentId: bigint;
@@ -187,8 +195,63 @@ export function useRoundVote() {
         }
       }
 
-      let runtime;
-      if (publicClient) {
+      let runtime: RoundVoteCommitRuntime | undefined;
+      const isRequestedAdvisoryVote = stakeAmount <= 0;
+      const advisoryVoteRecorderAddress = advisoryVoteRecorderInfo?.address as `0x${string}` | undefined;
+      if (isRequestedAdvisoryVote) {
+        if (isAdvisoryVoteRecorderLoading) {
+          setError("Preparing vote. Try again in a moment.");
+          return false;
+        }
+        if (!advisoryVoteRecorderAddress) {
+          setError("Zero-LREP advisory voting is unavailable right now.");
+          return false;
+        }
+        if (!publicClient) {
+          setError("Preparing vote. Try again in a moment.");
+          return false;
+        }
+
+        try {
+          const rawAvailability = await publicClient.readContract({
+            address: advisoryVoteRecorderAddress,
+            abi: AdvisoryVoteRecorderAbi,
+            functionName: "advisoryCommitAvailability",
+            args: [contentId],
+          });
+          const availability = parseAdvisoryCommitAvailability(rawAvailability);
+          if (!availability.canCommit) {
+            setError(getAdvisoryVoteUnavailableMessage(availability) ?? "Zero-LREP voting is unavailable right now.");
+            return false;
+          }
+          runtime = {
+            baseTotalStake: 0n,
+            baseVoteCount: 0n,
+            epochDuration: roundConfig?.epochDuration ?? DEFAULT_VOTING_CONFIG.epochDuration,
+            now: () => Number(availability.epochEnd) * 1000,
+            roundId: availability.roundId,
+            roundReferenceRatingBps: availability.roundReferenceRatingBps,
+            roundStartTimeSeconds: null,
+            targetRound: availability.minTargetRound,
+          };
+          if (process.env.NODE_ENV !== "production") {
+            console.debug("[round-vote] advisory availability", {
+              contentId: contentId.toString(),
+              epochEnd: availability.epochEnd.toString(),
+              maxTargetRound: availability.maxTargetRound.toString(),
+              minTargetRound: availability.minTargetRound.toString(),
+              roundId: availability.roundId.toString(),
+            });
+          }
+        } catch (availabilityError) {
+          console.warn("[round-vote] failed to check advisory vote availability before commit.", {
+            contentId: contentId.toString(),
+            error: availabilityError,
+          });
+          setError("Preparing vote. Try again in a moment.");
+          return false;
+        }
+      } else if (publicClient) {
         try {
           runtime = await resolveRoundVoteRuntime({
             publicClient,
@@ -233,7 +296,6 @@ export function useRoundVote() {
         return false;
       }
       const isZeroStakeVote = stakeWei === 0n;
-      const advisoryVoteRecorderAddress = advisoryVoteRecorderInfo?.address as `0x${string}` | undefined;
       if (isZeroStakeVote && isAdvisoryVoteRecorderLoading) {
         setError("Preparing vote. Try again in a moment.");
         return false;

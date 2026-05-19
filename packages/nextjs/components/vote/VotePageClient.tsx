@@ -22,8 +22,9 @@ import {
   isContentItemActive,
   isContentSearchQueryTooShort,
 } from "~~/hooks/contentFeed/shared";
-import { useDeployedContractInfo } from "~~/hooks/scaffold-eth";
+import { useDeployedContractInfo, useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
+import { useAdvisoryVoteAvailabilities } from "~~/hooks/useAdvisoryVoteAvailability";
 import { useCategoryPopularity } from "~~/hooks/useCategoryPopularity";
 import { useCategoryRegistry } from "~~/hooks/useCategoryRegistry";
 import type { ContentItem } from "~~/hooks/useContentFeed";
@@ -44,9 +45,11 @@ import { useVoteHistoryQuery } from "~~/hooks/useVoteHistoryQuery";
 import { useVoterAccuracyBatch } from "~~/hooks/useVoterAccuracyBatch";
 import { useWatchedContent } from "~~/hooks/useWatchedContent";
 import { mergeVoteHistoryItems } from "~~/hooks/voteHistory/shared";
+import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
 import { FOLLOWED_CURATOR_TOAST_ID } from "~~/lib/notifications/followedActivity";
 import { extractQuestionReferenceIds } from "~~/lib/questionReferences";
 import { replaceUrlPreservingHistoryState } from "~~/lib/ui/browserHistory";
+import { getAdvisoryVoteUnavailableMessage } from "~~/lib/vote/advisoryVoteAvailability";
 import { orderBundleMembersInFeed } from "~~/lib/vote/bundleFeedOrder";
 import { formatVoteCooldownRemaining, getVoteCooldownRemainingSeconds } from "~~/lib/vote/cooldown";
 import {
@@ -119,6 +122,7 @@ const FOR_YOU_CANDIDATE_PAGE_MULTIPLIER = 6;
 const FEED_PREFETCH_BUFFER = 6;
 const MOBILE_VOTE_DOCK_RESERVED_SPACE_PX = 152;
 const CONTENT_INTENT_PROMPT_MS = 1_400;
+const MIN_COUNTED_STAKE_MICRO = 1_000_000n;
 const INTERNAL_CONTENT_PIN_STORAGE_KEY = "curyo_internal_vote_content_pin";
 const INTERNAL_CONTENT_PIN_TTL_MS = 6 * 60 * 60 * 1000;
 
@@ -227,6 +231,11 @@ const HomeInner = () => {
 
   const { address } = useAccount();
   const { targetNetwork } = useTargetNetwork();
+  const { data: lrepBalance } = useScaffoldReadContract({
+    contractName: REPUTATION_CONTRACT_NAME,
+    functionName: "balanceOf",
+    args: [address],
+  });
   const { data: localCooldownVotingEngineInfo } = useDeployedContractInfo({
     contractName: "RoundVotingEngine" as any,
     chainId: targetNetwork.id as any,
@@ -313,6 +322,7 @@ const HomeInner = () => {
     followedItems,
   });
   const hasWallet = Boolean(address);
+  const isAdvisoryOnlyRater = hasWallet && lrepBalance !== undefined && lrepBalance < MIN_COUNTED_STAKE_MICRO;
   const viewGroups = useMemo(() => getVoteViewGroups(hasWallet), [hasWallet]);
   const activeScope: ScopeOption = isActivityViewOption(view) ? view : "all";
   const activeFeedMode: DiscoverFeedMode = isActivityViewOption(view) ? "for_you" : view;
@@ -705,7 +715,7 @@ const HomeInner = () => {
   });
   const { commitVote, isCommitting, error: voteError, clearError: clearVoteError } = useRoundVote();
   // Apply search, category filter, and the selected view before sorting
-  const filteredFeed = useMemo(() => {
+  const baseFilteredFeed = useMemo(() => {
     let items = filterDiscoverCategoryItems(feed, activeCategory, activeCategoryId, nowSeconds);
 
     switch (activeScope) {
@@ -740,11 +750,10 @@ const HomeInner = () => {
     settlingSoonContentIds,
     followedCuratorContentIds,
   ]);
-
-  const rankedDisplayFeed = useMemo(() => {
+  const rankedBaseDisplayFeed = useMemo(() => {
     const withRequestedItem = (items: ContentItem[]) =>
       effectiveRequestedActiveId !== null ? mergeRequestedContentIntoFeed(items, requestedContentItem) : items;
-    const items = [...filteredFeed];
+    const items = [...baseFilteredFeed];
 
     if (isSearchMode) {
       switch (effectiveSearchSortBy) {
@@ -823,8 +832,8 @@ const HomeInner = () => {
   }, [
     activeFeedMode,
     activeScope,
+    baseFilteredFeed,
     effectiveSearchSortBy,
-    filteredFeed,
     followedCuratorOrderMap,
     followedWallets,
     interestProfile,
@@ -840,6 +849,20 @@ const HomeInner = () => {
     requestedContentItem,
     feedExposureScope,
   ]);
+  const advisoryAvailabilityContentIds = useMemo(
+    () => (isAdvisoryOnlyRater ? rankedBaseDisplayFeed.map(item => item.id) : []),
+    [isAdvisoryOnlyRater, rankedBaseDisplayFeed],
+  );
+  const { availabilityByContentId: advisoryAvailabilityByContentId } = useAdvisoryVoteAvailabilities(
+    advisoryAvailabilityContentIds,
+    isAdvisoryOnlyRater,
+  );
+  const rankedDisplayFeed = useMemo(() => {
+    if (!isAdvisoryOnlyRater) return rankedBaseDisplayFeed;
+    return rankedBaseDisplayFeed.filter(
+      item => advisoryAvailabilityByContentId.get(item.id.toString())?.canCommit === true,
+    );
+  }, [advisoryAvailabilityByContentId, isAdvisoryOnlyRater, rankedBaseDisplayFeed]);
   const feedSessionKey = useMemo(
     () =>
       [
@@ -1157,6 +1180,17 @@ const HomeInner = () => {
         return;
       }
 
+      if (isAdvisoryOnlyRater) {
+        const availability = advisoryAvailabilityByContentId.get(item.id.toString());
+        if (!availability?.canCommit) {
+          notification.info(
+            getAdvisoryVoteUnavailableMessage(availability) ?? "Zero-LREP voting is unavailable for this round.",
+            { duration: 6000 },
+          );
+          return;
+        }
+      }
+
       clearVoteError();
       markPrimaryInteraction(item.id);
       recordRecommendationSignal(item, "vote_intent", { selected: true, isUp });
@@ -1174,6 +1208,8 @@ const HomeInner = () => {
       address,
       clearVoteError,
       getContentCooldownSeconds,
+      advisoryAvailabilityByContentId,
+      isAdvisoryOnlyRater,
       isVoteCooldownCheckPendingForContent,
       markPrimaryInteraction,
       openConnectModal,
@@ -1307,6 +1343,18 @@ const HomeInner = () => {
         return;
       }
 
+      if (isAdvisoryOnlyRater) {
+        const availability = advisoryAvailabilityByContentId.get(stakeModal.contentId.toString());
+        if (!availability?.canCommit) {
+          notification.info(
+            getAdvisoryVoteUnavailableMessage(availability) ?? "Zero-LREP voting is unavailable for this round.",
+            { duration: 6000 },
+          );
+          setStakeModal(prev => ({ ...prev, isOpen: false }));
+          return;
+        }
+      }
+
       const success = await commitVote({
         contentId: stakeModal.contentId,
         isUp,
@@ -1348,6 +1396,8 @@ const HomeInner = () => {
       clearVoteError,
       commitVote,
       displayFeed,
+      advisoryAvailabilityByContentId,
+      isAdvisoryOnlyRater,
       isVoteCooldownCheckPendingForContent,
       isFirstVote,
       markVoteCompleted,

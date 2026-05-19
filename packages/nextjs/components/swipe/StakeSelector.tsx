@@ -134,18 +134,6 @@ export function StakeSelector({
     functionName: "symbol",
   });
 
-  useEffect(() => {
-    if (!isOpen) return;
-    setIsUp(initialIsUp ?? true);
-    setPredictedUpPercent(getInitialPredictedUpPercent(initialIsUp));
-    setHasAdjustedPrediction(false);
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !isConfirming) onCancel();
-    };
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [initialIsUp, isConfirming, isOpen, onCancel]);
-
   const symbol = tokenSymbol ?? "LREP";
   const { calculateBonus, hasActiveParticipationRewards } = useParticipationRate();
   const voteBonus = calculateBonus(amount);
@@ -171,6 +159,20 @@ export function StakeSelector({
   const maxByCapacity = Math.floor(capacityFormatted);
   const maxStake = Math.min(maxByBalance, maxByCapacity);
   const sliderMax = Math.max(1, maxStake);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setAmount(maxStake >= MIN_COUNTED_STAKE_AMOUNT ? MIN_COUNTED_STAKE_AMOUNT : 0);
+    setIsUp(initialIsUp ?? true);
+    setPredictedUpPercent(getInitialPredictedUpPercent(initialIsUp));
+    setHasAdjustedPrediction(false);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !isConfirming) onCancel();
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [initialIsUp, isConfirming, isOpen, maxStake, onCancel]);
+
   const isCapacityLimited = amount > 0 && maxByCapacity < maxByBalance;
   const cooldownActive = cooldownSecondsRemaining > 0;
   const formDisabled = isConfirming || !roundAcceptsVotes;
