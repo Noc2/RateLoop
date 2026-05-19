@@ -2,9 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   MAX_PROFILE_SELF_REPORT_LENGTH,
+  RATER_TYPE,
   aggregateProfileSelfReports,
   emptyProfileSelfReportAudienceContext,
+  formatRaterTypeName,
   normalizeProfileSelfReport,
+  normalizeRaterType,
   parseProfileSelfReport,
   profileSelfReportHasValues,
   serializeProfileSelfReport,
@@ -22,7 +25,7 @@ test("normalizeProfileSelfReport trims, dedupes, drops invalid values, and enfor
   });
 
   assert.deepEqual(normalized, {
-    v: 1,
+    v: 2,
     ageGroup: "25-34",
     residenceCountry: "DE",
     nationalities: ["US", "DE", "FR"],
@@ -30,6 +33,67 @@ test("normalizeProfileSelfReport trims, dedupes, drops invalid values, and enfor
     roles: ["engineer", "founder", "operator", "creator"],
     expertise: ["ai", "crypto", "finance", "health", "gaming"],
   });
+});
+
+test("normalizeProfileSelfReport keeps rater type and type-specific context", () => {
+  assert.deepEqual(
+    normalizeProfileSelfReport({
+      raterType: "ai",
+      ai: {
+        modelProvider: "openai",
+        modelFamily: " GPT-5 ",
+        modelVersion: " preview ",
+        agentFramework: "openai-agents",
+        autonomy: "tool-using",
+        languages: ["en", "de", "bad"],
+        expertise: ["ai", "science", "unknown"],
+      },
+      team: {
+        teamType: "company",
+        teamSize: "11-50",
+        country: "de",
+        website: "https://example.com",
+      },
+      hybrid: {
+        oversight: "human-in-the-loop",
+        modelProvider: "anthropic",
+        modelFamily: "Claude",
+      },
+    }),
+    {
+      v: 2,
+      raterType: RATER_TYPE.AI,
+      ai: {
+        modelProvider: "openai",
+        modelFamily: "GPT-5",
+        modelVersion: "preview",
+        agentFramework: "openai-agents",
+        autonomy: "tool-using",
+        languages: ["en", "de"],
+        expertise: ["ai", "science"],
+      },
+      team: {
+        teamType: "company",
+        teamSize: "11-50",
+        country: "DE",
+        website: "https://example.com",
+      },
+      hybrid: {
+        oversight: "human-in-the-loop",
+        modelProvider: "anthropic",
+        modelFamily: "Claude",
+      },
+    },
+  );
+});
+
+test("rater type helpers normalize names, numbers, and invalid values", () => {
+  assert.equal(normalizeRaterType("Human"), RATER_TYPE.Human);
+  assert.equal(normalizeRaterType("2"), RATER_TYPE.AI);
+  assert.equal(normalizeRaterType(3), RATER_TYPE.Team);
+  assert.equal(normalizeRaterType("bogus"), RATER_TYPE.Unknown);
+  assert.equal(formatRaterTypeName(RATER_TYPE.Hybrid), "Hybrid");
+  assert.equal(formatRaterTypeName(42), "Unknown");
 });
 
 test("parseProfileSelfReport returns null for empty, malformed, or value-less payloads", () => {
@@ -46,10 +110,10 @@ test("serializeProfileSelfReport prunes input and respects the shared maximum le
     arbitraryHugeField: "x".repeat(MAX_PROFILE_SELF_REPORT_LENGTH * 2),
   });
 
-  assert.equal(serialized, JSON.stringify({ v: 1, ageGroup: "35-44", residenceCountry: "US" }));
+  assert.equal(serialized, JSON.stringify({ v: 2, ageGroup: "35-44", residenceCountry: "US" }));
   assert.equal(serialized.length < MAX_PROFILE_SELF_REPORT_LENGTH, true);
   assert.deepEqual(parseProfileSelfReport(serialized), {
-    v: 1,
+    v: 2,
     ageGroup: "35-44",
     residenceCountry: "US",
   });
