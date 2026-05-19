@@ -73,19 +73,19 @@ describe("metrics", () => {
       }),
       75,
     );
-    setGauge("keeper_consensus_reserve_wei", 4_000_000_000_000);
+    setGauge("keeper_wallet_balance_wei", 4_000_000_000_000);
 
     const metricsBody = getMetricsText();
     expect(metricsBody).toContain("keeper_rounds_reveal_failed_finalized_total 2");
     expect(metricsBody).toContain("keeper_unrevealed_cleanup_batches_total 3");
-    expect(metricsBody).toContain("keeper_consensus_reserve_wei 4000000000000");
+    expect(metricsBody).toContain("keeper_wallet_balance_wei 4000000000000");
 
     const health = getHealthSnapshot();
     expect([200, 503]).toContain(health.status);
     expect(JSON.parse(health.body)).toMatchObject({
       roundsRevealFailedFinalized: 2,
       cleanupBatchesProcessed: 3,
-      consensusReserveWei: "4000000000000",
+      walletBalanceWei: "4000000000000",
     });
   });
 });

@@ -73,7 +73,7 @@ docker run --env-file packages/keeper/.env.local -e METRICS_BIND_ADDRESS=0.0.0.0
 - **Prometheus metrics:** `http://localhost:9090/metrics`
 - **Health check:** `http://localhost:9090/health`
 
-Key metrics: `keeper_is_running` (gauge), `keeper_rounds_settled_total` (counter), `keeper_rounds_cancelled_total` (counter), `keeper_rounds_reveal_failed_finalized_total` (counter), `keeper_unrevealed_cleanup_batches_total` (counter), `keeper_consensus_reserve_wei` (gauge).
+Key metrics: `keeper_is_running` (gauge), `keeper_wallet_balance_wei` (gauge), `keeper_rounds_settled_total` (counter), `keeper_rounds_cancelled_total` (counter), `keeper_rounds_reveal_failed_finalized_total` (counter), and `keeper_unrevealed_cleanup_batches_total` (counter).
 
 When `KEEPER_FRONTEND_FEE_ENABLED=true`, the same worker prioritizes recent settled rounds for the configured frontend/operator, then backfills older settled rounds so historical `RoundRewardDistributor.claimFrontendFee(...)` claims do not age out of automation. It can also withdraw accumulated `FrontendRegistry.claimFees()` credits.
 

@@ -20,7 +20,6 @@ import {
 import { resolveRounds, validateKeeperContracts } from "./keeper.js";
 import { claimConfiguredFrontendFees } from "./frontend-fees.js";
 import { publishConfiguredCorrelationSnapshots } from "./correlation-snapshots.js";
-import { RoundVotingEngineAbi } from "@rateloop/contracts/abis";
 import {
   startMetricsServer,
   setHealthThreshold,
@@ -86,14 +85,10 @@ async function main() {
   const MIN_BALANCE = BigInt(config.minGasBalanceWei);
 
   async function updateOperationalGauges() {
-    const [balanceResult, consensusReserveResult] = await Promise.allSettled([
-      publicClient.getBalance({ address: account.address }),
-      publicClient.readContract({
-        address: config.contracts.votingEngine,
-        abi: RoundVotingEngineAbi,
-        functionName: "consensusReserve",
-      }),
-    ]);
+    const balanceResult = await publicClient.getBalance({ address: account.address }).then(
+      value => ({ status: "fulfilled" as const, value }),
+      reason => ({ status: "rejected" as const, reason }),
+    );
 
     if (balanceResult.status === "fulfilled") {
       const balance = balanceResult.value;
@@ -107,19 +102,6 @@ async function main() {
     } else {
       logger.warn("Failed to check wallet balance", {
         error: balanceResult.reason?.message || String(balanceResult.reason),
-      });
-    }
-
-    if (consensusReserveResult.status === "fulfilled") {
-      setGauge(
-        "keeper_consensus_reserve_wei",
-        Number(consensusReserveResult.value),
-      );
-    } else {
-      logger.warn("Failed to read consensus reserve", {
-        error:
-          consensusReserveResult.reason?.message ||
-          String(consensusReserveResult.reason),
       });
     }
   }
