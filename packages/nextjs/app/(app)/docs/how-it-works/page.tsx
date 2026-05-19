@@ -41,9 +41,9 @@ const HowItWorks: NextPage = () => {
       <p>
         Raters submit a <Link href="/docs/tech-stack#bayesian-truth-serum">private rating report</Link>: a
         thumbs-up/down signal and a 0-100% forecast of how many revealed raters will vote up. They can stake 0&ndash;10
-        LREP per report; zero-LREP votes can participate and qualify for launch reputation in verified-human anchored
-        rounds, while staked votes add normal settlement upside and risk. Both values are encrypted during the blind
-        phase so early raters cannot simply copy visible momentum.
+        LREP per report; zero-LREP advisory votes can participate only in rounds that already have a staked vote and do
+        not count toward settlement quorum, while staked votes add normal settlement upside and risk. Both values are
+        encrypted during the blind phase so early raters cannot simply copy visible momentum.
       </p>
       <ol>
         <li>
@@ -101,16 +101,19 @@ const HowItWorks: NextPage = () => {
 
       <h3 id="eligible-settled-rounds">Launch LREP credits</h3>
       <ul>
-        <li>Zero-LREP ratings can count toward starter LREP; staking is not required for launch credit.</li>
         <li>
-          The round must settle, include your revealed rating, have enough revealed raters, and pass the current
-          launch-reward checks.
+          Zero-LREP advisory ratings are available only in rounds that already have a staked vote and do not count
+          toward settlement quorum.
+        </li>
+        <li>
+          The round must settle, include your revealed rating, have enough counted staked raters, and pass the current
+          launch-reward checks before it can count as a launch credit.
         </li>
         <li>Earned launch payouts begin after two distinct verified-human anchors across qualifying rounds.</li>
         <li>Correlation snapshots can make dense clusters accrue fractional credit, so more rounds may be needed.</li>
       </ul>
       <p>
-        Example: you make useful zero-LREP ratings in two settled rounds, and each round has a different mature
+        Example: you make useful advisory ratings in two eligible settled rounds, and each round has a different mature
         verified-human anchor. Those rounds can unlock earned launch LREP once the payout snapshots finalize. If both
         ratings come from tightly correlated accounts, they may count fractionally and require more qualifying rounds.
       </p>

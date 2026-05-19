@@ -175,9 +175,9 @@ const SmartContracts: NextPage = () => {
         </li>
         <li>
           <strong>Rating stake:</strong> The production UI can approve optional LREP stake and submits a private up/down
-          signal plus expected up-vote percentage through <code>commitVote()</code>. Zero-LREP votes can participate
-          through the advisory recorder and qualify for launch reputation; only staked votes carry normal settlement
-          economics.
+          signal plus expected up-vote percentage through <code>commitVote()</code>. Zero-LREP advisory votes can
+          participate only after a round already has a staked vote; they do not count toward settlement quorum, but
+          eligible settled advisory rounds can qualify for launch credits.
         </li>
       </ul>
       <h3>Key Functions</h3>
@@ -368,7 +368,10 @@ const SmartContracts: NextPage = () => {
             <tr>
               <td className="font-mono">MIN_STAKE</td>
               <td>1 LREP</td>
-              <td>Minimum counted vote stake; zero-LREP ratings route through the advisory recorder instead</td>
+              <td>
+                Minimum counted vote stake; zero-LREP advisory ratings route separately and do not count toward
+                settlement quorum
+              </td>
             </tr>
             <tr>
               <td className="font-mono">MAX_STAKE</td>

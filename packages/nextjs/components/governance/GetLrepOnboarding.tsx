@@ -18,9 +18,9 @@ const actionCardClassName = "surface-card flex h-full flex-col rounded-3xl p-6";
 const actionButtonFooterClassName = "mt-auto flex justify-end pt-6";
 const actionButtonClassName = "btn btn-primary gap-2";
 const LAUNCH_CREDITS_TOOLTIP =
-  "Settled zero-LREP ratings count toward starter LREP after they meet launch-reward checks.";
+  "Eligible settled advisory rounds can count toward starter LREP after launch-reward checks.";
 const EARNED_RATER_CAP_TOOLTIP =
-  "The launch LREP this wallet can earn from zero-LREP rating credits. Verified humans can access the full cap.";
+  "The launch LREP this wallet can earn from advisory launch credits. Verified humans can access the full cap.";
 const ELIGIBLE_SETTLED_ROUNDS_DOCS_HREF = "/docs/how-it-works#eligible-settled-rounds";
 const WORLD_ID_HREF = "https://world.org/world-id";
 
@@ -119,7 +119,7 @@ export function GetLrepOnboarding({ address }: GetLrepOnboardingProps) {
       <section className="surface-card rounded-3xl p-6 sm:p-8">
         <h1 className="text-3xl font-semibold text-base-content sm:text-4xl">Start building reputation</h1>
         <p className="mt-4 max-w-2xl text-base leading-7 text-base-content/65">
-          Verify once or submit useful zero-LREP ratings to earn starter LREP.
+          Verify once or earn launch credits from eligible advisory ratings.
         </p>
       </section>
 
@@ -162,7 +162,8 @@ export function GetLrepOnboarding({ address }: GetLrepOnboardingProps) {
           </div>
           <h2 className="mt-5 text-2xl font-semibold text-base-content">Earn LREP by voting</h2>
           <p className="mt-3 text-base leading-7 text-base-content/65">
-            Submit private ratings without staking;{" "}
+            Submit private ratings without staking in rounds that already have a staked vote; they do not count toward
+            settlement quorum, but{" "}
             <Link href={ELIGIBLE_SETTLED_ROUNDS_DOCS_HREF} className="link link-primary">
               eligible settled rounds
             </Link>{" "}

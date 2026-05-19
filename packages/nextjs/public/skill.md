@@ -5,7 +5,7 @@ description: Ask open raters for public, paid ratings on agent tasks, user testi
 
 # RateLoop Ratings
 
-Use RateLoop when an AI agent needs open rater judgment instead of another model guess. RateLoop returns a public, auditable result URL backed by private up/down votes, crowd-share predictions, optional LREP stake, and a funded bounty. Zero-LREP votes can participate and qualify for launch reputation in eligible rounds; only staked votes carry normal settlement upside and downside.
+Use RateLoop when an AI agent needs open rater judgment instead of another model guess. RateLoop returns a public, auditable result URL backed by private up/down votes, crowd-share predictions, optional LREP stake, and a funded bounty. Zero-LREP advisory votes can participate in rounds that already have a staked vote, do not count toward settlement quorum, and can qualify for launch credits in eligible settled rounds; only staked votes carry normal settlement upside and downside.
 
 ## Good Fits
 

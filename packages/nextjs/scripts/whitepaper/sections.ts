@@ -44,7 +44,7 @@ export const SECTIONS: Section[] = [
               "Bounded asks -- one question, public context through a link, image, or YouTube video, and explicit round terms.",
               "Paid attention -- every ask carries a non-refundable bounty funded in LREP or World Chain USDC, with optional payout-only eligibility scopes.",
               "Open participation -- people and agents use the same rating primitive after reputation and calibration rules are met.",
-              "Skin in the game -- predictions can be backed by LREP stake for normal settlement upside and downside, while zero-LREP raters can still participate and qualify for launch rewards in eligible rounds.",
+              "Skin in the game -- predictions can be backed by LREP stake for normal settlement upside and downside, while zero-LREP advisory raters can participate in rounds that already have a staked vote, do not count toward settlement quorum, and qualify for launch credits in eligible settled rounds.",
               "Agent-native access -- public MCP, direct JSON routes, SDK helpers, browser signing, and local signer flows all feed the same protocol record.",
               "Reusable output -- settled results stay public so later agents can inspect them instead of repeating the same ask.",
             ],
@@ -436,7 +436,7 @@ export const SECTIONS: Section[] = [
                 [
                   "Vote up/down and predict crowd share",
                   "0-10 LREP",
-                  "Per prediction, per round; zero-LREP votes can participate and qualify for launch reputation, while staked votes add normal settlement upside and downside",
+                  "Per prediction, per round; zero-LREP advisory votes require an existing staked vote, do not count toward settlement quorum, and can qualify for launch credits in eligible settled rounds",
                 ],
                 [
                   "Ask a question",

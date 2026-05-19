@@ -35,11 +35,13 @@ Initial governance defaults:
 | `earnedRaterCapSchedule`             | `10 / 5 / 2.5 / 1.25 / 0.5 LREP` |
 | `requireNoPendingCleanup`            |                           `true` |
 
-A prediction creates a qualifying launch credit only when:
+Advisory ratings are available only in rounds that already have a staked vote
+and do not count toward settlement quorum. An eligible staked prediction or
+settled advisory rating creates a qualifying launch credit only when:
 
 1. The round is settled.
 2. The round has no pending unrevealed-vote cleanup when configured.
-3. At least `minVotersForEarnedRewards` raters revealed.
+3. At least `minVotersForEarnedRewards` counted staked raters revealed.
 4. At least `minVerifiedHumansPerRound` active, non-legacy verified humans
    revealed in the round.
 5. At least one verified anchor is not the claimant and not the content

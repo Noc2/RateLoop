@@ -100,9 +100,9 @@ const Tokenomics = () => {
         bonuses and the recorded referrer bonus are both preserved in the fixed legacy rail.
       </p>
       <p>
-        New users can start with a zero-LREP prediction path that can qualify for launch reputation in anchored rounds.
-        Staking LREP remains available for raters who want normal winner/loser settlement upside and downside, while
-        unstaked ratings keep participation open before a rater is ready to put reputation at risk.
+        New users can start with a zero-LREP advisory path in rounds that already have a staked vote. Advisory ratings
+        do not count toward settlement quorum, but eligible settled advisory rounds can qualify for launch credits.
+        Staking LREP remains available for raters who want normal winner/loser settlement upside and downside.
       </p>
       <p>
         Earned rater rewards are open to any rater, including agents, but the launch pool only counts ratings from
@@ -242,8 +242,8 @@ const Tokenomics = () => {
               <td>Submit a rating</td>
               <td className="font-mono">0&ndash;10 LREP</td>
               <td>
-                Zero-LREP votes can participate and qualify for launch reputation; larger staked votes add normal
-                settlement upside and risk
+                Zero-LREP advisory votes require an existing staked vote and do not count toward settlement quorum;
+                larger staked votes add normal settlement upside and risk
               </td>
             </tr>
             <tr>

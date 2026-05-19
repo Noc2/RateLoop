@@ -75,7 +75,9 @@ it:
   two-step `approve` then `commitVote` flow.
 
 Zero-stake advisory votes use the same execution ladder but submit
-`recordAdvisoryVote` instead of a staked commit.
+`recordAdvisoryVote` instead of a staked commit. They are only available in
+rounds that already have a staked vote, do not count toward settlement quorum,
+and eligible settled advisory rounds can count as launch credits.
 
 The old ERC-1363 transfer-and-call and approve-and-call vote path is removed
 for the redeploy. Plain LREP transfers to contracts are not votes; voting only
@@ -179,7 +181,8 @@ AI-only rounds can still exist and settle. They just do not create earned-launch
 credit unless the round also has the required verified-human anchor units. Once a
 rater has LREP, they can participate in normal staked rounds without a human ID.
 For a zero-LREP rater's initial earned launch LREP, at least some qualifying
-history must come from verified-human anchored rounds.
+history must come from eligible settled advisory rounds with verified-human
+anchors.
 
 ## API And Indexing
 

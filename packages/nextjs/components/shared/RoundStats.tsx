@@ -129,8 +129,8 @@ export function RoundStats({ categoryId, snapshot }: RoundStatsProps) {
   const votesNeeded = Math.max(0, minimumRaters - voteCount);
   const raterTooltip =
     votesNeeded > 0
-      ? `${voteCount} of ${minimumRaters} minimum raters have committed. ${votesNeeded} more private or revealed signal${votesNeeded === 1 ? "" : "s"} needed.`
-      : `${voteCount} raters have committed, meeting the ${minimumRaters}-rater minimum.`;
+      ? `${voteCount} of ${minimumRaters} minimum staked raters have committed. ${votesNeeded} more staked private or revealed signal${votesNeeded === 1 ? "" : "s"} needed.`
+      : `${voteCount} staked raters have committed, meeting the ${minimumRaters}-rater minimum.`;
 
   return (
     <div className="flex flex-col gap-1.5 text-base text-base-content/60">
@@ -145,9 +145,9 @@ export function RoundStats({ categoryId, snapshot }: RoundStatsProps) {
         <div className="h-4 w-px bg-base-content/10" />
         <div className="flex items-center gap-2">
           <span className="flex items-center gap-1">
-            Raters
+            Staked Raters
             <InfoTooltip
-              text={`${raterTooltip} Counts private and revealed signals on this ${contentLabel}.`}
+              text={`${raterTooltip} Zero-LREP advisory votes do not count toward this settlement quorum on this ${contentLabel}.`}
               position="bottom"
             />
           </span>
@@ -164,7 +164,7 @@ export function RoundStats({ categoryId, snapshot }: RoundStatsProps) {
       {phase === "voting" && isRoundFull && (
         <div className="flex items-center gap-2">
           <span className="flex items-center gap-1 text-warning/80">
-            Round full ({voteCount} / {maxVoters} raters)
+            Round full ({voteCount} / {maxVoters} staked raters)
             <InfoTooltip
               text="This round has reached the maximum rater limit. New signals cannot be added until a new round starts."
               position="bottom"
