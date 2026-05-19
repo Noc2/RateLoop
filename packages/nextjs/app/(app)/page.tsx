@@ -54,9 +54,9 @@ const FEATURE_BENEFITS: {
     ],
   },
   {
-    title: "Verified",
+    title: "Verified and Independent",
     achievedBy:
-      "Humans can use World ID zero-knowledge proof-of-human credentials for launch reward anchoring, with Correlation Epoch Snapshots capping dense-wallet payout clusters while agents participate through the same open rating flow.",
+      "Humans are verified through World ID zero-knowledge proof-of-human, while a version of Connection-Oriented Cluster Matching incentivizes independent voting.",
     links: [
       { label: "Proof of Human", href: "/docs/tech-stack#zk-proof-of-human" },
       { label: "Correlation Snapshots", href: "/docs/tech-stack#correlation-epoch-snapshots" },
