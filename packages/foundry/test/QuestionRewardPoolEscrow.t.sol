@@ -912,6 +912,29 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertGt(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, voter1), 0);
     }
 
+    function testUsdcSubmissionBundleRejectsActiveClusterOracle() public {
+        ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
+        assertEq(address(protocolConfig.clusterPayoutOracle()), address(oracle));
+        assertEq(address(votingEngine.protocolConfig().clusterPayoutOracle()), address(oracle));
+        uint256[] memory contentIds = _submitBundleQuestions();
+
+        vm.prank(funder);
+        usdc.approve(address(rewardPoolEscrow), REWARD_POOL_AMOUNT);
+        vm.expectRevert("Cluster bundle unsupported");
+        vm.prank(address(registry));
+        rewardPoolEscrow.createSubmissionBundleFromRegistry(
+            1,
+            contentIds,
+            funder,
+            REWARD_ASSET_USDC,
+            REWARD_POOL_AMOUNT,
+            3,
+            1,
+            block.timestamp + 30 days,
+            block.timestamp + 30 days
+        );
+    }
+
     function testSetVotingEngineRejectsZeroAddress() public {
         vm.prank(owner);
         (bool ok,) = address(rewardPoolEscrow).call(abi.encodeWithSignature("setVotingEngine(address)", address(0)));

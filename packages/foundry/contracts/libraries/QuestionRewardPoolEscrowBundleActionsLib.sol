@@ -97,6 +97,10 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         require(params.contentIds.length > 0, "No questions");
         require(params.funder != address(0), "Invalid funder");
         require(params.asset == REWARD_ASSET_LREP || params.asset == REWARD_ASSET_USDC, "Invalid asset");
+        require(
+            params.asset != REWARD_ASSET_USDC || protocolConfig.clusterPayoutOracle() == address(0),
+            "Cluster bundle unsupported"
+        );
         require(params.requiredCompleters >= MIN_REQUIRED_VOTERS, "Too few voters");
         require(params.requiredCompleters >= _requiredParticipantFloorForAmount(params.amount), "High-value floor");
         require(params.requiredSettledRounds >= 1, "Too few rounds");
