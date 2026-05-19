@@ -744,6 +744,25 @@ contract LaunchDistributionPoolTest is Test {
         assertEq(lrep.balanceOf(alice), 1e6);
     }
 
+    function test_UnlockFullEarnedRaterCapPartialPoolDoesNotConsumeFullCatchUpSlot() public {
+        ILaunchDistributionPool.LaunchRewardPolicy memory policy = _defaultPolicy();
+        policy.unverifiedEarnedRaterCapBps = 2_500;
+        pool.setLaunchRewardPolicy(policy);
+
+        _recordFiveEligibleCredits(alice);
+        assertEq(pool.rewardedRatingCount(alice), 1);
+        assertEq(pool.raterLaunchPaid(alice), 250_000);
+
+        _verify(alice, bytes32("alice-human"));
+        _setEarnedRaterDistributed(pool.EARNED_RATER_POOL_AMOUNT() - 125_000);
+        uint256 catchUp = pool.unlockFullEarnedRaterCap(alice);
+
+        assertEq(catchUp, 125_000);
+        assertEq(pool.raterLaunchPaid(alice), 375_000);
+        assertEq(pool.rewardedRatingCount(alice), 1);
+        assertEq(lrep.balanceOf(alice), 375_000);
+    }
+
     function test_UnlockFullEarnedRaterCapPaysCompletedUnverifiedSlots() public {
         ILaunchDistributionPool.LaunchRewardPolicy memory policy = _defaultPolicy();
         policy.unverifiedEarnedRaterCapBps = 2_500;

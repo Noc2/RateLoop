@@ -822,10 +822,26 @@ contract LaunchDistributionPool is
 
         catchUpPaid = targetPaid - raterLaunchPaid[rater];
         uint256 remaining = _remainingEarnedRaterPool();
-        if (catchUpPaid > remaining) catchUpPaid = remaining;
+        bool poolDepleted = catchUpPaid > remaining;
+        if (poolDepleted) catchUpPaid = remaining;
         if (catchUpPaid == 0) return 0;
 
-        rewardedRatingCount[rater] = targetRewardedCount;
+        if (poolDepleted) {
+            uint256 newTotalPaid = raterLaunchPaid[rater] + catchUpPaid;
+            uint32 proportionalCount;
+            if (newTotalPaid >= fullCap) {
+                proportionalCount = policy.rewardingRatingCount;
+            } else if (fullCap > 0) {
+                proportionalCount = uint32((newTotalPaid * uint256(policy.rewardingRatingCount)) / fullCap);
+            } else {
+                proportionalCount = currentRewardedCount;
+            }
+            if (proportionalCount < currentRewardedCount) proportionalCount = currentRewardedCount;
+            if (proportionalCount > targetRewardedCount) proportionalCount = targetRewardedCount;
+            rewardedRatingCount[rater] = proportionalCount;
+        } else {
+            rewardedRatingCount[rater] = targetRewardedCount;
+        }
         raterLaunchPaid[rater] += catchUpPaid;
         earnedRaterDistributed += catchUpPaid;
         _pay(rater, catchUpPaid);
