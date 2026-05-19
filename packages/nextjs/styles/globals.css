@@ -1126,6 +1126,21 @@ body {
   color: var(--color-primary);
 }
 
+.reward-chip-brand-blue {
+  background: var(--rateloop-blue);
+  color: #050505;
+}
+
+.reward-chip-brand-green {
+  background: var(--rateloop-green);
+  color: #050505;
+}
+
+.reward-chip-brand-yellow {
+  background: var(--rateloop-yellow);
+  color: #050505;
+}
+
 .reward-chip-muted {
   background: var(--curyo-control-idle-muted);
   color: rgb(245 245 245 / 0.72);

@@ -73,12 +73,12 @@ function formatDeadlineDistance(deadline: bigint) {
 }
 
 function getDeadlineChipClassName(tone: "active" | "ended") {
-  return tone === "active" ? "reward-chip-primary" : "reward-chip-muted";
+  return tone === "active" ? "reward-chip-brand-yellow" : "reward-chip-muted";
 }
 
 function getDeadlineTooltipClassName(tone: "active" | "ended") {
   return tone === "active"
-    ? "[&>svg]:text-primary/90 [&>svg]:hover:text-primary"
+    ? "[&>svg]:text-[#050505]/70 [&>svg]:hover:text-[#050505]"
     : "[&>svg]:text-base-content/50 [&>svg]:hover:text-base-content/75";
 }
 

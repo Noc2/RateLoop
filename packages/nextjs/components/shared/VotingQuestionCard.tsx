@@ -70,6 +70,7 @@ const DOCK_CONTROL_SIZE_PX = 44;
 const DOCK_CONTROL_SIZE = `${DOCK_CONTROL_SIZE_PX / 16}rem`;
 const COMPACT_DOCK_ORB_SIZE_PX = 88;
 const DOCK_CONTROL_CIRCLE_CLASS_NAME = "h-11 w-11 box-border";
+const REWARD_CHIP_INFO_ICON_CLASS_NAME = "[&>svg]:text-[#050505]/70 [&>svg]:hover:text-[#050505]";
 
 type ActivityTone = "primary" | "warning" | "success" | "neutral";
 
@@ -245,24 +246,26 @@ function RewardAmountDisplay({
   label,
   tooltip,
   ariaLabel,
+  tone,
 }: {
   amount: bigint;
   amountLabel?: string;
   label: string;
   tooltip: string;
   ariaLabel: string;
+  tone: "blue" | "green";
 }) {
   const displayAmountLabel = amountLabel ?? formatUsdAmount(amount);
 
   return (
     <div
-      className="reward-chip reward-chip-primary inline-flex max-w-full items-center gap-1.5 px-3 py-1.5 text-sm font-semibold leading-none"
+      className={`reward-chip reward-chip-brand-${tone} inline-flex max-w-full items-center gap-1.5 px-3 py-1.5 text-sm font-semibold leading-none`}
       aria-label={`${displayAmountLabel} ${ariaLabel}`}
     >
       <span>
         <span className="tabular-nums">{displayAmountLabel}</span> {label}
       </span>
-      <InfoTooltip text={tooltip} position="bottom" className="[&>svg]:text-primary/90 [&>svg]:hover:text-primary" />
+      <InfoTooltip text={tooltip} position="bottom" className={REWARD_CHIP_INFO_ICON_CLASS_NAME} />
     </div>
   );
 }
@@ -296,6 +299,7 @@ export function RewardPoolAmountDisplay({ amount, currency }: { amount: bigint; 
       label="bounty"
       tooltip={display.tooltip}
       ariaLabel="bounty"
+      tone="blue"
     />
   );
 }
@@ -307,6 +311,7 @@ export function FeedbackBonusAmountDisplay({ amount }: { amount: bigint }) {
       label="Feedback Bonus"
       tooltip={FEEDBACK_BONUS_TOOLTIP_TEXT}
       ariaLabel="Feedback Bonus"
+      tone="green"
     />
   );
 }
