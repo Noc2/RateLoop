@@ -33,6 +33,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
     uint256 internal constant BPS_SCALE = 10_000;
     uint256 internal constant BUNDLE_CLAIM_GRACE = 7 days;
     uint256 internal constant BUNDLE_REFUND_GRACE = 98 days;
+    uint256 internal constant BUNDLE_REFUND_SYNC_ROUND_LIMIT = 64;
     uint8 internal constant REWARD_ASSET_LREP = 0;
     uint8 internal constant REWARD_ASSET_USDC = 1;
 
@@ -82,7 +83,9 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         mapping(uint256 => BundleQuestion[]) storage bundleQuestions,
         mapping(uint256 => uint256) storage contentBundleId,
         mapping(uint256 => uint256) storage contentBundleIndex,
+        mapping(uint256 => mapping(uint256 => uint256)) storage bundleQuestionTerminalSyncCursor,
         ContentRegistry registry,
+        RoundVotingEngine votingEngine,
         ProtocolConfig protocolConfig,
         IERC20 lrepToken,
         IERC20 usdcToken,
@@ -121,7 +124,16 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             funderIdentity
         );
 
-        _registerBundleQuestions(bundleQuestions, contentBundleId, contentBundleIndex, registry, protocolConfig, params);
+        _registerBundleQuestions(
+            bundleQuestions,
+            contentBundleId,
+            contentBundleIndex,
+            bundleQuestionTerminalSyncCursor,
+            registry,
+            votingEngine,
+            protocolConfig,
+            params
+        );
 
         emit QuestionBundleRewardCreated(
             params.bundleId,
@@ -174,7 +186,9 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         mapping(uint256 => BundleQuestion[]) storage bundleQuestions,
         mapping(uint256 => uint256) storage contentBundleId,
         mapping(uint256 => uint256) storage contentBundleIndex,
+        mapping(uint256 => mapping(uint256 => uint256)) storage bundleQuestionTerminalSyncCursor,
         ContentRegistry registry,
+        RoundVotingEngine votingEngine,
         ProtocolConfig protocolConfig,
         CreateSubmissionBundleParams memory params
     ) private {
@@ -186,6 +200,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             require(contentBundleId[contentId] == 0, "Bundled");
             contentBundleId[contentId] = bundleId;
             contentBundleIndex[contentId] = i;
+            bundleQuestionTerminalSyncCursor[bundleId][i] = _initialBundleSyncCursor(votingEngine, contentId);
             bytes32 submitterIdentityKey = registry.contentSubmitterIdentityKey(contentId);
             if (submitterIdentityKey == bytes32(0)) {
                 submitterIdentityKey = QuestionRewardPoolEscrowVoterLib.identityKeyForCurrentRater(
@@ -205,6 +220,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         mapping(uint256 => BundleReward) storage bundleRewards,
         mapping(uint256 => mapping(uint256 => uint32)) storage bundleQuestionRecordedRounds,
         mapping(uint256 => mapping(uint256 => mapping(uint256 => uint64))) storage bundleRoundIds,
+        mapping(uint256 => mapping(uint256 => uint256)) storage bundleQuestionTerminalSyncCursor,
         mapping(uint256 => uint256) storage contentBundleId,
         mapping(uint256 => uint256) storage contentBundleIndex,
         uint256 contentId,
@@ -215,6 +231,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             bundleRewards,
             bundleQuestionRecordedRounds,
             bundleRoundIds,
+            bundleQuestionTerminalSyncCursor,
             contentBundleId,
             contentBundleIndex,
             contentId,
@@ -229,6 +246,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         mapping(uint256 => mapping(uint256 => uint32)) storage bundleQuestionRecordedRounds,
         mapping(uint256 => mapping(uint256 => mapping(uint256 => uint64))) storage bundleRoundIds,
         mapping(uint256 => mapping(uint256 => BundleRoundSetSnapshot)) storage bundleRoundSetSnapshots,
+        mapping(uint256 => mapping(uint256 => uint256)) storage bundleQuestionTerminalSyncCursor,
         mapping(uint256 => uint256) storage contentBundleId,
         mapping(uint256 => uint256) storage contentBundleIndex,
         ContentRegistry registry,
@@ -238,11 +256,12 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         uint256 roundId
     ) external {
         (, RoundLib.RoundState state,,,,,,,,, uint48 settledAt,,,) = votingEngine.rounds(contentId, roundId);
-        require(settledAt != 0, "Round not terminal");
+        require(_isTerminalRound(state, settledAt), "Round not terminal");
         _recordBundleQuestionTerminal(
             bundleRewards,
             bundleQuestionRecordedRounds,
             bundleRoundIds,
+            bundleQuestionTerminalSyncCursor,
             contentBundleId,
             contentBundleIndex,
             contentId,
@@ -264,6 +283,38 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             protocolConfig,
             bundleId,
             bundle
+        );
+    }
+
+    function syncQuestionBundleTerminals(
+        mapping(uint256 => BundleReward) storage bundleRewards,
+        mapping(uint256 => BundleQuestion[]) storage bundleQuestions,
+        mapping(uint256 => mapping(uint256 => uint32)) storage bundleQuestionRecordedRounds,
+        mapping(uint256 => mapping(uint256 => mapping(uint256 => uint64))) storage bundleRoundIds,
+        mapping(uint256 => mapping(uint256 => BundleRoundSetSnapshot)) storage bundleRoundSetSnapshots,
+        mapping(uint256 => mapping(uint256 => uint256)) storage bundleQuestionTerminalSyncCursor,
+        mapping(uint256 => uint256) storage contentBundleId,
+        mapping(uint256 => uint256) storage contentBundleIndex,
+        ContentRegistry registry,
+        RoundVotingEngine votingEngine,
+        ProtocolConfig protocolConfig,
+        uint256 bundleId,
+        uint256 maxRounds
+    ) external returns (uint256 processedRounds, bool complete) {
+        return _syncQuestionBundleTerminals(
+            bundleRewards,
+            bundleQuestions,
+            bundleQuestionRecordedRounds,
+            bundleRoundIds,
+            bundleRoundSetSnapshots,
+            bundleQuestionTerminalSyncCursor,
+            contentBundleId,
+            contentBundleIndex,
+            registry,
+            votingEngine,
+            protocolConfig,
+            bundleId,
+            maxRounds
         );
     }
 
@@ -473,6 +524,9 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         mapping(uint256 => mapping(uint256 => uint32)) storage bundleQuestionRecordedRounds,
         mapping(uint256 => mapping(uint256 => mapping(uint256 => uint64))) storage bundleRoundIds,
         mapping(uint256 => mapping(uint256 => BundleRoundSetSnapshot)) storage bundleRoundSetSnapshots,
+        mapping(uint256 => mapping(uint256 => uint256)) storage bundleQuestionTerminalSyncCursor,
+        mapping(uint256 => uint256) storage contentBundleId,
+        mapping(uint256 => uint256) storage contentBundleIndex,
         ContentRegistry registry,
         RoundVotingEngine votingEngine,
         ProtocolConfig protocolConfig,
@@ -484,6 +538,22 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         require(!bundle.refunded, "Already refunded");
         require(block.timestamp > bundle.bountyClosesAt, "Bundle active");
         require(block.timestamp > uint256(bundle.bountyClosesAt) + BUNDLE_REFUND_GRACE, "Grace");
+        (, bool syncComplete) = _syncQuestionBundleTerminals(
+            bundleRewards,
+            bundleQuestions,
+            bundleQuestionRecordedRounds,
+            bundleRoundIds,
+            bundleRoundSetSnapshots,
+            bundleQuestionTerminalSyncCursor,
+            contentBundleId,
+            contentBundleIndex,
+            registry,
+            votingEngine,
+            protocolConfig,
+            bundleId,
+            BUNDLE_REFUND_SYNC_ROUND_LIMIT
+        );
+        require(syncComplete, "Sync pending");
         _qualifyPendingBundleRoundSet(
             bundleRewards,
             bundleQuestions,
@@ -528,6 +598,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         mapping(uint256 => BundleReward) storage bundleRewards,
         mapping(uint256 => mapping(uint256 => uint32)) storage bundleQuestionRecordedRounds,
         mapping(uint256 => mapping(uint256 => mapping(uint256 => uint64))) storage bundleRoundIds,
+        mapping(uint256 => mapping(uint256 => uint256)) storage bundleQuestionTerminalSyncCursor,
         mapping(uint256 => uint256) storage contentBundleId,
         mapping(uint256 => uint256) storage contentBundleIndex,
         uint256 contentId,
@@ -541,6 +612,8 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         if (bundle.refunded) return;
 
         uint256 bundleIndex = contentBundleIndex[contentId];
+        _advanceBundleQuestionTerminalSyncCursor(bundleQuestionTerminalSyncCursor, bundleId, bundleIndex, roundId);
+
         uint256 roundSetIndex = bundleQuestionRecordedRounds[bundleId][bundleIndex];
         if (roundSetIndex >= bundle.requiredSettledRounds) return;
         if (roundSetIndex < bundle.completedRoundSets) return;
@@ -556,6 +629,123 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         bundleRoundIds[bundleId][bundleIndex][roundSetIndex] = uint64(roundId);
         bundleQuestionRecordedRounds[bundleId][bundleIndex] = uint32(roundSetIndex + 1);
         emit QuestionBundleRoundRecorded(bundleId, contentId, roundId, bundleIndex, roundSetIndex);
+    }
+
+    function _syncQuestionBundleTerminals(
+        mapping(uint256 => BundleReward) storage bundleRewards,
+        mapping(uint256 => BundleQuestion[]) storage bundleQuestions,
+        mapping(uint256 => mapping(uint256 => uint32)) storage bundleQuestionRecordedRounds,
+        mapping(uint256 => mapping(uint256 => mapping(uint256 => uint64))) storage bundleRoundIds,
+        mapping(uint256 => mapping(uint256 => BundleRoundSetSnapshot)) storage bundleRoundSetSnapshots,
+        mapping(uint256 => mapping(uint256 => uint256)) storage bundleQuestionTerminalSyncCursor,
+        mapping(uint256 => uint256) storage contentBundleId,
+        mapping(uint256 => uint256) storage contentBundleIndex,
+        ContentRegistry registry,
+        RoundVotingEngine votingEngine,
+        ProtocolConfig protocolConfig,
+        uint256 bundleId,
+        uint256 maxRounds
+    ) private returns (uint256 processedRounds, bool complete) {
+        require(maxRounds != 0, "No rounds");
+        BundleReward storage bundle = _getExistingBundleReward(bundleRewards, bundleId);
+        if (bundle.refunded) return (0, true);
+
+        BundleQuestion[] storage questions = bundleQuestions[bundleId];
+        complete = true;
+        for (uint256 i = 0; i < questions.length;) {
+            if (processedRounds >= maxRounds) return (processedRounds, false);
+            (uint256 processedQuestionRounds, bool questionComplete) = _syncBundleQuestionTerminalsForQuestion(
+                bundleRewards,
+                bundleQuestions,
+                bundleQuestionRecordedRounds,
+                bundleRoundIds,
+                bundleQuestionTerminalSyncCursor,
+                contentBundleId,
+                contentBundleIndex,
+                votingEngine,
+                bundle,
+                bundleId,
+                i,
+                maxRounds - processedRounds
+            );
+            processedRounds += processedQuestionRounds;
+            if (!questionComplete) complete = false;
+            unchecked {
+                ++i;
+            }
+        }
+
+        _qualifyPendingBundleRoundSet(
+            bundleRewards,
+            bundleQuestions,
+            bundleQuestionRecordedRounds,
+            bundleRoundIds,
+            bundleRoundSetSnapshots,
+            registry,
+            votingEngine,
+            protocolConfig,
+            bundleId,
+            bundle
+        );
+    }
+
+    function _syncBundleQuestionTerminalsForQuestion(
+        mapping(uint256 => BundleReward) storage bundleRewards,
+        mapping(uint256 => BundleQuestion[]) storage bundleQuestions,
+        mapping(uint256 => mapping(uint256 => uint32)) storage bundleQuestionRecordedRounds,
+        mapping(uint256 => mapping(uint256 => mapping(uint256 => uint64))) storage bundleRoundIds,
+        mapping(uint256 => mapping(uint256 => uint256)) storage bundleQuestionTerminalSyncCursor,
+        mapping(uint256 => uint256) storage contentBundleId,
+        mapping(uint256 => uint256) storage contentBundleIndex,
+        RoundVotingEngine votingEngine,
+        BundleReward storage bundle,
+        uint256 bundleId,
+        uint256 bundleIndex,
+        uint256 maxRounds
+    ) private returns (uint256 processedRounds, bool complete) {
+        uint256 contentId = bundleQuestions[bundleId][bundleIndex].contentId;
+        uint256 cursor = bundleQuestionTerminalSyncCursor[bundleId][bundleIndex];
+        if (cursor == 0) {
+            cursor = _fallbackBundleSyncCursor(bundleQuestionRecordedRounds, bundleRoundIds, bundleId, bundleIndex);
+            bundleQuestionTerminalSyncCursor[bundleId][bundleIndex] = cursor;
+        }
+
+        uint256 currentRoundId = votingEngine.currentRoundId(contentId);
+        if (currentRoundId == 0 || cursor > currentRoundId) return (0, true);
+
+        while (cursor <= currentRoundId) {
+            if (processedRounds >= maxRounds) return (processedRounds, false);
+            (uint48 startTime, RoundLib.RoundState state,,,,,,,,, uint48 settledAt,,,) =
+                votingEngine.rounds(contentId, cursor);
+            if (startTime == 0) {
+                bundleQuestionTerminalSyncCursor[bundleId][bundleIndex] = ++cursor;
+                processedRounds++;
+                continue;
+            }
+            if (startTime > bundle.bountyClosesAt) {
+                bundleQuestionTerminalSyncCursor[bundleId][bundleIndex] = currentRoundId + 1;
+                return (processedRounds, true);
+            }
+            if (!_isTerminalRound(state, settledAt)) return (processedRounds, false);
+
+            _recordBundleQuestionTerminal(
+                bundleRewards,
+                bundleQuestionRecordedRounds,
+                bundleRoundIds,
+                bundleQuestionTerminalSyncCursor,
+                contentBundleId,
+                contentBundleIndex,
+                contentId,
+                cursor,
+                state == RoundLib.RoundState.Settled
+            );
+            cursor = bundleQuestionTerminalSyncCursor[bundleId][bundleIndex];
+            if (cursor == 0) {
+                cursor = _fallbackBundleSyncCursor(bundleQuestionRecordedRounds, bundleRoundIds, bundleId, bundleIndex);
+            }
+            processedRounds++;
+        }
+        complete = true;
     }
 
     function _qualifyPendingBundleRoundSet(
@@ -929,6 +1119,43 @@ library QuestionRewardPoolEscrowBundleActionsLib {
 
     function _requiredParticipantFloorForAmount(uint256 amount) private pure returns (uint256) {
         return amount >= HIGH_VALUE_REWARD_POOL_THRESHOLD ? MIN_HIGH_VALUE_PARTICIPANTS : MIN_REWARD_POOL_PARTICIPANTS;
+    }
+
+    function _initialBundleSyncCursor(RoundVotingEngine votingEngine, uint256 contentId)
+        private
+        view
+        returns (uint256 cursor)
+    {
+        cursor = votingEngine.currentRoundId(contentId);
+        if (cursor == 0) return 1;
+        (uint48 startTime, RoundLib.RoundState state,,,,,,,,,,,,) = votingEngine.rounds(contentId, cursor);
+        if (startTime == 0 || state != RoundLib.RoundState.Open) return cursor + 1;
+    }
+
+    function _fallbackBundleSyncCursor(
+        mapping(uint256 => mapping(uint256 => uint32)) storage bundleQuestionRecordedRounds,
+        mapping(uint256 => mapping(uint256 => mapping(uint256 => uint64))) storage bundleRoundIds,
+        uint256 bundleId,
+        uint256 bundleIndex
+    ) private view returns (uint256 cursor) {
+        uint256 recordedRounds = bundleQuestionRecordedRounds[bundleId][bundleIndex];
+        if (recordedRounds == 0) return 1;
+        return uint256(bundleRoundIds[bundleId][bundleIndex][recordedRounds - 1]) + 1;
+    }
+
+    function _advanceBundleQuestionTerminalSyncCursor(
+        mapping(uint256 => mapping(uint256 => uint256)) storage bundleQuestionTerminalSyncCursor,
+        uint256 bundleId,
+        uint256 bundleIndex,
+        uint256 roundId
+    ) private {
+        if (bundleQuestionTerminalSyncCursor[bundleId][bundleIndex] == roundId) {
+            bundleQuestionTerminalSyncCursor[bundleId][bundleIndex] = roundId + 1;
+        }
+    }
+
+    function _isTerminalRound(RoundLib.RoundState state, uint48 settledAt) private pure returns (bool) {
+        return state != RoundLib.RoundState.Open || settledAt != 0;
     }
 
     function _normalizeFeedbackClosesAt(uint256 bountyClosesAt, uint256 feedbackClosesAt)

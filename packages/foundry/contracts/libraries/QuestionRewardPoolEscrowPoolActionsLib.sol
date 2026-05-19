@@ -24,6 +24,7 @@ library QuestionRewardPoolEscrowPoolActionsLib {
     uint256 internal constant MIN_REWARD_POOL_PARTICIPANTS = 3;
     uint256 internal constant HIGH_VALUE_REWARD_POOL_THRESHOLD = 1_000e6;
     uint256 internal constant MIN_HIGH_VALUE_PARTICIPANTS = 5;
+    uint256 internal constant BPS_SCALE = 10_000;
     uint8 internal constant REWARD_ASSET_LREP = 0;
     uint8 internal constant REWARD_ASSET_USDC = 1;
 
@@ -213,7 +214,7 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         require(params.requiredVoters >= _requiredParticipantFloorForAmount(fundedAmount), "High-value floor");
         require(params.requiredSettledRounds >= MIN_REQUIRED_SETTLED_ROUNDS, "Too few rounds");
         require(params.requiredSettledRounds <= MAX_REQUIRED_SETTLED_ROUNDS, "Too many rounds");
-        require(fundedAmount >= params.requiredSettledRounds * params.requiredVoters, "Amount too small");
+        require(fundedAmount >= params.requiredSettledRounds * params.requiredVoters * BPS_SCALE, "Amount too small");
         if (params.bountyClosesAt != 0) {
             require(params.bountyClosesAt > block.timestamp, "Bad close");
         }
@@ -221,7 +222,10 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         require(params.requiredVoters <= contentCfg.maxVoters, "Voters exceed max");
         require(contentCfg.maxVoters <= MAX_REWARD_POOL_ROUND_VOTERS, "Voters exceed max");
         if (!params.nonRefundable) {
-            require(fundedAmount >= params.requiredSettledRounds * uint256(contentCfg.maxVoters), "Amount too small");
+            require(
+                fundedAmount >= params.requiredSettledRounds * uint256(contentCfg.maxVoters) * BPS_SCALE,
+                "Amount too small"
+            );
             require(params.bountyClosesAt > block.timestamp, "Bad close");
         }
     }

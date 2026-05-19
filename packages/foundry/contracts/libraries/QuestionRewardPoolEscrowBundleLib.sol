@@ -5,6 +5,7 @@ import { ContentRegistry } from "../ContentRegistry.sol";
 import { ProtocolConfig } from "../ProtocolConfig.sol";
 import { RoundVotingEngine } from "../RoundVotingEngine.sol";
 import { BundleReward, BundleQuestion, BundleRoundSetSnapshot } from "./QuestionRewardPoolEscrowTypes.sol";
+import { QuestionRewardPoolEscrowClaimLib } from "./QuestionRewardPoolEscrowClaimLib.sol";
 import { QuestionRewardPoolEscrowQualificationLib } from "./QuestionRewardPoolEscrowQualificationLib.sol";
 import { QuestionRewardPoolEscrowVoterLib } from "./QuestionRewardPoolEscrowVoterLib.sol";
 import { RoundLib } from "./RoundLib.sol";
@@ -69,6 +70,7 @@ library QuestionRewardPoolEscrowBundleLib {
         bool trackFrontend
     ) external view returns (bool completed, address frontend, bytes32 firstCommitKey) {
         BundleQuestion[] storage questions = bundleQuestions[bundleId];
+        address frontendRecipient;
         for (uint256 i = 0; i < questions.length;) {
             BundleQuestion storage question = questions[i];
             uint256 roundId = bundleRoundIds[bundleId][i][roundSetIndex];
@@ -87,15 +89,28 @@ library QuestionRewardPoolEscrowBundleLib {
             );
             if (!revealed) return (false, address(0), bytes32(0));
             if (trackFrontend) {
+                address questionFrontendRecipient;
+                if (questionFrontend != address(0)) {
+                    questionFrontendRecipient = QuestionRewardPoolEscrowClaimLib.frontendRewardRecipient(
+                        votingEngine, question.contentId, roundId, questionFrontend
+                    );
+                }
                 if (i == 0) {
                     frontend = questionFrontend;
                     firstCommitKey = commitKey;
+                    frontendRecipient = questionFrontendRecipient;
                 } else if (questionFrontend != frontend) {
                     frontend = address(0);
                 }
                 if (
                     questionFrontend != address(0)
                         && !votingEngine.frontendEligibleAtCommit(question.contentId, roundId, commitKey)
+                ) {
+                    frontend = address(0);
+                }
+                if (
+                    questionFrontend != address(0)
+                        && (questionFrontendRecipient == address(0) || questionFrontendRecipient != frontendRecipient)
                 ) {
                     frontend = address(0);
                 }

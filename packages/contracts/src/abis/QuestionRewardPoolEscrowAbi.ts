@@ -1398,6 +1398,35 @@ export const QuestionRewardPoolEscrowAbi = [
   },
   {
     "type": "function",
+    "name": "syncQuestionBundleTerminals",
+    "inputs": [
+      {
+        "name": "bundleId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "maxRounds",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "processedRounds",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "complete",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "unpause",
     "inputs": [],
     "outputs": [],

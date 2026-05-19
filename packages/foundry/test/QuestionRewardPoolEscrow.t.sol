@@ -677,10 +677,11 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             RoundLib.RoundConfig({ epochDuration: 10 minutes, maxDuration: 1 hours, minVoters: 3, maxVoters: 4 });
         uint256 contentId = _submitQuestionWithRoundConfig("small-cap", roundConfig);
 
-        uint256 rewardPoolId = _createRewardPool(contentId, 4, 3, 1);
+        uint256 fundedAmount = 4 * 10_000;
+        uint256 rewardPoolId = _createRewardPool(contentId, fundedAmount, 3, 1);
 
         assertEq(rewardPoolId, 2);
-        assertEq(usdc.balanceOf(address(rewardPoolEscrow)), 4);
+        assertEq(usdc.balanceOf(address(rewardPoolEscrow)), fundedAmount);
     }
 
     function testRewardPoolRejectsRequiredVotersAboveQuestionCap() public {
@@ -1150,6 +1151,33 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertEq(reward, REWARD_POOL_AMOUNT / 3);
         assertEq(usdc.balanceOf(openVoter1), reward);
         assertEq(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, openVoter1), 0);
+    }
+
+    function testBundleFrontendFeeRequiresEveryQuestionRoundRecipient() public {
+        _registerFrontend(frontend1);
+        uint256[] memory contentIds = _submitBundleQuestions();
+        uint256 bundleId = _createSubmissionBundle(contentIds, funder, REWARD_ASSET_USDC, REWARD_POOL_AMOUNT, 3);
+
+        address[] memory voters = _threeVoters();
+        bool[] memory directions = _directions(true, true, false);
+        _settleRoundWithFrontend(voters, contentIds[0], directions, frontend1);
+
+        MockBundleFrontendRegistry secondRoundFrontendRegistry = new MockBundleFrontendRegistry();
+        secondRoundFrontendRegistry.setFrontend(frontend1, address(0xFEE), true, false);
+        vm.prank(owner);
+        protocolConfig.setFrontendRegistry(address(secondRoundFrontendRegistry));
+
+        _settleRoundWithFrontend(voters, contentIds[1], directions, frontend1);
+
+        uint256 frontendBalanceBefore = usdc.balanceOf(frontend1);
+        uint256 quotedReward = rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, voter1);
+        assertGt(quotedReward, 0);
+
+        vm.prank(voter1);
+        uint256 reward = rewardPoolEscrow.claimQuestionBundleReward(bundleId, 0);
+
+        assertEq(reward, quotedReward);
+        assertEq(usdc.balanceOf(frontend1), frontendBalanceBefore);
     }
 
     function testBundleAboveQuorumQualifiesWhenRequiredCompletersRevealBeforeClose() public {
@@ -2892,6 +2920,23 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.stopPrank();
     }
 
+    function testRewardPoolAmountMustCoverBpsScaledMaxVotersForRefundablePool() public {
+        uint256 contentId = _submitQuestion("");
+        uint256 exactAmount = 200 * 10_000;
+
+        vm.startPrank(funder);
+        usdc.approve(address(rewardPoolEscrow), exactAmount - 1);
+        vm.expectRevert("Amount too small");
+        rewardPoolEscrow.createRewardPool(contentId, exactAmount - 1, 3, 1, block.timestamp + 30 days, 0);
+
+        usdc.approve(address(rewardPoolEscrow), exactAmount);
+        uint256 rewardPoolId =
+            rewardPoolEscrow.createRewardPool(contentId, exactAmount, 3, 1, block.timestamp + 30 days, 0);
+        vm.stopPrank();
+
+        assertGt(rewardPoolId, 0);
+    }
+
     function testStandaloneUsdcRewardPoolAllowsFunderWithoutRaterIdentity() public {
         uint256 contentId = _submitQuestion("");
         address unverifiedFunder = address(0xB0B);
@@ -4459,6 +4504,36 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertGt(rewardPoolEscrow.claimQuestionBundleReward(bundleId, 0), 0);
     }
 
+    function testBundleRefundSyncsUnobservedTerminalRoundSetBeforeSweep() public {
+        uint256[] memory contentIds = _submitBundleQuestions();
+        uint256 bundleId = _createSubmissionBundle(contentIds, funder, REWARD_ASSET_USDC, REWARD_POOL_AMOUNT, 3);
+        uint256 bountyClosesAt = block.timestamp + 30 days;
+
+        vm.startPrank(owner);
+        MockQuestionRewardPoolEscrow mockEscrow = new MockQuestionRewardPoolEscrow();
+        registry.pause();
+        registry.setQuestionRewardPoolEscrow(address(mockEscrow));
+        registry.unpause();
+        vm.stopPrank();
+
+        address[] memory voters = _threeVoters();
+        bool[] memory directions = _directions(true, true, false);
+        _settleRoundWithoutBundleSync(voters, contentIds[0], directions);
+        _settleRoundWithoutBundleSync(voters, contentIds[1], directions);
+
+        vm.startPrank(owner);
+        registry.pause();
+        registry.setQuestionRewardPoolEscrow(address(rewardPoolEscrow));
+        registry.unpause();
+        vm.stopPrank();
+
+        assertEq(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, voter1), 0);
+
+        vm.warp(bountyClosesAt + BUNDLE_REFUND_GRACE + 1);
+        assertEq(rewardPoolEscrow.refundQuestionBundleReward(bundleId), 0);
+        assertGt(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, voter1), 0);
+    }
+
     function testBundleRefund_ClaimGraceBlocksRaceAtBountyClose() public {
         uint256[] memory contentIds = _submitBundleQuestions();
         uint256 bundleId = _createSubmissionBundle(contentIds, funder, REWARD_ASSET_USDC, REWARD_POOL_AMOUNT, 3);
@@ -4520,10 +4595,9 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
         vm.warp(block.timestamp + 25 hours);
         // Settle without auto-sync: the registry's active escrow is the mock, so we want to
-        // verify the LATER `syncBundleQuestionTerminal` call does the recording on the real
-        // escrow (the "late-synced round set" scenario).
-        uint256 lateFirstRoundId = _settleRoundWithoutBundleSync(voters, contentIds[0], directions);
-        uint256 lateSecondRoundId = _settleRoundWithoutBundleSync(voters, contentIds[1], directions);
+        // verify the refund path catches up the real escrow before sweeping funds.
+        _settleRoundWithoutBundleSync(voters, contentIds[0], directions);
+        _settleRoundWithoutBundleSync(voters, contentIds[1], directions);
 
         vm.startPrank(owner);
         registry.pause();
@@ -4533,18 +4607,18 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
         vm.warp(bountyClosesAt + BUNDLE_REFUND_GRACE + 1);
         assertEq(rewardPoolEscrow.refundQuestionBundleReward(bundleId), 0);
-        vm.warp(block.timestamp + BUNDLE_CLAIM_GRACE + 1);
-
-        rewardPoolEscrow.syncBundleQuestionTerminal(contentIds[0], lateFirstRoundId);
-        rewardPoolEscrow.syncBundleQuestionTerminal(contentIds[1], lateSecondRoundId);
         assertGt(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 1, voter2), 0);
 
-        assertEq(rewardPoolEscrow.refundQuestionBundleReward(bundleId), 0);
-        vm.expectRevert("Grace");
-        rewardPoolEscrow.refundQuestionBundleReward(bundleId);
+        vm.warp(block.timestamp + BUNDLE_CLAIM_GRACE + 1);
+
+        uint256 treasuryBalanceBefore = usdc.balanceOf(treasury);
+        uint256 refundAmount = rewardPoolEscrow.refundQuestionBundleReward(bundleId);
+        assertGt(refundAmount, 0);
+        assertEq(usdc.balanceOf(treasury), treasuryBalanceBefore + refundAmount);
 
         vm.prank(voter2);
-        assertGt(rewardPoolEscrow.claimQuestionBundleReward(bundleId, 1), 0);
+        vm.expectRevert("Bundle not claimable");
+        rewardPoolEscrow.claimQuestionBundleReward(bundleId, 1);
     }
 
     function testBundleRefund_LateSyncedRoundSetWaitsForCleanupBeforeClaimGrace() public {
@@ -4567,7 +4641,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
         vm.warp(block.timestamp + 25 hours);
         uint256 cleanupRoundId = _settleRoundWithOneUnrevealed(contentIds[0]);
-        uint256 lateSecondRoundId = _settleRoundWith(voters, contentIds[1], directions);
+        _settleRoundWith(voters, contentIds[1], directions);
 
         vm.startPrank(owner);
         registry.pause();
@@ -4576,13 +4650,6 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.stopPrank();
 
         vm.warp(bountyClosesAt + BUNDLE_REFUND_GRACE + 1);
-        assertEq(rewardPoolEscrow.refundQuestionBundleReward(bundleId), 0);
-        vm.warp(block.timestamp + BUNDLE_CLAIM_GRACE + 1);
-
-        rewardPoolEscrow.syncBundleQuestionTerminal(contentIds[0], cleanupRoundId);
-        rewardPoolEscrow.syncBundleQuestionTerminal(contentIds[1], lateSecondRoundId);
-        assertEq(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 1, voter1), 0);
-
         vm.expectRevert("Cleanup pending");
         rewardPoolEscrow.refundQuestionBundleReward(bundleId);
 
@@ -4633,5 +4700,36 @@ contract MockQuestionRewardOracleFrontendRegistry {
 
     function isEligible(address frontend) external view returns (bool) {
         return eligible[frontend];
+    }
+}
+
+contract MockBundleFrontendRegistry {
+    struct FrontendInfo {
+        address operator;
+        bool eligible;
+        bool canClaim;
+    }
+
+    mapping(address => FrontendInfo) public frontends;
+
+    function setFrontend(address frontend, address operator, bool eligible, bool canClaim) external {
+        frontends[frontend] = FrontendInfo({ operator: operator, eligible: eligible, canClaim: canClaim });
+    }
+
+    function isEligible(address frontend) external view returns (bool) {
+        return frontends[frontend].eligible;
+    }
+
+    function getFrontendInfo(address frontend)
+        external
+        view
+        returns (address operator, uint256 stakedAmount, bool eligible, bool slashed)
+    {
+        FrontendInfo memory info = frontends[frontend];
+        return (info.operator, 1, info.eligible, false);
+    }
+
+    function canClaimFeesForRound(address frontend, uint48) external view returns (bool) {
+        return frontends[frontend].canClaim;
     }
 }

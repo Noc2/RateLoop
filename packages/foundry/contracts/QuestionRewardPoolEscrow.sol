@@ -88,6 +88,7 @@ contract QuestionRewardPoolEscrow is
     mapping(uint256 => uint256) private contentBundleIndex;
     uint16 public defaultFrontendFeeBps;
     mapping(uint256 => address) private rewardPoolClusterPayoutOracle;
+    mapping(uint256 => mapping(uint256 => uint256)) private bundleQuestionTerminalSyncCursor;
 
     event RewardPoolCreated(
         uint256 indexed rewardPoolId,
@@ -561,7 +562,9 @@ contract QuestionRewardPoolEscrow is
             bundleQuestions,
             contentBundleId,
             contentBundleIndex,
+            bundleQuestionTerminalSyncCursor,
             registry,
+            votingEngine,
             votingEngine.protocolConfig(),
             lrepToken,
             usdcToken,
@@ -901,6 +904,7 @@ contract QuestionRewardPoolEscrow is
             bundleRewards,
             bundleQuestionRecordedRounds,
             bundleRoundIds,
+            bundleQuestionTerminalSyncCursor,
             contentBundleId,
             contentBundleIndex,
             contentId,
@@ -926,6 +930,7 @@ contract QuestionRewardPoolEscrow is
             bundleQuestionRecordedRounds,
             bundleRoundIds,
             bundleRoundSetSnapshots,
+            bundleQuestionTerminalSyncCursor,
             contentBundleId,
             contentBundleIndex,
             registry,
@@ -933,6 +938,27 @@ contract QuestionRewardPoolEscrow is
             votingEngine.protocolConfig(),
             contentId,
             roundId
+        );
+    }
+
+    function syncQuestionBundleTerminals(uint256 bundleId, uint256 maxRounds)
+        external
+        returns (uint256 processedRounds, bool complete)
+    {
+        return QuestionRewardPoolEscrowBundleActionsLib.syncQuestionBundleTerminals(
+            bundleRewards,
+            bundleQuestions,
+            bundleQuestionRecordedRounds,
+            bundleRoundIds,
+            bundleRoundSetSnapshots,
+            bundleQuestionTerminalSyncCursor,
+            contentBundleId,
+            contentBundleIndex,
+            registry,
+            votingEngine,
+            votingEngine.protocolConfig(),
+            bundleId,
+            maxRounds
         );
     }
 
@@ -985,6 +1011,9 @@ contract QuestionRewardPoolEscrow is
             bundleQuestionRecordedRounds,
             bundleRoundIds,
             bundleRoundSetSnapshots,
+            bundleQuestionTerminalSyncCursor,
+            contentBundleId,
+            contentBundleIndex,
             registry,
             votingEngine,
             votingEngine.protocolConfig(),
@@ -1289,5 +1318,5 @@ contract QuestionRewardPoolEscrow is
         );
     }
 
-    uint256[51] private __gap;
+    uint256[50] private __gap;
 }
