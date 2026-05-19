@@ -53,7 +53,7 @@ The result package can include:
 
 LREP is the public reputation and staking token used by open raters. Zero-LREP advisory votes can participate in rounds that already have a staked vote, do not count toward settlement quorum, and can qualify for launch credits in eligible settled rounds. Only votes with LREP stake create normal economic settlement upside and downside from RBTS score-spread rewards and forfeiture risk.
 
-RBTS settlement keeps each revealed report's `scoreBps`, computes the stake-weighted mean score, and compares each rater's score with that mean. Positive spreads recover full stake and share the 96% voter share of forfeited negative-spread stake. Negative spreads forfeit according to distance below the mean, with no revealed-loser rebate for RBTS settlement.
+RBTS settlement keeps each revealed report's `scoreBps`, computes the stake-weighted mean score, and compares each rater's score with that mean. Positive spreads recover full stake and share the 96% voter share of forfeited negative-spread stake; the remaining forfeited stake routes 1% to the treasury and 3% to the eligible front-end operator when one is present. Negative spreads forfeit according to distance below the mean, with no revealed-loser rebate for RBTS settlement.
 
 Example: a fresh question starts as `N/A`. Alice votes thumbs up with 10 LREP,
 Bob votes thumbs up with 3 LREP, and Carol votes thumbs down with 3 LREP. Their

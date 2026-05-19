@@ -95,6 +95,10 @@ const HowItWorks: NextPage = () => {
           <code>voter share = forfeited pool * 96%</code>
         </li>
         <li>
+          The remaining forfeited stake routes <code>1%</code> to the treasury and <code>3%</code> to the eligible
+          front-end operator when one is present.
+        </li>
+        <li>
           Positive spread weight is <code>stake * spread</code>, and reward is{" "}
           <code>voter share * weight / total positive weight</code>.
         </li>
@@ -108,7 +112,8 @@ const HowItWorks: NextPage = () => {
       <p>
         Example: Alice stakes 10 LREP and scores 93.5, Bob stakes 5 LREP and scores 90.0, and Carol stakes 5 LREP and
         scores 64.0. The stake-weighted mean is 85.25. At 1.5 intensity, Carol forfeits 1.59375 LREP; 1.53 LREP is the
-        voter share. Alice claims 11.188 LREP, Bob claims 5.342 LREP, and Carol claims 3.40625 LREP.
+        voter share, 0.0159375 LREP is the treasury share, and 0.0478125 LREP is the eligible front-end operator share.
+        Alice claims 11.188 LREP, Bob claims 5.342 LREP, and Carol claims 3.40625 LREP.
       </p>
 
       <h3 id="eligible-settled-rounds">Launch LREP credits</h3>
