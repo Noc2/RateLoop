@@ -4,17 +4,29 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ROUND_STATE } from "@rateloop/contracts/protocol";
 import {
+  AI_AGENT_FRAMEWORK_OPTIONS,
+  AI_AUTONOMY_OPTIONS,
+  AI_MODEL_PROVIDER_OPTIONS,
   type ExpertiseArea,
+  HYBRID_OVERSIGHT_OPTIONS,
   type LanguageCode,
   PROFILE_SELF_REPORT_NOTICE,
   type ProfileRole,
   type ProfileSelfReport,
+  RATER_TYPE,
+  RATER_TYPE_OPTIONS,
+  type RaterTypeValue,
+  TEAM_SIZE_OPTIONS,
+  TEAM_TYPE_OPTIONS,
+  formatRaterTypeName,
   normalizeProfileSelfReport,
+  normalizeRaterType,
   parseProfileSelfReport,
   profileSelfReportHasValues,
   serializeProfileSelfReport,
 } from "@rateloop/node-utils/profileSelfReport";
 import { useQuery } from "@tanstack/react-query";
+import { keccak256, toBytes, zeroHash } from "viem";
 import { useAccount } from "wagmi";
 import { ArrowLeftIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { BalanceHistory } from "~~/components/leaderboard/BalanceHistory";
@@ -38,7 +50,11 @@ import {
   useSetAvatarAccent,
   useSetProfile,
 } from "~~/hooks/useProfileRegistry";
-import { useRaterRegistryIdentity } from "~~/hooks/useRaterRegistryIdentity";
+import {
+  useRaterRegistryIdentity,
+  useRaterRegistryProfile,
+  useSetRaterProfile,
+} from "~~/hooks/useRaterRegistryIdentity";
 import { useVoterAccuracy } from "~~/hooks/useVoterAccuracy";
 import { useVoterStreak } from "~~/hooks/useVoterStreak";
 import { avatarAccentHexToRgb, normalizeAvatarAccentHex } from "~~/lib/avatar/avatarAccent";
@@ -169,6 +185,63 @@ function updateSelfReportArray<T extends string>(
 
 function optionSelected(values: readonly string[] | undefined, value: string) {
   return values?.includes(value) ?? false;
+}
+
+function formatProfileOptionLabel(value: string) {
+  return value
+    .split("-")
+    .map(part => (part.length <= 3 ? part.toUpperCase() : part.charAt(0).toUpperCase() + part.slice(1)))
+    .join(" ");
+}
+
+function getSelfReportRaterType(report: ProfileSelfReport | null | undefined) {
+  return normalizeRaterType(report?.raterType);
+}
+
+function resolveEditableRaterType(
+  registryRaterType: RaterTypeValue,
+  selfReport: ProfileSelfReport,
+  hasActiveHumanCredential: boolean,
+) {
+  if (hasActiveHumanCredential) return RATER_TYPE.Human;
+  if (registryRaterType !== RATER_TYPE.Unknown) return registryRaterType;
+  const selfReportRaterType = getSelfReportRaterType(selfReport);
+  return selfReportRaterType === RATER_TYPE.Unknown ? RATER_TYPE.Human : selfReportRaterType;
+}
+
+function withRaterType(report: ProfileSelfReport, raterType: RaterTypeValue) {
+  if (raterType === RATER_TYPE.Human) {
+    return normalizeProfileSelfReport({
+      ageGroup: report.ageGroup,
+      expertise: report.expertise,
+      languages: report.languages,
+      nationalities: report.nationalities,
+      raterType,
+      residenceCountry: report.residenceCountry,
+      roles: report.roles,
+    });
+  }
+  if (raterType === RATER_TYPE.AI) return normalizeProfileSelfReport({ ai: report.ai, raterType });
+  if (raterType === RATER_TYPE.Team) return normalizeProfileSelfReport({ raterType, team: report.team });
+  if (raterType === RATER_TYPE.Hybrid) return normalizeProfileSelfReport({ hybrid: report.hybrid, raterType });
+  return normalizeProfileSelfReport({ raterType });
+}
+
+function updateContextArray(
+  report: ProfileSelfReport,
+  section: "ai" | "team" | "hybrid",
+  key: "expertise" | "languages",
+  value: string,
+  checked: boolean,
+) {
+  const currentContext = report[section] ?? {};
+  const current = new Set(((currentContext as Record<string, readonly string[] | undefined>)[key] ?? []) as string[]);
+  if (checked) {
+    current.add(value);
+  } else {
+    current.delete(value);
+  }
+  return normalizeProfileSelfReport({ ...report, [section]: { ...currentContext, [key]: Array.from(current) } });
 }
 
 type CountryOption = (typeof PROFILE_COUNTRY_OPTIONS)[number];
@@ -439,6 +512,187 @@ function NationalityPicker({
   );
 }
 
+function ProfileTypeSpecificFields({
+  disabled,
+  onChange,
+  report,
+  raterType,
+}: {
+  disabled: boolean;
+  onChange: (report: ProfileSelfReport) => void;
+  report: ProfileSelfReport;
+  raterType: RaterTypeValue;
+}) {
+  const setReport = useCallback((value: unknown) => onChange(normalizeProfileSelfReport(value)), [onChange]);
+
+  const renderSelect = (
+    id: string,
+    label: string,
+    value: string | undefined,
+    options: readonly string[],
+    onValue: (value: string | undefined) => void,
+  ) => (
+    <label className="form-control">
+      <span className="label-text text-base-content/65">{label}</span>
+      <select
+        id={id}
+        aria-label={label}
+        className="select select-bordered mt-2 w-full bg-base-100"
+        value={value ?? ""}
+        onChange={event => onValue(event.target.value || undefined)}
+        disabled={disabled}
+      >
+        <option value="">Not specified</option>
+        {options.map(option => (
+          <option key={option} value={option}>
+            {formatProfileOptionLabel(option)}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+
+  const renderText = (
+    label: string,
+    value: string | undefined,
+    onValue: (value: string) => void,
+    placeholder: string,
+    className = "",
+  ) => (
+    <label className={`form-control ${className}`}>
+      <span className="label-text text-base-content/65">{label}</span>
+      <input
+        type="text"
+        className="input input-bordered mt-2 w-full bg-base-100"
+        placeholder={placeholder}
+        value={value ?? ""}
+        onChange={event => onValue(event.target.value)}
+        disabled={disabled}
+      />
+    </label>
+  );
+
+  const renderCheckboxes = (section: "ai" | "team" | "hybrid", key: "expertise" | "languages", label: string) => {
+    const options = key === "languages" ? PROFILE_LANGUAGE_OPTIONS : PROFILE_EXPERTISE_OPTIONS;
+    const values = (report[section]?.[key] ?? []) as readonly string[];
+    return (
+      <div className="lg:col-span-2">
+        <div className="label-text text-base-content/65">{label}</div>
+        <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          {options.map(option => (
+            <label key={option.value} className="flex items-center gap-2 text-sm text-base-content/75">
+              <input
+                type="checkbox"
+                className="checkbox checkbox-sm"
+                checked={optionSelected(values, option.value)}
+                onChange={event =>
+                  onChange(updateContextArray(report, section, key, option.value, event.target.checked))
+                }
+                disabled={disabled}
+              />
+              <span>{option.label}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  if (raterType === RATER_TYPE.AI) {
+    return (
+      <div className="mt-5 grid gap-4 lg:grid-cols-2">
+        {renderSelect(
+          "profile-ai-provider",
+          "Model provider",
+          report.ai?.modelProvider,
+          AI_MODEL_PROVIDER_OPTIONS,
+          value => setReport({ ...report, ai: { ...report.ai, modelProvider: value } }),
+        )}
+        {renderText(
+          "Model family",
+          report.ai?.modelFamily,
+          value => {
+            setReport({ ...report, ai: { ...report.ai, modelFamily: value } });
+          },
+          "GPT-5, Claude, Gemini...",
+        )}
+        {renderSelect(
+          "profile-ai-framework",
+          "Agent framework",
+          report.ai?.agentFramework,
+          AI_AGENT_FRAMEWORK_OPTIONS,
+          value => setReport({ ...report, ai: { ...report.ai, agentFramework: value } }),
+        )}
+        {renderSelect("profile-ai-autonomy", "Autonomy", report.ai?.autonomy, AI_AUTONOMY_OPTIONS, value =>
+          setReport({ ...report, ai: { ...report.ai, autonomy: value } }),
+        )}
+        {renderCheckboxes("ai", "languages", "Languages")}
+        {renderCheckboxes("ai", "expertise", "Expertise")}
+      </div>
+    );
+  }
+
+  if (raterType === RATER_TYPE.Team) {
+    return (
+      <div className="mt-5 grid gap-4 lg:grid-cols-2">
+        {renderSelect("profile-team-type", "Team type", report.team?.teamType, TEAM_TYPE_OPTIONS, value =>
+          setReport({ ...report, team: { ...report.team, teamType: value } }),
+        )}
+        {renderSelect("profile-team-size", "Team size", report.team?.teamSize, TEAM_SIZE_OPTIONS, value =>
+          setReport({ ...report, team: { ...report.team, teamSize: value } }),
+        )}
+        <SearchableCountrySelect
+          id="profile-team-country"
+          label="Country"
+          value={report.team?.country}
+          onChange={value => setReport({ ...report, team: { ...report.team, country: value } })}
+          disabled={disabled}
+        />
+        {renderText(
+          "Website",
+          report.team?.website,
+          value => {
+            onChange({ ...report, team: { ...report.team, website: value } });
+          },
+          "https://example.com",
+        )}
+        {renderCheckboxes("team", "languages", "Languages")}
+        {renderCheckboxes("team", "expertise", "Expertise")}
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-5 grid gap-4 lg:grid-cols-2">
+      {renderSelect(
+        "profile-hybrid-oversight",
+        "Oversight",
+        report.hybrid?.oversight,
+        HYBRID_OVERSIGHT_OPTIONS,
+        value => setReport({ ...report, hybrid: { ...report.hybrid, oversight: value } }),
+      )}
+      {renderSelect(
+        "profile-hybrid-provider",
+        "AI model provider",
+        report.hybrid?.modelProvider,
+        AI_MODEL_PROVIDER_OPTIONS,
+        value => setReport({ ...report, hybrid: { ...report.hybrid, modelProvider: value } }),
+      )}
+      {renderText(
+        "Model family",
+        report.hybrid?.modelFamily,
+        value => {
+          setReport({ ...report, hybrid: { ...report.hybrid, modelFamily: value } });
+        },
+        "GPT-5, Claude, Gemini...",
+        "lg:col-span-2",
+      )}
+      {renderCheckboxes("hybrid", "languages", "Languages")}
+      {renderCheckboxes("hybrid", "expertise", "Expertise")}
+    </div>
+  );
+}
+
 export function PublicProfileView({ address, embedded = false }: PublicProfileViewProps) {
   const normalizedAddress = address.toLowerCase() as `0x${string}`;
   const isPageVisible = usePageVisibility();
@@ -448,6 +702,11 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
   const { followedWallets, toggleFollow, isPending: isFollowPending } = useFollowedProfiles(connectedAddress);
   const { stats, categories } = useVoterAccuracy(normalizedAddress);
   const { hasActiveHumanCredential, isLoading: credentialLoading } = useRaterRegistryIdentity(normalizedAddress);
+  const {
+    profile: raterRegistryProfile,
+    isLoading: raterRegistryProfileLoading,
+    refetch: refetchRaterRegistryProfile,
+  } = useRaterRegistryProfile(normalizedAddress);
   const {
     profile: liveProfile,
     hasProfile: hasLiveProfile,
@@ -460,6 +719,7 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
     refetch: refetchAvatarAccent,
   } = useAvatarAccent(normalizedAddress);
   const { setProfile, isPending: isSavingProfile } = useSetProfile();
+  const { isAvailable: canWriteRaterProfile, setRaterProfile, isPending: isSavingRaterProfile } = useSetRaterProfile();
   const { setAvatarAccent, isPending: avatarAccentPending } = useSetAvatarAccent();
   const { clearAvatarAccent, isPending: clearAvatarAccentPending } = useClearAvatarAccent();
 
@@ -505,11 +765,13 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
   const [isEditing, setIsEditing] = useState(false);
   const [isAvatarEditorOpen, setIsAvatarEditorOpen] = useState(false);
   const [nameInput, setNameInput] = useState("");
+  const [raterTypeInput, setRaterTypeInput] = useState<RaterTypeValue>(RATER_TYPE.Human);
   const [selfReportInput, setSelfReportInput] = useState<ProfileSelfReport>(() => emptySelfReport());
   const [avatarAccentInput, setAvatarAccentInput] = useState("");
   const [profileError, setProfileError] = useState<string | null>(null);
   const [accentError, setAccentError] = useState<string | null>(null);
   const [committedName, setCommittedName] = useState("");
+  const [committedRaterType, setCommittedRaterType] = useState<RaterTypeValue>(RATER_TYPE.Unknown);
   const [committedSelfReport, setCommittedSelfReport] = useState<ProfileSelfReport>(() => emptySelfReport());
   const [committedAvatarAccentHex, setCommittedAvatarAccentHex] = useState<string | null>(null);
   const [profileDraftInitialized, setProfileDraftInitialized] = useState(false);
@@ -519,16 +781,20 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
   const backHref = ownProfile ? "/governance#profile" : "/governance";
   const totalVotes = profileDetail?.summary.totalVotes ?? 0;
   const ponderSelfReport = profileSelfReportFromString(summary?.selfReport);
+  const forcedRaterTypeInput = hasActiveHumanCredential ? RATER_TYPE.Human : raterTypeInput;
+  const effectiveSelfReportInput = withRaterType(selfReportInput, forcedRaterTypeInput);
 
   useEffect(() => {
     setIsEditing(false);
     setIsAvatarEditorOpen(false);
     setNameInput("");
+    setRaterTypeInput(RATER_TYPE.Human);
     setSelfReportInput(emptySelfReport());
     setAvatarAccentInput("");
     setProfileError(null);
     setAccentError(null);
     setCommittedName("");
+    setCommittedRaterType(RATER_TYPE.Unknown);
     setCommittedSelfReport(emptySelfReport());
     setCommittedAvatarAccentHex(null);
     setProfileDraftInitialized(false);
@@ -536,31 +802,62 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
   }, [normalizedAddress]);
 
   useEffect(() => {
-    if (profileDraftInitialized || liveProfileLoading) {
+    if (profileDraftInitialized || liveProfileLoading || raterRegistryProfileLoading) {
       return;
     }
 
     const nextName = liveProfile?.name ?? "";
     const nextSelfReport = profileSelfReportFromString(liveProfile?.selfReport);
+    const nextRaterType = resolveEditableRaterType(
+      raterRegistryProfile.raterType,
+      nextSelfReport,
+      hasActiveHumanCredential,
+    );
     setCommittedName(nextName);
-    setCommittedSelfReport(nextSelfReport);
+    setCommittedRaterType(nextRaterType);
+    setCommittedSelfReport(withRaterType(nextSelfReport, nextRaterType));
     setNameInput(nextName);
-    setSelfReportInput(nextSelfReport);
+    setRaterTypeInput(nextRaterType);
+    setSelfReportInput(withRaterType(nextSelfReport, nextRaterType));
     setProfileDraftInitialized(true);
-  }, [liveProfile, liveProfileLoading, profileDraftInitialized]);
+  }, [
+    hasActiveHumanCredential,
+    liveProfile?.name,
+    liveProfile?.selfReport,
+    liveProfileLoading,
+    profileDraftInitialized,
+    raterRegistryProfile.raterType,
+    raterRegistryProfileLoading,
+  ]);
 
   useEffect(() => {
-    if (!profileDraftInitialized || isEditing || liveProfileLoading) {
+    if (!profileDraftInitialized || isEditing || liveProfileLoading || raterRegistryProfileLoading) {
       return;
     }
 
     const nextName = liveProfile?.name ?? "";
     const nextSelfReport = profileSelfReportFromString(liveProfile?.selfReport);
+    const nextRaterType = resolveEditableRaterType(
+      raterRegistryProfile.raterType,
+      nextSelfReport,
+      hasActiveHumanCredential,
+    );
     setCommittedName(nextName);
-    setCommittedSelfReport(nextSelfReport);
+    setCommittedRaterType(nextRaterType);
+    setCommittedSelfReport(withRaterType(nextSelfReport, nextRaterType));
     setNameInput(nextName);
-    setSelfReportInput(nextSelfReport);
-  }, [liveProfile, isEditing, liveProfileLoading, profileDraftInitialized]);
+    setRaterTypeInput(nextRaterType);
+    setSelfReportInput(withRaterType(nextSelfReport, nextRaterType));
+  }, [
+    hasActiveHumanCredential,
+    isEditing,
+    liveProfile?.name,
+    liveProfile?.selfReport,
+    liveProfileLoading,
+    profileDraftInitialized,
+    raterRegistryProfile.raterType,
+    raterRegistryProfileLoading,
+  ]);
 
   useEffect(() => {
     if (avatarAccentInitialized || avatarAccentLoading) {
@@ -585,10 +882,16 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
 
   const { isTaken: isNameTaken, isLoading: nameCheckLoading } = useIsNameTaken(nameInput);
   const currentName = ownProfile ? committedName || liveProfile?.name || summary?.name || "" : summary?.name || "";
+  const registryDisplayRaterType = hasActiveHumanCredential ? RATER_TYPE.Human : raterRegistryProfile.raterType;
+  const fallbackDisplayRaterType = getSelfReportRaterType(ownProfile ? committedSelfReport : ponderSelfReport);
+  const currentRaterType =
+    registryDisplayRaterType !== RATER_TYPE.Unknown ? registryDisplayRaterType : fallbackDisplayRaterType;
+  const currentRaterTypeName = formatRaterTypeName(currentRaterType);
+  const hasCurrentRaterType = currentRaterType !== RATER_TYPE.Unknown;
   const currentSelfReport = ownProfile ? committedSelfReport : ponderSelfReport;
   const currentSelfReportGroups = getProfileSelfReportDisplayGroups(currentSelfReport);
   const hasCurrentSelfReport = currentSelfReportGroups.length > 0;
-  const selfReportInputLength = getProfileSelfReportLength(selfReportInput);
+  const selfReportInputLength = getProfileSelfReportLength(effectiveSelfReportInput);
   const displayName = currentName || truncateAddress(normalizedAddress);
   const displayAvatarAccentHex = ownProfile ? (committedAvatarAccentHex ?? avatarAccent?.hex ?? null) : null;
   const fallbackImageUrl =
@@ -607,6 +910,7 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
     ? `${generatedAvatarPreviewUrl}&preview=${encodeURIComponent(previewAvatarAccentHex ?? "default")}`
     : "";
   const avatarAccentBusy = avatarAccentPending || clearAvatarAccentPending;
+  const profileSaveBusy = isSavingProfile || isSavingRaterProfile;
   const hasAvatarAccentChanges = normalizedAvatarAccentInput !== committedAvatarAccentHex;
   const winRateLabel = stats && stats.totalSettledVotes > 0 ? `${(stats.winRate * 100).toFixed(1)}%` : "—";
   const dailyStreakLabel = (dailyStreak?.currentDailyStreak ?? 0).toLocaleString();
@@ -643,18 +947,22 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
   }, [displayName, normalizedAddress, openConnectModal, toggleFollow]);
 
   const openEditMode = useCallback(() => {
+    const nextRaterType = currentRaterType === RATER_TYPE.Unknown ? RATER_TYPE.Human : currentRaterType;
     setNameInput(currentName);
-    setSelfReportInput(currentSelfReport);
+    setRaterTypeInput(nextRaterType);
+    setSelfReportInput(withRaterType(currentSelfReport, nextRaterType));
     setProfileError(null);
     setIsEditing(true);
-  }, [currentName, currentSelfReport]);
+  }, [currentName, currentRaterType, currentSelfReport]);
 
   const handleCancelEdit = useCallback(() => {
+    const nextRaterType = committedRaterType === RATER_TYPE.Unknown ? RATER_TYPE.Human : committedRaterType;
     setNameInput(currentName);
-    setSelfReportInput(currentSelfReport);
+    setRaterTypeInput(nextRaterType);
+    setSelfReportInput(withRaterType(currentSelfReport, nextRaterType));
     setProfileError(null);
     setIsEditing(false);
-  }, [currentName, currentSelfReport]);
+  }, [committedRaterType, currentName, currentSelfReport]);
 
   const handleSaveProfile = useCallback(async () => {
     const trimmedName = nameInput.trim();
@@ -677,7 +985,7 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
     }
 
     try {
-      normalizedSelfReport = normalizeProfileSelfReport(selfReportInput);
+      normalizedSelfReport = withRaterType(selfReportInput, forcedRaterTypeInput);
       serializedSelfReport = profileSelfReportHasValues(normalizedSelfReport)
         ? serializeProfileSelfReport(normalizedSelfReport)
         : "";
@@ -695,18 +1003,39 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
 
     try {
       await setProfile(trimmedName, serializedSelfReport);
+      if (canWriteRaterProfile) {
+        await setRaterProfile(
+          forcedRaterTypeInput,
+          serializedSelfReport ? keccak256(toBytes(serializedSelfReport)) : zeroHash,
+        );
+      }
       setCommittedName(trimmedName);
+      setCommittedRaterType(forcedRaterTypeInput);
       setCommittedSelfReport(normalizedSelfReport);
       setNameInput(trimmedName);
+      setRaterTypeInput(forcedRaterTypeInput);
       setSelfReportInput(normalizedSelfReport);
       setIsEditing(false);
       notification.success(hasLiveProfile ? "Profile updated!" : "Profile created!");
       refetchLiveProfile();
+      refetchRaterRegistryProfile();
     } catch (error: any) {
       console.error("Profile update failed:", error);
       setProfileError(getProfileWriteErrorMessage(error, "Failed to update profile"));
     }
-  }, [hasLiveProfile, isNameTaken, isOwnName, nameInput, refetchLiveProfile, selfReportInput, setProfile]);
+  }, [
+    canWriteRaterProfile,
+    forcedRaterTypeInput,
+    hasLiveProfile,
+    isNameTaken,
+    isOwnName,
+    nameInput,
+    refetchLiveProfile,
+    refetchRaterRegistryProfile,
+    selfReportInput,
+    setProfile,
+    setRaterProfile,
+  ]);
 
   const openAvatarEditor = useCallback(() => {
     setAvatarAccentInput(committedAvatarAccentHex ?? "");
@@ -835,7 +1164,7 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
                       className={`input input-bordered h-auto w-full bg-base-100 px-0 text-3xl font-semibold ${
                         nameIsUnavailable ? "input-error" : ""
                       }`}
-                      disabled={isSavingProfile}
+                      disabled={profileSaveBusy}
                     />
                     <div className="mt-2 font-mono text-base text-base-content/55 break-all">{normalizedAddress}</div>
                     <div className="mt-2 flex items-start justify-between gap-3 text-sm">
@@ -853,6 +1182,11 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
                   <>
                     <h1 className="truncate text-3xl font-semibold">{displayName}</h1>
                     <div className="mt-2 font-mono text-base text-base-content/55 break-all">{normalizedAddress}</div>
+                    {hasCurrentRaterType ? (
+                      <div className="mt-3 inline-flex rounded-full bg-base-content/[0.06] px-3 py-1 text-sm font-medium text-base-content/75">
+                        {currentRaterTypeName}
+                      </div>
+                    ) : null}
                   </>
                 )}
               </div>
@@ -865,7 +1199,7 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
                     type="button"
                     onClick={handleCancelEdit}
                     className="btn btn-ghost border border-base-300"
-                    disabled={isSavingProfile}
+                    disabled={profileSaveBusy}
                   >
                     Cancel
                   </button>
@@ -874,13 +1208,13 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
                     onClick={() => void handleSaveProfile()}
                     className="btn btn-submit"
                     disabled={
-                      isSavingProfile ||
+                      profileSaveBusy ||
                       !nameInput.trim() ||
                       nameIsUnavailable ||
                       selfReportInputLength > MAX_PROFILE_SELF_REPORT_LENGTH
                     }
                   >
-                    {isSavingProfile ? "Saving..." : hasLiveProfile ? "Save changes" : "Save profile"}
+                    {profileSaveBusy ? "Saving..." : hasLiveProfile ? "Save changes" : "Save profile"}
                   </button>
                 </div>
               ) : (
@@ -950,148 +1284,188 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
                   type="button"
                   className="btn btn-ghost btn-sm border border-base-300"
                   onClick={() => {
-                    setSelfReportInput(emptySelfReport());
+                    setSelfReportInput(withRaterType(emptySelfReport(), forcedRaterTypeInput));
                     setProfileError(null);
                   }}
-                  disabled={isSavingProfile || !profileSelfReportHasValues(selfReportInput)}
+                  disabled={profileSaveBusy || !profileSelfReportHasValues(effectiveSelfReportInput)}
                 >
                   Clear
                 </button>
               </div>
 
-              <div className="mt-5 grid gap-4 lg:grid-cols-2">
-                <label className="form-control">
-                  <span className="label-text text-base-content/65">Age group</span>
-                  <select
-                    aria-label="Age group"
-                    className="select select-bordered mt-2 w-full bg-base-100"
-                    value={selfReportInput.ageGroup ?? ""}
-                    onChange={event => {
+              <div className="mt-5">
+                <div className="label-text text-base-content/65">Profile type</div>
+                <div className="mt-2 grid gap-2 sm:grid-cols-4">
+                  {RATER_TYPE_OPTIONS.map(option => {
+                    const lockedByCredential = hasActiveHumanCredential && option.value !== RATER_TYPE.Human;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        className={`rounded-xl border px-3 py-2 text-left text-sm font-medium transition ${
+                          forcedRaterTypeInput === option.value
+                            ? "border-primary bg-primary/15 text-primary"
+                            : "border-base-300 bg-base-100 text-base-content/70 hover:bg-base-200"
+                        } ${lockedByCredential ? "cursor-not-allowed opacity-45" : ""}`}
+                        disabled={profileSaveBusy || lockedByCredential}
+                        onClick={() => {
+                          setRaterTypeInput(option.value);
+                          setSelfReportInput(withRaterType(selfReportInput, option.value));
+                          setProfileError(null);
+                        }}
+                      >
+                        {option.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {forcedRaterTypeInput === RATER_TYPE.Human ? (
+                <div className="mt-5 grid gap-4 lg:grid-cols-2">
+                  <label className="form-control">
+                    <span className="label-text text-base-content/65">Age group</span>
+                    <select
+                      aria-label="Age group"
+                      className="select select-bordered mt-2 w-full bg-base-100"
+                      value={selfReportInput.ageGroup ?? ""}
+                      onChange={event => {
+                        setSelfReportInput(
+                          normalizeProfileSelfReport({ ...selfReportInput, ageGroup: event.target.value || undefined }),
+                        );
+                        setProfileError(null);
+                      }}
+                      disabled={profileSaveBusy}
+                    >
+                      <option value="">Prefer not to say</option>
+                      {PROFILE_AGE_GROUP_OPTIONS.map(option => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <SearchableCountrySelect
+                    id="profile-country"
+                    label="Country"
+                    value={selfReportInput.residenceCountry}
+                    onChange={value => {
                       setSelfReportInput(
-                        normalizeProfileSelfReport({ ...selfReportInput, ageGroup: event.target.value || undefined }),
+                        normalizeProfileSelfReport({
+                          ...selfReportInput,
+                          residenceCountry: value,
+                        }),
                       );
                       setProfileError(null);
                     }}
-                    disabled={isSavingProfile}
-                  >
-                    <option value="">Prefer not to say</option>
-                    {PROFILE_AGE_GROUP_OPTIONS.map(option => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                    disabled={profileSaveBusy}
+                  />
 
-                <SearchableCountrySelect
-                  id="profile-country"
-                  label="Country"
-                  value={selfReportInput.residenceCountry}
-                  onChange={value => {
-                    setSelfReportInput(
-                      normalizeProfileSelfReport({
-                        ...selfReportInput,
-                        residenceCountry: value,
-                      }),
-                    );
+                  <NationalityPicker
+                    value={selfReportInput.nationalities ?? []}
+                    onChange={values => {
+                      setSelfReportInput(normalizeProfileSelfReport({ ...selfReportInput, nationalities: values }));
+                      setProfileError(null);
+                    }}
+                    disabled={profileSaveBusy}
+                  />
+
+                  <div className="lg:col-span-2">
+                    <div className="label-text text-base-content/65">Languages</div>
+                    <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                      {PROFILE_LANGUAGE_OPTIONS.map(option => (
+                        <label key={option.value} className="flex items-center gap-2 text-sm text-base-content/75">
+                          <input
+                            type="checkbox"
+                            className="checkbox checkbox-sm"
+                            checked={optionSelected(selfReportInput.languages, option.value)}
+                            onChange={event => {
+                              setSelfReportInput(
+                                updateSelfReportArray<LanguageCode>(
+                                  selfReportInput,
+                                  "languages",
+                                  option.value,
+                                  event.target.checked,
+                                ),
+                              );
+                              setProfileError(null);
+                            }}
+                            disabled={profileSaveBusy}
+                          />
+                          <span>{option.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="lg:col-span-2">
+                    <div className="label-text text-base-content/65">Roles</div>
+                    <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                      {PROFILE_ROLE_OPTIONS.map(option => (
+                        <label key={option.value} className="flex items-center gap-2 text-sm text-base-content/75">
+                          <input
+                            type="checkbox"
+                            className="checkbox checkbox-sm"
+                            checked={optionSelected(selfReportInput.roles, option.value)}
+                            onChange={event => {
+                              setSelfReportInput(
+                                updateSelfReportArray<ProfileRole>(
+                                  selfReportInput,
+                                  "roles",
+                                  option.value,
+                                  event.target.checked,
+                                ),
+                              );
+                              setProfileError(null);
+                            }}
+                            disabled={profileSaveBusy}
+                          />
+                          <span>{option.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="lg:col-span-2">
+                    <div className="label-text text-base-content/65">Experience</div>
+                    <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                      {PROFILE_EXPERTISE_OPTIONS.map(option => (
+                        <label key={option.value} className="flex items-center gap-2 text-sm text-base-content/75">
+                          <input
+                            type="checkbox"
+                            className="checkbox checkbox-sm"
+                            checked={optionSelected(selfReportInput.expertise, option.value)}
+                            onChange={event => {
+                              setSelfReportInput(
+                                updateSelfReportArray<ExpertiseArea>(
+                                  selfReportInput,
+                                  "expertise",
+                                  option.value,
+                                  event.target.checked,
+                                ),
+                              );
+                              setProfileError(null);
+                            }}
+                            disabled={profileSaveBusy}
+                          />
+                          <span>{option.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <ProfileTypeSpecificFields
+                  disabled={profileSaveBusy}
+                  onChange={nextReport => {
+                    setSelfReportInput(nextReport);
                     setProfileError(null);
                   }}
-                  disabled={isSavingProfile}
+                  report={selfReportInput}
+                  raterType={forcedRaterTypeInput}
                 />
-
-                <NationalityPicker
-                  value={selfReportInput.nationalities ?? []}
-                  onChange={values => {
-                    setSelfReportInput(normalizeProfileSelfReport({ ...selfReportInput, nationalities: values }));
-                    setProfileError(null);
-                  }}
-                  disabled={isSavingProfile}
-                />
-
-                <div className="lg:col-span-2">
-                  <div className="label-text text-base-content/65">Languages</div>
-                  <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                    {PROFILE_LANGUAGE_OPTIONS.map(option => (
-                      <label key={option.value} className="flex items-center gap-2 text-sm text-base-content/75">
-                        <input
-                          type="checkbox"
-                          className="checkbox checkbox-sm"
-                          checked={optionSelected(selfReportInput.languages, option.value)}
-                          onChange={event => {
-                            setSelfReportInput(
-                              updateSelfReportArray<LanguageCode>(
-                                selfReportInput,
-                                "languages",
-                                option.value,
-                                event.target.checked,
-                              ),
-                            );
-                            setProfileError(null);
-                          }}
-                          disabled={isSavingProfile}
-                        />
-                        <span>{option.label}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="lg:col-span-2">
-                  <div className="label-text text-base-content/65">Roles</div>
-                  <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                    {PROFILE_ROLE_OPTIONS.map(option => (
-                      <label key={option.value} className="flex items-center gap-2 text-sm text-base-content/75">
-                        <input
-                          type="checkbox"
-                          className="checkbox checkbox-sm"
-                          checked={optionSelected(selfReportInput.roles, option.value)}
-                          onChange={event => {
-                            setSelfReportInput(
-                              updateSelfReportArray<ProfileRole>(
-                                selfReportInput,
-                                "roles",
-                                option.value,
-                                event.target.checked,
-                              ),
-                            );
-                            setProfileError(null);
-                          }}
-                          disabled={isSavingProfile}
-                        />
-                        <span>{option.label}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="lg:col-span-2">
-                  <div className="label-text text-base-content/65">Experience</div>
-                  <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                    {PROFILE_EXPERTISE_OPTIONS.map(option => (
-                      <label key={option.value} className="flex items-center gap-2 text-sm text-base-content/75">
-                        <input
-                          type="checkbox"
-                          className="checkbox checkbox-sm"
-                          checked={optionSelected(selfReportInput.expertise, option.value)}
-                          onChange={event => {
-                            setSelfReportInput(
-                              updateSelfReportArray<ExpertiseArea>(
-                                selfReportInput,
-                                "expertise",
-                                option.value,
-                                event.target.checked,
-                              ),
-                            );
-                            setProfileError(null);
-                          }}
-                          disabled={isSavingProfile}
-                        />
-                        <span>{option.label}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              </div>
+              )}
 
               <div className="mt-4 flex justify-end">
                 <span className="text-sm text-base-content/60">
@@ -1126,9 +1500,11 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
             <div>
               <h2 className="text-xl font-semibold text-base-content">Reputation context</h2>
             </div>
-            <div className="rounded-full bg-base-content/[0.05] px-4 py-2 text-sm font-medium text-base-content/70">
-              {rewardStatus ? rewardStatus.raterTypeName : "Loading"}
-            </div>
+            {hasCurrentRaterType ? (
+              <div className="rounded-full bg-base-content/[0.05] px-4 py-2 text-sm font-medium text-base-content/70">
+                {currentRaterTypeName}
+              </div>
+            ) : null}
           </div>
 
           {rewardStatusQuery.isLoading ? (

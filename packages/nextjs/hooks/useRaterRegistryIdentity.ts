@@ -237,6 +237,7 @@ export function useSetRaterProfile() {
   );
 
   return {
+    isAvailable: Boolean(raterRegistryContract),
     isPending: isPending || isSponsoredWritePending,
     setRaterProfile,
   };

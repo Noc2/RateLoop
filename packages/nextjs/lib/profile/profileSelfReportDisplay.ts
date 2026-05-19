@@ -1,12 +1,20 @@
 import {
   AGE_GROUP_OPTIONS,
+  AI_AGENT_FRAMEWORK_OPTIONS,
+  AI_AUTONOMY_OPTIONS,
+  AI_MODEL_PROVIDER_OPTIONS,
   EXPERTISE_OPTIONS,
   type ExpertiseArea,
+  HYBRID_OVERSIGHT_OPTIONS,
   LANGUAGE_OPTIONS,
   type LanguageCode,
   type ProfileRole,
   type ProfileSelfReport,
+  RATER_TYPE,
   ROLE_OPTIONS,
+  TEAM_SIZE_OPTIONS,
+  TEAM_TYPE_OPTIONS,
+  formatRaterTypeName,
 } from "@rateloop/node-utils/profileSelfReport";
 
 const PROFILE_LANGUAGE_LABELS: Record<LanguageCode, string> = {
@@ -58,6 +66,33 @@ const PROFILE_EXPERTISE_LABELS: Record<ExpertiseArea, string> = {
   "public-policy": "Public policy",
   science: "Science",
 };
+
+function formatProfileOptionLabel(value: string) {
+  return value
+    .split("-")
+    .map(part => (part.length <= 3 ? part.toUpperCase() : part.charAt(0).toUpperCase() + part.slice(1)))
+    .join(" ");
+}
+
+const AI_MODEL_PROVIDER_LABELS = Object.fromEntries(
+  AI_MODEL_PROVIDER_OPTIONS.map(value => [value, formatProfileOptionLabel(value)]),
+) as Record<(typeof AI_MODEL_PROVIDER_OPTIONS)[number], string>;
+const AI_AGENT_FRAMEWORK_LABELS = Object.fromEntries(
+  AI_AGENT_FRAMEWORK_OPTIONS.map(value => [value, formatProfileOptionLabel(value)]),
+) as Record<(typeof AI_AGENT_FRAMEWORK_OPTIONS)[number], string>;
+const AI_AUTONOMY_LABELS = Object.fromEntries(
+  AI_AUTONOMY_OPTIONS.map(value => [value, formatProfileOptionLabel(value)]),
+) as Record<(typeof AI_AUTONOMY_OPTIONS)[number], string>;
+const TEAM_TYPE_LABELS = Object.fromEntries(
+  TEAM_TYPE_OPTIONS.map(value => [value, formatProfileOptionLabel(value)]),
+) as Record<(typeof TEAM_TYPE_OPTIONS)[number], string>;
+const TEAM_SIZE_LABELS = Object.fromEntries(TEAM_SIZE_OPTIONS.map(value => [value, value])) as Record<
+  (typeof TEAM_SIZE_OPTIONS)[number],
+  string
+>;
+const HYBRID_OVERSIGHT_LABELS = Object.fromEntries(
+  HYBRID_OVERSIGHT_OPTIONS.map(value => [value, formatProfileOptionLabel(value)]),
+) as Record<(typeof HYBRID_OVERSIGHT_OPTIONS)[number], string>;
 
 const FALLBACK_COUNTRY_CODES = [
   "AD",
@@ -351,6 +386,9 @@ export function getProfileSelfReportDisplayGroups(report: ProfileSelfReport | nu
   if (!report) return [];
 
   return [
+    report.raterType !== undefined && report.raterType !== RATER_TYPE.Unknown
+      ? { label: "Profile type", values: [formatRaterTypeName(report.raterType)] }
+      : null,
     report.ageGroup ? { label: "Age group", values: [report.ageGroup] } : null,
     report.residenceCountry ? { label: "Country", values: [formatProfileCountryCode(report.residenceCountry)] } : null,
     report.nationalities?.length
@@ -362,6 +400,44 @@ export function getProfileSelfReportDisplayGroups(report: ProfileSelfReport | nu
     report.roles?.length ? { label: "Roles", values: report.roles.map(value => PROFILE_ROLE_LABELS[value]) } : null,
     report.expertise?.length
       ? { label: "Experience", values: report.expertise.map(value => PROFILE_EXPERTISE_LABELS[value]) }
+      : null,
+    report.ai?.modelProvider
+      ? { label: "Model provider", values: [AI_MODEL_PROVIDER_LABELS[report.ai.modelProvider]] }
+      : null,
+    report.ai?.modelFamily ? { label: "Model family", values: [report.ai.modelFamily] } : null,
+    report.ai?.modelVersion ? { label: "Model version", values: [report.ai.modelVersion] } : null,
+    report.ai?.agentFramework
+      ? { label: "Agent framework", values: [AI_AGENT_FRAMEWORK_LABELS[report.ai.agentFramework]] }
+      : null,
+    report.ai?.autonomy ? { label: "Autonomy", values: [AI_AUTONOMY_LABELS[report.ai.autonomy]] } : null,
+    report.ai?.languages?.length
+      ? { label: "AI languages", values: report.ai.languages.map(value => PROFILE_LANGUAGE_LABELS[value]) }
+      : null,
+    report.ai?.expertise?.length
+      ? { label: "AI expertise", values: report.ai.expertise.map(value => PROFILE_EXPERTISE_LABELS[value]) }
+      : null,
+    report.team?.teamType ? { label: "Team type", values: [TEAM_TYPE_LABELS[report.team.teamType]] } : null,
+    report.team?.teamSize ? { label: "Team size", values: [TEAM_SIZE_LABELS[report.team.teamSize]] } : null,
+    report.team?.country ? { label: "Team country", values: [formatProfileCountryCode(report.team.country)] } : null,
+    report.team?.website ? { label: "Website", values: [report.team.website] } : null,
+    report.team?.languages?.length
+      ? { label: "Team languages", values: report.team.languages.map(value => PROFILE_LANGUAGE_LABELS[value]) }
+      : null,
+    report.team?.expertise?.length
+      ? { label: "Team expertise", values: report.team.expertise.map(value => PROFILE_EXPERTISE_LABELS[value]) }
+      : null,
+    report.hybrid?.oversight
+      ? { label: "Oversight", values: [HYBRID_OVERSIGHT_LABELS[report.hybrid.oversight]] }
+      : null,
+    report.hybrid?.modelProvider
+      ? { label: "AI model provider", values: [AI_MODEL_PROVIDER_LABELS[report.hybrid.modelProvider]] }
+      : null,
+    report.hybrid?.modelFamily ? { label: "AI model family", values: [report.hybrid.modelFamily] } : null,
+    report.hybrid?.languages?.length
+      ? { label: "Hybrid languages", values: report.hybrid.languages.map(value => PROFILE_LANGUAGE_LABELS[value]) }
+      : null,
+    report.hybrid?.expertise?.length
+      ? { label: "Hybrid expertise", values: report.hybrid.expertise.map(value => PROFILE_EXPERTISE_LABELS[value]) }
       : null,
   ].filter((group): group is { label: string; values: string[] } => Boolean(group));
 }
