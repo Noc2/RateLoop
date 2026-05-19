@@ -1,6 +1,5 @@
 import { DocsTitle } from "~~/components/docs/DocsTitle";
 import { RewardPayoutPathsDiagram } from "~~/components/docs/RewardPayoutPathsDiagram";
-import { TokenAllocationChart } from "~~/components/docs/TokenAllocationChart";
 import { protocolDocFacts } from "~~/lib/docs/protocolFacts";
 import { LREP_MAX_SUPPLY_LABEL } from "~~/lib/docs/tokenomics";
 
@@ -52,10 +51,7 @@ const Tokenomics = () => {
       </p>
       <hr />
 
-      <h2>Token Distribution</h2>
-      <TokenAllocationChart />
-
-      <h3>Launch Distribution Pool</h3>
+      <h2>Launch Distribution Pool</h2>
       <p>
         The 68M LREP Launch Distribution Pool is the protocol&apos;s onboarding engine. It is not a large airdrop to the
         previous user set. The split is <strong>35M LREP</strong> for verified + referral rewards,{" "}
@@ -128,7 +124,7 @@ const Tokenomics = () => {
         former 4M LREP consensus reserve allocation moved into earned rater rewards.
       </p>
 
-      <h3>Treasury</h3>
+      <h2>Treasury</h2>
       <p>
         The protocol treasury starts with <strong>32M LREP</strong> on the governor/timelock from launch. It grows over
         time through governance-routed settlement remainder, cancellation fees from voluntary content withdrawals, and
