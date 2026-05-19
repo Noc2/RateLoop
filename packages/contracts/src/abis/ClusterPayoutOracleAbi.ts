@@ -1171,6 +1171,40 @@ export const ClusterPayoutOracleAbi = [
   },
   {
     "type": "function",
+    "name": "roundPayoutSnapshotConsumerFor",
+    "inputs": [
+      {
+        "name": "domain",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "rewardPoolId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "contentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "roundId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "roundPayoutSnapshotKey",
     "inputs": [
       {
@@ -1202,6 +1236,40 @@ export const ClusterPayoutOracleAbi = [
       }
     ],
     "stateMutability": "pure"
+  },
+  {
+    "type": "function",
+    "name": "roundPayoutSnapshotProposedAt",
+    "inputs": [
+      {
+        "name": "domain",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "rewardPoolId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "contentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "roundId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "function",

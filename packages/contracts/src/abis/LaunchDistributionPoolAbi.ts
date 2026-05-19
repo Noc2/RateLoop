@@ -823,6 +823,35 @@ export const LaunchDistributionPoolAbi = [
   },
   {
     "type": "function",
+    "name": "pendingEarnedRaterCreditReadyAt",
+    "inputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "pendingEarnedRaterCredits",
     "inputs": [
       {
@@ -1291,6 +1320,70 @@ export const LaunchDistributionPoolAbi = [
   },
   {
     "type": "function",
+    "name": "recordAdvisoryRaterRewardWithSourceReady",
+    "inputs": [
+      {
+        "name": "rater",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "contentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "roundId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "advisoryCommitKey",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "scoreBps",
+        "type": "uint16",
+        "internalType": "uint16"
+      },
+      {
+        "name": "revealedRaterCount",
+        "type": "uint16",
+        "internalType": "uint16"
+      },
+      {
+        "name": "noPendingCleanup",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "verifiedAnchorIds",
+        "type": "bytes32[]",
+        "internalType": "bytes32[]"
+      },
+      {
+        "name": "sourceReadyAt",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "recorded",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "paidAmount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "recordEarnedRaterReward",
     "inputs": [
       {
@@ -1337,6 +1430,70 @@ export const LaunchDistributionPoolAbi = [
         "name": "verifiedAnchorIds",
         "type": "bytes32[]",
         "internalType": "bytes32[]"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "paidAmount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "recordEarnedRaterRewardWithSourceReady",
+    "inputs": [
+      {
+        "name": "rater",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "contentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "roundId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "commitKey",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "scoreBps",
+        "type": "uint16",
+        "internalType": "uint16"
+      },
+      {
+        "name": "revealedRaterCount",
+        "type": "uint16",
+        "internalType": "uint16"
+      },
+      {
+        "name": "noPendingCleanup",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "stakeAmount",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "verifiedAnchorIds",
+        "type": "bytes32[]",
+        "internalType": "bytes32[]"
+      },
+      {
+        "name": "sourceReadyAt",
+        "type": "uint64",
+        "internalType": "uint64"
       }
     ],
     "outputs": [

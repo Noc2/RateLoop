@@ -1267,6 +1267,30 @@ export const RoundVotingEngineAbi = [
   },
   {
     "type": "function",
+    "name": "roundClusterPayoutReadyAt",
+    "inputs": [
+      {
+        "name": "contentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "roundId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint48",
+        "internalType": "uint48"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "roundConfigSnapshot",
     "inputs": [
       {

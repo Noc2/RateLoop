@@ -1343,6 +1343,24 @@ export const QuestionRewardPoolEscrowAbi = [
   },
   {
     "type": "function",
+    "name": "repointRewardPoolClusterPayoutOracle",
+    "inputs": [
+      {
+        "name": "rewardPoolId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "newOracle",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "revokeRole",
     "inputs": [
       {
@@ -1885,6 +1903,31 @@ export const QuestionRewardPoolEscrowAbi = [
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "RewardPoolClusterPayoutOracleRepointed",
+    "inputs": [
+      {
+        "name": "rewardPoolId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "oldClusterPayoutOracle",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "newClusterPayoutOracle",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
       }
     ],
     "anonymous": false
