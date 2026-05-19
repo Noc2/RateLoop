@@ -939,6 +939,11 @@ async function validateSponsoredCalls(
           continue;
         }
         return { ok: false, debugCode: "unsupported_operation" };
+      case "RaterRegistry":
+        if (functionName === "setProfile") {
+          continue;
+        }
+        return { ok: false, debugCode: "unsupported_operation" };
       case "RoundVotingEngine":
         if (functionName === "claimCancelledRoundRefund" || functionName === "commitVote") {
           continue;

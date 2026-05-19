@@ -283,7 +283,7 @@ function normalizeStringArray<T extends string>(
   return items.length > 0 ? items : undefined;
 }
 
-function pruneUndefined<T extends Record<string, unknown>>(value: T): T {
+function pruneUndefined<T extends object>(value: T): T {
   return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined)) as T;
 }
 
@@ -329,7 +329,7 @@ function normalizeHybridContext(value: unknown): ProfileHybridContext | undefine
 function pruneEmpty(report: ProfileSelfReport) {
   const next: ProfileSelfReport = { v: PROFILE_SELF_REPORT_SCHEMA_VERSION };
 
-  if (report.raterType && report.raterType !== RATER_TYPE.Unknown) next.raterType = report.raterType;
+  if (report.raterType !== undefined && report.raterType !== RATER_TYPE.Unknown) next.raterType = report.raterType;
   if (report.ageGroup) next.ageGroup = report.ageGroup;
   if (report.residenceCountry) next.residenceCountry = report.residenceCountry;
   if (report.nationalities?.length) next.nationalities = report.nationalities;
@@ -363,7 +363,7 @@ export function normalizeProfileSelfReport(value: unknown): ProfileSelfReport {
 
 export function profileSelfReportHasValues(report: ProfileSelfReport | null | undefined) {
   return Boolean(
-    (report?.raterType && report.raterType !== RATER_TYPE.Unknown) ||
+    (report?.raterType !== undefined && report.raterType !== RATER_TYPE.Unknown) ||
       report?.ageGroup ||
       report?.residenceCountry ||
       report?.nationalities?.length ||

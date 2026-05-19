@@ -51,6 +51,7 @@ const lrepContract = contractsForChain.LoopReputation;
 const contentRegistryContract = contractsForChain.ContentRegistry;
 const frontendRegistryContract = contractsForChain.FrontendRegistry;
 const profileRegistryContract = contractsForChain.ProfileRegistry;
+const raterRegistryContract = contractsForChain.RaterRegistry;
 const rewardEscrowContract = contractsForChain.QuestionRewardPoolEscrow;
 const rewardDistributorContract = contractsForChain.RoundRewardDistributor;
 const votingEngineContract = contractsForChain.RoundVotingEngine;
@@ -574,6 +575,7 @@ test("supported sponsored operation families are allowlisted", async () => {
     ],
     [encodeCall(profileRegistryContract, "setAvatarAccent", [0x76bb40])],
     [encodeCall(profileRegistryContract, "clearAvatarAccent")],
+    [encodeCall(raterRegistryContract, "setProfile", [2, `0x${"0".repeat(64)}`])],
     [encodeCall(votingEngineContract, "claimCancelledRoundRefund", [1n, 1n])],
     [encodeCall(rewardDistributorContract, "claimFrontendFee", [1n, 1n, WALLET])],
     [encodeCall(rewardDistributorContract, "claimParticipationReward", [1n, 1n])],
