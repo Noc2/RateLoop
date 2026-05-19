@@ -1,4 +1,6 @@
 import {
+  buildParticipationClaimStateLookups,
+  buildRoundClaimStateLookup,
   buildVoterParticipationClaimableRewards,
   calculateLastClaimAwarePoolShare,
   getQuestionRewardClaimArgs,
@@ -85,6 +87,63 @@ test("calculateLastClaimAwarePoolShare returns final claimant dust remainder", (
     }),
     3n,
   );
+});
+
+test("buildRoundClaimStateLookup prefers commit-key reward claims for delegated votes", () => {
+  const lookup = buildRoundClaimStateLookup({
+    contentId: 4n,
+    roundId: 2n,
+    connectedAddress: "0x2000000000000000000000000000000000000000",
+    voter: "0x1000000000000000000000000000000000000000",
+    commitKey: `0x${"a".repeat(64)}`,
+    settled: true,
+  });
+
+  assert.deepEqual(lookup, {
+    contract: "distributor",
+    functionName: "rewardCommitClaimed",
+    args: [4n, 2n, `0x${"a".repeat(64)}`],
+  });
+});
+
+test("buildRoundClaimStateLookup falls back to raw voter address when no commit key is indexed", () => {
+  const lookup = buildRoundClaimStateLookup({
+    contentId: 4n,
+    roundId: 2n,
+    connectedAddress: "0x2000000000000000000000000000000000000000",
+    voter: "0x1000000000000000000000000000000000000000",
+    commitKey: null,
+    settled: true,
+  });
+
+  assert.deepEqual(lookup, {
+    contract: "distributor",
+    functionName: "rewardClaimed",
+    args: [4n, 2n, "0x1000000000000000000000000000000000000000"],
+  });
+});
+
+test("buildParticipationClaimStateLookups uses commit-key claim accounting", () => {
+  const lookups = buildParticipationClaimStateLookups({
+    contentId: 4n,
+    roundId: 2n,
+    connectedAddress: "0x2000000000000000000000000000000000000000",
+    voter: "0x1000000000000000000000000000000000000000",
+    commitKey: `0x${"b".repeat(64)}`,
+  });
+
+  assert.deepEqual(lookups, {
+    claimed: {
+      contract: "distributor",
+      functionName: "participationRewardCommitClaimed",
+      args: [4n, 2n, `0x${"b".repeat(64)}`],
+    },
+    paid: {
+      contract: "distributor",
+      functionName: "participationRewardCommitPaid",
+      args: [4n, 2n, `0x${"b".repeat(64)}`],
+    },
+  });
 });
 
 test("sortClaimableRewardItems keeps frontend round credits ahead of the final frontend withdrawal", () => {

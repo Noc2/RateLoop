@@ -7,6 +7,29 @@ export interface RoundClaimableRewardItem {
   claimType: "reward" | "refund" | "participation_reward";
 }
 
+type ClaimHex = `0x${string}`;
+
+interface ClaimLookupBaseParams {
+  contentId: bigint;
+  roundId: bigint;
+  connectedAddress: ClaimHex;
+  voter?: string | null;
+  commitKey?: string | null;
+}
+
+export interface ClaimStateLookup {
+  contract: "distributor" | "engine";
+  functionName:
+    | "rewardCommitClaimed"
+    | "rewardClaimed"
+    | "cancelledRoundRefundClaimed"
+    | "participationRewardCommitClaimed"
+    | "participationRewardClaimed"
+    | "participationRewardCommitPaid"
+    | "participationRewardPaid";
+  args: readonly [bigint, bigint, ClaimHex];
+}
+
 export interface FrontendRoundFeeClaimableRewardItem {
   contentId: bigint;
   roundId: bigint;
@@ -82,6 +105,74 @@ interface LastClaimAwarePoolShareParams {
   totalClaimants: bigint;
   claimedCount: bigint;
   claimedAmount: bigint;
+}
+
+function normalizeClaimAddress(value: string | null | undefined): ClaimHex | null {
+  return typeof value === "string" && /^0x[0-9a-fA-F]{40}$/.test(value) ? (value.toLowerCase() as ClaimHex) : null;
+}
+
+function normalizeCommitKey(value: string | null | undefined): ClaimHex | null {
+  return typeof value === "string" && /^0x[0-9a-fA-F]{64}$/.test(value) ? (value.toLowerCase() as ClaimHex) : null;
+}
+
+function claimAccount(params: Pick<ClaimLookupBaseParams, "connectedAddress" | "voter">) {
+  return normalizeClaimAddress(params.voter) ?? params.connectedAddress;
+}
+
+export function buildRoundClaimStateLookup(params: ClaimLookupBaseParams & { settled: boolean }): ClaimStateLookup {
+  if (params.settled) {
+    const commitKey = normalizeCommitKey(params.commitKey);
+    if (commitKey) {
+      return {
+        contract: "distributor",
+        functionName: "rewardCommitClaimed",
+        args: [params.contentId, params.roundId, commitKey],
+      };
+    }
+    return {
+      contract: "distributor",
+      functionName: "rewardClaimed",
+      args: [params.contentId, params.roundId, claimAccount(params)],
+    };
+  }
+
+  return {
+    contract: "engine",
+    functionName: "cancelledRoundRefundClaimed",
+    args: [params.contentId, params.roundId, claimAccount(params)],
+  };
+}
+
+export function buildParticipationClaimStateLookups(params: ClaimLookupBaseParams) {
+  const commitKey = normalizeCommitKey(params.commitKey);
+  if (commitKey) {
+    return {
+      claimed: {
+        contract: "distributor" as const,
+        functionName: "participationRewardCommitClaimed" as const,
+        args: [params.contentId, params.roundId, commitKey] as const,
+      },
+      paid: {
+        contract: "distributor" as const,
+        functionName: "participationRewardCommitPaid" as const,
+        args: [params.contentId, params.roundId, commitKey] as const,
+      },
+    };
+  }
+
+  const account = claimAccount(params);
+  return {
+    claimed: {
+      contract: "distributor" as const,
+      functionName: "participationRewardClaimed" as const,
+      args: [params.contentId, params.roundId, account] as const,
+    },
+    paid: {
+      contract: "distributor" as const,
+      functionName: "participationRewardPaid" as const,
+      args: [params.contentId, params.roundId, account] as const,
+    },
+  };
 }
 
 export function calculateLastClaimAwarePoolShare({

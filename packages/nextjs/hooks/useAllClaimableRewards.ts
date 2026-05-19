@@ -5,6 +5,8 @@ import { ROUND_STATE } from "@rateloop/contracts/protocol";
 import { useAccount, useReadContracts } from "wagmi";
 import {
   type ClaimableRewardItem,
+  buildParticipationClaimStateLookups,
+  buildRoundClaimStateLookup,
   buildVoterParticipationClaimableRewards,
   calculateLastClaimAwarePoolShare,
 } from "~~/hooks/claimableRewards";
@@ -76,13 +78,22 @@ export function useAllClaimableRewards() {
 
   const claimedContracts = useMemo(() => {
     if (!distributorInfo || !engineInfo || !address || terminalVotes.length === 0) return [];
-    return terminalVotes.map(v => ({
-      address: v.roundState === ROUND_STATE.Settled ? distributorInfo.address : engineInfo.address,
-      abi: v.roundState === ROUND_STATE.Settled ? distributorInfo.abi : engineInfo.abi,
-      functionName:
-        v.roundState === ROUND_STATE.Settled ? ("rewardClaimed" as const) : ("cancelledRoundRefundClaimed" as const),
-      args: [BigInt(v.contentId), BigInt(v.roundId), address],
-    }));
+    return terminalVotes.map(v => {
+      const lookup = buildRoundClaimStateLookup({
+        contentId: BigInt(v.contentId),
+        roundId: BigInt(v.roundId),
+        connectedAddress: address as `0x${string}`,
+        voter: v.voter,
+        commitKey: v.commitKey,
+        settled: v.roundState === ROUND_STATE.Settled,
+      });
+      return {
+        address: lookup.contract === "distributor" ? distributorInfo.address : engineInfo.address,
+        abi: lookup.contract === "distributor" ? distributorInfo.abi : engineInfo.abi,
+        functionName: lookup.functionName,
+        args: lookup.args,
+      };
+    });
   }, [distributorInfo, engineInfo, address, terminalVotes]);
 
   const {
@@ -172,19 +183,26 @@ export function useAllClaimableRewards() {
     return settledParticipationTerminalVotes.flatMap(v => {
       const contentId = BigInt(v.contentId);
       const roundId = BigInt(v.roundId);
+      const claimLookups = buildParticipationClaimStateLookups({
+        contentId,
+        roundId,
+        connectedAddress: address as `0x${string}`,
+        voter: v.voter,
+        commitKey: v.commitKey,
+      });
 
       return [
         {
           address: distributorInfo.address,
           abi: distributorInfo.abi,
-          functionName: "participationRewardClaimed" as const,
-          args: [contentId, roundId, address],
+          functionName: claimLookups.claimed.functionName,
+          args: claimLookups.claimed.args,
         },
         {
           address: distributorInfo.address,
           abi: distributorInfo.abi,
-          functionName: "participationRewardPaid" as const,
-          args: [contentId, roundId, address],
+          functionName: claimLookups.paid.functionName,
+          args: claimLookups.paid.args,
         },
         {
           address: distributorInfo.address,

@@ -1050,6 +1050,7 @@ export function registerContentRoutes(app: ApiApp) {
         identityHolder: vote.identityHolder,
         identityVoter: vote.identityVoter,
         voterId: sql<null>`null`,
+        commitKey: vote.commitKey,
         commitHash: vote.commitHash,
         targetRound: vote.targetRound,
         drandChainHash: vote.drandChainHash,
