@@ -1134,10 +1134,6 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <h2 className="text-xl font-semibold text-base-content">Reputation context</h2>
-              <p className="mt-2 max-w-3xl text-sm leading-6 text-base-content/60">
-                Public follows and verified-human launch progress are visible here. Verified-human status does not boost
-                rating reward weight.
-              </p>
             </div>
             <div className="rounded-full bg-base-content/[0.05] px-4 py-2 text-sm font-medium text-base-content/70">
               {rewardStatus ? rewardStatus.raterTypeName : "Loading"}
@@ -1192,17 +1188,6 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
                       : `${formatLaunchEligibility(rewardStatus.launchRewards)}; verify to unlock ${formatLrepString(
                           rewardStatus.launchRewards.unlockableLaunchCap,
                         )} LREP`}
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-6">
-                <div className="surface-card-nested rounded-2xl px-4 py-3 text-sm text-base-content/70">
-                  <div className="font-medium text-base-content/85">
-                    Verified human {rewardStatus.humanCredential.status}
-                  </div>
-                  <div className="mt-2">
-                    Reward weight is stake, timing, and prediction score. Identity status does not multiply it.
                   </div>
                 </div>
               </div>
