@@ -1,13 +1,12 @@
 "use client";
 
 import { useCallback, useMemo } from "react";
-import { REWARD_SPLIT_BPS, ROUND_STATE } from "@rateloop/contracts/protocol";
+import { ROUND_STATE } from "@rateloop/contracts/protocol";
 import { useAccount, useReadContracts } from "wagmi";
 import {
   type ClaimableRewardItem,
   buildVoterParticipationClaimableRewards,
   calculateLastClaimAwarePoolShare,
-  calculateRevealedLoserRebate,
 } from "~~/hooks/claimableRewards";
 import { useDeployedContractInfo } from "~~/hooks/scaffold-eth";
 import { useClaimableFrontendRewards } from "~~/hooks/useClaimableFrontendRewards";
@@ -15,7 +14,7 @@ import { useClaimableQuestionRewards } from "~~/hooks/useClaimableQuestionReward
 import { useRecentUserVotes } from "~~/hooks/useRecentUserVotes";
 import type { PonderVoteItem } from "~~/services/ponder/client";
 
-const RBTS_REWARD_STATE_FIELDS = 8;
+const RBTS_REWARD_STATE_FIELDS = 4;
 
 function safeBigInt(val: unknown): bigint {
   try {
@@ -38,12 +37,8 @@ function rbtsRewardWeight(vote: PonderVoteItem) {
   return safeBigInt(vote.rbtsRewardWeight);
 }
 
-function rbtsForfeitedStake(vote: PonderVoteItem) {
-  return safeBigInt(vote.rbtsForfeitedStake);
-}
-
 function participationStake(vote: PonderVoteItem) {
-  return rbtsRewardWeight(vote);
+  return safeBigInt(vote.rbtsWeight);
 }
 
 /**
@@ -126,7 +121,7 @@ export function useAllClaimableRewards() {
   const settledParticipationTerminalVotes = useMemo(
     () =>
       terminalVotes.filter(
-        v => v.roundState === ROUND_STATE.Settled && v.revealed && isRbtsRewardRound(v) && rbtsRewardWeight(v) > 0n,
+        v => v.roundState === ROUND_STATE.Settled && v.revealed && isRbtsRewardRound(v) && participationStake(v) > 0n,
       ),
     [terminalVotes],
   );
@@ -162,30 +157,6 @@ export function useAllClaimableRewards() {
           address: engineInfo.address,
           abi: engineInfo.abi,
           functionName: "roundRbtsRewardClaimants" as const,
-          args: [contentId, roundId],
-        },
-        {
-          address: engineInfo.address,
-          abi: engineInfo.abi,
-          functionName: "roundRbtsForfeitedPool" as const,
-          args: [contentId, roundId],
-        },
-        {
-          address: engineInfo.address,
-          abi: engineInfo.abi,
-          functionName: "roundRbtsForfeitClaimants" as const,
-          args: [contentId, roundId],
-        },
-        {
-          address: distributorInfo.address,
-          abi: distributorInfo.abi,
-          functionName: "roundLoserRebateClaimedCount" as const,
-          args: [contentId, roundId],
-        },
-        {
-          address: distributorInfo.address,
-          abi: distributorInfo.abi,
-          functionName: "roundLoserRebateClaimedAmount" as const,
           args: [contentId, roundId],
         },
       ]);
@@ -267,7 +238,7 @@ export function useAllClaimableRewards() {
       });
     }
 
-    // Add RBTS-scored rewards. Positive score returns stake and earns pool share; forfeited stake gets a rebate.
+    // Add RBTS-scored rewards. Positive score spreads return stake and earn voter-pool share.
     if (
       rbtsRewardStateResults &&
       rbtsRewardStateResults.length === settledRbtsVotes.length * RBTS_REWARD_STATE_FIELDS
@@ -277,29 +248,13 @@ export function useAllClaimableRewards() {
         const stateIndex = i * RBTS_REWARD_STATE_FIELDS;
         const scoreWeight = rbtsRewardWeight(v);
         const stakeReturned = safeBigInt(v.rbtsStakeReturned);
-        const forfeitedStake = rbtsForfeitedStake(v);
         const totalScoreWeight = safeBigInt(v.roundRbtsRewardWeight);
         const voterPool = safeBigIntResult(rbtsRewardStateResults, stateIndex) ?? 0n;
         const voterRewardClaimedCount = safeBigIntResult(rbtsRewardStateResults, stateIndex + 1) ?? 0n;
         const voterRewardClaimedAmount = safeBigIntResult(rbtsRewardStateResults, stateIndex + 2) ?? 0n;
         const totalRewardClaimants =
           safeBigIntResult(rbtsRewardStateResults, stateIndex + 3) ?? safeBigInt(v.roundRbtsRewardClaimants);
-        const forfeitedPool =
-          safeBigIntResult(rbtsRewardStateResults, stateIndex + 4) ?? safeBigInt(v.roundRbtsForfeitedPool);
-        const totalForfeitClaimants =
-          safeBigIntResult(rbtsRewardStateResults, stateIndex + 5) ?? safeBigInt(v.roundRbtsForfeitClaimants);
-        const loserRebateClaimedCount = safeBigIntResult(rbtsRewardStateResults, stateIndex + 6) ?? 0n;
-        const loserRebateClaimedAmount = safeBigIntResult(rbtsRewardStateResults, stateIndex + 7) ?? 0n;
         let reward = stakeReturned;
-
-        reward += calculateRevealedLoserRebate({
-          forfeitedStake,
-          forfeitedPool,
-          refundBps: BigInt(REWARD_SPLIT_BPS.revealedLoserRefund),
-          totalClaimants: totalForfeitClaimants,
-          claimedCount: loserRebateClaimedCount,
-          claimedAmount: loserRebateClaimedAmount,
-        });
 
         reward += calculateLastClaimAwarePoolShare({
           claimantWeight: scoreWeight,

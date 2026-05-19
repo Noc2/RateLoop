@@ -296,7 +296,7 @@ test.describe("Reward claim lifecycle", () => {
     expect(doubleClaim, "Double participation reward claim should revert").toBe(false);
   });
 
-  test("losing voter cannot claim participation reward (NotWinningSide)", async () => {
+  test("revealed scored voter can claim participation reward even below the public winning side", async () => {
     test.skip(!settledContentId || roundId === 0n, "No settled content from previous test");
     test.setTimeout(60_000);
 
@@ -307,7 +307,7 @@ test.describe("Reward claim lifecycle", () => {
       loser.address,
       REWARD_DISTRIBUTOR,
     );
-    expect(result, "Losing voter participation reward claim should revert with NotWinningSide").toBe(false);
+    expect(result, "Revealed scored voter participation reward claim should succeed").toBe(true);
   });
 
   test("processUnrevealedVotes reverts when nothing to process (NothingProcessed)", async () => {

@@ -194,7 +194,7 @@ export function StakeSelector({
   ).toLocaleString();
   const participationBonusMicro = voteBonus !== undefined ? BigInt(Math.round(voteBonus * 1e6)) : 0n;
   const openPhaseGrossReturnMicro = voteEstimate.estimatedGrossReturnMicro + participationBonusMicro;
-  const openPhaseRevealedRefundMicro = voteEstimate.revealedLoserRefundMicro + participationBonusMicro;
+  const openPhaseBelowMeanFloorMicro = voteEstimate.belowMeanFloorMicro + participationBonusMicro;
   const openPhaseParticipationTooltip =
     voteBonus !== undefined
       ? `Includes the current participation bonus of +${voteBonus.toLocaleString(undefined, { maximumFractionDigits: 1 })} ${symbol}.`
@@ -445,9 +445,9 @@ export function StakeSelector({
                       </span>
                     </div>
                     <div className="flex items-center justify-between gap-3">
-                      <span>If missed but revealed</span>
+                      <span>Below-mean floor</span>
                       <span className="font-semibold tabular-nums">
-                        {formatLrepAmount(openPhaseRevealedRefundMicro)} {symbol}
+                        {formatLrepAmount(openPhaseBelowMeanFloorMicro)} {symbol}
                       </span>
                     </div>
                     <div className="flex items-center justify-between gap-3">

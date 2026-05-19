@@ -1,8 +1,7 @@
 import { BPS_SCALE, EPOCH_WEIGHT_BPS, REWARD_SPLIT_BPS } from "@rateloop/contracts/protocol";
 import type { RoundSnapshot } from "~~/lib/contracts/roundVotingEngine";
 
-const REMAINING_LOSING_POOL_BPS = BPS_SCALE - REWARD_SPLIT_BPS.revealedLoserRefund;
-const VOTER_POOL_SHARE_BPS = Math.floor((REMAINING_LOSING_POOL_BPS * REWARD_SPLIT_BPS.voter) / BPS_SCALE);
+const VOTER_POOL_SHARE_BPS = REWARD_SPLIT_BPS.voter;
 type ProgressTone = "primary" | "warning" | "success" | "neutral";
 
 type IncentiveSnapshot = Pick<
@@ -34,7 +33,7 @@ interface VoteReturnEstimate {
   projectedVoterPoolMicro: bigint;
   projectedPoolShareMicro: bigint;
   estimatedGrossReturnMicro: bigint;
-  revealedLoserRefundMicro: bigint;
+  belowMeanFloorMicro: bigint;
 }
 
 function formatPercent(value: number): string {
@@ -159,13 +158,12 @@ export function estimateVoteReturn(
       ? (effectiveStakeMicro * projectedVoterPoolMicro) / projectedWinningWeightedMicro
       : 0n;
   const estimatedGrossReturnMicro = stakeMicro + projectedPoolShareMicro;
-  const revealedLoserRefundMicro = (stakeMicro * BigInt(REWARD_SPLIT_BPS.revealedLoserRefund)) / BigInt(BPS_SCALE);
 
   return {
     effectiveStakeMicro,
     projectedVoterPoolMicro,
     projectedPoolShareMicro,
     estimatedGrossReturnMicro,
-    revealedLoserRefundMicro,
+    belowMeanFloorMicro: 0n,
   };
 }

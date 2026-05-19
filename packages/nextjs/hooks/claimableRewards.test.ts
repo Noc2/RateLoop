@@ -1,7 +1,6 @@
 import {
   buildVoterParticipationClaimableRewards,
   calculateLastClaimAwarePoolShare,
-  calculateRevealedLoserRebate,
   getQuestionRewardClaimArgs,
   sortClaimableRewardItems,
 } from "./claimableRewards";
@@ -85,32 +84,6 @@ test("calculateLastClaimAwarePoolShare returns final claimant dust remainder", (
       claimedAmount: 3n,
     }),
     3n,
-  );
-});
-
-test("calculateRevealedLoserRebate returns final claimant rebate remainder", () => {
-  assert.equal(
-    calculateRevealedLoserRebate({
-      forfeitedStake: 5n,
-      forfeitedPool: 10n,
-      refundBps: 5000n,
-      totalClaimants: 2n,
-      claimedCount: 1n,
-      claimedAmount: 2n,
-    }),
-    3n,
-  );
-
-  assert.equal(
-    calculateRevealedLoserRebate({
-      forfeitedStake: 5n,
-      forfeitedPool: 10n,
-      refundBps: 5000n,
-      totalClaimants: 2n,
-      claimedCount: 0n,
-      claimedAmount: 0n,
-    }),
-    2n,
   );
 });
 

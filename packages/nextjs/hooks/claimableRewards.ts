@@ -84,15 +84,6 @@ interface LastClaimAwarePoolShareParams {
   claimedAmount: bigint;
 }
 
-interface RevealedLoserRebateParams {
-  forfeitedStake: bigint;
-  forfeitedPool: bigint;
-  refundBps: bigint;
-  totalClaimants: bigint;
-  claimedCount: bigint;
-  claimedAmount: bigint;
-}
-
 export function calculateLastClaimAwarePoolShare({
   claimantWeight,
   totalWeight,
@@ -113,31 +104,6 @@ export function calculateLastClaimAwarePoolShare({
   }
 
   return claimedCount + 1n === totalClaimants ? pool - claimedAmount : (claimantWeight * pool) / totalWeight;
-}
-
-export function calculateRevealedLoserRebate({
-  forfeitedStake,
-  forfeitedPool,
-  refundBps,
-  totalClaimants,
-  claimedCount,
-  claimedAmount,
-}: RevealedLoserRebateParams) {
-  if (forfeitedStake <= 0n || forfeitedPool <= 0n || refundBps <= 0n) {
-    return 0n;
-  }
-
-  const loserRefundPool = (forfeitedPool * refundBps) / 10000n;
-  if (
-    loserRefundPool <= 0n ||
-    totalClaimants <= 0n ||
-    claimedCount >= totalClaimants ||
-    claimedAmount > loserRefundPool
-  ) {
-    return 0n;
-  }
-
-  return claimedCount + 1n === totalClaimants ? loserRefundPool - claimedAmount : (forfeitedStake * refundBps) / 10000n;
 }
 
 export function buildVoterParticipationClaimableRewards(candidates: readonly VoterParticipationRewardClaimCandidate[]) {
