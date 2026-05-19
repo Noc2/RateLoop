@@ -24,7 +24,7 @@ import { WinRateRing } from "~~/components/leaderboard/WinRateRing";
 import { FollowProfileButton } from "~~/components/shared/FollowProfileButton";
 import { ProfileImageLightbox } from "~~/components/shared/ProfileImageLightbox";
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
-import { buildRateContentHref } from "~~/constants/routes";
+import { SETTINGS_ROUTE, buildRateContentHref } from "~~/constants/routes";
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import { useCuryoConnectModal } from "~~/hooks/useCuryoConnectModal";
 import { useFollowedProfiles } from "~~/hooks/useFollowedProfiles";
@@ -1146,8 +1146,17 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
             <>
               <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                 <div className="surface-card-nested rounded-2xl px-4 py-3">
-                  <div className="text-sm text-base-content/60">Verified human</div>
-                  <div className="mt-1 text-xl font-semibold capitalize">{rewardStatus.humanCredential.status}</div>
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <div className="text-sm text-base-content/60">Verified human</div>
+                      <div className="mt-1 text-xl font-semibold capitalize">{rewardStatus.humanCredential.status}</div>
+                    </div>
+                    {ownProfile && rewardStatus.humanCredential.status !== "verified" ? (
+                      <Link href={`${SETTINGS_ROUTE}#identity`} className="btn btn-submit btn-sm">
+                        Get Verified
+                      </Link>
+                    ) : null}
+                  </div>
                   <div className="mt-1 text-sm text-base-content/55">Counts as a launch anchor when active</div>
                 </div>
 
