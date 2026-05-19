@@ -430,7 +430,9 @@ contract RoundVotingEngine is
         }
 
         if (!RoundLib.acceptsVotes(round, roundCfg.maxDuration)) revert RoundNotOpen();
-        if (block.timestamp >= uint256(round.startTime) + uint256(roundCfg.epochDuration)) revert RoundNotOpen();
+        unchecked {
+            if (block.timestamp >= uint256(round.startTime) + uint256(roundCfg.epochDuration)) revert RoundNotOpen();
+        }
         if (round.voteCount == 0 || round.totalStake == 0) revert RoundNotOpen();
         if (round.thresholdReachedAt != 0) revert ThresholdReached();
 
@@ -1102,8 +1104,10 @@ contract RoundVotingEngine is
 
     function previewCommitReferenceRatingBps(uint256 contentId) public view returns (uint16) {
         uint256 openRoundId = previewCommitRoundId(contentId);
-        if (openRoundId == nextRoundId[contentId] + 1) {
-            return registry.getRating(contentId);
+        unchecked {
+            if (openRoundId == nextRoundId[contentId] + 1) {
+                return registry.getRating(contentId);
+            }
         }
 
         return _getRoundReferenceRatingBps(contentId, openRoundId);
@@ -1122,7 +1126,9 @@ contract RoundVotingEngine is
             }
         }
 
-        return nextRoundId[contentId] + 1;
+        unchecked {
+            return nextRoundId[contentId] + 1;
+        }
     }
 
     function _getCategoryRegistry() internal view returns (ICategoryRegistry) {
@@ -1306,10 +1312,12 @@ contract RoundVotingEngine is
         if (!thresholdAlreadyReached) {
             commitRbtsWeight[contentId][roundId][commitKey] = effectiveStake;
         }
-        if (isUp) {
-            roundRatingUpEvidence[contentId][roundId] += ratingEvidenceWeight;
-        } else {
-            roundRatingDownEvidence[contentId][roundId] += ratingEvidenceWeight;
+        unchecked {
+            if (isUp) {
+                roundRatingUpEvidence[contentId][roundId] += ratingEvidenceWeight;
+            } else {
+                roundRatingDownEvidence[contentId][roundId] += ratingEvidenceWeight;
+            }
         }
 
         emit VoteRevealed(contentId, roundId, voter, isUp);
