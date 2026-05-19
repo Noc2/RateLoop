@@ -577,7 +577,8 @@ function deriveAcceptedTlockTargetRound(
   const roundStartTimeMs = normalizeRoundStartTimeMs(roundStartTimeSeconds);
   const drandPeriodMs = Math.max(1, Math.floor(chainInfo.period)) * 1000;
   const candidateOffsets =
-    candidateTimestampOffsetsSeconds && candidateTimestampOffsetsSeconds.length > 0
+    candidateTimestampOffsetsSeconds &&
+    candidateTimestampOffsetsSeconds.length > 0
       ? candidateTimestampOffsetsSeconds
       : buildDefaultCandidateTimestampOffsetsSeconds(chainInfo.period);
   let minAcceptedTargetRound = 0;
@@ -591,7 +592,10 @@ function deriveAcceptedTlockTargetRound(
       roundStartTimeMs,
     );
     const minTargetRound = roundAtOrAfter(revealableAfterMs, chainInfo);
-    const maxTargetRound = roundAt(revealableAfterMs + drandPeriodMs, chainInfo);
+    const maxTargetRound = roundAt(
+      revealableAfterMs + 2 * drandPeriodMs,
+      chainInfo,
+    );
 
     if (
       minTargetRound <= 0 ||

@@ -17,12 +17,12 @@ function assertTargetRoundValid(commitTimestamp, targetRound) {
   const minTargetRound = roundAtOrAfter(
     revealableAfter,
     DRAND_GENESIS_TIME,
-    DRAND_PERIOD
+    DRAND_PERIOD,
   );
   const maxTargetRound = roundAt(
-    revealableAfter + DRAND_PERIOD,
+    revealableAfter + 2n * DRAND_PERIOD,
     DRAND_GENESIS_TIME,
-    DRAND_PERIOD
+    DRAND_PERIOD,
   );
 
   assert.equal(targetRound >= minTargetRound, true);
@@ -38,7 +38,7 @@ test("deriveTlockCommitTargetRound uses the scheduled commit timestamp", () => {
     drandPeriod: DRAND_PERIOD,
   });
 
-  assert.equal(targetRound, 28_702_146n);
+  assert.equal(targetRound, 28_702_147n);
   assertTargetRoundValid(commitTimestamp, targetRound);
 });
 
@@ -57,9 +57,9 @@ test("deriveTlockCommitTargetRound anchors active rounds to the round start", ()
     computeCommitRevealableAfter(
       commitTimestamp,
       activeRoundStartTime,
-      EPOCH_DURATION
+      EPOCH_DURATION,
     ),
-    activeRoundStartTime + EPOCH_DURATION
+    activeRoundStartTime + EPOCH_DURATION,
   );
-  assert.equal(targetRound, 28_702_147n);
+  assert.equal(targetRound, 28_702_148n);
 });

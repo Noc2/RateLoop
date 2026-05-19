@@ -10,8 +10,7 @@ export function deriveAnchoredTlockRuntimeNowMs(params: {
   const latestBlockTimestampSeconds = Math.max(0, Math.floor(params.latestBlockTimestampSeconds)) + 1;
   const roundEpochDurationSeconds = Math.max(1, Math.floor(params.roundEpochDurationSeconds));
   const tlockEpochDurationSeconds = Math.max(1, Math.floor(params.tlockEpochDurationSeconds));
-  const roundStartTimeSeconds =
-    params.roundStartTimeSeconds != null ? Math.floor(params.roundStartTimeSeconds) : null;
+  const roundStartTimeSeconds = params.roundStartTimeSeconds != null ? Math.floor(params.roundStartTimeSeconds) : null;
 
   let revealableAfterSeconds = latestBlockTimestampSeconds + roundEpochDurationSeconds;
   if (roundStartTimeSeconds != null && roundStartTimeSeconds > 0) {
@@ -65,7 +64,7 @@ export function deriveAcceptedTlockTargetRound(params: {
 
     const minTargetRound = roundAtOrAfter(revealableAfterSeconds, drandGenesisTimeSeconds, drandPeriodSeconds);
     const maxTargetRound = roundAt(
-      revealableAfterSeconds + drandPeriodSeconds,
+      revealableAfterSeconds + 2n * drandPeriodSeconds,
       drandGenesisTimeSeconds,
       drandPeriodSeconds,
     );

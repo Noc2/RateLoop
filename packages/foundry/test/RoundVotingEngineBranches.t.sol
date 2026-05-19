@@ -3623,6 +3623,26 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         );
     }
 
+    function test_Commit_TargetRoundAtTwoPeriodTolerance_Accepts() public {
+        uint256 contentId = _submitContent();
+
+        uint256 revealableAfter = block.timestamp + EPOCH;
+        uint64 targetRound =
+            _roundAt(revealableAfter + 2 * uint256(_tlockDrandPeriod()), _tlockDrandGenesisTime(), _tlockDrandPeriod());
+        bytes32 drandChainHash = _tlockDrandChainHash();
+        bytes32 salt = keccak256(abi.encodePacked(voter1, block.timestamp, "two period target"));
+        bytes memory ciphertext = _testCiphertext(true, salt, contentId, targetRound, drandChainHash);
+        bytes32 commitHash = _commitHash(true, salt, voter1, contentId, targetRound, drandChainHash, ciphertext);
+
+        vm.prank(voter1);
+        lrepToken.approve(address(engine), STAKE);
+        uint256 roundContext = _roundContext(engine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());
+        vm.prank(voter1);
+        engine.commitVote(
+            contentId, roundContext, targetRound, drandChainHash, commitHash, ciphertext, STAKE, address(0)
+        );
+    }
+
     function test_Commit_TargetRoundCannotDelayLongCustomEpoch_Reverts() public {
         vm.prank(owner);
         _setTlockRoundConfig(ProtocolConfig(protocolConfigAddress), 7 days, 7 days, 3, 200);
