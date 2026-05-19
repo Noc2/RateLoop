@@ -33,7 +33,6 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
     error NoCommit();
     error VoteNotRevealed();
     error AdvisoryRevealedAfterSettlement();
-    error AdvisoryRevealedAfterRealVote();
     error PendingCleanup();
     error NotEnoughVotes();
     error Paused();
@@ -710,10 +709,9 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
     }
 
     function _effectiveRevealableAfter(AdvisoryCommit storage advisoryCommit) internal view returns (uint256) {
-        (uint48 roundStart, RoundLib.RoundState state,, uint16 revealedCount,,, uint48 settledAt) =
+        (uint48 roundStart, RoundLib.RoundState state,,,,, uint48 settledAt) =
             votingEngine.roundCore(advisoryCommit.contentId, advisoryCommit.roundId);
         if (roundStart == 0 || state != RoundLib.RoundState.Open || settledAt != 0) revert RoundNotOpen();
-        if (revealedCount != 0) revert AdvisoryRevealedAfterRealVote();
 
         (uint32 epochDuration,,,) = votingEngine.roundConfigSnapshot(advisoryCommit.contentId, advisoryCommit.roundId);
         if (epochDuration == 0) {

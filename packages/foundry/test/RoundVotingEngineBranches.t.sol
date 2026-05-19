@@ -2879,7 +2879,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertGt(revealableAfter, recordedAt + EPOCH, "does not leak on the global one-hour epoch");
     }
 
-    function test_AdvisoryRevealAfterRealReveal_Reverts() public {
+    function test_AdvisoryRevealAfterRealReveal_Succeeds() public {
         uint256 contentId = _submitContent();
         uint64 targetRound = _tlockCommitTargetRound();
         (bytes32 commitKey, bytes32 salt) =
@@ -2891,8 +2891,9 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         vm.warp(_tlockRoundTimestamp(targetRound) + 1);
         _reveal(contentId, roundId, commitKey, true, salt);
 
-        vm.expectRevert(AdvisoryVoteRecorder.AdvisoryRevealedAfterRealVote.selector);
         advisoryRecorder.revealAdvisoryVote(advisoryCommitKey, true, 5_000, advisorySalt);
+        (,,,,, bool revealed,,,,) = advisoryRecorder.advisoryCommitCore(advisoryCommitKey);
+        assertTrue(revealed, "advisory reveal remains available after real reveals");
     }
 
     function test_RealCommitAfterAdvisoryCommit_Reverts() public {
