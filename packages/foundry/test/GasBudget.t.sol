@@ -13,7 +13,7 @@ import { FrontendRegistry } from "../contracts/FrontendRegistry.sol";
 contract GasBudgetTest is RoundIntegrationTest {
     // Content submission validates uploaded media URLs and uses a live CategoryRegistry lookup,
     // so the baseline is higher than the initial pre-media measurement.
-    uint256 internal constant MAX_SUBMIT_CONTENT_GAS = 725_000;
+    uint256 internal constant MAX_SUBMIT_CONTENT_GAS = 750_000;
     // commitVote now validates the full armored AGE envelope and persists the ciphertext payload,
     // so the post-tlock baseline is materially higher than the earlier pre-parser threshold.
     uint256 internal constant MAX_COMMIT_VOTE_GAS = 2_900_000;

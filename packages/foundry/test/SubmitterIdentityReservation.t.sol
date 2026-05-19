@@ -69,7 +69,7 @@ contract SubmitterIdentityReservationTest is Test, ContentSubmissionTestBase {
         assertEq(registry.getSubmitterIdentity(contentId), submitter);
     }
 
-    function test_SubmitContent_DoesNotRequireStableRaterIdentity() public {
+    function test_SubmitContent_UsesReservationRaterIdentity() public {
         vm.prank(owner);
         mockRaterIdentityRegistry.setHolder(submitter);
 
@@ -105,10 +105,11 @@ contract SubmitterIdentityReservationTest is Test, ContentSubmissionTestBase {
         );
         vm.stopPrank();
 
-        assertEq(registry.getSubmitterIdentity(contentId), delegate);
+        assertEq(registry.getSubmitterIdentity(contentId), submitter);
+        assertEq(registry.contentSubmitterIdentityKey(contentId), bytes32(uint256(uint160(submitter))));
     }
 
-    function test_SubmitQuestion_DoesNotRequireStableRaterIdentity() public {
+    function test_SubmitQuestion_UsesReservationRaterIdentity() public {
         vm.prank(owner);
         mockRaterIdentityRegistry.setHolder(submitter);
 
@@ -139,6 +140,7 @@ contract SubmitterIdentityReservationTest is Test, ContentSubmissionTestBase {
             registry.submitQuestion(url, imageUrls, "", title, description, tags, 1, salt, _defaultQuestionSpec());
         vm.stopPrank();
 
-        assertEq(registry.getSubmitterIdentity(contentId), delegate);
+        assertEq(registry.getSubmitterIdentity(contentId), submitter);
+        assertEq(registry.contentSubmitterIdentityKey(contentId), bytes32(uint256(uint160(submitter))));
     }
 }

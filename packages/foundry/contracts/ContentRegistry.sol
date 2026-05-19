@@ -118,6 +118,8 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         address submitter;
         uint48 reservedAt;
         uint48 expiresAt;
+        address submitterIdentity;
+        bytes32 submitterIdentityKey;
     }
 
     struct SubmissionMetadata {
@@ -414,8 +416,15 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         PendingSubmission storage pending = pendingSubmissions[key];
         require(pending.submitter == address(0), "Reservation exists");
 
+        (address submitterIdentity, bytes32 submitterIdentityKey) = _snapshotSubmitterIdentity(msg.sender);
+        if (submitterIdentity == msg.sender && submitterIdentityKey == _addressIdentityKey(msg.sender)) {
+            submitterIdentity = address(0);
+            submitterIdentityKey = bytes32(0);
+        }
         pendingSubmissions[key] = PendingSubmission({
             submitter: msg.sender,
+            submitterIdentity: submitterIdentity,
+            submitterIdentityKey: submitterIdentityKey,
             reservedAt: block.timestamp.toUint48(),
             expiresAt: (block.timestamp + SUBMISSION_RESERVATION_PERIOD).toUint48()
         });
@@ -546,9 +555,12 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
                     questions[i].spec.resultSpecHash
                 )
             );
+            (address submitterIdentity, bytes32 submitterIdentityKey) = _pendingSubmitterIdentity(pending);
             uint256 contentId = _storeSubmittedContent(
                 submissionKeys[i],
                 pending.submitter,
+                submitterIdentity,
+                submitterIdentityKey,
                 contentHash,
                 resolvedCategoryIds[i],
                 validatedRoundConfig,
@@ -651,12 +663,14 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         SubmissionMetadata memory metadata =
             _validatedContextSubmissionMetadata(contextUrl, imageUrls, videoUrl, title, description, tags, categoryId);
         RoundLib.RoundConfig memory validatedRoundConfig = _validatedRoundConfig(roundConfig);
-        (uint256 resolvedCategoryId, bytes32 submissionKey,) = _prepareQuestionMediaSubmission(
+        (uint256 resolvedCategoryId, bytes32 submissionKey, PendingSubmission memory pending) = _prepareQuestionMediaSubmission(
             metadata, imageUrls, videoUrl, salt, rewardTerms, validatedRoundConfig, spec, submitter
         );
         contentId = _storeQuestionAndAttachReward(
             submissionKey,
             submitter,
+            pending.submitterIdentity,
+            pending.submitterIdentityKey,
             msg.sender,
             metadata,
             imageUrls,
@@ -749,6 +763,8 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         contentId = _storeQuestionAndAttachReward(
             submissionKey,
             pending.submitter,
+            pending.submitterIdentity,
+            pending.submitterIdentityKey,
             msg.sender,
             metadata,
             imageUrls,
@@ -875,6 +891,8 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     function _storeSubmittedContent(
         bytes32 submissionKey,
         address submitter,
+        address submitterIdentity,
+        bytes32 submitterIdentityKey,
         bytes32 contentHash,
         uint256 resolvedCategoryId,
         RoundLib.RoundConfig memory roundConfig,
@@ -882,7 +900,9 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     ) internal returns (uint256 contentId) {
         contentId = nextContentId++;
         contentSubmissionKey[contentId] = submissionKey;
-        (address submitterIdentity, bytes32 submitterIdentityKey) = _snapshotSubmitterIdentity(submitter);
+        if (submitterIdentity == address(0) || submitterIdentityKey == bytes32(0)) {
+            (submitterIdentity, submitterIdentityKey) = _snapshotSubmitterIdentity(submitter);
+        }
         getSubmitterIdentity[contentId] = submitterIdentity;
         contentSubmitterIdentityKey[contentId] = submitterIdentityKey;
         contentRoundConfig[contentId] = roundConfig;
@@ -922,6 +942,8 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     function _storeQuestionAndAttachReward(
         bytes32 submissionKey,
         address submitter,
+        address submitterIdentity,
+        bytes32 submitterIdentityKey,
         address funder,
         SubmissionMetadata memory metadata,
         string[] memory imageUrls,
@@ -933,8 +955,16 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         QuestionSpecCommitment memory spec
     ) internal returns (uint256 contentId) {
         bytes32 contentHash = _questionContentHash(metadata, imageUrls, videoUrl, resolvedCategoryId, spec);
-        contentId =
-            _storeSubmittedContent(submissionKey, submitter, contentHash, resolvedCategoryId, roundConfig, bundleId);
+        contentId = _storeSubmittedContent(
+            submissionKey,
+            submitter,
+            submitterIdentity,
+            submitterIdentityKey,
+            contentHash,
+            resolvedCategoryId,
+            roundConfig,
+            bundleId
+        );
         require(questionRewardPoolEscrow != address(0), "Bounty escrow not set");
         uint256 rewardPoolId = IQuestionRewardPoolEscrow(questionRewardPoolEscrow)
             .createSubmissionRewardPoolFromRegistry(
@@ -1368,6 +1398,18 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         submitterIdentity = resolved.holder == address(0) ? submitter : resolved.holder;
         submitterIdentityKey =
             resolved.identityKey == bytes32(0) ? _addressIdentityKey(submitter) : resolved.identityKey;
+    }
+
+    function _pendingSubmitterIdentity(PendingSubmission memory pending)
+        internal
+        view
+        returns (address submitterIdentity, bytes32 submitterIdentityKey)
+    {
+        submitterIdentity = pending.submitterIdentity;
+        submitterIdentityKey = pending.submitterIdentityKey;
+        if (submitterIdentity == address(0) || submitterIdentityKey == bytes32(0)) {
+            (submitterIdentity, submitterIdentityKey) = _snapshotSubmitterIdentity(pending.submitter);
+        }
     }
 
     function _resolveRater(address account)
