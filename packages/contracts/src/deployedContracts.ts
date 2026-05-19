@@ -755,7 +755,7 @@ const deployedContracts: GenericContractsDeclaration = {
       deployedOnBlock: 6,
     },
     RoundRevealLib: {
-      address: "0x3e0d3f6e40c26be612c320823820c2917ebf1c8d",
+      address: "0xa3735b72487700d92440d33b5f377d5b7a40de97",
       abi: [
         {
           type: "event",
@@ -1281,7 +1281,7 @@ const deployedContracts: GenericContractsDeclaration = {
       deployedOnBlock: 10,
     },
     QuestionRewardPoolEscrowQualificationLib: {
-      address: "0xfc48c9b7c1bac0aace3ddd26fb6638d12a9d33d6",
+      address: "0x0e6b0f4c255280256215ac36e6149cfe9b0967fb",
       abi: [
         {
           type: "function",
@@ -1509,7 +1509,7 @@ const deployedContracts: GenericContractsDeclaration = {
       deployedOnBlock: 11,
     },
     QuestionRewardPoolEscrowPoolActionsLib: {
-      address: "0x87c7e4d48565ce83a1e54e4e361ae38f1854f0f6",
+      address: "0x15d8b01882dfacda6d3ed588a00e5b020515ed9e",
       abi: [
         {
           type: "event",
@@ -1704,7 +1704,7 @@ const deployedContracts: GenericContractsDeclaration = {
       deployedOnBlock: 12,
     },
     QuestionRewardPoolEscrowClaimLib: {
-      address: "0x699d3b06363c2605e8d94f585bfe841e5e360d4b",
+      address: "0xaaf0451322486a906b3515a35b80c6f1cd6ea96c",
       abi: [
         {
           type: "function",
@@ -1949,6 +1949,40 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "frontendRewardRecipient",
+          inputs: [
+            {
+              name: "votingEngine",
+              type: "RoundVotingEngine",
+              internalType: "contract RoundVotingEngine",
+            },
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "frontend",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "nextEqualShare",
           inputs: [
             {
@@ -1981,7 +2015,7 @@ const deployedContracts: GenericContractsDeclaration = {
       deployedOnBlock: 13,
     },
     QuestionRewardPoolEscrowBundleLib: {
-      address: "0xaa224bb0a993a29707333afd213f3071cd76cdc7",
+      address: "0x35c55a16099ff124efea7ccf6bff19226989155e",
       abi: [
         {
           type: "function",
@@ -2016,7 +2050,7 @@ const deployedContracts: GenericContractsDeclaration = {
       deployedOnBlock: 14,
     },
     QuestionRewardPoolEscrowBundleActionsLib: {
-      address: "0x225245cb0ff3de44c3ead87919bbfd2a6a05e03f",
+      address: "0x8cbdfb41858f5a346e9f8ba76723f6876a2b1b63",
       abi: [
         {
           type: "event",
@@ -6458,6 +6492,35 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "uint16",
               internalType: "uint16",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "commitRbtsScoringWeight",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "commitKey",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
             },
           ],
           stateMutability: "view",
@@ -16532,6 +16595,35 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "syncQuestionBundleTerminals",
+          inputs: [
+            {
+              name: "bundleId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "maxRounds",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "processedRounds",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "complete",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "unpause",
           inputs: [],
           outputs: [],
@@ -24406,7 +24498,7 @@ const deployedContracts: GenericContractsDeclaration = {
       deployedOnBlock: 78,
     },
     LaunchDistributionPool: {
-      address: "0x0E4B6314D9756D40EE0b3D68cF3999D29eEFb147",
+      address: "0x3C4249f1cDf4C5Ee12D480a543a6A42362baAAFf",
       abi: [
         {
           type: "constructor",
@@ -26961,10 +27053,10 @@ const deployedContracts: GenericContractsDeclaration = {
         transferOwnership:
           "lib/openzeppelin-contracts/contracts/access/Ownable.sol",
       },
-      deployedOnBlock: 80,
+      deployedOnBlock: 81,
     },
     AdvisoryVoteRecorder: {
-      address: "0x5f474bC674b6Ad4d7b6A5c6429d586D53053DA33",
+      address: "0x1Da1e5EE07AD91E402BD4Fc14773f7a4caa6b2ad",
       abi: [
         {
           type: "constructor",
@@ -27782,7 +27874,7 @@ const deployedContracts: GenericContractsDeclaration = {
         transferOwnership:
           "lib/openzeppelin-contracts/contracts/access/Ownable.sol",
       },
-      deployedOnBlock: 84,
+      deployedOnBlock: 85,
     },
   },
 };
