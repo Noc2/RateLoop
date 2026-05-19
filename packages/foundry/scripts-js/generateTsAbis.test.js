@@ -3,6 +3,7 @@ import { afterEach, describe, test } from "node:test";
 
 import {
   assertFreshTargetDeployment,
+  assertSharedDeploymentArtifactsSynced,
   filterGeneratedContractsForDeployTarget,
 } from "./generateTsAbis.js";
 
@@ -209,6 +210,58 @@ describe("filterGeneratedContractsForDeployTarget", () => {
     assert.deepEqual(
       filterGeneratedContractsForDeployTarget(generatedContracts),
       generatedContracts
+    );
+  });
+});
+
+describe("assertSharedDeploymentArtifactsSynced", () => {
+  test("rejects shared artifacts that disagree with deployment exports", () => {
+    process.env.DEPLOY_TARGET_NETWORK = "localhost";
+
+    assert.throws(
+      () =>
+        assertSharedDeploymentArtifactsSynced(
+          {
+            31337: {
+              LaunchDistributionPool: {
+                address: "0x0000000000000000000000000000000000000001",
+              },
+            },
+          },
+          {
+            31337: {
+              "0x0000000000000000000000000000000000000002":
+                "LaunchDistributionPool",
+              deploymentComplete: "true",
+            },
+          },
+          { hasArtifact: () => true }
+        ),
+      /LaunchDistributionPool: shared 0x0000000000000000000000000000000000000001, deployment 0x0000000000000000000000000000000000000002/
+    );
+  });
+
+  test("accepts shared artifacts that match deployment exports", () => {
+    process.env.DEPLOY_TARGET_NETWORK = "localhost";
+
+    assert.doesNotThrow(() =>
+      assertSharedDeploymentArtifactsSynced(
+        {
+          31337: {
+            LaunchDistributionPool: {
+              address: "0x0000000000000000000000000000000000000002",
+            },
+          },
+        },
+        {
+          31337: {
+            "0x0000000000000000000000000000000000000002":
+              "LaunchDistributionPool",
+            deploymentComplete: "true",
+          },
+        },
+        { hasArtifact: () => true }
+      )
     );
   });
 });

@@ -1,4 +1,4 @@
-.PHONY: build deploy generate-abis get-address account chain compile compile-all flatten fork format lint test verify verify-blockscout slither aderyn coverage check-contract-sizes
+.PHONY: build deploy deploy-and-generate-abis generate-abis get-address account chain compile compile-all flatten fork format lint test verify verify-blockscout slither aderyn coverage check-contract-sizes
 
 TEST_ARGS ?=
 COVERAGE_ARGS ?=
@@ -34,8 +34,14 @@ deploy:
 		FOUNDRY_PROFILE=$(DEPLOY_PROFILE) forge script script/Deploy.s.sol --tc DeployScript --rpc-url $(RPC_URL) --account $(ETH_KEYSTORE_ACCOUNT) --broadcast --ffi --gas-estimate-multiplier 200 $(DEPLOY_FLOW_FLAGS) $(RESUME_FLAG) $(VERIFY_FLAGS); \
 	fi
 
-# Deploy and generate ABIs
-deploy-and-generate-abis: check-contract-sizes deploy generate-abis
+# Deploy and generate shared deployment artifacts.
+#
+# Keep this as an ordered recipe instead of independent prerequisites. If make
+# is invoked with parallel jobs, `generate-abis` must still wait for the fresh
+# broadcast/deployments JSON written by `deploy`.
+deploy-and-generate-abis: check-contract-sizes
+	$(MAKE) deploy
+	$(MAKE) generate-abis
 
 # Generate TypeScript ABIs
 generate-abis:

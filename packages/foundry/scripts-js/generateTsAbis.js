@@ -377,6 +377,62 @@ function hasGeneratedContracts(generatedContracts) {
   );
 }
 
+function isDeploymentAddressKey(value) {
+  return typeof value === "string" && value.startsWith("0x");
+}
+
+export function assertSharedDeploymentArtifactsSynced(
+  sharedContracts,
+  deployments,
+  options = {}
+) {
+  const hasArtifact =
+    options.hasArtifact ||
+    ((contractName) => Boolean(getArtifactOfContract(contractName)));
+  const deployTarget = process.env.DEPLOY_TARGET_NETWORK;
+  const targetChainId = DEPLOY_TARGET_TO_CHAIN_ID[deployTarget];
+  const chainIds = targetChainId
+    ? [String(targetChainId)]
+    : Object.keys(deployments);
+
+  for (const chainId of chainIds) {
+    const chainDeployments = deployments[chainId];
+    if (typeof chainDeployments !== "object" || chainDeployments === null) {
+      continue;
+    }
+
+    const chainContracts = sharedContracts[chainId] || {};
+    const mismatches = [];
+
+    for (const [address, contractName] of Object.entries(chainDeployments)) {
+      if (!isDeploymentAddressKey(address)) continue;
+      if (RAW_DEPLOYMENT_CONTRACTS_TO_SKIP.has(contractName)) continue;
+      if (DEPRECATED_CONTRACTS_TO_PRUNE.has(contractName)) continue;
+      if (!hasArtifact(contractName)) continue;
+
+      const sharedAddress = chainContracts[contractName]?.address;
+      if (!sharedAddress) {
+        mismatches.push(`${contractName}: missing shared artifact`);
+        continue;
+      }
+
+      if (sharedAddress.toLowerCase() !== address.toLowerCase()) {
+        mismatches.push(
+          `${contractName}: shared ${sharedAddress}, deployment ${address}`
+        );
+      }
+    }
+
+    if (mismatches.length > 0) {
+      throw new Error(
+        `Shared deployment artifacts are out of sync with deployments/${chainId}.json:\n- ${mismatches.join(
+          "\n- "
+        )}`
+      );
+    }
+  }
+}
+
 function isNonLocalDeploymentChain(chainId) {
   const numericChainId = Number(chainId);
   return (
@@ -613,6 +669,7 @@ function main() {
     ...existingContractsForPublish,
     ...generatedContractsForPublish,
   };
+  assertSharedDeploymentArtifactsSynced(mergedContracts, deployments);
 
   // Generate the shared deployedContracts content
   const fileContent = Object.entries(mergedContracts).reduce(
@@ -730,6 +787,11 @@ const PONDER_START_BLOCK_ENV_KEYS = {
   TimelockController: "PONDER_TIMELOCK_START_BLOCK",
 };
 
+const DEPRECATED_PONDER_ENV_KEYS = [
+  "PONDER_VOTER_ID_NFT_ADDRESS",
+  "PONDER_VOTER_ID_NFT_START_BLOCK",
+];
+
 function parseEnvFile(content) {
   const env = {};
   for (const line of content.split(/\r?\n/)) {
@@ -804,6 +866,14 @@ function updatePonderEnv(allGeneratedContracts, deployers = {}) {
 
   const updatedContracts = [];
   const removedContracts = [];
+  const removedDeprecatedEnvKeys = [];
+  for (const key of DEPRECATED_PONDER_ENV_KEYS) {
+    if (existingEnv[key] !== undefined) {
+      delete existingEnv[key];
+      removedDeprecatedEnvKeys.push(key);
+    }
+  }
+
   for (const [contractName, addressEnvKey] of Object.entries(
     PONDER_CONTRACT_ENV_KEYS
   )) {
@@ -837,6 +907,13 @@ function updatePonderEnv(allGeneratedContracts, deployers = {}) {
   if (removedContracts.length > 0) {
     console.log(
       `🧹 Removed stale Ponder .env.local entries with no shared deployment artifact: ${removedContracts.join(
+        ", "
+      )}`
+    );
+  }
+  if (removedDeprecatedEnvKeys.length > 0) {
+    console.log(
+      `🧹 Removed deprecated Ponder .env.local keys: ${removedDeprecatedEnvKeys.join(
         ", "
       )}`
     );
