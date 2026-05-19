@@ -112,18 +112,13 @@ const HowItWorks: NextPage = () => {
       </p>
 
       <h3 id="eligible-settled-rounds">Launch LREP credits</h3>
-      <ul>
-        <li>
-          Zero-LREP advisory ratings are available only in rounds that already have a staked vote and do not count
-          toward settlement quorum.
-        </li>
-        <li>
-          The round must settle, include your revealed rating, have enough counted staked raters, and pass the current
-          launch-reward checks before it can count as a launch credit.
-        </li>
-        <li>Earned launch payouts begin after two distinct verified-human anchors across qualifying rounds.</li>
-        <li>Correlation snapshots can make dense clusters accrue fractional credit, so more rounds may be needed.</li>
-      </ul>
+      <p>
+        To earn launch LREP, reveal useful advisory or staked ratings in eligible settled rounds; each finalized round
+        adds <code>effective credit = finalized independence weight / 10,000</code>. After enough full credits and the
+        verified-anchor checks are met, the payout is <code>min(cap, cap * rewarded credits / 10) - already paid</code>;
+        verifying the same wallet unlocks the full earned cap, while dense correlated clusters may need more rounds
+        because each credit can count fractionally.
+      </p>
       <p>
         Example: you make useful advisory ratings in two eligible settled rounds, and each round has a different mature
         verified-human anchor. Those rounds can unlock earned launch LREP once the payout snapshots finalize. If both
@@ -131,12 +126,12 @@ const HowItWorks: NextPage = () => {
       </p>
 
       <h3 id="stablecoin-bounties">Bounties</h3>
-      <ul>
-        <li>Bounties are scoped to a question or bundle and paid in the funding asset.</li>
-        <li>Only eligible revealed raters can claim, but eligibility does not affect who can answer.</li>
-        <li>USDC bounty claims wait for a finalized correlation payout snapshot.</li>
-        <li>Bundle claims require revealing on every question in the claimed round set.</li>
-      </ul>
+      <p>
+        To earn a bounty, reveal an eligible vote before the bounty closes; bundle bounties require revealing on every
+        question in the claimed round set. Each qualified round pays{" "}
+        <code>round allocation * claim weight / total claim weight</code>, where USDC claim weights come from the
+        finalized correlation payout snapshot and equal-weight rounds use one unit per eligible revealed rater.
+      </p>
       <p>
         Example: if a 30 USDC rater allocation is claimable and three eligible raters have effective weights of 2, 1,
         and 1, they claim 15 USDC, 7.5 USDC, and 7.5 USDC. In a two-question bundle, a rater who revealed on only one
@@ -144,12 +139,12 @@ const HowItWorks: NextPage = () => {
       </p>
 
       <h3>Feedback bonuses</h3>
-      <ul>
-        <li>Feedback bonuses are optional USDC pools for useful hidden feedback after settlement.</li>
-        <li>The award transaction pays the recipient directly, so there is no separate recipient claim.</li>
-        <li>Awards can only go to revealed raters who are not the funder or submitter identity.</li>
-        <li>Any unawarded remainder after the deadline goes to treasury.</li>
-      </ul>
+      <p>
+        To earn a feedback bonus, reveal your vote and leave useful hidden feedback; the configured awarder can pay one
+        award per independent rater or feedback hash before the feedback window closes. The calculation is{" "}
+        <code>recipient amount = gross award - frontend fee</code>, with the default frontend fee at 3% when an eligible
+        frontend applies; unawarded remainder goes to treasury after the deadline.
+      </p>
 
       <h2 id="optional-identity">Optional Identity Signals</h2>
       <p>
