@@ -27,6 +27,12 @@ export function normalizeRoundVoteError(message: string) {
   if (message.includes("TargetRoundOutOfWindow") || message.includes("0xe56a7aca")) {
     return "The voting window moved while your vote was being prepared. Please try again.";
   }
+  if (
+    normalizedMessage.includes("no shared drand target round") ||
+    normalizedMessage.includes("no valid drand target round")
+  ) {
+    return "Preparing private vote timing. Please try again in a moment.";
+  }
   if (message.includes("RoundNotAccepting") || message.includes("RoundNotOpen")) {
     return "This round is not accepting votes right now.";
   }

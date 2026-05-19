@@ -26,3 +26,10 @@ test("normalizeRoundVoteError translates content inactive selectors", () => {
     "This content is no longer active for voting.",
   );
 });
+
+test("normalizeRoundVoteError hides internal drand target derivation errors", () => {
+  assert.equal(
+    normalizeRoundVoteError("No shared drand target round for commit windows"),
+    "Preparing private vote timing. Please try again in a moment.",
+  );
+});
