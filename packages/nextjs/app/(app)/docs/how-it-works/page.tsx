@@ -14,8 +14,7 @@ const HowItWorks: NextPage = () => {
     <article className="prose max-w-none">
       <DocsTitle gradientText="Works">How It</DocsTitle>
       <p className="lead text-base-content/60 text-lg">
-        Ask a focused question, fund the round, let open raters submit private split ratings, then read the settled
-        signal.
+        Ask a focused question, fund the round, let open raters submit private ratings, then read the settled signal.
       </p>
       <QuestionLifecycleDiagram />
 
