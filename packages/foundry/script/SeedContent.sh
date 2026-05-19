@@ -11,7 +11,7 @@ CATEGORY_ID_RESOLVER="$SCRIPT_DIR/../scripts-js/resolveCategoryId.js"
 PONDER_ENV="$SCRIPT_DIR/../../ponder/.env.local"
 
 RPC="http://127.0.0.1:8545"
-SUBMISSION_BOUNTY_AMOUNT="1000000" # 1 LREP in 6 decimals (default minimum submission Bounty)
+SUBMISSION_BOUNTY_AMOUNT="2000000" # 200 max voters * 10_000 participant unit
 SUBMISSION_BOUNTY_REQUIRED_VOTERS="3"
 SUBMISSION_BOUNTY_REQUIRED_SETTLED_ROUNDS="1"
 SUBMISSION_BOUNTY_EXPIRES_AT="0"
@@ -214,14 +214,14 @@ SUBMISSION_BOUNTY_AMOUNTS=(
   "2500000"
   "5000000"
   "10000000"
-  "1500000"
+  "2000000"
   "3000000"
   "4000000"
   "6000000"
   "2000000"
   "8000000"
   "12000000"
-  "1000000"
+  "2000000"
   "7000000"
   "3500000"
   "5500000"
@@ -432,6 +432,14 @@ if [ "$TOTAL_ITEMS" -gt "${#KEYS[@]}" ]; then
   echo "ERROR: Not enough seeded account keys for $TOTAL_ITEMS questions"
   exit 1
 fi
+
+MIN_SUBMISSION_BOUNTY_AMOUNT=$((SUBMISSION_BOUNTY_REQUIRED_SETTLED_ROUNDS * SUBMISSION_ROUND_MAX_VOTERS * 10000))
+for ((i = 0; i < TOTAL_ITEMS; i++)); do
+  if [ "${SUBMISSION_BOUNTY_AMOUNTS[$i]}" -lt "$MIN_SUBMISSION_BOUNTY_AMOUNT" ]; then
+    echo "ERROR: Seed bounty for item $((i + 1)) is below the contract minimum of $MIN_SUBMISSION_BOUNTY_AMOUNT"
+    exit 1
+  fi
+done
 
 BUNDLE_QUESTION_COUNT="${#BUNDLE_CONTEXT_URLS[@]}"
 if [ "$BUNDLE_QUESTION_COUNT" -ne "${#BUNDLE_IMAGE_URLS[@]}" ] ||
