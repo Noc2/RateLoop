@@ -24,7 +24,7 @@ const steps: Array<{
 
 export function QuestionLifecycleDiagram() {
   return (
-    <DocsDiagramFrame eyebrow="Question lifecycle" title="From Ask to Rewards">
+    <DocsDiagramFrame title="From Ask to Rewards">
       <div className="grid gap-3 sm:grid-cols-3">
         {steps.map(step => (
           <article key={step.title} className="flex min-h-40 flex-col rounded-lg bg-base-content/[0.07] p-4">
