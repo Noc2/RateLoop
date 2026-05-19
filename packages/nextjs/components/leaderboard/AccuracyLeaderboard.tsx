@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { RATER_TYPE_OPTIONS } from "@rateloop/node-utils/profileSelfReport";
 import { useAccount } from "wagmi";
 import { FollowScopeToggle } from "~~/components/leaderboard/FollowScopeToggle";
 import { FollowProfileButton } from "~~/components/shared/FollowProfileButton";
@@ -18,6 +19,7 @@ import { notification } from "~~/utils/scaffold-eth";
 type SortOption = "signalScore" | "winRate" | "wins" | "stakeWon" | "settledVotes";
 type MinVotesOption = "3" | "5" | "10";
 type WindowOption = PonderAccuracyLeaderboardWindow;
+type RaterTypeFilter = "" | "1" | "2" | "3" | "4";
 
 export function AccuracyLeaderboard() {
   const { address: connectedAddress } = useAccount();
@@ -33,6 +35,7 @@ export function AccuracyLeaderboard() {
   const [minVotes, setMinVotes] = useState<MinVotesOption>("5");
   const [window, setWindow] = useState<WindowOption>("30d");
   const [categoryId, setCategoryId] = useState<string>("");
+  const [raterType, setRaterType] = useState<RaterTypeFilter>("");
   const [scope, setScope] = useState<"all" | "following">("all");
 
   useEffect(() => {
@@ -50,6 +53,7 @@ export function AccuracyLeaderboard() {
         };
         if (sortBy === "signalScore") params.minSignalVotes = minVotes;
         if (categoryId) params.categoryId = categoryId;
+        if (raterType) params.raterType = raterType;
         const data = await ponderApi.getAccuracyLeaderboard(params);
         if (!cancelled) setItems(data.items);
       } catch (err) {
@@ -66,7 +70,7 @@ export function AccuracyLeaderboard() {
     return () => {
       cancelled = true;
     };
-  }, [sortBy, window, minVotes, categoryId]);
+  }, [sortBy, window, minVotes, categoryId, raterType]);
 
   const truncateAddress = (addr: string) => `${addr.slice(0, 6)}...${addr.slice(-4)}`;
   const formatRate = (rate: number) => `${(rate * 100).toFixed(1)}%`;
@@ -178,6 +182,20 @@ export function AccuracyLeaderboard() {
           ))}
         </select>
 
+        <select
+          className="select select-sm bg-base-200 text-base rounded-full"
+          value={raterType}
+          onChange={e => setRaterType(e.target.value as RaterTypeFilter)}
+          aria-label="Filter by rater type"
+        >
+          <option value="">All raters</option>
+          {RATER_TYPE_OPTIONS.map(option => (
+            <option key={option.value} value={String(option.value)}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+
         {/* Sort toggle */}
         <select
           className="select select-sm bg-base-200 text-base rounded-full"
@@ -216,7 +234,11 @@ export function AccuracyLeaderboard() {
         </div>
       ) : items.length === 0 ? (
         <div className="text-center py-12 text-base-content/50">
-          <p>No voters with enough resolved votes in this range yet</p>
+          <p>
+            {raterType
+              ? "No voters in this rater cohort have enough resolved votes yet."
+              : "No voters with enough resolved votes in this range yet"}
+          </p>
         </div>
       ) : scope === "following" && visibleItems.length === 0 ? (
         <div className="text-center py-12 text-base-content/50">
@@ -289,9 +311,11 @@ export function AccuracyLeaderboard() {
                             {isCurrentUser && <span className="text-base text-primary">(You)</span>}
                             {entry.reputation ? (
                               <div className="mt-1 flex flex-wrap gap-1.5 text-xs text-base-content/60">
-                                <span className="rounded-full bg-base-content/[0.06] px-2 py-0.5">
-                                  {entry.reputation.raterTypeName}
-                                </span>
+                                {entry.reputation.raterTypeName !== "Unknown" ? (
+                                  <span className="rounded-full bg-base-content/[0.06] px-2 py-0.5">
+                                    {entry.reputation.raterTypeName}
+                                  </span>
+                                ) : null}
                                 <span className="rounded-full bg-base-content/[0.06] px-2 py-0.5">
                                   {entry.reputation.humanCredentialStatus === "verified"
                                     ? "Verified human"
