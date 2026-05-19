@@ -138,9 +138,8 @@ contract LaunchDistributionPool is
     event EarnedRaterRewardCreditPending(
         address indexed rater, uint256 indexed contentId, uint256 indexed roundId, bytes32 commitKey, uint16 scoreBps
     );
-    /// @notice Emitted when governance rescues a pending earned-rater credit whose oracle pin
-    ///         has become stale (cluster oracle was rotated). Resets the rater's per-round
-    ///         flags so they can re-record against the new oracle (M-Funds-3).
+    /// @notice Emitted when governance repoints a pending earned-rater credit whose oracle pin
+    ///         has become stale after a cluster oracle rotation.
     event StalePendingEarnedRaterCreditRescued(
         address indexed rater,
         uint256 indexed contentId,
@@ -216,27 +215,21 @@ contract LaunchDistributionPool is
     }
 
     /// @notice Governance rescue for pending earned-rater credits pinned to a now-stale oracle.
-    /// @dev M-Funds-3: when governance rotates `clusterPayoutOracle`, any
-    ///      `pendingEarnedRaterCredits` already recorded against the previous oracle become
-    ///      permanently un-finalizable (the new oracle won't accept proofs against the old
-    ///      root, the `pending.oracle` pin is fixed). This rescue drops a stale pending entry
-    ///      and resets the rater's per-round flags so they can re-record against the new
-    ///      oracle. Slot accounting (cap counter) is left intact — a stale pending entry
-    ///      still consumed a cap slot at record time, and rescue does not refund it.
+    /// @dev Keeps the original one-shot credit record intact and only repoints the pending
+    ///      proof verifier. Advisory launch credits cannot reliably be re-recorded after their
+    ///      advisory claim path is consumed, so deleting the pending ticket would strand them.
     function rescueStalePendingEarnedRaterCredit(uint256 contentId, uint256 roundId, bytes32 commitKey)
         external
         onlyOwner
     {
-        PendingEarnedRaterCredit memory pending = pendingEarnedRaterCredits[contentId][roundId][commitKey];
+        PendingEarnedRaterCredit storage pending = pendingEarnedRaterCredits[contentId][roundId][commitKey];
         if (!pending.pending) revert InvalidAmount();
         if (earnedRewardCreditFinalized[contentId][roundId][commitKey]) revert AlreadyClaimed();
-        if (pending.oracle == address(clusterPayoutOracle)) revert InvalidAddress();
-        delete pendingEarnedRaterCredits[contentId][roundId][commitKey];
-        delete pendingEarnedRaterCreditReadyAt[contentId][roundId][commitKey];
-        delete pendingEarnedRaterCreditAnchorIds[contentId][roundId][commitKey];
-        earnedRewardCreditRecorded[contentId][roundId][commitKey] = false;
-        raterRoundCreditRecorded[pending.rater][contentId][roundId] = false;
-        emit StalePendingEarnedRaterCreditRescued(pending.rater, contentId, roundId, commitKey, pending.oracle);
+        address currentOracle = address(clusterPayoutOracle);
+        if (currentOracle == address(0) || pending.oracle == currentOracle) revert InvalidAddress();
+        address staleOracle = pending.oracle;
+        pending.oracle = currentOracle;
+        emit StalePendingEarnedRaterCreditRescued(pending.rater, contentId, roundId, commitKey, staleOracle);
     }
 
     function setAuthorizedCaller(address caller, bool authorized) external onlyOwner {

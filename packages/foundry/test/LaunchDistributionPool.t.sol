@@ -518,28 +518,38 @@ contract LaunchDistributionPoolTest is Test {
         assertTrue(pool.earnedRewardCreditFinalized(1, 1, _commitKey(1)));
     }
 
-    function test_RescueStalePendingLaunchCreditLeavesDeferredAnchorsUntouched() public {
-        _configureLaunchOracle(1);
+    function test_RescueStalePendingLaunchCreditRepointsOracleAndDefersAnchors() public {
+        _configureLaunchOracle(80);
         bytes32 commitKey = _commitKey(80);
 
         pool.recordEarnedRaterReward(
-            alice, 80, 1, commitKey, 8_000, 3, true, pool.MIN_LAUNCH_CREDIT_STAKE(), _singleAnchor(bytes32("anchor-a"))
+            alice, 1, 80, commitKey, 8_000, 3, true, pool.MIN_LAUNCH_CREDIT_STAKE(), _singleAnchor(bytes32("anchor-a"))
         );
+        uint64 readyAt = pool.pendingEarnedRaterCreditReadyAt(1, 80, commitKey);
 
-        assertTrue(pool.earnedRewardCreditRecorded(80, 1, commitKey));
+        assertTrue(pool.earnedRewardCreditRecorded(1, 80, commitKey));
         assertEq(pool.raterDistinctVerifiedAnchorCount(alice), 0);
         assertEq(pool.raterDistinctAnchorRoundCount(alice), 0);
         assertEq(pool.verifiedAnchorDistinctRaterCount(bytes32("anchor-a")), 0);
 
-        _configureLaunchOracle(1);
-        pool.rescueStalePendingEarnedRaterCredit(80, 1, commitKey);
+        ClusterPayoutOracle currentOracle = _configureLaunchOracle(80);
+        pool.rescueStalePendingEarnedRaterCredit(1, 80, commitKey);
 
-        assertFalse(pool.earnedRewardCreditRecorded(80, 1, commitKey));
-        assertFalse(pool.raterRoundCreditRecorded(alice, 80, 1));
-        assertEq(pool.roundUnverifiedLaunchCreditCount(80, 1), 1);
+        assertTrue(pool.earnedRewardCreditRecorded(1, 80, commitKey));
+        assertTrue(pool.raterRoundCreditRecorded(alice, 1, 80));
+        assertEq(pool.pendingEarnedRaterCreditReadyAt(1, 80, commitKey), readyAt);
+        assertEq(pool.roundUnverifiedLaunchCreditCount(1, 80), 1);
         assertEq(pool.raterDistinctVerifiedAnchorCount(alice), 0);
         assertEq(pool.raterDistinctAnchorRoundCount(alice), 0);
         assertEq(pool.verifiedAnchorDistinctRaterCount(bytes32("anchor-a")), 0);
+
+        IClusterPayoutOracle.PayoutWeight memory payout =
+            _launchPayoutWeight(80, commitKey, alice, 2_500, keccak256("clustered"));
+        _proposeAndFinalizeLaunchPayoutSnapshot(currentOracle, 80, payout, keccak256("rescued-oracle"));
+        assertEq(pool.finalizeEarnedRaterRewardCredit(1, 80, commitKey, payout, new bytes32[](0)), 0);
+        assertEq(pool.raterDistinctVerifiedAnchorCount(alice), 1);
+        assertEq(pool.raterDistinctAnchorRoundCount(alice), 1);
+        assertEq(pool.verifiedAnchorDistinctRaterCount(bytes32("anchor-a")), 1);
     }
 
     function test_PartialLaunchCreditFinalizationBlocksRootReplacement() public {
