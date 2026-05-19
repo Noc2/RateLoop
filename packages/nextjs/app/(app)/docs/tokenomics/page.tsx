@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { DocsTitle } from "~~/components/docs/DocsTitle";
 import { RewardPayoutPathsDiagram } from "~~/components/docs/RewardPayoutPathsDiagram";
 import { TokenAllocationChart } from "~~/components/docs/TokenAllocationChart";
@@ -173,27 +172,6 @@ const Tokenomics = () => {
         They do not draw from the Launch Distribution Pool. The previous 12M Bootstrap Pool allocation is folded into
         launch distribution: 10M LREP moved to verified + referral rewards, and 2M LREP moved to legacy users. The
         former 4M LREP consensus reserve allocation moved into earned rater rewards.
-      </p>
-
-      <h3 id="bounties">Bounties</h3>
-      <p>
-        Bounties are separate from LREP launch rewards. They are attached at submission, funded in LREP or World Chain
-        USDC, scoped to one question or a question bundle, and split across eligible revealed raters in each qualified
-        bounty round after a 3% frontend-operator share. Accurate crowd predictions earn more, while near misses can
-        receive a smaller payout for useful participation. USDC claims use{" "}
-        <Link href="/docs/tech-stack#correlation-epoch-snapshots">correlation-capped effective weights</Link> after
-        settlement, so dense clusters share capped payout weight without changing the public result. These bounty
-        weights are independence/correlation weights, not LREP stake amounts. Bundle bounties can require multiple
-        settlement round sets; each set requires every bundled question to settle once and is claimed independently. If
-        the commit-attributed frontend is not payable, that share stays with the rater claim. Bounty required-rater
-        terms cannot exceed the question&apos;s selected rater cap, and bounty-paying questions currently keep that cap
-        at 200 or lower.
-      </p>
-      <h3 id="feedback-bonuses">Feedback Bonuses</h3>
-      <p>
-        Feedback Bonuses are separate, optional USDC pools. They reward revealed raters for useful hidden feedback after
-        settlement, pay immediately in the award transaction, reserve the same 3% eligible frontend share, and send
-        expired unawarded USDC to treasury.
       </p>
 
       <h3>Treasury</h3>

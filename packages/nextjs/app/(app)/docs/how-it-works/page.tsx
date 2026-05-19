@@ -131,7 +131,9 @@ const HowItWorks: NextPage = () => {
         question in the claimed round set. Each qualified round pays{" "}
         <code>round allocation * claim weight / total claim weight</code>, where USDC claim weights come from the
         finalized <Link href="/docs/tech-stack#correlation-epoch-snapshots">correlation payout snapshot</Link> and
-        equal-weight rounds use one unit per eligible revealed rater.
+        equal-weight rounds use one unit per eligible revealed rater. An eligible commit-attributed frontend receives
+        the default 3% frontend fee before rater payouts; if that frontend is not payable, the share stays with the
+        rater claim.
       </p>
       <p>
         Example: if a 30 USDC rater allocation is claimable and three eligible raters have effective correlation weights
