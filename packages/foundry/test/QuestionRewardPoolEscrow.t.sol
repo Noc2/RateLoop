@@ -2632,9 +2632,8 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     function testClusterRewardPoolCanSkipFinalizedEmptySnapshot() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         uint256 contentId = _submitQuestion("");
-        uint256 rewardPoolId = _createRewardPoolWithEligibility(
-            contentId, REWARD_POOL_AMOUNT, 3, 1, BOUNTY_ELIGIBILITY_VERIFIED_HUMAN
-        );
+        uint256 rewardPoolId =
+            _createRewardPoolWithEligibility(contentId, REWARD_POOL_AMOUNT, 3, 1, BOUNTY_ELIGIBILITY_VERIFIED_HUMAN);
 
         address[] memory unverifiedVoters = _voters(address(20), address(21), address(22));
         vm.startPrank(owner);

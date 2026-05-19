@@ -171,7 +171,8 @@ contract ClusterPayoutOracleTest is Test {
         input.weightRoot = bytes32(0);
 
         oracle.proposeRoundPayoutSnapshot(input);
-        bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(input.domain, input.rewardPoolId, input.contentId, input.roundId);
+        bytes32 snapshotKey =
+            oracle.roundPayoutSnapshotKey(input.domain, input.rewardPoolId, input.contentId, input.roundId);
         vm.warp(block.timestamp + 1 hours + 1);
         oracle.finalizeRoundPayoutSnapshot(snapshotKey);
 
@@ -248,7 +249,8 @@ contract ClusterPayoutOracleTest is Test {
         input.weightRoot = bytes32(0);
 
         oracle.proposeRoundPayoutSnapshot(input);
-        bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(input.domain, input.rewardPoolId, input.contentId, input.roundId);
+        bytes32 snapshotKey =
+            oracle.roundPayoutSnapshotKey(input.domain, input.rewardPoolId, input.contentId, input.roundId);
         oracle.challengeRoundPayoutSnapshot(snapshotKey, keccak256("bad-empty-root"));
         oracle.rejectRoundPayoutSnapshot(snapshotKey, keccak256("bad-empty-root"));
 

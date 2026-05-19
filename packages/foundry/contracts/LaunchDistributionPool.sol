@@ -900,7 +900,8 @@ contract LaunchDistributionPool is
         if (newOracle == address(0) || newOracle.code.length == 0) revert InvalidAddress();
         try IClusterPayoutOracle(newOracle).roundPayoutSnapshotKey(PAYOUT_DOMAIN_LAUNCH_CREDIT, 0, 0, 0) returns (
             bytes32
-        ) { } catch {
+        ) { }
+        catch {
             revert InvalidAddress();
         }
     }

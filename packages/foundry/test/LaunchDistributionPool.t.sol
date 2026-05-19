@@ -80,8 +80,9 @@ contract LaunchDistributionPoolTest is Test {
         vm.expectRevert(LaunchDistributionPool.InvalidAddress.selector);
         pool.setRaterRegistry(address(incompatible));
 
-        RaterRegistry replacementRegistry =
-            new RaterRegistry(address(this), address(this), address(worldIdRouter), bytes32("replacement"), 2, 365 days);
+        RaterRegistry replacementRegistry = new RaterRegistry(
+            address(this), address(this), address(worldIdRouter), bytes32("replacement"), 2, 365 days
+        );
         pool.setRaterRegistry(address(replacementRegistry));
         assertEq(address(pool.raterRegistry()), address(replacementRegistry));
 
