@@ -239,6 +239,34 @@ contract LaunchDistributionPoolTest is Test {
         assertEq(lrep.balanceOf(alice), 2_500_000);
     }
 
+    function test_RecordEarnedRaterRewardPartialEarnedPoolDoesNotConsumeFullSlot() public {
+        _recordLaunchRewardSlots(alice, 5);
+        assertEq(pool.rewardedRatingCount(alice), 1);
+        assertEq(pool.raterLaunchPaid(alice), 250_000);
+
+        _setEarnedRaterDistributed(pool.EARNED_RATER_POOL_AMOUNT() - 125_000);
+        uint256 partialReward = _recordLaunchReward(alice, 6, bytes32("anchor-b"));
+
+        assertEq(partialReward, 125_000);
+        assertEq(pool.raterLaunchPaid(alice), 375_000);
+        assertEq(pool.rewardedRatingCount(alice), 1);
+        assertEq(lrep.balanceOf(alice), 375_000);
+    }
+
+    function test_RecordEarnedRaterRewardExactRemainingEarnedPoolConsumesSlot() public {
+        _recordLaunchRewardSlots(alice, 5);
+        assertEq(pool.rewardedRatingCount(alice), 1);
+        assertEq(pool.raterLaunchPaid(alice), 250_000);
+
+        _setEarnedRaterDistributed(pool.EARNED_RATER_POOL_AMOUNT() - 250_000);
+        uint256 fullSlotReward = _recordLaunchReward(alice, 6, bytes32("anchor-b"));
+
+        assertEq(fullSlotReward, 250_000);
+        assertEq(pool.raterLaunchPaid(alice), 500_000);
+        assertEq(pool.rewardedRatingCount(alice), 2);
+        assertEq(lrep.balanceOf(alice), 500_000);
+    }
+
     function test_CorrelationOracleDelaysAndFractionalizesLaunchCredit() public {
         MockLaunchOracleFrontendRegistry frontendRegistry = new MockLaunchOracleFrontendRegistry();
         frontendRegistry.setEligible(address(this), true);
@@ -1217,6 +1245,13 @@ contract LaunchDistributionPoolTest is Test {
         );
     }
 
+    function _recordLaunchRewardSlots(address rater, uint256 count) internal {
+        for (uint256 i = 0; i < count; i++) {
+            bytes32 anchorId = i % 2 == 0 ? bytes32("anchor-a") : bytes32("anchor-b");
+            _recordLaunchReward(rater, i + 1, anchorId);
+        }
+    }
+
     function _singleAnchor(bytes32 anchorId) internal pure returns (bytes32[] memory anchors) {
         anchors = new bytes32[](1);
         anchors[0] = anchorId;
@@ -1364,6 +1399,10 @@ contract LaunchDistributionPoolTest is Test {
 
     function _setEligibleRaterCount(uint256 count) internal {
         stdstore.target(address(pool)).sig("eligibleRaterCount()").checked_write(count);
+    }
+
+    function _setEarnedRaterDistributed(uint256 amount) internal {
+        stdstore.target(address(pool)).sig("earnedRaterDistributed()").checked_write(amount);
     }
 }
 
