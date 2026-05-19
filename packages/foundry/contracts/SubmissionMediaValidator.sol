@@ -56,7 +56,10 @@ contract SubmissionMediaValidator {
     }
 
     function _isSupportedImageUrl(string memory url) internal pure returns (bool) {
-        return _hasUploadedImagePath(url);
+        return _hasUploadedImagePath(url, "https://www.rateloop.xyz/api/attachments/images/att_")
+            || _hasUploadedImagePath(url, "https://rateloop.xyz/api/attachments/images/att_")
+            || _hasUploadedImagePath(url, "https://www.curyo.xyz/api/attachments/images/att_")
+            || _hasUploadedImagePath(url, "https://curyo.xyz/api/attachments/images/att_");
     }
 
     function _isSupportedVideoUrl(string memory url) internal pure returns (bool) {
@@ -130,46 +133,21 @@ contract SubmissionMediaValidator {
         return (char >= "0" && char <= "9") || (char >= "A" && char <= "F") || (char >= "a" && char <= "f");
     }
 
-    function _hasUploadedImagePath(string memory value) internal pure returns (bool) {
+    function _hasUploadedImagePath(string memory value, string memory prefix) internal pure returns (bool) {
         bytes memory valueBytes = bytes(value);
-        bytes memory schemeBytes = bytes("https://");
-        bytes memory pathPrefixBytes = bytes("/api/attachments/images/att_");
+        bytes memory prefixBytes = bytes(prefix);
         bytes memory suffixBytes = bytes(".webp");
-        uint256 pathStart;
 
-        if (valueBytes.length < schemeBytes.length + pathPrefixBytes.length + 16 + suffixBytes.length) return false;
-
-        for (uint256 i = schemeBytes.length; i < valueBytes.length; i++) {
-            if (valueBytes[i] == "/") {
-                pathStart = i;
-                break;
-            }
-            if (valueBytes[i] == "?" || valueBytes[i] == "#") {
-                return false;
-            }
-        }
-        if (pathStart == 0) return false;
-        if (valueBytes.length < pathStart + pathPrefixBytes.length + 16 + suffixBytes.length) return false;
-
-        for (uint256 i = 0; i < pathPrefixBytes.length; i++) {
-            if (valueBytes[pathStart + i] != pathPrefixBytes[i]) return false;
-        }
+        if (valueBytes.length < prefixBytes.length + 16 + suffixBytes.length) return false;
+        if (!_hasPrefix(value, prefix)) return false;
 
         uint256 end = valueBytes.length;
-        for (uint256 i = pathStart + pathPrefixBytes.length; i < valueBytes.length; i++) {
-            if (valueBytes[i] == "?" || valueBytes[i] == "#") {
-                end = i;
-                break;
-            }
-        }
-        if (end < pathStart + pathPrefixBytes.length + 16 + suffixBytes.length) return false;
-
         uint256 suffixOffset = end - suffixBytes.length;
         for (uint256 i = 0; i < suffixBytes.length; i++) {
             if (valueBytes[suffixOffset + i] != suffixBytes[i]) return false;
         }
 
-        uint256 idStart = pathStart + pathPrefixBytes.length;
+        uint256 idStart = prefixBytes.length;
         uint256 idLength = suffixOffset - idStart;
         if (idLength < 16 || idLength > 80) return false;
 

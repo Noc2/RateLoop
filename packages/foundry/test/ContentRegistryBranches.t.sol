@@ -1641,6 +1641,42 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.stopPrank();
     }
 
+    function test_SubmitContent_UploadedImageFromUnapprovedHost_Reverts() public {
+        vm.startPrank(submitter);
+        lrepToken.approve(address(registry), 10e6);
+        vm.expectRevert("Invalid media URL");
+        registry.submitQuestion(
+            "https://example.com/context",
+            _singleImageUrls("https://evil.example/api/attachments/images/att_0123456789abcdef.webp"),
+            "",
+            "goal",
+            "goal",
+            "tags",
+            1,
+            bytes32(0),
+            _defaultQuestionSpec()
+        );
+        vm.stopPrank();
+    }
+
+    function test_SubmitContent_UploadedImageWithQuery_Reverts() public {
+        vm.startPrank(submitter);
+        lrepToken.approve(address(registry), 10e6);
+        vm.expectRevert("Invalid media URL");
+        registry.submitQuestion(
+            "https://example.com/context",
+            _singleImageUrls(string.concat(_uploadedImageUrl("valid-image-with-query"), "?download=1")),
+            "",
+            "goal",
+            "goal",
+            "tags",
+            1,
+            bytes32(0),
+            _defaultQuestionSpec()
+        );
+        vm.stopPrank();
+    }
+
     function test_SubmitContent_CategoryNotRegistered_Reverts() public {
         vm.prank(owner);
         registry.setCategoryRegistry(address(mockCategoryRegistry));
@@ -1758,9 +1794,8 @@ contract ContentRegistryBranchesTest is VotingTestBase {
     }
 
     function test_SubmitContent_UrlTooLong_Reverts() public {
-        string memory longUrl = _validLengthUrl(
-            2049, bytes("https://"), bytes(".example.com/api/attachments/images/att_abcdefghijklmnop.webp")
-        );
+        string memory longUrl =
+            _validLengthUrl(2049, bytes("https://www.curyo.xyz/api/attachments/images/att_"), bytes(".webp"));
 
         vm.startPrank(submitter);
         lrepToken.approve(address(registry), 10e6);
@@ -1779,13 +1814,11 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.stopPrank();
     }
 
-    function test_SubmitQuestion_AllowsMaxLengthImageUrl() public view {
-        string memory maxUrl = _validLengthUrl(
-            2048, bytes("https://"), bytes(".example.com/api/attachments/images/att_abcdefghijklmnop.webp")
-        );
+    function test_SubmitQuestion_AllowsMaxLengthContextUrl() public view {
+        string memory maxUrl = _validLengthUrl(2048, bytes("https://"), bytes(".example.com/context"));
 
         registry.previewQuestionSubmissionKey(
-            "https://example.com/context", _singleImageUrls(maxUrl), "", "Question?", "Context.", "tags", 1
+            maxUrl, _singleImageUrls(_uploadedImageUrl("max-length-context")), "", "Question?", "Context.", "tags", 1
         );
     }
 
