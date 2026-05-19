@@ -180,6 +180,7 @@ contract LaunchDistributionPool is
         if (_lrepToken == address(0) || _raterRegistry == address(0) || _governance == address(0)) {
             revert InvalidAddress();
         }
+        _validateRaterRegistry(_raterRegistry);
         lrepToken = IERC20(_lrepToken);
         raterRegistry = RaterRegistry(_raterRegistry);
         governance = _governance;
@@ -202,13 +203,13 @@ contract LaunchDistributionPool is
     }
 
     function setRaterRegistry(address newRegistry) external onlyOwner {
-        if (newRegistry == address(0)) revert InvalidAddress();
+        _validateRaterRegistry(newRegistry);
         raterRegistry = RaterRegistry(newRegistry);
         emit RaterRegistryUpdated(newRegistry);
     }
 
     function setClusterPayoutOracle(address newOracle) external onlyOwner {
-        if (newOracle == address(0)) revert InvalidAddress();
+        _validateClusterPayoutOracle(newOracle);
         clusterPayoutOracle = IClusterPayoutOracle(newOracle);
         emit ClusterPayoutOracleUpdated(newOracle);
     }
@@ -885,6 +886,23 @@ contract LaunchDistributionPool is
             return credential.nullifierHash;
         }
         return bytes32(0);
+    }
+
+    function _validateRaterRegistry(address newRegistry) private view {
+        if (newRegistry == address(0) || newRegistry.code.length == 0) revert InvalidAddress();
+        try RaterRegistry(newRegistry).getHumanCredential(address(0)) returns (RaterRegistry.HumanCredential memory) { }
+        catch {
+            revert InvalidAddress();
+        }
+    }
+
+    function _validateClusterPayoutOracle(address newOracle) private view {
+        if (newOracle == address(0) || newOracle.code.length == 0) revert InvalidAddress();
+        try IClusterPayoutOracle(newOracle).roundPayoutSnapshotKey(PAYOUT_DOMAIN_LAUNCH_CREDIT, 0, 0, 0) returns (
+            bytes32
+        ) { } catch {
+            revert InvalidAddress();
+        }
     }
 
     function _isDuplicateAnchor(bytes32[] calldata verifiedAnchorIds, uint256 index) internal pure returns (bool) {

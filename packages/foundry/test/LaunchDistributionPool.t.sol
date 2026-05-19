@@ -60,6 +60,47 @@ contract LaunchDistributionPoolTest is Test {
         );
     }
 
+    function test_ConstructorRejectsInvalidRaterRegistryIntegration() public {
+        vm.expectRevert(LaunchDistributionPool.InvalidAddress.selector);
+        new LaunchDistributionPool(address(lrep), address(0xBEEF), address(this));
+
+        MockLaunchOracleFrontendRegistry incompatible = new MockLaunchOracleFrontendRegistry();
+        vm.expectRevert(LaunchDistributionPool.InvalidAddress.selector);
+        new LaunchDistributionPool(address(lrep), address(incompatible), address(this));
+    }
+
+    function test_SetIntegrationAddressesValidateContracts() public {
+        vm.expectRevert(LaunchDistributionPool.InvalidAddress.selector);
+        pool.setRaterRegistry(address(0));
+
+        vm.expectRevert(LaunchDistributionPool.InvalidAddress.selector);
+        pool.setRaterRegistry(address(0xBEEF));
+
+        MockLaunchOracleFrontendRegistry incompatible = new MockLaunchOracleFrontendRegistry();
+        vm.expectRevert(LaunchDistributionPool.InvalidAddress.selector);
+        pool.setRaterRegistry(address(incompatible));
+
+        RaterRegistry replacementRegistry =
+            new RaterRegistry(address(this), address(this), address(worldIdRouter), bytes32("replacement"), 2, 365 days);
+        pool.setRaterRegistry(address(replacementRegistry));
+        assertEq(address(pool.raterRegistry()), address(replacementRegistry));
+
+        vm.expectRevert(LaunchDistributionPool.InvalidAddress.selector);
+        pool.setClusterPayoutOracle(address(0));
+
+        vm.expectRevert(LaunchDistributionPool.InvalidAddress.selector);
+        pool.setClusterPayoutOracle(address(0xBEEF));
+
+        vm.expectRevert(LaunchDistributionPool.InvalidAddress.selector);
+        pool.setClusterPayoutOracle(address(incompatible));
+
+        MockLaunchOracleFrontendRegistry frontendRegistry = new MockLaunchOracleFrontendRegistry();
+        frontendRegistry.setEligible(address(this), true);
+        ClusterPayoutOracle oracle = new ClusterPayoutOracle(address(this), address(frontendRegistry), address(lrep));
+        pool.setClusterPayoutOracle(address(oracle));
+        assertEq(address(pool.clusterPayoutOracle()), address(oracle));
+    }
+
     function test_DefaultLaunchRewardPolicyUsesAntiFarmDefaults() public view {
         (
             uint16 minQualifyingScoreBps,
