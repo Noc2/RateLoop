@@ -1,12 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import {
-  LAUNCH_DISTRIBUTION_POOL_AMOUNT_COMPACT_LABEL,
-  LREP_INITIAL_MINTED_SUPPLY_COMPACT_LABEL,
-  launchDistributionChartSlices,
-  tokenAllocationChartSlices,
-} from "~~/lib/docs/tokenomics";
+import { LREP_INITIAL_MINTED_SUPPLY_COMPACT_LABEL, tokenAllocationChartSlices } from "~~/lib/docs/tokenomics";
 
 const SIZE = 200;
 const CENTER = SIZE / 2;
@@ -60,16 +55,16 @@ export function TokenAllocationChart() {
           <h3 className="mt-1 text-xl font-semibold leading-tight text-base-content">100M LREP Allocation Map</h3>
         </div>
         <p className="max-w-xl text-sm leading-6 text-base-content/62 sm:text-right">
-          The launch pool is shown once, then expanded into the three rails that draw from it.
+          The full supply is split into three launch rails plus the governance treasury.
         </p>
       </div>
-      <div className="grid gap-4 rounded-lg bg-base-100 p-3 sm:p-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.35fr)]">
+      <div className="grid gap-4 rounded-lg bg-base-100 p-3 sm:p-4 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center lg:flex-col lg:items-start">
           <svg
             viewBox={`0 0 ${SIZE} ${SIZE}`}
             className="h-[160px] w-[160px] shrink-0"
             role="img"
-            aria-label="LREP allocation chart: 68 percent launch distribution pool and 32 percent treasury"
+            aria-label="LREP allocation chart: 35 percent human verified and referral rewards, 29 percent earned rater rewards, 4 percent legacy users, and 32 percent treasury"
           >
             {arcs.map(arc => (
               <path
@@ -126,67 +121,29 @@ export function TokenAllocationChart() {
           </div>
         </div>
 
-        <div className="grid gap-3">
-          <div
-            className={`rounded-lg border border-base-content/10 bg-base-content/[0.05] p-3 transition-opacity duration-150 ${
-              hovered === 1 ? "opacity-45" : ""
-            }`}
-            onMouseEnter={() => setHovered(0)}
-            onMouseLeave={() => setHovered(null)}
-          >
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <p className="text-sm font-semibold leading-snug text-base-content">Launch Distribution Pool</p>
-              <p className="font-mono text-xs text-base-content/55">
-                {LAUNCH_DISTRIBUTION_POOL_AMOUNT_COMPACT_LABEL} LREP
-              </p>
-            </div>
-            <div className="mt-3 flex h-3 overflow-hidden rounded-full bg-base-content/10">
-              {launchDistributionChartSlices.map(slice => (
-                <div
-                  key={slice.index}
-                  className="h-full"
-                  style={{ width: `${slice.launchValue}%`, backgroundColor: slice.color }}
-                />
-              ))}
-            </div>
-            <div className="mt-3 grid gap-2">
-              {launchDistributionChartSlices.map(slice => (
-                <div
-                  key={slice.index}
-                  className="grid gap-1 rounded-md bg-base-content/[0.04] p-2 sm:grid-cols-[1fr_auto]"
-                >
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: slice.color }} />
-                      <p className="text-sm font-semibold leading-snug text-base-content">{slice.label}</p>
-                    </div>
-                    <p className="mt-1 text-xs leading-5 text-base-content/58">{slice.purpose}</p>
-                  </div>
-                  <div className="font-mono text-xs leading-5 text-base-content/62 sm:text-right">
-                    <p>{slice.amountLabel}</p>
-                    <p>{slice.launchShareLabel}</p>
-                  </div>
+        <div className="grid gap-2">
+          {tokenAllocationChartSlices.map(slice => (
+            <div
+              key={slice.index}
+              className={`grid gap-1 rounded-lg border border-base-content/10 bg-base-content/[0.05] p-3 transition-opacity duration-150 sm:grid-cols-[1fr_auto] ${
+                hovered !== null && hovered !== slice.index ? "opacity-45" : ""
+              }`}
+              onMouseEnter={() => setHovered(slice.index)}
+              onMouseLeave={() => setHovered(null)}
+            >
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: slice.color }} />
+                  <p className="text-sm font-semibold leading-snug text-base-content">{slice.label}</p>
                 </div>
-              ))}
+                <p className="mt-1 text-xs leading-5 text-base-content/58">{slice.purpose}</p>
+              </div>
+              <div className="font-mono text-xs leading-5 text-base-content/62 sm:text-right">
+                <p>{slice.amountLabel}</p>
+                <p>{slice.percentLabel}</p>
+              </div>
             </div>
-          </div>
-
-          <div
-            className={`rounded-lg border border-base-content/10 bg-base-content/[0.05] p-3 transition-opacity duration-150 ${
-              hovered === 0 ? "opacity-45" : ""
-            }`}
-            onMouseEnter={() => setHovered(1)}
-            onMouseLeave={() => setHovered(null)}
-          >
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <p className="text-sm font-semibold leading-snug text-base-content">Treasury</p>
-              <p className="font-mono text-xs text-base-content/55">32M LREP</p>
-            </div>
-            <p className="mt-2 text-xs leading-5 text-base-content/58">
-              Governance-controlled LREP for safety responses, verification acceleration, ecosystem grants, partner
-              activation, and protocol development.
-            </p>
-          </div>
+          ))}
         </div>
       </div>
     </div>

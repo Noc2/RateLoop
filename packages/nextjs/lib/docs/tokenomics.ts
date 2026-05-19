@@ -45,20 +45,28 @@ const launchDistributionBreakdownEntries: readonly LaunchDistributionBreakdownEn
     label: "Human verified + referral rewards",
     amount: 35_000_000,
     purpose: "One-time decaying human verification bonuses plus bounded referrals",
-    color: "#7DD3FC",
+    color: "var(--rateloop-blue)",
   },
   {
     label: "Earned rater rewards",
     amount: 29_000_000,
     purpose:
       "Count-based rewards for useful revealed ratings in verified-human anchored rounds, with full caps unlockable by later human verification",
-    color: "#A7F3D0",
+    color: "var(--rateloop-green)",
   },
   {
     label: "Legacy users",
     amount: 4_000_000,
     purpose: "Fixed allocation for the previous-user set",
-    color: "#FDE68A",
+    color: "var(--rateloop-yellow)",
+  },
+] as const;
+
+const tokenAllocationChartEntries: readonly TokenDistributionEntry[] = [
+  ...launchDistributionBreakdownEntries,
+  {
+    ...tokenDistributionEntries[1],
+    color: "var(--rateloop-pink)",
   },
 ] as const;
 
@@ -78,7 +86,7 @@ export const tokenDistributionTableRows = tokenDistributionEntries.map(entry => 
   amountLabel: formatLrepAmount(entry.amount),
 }));
 
-export const tokenAllocationChartSlices = tokenDistributionEntries.map((entry, index) => ({
+export const tokenAllocationChartSlices = tokenAllocationChartEntries.map((entry, index) => ({
   ...entry,
   index,
   amountLabel: formatLrepAmount(entry.amount),
@@ -91,16 +99,6 @@ export const launchDistributionBreakdownRows = launchDistributionBreakdownEntrie
   formatLrepAmount(entry.amount),
   entry.purpose,
 ]);
-
-export const launchDistributionChartSlices = launchDistributionBreakdownEntries.map((entry, index) => ({
-  ...entry,
-  index,
-  amountLabel: formatLrepAmount(entry.amount),
-  percentLabel: formatAllocationPercent(entry.amount),
-  launchShareLabel: `${((entry.amount / LAUNCH_DISTRIBUTION_POOL_AMOUNT) * 100).toFixed(1)}% of launch pool`,
-  launchValue: (entry.amount / LAUNCH_DISTRIBUTION_POOL_AMOUNT) * 100,
-  value: (entry.amount / LREP_MAX_SUPPLY) * 100,
-}));
 
 export const tokenDistributionWhitepaperRows = tokenDistributionEntries.map(entry => [
   entry.label,
