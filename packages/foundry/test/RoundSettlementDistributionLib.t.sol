@@ -10,7 +10,6 @@ import { RoundSettlementDistributionLib } from "../contracts/libraries/RoundSett
 
 contract RoundSettlementDistributionHarness {
     RoundLib.Round internal round;
-    uint256 internal reserve;
     mapping(uint256 => mapping(uint256 => uint256)) internal roundVoterPool;
     mapping(uint256 => mapping(uint256 => uint256)) internal roundWinningStake;
     mapping(uint256 => mapping(uint256 => uint256)) internal roundStakeWithEligibleFrontend;
@@ -22,31 +21,20 @@ contract RoundSettlementDistributionHarness {
         round.downPool = downPool;
     }
 
-    function setReserve(uint256 value) external {
-        reserve = value;
-    }
-
-    function distribute(uint256 weightedWinningStake, uint256 forfeitedPool, bool rawUnanimous) external {
-        (reserve,) = RoundSettlementDistributionLib.distribute(
+    function distribute(uint256 weightedWinningStake, uint256 forfeitedPool) external {
+        RoundSettlementDistributionLib.distribute(
             IERC20(address(0)),
             ProtocolConfig(address(0)),
-            round,
             roundVoterPool,
             roundWinningStake,
             roundStakeWithEligibleFrontend,
             roundFrontendPool,
             roundFrontendRegistrySnapshot,
-            reserve,
             1,
             1,
             weightedWinningStake,
-            forfeitedPool,
-            rawUnanimous
+            forfeitedPool
         );
-    }
-
-    function consensusReserve() external view returns (uint256) {
-        return reserve;
     }
 
     function voterPool() external view returns (uint256) {
@@ -55,25 +43,21 @@ contract RoundSettlementDistributionHarness {
 }
 
 contract RoundSettlementDistributionLibTest is Test {
-    function test_ContestedZeroForfeitureDoesNotReceiveConsensusSubsidy() public {
+    function test_ContestedZeroForfeitureDoesNotCreateRewards() public {
         RoundSettlementDistributionHarness harness = new RoundSettlementDistributionHarness();
         harness.setRoundPools(10e6, 5e6);
-        harness.setReserve(100e6);
 
-        harness.distribute(15e6, 0, false);
+        harness.distribute(15e6, 0);
 
-        assertEq(harness.consensusReserve(), 100e6);
         assertEq(harness.voterPool(), 0);
     }
 
-    function test_RawUnanimousZeroForfeitureReceivesConsensusSubsidy() public {
+    function test_RawUnanimousZeroForfeitureDoesNotCreateSubsidy() public {
         RoundSettlementDistributionHarness harness = new RoundSettlementDistributionHarness();
         harness.setRoundPools(15e6, 0);
-        harness.setReserve(100e6);
 
-        harness.distribute(15e6, 0, true);
+        harness.distribute(15e6, 0);
 
-        assertEq(harness.consensusReserve(), 100e6 - 750_000);
-        assertEq(harness.voterPool(), 750_000);
+        assertEq(harness.voterPool(), 0);
     }
 }

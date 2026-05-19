@@ -13,8 +13,6 @@ import { TokenTransferLib } from "./TokenTransferLib.sol";
 /// @notice Extracts bounty accounting from RoundVotingEngine to keep runtime bytecode below EIP-170.
 library RoundSettlementDistributionLib {
     event TreasuryFeeDistributed(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
-    event ConsensusReserveFunded(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
-    event ConsensusSubsidyDistributed(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
     /// @notice Emitted when the 1% treasury fee could not be delivered (treasury unset or
     ///         transfer reverted) and the amount was rerouted into the voter pool instead.
     ///         Lets indexers reconcile voter-reward accounting with expected fee splits.
@@ -23,36 +21,25 @@ library RoundSettlementDistributionLib {
     function distribute(
         IERC20 lrepToken,
         ProtocolConfig protocolConfig,
-        RoundLib.Round storage round,
         mapping(uint256 => mapping(uint256 => uint256)) storage roundVoterPool,
         mapping(uint256 => mapping(uint256 => uint256)) storage roundWinningStake,
         mapping(uint256 => mapping(uint256 => uint256)) storage roundStakeWithEligibleFrontend,
         mapping(uint256 => mapping(uint256 => uint256)) storage roundFrontendPool,
         mapping(uint256 => mapping(uint256 => address)) storage roundFrontendRegistrySnapshot,
-        uint256 consensusReserve,
         uint256 contentId,
         uint256 roundId,
         uint256 weightedWinningStake,
-        uint256 losingPool,
-        bool rawUnanimous
-    ) external returns (uint256 updatedConsensusReserve, uint256 treasuryPaid) {
-        updatedConsensusReserve = consensusReserve;
-
+        uint256 losingPool
+    ) external returns (uint256 treasuryPaid) {
         if (losingPool > 0) {
             uint256 loserRefundShare = RewardMath.calculateRevealedLoserRefund(losingPool);
-            (uint256 voterShare, uint256 platformShare, uint256 treasuryShare, uint256 consensusShare) =
+            (uint256 voterShare, uint256 platformShare, uint256 treasuryShare) =
                 RewardMath.splitPool(losingPool - loserRefundShare);
 
             if (weightedWinningStake > 0) {
                 roundVoterPool[contentId][roundId] += voterShare;
-            } else if (voterShare > 0) {
-                updatedConsensusReserve += voterShare;
-                emit ConsensusReserveFunded(contentId, roundId, voterShare);
-            }
-
-            if (consensusShare > 0) {
-                updatedConsensusReserve += consensusShare;
-                emit ConsensusReserveFunded(contentId, roundId, consensusShare);
+            } else {
+                treasuryShare += voterShare;
             }
 
             if (platformShare > 0) {
@@ -71,16 +58,6 @@ library RoundSettlementDistributionLib {
             if (treasuryShare > 0) {
                 treasuryPaid =
                     _transferTreasuryFee(lrepToken, protocolConfig, roundVoterPool, contentId, roundId, treasuryShare);
-            }
-        }
-
-        if (rawUnanimous && weightedWinningStake > 0) {
-            uint256 totalStake = round.upPool + round.downPool;
-            uint256 subsidy = RewardMath.calculateConsensusSubsidy(totalStake, consensusReserve);
-            if (subsidy > 0) {
-                updatedConsensusReserve -= subsidy;
-                roundVoterPool[contentId][roundId] += subsidy;
-                emit ConsensusSubsidyDistributed(contentId, roundId, subsidy);
             }
         }
 

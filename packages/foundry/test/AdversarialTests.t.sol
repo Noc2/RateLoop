@@ -18,7 +18,7 @@ import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
 
 /// @title AdversarialTests
 /// @notice Pre-deployment adversarial tests covering reward exhaustion, state transition
-///         violations, double-claim vectors, cooldown bypass, consensus subsidy draining,
+///         violations, double-claim vectors, cooldown bypass, unanimous-round accounting,
 ///         and processUnrevealedVotes edge cases.
 contract AdversarialTests is VotingTestBase {
     LoopReputation lrepToken;
@@ -116,12 +116,6 @@ contract AdversarialTests is VotingTestBase {
             DEFAULT_DRAND_PERIOD
         );
         _setTlockRoundConfig(ProtocolConfig(address(engine.protocolConfig())), EPOCH_DURATION, 7 days, 3, 200);
-
-        // Fund consensus reserve
-        uint256 reserveAmount = 1_000_000e6;
-        lrepToken.mint(owner, reserveAmount);
-        lrepToken.approve(address(engine), reserveAmount);
-        engine.addToConsensusReserve(reserveAmount);
 
         // Fund actors
         address[6] memory users = [submitter, voter1, voter2, voter3, voter4, voter5];
@@ -398,14 +392,13 @@ contract AdversarialTests is VotingTestBase {
         cks[2] = ck3;
         _settleAfterFinalGrace(contentId, roundId, cks);
 
-        uint256 reserveBefore = engine.consensusReserve();
+        uint256 treasuryBefore = lrepToken.balanceOf(treasury);
 
-        // Process unrevealed (settled unrevealed stake is credited to consensus reserve).
+        // Process unrevealed (settled unrevealed stake is routed to treasury).
         engine.processUnrevealedVotes(contentId, roundId, 0, 0);
 
-        uint256 reserveAfter1 = engine.consensusReserve();
-        uint256 routedAmount = reserveAfter1 - reserveBefore;
-        assertGt(routedAmount, 0, "Some amount should be routed to reserve");
+        uint256 routedAmount = lrepToken.balanceOf(treasury) - treasuryBefore;
+        assertGt(routedAmount, 0, "Some amount should be routed to treasury");
 
         // Process again — same range, reverts because nothing left to process (stakeAmount zeroed)
         vm.expectRevert(RoundVotingEngine.NothingProcessed.selector);
@@ -595,13 +588,12 @@ contract AdversarialTests is VotingTestBase {
     }
 
     // =========================================================================
-    // 5. CONSENSUS SUBSIDY DRAIN
+    // 5. UNANIMOUS ROUNDS DO NOT RECEIVE SUBSIDY
     // =========================================================================
 
-    /// @notice Repeated unanimous rounds cannot drain reserve beyond MAX_CONSENSUS_SUBSIDY per round
-    function test_ConsensusSubsidy_CappedPerRound() public {
+    /// @notice Unanimous rounds settle without creating a subsidy pool.
+    function test_UnanimousRound_NoConsensusSubsidy() public {
         uint256 contentId = _submitContent();
-        uint256 reserveBefore = engine.consensusReserve();
 
         // Large unanimous UP round
         (bytes32 ck1,) = _commit(voter1, contentId, true, 10e6);
@@ -615,23 +607,15 @@ contract AdversarialTests is VotingTestBase {
         cks[2] = ck3;
         _settleRound(contentId, roundId, cks);
 
-        uint256 reserveAfter = engine.consensusReserve();
-        uint256 subsidyUsed = reserveBefore - reserveAfter;
-        RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
         uint256 forfeitedPool = engine.roundRbtsForfeitedPool(contentId, roundId);
-        uint256 loserRefundShare = (forfeitedPool * 500) / 10_000;
-        uint256 forfeitureConsensusShare = ((forfeitedPool - loserRefundShare) * 500) / 10_000;
-        uint256 expectedSubsidy = ((round.upPool + round.downPool) * 500) / 10_000;
-
-        // Reserve movement is net of the unanimous-round subsidy and consensus share
-        // replenished from RBTS forfeitures in the same settlement.
-        assertEq(subsidyUsed, expectedSubsidy - forfeitureConsensusShare, "Net reserve drain should match accounting");
-        assertLe(expectedSubsidy, 50e6, "Subsidy must not exceed MAX_CONSENSUS_SUBSIDY");
+        uint256 loserRefundShare = RewardMath.calculateRevealedLoserRefund(forfeitedPool);
+        (uint256 voterShare, uint256 frontendShare,) = RewardMath.splitPool(forfeitedPool - loserRefundShare);
+        assertEq(engine.roundVoterPool(contentId, roundId), voterShare + frontendShare);
     }
 
-    /// @notice Empty consensus reserve means unanimous rounds get zero subsidy
-    function test_ConsensusSubsidy_EmptyReserve_ZeroSubsidy() public {
-        // Deploy fresh setup with zero consensus reserve
+    /// @notice Unanimous rounds get zero subsidy without a losing pool.
+    function test_UnanimousRound_ZeroSubsidy() public {
+        // Deploy fresh setup; there is no consensus reserve in the protocol.
         vm.startPrank(owner);
         LoopReputation token2 = new LoopReputation(owner, owner);
         token2.grantRole(token2.MINTER_ROLE(), owner);
@@ -682,8 +666,6 @@ contract AdversarialTests is VotingTestBase {
             DEFAULT_DRAND_PERIOD
         );
         _setTlockRoundConfig(ProtocolConfig(address(eng2.protocolConfig())), EPOCH_DURATION, 7 days, 3, 200);
-
-        // NO fundConsensusReserve — reserve is zero
 
         token2.mint(submitter, 100_000e6);
         token2.mint(voter1, 100_000e6);
@@ -749,15 +731,12 @@ contract AdversarialTests is VotingTestBase {
 
         _settleAfterRbtsSeed(eng2, 1, 1);
 
-        // With zero reserve, no consensus subsidy is paid. RBTS forfeitures still fund
+        // No consensus subsidy is paid. RBTS forfeitures still fund
         // the voter pool, with the frontend share falling back to voters when no eligible
         // frontend is attached.
         uint256 forfeitedPool = eng2.roundRbtsForfeitedPool(1, 1);
-        uint256 loserRefundShare = (forfeitedPool * 500) / 10_000;
-        uint256 postRebateForfeited = forfeitedPool - loserRefundShare;
-        uint256 voterShare = postRebateForfeited - ((postRebateForfeited * 300) / 10_000)
-            - ((postRebateForfeited * 100) / 10_000) - ((postRebateForfeited * 500) / 10_000);
-        uint256 frontendFallbackShare = (postRebateForfeited * 300) / 10_000;
+        uint256 loserRefundShare = RewardMath.calculateRevealedLoserRefund(forfeitedPool);
+        (uint256 voterShare, uint256 frontendFallbackShare,) = RewardMath.splitPool(forfeitedPool - loserRefundShare);
         uint256 voterPool = eng2.roundVoterPool(1, 1);
         assertEq(voterPool, voterShare + frontendFallbackShare, "Voter pool should come only from forfeitures");
     }
@@ -1217,7 +1196,7 @@ contract AdversarialTests is VotingTestBase {
         engine.processUnrevealedVotes(contentId, roundId, 0, 0);
 
         uint256 engineBalance = lrepToken.balanceOf(address(engine));
-        uint256 obligations = engine.consensusReserve();
+        uint256 obligations = 0;
 
         assertGe(engineBalance, obligations, "Engine insolvent after full cycle");
     }
@@ -1318,8 +1297,8 @@ contract AdversarialTests is VotingTestBase {
         uint256[5] memory inputs = [uint256(10e6), 1e6, 1, 999_999e6, 10_000_000e6];
 
         for (uint256 i = 0; i < inputs.length; i++) {
-            (uint256 v, uint256 p, uint256 t, uint256 c) = RewardMath.splitPool(inputs[i]);
-            assertEq(v + p + t + c, inputs[i], "Split must sum to input");
+            (uint256 v, uint256 p, uint256 t) = RewardMath.splitPool(inputs[i]);
+            assertEq(v + p + t, inputs[i], "Split must sum to input");
         }
     }
 
@@ -1335,7 +1314,7 @@ contract AdversarialTests is VotingTestBase {
         stake3 = bound(stake3, 1e6, 10e6);
         losingPool = bound(losingPool, 1e6, 1_000_000e6);
 
-        (uint256 voterPool,,,) = RewardMath.splitPool(losingPool);
+        (uint256 voterPool,,) = RewardMath.splitPool(losingPool);
 
         // All three are winners with epoch-1 weight (10000 BPS)
         uint256 eff1 = stake1; // weight 100% → same as stake

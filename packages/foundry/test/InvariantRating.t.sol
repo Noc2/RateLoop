@@ -90,12 +90,6 @@ contract InvariantRating is VotingTestBase {
         ProtocolConfig(address(engine.protocolConfig())).setTreasury(treasury);
         _setTlockRoundConfig(ProtocolConfig(address(engine.protocolConfig())), EPOCH_DURATION, 7 days, 3, 200);
 
-        // Fund consensus reserve
-        uint256 reserveAmount = 1_000_000e6;
-        lrepToken.mint(owner, reserveAmount);
-        lrepToken.approve(address(engine), reserveAmount);
-        engine.addToConsensusReserve(reserveAmount);
-
         // Create voters
         for (uint256 i = 0; i < NUM_VOTERS; i++) {
             address voter = address(uint160(10 + i));

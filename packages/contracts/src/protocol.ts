@@ -48,9 +48,8 @@ export const PLATFORM_REWARD_SPLIT_BPS = {
 
 export const REWARD_SPLIT_BPS = {
   revealedLoserRefund: 500,
-  voter: 9_100,
+  voter: 9_600,
   submitter: 0,
   platform: PLATFORM_REWARD_SPLIT_BPS.frontend,
   treasury: 100,
-  consensus: 500,
 } as const;

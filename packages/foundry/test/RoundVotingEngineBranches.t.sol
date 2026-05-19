@@ -169,7 +169,6 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         lrepToken.approve(address(participationPool), 500_000e6);
         participationPool.depositPool(500_000e6);
         lrepToken.approve(address(engine), 500_000e6);
-        engine.addToConsensusReserve(500_000e6);
 
         address[9] memory users = [submitter, voter1, voter2, voter3, voter4, voter5, voter6, frontend1, delegate1];
         for (uint256 i = 0; i < users.length; i++) {
@@ -778,7 +777,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertEq(commit.stakeAmount, STAKE);
         assertEq(lrepToken.nonces(permitVoter), 1);
         assertEq(lrepToken.allowance(permitVoter, address(engine)), 0);
-        assertEq(lrepToken.balanceOf(address(engine)), 500_000e6 + STAKE);
+        assertEq(lrepToken.balanceOf(address(engine)), STAKE);
     }
 
     function test_CommitVoteWithPermit_InvalidSignerReverts() public {
@@ -2267,20 +2266,17 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
         uint256 treasuryBefore = lrepToken.balanceOf(treasury);
         uint256 keeperBefore = lrepToken.balanceOf(keeper);
-        uint256 consensusReserveBefore = engine.consensusReserve();
         vm.prank(keeper);
         engine.processUnrevealedVotes(contentId, roundId, 0, 0);
         uint256 treasuryAfter = lrepToken.balanceOf(treasury);
         uint256 keeperAfter = lrepToken.balanceOf(keeper);
-        uint256 consensusReserveAfter = engine.consensusReserve();
 
         assertEq(engine.roundUnrevealedCleanupRemaining(contentId, roundId), 0);
-        assertEq(treasuryAfter, treasuryBefore, "settled unrevealed stake should not go to treasury");
         assertEq(keeperAfter - keeperBefore, STAKE / 100, "cleanup caller receives 1% incentive");
         assertEq(
-            consensusReserveAfter - consensusReserveBefore,
+            treasuryAfter - treasuryBefore,
             STAKE - (STAKE / 100),
-            "settled unrevealed stake less incentive boosts reserve"
+            "settled unrevealed stake less incentive routes to treasury"
         );
 
         vm.prank(voter2);
@@ -2313,19 +2309,16 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
         uint256 treasuryBefore = lrepToken.balanceOf(treasury);
         uint256 keeperBefore = lrepToken.balanceOf(keeper);
-        uint256 consensusReserveBefore = engine.consensusReserve();
         vm.prank(keeper);
         engine.processUnrevealedVotes(contentId, roundId, 0, 1);
-        assertEq(lrepToken.balanceOf(treasury), treasuryBefore);
+        assertEq(lrepToken.balanceOf(treasury) - treasuryBefore, STAKE - (STAKE / 100));
         assertEq(lrepToken.balanceOf(keeper) - keeperBefore, STAKE / 100);
-        assertEq(engine.consensusReserve() - consensusReserveBefore, STAKE - (STAKE / 100));
         assertEq(engine.roundUnrevealedCleanupRemaining(contentId, roundId), 1);
 
         vm.prank(keeper);
         engine.processUnrevealedVotes(contentId, roundId, 1, 1);
-        assertEq(lrepToken.balanceOf(treasury), treasuryBefore);
+        assertEq(lrepToken.balanceOf(treasury) - treasuryBefore, STAKE * 2 - ((STAKE * 2) / 100));
         assertEq(lrepToken.balanceOf(keeper) - keeperBefore, (STAKE * 2) / 100);
-        assertEq(engine.consensusReserve() - consensusReserveBefore, STAKE * 2 - ((STAKE * 2) / 100));
         assertEq(engine.roundUnrevealedCleanupRemaining(contentId, roundId), 0);
     }
 
@@ -2381,7 +2374,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
         uint256 keeperBefore = lrepToken.balanceOf(keeper);
         uint256 voter4Before = lrepToken.balanceOf(voter4);
-        uint256 reserveBefore = engine.consensusReserve();
+        uint256 treasuryBefore = lrepToken.balanceOf(treasury);
 
         vm.prank(keeper);
         engine.processUnrevealedVotes(contentId, roundId, 0, 0);
@@ -2389,7 +2382,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         // Refund still happens.
         assertEq(lrepToken.balanceOf(voter4) - voter4Before, STAKE, "voter4 refunded");
         assertEq(lrepToken.balanceOf(keeper), keeperBefore, "keeper not paid");
-        assertEq(engine.consensusReserve(), reserveBefore, "refund-only cleanup must not drain reserve");
+        assertEq(lrepToken.balanceOf(treasury), treasuryBefore, "refund-only cleanup must not pay treasury");
     }
 
     function test_ProcessUnrevealed_SettledCleanupPaysIncentiveOncePerForfeiture() public {
@@ -2450,7 +2443,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         _settleRoundAfterRbtsSeed(contentId, roundId);
 
         uint256 keeperBefore = lrepToken.balanceOf(keeper);
-        uint256 reserveBefore = engine.consensusReserve();
+        uint256 treasuryBefore = lrepToken.balanceOf(treasury);
         for (uint256 i = 0; i < unrevealedVoters.length; ++i) {
             vm.prank(keeper);
             engine.processUnrevealedVotes(contentId, roundId, i, 1);
@@ -2458,9 +2451,9 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
         assertEq(lrepToken.balanceOf(keeper) - keeperBefore, 5e6, "round cleanup incentive is capped");
         assertEq(
-            engine.consensusReserve() - reserveBefore,
+            lrepToken.balanceOf(treasury) - treasuryBefore,
             highStake * unrevealedVoters.length - 5e6,
-            "remaining stake stays reserved"
+            "remaining stake routes to treasury"
         );
         assertEq(engine.roundUnrevealedCleanupRemaining(contentId, roundId), 0, "cleanup queue clears");
     }

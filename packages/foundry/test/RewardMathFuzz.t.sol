@@ -71,20 +71,20 @@ contract RewardMathFuzz is Test {
     function testFuzz_splitPool_SharesSumToInput(uint256 losingPool) public pure {
         losingPool = bound(losingPool, 0, type(uint128).max);
 
-        (uint256 voter, uint256 platform, uint256 treasury, uint256 consensus) = RewardMath.splitPool(losingPool);
+        (uint256 voter, uint256 platform, uint256 treasury) = RewardMath.splitPool(losingPool);
 
-        uint256 total = voter + platform + treasury + consensus;
+        uint256 total = voter + platform + treasury;
         assertEq(total, losingPool, "shares do not sum to input");
     }
 
     function testFuzz_splitPool_VoterGetsRemainder(uint256 losingPool) public pure {
         losingPool = bound(losingPool, 10000, type(uint128).max); // Need enough for meaningful split
 
-        (uint256 voter,,,) = RewardMath.splitPool(losingPool);
+        (uint256 voter,,) = RewardMath.splitPool(losingPool);
 
-        // Voter share should be >= 91% because it receives the unallocated rounding remainder.
-        uint256 minVoter = (losingPool * 9100) / 10000;
-        assertGe(voter, minVoter, "voter share below 91% floor");
+        // Voter share should be >= 96% because it receives the unallocated rounding remainder.
+        uint256 minVoter = (losingPool * 9600) / 10000;
+        assertGe(voter, minVoter, "voter share below 96% floor");
     }
 
     // =========================================================================
@@ -106,24 +106,5 @@ contract RewardMathFuzz is Test {
 
         uint256 refund = RewardMath.calculateRevealedLoserRefund(losingStake);
         assertLe(refund, losingStake, "refund exceeds original stake");
-    }
-
-    // =========================================================================
-    // calculateConsensusSubsidy
-    // =========================================================================
-
-    function testFuzz_calculateConsensusSubsidy_CappedByMaxAndReserve(uint256 totalStake, uint256 reserveBalance)
-        public
-        pure
-    {
-        totalStake = bound(totalStake, 0, type(uint128).max);
-        reserveBalance = bound(reserveBalance, 0, type(uint128).max);
-
-        uint256 subsidy = RewardMath.calculateConsensusSubsidy(totalStake, reserveBalance);
-
-        // Never exceeds MAX_CONSENSUS_SUBSIDY (50e6)
-        assertLe(subsidy, 50e6, "subsidy exceeds MAX");
-        // Never exceeds reserve
-        assertLe(subsidy, reserveBalance, "subsidy exceeds reserve");
     }
 }

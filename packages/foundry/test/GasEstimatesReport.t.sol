@@ -16,12 +16,6 @@ import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract MockVotingEngineForFrontendGas {
-    uint256 public totalAddedToReserve;
-
-    function addToConsensusReserve(uint256 amount) external {
-        totalAddedToReserve += amount;
-    }
-
     function transferReward(address, uint256) external { }
 }
 

@@ -652,56 +652,6 @@ const deployedContracts: GenericContractsDeclaration = {
       abi: [
         {
           type: "event",
-          name: "ConsensusReserveFunded",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              indexed: true,
-              internalType: "uint256",
-            },
-            {
-              name: "roundId",
-              type: "uint256",
-              indexed: true,
-              internalType: "uint256",
-            },
-            {
-              name: "amount",
-              type: "uint256",
-              indexed: false,
-              internalType: "uint256",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "ConsensusSubsidyDistributed",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              indexed: true,
-              internalType: "uint256",
-            },
-            {
-              name: "roundId",
-              type: "uint256",
-              indexed: true,
-              internalType: "uint256",
-            },
-            {
-              name: "amount",
-              type: "uint256",
-              indexed: false,
-              internalType: "uint256",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
           name: "TreasuryFeeDistributed",
           inputs: [
             {
@@ -1044,7 +994,7 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "event",
-          name: "ForfeitedFundsFallbackToConsensusReserve",
+          name: "ForfeitedFundsRetained",
           inputs: [
             {
               name: "contentId",
@@ -1081,31 +1031,6 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "roundId",
               type: "uint256",
               indexed: true,
-              internalType: "uint256",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "UnrevealedStakeAddedToConsensusReserve",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              indexed: true,
-              internalType: "uint256",
-            },
-            {
-              name: "roundId",
-              type: "uint256",
-              indexed: true,
-              internalType: "uint256",
-            },
-            {
-              name: "amount",
-              type: "uint256",
-              indexed: false,
               internalType: "uint256",
             },
           ],
@@ -6158,19 +6083,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "addToConsensusReserve",
-          inputs: [
-            {
-              name: "amount",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
           name: "cancelExpiredRound",
           inputs: [
             {
@@ -6723,19 +6635,6 @@ const deployedContracts: GenericContractsDeclaration = {
           ],
           outputs: [],
           stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "consensusReserve",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
         },
         {
           type: "function",
@@ -8444,75 +8343,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "event",
-          name: "ConsensusReserveFunded",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              indexed: true,
-              internalType: "uint256",
-            },
-            {
-              name: "roundId",
-              type: "uint256",
-              indexed: true,
-              internalType: "uint256",
-            },
-            {
-              name: "amount",
-              type: "uint256",
-              indexed: false,
-              internalType: "uint256",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "ConsensusReserveToppedUp",
-          inputs: [
-            {
-              name: "funder",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "amount",
-              type: "uint256",
-              indexed: false,
-              internalType: "uint256",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "ConsensusSubsidyDistributed",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              indexed: true,
-              internalType: "uint256",
-            },
-            {
-              name: "roundId",
-              type: "uint256",
-              indexed: true,
-              internalType: "uint256",
-            },
-            {
-              name: "amount",
-              type: "uint256",
-              indexed: false,
-              internalType: "uint256",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
           name: "CurrentEpochRefunded",
           inputs: [
             {
@@ -8539,31 +8369,6 @@ const deployedContracts: GenericContractsDeclaration = {
         {
           type: "event",
           name: "ForfeitedFundsAddedToTreasury",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              indexed: true,
-              internalType: "uint256",
-            },
-            {
-              name: "roundId",
-              type: "uint256",
-              indexed: true,
-              internalType: "uint256",
-            },
-            {
-              name: "amount",
-              type: "uint256",
-              indexed: false,
-              internalType: "uint256",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "ForfeitedFundsFallbackToConsensusReserve",
           inputs: [
             {
               name: "contentId",
@@ -9000,31 +8805,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "event",
-          name: "UnrevealedStakeAddedToConsensusReserve",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              indexed: true,
-              internalType: "uint256",
-            },
-            {
-              name: "roundId",
-              type: "uint256",
-              indexed: true,
-              internalType: "uint256",
-            },
-            {
-              name: "amount",
-              type: "uint256",
-              indexed: false,
-              internalType: "uint256",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
           name: "VoteCommitted",
           inputs: [
             {
@@ -9349,7 +9129,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
       ],
       inheritedFunctions: {
-        addToConsensusReserve: "contracts/interfaces/IRoundVotingEngine.sol",
         currentRoundId: "contracts/interfaces/IRoundVotingEngine.sol",
         hasCommits: "contracts/interfaces/IRoundVotingEngine.sol",
         rounds: "contracts/interfaces/IRoundVotingEngine.sol",
@@ -11746,6 +11525,19 @@ const deployedContracts: GenericContractsDeclaration = {
           inputs: [],
           outputs: [],
           stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "confiscationRecipient",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
         },
         {
           type: "function",
@@ -23322,6 +23114,11 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "bytes32",
             },
           ],
+        },
+        {
+          type: "error",
+          name: "ActiveHumanCredentialRequiresHumanProfile",
+          inputs: [],
         },
         {
           type: "error",

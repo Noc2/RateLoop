@@ -8,6 +8,7 @@ import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
 import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
 import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
 import { RoundLib } from "../contracts/libraries/RoundLib.sol";
+import { RewardMath } from "../contracts/libraries/RewardMath.sol";
 import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
 import { LoopReputation } from "../contracts/LoopReputation.sol";
 import { VotingTestBase } from "./helpers/VotingTestHelpers.sol";
@@ -99,7 +100,6 @@ contract SelectiveRevelationTest is VotingTestBase {
 
         lrepToken.mint(owner, 2_000_000e6);
         lrepToken.approve(address(engine), 500_000e6);
-        engine.addToConsensusReserve(500_000e6);
 
         // Set up 10 voters
         for (uint256 i = 0; i < 10; i++) {
@@ -267,7 +267,7 @@ contract SelectiveRevelationTest is VotingTestBase {
         assertEq(uint256(round.state), uint256(RoundLib.RoundState.Settled));
     }
 
-    function test_MultiEpoch_CurrentEpochUnrevealedPreventsConsensusSubsidy() public {
+    function test_MultiEpoch_CurrentEpochUnrevealedDoesNotCreateSubsidy() public {
         uint256 contentId = _submitContent();
 
         (bytes32 ck1, bytes32 s1) = _commit(voters[0], contentId, true, STAKE);
@@ -285,13 +285,15 @@ contract SelectiveRevelationTest is VotingTestBase {
         _reveal(contentId, roundId, ck2, true, s2);
         _reveal(contentId, roundId, ck3, true, s3);
 
-        uint256 reserveBefore = engine.consensusReserve();
         _settleAfterRbtsSeed(engine, contentId, roundId);
 
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertEq(uint256(round.state), uint256(RoundLib.RoundState.Settled));
         assertEq(engine.roundUnrevealedCleanupRemaining(contentId, roundId), 0);
-        assertGe(engine.consensusReserve(), reserveBefore, "unrevealed current-epoch vote should block subsidy");
+        uint256 forfeitedPool = engine.roundRbtsForfeitedPool(contentId, roundId);
+        uint256 loserRefundShare = RewardMath.calculateRevealedLoserRefund(forfeitedPool);
+        (uint256 voterShare, uint256 frontendShare,) = RewardMath.splitPool(forfeitedPool - loserRefundShare);
+        assertEq(engine.roundVoterPool(contentId, roundId), voterShare + frontendShare);
     }
 
     function test_PostThresholdRevealCannotEnterRbtsScoringSet() public {
@@ -365,7 +367,7 @@ contract SelectiveRevelationTest is VotingTestBase {
         assertEq(engine.roundUnrevealedCleanupRemaining(contentId, roundId), 0);
     }
 
-    function test_FinalGraceExpiry_UnrevealedPastEpochPreventsConsensusSubsidy() public {
+    function test_FinalGraceExpiry_UnrevealedPastEpochDoesNotCreateSubsidy() public {
         uint256 contentId = _submitContent();
 
         bytes32[4] memory commitKeys;
@@ -385,13 +387,15 @@ contract SelectiveRevelationTest is VotingTestBase {
         _reveal(contentId, roundId, commitKeys[1], true, salts[1]);
         _reveal(contentId, roundId, commitKeys[2], true, salts[2]);
 
-        uint256 reserveBefore = engine.consensusReserve();
         _settleAfterRbtsSeed(engine, contentId, roundId);
 
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertEq(uint256(round.state), uint256(RoundLib.RoundState.Settled));
         assertEq(engine.roundUnrevealedCleanupRemaining(contentId, roundId), 1);
-        assertGe(engine.consensusReserve(), reserveBefore, "unrevealed past-epoch vote should block subsidy");
+        uint256 forfeitedPool = engine.roundRbtsForfeitedPool(contentId, roundId);
+        uint256 loserRefundShare = RewardMath.calculateRevealedLoserRefund(forfeitedPool);
+        (uint256 voterShare, uint256 frontendShare,) = RewardMath.splitPool(forfeitedPool - loserRefundShare);
+        assertEq(engine.roundVoterPool(contentId, roundId), voterShare + frontendShare);
     }
 
     /// @notice Within grace period, unrevealed votes still block settlement.

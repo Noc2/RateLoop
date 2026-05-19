@@ -12,7 +12,7 @@ import { ILaunchDistributionPool } from "./interfaces/ILaunchDistributionPool.so
 import { IRoundPayoutSnapshotConsumer } from "./interfaces/IRoundPayoutSnapshotConsumer.sol";
 
 /// @title LaunchDistributionPool
-/// @notice Holds the 64M LREP launch allocation and releases it through earned, verified, and legacy paths.
+/// @notice Holds the 68M LREP launch allocation and releases it through earned, verified, and legacy paths.
 contract LaunchDistributionPool is
     ILaunchDistributionPool,
     IRoundPayoutSnapshotConsumer,
@@ -31,7 +31,7 @@ contract LaunchDistributionPool is
     error SnapshotNotFinalized();
 
     uint256 public constant LEGACY_POOL_AMOUNT = 4_000_000e6;
-    uint256 public constant EARNED_RATER_POOL_AMOUNT = 25_000_000e6;
+    uint256 public constant EARNED_RATER_POOL_AMOUNT = 29_000_000e6;
     uint256 public constant VERIFIED_REFERRAL_POOL_AMOUNT = 35_000_000e6;
     uint256 public constant TOTAL_POOL_AMOUNT =
         LEGACY_POOL_AMOUNT + EARNED_RATER_POOL_AMOUNT + VERIFIED_REFERRAL_POOL_AMOUNT;

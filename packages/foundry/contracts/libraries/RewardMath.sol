@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 /// @title RewardMath
 /// @notice Pure functions for parimutuel reward calculations with epoch-weighted stake.
-/// @dev Pool split: 91% voters, 3% frontend, 1% treasury, 5% consensus subsidy.
+/// @dev Pool split: 96% voters, 3% frontend, 1% treasury.
 ///      Voter rewards are distributed proportional to epoch-weighted effective stake.
 ///      Epoch 1 (blind) = 100% weight; Epoch 2+ (saw results) = 25% weight.
 ///      This creates a 4:1 reward ratio for early blind voters vs late informed voters.
@@ -13,13 +13,8 @@ library RewardMath {
     // Pool split percentages
     uint256 internal constant PLATFORM_BPS = 300; // 3% frontend fee share
     uint256 internal constant TREASURY_BPS = 100; // 1% treasury
-    uint256 internal constant CONSENSUS_BPS = 500; // 5% consensus subsidy reserve
     uint256 internal constant REVEALED_LOSER_REFUND_BPS = 500; // 5% rebate for revealed losing votes
     uint256 internal constant BPS_TOTAL = 10000;
-
-    // Consensus subsidy: payout rate when losingPool == 0 (5% of total round stake)
-    uint256 internal constant CONSENSUS_SUBSIDY_RATE = 500; // 5% of totalStake
-    uint256 internal constant MAX_CONSENSUS_SUBSIDY = 50e6; // 50 LREP cap per round (6 decimals)
 
     // Rating calculation parameter (fixed, not configurable)
     uint256 internal constant RATING_B = 50e6; // Smoothing parameter for rating formula (50 LREP in 6 decimals)
@@ -56,7 +51,7 @@ library RewardMath {
     /// @notice Calculate a voter's reward from the voter pool (epoch-weighted-stake-proportional).
     /// @param effectiveStake The voter's epoch-weighted effective stake (stake × epochWeightBps / 10000).
     /// @param totalWeightedWinningStake Sum of all winning voters' effective stakes.
-    /// @param voterPool The portion of losing stakes allocated to voters (90%).
+    /// @param voterPool The portion of forfeited stakes allocated to voters.
     /// @return reward Amount of tokens the voter earns (excludes original stake return).
     function calculateVoterReward(uint256 effectiveStake, uint256 totalWeightedWinningStake, uint256 voterPool)
         internal
@@ -76,28 +71,16 @@ library RewardMath {
 
     /// @notice Split the losing pool into voter and protocol buckets.
     /// @param losingPool Total tokens from losing side.
-    /// @return voterShare 91% for winning voters (100% content-specific).
+    /// @return voterShare 96% for scored voters (100% content-specific).
     /// @return platformShare 3% for frontend fees.
     /// @return treasuryShare 1% for governance treasury.
-    /// @return consensusShare 5% for consensus subsidy reserve.
     function splitPool(uint256 losingPool)
         internal
         pure
-        returns (uint256 voterShare, uint256 platformShare, uint256 treasuryShare, uint256 consensusShare)
+        returns (uint256 voterShare, uint256 platformShare, uint256 treasuryShare)
     {
         platformShare = (losingPool * PLATFORM_BPS) / BPS_TOTAL;
         treasuryShare = (losingPool * TREASURY_BPS) / BPS_TOTAL;
-        consensusShare = (losingPool * CONSENSUS_BPS) / BPS_TOTAL;
-        voterShare = losingPool - platformShare - treasuryShare - consensusShare; // remainder = 91%
-    }
-
-    /// @notice Calculate the consensus subsidy for a unanimous round.
-    /// @param totalStake Total stake from all voters in the round.
-    /// @param reserveBalance Current balance of the consensus subsidy reserve.
-    /// @return subsidy Amount to distribute from the reserve (capped by balance).
-    function calculateConsensusSubsidy(uint256 totalStake, uint256 reserveBalance) internal pure returns (uint256) {
-        uint256 desired = (totalStake * CONSENSUS_SUBSIDY_RATE) / BPS_TOTAL;
-        if (desired > MAX_CONSENSUS_SUBSIDY) desired = MAX_CONSENSUS_SUBSIDY;
-        return desired > reserveBalance ? reserveBalance : desired;
+        voterShare = losingPool - platformShare - treasuryShare; // remainder = 96%
     }
 }

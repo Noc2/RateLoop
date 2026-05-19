@@ -21,12 +21,10 @@ contract FormalVerification_GovernanceTest is Test {
 
     // Mock pool addresses
     address mockLaunchDistribution = address(10);
-    address mockConsensusReserve = address(12);
     address mockTreasury = address(13);
 
     // Realistic launch balances excluded from dynamic quorum.
-    uint256 constant LAUNCH_DISTRIBUTION_BAL = 64_000_000e6;
-    uint256 constant CONSENSUS_RESERVE_BAL = 4_000_000e6;
+    uint256 constant LAUNCH_DISTRIBUTION_BAL = 68_000_000e6;
     uint256 constant TREASURY_BAL = 32_000_000e6;
     // Total excluded at launch = 100M
 
@@ -40,10 +38,9 @@ contract FormalVerification_GovernanceTest is Test {
         timelock = new TimelockController(2 days, empty, empty, deployer);
 
         governor = new CuryoGovernor(IVotes(address(token)), timelock);
-        address[] memory holders = new address[](3);
+        address[] memory holders = new address[](2);
         holders[0] = mockLaunchDistribution;
-        holders[1] = mockConsensusReserve;
-        holders[2] = mockTreasury;
+        holders[1] = mockTreasury;
         governor.initializePools(holders);
 
         token.setGovernor(address(governor));
@@ -52,7 +49,6 @@ contract FormalVerification_GovernanceTest is Test {
 
         // Fund excluded launch holders with realistic balances.
         token.mint(mockLaunchDistribution, LAUNCH_DISTRIBUTION_BAL);
-        token.mint(mockConsensusReserve, CONSENSUS_RESERVE_BAL);
         token.mint(mockTreasury, TREASURY_BAL);
 
         vm.stopPrank();

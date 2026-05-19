@@ -45,8 +45,7 @@ library RoundCleanupLib {
     );
     event BundleObserverNotifyReplayed(uint256 indexed contentId, uint256 indexed roundId, bool settled);
     event ForfeitedFundsAddedToTreasury(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
-    event UnrevealedStakeAddedToConsensusReserve(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
-    event ForfeitedFundsFallbackToConsensusReserve(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
+    event ForfeitedFundsRetained(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
     event CurrentEpochRefunded(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
 
     function targetRoundRevealableAt(
@@ -388,12 +387,11 @@ library RoundCleanupLib {
         uint256 roundId,
         IERC20 lrepToken,
         ProtocolConfig protocolConfig,
-        uint256 consensusReserve,
         uint256 accountedLrepBalance,
         address cleanupCaller,
         uint256 startIndex,
         uint256 count
-    ) external returns (uint256 updatedConsensusReserve, uint256 updatedAccountedLrepBalance) {
+    ) external returns (uint256 updatedAccountedLrepBalance) {
         if (
             round.state != RoundLib.RoundState.Settled && round.state != RoundLib.RoundState.Tied
                 && round.state != RoundLib.RoundState.RevealFailed
@@ -405,11 +403,10 @@ library RoundCleanupLib {
 
         (
             uint256 forfeitedToTreasury,
-            uint256 addedToConsensusReserve,
             uint256 refundedLrep,
             uint256 processedPastEpochCount,
             uint256 cleanupIncentive,
-            uint256 nextConsensusReserve
+            uint256 treasuryPaid
         ) = processUnrevealedVotes(
             round,
             commitKeys,
@@ -419,32 +416,23 @@ library RoundCleanupLib {
             roundId,
             lrepToken,
             protocolConfig,
-            consensusReserve,
             cleanupCaller,
             startIndex,
             count
         );
 
-        updatedConsensusReserve = nextConsensusReserve;
         updatedAccountedLrepBalance = accountedLrepBalance;
-        uint256 paidOut = refundedLrep + cleanupIncentive;
-        if (forfeitedToTreasury > 0 && nextConsensusReserve == consensusReserve + addedToConsensusReserve) {
-            paidOut += forfeitedToTreasury;
-        }
+        uint256 paidOut = refundedLrep + cleanupIncentive + treasuryPaid;
         if (paidOut > 0) {
             updatedAccountedLrepBalance -= paidOut;
         }
 
         if (forfeitedToTreasury > 0) {
-            if (nextConsensusReserve == consensusReserve + addedToConsensusReserve) {
+            if (treasuryPaid > 0) {
                 emit ForfeitedFundsAddedToTreasury(contentId, roundId, forfeitedToTreasury);
             } else {
-                emit ForfeitedFundsFallbackToConsensusReserve(contentId, roundId, forfeitedToTreasury);
+                emit ForfeitedFundsRetained(contentId, roundId, forfeitedToTreasury);
             }
-        }
-
-        if (addedToConsensusReserve > 0) {
-            emit UnrevealedStakeAddedToConsensusReserve(contentId, roundId, addedToConsensusReserve);
         }
 
         if (processedPastEpochCount > 0) {
@@ -469,7 +457,6 @@ library RoundCleanupLib {
         uint256 roundId,
         IERC20 lrepToken,
         ProtocolConfig protocolConfig,
-        uint256 consensusReserve,
         address cleanupCaller,
         uint256 startIndex,
         uint256 count
@@ -477,11 +464,10 @@ library RoundCleanupLib {
         public
         returns (
             uint256 forfeitedToTreasury,
-            uint256 addedToConsensusReserve,
             uint256 refundedLrep,
             uint256 processedPastEpochCount,
             uint256 cleanupIncentive,
-            uint256 updatedConsensusReserve
+            uint256 treasuryPaid
         )
     {
         uint256 len = commitKeys.length;
@@ -493,7 +479,6 @@ library RoundCleanupLib {
             uint256 candidate = startIndex + count;
             endIndex = (count == 0 || candidate < startIndex || candidate > len) ? len : candidate;
         }
-        updatedConsensusReserve = consensusReserve;
 
         for (uint256 i = startIndex; i < endIndex; i++) {
             RoundLib.Commit storage commit = roundCommits[commitKeys[i]];
@@ -503,12 +488,7 @@ library RoundCleanupLib {
 
                 if (round.state == RoundLib.RoundState.RevealFailed || commit.revealableAfter <= round.settledAt) {
                     processedPastEpochCount++;
-                    if (round.state == RoundLib.RoundState.Settled) {
-                        addedToConsensusReserve += amount;
-                        updatedConsensusReserve += amount;
-                    } else {
-                        forfeitedToTreasury += amount;
-                    }
+                    forfeitedToTreasury += amount;
                 } else {
                     try TokenTransferLib.safeTransfer(lrepToken, commit.voter, amount) {
                         refundedLrep += amount;
@@ -520,48 +500,29 @@ library RoundCleanupLib {
         }
 
         uint256 cleanupIncentivePaid = roundCleanupIncentivePaid[contentId][roundId];
-        cleanupIncentive = _cleanupIncentive(forfeitedToTreasury + addedToConsensusReserve, 5e6 - cleanupIncentivePaid);
+        cleanupIncentive = _cleanupIncentive(forfeitedToTreasury, 5e6 - cleanupIncentivePaid);
         if (cleanupIncentive > 0) {
-            // Drain the forfeit/reserve pots that funded this incentive.
-            uint256 remainingIncentive = cleanupIncentive;
-            uint256 fromReserve =
-                addedToConsensusReserve < remainingIncentive ? addedToConsensusReserve : remainingIncentive;
-            if (fromReserve > 0) {
-                addedToConsensusReserve -= fromReserve;
-                updatedConsensusReserve -= fromReserve;
-                remainingIncentive -= fromReserve;
-            }
-            uint256 fromTreasuryForfeiture =
-                forfeitedToTreasury < remainingIncentive ? forfeitedToTreasury : remainingIncentive;
-            if (fromTreasuryForfeiture > 0) {
-                forfeitedToTreasury -= fromTreasuryForfeiture;
-                remainingIncentive -= fromTreasuryForfeiture;
-            }
+            forfeitedToTreasury -= cleanupIncentive;
             // Count the paid incentive toward the per-round 5 LREP cap across batches.
-            if (cleanupIncentive > 0) {
-                roundCleanupIncentivePaid[contentId][roundId] = cleanupIncentivePaid + cleanupIncentive;
-                lrepToken.safeTransfer(cleanupCaller, cleanupIncentive);
-            }
+            roundCleanupIncentivePaid[contentId][roundId] = cleanupIncentivePaid + cleanupIncentive;
+            lrepToken.safeTransfer(cleanupCaller, cleanupIncentive);
         }
 
         if (forfeitedToTreasury > 0) {
             address currentTreasury = protocolConfig.treasury();
             if (currentTreasury != address(0)) {
-                try TokenTransferLib.safeTransfer(lrepToken, currentTreasury, forfeitedToTreasury) { }
-                catch {
-                    updatedConsensusReserve += forfeitedToTreasury;
-                }
-            } else {
-                updatedConsensusReserve += forfeitedToTreasury;
+                try TokenTransferLib.safeTransfer(lrepToken, currentTreasury, forfeitedToTreasury) {
+                    treasuryPaid = forfeitedToTreasury;
+                } catch { }
             }
         }
 
-        if (forfeitedToTreasury == 0 && addedToConsensusReserve == 0 && refundedLrep == 0 && cleanupIncentive == 0) {
+        if (forfeitedToTreasury == 0 && refundedLrep == 0 && cleanupIncentive == 0) {
             revert NothingProcessed();
         }
     }
 
-    /// @notice Compute the keeper cleanup incentive for forfeited stake or reserve replenishment.
+    /// @notice Compute the keeper cleanup incentive for forfeited stake.
     function _cleanupIncentive(uint256 forfeitedAmount, uint256 remainingCap) private pure returns (uint256 incentive) {
         if (remainingCap == 0) return 0;
         incentive = forfeitedAmount * CLEANUP_INCENTIVE_BPS / 10_000;

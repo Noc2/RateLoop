@@ -9,6 +9,7 @@ import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
 import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
 import { LoopReputation } from "../contracts/LoopReputation.sol";
 import { RoundLib } from "../contracts/libraries/RoundLib.sol";
+import { RewardMath } from "../contracts/libraries/RewardMath.sol";
 import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
 import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
 
@@ -17,7 +18,7 @@ import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.so
 ///         1. Epoch-1 (blind) = 100% weight (10000 BPS), epoch-2+ (informed) = 25% weight (2500 BPS)
 ///         2. minVoters = 3 required for settlement
 ///         3. Expired rounds cancelled after maxDuration without enough voters
-///         4. Consensus subsidy paid from reserve when all voters unanimous
+///         4. Unanimous rounds receive only forfeiture-derived rewards, not a reserve subsidy
 contract GameTheoryImprovementsTest is VotingTestBase {
     LoopReputation lrepToken;
     ContentRegistry registry;
@@ -99,11 +100,6 @@ contract GameTheoryImprovementsTest is VotingTestBase {
         _setTlockRoundConfig(
             ProtocolConfig(address(engine.protocolConfig())), EPOCH_DURATION, MAX_DURATION, MIN_VOTERS, 1000
         );
-
-        // Fund consensus reserve
-        lrepToken.mint(owner, 200_000e6);
-        lrepToken.approve(address(engine), 200_000e6);
-        engine.addToConsensusReserve(200_000e6);
 
         // Fund submitter and voters
         lrepToken.mint(submitter, 100_000e6);
@@ -400,17 +396,13 @@ contract GameTheoryImprovementsTest is VotingTestBase {
     }
 
     // =========================================================================
-    // TEST 5: ConsensusSubsidy (all voters unanimous UP, losingPool = 0)
+    // TEST 5: unanimous round with no losing pool
     // =========================================================================
 
-    /// @notice All 3 voters vote UP (unanimous). losingPool = 0, so subsidy is paid
-    ///         from the consensus reserve instead of from losers' stakes.
-    ///         The reserve decreases by the subsidy amount, and winners receive stake + subsidy share.
-    function test_ConsensusSubsidy() public {
+    /// @notice All 3 voters vote UP (unanimous). losingPool = 0, so no extra voter pool is created.
+    function test_UnanimousRound_NoConsensusSubsidy() public {
         uint256 cid = _submit();
         uint256 roundStart = block.timestamp;
-
-        uint256 reserveBefore = engine.consensusReserve();
 
         // 3 unanimous UP voters (epoch-1)
         _commit(alice, cid, true, 10e6);
@@ -437,24 +429,19 @@ contract GameTheoryImprovementsTest is VotingTestBase {
         assertEq(uint256(settled.state), uint256(RoundLib.RoundState.Settled), "Round settled");
         assertTrue(settled.upWins, "UP wins (unanimous)");
 
-        // Consensus reserve should have decreased (subsidy paid out)
-        uint256 reserveAfter = engine.consensusReserve();
-        assertLt(reserveAfter, reserveBefore, "Consensus reserve decreased - subsidy paid");
-
-        uint256 subsidyPaid = reserveBefore - reserveAfter;
-        assertGt(subsidyPaid, 0, "Non-zero subsidy distributed to winners");
-
-        // Voter pool should be non-zero (funded by consensus subsidy)
+        uint256 forfeitedPool = engine.roundRbtsForfeitedPool(cid, roundId);
+        uint256 loserRefundShare = RewardMath.calculateRevealedLoserRefund(forfeitedPool);
+        (uint256 expectedVoterPool, uint256 frontendShare,) = RewardMath.splitPool(forfeitedPool - loserRefundShare);
         uint256 voterPool = engine.roundVoterPool(cid, roundId);
-        assertGt(voterPool, 0, "Voter pool non-zero - subsidy distributed");
+        assertEq(voterPool, expectedVoterPool + frontendShare, "Voter pool comes only from forfeitures");
 
         // Alice can claim her stake + subsidy share
         uint256 aliceBefore = lrepToken.balanceOf(alice);
         vm.prank(alice);
         distributor.claimReward(cid, roundId);
         uint256 aliceAfter = lrepToken.balanceOf(alice);
-        assertGt(aliceAfter, aliceBefore, "Alice received tokens back");
-        // Alice gets her 10 LREP stake returned at minimum
-        assertGe(aliceAfter - aliceBefore, 10e6, "Alice gets at least her full stake back");
+        uint256 payout = aliceAfter - aliceBefore;
+        assertGt(payout, 0, "Alice received a claim");
+        assertLe(payout, 10e6 + voterPool, "claim stays inside forfeiture pool");
     }
 }

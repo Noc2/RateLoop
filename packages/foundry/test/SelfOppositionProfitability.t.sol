@@ -94,11 +94,6 @@ contract SelfOppositionProfitabilityTest is VotingTestBase {
         // Config: epochDuration=1h, maxDuration=7d, minVoters=3, maxVoters=200
         _setTlockRoundConfig(ProtocolConfig(address(engine.protocolConfig())), 1 hours, 7 days, 3, 200);
 
-        // Fund consensus reserve
-        lrepToken.mint(owner, 100_000e6);
-        lrepToken.approve(address(engine), 100_000e6);
-        engine.addToConsensusReserve(100_000e6);
-
         // Set up ParticipationPool
         pool = new ParticipationPool(address(lrepToken), owner);
         pool.setAuthorizedCaller(address(distributor), true);
@@ -289,7 +284,7 @@ contract SelfOppositionProfitabilityTest is VotingTestBase {
 
         uint256 forfeitedPool = engine.roundRbtsForfeitedPool(cid, 1);
         uint256 loserRefundPool = RewardMath.calculateRevealedLoserRefund(forfeitedPool);
-        (uint256 voterPool, uint256 platformShare,,) = RewardMath.splitPool(forfeitedPool - loserRefundPool);
+        (uint256 voterPool, uint256 platformShare,) = RewardMath.splitPool(forfeitedPool - loserRefundPool);
         uint256 observedVoterPool = engine.roundVoterPool(cid, 1);
 
         assertGt(forfeitedPool, 0, "RBTS scoring should create a forfeiture pool in this fixture");
@@ -337,7 +332,7 @@ contract SelfOppositionProfitabilityTest is VotingTestBase {
         uint256 loserRebate = RewardMath.calculateRevealedLoserRefund(stakeLose);
         // Best-case recovery from the losing leg: attacker captures the whole voter pool
         // and also claims the revealed-loser rebate. The protocol still withholds part of the remainder.
-        (uint256 voterPool,,,) = RewardMath.splitPool(stakeLose - loserRebate);
+        (uint256 voterPool,,) = RewardMath.splitPool(stakeLose - loserRebate);
         uint256 maxRecovered = voterPool + loserRebate;
         uint256 attackerShare = voterPool * stakeWin / (stakeWin + 5e6);
 

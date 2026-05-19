@@ -105,13 +105,6 @@ abstract contract SecurityHarnessBase is VotingTestBase {
         _setTlockDrandConfig(config, DEFAULT_DRAND_CHAIN_HASH, DEFAULT_DRAND_GENESIS_TIME, DEFAULT_DRAND_PERIOD);
         _setTlockRoundConfig(config, epochDuration, 7 days, 3, 200);
     }
-
-    function _fundConsensusReserve(LoopReputation token, RoundVotingEngine votingEngine, address owner) internal {
-        uint256 reserveAmount = 1_000_000e6;
-        token.mint(owner, reserveAmount);
-        token.approve(address(votingEngine), reserveAmount);
-        votingEngine.addToConsensusReserve(reserveAmount);
-    }
 }
 
 contract SecurityReentrancyTest is SecurityHarnessBase {
@@ -156,7 +149,6 @@ contract SecurityReentrancyTest is SecurityHarnessBase {
         lrepToken.grantRole(lrepToken.MINTER_ROLE(), owner);
         (registry, votingEngine) = _deploySecurityHarness(lrepToken, owner);
         _configureSecurityHarness(registry, votingEngine, treasury, EPOCH_DURATION);
-        _fundConsensusReserve(lrepToken, votingEngine, owner);
 
         {
             address[5] memory users = [submitter, voter1, voter2, voter3, attacker];
@@ -310,7 +302,6 @@ contract SecurityPlainTransferTest is SecurityHarnessBase {
         lrepToken.grantRole(lrepToken.MINTER_ROLE(), owner);
         (registry, votingEngine) = _deploySecurityHarness(lrepToken, owner);
         _configureSecurityHarness(registry, votingEngine, treasury, EPOCH_DURATION);
-        _fundConsensusReserve(lrepToken, votingEngine, owner);
 
         lrepToken.mint(submitter, 10_000e6);
         lrepToken.mint(voter, 10_000e6);
@@ -335,7 +326,7 @@ contract SecurityPlainTransferTest is SecurityHarnessBase {
         assertEq(
             RoundEngineReadHelpers.activeRoundId(votingEngine, contentId), 0, "plain transfers do not create rounds"
         );
-        assertEq(lrepToken.balanceOf(address(votingEngine)), 1_000_000e6 + STAKE, "tokens transferred without vote");
+        assertEq(lrepToken.balanceOf(address(votingEngine)), STAKE, "tokens transferred without vote");
     }
 
     function test_GovernanceCanRecoverPlainTransferSurplus() public {
@@ -351,7 +342,7 @@ contract SecurityPlainTransferTest is SecurityHarnessBase {
 
         assertEq(lrepToken.balanceOf(treasury), treasuryBalanceBefore, "treasury unchanged");
         assertEq(lrepToken.balanceOf(owner), ownerBalanceBefore + STAKE, "admin receives surplus");
-        assertEq(lrepToken.balanceOf(address(votingEngine)), 1_000_000e6, "engine keeps accounted reserve");
+        assertEq(lrepToken.balanceOf(address(votingEngine)), 0, "engine keeps no surplus");
 
         vm.prank(owner);
         votingEngine.recoverSurplusLrep();
@@ -403,7 +394,6 @@ contract SecuritySettlementTimingTest is SecurityHarnessBase {
         lrepToken.grantRole(lrepToken.MINTER_ROLE(), owner);
         (registry, votingEngine) = _deploySecurityHarness(lrepToken, owner);
         _configureSecurityHarness(registry, votingEngine, treasury, EPOCH_DURATION);
-        _fundConsensusReserve(lrepToken, votingEngine, owner);
 
         {
             address[4] memory users = [submitter, voter1, voter2, voter3];
@@ -633,14 +623,6 @@ contract SecurityAccessControlTest is Test {
         vm.prank(attacker);
         _expectUnauthorized(attacker, CONFIG_ROLE_ENGINE);
         ProtocolConfig(protocolConfigAddress).setConfig(5 minutes, 7 days, 3, 200);
-    }
-
-    function test_ACL_Engine_addToConsensusReserve_IsPermissionless() public {
-        // addToConsensusReserve is permissionless by design (treasury top-ups + slashed-stake routing)
-        // Verify it reverts on insufficient allowance, not on access control
-        vm.prank(attacker);
-        vm.expectRevert(); // ERC20InsufficientAllowance — no tokens approved
-        votingEngine.addToConsensusReserve(100);
     }
 
     function test_ACL_Engine_setRaterRegistry_Unauthorized() public {

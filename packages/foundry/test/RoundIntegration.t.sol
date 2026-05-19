@@ -154,12 +154,6 @@ contract RoundIntegrationTest is VotingTestBase {
         // Use short 10-minute epochs for tests.
         _setTlockRoundConfig(ProtocolConfig(address(votingEngine.protocolConfig())), EPOCH_DURATION, 7 days, 3, 200);
 
-        // Fund consensus reserve
-        uint256 reserveAmount = 1_000_000e6;
-        lrepToken.mint(owner, reserveAmount);
-        lrepToken.approve(address(votingEngine), reserveAmount);
-        votingEngine.addToConsensusReserve(reserveAmount);
-
         // Mint LREP to all test users
         address[7] memory users = [submitter, voter1, voter2, voter3, voter4, voter5, voter6];
         for (uint256 i = 0; i < users.length; i++) {
@@ -712,11 +706,7 @@ contract RoundIntegrationTest is VotingTestBase {
             );
         }
 
-        assertEq(
-            lrepToken.balanceOf(address(votingEngine)),
-            votingEngine.consensusReserve(),
-            "engine should not retain voter reward dust"
-        );
+        assertEq(lrepToken.balanceOf(address(votingEngine)), 0, "engine should not retain voter reward dust");
     }
 
     function test_LoserRebate_LastLoserReceivesRoundingRemainder() public {
@@ -1784,21 +1774,27 @@ contract RoundIntegrationTest is VotingTestBase {
         votingEngine.revealVoteByCommitKey(contentId, roundId, _commitKey(voter2, ch2), true, 5_000, s2);
         votingEngine.revealVoteByCommitKey(contentId, roundId, _commitKey(voter3, ch3), true, 5_000, s3);
 
-        uint256 reserveBefore = votingEngine.consensusReserve();
         _settleAfterRbtsSeed(votingEngine, contentId, roundId);
 
         RoundLib.Round memory round = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
         assertEq(uint256(round.state), uint256(RoundLib.RoundState.Settled), "Should be settled by consensus");
         assertTrue(round.upWins, "UP should win by consensus");
 
-        // Consensus reserve should have decreased (subsidy paid out)
-        assertLt(votingEngine.consensusReserve(), reserveBefore, "Consensus reserve should decrease");
+        uint256 forfeitedPool = votingEngine.roundRbtsForfeitedPool(contentId, roundId);
+        uint256 loserRefundShare = RewardMath.calculateRevealedLoserRefund(forfeitedPool);
+        (uint256 voterShare, uint256 frontendShare,) = RewardMath.splitPool(forfeitedPool - loserRefundShare);
+        assertEq(
+            votingEngine.roundVoterPool(contentId, roundId),
+            voterShare + frontendShare,
+            "unanimous round rewards should come only from RBTS forfeitures"
+        );
 
-        // Winner can claim consensus subsidy reward
         uint256 balBefore = lrepToken.balanceOf(voter1);
         vm.prank(voter1);
         rewardDistributor.claimReward(contentId, roundId);
-        assertGt(lrepToken.balanceOf(voter1), balBefore, "Consensus winner should receive subsidy reward");
+        uint256 payout = lrepToken.balanceOf(voter1) - balBefore;
+        assertGt(payout, 0, "Consensus winner should receive a claim");
+        assertLe(payout, STAKE + votingEngine.roundVoterPool(contentId, roundId), "claim stays inside forfeiture pool");
     }
 
     function test_ConsensusSettlement_OnlyDownVoters() public {
@@ -2021,10 +2017,10 @@ contract RoundIntegrationTest is VotingTestBase {
     }
 
     // =========================================================================
-    // CONSENSUS SUBSIDY
+    // UNANIMOUS ROUND REWARDS
     // =========================================================================
 
-    function test_UnanimousRoundPaysConsensusSubsidy() public {
+    function test_UnanimousRoundDoesNotPayConsensusSubsidy() public {
         uint256 contentId = _submitContent();
 
         // All voters same direction — unanimous UP
@@ -2084,7 +2080,6 @@ contract RoundIntegrationTest is VotingTestBase {
         vm.stopPrank();
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(votingEngine, contentId);
-        uint256 reserveBefore = votingEngine.consensusReserve();
 
         RoundLib.Round memory rUR0 = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
         _warpPastTlockRevealTime(uint256(rUR0.startTime) + EPOCH_DURATION);
@@ -2094,12 +2089,21 @@ contract RoundIntegrationTest is VotingTestBase {
 
         _settleAfterRbtsSeed(votingEngine, contentId, roundId);
 
-        assertLt(votingEngine.consensusReserve(), reserveBefore, "Reserve should decrease for consensus subsidy");
+        uint256 forfeitedPool = votingEngine.roundRbtsForfeitedPool(contentId, roundId);
+        uint256 loserRefundShare = RewardMath.calculateRevealedLoserRefund(forfeitedPool);
+        (uint256 voterShare, uint256 frontendShare,) = RewardMath.splitPool(forfeitedPool - loserRefundShare);
+        assertEq(
+            votingEngine.roundVoterPool(contentId, roundId),
+            voterShare + frontendShare,
+            "unanimous round rewards should come only from RBTS forfeitures"
+        );
 
         uint256 balBefore = lrepToken.balanceOf(voter1);
         vm.prank(voter1);
         rewardDistributor.claimReward(contentId, roundId);
-        assertGt(lrepToken.balanceOf(voter1), balBefore, "Voter should receive consensus subsidy");
+        uint256 payout = lrepToken.balanceOf(voter1) - balBefore;
+        assertGt(payout, 0, "Voter should receive a claim");
+        assertLe(payout, STAKE + votingEngine.roundVoterPool(contentId, roundId), "claim stays inside forfeiture pool");
     }
 
     function test_LowRatedFirstSettlementDoesNotPayTreasury() public {
@@ -2872,7 +2876,6 @@ contract RoundIntegrationTest is VotingTestBase {
         uint256 feesBefore = frontendReg.getAccumulatedFees(frontendOp);
         uint256 frontendBalanceBefore = lrepToken.balanceOf(frontendOp);
         uint256 treasuryBalanceBefore = lrepToken.balanceOf(treasury);
-        uint256 reserveBefore = votingEngine.consensusReserve();
 
         vm.mockCallRevert(
             address(frontendReg),
@@ -2886,10 +2889,7 @@ contract RoundIntegrationTest is VotingTestBase {
 
         assertEq(lrepToken.balanceOf(frontendOp), frontendBalanceBefore, "lookup failure must not pay frontend");
         assertEq(frontendReg.getAccumulatedFees(frontendOp), feesBefore, "lookup failure must not accrue fees");
-        assertTrue(
-            lrepToken.balanceOf(treasury) > treasuryBalanceBefore || votingEngine.consensusReserve() > reserveBefore,
-            "confiscated fee should reach protocol"
-        );
+        assertGt(lrepToken.balanceOf(treasury), treasuryBalanceBefore, "confiscated fee should reach protocol");
     }
 
     function test_ClaimFrontendFee_DoubleClaimReverts() public {
@@ -2915,7 +2915,6 @@ contract RoundIntegrationTest is VotingTestBase {
         uint256 feesBefore = frontendReg.getAccumulatedFees(frontendOp);
         uint256 frontendBalanceBefore = lrepToken.balanceOf(frontendOp);
         uint256 treasuryBalanceBefore = lrepToken.balanceOf(treasury);
-        uint256 reserveBefore = votingEngine.consensusReserve();
 
         vm.expectRevert(RoundRewardDistributor.FrontendFeeNotClaimable.selector);
         _claimFrontendFeeAsOperator(contentId, roundId, frontendOp);
@@ -2923,10 +2922,7 @@ contract RoundIntegrationTest is VotingTestBase {
 
         assertEq(lrepToken.balanceOf(frontendOp), frontendBalanceBefore, "deregistered frontend must not be paid");
         assertEq(frontendReg.getAccumulatedFees(frontendOp), feesBefore, "deregistered frontend must not accrue fees");
-        assertTrue(
-            lrepToken.balanceOf(treasury) > treasuryBalanceBefore || votingEngine.consensusReserve() > reserveBefore,
-            "redirected fee should reach protocol"
-        );
+        assertGt(lrepToken.balanceOf(treasury), treasuryBalanceBefore, "redirected fee should reach protocol");
     }
 
     function test_ClaimFrontendFee_ReroutesHistoricalShareWhileFrontendIsSlashed() public {
@@ -2939,15 +2935,11 @@ contract RoundIntegrationTest is VotingTestBase {
         uint256 feesBefore = frontendReg.getAccumulatedFees(frontendOp);
         uint256 frontendBalanceBefore = lrepToken.balanceOf(frontendOp);
         uint256 treasuryBalanceBefore = lrepToken.balanceOf(treasury);
-        uint256 reserveBefore = votingEngine.consensusReserve();
         _confiscateFrontendFee(contentId, roundId, frontendOp);
 
         assertEq(lrepToken.balanceOf(frontendOp), frontendBalanceBefore, "slashed frontend must not be paid directly");
         assertEq(frontendReg.getAccumulatedFees(frontendOp), feesBefore, "slashed frontend must not accrue fees");
-        assertTrue(
-            lrepToken.balanceOf(treasury) > treasuryBalanceBefore || votingEngine.consensusReserve() > reserveBefore,
-            "redirected fee should reach protocol"
-        );
+        assertGt(lrepToken.balanceOf(treasury), treasuryBalanceBefore, "redirected fee should reach protocol");
     }
 
     function test_ClaimFrontendFee_KeepsHistoricalShareWithoutIdentityGate() public {
@@ -2960,7 +2952,6 @@ contract RoundIntegrationTest is VotingTestBase {
         uint256 feesBefore = frontendReg.getAccumulatedFees(frontendOp);
         uint256 frontendBalanceBefore = lrepToken.balanceOf(frontendOp);
         uint256 treasuryBalanceBefore = lrepToken.balanceOf(treasury);
-        uint256 reserveBefore = votingEngine.consensusReserve();
 
         _claimFrontendFeeAsOperator(contentId, roundId, frontendOp);
 
@@ -2971,7 +2962,6 @@ contract RoundIntegrationTest is VotingTestBase {
             "revocation should not erase earned historical fees"
         );
         assertEq(lrepToken.balanceOf(treasury), treasuryBalanceBefore, "claim should not route earned fees to treasury");
-        assertEq(votingEngine.consensusReserve(), reserveBefore, "claim should not route earned fees to reserve");
     }
 
     /// @dev After completeDeregister + register(), the frontend's `registeredAt` is set to

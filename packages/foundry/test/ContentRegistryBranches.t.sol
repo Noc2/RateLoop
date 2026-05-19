@@ -130,7 +130,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         lrepToken.approve(address(participationPool), 500_000e6);
         participationPool.depositPool(500_000e6);
         lrepToken.approve(address(votingEngine), 500_000e6);
-        votingEngine.addToConsensusReserve(500_000e6);
 
         address[9] memory users = [submitter, voter1, voter2, voter3, voter4, voter5, voter6, keeper, delegate];
         for (uint256 i = 0; i < users.length; i++) {

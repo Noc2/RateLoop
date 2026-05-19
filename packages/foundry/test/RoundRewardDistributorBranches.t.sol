@@ -153,7 +153,6 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
 
         lrepToken.mint(owner, 1_000_000e6);
         lrepToken.approve(address(votingEngine), 500_000e6);
-        votingEngine.addToConsensusReserve(500_000e6);
 
         address[5] memory users = [submitter, voter1, voter2, voter3, keeper];
         for (uint256 i = 0; i < users.length; i++) {

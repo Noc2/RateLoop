@@ -93,11 +93,6 @@ contract FormalVerification_RoundLifecycleTest is VotingTestBase {
             ProtocolConfig(address(engine.protocolConfig())), EPOCH_DURATION, MAX_DURATION, MIN_VOTERS, 200
         );
 
-        // Fund consensus reserve
-        lrepToken.mint(owner, 100_000e6);
-        lrepToken.approve(address(engine), 100_000e6);
-        engine.addToConsensusReserve(100_000e6);
-
         // Fund submitter and voters
         lrepToken.mint(submitter, 100_000e6);
         for (uint256 i = 0; i < 10; i++) {

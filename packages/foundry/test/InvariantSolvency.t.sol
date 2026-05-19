@@ -93,12 +93,6 @@ contract InvariantSolvency is VotingTestBase {
         ProtocolConfig(address(engine.protocolConfig())).setTreasury(treasury);
         _setTlockRoundConfig(ProtocolConfig(address(engine.protocolConfig())), EPOCH_DURATION, 7 days, 3, 200);
 
-        // Fund consensus reserve
-        uint256 reserveAmount = 1_000_000e6;
-        lrepToken.mint(owner, reserveAmount);
-        lrepToken.approve(address(engine), reserveAmount);
-        engine.addToConsensusReserve(reserveAmount);
-
         // Create voters
         for (uint256 i = 0; i < NUM_VOTERS; i++) {
             address voter = address(uint160(10 + i));
@@ -169,18 +163,11 @@ contract InvariantSolvency is VotingTestBase {
         uint256 totalClaimedOut =
             handler.ghost_totalClaimed() + handler.ghost_totalRefunded() + lrepToken.balanceOf(treasury);
 
-        // totalIn >= totalClaimedOut (can't pay out more than staked, ignoring consensus subsidy)
-        // Allow for consensus subsidy which adds extra tokens from the reserve
-        // This is a soft check: outflows can exceed stake-inflows by at most the consensus used
+        // totalIn >= totalClaimedOut (can't pay out more than staked).
         // The strict check is C-03 (balance solvency)
         if (totalIn > 0 || totalClaimedOut > 0) {
-            // outflows <= inflows + actual consensus subsidy spent + dust
             uint256 dust = handler.settleCount() * 5;
-            assertLe(
-                totalClaimedOut,
-                totalIn + handler.ghost_totalConsensusSubsidy() + dust,
-                "C-02: outflows exceed inflows + consensus subsidy"
-            );
+            assertLe(totalClaimedOut, totalIn + dust, "C-02: outflows exceed inflows");
         }
     }
 
@@ -191,8 +178,8 @@ contract InvariantSolvency is VotingTestBase {
     function invariant_C03_BalanceSolvency() public view {
         uint256 engineBalance = lrepToken.balanceOf(address(engine));
 
-        // Compute minimum obligations: open round stakes + unclaimed rewards + consensus reserve
-        uint256 obligations = engine.consensusReserve();
+        // Compute minimum obligations: open round stakes + unclaimed rewards.
+        uint256 obligations;
 
         // Add open round stakes (committed but not yet settled/refunded)
         uint256 recordCount = handler.getRoundRecordCount();

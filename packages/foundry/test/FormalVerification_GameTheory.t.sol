@@ -16,7 +16,7 @@ import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.so
 
 /// @title Formal Verification: Parimutuel Game Theory (Public Vote + Random Settlement)
 /// @notice 14 scenarios verifying honest voting profitability, collusion resistance,
-///         consensus subsidy mechanics, settlement timing, and tied rounds.
+///         unanimous settlement accounting, settlement timing, and tied rounds.
 contract FormalVerification_GameTheoryTest is VotingTestBase {
     LoopReputation lrepToken;
     ContentRegistry registry;
@@ -92,11 +92,6 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
 
         // Config: epochDuration=1h, maxDuration=7d, minVoters=3, maxVoters=200
         _setTlockRoundConfig(ProtocolConfig(address(engine.protocolConfig())), 1 hours, MAX_DURATION, MIN_VOTERS, 200);
-
-        // Fund consensus reserve: 100K LREP
-        lrepToken.mint(owner, 100_000e6);
-        lrepToken.approve(address(engine), 100_000e6);
-        engine.addToConsensusReserve(100_000e6);
 
         // Fund submitter and voters
         lrepToken.mint(submitter, 100_000e6);
@@ -326,12 +321,11 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
         assertLt(totalProfit, int256(uint256(1e6)), "Total colluder profit < 1 LREP - negligible");
     }
 
-    // ==================== Test 5: Unanimous Round - Consensus Subsidy ====================
+    // ==================== Test 5: Unanimous Round - No Subsidy ====================
 
-    /// @notice 5 UP (50 each). No losers -> consensus subsidy from reserve.
-    function test_UnanimousRound_ConsensusSubsidy() public {
+    /// @notice 5 UP (50 each). No losers -> no extra voter pool.
+    function test_UnanimousRound_NoConsensusSubsidy() public {
         uint256 cid = _submit();
-        uint256 reserveBefore = engine.consensusReserve();
         uint256 submitterBefore = lrepToken.balanceOf(submitter);
 
         _vote(v[0], cid, true, 5e6);
@@ -345,17 +339,16 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
         // Consensus settlement after maxEpochBlocks
         _forceSettle(cid);
 
-        assertEq(
-            engine.consensusReserve(),
-            _applyUnanimousReserveAccounting(reserveBefore, cid, rid),
-            "Reserve tracks net unanimous-round accounting"
-        );
+        uint256 forfeitedPool = engine.roundRbtsForfeitedPool(cid, rid);
+        uint256 loserRefundShare = RewardMath.calculateRevealedLoserRefund(forfeitedPool);
+        (uint256 voterShare, uint256 frontendShare,) = RewardMath.splitPool(forfeitedPool - loserRefundShare);
+        assertEq(engine.roundVoterPool(cid, rid), voterShare + frontendShare, "Voter pool comes only from forfeitures");
 
         uint256 payout = _claimPayout(v[0], cid, rid);
         assertGt(payout, 0, "Voter gets RBTS claim value");
         assertLe(payout, 5e6 + engine.roundVoterPool(cid, rid), "Voter claim stays inside pool bounds");
 
-        assertEq(lrepToken.balanceOf(submitter), submitterBefore, "Submitter receives no consensus subsidy");
+        assertEq(lrepToken.balanceOf(submitter), submitterBefore, "Submitter receives no voter-pool payout");
     }
 
     // ==================== Test 6: Same-Epoch Stake Weight ====================
@@ -489,13 +482,10 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
         assertGt(loss, 0, "Attacker loses value");
     }
 
-    // ==================== Test 10: Consensus Reserve Drain - 10 Rounds ====================
+    // ==================== Test 10: Unanimous Rounds Do Not Drain Protocol Funds ====================
 
-    /// @notice 10 unanimous rounds drain reserve predictably.
-    function test_ConsensusSubsidyDrain_10Rounds() public {
-        uint256 reserveBefore = engine.consensusReserve();
-
-        uint256 expectedReserve = reserveBefore;
+    /// @notice 10 unanimous rounds settle without extra reward pools.
+    function test_UnanimousRounds_DoNotCreateSubsidyPools() public {
         for (uint256 r = 0; r < 10; r++) {
             uint256 cid = _submit();
 
@@ -511,7 +501,12 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
 
             RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, cid, rid);
             assertEq(uint256(round.state), uint256(RoundLib.RoundState.Settled), "Round settled");
-            expectedReserve = _applyUnanimousReserveAccounting(expectedReserve, cid, rid);
+            uint256 forfeitedPool = engine.roundRbtsForfeitedPool(cid, rid);
+            uint256 loserRefundShare = RewardMath.calculateRevealedLoserRefund(forfeitedPool);
+            (uint256 voterShare, uint256 frontendShare,) = RewardMath.splitPool(forfeitedPool - loserRefundShare);
+            assertEq(
+                engine.roundVoterPool(cid, rid), voterShare + frontendShare, "Voter pool comes only from forfeitures"
+            );
 
             // Claim rewards so voters have tokens back for next round
             for (uint256 i = 0; i < 5; i++) {
@@ -522,18 +517,13 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
             // Wait for cooldown so voters can vote again on fresh content
             vm.warp(block.timestamp + 24 hours + 1);
         }
-
-        assertEq(engine.consensusReserve(), expectedReserve, "Reserve drained by net unanimous-round accounting");
-        assertLt(engine.consensusReserve(), reserveBefore, "Unanimous rounds still drain reserve");
     }
 
-    // ==================== Test 11: Consensus Reserve Replenishment ====================
+    // ==================== Test 11: Contested Rounds Fund Voters ====================
 
-    /// @notice Contested rounds replenish reserve (5% of losing pool), unanimous rounds drain it.
-    function test_ConsensusSubsidyReplenishment() public {
-        uint256 reserve = engine.consensusReserve(); // 100_000e6
-
-        // Round 1: contested (3 UP vs 2 DOWN, 5e6 each) -> +0.475 LREP to reserve
+    /// @notice Contested rounds fund voter rewards; unanimous rounds do not.
+    function test_ContestedRoundFundsVoters_UnanimousRoundDoesNot() public {
+        uint256 contestedVoterPool;
         {
             uint256 cid = _submit();
             _vote(v[0], cid, true, 5e6);
@@ -543,11 +533,11 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
             _vote(v[4], cid, false, 5e6);
             uint256 rid = RoundEngineReadHelpers.activeRoundId(engine, cid);
             _forceSettle(cid);
-            reserve += _rbtsConsensusShare(cid, rid);
+            contestedVoterPool = engine.roundVoterPool(cid, rid);
         }
-        assertEq(engine.consensusReserve(), reserve, "Reserve increased by RBTS forfeiture consensus share");
+        assertGt(contestedVoterPool, 0, "Contested RBTS forfeitures fund voter rewards");
 
-        // Round 2: unanimous (5 UP, 10e6 each) -> -2_500_000 from reserve
+        // Round 2: unanimous (5 UP, 10e6 each) -> no losing stake, no subsidy.
         {
             vm.warp(block.timestamp + 24 hours + 1); // cooldown for voters
             uint256 cid = _submit();
@@ -556,11 +546,13 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
             }
             uint256 rid = RoundEngineReadHelpers.activeRoundId(engine, cid);
             _forceSettle(cid);
-            reserve = _applyUnanimousReserveAccounting(reserve, cid, rid);
+            uint256 forfeitedPool = engine.roundRbtsForfeitedPool(cid, rid);
+            uint256 loserRefundShare = RewardMath.calculateRevealedLoserRefund(forfeitedPool);
+            (uint256 voterShare, uint256 frontendShare,) = RewardMath.splitPool(forfeitedPool - loserRefundShare);
+            assertEq(
+                engine.roundVoterPool(cid, rid), voterShare + frontendShare, "Voter pool comes only from forfeitures"
+            );
         }
-        assertEq(engine.consensusReserve(), reserve, "Reserve decreased by net unanimous-round accounting");
-
-        assertLt(reserve, 100_000e6, "Net result drains reserve after one contested and one unanimous round");
     }
 
     // ==================== Test 12: Settlement After Reveals ====================

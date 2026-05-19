@@ -212,11 +212,6 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         _setTlockDrandConfig(protocolConfig, DEFAULT_DRAND_CHAIN_HASH, DEFAULT_DRAND_GENESIS_TIME, DEFAULT_DRAND_PERIOD);
         _setTlockRoundConfig(protocolConfig, EPOCH_DURATION, 7 days, 3, 200);
 
-        uint256 reserveAmount = 1_000_000e6;
-        lrepToken.mint(owner, reserveAmount);
-        lrepToken.approve(address(votingEngine), reserveAmount);
-        votingEngine.addToConsensusReserve(reserveAmount);
-
         address[7] memory humans = [submitter, funder, voter1, voter2, voter3, voter4, frontend1];
         for (uint256 i = 0; i < humans.length; i++) {
             raterIdentityRegistry.setHolder(humans[i]);

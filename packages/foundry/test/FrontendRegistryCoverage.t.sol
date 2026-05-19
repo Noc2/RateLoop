@@ -14,16 +14,10 @@ import { RoundLib } from "../contracts/libraries/RoundLib.sol";
 // =========================================================================
 
 contract MockVotingEngine_FR is IRoundVotingEngine {
-    uint256 public totalAddedToReserve;
     LoopReputation public immutable lrepToken;
 
     constructor(LoopReputation lrepToken_) {
         lrepToken = lrepToken_;
-    }
-
-    function addToConsensusReserve(uint256 amount) external override {
-        lrepToken.transferFrom(msg.sender, address(this), amount);
-        totalAddedToReserve += amount;
     }
 
     function hasCommits(uint256) external pure override returns (bool) {

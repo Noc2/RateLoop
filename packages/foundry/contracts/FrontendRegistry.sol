@@ -47,6 +47,7 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     // --- State ---
     IERC20 public lrepToken;
     IRoundVotingEngine public votingEngine;
+    address public confiscationRecipient;
 
     mapping(address => Frontend) public frontends;
     address[] public registeredFrontends;
@@ -58,7 +59,7 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     mapping(address => address) private feeCreditorForEngine;
 
     /// @dev Reserved storage gap for future upgrades
-    uint256[45] private __gap;
+    uint256[44] private __gap;
 
     // --- Events ---
     event FrontendRegistered(address indexed frontend, address indexed operator, uint256 stakedAmount);
@@ -103,6 +104,7 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
         _setRoleAdmin(FEE_CREDITOR_ROLE, GOVERNANCE_ROLE);
 
         lrepToken = IERC20(_lrepToken);
+        confiscationRecipient = _governance;
     }
 
     // --- View Functions ---
@@ -318,17 +320,9 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
         f.lrepFees = 0;
         f.slashed = true;
 
-        uint256 totalToReserve = amount + confiscatedFees;
-        if (totalToReserve > 0) {
-            uint256 balanceBefore = lrepToken.balanceOf(address(this));
-            lrepToken.forceApprove(address(votingEngine), totalToReserve);
-            votingEngine.addToConsensusReserve(totalToReserve);
-            lrepToken.forceApprove(address(votingEngine), 0);
-            uint256 balanceAfter = lrepToken.balanceOf(address(this));
-            require(
-                balanceBefore >= balanceAfter && balanceBefore - balanceAfter == totalToReserve,
-                "Reserve transfer failed"
-            );
+        uint256 totalConfiscated = amount + confiscatedFees;
+        if (totalConfiscated > 0) {
+            lrepToken.safeTransfer(confiscationRecipient, totalConfiscated);
         }
 
         if (confiscatedFees > 0) {

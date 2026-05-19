@@ -1174,6 +1174,11 @@ export const RaterRegistryAbi = [
   },
   {
     "type": "error",
+    "name": "ActiveHumanCredentialRequiresHumanProfile",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "CallerIsDelegate",
     "inputs": []
   },

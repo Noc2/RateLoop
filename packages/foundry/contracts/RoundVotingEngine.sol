@@ -143,10 +143,6 @@ contract RoundVotingEngine is
     // `hasCommits` view is fulfilled by the auto-getter without an explicit function definition.
     mapping(uint256 => bool) public hasCommits;
 
-    // Sybil resistance
-    // Consensus subsidy reserve: pre-funded + replenished by 5% of each losing pool.
-    // Pays out on unanimous rounds (losingPool == 0) to incentivize voting on obvious content.
-    uint256 public consensusReserve;
     uint256 internal accountedLrepBalance;
 
     // Config snapshot per round: prevents governance config changes from affecting in-progress rounds
@@ -228,17 +224,8 @@ contract RoundVotingEngine is
         uint256 indexed contentId, uint256 indexed roundId, address indexed voter, uint256 amount
     );
     event ForfeitedFundsAddedToTreasury(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
-    event UnrevealedStakeAddedToConsensusReserve(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
-    /// @notice Emitted when the treasury transfer branch of `processUnrevealedVotes` falls
-    ///         back to the consensus reserve -- either because the treasury address is
-    ///         unset or because the transfer reverted. Gives indexers a distinct signal
-    ///         from the settled-round replenishment path (`UnrevealedStakeAddedToConsensusReserve`).
-    event ForfeitedFundsFallbackToConsensusReserve(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
     event CurrentEpochRefunded(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
     event TreasuryFeeDistributed(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
-    event ConsensusReserveFunded(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
-    event ConsensusReserveToppedUp(address indexed funder, uint256 amount);
-    event ConsensusSubsidyDistributed(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -263,16 +250,6 @@ contract RoundVotingEngine is
         lrepToken = IERC20(_lrepToken);
         registry = ContentRegistry(_registry);
         protocolConfig = ProtocolConfig(_protocolConfig);
-    }
-
-    /// @notice Add LREP to the consensus reserve.
-    /// @dev Permissionless by design — treasury top-ups and slashed-stake routing both use this same path.
-    function addToConsensusReserve(uint256 amount) external {
-        if (amount == 0) revert InvalidStake();
-        lrepToken.safeTransferFrom(msg.sender, address(this), amount);
-        accountedLrepBalance += amount;
-        consensusReserve += amount;
-        emit ConsensusReserveToppedUp(msg.sender, amount);
     }
 
     /// @notice Recover LREP sent directly to this contract outside accounted protocol flows.
@@ -935,23 +912,19 @@ contract RoundVotingEngine is
         }
         _notifyBundleRoundTerminal(contentId, roundId, true);
 
-        (uint256 updatedConsensusReserve, uint256 treasuryPaid) = RoundSettlementDistributionLib.distribute(
+        uint256 treasuryPaid = RoundSettlementDistributionLib.distribute(
             lrepToken,
             protocolConfig,
-            round,
             roundVoterPool,
             roundWinningStake,
             roundStakeWithEligibleFrontend,
             roundFrontendPool,
             roundFrontendRegistrySnapshot,
-            consensusReserve,
             contentId,
             roundId,
             weightedWinningStake,
-            rbtsForfeitedPool,
-            binaryLosingPool == 0 && round.revealedCount == round.voteCount
+            rbtsForfeitedPool
         );
-        consensusReserve = updatedConsensusReserve;
         if (treasuryPaid > 0) {
             accountedLrepBalance -= treasuryPaid;
         }
@@ -1018,8 +991,7 @@ contract RoundVotingEngine is
     // =========================================================================
 
     /// @notice Process unrevealed votes in batches after settlement. Permissionless.
-    /// @dev For settled rounds: unrevealed votes from past epochs are credited to the consensus reserve.
-    ///      For tied rounds: unrevealed votes from past epochs are forfeited to treasury.
+    /// @dev For settled/tied rounds: unrevealed votes from past epochs are forfeited to treasury.
     ///      Current/future-epoch votes at settlement/tie time are refunded because they had no chance.
     ///      For reveal-failed rounds: all unrevealed votes are forfeited because the final reveal grace has passed.
     function processUnrevealedVotes(uint256 contentId, uint256 roundId, uint256 startIndex, uint256 count)
@@ -1027,7 +999,7 @@ contract RoundVotingEngine is
         nonReentrant
     {
         RoundLib.Round storage round = rounds[contentId][roundId];
-        (consensusReserve, accountedLrepBalance) = RoundCleanupLib.processUnrevealedVotesForEngine(
+        accountedLrepBalance = RoundCleanupLib.processUnrevealedVotesForEngine(
             round,
             roundCommitHashes[contentId][roundId],
             commits[contentId][roundId],
@@ -1037,7 +1009,6 @@ contract RoundVotingEngine is
             roundId,
             lrepToken,
             protocolConfig,
-            consensusReserve,
             accountedLrepBalance,
             msg.sender,
             startIndex,

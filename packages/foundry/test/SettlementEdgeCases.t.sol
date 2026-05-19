@@ -23,7 +23,7 @@ import { MockRaterIdentityRegistry } from "./mocks/MockRaterIdentityRegistry.sol
 
 /// @title SettlementEdgeCasesTest
 /// @notice Tests for settlement edge cases: double-settle, cancel timing boundaries,
-///         settle on already-settled, treasury=address(0), consensus reserve depletion,
+///         settle on already-settled, treasury=address(0),
 ///         small losing pool rounding, cancel after tie, state machine transitions.
 contract SettlementEdgeCasesTest is VotingTestBase {
     LoopReputation public lrepToken;
@@ -131,7 +131,6 @@ contract SettlementEdgeCasesTest is VotingTestBase {
         lrepToken.approve(address(participationPool), 500_000e6);
         participationPool.depositPool(500_000e6);
         lrepToken.approve(address(engine), 500_000e6);
-        engine.addToConsensusReserve(500_000e6);
 
         address[8] memory users = [submitter, voter1, voter2, voter3, voter4, voter5, voter6, frontend1];
         for (uint256 i = 0; i < users.length; i++) {
@@ -629,45 +628,39 @@ contract SettlementEdgeCasesTest is VotingTestBase {
     }
 
     // =========================================================================
-    // 11. UNANIMOUS ROUND: consensus subsidy from reserve
+    // 11. UNANIMOUS ROUND: no subsidy without losing stake
     // =========================================================================
 
-    function test_Settle_UnanimousUp_ConsensusSubsidy() public {
+    function test_Settle_UnanimousUp_NoConsensusSubsidy() public {
         (uint256 contentId, uint256 roundId) = _setupThreeVoterRound(true, true, true);
 
-        uint256 reserveBefore = engine.consensusReserve();
-
         _settleAfterRbtsSeed(engine, contentId, roundId);
 
-        uint256 reserveAfter = engine.consensusReserve();
-        // Reserve should decrease (subsidy paid out)
-        assertLt(reserveAfter, reserveBefore);
-
-        // Voter pool should have the subsidy
+        uint256 forfeitedPool = engine.roundRbtsForfeitedPool(contentId, roundId);
+        uint256 loserRefundShare = RewardMath.calculateRevealedLoserRefund(forfeitedPool);
+        (uint256 voterShare, uint256 frontendShare,) = RewardMath.splitPool(forfeitedPool - loserRefundShare);
         uint256 voterPool = engine.roundVoterPool(contentId, roundId);
-        assertGt(voterPool, 0);
+        assertEq(voterPool, voterShare + frontendShare);
     }
 
-    function test_Settle_UnanimousDown_ConsensusSubsidy() public {
+    function test_Settle_UnanimousDown_NoConsensusSubsidy() public {
         (uint256 contentId, uint256 roundId) = _setupThreeVoterRound(false, false, false);
-
-        uint256 reserveBefore = engine.consensusReserve();
 
         _settleAfterRbtsSeed(engine, contentId, roundId);
 
-        uint256 reserveAfter = engine.consensusReserve();
-        assertLt(reserveAfter, reserveBefore);
+        uint256 forfeitedPool = engine.roundRbtsForfeitedPool(contentId, roundId);
+        uint256 loserRefundShare = RewardMath.calculateRevealedLoserRefund(forfeitedPool);
+        (uint256 voterShare, uint256 frontendShare,) = RewardMath.splitPool(forfeitedPool - loserRefundShare);
+        uint256 voterPool = engine.roundVoterPool(contentId, roundId);
+        assertEq(voterPool, voterShare + frontendShare);
     }
 
     // =========================================================================
-    // 12. CONSENSUS RESERVE AT ZERO: unanimous round settles without initial subsidy
+    // 12. NO CONSENSUS RESERVE: unanimous round settles without subsidy
     // =========================================================================
 
     function test_Settle_Unanimous_ZeroReserve_SettlesWithZeroSubsidy() public {
         (LoopReputation lrepToken2, ContentRegistry registry2, RoundVotingEngine engine2) = _deployZeroReserveHarness();
-
-        // DO NOT fund consensus reserve — leave at 0
-        assertEq(engine2.consensusReserve(), 0);
 
         uint256 contentId = _submitContentOnRegistry(lrepToken2, registry2, "https://example.com/zero-reserve");
         uint256 roundId = _prepareUnanimousRoundOnEngine(engine2, lrepToken2, contentId);
@@ -680,10 +673,8 @@ contract SettlementEdgeCasesTest is VotingTestBase {
 
         uint256 forfeitedPool = engine2.roundRbtsForfeitedPool(contentId, roundId);
         uint256 loserRefundShare = RewardMath.calculateRevealedLoserRefund(forfeitedPool);
-        (uint256 voterShare, uint256 frontendShare,, uint256 consensusShare) =
-            RewardMath.splitPool(forfeitedPool - loserRefundShare);
+        (uint256 voterShare, uint256 frontendShare,) = RewardMath.splitPool(forfeitedPool - loserRefundShare);
 
-        assertEq(engine2.consensusReserve(), consensusShare);
         assertGt(forfeitedPool, 0, "RBTS forfeitures still fund the round with no reserve subsidy");
         assertEq(engine2.roundVoterPool(contentId, roundId), voterShare + frontendShare);
     }

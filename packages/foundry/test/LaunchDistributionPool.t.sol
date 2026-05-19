@@ -52,7 +52,7 @@ contract LaunchDistributionPoolTest is Test {
 
     function test_PoolSplitSumsToLaunchDistribution() public view {
         assertEq(pool.LEGACY_POOL_AMOUNT(), 4_000_000e6);
-        assertEq(pool.EARNED_RATER_POOL_AMOUNT(), 25_000_000e6);
+        assertEq(pool.EARNED_RATER_POOL_AMOUNT(), 29_000_000e6);
         assertEq(pool.VERIFIED_REFERRAL_POOL_AMOUNT(), 35_000_000e6);
         assertEq(
             pool.LEGACY_POOL_AMOUNT() + pool.EARNED_RATER_POOL_AMOUNT() + pool.VERIFIED_REFERRAL_POOL_AMOUNT(),

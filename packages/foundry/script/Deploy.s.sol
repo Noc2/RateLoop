@@ -34,10 +34,9 @@ contract DeployRateLoop is ScaffoldETHDeploy {
     uint256 public constant TIMELOCK_MIN_DELAY = 2 days;
 
     uint256 public constant TOTAL_SUPPLY_CAP = 100_000_000 * 1e6;
-    uint256 public constant CONSENSUS_POOL_AMOUNT = 4_000_000 * 1e6;
     uint256 public constant TREASURY_AMOUNT = 32_000_000 * 1e6;
     uint256 public constant PARTICIPATION_POOL_AMOUNT = 0;
-    uint256 public constant LAUNCH_DISTRIBUTION_AMOUNT = TOTAL_SUPPLY_CAP - CONSENSUS_POOL_AMOUNT - TREASURY_AMOUNT;
+    uint256 public constant LAUNCH_DISTRIBUTION_AMOUNT = TOTAL_SUPPLY_CAP - TREASURY_AMOUNT;
     bytes32 internal constant ERC1967_ADMIN_SLOT = bytes32(uint256(keccak256("eip1967.proxy.admin")) - 1);
 
     address internal constant WORLD_CHAIN_MAINNET_USDC = 0x79A02482A880bCE3F13e09Da970dC34db4CD24d1;
@@ -242,11 +241,6 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         _seedCategories(categoryRegistry);
         protocolConfig.setConfig(20 minutes, 20 minutes, 3, 200);
 
-        lrepToken.mint(deployer, CONSENSUS_POOL_AMOUNT);
-        lrepToken.approve(address(votingEngine), CONSENSUS_POOL_AMOUNT);
-        votingEngine.addToConsensusReserve(CONSENSUS_POOL_AMOUNT);
-        console.log("Funded 4M LREP to consensus reserve");
-
         lrepToken.mint(governance, TREASURY_AMOUNT);
         console.log("Minted 32M LREP to governance treasury");
 
@@ -270,7 +264,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         lrepToken.approve(address(launchDistributionPool), LAUNCH_DISTRIBUTION_AMOUNT);
         launchDistributionPool.depositPool(LAUNCH_DISTRIBUTION_AMOUNT);
         protocolConfig.setLaunchDistributionPool(address(launchDistributionPool));
-        console.log("LaunchDistributionPool deployed and funded with 64M LREP");
+        console.log("LaunchDistributionPool deployed and funded with 68M LREP");
         console.log("ClusterPayoutOracle deployed at:", address(clusterPayoutOracle));
         console.log("AdvisoryVoteRecorder deployed at:", address(advisoryVoteRecorder));
 

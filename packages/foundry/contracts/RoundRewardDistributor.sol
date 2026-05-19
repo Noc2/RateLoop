@@ -1033,9 +1033,10 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
             return;
         }
 
+        // Treasury is initialized in ProtocolConfig, but if governance has temporarily
+        // unset or broken it, keep protocol-routed rewards recoverable here instead of
+        // reviving a subsidy reserve.
         votingEngine.transferReward(address(this), fee);
-        lrepToken.forceApprove(address(votingEngine), fee);
-        votingEngine.addToConsensusReserve(fee);
     }
 
     function _readSettledStaleRound(uint256 contentId, uint256 roundId)

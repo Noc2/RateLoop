@@ -11,23 +11,10 @@ import { RoundLib } from "../contracts/libraries/RoundLib.sol";
 
 /// @title Mock RoundVotingEngine for testing FrontendRegistry
 contract MockVotingEngine is IRoundVotingEngine {
-    uint256 public totalAddedToReserve;
     LoopReputation public immutable lrepToken;
-    bool public pullReserve = true;
 
     constructor(LoopReputation lrepToken_) {
         lrepToken = lrepToken_;
-    }
-
-    function setPullReserve(bool value) external {
-        pullReserve = value;
-    }
-
-    function addToConsensusReserve(uint256 amount) external override {
-        if (pullReserve) {
-            lrepToken.transferFrom(msg.sender, address(this), amount);
-        }
-        totalAddedToReserve += amount;
     }
 
     function hasCommits(uint256) external pure override returns (bool) {
@@ -451,7 +438,7 @@ contract FrontendRegistryTest is Test {
         vm.stopPrank();
 
         uint256 slashAmount = STAKE / 2;
-        uint256 voterPoolBefore = votingEngine.totalAddedToReserve();
+        uint256 confiscationRecipientBefore = lrepToken.balanceOf(admin);
 
         vm.prank(admin);
         registry.slashFrontend(frontend1, slashAmount, "Malicious behavior");
@@ -461,8 +448,7 @@ contract FrontendRegistryTest is Test {
         assertFalse(eligible);
         assertTrue(slashed);
 
-        // Slashed amount goes to voter pool
-        assertEq(votingEngine.totalAddedToReserve(), voterPoolBefore + slashAmount);
+        assertEq(lrepToken.balanceOf(admin), confiscationRecipientBefore + slashAmount);
     }
 
     function test_UnslashFrontend() public {
@@ -722,13 +708,13 @@ contract FrontendRegistryTest is Test {
         vm.prank(feeCreditor);
         registry.creditFees(frontend1, 200e6);
 
-        uint256 reserveBefore = votingEngine.totalAddedToReserve();
+        uint256 confiscationRecipientBefore = lrepToken.balanceOf(admin);
 
         vm.prank(admin);
         registry.slashFrontend(frontend1, 100e6, "Malicious behavior");
 
         assertEq(registry.getAccumulatedFees(frontend1), 0);
-        assertEq(votingEngine.totalAddedToReserve(), reserveBefore + 300e6);
+        assertEq(lrepToken.balanceOf(admin), confiscationRecipientBefore + 300e6);
     }
 
     function test_SlashFrontendConfiscatesAccruedFeesWhileExitPending() public {
@@ -745,13 +731,13 @@ contract FrontendRegistryTest is Test {
         vm.prank(frontend1);
         registry.requestDeregister();
 
-        uint256 reserveBefore = votingEngine.totalAddedToReserve();
+        uint256 confiscationRecipientBefore = lrepToken.balanceOf(admin);
 
         vm.prank(admin);
         registry.slashFrontend(frontend1, 100e6, "Malicious behavior");
 
         assertEq(registry.getAccumulatedFees(frontend1), 0);
-        assertEq(votingEngine.totalAddedToReserve(), reserveBefore + 300e6);
+        assertEq(lrepToken.balanceOf(admin), confiscationRecipientBefore + 300e6);
     }
 
     // --- Admin Functions Tests ---
@@ -842,19 +828,6 @@ contract FrontendRegistryTest is Test {
         vm.prank(admin);
         vm.expectRevert("VotingEngine not set");
         noEngineRegistry.slashFrontend(frontend1, STAKE / 2, "Test");
-    }
-
-    function test_SlashFrontendRequiresReserveTransfer() public {
-        vm.startPrank(frontend1);
-        lrepToken.approve(address(registry), STAKE);
-        registry.register();
-        vm.stopPrank();
-
-        votingEngine.setPullReserve(false);
-
-        vm.prank(admin);
-        vm.expectRevert("Reserve transfer failed");
-        registry.slashFrontend(frontend1, STAKE / 2, "Test");
     }
 
     function test_AddAndRemoveFeeCreditor() public {

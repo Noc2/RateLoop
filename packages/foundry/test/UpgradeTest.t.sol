@@ -25,8 +25,6 @@ import { MockRaterIdentityRegistry } from "./mocks/MockRaterIdentityRegistry.sol
 
 /// @title Minimal mock for RoundVotingEngine interface (used by FrontendRegistry)
 contract MockVotingEngineForUpgrade is IRoundVotingEngine {
-    function addToConsensusReserve(uint256) external override { }
-
     function hasCommits(uint256) external pure override returns (bool) {
         return false;
     }
@@ -334,11 +332,11 @@ contract UpgradeTest is Test {
         uint256 roundId = 8;
         bytes32 commitKey = keccak256("layout-commit");
 
-        vm.store(address(votingEngine), _doubleUintMappingSlot(54, contentId, roundId), bytes32(uint256(111)));
-        vm.store(address(votingEngine), _doubleUintMappingSlot(55, contentId, roundId), bytes32(uint256(222)));
+        vm.store(address(votingEngine), _doubleUintMappingSlot(53, contentId, roundId), bytes32(uint256(111)));
+        vm.store(address(votingEngine), _doubleUintMappingSlot(54, contentId, roundId), bytes32(uint256(222)));
         vm.store(
             address(votingEngine),
-            _tripleUintBytes32MappingSlot(56, contentId, roundId, commitKey),
+            _tripleUintBytes32MappingSlot(55, contentId, roundId, commitKey),
             bytes32(uint256(333))
         );
 

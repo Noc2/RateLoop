@@ -8,6 +8,7 @@ import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
 import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
 import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
 import { RoundLib } from "../contracts/libraries/RoundLib.sol";
+import { RewardMath } from "../contracts/libraries/RewardMath.sol";
 import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
 import { LoopReputation } from "../contracts/LoopReputation.sol";
 import { ParticipationPool } from "../contracts/ParticipationPool.sol";
@@ -17,7 +18,7 @@ import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.so
 /// @title Audit Gap Tests — Priority-1 test coverage for gaps identified during security audit.
 /// @dev Covers:
 ///   1. Paused state enforcement — new commitments stop, existing-round exits continue
-///   2. Claim paths in a single settled round (voter + loser refund + participation + frontend fee + consensus)
+///   2. Claim paths in a single settled round (voter + loser refund + participation + frontend fee)
 ///   3. processUnrevealedVotes batch boundary edge cases
 ///   4. Tied + RevealFailed refund path precedence
 ///   5. Exact cooldown boundary timing
@@ -116,12 +117,6 @@ contract AuditGapTests is VotingTestBase {
         ProtocolConfig(address(votingEngine.protocolConfig())).setFrontendRegistry(address(frontendRegistry));
         ProtocolConfig(address(votingEngine.protocolConfig())).setParticipationPool(address(participationPool));
         _setTlockRoundConfig(ProtocolConfig(address(votingEngine.protocolConfig())), EPOCH_DURATION, 7 days, 3, 200);
-
-        // Fund consensus reserve
-        uint256 reserveAmount = 1_000_000e6;
-        lrepToken.mint(owner, reserveAmount);
-        lrepToken.approve(address(votingEngine), reserveAmount);
-        votingEngine.addToConsensusReserve(reserveAmount);
 
         // Mint LREP to test users
         address[6] memory users = [submitter, voter1, voter2, voter3, voter4, frontend];
@@ -346,8 +341,8 @@ contract AuditGapTests is VotingTestBase {
     // =========================================================================
 
     /// @notice Complete roundtrip: settle a round then claim voter reward,
-    ///         loser refund, participation reward, frontend fee, and verify consensus reserve
-    ///         was funded — all in one round without double-counting.
+    ///         loser refund, participation reward, and frontend fee in one round
+    ///         without double-counting.
     function test_ClaimPaths_SingleRound() public {
         uint256 contentId = _submitContent("https://full-claim-test.com");
 
@@ -570,14 +565,12 @@ contract AuditGapTests is VotingTestBase {
     }
 
     // =========================================================================
-    // SECTION 5 — Consensus Subsidy on Unanimous Round
+    // SECTION 5 — No Consensus Subsidy on Unanimous Round
     // =========================================================================
 
-    /// @notice Unanimous round (all UP, no DOWN) correctly draws from consensus reserve
-    function test_ConsensusSubsidy_UnanimousRound() public {
+    /// @notice Unanimous round (all UP, no DOWN) settles without an extra subsidy pool.
+    function test_UnanimousRound_NoConsensusSubsidy() public {
         uint256 contentId = _submitContent("https://consensus-test.com");
-
-        uint256 reserveBefore = votingEngine.consensusReserve();
 
         (bytes32 s1, bytes32 ck1) = _commit(voter1, contentId, true, STAKE, address(0));
         (bytes32 s2, bytes32 ck2) = _commit(voter2, contentId, true, STAKE, address(0));
@@ -591,28 +584,21 @@ contract AuditGapTests is VotingTestBase {
         vm.warp(block.timestamp + 60 minutes + 1);
         _settleAfterRbtsSeed(votingEngine, contentId, 1);
 
-        uint256 reserveAfter = votingEngine.consensusReserve();
-        assertTrue(reserveAfter < reserveBefore, "Consensus reserve should decrease");
-
-        // Expected subsidy: 5% of total stake (30 LREP), capped at 50 LREP.
-        // The observed reserve decrease is net of the RBTS forfeiture consensus share
-        // replenished during the same settlement.
-        uint256 totalStake = STAKE * 3;
-        uint256 expectedSubsidy = (totalStake * 500) / 10000;
         uint256 forfeitedPool = votingEngine.roundRbtsForfeitedPool(contentId, 1);
-        uint256 loserRefundShare = (forfeitedPool * 500) / 10000;
-        uint256 forfeitureConsensusShare = ((forfeitedPool - loserRefundShare) * 500) / 10000;
+        uint256 loserRefundShare = RewardMath.calculateRevealedLoserRefund(forfeitedPool);
+        (uint256 voterShare, uint256 frontendShare,) = RewardMath.splitPool(forfeitedPool - loserRefundShare);
         assertEq(
-            reserveBefore - reserveAfter,
-            expectedSubsidy - forfeitureConsensusShare,
-            "Reserve decrease should match net subsidy accounting"
+            votingEngine.roundVoterPool(contentId, 1),
+            voterShare + frontendShare,
+            "Voter pool should come only from forfeitures"
         );
 
-        // Winners should be able to claim rewards
         uint256 v1Before = lrepToken.balanceOf(voter1);
         vm.prank(voter1);
         rewardDistributor.claimReward(contentId, 1);
-        assertTrue(lrepToken.balanceOf(voter1) > v1Before, "Voter should get stake + subsidy share");
+        uint256 payout = lrepToken.balanceOf(voter1) - v1Before;
+        assertGt(payout, 0, "Voter should receive a claim");
+        assertLe(payout, STAKE + votingEngine.roundVoterPool(contentId, 1), "claim stays inside forfeiture pool");
     }
 
     // =========================================================================
@@ -620,7 +606,7 @@ contract AuditGapTests is VotingTestBase {
     // =========================================================================
 
     /// @notice After all claims in a settled round, the engine should have no stuck funds
-    ///         from that round (only consensus reserve and other-round funds remain).
+    ///         from that round.
     function test_Solvency_AllClaimsExhaust_NoStuckFunds() public {
         uint256 contentId = _submitContent("https://solvency-test.com");
 
@@ -647,15 +633,7 @@ contract AuditGapTests is VotingTestBase {
 
         uint256 engineBalAfter = lrepToken.balanceOf(address(votingEngine));
 
-        // Engine balance should be >= engineBalStart (consensus reserve grew by 5% of losing pool)
-        // The only remaining funds should be: consensus reserve + any rounding dust
-        uint256 consensusReserve = votingEngine.consensusReserve();
-
-        // Engine should hold at least the remaining reserve.
-        assertTrue(engineBalAfter >= consensusReserve, "Engine must hold at least the consensus reserve");
-
         // Final winner receives any voter-pool remainder, so no reward dust should remain.
-        uint256 dust = engineBalAfter - consensusReserve;
-        assertEq(dust, 0, "No voter reward dust should remain");
+        assertEq(engineBalAfter, 0, "No voter reward dust should remain");
     }
 }

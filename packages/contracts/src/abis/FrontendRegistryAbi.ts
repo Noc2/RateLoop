@@ -180,6 +180,19 @@ export const FrontendRegistryAbi = [
   },
   {
     "type": "function",
+    "name": "confiscationRecipient",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "creditFees",
     "inputs": [
       {
