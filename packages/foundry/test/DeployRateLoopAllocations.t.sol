@@ -5,6 +5,8 @@ import { Test } from "forge-std/Test.sol";
 import { DeployRateLoop } from "../script/Deploy.s.sol";
 import { LaunchDistributionPool } from "../contracts/LaunchDistributionPool.sol";
 import { LoopReputation } from "../contracts/LoopReputation.sol";
+import { RaterRegistry } from "../contracts/RaterRegistry.sol";
+import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
 
 contract DeployRateLoopHarness is DeployRateLoop {
     function worldIdExternalNullifierHash(string memory appId, string memory action) external pure returns (uint256) {
@@ -16,7 +18,11 @@ contract DeployRateLoopAllocationsTest is Test {
     function test_LaunchAllocations_MintFullLrepSupplyAtLaunch() public {
         DeployRateLoop deployScript = new DeployRateLoop();
         LoopReputation lrepToken = new LoopReputation(address(this), address(this));
-        LaunchDistributionPool launchPool = new LaunchDistributionPool(address(lrepToken), address(this), address(this));
+        RaterRegistry raterRegistry = new RaterRegistry(
+            address(this), address(this), address(new MockWorldIDRouter()), bytes32("rate-loop"), 1, 365 days
+        );
+        LaunchDistributionPool launchPool =
+            new LaunchDistributionPool(address(lrepToken), address(raterRegistry), address(this));
 
         uint256 totalLaunchAllocation = deployScript.CONSENSUS_POOL_AMOUNT() + deployScript.TREASURY_AMOUNT()
             + deployScript.PARTICIPATION_POOL_AMOUNT() + deployScript.LAUNCH_DISTRIBUTION_AMOUNT();
