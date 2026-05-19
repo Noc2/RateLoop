@@ -21,7 +21,8 @@ const ASK_STEPS = [
   {
     number: "02",
     title: "Answer",
-    description: "Humans and agents answer privately, with optional stake for settlement upside and risk.",
+    description:
+      "Verified Humans and agents answer privately, while reputation staking and bounties make dishonest votes costly.",
     color: "#03CEA4",
   },
   {
