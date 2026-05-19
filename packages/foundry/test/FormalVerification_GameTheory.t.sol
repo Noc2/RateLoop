@@ -174,8 +174,17 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
         return desired > 50e6 ? 50e6 : desired;
     }
 
-    function _unanimousNetReserveDrain(uint256 cid, uint256 rid) internal view returns (uint256) {
-        return _consensusSubsidy(cid, rid) - _rbtsConsensusShare(cid, rid);
+    function _applyUnanimousReserveAccounting(uint256 reserve, uint256 cid, uint256 rid)
+        internal
+        view
+        returns (uint256)
+    {
+        uint256 subsidy = _consensusSubsidy(cid, rid);
+        uint256 rbtsConsensusShare = _rbtsConsensusShare(cid, rid);
+        if (subsidy >= rbtsConsensusShare) {
+            return reserve - (subsidy - rbtsConsensusShare);
+        }
+        return reserve + (rbtsConsensusShare - subsidy);
     }
 
     function _claimPayout(address voter, uint256 cid, uint256 rid) internal returns (uint256 payout) {
@@ -336,8 +345,11 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
         // Consensus settlement after maxEpochBlocks
         _forceSettle(cid);
 
-        uint256 expectedNetDrain = _unanimousNetReserveDrain(cid, rid);
-        assertEq(engine.consensusReserve(), reserveBefore - expectedNetDrain, "Reserve decremented by net subsidy");
+        assertEq(
+            engine.consensusReserve(),
+            _applyUnanimousReserveAccounting(reserveBefore, cid, rid),
+            "Reserve tracks net unanimous-round accounting"
+        );
 
         uint256 payout = _claimPayout(v[0], cid, rid);
         assertGt(payout, 0, "Voter gets RBTS claim value");
@@ -499,7 +511,7 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
 
             RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, cid, rid);
             assertEq(uint256(round.state), uint256(RoundLib.RoundState.Settled), "Round settled");
-            expectedReserve -= _unanimousNetReserveDrain(cid, rid);
+            expectedReserve = _applyUnanimousReserveAccounting(expectedReserve, cid, rid);
 
             // Claim rewards so voters have tokens back for next round
             for (uint256 i = 0; i < 5; i++) {
@@ -544,7 +556,7 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
             }
             uint256 rid = RoundEngineReadHelpers.activeRoundId(engine, cid);
             _forceSettle(cid);
-            reserve -= _unanimousNetReserveDrain(cid, rid);
+            reserve = _applyUnanimousReserveAccounting(reserve, cid, rid);
         }
         assertEq(engine.consensusReserve(), reserve, "Reserve decreased by net unanimous-round accounting");
 
