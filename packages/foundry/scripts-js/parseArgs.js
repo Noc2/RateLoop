@@ -225,6 +225,21 @@ if (result.status !== 0) {
 
 // Run seed script for localhost deployments
 if (network === "localhost") {
+  const fundKeeperScript = join(
+    __dirname,
+    "..",
+    "scripts-js",
+    "fundLocalKeeper.js"
+  );
+  const fundKeeperResult = spawnSync("node", [fundKeeperScript], {
+    stdio: "inherit",
+    shell: true,
+    cwd: join(__dirname, ".."),
+  });
+  if (fundKeeperResult.status !== 0) {
+    process.exit(fundKeeperResult.status);
+  }
+
   const seedScript = join(__dirname, "..", "script", "SeedContent.sh");
   const seedResult = spawnSync("bash", [seedScript], {
     stdio: "inherit",
