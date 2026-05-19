@@ -121,7 +121,7 @@ function LiveRoundActivity({
   const detailCopy =
     snapshot.phase !== "voting"
       ? snapshot.hasRound
-        ? `${formatLrepAmount(snapshot.totalStake, 0)} LREP locked in the last round`
+        ? `${formatLrepAmount(snapshot.totalStake)} LREP locked in the last round`
         : ""
       : snapshot.isEpoch1
         ? condensed
@@ -130,7 +130,7 @@ function LiveRoundActivity({
             ? `Example bonus: ${blindDetail}.`
             : "Blind signals keep full reward weight."
         : condensed
-          ? (progress?.detailLabel ?? `${formatLrepAmount(snapshot.totalStake, 0)} LREP active`)
+          ? (progress?.detailLabel ?? `${formatLrepAmount(snapshot.totalStake)} LREP active`)
           : describeOpenRoundActivity(snapshot);
   const supportCopy =
     snapshot.phase !== "voting"
@@ -230,7 +230,7 @@ function LiveRoundActivity({
           <p
             className={`font-semibold tabular-nums text-base-content ${condensed ? "mt-0.5 text-sm" : "mt-1 text-base"}`}
           >
-            {formatLrepAmount(snapshot.totalStake, 0)}
+            {formatLrepAmount(snapshot.totalStake)}
           </p>
         </div>
       </div>

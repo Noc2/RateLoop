@@ -71,10 +71,10 @@ export function describeOpenRoundActivity(
 ) {
   const revealsNeeded = Math.max(0, snapshot.minVoters - snapshot.revealedCount);
   if (revealsNeeded > 0) {
-    return `${formatLrepAmount(snapshot.totalStake, 0)} LREP active · ${revealsNeeded} more revealed signal${revealsNeeded === 1 ? "" : "s"} to settle.`;
+    return `${formatLrepAmount(snapshot.totalStake)} LREP active · ${revealsNeeded} more revealed signal${revealsNeeded === 1 ? "" : "s"} to settle.`;
   }
 
-  return `${formatLrepAmount(snapshot.totalStake, 0)} LREP active · Settlement threshold is in reach.`;
+  return `${formatLrepAmount(snapshot.totalStake)} LREP active · Settlement threshold is in reach.`;
 }
 
 function getBlindParticipationLabel(ratePercent?: number): string | null {

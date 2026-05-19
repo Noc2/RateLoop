@@ -1,6 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { describeOpenRoundActivity, estimateVoteReturn, getRoundProgressMessaging } from "~~/lib/vote/voteIncentives";
+import {
+  describeOpenRoundActivity,
+  estimateVoteReturn,
+  formatLrepAmount,
+  getRoundProgressMessaging,
+} from "~~/lib/vote/voteIncentives";
+
+test("formatLrepAmount preserves half-LREP stake precision", () => {
+  assert.equal(formatLrepAmount(5_500_000n), "5.5");
+  assert.equal(formatLrepAmount(6_000_000n), "6");
+});
 
 test("getRoundProgressMessaging makes blind rounds sell bonus and urgency", () => {
   const message = getRoundProgressMessaging(
