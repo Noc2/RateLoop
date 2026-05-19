@@ -1,5 +1,5 @@
 import React from "react";
-import { RoundRevealedBreakdown } from "./RoundStats";
+import { RoundRevealedBreakdown, formatPrivateRoundHint, formatRaterProgress } from "./RoundStats";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import test from "node:test";
@@ -30,4 +30,41 @@ test("RoundRevealedBreakdown renders Up before Down to match the rating button o
   assert.match(html, /Up<\/span>\s*<span[^>]*>0 LREP<\/span>\s*<span[^>]*>0 signals<\/span>/);
   assert.match(html, /Down<\/span>\s*<span[^>]*>5 LREP<\/span>\s*<span[^>]*>1 signal<\/span>/);
   assert.ok(html.indexOf(">Up<") < html.indexOf(">Down<"));
+});
+
+test("formatPrivateRoundHint shows the next private round countdown", () => {
+  assert.equal(
+    formatPrivateRoundHint({
+      phase: "voting",
+      currentEpochRemaining: 9 * 60 + 5,
+      roundTimeRemaining: 20 * 60,
+    }),
+    "Private round ends in 9:05",
+  );
+});
+
+test("formatPrivateRoundHint respects the final round deadline", () => {
+  assert.equal(
+    formatPrivateRoundHint({
+      phase: "voting",
+      currentEpochRemaining: 20 * 60,
+      roundTimeRemaining: 4 * 60 + 3,
+    }),
+    "Private round ends in 4:03",
+  );
+});
+
+test("formatPrivateRoundHint hides after the round deadline", () => {
+  assert.equal(
+    formatPrivateRoundHint({
+      phase: "voting",
+      currentEpochRemaining: 20 * 60,
+      roundTimeRemaining: 0,
+    }),
+    null,
+  );
+});
+
+test("formatRaterProgress shows committed raters against the settlement minimum", () => {
+  assert.equal(formatRaterProgress(1, 3), "1/3");
 });

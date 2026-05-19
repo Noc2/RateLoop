@@ -15,6 +15,35 @@ interface RoundRevealedBreakdownProps {
   stacked?: boolean;
 }
 
+function formatRoundCountdown(seconds: number): string {
+  const safeSeconds = Math.max(0, Math.floor(seconds));
+  const hours = Math.floor(safeSeconds / 3600);
+  const minutes = Math.floor((safeSeconds % 3600) / 60);
+  const remainingSeconds = safeSeconds % 60;
+
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, "0")}:${String(remainingSeconds).padStart(2, "0")}`;
+  }
+
+  return `${minutes}:${String(remainingSeconds).padStart(2, "0")}`;
+}
+
+export function formatPrivateRoundHint(
+  snapshot: Pick<RoundSnapshot, "phase" | "currentEpochRemaining" | "roundTimeRemaining">,
+) {
+  if (snapshot.phase !== "voting") return null;
+  if (snapshot.roundTimeRemaining <= 0) return null;
+
+  const remaining = Math.min(snapshot.currentEpochRemaining, snapshot.roundTimeRemaining);
+  if (remaining <= 0) return null;
+
+  return `Private round ends in ${formatRoundCountdown(remaining)}`;
+}
+
+export function formatRaterProgress(voteCount: number, minimumRaters: number): string {
+  return `${voteCount}/${minimumRaters}`;
+}
+
 export function RoundRevealedBreakdown({ snapshot, stacked = false }: RoundRevealedBreakdownProps) {
   const { round, isLoading } = snapshot;
 
@@ -95,11 +124,13 @@ export function RoundStats({ categoryId, snapshot }: RoundStatsProps) {
 
   const totalStakeFormatted = Number(round.totalStake) / 1e6;
   const voteCount = Number(round.voteCount);
-  const revealedVotesNeeded = snapshot.votersNeeded;
-  const settlementHint =
-    phase === "voting" && revealedVotesNeeded > 0
-      ? `${revealedVotesNeeded} more revealed signal${revealedVotesNeeded === 1 ? "" : "s"} to settle`
-      : null;
+  const minimumRaters = snapshot.minVoters;
+  const privateRoundHint = formatPrivateRoundHint(snapshot);
+  const votesNeeded = Math.max(0, minimumRaters - voteCount);
+  const raterTooltip =
+    votesNeeded > 0
+      ? `${voteCount} of ${minimumRaters} minimum raters have committed. ${votesNeeded} more private or revealed signal${votesNeeded === 1 ? "" : "s"} needed.`
+      : `${voteCount} raters have committed, meeting the ${minimumRaters}-rater minimum.`;
 
   return (
     <div className="flex flex-col gap-1.5 text-base text-base-content/60">
@@ -116,16 +147,16 @@ export function RoundStats({ categoryId, snapshot }: RoundStatsProps) {
           <span className="flex items-center gap-1">
             Raters
             <InfoTooltip
-              text={`Number of private signals committed on this ${contentLabel} in the current round.`}
+              text={`${raterTooltip} Counts private and revealed signals on this ${contentLabel}.`}
               position="bottom"
             />
           </span>
-          <span className="font-semibold tabular-nums">{voteCount}</span>
+          <span className="font-semibold tabular-nums">{formatRaterProgress(voteCount, minimumRaters)}</span>
         </div>
-        {settlementHint ? (
+        {privateRoundHint ? (
           <>
             <div className="h-4 w-px bg-base-content/10" />
-            <span>{settlementHint}</span>
+            <span>{privateRoundHint}</span>
           </>
         ) : null}
       </div>
