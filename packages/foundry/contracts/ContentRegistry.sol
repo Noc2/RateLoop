@@ -369,11 +369,21 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     /// @notice Set the CategoryRegistry address (can only be called by CONFIG_ROLE).
     function setCategoryRegistry(address _categoryRegistry) external onlyRole(CONFIG_ROLE) {
         require(_categoryRegistry != address(0), "Invalid address");
+        require(_categoryRegistry.code.length != 0, "No code");
+        try ICategoryRegistry(_categoryRegistry).isCategory(0) returns (bool) { }
+        catch {
+            revert("Invalid category registry");
+        }
         categoryRegistry = ICategoryRegistry(_categoryRegistry);
     }
 
     function setProtocolConfig(address _protocolConfig) external onlyRole(CONFIG_ROLE) {
         require(_protocolConfig != address(0), "Invalid address");
+        require(_protocolConfig.code.length != 0, "No code");
+        try ProtocolConfig(_protocolConfig).config() returns (uint32, uint32, uint16, uint16) { }
+        catch {
+            revert("Invalid protocol config");
+        }
         protocolConfig = ProtocolConfig(_protocolConfig);
     }
 

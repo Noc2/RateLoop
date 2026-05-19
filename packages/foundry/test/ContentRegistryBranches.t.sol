@@ -172,6 +172,26 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         assertEq(address(registry.protocolConfig()), address(replacementConfig));
     }
 
+    function test_SetCategoryRegistryRejectsNoCodeOrWrongContract() public {
+        vm.prank(owner);
+        vm.expectRevert("No code");
+        registry.setCategoryRegistry(address(0xBEEF));
+
+        vm.prank(owner);
+        vm.expectRevert("Invalid category registry");
+        registry.setCategoryRegistry(address(mockQuestionRewardPoolEscrow));
+    }
+
+    function test_SetProtocolConfigRejectsNoCodeOrWrongContract() public {
+        vm.prank(owner);
+        vm.expectRevert("No code");
+        registry.setProtocolConfig(address(0xBEEF));
+
+        vm.prank(owner);
+        vm.expectRevert("Invalid protocol config");
+        registry.setProtocolConfig(address(mockQuestionRewardPoolEscrow));
+    }
+
     function _vote(address voter, uint256 contentId, bool isUp) internal {
         _commit(voter, contentId, isUp);
     }

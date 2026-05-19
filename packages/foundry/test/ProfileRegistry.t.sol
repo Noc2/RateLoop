@@ -391,6 +391,17 @@ contract ProfileRegistryTest is Test {
         assertEq(registry.getAddressByName("alice"), user1);
     }
 
+    function test_AdminRejectsInvalidRaterRegistry() public {
+        vm.prank(admin);
+        vm.expectRevert("No code");
+        registry.setRaterRegistry(address(0xBEEF));
+
+        MockWorldIDRouter wrongContract = new MockWorldIDRouter();
+        vm.prank(admin);
+        vm.expectRevert("Invalid registry");
+        registry.setRaterRegistry(address(wrongContract));
+    }
+
     function test_GetAddressByName() public {
         assertEq(registry.getAddressByName("alice"), address(0));
 

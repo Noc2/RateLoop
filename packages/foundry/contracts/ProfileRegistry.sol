@@ -84,6 +84,15 @@ contract ProfileRegistry is IProfileRegistry, Initializable, AccessControlUpgrad
     /// @notice Set or clear the optional rater registry used as a profile continuity signal.
     /// @param _raterRegistry The rater registry contract address, or zero to disable credential lookups.
     function setRaterRegistry(address _raterRegistry) external onlyRole(ADMIN_ROLE) {
+        if (_raterRegistry != address(0)) {
+            require(_raterRegistry.code.length != 0, "No code");
+            try IRaterIdentityRegistry(_raterRegistry).resolveRater(address(this)) returns (
+                IRaterIdentityRegistry.ResolvedRater memory
+            ) { }
+            catch {
+                revert("Invalid registry");
+            }
+        }
         raterRegistry = IRaterIdentityRegistry(_raterRegistry);
         emit RaterRegistryUpdated(_raterRegistry);
     }
