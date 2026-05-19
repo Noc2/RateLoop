@@ -88,23 +88,38 @@ contract RewardMathFuzz is Test {
     }
 
     // =========================================================================
-    // calculateRevealedLoserRefund
+    // score-spread accounting
     // =========================================================================
 
-    function testFuzz_calculateRevealedLoserRefund_FivePercentOfInput(uint256 losingStake) public pure {
-        losingStake = bound(losingStake, 0, type(uint128).max);
+    function testFuzz_calculatePositiveScoreSpreadWeight_MatchesDelta(
+        uint256 rbtsWeight,
+        uint16 scoreBps,
+        uint16 meanScoreBps
+    ) public pure {
+        rbtsWeight = bound(rbtsWeight, 0, type(uint128).max);
+        scoreBps = uint16(bound(scoreBps, 0, 10_000));
+        meanScoreBps = uint16(bound(meanScoreBps, 0, 10_000));
 
-        uint256 refund = RewardMath.calculateRevealedLoserRefund(losingStake);
+        uint256 weight = RewardMath.calculatePositiveScoreSpreadWeight(rbtsWeight, scoreBps, meanScoreBps);
+        uint256 expected = scoreBps > meanScoreBps ? (rbtsWeight * (scoreBps - meanScoreBps)) / 10_000 : 0;
 
-        // Refund should be exactly floor(losingStake * 500 / 10000)
-        uint256 expected = (losingStake * 500) / 10000;
-        assertEq(refund, expected, "refund != 5% of losing stake");
+        assertEq(weight, expected, "positive spread weight mismatch");
     }
 
-    function testFuzz_calculateRevealedLoserRefund_NeverExceedsStake(uint256 losingStake) public pure {
-        losingStake = bound(losingStake, 0, type(uint128).max);
+    function testFuzz_calculateNegativeScoreSpreadForfeit_CappedAtStake(
+        uint256 stake,
+        uint16 scoreBps,
+        uint16 meanScoreBps
+    ) public pure {
+        stake = bound(stake, 0, type(uint128).max);
+        scoreBps = uint16(bound(scoreBps, 0, 10_000));
+        meanScoreBps = uint16(bound(meanScoreBps, 0, 10_000));
 
-        uint256 refund = RewardMath.calculateRevealedLoserRefund(losingStake);
-        assertLe(refund, losingStake, "refund exceeds original stake");
+        uint256 forfeited = RewardMath.calculateNegativeScoreSpreadForfeit(stake, scoreBps, meanScoreBps);
+
+        assertLe(forfeited, stake, "forfeit exceeds original stake");
+        if (scoreBps >= meanScoreBps) {
+            assertEq(forfeited, 0, "non-negative spread should not forfeit");
+        }
     }
 }

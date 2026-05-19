@@ -11,10 +11,6 @@ contract RewardMathHarness {
         return RewardMath.splitPool(losingPool);
     }
 
-    function calculateRevealedLoserRefund(uint256 losingStake) external pure returns (uint256) {
-        return RewardMath.calculateRevealedLoserRefund(losingStake);
-    }
-
     function calculateVoterReward(uint256 effectiveStake, uint256 totalWeightedWinningStake, uint256 voterPool)
         external
         pure
@@ -25,6 +21,22 @@ contract RewardMathHarness {
 
     function calculateRating(uint256 totalUpStake, uint256 totalDownStake) external pure returns (uint16) {
         return RewardMath.calculateRating(totalUpStake, totalDownStake);
+    }
+
+    function calculatePositiveScoreSpreadWeight(uint256 rbtsWeight, uint16 scoreBps, uint16 meanScoreBps)
+        external
+        pure
+        returns (uint256)
+    {
+        return RewardMath.calculatePositiveScoreSpreadWeight(rbtsWeight, scoreBps, meanScoreBps);
+    }
+
+    function calculateNegativeScoreSpreadForfeit(uint256 stakeAmount, uint16 scoreBps, uint16 meanScoreBps)
+        external
+        pure
+        returns (uint256)
+    {
+        return RewardMath.calculateNegativeScoreSpreadForfeit(stakeAmount, scoreBps, meanScoreBps);
     }
 
     function epochWeightBps(uint8 epochIndex) external pure returns (uint256) {
@@ -52,22 +64,12 @@ contract RewardMathTest is Test {
         assertEq(voterShare + platformShare + treasuryShare, losingPool, "Pool split must conserve total");
     }
 
-    function testFuzz_LoserRefundThenSplit_Conservation(uint256 losingPool) public view {
+    function testFuzz_SplitPool_ProtocolSharesComeFromForfeitedPool(uint256 losingPool) public view {
         losingPool = bound(losingPool, 0, type(uint128).max);
 
-        uint256 loserRefundShare = harness.calculateRevealedLoserRefund(losingPool);
-        (uint256 voterShare, uint256 platformShare, uint256 treasuryShare) =
-            harness.splitPool(losingPool - loserRefundShare);
+        (uint256 voterShare, uint256 platformShare, uint256 treasuryShare) = harness.splitPool(losingPool);
 
-        assertEq(
-            loserRefundShare + voterShare + platformShare + treasuryShare,
-            losingPool,
-            "Pool split with loser refund must conserve total"
-        );
-    }
-
-    function test_CalculateRevealedLoserRefund_FivePercent() public view {
-        assertEq(harness.calculateRevealedLoserRefund(10e6), 500_000, "Refund should equal 5% of losing stake");
+        assertEq(voterShare + platformShare + treasuryShare, losingPool, "Forfeited pool split must conserve total");
     }
 
     function testFuzz_SplitPool_VoterShareDominates(uint256 losingPool) public view {
@@ -184,6 +186,35 @@ contract RewardMathTest is Test {
         uint256 reward = harness.calculateVoterReward(effectiveStake, 0, voterPool);
 
         assertEq(reward, 0, "Zero totalWeightedWinningStake must return zero reward");
+    }
+
+    // ====================================================
+    // score-spread accounting — Unit Tests
+    // ====================================================
+
+    function test_CalculatePositiveScoreSpreadWeight_UsesRbtsWeightAndDelta() public view {
+        uint256 weight = harness.calculatePositiveScoreSpreadWeight(10e6, 9350, 8525);
+
+        assertEq(weight, 825_000, "Alice positive spread weight should be stake * 8.25%");
+    }
+
+    function test_CalculatePositiveScoreSpreadWeight_ZeroAtOrBelowMean() public view {
+        assertEq(harness.calculatePositiveScoreSpreadWeight(10e6, 8525, 8525), 0, "Mean score has no reward weight");
+        assertEq(
+            harness.calculatePositiveScoreSpreadWeight(10e6, 6400, 8525), 0, "Below-mean score has no reward weight"
+        );
+    }
+
+    function test_CalculateNegativeScoreSpreadForfeit_AppliesIntensityAndCapsAtStake() public view {
+        uint256 forfeited = harness.calculateNegativeScoreSpreadForfeit(5e6, 6400, 8525);
+
+        assertEq(forfeited, 1_593_750, "Carol forfeits stake * 1.5 * 21.25%");
+        assertEq(harness.calculateNegativeScoreSpreadForfeit(5e6, 0, 10_000), 5e6, "Forfeit is capped at stake");
+    }
+
+    function test_CalculateNegativeScoreSpreadForfeit_ZeroAtOrAboveMean() public view {
+        assertEq(harness.calculateNegativeScoreSpreadForfeit(5e6, 8525, 8525), 0, "Mean score does not forfeit");
+        assertEq(harness.calculateNegativeScoreSpreadForfeit(5e6, 9350, 8525), 0, "Above-mean score does not forfeit");
     }
 
     // ====================================================

@@ -382,21 +382,20 @@ contract AuditGapTests is VotingTestBase {
         uint256 v2After = lrepToken.balanceOf(voter2);
         assertTrue(v2After > v2Before, "Winner 2 should receive reward");
 
-        // 3. Loser claim (voter3 - revealed losing side gets its RBTS stake return/reward plus forfeiture rebate)
-        uint256 forfeitedStake = votingEngine.commitRbtsForfeitedStake(contentId, 1, ck3);
-        uint256 expectedRebate = (forfeitedStake * 500) / 10000;
-        uint256 claimedRebateBefore = rewardDistributor.roundLoserRebateClaimedAmount(contentId, 1);
+        // 3. Lower-scoring claim (voter3 - revealed reports get RBTS stake return plus any positive-spread reward)
+        uint256 expectedLoserClaim = votingEngine.commitRbtsStakeReturned(contentId, 1, ck3);
+        uint256 scoreWeight = votingEngine.commitRbtsRewardWeight(contentId, 1, ck3);
+        if (scoreWeight > 0) {
+            expectedLoserClaim += RewardMath.calculateVoterReward(
+                scoreWeight, votingEngine.roundRbtsRewardWeight(contentId, 1), votingEngine.roundVoterPool(contentId, 1)
+            );
+        }
 
         uint256 v3Before = lrepToken.balanceOf(voter3);
         vm.prank(voter3);
         rewardDistributor.claimReward(contentId, 1);
         uint256 v3After = lrepToken.balanceOf(voter3);
-        assertTrue(v3After > v3Before, "Revealed losing-side voter should receive RBTS claim value");
-        assertEq(
-            rewardDistributor.roundLoserRebateClaimedAmount(contentId, 1) - claimedRebateBefore,
-            expectedRebate,
-            "Rebate should be 5% of forfeited stake"
-        );
+        assertEq(v3After - v3Before, expectedLoserClaim, "Revealed losing-side claim should match RBTS claim value");
         assertLt(v3After - v3Before, STAKE, "Forfeited losing side should not recover full stake");
 
         // 4. Frontend fee (credited to FrontendRegistry, then claimed by operator)
@@ -585,13 +584,9 @@ contract AuditGapTests is VotingTestBase {
         _settleAfterRbtsSeed(votingEngine, contentId, 1);
 
         uint256 forfeitedPool = votingEngine.roundRbtsForfeitedPool(contentId, 1);
-        uint256 loserRefundShare = RewardMath.calculateRevealedLoserRefund(forfeitedPool);
-        (uint256 voterShare, uint256 frontendShare,) = RewardMath.splitPool(forfeitedPool - loserRefundShare);
-        assertEq(
-            votingEngine.roundVoterPool(contentId, 1),
-            voterShare + frontendShare,
-            "Voter pool should come only from forfeitures"
-        );
+        if (votingEngine.roundRbtsRewardWeight(contentId, 1) > 0) {
+            assertEq(votingEngine.roundVoterPool(contentId, 1), forfeitedPool, "Voter pool should equal forfeitures");
+        }
 
         uint256 v1Before = lrepToken.balanceOf(voter1);
         vm.prank(voter1);

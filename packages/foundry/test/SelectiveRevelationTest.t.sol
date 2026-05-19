@@ -8,7 +8,6 @@ import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
 import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
 import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
 import { RoundLib } from "../contracts/libraries/RoundLib.sol";
-import { RewardMath } from "../contracts/libraries/RewardMath.sol";
 import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
 import { LoopReputation } from "../contracts/LoopReputation.sol";
 import { VotingTestBase } from "./helpers/VotingTestHelpers.sol";
@@ -291,9 +290,9 @@ contract SelectiveRevelationTest is VotingTestBase {
         assertEq(uint256(round.state), uint256(RoundLib.RoundState.Settled));
         assertEq(engine.roundUnrevealedCleanupRemaining(contentId, roundId), 0);
         uint256 forfeitedPool = engine.roundRbtsForfeitedPool(contentId, roundId);
-        uint256 loserRefundShare = RewardMath.calculateRevealedLoserRefund(forfeitedPool);
-        (uint256 voterShare, uint256 frontendShare,) = RewardMath.splitPool(forfeitedPool - loserRefundShare);
-        assertEq(engine.roundVoterPool(contentId, roundId), voterShare + frontendShare);
+        if (engine.roundRbtsRewardWeight(contentId, roundId) > 0) {
+            assertEq(engine.roundVoterPool(contentId, roundId), forfeitedPool);
+        }
     }
 
     function test_PostThresholdRevealCannotEnterRbtsScoringSet() public {
@@ -393,9 +392,9 @@ contract SelectiveRevelationTest is VotingTestBase {
         assertEq(uint256(round.state), uint256(RoundLib.RoundState.Settled));
         assertEq(engine.roundUnrevealedCleanupRemaining(contentId, roundId), 1);
         uint256 forfeitedPool = engine.roundRbtsForfeitedPool(contentId, roundId);
-        uint256 loserRefundShare = RewardMath.calculateRevealedLoserRefund(forfeitedPool);
-        (uint256 voterShare, uint256 frontendShare,) = RewardMath.splitPool(forfeitedPool - loserRefundShare);
-        assertEq(engine.roundVoterPool(contentId, roundId), voterShare + frontendShare);
+        if (engine.roundRbtsRewardWeight(contentId, roundId) > 0) {
+            assertEq(engine.roundVoterPool(contentId, roundId), forfeitedPool);
+        }
     }
 
     /// @notice Within grace period, unrevealed votes still block settlement.

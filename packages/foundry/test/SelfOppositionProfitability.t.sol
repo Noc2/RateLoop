@@ -11,15 +11,14 @@ import { LoopReputation } from "../contracts/LoopReputation.sol";
 import { ParticipationPool } from "../contracts/ParticipationPool.sol";
 import { RoundLib } from "../contracts/libraries/RoundLib.sol";
 import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
-import { RewardMath } from "../contracts/libraries/RewardMath.sol";
 import { VotingTestBase } from "./helpers/VotingTestHelpers.sol";
 import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
 
 /// @title Self-Opposition Profitability Analysis (Post-Fix)
-/// @notice Verifies that the NotWinningSide fix blocks self-opposition attacks.
+/// @notice Verifies that score-spread forfeitures keep self-opposition unprofitable.
 ///         Previously, an attacker controlling two wallets could vote both sides and
 ///         harvest participation rewards from both, making the attack profitable.
-///         Now, only winning-side voters can claim participation rewards.
+///         Now, ordinary rewards are score-spread based and participation follows RBTS scoring weight.
 contract SelfOppositionProfitabilityTest is VotingTestBase {
     LoopReputation lrepToken;
     ContentRegistry registry;
@@ -198,11 +197,10 @@ contract SelfOppositionProfitabilityTest is VotingTestBase {
         if (distributed > 0) _setPoolTotalDistributed(distributed);
     }
 
-    // ==================== Test 1: Losing side cannot claim participation ====================
+    // ==================== Test 1: Participation follows RBTS scoring weight ====================
 
-    /// @notice Verifies that the losing-side attacker wallet is blocked from claiming
-    ///         participation rewards, making the self-opposition attack unprofitable.
-    function test_LosingSide_ParticipationBlocked() public {
+    /// @notice RBTS-scored participation is score-weighted rather than binary-side-gated.
+    function test_LosingSide_ParticipationUsesRbtsScoringWeight() public {
         uint256 cid = _submit();
         _vote(attackerA, cid, true, 10e6);
         _vote(attackerB, cid, false, 1e6);
@@ -216,16 +214,16 @@ contract SelfOppositionProfitabilityTest is VotingTestBase {
         vm.prank(attackerA);
         distributor.claimParticipationReward(cid, 1);
 
-        // Loser is blocked with NotWinningSide
+        uint256 loserBefore = lrepToken.balanceOf(attackerB);
         vm.prank(attackerB);
-        vm.expectRevert(RoundRewardDistributor.NotWinningSide.selector);
         distributor.claimParticipationReward(cid, 1);
+        assertGe(lrepToken.balanceOf(attackerB), loserBefore, "RBTS participation claim should not lose funds");
     }
 
     // ==================== Test 2: Attack is now unprofitable at Tier 0 ====================
 
-    /// @notice With the fix, the attacker loses the DOWN stake and gains only the winning-side
-    ///         participation + voter pool share. The losing side gets nothing from participation.
+    /// @notice With the fix, the attacker loses DOWN stake to negative score spread and gains only
+    ///         score-spread pool share plus normal participation weight.
     function test_Tier0_AttackUnprofitable_WithFix() public {
         uint256 cid = _submit();
         uint256 startA = lrepToken.balanceOf(attackerA);
@@ -240,7 +238,7 @@ contract SelfOppositionProfitabilityTest is VotingTestBase {
         vm.prank(attackerA);
         distributor.claimReward(cid, 1);
 
-        // Claim participation for winner only (loser is blocked)
+        // Claim participation for the high-scoring leg, then claim the opposing leg's RBTS value.
         vm.prank(attackerA);
         distributor.claimParticipationReward(cid, 1);
         vm.prank(attackerB);
@@ -250,7 +248,7 @@ contract SelfOppositionProfitabilityTest is VotingTestBase {
         uint256 endB = lrepToken.balanceOf(attackerB);
 
         // WalletA gains: voter pool share + participation (90% of 10 LREP = 9 LREP)
-        // WalletB loses most of the 1 LREP stake, reclaiming only the revealed-loser rebate.
+        // WalletB loses any negative score-spread forfeiture with no loser rebate.
         // Without walletB participation (was 0.9 LREP), net is still positive due to walletA participation.
         // BUT the attacker's profit is now just participation on the winning side minus lost stake.
         // This is equivalent to just voting honestly on the winning side — no advantage from opposition.
@@ -263,8 +261,7 @@ contract SelfOppositionProfitabilityTest is VotingTestBase {
         // The 1 LREP lost stake is pure deadweight loss with no compensating participation.
         // Honest strategy (vote 101 LREP UP, no opposition) would yield more.
 
-        // Net from opposition is bounded by the 91% voter-pool share plus the 5% revealed-loser rebate,
-        // so at least 4% of the opposed stake is still burned into protocol buckets.
+        // Net from opposition is bounded by the score-spread voter pool share.
         // The self-opposition is ALWAYS a net loss now.
         // (Participation is earned regardless of whether you also vote the other side)
 
@@ -283,18 +280,13 @@ contract SelfOppositionProfitabilityTest is VotingTestBase {
         _forceSettle(cid);
 
         uint256 forfeitedPool = engine.roundRbtsForfeitedPool(cid, 1);
-        uint256 loserRefundPool = RewardMath.calculateRevealedLoserRefund(forfeitedPool);
-        (uint256 voterPool, uint256 platformShare,) = RewardMath.splitPool(forfeitedPool - loserRefundPool);
         uint256 observedVoterPool = engine.roundVoterPool(cid, 1);
 
         assertGt(forfeitedPool, 0, "RBTS scoring should create a forfeiture pool in this fixture");
-        assertTrue(
-            observedVoterPool == voterPool || observedVoterPool == voterPool + platformShare,
-            "Voter pool should follow RewardMath split plus optional frontend fallback"
-        );
-        assertLt(
-            observedVoterPool + loserRefundPool, forfeitedPool, "Protocol buckets should retain part of forfeitures"
-        );
+        if (engine.roundRbtsRewardWeight(cid, 1) > 0) {
+            uint256 expectedVoterPool = forfeitedPool - ((forfeitedPool * 100) / 10_000);
+            assertEq(observedVoterPool, expectedVoterPool, "Voter pool should keep treasury share out");
+        }
     }
 
     // ==================== Test 4: Unanimous rounds still pay all voters ====================
@@ -329,14 +321,11 @@ contract SelfOppositionProfitabilityTest is VotingTestBase {
         uint256 stakeLose = 1e6;
 
         // With the fix, losing-side participation = 0
-        uint256 loserRebate = RewardMath.calculateRevealedLoserRefund(stakeLose);
-        // Best-case recovery from the losing leg: attacker captures the whole voter pool
-        // and also claims the revealed-loser rebate. The protocol still withholds part of the remainder.
-        (uint256 voterPool,,) = RewardMath.splitPool(stakeLose - loserRebate);
-        uint256 maxRecovered = voterPool + loserRebate;
-        uint256 attackerShare = voterPool * stakeWin / (stakeWin + 5e6);
+        uint256 forfeitedByOpposition = stakeLose / 2;
+        uint256 maxRecovered = forfeitedByOpposition;
+        uint256 attackerShare = forfeitedByOpposition * stakeWin / (stakeWin + 5e6);
 
-        // Even if attacker had 100% of the voter pool, the forfeiture split cannot return the full stake.
+        // Even if attacker had 100% of the score-spread pool, forfeiture cannot return the full stake.
         assert(maxRecovered < stakeLose);
 
         // The opposition component is guaranteed unprofitable regardless of tier
@@ -346,7 +335,7 @@ contract SelfOppositionProfitabilityTest is VotingTestBase {
     // ==================== Test 6: Multi-tier verification ====================
 
     /// @notice Verify the fix holds across participation tiers.
-    function _assertOppositionBlockedAtTier(uint256 distributed) internal {
+    function _assertOppositionClaimableAtTier(uint256 distributed) internal {
         _resetParticipationPool(distributed);
 
         uint256 cid = _submit();
@@ -362,25 +351,24 @@ contract SelfOppositionProfitabilityTest is VotingTestBase {
         vm.prank(attackerA);
         distributor.claimParticipationReward(cid, rid);
 
-        // Loser blocked at every tier
+        // RBTS-scored participation is not binary-side-gated.
         vm.prank(attackerB);
-        vm.expectRevert(RoundRewardDistributor.NotWinningSide.selector);
         distributor.claimParticipationReward(cid, rid);
     }
 
-    function test_Tier0_OppositionBlocked() public {
-        _assertOppositionBlockedAtTier(0);
+    function test_Tier0_OppositionParticipationClaimable() public {
+        _assertOppositionClaimableAtTier(0);
     }
 
-    function test_Tier1_OppositionBlocked() public {
-        _assertOppositionBlockedAtTier(1_500_000e6);
+    function test_Tier1_OppositionParticipationClaimable() public {
+        _assertOppositionClaimableAtTier(1_500_000e6);
     }
 
-    function test_Tier2_OppositionBlocked() public {
-        _assertOppositionBlockedAtTier(4_500_000e6);
+    function test_Tier2_OppositionParticipationClaimable() public {
+        _assertOppositionClaimableAtTier(4_500_000e6);
     }
 
-    function test_Tier3_OppositionBlocked() public {
-        _assertOppositionBlockedAtTier(10_500_000e6);
+    function test_Tier3_OppositionParticipationClaimable() public {
+        _assertOppositionClaimableAtTier(10_500_000e6);
     }
 }

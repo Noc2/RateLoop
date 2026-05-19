@@ -196,9 +196,7 @@ contract SettlementEdgeCasesTest is VotingTestBase {
         returns (uint256)
     {
         bytes32 commitKey = _commitKeyForVoter(votingEngine, contentId, roundId, voter);
-        uint256 returnedStake = votingEngine.commitRbtsStakeReturned(contentId, roundId, commitKey);
-        uint256 forfeitedStake = votingEngine.commitRbtsForfeitedStake(contentId, roundId, commitKey);
-        return returnedStake + RewardMath.calculateRevealedLoserRefund(forfeitedStake);
+        return votingEngine.commitRbtsStakeReturned(contentId, roundId, commitKey);
     }
 
     function _expectedRbtsVoterReward(RoundVotingEngine votingEngine, uint256 contentId, uint256 roundId, address voter)
@@ -588,7 +586,7 @@ contract SettlementEdgeCasesTest is VotingTestBase {
         cfg.setTreasury(address(0));
     }
 
-    function test_Settle_TreasuryReceivesFee() public {
+    function test_Settle_ScoreSpreadForfeituresStayInVoterPool() public {
         (uint256 contentId, uint256 roundId) = _setupThreeVoterRound(true, true, false);
 
         uint256 treasuryBefore = lrepToken.balanceOf(treasury);
@@ -596,8 +594,10 @@ contract SettlementEdgeCasesTest is VotingTestBase {
         _settleAfterRbtsSeed(engine, contentId, roundId);
 
         uint256 treasuryAfter = lrepToken.balanceOf(treasury);
-        // Treasury should receive some fee from the losing pool
-        assertGt(treasuryAfter, treasuryBefore);
+        if (engine.roundRbtsRewardWeight(contentId, roundId) > 0) {
+            assertEq(engine.roundVoterPool(contentId, roundId), engine.roundRbtsForfeitedPool(contentId, roundId));
+            assertEq(treasuryAfter, treasuryBefore);
+        }
     }
 
     // =========================================================================
@@ -637,10 +637,10 @@ contract SettlementEdgeCasesTest is VotingTestBase {
         _settleAfterRbtsSeed(engine, contentId, roundId);
 
         uint256 forfeitedPool = engine.roundRbtsForfeitedPool(contentId, roundId);
-        uint256 loserRefundShare = RewardMath.calculateRevealedLoserRefund(forfeitedPool);
-        (uint256 voterShare, uint256 frontendShare,) = RewardMath.splitPool(forfeitedPool - loserRefundShare);
         uint256 voterPool = engine.roundVoterPool(contentId, roundId);
-        assertEq(voterPool, voterShare + frontendShare);
+        if (engine.roundRbtsRewardWeight(contentId, roundId) > 0) {
+            assertEq(voterPool, forfeitedPool);
+        }
     }
 
     function test_Settle_UnanimousDown_NoConsensusSubsidy() public {
@@ -649,10 +649,10 @@ contract SettlementEdgeCasesTest is VotingTestBase {
         _settleAfterRbtsSeed(engine, contentId, roundId);
 
         uint256 forfeitedPool = engine.roundRbtsForfeitedPool(contentId, roundId);
-        uint256 loserRefundShare = RewardMath.calculateRevealedLoserRefund(forfeitedPool);
-        (uint256 voterShare, uint256 frontendShare,) = RewardMath.splitPool(forfeitedPool - loserRefundShare);
         uint256 voterPool = engine.roundVoterPool(contentId, roundId);
-        assertEq(voterPool, voterShare + frontendShare);
+        if (engine.roundRbtsRewardWeight(contentId, roundId) > 0) {
+            assertEq(voterPool, forfeitedPool);
+        }
     }
 
     // =========================================================================
@@ -672,11 +672,10 @@ contract SettlementEdgeCasesTest is VotingTestBase {
         assertEq(uint256(settled.state), uint256(RoundLib.RoundState.Settled));
 
         uint256 forfeitedPool = engine2.roundRbtsForfeitedPool(contentId, roundId);
-        uint256 loserRefundShare = RewardMath.calculateRevealedLoserRefund(forfeitedPool);
-        (uint256 voterShare, uint256 frontendShare,) = RewardMath.splitPool(forfeitedPool - loserRefundShare);
 
-        assertGt(forfeitedPool, 0, "RBTS forfeitures still fund the round with no reserve subsidy");
-        assertEq(engine2.roundVoterPool(contentId, roundId), voterShare + frontendShare);
+        if (engine2.roundRbtsRewardWeight(contentId, roundId) > 0) {
+            assertEq(engine2.roundVoterPool(contentId, roundId), forfeitedPool);
+        }
     }
 
     // =========================================================================

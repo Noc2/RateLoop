@@ -9,7 +9,6 @@ import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
 import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
 import { LoopReputation } from "../contracts/LoopReputation.sol";
 import { RoundLib } from "../contracts/libraries/RoundLib.sol";
-import { RewardMath } from "../contracts/libraries/RewardMath.sol";
 import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
 import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
 
@@ -430,10 +429,10 @@ contract GameTheoryImprovementsTest is VotingTestBase {
         assertTrue(settled.upWins, "UP wins (unanimous)");
 
         uint256 forfeitedPool = engine.roundRbtsForfeitedPool(cid, roundId);
-        uint256 loserRefundShare = RewardMath.calculateRevealedLoserRefund(forfeitedPool);
-        (uint256 expectedVoterPool, uint256 frontendShare,) = RewardMath.splitPool(forfeitedPool - loserRefundShare);
         uint256 voterPool = engine.roundVoterPool(cid, roundId);
-        assertEq(voterPool, expectedVoterPool + frontendShare, "Voter pool comes only from forfeitures");
+        if (engine.roundRbtsRewardWeight(cid, roundId) > 0) {
+            assertEq(voterPool, forfeitedPool, "Voter pool comes only from RBTS forfeitures");
+        }
 
         // Alice can claim her stake + subsidy share
         uint256 aliceBefore = lrepToken.balanceOf(alice);

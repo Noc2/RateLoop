@@ -388,20 +388,14 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         assertGt(claimedAmount, STAKE / 20, "not capped at old loser rebate");
     }
 
-    function test_ClaimReward_LegacyUnscoredRoundCanClaim() public {
+    function test_ClaimReward_UnscoredRoundReverts() public {
         (uint256 contentId, uint256 roundId) = _setupSettledRound();
         stdstore.target(address(votingEngine)).sig("roundRbtsScored(uint256,uint256)").with_key(contentId)
             .with_key(roundId).checked_write(false);
 
-        uint256 winnerBefore = lrepToken.balanceOf(voter1);
         vm.prank(voter1);
+        vm.expectRevert(RoundRewardDistributor.RoundNotSettled.selector);
         rewardDistributor.claimReward(contentId, roundId);
-        assertGt(lrepToken.balanceOf(voter1), winnerBefore, "legacy winner receives stake and reward");
-
-        uint256 loserBefore = lrepToken.balanceOf(voter3);
-        vm.prank(voter3);
-        rewardDistributor.claimReward(contentId, roundId);
-        assertGt(lrepToken.balanceOf(voter3), loserBefore, "legacy loser receives rebate");
     }
 
     function test_ClaimReward_WinnerGetsReward() public {

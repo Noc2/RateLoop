@@ -256,6 +256,23 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         engine.revealVoteByCommitKey(contentId, roundId, commitKey, isUp, 5_000, salt);
     }
 
+    function _predictionBps(uint256 index, bool isUp) internal pure returns (uint16) {
+        uint16[3] memory upPredictions = [uint16(7_000), uint16(6_000), uint16(5_500)];
+        uint16[3] memory downPredictions = [uint16(4_000), uint16(3_500), uint16(3_000)];
+        return isUp ? upPredictions[index % upPredictions.length] : downPredictions[index % downPredictions.length];
+    }
+
+    function _revealPrediction(
+        uint256 contentId,
+        uint256 roundId,
+        bytes32 commitKey,
+        bool isUp,
+        uint16 predictedUpBps,
+        bytes32 salt
+    ) internal {
+        engine.revealVoteByCommitKey(contentId, roundId, commitKey, isUp, predictedUpBps, salt);
+    }
+
     function _settleRoundAfterRbtsSeed(uint256 contentId, uint256 roundId) internal {
         vm.roll(block.number + 1);
         engine.settleRound(contentId, roundId);
@@ -278,6 +295,17 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         internal
         returns (bytes32 commitKey, bytes32 salt)
     {
+        return _commitPredictionWithFrontend(voter, contentId, isUp, predictedUpBps, stake, address(0));
+    }
+
+    function _commitPredictionWithFrontend(
+        address voter,
+        uint256 contentId,
+        bool isUp,
+        uint16 predictedUpBps,
+        uint256 stake,
+        address frontend
+    ) internal returns (bytes32 commitKey, bytes32 salt) {
         salt = keccak256(abi.encodePacked(voter, isUp, predictedUpBps, block.timestamp));
         uint256 roundId = engine.previewCommitRoundId(contentId);
         uint16 referenceRatingBps = engine.previewCommitReferenceRatingBps(contentId);
@@ -309,7 +337,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
             commitHash,
             ciphertext,
             stake,
-            address(0)
+            frontend
         );
         vm.stopPrank();
     }
@@ -633,9 +661,10 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
         bytes32[3] memory commitKeys;
         bytes32[3] memory salts;
-        (commitKeys[0], salts[0]) = _commit(voter1, contentId, v1Up, STAKE);
-        (commitKeys[1], salts[1]) = _commit(voter2, contentId, v2Up, STAKE);
-        (commitKeys[2], salts[2]) = _commit(voter3, contentId, v3Up, STAKE);
+        uint16[3] memory predictions = [_predictionBps(0, v1Up), _predictionBps(1, v2Up), _predictionBps(2, v3Up)];
+        (commitKeys[0], salts[0]) = _commitPrediction(voter1, contentId, v1Up, predictions[0], STAKE);
+        (commitKeys[1], salts[1]) = _commitPrediction(voter2, contentId, v2Up, predictions[1], STAKE);
+        (commitKeys[2], salts[2]) = _commitPrediction(voter3, contentId, v3Up, predictions[2], STAKE);
 
         roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
 
@@ -643,9 +672,9 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         RoundLib.Round memory r0 = RoundEngineReadHelpers.round(engine, contentId, roundId);
         _warpPastTlockRevealTime(uint256(r0.startTime) + EPOCH);
 
-        _reveal(contentId, roundId, commitKeys[0], v1Up, salts[0]);
-        _reveal(contentId, roundId, commitKeys[1], v2Up, salts[1]);
-        _reveal(contentId, roundId, commitKeys[2], v3Up, salts[2]);
+        _revealPrediction(contentId, roundId, commitKeys[0], v1Up, predictions[0], salts[0]);
+        _revealPrediction(contentId, roundId, commitKeys[1], v2Up, predictions[1], salts[1]);
+        _revealPrediction(contentId, roundId, commitKeys[2], v3Up, predictions[2], salts[2]);
     }
 
     // =========================================================================
@@ -1011,14 +1040,16 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         );
 
         Vm.Log[] memory logs = vm.getRecordedLogs();
-        bytes32 expectedTopic = keccak256("RbtsRewardsScored(uint256,uint256,bytes32,uint256,uint256,uint256,uint256)");
+        bytes32 expectedTopic =
+            keccak256("RbtsRewardsScored(uint256,uint256,bytes32,uint256,uint256,uint256,uint256,uint16)");
         bool found;
         for (uint256 i = 0; i < logs.length; i++) {
             if (
                 logs[i].emitter == address(engine) && logs[i].topics.length == 3 && logs[i].topics[0] == expectedTopic
                     && uint256(logs[i].topics[1]) == contentId && uint256(logs[i].topics[2]) == roundId
             ) {
-                (bytes32 scoreSeed,,,,) = abi.decode(logs[i].data, (bytes32, uint256, uint256, uint256, uint256));
+                (bytes32 scoreSeed,,,,,) =
+                    abi.decode(logs[i].data, (bytes32, uint256, uint256, uint256, uint256, uint16));
                 assertEq(scoreSeed, expectedSeed, "score seed must use captured entropy");
                 found = true;
                 break;
@@ -1079,14 +1110,16 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertEq(engine.roundRbtsSeedEntropy(contentId, roundId), capturedEntropy, "settlement finalizes delayed seed");
 
         Vm.Log[] memory logs = vm.getRecordedLogs();
-        bytes32 expectedTopic = keccak256("RbtsRewardsScored(uint256,uint256,bytes32,uint256,uint256,uint256,uint256)");
+        bytes32 expectedTopic =
+            keccak256("RbtsRewardsScored(uint256,uint256,bytes32,uint256,uint256,uint256,uint256,uint16)");
         bool found;
         for (uint256 i = 0; i < logs.length; i++) {
             if (
                 logs[i].emitter == address(engine) && logs[i].topics.length == 3 && logs[i].topics[0] == expectedTopic
                     && uint256(logs[i].topics[1]) == contentId && uint256(logs[i].topics[2]) == roundId
             ) {
-                (bytes32 scoreSeed,,,,) = abi.decode(logs[i].data, (bytes32, uint256, uint256, uint256, uint256));
+                (bytes32 scoreSeed,,,,,) =
+                    abi.decode(logs[i].data, (bytes32, uint256, uint256, uint256, uint256, uint16));
                 assertEq(scoreSeed, expectedSeed, "score seed must ignore settlement prevrandao");
                 found = true;
                 break;
@@ -2102,17 +2135,20 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
         uint256 contentId = _submitContent();
 
-        (bytes32 ck1, bytes32 s1) = _commitWithFrontend(voter1, contentId, true, STAKE, frontend1);
-        (bytes32 ck2, bytes32 s2) = _commit(voter2, contentId, true, STAKE);
-        (bytes32 ck3, bytes32 s3) = _commit(voter3, contentId, false, STAKE);
+        uint16 p1 = _predictionBps(0, true);
+        uint16 p2 = _predictionBps(1, true);
+        uint16 p3 = _predictionBps(2, false);
+        (bytes32 ck1, bytes32 s1) = _commitPredictionWithFrontend(voter1, contentId, true, p1, STAKE, frontend1);
+        (bytes32 ck2, bytes32 s2) = _commitPrediction(voter2, contentId, true, p2, STAKE);
+        (bytes32 ck3, bytes32 s3) = _commitPrediction(voter3, contentId, false, p3, STAKE);
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
 
         // Reveal after epoch
         _warpPastTlockRevealTime(block.timestamp + EPOCH);
-        _reveal(contentId, roundId, ck1, true, s1);
-        _reveal(contentId, roundId, ck2, true, s2);
-        _reveal(contentId, roundId, ck3, false, s3);
+        _revealPrediction(contentId, roundId, ck1, true, p1, s1);
+        _revealPrediction(contentId, roundId, ck2, true, p2, s2);
+        _revealPrediction(contentId, roundId, ck3, false, p3, s3);
 
         _settleRoundAfterRbtsSeed(contentId, roundId);
         uint256 feesBefore = frontendRegistry.getAccumulatedFees(frontend1);
@@ -2128,16 +2164,19 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
         uint256 contentId = _submitContent();
 
-        (bytes32 ck1, bytes32 s1) = _commitWithFrontend(voter1, contentId, true, STAKE, frontend1);
-        (bytes32 ck2, bytes32 s2) = _commit(voter2, contentId, true, STAKE);
-        (bytes32 ck3, bytes32 s3) = _commit(voter3, contentId, false, STAKE);
+        uint16 p1 = _predictionBps(0, true);
+        uint16 p2 = _predictionBps(1, true);
+        uint16 p3 = _predictionBps(2, false);
+        (bytes32 ck1, bytes32 s1) = _commitPredictionWithFrontend(voter1, contentId, true, p1, STAKE, frontend1);
+        (bytes32 ck2, bytes32 s2) = _commitPrediction(voter2, contentId, true, p2, STAKE);
+        (bytes32 ck3, bytes32 s3) = _commitPrediction(voter3, contentId, false, p3, STAKE);
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
 
         _warpPastTlockRevealTime(block.timestamp + EPOCH);
-        _reveal(contentId, roundId, ck1, true, s1);
-        _reveal(contentId, roundId, ck2, true, s2);
-        _reveal(contentId, roundId, ck3, false, s3);
+        _revealPrediction(contentId, roundId, ck1, true, p1, s1);
+        _revealPrediction(contentId, roundId, ck2, true, p2, s2);
+        _revealPrediction(contentId, roundId, ck3, false, p3, s3);
 
         _settleRoundAfterRbtsSeed(contentId, roundId);
 
@@ -2154,16 +2193,19 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
         uint256 contentId = _submitContent();
 
-        (bytes32 ck1, bytes32 s1) = _commitWithFrontend(voter1, contentId, true, STAKE, frontend1);
-        (bytes32 ck2, bytes32 s2) = _commit(voter2, contentId, true, STAKE);
-        (bytes32 ck3, bytes32 s3) = _commit(voter3, contentId, false, STAKE);
+        uint16 p1 = _predictionBps(0, true);
+        uint16 p2 = _predictionBps(1, true);
+        uint16 p3 = _predictionBps(2, false);
+        (bytes32 ck1, bytes32 s1) = _commitPredictionWithFrontend(voter1, contentId, true, p1, STAKE, frontend1);
+        (bytes32 ck2, bytes32 s2) = _commitPrediction(voter2, contentId, true, p2, STAKE);
+        (bytes32 ck3, bytes32 s3) = _commitPrediction(voter3, contentId, false, p3, STAKE);
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
 
         _warpPastTlockRevealTime(block.timestamp + EPOCH);
-        _reveal(contentId, roundId, ck1, true, s1);
-        _reveal(contentId, roundId, ck2, true, s2);
-        _reveal(contentId, roundId, ck3, false, s3);
+        _revealPrediction(contentId, roundId, ck1, true, p1, s1);
+        _revealPrediction(contentId, roundId, ck2, true, p2, s2);
+        _revealPrediction(contentId, roundId, ck3, false, p3, s3);
 
         _settleRoundAfterRbtsSeed(contentId, roundId);
 
@@ -3869,16 +3911,19 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         uint256 contentId = _submitContent();
 
         // All UP, no DOWN -> unanimous
-        (bytes32 ck1, bytes32 s1) = _commit(voter1, contentId, true, STAKE);
-        (bytes32 ck2, bytes32 s2) = _commit(voter2, contentId, true, STAKE);
-        (bytes32 ck3, bytes32 s3) = _commit(voter3, contentId, true, STAKE);
+        uint16 p1 = _predictionBps(0, true);
+        uint16 p2 = _predictionBps(1, true);
+        uint16 p3 = _predictionBps(2, true);
+        (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, true, p1, STAKE);
+        (bytes32 ck2, bytes32 s2) = _commitPrediction(voter2, contentId, true, p2, STAKE);
+        (bytes32 ck3, bytes32 s3) = _commitPrediction(voter3, contentId, true, p3, STAKE);
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
 
         _warpPastTlockRevealTime(block.timestamp + EPOCH);
-        _reveal(contentId, roundId, ck1, true, s1);
-        _reveal(contentId, roundId, ck2, true, s2);
-        _reveal(contentId, roundId, ck3, true, s3);
+        _revealPrediction(contentId, roundId, ck1, true, p1, s1);
+        _revealPrediction(contentId, roundId, ck2, true, p2, s2);
+        _revealPrediction(contentId, roundId, ck3, true, p3, s3);
 
         _settleRoundAfterRbtsSeed(contentId, roundId);
 
@@ -3886,7 +3931,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertEq(uint256(round.state), uint256(RoundLib.RoundState.Settled));
         assertTrue(round.upWins);
 
-        // Consensus subsidy from reserve (losingPool == 0)
+        // No consensus subsidy; any voter pool comes from RBTS score-spread forfeiture.
         uint256 voterPool = engine.roundVoterPool(contentId, roundId);
         assertGt(voterPool, 0);
     }

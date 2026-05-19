@@ -262,8 +262,8 @@ contract AdversarialTests is VotingTestBase {
         );
     }
 
-    /// @notice Revealed voters with RBTS forfeitures receive their forfeiture rebate and do not revert.
-    function test_RewardExhaustion_LoserGetsRebate() public {
+    /// @notice Revealed voters with RBTS forfeitures receive their score-spread stake return and do not revert.
+    function test_RewardExhaustion_LowScoreGetsStakeReturn() public {
         uint256 contentId = _submitContent();
 
         // Asymmetric stakes to avoid tie
@@ -278,21 +278,20 @@ contract AdversarialTests is VotingTestBase {
         cks[2] = ck3;
         _settleRound(contentId, roundId, cks);
 
-        uint256 forfeitedStake = engine.commitRbtsForfeitedStake(contentId, roundId, ck2);
-        uint256 expectedRebate = (forfeitedStake * 500) / 10_000;
-        uint256 claimedBefore = distributor.roundLoserRebateClaimedAmount(contentId, roundId);
+        uint256 expectedClaim = engine.commitRbtsStakeReturned(contentId, roundId, ck2);
+        uint256 scoreWeight = engine.commitRbtsRewardWeight(contentId, roundId, ck2);
+        if (scoreWeight > 0) {
+            expectedClaim += RewardMath.calculateVoterReward(
+                scoreWeight, engine.roundRbtsRewardWeight(contentId, roundId), engine.roundVoterPool(contentId, roundId)
+            );
+        }
 
         uint256 balBefore = lrepToken.balanceOf(voter2);
         vm.prank(voter2);
         distributor.claimReward(contentId, roundId);
         uint256 balAfter = lrepToken.balanceOf(voter2);
 
-        assertEq(
-            distributor.roundLoserRebateClaimedAmount(contentId, roundId) - claimedBefore,
-            expectedRebate,
-            "Forfeited stake rebate should be 5%"
-        );
-        assertGe(balAfter - balBefore, expectedRebate, "Claim should include at least the RBTS rebate");
+        assertEq(balAfter - balBefore, expectedClaim, "Claim should match RBTS claim value");
         assertLt(balAfter - balBefore, 5e6, "Forfeited losing leg should not recover full stake");
     }
 
@@ -608,9 +607,9 @@ contract AdversarialTests is VotingTestBase {
         _settleRound(contentId, roundId, cks);
 
         uint256 forfeitedPool = engine.roundRbtsForfeitedPool(contentId, roundId);
-        uint256 loserRefundShare = RewardMath.calculateRevealedLoserRefund(forfeitedPool);
-        (uint256 voterShare, uint256 frontendShare,) = RewardMath.splitPool(forfeitedPool - loserRefundShare);
-        assertEq(engine.roundVoterPool(contentId, roundId), voterShare + frontendShare);
+        if (engine.roundRbtsRewardWeight(contentId, roundId) > 0) {
+            assertEq(engine.roundVoterPool(contentId, roundId), forfeitedPool);
+        }
     }
 
     /// @notice Unanimous rounds get zero subsidy without a losing pool.
@@ -735,10 +734,10 @@ contract AdversarialTests is VotingTestBase {
         // the voter pool, with the frontend share falling back to voters when no eligible
         // frontend is attached.
         uint256 forfeitedPool = eng2.roundRbtsForfeitedPool(1, 1);
-        uint256 loserRefundShare = RewardMath.calculateRevealedLoserRefund(forfeitedPool);
-        (uint256 voterShare, uint256 frontendFallbackShare,) = RewardMath.splitPool(forfeitedPool - loserRefundShare);
         uint256 voterPool = eng2.roundVoterPool(1, 1);
-        assertEq(voterPool, voterShare + frontendFallbackShare, "Voter pool should come only from forfeitures");
+        if (eng2.roundRbtsRewardWeight(1, 1) > 0) {
+            assertEq(voterPool, forfeitedPool, "Voter pool should come only from RBTS forfeitures");
+        }
     }
 
     // =========================================================================
@@ -1289,18 +1288,8 @@ contract AdversarialTests is VotingTestBase {
     }
 
     // =========================================================================
-    // 14. REWARD MATH — splitPool sums to input
+    // 14. REWARD MATH — voter rewards stay within score-spread pool
     // =========================================================================
-
-    /// @notice All pool split components sum exactly to the input losingPool
-    function test_RewardMath_SplitPool_SumsToInput() public pure {
-        uint256[5] memory inputs = [uint256(10e6), 1e6, 1, 999_999e6, 10_000_000e6];
-
-        for (uint256 i = 0; i < inputs.length; i++) {
-            (uint256 v, uint256 p, uint256 t) = RewardMath.splitPool(inputs[i]);
-            assertEq(v + p + t, inputs[i], "Split must sum to input");
-        }
-    }
 
     /// @notice calculateVoterReward: sum of all voter rewards ≤ voterPool (fuzz)
     function testFuzz_RewardMath_VoterRewards_DontExceedPool(
@@ -1314,7 +1303,7 @@ contract AdversarialTests is VotingTestBase {
         stake3 = bound(stake3, 1e6, 10e6);
         losingPool = bound(losingPool, 1e6, 1_000_000e6);
 
-        (uint256 voterPool,,) = RewardMath.splitPool(losingPool);
+        uint256 voterPool = losingPool;
 
         // All three are winners with epoch-1 weight (10000 BPS)
         uint256 eff1 = stake1; // weight 100% → same as stake

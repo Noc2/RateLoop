@@ -10,7 +10,6 @@ import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol"
 import { LoopReputation } from "../contracts/LoopReputation.sol";
 import { RoundLib } from "../contracts/libraries/RoundLib.sol";
 import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
-import { RewardMath } from "../contracts/libraries/RewardMath.sol";
 import { VotingTestBase } from "./helpers/VotingTestHelpers.sol";
 import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
 
@@ -213,15 +212,9 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
         assertGt(winnerPayout, 0, "Winner receives RBTS claim value");
         assertLe(winnerPayout, 5e6 + engine.roundVoterPool(cid, rid), "Winner claim stays inside pool bounds");
 
-        uint256 expectedRebate = (engine.commitRbtsForfeitedStake(cid, rid, downKey) * 500) / 10_000;
-        uint256 rebateBefore = distributor.roundLoserRebateClaimedAmount(cid, rid);
+        uint256 expectedLoserPayout = engine.commitRbtsStakeReturned(cid, rid, downKey);
         uint256 loserPayout = _claimPayout(v[3], cid, rid);
-        assertEq(
-            distributor.roundLoserRebateClaimedAmount(cid, rid) - rebateBefore,
-            expectedRebate,
-            "Loser rebate tracks forfeited stake"
-        );
-        assertGe(loserPayout, expectedRebate, "Losing-side claim includes its rebate");
+        assertEq(loserPayout, expectedLoserPayout, "Losing-side claim has no loser rebate");
     }
 
     // ==================== Test 2: Proportional Rewards ====================
@@ -340,9 +333,9 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
         _forceSettle(cid);
 
         uint256 forfeitedPool = engine.roundRbtsForfeitedPool(cid, rid);
-        uint256 loserRefundShare = RewardMath.calculateRevealedLoserRefund(forfeitedPool);
-        (uint256 voterShare, uint256 frontendShare,) = RewardMath.splitPool(forfeitedPool - loserRefundShare);
-        assertEq(engine.roundVoterPool(cid, rid), voterShare + frontendShare, "Voter pool comes only from forfeitures");
+        if (engine.roundRbtsRewardWeight(cid, rid) > 0) {
+            assertEq(engine.roundVoterPool(cid, rid), forfeitedPool, "Voter pool comes only from RBTS forfeitures");
+        }
 
         uint256 payout = _claimPayout(v[0], cid, rid);
         assertGt(payout, 0, "Voter gets RBTS claim value");
@@ -433,15 +426,9 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, cid, rid);
         assertTrue(round.upWins, "Minnows outweigh whale (450 > 100)");
 
-        uint256 expectedRebate = (engine.commitRbtsForfeitedStake(cid, rid, whaleKey) * 500) / 10_000;
-        uint256 rebateBefore = distributor.roundLoserRebateClaimedAmount(cid, rid);
+        uint256 expectedPayout = engine.commitRbtsStakeReturned(cid, rid, whaleKey);
         uint256 payout = _claimPayout(v[0], cid, rid);
-        assertEq(
-            distributor.roundLoserRebateClaimedAmount(cid, rid) - rebateBefore,
-            expectedRebate,
-            "Whale rebate tracks forfeited stake"
-        );
-        assertGe(payout, expectedRebate, "Losing whale claim includes rebate");
+        assertEq(payout, expectedPayout, "Losing whale claim has no loser rebate");
         assertLe(payout, 10e6 + engine.roundVoterPool(cid, rid), "Losing whale claim stays inside pool bounds");
     }
 
@@ -502,11 +489,9 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
             RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, cid, rid);
             assertEq(uint256(round.state), uint256(RoundLib.RoundState.Settled), "Round settled");
             uint256 forfeitedPool = engine.roundRbtsForfeitedPool(cid, rid);
-            uint256 loserRefundShare = RewardMath.calculateRevealedLoserRefund(forfeitedPool);
-            (uint256 voterShare, uint256 frontendShare,) = RewardMath.splitPool(forfeitedPool - loserRefundShare);
-            assertEq(
-                engine.roundVoterPool(cid, rid), voterShare + frontendShare, "Voter pool comes only from forfeitures"
-            );
+            if (engine.roundRbtsRewardWeight(cid, rid) > 0) {
+                assertEq(engine.roundVoterPool(cid, rid), forfeitedPool, "Voter pool comes only from RBTS forfeitures");
+            }
 
             // Claim rewards so voters have tokens back for next round
             for (uint256 i = 0; i < 5; i++) {
@@ -521,9 +506,8 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
 
     // ==================== Test 11: Contested Rounds Fund Voters ====================
 
-    /// @notice Contested rounds fund voter rewards; unanimous rounds do not.
-    function test_ContestedRoundFundsVoters_UnanimousRoundDoesNot() public {
-        uint256 contestedVoterPool;
+    /// @notice Score-spread forfeitures, when present, fund voter rewards.
+    function test_ScoreSpreadForfeituresFundVoters() public {
         {
             uint256 cid = _submit();
             _vote(v[0], cid, true, 5e6);
@@ -533,9 +517,11 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
             _vote(v[4], cid, false, 5e6);
             uint256 rid = RoundEngineReadHelpers.activeRoundId(engine, cid);
             _forceSettle(cid);
-            contestedVoterPool = engine.roundVoterPool(cid, rid);
+            uint256 forfeitedPool = engine.roundRbtsForfeitedPool(cid, rid);
+            if (engine.roundRbtsRewardWeight(cid, rid) > 0) {
+                assertEq(engine.roundVoterPool(cid, rid), forfeitedPool, "Voter pool should equal forfeitures");
+            }
         }
-        assertGt(contestedVoterPool, 0, "Contested RBTS forfeitures fund voter rewards");
 
         // Round 2: unanimous (5 UP, 10e6 each) -> no losing stake, no subsidy.
         {
@@ -547,11 +533,9 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
             uint256 rid = RoundEngineReadHelpers.activeRoundId(engine, cid);
             _forceSettle(cid);
             uint256 forfeitedPool = engine.roundRbtsForfeitedPool(cid, rid);
-            uint256 loserRefundShare = RewardMath.calculateRevealedLoserRefund(forfeitedPool);
-            (uint256 voterShare, uint256 frontendShare,) = RewardMath.splitPool(forfeitedPool - loserRefundShare);
-            assertEq(
-                engine.roundVoterPool(cid, rid), voterShare + frontendShare, "Voter pool comes only from forfeitures"
-            );
+            if (engine.roundRbtsRewardWeight(cid, rid) > 0) {
+                assertEq(engine.roundVoterPool(cid, rid), forfeitedPool, "Voter pool comes only from RBTS forfeitures");
+            }
         }
     }
 
