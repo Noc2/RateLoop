@@ -18,6 +18,10 @@ interface VoteSignalRailProps {
   cooldownSecondsRemaining: number;
   hasOptimisticCurrentRoundVote?: boolean;
   isVoteEligibilityPending?: boolean;
+  voteUnavailableStatus?: {
+    label: string;
+    detail: string;
+  } | null;
   attentionToken?: number | null;
   onVote: (item: ContentItem, isUp: boolean) => void;
 }
@@ -29,6 +33,7 @@ export function VoteSignalRail({
   cooldownSecondsRemaining,
   hasOptimisticCurrentRoundVote = false,
   isVoteEligibilityPending = false,
+  voteUnavailableStatus = null,
   attentionToken,
   onVote,
 }: VoteSignalRailProps) {
@@ -73,6 +78,7 @@ export function VoteSignalRail({
             error={voteError}
             cooldownSecondsRemaining={cooldownSecondsRemaining}
             isVoteEligibilityPending={isVoteEligibilityPending}
+            voteUnavailableStatus={voteUnavailableStatus}
             isContentActive={isContentItemActive(primaryItem)}
             isOwnContent={primaryItem.isOwnContent}
             embedded

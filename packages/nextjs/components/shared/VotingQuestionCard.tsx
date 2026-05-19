@@ -35,6 +35,10 @@ interface VotingQuestionCardProps {
   error?: string | null;
   cooldownSecondsRemaining?: number;
   isVoteEligibilityPending?: boolean;
+  voteUnavailableStatus?: {
+    label: string;
+    detail: string;
+  } | null;
   isContentActive?: boolean;
   isOwnContent?: boolean;
   openRound?: ContentOpenRoundSummary | null;
@@ -400,6 +404,7 @@ export function VotingQuestionCard({
   error,
   cooldownSecondsRemaining = 0,
   isVoteEligibilityPending = false,
+  voteUnavailableStatus = null,
   isContentActive = true,
   isOwnContent,
   openRound,
@@ -429,7 +434,8 @@ export function VotingQuestionCard({
     roundNotAcceptingMessage,
   });
   const contentInactive = !isContentActive;
-  const voteActionDisabled = isCommitting || isVoteEligibilityPending || contentInactive || !roundAcceptsVotes;
+  const voteActionDisabled =
+    isCommitting || isVoteEligibilityPending || Boolean(voteUnavailableStatus) || contentInactive || !roundAcceptsVotes;
   const [isDetailsOpen, setIsDetailsOpen] = useState(isSignalVariant);
   const [isAttentionActive, setIsAttentionActive] = useState(false);
   const [showFundQuestionModal, setShowFundQuestionModal] = useState(false);
@@ -499,6 +505,20 @@ export function VotingQuestionCard({
         ) : (
           <span className={STATUS_PILL_CLASS_NAME}>
             <span className="text-base text-base-content/65">Your question</span>
+          </span>
+        )}
+      </HoverTooltip>
+    ) : voteUnavailableStatus ? (
+      <HoverTooltip text={voteUnavailableStatus.detail} position="bottom">
+        {usesDockStatusText ? (
+          <span
+            className={`${DOCK_STATUS_TEXT_CLASS_NAME} max-w-[7.25rem] text-[0.95rem] leading-tight text-base-content/68`}
+          >
+            {voteUnavailableStatus.label}
+          </span>
+        ) : (
+          <span className={STATUS_PILL_CLASS_NAME}>
+            <span className="text-base text-base-content/65">{voteUnavailableStatus.label}</span>
           </span>
         )}
       </HoverTooltip>

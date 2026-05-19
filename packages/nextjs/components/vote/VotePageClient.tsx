@@ -140,6 +140,15 @@ function getVoteCooldownMessage(seconds: number) {
   return `You already voted on this content recently. Try again in ${formatVoteCooldownRemaining(seconds)}.`;
 }
 
+function getLrepRequiredVoteStatus(unavailableMessage?: string | null) {
+  return {
+    label: "LREP required",
+    detail:
+      unavailableMessage ??
+      "This wallet needs LREP to join this round. Zero-LREP advisory voting is only available after a staked rater opens the round.",
+  };
+}
+
 function readInternalContentPinKey(contentPinKey: string | null) {
   if (!contentPinKey || typeof window === "undefined") return null;
 
@@ -853,15 +862,23 @@ const HomeInner = () => {
     () => (isAdvisoryOnlyRater ? rankedBaseDisplayFeed.map(item => item.id) : []),
     [isAdvisoryOnlyRater, rankedBaseDisplayFeed],
   );
-  const { availabilityByContentId: advisoryAvailabilityByContentId } = useAdvisoryVoteAvailabilities(
-    advisoryAvailabilityContentIds,
-    isAdvisoryOnlyRater,
-  );
+  const { availabilityByContentId: advisoryAvailabilityByContentId, isLoading: advisoryAvailabilityLoading } =
+    useAdvisoryVoteAvailabilities(advisoryAvailabilityContentIds, isAdvisoryOnlyRater);
+  const advisoryPriorityKey = useMemo(() => {
+    if (!isAdvisoryOnlyRater) return "staked";
+    return rankedBaseDisplayFeed
+      .filter(item => advisoryAvailabilityByContentId.get(item.id.toString())?.canCommit === true)
+      .map(item => item.id.toString())
+      .join(",");
+  }, [advisoryAvailabilityByContentId, isAdvisoryOnlyRater, rankedBaseDisplayFeed]);
   const rankedDisplayFeed = useMemo(() => {
     if (!isAdvisoryOnlyRater) return rankedBaseDisplayFeed;
-    return rankedBaseDisplayFeed.filter(
-      item => advisoryAvailabilityByContentId.get(item.id.toString())?.canCommit === true,
-    );
+    return [...rankedBaseDisplayFeed].sort((a, b) => {
+      const aCanCommit = advisoryAvailabilityByContentId.get(a.id.toString())?.canCommit === true;
+      const bCanCommit = advisoryAvailabilityByContentId.get(b.id.toString())?.canCommit === true;
+      if (aCanCommit === bCanCommit) return 0;
+      return aCanCommit ? -1 : 1;
+    });
   }, [advisoryAvailabilityByContentId, isAdvisoryOnlyRater, rankedBaseDisplayFeed]);
   const feedSessionKey = useMemo(
     () =>
@@ -871,10 +888,12 @@ const HomeInner = () => {
         normalizedAddress ?? "anonymous",
         activeCategory,
         view,
+        advisoryPriorityKey,
         isSearchMode ? `search:${trimmedSearchQuery}:${effectiveSearchSortBy}` : `sort:${sortBy}`,
       ].join("|"),
     [
       activeCategory,
+      advisoryPriorityKey,
       effectiveSearchSortBy,
       isSearchMode,
       normalizedAddress,
@@ -1124,7 +1143,21 @@ const HomeInner = () => {
   const feedbackSheetHasOptimisticCurrentRoundVote = feedbackSheetItem
     ? optimisticVotedContentIds.has(feedbackSheetItem.id.toString())
     : false;
-  const primaryVoteEligibilityPending = primaryItem ? isVoteCooldownCheckPendingForContent(primaryItem.id) : false;
+  const primaryVoteEligibilityPending = primaryItem
+    ? isVoteCooldownCheckPendingForContent(primaryItem.id) ||
+      (isAdvisoryOnlyRater &&
+        advisoryAvailabilityLoading &&
+        !advisoryAvailabilityByContentId.has(primaryItem.id.toString()))
+    : false;
+  const primaryVoteUnavailableStatus = useMemo(() => {
+    if (!primaryItem || !isAdvisoryOnlyRater) return null;
+
+    const availability = advisoryAvailabilityByContentId.get(primaryItem.id.toString());
+    if (availability?.canCommit === true) return null;
+    if (!availability && advisoryAvailabilityLoading) return null;
+
+    return getLrepRequiredVoteStatus(getAdvisoryVoteUnavailableMessage(availability));
+  }, [advisoryAvailabilityByContentId, advisoryAvailabilityLoading, isAdvisoryOnlyRater, primaryItem]);
   const primaryAttentionToken =
     primaryItem && voteAttention?.contentId === primaryItem.id.toString() ? voteAttention.token : null;
   const stakeModalCooldownSeconds = stakeModal.contentId > 0n ? getContentCooldownSeconds(stakeModal.contentId) : 0;
@@ -1899,6 +1932,7 @@ const HomeInner = () => {
                 cooldownSecondsRemaining={primaryItemCooldownSeconds}
                 hasOptimisticCurrentRoundVote={primaryHasOptimisticCurrentRoundVote}
                 isVoteEligibilityPending={primaryVoteEligibilityPending}
+                voteUnavailableStatus={primaryVoteUnavailableStatus}
                 attentionToken={primaryAttentionToken}
                 onVote={handleButtonVote}
               />
@@ -1928,6 +1962,7 @@ const HomeInner = () => {
                 error={voteError}
                 cooldownSecondsRemaining={primaryItemCooldownSeconds}
                 isVoteEligibilityPending={primaryVoteEligibilityPending}
+                voteUnavailableStatus={primaryVoteUnavailableStatus}
                 isContentActive={isContentItemActive(primaryItem)}
                 isOwnContent={primaryItem.isOwnContent}
                 embedded
