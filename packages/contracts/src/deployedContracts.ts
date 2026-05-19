@@ -27081,6 +27081,79 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "advisoryCommitAvailability",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "availability",
+              type: "tuple",
+              internalType:
+                "struct AdvisoryVoteRecorder.AdvisoryCommitAvailability",
+              components: [
+                {
+                  name: "canCommit",
+                  type: "bool",
+                  internalType: "bool",
+                },
+                {
+                  name: "status",
+                  type: "uint8",
+                  internalType:
+                    "enum AdvisoryVoteRecorder.AdvisoryCommitAvailabilityStatus",
+                },
+                {
+                  name: "roundId",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "roundReferenceRatingBps",
+                  type: "uint16",
+                  internalType: "uint16",
+                },
+                {
+                  name: "epochEnd",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "drandChainHash",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+                {
+                  name: "drandGenesisTime",
+                  type: "uint64",
+                  internalType: "uint64",
+                },
+                {
+                  name: "drandPeriod",
+                  type: "uint64",
+                  internalType: "uint64",
+                },
+                {
+                  name: "minTargetRound",
+                  type: "uint64",
+                  internalType: "uint64",
+                },
+                {
+                  name: "maxTargetRound",
+                  type: "uint64",
+                  internalType: "uint64",
+                },
+              ],
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "advisoryCommitCore",
           inputs: [
             {
@@ -27855,6 +27928,11 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "uint256",
             },
           ],
+        },
+        {
+          type: "error",
+          name: "TargetRoundOutOfWindow",
+          inputs: [],
         },
         {
           type: "error",
