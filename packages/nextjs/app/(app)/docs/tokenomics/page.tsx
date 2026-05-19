@@ -2,11 +2,7 @@ import { DocsTitle } from "~~/components/docs/DocsTitle";
 import { RewardPayoutPathsDiagram } from "~~/components/docs/RewardPayoutPathsDiagram";
 import { TokenAllocationChart } from "~~/components/docs/TokenAllocationChart";
 import { protocolDocFacts } from "~~/lib/docs/protocolFacts";
-import {
-  LREP_MAX_SUPPLY_LABEL,
-  launchDistributionBreakdownRows,
-  tokenDistributionTableRows,
-} from "~~/lib/docs/tokenomics";
+import { LREP_MAX_SUPPLY_LABEL } from "~~/lib/docs/tokenomics";
 
 const Tokenomics = () => {
   return (
@@ -57,29 +53,7 @@ const Tokenomics = () => {
       <hr />
 
       <h2>Token Distribution</h2>
-      <div className="not-prose my-6">
-        <TokenAllocationChart />
-      </div>
-      <div className="not-prose overflow-x-auto my-6 rounded-xl bg-base-200">
-        <table className="table table-zebra [&_th]:text-base [&_td]:text-base [&_.badge]:text-base [&_th]:bg-base-300">
-          <thead>
-            <tr>
-              <th>Pool</th>
-              <th>Allocation</th>
-              <th>Purpose</th>
-            </tr>
-          </thead>
-          <tbody>
-            {tokenDistributionTableRows.map(row => (
-              <tr key={row.label}>
-                <td className="font-medium">{row.label}</td>
-                <td className="font-mono">{row.amountLabel}</td>
-                <td>{row.purpose}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <TokenAllocationChart />
 
       <h3>Launch Distribution Pool</h3>
       <p>
@@ -109,26 +83,6 @@ const Tokenomics = () => {
         verifying the same wallet as a human. Governance can tighten these thresholds over time. Agent wallets do not
         count as human anchors unless they hold an active verified-human credential.
       </p>
-      <div className="not-prose overflow-x-auto my-6 rounded-xl bg-base-200">
-        <table className="table table-zebra [&_th]:text-base [&_td]:text-base [&_.badge]:text-base [&_th]:bg-base-300">
-          <thead>
-            <tr>
-              <th>Launch rail</th>
-              <th>Allocation</th>
-              <th>Purpose</th>
-            </tr>
-          </thead>
-          <tbody>
-            {launchDistributionBreakdownRows.map(([rail, amount, purpose]) => (
-              <tr key={rail}>
-                <td className="font-medium">{rail}</td>
-                <td className="font-mono">{amount}</td>
-                <td>{purpose}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
       <div className="not-prose overflow-x-auto my-6 rounded-xl bg-base-200">
         <table className="table table-zebra [&_th]:text-base [&_td]:text-base [&_.badge]:text-base [&_th]:bg-base-300">
           <thead>
