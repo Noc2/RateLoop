@@ -132,6 +132,9 @@ contract QuestionRewardPoolEscrow is
         bytes32 weightRoot
     );
     event RewardPoolClusterPayoutOracleSnapshotted(uint256 indexed rewardPoolId, address indexed clusterPayoutOracle);
+    event RewardPoolClusterPayoutOracleRepointed(
+        uint256 indexed rewardPoolId, address indexed oldClusterPayoutOracle, address indexed newClusterPayoutOracle
+    );
     event RewardPoolCursorAdvanced(
         uint256 indexed rewardPoolId, uint256 indexed contentId, uint256 fromRoundId, uint256 toRoundId, uint256 skipped
     );
@@ -621,6 +624,38 @@ contract QuestionRewardPoolEscrow is
         QuestionRewardPoolEscrowPoolActionsLib.snapshotRewardPoolClusterPayoutOracle(
             rewardPoolClusterPayoutOracle, votingEngine, rewardPoolId, asset
         );
+    }
+
+    function repointRewardPoolClusterPayoutOracle(uint256 rewardPoolId, address newOracle)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
+        RewardPool storage rewardPool = _getExistingRewardPool(rewardPoolId);
+        require(rewardPool.asset == REWARD_ASSET_USDC, "Not USDC pool");
+        require(rewardPool.qualifiedRounds == 0 && rewardPool.claimedAmount == 0, "Pool already consumed");
+        address oldOracle = rewardPoolClusterPayoutOracle[rewardPoolId];
+        require(oldOracle != address(0), "Oracle not pinned");
+        require(newOracle != address(0) && newOracle.code.length != 0, "Invalid oracle");
+        require(newOracle != oldOracle, "Oracle unchanged");
+        IClusterPayoutOracle oracle = IClusterPayoutOracle(newOracle);
+        try oracle.roundPayoutSnapshotKey(
+            PAYOUT_DOMAIN_QUESTION_REWARD, rewardPoolId, rewardPool.contentId, 0
+        ) returns (
+            bytes32
+        ) { }
+        catch {
+            revert("Invalid oracle");
+        }
+        try oracle.roundPayoutSnapshotProposedAt(
+            PAYOUT_DOMAIN_QUESTION_REWARD, rewardPoolId, rewardPool.contentId, 0
+        ) returns (
+            uint64
+        ) { }
+        catch {
+            revert("Invalid oracle");
+        }
+        rewardPoolClusterPayoutOracle[rewardPoolId] = newOracle;
+        emit RewardPoolClusterPayoutOracleRepointed(rewardPoolId, oldOracle, newOracle);
     }
 
     function qualifyRound(uint256 rewardPoolId, uint256 roundId) external {
