@@ -422,7 +422,7 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
             bytes32[] memory verifiedAnchorIds
         ) {
             try ILaunchDistributionPool(launchPool)
-                .recordEarnedRaterReward(
+                .recordEarnedRaterRewardWithSourceReady(
                     rewardRecipient,
                     contentId,
                     roundId,
@@ -431,7 +431,8 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
                     round.revealedCount,
                     votingEngine.roundUnrevealedCleanupRemaining(contentId, roundId) == 0,
                     stakeAmount,
-                    verifiedAnchorIds
+                    verifiedAnchorIds,
+                    votingEngine.roundClusterPayoutReadyAt(contentId, roundId)
                 ) returns (
                 uint256
             ) { }

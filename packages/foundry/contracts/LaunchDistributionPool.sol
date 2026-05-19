@@ -356,6 +356,58 @@ contract LaunchDistributionPool is
         uint256 stakeAmount,
         bytes32[] calldata verifiedAnchorIds
     ) external onlyAuthorized nonReentrant returns (uint256 paidAmount) {
+        return _recordEarnedRaterRewardCredit(
+            rater,
+            contentId,
+            roundId,
+            commitKey,
+            scoreBps,
+            revealedRaterCount,
+            noPendingCleanup,
+            stakeAmount,
+            verifiedAnchorIds,
+            uint64(block.timestamp)
+        );
+    }
+
+    function recordEarnedRaterRewardWithSourceReady(
+        address rater,
+        uint256 contentId,
+        uint256 roundId,
+        bytes32 commitKey,
+        uint16 scoreBps,
+        uint16 revealedRaterCount,
+        bool noPendingCleanup,
+        uint256 stakeAmount,
+        bytes32[] calldata verifiedAnchorIds,
+        uint64 sourceReadyAt
+    ) external onlyAuthorized nonReentrant returns (uint256 paidAmount) {
+        return _recordEarnedRaterRewardCredit(
+            rater,
+            contentId,
+            roundId,
+            commitKey,
+            scoreBps,
+            revealedRaterCount,
+            noPendingCleanup,
+            stakeAmount,
+            verifiedAnchorIds,
+            sourceReadyAt
+        );
+    }
+
+    function _recordEarnedRaterRewardCredit(
+        address rater,
+        uint256 contentId,
+        uint256 roundId,
+        bytes32 commitKey,
+        uint16 scoreBps,
+        uint16 revealedRaterCount,
+        bool noPendingCleanup,
+        uint256 stakeAmount,
+        bytes32[] calldata verifiedAnchorIds,
+        uint64 sourceReadyAt
+    ) internal returns (uint256 paidAmount) {
         LaunchRewardPolicy memory policy = launchRewardPolicy;
         uint16 distinctRoundAnchors = _countDistinctAvailableAnchors(policy, rater, verifiedAnchorIds);
         if (!_passesLaunchRewardContext(
@@ -392,7 +444,9 @@ contract LaunchDistributionPool is
             roundUnverifiedLaunchCreditCount[contentId][roundId] += 1;
         }
         if (clusterProofRequired) {
-            _storePendingEarnedRaterCredit(rater, contentId, roundId, commitKey, scoreBps, policy, verifiedAnchorIds);
+            _storePendingEarnedRaterCredit(
+                rater, contentId, roundId, commitKey, scoreBps, policy, verifiedAnchorIds, sourceReadyAt
+            );
             return 0;
         }
 
@@ -411,6 +465,54 @@ contract LaunchDistributionPool is
         bool noPendingCleanup,
         bytes32[] calldata verifiedAnchorIds
     ) external onlyAuthorized nonReentrant returns (bool recorded, uint256 paidAmount) {
+        return _recordAdvisoryRaterRewardCredit(
+            rater,
+            contentId,
+            roundId,
+            advisoryCommitKey,
+            scoreBps,
+            revealedRaterCount,
+            noPendingCleanup,
+            verifiedAnchorIds,
+            uint64(block.timestamp)
+        );
+    }
+
+    function recordAdvisoryRaterRewardWithSourceReady(
+        address rater,
+        uint256 contentId,
+        uint256 roundId,
+        bytes32 advisoryCommitKey,
+        uint16 scoreBps,
+        uint16 revealedRaterCount,
+        bool noPendingCleanup,
+        bytes32[] calldata verifiedAnchorIds,
+        uint64 sourceReadyAt
+    ) external onlyAuthorized nonReentrant returns (bool recorded, uint256 paidAmount) {
+        return _recordAdvisoryRaterRewardCredit(
+            rater,
+            contentId,
+            roundId,
+            advisoryCommitKey,
+            scoreBps,
+            revealedRaterCount,
+            noPendingCleanup,
+            verifiedAnchorIds,
+            sourceReadyAt
+        );
+    }
+
+    function _recordAdvisoryRaterRewardCredit(
+        address rater,
+        uint256 contentId,
+        uint256 roundId,
+        bytes32 advisoryCommitKey,
+        uint16 scoreBps,
+        uint16 revealedRaterCount,
+        bool noPendingCleanup,
+        bytes32[] calldata verifiedAnchorIds,
+        uint64 sourceReadyAt
+    ) internal returns (bool recorded, uint256 paidAmount) {
         LaunchRewardPolicy memory policy = launchRewardPolicy;
         uint16 distinctRoundAnchors = _countDistinctAvailableAnchors(policy, rater, verifiedAnchorIds);
         if (!_passesAdvisoryLaunchRewardContext(
@@ -438,7 +540,7 @@ contract LaunchDistributionPool is
         }
         if (clusterProofRequired) {
             _storePendingEarnedRaterCredit(
-                rater, contentId, roundId, advisoryCommitKey, scoreBps, policy, verifiedAnchorIds
+                rater, contentId, roundId, advisoryCommitKey, scoreBps, policy, verifiedAnchorIds, sourceReadyAt
             );
             return (true, 0);
         }
@@ -613,14 +715,15 @@ contract LaunchDistributionPool is
         bytes32 commitKey,
         uint16 scoreBps,
         LaunchRewardPolicy memory policy,
-        bytes32[] calldata verifiedAnchorIds
+        bytes32[] calldata verifiedAnchorIds,
+        uint64 sourceReadyAt
     ) internal {
         address oracle = address(clusterPayoutOracle);
-        if (oracle == address(0)) revert SnapshotNotFinalized();
+        if (oracle == address(0) || sourceReadyAt == 0) revert SnapshotNotFinalized();
         pendingEarnedRaterCredits[contentId][roundId][commitKey] = PendingEarnedRaterCredit({
             rater: rater, oracle: oracle, scoreBps: scoreBps, policy: policy, pending: true
         });
-        pendingEarnedRaterCreditReadyAt[contentId][roundId][commitKey] = uint64(block.timestamp);
+        pendingEarnedRaterCreditReadyAt[contentId][roundId][commitKey] = sourceReadyAt;
 
         delete pendingEarnedRaterCreditAnchorIds[contentId][roundId][commitKey];
         bytes32[] storage pendingAnchors = pendingEarnedRaterCreditAnchorIds[contentId][roundId][commitKey];

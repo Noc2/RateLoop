@@ -510,14 +510,13 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
             minAnchorCredentialAgeSeconds
         );
         bool recorded;
-        (recorded, paidAmount) = launchDistributionPool.recordAdvisoryRaterReward(
+        (recorded, paidAmount) = _recordAdvisoryLaunchCredit(
+            launchDistributionPool,
+            advisoryCommit,
             rewardRecipient,
-            advisoryCommit.contentId,
-            advisoryCommit.roundId,
             advisoryCommitKey,
             scoreBps,
             revealedCount,
-            true,
             verifiedAnchorIds
         );
         if (!recorded) return (scoreBps, 0);
@@ -527,6 +526,28 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         emit AdvisoryLaunchCreditClaimed(
             advisoryCommit.contentId, advisoryCommit.roundId, rewardRecipient, advisoryCommitKey, scoreBps, paidAmount
         );
+    }
+
+    function _recordAdvisoryLaunchCredit(
+        ILaunchDistributionPool launchDistributionPool,
+        AdvisoryCommit storage advisoryCommit,
+        address rewardRecipient,
+        bytes32 advisoryCommitKey,
+        uint16 scoreBps,
+        uint16 revealedCount,
+        bytes32[] memory verifiedAnchorIds
+    ) internal returns (bool recorded, uint256 paidAmount) {
+        return launchDistributionPool.recordAdvisoryRaterRewardWithSourceReady(
+                rewardRecipient,
+                advisoryCommit.contentId,
+                advisoryCommit.roundId,
+                advisoryCommitKey,
+                scoreBps,
+                revealedCount,
+                true,
+                verifiedAnchorIds,
+                votingEngine.roundClusterPayoutReadyAt(advisoryCommit.contentId, advisoryCommit.roundId)
+            );
     }
 
     function advisoryCommitCore(bytes32 advisoryCommitKey)

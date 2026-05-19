@@ -38,6 +38,21 @@ contract MockRevertingLaunchDistributionPool {
     ) external pure returns (uint256) {
         revert LaunchCreditRejected();
     }
+
+    function recordEarnedRaterRewardWithSourceReady(
+        address,
+        uint256,
+        uint256,
+        bytes32,
+        uint16,
+        uint16,
+        bool,
+        uint256,
+        bytes32[] calldata,
+        uint64
+    ) external pure returns (uint256) {
+        revert LaunchCreditRejected();
+    }
 }
 
 /// @title RoundRewardDistributor branch coverage tests (tlock commit-reveal)
