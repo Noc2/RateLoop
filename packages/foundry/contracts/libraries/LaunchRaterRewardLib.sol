@@ -19,7 +19,10 @@ library LaunchRaterRewardLib {
         uint48 roundStartTime,
         uint32 minAnchorCredentialAgeSeconds
     ) external view returns (bytes32[] memory anchorIds) {
-        address raterRegistryAddress = config.raterRegistry();
+        address raterRegistryAddress = votingEngine.roundRaterRegistrySnapshot(contentId, roundId);
+        if (raterRegistryAddress == address(0)) {
+            raterRegistryAddress = config.raterRegistry();
+        }
         if (raterRegistryAddress == address(0) || voteCount == 0) return new bytes32[](0);
 
         RaterRegistry raterRegistry = RaterRegistry(raterRegistryAddress);

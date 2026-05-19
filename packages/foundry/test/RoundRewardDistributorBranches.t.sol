@@ -428,6 +428,27 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         assertEq(launchPool.raterDistinctAnchorRoundCount(voter1), 1);
     }
 
+    function test_ClaimReward_UsesRoundRaterRegistrySnapshotForVerifiedHumanAnchor() public {
+        bytes32 anchorId = bytes32("snapshot-anchor-voter-2");
+        _verifyHuman(voter2, anchorId);
+        (uint256 contentId, uint256 roundId) = _setupSettledPredictionRound();
+        assertEq(votingEngine.roundRaterRegistrySnapshot(contentId, roundId), address(raterRegistry));
+
+        RaterRegistry replacementRegistry =
+            new RaterRegistry(owner, owner, address(worldIdRouter), bytes32("replacement-rate-loop"), 2, 365 days);
+        ProtocolConfig config = ProtocolConfig(address(votingEngine.protocolConfig()));
+        vm.prank(owner);
+        config.setRaterRegistry(address(replacementRegistry));
+
+        vm.prank(voter1);
+        rewardDistributor.claimReward(contentId, roundId);
+
+        assertEq(launchPool.qualifyingRatingCount(voter1), 1);
+        assertEq(launchPool.raterDistinctVerifiedAnchorCount(voter1), 1);
+        assertEq(launchPool.raterDistinctAnchorRoundCount(voter1), 1);
+        assertEq(launchPool.verifiedAnchorDistinctRaterCount(anchorId), 1);
+    }
+
     function test_ClaimReward_DoesNotRecordLaunchCreditWithFreshVerifiedHumanAnchor() public {
         _verifyHumanFresh(voter2, bytes32("fresh-anchor-voter-2"));
         (uint256 contentId, uint256 roundId) = _setupSettledPredictionRound();
