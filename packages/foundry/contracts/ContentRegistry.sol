@@ -1339,12 +1339,20 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     }
 
     function _isSubmitterIdentity(uint256 contentId, address account) private view returns (bool) {
-        bytes32 submitterIdentityKey = contentSubmitterIdentityKey[contentId];
-        if (submitterIdentityKey == bytes32(0)) {
-            address submitterIdentity = getSubmitterIdentity[contentId];
-            return submitterIdentity != address(0) && submitterIdentity == account;
+        Content storage content = contents[contentId];
+        address submitterIdentity = getSubmitterIdentity[contentId];
+        if (submitterIdentity == address(0)) {
+            if (content.submitter == account) return true;
+        } else {
+            if (submitterIdentity == account) return true;
+            if (content.submitter == account && content.submitter == submitterIdentity) return true;
         }
+
+        bytes32 submitterIdentityKey = contentSubmitterIdentityKey[contentId];
+        if (submitterIdentityKey == bytes32(0)) return false;
+
         IRaterIdentityRegistry.ResolvedRater memory resolved = _resolveRater(account);
+        if (submitterIdentity != address(0) && resolved.holder == submitterIdentity) return true;
         return resolved.identityKey == submitterIdentityKey;
     }
 

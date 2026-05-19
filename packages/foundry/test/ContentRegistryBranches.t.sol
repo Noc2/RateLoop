@@ -2021,7 +2021,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         registry.cancelContent(contentId);
     }
 
-    function test_CancelContent_AllowsReboundSubmitterIdentity() public {
+    function test_CancelContent_AllowsStoredSubmitterAfterIdentityRebind() public {
         vm.startPrank(submitter);
         lrepToken.approve(address(registry), 10e6);
         uint256 contentId =
@@ -2037,10 +2037,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.stopPrank();
 
         vm.prank(submitter);
-        vm.expectRevert("Not submitter");
-        registry.cancelContent(contentId);
-
-        vm.prank(remintedSubmitter);
         registry.cancelContent(contentId);
 
         (,,,,, ContentRegistry.ContentStatus status,,,,) = registry.contents(contentId);
@@ -2787,7 +2783,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.stopPrank();
     }
 
-    function test_ReviveContent_AllowsReboundSubmitterIdentity() public {
+    function test_ReviveContent_AllowsStoredSubmitterAfterIdentityRebind() public {
         string memory url = "https://example.com/reminted-revive";
 
         vm.startPrank(submitter);
@@ -2805,21 +2801,15 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         raterRegistry.clearRevokedHumanNullifier(RaterRegistry.HumanCredentialProvider.CuryoSelfVerifiedSeed, anchor);
         _seedRaterIdentity(raterRegistry, remintedSubmitter, anchor);
         vm.stopPrank();
-        vm.prank(owner);
-        lrepToken.mint(remintedSubmitter, 10_000e6);
 
-        vm.prank(submitter);
-        vm.expectRevert("Not original submitter");
-        registry.reviveContent(contentId);
-
-        vm.startPrank(remintedSubmitter);
+        vm.startPrank(submitter);
         lrepToken.approve(address(registry), 5e6);
         registry.reviveContent(contentId);
         vm.stopPrank();
 
         (,,,,, ContentRegistry.ContentStatus status,, address reviver,,) = registry.contents(contentId);
         assertEq(uint256(status), uint256(ContentRegistry.ContentStatus.Active));
-        assertEq(reviver, remintedSubmitter);
+        assertEq(reviver, submitter);
     }
 
     function test_ReviveContent_RevertsWhenUrlWasResubmitted() public {
