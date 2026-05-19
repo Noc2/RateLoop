@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { encodePacked, keccak256 } from "viem";
 
 type RegisteredHandler = (args: {
   event: {
@@ -10,6 +11,10 @@ type RegisteredHandler = (args: {
 }) => Promise<void>;
 
 const handlers = new Map<string, RegisteredHandler>();
+
+function rbtsCommitKey(voter: `0x${string}`, commitHash: `0x${string}`) {
+  return keccak256(encodePacked(["address", "bytes32"], [voter, commitHash]));
+}
 
 vi.mock("ponder:registry", () => ({
   ponder: {
@@ -310,6 +315,8 @@ describe("RoundVotingEngine ponder handlers", () => {
 
   it("stores a late commit in the reduced reward epoch", async () => {
     const voter = "0x0000000000000000000000000000000000000001";
+    const commitHash = `0x${"11".repeat(32)}` as `0x${string}`;
+    const commitKey = rbtsCommitKey(voter, commitHash);
     const readContract = vi.fn(async ({ functionName }: { functionName: string }) => {
       if (functionName === "commitIdentityKey") return `0x${"00".repeat(32)}`;
       if (functionName === "commitIdentityHolder") return "0x0000000000000000000000000000000000000000";
@@ -339,7 +346,7 @@ describe("RoundVotingEngine ponder handlers", () => {
           contentId: 7n,
           roundId: 2n,
           voter,
-          commitHash: `0x${"11".repeat(32)}`,
+          commitHash,
           roundReferenceRatingBps: 7200,
           targetRound: 123n,
           drandChainHash: `0x${"22".repeat(32)}`,
@@ -374,6 +381,12 @@ describe("RoundVotingEngine ponder handlers", () => {
     });
     expect(readContract).toHaveBeenCalledWith(
       expect.objectContaining({
+        functionName: "commitIdentityKey",
+        args: [7n, 2n, commitKey],
+      }),
+    );
+    expect(readContract).toHaveBeenCalledWith(
+      expect.objectContaining({
         functionName: "roundHasHumanVerifiedCommit",
         args: [7n, 2n],
       }),
@@ -395,6 +408,8 @@ describe("RoundVotingEngine ponder handlers", () => {
     const delegate = "0x0000000000000000000000000000000000000001";
     const holder = "0x0000000000000000000000000000000000000002";
     const identityKey = `0x${"33".repeat(32)}`;
+    const commitHash = `0x${"11".repeat(32)}` as `0x${string}`;
+    const commitKey = rbtsCommitKey(delegate, commitHash);
     const readContract = vi.fn(async ({ functionName }: { functionName: string }) => {
       if (functionName === "commitIdentityKey") return identityKey;
       if (functionName === "commitIdentityHolder") return holder;
@@ -420,7 +435,7 @@ describe("RoundVotingEngine ponder handlers", () => {
           contentId: 7n,
           roundId: 2n,
           voter: delegate,
-          commitHash: `0x${"11".repeat(32)}`,
+          commitHash,
           roundReferenceRatingBps: 7200,
           targetRound: 123n,
           drandChainHash: `0x${"22".repeat(32)}`,
@@ -453,6 +468,12 @@ describe("RoundVotingEngine ponder handlers", () => {
         identityVoter: holder,
       }),
     });
+    expect(readContract).toHaveBeenCalledWith(
+      expect.objectContaining({
+        functionName: "commitIdentityKey",
+        args: [7n, 2n, commitKey],
+      }),
+    );
     expect(insertCalls).toContainEqual({
       table: "dailyVoteActivity",
       values: expect.objectContaining({
@@ -677,6 +698,9 @@ describe("RoundVotingEngine ponder handlers", () => {
     const voter2 = "0x0000000000000000000000000000000000000002";
     const voter3 = "0x0000000000000000000000000000000000000003";
     const voter4 = "0x0000000000000000000000000000000000000004";
+    const identityKey1 = `0x${"aa".repeat(32)}`;
+    const identityKey2 = `0x${"bb".repeat(32)}`;
+    const identityKey3 = `0x${"cc".repeat(32)}`;
     const { db, updateCalls } = createDb({
       existingRound: {
         id: "7-2",
@@ -686,6 +710,7 @@ describe("RoundVotingEngine ponder handlers", () => {
         {
           id: `7-2-${voter1}`,
           voter: voter1,
+          identityKey: identityKey1,
           commitHash: `0x${"11".repeat(32)}`,
           revealed: true,
           isUp: true,
@@ -696,6 +721,7 @@ describe("RoundVotingEngine ponder handlers", () => {
         {
           id: `7-2-${voter2}`,
           voter: voter2,
+          identityKey: identityKey2,
           commitHash: `0x${"22".repeat(32)}`,
           revealed: true,
           isUp: true,
@@ -706,6 +732,7 @@ describe("RoundVotingEngine ponder handlers", () => {
         {
           id: `7-2-${voter3}`,
           voter: voter3,
+          identityKey: identityKey3,
           commitHash: `0x${"33".repeat(32)}`,
           revealed: true,
           isUp: false,
@@ -737,7 +764,7 @@ describe("RoundVotingEngine ponder handlers", () => {
         args: {
           contentId: 7n,
           roundId: 2n,
-          scoreSeed: `0x${"11".repeat(32)}`,
+          scoreSeed: `0x${"01".repeat(32)}`,
           rewardWeight: 50n,
           rewardClaimants: 2n,
           forfeitedPool: 5n,
@@ -768,6 +795,11 @@ describe("RoundVotingEngine ponder handlers", () => {
       expect(update).toBeDefined();
       return update!.values;
     });
+    expect(economicUpdates.map((update) => update.rbtsScoreBps)).toEqual([
+      1800,
+      8750,
+      6750,
+    ]);
     const meanScoreBps =
       economicUpdates.reduce(
         (sum, update) => sum + 25n * BigInt(update.rbtsScoreBps as number),

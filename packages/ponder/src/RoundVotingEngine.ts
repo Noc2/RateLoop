@@ -29,6 +29,7 @@ const RBTS_SCORE_SCALE_BPS = 10_000;
 const RBTS_SCORE_SCALE = 10_000n;
 const RBTS_NEGATIVE_SPREAD_FORFEIT_BPS = 15_000n;
 const ZERO_SCORE_SEED = `0x${"00".repeat(32)}` as `0x${string}`;
+const ZERO_BYTES32 = `0x${"00".repeat(32)}` as `0x${string}`;
 
 function normalizeAddress(
   address: string | null | undefined,
@@ -42,12 +43,35 @@ function firstContractAddress(address: unknown): `0x${string}` | null {
   return typeof value === "string" ? normalizeAddress(value) : null;
 }
 
+function normalizeBytes32(value: unknown): `0x${string}` | null {
+  if (typeof value !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(value)) {
+    return null;
+  }
+  return value.toLowerCase() as `0x${string}`;
+}
+
+function addressIdentityKey(account: `0x${string}`) {
+  return keccak256(
+    encodePacked(["string", "address"], ["rateloop.address-identity-v1", account]),
+  );
+}
+
+function nonZeroIdentityKey(
+  identityKey: unknown,
+  fallbackVoter: `0x${string}`,
+) {
+  const normalized = normalizeBytes32(identityKey);
+  return normalized && normalized !== ZERO_BYTES32
+    ? normalized
+    : addressIdentityKey(fallbackVoter);
+}
+
 async function resolveVoteIdentityAtCommit(params: {
   context: any;
   contentId: bigint;
   roundId: bigint;
   voter: `0x${string}`;
-  commitHash: `0x${string}`;
+  commitKey: `0x${string}`;
 }) {
   const rawVoter = normalizeAddress(params.voter) ?? params.voter;
   const engineAddress = firstContractAddress(
@@ -55,7 +79,7 @@ async function resolveVoteIdentityAtCommit(params: {
   );
   if (!params.context.client?.readContract || !engineAddress) {
     return {
-      identityKey: null as `0x${string}` | null,
+      identityKey: addressIdentityKey(rawVoter),
       identityHolder: rawVoter,
       identityVoter: rawVoter,
     };
@@ -67,26 +91,26 @@ async function resolveVoteIdentityAtCommit(params: {
         abi: RoundVotingEngineAbi,
         address: engineAddress,
         functionName: "commitIdentityKey",
-        args: [params.contentId, params.roundId, params.commitHash],
+        args: [params.contentId, params.roundId, params.commitKey],
       }),
       params.context.client.readContract({
         abi: RoundVotingEngineAbi,
         address: engineAddress,
         functionName: "commitIdentityHolder",
-        args: [params.contentId, params.roundId, params.commitHash],
+        args: [params.contentId, params.roundId, params.commitKey],
       }),
     ]);
     const holderAddress = normalizeAddress(String(holder));
     const identityHolder =
       holderAddress && holderAddress !== zeroAddress ? holderAddress : rawVoter;
     return {
-      identityKey: String(identityKey) as `0x${string}`,
+      identityKey: nonZeroIdentityKey(identityKey, rawVoter),
       identityHolder,
       identityVoter: identityHolder,
     };
   } catch {
     return {
-      identityKey: null,
+      identityKey: addressIdentityKey(rawVoter),
       identityHolder: rawVoter,
       identityVoter: rawVoter,
     };
@@ -511,16 +535,16 @@ ponder.on("RoundVotingEngine:VoteCommitted", async ({ event, context }) => {
   };
   const roundKey = `${contentId}-${roundId}`;
   const rawVoter = normalizeAddress(voter) ?? voter;
+  const voteKey = `${contentId}-${roundId}-${rawVoter}`;
+  const commitKey = rbtsCommitKey(rawVoter, commitHash);
   const { identityKey, identityHolder, identityVoter } =
     await resolveVoteIdentityAtCommit({
       context,
       contentId,
       roundId,
       voter: rawVoter,
-      commitHash,
+      commitKey,
     });
-  const voteKey = `${contentId}-${roundId}-${rawVoter}`;
-  const commitKey = rbtsCommitKey(rawVoter, commitHash);
   const referenceRatingBps = Number(roundReferenceRatingBps);
 
   // Upsert round record — VoteCommitted is the first event for a new round
@@ -847,17 +871,17 @@ ponder.on("RoundVotingEngine:RbtsRewardsScored", async ({ event, context }) => {
       const ownWeight = roundVote.rbtsWeight ?? 0n;
       const stake = roundVote.stake ?? 0n;
 
-      const commitKey = rbtsCommitKey(roundVote.voter, roundVote.commitHash);
+      const drawKey = nonZeroIdentityKey(roundVote.identityKey, roundVote.voter);
       const referenceIndex = rbtsOtherIndex({
         scoreSeed,
-        commitKey,
+        commitKey: drawKey,
         ownIndex: index,
         count: scoringSet.length,
         domain: 1,
       });
       const peerIndex = rbtsPeerIndex({
         scoreSeed,
-        commitKey,
+        commitKey: drawKey,
         ownIndex: index,
         referenceIndex,
         count: scoringSet.length,
