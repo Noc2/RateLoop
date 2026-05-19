@@ -782,7 +782,7 @@ export function VotingQuestionCard({
 
                 {showVoteAttentionHint ? (
                   <p className="vote-attention-hint px-4 pb-1 text-center text-[0.72rem] font-semibold uppercase tracking-[0.16em] text-primary/90">
-                    Predict here
+                    Rate here
                   </p>
                 ) : null}
 
@@ -835,7 +835,7 @@ export function VotingQuestionCard({
             {ratingOrb}
             {showVoteAttentionHint && isSignalVariant ? (
               <p className="vote-attention-hint mt-3 text-[0.72rem] font-semibold uppercase tracking-[0.16em] text-primary/90">
-                Predict here
+                Rate here
               </p>
             ) : null}
             {!(address && hasMyVote) && !centerStatusContent && isSignalVariant ? (
