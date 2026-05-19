@@ -1018,15 +1018,22 @@ body {
 .crowd-forecast-range {
   --range-fill: 0;
   --range-bg: transparent;
+  --crowd-forecast-gradient: linear-gradient(
+    90deg,
+    var(--color-error),
+    var(--rateloop-yellow),
+    var(--rateloop-green),
+    var(--rateloop-blue)
+  );
   color: var(--curyo-warm-white);
 }
 
 .crowd-forecast-range::-webkit-slider-runnable-track {
-  background: var(--rateloop-spectrum-gradient) !important;
+  background: var(--crowd-forecast-gradient) !important;
 }
 
 .crowd-forecast-range::-moz-range-track {
-  background: var(--rateloop-spectrum-gradient) !important;
+  background: var(--crowd-forecast-gradient) !important;
 }
 
 /* Selected pills and tabs */
