@@ -459,6 +459,21 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
             }
         }
 
+        if (rewardRecipient != address(0)) {
+            commitKey = votingEngine.holderCommitKey(pool.contentId, pool.roundId, rewardRecipient);
+            if (commitKey != bytes32(0)) {
+                bytes32 committedIdentityKey = votingEngine.commitIdentityKey(pool.contentId, pool.roundId, commitKey);
+                if (committedIdentityKey != bytes32(0)) {
+                    identityKey = committedIdentityKey;
+                }
+                address committedHolder = votingEngine.commitIdentityHolder(pool.contentId, pool.roundId, commitKey);
+                if (committedHolder != address(0)) {
+                    rewardRecipient = committedHolder;
+                }
+                return (identityKey, rewardRecipient, commitKey);
+            }
+        }
+
         bytes32 commitHash = votingEngine.voterCommitHash(pool.contentId, pool.roundId, recipient);
         if (commitHash != bytes32(0)) {
             commitKey = keccak256(abi.encodePacked(recipient, commitHash));

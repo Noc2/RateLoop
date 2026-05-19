@@ -514,6 +514,35 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         assertEq(usdc.balanceOf(newDelegate), delegateBalanceBefore);
     }
 
+    function testAwardUsesCommittedHolderAfterIdentityKeyRotation() public {
+        uint256 contentId = _submitQuestion("");
+        uint256 poolId = _createFeedbackBonusPool(contentId);
+
+        _setAcceptedDelegate(raterRegistry, voter1, delegate1);
+
+        address[] memory voters = new address[](3);
+        voters[0] = delegate1;
+        voters[1] = voter2;
+        voters[2] = voter3;
+        uint256 roundId = _settleRoundWith(voters, contentId, _directions(true, true, false));
+        assertTrue(votingEngine.holderCommitKey(contentId, roundId, voter1) != bytes32(0));
+
+        bytes32 oldAnchor = bytes32(uint256(uint160(voter1)));
+        vm.startPrank(owner);
+        raterRegistry.revokeHumanCredential(voter1);
+        raterRegistry.clearRevokedHumanNullifier(RaterRegistry.HumanCredentialProvider.CuryoSelfVerifiedSeed, oldAnchor);
+        _seedRaterIdentity(raterRegistry, voter1, keccak256("voter1-rotated-anchor"));
+        vm.stopPrank();
+
+        uint256 holderBalanceBefore = usdc.balanceOf(voter1);
+
+        vm.prank(funder);
+        uint256 recipientAmount = feedbackBonusEscrow.awardFeedbackBonus(poolId, voter1, FEEDBACK_HASH, 10e6);
+
+        assertEq(recipientAmount, 10e6);
+        assertEq(usdc.balanceOf(voter1), holderBalanceBefore + recipientAmount);
+    }
+
     function testCreateFeedbackBonusPoolAllowsFunderWithoutHumanCredential() public {
         uint256 contentId = _submitQuestion("");
         address unverifiedFunder = address(0xB0B);
