@@ -30,6 +30,37 @@ import { jsonBig } from "../shared.js";
 import { safeBigInt, safeLimit, safeOffset } from "../utils.js";
 
 type OrderableExpression = Parameters<typeof desc>[0];
+type AccuracyLeaderboardRaterTypeFilter = 1 | 2 | 3 | 4;
+
+const RATER_TYPE_FILTERS = new Map<string, AccuracyLeaderboardRaterTypeFilter>([
+  ["1", 1],
+  ["human", 1],
+  ["2", 2],
+  ["ai", 2],
+  ["3", 3],
+  ["team", 3],
+  ["4", 4],
+  ["hybrid", 4],
+]);
+
+function parseRaterTypeFilter(value: string | undefined): AccuracyLeaderboardRaterTypeFilter | null | "invalid" {
+  if (value === undefined || value.trim() === "" || value.toLowerCase() === "all") {
+    return null;
+  }
+  return RATER_TYPE_FILTERS.get(value.trim().toLowerCase()) ?? "invalid";
+}
+
+function activeHumanCredentialSql(nowSeconds: bigint) {
+  return sql<boolean>`coalesce(${raterHumanCredential.verified}, false) = true and coalesce(${raterHumanCredential.revoked}, false) = false and (${raterHumanCredential.expiresAt} = 0 or ${raterHumanCredential.expiresAt} > ${nowSeconds})`;
+}
+
+function effectiveRaterTypeSql(nowSeconds: bigint) {
+  return sql<number>`case when ${activeHumanCredentialSql(nowSeconds)} then 1 else coalesce(${raterProfile.raterType}, ${profile.selfReportedRaterType}, 0) end`;
+}
+
+function raterTypeFilterSql(filter: AccuracyLeaderboardRaterTypeFilter | null, nowSeconds: bigint) {
+  return filter === null ? null : sql`${effectiveRaterTypeSql(nowSeconds)} = ${filter}`;
+}
 
 async function attachAccuracyLeaderboardReputation<
   T extends { voter: `0x${string}` },
@@ -41,7 +72,8 @@ async function attachAccuracyLeaderboardReputation<
   ];
   const nowSeconds = BigInt(Math.floor(Date.now() / 1000));
 
-  const [raterProfiles, humanCredentials, followStats] = await Promise.all([
+  const [raterProfiles, humanCredentials, profileRows, followStats] =
+    await Promise.all([
     db
       .select()
       .from(raterProfile)
@@ -50,6 +82,13 @@ async function attachAccuracyLeaderboardReputation<
       .select()
       .from(raterHumanCredential)
       .where(inArray(raterHumanCredential.rater, addresses)),
+    db
+      .select({
+        address: profile.address,
+        selfReportedRaterType: profile.selfReportedRaterType,
+      })
+      .from(profile)
+      .where(inArray(profile.address, addresses)),
     getFollowStatsMap(addresses),
   ]);
 
@@ -59,6 +98,9 @@ async function attachAccuracyLeaderboardReputation<
   const humanCredentialMap = new Map(
     humanCredentials.map((row) => [row.rater, row]),
   );
+  const selfReportedRaterTypeMap = new Map(
+    profileRows.map((row) => [row.address, row.selfReportedRaterType]),
+  );
 
   return items.map((item) => {
     const credential = humanCredentialMap.get(item.voter);
@@ -67,16 +109,20 @@ async function attachAccuracyLeaderboardReputation<
       followingCount: 0,
     };
     const humanCredentialStatus = credentialStatus(credential, nowSeconds);
+    const raterType =
+      humanCredentialStatus === "verified"
+        ? 1
+        : (raterProfileMap.get(item.voter)?.raterType ??
+          selfReportedRaterTypeMap.get(item.voter) ??
+          0);
     const participationLane =
       humanCredentialStatus === "verified" ? "verified_human" : "open";
 
     return {
       ...item,
       reputation: {
-        raterType: raterProfileMap.get(item.voter)?.raterType ?? 0,
-        raterTypeName: raterTypeName(
-          raterProfileMap.get(item.voter)?.raterType,
-        ),
+        raterType,
+        raterTypeName: raterTypeName(raterType),
         humanCredentialStatus,
         participationLane,
         followerCount: follow.followerCount,
@@ -237,6 +283,10 @@ export function registerLeaderboardRoutes(app: ApiApp) {
     const includeReputation = ["1", "true"].includes(
       (c.req.query("includeReputation") ?? "").toLowerCase(),
     );
+    const raterTypeFilter = parseRaterTypeFilter(c.req.query("raterType"));
+    if (raterTypeFilter === "invalid") {
+      return c.json({ error: "Invalid raterType" }, 400);
+    }
     const sortByRaw = c.req.query("sortBy") ?? "signalScore";
     const sortBy =
       sortByRaw === "signalScore" ||
@@ -272,6 +322,9 @@ export function registerLeaderboardRoutes(app: ApiApp) {
     const categoryId = categoryIdParam ? safeBigInt(categoryIdParam) : null;
     if (categoryIdParam && categoryId === null)
       return c.json({ error: "Invalid categoryId" }, 400);
+
+    const nowSeconds = BigInt(Math.floor(Date.now() / 1000));
+    const raterTypeCondition = raterTypeFilterSql(raterTypeFilter, nowSeconds);
 
     if (sortBy === "signalScore") {
       const aggregateTotalSettledVotes = sql<number>`count(*)`;
@@ -312,6 +365,7 @@ export function registerLeaderboardRoutes(app: ApiApp) {
         eq(vote.revealed, true),
         eq(round.state, ROUND_STATE.Settled),
       ];
+      if (raterTypeCondition) baseConditions.push(raterTypeCondition);
       if (
         windowBounds.window !== "all" &&
         windowBounds.startsAt !== null &&
@@ -337,6 +391,11 @@ export function registerLeaderboardRoutes(app: ApiApp) {
               )
               .innerJoin(content, eq(vote.contentId, content.id))
               .leftJoin(profile, eq(vote.voter, profile.address))
+              .leftJoin(raterProfile, eq(vote.voter, raterProfile.address))
+              .leftJoin(
+                raterHumanCredential,
+                eq(vote.voter, raterHumanCredential.rater),
+              )
               .leftJoin(voterStats, eq(vote.voter, voterStats.voter))
               .where(and(...baseConditions, eq(content.categoryId, categoryId)))
               .groupBy(
@@ -362,6 +421,11 @@ export function registerLeaderboardRoutes(app: ApiApp) {
                 ),
               )
               .leftJoin(profile, eq(vote.voter, profile.address))
+              .leftJoin(raterProfile, eq(vote.voter, raterProfile.address))
+              .leftJoin(
+                raterHumanCredential,
+                eq(vote.voter, raterHumanCredential.rater),
+              )
               .leftJoin(voterStats, eq(vote.voter, voterStats.voter))
               .where(and(...baseConditions))
               .groupBy(
@@ -474,6 +538,7 @@ export function registerLeaderboardRoutes(app: ApiApp) {
         gte(round.settledAt, windowBounds.startsAt),
         lt(round.settledAt, windowBounds.endsAt),
       ];
+      if (raterTypeCondition) baseConditions.push(raterTypeCondition);
 
       const rows =
         categoryId !== null
@@ -489,6 +554,11 @@ export function registerLeaderboardRoutes(app: ApiApp) {
               )
               .innerJoin(content, eq(vote.contentId, content.id))
               .leftJoin(profile, eq(vote.voter, profile.address))
+              .leftJoin(raterProfile, eq(vote.voter, raterProfile.address))
+              .leftJoin(
+                raterHumanCredential,
+                eq(vote.voter, raterHumanCredential.rater),
+              )
               .where(and(...baseConditions, eq(content.categoryId, categoryId)))
               .groupBy(vote.voter, profile.name)
               .having(sql`count(*) >= ${minVotes}`)
@@ -506,6 +576,11 @@ export function registerLeaderboardRoutes(app: ApiApp) {
                 ),
               )
               .leftJoin(profile, eq(vote.voter, profile.address))
+              .leftJoin(raterProfile, eq(vote.voter, raterProfile.address))
+              .leftJoin(
+                raterHumanCredential,
+                eq(vote.voter, raterHumanCredential.rater),
+              )
               .where(and(...baseConditions))
               .groupBy(vote.voter, profile.name)
               .having(sql`count(*) >= ${minVotes}`)
@@ -554,10 +629,19 @@ export function registerLeaderboardRoutes(app: ApiApp) {
         })
         .from(voterCategoryStats)
         .leftJoin(profile, eq(voterCategoryStats.voter, profile.address))
+        .leftJoin(
+          raterProfile,
+          eq(voterCategoryStats.voter, raterProfile.address),
+        )
+        .leftJoin(
+          raterHumanCredential,
+          eq(voterCategoryStats.voter, raterHumanCredential.rater),
+        )
         .where(
           and(
             eq(voterCategoryStats.categoryId, categoryId),
             gte(voterCategoryStats.totalSettledVotes, minVotes),
+            ...(raterTypeCondition ? [raterTypeCondition] : []),
           ),
         )
         .orderBy(...categoryOrderByExprs)
@@ -597,7 +681,17 @@ export function registerLeaderboardRoutes(app: ApiApp) {
       })
       .from(voterStats)
       .leftJoin(profile, eq(voterStats.voter, profile.address))
-      .where(gte(voterStats.totalSettledVotes, minVotes))
+      .leftJoin(raterProfile, eq(voterStats.voter, raterProfile.address))
+      .leftJoin(
+        raterHumanCredential,
+        eq(voterStats.voter, raterHumanCredential.rater),
+      )
+      .where(
+        and(
+          gte(voterStats.totalSettledVotes, minVotes),
+          ...(raterTypeCondition ? [raterTypeCondition] : []),
+        ),
+      )
       .orderBy(...overallOrderByExprs)
       .limit(limit)
       .offset(offset);

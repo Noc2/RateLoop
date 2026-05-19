@@ -1235,6 +1235,7 @@ export const ponderApi = {
     minVotes?: string;
     minSignalVotes?: string;
     includeReputation?: string;
+    raterType?: string;
     limit?: string;
     offset?: string;
   }) {

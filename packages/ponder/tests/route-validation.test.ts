@@ -182,6 +182,7 @@ function mockPonderModules<T>(result: T) {
       createdAt: "profile.createdAt",
       name: "profile.name",
       selfReport: "profile.selfReport",
+      selfReportedRaterType: "profile.selfReportedRaterType",
       totalContent: "profile.totalContent",
       totalRewardsClaimed: "profile.totalRewardsClaimed",
       totalVotes: "profile.totalVotes",
@@ -954,6 +955,46 @@ describe("registerLeaderboardRoutes", () => {
     expect(serialized).toContain("count(*)");
     expect(serialized).toContain("vote.voter");
     expect(serialized).not.toContain("totalStakeWon");
+  });
+
+  it("filters accuracy leaderboards by effective rater type before paging", async () => {
+    const { queryBuilder } = mockPonderModules([]);
+    const { registerLeaderboardRoutes } = await import(
+      "../src/api/routes/leaderboard-routes.js"
+    );
+
+    const app = new Hono();
+    registerLeaderboardRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/accuracy-leaderboard?sortBy=signalScore&raterType=ai",
+    );
+
+    expect(response.status).toBe(200);
+    const whereArg = queryBuilder.where.mock.calls[0]?.[0];
+    const serialized = serializeExpression(whereArg);
+    expect(serialized).toContain("raterProfile.raterType");
+    expect(serialized).toContain("profile.selfReportedRaterType");
+    expect(serialized).toContain("raterHumanCredential.verified");
+    expect(serialized).toContain("2");
+  });
+
+  it("rejects invalid rater type filters before querying", async () => {
+    const { db } = mockPonderModules([]);
+    const { registerLeaderboardRoutes } = await import(
+      "../src/api/routes/leaderboard-routes.js"
+    );
+
+    const app = new Hono();
+    registerLeaderboardRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/accuracy-leaderboard?raterType=unknown",
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "Invalid raterType" });
+    expect(db.select).not.toHaveBeenCalled();
   });
 
   it("attaches public reputation context when requested", async () => {

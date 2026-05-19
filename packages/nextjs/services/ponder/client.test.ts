@@ -403,6 +403,7 @@ test("ponderApi.getAccuracyLeaderboard forwards includeReputation", async () => 
     const response = await ponderApi.getAccuracyLeaderboard({
       includeReputation: "1",
       minSignalVotes: "5",
+      raterType: "ai",
     });
 
     assert.equal(response.items[0]?.reputation?.followerCount, 3);
@@ -413,6 +414,7 @@ test("ponderApi.getAccuracyLeaderboard forwards includeReputation", async () => 
   assert.match(requestedUrl, /\/accuracy-leaderboard\?/);
   assert.match(requestedUrl, /includeReputation=1/);
   assert.match(requestedUrl, /minSignalVotes=5/);
+  assert.match(requestedUrl, /raterType=ai/);
 });
 
 test("ponderApi.getProfile exposes social counts from profile detail", async () => {
