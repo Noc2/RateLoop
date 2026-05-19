@@ -565,6 +565,15 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         return snapshot;
     }
 
+    function roundPayoutSnapshotConsumerFor(uint8 domain, uint256 rewardPoolId, uint256 contentId, uint256 roundId)
+        external
+        view
+        returns (address)
+    {
+        bytes32 snapshotKey = roundPayoutSnapshotKey(domain, rewardPoolId, contentId, roundId);
+        return roundPayoutProposals[snapshotKey].consumer;
+    }
+
     function roundPayoutProposal(bytes32 snapshotKey) external view returns (RoundPayoutProposal memory) {
         return roundPayoutProposals[snapshotKey];
     }
@@ -572,7 +581,9 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
     function verifyPayoutWeight(PayoutWeight calldata payout, bytes32[] calldata proof) external view returns (bool) {
         bytes32 snapshotKey =
             roundPayoutSnapshotKey(payout.domain, payout.rewardPoolId, payout.contentId, payout.roundId);
-        RoundPayoutSnapshot memory snapshot = roundPayoutProposals[snapshotKey].snapshot;
+        RoundPayoutProposal memory proposal = roundPayoutProposals[snapshotKey];
+        if (msg.sender != proposal.consumer) return false;
+        RoundPayoutSnapshot memory snapshot = proposal.snapshot;
         if (snapshot.status != SnapshotStatus.Finalized) return false;
         if (snapshot.totalClaimWeight == 0 || snapshot.weightRoot == bytes32(0)) return false;
         if (payout.independenceBps > BPS_DENOMINATOR) return false;

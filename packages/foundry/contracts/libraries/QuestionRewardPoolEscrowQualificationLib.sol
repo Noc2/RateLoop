@@ -259,6 +259,12 @@ library QuestionRewardPoolEscrowQualificationLib {
         IClusterPayoutOracle.RoundPayoutSnapshot memory payoutSnapshot = _finalizedQuestionPayoutSnapshot(
             rewardPoolClusterPayoutOracle, rewardPoolId, rewardPool.contentId, roundId, payoutDomain
         );
+        require(
+            IClusterPayoutOracle(_clusterPayoutOracleAddress(rewardPoolClusterPayoutOracle, rewardPoolId))
+                .roundPayoutSnapshotConsumerFor(payoutDomain, rewardPoolId, rewardPool.contentId, roundId)
+            == address(this),
+            "Cluster consumer mismatch"
+        );
         require(payoutSnapshot.rawEligibleVoters == baseRawEligibleVoters, "Cluster snapshot mismatch");
 
         uint256 effectiveParticipantUnits = payoutSnapshot.effectiveParticipantUnits;
@@ -591,6 +597,13 @@ library QuestionRewardPoolEscrowQualificationLib {
             IClusterPayoutOracle.RoundPayoutSnapshot memory payoutSnapshot
         ) {
             if (payoutSnapshot.status != IClusterPayoutOracle.SnapshotStatus.Finalized) {
+                return (roundSettled, false, rawEligibleVoters, 0, 0, settledAt);
+            }
+            if (
+                IClusterPayoutOracle(clusterPayoutOracle)
+                        .roundPayoutSnapshotConsumerFor(payoutDomain, rewardPool.id, rewardPool.contentId, roundId)
+                    != address(this)
+            ) {
                 return (roundSettled, false, rawEligibleVoters, 0, 0, settledAt);
             }
             if (payoutSnapshot.rawEligibleVoters != rawEligibleVoters) {

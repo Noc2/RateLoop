@@ -149,12 +149,18 @@ contract ClusterPayoutOracleTest is Test {
         oracle.finalizeRoundPayoutSnapshot(snapshotKey);
 
         bytes32[] memory proof = new bytes32[](0);
+        assertFalse(oracle.verifyPayoutWeight(payout, proof));
+        vm.prank(address(questionConsumer));
         assertTrue(oracle.verifyPayoutWeight(payout, proof));
 
         IClusterPayoutOracle.RoundPayoutSnapshot memory snapshot =
             oracle.getRoundPayoutSnapshot(oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), 7, 42, 3);
         assertEq(uint8(snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Finalized));
         assertEq(snapshot.totalClaimWeight, 2_500);
+        assertEq(
+            oracle.roundPayoutSnapshotConsumerFor(oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), 7, 42, 3),
+            address(questionConsumer)
+        );
     }
 
     function test_EmptyRoundPayoutSnapshotFinalizesButCannotVerifyClaims() public {
@@ -362,6 +368,7 @@ contract ClusterPayoutOracleTest is Test {
             oracle.getRoundPayoutSnapshot(oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), 7, 42, 3);
         assertEq(uint8(snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Finalized));
         bytes32[] memory proof = new bytes32[](0);
+        vm.prank(address(questionConsumer));
         assertTrue(oracle.verifyPayoutWeight(payout, proof));
     }
 

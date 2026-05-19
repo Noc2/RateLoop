@@ -70,6 +70,11 @@ interface IClusterPayoutOracle {
         view
         returns (RoundPayoutSnapshot memory);
 
+    function roundPayoutSnapshotConsumerFor(uint8 domain, uint256 rewardPoolId, uint256 contentId, uint256 roundId)
+        external
+        view
+        returns (address);
+
     function rejectedRoundPayoutSnapshotRoots(bytes32 snapshotKey, bytes32 weightRoot) external view returns (bool);
 
     function verifyPayoutWeight(PayoutWeight calldata payout, bytes32[] calldata proof) external view returns (bool);
