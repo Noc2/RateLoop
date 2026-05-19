@@ -2690,11 +2690,52 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     function test_AdvisoryVoteRequiresExistingStakedRoundWithoutVoteStakeAccounting() public {
         uint256 contentId = _submitContent();
         _expectAdvisoryRevert(voter1, contentId, "advisory-no-staked-round", RoundVotingEngine.RoundNotOpen.selector);
+        AdvisoryVoteRecorder.AdvisoryCommitAvailability memory noStakedAvailability =
+            advisoryRecorder.advisoryCommitAvailability(contentId);
+        assertFalse(noStakedAvailability.canCommit, "fresh content is not advisory-voteable");
+        assertEq(
+            uint256(noStakedAvailability.status),
+            uint256(AdvisoryVoteRecorder.AdvisoryCommitAvailabilityStatus.NoStakedRound),
+            "fresh content reports missing staked round"
+        );
+        assertEq(noStakedAvailability.roundId, 0, "fresh content has no advisory round");
 
         uint64 targetRound = _openStakedRound(voter2, contentId, "advisory-staked-open");
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
         uint16 referenceRatingBps = engine.previewCommitReferenceRatingBps(contentId);
         uint256 roundContext = _roundContext(roundId, referenceRatingBps);
+        RoundLib.Round memory previewedRound = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        AdvisoryVoteRecorder.AdvisoryCommitAvailability memory availability =
+            advisoryRecorder.advisoryCommitAvailability(contentId);
+        assertTrue(availability.canCommit, "staked blind round is advisory-voteable");
+        assertEq(
+            uint256(availability.status),
+            uint256(AdvisoryVoteRecorder.AdvisoryCommitAvailabilityStatus.Available),
+            "staked blind round reports available"
+        );
+        assertEq(availability.roundId, roundId, "availability round matches active round");
+        assertEq(availability.roundReferenceRatingBps, referenceRatingBps, "availability reference rating matches");
+        assertEq(
+            availability.epochEnd, uint256(previewedRound.startTime) + EPOCH, "availability anchors to first epoch end"
+        );
+        assertEq(availability.drandChainHash, _tlockDrandChainHash(), "availability exposes drand chain hash");
+        assertEq(availability.drandGenesisTime, _tlockDrandGenesisTime(), "availability exposes drand genesis");
+        assertEq(availability.drandPeriod, _tlockDrandPeriod(), "availability exposes drand period");
+        assertEq(
+            availability.minTargetRound,
+            _tlockTargetRoundAt(availability.epochEnd),
+            "availability exposes min target round"
+        );
+        assertEq(
+            availability.maxTargetRound,
+            _roundAt(
+                availability.epochEnd + 2 * uint256(_tlockDrandPeriod()), _tlockDrandGenesisTime(), _tlockDrandPeriod()
+            ),
+            "availability exposes max target round"
+        );
+        assertGe(targetRound, availability.minTargetRound, "opened target is inside advisory range");
+        assertLe(targetRound, availability.maxTargetRound, "opened target is inside advisory range");
+
         bytes32 drandChainHash = _tlockDrandChainHash();
         bytes32 salt = keccak256(abi.encodePacked(voter1, block.timestamp, "advisory"));
         bytes memory ciphertext = _testCiphertext(true, salt, contentId, targetRound, drandChainHash);
@@ -2765,6 +2806,14 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertEq(advisoryRecorder.roundAdvisoryCommitCount(contentId, roundId), 1, "pre-boundary advisory accepted");
 
         vm.warp(uint256(round.startTime) + 1 hours);
+        AdvisoryVoteRecorder.AdvisoryCommitAvailability memory boundaryAvailability =
+            advisoryRecorder.advisoryCommitAvailability(contentId);
+        assertFalse(boundaryAvailability.canCommit, "advisory closes at first epoch boundary");
+        assertEq(
+            uint256(boundaryAvailability.status),
+            uint256(AdvisoryVoteRecorder.AdvisoryCommitAvailabilityStatus.OutsideBlindEpoch),
+            "boundary reports outside blind epoch"
+        );
         _expectAdvisoryRevert(voter3, contentId, "advisory-at-boundary", RoundVotingEngine.RoundNotOpen.selector);
         assertEq(advisoryRecorder.roundAdvisoryCommitCount(contentId, roundId), 1, "boundary advisory rejected");
     }

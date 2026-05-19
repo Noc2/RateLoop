@@ -39,6 +39,7 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
     error Paused();
     error IndexOutOfBounds();
     error MaxAdvisoryVotersReached();
+    error TargetRoundOutOfWindow();
     /// @notice Reveal-time drand chain hash differs from the value used at commit-time.
     /// @dev Surfaces silent desync between the ciphertext (encrypted under the commit-time
     ///      chain hash) and the round snapshot — without this check the tlock decryption
@@ -92,6 +93,31 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         uint16 roundReferenceRatingBps;
     }
 
+    enum AdvisoryCommitAvailabilityStatus {
+        Available,
+        Paused,
+        ContentInactive,
+        NoStakedRound,
+        RoundNotOpen,
+        OutsideBlindEpoch,
+        ThresholdReached,
+        MaxAdvisoryVotersReached,
+        InvalidConfig
+    }
+
+    struct AdvisoryCommitAvailability {
+        bool canCommit;
+        AdvisoryCommitAvailabilityStatus status;
+        uint256 roundId;
+        uint16 roundReferenceRatingBps;
+        uint256 epochEnd;
+        bytes32 drandChainHash;
+        uint64 drandGenesisTime;
+        uint64 drandPeriod;
+        uint64 minTargetRound;
+        uint64 maxTargetRound;
+    }
+
     mapping(bytes32 => AdvisoryCommit) internal advisoryCommits;
     // Account aliases: delegated advisory commits write both the delegate and stable holder.
     mapping(uint256 => mapping(uint256 => mapping(address => bytes32))) public advisoryCommitKeyByRater;
@@ -139,6 +165,95 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
     function setPaused(bool value) external onlyOwner {
         paused = value;
         emit PausedUpdated(value);
+    }
+
+    function advisoryCommitAvailability(uint256 contentId)
+        external
+        view
+        returns (AdvisoryCommitAvailability memory availability)
+    {
+        if (paused) {
+            availability.status = AdvisoryCommitAvailabilityStatus.Paused;
+            return availability;
+        }
+        if (!registry.isContentActive(contentId)) {
+            availability.status = AdvisoryCommitAvailabilityStatus.ContentInactive;
+            return availability;
+        }
+
+        availability.roundId = votingEngine.currentRoundId(contentId);
+        if (availability.roundId == 0) {
+            availability.status = AdvisoryCommitAvailabilityStatus.NoStakedRound;
+            return availability;
+        }
+
+        (
+            uint48 roundStart,
+            RoundLib.RoundState state,
+            uint16 voteCount,,
+            uint64 totalStake,
+            uint48 thresholdReachedAt,
+            uint48 settledAt
+        ) = votingEngine.roundCore(contentId, availability.roundId);
+        (uint32 epochDuration, uint32 maxDuration,, uint16 maxVoters) =
+            votingEngine.roundConfigSnapshot(contentId, availability.roundId);
+        if (roundStart == 0 || epochDuration == 0 || maxDuration == 0 || maxVoters == 0) {
+            availability.status = AdvisoryCommitAvailabilityStatus.InvalidConfig;
+            return availability;
+        }
+
+        availability.roundReferenceRatingBps =
+            votingEngine.roundReferenceRatingBpsForRound(contentId, availability.roundId);
+        availability.epochEnd = uint256(roundStart) + uint256(epochDuration);
+        (availability.drandChainHash, availability.drandGenesisTime, availability.drandPeriod) =
+            _resolvedRoundDrandConfig(contentId, availability.roundId);
+        if (
+            availability.drandChainHash == bytes32(0) || availability.drandGenesisTime == 0
+                || availability.drandPeriod == 0 || availability.epochEnd < availability.drandGenesisTime
+        ) {
+            availability.status = AdvisoryCommitAvailabilityStatus.InvalidConfig;
+            return availability;
+        }
+
+        availability.minTargetRound =
+            _targetRoundAtOrAfter(availability.epochEnd, availability.drandGenesisTime, availability.drandPeriod);
+        availability.maxTargetRound = _targetRoundAt(
+            availability.epochEnd + 2 * uint256(availability.drandPeriod),
+            availability.drandGenesisTime,
+            availability.drandPeriod
+        );
+        if (
+            availability.minTargetRound == 0 || availability.maxTargetRound == 0
+                || availability.minTargetRound > availability.maxTargetRound
+        ) {
+            availability.status = AdvisoryCommitAvailabilityStatus.InvalidConfig;
+            return availability;
+        }
+
+        if (state != RoundLib.RoundState.Open || settledAt != 0 || block.timestamp >= uint256(roundStart) + maxDuration)
+        {
+            availability.status = AdvisoryCommitAvailabilityStatus.RoundNotOpen;
+            return availability;
+        }
+        if (block.timestamp >= availability.epochEnd) {
+            availability.status = AdvisoryCommitAvailabilityStatus.OutsideBlindEpoch;
+            return availability;
+        }
+        if (voteCount == 0 || totalStake == 0) {
+            availability.status = AdvisoryCommitAvailabilityStatus.NoStakedRound;
+            return availability;
+        }
+        if (thresholdReachedAt != 0) {
+            availability.status = AdvisoryCommitAvailabilityStatus.ThresholdReached;
+            return availability;
+        }
+        if (roundAdvisoryCommitKeys[contentId][availability.roundId].length >= maxVoters) {
+            availability.status = AdvisoryCommitAvailabilityStatus.MaxAdvisoryVotersReached;
+            return availability;
+        }
+
+        availability.canCommit = true;
+        availability.status = AdvisoryCommitAvailabilityStatus.Available;
     }
 
     /// @notice Record a zero-stake advisory commit for the active staked voteable round.
@@ -509,6 +624,34 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
             ciphertext, targetRound, drandChainHash, expectedChainHash, epochEnd, epochDuration, genesisTime, period
         );
         usedChainHash = expectedChainHash;
+    }
+
+    function _resolvedRoundDrandConfig(uint256 contentId, uint256 roundId)
+        internal
+        view
+        returns (bytes32 chainHash, uint64 genesisTime, uint64 period)
+    {
+        (chainHash, genesisTime, period) = votingEngine.roundDrandConfig(contentId, roundId);
+        if (chainHash == bytes32(0) || genesisTime == 0 || period == 0) {
+            chainHash = protocolConfig.drandChainHash();
+            genesisTime = protocolConfig.drandGenesisTime();
+            period = protocolConfig.drandPeriod();
+        }
+    }
+
+    function _targetRoundAt(uint256 timestamp, uint64 genesisTime, uint64 period) internal pure returns (uint64) {
+        if (period == 0 || timestamp < genesisTime) return 0;
+        return uint64(((timestamp - genesisTime) / period) + 1);
+    }
+
+    function _targetRoundAtOrAfter(uint256 timestamp, uint64 genesisTime, uint64 period)
+        internal
+        pure
+        returns (uint64)
+    {
+        if (period == 0 || timestamp < genesisTime) return 0;
+        uint256 elapsed = timestamp - genesisTime;
+        return uint64(((elapsed + uint256(period) - 1) / uint256(period)) + 1);
     }
 
     /// @notice Reject the reveal if the drand chain hash used at commit-time no longer matches
