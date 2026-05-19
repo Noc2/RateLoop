@@ -530,6 +530,38 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         assertEq(id, 1);
     }
 
+    function test_SubmitQuestion_DefaultRewardCoversMaxTurnout() public {
+        string memory contextUrl = "https://example.com/default-reward";
+        string[] memory imageUrls = _emptyImageUrls();
+        bytes32 salt = keccak256("default-reward-covers-max-turnout");
+
+        vm.startPrank(submitter);
+        _reserveQuestionSubmissionWithRewardTerms(
+            contextUrl,
+            imageUrls,
+            "",
+            "Question?",
+            "Context",
+            "Products",
+            1,
+            salt,
+            submitter,
+            DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
+            _defaultSubmissionRewardAmount(registry),
+            DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS,
+            DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
+            DEFAULT_SUBMISSION_REWARD_EXPIRES_AT
+        );
+        vm.warp(block.timestamp + 1);
+        registry.submitQuestion(
+            contextUrl, imageUrls, "", "Question?", "Context", "Products", 1, salt, _defaultQuestionSpec()
+        );
+        vm.stopPrank();
+
+        (,,, uint16 maxVoters) = ProtocolConfig(address(votingEngine.protocolConfig())).config();
+        assertGe(mockQuestionRewardPoolEscrow.lastAmount(), uint256(maxVoters) * 10_000);
+    }
+
     function test_SubmitQuestion_GenericEvidenceUrl_Reverts() public {
         vm.startPrank(submitter);
         lrepToken.approve(address(registry), 10e6);

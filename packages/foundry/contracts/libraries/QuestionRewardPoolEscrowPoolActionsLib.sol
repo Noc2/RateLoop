@@ -221,11 +221,10 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         RoundLib.RoundConfig memory contentCfg = registry.getContentRoundConfig(params.contentId);
         require(params.requiredVoters <= contentCfg.maxVoters, "Voters exceed max");
         require(contentCfg.maxVoters <= MAX_REWARD_POOL_ROUND_VOTERS, "Voters exceed max");
+        require(
+            fundedAmount >= params.requiredSettledRounds * uint256(contentCfg.maxVoters) * BPS_SCALE, "Amount too small"
+        );
         if (!params.nonRefundable) {
-            require(
-                fundedAmount >= params.requiredSettledRounds * uint256(contentCfg.maxVoters) * BPS_SCALE,
-                "Amount too small"
-            );
             require(params.bountyClosesAt > block.timestamp, "Bad close");
         }
     }

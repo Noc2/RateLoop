@@ -72,6 +72,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     uint8 internal constant SUBMISSION_REWARD_ASSET_LREP = 0;
     uint8 internal constant SUBMISSION_REWARD_ASSET_USDC = 1;
     uint256 internal constant DEFAULT_MIN_SUBMISSION_REWARD_POOL = 1e6;
+    uint256 internal constant SUBMISSION_REWARD_PARTICIPANT_UNIT = 10_000;
     uint256 internal constant MIN_SUBMISSION_REWARD_REQUIRED_VOTERS = 3;
     uint256 internal constant MIN_SUBMISSION_REWARD_SETTLED_ROUNDS = 1;
     uint256 internal constant MAX_SUBMISSION_REWARD_SETTLED_ROUNDS = 16;
@@ -1335,7 +1336,11 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
                 ? protocolConfig.minSubmissionLrepPool()
                 : protocolConfig.minSubmissionUsdcPool();
         }
-        return minimum == 0 ? DEFAULT_MIN_SUBMISSION_REWARD_POOL : minimum;
+        if (minimum == 0) minimum = DEFAULT_MIN_SUBMISSION_REWARD_POOL;
+        RoundLib.RoundConfig memory defaultConfig = _defaultRoundConfig();
+        uint256 maxTurnoutMinimum = uint256(defaultConfig.maxVoters) * MIN_SUBMISSION_REWARD_SETTLED_ROUNDS
+            * SUBMISSION_REWARD_PARTICIPANT_UNIT;
+        return minimum > maxTurnoutMinimum ? minimum : maxTurnoutMinimum;
     }
 
     function _defaultRoundConfig() internal view returns (RoundLib.RoundConfig memory cfg) {

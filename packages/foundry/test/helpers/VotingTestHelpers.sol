@@ -375,11 +375,15 @@ abstract contract ContentSubmissionTestBase {
 
     function _defaultSubmissionRewardAmount(ContentRegistry registry) internal view returns (uint256) {
         ProtocolConfig config = registry.protocolConfig();
+        uint256 minimum = DEFAULT_SUBMISSION_REWARD_POOL;
+        uint16 maxVoters = 200;
         if (address(config) != address(0)) {
             uint256 configuredMinimum = config.minSubmissionLrepPool();
-            if (configuredMinimum != 0) return configuredMinimum;
+            if (configuredMinimum != 0) minimum = configuredMinimum;
+            (,,, maxVoters) = config.config();
         }
-        return DEFAULT_SUBMISSION_REWARD_POOL;
+        uint256 maxTurnoutMinimum = uint256(maxVoters) * DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS * 10_000;
+        return minimum > maxTurnoutMinimum ? minimum : maxTurnoutMinimum;
     }
 
     function _defaultSubmissionRewardTerms(ContentRegistry registry)
