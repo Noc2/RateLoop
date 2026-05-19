@@ -88,10 +88,6 @@ function formatTimestamp(timestamp: string) {
   });
 }
 
-function formatBpsPercent(value: number) {
-  return `${(value / 100).toFixed(2)}%`;
-}
-
 function formatLaunchEligibility(rewardStatus: PonderRaterParticipationStatusResponse["launchRewards"]) {
   if (rewardStatus.eligible) {
     return `${rewardStatus.rewardedRatingCount}/${rewardStatus.qualifyingRatingCount} launch reward slots paid`;
@@ -109,11 +105,6 @@ function formatLaunchCapSummary(rewardStatus: PonderRaterParticipationStatusResp
     return `${activeCap} LREP cap`;
   }
   return `${activeCap} / ${fullCap} LREP cap`;
-}
-
-function formatParticipationLane(lane: PonderRaterParticipationStatusResponse["participationLane"]) {
-  if (lane === "verified_human") return "Verified human";
-  return "Open capped";
 }
 
 function getUrlHost(url: string) {
@@ -1154,16 +1145,6 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
           ) : rewardStatus ? (
             <>
               <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                <div className="surface-card-nested rounded-2xl px-4 py-3">
-                  <div className="text-sm text-base-content/60">Participation lane</div>
-                  <div className="mt-1 text-xl font-semibold">
-                    {formatParticipationLane(rewardStatus.participationLane)}
-                  </div>
-                  <div className="mt-1 text-sm text-base-content/55">
-                    Base reward weight {formatBpsPercent(rewardStatus.participationPolicy.baseRewardWeightBps)}
-                  </div>
-                </div>
-
                 <div className="surface-card-nested rounded-2xl px-4 py-3">
                   <div className="text-sm text-base-content/60">Verified human</div>
                   <div className="mt-1 text-xl font-semibold capitalize">{rewardStatus.humanCredential.status}</div>
