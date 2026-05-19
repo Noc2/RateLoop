@@ -1,3 +1,4 @@
+import { parseProfileSelfReport } from "@rateloop/node-utils/profileSelfReport";
 import { ponder } from "ponder:registry";
 import { globalStats, profile } from "ponder:schema";
 
@@ -5,6 +6,10 @@ import { globalStats, profile } from "ponder:schema";
 // Drizzle query builder (select/from/where) is only available in API routes.
 // Aggregate counts start at 0 and are incremented by other event handlers
 // (ContentSubmitted, VoteCommitted, VoteRevealed, RewardClaimed) as new events arrive.
+
+function parseSelfReportedRaterType(selfReport: string) {
+  return parseProfileSelfReport(selfReport)?.raterType ?? 0;
+}
 
 ponder.on("ProfileRegistry:ProfileCreated", async ({ event, context }) => {
   const { user, name, selfReport } = event.args;
@@ -15,6 +20,7 @@ ponder.on("ProfileRegistry:ProfileCreated", async ({ event, context }) => {
       address: user,
       name,
       selfReport,
+      selfReportedRaterType: parseSelfReportedRaterType(selfReport),
       createdAt: event.block.timestamp,
       updatedAt: event.block.timestamp,
       totalVotes: 0,
@@ -47,6 +53,7 @@ ponder.on("ProfileRegistry:ProfileUpdated", async ({ event, context }) => {
     await context.db.update(profile, { address: user }).set({
       name,
       selfReport,
+      selfReportedRaterType: parseSelfReportedRaterType(selfReport),
       updatedAt: event.block.timestamp,
     });
   } else {
@@ -56,6 +63,7 @@ ponder.on("ProfileRegistry:ProfileUpdated", async ({ event, context }) => {
         address: user,
         name,
         selfReport,
+        selfReportedRaterType: parseSelfReportedRaterType(selfReport),
         createdAt: event.block.timestamp,
         updatedAt: event.block.timestamp,
         totalVotes: 0,

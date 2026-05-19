@@ -767,16 +767,23 @@ export const launchRaterRewardProgress = onchainTable(
 // PROFILE
 // ============================================================
 
-export const profile = onchainTable("profile", (t) => ({
-  address: t.hex().primaryKey(),
-  name: t.text().notNull(),
-  selfReport: t.text().notNull(),
-  createdAt: t.bigint().notNull(),
-  updatedAt: t.bigint().notNull(),
-  totalVotes: t.integer().notNull(),
-  totalContent: t.integer().notNull(),
-  totalRewardsClaimed: t.bigint().notNull(),
-}));
+export const profile = onchainTable(
+  "profile",
+  (t) => ({
+    address: t.hex().primaryKey(),
+    name: t.text().notNull(),
+    selfReport: t.text().notNull(),
+    selfReportedRaterType: t.integer().notNull(),
+    createdAt: t.bigint().notNull(),
+    updatedAt: t.bigint().notNull(),
+    totalVotes: t.integer().notNull(),
+    totalContent: t.integer().notNull(),
+    totalRewardsClaimed: t.bigint().notNull(),
+  }),
+  (table) => ({
+    selfReportedRaterTypeIdx: index().on(table.selfReportedRaterType),
+  }),
+);
 
 // ============================================================
 // VOTER ACCURACY STATS (global per voter)
