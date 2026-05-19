@@ -766,6 +766,7 @@ export function registerDataRoutes(app: ApiApp) {
         roundUpWins: round.upWins,
         roundRbtsRewardWeight: round.rbtsRewardWeight,
         roundRbtsRewardClaimants: round.rbtsRewardClaimants,
+        roundRbtsMeanScoreBps: round.rbtsMeanScoreBps,
         roundRbtsForfeitedPool: round.rbtsForfeitedPool,
         roundRbtsForfeitClaimants: round.rbtsForfeitClaimants,
       })

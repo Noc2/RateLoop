@@ -27,6 +27,7 @@ import {
 
 const RBTS_SCORE_SCALE_BPS = 10_000;
 const RBTS_SCORE_SCALE = 10_000n;
+const RBTS_NEGATIVE_SPREAD_FORFEIT_BPS = 15_000n;
 const ZERO_SCORE_SEED = `0x${"00".repeat(32)}` as `0x${string}`;
 
 function normalizeAddress(
@@ -260,9 +261,24 @@ function rbtsScoreBps({
   return Math.floor((informationScore + predictionScore) / 2);
 }
 
-function weightByRbtsScore(amount: bigint, scoreBps: number): bigint {
-  if (scoreBps <= 0 || amount <= 0n) return 0n;
-  return (amount * BigInt(scoreBps)) / RBTS_SCORE_SCALE;
+function rbtsPositiveSpreadRewardWeight(
+  rbtsWeight: bigint,
+  positiveDeltaBps: bigint,
+): bigint {
+  if (rbtsWeight <= 0n || positiveDeltaBps <= 0n) return 0n;
+  return (rbtsWeight * positiveDeltaBps) / RBTS_SCORE_SCALE;
+}
+
+function rbtsNegativeSpreadForfeiture(
+  stake: bigint,
+  negativeDeltaBps: bigint,
+): bigint {
+  if (stake <= 0n || negativeDeltaBps <= 0n) return 0n;
+  const forfeiture =
+    (stake * RBTS_NEGATIVE_SPREAD_FORFEIT_BPS * negativeDeltaBps) /
+    RBTS_SCORE_SCALE /
+    RBTS_SCORE_SCALE;
+  return forfeiture > stake ? stake : forfeiture;
 }
 
 function rbtsCommitKey(voter: `0x${string}`, commitHash: `0x${string}`) {
@@ -755,6 +771,7 @@ ponder.on("RoundVotingEngine:RbtsRewardsScored", async ({ event, context }) => {
     scoreSeed = ZERO_SCORE_SEED,
     forfeitedPool,
     forfeitClaimants,
+    meanScoreBps = 0,
   } = event.args as {
     contentId: bigint;
     roundId: bigint;
@@ -763,6 +780,7 @@ ponder.on("RoundVotingEngine:RbtsRewardsScored", async ({ event, context }) => {
     scoreSeed?: `0x${string}`;
     forfeitedPool: bigint;
     forfeitClaimants: bigint;
+    meanScoreBps?: number;
   };
   const roundKey = `${contentId}-${roundId}`;
 
@@ -772,6 +790,7 @@ ponder.on("RoundVotingEngine:RbtsRewardsScored", async ({ event, context }) => {
       rbtsRewardWeight: rewardWeight,
       rbtsRewardClaimants: Number(rewardClaimants),
       rbtsScoreSeed: scoreSeed,
+      rbtsMeanScoreBps: Number(meanScoreBps),
       rbtsForfeitedPool: forfeitedPool,
       rbtsForfeitClaimants: Number(forfeitClaimants),
     });
@@ -792,12 +811,30 @@ ponder.on("RoundVotingEngine:RbtsRewardsScored", async ({ event, context }) => {
         asc(vote.id),
       );
 
-    const economicVotes = roundVotes.filter(
+    const scoringSet = roundVotes.filter(
       (roundVote) => (roundVote.rbtsWeight ?? 0n) > 0n,
     );
+    if (scoringSet.length < 3) {
+      for (const roundVote of roundVotes) {
+        await context.db.update(vote, { id: roundVote.id }).set({
+          rbtsRewardWeight: 0n,
+          rbtsStakeReturned:
+            (roundVote.stake ?? 0n) > 0n ? (roundVote.stake ?? 0n) : 0n,
+          rbtsForfeitedStake: 0n,
+        });
+      }
+      return;
+    }
 
-    for (let index = 0; index < roundVotes.length; index += 1) {
-      const roundVote = roundVotes[index];
+    const scoredVotes: {
+      id: string;
+      scoreBps: number;
+      rbtsWeight: bigint;
+      stake: bigint;
+    }[] = [];
+
+    for (let index = 0; index < scoringSet.length; index += 1) {
+      const roundVote = scoringSet[index];
       if (
         roundVote.isUp === null ||
         roundVote.predictedUpBps === null ||
@@ -815,7 +852,7 @@ ponder.on("RoundVotingEngine:RbtsRewardsScored", async ({ event, context }) => {
         scoreSeed,
         commitKey,
         ownIndex: index,
-        count: roundVotes.length,
+        count: scoringSet.length,
         domain: 1,
       });
       const peerIndex = rbtsPeerIndex({
@@ -823,10 +860,10 @@ ponder.on("RoundVotingEngine:RbtsRewardsScored", async ({ event, context }) => {
         commitKey,
         ownIndex: index,
         referenceIndex,
-        count: roundVotes.length,
+        count: scoringSet.length,
       });
-      const referenceVote = roundVotes[referenceIndex];
-      const peerVote = roundVotes[peerIndex];
+      const referenceVote = scoringSet[referenceIndex];
+      const peerVote = scoringSet[peerIndex];
       if (referenceVote.predictedUpBps === null || peerVote.isUp === null) {
         continue;
       }
@@ -838,21 +875,78 @@ ponder.on("RoundVotingEngine:RbtsRewardsScored", async ({ event, context }) => {
         peerSignalIsUp: peerVote.isUp,
       });
 
-      if (ownWeight === 0n || economicVotes.length < 3) {
+      scoredVotes.push({
+        id: roundVote.id,
+        scoreBps,
+        rbtsWeight: ownWeight,
+        stake,
+      });
+    }
+
+    if (scoredVotes.length < 3) {
+      for (const roundVote of roundVotes) {
         await context.db.update(vote, { id: roundVote.id }).set({
-          rbtsScoreBps: scoreBps,
           rbtsRewardWeight: 0n,
-          rbtsStakeReturned: ownWeight > 0n ? stake : 0n,
+          rbtsStakeReturned:
+            (roundVote.stake ?? 0n) > 0n ? (roundVote.stake ?? 0n) : 0n,
+          rbtsForfeitedStake: 0n,
+        });
+      }
+      return;
+    }
+
+    const totalScoreWeight = scoredVotes.reduce(
+      (sum, scoredVote) => sum + scoredVote.rbtsWeight,
+      0n,
+    );
+    const weightedScoreSum = scoredVotes.reduce(
+      (sum, scoredVote) =>
+        sum + scoredVote.rbtsWeight * BigInt(scoredVote.scoreBps),
+      0n,
+    );
+    const indexedMeanScoreBps =
+      totalScoreWeight > 0n ? weightedScoreSum / totalScoreWeight : 0n;
+    const positiveSpreadWeight = scoredVotes.reduce((sum, scoredVote) => {
+      const deltaBps = BigInt(scoredVote.scoreBps) - indexedMeanScoreBps;
+      return deltaBps > 0n
+        ? sum + rbtsPositiveSpreadRewardWeight(scoredVote.rbtsWeight, deltaBps)
+        : sum;
+    }, 0n);
+
+    for (const scoredVote of scoredVotes) {
+      if (scoredVote.stake <= 0n) {
+        await context.db.update(vote, { id: scoredVote.id }).set({
+          rbtsScoreBps: scoredVote.scoreBps,
+          rbtsRewardWeight: 0n,
+          rbtsStakeReturned: 0n,
           rbtsForfeitedStake: 0n,
         });
         continue;
       }
 
+      const deltaBps = BigInt(scoredVote.scoreBps) - indexedMeanScoreBps;
+      const forfeitedStake =
+        positiveSpreadWeight > 0n && deltaBps < 0n
+          ? rbtsNegativeSpreadForfeiture(scoredVote.stake, -deltaBps)
+          : 0n;
+      await context.db.update(vote, { id: scoredVote.id }).set({
+        rbtsScoreBps: scoredVote.scoreBps,
+        rbtsRewardWeight:
+          deltaBps > 0n
+            ? rbtsPositiveSpreadRewardWeight(scoredVote.rbtsWeight, deltaBps)
+            : 0n,
+        rbtsStakeReturned: scoredVote.stake - forfeitedStake,
+        rbtsForfeitedStake: forfeitedStake,
+      });
+    }
+
+    for (const roundVote of roundVotes) {
+      if ((roundVote.rbtsWeight ?? 0n) > 0n) continue;
       await context.db.update(vote, { id: roundVote.id }).set({
-        rbtsScoreBps: scoreBps,
-        rbtsRewardWeight: weightByRbtsScore(ownWeight, scoreBps),
-        rbtsStakeReturned: weightByRbtsScore(stake, scoreBps),
-        rbtsForfeitedStake: stake - weightByRbtsScore(stake, scoreBps),
+        rbtsRewardWeight: 0n,
+        rbtsStakeReturned:
+          (roundVote.stake ?? 0n) > 0n ? (roundVote.stake ?? 0n) : 0n,
+        rbtsForfeitedStake: 0n,
       });
     }
   }

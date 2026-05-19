@@ -862,6 +862,7 @@ export interface PonderVoteItem {
   roundUpWins: boolean | null;
   roundRbtsRewardWeight?: string | null;
   roundRbtsRewardClaimants?: number | null;
+  roundRbtsMeanScoreBps?: number | null;
   roundRbtsForfeitedPool?: string | null;
   roundRbtsForfeitClaimants?: number | null;
 }

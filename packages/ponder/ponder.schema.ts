@@ -127,6 +127,7 @@ export const round = onchainTable(
     rbtsRewardWeight: t.bigint(),
     rbtsRewardClaimants: t.integer(),
     rbtsScoreSeed: t.hex(),
+    rbtsMeanScoreBps: t.integer(),
     rbtsForfeitedPool: t.bigint(),
     rbtsForfeitClaimants: t.integer(),
     startTime: t.bigint(),

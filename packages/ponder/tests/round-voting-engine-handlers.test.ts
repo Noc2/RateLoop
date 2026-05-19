@@ -576,13 +576,14 @@ describe("RoundVotingEngine ponder handlers", () => {
         rbtsRewardWeight: 50n,
         rbtsRewardClaimants: 2,
         rbtsScoreSeed: `0x${"11".repeat(32)}`,
+        rbtsMeanScoreBps: 0,
         rbtsForfeitedPool: 5n,
         rbtsForfeitClaimants: 1,
       },
     });
   });
 
-  it("scores zero-stake revealed votes for launch bootstrap without economic rewards", async () => {
+  it("returns zero-stake revealed votes without economic RBTS rewards", async () => {
     const voter1 = "0x0000000000000000000000000000000000000001";
     const voter2 = "0x0000000000000000000000000000000000000002";
     const voter3 = "0x0000000000000000000000000000000000000003";
@@ -659,7 +660,6 @@ describe("RoundVotingEngine ponder handlers", () => {
       rbtsStakeReturned: 0n,
       rbtsForfeitedStake: 0n,
     });
-    expect(zeroStakeUpdate?.values.rbtsScoreBps).toBeGreaterThan(0);
 
     const stakedUpdate = updateCalls.find(
       (call) => call.table === "vote" && call.key.id === `7-2-${voter1}`,
@@ -670,7 +670,6 @@ describe("RoundVotingEngine ponder handlers", () => {
       rbtsStakeReturned: 25n,
       rbtsForfeitedStake: 0n,
     });
-    expect(stakedUpdate?.values.rbtsScoreBps).toBeGreaterThan(0);
   });
 
   it("preserves economic RBTS payouts when zero-stake votes are mixed into a scored round", async () => {
@@ -761,13 +760,41 @@ describe("RoundVotingEngine ponder handlers", () => {
       rbtsStakeReturned: 0n,
       rbtsForfeitedStake: 0n,
     });
-    expect(zeroStakeUpdate?.values.rbtsScoreBps).toBeGreaterThan(0);
 
-    const stakedUpdate = updateCalls.find(
-      (call) => call.table === "vote" && call.key.id === `7-2-${voter1}`,
-    );
-    expect(stakedUpdate).toBeDefined();
-    expect(stakedUpdate?.values.rbtsRewardWeight).toBeGreaterThan(0n);
-    expect(stakedUpdate?.values.rbtsStakeReturned).toBeGreaterThan(0n);
+    const economicUpdates = [voter1, voter2, voter3].map((voter) => {
+      const update = updateCalls.find(
+        (call) => call.table === "vote" && call.key.id === `7-2-${voter}`,
+      );
+      expect(update).toBeDefined();
+      return update!.values;
+    });
+    const meanScoreBps =
+      economicUpdates.reduce(
+        (sum, update) => sum + 25n * BigInt(update.rbtsScoreBps as number),
+        0n,
+      ) / 75n;
+
+    let positiveSpreadCount = 0;
+    let negativeSpreadCount = 0;
+    for (const update of economicUpdates) {
+      const scoreBps = BigInt(update.rbtsScoreBps as number);
+      const deltaBps = scoreBps - meanScoreBps;
+      if (deltaBps > 0n) {
+        positiveSpreadCount += 1;
+        expect(update.rbtsRewardWeight).toBe((25n * deltaBps) / 10_000n);
+        expect(update.rbtsStakeReturned).toBe(25n);
+        expect(update.rbtsForfeitedStake).toBe(0n);
+      } else {
+        const rawForfeiture =
+          deltaBps < 0n ? (25n * 15_000n * -deltaBps) / 10_000n / 10_000n : 0n;
+        const forfeitedStake = rawForfeiture > 25n ? 25n : rawForfeiture;
+        negativeSpreadCount += deltaBps < 0n ? 1 : 0;
+        expect(update.rbtsRewardWeight).toBe(0n);
+        expect(update.rbtsStakeReturned).toBe(25n - forfeitedStake);
+        expect(update.rbtsForfeitedStake).toBe(forfeitedStake);
+      }
+    }
+    expect(positiveSpreadCount).toBeGreaterThan(0);
+    expect(negativeSpreadCount).toBeGreaterThan(0);
   });
 });
