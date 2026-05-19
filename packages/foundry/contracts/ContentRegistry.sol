@@ -985,6 +985,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         require(c.status == ContentStatus.Active, "Not active");
         require(block.timestamp > dormancyAnchorAt[contentId] + DORMANCY_PERIOD, "Dormancy period not elapsed");
         require(!_hasOpenRound(contentId), "Content has active round");
+        require(contentBundleId[contentId] == 0, "Bundled content");
 
         c.status = ContentStatus.Dormant;
 
@@ -1029,6 +1030,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         Content storage c = contents[contentId];
         require(c.id != 0, "Content does not exist");
         require(c.status == ContentStatus.Dormant, "Not dormant");
+        require(contentBundleId[contentId] == 0, "Bundled content");
 
         bytes32 submissionKey = contentSubmissionKey[contentId];
         require(submissionKey != bytes32(0), "No submission key");

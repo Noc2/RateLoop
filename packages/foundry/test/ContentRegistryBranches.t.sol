@@ -318,6 +318,102 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         return RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 7 days, minVoters: 3, maxVoters: 100 });
     }
 
+    function _submitReservedQuestionBundleForDormancyTest() internal returns (uint256[] memory contentIds) {
+        ContentRegistry.BundleQuestionInput[] memory questions = new ContentRegistry.BundleQuestionInput[](2);
+        questions[0] = ContentRegistry.BundleQuestionInput({
+            contextUrl: "https://example.com/dormant-bundle-a",
+            imageUrls: _emptyImageUrls(),
+            videoUrl: "",
+            title: "Question A?",
+            description: "Context voters should consider",
+            tags: "Products",
+            categoryId: 1,
+            salt: keccak256("dormant-bundle-a"),
+            spec: _defaultQuestionSpec()
+        });
+        questions[1] = ContentRegistry.BundleQuestionInput({
+            contextUrl: "https://example.com/dormant-bundle-b",
+            imageUrls: _emptyImageUrls(),
+            videoUrl: "",
+            title: "Question B?",
+            description: "Context voters should consider",
+            tags: "Products",
+            categoryId: 1,
+            salt: keccak256("dormant-bundle-b"),
+            spec: _defaultQuestionSpec()
+        });
+        ContentRegistry.SubmissionRewardTerms memory rewardTerms = _submissionRewardTerms(
+            DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
+            _defaultSubmissionRewardAmount(registry) * 2,
+            DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS,
+            DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
+            block.timestamp + 30 days
+        );
+        RoundLib.RoundConfig memory roundConfig = _bundleContentRoundConfig();
+        bytes32 revealCommitment = _bundleRevealCommitment(questions, rewardTerms, roundConfig, submitter);
+
+        vm.startPrank(submitter);
+        registry.reserveSubmission(revealCommitment);
+        vm.warp(block.timestamp + 2 seconds);
+        (, contentIds) = registry.submitQuestionBundleWithRewardAndRoundConfig(questions, rewardTerms, roundConfig);
+        vm.stopPrank();
+    }
+
+    function _bundleRevealCommitment(
+        ContentRegistry.BundleQuestionInput[] memory questions,
+        ContentRegistry.SubmissionRewardTerms memory rewardTerms,
+        RoundLib.RoundConfig memory roundConfig,
+        address submitterAddress
+    ) internal view returns (bytes32) {
+        bytes32[] memory questionHashes = new bytes32[](questions.length);
+        for (uint256 i = 0; i < questions.length; i++) {
+            (uint256 resolvedCategoryId,) = registry.previewQuestionSubmissionKey(
+                questions[i].contextUrl,
+                questions[i].imageUrls,
+                questions[i].videoUrl,
+                questions[i].title,
+                questions[i].description,
+                questions[i].tags,
+                questions[i].categoryId
+            );
+            questionHashes[i] = keccak256(
+                abi.encode(
+                    "curyo-question-bundle-item-v2",
+                    questions[i].contextUrl,
+                    keccak256(abi.encode(questions[i].imageUrls, questions[i].videoUrl)),
+                    questions[i].title,
+                    questions[i].description,
+                    questions[i].tags,
+                    resolvedCategoryId,
+                    questions[i].salt,
+                    i,
+                    questions[i].spec.questionMetadataHash,
+                    questions[i].spec.resultSpecHash
+                )
+            );
+        }
+
+        bytes32 bundleHash = keccak256(abi.encode("curyo-question-bundle-v2", questionHashes));
+        return keccak256(
+            abi.encode(
+                "curyo-question-bundle-reveal-v3",
+                bundleHash,
+                submitterAddress,
+                rewardTerms.asset,
+                rewardTerms.amount,
+                rewardTerms.requiredVoters,
+                rewardTerms.requiredSettledRounds,
+                rewardTerms.bountyClosesAt,
+                rewardTerms.feedbackClosesAt,
+                rewardTerms.bountyEligibility,
+                roundConfig.epochDuration,
+                roundConfig.maxDuration,
+                roundConfig.minVoters,
+                roundConfig.maxVoters
+            )
+        );
+    }
+
     function _reserveQuestionSubmission(QuestionReservation memory reservation)
         internal
         returns (bytes32 submissionKey)
@@ -2480,6 +2576,15 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
         vm.expectRevert("Dormancy period not elapsed");
         registry.markDormant(1);
+    }
+
+    function test_MarkDormant_BundledContent_Reverts() public {
+        uint256[] memory contentIds = _submitReservedQuestionBundleForDormancyTest();
+
+        vm.warp(block.timestamp + 31 days);
+
+        vm.expectRevert("Bundled content");
+        registry.markDormant(contentIds[0]);
     }
 
     function test_MarkDormant_VotingEngineNotSet_AllowsDormant() public {
