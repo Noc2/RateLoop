@@ -446,6 +446,10 @@ library QuestionRewardPoolEscrowQualificationLib {
             if (
                 payoutSnapshot.status != IClusterPayoutOracle.SnapshotStatus.Finalized
                     || payoutSnapshot.rawEligibleVoters != rawEligibleVoters
+                    || !_questionPayoutSnapshotConsumerMatches(clusterPayoutOracle, rewardPool, roundId, payoutDomain)
+                    || !_questionPayoutSnapshotSourceReady(
+                        clusterPayoutOracle, votingEngine, rewardPool, roundId, payoutDomain
+                    )
             ) {
                 return (false, false, 0);
             }

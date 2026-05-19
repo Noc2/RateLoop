@@ -2660,6 +2660,24 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertEq(nextRoundToEvaluate, roundId);
     }
 
+    function testClusterRewardPoolDoesNotSkipBelowFloorSnapshotForDifferentConsumer() public {
+        ClusterPayoutOracle oracle = _newEligibleClusterPayoutOracle();
+        oracle.setOracleConfig(1 hours, 5e6, address(this));
+        oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), address(this));
+        vm.prank(owner);
+        protocolConfig.setClusterPayoutOracle(address(oracle));
+
+        uint256 contentId = _submitQuestion("");
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+
+        uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+        _finalizeClusterPayoutSnapshot(oracle, rewardPoolId, contentId, roundId, 3, 20_000, 1);
+
+        (uint256 skipped, uint256 nextRoundToEvaluate) = rewardPoolEscrow.advanceQualificationCursor(rewardPoolId, 1);
+        assertEq(skipped, 0);
+        assertEq(nextRoundToEvaluate, roundId);
+    }
+
     function testClusterRewardPoolRejectsSnapshotProposedBeforeCleanupComplete() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         uint256 contentId = _submitQuestion("");
@@ -2674,6 +2692,22 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
         vm.expectRevert("Cluster source stale");
         rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
+
+        (uint256 skipped, uint256 nextRoundToEvaluate) = rewardPoolEscrow.advanceQualificationCursor(rewardPoolId, 1);
+        assertEq(skipped, 0);
+        assertEq(nextRoundToEvaluate, roundId);
+    }
+
+    function testClusterRewardPoolDoesNotSkipBelowFloorSnapshotProposedBeforeCleanupComplete() public {
+        ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
+        uint256 contentId = _submitQuestion("");
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+
+        uint256 roundId = _settleRoundWithOneUnrevealed(contentId);
+        assertEq(votingEngine.roundClusterPayoutReadyAt(contentId, roundId), 0);
+
+        _finalizeClusterPayoutSnapshot(oracle, rewardPoolId, contentId, roundId, 3, 20_000, 1);
+        votingEngine.processUnrevealedVotes(contentId, roundId, 0, 0);
 
         (uint256 skipped, uint256 nextRoundToEvaluate) = rewardPoolEscrow.advanceQualificationCursor(rewardPoolId, 1);
         assertEq(skipped, 0);
