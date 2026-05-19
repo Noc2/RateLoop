@@ -16,8 +16,8 @@ SUBMISSION_BOUNTY_REQUIRED_VOTERS="3"
 SUBMISSION_BOUNTY_REQUIRED_SETTLED_ROUNDS="1"
 SUBMISSION_BOUNTY_EXPIRES_AT="0"
 SUBMISSION_BOUNTY_ELIGIBILITY="0"
-SUBMISSION_BUNDLE_BOUNTY_ASSET="1" # Mock USDC on localhost
-SUBMISSION_BUNDLE_BOUNTY_AMOUNT="30000000" # 30 mock USDC in 6 decimals
+SUBMISSION_BUNDLE_BOUNTY_ASSET="0" # LREP; USDC bundles are disabled when the cluster payout oracle is configured
+SUBMISSION_BUNDLE_BOUNTY_AMOUNT="30000000" # 30 LREP in 6 decimals
 SUBMISSION_BUNDLE_BOUNTY_DEADLINE_SECONDS=$((30 * 24 * 60 * 60))
 BUNDLE_FUNDER_KEY_INDEX="1"
 SUBMISSION_ROUND_EPOCH_DURATION="1200"
@@ -519,70 +519,64 @@ for ((i = 0; i < TOTAL_ITEMS; i++)); do
   echo ""
 done
 
-BUNDLE_SUBMITTED_COUNT="0"
-if [ -z "$USDC_TOKEN" ]; then
-  echo "Skipping bundled question bounty: Mock USDC not found"
-  echo ""
-else
-  echo "=== Seeding bundled question bounty ==="
-  echo "(One mock-USDC bounty funds multiple questions from the same research context)"
-  echo ""
+echo "=== Seeding bundled question bounty ==="
+echo "(One LREP bounty funds multiple questions from the same research context)"
+echo ""
 
-  BUNDLE_FUNDER_KEY="${KEYS[$BUNDLE_FUNDER_KEY_INDEX]}"
-  BUNDLE_FUNDER_ADDR=$(cast wallet address "$BUNDLE_FUNDER_KEY")
-  echo "Bundle funder: $BUNDLE_FUNDER_ADDR"
+BUNDLE_FUNDER_KEY="${KEYS[$BUNDLE_FUNDER_KEY_INDEX]}"
+BUNDLE_FUNDER_ADDR=$(cast wallet address "$BUNDLE_FUNDER_KEY")
+echo "Bundle funder: $BUNDLE_FUNDER_ADDR"
 
-  ETH_BAL=$(cast balance "$BUNDLE_FUNDER_ADDR" --rpc-url "$RPC" 2>/dev/null || echo "0")
-  if [ "$ETH_BAL" = "0" ]; then
-    echo "  Funding with ETH..."
-    cast rpc anvil_setBalance "$BUNDLE_FUNDER_ADDR" "0x8AC7230489E80000" --rpc-url "$RPC" > /dev/null 2>&1
-  fi
-
-  CURRENT_BLOCK_TIMESTAMP=$(cast block latest --field timestamp --rpc-url "$RPC" | tr -d '[:space:]')
-  BUNDLE_BOUNTY_CLOSES_AT=$((CURRENT_BLOCK_TIMESTAMP + SUBMISSION_BUNDLE_BOUNTY_DEADLINE_SECONDS))
-  BUNDLE_QUESTION_ARGS=()
-  for ((i = 0; i < BUNDLE_QUESTION_COUNT; i++)); do
-    printf -v BUNDLE_SALT "%064x" "$((100 + i + 1))"
-    BUNDLE_QUESTION_ARGS+=(
-      "${BUNDLE_CONTEXT_URLS[$i]}"
-      "${BUNDLE_IMAGE_URLS[$i]}"
-      "${BUNDLE_VIDEO_URLS[$i]}"
-      "${BUNDLE_TITLES[$i]}"
-      "${BUNDLE_DESCRIPTIONS[$i]}"
-      "${BUNDLE_TAGS[$i]}"
-      "${BUNDLE_CATEGORY_IDS[$i]}"
-      "0x$BUNDLE_SALT"
-    )
-    echo "  - ${BUNDLE_TITLES[$i]} (${BUNDLE_CATEGORY_SLUGS[$i]} -> ${BUNDLE_CATEGORY_IDS[$i]})"
-  done
-
-  echo "  Approving mock USDC bundle bounty: $SUBMISSION_BUNDLE_BOUNTY_AMOUNT"
-  cast send "$USDC_TOKEN" "approve(address,uint256)" "$QUESTION_REWARD_POOL_ESCROW" "$SUBMISSION_BUNDLE_BOUNTY_AMOUNT" \
-    --private-key "$BUNDLE_FUNDER_KEY" --rpc-url "$RPC" > /dev/null
-
-  BUNDLE_BUILD_OUTPUT=$(node "$SCRIPT_DIR/../scripts-js/buildQuestionBundleReservation.js" \
-    "$BUNDLE_FUNDER_ADDR" "$SUBMISSION_BUNDLE_BOUNTY_ASSET" "$SUBMISSION_BUNDLE_BOUNTY_AMOUNT" \
-    "$SUBMISSION_BOUNTY_REQUIRED_VOTERS" "$SUBMISSION_BOUNTY_REQUIRED_SETTLED_ROUNDS" \
-    "$BUNDLE_BOUNTY_CLOSES_AT" "$BUNDLE_BOUNTY_CLOSES_AT" \
-    "$SUBMISSION_ROUND_EPOCH_DURATION" "$SUBMISSION_ROUND_MAX_DURATION" "$SUBMISSION_ROUND_MIN_VOTERS" "$SUBMISSION_BUNDLE_ROUND_MAX_VOTERS" \
-    -- "${BUNDLE_QUESTION_ARGS[@]}")
-  BUNDLE_REVEAL_COMMITMENT=$(printf '%s\n' "$BUNDLE_BUILD_OUTPUT" | sed -n '1p')
-  BUNDLE_CALLDATA=$(printf '%s\n' "$BUNDLE_BUILD_OUTPUT" | sed -n '2p')
-
-  echo "  Reserving bundled submission..."
-  cast send "$REGISTRY" "reserveSubmission(bytes32)" "$BUNDLE_REVEAL_COMMITMENT" \
-    --private-key "$BUNDLE_FUNDER_KEY" --rpc-url "$RPC" > /dev/null
-
-  sleep 1
-
-  echo "  Submitting bundled questions with one bounty..."
-  cast send "$REGISTRY" "$BUNDLE_CALLDATA" \
-    --private-key "$BUNDLE_FUNDER_KEY" --rpc-url "$RPC" > /dev/null
-
-  BUNDLE_SUBMITTED_COUNT="$BUNDLE_QUESTION_COUNT"
-  echo "  Done!"
-  echo ""
+ETH_BAL=$(cast balance "$BUNDLE_FUNDER_ADDR" --rpc-url "$RPC" 2>/dev/null || echo "0")
+if [ "$ETH_BAL" = "0" ]; then
+  echo "  Funding with ETH..."
+  cast rpc anvil_setBalance "$BUNDLE_FUNDER_ADDR" "0x8AC7230489E80000" --rpc-url "$RPC" > /dev/null 2>&1
 fi
+
+CURRENT_BLOCK_TIMESTAMP=$(cast block latest --field timestamp --rpc-url "$RPC" | tr -d '[:space:]')
+BUNDLE_BOUNTY_CLOSES_AT=$((CURRENT_BLOCK_TIMESTAMP + SUBMISSION_BUNDLE_BOUNTY_DEADLINE_SECONDS))
+BUNDLE_QUESTION_ARGS=()
+for ((i = 0; i < BUNDLE_QUESTION_COUNT; i++)); do
+  printf -v BUNDLE_SALT "%064x" "$((100 + i + 1))"
+  BUNDLE_QUESTION_ARGS+=(
+    "${BUNDLE_CONTEXT_URLS[$i]}"
+    "${BUNDLE_IMAGE_URLS[$i]}"
+    "${BUNDLE_VIDEO_URLS[$i]}"
+    "${BUNDLE_TITLES[$i]}"
+    "${BUNDLE_DESCRIPTIONS[$i]}"
+    "${BUNDLE_TAGS[$i]}"
+    "${BUNDLE_CATEGORY_IDS[$i]}"
+    "0x$BUNDLE_SALT"
+  )
+  echo "  - ${BUNDLE_TITLES[$i]} (${BUNDLE_CATEGORY_SLUGS[$i]} -> ${BUNDLE_CATEGORY_IDS[$i]})"
+done
+
+echo "  Approving LREP bundle bounty: $SUBMISSION_BUNDLE_BOUNTY_AMOUNT"
+cast send "$TOKEN" "approve(address,uint256)" "$QUESTION_REWARD_POOL_ESCROW" "$SUBMISSION_BUNDLE_BOUNTY_AMOUNT" \
+  --private-key "$BUNDLE_FUNDER_KEY" --rpc-url "$RPC" > /dev/null
+
+BUNDLE_BUILD_OUTPUT=$(node "$SCRIPT_DIR/../scripts-js/buildQuestionBundleReservation.js" \
+  "$BUNDLE_FUNDER_ADDR" "$SUBMISSION_BUNDLE_BOUNTY_ASSET" "$SUBMISSION_BUNDLE_BOUNTY_AMOUNT" \
+  "$SUBMISSION_BOUNTY_REQUIRED_VOTERS" "$SUBMISSION_BOUNTY_REQUIRED_SETTLED_ROUNDS" \
+  "$BUNDLE_BOUNTY_CLOSES_AT" "$BUNDLE_BOUNTY_CLOSES_AT" \
+  "$SUBMISSION_ROUND_EPOCH_DURATION" "$SUBMISSION_ROUND_MAX_DURATION" "$SUBMISSION_ROUND_MIN_VOTERS" "$SUBMISSION_BUNDLE_ROUND_MAX_VOTERS" \
+  -- "${BUNDLE_QUESTION_ARGS[@]}")
+BUNDLE_REVEAL_COMMITMENT=$(printf '%s\n' "$BUNDLE_BUILD_OUTPUT" | sed -n '1p')
+BUNDLE_CALLDATA=$(printf '%s\n' "$BUNDLE_BUILD_OUTPUT" | sed -n '2p')
+
+echo "  Reserving bundled submission..."
+cast send "$REGISTRY" "reserveSubmission(bytes32)" "$BUNDLE_REVEAL_COMMITMENT" \
+  --private-key "$BUNDLE_FUNDER_KEY" --rpc-url "$RPC" > /dev/null
+
+sleep 1
+
+echo "  Submitting bundled questions with one bounty..."
+cast send "$REGISTRY" "$BUNDLE_CALLDATA" \
+  --private-key "$BUNDLE_FUNDER_KEY" --rpc-url "$RPC" > /dev/null
+
+BUNDLE_SUBMITTED_COUNT="$BUNDLE_QUESTION_COUNT"
+echo "  Done!"
+echo ""
 
 echo "=== Seed complete: $TOTAL_ITEMS standalone questions and $BUNDLE_SUBMITTED_COUNT bundled question items submitted ==="
 echo ""
