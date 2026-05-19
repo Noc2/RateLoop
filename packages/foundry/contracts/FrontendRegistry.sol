@@ -55,9 +55,10 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     bool public initialFeeCreditorConfigured;
     address public feeCreditor;
     mapping(address => bool) private authorizedFeeCreditors;
+    mapping(address => address) private feeCreditorForEngine;
 
     /// @dev Reserved storage gap for future upgrades
-    uint256[46] private __gap;
+    uint256[45] private __gap;
 
     // --- Events ---
     event FrontendRegistered(address indexed frontend, address indexed operator, uint256 stakedAmount);
@@ -256,8 +257,13 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     /// @dev No eligibility check here — commit-time eligibility is snapshotted in RoundVotingEngine.
     ///      Slashed or underbonded frontends cannot accrue newly claimed historical fees.
     function creditFees(address frontend, uint256 lrepAmount) external override onlyRole(FEE_CREDITOR_ROLE) {
-        require(msg.sender == feeCreditor && authorizedFeeCreditors[msg.sender], "Unauthorized fee creditor");
-        _requireFeeCreditorForEngine(msg.sender, address(votingEngine));
+        require(authorizedFeeCreditors[msg.sender], "Unauthorized fee creditor");
+        address creditorEngine = _feeCreditorVotingEngine(msg.sender);
+        address engineCreditor = feeCreditorForEngine[creditorEngine];
+        if (engineCreditor == address(0) && msg.sender == feeCreditor && creditorEngine == address(votingEngine)) {
+            engineCreditor = msg.sender;
+        }
+        require(engineCreditor == msg.sender, "Unauthorized fee creditor");
         require(lrepAmount <= MAX_FEE_CREDIT, "Fee credit too large");
         Frontend storage f = frontends[frontend];
         require(f.operator != address(0), "Frontend not registered");
@@ -353,9 +359,11 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
         if (address(votingEngine) == _votingEngine) return;
         address oldCreditor = feeCreditor;
         if (oldCreditor != address(0)) {
+            address oldEngine = address(votingEngine);
+            if (feeCreditorForEngine[oldEngine] == address(0)) {
+                feeCreditorForEngine[oldEngine] = oldCreditor;
+            }
             feeCreditor = address(0);
-            authorizedFeeCreditors[oldCreditor] = false;
-            _revokeRole(FEE_CREDITOR_ROLE, oldCreditor);
             emit FeeCreditorUpdated(oldCreditor, address(0));
         }
         votingEngine = IRoundVotingEngine(_votingEngine);
@@ -365,7 +373,7 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     /// @notice Grant fee creditor role to the reward distributor for the current voting engine.
     /// @param creditor The address to grant the role to
     function addFeeCreditor(address creditor) external onlyRole(GOVERNANCE_ROLE) {
-        _requireFeeCreditorForEngine(creditor, address(votingEngine));
+        address creditorEngine = _requireFeeCreditorForEngine(creditor, address(votingEngine));
         address oldCreditor = feeCreditor;
         if (oldCreditor != address(0) && oldCreditor != creditor) {
             authorizedFeeCreditors[oldCreditor] = false;
@@ -373,6 +381,7 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
         }
         feeCreditor = creditor;
         authorizedFeeCreditors[creditor] = true;
+        feeCreditorForEngine[creditorEngine] = creditor;
         _grantRole(FEE_CREDITOR_ROLE, creditor);
         emit FeeCreditorUpdated(oldCreditor, creditor);
     }
@@ -385,6 +394,7 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
             emit FeeCreditorUpdated(creditor, address(0));
         }
         authorizedFeeCreditors[creditor] = false;
+        _clearFeeCreditorForEngine(creditor);
         _revokeRole(FEE_CREDITOR_ROLE, creditor);
     }
 
@@ -392,10 +402,11 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     /// @param creditor The initial contract allowed to credit frontend fees.
     function initializeFeeCreditor(address creditor) external onlyRole(ADMIN_ROLE) {
         require(!initialFeeCreditorConfigured, "Initial fee creditor set");
-        _requireFeeCreditorForEngine(creditor, address(votingEngine));
+        address creditorEngine = _requireFeeCreditorForEngine(creditor, address(votingEngine));
         initialFeeCreditorConfigured = true;
         feeCreditor = creditor;
         authorizedFeeCreditors[creditor] = true;
+        feeCreditorForEngine[creditorEngine] = creditor;
         _grantRole(FEE_CREDITOR_ROLE, creditor);
         emit FeeCreditorUpdated(address(0), creditor);
     }
@@ -436,13 +447,31 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
             && frontendExitAvailableAt[frontend] == 0;
     }
 
-    function _requireFeeCreditorForEngine(address creditor, address engine) internal view {
+    function _requireFeeCreditorForEngine(address creditor, address engine)
+        internal
+        view
+        returns (address creditorEngine)
+    {
         require(engine != address(0), "VotingEngine not set");
+        creditorEngine = _feeCreditorVotingEngine(creditor);
+        require(creditorEngine == engine, "Invalid fee creditor");
+    }
+
+    function _feeCreditorVotingEngine(address creditor) internal view returns (address creditorEngine) {
         require(creditor.code.length != 0, "Invalid fee creditor");
-        try IRoundRewardDistributor(creditor).votingEngine() returns (address creditorEngine) {
-            require(creditorEngine == engine, "Invalid fee creditor");
+        try IRoundRewardDistributor(creditor).votingEngine() returns (address engine) {
+            return engine;
         } catch {
             revert("Invalid fee creditor");
         }
+    }
+
+    function _clearFeeCreditorForEngine(address creditor) internal {
+        if (creditor.code.length == 0) return;
+        try IRoundRewardDistributor(creditor).votingEngine() returns (address engine) {
+            if (feeCreditorForEngine[engine] == creditor) {
+                delete feeCreditorForEngine[engine];
+            }
+        } catch { }
     }
 }

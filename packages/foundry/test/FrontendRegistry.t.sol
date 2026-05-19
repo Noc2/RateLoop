@@ -770,7 +770,7 @@ contract FrontendRegistryTest is Test {
         assertEq(address(registry.votingEngine()), newVotingEngine);
     }
 
-    function test_SetVotingEngine_RevokesHistoricalFeeCreditor() public {
+    function test_SetVotingEngine_PreservesHistoricalFeeCreditor() public {
         address newVotingEngine = address(new MockVotingEngine(lrepToken));
 
         vm.startPrank(frontend1);
@@ -783,11 +783,12 @@ contract FrontendRegistryTest is Test {
 
         assertEq(address(registry.votingEngine()), newVotingEngine);
         assertEq(registry.feeCreditor(), address(0));
-        assertFalse(registry.hasRole(registry.FEE_CREDITOR_ROLE(), feeCreditor));
+        assertTrue(registry.hasRole(registry.FEE_CREDITOR_ROLE(), feeCreditor));
 
         vm.prank(feeCreditor);
-        vm.expectRevert();
         registry.creditFees(frontend1, 100e6);
+
+        assertEq(registry.getAccumulatedFees(frontend1), 100e6);
     }
 
     function test_SetVotingEngine_RejectsNoCode() public {

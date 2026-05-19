@@ -3244,6 +3244,32 @@ contract RoundIntegrationTest is VotingTestBase {
         );
     }
 
+    function test_ClaimFrontendFee_UsesSnapshotRegistryAfterEngineRotation() public {
+        (FrontendRegistry frontendReg, address frontendOp) = _setupFrontendRegistry();
+        (uint256 contentId, uint256 roundId) = _settleRoundWithFrontend(frontendOp);
+        RoundVotingEngine replacementEngine = _deployReplacementVotingEngine();
+
+        vm.prank(owner);
+        frontendReg.setVotingEngine(address(replacementEngine));
+
+        assertEq(address(frontendReg.votingEngine()), address(replacementEngine));
+        assertEq(frontendReg.feeCreditor(), address(0));
+        assertTrue(
+            frontendReg.hasRole(frontendReg.FEE_CREDITOR_ROLE(), address(rewardDistributor)),
+            "historical distributor should stay authorized"
+        );
+
+        uint256 feesBefore = frontendReg.getAccumulatedFees(frontendOp);
+
+        _claimFrontendFeeAsOperator(contentId, roundId, frontendOp);
+
+        assertGt(
+            frontendReg.getAccumulatedFees(frontendOp) - feesBefore,
+            0,
+            "engine rotation should not break historical frontend fee claims"
+        );
+    }
+
     function test_ClaimFrontendFee_NoEligibleFrontendRedirectsToVoterPool() public {
         // No frontend registry set — 3 voters (2 up, 1 down) to avoid tie
         uint256 contentId = _submitContent();
