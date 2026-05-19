@@ -59,6 +59,38 @@ contract RaterRegistryTest is Test {
         assertEq(profile.updatedAt, uint64(block.timestamp));
     }
 
+    function test_SetProfileRejectsNonHumanTypeForActiveHumanCredential() public {
+        uint256[8] memory proof;
+
+        vm.prank(rater);
+        registry.attestHumanCredentialWithProof(1, uint256(NULLIFIER_HASH), proof);
+
+        vm.prank(rater);
+        vm.expectRevert(RaterRegistry.ActiveHumanCredentialRequiresHumanProfile.selector);
+        registry.setProfile(RaterRegistry.RaterType.AI, METADATA_HASH);
+
+        vm.prank(rater);
+        registry.setProfile(RaterRegistry.RaterType.Human, METADATA_HASH);
+
+        RaterRegistry.RaterProfile memory profile = registry.getProfile(rater);
+        assertEq(uint256(profile.raterType), uint256(RaterRegistry.RaterType.Human));
+        assertEq(profile.metadataHash, METADATA_HASH);
+    }
+
+    function test_AttestHumanCredentialForcesHumanProfileAndPreservesMetadataHash() public {
+        uint256[8] memory proof;
+
+        vm.prank(rater);
+        registry.setProfile(RaterRegistry.RaterType.AI, METADATA_HASH);
+
+        vm.prank(rater);
+        registry.attestHumanCredentialWithProof(1, uint256(NULLIFIER_HASH), proof);
+
+        RaterRegistry.RaterProfile memory profile = registry.getProfile(rater);
+        assertEq(uint256(profile.raterType), uint256(RaterRegistry.RaterType.Human));
+        assertEq(profile.metadataHash, METADATA_HASH);
+    }
+
     function test_FollowProfileStoresPublicRelationshipAndCounts() public {
         vm.prank(rater);
         vm.expectEmit(true, true, false, true);
@@ -316,6 +348,9 @@ contract RaterRegistryTest is Test {
     function test_SeedHumanCredentialStoresCuryoSelfVerifiedAccountAsVerifiedHuman() public {
         uint64 expiresAt = uint64(block.timestamp + 180 days);
 
+        vm.prank(rater);
+        registry.setProfile(RaterRegistry.RaterType.Team, METADATA_HASH);
+
         vm.prank(admin);
         registry.seedHumanCredential(rater, expiresAt, CURYO_ANCHOR_ID, EVIDENCE_HASH);
 
@@ -334,6 +369,10 @@ contract RaterRegistryTest is Test {
             rater
         );
         assertTrue(registry.hasActiveHumanCredential(rater));
+
+        RaterRegistry.RaterProfile memory profile = registry.getProfile(rater);
+        assertEq(uint256(profile.raterType), uint256(RaterRegistry.RaterType.Human));
+        assertEq(profile.metadataHash, METADATA_HASH);
     }
 
     function test_SeedHumanCredentialExpiresLikeWorldIdHumanUnit() public {

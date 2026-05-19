@@ -103,6 +103,7 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
     error DelegateAlreadyAssigned();
     error NoDelegateSet();
     error NoPendingDelegate();
+    error ActiveHumanCredentialRequiresHumanProfile();
 
     constructor(
         address admin,
@@ -137,6 +138,10 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
     /// @notice Self-report the account type and a metadata hash.
     /// @dev Metadata is reputational and indexable, not proof of rater type.
     function setProfile(RaterType raterType, bytes32 metadataHash) external {
+        if (hasActiveHumanCredential(msg.sender) && raterType != RaterType.Human) {
+            revert ActiveHumanCredentialRequiresHumanProfile();
+        }
+
         _profiles[msg.sender] =
             RaterProfile({ raterType: raterType, metadataHash: metadataHash, updatedAt: uint64(block.timestamp) });
 
@@ -451,6 +456,18 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
         emit HumanCredentialVerified(
             rater, nullifierHash, scope, provider, uint64(block.timestamp), expiresAt, evidenceHash
         );
+
+        _forceHumanProfile(rater);
+    }
+
+    function _forceHumanProfile(address rater) internal {
+        RaterProfile storage profile = _profiles[rater];
+        if (profile.raterType == RaterType.Human) return;
+
+        profile.raterType = RaterType.Human;
+        profile.updatedAt = uint64(block.timestamp);
+
+        emit RaterProfileUpdated(rater, RaterType.Human, profile.metadataHash, uint64(block.timestamp));
     }
 
     function _identityForHolder(address holder)
