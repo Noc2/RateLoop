@@ -67,7 +67,6 @@ const HowItWorks: NextPage = () => {
         Private reports stay hidden through the commit-reveal flow until the blind phase ends. The keeper normally
         derives the reveal data after the epoch closes; users can self-reveal if the automatic path is delayed.
       </p>
-      <RbtsScoreSpreadSettlementDiagram />
 
       <h3>Voting Rules</h3>
       <ul>
@@ -79,18 +78,33 @@ const HowItWorks: NextPage = () => {
       <h2 id="on-chain-settlement">3. Settle Rewards</h2>
       <h3 id="lrep-stake-settlement">LREP stake settlement</h3>
       <p>
-        Once a round settles, revealed raters can claim from the reward paths they qualified for. Claims are based on
-        what was revealed, how well the crowd forecast scored, and whether the reward path has any extra eligibility
-        checks.
+        RBTS compares every revealed staked report with the stake-weighted mean score. A report&apos;s score spread is
+        its own score minus that mean.
       </p>
       <ul>
-        <li>RBTS stores each revealed report&apos;s scoreBps and computes the stake-weighted mean score.</li>
-        <li>Positive score spreads recover full stake and share the 96% voter share of forfeited stake.</li>
         <li>
-          Negative score spreads forfeit according to distance below the mean; there is no RBTS revealed-loser rebate.
+          <code>mean = sum(stake * score) / sum(stake)</code>
         </li>
-        <li>Unrevealed reports do not earn from that round and can be cleaned up after the reveal grace period.</li>
+        <li>
+          <code>spread = score - mean</code>
+        </li>
+        <li>
+          Negative spreads forfeit <code>stake * intensity * abs(spread) / 100</code>.
+        </li>
+        <li>
+          <code>voter share = forfeited pool * 96%</code>
+        </li>
+        <li>
+          Positive spread weight is <code>stake * spread</code>, and reward is{" "}
+          <code>voter share * weight / total positive weight</code>.
+        </li>
+        <li>
+          Final claims are <code>stake + positive reward</code> for positive spreads and <code>stake - forfeiture</code>{" "}
+          for negative spreads. Unrevealed reports do not earn from that round and can be cleaned up after the reveal
+          grace period.
+        </li>
       </ul>
+      <RbtsScoreSpreadSettlementDiagram />
       <p>
         Example: Alice stakes 10 LREP and scores 93.5, Bob stakes 5 LREP and scores 90.0, and Carol stakes 5 LREP and
         scores 64.0. The stake-weighted mean is 85.25. At 1.5 intensity, Carol forfeits 1.59375 LREP; 1.53 LREP is the

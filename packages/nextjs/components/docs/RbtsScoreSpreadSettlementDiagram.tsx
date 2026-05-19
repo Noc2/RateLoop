@@ -40,12 +40,16 @@ const settlementFacts = [
 
 export function RbtsScoreSpreadSettlementDiagram() {
   return (
-    <DocsDiagramFrame
-      eyebrow="RBTS settlement"
-      title="Score Spreads Compete Against The Weighted Mean"
-      description="RBTS keeps each report's scoreBps, compares every staked report with the stake-weighted mean score, and routes the voter share of forfeited negative spread to positive spread reports."
-    >
-      <div className="grid gap-4 lg:grid-cols-[1fr_14rem]">
+    <DocsDiagramFrame eyebrow="LREP stake settlement" title="Score Spreads Compete Against The Weighted Mean">
+      <div className="grid gap-4">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+          {settlementFacts.map(([label, value]) => (
+            <div key={label} className="rounded-lg border border-base-content/10 bg-base-content/[0.05] px-3 py-2">
+              <p className="text-xs font-semibold uppercase text-base-content/45">{label}</p>
+              <p className="mt-1 font-mono text-sm font-semibold text-base-content">{value}</p>
+            </div>
+          ))}
+        </div>
         <div className="overflow-x-auto">
           <table className="min-w-[720px] text-left text-sm">
             <thead className="text-xs uppercase text-base-content/45">
@@ -74,20 +78,7 @@ export function RbtsScoreSpreadSettlementDiagram() {
             </tbody>
           </table>
         </div>
-        <div className="grid content-start gap-2">
-          {settlementFacts.map(([label, value]) => (
-            <div key={label} className="rounded-lg border border-base-content/10 bg-base-content/[0.05] px-3 py-2">
-              <p className="text-xs font-semibold uppercase text-base-content/45">{label}</p>
-              <p className="mt-1 font-mono text-sm font-semibold text-base-content">{value}</p>
-            </div>
-          ))}
-        </div>
       </div>
-      <p className="mt-4 text-sm leading-6 text-base-content/62">
-        Alice and Bob keep their full stake and split the 96% voter share of Carol&apos;s forfeited amount by positive
-        spread weight. Carol has a negative spread, so there is no revealed-loser rebate in RBTS score-spread
-        settlement.
-      </p>
     </DocsDiagramFrame>
   );
 }
