@@ -130,12 +130,14 @@ const HowItWorks: NextPage = () => {
         To earn a bounty, reveal an eligible vote before the bounty closes; bundle bounties require revealing on every
         question in the claimed round set. Each qualified round pays{" "}
         <code>round allocation * claim weight / total claim weight</code>, where USDC claim weights come from the
-        finalized correlation payout snapshot and equal-weight rounds use one unit per eligible revealed rater.
+        finalized <Link href="/docs/tech-stack#correlation-epoch-snapshots">correlation payout snapshot</Link> and
+        equal-weight rounds use one unit per eligible revealed rater.
       </p>
       <p>
-        Example: if a 30 USDC rater allocation is claimable and three eligible raters have effective weights of 2, 1,
-        and 1, they claim 15 USDC, 7.5 USDC, and 7.5 USDC. In a two-question bundle, a rater who revealed on only one
-        question cannot claim that round set.
+        Example: if a 30 USDC rater allocation is claimable and three eligible raters have effective correlation weights
+        of 2, 1, and 1, they claim 15 USDC, 7.5 USDC, and 7.5 USDC. Those weights are independence/correlation payout
+        weights, not stake amounts. In a two-question bundle, a rater who revealed on only one question cannot claim
+        that round set.
       </p>
 
       <h3>Feedback bonuses</h3>

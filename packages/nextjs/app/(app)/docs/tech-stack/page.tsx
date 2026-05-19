@@ -172,12 +172,25 @@ const TechStackPage: NextPage = () => {
         funded in LREP or World Chain USDC. Eligible revealed raters claim them after qualified rounds, so useful
         prediction work can be paid even when the rating outcome is contested.
       </p>
+      <p>
+        A bounty claim uses <code>round allocation * claim weight / total claim weight</code>. Equal-weight bounty
+        rounds give one claim-weight unit to each eligible revealed rater. USDC bounty rounds can instead use the
+        finalized correlation payout snapshot, where the claim weight is the rater&apos;s effective correlation weight.
+      </p>
 
       <h2 id="correlation-epoch-snapshots">Correlation Epoch Snapshots</h2>
       <p>
         RateLoop uses challengeable correlation snapshots for payout accounting. The public rating result settles first;
         then USDC bounty claims and earned launch LREP credits wait for a finalized Merkle root of per-rater effective
         weights. This delays payout finality, not the result itself.
+      </p>
+      <p>
+        Effective correlation weight is the payout weight left after applying an independence multiplier to a
+        rater&apos;s base claim weight. It answers &quot;how much independent payout credit should this revealed rater
+        receive?&quot; rather than &quot;how much LREP did this rater stake?&quot; For example, a fully independent
+        rater may keep 10,000 independence bps, while two tightly correlated raters may each be capped to a fractional
+        weight. A 30 USDC rater allocation split across effective correlation weights of 2, 1, and 1 pays 15 USDC, 7.5
+        USDC, and 7.5 USDC.
       </p>
       <p>
         The scorer is COCM-inspired: it compresses dense wallet clusters, timing/funding links, agent operator links,

@@ -62,6 +62,12 @@ rating above neutral. USDC bounty and launch LREP claims can still wait for the
 correlation payout snapshot; that snapshot caps payout weight, not the public
 rating.
 
+For USDC bounties, effective correlation weight is the claim weight left after
+the finalized correlation payout snapshot applies independence caps. It is not
+the rater's LREP stake amount. Example: if a 30 USDC rater allocation is
+claimable and three eligible raters have effective correlation weights of 2, 1,
+and 1, they claim 15 USDC, 7.5 USDC, and 7.5 USDC.
+
 Score-spread example: Alice stakes 10 LREP and scores 93.5, Bob stakes 5 LREP and scores 90.0, and Carol stakes 5 LREP and scores 64.0. The stake-weighted mean is 85.25. At 1.5 intensity, Carol forfeits 1.59375 LREP. Alice claims 11.2375 LREP, Bob claims 5.35625 LREP, and Carol claims 3.40625 LREP.
 
 ## Payout Roots
