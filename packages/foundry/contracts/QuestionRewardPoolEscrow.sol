@@ -973,6 +973,7 @@ contract QuestionRewardPoolEscrow is
             bundleQuestionRecordedRounds,
             bundleRoundIds,
             bundleRoundSetSnapshots,
+            bundleQuestionTerminalSyncCursor,
             bundleRoundSetRewardClaimed,
             registry,
             votingEngine,

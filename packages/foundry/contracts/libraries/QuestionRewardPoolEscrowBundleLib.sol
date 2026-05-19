@@ -142,12 +142,21 @@ library QuestionRewardPoolEscrowBundleLib {
         mapping(uint256 => BundleQuestion[]) storage bundleQuestions,
         mapping(uint256 => mapping(uint256 => uint32)) storage bundleQuestionRecordedRounds,
         mapping(uint256 => mapping(uint256 => mapping(uint256 => uint64))) storage bundleRoundIds,
+        mapping(uint256 => mapping(uint256 => uint256)) storage bundleQuestionTerminalSyncCursor,
         uint256 bundleId,
         uint256 roundSetIndex
     ) external {
         BundleQuestion[] storage questions = bundleQuestions[bundleId];
         for (uint256 i = 0; i < questions.length;) {
             uint256 recordedRounds = bundleQuestionRecordedRounds[bundleId][i];
+            uint256 failedRoundId = bundleRoundIds[bundleId][i][roundSetIndex];
+            uint256 rewindTo = failedRoundId == 0
+                ? (roundSetIndex == 0 ? 1 : uint256(bundleRoundIds[bundleId][i][roundSetIndex - 1]) + 1)
+                : failedRoundId + 1;
+            uint256 cursor = bundleQuestionTerminalSyncCursor[bundleId][i];
+            if (cursor == 0 || cursor > rewindTo) {
+                bundleQuestionTerminalSyncCursor[bundleId][i] = rewindTo;
+            }
             for (uint256 j = roundSetIndex + 1; j < recordedRounds;) {
                 delete bundleRoundIds[bundleId][i][j];
                 unchecked {

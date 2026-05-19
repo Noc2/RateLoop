@@ -1634,6 +1634,40 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertEq(claimable, REWARD_POOL_AMOUNT / 3);
     }
 
+    function testBatchBundleSyncReplaysFutureRoundsAfterFailedSetReset() public {
+        uint256[] memory contentIds = _submitBundleQuestions();
+        uint256 bundleId = _createSubmissionBundle(contentIds, funder, REWARD_ASSET_USDC, 120e6, 3, 2);
+
+        address retryCompleter1 = address(30);
+        address retryCompleter2 = address(31);
+        address retryCompleter3 = address(32);
+        _registerTestVoter(retryCompleter1);
+        _registerTestVoter(retryCompleter2);
+        _registerTestVoter(retryCompleter3);
+
+        address[] memory firstQuestionVoters = _voters(voter1, voter2, voter3);
+        address[] memory secondQuestionVoters = _voters(voter2, voter3, voter4);
+        address[] memory retryCompleters = _voters(retryCompleter1, retryCompleter2, retryCompleter3);
+        bool[] memory directions = _directions(true, true, false);
+
+        _settleRoundWithoutBundleSync(firstQuestionVoters, contentIds[0], directions);
+        vm.warp(block.timestamp + 2 days);
+        _settleRoundWithoutBundleSync(retryCompleters, contentIds[0], directions);
+        _settleRoundWithoutBundleSync(secondQuestionVoters, contentIds[1], directions);
+        vm.warp(block.timestamp + 2 days);
+        _settleRoundWithoutBundleSync(retryCompleters, contentIds[1], directions);
+
+        (uint256 processedRounds, bool complete) = rewardPoolEscrow.syncQuestionBundleTerminals(bundleId, 10);
+        assertEq(processedRounds, 0);
+        assertTrue(complete);
+        assertEq(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, retryCompleter1), 0);
+
+        (processedRounds, complete) = rewardPoolEscrow.syncQuestionBundleTerminals(bundleId, 10);
+        assertEq(processedRounds, 2);
+        assertTrue(complete);
+        assertGt(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, retryCompleter1), 0);
+    }
+
     function testSubmissionBundleRequiresFundingForMaxCompleters() public {
         RoundLib.RoundConfig memory roundConfig = RoundLib.RoundConfig({
             epochDuration: uint32(EPOCH_DURATION), maxDuration: uint32(7 days), minVoters: 3, maxVoters: 4

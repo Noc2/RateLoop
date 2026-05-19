@@ -278,6 +278,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             bundleQuestionRecordedRounds,
             bundleRoundIds,
             bundleRoundSetSnapshots,
+            bundleQuestionTerminalSyncCursor,
             registry,
             votingEngine,
             protocolConfig,
@@ -324,6 +325,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         mapping(uint256 => mapping(uint256 => uint32)) storage bundleQuestionRecordedRounds,
         mapping(uint256 => mapping(uint256 => mapping(uint256 => uint64))) storage bundleRoundIds,
         mapping(uint256 => mapping(uint256 => BundleRoundSetSnapshot)) storage bundleRoundSetSnapshots,
+        mapping(uint256 => mapping(uint256 => uint256)) storage bundleQuestionTerminalSyncCursor,
         mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) storage bundleRoundSetRewardClaimed,
         ContentRegistry registry,
         RoundVotingEngine votingEngine,
@@ -340,6 +342,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             bundleQuestionRecordedRounds,
             bundleRoundIds,
             bundleRoundSetSnapshots,
+            bundleQuestionTerminalSyncCursor,
             registry,
             votingEngine,
             protocolConfig,
@@ -560,6 +563,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             bundleQuestionRecordedRounds,
             bundleRoundIds,
             bundleRoundSetSnapshots,
+            bundleQuestionTerminalSyncCursor,
             registry,
             votingEngine,
             protocolConfig,
@@ -681,6 +685,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             bundleQuestionRecordedRounds,
             bundleRoundIds,
             bundleRoundSetSnapshots,
+            bundleQuestionTerminalSyncCursor,
             registry,
             votingEngine,
             protocolConfig,
@@ -754,6 +759,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         mapping(uint256 => mapping(uint256 => uint32)) storage bundleQuestionRecordedRounds,
         mapping(uint256 => mapping(uint256 => mapping(uint256 => uint64))) storage bundleRoundIds,
         mapping(uint256 => mapping(uint256 => BundleRoundSetSnapshot)) storage bundleRoundSetSnapshots,
+        mapping(uint256 => mapping(uint256 => uint256)) storage bundleQuestionTerminalSyncCursor,
         ContentRegistry registry,
         RoundVotingEngine votingEngine,
         ProtocolConfig protocolConfig,
@@ -770,6 +776,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             bundleQuestionRecordedRounds,
             bundleRoundIds,
             bundleRoundSetSnapshots,
+            bundleQuestionTerminalSyncCursor,
             registry,
             votingEngine,
             protocolConfig,
@@ -785,6 +792,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         mapping(uint256 => mapping(uint256 => uint32)) storage bundleQuestionRecordedRounds,
         mapping(uint256 => mapping(uint256 => mapping(uint256 => uint64))) storage bundleRoundIds,
         mapping(uint256 => mapping(uint256 => BundleRoundSetSnapshot)) storage bundleRoundSetSnapshots,
+        mapping(uint256 => mapping(uint256 => uint256)) storage bundleQuestionTerminalSyncCursor,
         ContentRegistry registry,
         RoundVotingEngine votingEngine,
         ProtocolConfig protocolConfig,
@@ -799,7 +807,12 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         );
         if (completerCount < bundle.requiredCompleters) {
             QuestionRewardPoolEscrowBundleLib.resetRoundSet(
-                bundleQuestions, bundleQuestionRecordedRounds, bundleRoundIds, bundleId, roundSetIndex
+                bundleQuestions,
+                bundleQuestionRecordedRounds,
+                bundleRoundIds,
+                bundleQuestionTerminalSyncCursor,
+                bundleId,
+                roundSetIndex
             );
             return;
         }
@@ -807,7 +820,12 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         uint256 allocation = _previewBundleRoundSetAllocation(bundle);
         if (allocation == 0 || allocation < completerCount) {
             QuestionRewardPoolEscrowBundleLib.resetRoundSet(
-                bundleQuestions, bundleQuestionRecordedRounds, bundleRoundIds, bundleId, roundSetIndex
+                bundleQuestions,
+                bundleQuestionRecordedRounds,
+                bundleRoundIds,
+                bundleQuestionTerminalSyncCursor,
+                bundleId,
+                roundSetIndex
             );
             return;
         }
