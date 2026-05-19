@@ -438,7 +438,6 @@ test.describe("Reward claim lifecycle", () => {
     const settled = await settleRoundDirect(BigInt(cleanupContentId!), cleanupRoundId, keeper.address, VOTING_ENGINE);
     expect(settled, "Cleanup setup round did not settle").toBe(true);
 
-    const consensusReserveBefore = await readUint256("consensusReserve", VOTING_ENGINE);
     const unrevealed1Before = await readTokenBalance(unrevealed1.address, LREP_TOKEN);
     const unrevealed2Before = await readTokenBalance(unrevealed2.address, LREP_TOKEN);
 
@@ -452,14 +451,12 @@ test.describe("Reward claim lifecycle", () => {
     );
     expect(cleanupSuccess, "Cleanup should process unrevealed votes").toBe(true);
 
-    const consensusReserveAfter = await readUint256("consensusReserve", VOTING_ENGINE);
     const unrevealed1After = await readTokenBalance(unrevealed1.address, LREP_TOKEN);
     const unrevealed2After = await readTokenBalance(unrevealed2.address, LREP_TOKEN);
 
     // Current-epoch unrevealed stakes had no chance to reveal before settlement, so they are refunded.
     expect(unrevealed1After - unrevealed1Before).toBe(STAKE);
     expect(unrevealed2After - unrevealed2Before).toBe(STAKE);
-    expect(consensusReserveAfter).toBe(consensusReserveBefore);
 
     const secondCleanup = await processUnrevealedVotes(
       BigInt(cleanupContentId!),

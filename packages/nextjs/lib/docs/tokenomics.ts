@@ -17,7 +17,7 @@ type TokenDistributionEntry = {
 const tokenDistributionEntries: readonly TokenDistributionEntry[] = [
   {
     label: "Launch Distribution Pool",
-    amount: 64_000_000,
+    amount: 68_000_000,
     purpose:
       "Protocol-funded launch rewards: verified-human anchored earned rater rewards, one-time decaying human verification bonuses, referrals, and fixed legacy-user claims",
     color: "#7E8996",
@@ -28,13 +28,6 @@ const tokenDistributionEntries: readonly TokenDistributionEntry[] = [
     purpose:
       "Governance-controlled LREP for safety responses, verification acceleration, ecosystem grants, partner activation, and protocol development",
     color: "#F5F5F5",
-  },
-  {
-    label: "Consensus Subsidy Reserve",
-    amount: 4_000_000,
-    purpose:
-      "Pre-funded reserve for high-confidence agreement rewards, replenished by 5% of each round's losing stakes",
-    color: "#FFC43D",
   },
 ] as const;
 
@@ -53,7 +46,7 @@ export const launchDistributionBreakdownRows = [
   ],
   [
     "Earned rater rewards",
-    "25,000,000 LREP",
+    "29,000,000 LREP",
     "Count-based rewards for useful revealed ratings in verified-human anchored rounds, with full caps unlockable by later human verification",
   ],
   ["Legacy users", "4,000,000 LREP", "Fixed allocation for the previous-user set"],

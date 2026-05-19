@@ -107,7 +107,7 @@ const SmartContracts: NextPage = () => {
             <tr>
               <td className="font-mono text-primary">LaunchDistributionPool</td>
               <td>
-                64M LREP launch rewards: 35M verified/referral, 25M anchor-gated earned rater, and 4M legacy users
+                68M LREP launch rewards: 35M verified/referral, 29M anchor-gated earned rater, and 4M legacy users
               </td>
               <td>No</td>
             </tr>
@@ -350,9 +350,9 @@ const SmartContracts: NextPage = () => {
       <h2>RoundVotingEngine</h2>
       <p>
         Manages per-content voting rounds with tlock commit-reveal voting, explicit drand metadata binding,
-        epoch-weighted rewards, and deterministic settlement. One-sided rounds (consensus) receive a subsidy from the
-        consensus subsidy reserve. Commit-time reward weight is stake times the epoch timing weight; human credentials
-        do not multiply settlement rewards.
+        epoch-weighted rewards, and deterministic settlement. One-sided rounds do not receive a consensus subsidy.
+        Commit-time reward weight is stake times the epoch timing weight; human credentials do not multiply settlement
+        rewards.
       </p>
       <h3>Configuration</h3>
       <div className="not-prose overflow-x-auto my-6 rounded-xl bg-base-200">
@@ -699,7 +699,7 @@ const SmartContracts: NextPage = () => {
       <ul>
         <li>
           <code>splitPoolAfterLoserRefund(losingPool)</code> &mdash; Reserve a 5% rebate for revealed losers, then split
-          the remaining pool into 91% voters / 5% consensus subsidy / 3% frontend / 1% treasury.
+          the remaining pool into 96% voters / 3% frontend / 1% treasury.
         </li>
         <li>
           <code>calculateVoterReward(shares, totalWinningShares, voterPool)</code> &mdash; Share-proportional reward

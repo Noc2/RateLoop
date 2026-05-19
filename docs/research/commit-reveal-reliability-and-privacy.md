@@ -195,7 +195,7 @@ For unrevealed commits after grace:
 - no HREP reward;
 - no bounty reward;
 - no frontend fee attribution;
-- staked HREP forfeited to consensus reserve or treasury;
+- staked HREP forfeited to treasury or governance-style protocol recovery;
 - optional identity cooldown for repeated non-reveals;
 - optional UI risk warning next time the same Voter ID tries to vote.
 
@@ -424,7 +424,7 @@ token with invisible voting.
 ## Open Questions
 
 - What should the reveal grace be for Curyo's current 20-minute epochs?
-- Should unrevealed stake go to consensus reserve, treasury, or be split?
+- Should unrevealed stake always go to treasury, or should some cases route to governance-style protocol recovery?
 - Should repeated non-reveal affect Voter ID eligibility or only UX warnings?
 - Should private answer bounties pay answerers directly, or should HREP voters
   validate the selected winner first?

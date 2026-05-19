@@ -1763,8 +1763,8 @@ export async function finalizeRevealFailedRound(
 /**
  * Process unrevealed votes after settlement.
  * Calls processUnrevealedVotes(contentId, roundId, startIndex, count).
- * Routes settled past-epoch stakes to the consensus reserve, forfeits
- * tied/reveal-failed stakes to treasury, and refunds current/future-epoch stakes.
+ * Routes settled past-epoch and reveal-failed forfeitures to treasury, and refunds
+ * current/future-epoch stakes.
  */
 export async function processUnrevealedVotes(
   contentId: number | bigint,
@@ -1858,7 +1858,7 @@ export async function claimVoterReward(
 }
 
 /**
- * Read a public uint256 view function from a contract (e.g. consensusReserve).
+ * Read a public uint256 view function from a contract.
  */
 export async function readUint256(functionName: string, contractAddress: string, args: bigint[] = []): Promise<bigint> {
   const { encodeFunctionData, decodeFunctionResult } = await import("viem");

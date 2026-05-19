@@ -1,6 +1,6 @@
 "use client";
 
-import { BuildingLibraryIcon, CircleStackIcon, ShieldCheckIcon, UserGroupIcon } from "@heroicons/react/24/outline";
+import { BuildingLibraryIcon, CircleStackIcon, UserGroupIcon } from "@heroicons/react/24/outline";
 import { surfaceSectionHeadingClassName } from "~~/components/shared/sectionHeading";
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
@@ -60,11 +60,6 @@ export const TreasuryBalance = () => {
     },
   });
 
-  const { data: consensusReserve, isLoading: consensusReserveLoading } = useScaffoldReadContract({
-    contractName: "RoundVotingEngine",
-    functionName: "consensusReserve",
-  });
-
   const { data: launchDistributionBalance, isLoading: launchDistributionLoading } = useScaffoldReadContract({
     contractName: "LaunchDistributionPool",
     functionName: "poolBalance",
@@ -90,17 +85,10 @@ export const TreasuryBalance = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-5">
         <PoolStat
           title="Treasury"
-          tooltip="Balance held by the governance-controlled treasury. Funded by the 1% settlement fee, cancellation fees, and forfeited votes."
+          tooltip="Balance held by the governance-controlled treasury. Funded by the 1% settlement fee, cancellation fees, and forfeited unrevealed votes."
           value={treasuryBalanceRaw}
           isLoading={treasuryLoading}
           Icon={BuildingLibraryIcon}
-        />
-        <PoolStat
-          title="Consensus Reserve"
-          tooltip="Tracked inside RoundVotingEngine and replenished by 5% of losing pools from two-sided rounds."
-          value={consensusReserve}
-          isLoading={consensusReserveLoading}
-          Icon={ShieldCheckIcon}
         />
         <PoolStat
           title="Launch Distribution"

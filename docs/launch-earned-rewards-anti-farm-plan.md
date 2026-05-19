@@ -16,7 +16,7 @@ Today, `RoundRewardDistributor` calls `LaunchDistributionPool` after a
 prediction reward claim. The launch pool receives only `(rater, scoreBps)`.
 That means it cannot tell whether the scored prediction came from a public,
 independently anchored round or from a cheap controlled round. A Sybil operator
-can therefore split across wallets and farm the `25M LREP` earned-rater pool if
+can therefore split across wallets and farm the `29M LREP` earned-rater pool if
 round creation and settlement are cheap enough.
 
 ## Target Policy
@@ -67,8 +67,8 @@ credits pay the normal per-credit slice once all gates are satisfied.
 
 Earned-rater caps start at `10 LREP` for the first `100,000` eligible raters,
 then step down to `5`, `2.5`, `1.25`, and `0.5 LREP` at the existing count
-thresholds. With the `25M LREP` earned-rater allocation, this supports about
-`12.6M` fully paid earned-rater recipients before the pool exhausts.
+thresholds. With the `29M LREP` earned-rater allocation, this supports about
+`20.6M` fully paid earned-rater recipients before the pool exhausts.
 
 All policy values must be timelock-governance updateable so the network can
 start permissive and become stricter if farming pressure appears.

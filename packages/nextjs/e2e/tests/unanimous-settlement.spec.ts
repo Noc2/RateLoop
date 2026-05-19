@@ -19,11 +19,10 @@ import { expect, test } from "@playwright/test";
 /**
  * Unanimous settlement — all raters submit the same binary signal.
  *
- * Under RBTS, unanimous rounds may be funded by prediction forfeitures before
- * touching the consensus reserve, so the reserve no longer has to decrease for
- * a unanimous settlement to be valid.
+ * Under RBTS, unanimous rounds may still create voter rewards from prediction
+ * forfeitures, but they no longer receive a consensus-reserve subsidy.
  */
-test.describe("Unanimous settlement (consensus reserve)", () => {
+test.describe("Unanimous settlement without reserve subsidy", () => {
   test.describe.configure({ mode: "serial" });
 
   const VOTING_ENGINE = CONTRACT_ADDRESSES.RoundVotingEngine;
@@ -40,7 +39,6 @@ test.describe("Unanimous settlement (consensus reserve)", () => {
 
   let contentId: string | null = null;
   let roundId: bigint = 0n;
-  let reserveBefore: bigint = 0n;
 
   test("submit fresh content for unanimous test", async () => {
     test.setTimeout(60_000);
@@ -85,10 +83,6 @@ test.describe("Unanimous settlement (consensus reserve)", () => {
   test("commit, reveal, and settle 3 unanimous UP votes", async () => {
     test.setTimeout(120_000);
     test.skip(!contentId, "No content from previous test");
-
-    // Snapshot consensus reserve BEFORE settlement
-    reserveBefore = await readUint256("consensusReserve", VOTING_ENGINE);
-    expect(reserveBefore).toBeGreaterThan(0n);
 
     const voters = [ANVIL_ACCOUNTS.account3, ANVIL_ACCOUNTS.account4, ANVIL_ACCOUNTS.account5];
 
@@ -146,12 +140,12 @@ test.describe("Unanimous settlement (consensus reserve)", () => {
     expect(settledIndexed, "Ponder did not index settlement").toBe(true);
   });
 
-  test("consensus reserve remains bounded after unanimous RBTS settlement", async () => {
+  test("voter pool remains bounded after unanimous RBTS settlement", async () => {
     test.skip(!contentId || roundId === 0n, "No content or round from previous test");
 
-    const reserveAfter = await readUint256("consensusReserve", VOTING_ENGINE);
-    expect(reserveAfter).toBeGreaterThanOrEqual(0n);
-    expect(reserveAfter).toBeLessThanOrEqual(reserveBefore + STAKE * 3n);
+    const voterPoolAfterSettlement = await readUint256("roundVoterPool", VOTING_ENGINE, [BigInt(contentId!), roundId]);
+    expect(voterPoolAfterSettlement).toBeGreaterThanOrEqual(0n);
+    expect(voterPoolAfterSettlement).toBeLessThanOrEqual(STAKE * 3n);
   });
 
   test("round settled as unanimous with correct data", async () => {

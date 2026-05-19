@@ -90,9 +90,9 @@ const Tokenomics = () => {
 
       <h3>Launch Distribution Pool</h3>
       <p>
-        The 64M LREP Launch Distribution Pool is the protocol&apos;s onboarding engine. It is not a large airdrop to the
+        The 68M LREP Launch Distribution Pool is the protocol&apos;s onboarding engine. It is not a large airdrop to the
         previous user set. The split is <strong>35M LREP</strong> for verified + referral rewards,{" "}
-        <strong>25M LREP</strong> for earned rater rewards, and <strong>4M LREP</strong> for legacy users.
+        <strong>29M LREP</strong> for earned rater rewards, and <strong>4M LREP</strong> for legacy users.
       </p>
       <p>
         The 4M legacy claim is split across the same nine migrated verified users from the old redeploy manifest.
@@ -111,7 +111,7 @@ const Tokenomics = () => {
         qualifying history, bounded anchor fanout, round-level unverified-credit caps, aged anchor credentials, and a
         finalized correlation payout snapshot before payouts begin. Correlated accounts accrue fractional effective
         credit, so they may need more rounds before LREP starts paying. Full caps start at <strong>10 LREP</strong> and
-        step down through 5, 2.5, 1.25, and 0.5 LREP so the 25M LREP earned rater rail can support about 12.6M fully
+        step down through 5, 2.5, 1.25, and 0.5 LREP so the 29M LREP earned rater rail can support about 20.6M fully
         paid recipients. Open raters can be given a governed partial cap and later unlock the full snapshotted cap by
         verifying the same wallet as a human. Governance can tighten these thresholds over time. Agent wallets do not
         count as human anchors unless they hold an active verified-human credential.
@@ -178,7 +178,7 @@ const Tokenomics = () => {
         Verification acceleration, safety responses, appeals, and governance programs are treasury responsibilities.
         They do not draw from the Launch Distribution Pool. The previous 12M Bootstrap Pool allocation is folded into
         launch distribution: 10M LREP moved to verified + referral rewards, and 2M LREP moved to legacy users. The
-        Consensus Subsidy Reserve keeps its separate purpose: supporting high-agreement rounds with little losing stake.
+        former 4M LREP consensus reserve allocation moved into earned rater rewards.
       </p>
 
       <h3 id="bounties">Bounties</h3>
@@ -221,7 +221,7 @@ const Tokenomics = () => {
         When a round resolves, accurate revealed crowd predictions recover their original stake and claim from the
         content-specific rater pool. Revealed misses can reclaim{" "}
         <strong>{protocolDocFacts.revealedLoserRefundPercentLabel}</strong> of raw stake, and the remaining losing pool
-        is split across accurate raters, frontend operators, consensus reserve, and treasury.
+        is split across accurate raters, frontend operators, and treasury. No unanimous consensus subsidy is paid.
       </p>
       <RewardPayoutPathsDiagram />
 

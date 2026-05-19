@@ -563,10 +563,9 @@ design:
 
 The current launch allocation in `packages/foundry/script/Deploy.s.sol` is:
 
-- 4M LREP consensus reserve.
 - 32M LREP treasury.
-- 64M LREP Launch Distribution Pool, split into 35M verified + referral
-  rewards, 25M earned rater rewards, and 4M legacy users.
+- 68M LREP Launch Distribution Pool, split into 35M verified + referral
+  rewards, 29M earned rater rewards, and 4M legacy users.
 - No funded Bootstrap Pool allocation; the previous 12M bucket is folded into
   launch distribution.
 
@@ -910,7 +909,7 @@ Current:
 - accepts 0 to 10 LREP stake;
 - transfers HREP to engine;
 - weighted pools decide the binary side;
-- losing HREP funds rewards, consensus reserve, treasury, and frontend fees.
+- losing HREP funds rewards, treasury, and frontend fees.
 
 Recommended:
 
