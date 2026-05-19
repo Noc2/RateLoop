@@ -47,7 +47,6 @@ export const PLATFORM_REWARD_SPLIT_BPS = {
 } as const;
 
 export const REWARD_SPLIT_BPS = {
-  revealedLoserRefund: 500,
   voter: 9_600,
   submitter: 0,
   platform: PLATFORM_REWARD_SPLIT_BPS.frontend,

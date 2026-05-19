@@ -10,7 +10,7 @@ import { RewardMath } from "./RewardMath.sol";
 import { TokenTransferLib } from "./TokenTransferLib.sol";
 
 /// @title RoundSettlementDistributionLib
-/// @notice Extracts bounty accounting from RoundVotingEngine to keep runtime bytecode below EIP-170.
+/// @notice Extracts forfeited-stake accounting from RoundVotingEngine to keep runtime bytecode below EIP-170.
 library RoundSettlementDistributionLib {
     event TreasuryFeeDistributed(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
     /// @notice Emitted when the 1% treasury fee could not be delivered (treasury unset or
@@ -29,12 +29,10 @@ library RoundSettlementDistributionLib {
         uint256 contentId,
         uint256 roundId,
         uint256 weightedWinningStake,
-        uint256 losingPool
+        uint256 forfeitedPool
     ) external returns (uint256 treasuryPaid) {
-        if (losingPool > 0) {
-            uint256 loserRefundShare = RewardMath.calculateRevealedLoserRefund(losingPool);
-            (uint256 voterShare, uint256 platformShare, uint256 treasuryShare) =
-                RewardMath.splitPool(losingPool - loserRefundShare);
+        if (forfeitedPool > 0) {
+            (uint256 voterShare, uint256 platformShare, uint256 treasuryShare) = RewardMath.splitPool(forfeitedPool);
 
             if (weightedWinningStake > 0) {
                 roundVoterPool[contentId][roundId] += voterShare;
@@ -75,17 +73,13 @@ library RoundSettlementDistributionLib {
         uint256 platformShare
     ) private {
         IFrontendRegistry currentFrontendRegistry = IFrontendRegistry(protocolConfig.frontendRegistry());
-        uint256 frontendShare = platformShare;
-
-        if (frontendShare > 0) {
-            if (roundStakeWithEligibleFrontend[contentId][roundId] > 0) {
-                roundFrontendPool[contentId][roundId] = frontendShare;
-                if (roundFrontendRegistrySnapshot[contentId][roundId] == address(0)) {
-                    roundFrontendRegistrySnapshot[contentId][roundId] = address(currentFrontendRegistry);
-                }
-            } else {
-                roundVoterPool[contentId][roundId] += frontendShare;
+        if (roundStakeWithEligibleFrontend[contentId][roundId] > 0) {
+            roundFrontendPool[contentId][roundId] = platformShare;
+            if (roundFrontendRegistrySnapshot[contentId][roundId] == address(0)) {
+                roundFrontendRegistrySnapshot[contentId][roundId] = address(currentFrontendRegistry);
             }
+        } else {
+            roundVoterPool[contentId][roundId] += platformShare;
         }
     }
 

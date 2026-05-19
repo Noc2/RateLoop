@@ -93,7 +93,6 @@ contract RoundVotingEngine is
     uint256 internal constant VOTE_COOLDOWN = 24 hours; // Time-based cooldown per content per voter
     uint256 internal constant MAX_CIPHERTEXT_SIZE = 2_048; // 2 KB max ciphertext to prevent storage bloat
     uint16 internal constant MIN_RBTS_PARTICIPANTS = 3;
-    uint16 internal constant RBTS_SCORE_SCALE_BPS = 10_000;
 
     // --- State ---
     IERC20 internal lrepToken;
@@ -118,7 +117,7 @@ contract RoundVotingEngine is
 
     // Reward accounting per round
     mapping(uint256 => mapping(uint256 => uint256)) public roundVoterPool; // contentId => roundId => voter pool
-    mapping(uint256 => mapping(uint256 => uint256)) public roundWinningStake; // contentId => roundId => epoch-weighted winning stake
+    mapping(uint256 => mapping(uint256 => uint256)) public roundWinningStake; // contentId => roundId => reward-distribution weight
 
     // Robust BTS reward accounting per round.
     mapping(uint256 => mapping(uint256 => bool)) public roundRbtsScored;
@@ -128,6 +127,7 @@ contract RoundVotingEngine is
     mapping(uint256 => mapping(uint256 => uint256)) public roundRbtsParticipationClaimants;
     mapping(uint256 => mapping(uint256 => uint256)) public roundRbtsForfeitedPool;
     mapping(uint256 => mapping(uint256 => uint256)) public roundRbtsForfeitClaimants;
+    mapping(uint256 => mapping(uint256 => uint16)) public roundRbtsMeanScoreBps;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint16))) public commitPredictedUpBps;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint256))) internal commitRbtsWeight;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint16))) public commitRbtsScoreBps;
@@ -203,7 +203,8 @@ contract RoundVotingEngine is
         uint256 rewardWeight,
         uint256 rewardClaimants,
         uint256 forfeitedPool,
-        uint256 forfeitClaimants
+        uint256 forfeitClaimants,
+        uint16 meanScoreBps
     );
     event RbtsSeedCaptured(uint256 indexed contentId, uint256 indexed roundId, bytes32 entropy);
     event RoundSettled(uint256 indexed contentId, uint256 indexed roundId, bool upWins, uint256 losingPool);
@@ -875,7 +876,7 @@ contract RoundVotingEngine is
             roundUnrevealedCleanupRemaining[contentId][roundId] = unrevealedPastEpochCount;
         }
 
-        uint256 weightedWinningStake;
+        uint256 weightedRewardStake;
         uint256 rbtsForfeitedPool;
         uint256 binaryLosingPool;
         bool upWins;
@@ -900,8 +901,8 @@ contract RoundVotingEngine is
         }
         binaryLosingPool = upWins ? round.downPool : round.upPool;
 
-        (weightedWinningStake, rbtsForfeitedPool, scoreSeed) =
-            _scoreRbtsRewards(contentId, roundId, round.revealedCount, upWins, round.thresholdReachedAt);
+        (weightedRewardStake, rbtsForfeitedPool, scoreSeed) =
+            _scoreRbtsRewards(contentId, roundId, round.revealedCount, round.thresholdReachedAt);
         roundRbtsScored[contentId][roundId] = true;
 
         round.upWins = upWins;
@@ -922,7 +923,7 @@ contract RoundVotingEngine is
             roundFrontendRegistrySnapshot,
             contentId,
             roundId,
-            weightedWinningStake,
+            weightedRewardStake,
             rbtsForfeitedPool
         );
         if (treasuryPaid > 0) {
@@ -950,7 +951,8 @@ contract RoundVotingEngine is
             roundRbtsRewardWeight[contentId][roundId],
             roundRbtsRewardClaimants[contentId][roundId],
             roundRbtsForfeitedPool[contentId][roundId],
-            roundRbtsForfeitClaimants[contentId][roundId]
+            roundRbtsForfeitClaimants[contentId][roundId],
+            roundRbtsMeanScoreBps[contentId][roundId]
         );
         emit RoundSettled(contentId, roundId, upWins, binaryLosingPool);
     }
@@ -1194,13 +1196,10 @@ contract RoundVotingEngine is
         return RoundCleanupLib.pastEpochUnrevealedCount(epochUnrevealedCount[contentId][roundId], round, roundCfg);
     }
 
-    function _scoreRbtsRewards(
-        uint256 contentId,
-        uint256 roundId,
-        uint256 revealedCount,
-        bool upWins,
-        uint48 thresholdReachedAt
-    ) internal returns (uint256 rewardWeight, uint256 forfeitedPool, bytes32 scoreSeed) {
+    function _scoreRbtsRewards(uint256 contentId, uint256 roundId, uint256 revealedCount, uint48 thresholdReachedAt)
+        internal
+        returns (uint256 rewardWeight, uint256 forfeitedPool, bytes32 scoreSeed)
+    {
         bytes32 settlementEntropy = RoundRevealLib.finalizeRbtsSeed(roundRbtsSeedEntropy, contentId, roundId);
         RoundRevealLib.ScoreRbtsResult memory result = RoundRevealLib.scoreRbtsRewards(
             roundCommitHashes[contentId][roundId],
@@ -1216,9 +1215,7 @@ contract RoundVotingEngine is
                 contentId: contentId,
                 roundId: roundId,
                 revealedCount: revealedCount,
-                upWins: upWins,
                 minParticipants: MIN_RBTS_PARTICIPANTS,
-                scoreScaleBps: RBTS_SCORE_SCALE_BPS,
                 settlementEntropy: settlementEntropy,
                 thresholdReachedAt: thresholdReachedAt
             })
@@ -1233,6 +1230,7 @@ contract RoundVotingEngine is
         roundRbtsParticipationClaimants[contentId][roundId] = result.participationClaimants;
         roundRbtsForfeitedPool[contentId][roundId] = result.forfeitedPool;
         roundRbtsForfeitClaimants[contentId][roundId] = result.forfeitClaimants;
+        roundRbtsMeanScoreBps[contentId][roundId] = result.meanScoreBps;
     }
 
     function _revealRbtsVoteInternal(
