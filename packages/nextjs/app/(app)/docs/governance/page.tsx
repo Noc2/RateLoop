@@ -112,7 +112,7 @@ const GovernanceDocs: NextPage = () => {
         <strong>{protocolDocFacts.frontendOperatorStakeLabel}</strong> in the FrontendRegistry. Operators publish the
         deterministic artifact URI and root from their registered wallet, then wait through the challenge window. Other
         operators or auditors can recompute the artifact and challenge bad roots with the configured USDC challenge
-        bond, which defaults to 5 USDC (5_000_000 atomic units).
+        bond, which defaults to 5 USDC.
       </p>
       <OracleChallengeFlowDiagram />
       <p>
