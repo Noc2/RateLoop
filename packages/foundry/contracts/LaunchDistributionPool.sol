@@ -275,7 +275,10 @@ contract LaunchDistributionPool is
         if (newReadyAt != 0) {
             // L-Oracle-C: refuse to advance readyAt into the future relative to current block —
             // would silently strand the credit. Allow stepping backwards to before the new
-            // oracle's snapshot proposedAt.
+            // oracle's snapshot proposedAt. Governance-only function; the L2 sequencer's
+            // ~20s timestamp drift is well below the cluster oracle's challenge window
+            // (12 h default) so timestamp dependence is intentional and safe here.
+            // slither-disable-next-line timestamp
             if (uint256(newReadyAt) > block.timestamp) revert InvalidAmount();
             pendingEarnedRaterCreditReadyAt[contentId][roundId][commitKey] = newReadyAt;
         }
