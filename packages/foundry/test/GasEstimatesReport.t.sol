@@ -29,9 +29,8 @@ contract MockRewardDistributorForFrontendGas {
 }
 
 contract UserTransactionGasEstimatesTest is RoundIntegrationTest {
-    bytes32 internal constant VOTE_COMMITTED_TOPIC = keccak256(
-        "VoteCommitted(uint256,uint256,address,bytes32,uint16,uint64,bytes32,uint256,bytes32,bytes)"
-    );
+    bytes32 internal constant VOTE_COMMITTED_TOPIC =
+        keccak256("VoteCommitted(uint256,uint256,address,bytes32,uint16,uint64,bytes32,uint256,bytes32,bytes)");
     bytes32 internal constant ADVISORY_VOTE_RECORDED_TOPIC = keccak256(
         "AdvisoryVoteRecorded(uint256,uint256,address,bytes32,bytes32,uint16,uint64,bytes32,bytes32,bytes)"
     );
@@ -100,7 +99,10 @@ contract UserTransactionGasEstimatesTest is RoundIntegrationTest {
         console2.log("submit_content_reveal_calldata_intrinsic_gas", _calldataIntrinsicGas(callData));
     }
 
-    function _logVoteCommitPayload(bytes memory callData, bytes memory ciphertext, uint256 eventDataBytes) internal pure {
+    function _logVoteCommitPayload(bytes memory callData, bytes memory ciphertext, uint256 eventDataBytes)
+        internal
+        pure
+    {
         console2.log("vote_commit_calldata_bytes", callData.length);
         console2.log("vote_commit_calldata_nonzero_bytes", _calldataNonzeroBytes(callData));
         console2.log("vote_commit_calldata_intrinsic_gas", _calldataIntrinsicGas(callData));
@@ -202,7 +204,8 @@ contract UserTransactionGasEstimatesTest is RoundIntegrationTest {
 
     function testGasEstimate_recordAdvisoryVote_logs() public {
         vm.pauseGasMetering();
-        AdvisoryVoteRecorder advisoryRecorder = new AdvisoryVoteRecorder(address(votingEngine), address(registry), owner);
+        AdvisoryVoteRecorder advisoryRecorder =
+            new AdvisoryVoteRecorder(address(votingEngine), address(registry), owner);
         ProtocolConfig config = ProtocolConfig(address(votingEngine.protocolConfig()));
         vm.prank(owner);
         config.setAdvisoryVoteRecorder(address(advisoryRecorder));
@@ -222,7 +225,8 @@ contract UserTransactionGasEstimatesTest is RoundIntegrationTest {
         );
 
         bytes32 salt = keccak256(abi.encodePacked(voter2, contentId, "advisory-gas"));
-        TestCommitArtifacts memory artifacts = _buildTestCommitArtifacts(address(votingEngine), voter2, true, salt, contentId);
+        TestCommitArtifacts memory artifacts =
+            _buildTestCommitArtifacts(address(votingEngine), voter2, true, salt, contentId);
         bytes memory callData = abi.encodeCall(
             AdvisoryVoteRecorder.recordAdvisoryVote,
             (

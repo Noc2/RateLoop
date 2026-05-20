@@ -1856,12 +1856,13 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
         bytes32 rotatedChainHash = bytes32(uint256(0xBEEF));
         vm.prank(owner);
-        ProtocolConfig(protocolConfigAddress).setDrandConfig(
-            rotatedChainHash, DEFAULT_DRAND_GENESIS_TIME, DEFAULT_DRAND_PERIOD
-        );
+        ProtocolConfig(protocolConfigAddress)
+            .setDrandConfig(rotatedChainHash, DEFAULT_DRAND_GENESIS_TIME, DEFAULT_DRAND_PERIOD);
 
         (,, bytes32 commitChainHashAfter,,,) = engine.commitRevealData(contentId, roundId, commitKey);
-        assertEq(commitChainHashAfter, _tlockDrandChainHash(), "live config rotation must not rewrite commit hash input");
+        assertEq(
+            commitChainHashAfter, _tlockDrandChainHash(), "live config rotation must not rewrite commit hash input"
+        );
 
         _warpPastTlockRevealTime(block.timestamp + EPOCH);
         engine.revealVoteByCommitKey(contentId, roundId, commitKey, true, 5_000, salt);
@@ -1903,14 +1904,15 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         lrepToken.approve(address(engine), STAKE);
         uint256 roundContext = _roundContext(engine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());
         vm.prank(voter1);
-        engine.commitVote(contentId, roundContext, targetRound, snapshotChainHash, commitHash, ciphertext, STAKE, address(0));
+        engine.commitVote(
+            contentId, roundContext, targetRound, snapshotChainHash, commitHash, ciphertext, STAKE, address(0)
+        );
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
         bytes32 commitKey = _commitKey(voter1, commitHash);
         vm.prank(owner);
-        ProtocolConfig(protocolConfigAddress).setDrandConfig(
-            rotatedChainHash, DEFAULT_DRAND_GENESIS_TIME, DEFAULT_DRAND_PERIOD
-        );
+        ProtocolConfig(protocolConfigAddress)
+            .setDrandConfig(rotatedChainHash, DEFAULT_DRAND_GENESIS_TIME, DEFAULT_DRAND_PERIOD);
 
         _warpPastTlockRevealTime(block.timestamp + EPOCH);
         vm.expectRevert(RoundVotingEngine.HashMismatch.selector);
