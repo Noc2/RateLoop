@@ -17,6 +17,7 @@ function toMicroUnits(value: number) {
 export function useWalletSummaryData(address?: Address) {
   const { targetNetwork } = useTargetNetwork();
   const isPageVisible = usePageVisibility();
+  const isLocalNetwork = targetNetwork.id === 31337;
   const { totalSubmissionStake } = useSubmissionStakes(address);
   const { activeStaked: votingStaked } = useVotingStakes(address);
   const { votes: activeVotes, earliestReveal, hasPendingReveals } = useActiveVotesWithDeadlines(address);
@@ -28,8 +29,8 @@ export function useWalletSummaryData(address?: Address) {
     watch: false,
     query: {
       enabled: !!address,
-      staleTime: 60_000,
-      refetchInterval: isPageVisible ? 60_000 : false,
+      staleTime: isLocalNetwork ? 0 : 60_000,
+      refetchInterval: isPageVisible ? (isLocalNetwork ? 2_000 : 60_000) : false,
     },
   });
 
@@ -40,8 +41,8 @@ export function useWalletSummaryData(address?: Address) {
     watch: false,
     query: {
       enabled: !!address,
-      staleTime: 60_000,
-      refetchInterval: isPageVisible ? 60_000 : false,
+      staleTime: isLocalNetwork ? 0 : 60_000,
+      refetchInterval: isPageVisible ? (isLocalNetwork ? 2_000 : 60_000) : false,
     },
   });
 

@@ -1379,6 +1379,35 @@ export function ContentSubmissionSection() {
       return;
     }
 
+    const submitterAddress = connectedAddress as `0x${string}` | undefined;
+    if (!submitterAddress) {
+      notification.error("Wallet not connected");
+      return;
+    }
+
+    try {
+      const rewardBalance = (await readContract(wagmiConfig, {
+        address: verifiedRewardTokenAddress,
+        abi: ERC20_APPROVAL_ABI,
+        functionName: "balanceOf",
+        args: [submitterAddress],
+      })) as bigint;
+
+      if (rewardBalance < selectedRewardAmount) {
+        setSubmissionStep("bounty");
+        notification.error(
+          `You need ${formatSubmissionRewardAmount(selectedRewardAmount, rewardAsset)} to fund this bounty. Your wallet has ${formatSubmissionRewardAmount(
+            rewardBalance,
+            rewardAsset,
+          )}.`,
+        );
+        return;
+      }
+    } catch {
+      notification.error(`Could not verify your ${rewardAsset === "lrep" ? "LREP" : "USDC"} balance.`);
+      return;
+    }
+
     const accepted = await requireAcceptance("submit");
     if (!accepted) return;
 
@@ -1388,10 +1417,6 @@ export function ContentSubmissionSection() {
     let cancelReservedSubmission: ((revealCommitment: `0x${string}`) => Promise<void>) | null = null;
     try {
       let submittedContentIds: bigint[] = [];
-      const submitterAddress = connectedAddress as `0x${string}` | undefined;
-      if (!submitterAddress) {
-        throw new Error("Wallet not connected");
-      }
       const publicClient = getPublicClient(wagmiConfig, { chainId: targetNetwork.id as any });
       const getFreshPendingNonce = async (minimumNonce?: number): Promise<number | undefined> => {
         if (!publicClient) return minimumNonce;
