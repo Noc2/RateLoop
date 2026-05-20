@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
@@ -12,7 +13,12 @@ import { getMissingKeeperEnvVars } from "./dev-stack-keeper.mjs";
 const currentFile = fileURLToPath(import.meta.url);
 const repoRoot = path.resolve(path.dirname(currentFile), "..");
 const nextProjectDir = path.join(repoRoot, "packages", "nextjs");
+const ponderProjectDir = path.join(repoRoot, "packages", "ponder");
 const nextDevLockPath = path.join(nextProjectDir, ".next-dev.lock");
+const ponderEnvPath = path.join(ponderProjectDir, ".env.local");
+const ponderPgliteDir = path.join(ponderProjectDir, ".ponder", "pglite");
+const ponderDeploymentFingerprintPath = path.join(ponderProjectDir, ".ponder", "dev-stack-deployment-fingerprint");
+const deployedContractsPath = path.join(repoRoot, "packages", "contracts", "src", "deployedContracts.ts");
 const yarnCommand = process.platform === "win32" ? "yarn.cmd" : "yarn";
 const baseServices = [
   {
@@ -119,6 +125,91 @@ function parseEnvFile(filePath) {
   return values;
 }
 
+function isLocalPonderRpcUrl(value) {
+  try {
+    const url = new URL(value);
+    return url.hostname === "localhost" || url.hostname === "127.0.0.1" || url.hostname === "::1";
+  } catch {
+    return false;
+  }
+}
+
+function getPonderNetworkFromEnv(env) {
+  return env.PONDER_NETWORK?.trim() || "hardhat";
+}
+
+function getPonderRpcUrlFromEnv(env) {
+  return env.PONDER_RPC_URL_31337?.trim() || "http://127.0.0.1:8545";
+}
+
+function getDeploymentFingerprint() {
+  if (!existsSync(deployedContractsPath)) return null;
+
+  return createHash("sha256").update(readFileSync(deployedContractsPath)).digest("hex");
+}
+
+export function getPonderDataResetPlan({
+  ponderNetwork = "hardhat",
+  ponderRpcUrl = "http://127.0.0.1:8545",
+  currentFingerprint,
+  storedFingerprint,
+  hasPglite,
+} = {}) {
+  if (ponderNetwork !== "hardhat" || !isLocalPonderRpcUrl(ponderRpcUrl)) {
+    return {
+      shouldRecord: false,
+      shouldReset: false,
+      reason: "Ponder is not targeting local hardhat",
+    };
+  }
+
+  if (!currentFingerprint) {
+    return {
+      shouldRecord: false,
+      shouldReset: false,
+      reason: "deployment fingerprint is unavailable",
+    };
+  }
+
+  if (storedFingerprint === currentFingerprint) {
+    return {
+      shouldRecord: false,
+      shouldReset: false,
+      reason: "local deployment artifact is unchanged",
+    };
+  }
+
+  return {
+    shouldRecord: true,
+    shouldReset: hasPglite,
+    reason: storedFingerprint ? "local deployment artifact changed" : "no local deployment fingerprint was recorded",
+  };
+}
+
+function resetLocalPonderDataIfDeploymentChanged(env) {
+  const currentFingerprint = getDeploymentFingerprint();
+  const storedFingerprint = existsSync(ponderDeploymentFingerprintPath)
+    ? readFileSync(ponderDeploymentFingerprintPath, "utf8").trim()
+    : undefined;
+  const plan = getPonderDataResetPlan({
+    ponderNetwork: getPonderNetworkFromEnv(env),
+    ponderRpcUrl: getPonderRpcUrlFromEnv(env),
+    currentFingerprint,
+    storedFingerprint,
+    hasPglite: existsSync(ponderPgliteDir),
+  });
+
+  if (plan.shouldReset) {
+    rmSync(ponderPgliteDir, { recursive: true, force: true });
+    console.log(`[dev-stack] Cleared local Ponder PGlite data because ${plan.reason}.`);
+  }
+
+  if (plan.shouldRecord && currentFingerprint) {
+    mkdirSync(path.dirname(ponderDeploymentFingerprintPath), { recursive: true });
+    writeFileSync(ponderDeploymentFingerprintPath, `${currentFingerprint}\n`);
+  }
+}
+
 function resolveKeeperStartupStatus() {
   const keeperEnvPath = path.join(repoRoot, "packages", "keeper", ".env.local");
   const envFromFile = parseEnvFile(keeperEnvPath);
@@ -130,6 +221,11 @@ function resolveKeeperStartupStatus() {
     enabled: missing.length === 0,
     missing,
   };
+}
+
+function resolvePonderStartupEnv() {
+  const envFromFile = parseEnvFile(ponderEnvPath);
+  return { ...envFromFile, ...process.env };
 }
 
 function printMissingDockerHelp(databaseConfig) {
@@ -328,7 +424,7 @@ Environment:
   const keeperStartup = resolveKeeperStartupStatus();
 
   warnIfMissing(
-    path.join(repoRoot, "packages", "ponder", ".env.local"),
+    ponderEnvPath,
     "packages/ponder/.env.local is missing. Ponder will use defaults where it can, but RPC/network settings may be incomplete.",
   );
 
@@ -358,6 +454,7 @@ Environment:
   }
 
   runDbPush(databaseConfig, { skipDbPush, allowRemoteDbPush });
+  resetLocalPonderDataIfDeploymentChanged(resolvePonderStartupEnv());
 
   const services = keeperStartup.enabled ? [...baseServices, keeperService] : baseServices;
   if (!keeperStartup.enabled) {
