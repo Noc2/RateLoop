@@ -374,6 +374,12 @@
   {
     "slot": 62,
     "offset": 0,
+    "label": "pendingTreasuryForfeitLrep",
+    "type": "t_uint256"
+  },
+  {
+    "slot": 63,
+    "offset": 0,
     "label": "__gap",
     "type": "t_array"
   }

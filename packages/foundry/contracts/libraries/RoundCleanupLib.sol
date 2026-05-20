@@ -46,6 +46,10 @@ library RoundCleanupLib {
     event BundleObserverNotifyReplayed(uint256 indexed contentId, uint256 indexed roundId, bool settled);
     event ForfeitedFundsAddedToTreasury(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
     event ForfeitedFundsRetained(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
+    /// @notice L-Cleanup-1: emitted when treasury was unset or rejected the forfeit transfer.
+    ///         The engine accumulates the unpaid amount into `pendingTreasuryForfeitLrep` for
+    ///         later flush via `flushPendingTreasuryForfeit()`.
+    event TreasuryForfeitPending(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
     event CurrentEpochRefunded(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
 
     function targetRoundRevealableAt(
@@ -391,7 +395,7 @@ library RoundCleanupLib {
         address cleanupCaller,
         uint256 startIndex,
         uint256 count
-    ) external returns (uint256 updatedAccountedLrepBalance) {
+    ) external returns (uint256 updatedAccountedLrepBalance, uint256 pendingTreasuryForfeitDelta) {
         if (
             round.state != RoundLib.RoundState.Settled && round.state != RoundLib.RoundState.Tied
                 && round.state != RoundLib.RoundState.RevealFailed
@@ -431,7 +435,11 @@ library RoundCleanupLib {
             if (treasuryPaid > 0) {
                 emit ForfeitedFundsAddedToTreasury(contentId, roundId, forfeitedToTreasury);
             } else {
+                // L-Cleanup-1: surface the unpaid amount so the engine can accumulate it into
+                // its pending bucket. We keep emitting `ForfeitedFundsRetained` for backward
+                // compatibility with indexers.
                 emit ForfeitedFundsRetained(contentId, roundId, forfeitedToTreasury);
+                pendingTreasuryForfeitDelta = forfeitedToTreasury;
             }
         }
 
@@ -513,7 +521,16 @@ library RoundCleanupLib {
             if (currentTreasury != address(0)) {
                 try TokenTransferLib.safeTransfer(lrepToken, currentTreasury, forfeitedToTreasury) {
                     treasuryPaid = forfeitedToTreasury;
-                } catch { }
+                } catch {
+                    // L-Cleanup-1: treasury rejected or paused. The caller (engine) is
+                    // responsible for accumulating the unpaid amount into the
+                    // `pendingTreasuryForfeitLrep` bucket so a permissionless
+                    // `flushPendingTreasuryForfeit()` can retry later. We surface the
+                    // difference via the `treasuryPaid` return value (zero in this branch).
+                    emit TreasuryForfeitPending(contentId, roundId, forfeitedToTreasury);
+                }
+            } else {
+                emit TreasuryForfeitPending(contentId, roundId, forfeitedToTreasury);
             }
         }
 

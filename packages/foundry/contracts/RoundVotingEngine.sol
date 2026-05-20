@@ -240,6 +240,9 @@ contract RoundVotingEngine is
     event RoundCancelled(uint256 indexed contentId, uint256 indexed roundId);
     event RoundTied(uint256 indexed contentId, uint256 indexed roundId);
     event RoundRevealFailed(uint256 indexed contentId, uint256 indexed roundId);
+    /// @notice L-Cleanup-1: emitted when accumulated treasury-rejected forfeits are
+    ///         successfully flushed to treasury via `flushPendingTreasuryForfeit`.
+    event PendingTreasuryForfeitFlushed(address indexed treasury, uint256 amount);
     /// @notice Emitted when `_notifyBundleRoundTerminal` invocation of
     ///         `recordBundleQuestionTerminal` on the bundle escrow reverts. The terminal signal
     ///         is captured in `pendingBundleObserverReplay` so an admin can call
@@ -1038,7 +1041,7 @@ contract RoundVotingEngine is
         nonReentrant
     {
         RoundLib.Round storage round = rounds[contentId][roundId];
-        accountedLrepBalance = RoundCleanupLib.processUnrevealedVotesForEngine(
+        (uint256 newAccountedBalance, uint256 pendingDelta) = RoundCleanupLib.processUnrevealedVotesForEngine(
             round,
             roundCommitHashes[contentId][roundId],
             commits[contentId][roundId],
@@ -1053,12 +1056,36 @@ contract RoundVotingEngine is
             startIndex,
             count
         );
+        accountedLrepBalance = newAccountedBalance;
+        // L-Cleanup-1: accumulate any treasury-rejected forfeit into the pending bucket so a
+        // later `flushPendingTreasuryForfeit` (permissionless) can retry the transfer. Without
+        // this, the unpaid LREP would stay in the engine but be inaccessible: commits are
+        // zeroed and `recoverSurplusLrep` can't touch funds still on the accounted side.
+        if (pendingDelta > 0) {
+            pendingTreasuryForfeitLrep += pendingDelta;
+        }
         if (
             round.state == RoundLib.RoundState.Settled && roundUnrevealedCleanupRemaining[contentId][roundId] == 0
                 && roundClusterPayoutReadyAt[contentId][roundId] == 0
         ) {
             roundClusterPayoutReadyAt[contentId][roundId] = block.timestamp.toUint48();
         }
+    }
+
+    /// @notice L-Cleanup-1: permissionless retry of pending treasury forfeits accumulated by
+    ///         `processUnrevealedVotes` when treasury was unset or the transfer reverted.
+    ///         Decrements `accountedLrepBalance` only on successful transfer; the bucket
+    ///         survives failed flushes so callers can retry once treasury is healthy.
+    function flushPendingTreasuryForfeit() external nonReentrant returns (uint256 paid) {
+        uint256 amount = pendingTreasuryForfeitLrep;
+        if (amount == 0) revert NothingProcessed();
+        address treasuryAddress = protocolConfig.treasury();
+        if (treasuryAddress == address(0)) revert InvalidAddress();
+        pendingTreasuryForfeitLrep = 0;
+        lrepToken.safeTransfer(treasuryAddress, amount);
+        accountedLrepBalance -= amount;
+        emit PendingTreasuryForfeitFlushed(treasuryAddress, amount);
+        return amount;
     }
     // =========================================================================
     // INTERNAL HELPERS
@@ -1522,6 +1549,12 @@ contract RoundVotingEngine is
     ///         waiting 256 blocks and re-rolling. Capped at `MAX_RBTS_SEED_REFRESHES` per round.
     mapping(uint256 contentId => mapping(uint256 roundId => uint8)) public roundRbtsSeedRefreshCount;
 
+    /// @notice L-Cleanup-1: accumulated LREP that `processUnrevealedVotes` tried to send to
+    ///         treasury but couldn't (treasury unset or transfer reverted). Permissionless
+    ///         `flushPendingTreasuryForfeit` retries the transfer; until then the amount stays
+    ///         in `accountedLrepBalance` so it isn't classified as recoverable surplus.
+    uint256 public pendingTreasuryForfeitLrep;
+
     // --- Storage gap reserved for future upgrades ---
-    uint256[22] private __gap;
+    uint256[21] private __gap;
 }
