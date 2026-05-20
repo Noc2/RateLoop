@@ -2,6 +2,7 @@ import {
   resolveVoteFeedActiveContentIdForSessionChange,
   resolveVoteFeedActiveSourceIndex,
   resolveVoteFeedVisibleRange,
+  shouldHoldVoteFeedForRequestedContent,
 } from "./useVoteFeedStage";
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -14,6 +15,30 @@ test("selects the requested content once it is present in the feed", () => {
 
 test("does not fall back to the first item while a requested deep-link item is still missing", () => {
   assert.equal(resolveVoteFeedActiveSourceIndex(items, null, 9n), -1);
+});
+
+test("holds the visible feed while a missing requested item is still loading", () => {
+  assert.equal(
+    shouldHoldVoteFeedForRequestedContent({
+      activeSourceIndex: -1,
+      isFeedLoading: false,
+      isRequestedContentLoading: true,
+      requestedActiveId: 9n,
+    }),
+    true,
+  );
+});
+
+test("releases the visible feed after a missing requested item finishes loading", () => {
+  assert.equal(
+    shouldHoldVoteFeedForRequestedContent({
+      activeSourceIndex: -1,
+      isFeedLoading: false,
+      isRequestedContentLoading: false,
+      requestedActiveId: 9n,
+    }),
+    false,
+  );
 });
 
 test("falls back to the first item when there is no explicit requested selection", () => {

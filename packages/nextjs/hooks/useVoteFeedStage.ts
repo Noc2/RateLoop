@@ -69,6 +69,25 @@ export function resolveVoteFeedActiveContentIdForSessionChange(
   return requestedActiveId ?? null;
 }
 
+export function shouldHoldVoteFeedForRequestedContent({
+  activeSourceIndex,
+  isFeedLoading,
+  isRequestedContentLoading,
+  requestedActiveId,
+}: {
+  activeSourceIndex: number;
+  isFeedLoading: boolean;
+  isRequestedContentLoading: boolean;
+  requestedActiveId?: bigint | null;
+}) {
+  return (
+    requestedActiveId !== undefined &&
+    requestedActiveId !== null &&
+    activeSourceIndex < 0 &&
+    (isFeedLoading || isRequestedContentLoading)
+  );
+}
+
 export function useVoteFeedStage(items: ContentItem[], options: UseVoteFeedStageOptions) {
   const { sessionKey, visibleCount, requestedActiveId } = options;
   const [activeContentId, setActiveContentId] = useState<bigint | null>(requestedActiveId ?? null);

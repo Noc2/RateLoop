@@ -40,7 +40,7 @@ import { useRoundVote } from "~~/hooks/useRoundVote";
 import { SubmitterProfile, useSubmitterProfiles } from "~~/hooks/useSubmitterProfiles";
 import { useUnixTime } from "~~/hooks/useUnixTime";
 import { useVoteCooldowns } from "~~/hooks/useVoteCooldowns";
-import { useVoteFeedStage } from "~~/hooks/useVoteFeedStage";
+import { shouldHoldVoteFeedForRequestedContent, useVoteFeedStage } from "~~/hooks/useVoteFeedStage";
 import { useVoteHistoryQuery } from "~~/hooks/useVoteHistoryQuery";
 import { useVoterAccuracyBatch } from "~~/hooks/useVoterAccuracyBatch";
 import { useWatchedContent } from "~~/hooks/useWatchedContent";
@@ -1750,6 +1750,10 @@ const HomeInner = () => {
   }, [categories]);
 
   const emptyStateMessage = useMemo(() => {
+    if (effectiveRequestedActiveId !== null && activeSourceIndex < 0 && !requestedContentLoading) {
+      return "This content could not be shown. It may be unavailable or hidden by this frontend's moderation policy.";
+    }
+
     if (effectiveRequestedActiveId !== null && !requestedContentLoading && !requestedContentItem) {
       return "This content could not be shown. It may be unavailable or hidden by this frontend's moderation policy.";
     }
@@ -1824,6 +1828,7 @@ const HomeInner = () => {
     activeFeedMode,
     activeScope,
     address,
+    activeSourceIndex,
     effectiveRequestedActiveId,
     requestedContentItem,
     requestedContentLoading,
@@ -1831,12 +1836,14 @@ const HomeInner = () => {
     trimmedSearchQuery,
   ]);
 
-  const showRequestedContentLoading =
-    effectiveRequestedActiveId !== null &&
-    !feedContainsRequestedContent &&
-    requestedContentItem === null &&
-    requestedContentLoading &&
-    feed.length === 0;
+  const showRequestedContentLoading = shouldHoldVoteFeedForRequestedContent({
+    activeSourceIndex,
+    isFeedLoading: isLoading,
+    isRequestedContentLoading: requestedContentLoading,
+    requestedActiveId: effectiveRequestedActiveId,
+  });
+  const showRequestedContentUnavailable =
+    effectiveRequestedActiveId !== null && activeSourceIndex < 0 && !showRequestedContentLoading;
   return (
     <AppPageShell
       horizontalPaddingClassName="px-0 xl:px-4"
@@ -1875,7 +1882,7 @@ const HomeInner = () => {
                         <div className="flex justify-center py-16 xl:h-full xl:items-center xl:py-10">
                           <span className="loading loading-spinner loading-lg text-primary"></span>
                         </div>
-                      ) : displayFeed.length === 0 ? (
+                      ) : displayFeed.length === 0 || showRequestedContentUnavailable ? (
                         <div className="py-16 text-center text-base text-base-content/60 xl:flex xl:h-full xl:items-center xl:justify-center xl:py-10">
                           {emptyStateMessage}
                         </div>
