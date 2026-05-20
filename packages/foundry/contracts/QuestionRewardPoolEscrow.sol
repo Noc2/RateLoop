@@ -1158,12 +1158,11 @@ contract QuestionRewardPoolEscrow is
     ///         settled, the reward pool does not exist or has been refunded, or the domain /
     ///         rewardPool / content do not match. The oracle uses this to reject slot-squat
     ///         proposals that would otherwise censor honest payouts during the challenge window.
-    function roundPayoutSnapshotSourceReadyAt(
-        uint8 domain,
-        uint256 rewardPoolId,
-        uint256 contentId,
-        uint256 roundId
-    ) external view returns (uint64) {
+    function roundPayoutSnapshotSourceReadyAt(uint8 domain, uint256 rewardPoolId, uint256 contentId, uint256 roundId)
+        external
+        view
+        returns (uint64)
+    {
         if (domain != PAYOUT_DOMAIN_QUESTION_REWARD) return 0;
         RewardPool storage rewardPool = rewardPools[rewardPoolId];
         if (rewardPool.id == 0 || rewardPool.refunded || rewardPool.contentId != contentId) return 0;

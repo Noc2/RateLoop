@@ -382,8 +382,7 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
                 uint256
             ) {
                 return true;
-            }
-            catch (bytes memory reason) {
+            } catch (bytes memory reason) {
                 emit LaunchRaterRewardCreditFailed(contentId, roundId, commitKey, rewardRecipient, launchPool, reason);
                 return false;
             }
@@ -397,10 +396,7 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
     ///         original `claimReward` call. Reads back the recipient + stake captured at first
     ///         attempt, re-invokes the launch pool's recordEarnedRaterRewardWithSourceReady, and
     ///         clears the pending entry on success. No-op (reverts) when no pending entry exists.
-    function retryLaunchRaterRewardCredit(uint256 contentId, uint256 roundId, bytes32 commitKey)
-        external
-        nonReentrant
-    {
+    function retryLaunchRaterRewardCredit(uint256 contentId, uint256 roundId, bytes32 commitKey) external nonReentrant {
         PendingLaunchCredit memory pending = pendingLaunchCreditRetry[contentId][roundId][commitKey];
         require(pending.recipient != address(0), "Nothing to retry");
         ProtocolConfig config = ProtocolConfig(votingEngine.protocolConfig());

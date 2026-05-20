@@ -343,9 +343,12 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         // future round at gas cost only and stall payouts for the duration of the challenge
         // window plus arbiter response time. A reverting / non-conforming consumer view is
         // treated as not-ready so a misconfigured consumer cannot itself become a DoS vector.
-        try IRoundPayoutSnapshotConsumer(consumer).roundPayoutSnapshotSourceReadyAt(
-            input.domain, input.rewardPoolId, input.contentId, input.roundId
-        ) returns (uint64 sourceReadyAt) {
+        try IRoundPayoutSnapshotConsumer(consumer)
+            .roundPayoutSnapshotSourceReadyAt(
+                input.domain, input.rewardPoolId, input.contentId, input.roundId
+            ) returns (
+            uint64 sourceReadyAt
+        ) {
             if (sourceReadyAt == 0 || uint256(sourceReadyAt) > block.timestamp) revert SourceNotReady();
         } catch {
             revert SourceNotReady();
@@ -507,9 +510,12 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         // "consumed" (conservative — outside the veto window the rejection still aborts; inside
         // the veto window the rejection proceeds as before).
         bool consumed;
-        try IRoundPayoutSnapshotConsumer(consumer).isRoundPayoutSnapshotConsumed(
-            snapshot.domain, snapshot.rewardPoolId, snapshot.contentId, snapshot.roundId
-        ) returns (bool isConsumed) {
+        try IRoundPayoutSnapshotConsumer(consumer)
+            .isRoundPayoutSnapshotConsumed(
+                snapshot.domain, snapshot.rewardPoolId, snapshot.contentId, snapshot.roundId
+            ) returns (
+            bool isConsumed
+        ) {
             consumed = isConsumed;
         } catch {
             consumed = true;

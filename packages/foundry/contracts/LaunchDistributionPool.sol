@@ -854,12 +854,11 @@ contract LaunchDistributionPool is
     ///         the first rater claim records a pending credit. Falls back to the per-record
     ///         `launchRoundSourceReadyAt` so existing deployments without the source wired up
     ///         still get the gate once at least one credit lands.
-    function roundPayoutSnapshotSourceReadyAt(
-        uint8 domain,
-        uint256 rewardPoolId,
-        uint256 contentId,
-        uint256 roundId
-    ) external view returns (uint64) {
+    function roundPayoutSnapshotSourceReadyAt(uint8 domain, uint256 rewardPoolId, uint256 contentId, uint256 roundId)
+        external
+        view
+        returns (uint64)
+    {
         if (domain != PAYOUT_DOMAIN_LAUNCH_CREDIT || rewardPoolId != 0) return 0;
         IRoundClusterReadyAtSource source = roundClusterReadyAtSource;
         if (address(source) != address(0)) {
