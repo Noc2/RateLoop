@@ -58,6 +58,11 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
     /// @dev Provider-namespaced revocation flag. Namespaced for the same
     ///      cross-provider collision reason as `_humanNullifierOwnerByProvider`.
     mapping(HumanCredentialProvider => mapping(bytes32 => bool)) private _revokedHumanNullifierByProvider;
+    /// @dev RR-6 (2026-05-20 follow-up audit): records the rater whose credential was last
+    ///      revoked against this (provider, nullifierHash). Exposed via the indexed `prevOwner`
+    ///      field of `HumanNullifierRevocationCleared` so off-chain alerts can fire on a single
+    ///      log when a SEEDER recycles a previously-bound nullifier onto a new address.
+    mapping(HumanCredentialProvider => mapping(bytes32 => address)) private _lastRevokedOwnerByProvider;
     mapping(address => mapping(address => bool)) public isFollowing;
     mapping(address => uint256) public followingCount;
     mapping(address => uint256) public followerCount;
@@ -86,7 +91,13 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
     event HumanCredentialRevoked(
         address indexed rater, bytes32 indexed nullifierHash, HumanCredentialProvider indexed provider
     );
-    event HumanNullifierRevocationCleared(bytes32 indexed nullifierHash, HumanCredentialProvider indexed provider);
+    /// @notice RR-6 (2026-05-20 follow-up audit): `prevOwner` identifies the rater whose
+    ///         credential was last revoked against this (provider, nullifierHash). Off-chain
+    ///         alerting can fire on the single log instead of joining against a prior
+    ///         `HumanCredentialRevoked` event.
+    event HumanNullifierRevocationCleared(
+        bytes32 indexed nullifierHash, HumanCredentialProvider indexed provider, address indexed prevOwner
+    );
     /// @notice M-Identity-2: emitted when SEEDER_ROLE explicitly re-binds a rater's canonical
     ///         identity key. Off-chain consumers MUST re-map any per-identity state keyed off
     ///         the old key (cooldowns, exclusions, profile ownership) when they observe this.
@@ -325,6 +336,7 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
         ) {
             delete _humanNullifierOwnerByProvider[provider][nullifierHash];
             _revokedHumanNullifierByProvider[provider][nullifierHash] = true;
+            _lastRevokedOwnerByProvider[provider][nullifierHash] = rater;
         }
 
         // RR-1 (2026-05-20 follow-up audit): the M-Identity-2 sticky-canonical fix preserved
@@ -351,7 +363,8 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
         if (nullifierHash == bytes32(0)) revert InvalidCredential();
         if (provider == HumanCredentialProvider.None) revert InvalidCredential();
         _revokedHumanNullifierByProvider[provider][nullifierHash] = false;
-        emit HumanNullifierRevocationCleared(nullifierHash, provider);
+        address prevOwner = _lastRevokedOwnerByProvider[provider][nullifierHash];
+        emit HumanNullifierRevocationCleared(nullifierHash, provider, prevOwner);
     }
 
     /// @notice M-Identity-2: explicit governance action to re-bind a rater's canonical identity
