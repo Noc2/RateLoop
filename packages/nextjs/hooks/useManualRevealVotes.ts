@@ -10,7 +10,7 @@ import {
   parseTlockCiphertextMetadata,
 } from "@rateloop/contracts/voting";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Address, isAddress, zeroAddress, zeroHash } from "viem";
+import { Address, isAddress, keccak256, zeroAddress, zeroHash } from "viem";
 import { useAccount, usePublicClient, useWalletClient } from "wagmi";
 import { useDeployedContractInfo } from "~~/hooks/scaffold-eth";
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
@@ -36,6 +36,7 @@ export interface ManualRevealVote {
   revealAvailableAt: bigint;
   commitHash: `0x${string}`;
   commitKey: `0x${string}`;
+  ciphertextHash: `0x${string}`;
   ciphertext: `0x${string}`;
   targetRound: bigint;
   drandChainHash: `0x${string}`;
@@ -76,9 +77,9 @@ function indexedCommitHash(vote: PonderVoteItem): `0x${string}` {
 
 function normalizeCommitData(rawCommit: unknown): CommitData {
   const commit = rawCommit as Record<string, unknown> & readonly unknown[];
-  if (commit?.ciphertext != null) {
+  if (commit?.ciphertextHash != null) {
     return {
-      ciphertext: commit.ciphertext as `0x${string}`,
+      ciphertextHash: commit.ciphertextHash as `0x${string}`,
       targetRound: commit.targetRound as bigint | undefined,
       drandChainHash: commit.drandChainHash as `0x${string}` | undefined,
       revealableAfter: (commit.revealableAfter as bigint | undefined) ?? 0n,
@@ -89,7 +90,7 @@ function normalizeCommitData(rawCommit: unknown): CommitData {
 
   if (Array.isArray(commit) && commit.length >= 6) {
     return {
-      ciphertext: commit[0] as `0x${string}`,
+      ciphertextHash: commit[0] as `0x${string}`,
       targetRound: commit[1] as bigint,
       drandChainHash: commit[2] as `0x${string}`,
       revealableAfter: commit[3] as bigint,
@@ -99,7 +100,7 @@ function normalizeCommitData(rawCommit: unknown): CommitData {
   }
 
   return {
-    ciphertext: "0x",
+    ciphertextHash: zeroHash,
     targetRound: 0n,
     drandChainHash: zeroHash,
     revealableAfter: 0n,
@@ -431,6 +432,11 @@ export function useManualRevealVotes(voter?: Address) {
           if (commit.revealed) {
             return null;
           }
+          const ciphertext = vote.ciphertext as `0x${string}` | undefined;
+          const indexedCiphertextHash = vote.ciphertextHash as `0x${string}` | undefined;
+          if (!ciphertext || !indexedCiphertextHash) return null;
+          if (indexedCiphertextHash.toLowerCase() !== commit.ciphertextHash.toLowerCase()) return null;
+          if (keccak256(ciphertext) !== commit.ciphertextHash) return null;
 
           const timing = await deriveRevealAvailableAtSeconds({
             publicClient,
@@ -455,7 +461,8 @@ export function useManualRevealVotes(voter?: Address) {
             revealAvailableAt: timing.revealAvailableAt,
             commitHash,
             commitKey,
-            ciphertext: commit.ciphertext as `0x${string}`,
+            ciphertextHash: commit.ciphertextHash,
+            ciphertext,
             targetRound: commit.targetRound ?? 0n,
             drandChainHash: commit.drandChainHash ?? zeroHash,
             secondsUntilReveal: 0,
@@ -544,7 +551,12 @@ export function useManualRevealVotes(voter?: Address) {
           return false;
         }
 
-        const parsedMetadata = parseTlockCiphertextMetadata(latestCommit.ciphertext as `0x${string}`);
+        if (keccak256(vote.ciphertext) !== latestCommit.ciphertextHash) {
+          notification.error("The indexed vote ciphertext does not match the on-chain commitment.");
+          return false;
+        }
+
+        const parsedMetadata = parseTlockCiphertextMetadata(vote.ciphertext);
         if (!parsedMetadata) {
           notification.error("The stored vote ciphertext is malformed and cannot be manually revealed.");
           return false;
@@ -558,7 +570,7 @@ export function useManualRevealVotes(voter?: Address) {
           return false;
         }
 
-        const decrypted = await decryptTlockVoteCiphertext(latestCommit.ciphertext as `0x${string}`);
+        const decrypted = await decryptTlockVoteCiphertext(vote.ciphertext);
         if (!decrypted) {
           notification.error("The stored ciphertext could not be decoded.");
           return false;

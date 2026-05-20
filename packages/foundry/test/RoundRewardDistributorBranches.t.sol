@@ -167,6 +167,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
             contentId, cachedRoundContext1, _tlockCommitTargetRound(), _tlockDrandChainHash(), ch, ct, stake, address(0)
         );
         ck = _commitKey(voter, ch);
+        _rememberTestReveal(ck, isUp, salt);
     }
 
     function _vote(address voter, uint256 contentId, bool isUp) internal {
@@ -212,6 +213,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
             address(0)
         );
         vm.stopPrank();
+        _rememberTestReveal(commitKey, isUp, salt);
     }
 
     function _revealAll(uint256 contentId, uint256 roundId) internal {
@@ -219,8 +221,11 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         for (uint256 i = 0; i < keys.length; i++) {
             RoundLib.Commit memory c = RoundEngineReadHelpers.commit(votingEngine, contentId, roundId, keys[i]);
             if (!c.revealed && c.stakeAmount > 0) {
-                (bool isUp, bytes32 salt) = _decodeTestCiphertext(c.ciphertext);
-                try votingEngine.revealVoteByCommitKey(contentId, roundId, keys[i], isUp, 5_000, salt) { } catch { }
+                (bool isUp, bytes32 salt, bool exists) = _testRevealPayload(keys[i]);
+                if (exists) {
+                    try votingEngine.revealVoteByCommitKey(contentId, roundId, keys[i], isUp, 5_000, salt) { }
+                        catch { }
+                }
             }
         }
     }

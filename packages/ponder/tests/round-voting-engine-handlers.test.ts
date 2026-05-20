@@ -6,6 +6,7 @@ type RegisteredHandler = (args: {
     args: Record<string, unknown>;
     block: { number: bigint; timestamp: bigint };
     log?: { logIndex: number };
+    transaction?: { hash: `0x${string}` };
   };
   context: Record<string, any>;
 }) => Promise<void>;
@@ -376,6 +377,8 @@ describe("RoundVotingEngine ponder handlers", () => {
     const voter = "0x0000000000000000000000000000000000000001";
     const commitHash = `0x${"11".repeat(32)}` as `0x${string}`;
     const commitKey = rbtsCommitKey(voter, commitHash);
+    const ciphertext = "0x1234" as `0x${string}`;
+    const ciphertextHash = keccak256(ciphertext);
     const readContract = vi.fn(async ({ functionName }: { functionName: string }) => {
       if (functionName === "commitIdentityKey") return `0x${"00".repeat(32)}`;
       if (functionName === "commitIdentityHolder") return "0x0000000000000000000000000000000000000000";
@@ -410,6 +413,11 @@ describe("RoundVotingEngine ponder handlers", () => {
           targetRound: 123n,
           drandChainHash: `0x${"22".repeat(32)}`,
           stake: 10n,
+          ciphertextHash,
+          ciphertext,
+        },
+        transaction: {
+          hash: `0x${"44".repeat(32)}`,
         },
         block: {
           number: 43n,
@@ -436,6 +444,9 @@ describe("RoundVotingEngine ponder handlers", () => {
         committedAt: 1_601n,
         commitBlockNumber: 43n,
         commitLogIndex: 9,
+        commitTxHash: `0x${"44".repeat(32)}`,
+        ciphertextHash,
+        ciphertext,
       }),
     });
     expect(readContract).toHaveBeenCalledWith(
@@ -469,6 +480,8 @@ describe("RoundVotingEngine ponder handlers", () => {
     const identityKey = `0x${"33".repeat(32)}`;
     const commitHash = `0x${"11".repeat(32)}` as `0x${string}`;
     const commitKey = rbtsCommitKey(delegate, commitHash);
+    const ciphertext = "0xabcd" as `0x${string}`;
+    const ciphertextHash = keccak256(ciphertext);
     const readContract = vi.fn(async ({ functionName }: { functionName: string }) => {
       if (functionName === "commitIdentityKey") return identityKey;
       if (functionName === "commitIdentityHolder") return holder;
@@ -499,6 +512,11 @@ describe("RoundVotingEngine ponder handlers", () => {
           targetRound: 123n,
           drandChainHash: `0x${"22".repeat(32)}`,
           stake: 10n,
+          ciphertextHash,
+          ciphertext,
+        },
+        transaction: {
+          hash: `0x${"55".repeat(32)}`,
         },
         block: {
           number: 43n,

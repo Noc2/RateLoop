@@ -4548,7 +4548,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.mockCall(
             address(votingEngine),
             abi.encodeWithSignature("commitRevealData(uint256,uint256,bytes32)", contentId, roundId, commitKey),
-            abi.encode(bytes(""), uint64(0), bytes32(0), uint48(block.timestamp), true, uint64(STAKE))
+            abi.encode(bytes32(0), uint64(0), bytes32(0), uint48(block.timestamp), true, uint64(STAKE))
         );
         // Escrow reads via the narrow commitCore getter for gas; mock it too so synthetic
         // reveals behave like real commits.

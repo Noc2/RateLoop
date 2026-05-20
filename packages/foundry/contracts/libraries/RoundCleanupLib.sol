@@ -76,7 +76,7 @@ library RoundCleanupLib {
         mapping(uint256 => uint64) storage roundDrandPeriodSnapshot,
         ProtocolConfig protocolConfig,
         uint256 roundId,
-        bytes memory ciphertext,
+        bytes calldata ciphertext,
         uint64 targetRound,
         bytes32 drandChainHash,
         uint256 epochEnd,
@@ -218,11 +218,15 @@ library RoundCleanupLib {
         return (c.voter, c.stakeAmount, c.frontend, c.revealableAfter, c.revealed, c.isUp, c.epochIndex);
     }
 
-    function commitRevealData(mapping(bytes32 => RoundLib.Commit) storage roundCommits, bytes32 commitKey)
+    function commitRevealData(
+        mapping(bytes32 => RoundLib.Commit) storage roundCommits,
+        bytes32 commitKey,
+        bytes32 effectiveDrandChainHash
+    )
         external
         view
         returns (
-            bytes memory ciphertext,
+            bytes32 ciphertextHash,
             uint64 targetRound,
             bytes32 drandChainHash,
             uint48 revealableAfter,
@@ -231,7 +235,8 @@ library RoundCleanupLib {
         )
     {
         RoundLib.Commit storage c = roundCommits[commitKey];
-        return (c.ciphertext, c.targetRound, c.drandChainHash, c.revealableAfter, c.revealed, c.stakeAmount);
+        bytes32 commitDrandChainHash = c.voter == address(0) ? bytes32(0) : effectiveDrandChainHash;
+        return (c.ciphertextHash, c.targetRound, commitDrandChainHash, c.revealableAfter, c.revealed, c.stakeAmount);
     }
 
     function recordCommitIndexes(

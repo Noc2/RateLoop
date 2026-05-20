@@ -1,5 +1,6 @@
 import { ponder } from "ponder:registry";
 import { advisoryVote } from "ponder:schema";
+import { keccak256 } from "viem";
 
 ponder.on("AdvisoryVoteRecorder:AdvisoryVoteRecorded", async ({ event, context }) => {
   const {
@@ -11,7 +12,15 @@ ponder.on("AdvisoryVoteRecorder:AdvisoryVoteRecorded", async ({ event, context }
     roundReferenceRatingBps,
     targetRound,
     drandChainHash,
+    ciphertextHash,
+    ciphertext,
   } = event.args;
+
+  if (keccak256(ciphertext) !== ciphertextHash) {
+    throw new Error(
+      `AdvisoryVoteRecorded ciphertext hash mismatch for tx ${event.transaction.hash}`,
+    );
+  }
 
   await context.db
     .insert(advisoryVote)
@@ -21,6 +30,9 @@ ponder.on("AdvisoryVoteRecorder:AdvisoryVoteRecorded", async ({ event, context }
       roundId,
       voter,
       commitHash,
+      ciphertextHash,
+      ciphertext,
+      ciphertextSource: "event",
       targetRound,
       drandChainHash,
       roundReferenceRatingBps: Number(roundReferenceRatingBps),
@@ -28,13 +40,22 @@ ponder.on("AdvisoryVoteRecorder:AdvisoryVoteRecorded", async ({ event, context }
       launchCreditClaimed: false,
       revealed: false,
       committedAt: event.block.timestamp,
+      commitTxHash: event.transaction.hash,
+      commitBlockNumber: event.block.number,
+      commitLogIndex: Number(event.log?.logIndex ?? 0),
       updatedAt: event.block.timestamp,
     })
     .onConflictDoUpdate({
       commitHash,
+      ciphertextHash,
+      ciphertext,
+      ciphertextSource: "event",
       targetRound,
       drandChainHash,
       roundReferenceRatingBps: Number(roundReferenceRatingBps),
+      commitTxHash: event.transaction.hash,
+      commitBlockNumber: event.block.number,
+      commitLogIndex: Number(event.log?.logIndex ?? 0),
       updatedAt: event.block.timestamp,
     });
 });

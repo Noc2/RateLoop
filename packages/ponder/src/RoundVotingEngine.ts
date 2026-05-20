@@ -563,6 +563,8 @@ ponder.on("RoundVotingEngine:VoteCommitted", async ({ event, context }) => {
     targetRound,
     drandChainHash,
     stake,
+    ciphertextHash,
+    ciphertext,
   } = event.args as {
     contentId: bigint;
     roundId: bigint;
@@ -572,7 +574,14 @@ ponder.on("RoundVotingEngine:VoteCommitted", async ({ event, context }) => {
     targetRound: bigint;
     drandChainHash: `0x${string}`;
     stake: bigint;
+    ciphertextHash: `0x${string}`;
+    ciphertext: `0x${string}`;
   };
+  if (keccak256(ciphertext) !== ciphertextHash) {
+    throw new Error(
+      `VoteCommitted ciphertext hash mismatch for tx ${event.transaction.hash}`,
+    );
+  }
   const roundKey = `${contentId}-${roundId}`;
   const rawVoter = normalizeAddress(voter) ?? voter;
   const voteKey = `${contentId}-${roundId}-${rawVoter}`;
@@ -666,6 +675,9 @@ ponder.on("RoundVotingEngine:VoteCommitted", async ({ event, context }) => {
       identityVoter,
       commitKey,
       commitHash,
+      ciphertextHash,
+      ciphertext,
+      ciphertextSource: "event",
       targetRound,
       drandChainHash,
       isUp: null,
@@ -679,6 +691,7 @@ ponder.on("RoundVotingEngine:VoteCommitted", async ({ event, context }) => {
       epochIndex,
       revealed: false,
       committedAt: event.block.timestamp,
+      commitTxHash: event.transaction.hash,
       commitBlockNumber: event.block.number,
       commitLogIndex: Number(event.log?.logIndex ?? 0),
       revealedAt: null,

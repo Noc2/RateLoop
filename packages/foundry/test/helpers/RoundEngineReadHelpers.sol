@@ -62,7 +62,7 @@ library RoundEngineReadHelpers {
     {
         (c.voter, c.stakeAmount, c.frontend, c.revealableAfter, c.revealed, c.isUp, c.epochIndex) =
             engine.commitCore(contentId, roundId, commitKey);
-        (c.ciphertext, c.targetRound, c.drandChainHash, c.revealableAfter, c.revealed, c.stakeAmount) =
+        (c.ciphertextHash, c.targetRound,, c.revealableAfter, c.revealed, c.stakeAmount) =
             engine.commitRevealData(contentId, roundId, commitKey);
     }
 

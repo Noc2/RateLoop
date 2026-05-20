@@ -128,6 +128,22 @@ describe("keeper config", () => {
     ).rejects.toThrow("KEEPER_CLEANUP_BATCH_SIZE must be a positive integer");
   });
 
+  it("loads an optional Ponder API base URL", async () => {
+    const { config } = await loadKeeperConfig({
+      PONDER_BASE_URL: "https://ponder.example.com/",
+    });
+
+    expect(config.ponderBaseUrl).toBe("https://ponder.example.com");
+  });
+
+  it("rejects an invalid Ponder API base URL", async () => {
+    await expect(
+      loadKeeperConfig({
+        PONDER_BASE_URL: "not a url",
+      }),
+    ).rejects.toThrow("PONDER_BASE_URL must be a valid URL when provided");
+  });
+
   it.each([
     ["CHAIN_ID", "4801abc", "CHAIN_ID must be a positive integer"],
     ["KEEPER_INTERVAL_MS", "30000ms", "KEEPER_INTERVAL_MS must be a positive integer"],

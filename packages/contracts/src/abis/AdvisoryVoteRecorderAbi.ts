@@ -225,9 +225,9 @@ export const AdvisoryVoteRecorderAbi = [
     ],
     "outputs": [
       {
-        "name": "ciphertext",
-        "type": "bytes",
-        "internalType": "bytes"
+        "name": "ciphertextHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
       },
       {
         "name": "targetRound",
@@ -646,6 +646,18 @@ export const AdvisoryVoteRecorderAbi = [
         "type": "bytes32",
         "indexed": false,
         "internalType": "bytes32"
+      },
+      {
+        "name": "ciphertextHash",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "ciphertext",
+        "type": "bytes",
+        "indexed": false,
+        "internalType": "bytes"
       }
     ],
     "anonymous": false

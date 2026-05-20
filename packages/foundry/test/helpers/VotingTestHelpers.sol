@@ -498,6 +498,7 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
         uint16 roundReferenceRatingBps;
         uint64 targetRound;
         bytes32 drandChainHash;
+        bytes32 ciphertextHash;
         bytes32 commitHash;
         bytes32 commitKey;
     }
@@ -512,6 +513,14 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
         address frontend;
         bytes32 salt;
     }
+
+    struct TestRevealPayload {
+        bool exists;
+        bool isUp;
+        bytes32 salt;
+    }
+
+    mapping(bytes32 => TestRevealPayload) internal testRevealPayloads;
 
     bytes32 internal constant DEFAULT_DRAND_CHAIN_HASH =
         0x52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971;
@@ -727,6 +736,7 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
         artifacts.targetRound = _tlockCommitTargetRound();
         artifacts.drandChainHash = _tlockDrandChainHash();
         artifacts.ciphertext = _testCiphertext(isUp, salt, contentId, artifacts.targetRound, artifacts.drandChainHash);
+        artifacts.ciphertextHash = keccak256(artifacts.ciphertext);
         artifacts.commitHash = _commitHash(
             isUp,
             salt,
@@ -761,7 +771,17 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
             );
         vm.stopPrank();
 
+        _rememberTestReveal(artifacts.commitKey, request.isUp, request.salt);
         return artifacts.commitKey;
+    }
+
+    function _rememberTestReveal(bytes32 commitKey, bool isUp, bytes32 salt) internal {
+        testRevealPayloads[commitKey] = TestRevealPayload({ exists: true, isUp: isUp, salt: salt });
+    }
+
+    function _testRevealPayload(bytes32 commitKey) internal view returns (bool isUp, bytes32 salt, bool exists) {
+        TestRevealPayload memory payload = testRevealPayloads[commitKey];
+        return (payload.isUp, payload.salt, payload.exists);
     }
 
     function _tlockCommitTargetRound() internal view returns (uint64) {

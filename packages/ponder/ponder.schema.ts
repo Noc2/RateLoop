@@ -168,6 +168,9 @@ export const vote = onchainTable(
     identityVoter: t.hex(), // compatibility alias for identityHolder
     commitKey: t.hex().notNull(),
     commitHash: t.hex().notNull(),
+    ciphertextHash: t.hex().notNull(),
+    ciphertext: t.hex().notNull(),
+    ciphertextSource: t.text().notNull().default("event"),
     targetRound: t.bigint().notNull(),
     drandChainHash: t.hex().notNull(),
     isUp: t.boolean(), // null until revealed
@@ -181,6 +184,7 @@ export const vote = onchainTable(
     epochIndex: t.integer().notNull(), // 0=epoch-1 (100% weight), 1=epoch-2+ (25% weight)
     revealed: t.boolean().notNull().default(false),
     committedAt: t.bigint().notNull(),
+    commitTxHash: t.hex(),
     commitBlockNumber: t.bigint(),
     commitLogIndex: t.integer(),
     revealedAt: t.bigint(), // null until revealed
@@ -223,6 +227,9 @@ export const advisoryVote = onchainTable(
     roundId: t.bigint().notNull(),
     voter: t.hex().notNull(),
     commitHash: t.hex().notNull(),
+    ciphertextHash: t.hex().notNull(),
+    ciphertext: t.hex().notNull(),
+    ciphertextSource: t.text().notNull().default("event"),
     targetRound: t.bigint().notNull(),
     drandChainHash: t.hex().notNull(),
     roundReferenceRatingBps: t.integer().notNull(),
@@ -233,6 +240,9 @@ export const advisoryVote = onchainTable(
     launchCreditClaimed: t.boolean().notNull().default(false),
     revealed: t.boolean().notNull().default(false),
     committedAt: t.bigint().notNull(),
+    commitTxHash: t.hex(),
+    commitBlockNumber: t.bigint(),
+    commitLogIndex: t.integer(),
     revealedAt: t.bigint(),
     creditedAt: t.bigint(),
     updatedAt: t.bigint().notNull(),

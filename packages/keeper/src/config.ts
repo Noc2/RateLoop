@@ -59,6 +59,20 @@ function requireUrlEnv(name: string, errors: string[]): string {
   return value;
 }
 
+function readOptionalUrlEnv(name: string, errors: string[]): string | undefined {
+  const value = readEnv(name);
+  if (!value) return undefined;
+
+  try {
+    new URL(value);
+  } catch {
+    errors.push(`${name} must be a valid URL when provided`);
+    return undefined;
+  }
+
+  return value.replace(/\/+$/, "");
+}
+
 function requireIntEnv(name: string, errors: string[]): number {
   const value = readEnv(name);
   if (!value) {
@@ -377,6 +391,7 @@ function loadConfig() {
 
     // Keeper behavior
     intervalMs: readPositiveIntEnv("KEEPER_INTERVAL_MS", "30000", errors),
+    ponderBaseUrl: readOptionalUrlEnv("PONDER_BASE_URL", errors),
     startupJitterMs: readNonNegativeIntEnv(
       "KEEPER_STARTUP_JITTER_MS",
       "0",

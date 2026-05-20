@@ -1846,6 +1846,77 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         engine.revealVoteByCommitKey(contentId, roundId, commitKey, true, 5_000, salt);
     }
 
+    function test_Reveal_UsesSnapshotDrandChainHashAfterConfigRotation() public {
+        uint256 contentId = _submitContent();
+        (bytes32 commitKey, bytes32 salt) = _commit(voter1, contentId, true, STAKE);
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+
+        (,, bytes32 commitChainHashBefore,,,) = engine.commitRevealData(contentId, roundId, commitKey);
+        assertEq(commitChainHashBefore, _tlockDrandChainHash(), "commit reveal data exposes snapshot hash");
+
+        bytes32 rotatedChainHash = bytes32(uint256(0xBEEF));
+        vm.prank(owner);
+        ProtocolConfig(protocolConfigAddress).setDrandConfig(
+            rotatedChainHash, DEFAULT_DRAND_GENESIS_TIME, DEFAULT_DRAND_PERIOD
+        );
+
+        (,, bytes32 commitChainHashAfter,,,) = engine.commitRevealData(contentId, roundId, commitKey);
+        assertEq(commitChainHashAfter, _tlockDrandChainHash(), "live config rotation must not rewrite commit hash input");
+
+        _warpPastTlockRevealTime(block.timestamp + EPOCH);
+        engine.revealVoteByCommitKey(contentId, roundId, commitKey, true, 5_000, salt);
+    }
+
+    function test_CommitRevealData_NonExistentCommit_ReturnsEmptyMetadata() public {
+        uint256 contentId = _submitContent();
+        _commit(voter1, contentId, true, STAKE);
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        bytes32 missingCommitKey = keccak256("missing-commit");
+
+        (
+            bytes32 ciphertextHash,
+            uint64 targetRound,
+            bytes32 drandChainHash,
+            uint48 revealableAfter,
+            bool revealed,
+            uint64 stakeAmount
+        ) = engine.commitRevealData(contentId, roundId, missingCommitKey);
+
+        assertEq(ciphertextHash, bytes32(0));
+        assertEq(targetRound, 0);
+        assertEq(drandChainHash, bytes32(0));
+        assertEq(revealableAfter, 0);
+        assertFalse(revealed);
+        assertEq(stakeAmount, 0);
+    }
+
+    function test_Reveal_RejectsCommitHashBuiltWithRotatedLiveDrandHash() public {
+        uint256 contentId = _submitContent();
+        bytes32 snapshotChainHash = _tlockDrandChainHash();
+        bytes32 rotatedChainHash = bytes32(uint256(0xBEEF));
+        bytes32 salt = keccak256(abi.encodePacked(voter1, block.timestamp, "rotated-live-hash"));
+        uint64 targetRound = _tlockCommitTargetRound(engine, contentId);
+        bytes memory ciphertext = _testCiphertext(true, salt, contentId, targetRound, snapshotChainHash);
+        bytes32 commitHash = _commitHash(true, salt, voter1, contentId, targetRound, rotatedChainHash, ciphertext);
+
+        vm.prank(voter1);
+        lrepToken.approve(address(engine), STAKE);
+        uint256 roundContext = _roundContext(engine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());
+        vm.prank(voter1);
+        engine.commitVote(contentId, roundContext, targetRound, snapshotChainHash, commitHash, ciphertext, STAKE, address(0));
+
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        bytes32 commitKey = _commitKey(voter1, commitHash);
+        vm.prank(owner);
+        ProtocolConfig(protocolConfigAddress).setDrandConfig(
+            rotatedChainHash, DEFAULT_DRAND_GENESIS_TIME, DEFAULT_DRAND_PERIOD
+        );
+
+        _warpPastTlockRevealTime(block.timestamp + EPOCH);
+        vm.expectRevert(RoundVotingEngine.HashMismatch.selector);
+        engine.revealVoteByCommitKey(contentId, roundId, commitKey, true, 5_000, salt);
+    }
+
     function test_Reveal_NonExistentCommitKey_Reverts() public {
         uint256 contentId = _submitContent();
         _commit(voter1, contentId, true, STAKE);
@@ -4010,12 +4081,13 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     function test_GetCommit_ReturnsCorrectData() public {
         uint256 contentId = _submitContent();
 
-        (bytes32 commitKey,) = _commit(voter1, contentId, true, STAKE);
+        (bytes32 commitKey, bytes32 salt) = _commit(voter1, contentId, true, STAKE);
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
 
         RoundLib.Commit memory commit = RoundEngineReadHelpers.commit(engine, contentId, roundId, commitKey);
         assertEq(commit.voter, voter1);
         assertEq(commit.stakeAmount, STAKE);
+        assertEq(commit.ciphertextHash, keccak256(_testCiphertext(true, salt, contentId)));
         assertFalse(commit.revealed);
         assertEq(commit.epochIndex, 0); // epoch 1 -> index 0
     }

@@ -22,7 +22,7 @@ library TlockVoteLib {
     bytes internal constant AGE_MAC_PREFIX = "--- ";
 
     function validateCommitData(
-        bytes memory ciphertext,
+        bytes calldata ciphertext,
         uint64 targetRound,
         bytes32 drandChainHash,
         bytes32 expectedDrandChainHash,
@@ -76,7 +76,35 @@ library TlockVoteLib {
         );
     }
 
-    function _validateCiphertext(bytes memory ciphertext) private pure {
+    function buildExpectedRbtsCommitHashFromCiphertextHash(
+        bool isUp,
+        uint16 predictedUpBps,
+        bytes32 salt,
+        address voter,
+        uint256 contentId,
+        uint256 roundId,
+        uint16 roundReferenceRatingBps,
+        uint64 targetRound,
+        bytes32 drandChainHash,
+        bytes32 ciphertextHash
+    ) external pure returns (bytes32) {
+        return keccak256(
+            abi.encodePacked(
+                isUp,
+                predictedUpBps,
+                salt,
+                voter,
+                contentId,
+                roundId,
+                roundReferenceRatingBps,
+                targetRound,
+                drandChainHash,
+                ciphertextHash
+            )
+        );
+    }
+
+    function _validateCiphertext(bytes calldata ciphertext) private pure {
         if (ciphertext.length == 0) revert InvalidCiphertext();
         if (ciphertext.length > MAX_CIPHERTEXT_SIZE) revert CiphertextTooLarge();
         if (ciphertext.length < AGE_HEADER.length + AGE_FOOTER.length + 2) revert InvalidCiphertext();
@@ -118,7 +146,7 @@ library TlockVoteLib {
         if (targetRound < minTargetRound || targetRound > maxTargetRound) revert TargetRoundOutOfWindow();
     }
 
-    function _extractTlockMetadata(bytes memory ciphertext)
+    function _extractTlockMetadata(bytes calldata ciphertext)
         private
         pure
         returns (uint64 targetRound, bytes32 drandChainHash)
@@ -167,7 +195,7 @@ library TlockVoteLib {
         return uint64(((elapsed + uint256(period) - 1) / uint256(period)) + 1);
     }
 
-    function _decodeBase64Payload(bytes memory data, uint256 start, uint256 end)
+    function _decodeBase64Payload(bytes calldata data, uint256 start, uint256 end)
         private
         pure
         returns (bytes memory out)
@@ -205,7 +233,7 @@ library TlockVoteLib {
         }
     }
 
-    function _stripBase64Whitespace(bytes memory data, uint256 start, uint256 end)
+    function _stripBase64Whitespace(bytes calldata data, uint256 start, uint256 end)
         private
         pure
         returns (bytes memory clean)
@@ -227,7 +255,7 @@ library TlockVoteLib {
         }
     }
 
-    function _validateArmoredPayloadLines(bytes memory data, uint256 start, uint256 end) private pure {
+    function _validateArmoredPayloadLines(bytes calldata data, uint256 start, uint256 end) private pure {
         uint256 cursor = start;
         uint256 lastLineLength = 0;
 
@@ -301,7 +329,7 @@ library TlockVoteLib {
         revert InvalidCiphertext();
     }
 
-    function _trimTrailingNewlines(bytes memory data) private pure returns (uint256 trimmedLength) {
+    function _trimTrailingNewlines(bytes calldata data) private pure returns (uint256 trimmedLength) {
         trimmedLength = data.length;
         while (trimmedLength > 0) {
             bytes1 tail = data[trimmedLength - 1];
@@ -315,7 +343,7 @@ library TlockVoteLib {
         return code >= uint8(bytes1("0")) && code <= uint8(bytes1("9"));
     }
 
-    function _hasPrefix(bytes memory data, bytes memory prefix) private pure returns (bool) {
+    function _hasPrefix(bytes calldata data, bytes memory prefix) private pure returns (bool) {
         if (data.length < prefix.length) return false;
         for (uint256 i = 0; i < prefix.length; i++) {
             if (data[i] != prefix[i]) return false;
@@ -323,7 +351,7 @@ library TlockVoteLib {
         return true;
     }
 
-    function _hasSuffix(bytes memory data, uint256 trimmedLength, bytes memory suffix) private pure returns (bool) {
+    function _hasSuffix(bytes calldata data, uint256 trimmedLength, bytes memory suffix) private pure returns (bool) {
         if (trimmedLength < suffix.length) return false;
         uint256 start = trimmedLength - suffix.length;
         for (uint256 i = 0; i < suffix.length; i++) {

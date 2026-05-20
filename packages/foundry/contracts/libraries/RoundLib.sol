@@ -65,9 +65,8 @@ library RoundLib {
     struct Commit {
         address voter;
         uint64 stakeAmount;
-        bytes ciphertext; // tlock-encrypted payload (decryptable after epoch end via drand)
+        bytes32 ciphertextHash; // keccak256 of the tlock-encrypted payload emitted at commit time
         uint64 targetRound; // drand round targeted by the ciphertext
-        bytes32 drandChainHash; // drand chain hash bound into the commitment
         address frontend; // Frontend operator address (for fee distribution)
         uint48 revealableAfter; // Dual-purpose; see struct NatSpec above. Always check `revealed` first.
         bool revealed;

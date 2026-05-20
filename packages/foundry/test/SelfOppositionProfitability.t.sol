@@ -156,6 +156,7 @@ contract SelfOppositionProfitabilityTest is VotingTestBase {
             address(0)
         );
         commitKey = keccak256(abi.encodePacked(voter, commitHash));
+        _rememberTestReveal(commitKey, up, salt);
     }
 
     function _forceSettle(uint256 cid) internal {
@@ -167,8 +168,10 @@ contract SelfOppositionProfitabilityTest is VotingTestBase {
         for (uint256 i = 0; i < keys.length; i++) {
             RoundLib.Commit memory c = RoundEngineReadHelpers.commit(engine, cid, roundId, keys[i]);
             if (!c.revealed && c.stakeAmount > 0) {
-                (bool up, bytes32 s) = _decodeTestCiphertext(c.ciphertext);
-                try engine.revealVoteByCommitKey(cid, roundId, keys[i], up, 5_000, s) { } catch { }
+                (bool up, bytes32 s, bool exists) = _testRevealPayload(keys[i]);
+                if (exists) {
+                    try engine.revealVoteByCommitKey(cid, roundId, keys[i], up, 5_000, s) { } catch { }
+                }
             }
         }
         RoundLib.Round memory r2 = RoundEngineReadHelpers.round(engine, cid, roundId);

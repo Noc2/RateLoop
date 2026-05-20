@@ -12,6 +12,7 @@ import { type Address } from "viem";
 export interface CommitVoteParams {
   commitHash: VoteCommitHash;
   ciphertext: VoteCiphertext;
+  ciphertextHash: `0x${string}`;
   roundId: bigint;
   roundReferenceRatingBps: number;
   targetRound: bigint;
@@ -80,6 +81,7 @@ export async function buildCommitVoteParams(params: {
   const predictedUpBps = predictionPercentToBps(params.predictedUpPercent);
   const {
     ciphertext,
+    ciphertextHash,
     commitHash,
     roundReferenceRatingBps,
     targetRound,
@@ -101,6 +103,7 @@ export async function buildCommitVoteParams(params: {
   return {
     commitHash,
     ciphertext,
+    ciphertextHash,
     roundId: params.roundId,
     roundReferenceRatingBps,
     targetRound,

@@ -2129,5 +2129,10 @@ export const ClusterPayoutOracleAbi = [
     "type": "error",
     "name": "SnapshotNotFound",
     "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "SourceNotReady",
+    "inputs": []
   }
 ] as const;

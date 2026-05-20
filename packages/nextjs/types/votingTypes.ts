@@ -18,7 +18,7 @@ export interface RoundData {
 
 /** Fields from RoundVotingEngine.commitRevealData() */
 export interface CommitData {
-  ciphertext: `0x${string}`;
+  ciphertextHash: `0x${string}`;
   targetRound?: bigint;
   drandChainHash?: `0x${string}`;
   revealableAfter: bigint;

@@ -27,7 +27,7 @@ import { IParticipationPool } from "./interfaces/IParticipationPool.sol";
 
 /// @title RoundVotingEngine
 /// @notice Per-content round-based parimutuel voting with keeper-assisted/self-reveal and epoch-weighted rewards.
-/// @dev Flow: commitVote (stores ciphertext bytes, drand metadata, and commit hash) → epoch ends → revealVote
+/// @dev Flow: commitVote (stores ciphertext hash, drand metadata, and commit hash) → epoch ends → revealVote
 ///      (caller supplies plaintext consistent with the commit hash) → settleRound (≥3 revealed votes) or
 ///      finalizeRevealFailedRound().
 ///      Rounds accumulate votes across 20-minute epochs. After each epoch, keepers normally derive reveal plaintext
@@ -205,7 +205,9 @@ contract RoundVotingEngine is
         uint16 roundReferenceRatingBps,
         uint64 targetRound,
         bytes32 drandChainHash,
-        uint256 stake
+        uint256 stake,
+        bytes32 ciphertextHash,
+        bytes ciphertext
     );
     event RoundReferenceSnapshotted(uint256 indexed contentId, uint256 indexed roundId, uint16 roundReferenceRatingBps);
     event RoundConfigSnapshotted(
@@ -307,11 +309,9 @@ contract RoundVotingEngine is
     // COMMIT PHASE
     // =========================================================================
 
-    /// @notice Narrow view of a commit that omits `ciphertext`, `targetRound`, and
-    ///         `drandChainHash`. Used by off-chain iterators and by the reward distributor's
-    ///         dust-finalization paths, which read many commits in a single call and would
-    ///         otherwise pay ~2 KB of memory expansion per commit for the full public getter.
-    /// @dev Returned fields mirror RoundLib.Commit but skip the blob data.
+    /// @notice Narrow view of a commit that omits hash/target metadata. Used by off-chain iterators
+    ///         and by reward distributor paths that read many claim-relevant commits in one call.
+    /// @dev Returned fields mirror the claim-relevant subset of RoundLib.Commit.
     function commitCore(uint256 contentId, uint256 roundId, bytes32 commitKey)
         external
         view
@@ -335,7 +335,7 @@ contract RoundVotingEngine is
         external
         view
         returns (
-            bytes memory ciphertext,
+            bytes32 ciphertextHash,
             uint64 targetRound,
             bytes32 drandChainHash,
             uint48 revealableAfter,
@@ -343,7 +343,9 @@ contract RoundVotingEngine is
             uint64 stakeAmount
         )
     {
-        return RoundCleanupLib.commitRevealData(commits[contentId][roundId], commitKey);
+        return RoundCleanupLib.commitRevealData(
+            commits[contentId][roundId], commitKey, _getRoundDrandChainHash(contentId, roundId)
+        );
     }
 
     /// @notice Commit a blind vote on content. Direction is hidden via tlock encryption.
@@ -459,7 +461,7 @@ contract RoundVotingEngine is
         uint64 targetRound,
         bytes32 drandChainHash,
         bytes32 commitHash,
-        bytes memory ciphertext,
+        bytes calldata ciphertext,
         uint256 stakeAmount,
         address frontend
     ) internal {
@@ -519,6 +521,7 @@ contract RoundVotingEngine is
         _validateCommitTlockData(
             contentId, roundId, ciphertext, targetRound, drandChainHash, epochEnd, roundCfg.epochDuration
         );
+        bytes32 ciphertextHash = keccak256(ciphertext);
         // Transfer LREP stake after all lightweight validation passes.
         lrepToken.safeTransferFrom(voter, address(this), stakeAmount);
         accountedLrepBalance += stakeAmount;
@@ -529,11 +532,10 @@ contract RoundVotingEngine is
             commitKey,
             voter,
             stakeAmount64,
-            ciphertext,
+            ciphertextHash,
             frontend,
             epochEnd,
             targetRound,
-            drandChainHash,
             epochIdx,
             commitHash,
             resolved.identityKey,
@@ -549,7 +551,16 @@ contract RoundVotingEngine is
         }
 
         emit VoteCommitted(
-            contentId, roundId, voter, commitHash, expectedReferenceRatingBps, targetRound, drandChainHash, stakeAmount
+            contentId,
+            roundId,
+            voter,
+            commitHash,
+            expectedReferenceRatingBps,
+            targetRound,
+            drandChainHash,
+            stakeAmount,
+            ciphertextHash,
+            ciphertext
         );
     }
 
@@ -565,7 +576,7 @@ contract RoundVotingEngine is
     function _validateCommitTlockData(
         uint256 contentId,
         uint256 roundId,
-        bytes memory ciphertext,
+        bytes calldata ciphertext,
         uint64 targetRound,
         bytes32 drandChainHash,
         uint256 epochEnd,
@@ -591,11 +602,10 @@ contract RoundVotingEngine is
         bytes32 commitKey,
         address voter,
         uint64 stakeAmount64,
-        bytes memory ciphertext,
+        bytes32 ciphertextHash,
         address frontend,
         uint256 epochEnd,
         uint64 targetRound,
-        bytes32 drandChainHash,
         uint8 epochIdx,
         bytes32 commitHash,
         bytes32 identityKey,
@@ -607,11 +617,10 @@ contract RoundVotingEngine is
             commitKey,
             voter,
             stakeAmount64,
-            ciphertext,
+            ciphertextHash,
             frontend,
             epochEnd,
             targetRound,
-            drandChainHash,
             epochIdx
         );
         _markFrontendEligibility(contentId, roundId, commitKey, frontend);
@@ -626,21 +635,19 @@ contract RoundVotingEngine is
         bytes32 commitKey,
         address voter,
         uint64 stakeAmount64,
-        bytes memory ciphertext,
+        bytes32 ciphertextHash,
         address frontend,
         uint256 epochEnd,
         uint64 targetRound,
-        bytes32 drandChainHash,
         uint8 epochIdx
     ) internal {
         commits[contentId][roundId][commitKey] = RoundLib.Commit({
             voter: voter,
             stakeAmount: stakeAmount64,
-            ciphertext: ciphertext,
+            ciphertextHash: ciphertextHash,
             frontend: frontend,
             revealableAfter: epochEnd.toUint48(),
             targetRound: targetRound,
-            drandChainHash: drandChainHash,
             revealed: false,
             isUp: false,
             epochIndex: epochIdx
@@ -1112,6 +1119,13 @@ contract RoundVotingEngine is
         );
     }
 
+    function _getRoundDrandChainHash(uint256 contentId, uint256 roundId) internal view returns (bytes32 chainHash) {
+        chainHash = roundDrandChainHashSnapshot[contentId][roundId];
+        if (chainHash == bytes32(0)) {
+            chainHash = protocolConfig.drandChainHash();
+        }
+    }
+
     function _currentConfig() internal view returns (RoundLib.RoundConfig memory cfg) {
         (cfg.epochDuration, cfg.maxDuration, cfg.minVoters, cfg.maxVoters) = protocolConfig.config();
     }
@@ -1333,7 +1347,8 @@ contract RoundVotingEngine is
                 salt: salt,
                 roundReferenceRatingBps: _getRoundReferenceRatingBps(contentId, roundId),
                 minVoters: _rbtsRevealQuorum(roundCfg.minVoters),
-                targetRoundRevealableAt: targetRoundRevealableAt
+                targetRoundRevealableAt: targetRoundRevealableAt,
+                drandChainHash: _getRoundDrandChainHash(contentId, roundId)
             })
         );
         roundStakeWithEligibleFrontend[contentId][roundId] = eligibleFrontendStake;

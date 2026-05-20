@@ -744,6 +744,9 @@ export function registerDataRoutes(app: ApiApp) {
         voterId: sql<null>`null`,
         commitKey: vote.commitKey,
         commitHash: vote.commitHash,
+        ciphertextHash: vote.ciphertextHash,
+        ciphertext: vote.ciphertext,
+        ciphertextSource: vote.ciphertextSource,
         targetRound: vote.targetRound,
         drandChainHash: vote.drandChainHash,
         isUp: vote.isUp,
@@ -757,6 +760,9 @@ export function registerDataRoutes(app: ApiApp) {
         epochIndex: vote.epochIndex,
         revealed: vote.revealed,
         committedAt: vote.committedAt,
+        commitTxHash: vote.commitTxHash,
+        commitBlockNumber: vote.commitBlockNumber,
+        commitLogIndex: vote.commitLogIndex,
         revealedAt: vote.revealedAt,
         roundStartTime: round.startTime,
         roundEpochDuration: round.epochDuration,
@@ -806,6 +812,56 @@ export function registerDataRoutes(app: ApiApp) {
       limit,
       offset,
     });
+  });
+
+  app.get("/advisory-votes", async (c) => {
+    const contentId = c.req.query("contentId");
+    const roundId = c.req.query("roundId");
+    const limit = safeLimit(c.req.query("limit"), 50, 200);
+    const offset = safeOffset(c.req.query("offset"));
+    if (Number.isNaN(offset)) return c.json({ error: "Invalid offset" }, 400);
+
+    const conditions = [];
+    if (contentId) {
+      const parsed = safeBigInt(contentId);
+      if (parsed === null) return c.json({ error: "Invalid contentId" }, 400);
+      conditions.push(eq(advisoryVote.contentId, parsed));
+    }
+    if (roundId) {
+      const parsed = safeBigInt(roundId);
+      if (parsed === null) return c.json({ error: "Invalid roundId" }, 400);
+      conditions.push(eq(advisoryVote.roundId, parsed));
+    }
+
+    const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const items = await db
+      .select({
+        id: advisoryVote.id,
+        commitKey: advisoryVote.id,
+        contentId: advisoryVote.contentId,
+        roundId: advisoryVote.roundId,
+        voter: advisoryVote.voter,
+        commitHash: advisoryVote.commitHash,
+        ciphertextHash: advisoryVote.ciphertextHash,
+        ciphertext: advisoryVote.ciphertext,
+        ciphertextSource: advisoryVote.ciphertextSource,
+        targetRound: advisoryVote.targetRound,
+        drandChainHash: advisoryVote.drandChainHash,
+        revealed: advisoryVote.revealed,
+        committedAt: advisoryVote.committedAt,
+        commitTxHash: advisoryVote.commitTxHash,
+        commitBlockNumber: advisoryVote.commitBlockNumber,
+        commitLogIndex: advisoryVote.commitLogIndex,
+        revealedAt: advisoryVote.revealedAt,
+      })
+      .from(advisoryVote)
+      .where(where)
+      .orderBy(desc(advisoryVote.committedAt))
+      .limit(limit)
+      .offset(offset);
+
+    return jsonBig(c, { items, limit, offset });
   });
 
   app.get("/vote-cooldowns", async (c) => {

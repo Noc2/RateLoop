@@ -840,6 +840,9 @@ export interface PonderVoteItem {
   voterId?: string | null;
   commitKey?: string;
   commitHash?: string;
+  ciphertextHash?: string;
+  ciphertext?: string;
+  ciphertextSource?: string;
   targetRound?: string;
   drandChainHash?: string;
   isUp: boolean | null; // null until revealed
@@ -853,6 +856,9 @@ export interface PonderVoteItem {
   epochIndex: number; // 0=epoch-1 (100% weight), 1=epoch-2+ (25% weight)
   revealed: boolean;
   committedAt: string;
+  commitTxHash?: string | null;
+  commitBlockNumber?: string | null;
+  commitLogIndex?: number | null;
   revealedAt: string | null;
   roundStartTime: string | null;
   roundEpochDuration?: number;
