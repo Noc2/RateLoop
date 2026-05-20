@@ -94,12 +94,12 @@ test("CI smoke and API projects keep browser smoke separate from fetch-only spec
   const smokeSpec = "/tmp/rateloop/packages/nextjs/e2e/tests/smoke.spec.ts";
   const docsSpec = "/tmp/rateloop/packages/nextjs/e2e/tests/docs-pages.spec.ts";
   const apiSpec = "/tmp/rateloop/packages/nextjs/e2e/tests/ponder-api.spec.ts";
-  const followApiSpec = "/tmp/rateloop/packages/nextjs/e2e/tests/follow-api.spec.ts";
+  const watchlistApiSpec = "/tmp/rateloop/packages/nextjs/e2e/tests/watchlist-api.spec.ts";
 
   assert.equal(smokeMatch.test(smokeSpec), true, "ci-smoke should include browser smoke specs");
   assert.equal(smokeMatch.test(docsSpec), true, "ci-smoke should include docs smoke specs");
   assert.equal(smokeMatch.test(apiSpec), false, "ci-smoke should not include API-only specs");
   assert.equal(apiMatch.test(apiSpec), true, "ci-api should include Ponder API specs");
-  assert.equal(apiMatch.test(followApiSpec), true, "ci-api should include Next API specs");
+  assert.equal(apiMatch.test(watchlistApiSpec), true, "ci-api should include Next API specs");
   assert.equal(apiMatch.test(smokeSpec), false, "ci-api should not include browser smoke specs");
 });

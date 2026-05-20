@@ -9,11 +9,11 @@ const RESPONSIVE_LAYOUT_TESTS = specFile("responsive-layout");
 const ACCESSIBILITY_AXE_TESTS = specFile("accessibility-axe");
 const MOBILE_TESTS = specFile("mobile");
 const CI_SMOKE_TESTS = specFiles("smoke", "pages-smoke", "docs-pages");
-const CI_API_TESTS = specFiles("nextjs-api", "follow-api", "watchlist-api", "faucet", "contract-boundaries", "ponder-api");
+const CI_API_TESTS = specFiles("nextjs-api", "watchlist-api", "faucet", "contract-boundaries", "ponder-api");
 const CHROMIUM_SPECIAL_TESTS =
   /round-cancellation|content-dormancy|settlement-lifecycle|reward-claim|tied-round|zz-multi-round|unanimous-settlement|frontend-fee-claim|reveal-failed|manual-reveal|keeper-settlement|mobile|browser-compat|responsive-layout|accessibility-axe/;
 const CI_APP_IGNORED_TESTS =
-  /smoke|pages-smoke|docs-pages|nextjs-api|follow-api|watchlist-api|faucet|contract-boundaries|ponder-api|round-cancellation|content-dormancy|settlement-lifecycle|reward-claim|tied-round|zz-multi-round|unanimous-settlement|frontend-fee-claim|reveal-failed|manual-reveal|keeper-settlement|mobile|browser-compat|responsive-layout|accessibility-axe/;
+  /smoke|pages-smoke|docs-pages|nextjs-api|watchlist-api|faucet|contract-boundaries|ponder-api|round-cancellation|content-dormancy|settlement-lifecycle|reward-claim|tied-round|zz-multi-round|unanimous-settlement|frontend-fee-claim|reveal-failed|manual-reveal|keeper-settlement|mobile|browser-compat|responsive-layout|accessibility-axe/;
 
 export default defineConfig({
   globalSetup: "./global-setup.cts",
