@@ -58,18 +58,20 @@ export function resolveBountyReferenceNowSeconds(
   latestBlockTimestamp: bigint | number | null | undefined,
   fallbackNowSeconds = Math.floor(Date.now() / 1000),
 ): number {
+  const normalizedFallback = Math.floor(fallbackNowSeconds);
+
   if (typeof latestBlockTimestamp === "bigint") {
     const normalized = Number(latestBlockTimestamp);
     if (Number.isFinite(normalized)) {
-      return normalized;
+      return Math.max(Math.floor(normalized), normalizedFallback);
     }
   }
 
   if (typeof latestBlockTimestamp === "number" && Number.isFinite(latestBlockTimestamp)) {
-    return Math.floor(latestBlockTimestamp);
+    return Math.max(Math.floor(latestBlockTimestamp), normalizedFallback);
   }
 
-  return fallbackNowSeconds;
+  return normalizedFallback;
 }
 
 export function formatBountyWindowDuration(seconds: number | null): string {

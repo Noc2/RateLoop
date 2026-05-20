@@ -35,9 +35,11 @@ test("getBountyClosesAtFromWindowSeconds supports short synced windows", () => {
   assert.equal(getBountyClosesAtFromWindowSeconds(null, 1_000), 0n);
 });
 
-test("resolveBountyReferenceNowSeconds prefers the chain timestamp when available", () => {
+test("resolveBountyReferenceNowSeconds uses the newest usable timestamp", () => {
   assert.equal(resolveBountyReferenceNowSeconds(12_345n, 1_000), 12_345);
   assert.equal(resolveBountyReferenceNowSeconds(54_321, 1_000), 54_321);
+  assert.equal(resolveBountyReferenceNowSeconds(900n, 1_000), 1_000);
+  assert.equal(resolveBountyReferenceNowSeconds(999.9, 1_000), 1_000);
   assert.equal(resolveBountyReferenceNowSeconds(undefined, 1_000), 1_000);
 });
 
