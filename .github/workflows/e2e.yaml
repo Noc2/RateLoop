@@ -43,31 +43,43 @@ jobs:
             playwright_browsers: chromium
             timeout: 30
             start_keeper: false
+            warm_routes: true
+          - suite: api
+            command: yarn workspace @rateloop/nextjs e2e:ci:api
+            playwright_browsers: none
+            timeout: 30
+            start_keeper: false
+            warm_routes: false
           - suite: app
             command: yarn workspace @rateloop/nextjs e2e:ci:app
             playwright_browsers: chromium
             timeout: 45
             start_keeper: false
+            warm_routes: true
           - suite: responsive
             command: yarn workspace @rateloop/nextjs e2e:responsive
             playwright_browsers: chromium
             timeout: 35
             start_keeper: false
+            warm_routes: true
           - suite: a11y
             command: yarn workspace @rateloop/nextjs e2e:a11y
             playwright_browsers: chromium
             timeout: 30
             start_keeper: false
+            warm_routes: true
           - suite: lifecycle
             command: yarn workspace @rateloop/nextjs e2e:ci:lifecycle
             playwright_browsers: chromium
             timeout: 45
             start_keeper: false
+            warm_routes: true
           - suite: keeper
             command: yarn workspace @rateloop/nextjs e2e:ci:keeper
             playwright_browsers: chromium
             timeout: 35
             start_keeper: true
+            warm_routes: true
 
     steps:
       - name: Checkout
@@ -85,7 +97,17 @@ jobs:
       - name: Install dependencies
         run: yarn install --immutable
 
+      - name: Cache Playwright browsers
+        if: matrix.playwright_browsers != 'none'
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('yarn.lock', 'packages/nextjs/package.json') }}
+          restore-keys: |
+            playwright-${{ runner.os }}-
+
       - name: Install Playwright browsers
+        if: matrix.playwright_browsers != 'none'
         run: yarn workspace @rateloop/nextjs exec playwright install ${{ matrix.playwright_browsers }} --with-deps
 
       - name: Start Anvil and deploy contracts
@@ -136,6 +158,7 @@ jobs:
           echo "✓ Ponder ready"
 
       - name: Warm critical Next.js routes
+        if: matrix.warm_routes
         run: |
           # Avoid spending Playwright's navigation budget on first-hit Next dev compilation.
           for route in / /rate /ask /vote/reveal /docs /legal /legal/terms; do
@@ -178,7 +201,9 @@ jobs:
         if: failure()
         with:
           name: playwright-report-${{ matrix.suite }}
-          path: packages/nextjs/e2e/playwright-report/
+          path: |
+            packages/nextjs/e2e/playwright-report/
+            packages/nextjs/e2e/test-results/
           if-no-files-found: ignore
           retention-days: 14
 
@@ -209,10 +234,12 @@ jobs:
             command: yarn workspace @rateloop/nextjs e2e:compat
             playwright_browsers: chromium firefox webkit
             timeout: 45
+            warm_routes: true
           - suite: mobile
             command: yarn workspace @rateloop/nextjs e2e:mobile
             playwright_browsers: chromium webkit
             timeout: 45
+            warm_routes: true
 
     steps:
       - name: Checkout
@@ -229,6 +256,14 @@ jobs:
 
       - name: Install dependencies
         run: yarn install --immutable
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('yarn.lock', 'packages/nextjs/package.json') }}
+          restore-keys: |
+            playwright-${{ runner.os }}-
 
       - name: Install Playwright browsers
         run: yarn workspace @rateloop/nextjs exec playwright install ${{ matrix.playwright_browsers }} --with-deps
@@ -281,6 +316,7 @@ jobs:
           echo "✓ Ponder ready"
 
       - name: Warm critical Next.js routes
+        if: matrix.warm_routes
         run: |
           for route in / /rate /ask /docs /legal /legal/terms; do
             echo "Warming ${route}"
@@ -306,6 +342,8 @@ jobs:
         if: failure()
         with:
           name: playwright-report-browser-compat-${{ matrix.suite }}
-          path: packages/nextjs/e2e/playwright-report/
+          path: |
+            packages/nextjs/e2e/playwright-report/
+            packages/nextjs/e2e/test-results/
           if-no-files-found: ignore
           retention-days: 14

@@ -77,11 +77,29 @@ test("CI app project covers broad Chromium specs without rerunning scoped suites
   const testIgnore = getProjectTestIgnore("ci-app");
   const broadSpec = "/tmp/rateloop/packages/nextjs/e2e/tests/vote.spec.ts";
   const smokeSpec = "/tmp/rateloop/packages/nextjs/e2e/tests/smoke.spec.ts";
+  const apiSpec = "/tmp/rateloop/packages/nextjs/e2e/tests/ponder-api.spec.ts";
   const lifecycleSpec = "/tmp/rateloop/packages/nextjs/e2e/tests/settlement-lifecycle.spec.ts";
   const compatSpec = "/tmp/rateloop/packages/nextjs/e2e/tests/browser-compat.spec.ts";
 
   assert.equal(testIgnore.test(broadSpec), false, "ci-app should include broad app specs");
   assert.equal(testIgnore.test(smokeSpec), true, "ci-app should leave smoke specs to ci-smoke");
+  assert.equal(testIgnore.test(apiSpec), true, "ci-app should leave API-only specs to ci-api");
   assert.equal(testIgnore.test(lifecycleSpec), true, "ci-app should leave lifecycle specs to lifecycle projects");
   assert.equal(testIgnore.test(compatSpec), true, "ci-app should leave browser compat specs to scheduled compat projects");
+});
+
+test("CI smoke and API projects keep browser smoke separate from fetch-only specs", () => {
+  const smokeMatch = getProjectTestMatch("ci-smoke");
+  const apiMatch = getProjectTestMatch("ci-api");
+  const smokeSpec = "/tmp/rateloop/packages/nextjs/e2e/tests/smoke.spec.ts";
+  const docsSpec = "/tmp/rateloop/packages/nextjs/e2e/tests/docs-pages.spec.ts";
+  const apiSpec = "/tmp/rateloop/packages/nextjs/e2e/tests/ponder-api.spec.ts";
+  const followApiSpec = "/tmp/rateloop/packages/nextjs/e2e/tests/follow-api.spec.ts";
+
+  assert.equal(smokeMatch.test(smokeSpec), true, "ci-smoke should include browser smoke specs");
+  assert.equal(smokeMatch.test(docsSpec), true, "ci-smoke should include docs smoke specs");
+  assert.equal(smokeMatch.test(apiSpec), false, "ci-smoke should not include API-only specs");
+  assert.equal(apiMatch.test(apiSpec), true, "ci-api should include Ponder API specs");
+  assert.equal(apiMatch.test(followApiSpec), true, "ci-api should include Next API specs");
+  assert.equal(apiMatch.test(smokeSpec), false, "ci-api should not include browser smoke specs");
 });

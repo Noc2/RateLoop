@@ -2,17 +2,18 @@ import { E2E_BASE_URL } from "./helpers/service-urls";
 import { defineConfig, devices } from "@playwright/test";
 
 const specFile = (name: string) => new RegExp(`(^|[/\\\\])${name}\\.spec\\.[cm]?[jt]sx?$`);
+const specFiles = (...names: string[]) => new RegExp(`(^|[/\\\\])(?:${names.join("|")})\\.spec\\.[cm]?[jt]sx?$`);
 
 const BROWSER_COMPAT_TESTS = specFile("browser-compat");
 const RESPONSIVE_LAYOUT_TESTS = specFile("responsive-layout");
 const ACCESSIBILITY_AXE_TESTS = specFile("accessibility-axe");
 const MOBILE_TESTS = specFile("mobile");
-const CI_SMOKE_TESTS =
-  /smoke|pages-smoke|docs-pages|nextjs-api|follow-api|watchlist-api|faucet|contract-boundaries/;
+const CI_SMOKE_TESTS = specFiles("smoke", "pages-smoke", "docs-pages");
+const CI_API_TESTS = specFiles("nextjs-api", "follow-api", "watchlist-api", "faucet", "contract-boundaries", "ponder-api");
 const CHROMIUM_SPECIAL_TESTS =
   /round-cancellation|content-dormancy|settlement-lifecycle|reward-claim|tied-round|zz-multi-round|unanimous-settlement|frontend-fee-claim|reveal-failed|manual-reveal|keeper-settlement|mobile|browser-compat|responsive-layout|accessibility-axe/;
 const CI_APP_IGNORED_TESTS =
-  /smoke|pages-smoke|docs-pages|nextjs-api|follow-api|watchlist-api|faucet|contract-boundaries|round-cancellation|content-dormancy|settlement-lifecycle|reward-claim|tied-round|zz-multi-round|unanimous-settlement|frontend-fee-claim|reveal-failed|manual-reveal|keeper-settlement|mobile|browser-compat|responsive-layout|accessibility-axe/;
+  /smoke|pages-smoke|docs-pages|nextjs-api|follow-api|watchlist-api|faucet|contract-boundaries|ponder-api|round-cancellation|content-dormancy|settlement-lifecycle|reward-claim|tied-round|zz-multi-round|unanimous-settlement|frontend-fee-claim|reveal-failed|manual-reveal|keeper-settlement|mobile|browser-compat|responsive-layout|accessibility-axe/;
 
 export default defineConfig({
   globalSetup: "./global-setup.cts",
@@ -22,6 +23,7 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   workers: 1, // Single worker to prevent Anvil nonce conflicts
   reporter: process.env.CI ? [["github"], ["html", { open: "never", outputFolder: "playwright-report" }]] : "html",
+  outputDir: "test-results",
   timeout: 60_000, // On-chain tx confirmation needs time
 
   use: {
@@ -35,6 +37,10 @@ export default defineConfig({
       name: "ci-smoke",
       use: { ...devices["Desktop Chrome"] },
       testMatch: CI_SMOKE_TESTS,
+    },
+    {
+      name: "ci-api",
+      testMatch: CI_API_TESTS,
     },
     {
       name: "ci-app",
