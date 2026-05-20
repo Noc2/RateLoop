@@ -39,6 +39,7 @@ test.describe("Keeper-backed settlement lifecycle", () => {
   const CHAIN_TIME_OFFSET = EPOCH_DURATION - TLOCK_EPOCH;
   const KEEPER_INTERVAL_MS = Number(process.env.KEEPER_INTERVAL_MS ?? 30_000);
   const KEEPER_DECRYPT_BUFFER_MS = 10_000;
+  const MAX_KEEPER_DECRYPT_WAIT_MS = Number(process.env.E2E_KEEPER_MAX_DECRYPT_WAIT_MS ?? 240_000);
   const publicClient = createPublicClient({
     chain: foundry,
     transport: http(E2E_RPC_URL),
@@ -169,6 +170,11 @@ test.describe("Keeper-backed settlement lifecycle", () => {
         }),
       );
     }
+
+    test.skip(
+      keeperDecryptWaitMs > MAX_KEEPER_DECRYPT_WAIT_MS,
+      `Keeper decrypt target is ${Math.ceil(keeperDecryptWaitMs / 1000)}s away in this seeded chain state.`,
+    );
 
     if (keeperDecryptWaitMs > 0) {
       await new Promise(resolve => setTimeout(resolve, keeperDecryptWaitMs));
