@@ -144,7 +144,7 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
     /// @notice Self-report the account type and a metadata hash.
     /// @dev Metadata is reputational and indexable, not proof of rater type.
     function setProfile(RaterType raterType, bytes32 metadataHash) external {
-        if (hasActiveHumanCredential(msg.sender) && raterType != RaterType.Human) {
+        if (hasActiveHumanCredential(msg.sender) && !_isHumanCredentialCompatibleProfile(raterType)) {
             revert ActiveHumanCredentialRequiresHumanProfile();
         }
 
@@ -488,17 +488,21 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
             rater, nullifierHash, scope, provider, uint64(block.timestamp), expiresAt, evidenceHash
         );
 
-        _forceHumanProfile(rater);
+        _forceHumanCredentialCompatibleProfile(rater);
     }
 
-    function _forceHumanProfile(address rater) internal {
+    function _forceHumanCredentialCompatibleProfile(address rater) internal {
         RaterProfile storage profile = _profiles[rater];
-        if (profile.raterType == RaterType.Human) return;
+        if (_isHumanCredentialCompatibleProfile(profile.raterType)) return;
 
         profile.raterType = RaterType.Human;
         profile.updatedAt = uint64(block.timestamp);
 
         emit RaterProfileUpdated(rater, RaterType.Human, profile.metadataHash, uint64(block.timestamp));
+    }
+
+    function _isHumanCredentialCompatibleProfile(RaterType raterType) internal pure returns (bool) {
+        return raterType == RaterType.Human || raterType == RaterType.Team || raterType == RaterType.Hybrid;
     }
 
     function _identityForHolder(address holder)

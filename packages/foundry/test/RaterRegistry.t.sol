@@ -59,7 +59,7 @@ contract RaterRegistryTest is Test {
         assertEq(profile.updatedAt, uint64(block.timestamp));
     }
 
-    function test_SetProfileRejectsNonHumanTypeForActiveHumanCredential() public {
+    function test_SetProfileRejectsAiTypeForActiveHumanCredential() public {
         uint256[8] memory proof;
 
         vm.prank(rater);
@@ -77,7 +77,28 @@ contract RaterRegistryTest is Test {
         assertEq(profile.metadataHash, METADATA_HASH);
     }
 
-    function test_AttestHumanCredentialForcesHumanProfileAndPreservesMetadataHash() public {
+    function test_SetProfileAllowsTeamAndHybridForActiveHumanCredential() public {
+        uint256[8] memory proof;
+
+        vm.prank(rater);
+        registry.attestHumanCredentialWithProof(1, uint256(NULLIFIER_HASH), proof);
+
+        vm.prank(rater);
+        registry.setProfile(RaterRegistry.RaterType.Team, METADATA_HASH);
+
+        RaterRegistry.RaterProfile memory teamProfile = registry.getProfile(rater);
+        assertEq(uint256(teamProfile.raterType), uint256(RaterRegistry.RaterType.Team));
+        assertEq(teamProfile.metadataHash, METADATA_HASH);
+
+        vm.prank(rater);
+        registry.setProfile(RaterRegistry.RaterType.Hybrid, METADATA_HASH);
+
+        RaterRegistry.RaterProfile memory hybridProfile = registry.getProfile(rater);
+        assertEq(uint256(hybridProfile.raterType), uint256(RaterRegistry.RaterType.Hybrid));
+        assertEq(hybridProfile.metadataHash, METADATA_HASH);
+    }
+
+    function test_AttestHumanCredentialForcesAiProfileToHumanAndPreservesMetadataHash() public {
         uint256[8] memory proof;
 
         vm.prank(rater);
@@ -89,6 +110,31 @@ contract RaterRegistryTest is Test {
         RaterRegistry.RaterProfile memory profile = registry.getProfile(rater);
         assertEq(uint256(profile.raterType), uint256(RaterRegistry.RaterType.Human));
         assertEq(profile.metadataHash, METADATA_HASH);
+    }
+
+    function test_AttestHumanCredentialPreservesTeamAndHybridProfileTypes() public {
+        uint256[8] memory proof;
+
+        vm.prank(rater);
+        registry.setProfile(RaterRegistry.RaterType.Team, METADATA_HASH);
+
+        vm.prank(rater);
+        registry.attestHumanCredentialWithProof(1, uint256(NULLIFIER_HASH), proof);
+
+        RaterRegistry.RaterProfile memory teamProfile = registry.getProfile(rater);
+        assertEq(uint256(teamProfile.raterType), uint256(RaterRegistry.RaterType.Team));
+        assertEq(teamProfile.metadataHash, METADATA_HASH);
+
+        bytes32 otherNullifier = keccak256("other-nullifier");
+        vm.prank(otherRater);
+        registry.setProfile(RaterRegistry.RaterType.Hybrid, METADATA_HASH);
+
+        vm.prank(otherRater);
+        registry.attestHumanCredentialWithProof(1, uint256(otherNullifier), proof);
+
+        RaterRegistry.RaterProfile memory hybridProfile = registry.getProfile(otherRater);
+        assertEq(uint256(hybridProfile.raterType), uint256(RaterRegistry.RaterType.Hybrid));
+        assertEq(hybridProfile.metadataHash, METADATA_HASH);
     }
 
     function test_FollowProfileStoresPublicRelationshipAndCounts() public {
@@ -366,7 +412,7 @@ contract RaterRegistryTest is Test {
         assertTrue(registry.hasActiveHumanCredential(rater));
 
         RaterRegistry.RaterProfile memory profile = registry.getProfile(rater);
-        assertEq(uint256(profile.raterType), uint256(RaterRegistry.RaterType.Human));
+        assertEq(uint256(profile.raterType), uint256(RaterRegistry.RaterType.Team));
         assertEq(profile.metadataHash, METADATA_HASH);
     }
 

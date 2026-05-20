@@ -198,15 +198,25 @@ function getSelfReportRaterType(report: ProfileSelfReport | null | undefined) {
   return normalizeRaterType(report?.raterType);
 }
 
+function isHumanCredentialCompatibleRaterType(raterType: RaterTypeValue) {
+  return raterType === RATER_TYPE.Human || raterType === RATER_TYPE.Team || raterType === RATER_TYPE.Hybrid;
+}
+
 function resolveEditableRaterType(
   registryRaterType: RaterTypeValue,
   selfReport: ProfileSelfReport,
   hasActiveHumanCredential: boolean,
 ) {
-  if (hasActiveHumanCredential) return RATER_TYPE.Human;
-  if (registryRaterType !== RATER_TYPE.Unknown) return registryRaterType;
+  if (registryRaterType !== RATER_TYPE.Unknown) {
+    return hasActiveHumanCredential && !isHumanCredentialCompatibleRaterType(registryRaterType)
+      ? RATER_TYPE.Human
+      : registryRaterType;
+  }
   const selfReportRaterType = getSelfReportRaterType(selfReport);
-  return selfReportRaterType === RATER_TYPE.Unknown ? RATER_TYPE.Human : selfReportRaterType;
+  if (selfReportRaterType === RATER_TYPE.Unknown) return RATER_TYPE.Human;
+  return hasActiveHumanCredential && !isHumanCredentialCompatibleRaterType(selfReportRaterType)
+    ? RATER_TYPE.Human
+    : selfReportRaterType;
 }
 
 function withRaterType(report: ProfileSelfReport, raterType: RaterTypeValue) {
@@ -781,7 +791,10 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
   const backHref = ownProfile ? "/governance#profile" : "/governance";
   const totalVotes = profileDetail?.summary.totalVotes ?? 0;
   const ponderSelfReport = profileSelfReportFromString(summary?.selfReport);
-  const forcedRaterTypeInput = hasActiveHumanCredential ? RATER_TYPE.Human : raterTypeInput;
+  const forcedRaterTypeInput =
+    hasActiveHumanCredential && !isHumanCredentialCompatibleRaterType(raterTypeInput)
+      ? RATER_TYPE.Human
+      : raterTypeInput;
   const effectiveSelfReportInput = withRaterType(selfReportInput, forcedRaterTypeInput);
 
   useEffect(() => {
@@ -882,7 +895,10 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
 
   const { isTaken: isNameTaken, isLoading: nameCheckLoading } = useIsNameTaken(nameInput);
   const currentName = ownProfile ? committedName || liveProfile?.name || summary?.name || "" : summary?.name || "";
-  const registryDisplayRaterType = hasActiveHumanCredential ? RATER_TYPE.Human : raterRegistryProfile.raterType;
+  const registryDisplayRaterType =
+    hasActiveHumanCredential && !isHumanCredentialCompatibleRaterType(raterRegistryProfile.raterType)
+      ? RATER_TYPE.Human
+      : raterRegistryProfile.raterType;
   const fallbackDisplayRaterType = getSelfReportRaterType(ownProfile ? committedSelfReport : ponderSelfReport);
   const currentRaterType =
     registryDisplayRaterType !== RATER_TYPE.Unknown ? registryDisplayRaterType : fallbackDisplayRaterType;
@@ -1297,7 +1313,7 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
                 <div className="label-text text-base-content/65">Profile type</div>
                 <div className="mt-2 grid gap-2 sm:grid-cols-4">
                   {RATER_TYPE_OPTIONS.map(option => {
-                    const lockedByCredential = hasActiveHumanCredential && option.value !== RATER_TYPE.Human;
+                    const lockedByCredential = hasActiveHumanCredential && option.value === RATER_TYPE.AI;
                     return (
                       <button
                         key={option.value}
