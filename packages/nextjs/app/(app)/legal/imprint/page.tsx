@@ -25,6 +25,9 @@ const ImprintPage: NextPage = () => {
         <h2>Represented by</h2>
         <p>Gesch&auml;ftsf&uuml;hrer: David Hawig</p>
 
+        <h2>Commercial Register</h2>
+        <p>HRB 24975, Amtsgericht Bad Kreuznach</p>
+
         <h2>Contact</h2>
         <p>Email: hawigxyz@proton.me</p>
 
