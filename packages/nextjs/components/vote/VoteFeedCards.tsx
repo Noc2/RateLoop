@@ -59,17 +59,32 @@ function getSourceLabel(url: string) {
   }
 }
 
-function formatDeadlineDistance(deadline: bigint) {
+type DeadlineDisplay =
+  | { kind: "now"; label: "now" }
+  | { kind: "relative"; label: string }
+  | { kind: "date"; label: string };
+
+function formatDeadlineDisplay(deadline: bigint): DeadlineDisplay {
   const nowSeconds = BigInt(Math.floor(Date.now() / 1000));
   const seconds = Number(deadline - nowSeconds);
-  if (seconds <= 0) return "now";
-  if (seconds < 60 * 60) return `${Math.max(1, Math.ceil(seconds / 60))}m`;
-  if (seconds < 24 * 60 * 60) return `${Math.ceil(seconds / (60 * 60))}h`;
-  if (seconds < 7 * 24 * 60 * 60) return `${Math.ceil(seconds / (24 * 60 * 60))}d`;
+  if (seconds <= 0) return { kind: "now", label: "now" };
+  if (seconds < 60 * 60) return { kind: "relative", label: `${Math.max(1, Math.ceil(seconds / 60))}m` };
+  if (seconds < 24 * 60 * 60) return { kind: "relative", label: `${Math.ceil(seconds / (60 * 60))}h` };
+  if (seconds < 7 * 24 * 60 * 60) return { kind: "relative", label: `${Math.ceil(seconds / (24 * 60 * 60))}d` };
 
-  return new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short", year: "numeric" }).format(
-    new Date(Number(deadline) * 1000),
-  );
+  return {
+    kind: "date",
+    label: new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short", year: "numeric" }).format(
+      new Date(Number(deadline) * 1000),
+    ),
+  };
+}
+
+function formatDeadlineLabel(action: string, deadline: bigint) {
+  const display = formatDeadlineDisplay(deadline);
+  if (display.kind === "now") return `${action} now`;
+  if (display.kind === "date") return `${action} on ${display.label}`;
+  return `${action} in ${display.label}`;
 }
 
 function getDeadlineChipClassName(tone: "active" | "ended") {
@@ -103,7 +118,7 @@ function getRewardDeadlineChips(item: ContentItem) {
   } else if (!isFeedbackClosed && hasActiveBounty) {
     if (activeBountyClosesAt) {
       chips.push({
-        label: `Expires in ${formatDeadlineDistance(activeBountyClosesAt)}`,
+        label: formatDeadlineLabel("Expires", activeBountyClosesAt),
         tone: "active",
         tooltip: BOUNTY_DEADLINE_TOOLTIP_TEXT,
       });
@@ -113,7 +128,7 @@ function getRewardDeadlineChips(item: ContentItem) {
   if (feedbackSummary && hasActiveFeedback) {
     chips.push({
       label: activeFeedbackClosesAt
-        ? `Feedback closes in ${formatDeadlineDistance(activeFeedbackClosesAt)}`
+        ? formatDeadlineLabel("Feedback closes", activeFeedbackClosesAt)
         : "Feedback active",
       tone: "active",
       tooltip: FEEDBACK_DEADLINE_TOOLTIP_TEXT,
