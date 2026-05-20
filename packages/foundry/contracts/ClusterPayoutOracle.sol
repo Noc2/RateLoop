@@ -502,8 +502,18 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         if (consumer == address(0)) revert InvalidAddress();
 
         bool withinVetoWindow = block.timestamp <= uint256(snapshot.finalizedAt) + uint256(FINALIZATION_VETO_WINDOW);
-        bool consumed = IRoundPayoutSnapshotConsumer(consumer)
-            .isRoundPayoutSnapshotConsumed(snapshot.domain, snapshot.rewardPoolId, snapshot.contentId, snapshot.roundId);
+        // L-Oracle-B: wrap the consumer call in try/catch so a broken / removed consumer cannot
+        // trap the arbiter and indefinitely block reject. A reverting consumer is treated as
+        // "consumed" (conservative — outside the veto window the rejection still aborts; inside
+        // the veto window the rejection proceeds as before).
+        bool consumed;
+        try IRoundPayoutSnapshotConsumer(consumer).isRoundPayoutSnapshotConsumed(
+            snapshot.domain, snapshot.rewardPoolId, snapshot.contentId, snapshot.roundId
+        ) returns (bool isConsumed) {
+            consumed = isConsumed;
+        } catch {
+            consumed = true;
+        }
         if (!withinVetoWindow) {
             // Outside the veto window the rejection is only safe if the consumer has not yet paid
             // any claim against this snapshot's merkle root.

@@ -654,6 +654,15 @@ contract QuestionRewardPoolEscrow is
         catch {
             revert("Invalid oracle");
         }
+        // L-Oracle-B: ensure the new oracle has its consumer pin set back to this escrow before
+        // repointing. Without this, governance fat-finger creates a window where future claims
+        // revert on `verifyPayoutWeight` (msg.sender != proposal.consumer) and no proposal can be
+        // accepted because `_requireSourceReady` cannot resolve through a misconfigured consumer.
+        try oracle.roundPayoutSnapshotConsumer(PAYOUT_DOMAIN_QUESTION_REWARD) returns (address consumer) {
+            require(consumer == address(this), "Oracle consumer mismatch");
+        } catch {
+            revert("Invalid oracle");
+        }
         rewardPoolClusterPayoutOracle[rewardPoolId] = newOracle;
         emit RewardPoolClusterPayoutOracleRepointed(rewardPoolId, oldOracle, newOracle);
     }
