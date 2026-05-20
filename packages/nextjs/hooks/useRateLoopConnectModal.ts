@@ -23,7 +23,7 @@ function getConnectFailureMessage(error: unknown): string {
   return "Could not connect wallet. Check your wallet and try again.";
 }
 
-export function useCuryoConnectModal() {
+export function useRateLoopConnectModal() {
   const { connect, isConnecting: thirdwebConnecting } = useConnectModal();
   const { connectAsync, connectors, isPending: wagmiConnecting } = useConnect();
   const { targetNetwork } = useTargetNetwork();

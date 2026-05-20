@@ -3,6 +3,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { AgentIntegrationSequenceDiagram } from "~~/components/docs/AgentIntegrationSequenceDiagram";
 import { DocsTitle } from "~~/components/docs/DocsTitle";
+import { listAgentResultTemplates } from "~~/lib/agent/templates";
 
 const genericMcpConfig = `{
   "mcpServers": {
@@ -34,6 +35,8 @@ const productionDirectHttpOrigin = "https://www.rateloop.xyz";
 const agentsPackageHref = "https://github.com/Noc2/RateLoop/tree/main/packages/agents";
 const agentsCliHref = "https://github.com/Noc2/RateLoop/blob/main/packages/agents/src/cli.ts";
 const agentsCliDocsHref = "https://github.com/Noc2/RateLoop/tree/main/packages/agents#local-signer-cli";
+const agentsTemplatesSourceHref = "https://github.com/Noc2/RateLoop/blob/main/packages/agents/src/templates.ts";
+const agentsQuestionExamplesHref = "https://github.com/Noc2/RateLoop/tree/main/packages/agents/examples/questions";
 
 function formatDirectHttpRoutes(origin: string) {
   const normalizedOrigin = origin.replace(/\/$/, "");
@@ -128,12 +131,31 @@ const useCases = [
   "Public bug reproduction or feature acceptance checks",
 ] as const;
 
-const templateRecommendations = [
-  "Use feature_acceptance_test when the user has a public preview URL and wants humans to follow concrete test steps.",
-  "Use go_no_go or agent_action_go_no_go when the agent needs approval before taking a consequential action.",
-  "Use llm_answer_quality for answer quality, rag_grounding_check for source-support review, claim_verification for factual support, or source_credibility_check for source screening.",
-  "Use ranked_option_member or pairwise_output_preference when comparing several generated options; create one binary-rated question per option and compare final ratings later.",
+const resultTemplates = listAgentResultTemplates();
+const highlightedTemplateIds = [
+  "generic_rating",
+  "feature_acceptance_test",
+  "go_no_go",
+  "agent_action_go_no_go",
+  "llm_answer_quality",
+  "rag_grounding_check",
+  "claim_verification",
+  "source_credibility_check",
+  "ranked_option_member",
+  "pairwise_output_preference",
 ] as const;
+
+function getTemplateHref(templateId: string) {
+  return `#template-${templateId}`;
+}
+
+function TemplateIdLink({ id }: { id: string }) {
+  return (
+    <Link href={getTemplateHref(id)} className="font-mono text-sm">
+      {id}
+    </Link>
+  );
+}
 
 const integratedPaths = [
   "WebMCP guidance on this page for browser agents that need to understand what to ask the user next",
@@ -228,11 +250,75 @@ const AIPage = async () => {
         landing-page review, feature acceptance test, source credibility check, source-support check, or go/no-go action
         gate while returning fields that an agent can store and compare later.
       </p>
+      <p>
+        Agents can fetch the complete machine-readable list from{" "}
+        <Link href="/api/agent/templates">
+          <code>GET /api/agent/templates</code>
+        </Link>{" "}
+        or through <Link href="#mcp">MCP</Link> with <code>curyo_list_result_templates</code>. The canonical source is{" "}
+        <a href={agentsTemplatesSourceHref} target="_blank" rel="noopener noreferrer" className="link link-primary">
+          <code>packages/agents/src/templates.ts</code>
+        </a>
+        , and copy-paste question examples live in{" "}
+        <a href={agentsQuestionExamplesHref} target="_blank" rel="noopener noreferrer" className="link link-primary">
+          <code>packages/agents/examples/questions</code>
+        </a>
+        .
+      </p>
       <ul>
-        {templateRecommendations.map(item => (
-          <li key={item}>{item}</li>
-        ))}
+        <li>
+          Use <TemplateIdLink id="feature_acceptance_test" /> when the user has a public preview URL and wants humans to
+          follow concrete test steps.
+        </li>
+        <li>
+          Use <TemplateIdLink id="go_no_go" /> or <TemplateIdLink id="agent_action_go_no_go" /> when the agent needs
+          approval before taking a consequential action.
+        </li>
+        <li>
+          Use <TemplateIdLink id="llm_answer_quality" /> for answer quality, <TemplateIdLink id="rag_grounding_check" />{" "}
+          for source-support review, <TemplateIdLink id="claim_verification" /> for factual support, or{" "}
+          <TemplateIdLink id="source_credibility_check" /> for source screening.
+        </li>
+        <li>
+          Use <TemplateIdLink id="ranked_option_member" /> or <TemplateIdLink id="pairwise_output_preference" /> when
+          comparing several generated options; create one binary-rated question per option and compare final ratings
+          later.
+        </li>
       </ul>
+      <div className="not-prose my-8 grid gap-4 md:grid-cols-2">
+        {resultTemplates
+          .filter(template => highlightedTemplateIds.includes(template.id as (typeof highlightedTemplateIds)[number]))
+          .map(template => (
+            <section
+              key={template.id}
+              id={`template-${template.id}`}
+              className="scroll-mt-28 rounded-lg border border-base-content/10 bg-base-200/50 p-4"
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-base font-semibold text-base-content">{template.title}</h3>
+                  <Link href={getTemplateHref(template.id)} className="font-mono text-xs text-primary">
+                    {template.id}
+                  </Link>
+                </div>
+                <span className="rounded-full bg-base-300 px-2.5 py-1 font-mono text-[11px] text-base-content/70">
+                  {template.submissionPattern}
+                </span>
+              </div>
+              <p className="mt-3 text-sm leading-6 text-base-content/70">{template.description}</p>
+              <dl className="mt-4 space-y-2 text-sm">
+                <div>
+                  <dt className="font-semibold text-base-content">UP means</dt>
+                  <dd className="text-base-content/70">{template.voteSemantics.up}</dd>
+                </div>
+                <div>
+                  <dt className="font-semibold text-base-content">DOWN means</dt>
+                  <dd className="text-base-content/70">{template.voteSemantics.down}</dd>
+                </div>
+              </dl>
+            </section>
+          ))}
+      </div>
 
       <h2 id="paths">Integrated Paths</h2>
       <ul>

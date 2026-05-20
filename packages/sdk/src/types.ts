@@ -1,17 +1,17 @@
-export type CuryoFetch = typeof fetch;
+export type RateLoopFetch = typeof fetch;
 
-export interface CuryoSdkOptions {
+export interface RateLoopSdkOptions {
   chainId?: number;
   apiBaseUrl?: string;
   frontendCode?: `0x${string}`;
-  fetchImpl?: CuryoFetch;
+  fetchImpl?: RateLoopFetch;
   timeoutMs?: number;
 }
 
-export interface CuryoClientConfig {
+export interface RateLoopClientConfig {
   chainId?: number;
   apiBaseUrl?: string;
   frontendCode?: `0x${string}`;
-  fetchImpl: CuryoFetch;
+  fetchImpl: RateLoopFetch;
   timeoutMs: number;
 }

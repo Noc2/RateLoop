@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse, after } from "next/server";
 import { McpAuthError, authenticateMcpRequest, buildMcpAuthChallenge } from "~~/lib/mcp/auth";
-import { MCP_TOOLS, callCuryoMcpTool, getMcpToolRequiredScope, normalizeToolError } from "~~/lib/mcp/tools";
+import { MCP_TOOLS, callRateLoopMcpTool, getMcpToolRequiredScope, normalizeToolError } from "~~/lib/mcp/tools";
 import { checkRateLimit } from "~~/utils/rateLimit";
 
 export const runtime = "nodejs";
@@ -174,7 +174,7 @@ export async function GET(request: NextRequest) {
   return NextResponse.json(
     {
       allowedMethods: ["POST", "OPTIONS"],
-      error: "SSE streams are not enabled for this Curyo MCP release. Use POST JSON-RPC calls over streamable HTTP.",
+      error: "SSE streams are not enabled for this RateLoop MCP release. Use POST JSON-RPC calls over streamable HTTP.",
       supportedTransports: ["streamable-http"],
     },
     { headers: { ...corsHeaders(request), Allow: "POST, OPTIONS" }, status: 405 },
@@ -269,7 +269,7 @@ export async function POST(request: NextRequest) {
       }
       await authenticateMcpRequest(request, requiredScope);
 
-      const result = await callCuryoMcpTool({
+      const result = await callRateLoopMcpTool({
         agent,
         arguments: body.params?.arguments,
         name,

@@ -40,7 +40,7 @@ import { QuestionRewardPoolEscrowVoterLib } from "./libraries/QuestionRewardPool
 
 /// @title QuestionRewardPoolEscrow
 /// @notice Holds per-question USDC bounties and pays equal per-round rewards to revealed voters.
-/// @dev Curyo 2 keeps LREP coherence penalties in the voting engine. Stablecoin payouts are participation rewards.
+/// @dev RateLoop 2 keeps LREP coherence penalties in the voting engine. Stablecoin payouts are participation rewards.
 contract QuestionRewardPoolEscrow is
     Initializable,
     AccessControlUpgradeable,

@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
@@ -12,7 +13,12 @@ import { getMissingKeeperEnvVars } from "./dev-stack-keeper.mjs";
 const currentFile = fileURLToPath(import.meta.url);
 const repoRoot = path.resolve(path.dirname(currentFile), "..");
 const nextProjectDir = path.join(repoRoot, "packages", "nextjs");
+const ponderProjectDir = path.join(repoRoot, "packages", "ponder");
 const nextDevLockPath = path.join(nextProjectDir, ".next-dev.lock");
+const ponderEnvPath = path.join(ponderProjectDir, ".env.local");
+const ponderPgliteDir = path.join(ponderProjectDir, ".ponder", "pglite");
+const ponderDeploymentFingerprintPath = path.join(ponderProjectDir, ".ponder", "dev-stack-deployment-fingerprint");
+const deployedContractsPath = path.join(repoRoot, "packages", "contracts", "src", "deployedContracts.ts");
 const yarnCommand = process.platform === "win32" ? "yarn.cmd" : "yarn";
 const baseServices = [
   {
@@ -39,6 +45,22 @@ const keeperService = {
 };
 const allowRemoteDbPushFlag = "--allow-remote-db-push";
 const skipDbPushFlag = "--skip-db-push";
+const ponderLocalDeploymentEnvKeys = [
+  "PONDER_ADVISORY_VOTE_RECORDER_ADDRESS",
+  "PONDER_CATEGORY_REGISTRY_ADDRESS",
+  "PONDER_CLUSTER_PAYOUT_ORACLE_ADDRESS",
+  "PONDER_CONTENT_REGISTRY_ADDRESS",
+  "PONDER_FEEDBACK_BONUS_ESCROW_ADDRESS",
+  "PONDER_FRONTEND_REGISTRY_ADDRESS",
+  "PONDER_LAUNCH_DISTRIBUTION_POOL_ADDRESS",
+  "PONDER_LREP_ADDRESS",
+  "PONDER_PARTICIPATION_POOL_ADDRESS",
+  "PONDER_PROFILE_REGISTRY_ADDRESS",
+  "PONDER_QUESTION_REWARD_POOL_ESCROW_ADDRESS",
+  "PONDER_RATER_REGISTRY_ADDRESS",
+  "PONDER_ROUND_REWARD_DISTRIBUTOR_ADDRESS",
+  "PONDER_ROUND_VOTING_ENGINE_ADDRESS",
+];
 const resetColor = "\u001b[0m";
 const managedChildren = [];
 let shuttingDown = false;
@@ -119,6 +141,108 @@ function parseEnvFile(filePath) {
   return values;
 }
 
+function isLocalPonderRpcUrl(value) {
+  try {
+    const url = new URL(value);
+    return url.hostname === "localhost" || url.hostname === "127.0.0.1" || url.hostname === "::1";
+  } catch {
+    return false;
+  }
+}
+
+function getPonderNetworkFromEnv(env) {
+  return env.PONDER_NETWORK?.trim() || "hardhat";
+}
+
+function getPonderRpcUrlFromEnv(env) {
+  return env.PONDER_RPC_URL_31337?.trim() || "http://127.0.0.1:8545";
+}
+
+export function getPonderDeploymentFingerprint({ deployedContractsContent, env = {} } = {}) {
+  if (!deployedContractsContent) return null;
+
+  const hash = createHash("sha256").update(deployedContractsContent);
+  for (const key of ponderLocalDeploymentEnvKeys) {
+    const value = env[key]?.trim();
+    if (value) {
+      hash.update("\0").update(key).update("=").update(value);
+    }
+  }
+
+  return hash.digest("hex");
+}
+
+function getDeploymentFingerprint(env) {
+  if (!existsSync(deployedContractsPath)) return null;
+
+  return getPonderDeploymentFingerprint({
+    deployedContractsContent: readFileSync(deployedContractsPath, "utf8"),
+    env,
+  });
+}
+
+export function getPonderDataResetPlan({
+  ponderNetwork = "hardhat",
+  ponderRpcUrl = "http://127.0.0.1:8545",
+  currentFingerprint,
+  storedFingerprint,
+  hasPglite,
+} = {}) {
+  if (ponderNetwork !== "hardhat" || !isLocalPonderRpcUrl(ponderRpcUrl)) {
+    return {
+      shouldRecord: false,
+      shouldReset: false,
+      reason: "Ponder is not targeting local hardhat",
+    };
+  }
+
+  if (!currentFingerprint) {
+    return {
+      shouldRecord: false,
+      shouldReset: false,
+      reason: "deployment fingerprint is unavailable",
+    };
+  }
+
+  if (storedFingerprint === currentFingerprint) {
+    return {
+      shouldRecord: false,
+      shouldReset: false,
+      reason: "local deployment artifact is unchanged",
+    };
+  }
+
+  return {
+    shouldRecord: true,
+    shouldReset: hasPglite,
+    reason: storedFingerprint ? "local deployment artifact changed" : "no local deployment fingerprint was recorded",
+  };
+}
+
+function resetLocalPonderDataIfDeploymentChanged(env) {
+  const currentFingerprint = getDeploymentFingerprint(env);
+  const storedFingerprint = existsSync(ponderDeploymentFingerprintPath)
+    ? readFileSync(ponderDeploymentFingerprintPath, "utf8").trim()
+    : undefined;
+  const plan = getPonderDataResetPlan({
+    ponderNetwork: getPonderNetworkFromEnv(env),
+    ponderRpcUrl: getPonderRpcUrlFromEnv(env),
+    currentFingerprint,
+    storedFingerprint,
+    hasPglite: existsSync(ponderPgliteDir),
+  });
+
+  if (plan.shouldReset) {
+    rmSync(ponderPgliteDir, { recursive: true, force: true });
+    console.log(`[dev-stack] Cleared local Ponder PGlite data because ${plan.reason}.`);
+  }
+
+  if (plan.shouldRecord && currentFingerprint) {
+    mkdirSync(path.dirname(ponderDeploymentFingerprintPath), { recursive: true });
+    writeFileSync(ponderDeploymentFingerprintPath, `${currentFingerprint}\n`);
+  }
+}
+
 function resolveKeeperStartupStatus() {
   const keeperEnvPath = path.join(repoRoot, "packages", "keeper", ".env.local");
   const envFromFile = parseEnvFile(keeperEnvPath);
@@ -130,6 +254,11 @@ function resolveKeeperStartupStatus() {
     enabled: missing.length === 0,
     missing,
   };
+}
+
+function resolvePonderStartupEnv() {
+  const envFromFile = parseEnvFile(ponderEnvPath);
+  return { ...envFromFile, ...process.env };
 }
 
 function printMissingDockerHelp(databaseConfig) {
@@ -328,7 +457,7 @@ Environment:
   const keeperStartup = resolveKeeperStartupStatus();
 
   warnIfMissing(
-    path.join(repoRoot, "packages", "ponder", ".env.local"),
+    ponderEnvPath,
     "packages/ponder/.env.local is missing. Ponder will use defaults where it can, but RPC/network settings may be incomplete.",
   );
 
@@ -358,6 +487,7 @@ Environment:
   }
 
   runDbPush(databaseConfig, { skipDbPush, allowRemoteDbPush });
+  resetLocalPonderDataIfDeploymentChanged(resolvePonderStartupEnv());
 
   const services = keeperStartup.enabled ? [...baseServices, keeperService] : baseServices;
   if (!keeperStartup.enabled) {

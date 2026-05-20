@@ -139,7 +139,7 @@ test("sweepAgentLifecycleCallbacks stays idempotent through stable event ids", a
   assert.equal(duplicateCount, 2);
 });
 
-test("sweepAgentLifecycleCallbacks pages past the first batch without starving newer asks", async () => {
+test("sweepAgentLifecycleCallbacks caps scanned asks per invocation", async () => {
   const listCalls: Array<{ after: string | null; limit: number }> = [];
   const openedContentIds: string[] = [];
   const candidates = [
@@ -204,15 +204,12 @@ test("sweepAgentLifecycleCallbacks pages past the first batch without starving n
     now: new Date("2023-11-14T22:13:40.000Z"),
   });
 
-  assert.equal(result.scanned, 3);
-  assert.deepEqual(openedContentIds, ["41", "42", "43"]);
+  assert.equal(result.scanned, 2);
+  assert.equal(result.hasMore, true);
+  assert.deepEqual(openedContentIds, ["41", "42"]);
   assert.deepEqual(listCalls, [
     {
       after: null,
-      limit: 2,
-    },
-    {
-      after: `0x${"3".repeat(64)}`,
       limit: 2,
     },
   ]);

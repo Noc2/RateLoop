@@ -175,10 +175,6 @@ export function parseAttachmentIdFromImageUrl(value: string): string | null {
   return parseAttachmentIdFromUploadedImageUrl(value);
 }
 
-export function validateImageAttachmentBlobPathname(attachmentId: string, blobPathname: string) {
-  return blobPathname.startsWith(`question-attachments/${attachmentId}/`);
-}
-
 export function isLocalImageAttachmentPathname(pathname: string | null | undefined) {
   return Boolean(pathname?.startsWith(LOCAL_IMAGE_ATTACHMENT_URI_PREFIX));
 }

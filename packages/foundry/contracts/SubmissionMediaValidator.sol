@@ -2,7 +2,7 @@
 pragma solidity ^0.8.24;
 
 /// @title SubmissionMediaValidator
-/// @notice Stateless helper for Curyo question media validation.
+/// @notice Stateless helper for RateLoop question media validation.
 /// @dev Kept outside ContentRegistry to avoid bloating the upgradeable registry runtime.
 contract SubmissionMediaValidator {
     uint256 public constant MAX_IMAGE_URLS = 4;

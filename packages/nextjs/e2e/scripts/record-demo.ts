@@ -124,7 +124,7 @@ async function prepareDemoContent(): Promise<{ searchQuery: string }> {
   console.log("Preparing deterministic demo content...");
   const submitter = ANVIL_ACCOUNTS.account10;
   const uniqueId = Date.now();
-  const title = `Curyo Demo ${uniqueId}`;
+  const title = `RateLoop Demo ${uniqueId}`;
   const demoUrl = `https://www.youtube.com/watch?v=curyo_demo_${uniqueId}`;
 
   const submitted = await submitContentDirect(
@@ -306,7 +306,7 @@ async function main(): Promise<void> {
     await browser.close();
   }
 
-  console.log(`Curyo demo video saved to ${outputPath}`);
+  console.log(`RateLoop demo video saved to ${outputPath}`);
 }
 
 main().catch(error => {

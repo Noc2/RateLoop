@@ -1,5 +1,5 @@
 import type { McpAgentAuth } from "./auth";
-import { McpToolError, __setMcpToolTestOverridesForTests, callCuryoMcpTool, normalizeToolError } from "./tools";
+import { McpToolError, __setMcpToolTestOverridesForTests, callRateLoopMcpTool, normalizeToolError } from "./tools";
 import assert from "node:assert/strict";
 import { after, before, beforeEach, test } from "node:test";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
@@ -123,7 +123,7 @@ test("curyo_get_result requires contentId when an operation maps to multiple bun
 
   await assert.rejects(
     () =>
-      callCuryoMcpTool({
+      callRateLoopMcpTool({
         agent: AGENT,
         arguments: {
           chainId: 480,
@@ -241,7 +241,7 @@ test("curyo_get_result accepts an explicit bundle contentId without bypassing op
       }) as never,
   });
 
-  const result = (await callCuryoMcpTool({
+  const result = (await callRateLoopMcpTool({
     agent: AGENT,
     arguments: {
       chainId: 480,
@@ -302,7 +302,7 @@ test("curyo_get_result returns schema-shaped pending packages before content exi
     `,
   });
 
-  const result = (await callCuryoMcpTool({
+  const result = (await callRateLoopMcpTool({
     agent: AGENT,
     arguments: {
       chainId: 480,
@@ -433,7 +433,7 @@ test("curyo_get_result applies bundle bounty eligibility when loading eligible a
       }) as never,
   });
 
-  const result = (await callCuryoMcpTool({
+  const result = (await callRateLoopMcpTool({
     agent: AGENT,
     arguments: {
       contentId: "789",

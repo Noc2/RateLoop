@@ -5,21 +5,6 @@ import "forge-std/Script.sol";
 import "forge-std/Vm.sol";
 import "solidity-bytes-utils/BytesLib.sol";
 
-/**
- * @dev Temp Vm implementation
- * @notice calls the tryffi function on the Vm contract
- * @notice will be deleted once the forge/std is updated
- */
-struct FfiResult {
-    int32 exit_code;
-    bytes stdout;
-    bytes stderr;
-}
-
-interface tempVm {
-    function tryFfi(string[] calldata) external returns (FfiResult memory);
-}
-
 contract VerifyAll is Script {
     uint96 currTransactionIdx;
 
@@ -67,7 +52,7 @@ contract VerifyAll is Script {
         inputs[7] = vm.toString(constructorArgs);
         inputs[8] = "--watch";
 
-        FfiResult memory f = tempVm(address(vm)).tryFfi(inputs);
+        Vm.FfiResult memory f = vm.tryFfi(inputs);
 
         if (f.stderr.length != 0) {
             console.logString(string.concat("Submitting verification for contract: ", vm.toString(contractAddr)));

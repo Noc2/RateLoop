@@ -16,6 +16,40 @@ import {
 } from "../shared.js";
 import { isValidAddress, safeLimit } from "../utils.js";
 
+function voteMatchesVoter(address: `0x${string}`) {
+  return or(
+    eq(vote.voter, address),
+    eq(vote.identityHolder, address),
+    eq(vote.identityVoter, address),
+  );
+}
+
+function voteMatchesAnyVoter(addresses: `0x${string}`[]) {
+  return or(
+    inArray(vote.voter, addresses),
+    inArray(vote.identityHolder, addresses),
+    inArray(vote.identityVoter, addresses),
+  );
+}
+
+async function resolveFollowedAddresses(
+  address: `0x${string}`,
+  explicitFollowed: string | undefined,
+) {
+  const addresses = new Set<`0x${string}`>(
+    await listActiveFollowedAddresses(address),
+  );
+
+  for (const raw of explicitFollowed?.split(",").slice(0, 100) ?? []) {
+    const normalized = raw.trim().toLowerCase();
+    if (isValidAddress(normalized)) {
+      addresses.add(normalized as `0x${string}`);
+    }
+  }
+
+  return [...addresses];
+}
+
 export function registerDiscoveryRoutes(app: ApiApp) {
   const allowedContentCondition = buildAllowedContentCondition({
     canonicalUrl: content.canonicalUrl,
@@ -32,7 +66,10 @@ export function registerDiscoveryRoutes(app: ApiApp) {
       return c.json({ error: "Invalid address" }, 400);
 
     const watchedContentIds = parseBigIntList(c.req.query("watched"), 100);
-    const followedAddresses = await listActiveFollowedAddresses(address);
+    const followedAddresses = await resolveFollowedAddresses(
+      address,
+      c.req.query("followed"),
+    );
 
     const votedOpenRounds = await db
       .select({
@@ -61,7 +98,7 @@ export function registerDiscoveryRoutes(app: ApiApp) {
       .where(
         and(
           allowedContentCondition,
-          eq(vote.voter, address),
+          voteMatchesVoter(address),
           eq(round.state, ROUND_STATE.Open),
           gte(round.voteCount, round.minVoters),
         ),
@@ -224,7 +261,7 @@ export function registerDiscoveryRoutes(app: ApiApp) {
             .where(
               and(
                 allowedContentCondition,
-                inArray(vote.voter, followedAddresses),
+                voteMatchesAnyVoter(followedAddresses),
                 eq(vote.revealed, true),
                 or(
                   eq(round.state, ROUND_STATE.Settled),
@@ -257,7 +294,10 @@ export function registerDiscoveryRoutes(app: ApiApp) {
       return c.json({ error: "Invalid address" }, 400);
 
     const watchedContentIds = parseBigIntList(c.req.query("watched"), 200);
-    const followedAddresses = await listActiveFollowedAddresses(address);
+    const followedAddresses = await resolveFollowedAddresses(
+      address,
+      c.req.query("followed"),
+    );
     const nowSeconds = BigInt(Math.floor(Date.now() / 1000));
     const settlingSoonCutoff =
       nowSeconds + BigInt(SETTLING_SOON_WINDOW_SECONDS);
@@ -291,7 +331,7 @@ export function registerDiscoveryRoutes(app: ApiApp) {
       .where(
         and(
           allowedContentCondition,
-          eq(vote.voter, address),
+          voteMatchesVoter(address),
           eq(round.state, ROUND_STATE.Open),
           gte(round.voteCount, round.minVoters),
         ),
@@ -425,7 +465,7 @@ export function registerDiscoveryRoutes(app: ApiApp) {
             .where(
               and(
                 allowedContentCondition,
-                inArray(vote.voter, followedAddresses),
+                voteMatchesAnyVoter(followedAddresses),
                 eq(vote.revealed, true),
                 gte(round.settledAt, recentCutoff),
                 or(
@@ -469,7 +509,7 @@ export function registerDiscoveryRoutes(app: ApiApp) {
       .where(
         and(
           allowedContentCondition,
-          eq(vote.voter, address),
+          voteMatchesVoter(address),
           gte(round.settledAt, recentCutoff),
           or(
             eq(round.state, ROUND_STATE.Settled),

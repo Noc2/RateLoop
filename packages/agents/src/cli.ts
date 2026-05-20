@@ -1,7 +1,7 @@
 import { readFile, readdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createCuryoAgentClient } from "@rateloop/sdk/agent";
+import { createRateLoopAgentClient } from "@rateloop/sdk/agent";
 import { loadAgentsRuntimeConfig } from "./config";
 import {
   askHumansWithLocalSigner,
@@ -77,13 +77,13 @@ function readPaymentMode(options: CliOptions) {
 function printLocalAskProgress(event: LocalAskProgress) {
   switch (event.type) {
     case "ask_submitted":
-      console.error(`Curyo ask prepared: ${event.response.operationKey ?? "operation pending"}`);
+      console.error(`RateLoop ask prepared: ${event.response.operationKey ?? "operation pending"}`);
       return;
     case "x402_signed":
       console.error("Signed x402 authorization.");
       return;
     case "x402_resubmitted":
-      console.error(`Curyo x402 ask prepared: ${event.response.operationKey ?? "operation pending"}`);
+      console.error(`RateLoop x402 ask prepared: ${event.response.operationKey ?? "operation pending"}`);
       return;
     case "transaction_sent":
       console.error(`Sent transactionPlan.calls[${event.index}]${event.phase ? ` (${event.phase})` : ""}: ${event.hash}`);
@@ -92,7 +92,7 @@ function printLocalAskProgress(event: LocalAskProgress) {
       console.error(`Receipt confirmed for transactionPlan.calls[${event.index}]: ${event.hash}`);
       return;
     case "transactions_confirmed":
-      console.error(`Confirmed hashes with Curyo: ${event.response.operationKey ?? "operation pending"}`);
+      console.error(`Confirmed hashes with RateLoop: ${event.response.operationKey ?? "operation pending"}`);
       return;
   }
 }
@@ -137,7 +137,7 @@ function usage() {
   yarn workspace @rateloop/agents result --operation-key 0x...
 
 Environment:
-  CURYO_API_BASE_URL     Hosted Curyo origin for HTTP and MCP flows
+  CURYO_API_BASE_URL     Hosted RateLoop origin for HTTP and MCP flows
   CURYO_MCP_TOKEN        Optional managed agent bearer token
   CURYO_MCP_API_URL      Optional MCP endpoint override
   CURYO_RPC_URL          RPC URL used by local-ask to send wallet transactions
@@ -149,7 +149,7 @@ Environment:
 
 function createAgentClient() {
   const config = loadAgentsRuntimeConfig();
-  return createCuryoAgentClient({
+  return createRateLoopAgentClient({
     apiBaseUrl: config.apiBaseUrl,
     mcpAccessToken: config.mcpAccessToken,
     mcpApiUrl: config.mcpApiUrl,

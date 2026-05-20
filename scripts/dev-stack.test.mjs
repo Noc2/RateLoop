@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { getDbPushPlan } from "./dev-stack.mjs";
+import { getDbPushPlan, getPonderDataResetPlan, getPonderDeploymentFingerprint } from "./dev-stack.mjs";
 
 const localDatabaseConfig = {
   url: "postgresql://postgres:postgres@127.0.0.1:5432/rateloop_app",
@@ -63,4 +63,101 @@ test("honors an explicit schema push skip even for local databases", () => {
     shouldRun: false,
     reason: "Next.js schema push was disabled",
   });
+});
+
+test("resets local Ponder data when the deployment fingerprint changes", () => {
+  assert.deepEqual(
+    getPonderDataResetPlan({
+      ponderNetwork: "hardhat",
+      ponderRpcUrl: "http://127.0.0.1:8545",
+      currentFingerprint: "new",
+      storedFingerprint: "old",
+      hasPglite: true,
+    }),
+    {
+      shouldRecord: true,
+      shouldReset: true,
+      reason: "local deployment artifact changed",
+    },
+  );
+});
+
+test("records the local deployment fingerprint without resetting when Ponder has no data yet", () => {
+  assert.deepEqual(
+    getPonderDataResetPlan({
+      ponderNetwork: "hardhat",
+      ponderRpcUrl: "http://127.0.0.1:8545",
+      currentFingerprint: "new",
+      storedFingerprint: undefined,
+      hasPglite: false,
+    }),
+    {
+      shouldRecord: true,
+      shouldReset: false,
+      reason: "no local deployment fingerprint was recorded",
+    },
+  );
+});
+
+test("keeps Ponder data when the local deployment fingerprint is unchanged", () => {
+  assert.deepEqual(
+    getPonderDataResetPlan({
+      ponderNetwork: "hardhat",
+      ponderRpcUrl: "http://127.0.0.1:8545",
+      currentFingerprint: "same",
+      storedFingerprint: "same",
+      hasPglite: true,
+    }),
+    {
+      shouldRecord: false,
+      shouldReset: false,
+      reason: "local deployment artifact is unchanged",
+    },
+  );
+});
+
+test("does not reset Ponder data for non-local Ponder networks", () => {
+  assert.deepEqual(
+    getPonderDataResetPlan({
+      ponderNetwork: "worldchainSepolia",
+      ponderRpcUrl: "https://worldchain-sepolia.g.alchemy.com/public",
+      currentFingerprint: "new",
+      storedFingerprint: "old",
+      hasPglite: true,
+    }),
+    {
+      shouldRecord: false,
+      shouldReset: false,
+      reason: "Ponder is not targeting local hardhat",
+    },
+  );
+});
+
+test("includes local Ponder address overrides in the deployment fingerprint", () => {
+  const base = getPonderDeploymentFingerprint({
+    deployedContractsContent: "contracts",
+    env: {},
+  });
+  const withOverride = getPonderDeploymentFingerprint({
+    deployedContractsContent: "contracts",
+    env: {
+      PONDER_CONTENT_REGISTRY_ADDRESS: "0x1111111111111111111111111111111111111111",
+    },
+  });
+  const withDifferentOverride = getPonderDeploymentFingerprint({
+    deployedContractsContent: "contracts",
+    env: {
+      PONDER_CONTENT_REGISTRY_ADDRESS: "0x2222222222222222222222222222222222222222",
+    },
+  });
+  const withUnrelatedEnv = getPonderDeploymentFingerprint({
+    deployedContractsContent: "contracts",
+    env: {
+      NEXT_PUBLIC_PONDER_URL: "http://127.0.0.1:42069",
+    },
+  });
+
+  assert.notEqual(base, withOverride);
+  assert.notEqual(withOverride, withDifferentOverride);
+  assert.equal(base, withUnrelatedEnv);
 });

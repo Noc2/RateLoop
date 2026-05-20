@@ -2,7 +2,7 @@ import { HandThumbDownIcon, HandThumbUpIcon } from "@heroicons/react/24/outline"
 import { TooltipAnchor } from "~~/components/ui/InfoTooltip";
 import type { TooltipPosition } from "~~/lib/ui/tooltipPosition";
 
-interface CuryoVoteButtonProps {
+interface RateLoopVoteButtonProps {
   direction: "up" | "down";
   disabled?: boolean;
   onClick: () => void;
@@ -22,14 +22,14 @@ function VoteDirectionIcon({ direction, className = "h-[22px] w-[22px] drop-shad
   return <Icon className={className} aria-hidden />;
 }
 
-export function CuryoVoteButton({
+export function RateLoopVoteButton({
   direction,
   disabled = false,
   onClick,
   size = "default",
   attention = false,
   tooltipPosition = "bottom",
-}: CuryoVoteButtonProps) {
+}: RateLoopVoteButtonProps) {
   const isUp = direction === "up";
   const label = isUp ? "Thumbs up" : "Thumbs down";
   const directionLabel = isUp ? "Up" : "Down";

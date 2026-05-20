@@ -10,7 +10,7 @@ import { HumanSignInButton } from "~~/components/shared/HumanSignInButton";
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import { HUMAN_SIGN_IN_LABEL } from "~~/lib/home/humanSignInRoute";
 
-export const CuryoConnectButton = ({
+export const RateLoopConnectButton = ({
   inlineMenu = false,
   compact = false,
 }: {

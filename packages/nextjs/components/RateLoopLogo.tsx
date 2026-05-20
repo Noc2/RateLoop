@@ -3,7 +3,7 @@ import Image from "next/image";
 /**
  * Shared RateLoop logo wrapper.
  */
-export function CuryoLogo({ className = "h-8 w-8", idPrefix }: { className?: string; idPrefix?: string }) {
+export function RateLoopLogo({ className = "h-8 w-8", idPrefix }: { className?: string; idPrefix?: string }) {
   void idPrefix;
 
   return (

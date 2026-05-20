@@ -33,7 +33,7 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
     enum HumanCredentialProvider {
         None,
         WorldId,
-        CuryoSelfVerifiedSeed
+        RateLoopSelfVerifiedSeed
     }
 
     struct HumanCredential {
@@ -289,7 +289,7 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
         );
     }
 
-    /// @notice Seed a previous Curyo Self.xyz verified account as the same verified-human unit used by World ID.
+    /// @notice Seed a previous RateLoop Self.xyz verified account as the same verified-human unit used by World ID.
     /// @dev Provider provenance is internal metadata; consumers should show this as a generic verified human.
     function seedHumanCredential(address rater, uint64 expiresAt, bytes32 anchorId, bytes32 evidenceHash)
         external
@@ -300,7 +300,7 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
             anchorId,
             CURYO_SELF_VERIFIED_SCOPE,
             expiresAt,
-            HumanCredentialProvider.CuryoSelfVerifiedSeed,
+            HumanCredentialProvider.RateLoopSelfVerifiedSeed,
             evidenceHash
         );
     }
@@ -344,7 +344,7 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
 
     /// @notice Returns the address that owns a nullifier hash within a specific provider's namespace.
     /// @dev Replaces the previous global `humanNullifierOwner(bytes32)` view. Ownership is per-provider
-    ///      so a value seeded under `CuryoSelfVerifiedSeed` does not collide with a WorldID nullifier of
+    ///      so a value seeded under `RateLoopSelfVerifiedSeed` does not collide with a WorldID nullifier of
     ///      the same 32 bytes (L-Identity-1).
     function humanNullifierOwnerByProvider(HumanCredentialProvider provider, bytes32 nullifierHash)
         external
@@ -436,7 +436,7 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
         if (currentOwner != address(0) && currentOwner != rater) revert NullifierAlreadyAssigned();
         _humanNullifierOwnerByProvider[provider][nullifierHash] = rater;
         if (
-            _canonicalHumanIdentityKey[rater] == bytes32(0) || provider == HumanCredentialProvider.CuryoSelfVerifiedSeed
+            _canonicalHumanIdentityKey[rater] == bytes32(0) || provider == HumanCredentialProvider.RateLoopSelfVerifiedSeed
         ) {
             _canonicalHumanIdentityKey[rater] = nullifierHash;
         }

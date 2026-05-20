@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { parseJsonBody } from "~~/lib/agent/http";
 import { AgentPolicyLifecycleError, revokeAgentPolicyToken, rotateAgentPolicyToken } from "~~/lib/agent/policies";
 import {
   REVOKE_AGENT_POLICY_TOKEN_ACTION,
@@ -64,13 +65,15 @@ async function verifyManagementAction(
 }
 
 export async function POST(request: NextRequest) {
-  const body = (await request.json()) as Record<string, unknown> & { signature?: `0x${string}`; challengeId?: string };
-  const limited = await checkRateLimit(request, WRITE_RATE_LIMIT, {
-    extraKeyParts: [typeof body.address === "string" ? body.address : undefined, "rotate_token"],
-  });
+  const limited = await checkRateLimit(request, WRITE_RATE_LIMIT);
   if (limited) return limited;
 
   try {
+    const body = await parseJsonBody(request);
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+
     const verified = await verifyManagementAction(body, ROTATE_AGENT_POLICY_TOKEN_ACTION);
     if (!verified.ok) return verified.response;
 
@@ -94,13 +97,15 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const body = (await request.json()) as Record<string, unknown> & { signature?: `0x${string}`; challengeId?: string };
-  const limited = await checkRateLimit(request, WRITE_RATE_LIMIT, {
-    extraKeyParts: [typeof body.address === "string" ? body.address : undefined, "revoke_token"],
-  });
+  const limited = await checkRateLimit(request, WRITE_RATE_LIMIT);
   if (limited) return limited;
 
   try {
+    const body = await parseJsonBody(request);
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+
     const verified = await verifyManagementAction(body, REVOKE_AGENT_POLICY_TOKEN_ACTION);
     if (!verified.ok) return verified.response;
 

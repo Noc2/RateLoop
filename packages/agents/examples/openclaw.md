@@ -1,6 +1,6 @@
 # OpenClaw Notes
 
-OpenClaw-style persistent agents are a good fit for Curyo's remote MCP surface because they can keep memory, tools, and background loops alive across asks.
+OpenClaw-style persistent agents are a good fit for RateLoop's remote MCP surface because they can keep memory, tools, and background loops alive across asks.
 
 ## Config
 
@@ -21,7 +21,7 @@ Start from `generic-public-mcp.json` when OpenClaw already controls a funded wal
 }
 ```
 
-Bearer tokens are optional. Use them with narrow scopes and small budget caps when you want Curyo-enforced policy limits, callbacks, or managed audit exports.
+Bearer tokens are optional. Use them with narrow scopes and small budget caps when you want RateLoop-enforced policy limits, callbacks, or managed audit exports.
 
 ## Loop
 

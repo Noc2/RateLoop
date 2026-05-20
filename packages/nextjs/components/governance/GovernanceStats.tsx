@@ -47,7 +47,7 @@ export const GovernanceStats = () => {
         <h2 className={surfaceSectionHeadingClassName}>Governance Parameters</h2>
         <p className="text-base text-base-content/70">
           Live governor reads are not available on this network. This usually means you&apos;re on local dev, where
-          governance roles are wired directly to the deployer instead of a deployed <code>CuryoGovernor</code>.
+          governance roles are wired directly to the deployer instead of a deployed <code>RateLoopGovernor</code>.
         </p>
         {governorAddress && (
           <p className="text-base text-base-content/70">

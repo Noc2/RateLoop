@@ -1,13 +1,13 @@
 import { NetworkOptions } from "./NetworkOptions";
 import { ArrowsRightLeftIcon } from "@heroicons/react/24/outline";
 import { ArrowLeftOnRectangleIcon, ChevronDownIcon } from "@heroicons/react/24/outline";
-import { useCuryoDisconnect } from "~~/hooks/useCuryoDisconnect";
-import { useCuryoSwitchNetwork } from "~~/hooks/useCuryoSwitchNetwork";
+import { useRateLoopDisconnect } from "~~/hooks/useRateLoopDisconnect";
+import { useRateLoopSwitchNetwork } from "~~/hooks/useRateLoopSwitchNetwork";
 import { getTargetNetworks } from "~~/utils/scaffold-eth";
 
 export const WrongNetworkDropdown = () => {
-  const disconnect = useCuryoDisconnect();
-  const { switchToChain, switchingChainId } = useCuryoSwitchNetwork();
+  const disconnect = useRateLoopDisconnect();
+  const { switchToChain, switchingChainId } = useRateLoopSwitchNetwork();
   const allowedNetworks = getTargetNetworks();
 
   if (allowedNetworks.length === 1) {

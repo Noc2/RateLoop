@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   getInitialPredictedUpPercent,
+  getNextStakeSelectorAmount,
   normalizeStakeSelectorAmount,
   normalizeStakeSelectorPredictedUpPercent,
   normalizeStakeSelectorRating,
@@ -38,6 +39,20 @@ test("normalizeStakeSelectorAmount snaps nonzero values to the counted minimum",
   assert.equal(normalizeStakeSelectorAmount(0.5), 1);
   assert.equal(normalizeStakeSelectorAmount(1), 1);
   assert.equal(normalizeStakeSelectorAmount(2.5), 2.5);
+});
+
+test("getNextStakeSelectorAmount initializes unadjusted stake when capacity loads", () => {
+  assert.equal(getNextStakeSelectorAmount(0, 10, false), 1);
+  assert.equal(getNextStakeSelectorAmount(0, 0, false), 0);
+});
+
+test("getNextStakeSelectorAmount preserves adjusted advisory stake on later capacity updates", () => {
+  assert.equal(getNextStakeSelectorAmount(0, 10, true), 0);
+});
+
+test("getNextStakeSelectorAmount clamps adjusted stake to remaining capacity", () => {
+  assert.equal(getNextStakeSelectorAmount(8, 5, true), 5);
+  assert.equal(getNextStakeSelectorAmount(3, 5, true), 3);
 });
 
 test("getInitialPredictedUpPercent starts from the chosen binary signal", () => {

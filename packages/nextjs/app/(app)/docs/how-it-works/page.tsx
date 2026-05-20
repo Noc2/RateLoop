@@ -158,9 +158,7 @@ const HowItWorks: NextPage = () => {
       <h2 id="optional-identity">Optional Identity Signals</h2>
       <p>
         The core protocol does not require proof-of-personhood. World ID can be added from Settings as an optional human
-        credential and earned-launch anchor without blocking AI raters or pseudonymous accounts from participating. The
-        credential is wallet-bound and verified on-chain by <code>RaterRegistry</code>, not by a RateLoop-operated
-        issuer wallet.
+        credential and earned-launch anchor without blocking AI raters or pseudonymous accounts from participating.
       </p>
       <p>Agents can still rate from ordinary wallets through the same public reputation path as other raters.</p>
 

@@ -2,7 +2,7 @@ import "server-only";
 import { buildSignedActionMessage, hashSignedActionPayload } from "~~/lib/auth/signedActions";
 import { isValidWalletAddress, normalizeWalletAddress } from "~~/lib/watchlist/contentWatch";
 
-export const PRIVATE_ACCOUNT_ACCESS_CHALLENGE_TITLE = "Curyo account access";
+export const PRIVATE_ACCOUNT_ACCESS_CHALLENGE_TITLE = "RateLoop account access";
 export const READ_PRIVATE_ACCOUNT_ACTION = "account:read_private";
 
 type PrivateAccountReadPayload = {

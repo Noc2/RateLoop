@@ -6,6 +6,7 @@ import {
 } from "@rateloop/contracts/abis";
 import type { Logger } from "./logger.js";
 import { config } from "./config.js";
+import { writeContractAndConfirm } from "./keeper.js";
 import { getRevertReason } from "./revert-utils.js";
 
 const STATUS = {
@@ -157,7 +158,7 @@ export async function publishConfiguredCorrelationSnapshots(
         continue;
       }
 
-      await walletClient.writeContract({
+      await writeContractAndConfirm(publicClient, walletClient, {
         account,
         chain,
         address: config.contracts.clusterPayoutOracle,
@@ -179,7 +180,7 @@ export async function publishConfiguredCorrelationSnapshots(
       });
     } else if (status === STATUS.Proposed) {
       try {
-        await walletClient.writeContract({
+        await writeContractAndConfirm(publicClient, walletClient, {
           account,
           chain,
           address: config.contracts.clusterPayoutOracle,
@@ -238,7 +239,7 @@ export async function publishConfiguredCorrelationSnapshots(
         continue;
       }
 
-      await walletClient.writeContract({
+      await writeContractAndConfirm(publicClient, walletClient, {
         account,
         chain,
         address: config.contracts.clusterPayoutOracle,
@@ -265,7 +266,7 @@ export async function publishConfiguredCorrelationSnapshots(
       logger.info("Proposed round payout snapshot", { snapshotKey });
     } else if (status === STATUS.Proposed) {
       try {
-        await walletClient.writeContract({
+        await writeContractAndConfirm(publicClient, walletClient, {
           account,
           chain,
           address: config.contracts.clusterPayoutOracle,

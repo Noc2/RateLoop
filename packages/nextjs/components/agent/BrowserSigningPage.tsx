@@ -13,11 +13,11 @@ import {
   ShieldCheckIcon,
   WalletIcon,
 } from "@heroicons/react/24/outline";
-import { CuryoConnectButton } from "~~/components/scaffold-eth";
+import { RateLoopConnectButton } from "~~/components/scaffold-eth";
 import { AppPageShell } from "~~/components/shared/AppPageShell";
 import { surfaceSectionHeadingClassName } from "~~/components/shared/sectionHeading";
 import { DOCS_AI_ROUTE } from "~~/constants/routes";
-import { useCuryoSwitchNetwork } from "~~/hooks/useCuryoSwitchNetwork";
+import { useRateLoopSwitchNetwork } from "~~/hooks/useRateLoopSwitchNetwork";
 import { notification } from "~~/utils/scaffold-eth";
 
 type JsonRecord = Record<string, unknown>;
@@ -77,13 +77,13 @@ function readQuestionTitle(intent: SigningIntent | null) {
   const question = intent?.requestBody?.question;
   if (question && typeof question === "object" && !Array.isArray(question)) {
     const title = (question as JsonRecord).title;
-    return typeof title === "string" && title.trim() ? title.trim() : "Curyo ask";
+    return typeof title === "string" && title.trim() ? title.trim() : "RateLoop ask";
   }
   const questions = intent?.requestBody?.questions;
   if (Array.isArray(questions) && questions.length > 0) {
     return `${questions.length} question bundle`;
   }
-  return "Curyo ask";
+  return "RateLoop ask";
 }
 
 function readBounty(intent: SigningIntent | null) {
@@ -125,7 +125,7 @@ function assertZeroValue(value: unknown, field: string) {
 function readTypedData(request: JsonRecord | null | undefined) {
   const typedData = request?.typedData ?? request?.eip712;
   if (!typedData || typeof typedData !== "object" || Array.isArray(typedData)) {
-    throw new Error("Curyo did not return x402 typed data.");
+    throw new Error("RateLoop did not return x402 typed data.");
   }
   return typedData as {
     domain: JsonRecord;
@@ -158,7 +158,7 @@ export function BrowserSigningPage({ intentId }: { intentId: string }) {
   const wagmiConfig = useConfig();
   const { address, chain } = useAccount();
   const { signTypedDataAsync, isPending: isSigningTypedData } = useSignTypedData();
-  const { switchToChain, switchingChainId } = useCuryoSwitchNetwork();
+  const { switchToChain, switchingChainId } = useRateLoopSwitchNetwork();
   const token = useMemo(() => readToken(searchParams), [searchParams]);
   const [intent, setIntent] = useState<SigningIntent | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -257,7 +257,7 @@ export function BrowserSigningPage({ intentId }: { intentId: string }) {
       }
 
       setIntent(prepared);
-      notification.success("Curyo ask is ready for wallet execution.");
+      notification.success("RateLoop ask is ready for wallet execution.");
     } catch (prepareError) {
       setError(prepareError instanceof Error ? prepareError.message : "Failed to prepare signing intent.");
     } finally {
@@ -317,9 +317,9 @@ export function BrowserSigningPage({ intentId }: { intentId: string }) {
         method: "POST",
       });
       const body = (await response.json()) as SigningIntent | { message?: string; error?: string };
-      if (!response.ok) throw new Error(readResponseError(body, "Failed to confirm Curyo ask."));
+      if (!response.ok) throw new Error(readResponseError(body, "Failed to confirm RateLoop ask."));
       setIntent(body as SigningIntent);
-      notification.success("Ask submitted to Curyo.");
+      notification.success("Ask submitted to RateLoop.");
     } catch (executeError) {
       setError(executeError instanceof Error ? executeError.message : "Failed to execute wallet calls.");
     } finally {
@@ -335,12 +335,12 @@ export function BrowserSigningPage({ intentId }: { intentId: string }) {
             <p className="text-sm font-semibold uppercase tracking-wide text-base-content/50">Agent signing handoff</p>
             <h1 className={`${surfaceSectionHeadingClassName} mt-2`}>{readQuestionTitle(intent)}</h1>
             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-base-content/65">
-              Review this Curyo ask, connect the wallet that should pay the bounty, then sign and submit the prepared
+              Review this RateLoop ask, connect the wallet that should pay the bounty, then sign and submit the prepared
               wallet calls.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <CuryoConnectButton />
+            <RateLoopConnectButton />
             <Link href={DOCS_AI_ROUTE} className="btn btn-outline btn-sm">
               For Agents
             </Link>
@@ -407,7 +407,7 @@ export function BrowserSigningPage({ intentId }: { intentId: string }) {
               <div>
                 <h2 className="text-lg font-semibold">Sign and submit</h2>
                 <p className="mt-1 text-sm text-base-content/60">
-                  Browser signing keeps the private key in the user wallet. Curyo receives only the submitted
+                  Browser signing keeps the private key in the user wallet. RateLoop receives only the submitted
                   transaction hashes.
                 </p>
               </div>

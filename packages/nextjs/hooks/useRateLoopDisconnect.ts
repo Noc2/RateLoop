@@ -6,7 +6,7 @@ import { useDisconnect as useWagmiDisconnect } from "wagmi";
 import { setConnectedThirdwebConnectorWallet } from "~~/services/thirdweb/connectorWalletState";
 import { clearWalletState } from "~~/services/thirdweb/walletStateCleanup";
 
-export function useCuryoDisconnect() {
+export function useRateLoopDisconnect() {
   const activeWallet = useActiveWallet();
   const { disconnect: disconnectThirdweb } = useThirdwebDisconnect();
   const { disconnect: disconnectWagmi } = useWagmiDisconnect();

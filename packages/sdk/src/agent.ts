@@ -1,5 +1,5 @@
-import { CuryoApiError, CuryoSdkError } from "./errors";
-import type { CuryoFetch } from "./types";
+import { RateLoopApiError, RateLoopSdkError } from "./errors";
+import type { RateLoopFetch } from "./types";
 
 type JsonPrimitive = string | number | boolean | null;
 type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
@@ -11,20 +11,20 @@ const DEFAULT_AGENT_API_PATH = "/api/agent";
 const DEFAULT_MCP_PATH = "/api/mcp";
 const DEFAULT_PUBLIC_MCP_PATH = "/api/mcp/public";
 const AGENT_AUTH_REQUIRED_MESSAGE =
-  "Curyo agent operations require apiBaseUrl for direct HTTP or mcpApiUrl for MCP. Add mcpAccessToken only for managed agent policies.";
+  "RateLoop agent operations require apiBaseUrl for direct HTTP or mcpApiUrl for MCP. Add mcpAccessToken only for managed agent policies.";
 
-export interface CuryoAgentClientOptions {
+export interface RateLoopAgentClientOptions {
   agentApiPath?: string;
   apiBaseUrl?: string;
   mcpApiUrl?: string;
   mcpAccessToken?: string;
-  fetchImpl?: CuryoFetch;
-  quoteFetchImpl?: CuryoFetch;
+  fetchImpl?: RateLoopFetch;
+  quoteFetchImpl?: RateLoopFetch;
   timeoutMs?: number;
   mcpProtocolVersion?: string;
 }
 
-export interface CuryoAgentQuestionItem {
+export interface RateLoopAgentQuestionItem {
   title: string;
   description?: string;
   contextUrl?: string;
@@ -35,7 +35,7 @@ export interface CuryoAgentQuestionItem {
   [key: string]: unknown;
 }
 
-export interface CuryoAgentBounty {
+export interface RateLoopAgentBounty {
   asset?: "USDC" | string;
   amount: string | number | bigint;
   requiredVoters?: string | number | bigint;
@@ -46,7 +46,7 @@ export interface CuryoAgentBounty {
   [key: string]: unknown;
 }
 
-export interface CuryoAgentRoundConfig {
+export interface RateLoopAgentRoundConfig {
   epochDuration?: string | number | bigint;
   blindPhaseSeconds?: string | number | bigint;
   blindSeconds?: string | number | bigint;
@@ -58,20 +58,20 @@ export interface CuryoAgentRoundConfig {
   [key: string]: unknown;
 }
 
-export interface CuryoAgentQuestionRequest {
+export interface RateLoopAgentQuestionRequest {
   clientRequestId: string;
   chainId?: number;
-  question?: CuryoAgentQuestionItem;
-  questions?: CuryoAgentQuestionItem[];
-  bounty: CuryoAgentBounty;
-  roundConfig?: CuryoAgentRoundConfig;
+  question?: RateLoopAgentQuestionItem;
+  questions?: RateLoopAgentQuestionItem[];
+  bounty: RateLoopAgentBounty;
+  roundConfig?: RateLoopAgentRoundConfig;
   walletAddress?: `0x${string}` | string;
   [key: string]: unknown;
 }
 
-export interface QuoteQuestionRequest extends CuryoAgentQuestionRequest {}
+export interface QuoteQuestionRequest extends RateLoopAgentQuestionRequest {}
 
-export interface AskHumansRequest extends CuryoAgentQuestionRequest {
+export interface AskHumansRequest extends RateLoopAgentQuestionRequest {
   maxPaymentAmount?: string | number | bigint;
   mode?: "sync" | "async";
   paymentAuthorization?: {
@@ -120,7 +120,7 @@ export interface CompleteSigningIntentRequest extends SigningIntentLookup {
   transactionHashes: (`0x${string}` | string)[];
 }
 
-export interface CuryoAgentPayment {
+export interface RateLoopAgentPayment {
   amount?: string;
   asset?: string;
   bountyAmount?: string;
@@ -130,7 +130,7 @@ export interface CuryoAgentPayment {
   [key: string]: unknown;
 }
 
-export interface CuryoAgentWalletTransactionCall {
+export interface RateLoopAgentWalletTransactionCall {
   data?: `0x${string}` | string;
   description?: string;
   functionName?: string;
@@ -142,20 +142,20 @@ export interface CuryoAgentWalletTransactionCall {
   [key: string]: unknown;
 }
 
-export interface CuryoAgentWalletTransactionPlan {
-  calls?: CuryoAgentWalletTransactionCall[];
+export interface RateLoopAgentWalletTransactionPlan {
+  calls?: RateLoopAgentWalletTransactionCall[];
   requiresOrderedExecution?: boolean;
   [key: string]: unknown;
 }
 
-export interface CuryoAgentWalletInfo {
+export interface RateLoopAgentWalletInfo {
   address?: `0x${string}` | string;
   fundingMode?: "agent_wallet" | "x402_authorization" | string;
   note?: string;
   [key: string]: unknown;
 }
 
-export interface CuryoAgentFastLaneGuidance {
+export interface RateLoopAgentFastLaneGuidance {
   conservativeStartingBountyAtomic?: string;
   estimatedResultAt?: number;
   estimatedTimeToResultSeconds?: number;
@@ -178,7 +178,7 @@ export interface CuryoAgentFastLaneGuidance {
   [key: string]: unknown;
 }
 
-export interface CuryoAgentLiveAskGuidance {
+export interface RateLoopAgentLiveAskGuidance {
   lowResponseRisk?: "low" | "medium" | "high" | string;
   reasonCodes?: string[];
   recommendedAction?: "wait" | "top_up" | "retry_later" | string;
@@ -189,10 +189,10 @@ export interface CuryoAgentLiveAskGuidance {
 export interface QuoteQuestionResponse {
   canSubmit?: boolean;
   clientRequestId?: string;
-  fastLane?: CuryoAgentFastLaneGuidance;
+  fastLane?: RateLoopAgentFastLaneGuidance;
   operationKey?: `0x${string}` | string;
   payloadHash?: string;
-  payment?: CuryoAgentPayment;
+  payment?: RateLoopAgentPayment;
   questionCount?: number;
   resolvedCategoryIds?: string[];
   walletPolicyRequired?: boolean;
@@ -204,7 +204,7 @@ export interface AskHumansResponse {
   operationKey?: `0x${string}` | string;
   contentId?: string | null;
   contentIds?: string[];
-  fastLane?: CuryoAgentFastLaneGuidance;
+  fastLane?: RateLoopAgentFastLaneGuidance;
   managedBudget?: JsonRecord | null;
   nextAction?: string | null;
   pollAfterMs?: number | null;
@@ -215,12 +215,12 @@ export interface AskHumansResponse {
   status?: string;
   statusTool?: string;
   confirmTool?: string;
-  payment?: CuryoAgentPayment;
+  payment?: RateLoopAgentPayment;
   paymentMode?: "wallet_calls" | "x402_authorization" | string;
   rewardPoolId?: string | null;
-  transactionPlan?: CuryoAgentWalletTransactionPlan;
+  transactionPlan?: RateLoopAgentWalletTransactionPlan;
   transactionHashes?: string[];
-  wallet?: CuryoAgentWalletInfo;
+  wallet?: RateLoopAgentWalletInfo;
   webhook?: JsonRecord | null;
   warnings?: string[];
   x402AuthorizationRequest?: JsonRecord | null;
@@ -260,12 +260,12 @@ export interface QuestionStatusResponse {
   operationKey?: `0x${string}` | string;
   payerAddress?: string;
   payloadHash?: string;
-  payment?: CuryoAgentPayment;
+  payment?: RateLoopAgentPayment;
   pollAfterMs?: number | null;
   publicUrl?: string | null;
   questionCount?: number;
   ready?: boolean;
-  liveAskGuidance?: CuryoAgentLiveAskGuidance | null;
+  liveAskGuidance?: RateLoopAgentLiveAskGuidance | null;
   rewardPoolId?: string | null;
   resultTool?: string | null;
   status: string;
@@ -275,7 +275,7 @@ export interface QuestionStatusResponse {
   [key: string]: unknown;
 }
 
-export type CuryoAgentAnswer =
+export type RateLoopAgentAnswer =
   | "pending"
   | "proceed"
   | "proceed_with_caution"
@@ -284,9 +284,9 @@ export type CuryoAgentAnswer =
   | "inconclusive"
   | "failed";
 
-export interface CuryoAgentResult {
+export interface RateLoopAgentResult {
   ready: boolean;
-  answer?: CuryoAgentAnswer | string;
+  answer?: RateLoopAgentAnswer | string;
   status?: string;
   operation?: JsonRecord | null;
   result?: unknown;
@@ -303,7 +303,7 @@ export interface CuryoAgentResult {
   majorObjections?: JsonRecord[];
   featureTest?: JsonRecord | null;
   dissentingView?: string | null;
-  liveAskGuidance?: CuryoAgentLiveAskGuidance | null;
+  liveAskGuidance?: RateLoopAgentLiveAskGuidance | null;
   recommendedNextAction?: string;
   publicUrl?: string | null;
   methodology?: JsonRecord;
@@ -337,7 +337,7 @@ export interface ListResultTemplatesResponse {
   [key: string]: unknown;
 }
 
-export interface CuryoAgentClient {
+export interface RateLoopAgentClient {
   quoteQuestion(params: QuoteQuestionRequest): Promise<QuoteQuestionResponse>;
   askHumans(params: AskHumansRequest): Promise<AskHumansResponse>;
   createSigningIntent(
@@ -358,7 +358,7 @@ export interface CuryoAgentClient {
   ): Promise<QuestionStatusResponse>;
   getResult(
     params: QuestionStatusLookup & { contentId?: string | bigint },
-  ): Promise<CuryoAgentResult>;
+  ): Promise<RateLoopAgentResult>;
   listResultTemplates(): Promise<ListResultTemplatesResponse>;
 }
 
@@ -386,14 +386,14 @@ interface NormalizedAgentConfig {
   apiBaseUrl?: string;
   mcpApiUrl?: string;
   mcpAccessToken?: string;
-  fetchImpl: CuryoFetch;
+  fetchImpl: RateLoopFetch;
   timeoutMs: number;
   mcpProtocolVersion: string;
 }
 
-export function createCuryoAgentClient(
-  options: CuryoAgentClientOptions = {},
-): CuryoAgentClient {
+export function createRateLoopAgentClient(
+  options: RateLoopAgentClientOptions = {},
+): RateLoopAgentClient {
   const config = normalizeAgentConfig(options);
 
   return {
@@ -412,7 +412,7 @@ export function createCuryoAgentClient(
 
 export function quoteQuestion(
   params: QuoteQuestionRequest,
-  options: CuryoAgentClientOptions = {},
+  options: RateLoopAgentClientOptions = {},
 ): Promise<QuoteQuestionResponse> {
   const config = normalizeAgentConfig(options);
   if (hasDirectAgentHttp(config)) {
@@ -432,7 +432,7 @@ export function quoteQuestion(
 
 export async function askHumans(
   params: AskHumansRequest,
-  options: CuryoAgentClientOptions = {},
+  options: RateLoopAgentClientOptions = {},
 ): Promise<AskHumansResponse> {
   const config = normalizeAgentConfig(options);
   const { transport, ...body } = params;
@@ -452,16 +452,16 @@ export async function askHumans(
     return callMcpTool<AskHumansResponse>(config, "curyo_ask_humans", body);
   }
 
-  throw new CuryoSdkError(AGENT_AUTH_REQUIRED_MESSAGE);
+  throw new RateLoopSdkError(AGENT_AUTH_REQUIRED_MESSAGE);
 }
 
 export async function createSigningIntent(
   params: CreateSigningIntentRequest,
-  options: CuryoAgentClientOptions = {},
+  options: RateLoopAgentClientOptions = {},
 ): Promise<SigningIntentResponse> {
   const config = normalizeAgentConfig(options);
   if (!hasDirectAgentHttp(config)) {
-    throw new CuryoSdkError("apiBaseUrl is required to create browser signing links");
+    throw new RateLoopSdkError("apiBaseUrl is required to create browser signing links");
   }
 
   return requestJson<SigningIntentResponse>(config, agentSigningIntentsUrl(config), {
@@ -473,11 +473,11 @@ export async function createSigningIntent(
 
 export async function getSigningIntent(
   params: SigningIntentLookup,
-  options: CuryoAgentClientOptions = {},
+  options: RateLoopAgentClientOptions = {},
 ): Promise<SigningIntentResponse> {
   const config = normalizeAgentConfig(options);
   if (!hasDirectAgentHttp(config)) {
-    throw new CuryoSdkError("apiBaseUrl is required to read browser signing links");
+    throw new RateLoopSdkError("apiBaseUrl is required to read browser signing links");
   }
 
   return requestJson<SigningIntentResponse>(config, agentSigningIntentUrl(config, params), {
@@ -488,11 +488,11 @@ export async function getSigningIntent(
 
 export async function prepareSigningIntent(
   params: PrepareSigningIntentRequest,
-  options: CuryoAgentClientOptions = {},
+  options: RateLoopAgentClientOptions = {},
 ): Promise<SigningIntentResponse> {
   const config = normalizeAgentConfig(options);
   if (!hasDirectAgentHttp(config)) {
-    throw new CuryoSdkError("apiBaseUrl is required to prepare browser signing links");
+    throw new RateLoopSdkError("apiBaseUrl is required to prepare browser signing links");
   }
 
   return requestJson<SigningIntentResponse>(config, agentSigningIntentActionUrl(config, params, "prepare"), {
@@ -508,11 +508,11 @@ export async function prepareSigningIntent(
 
 export async function completeSigningIntent(
   params: CompleteSigningIntentRequest,
-  options: CuryoAgentClientOptions = {},
+  options: RateLoopAgentClientOptions = {},
 ): Promise<SigningIntentResponse> {
   const config = normalizeAgentConfig(options);
   if (!hasDirectAgentHttp(config)) {
-    throw new CuryoSdkError("apiBaseUrl is required to complete browser signing links");
+    throw new RateLoopSdkError("apiBaseUrl is required to complete browser signing links");
   }
 
   return requestJson<SigningIntentResponse>(config, agentSigningIntentActionUrl(config, params, "complete"), {
@@ -527,7 +527,7 @@ export async function completeSigningIntent(
 
 export async function confirmAskTransactions(
   params: ConfirmAskTransactionsRequest,
-  options: CuryoAgentClientOptions = {},
+  options: RateLoopAgentClientOptions = {},
 ): Promise<QuestionStatusResponse> {
   const config = normalizeAgentConfig(options);
   if (hasDirectAgentHttp(config)) {
@@ -542,12 +542,12 @@ export async function confirmAskTransactions(
     return callMcpTool<QuestionStatusResponse>(config, "curyo_confirm_ask_transactions", { ...params });
   }
 
-  throw new CuryoSdkError(AGENT_AUTH_REQUIRED_MESSAGE);
+  throw new RateLoopSdkError(AGENT_AUTH_REQUIRED_MESSAGE);
 }
 
 export async function getQuestionStatus(
   params: QuestionStatusLookup,
-  options: CuryoAgentClientOptions = {},
+  options: RateLoopAgentClientOptions = {},
 ): Promise<QuestionStatusResponse> {
   const config = normalizeAgentConfig(options);
   if (hasDirectAgentHttp(config)) {
@@ -569,16 +569,16 @@ export async function getQuestionStatus(
     );
   }
 
-  throw new CuryoSdkError(AGENT_AUTH_REQUIRED_MESSAGE);
+  throw new RateLoopSdkError(AGENT_AUTH_REQUIRED_MESSAGE);
 }
 
 export async function getResult(
   params: QuestionStatusLookup & { contentId?: string | bigint },
-  options: CuryoAgentClientOptions = {},
-): Promise<CuryoAgentResult> {
+  options: RateLoopAgentClientOptions = {},
+): Promise<RateLoopAgentResult> {
   const config = normalizeAgentConfig(options);
   if (hasDirectAgentHttp(config)) {
-    return requestJson<CuryoAgentResult>(
+    return requestJson<RateLoopAgentResult>(
       config,
       agentResultUrl(config, params),
       {
@@ -597,11 +597,11 @@ export async function getResult(
     return parseAgentResult(result);
   }
 
-  throw new CuryoSdkError(AGENT_AUTH_REQUIRED_MESSAGE);
+  throw new RateLoopSdkError(AGENT_AUTH_REQUIRED_MESSAGE);
 }
 
 export async function listResultTemplates(
-  options: CuryoAgentClientOptions = {},
+  options: RateLoopAgentClientOptions = {},
 ): Promise<ListResultTemplatesResponse> {
   const config = normalizeAgentConfig(options);
   if (hasDirectAgentHttp(config)) {
@@ -622,11 +622,11 @@ export async function listResultTemplates(
   );
 }
 
-export function parseAgentResult(value: unknown): CuryoAgentResult {
+export function parseAgentResult(value: unknown): RateLoopAgentResult {
   const parsed = parseMaybeJson(value);
   const unwrapped = unwrapStructuredContent(parsed);
   if (!isJsonRecord(unwrapped)) {
-    throw new CuryoSdkError("Agent result must be a JSON object");
+    throw new RateLoopSdkError("Agent result must be a JSON object");
   }
 
   const ready =
@@ -636,14 +636,14 @@ export function parseAgentResult(value: unknown): CuryoAgentResult {
   return {
     ...unwrapped,
     ready,
-  } as CuryoAgentResult;
+  } as RateLoopAgentResult;
 }
 
 export function buildWebhookVerifier(
   options: WebhookVerifierOptions,
 ): WebhookVerifier {
   if (!options.secret) {
-    throw new CuryoSdkError("Webhook verifier secret is required");
+    throw new RateLoopSdkError("Webhook verifier secret is required");
   }
 
   const eventIdHeader = (
@@ -683,7 +683,7 @@ export function buildWebhookVerifier(
     verify,
     assertValid: async (params) => {
       if (!(await verify(params))) {
-        throw new CuryoSdkError("Invalid Curyo webhook signature");
+        throw new RateLoopSdkError("Invalid RateLoop webhook signature");
       }
     },
   };
@@ -695,7 +695,7 @@ async function callMcpTool<T>(
   args: JsonRecord,
 ): Promise<T> {
   if (!config.mcpApiUrl) {
-    throw new CuryoSdkError(
+    throw new RateLoopSdkError(
       "apiBaseUrl or mcpApiUrl is required for MCP agent operations",
     );
   }
@@ -730,8 +730,8 @@ async function callMcpTool<T>(
     const message =
       typeof rpc.error.message === "string"
         ? rpc.error.message
-        : "Curyo MCP request failed";
-    throw new CuryoApiError(message, 400);
+        : "RateLoop MCP request failed";
+    throw new RateLoopApiError(message, 400);
   }
 
   const result = isJsonRecord(rpc.result) ? rpc.result : null;
@@ -742,8 +742,8 @@ async function callMcpTool<T>(
     const message =
       typeof toolResult.message === "string"
         ? toolResult.message
-        : "Curyo MCP tool failed";
-    throw new CuryoApiError(message, 400);
+        : "RateLoop MCP tool failed";
+    throw new RateLoopApiError(message, 400);
   }
   if (result?.isError === true) {
     const structured = isJsonRecord(result.structuredContent)
@@ -752,8 +752,8 @@ async function callMcpTool<T>(
     const message =
       typeof structured.message === "string"
         ? structured.message
-        : "Curyo MCP tool failed";
-    throw new CuryoApiError(message, 400);
+        : "RateLoop MCP tool failed";
+    throw new RateLoopApiError(message, 400);
   }
 
   return (
@@ -784,15 +784,15 @@ async function requestJson<T>(
         ? parsed.error
         : isJsonRecord(parsed) && typeof parsed.message === "string"
           ? parsed.message
-          : `Curyo request failed with status ${response.status}`;
-    throw new CuryoApiError(message, response.status);
+          : `RateLoop request failed with status ${response.status}`;
+    throw new RateLoopApiError(message, response.status);
   }
 
   return parsed as T;
 }
 
 async function fetchWithTimeout(
-  fetchImpl: CuryoFetch,
+  fetchImpl: RateLoopFetch,
   timeoutMs: number,
   url: string,
   init: RequestInit,
@@ -807,18 +807,18 @@ async function fetchWithTimeout(
     });
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
-      throw new CuryoApiError(`Curyo request timed out after ${timeoutMs}ms`, 504);
+      throw new RateLoopApiError(`RateLoop request timed out after ${timeoutMs}ms`, 504);
     }
 
     const message = error instanceof Error ? error.message : "Unknown fetch error";
-    throw new CuryoApiError(`Curyo request failed: ${message}`, 502);
+    throw new RateLoopApiError(`RateLoop request failed: ${message}`, 502);
   } finally {
     clearTimeout(timeoutHandle);
   }
 }
 
 function normalizeAgentConfig(
-  options: CuryoAgentClientOptions,
+  options: RateLoopAgentClientOptions,
 ): NormalizedAgentConfig {
   const apiBaseUrl = normalizeUrl(options.apiBaseUrl);
   const fetchImpl = options.fetchImpl ?? fetch;
@@ -847,13 +847,13 @@ function normalizeUrl(value?: string) {
   try {
     return new URL(value).toString().replace(/\/+$/, "");
   } catch {
-    throw new CuryoSdkError(`Invalid URL: ${value}`);
+    throw new RateLoopSdkError(`Invalid URL: ${value}`);
   }
 }
 
 function agentBaseUrl(config: NormalizedAgentConfig) {
   if (!config.apiBaseUrl) {
-    throw new CuryoSdkError(
+    throw new RateLoopSdkError(
       "apiBaseUrl is required for direct agent HTTP operations",
     );
   }
@@ -878,10 +878,10 @@ function agentSigningIntentsUrl(config: NormalizedAgentConfig) {
 
 function agentSigningIntentUrl(config: NormalizedAgentConfig, params: SigningIntentLookup) {
   if (!params.intentId.trim()) {
-    throw new CuryoSdkError("intentId is required");
+    throw new RateLoopSdkError("intentId is required");
   }
   if (!params.token.trim()) {
-    throw new CuryoSdkError("token is required");
+    throw new RateLoopSdkError("token is required");
   }
   const url = new URL(`./signing-intents/${params.intentId.trim()}`, `${agentBaseUrl(config)}/`);
   url.searchParams.set("token", params.token);
@@ -894,7 +894,7 @@ function agentSigningIntentActionUrl(
   action: "complete" | "prepare",
 ) {
   if (!params.intentId.trim()) {
-    throw new CuryoSdkError("intentId is required");
+    throw new RateLoopSdkError("intentId is required");
   }
   return new URL(`./signing-intents/${params.intentId.trim()}/${action}`, `${agentBaseUrl(config)}/`).toString();
 }
@@ -902,7 +902,7 @@ function agentSigningIntentActionUrl(
 function agentConfirmAskUrl(config: NormalizedAgentConfig, operationKey: string) {
   const trimmed = operationKey.trim();
   if (!trimmed) {
-    throw new CuryoSdkError("operationKey is required to confirm ask transactions");
+    throw new RateLoopSdkError("operationKey is required to confirm ask transactions");
   }
   return new URL(`./asks/${trimmed}/confirm`, `${agentBaseUrl(config)}/`).toString();
 }
@@ -921,7 +921,7 @@ function agentStatusUrl(
   }
 
   if (!params.chainId || !params.clientRequestId) {
-    throw new CuryoSdkError(
+    throw new RateLoopSdkError(
       "Provide operationKey or both chainId and clientRequestId",
     );
   }
@@ -958,7 +958,7 @@ function agentResultUrl(
   }
 
   if (!params.chainId || !params.clientRequestId) {
-    throw new CuryoSdkError(
+    throw new RateLoopSdkError(
       "Provide contentId, operationKey, or both chainId and clientRequestId",
     );
   }
@@ -1008,7 +1008,7 @@ function parseJson(body: string): unknown {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unknown parse error";
-    throw new CuryoApiError(`Curyo returned invalid JSON: ${message}`, 502);
+    throw new RateLoopApiError(`RateLoop returned invalid JSON: ${message}`, 502);
   }
 }
 

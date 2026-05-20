@@ -28,7 +28,7 @@ const templateSelectorSchema = {
   additionalProperties: false,
   properties: {
     templateId: {
-      description: "Off-chain Curyo result interpretation template id.",
+      description: "Off-chain RateLoop result interpretation template id.",
       type: "string",
     },
     templateInputs: {
@@ -140,7 +140,7 @@ export const agentOperationLookupInputSchema = {
   properties: {
     chainId: { description: "Chain id used with clientRequestId lookup.", type: "integer" },
     clientRequestId: { description: "Client idempotency key returned by curyo_ask_humans.", type: "string" },
-    operationKey: { description: "Curyo operation key returned by quote or ask.", type: "string" },
+    operationKey: { description: "RateLoop operation key returned by quote or ask.", type: "string" },
     walletAddress: {
       ...agentWalletAddressSchema,
       description:
@@ -241,7 +241,7 @@ export const agentAskHumansInputSchema = {
 export const agentConfirmAskTransactionsInputSchema = {
   additionalProperties: false,
   properties: {
-    operationKey: { description: "Curyo operation key returned by curyo_ask_humans.", type: "string" },
+    operationKey: { description: "RateLoop operation key returned by curyo_ask_humans.", type: "string" },
     transactionHashes: {
       description: "Transaction hashes produced by executing the wallet transaction plan.",
       items: { pattern: "^0x[a-fA-F0-9]{64}$", type: "string" },

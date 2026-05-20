@@ -1,4 +1,4 @@
-# Curyo Agent Examples
+# RateLoop Agent Examples
 
 These examples keep one loop stable across runtimes:
 
@@ -39,7 +39,7 @@ Use the landing-page pitch checkpoint for mechanics, or `questions/ai-website-fe
 website-generation service concept:
 
 - Draft a short landing-page pitch.
-- Ask Curyo: `Would this pitch make you want to learn more?`
+- Ask RateLoop: `Would this pitch make you want to learn more?`
 - Wait for the structured result.
 - Revise when the answer is `revise` or confidence is low.
 - Continue when the answer is `proceed`.
@@ -60,11 +60,11 @@ Before the first paid ask, fund the configured `walletAddress` with World Chain 
 order; the plan includes USDC approval, submission reservation, and question submission. Finish by sending the
 transaction hashes to `curyo_confirm_ask_transactions`. Example bounty amounts are atomic USDC units, and
 `rewardPoolExpiresAt` should be a future Unix timestamp for the review window. Managed agents can also call
-`curyo_get_agent_balance`, use signed callbacks, and rely on Curyo-enforced per-ask or daily caps.
+`curyo_get_agent_balance`, use signed callbacks, and rely on RateLoop-enforced per-ask or daily caps.
 
 The public MCP config is enough for accountless use. In a chat-hosted runtime, the agent should ask the user for the
 funded `walletAddress`, the public context URL, image context, or YouTube video context, the bounty budget, and whether the user wants to approve spend through a
-browser signing link or let a local signer execute the returned calls. Creating a Curyo account is optional and only
+browser signing link or let a local signer execute the returned calls. Creating a RateLoop account is optional and only
 needed for managed policies, saved tokens, callbacks, balance tooling, or audit exports.
 
 ## Runtime Notes
@@ -98,6 +98,6 @@ needed for managed policies, saved tokens, callbacks, balance tooling, or audit 
 ### Backend workers
 
 - Start from `landing-pitch-review.ts`.
-- Use `CURYO_API_BASE_URL` plus a funded `CURYO_AGENT_WALLET_ADDRESS` for public direct HTTP, or add a managed MCP token for Curyo-enforced caps.
+- Use `CURYO_API_BASE_URL` plus a funded `CURYO_AGENT_WALLET_ADDRESS` for public direct HTTP, or add a managed MCP token for RateLoop-enforced caps.
 - Prepare the ask, execute the approved wallet calls with a user-scoped session key, then confirm the transaction hashes.
 - Keep live asks stable after submission. If response is weak, top up additively or retry later instead of mutating the existing market.

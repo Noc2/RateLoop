@@ -1,9 +1,9 @@
-# Human Evaluation Platform Lessons For Curyo
+# Human Evaluation Platform Lessons For RateLoop
 
 Research date: 2026-04-27
 
 This note looks at Humanloop, LangSmith, and Label Studio through one question:
-what should Curyo learn if it wants to serve the AI evaluation, human review, and
+what should RateLoop learn if it wants to serve the AI evaluation, human review, and
 agent-feedback use case better?
 
 ## Short Answer
@@ -25,17 +25,17 @@ Studio each package that loop differently:
   labeling UIs, reviewer assignment, quality dashboards, consensus metrics,
   model-assisted labeling, and enterprise data-plane controls.
 
-Curyo already has a differentiated primitive that these tools mostly do not:
+RateLoop already has a differentiated primitive that these tools mostly do not:
 funded, public, wallet-native, verified-human judgment that agents can call
-through SDK/MCP flows. To fit this use case better, Curyo should package that
+through SDK/MCP flows. To fit this use case better, RateLoop should package that
 primitive as a human evaluation layer: projects, templates, review queues,
 rubrics, trace/dataset import, agreement metrics, structured exports, and
 integration hooks back into tools like LangSmith, Label Studio, CI, and agent
 runtimes.
 
-## Current Curyo Baseline
+## Current RateLoop Baseline
 
-The repo already describes Curyo as "a verified human feedback layer for agents
+The repo already describes RateLoop as "a verified human feedback layer for agents
 and people." The current agent loop is:
 
 1. An agent or person asks one focused public question.
@@ -78,7 +78,7 @@ Important current status: Humanloop's docs say the platform would be sunset on
 September 8, 2025 after an acquisition; as of this research date, that date is
 in the past. Their migration guide says the export tool covers files, versions,
 deployments, logs, evaluations, and datapoints, and exports in
-JSON/JSONL-compatible formats. For Curyo, this is a category lesson: customers
+JSON/JSONL-compatible formats. For RateLoop, this is a category lesson: customers
 will trust evaluation systems more if prompts, rubrics, logs, labels, and
 results are portable from day one.
 
@@ -93,7 +93,7 @@ Useful product patterns:
 - Strong security posture: RBAC, SSO/SAML, deployment options, auditability,
   data privacy, and enterprise compliance.
 
-Lessons for Curyo:
+Lessons for RateLoop:
 
 - Make "human judgment as evaluator" a first-class object, not only a vote.
 - Treat prompts, rubrics, templates, datasets, and result schemas as versioned
@@ -126,16 +126,16 @@ Useful product patterns:
 - Cloud, hybrid, and self-hosted deployment modes for different compliance
   needs.
 
-Lessons for Curyo:
+Lessons for RateLoop:
 
-- Introduce a Curyo "evaluation trace" or at least a stable trace attachment
+- Introduce a RateLoop "evaluation trace" or at least a stable trace attachment
   shape: `traceId`, source system, environment, app version, chain ID, contract
   addresses, wallet type, transaction hashes, route, and submitted task.
 - Let agents attach a LangSmith run/trace URL or exported trace JSON as the
-  context for a Curyo ask.
-- Let Curyo results post back to the originating tool as feedback, annotations,
+  context for a RateLoop ask.
+- Let RateLoop results post back to the originating tool as feedback, annotations,
   or dataset rows.
-- Build a release-gate mode where a set of Curyo human judgments can block or
+- Build a release-gate mode where a set of RateLoop human judgments can block or
   permit prompt, model, or agent changes.
 
 ### Label Studio
@@ -164,7 +164,7 @@ Useful product patterns:
 - Enterprise story includes workspaces, roles, dashboards, audit logs, SSO/SCIM,
   customer storage, and security posture.
 
-Lessons for Curyo:
+Lessons for RateLoop:
 
 - Ship a template catalog for evaluation tasks instead of relying on generic
   questions.
@@ -176,11 +176,11 @@ Lessons for Curyo:
 - Let AI prefill, summarize, rank, or route work, but keep paid verified humans
   in the accountability loop.
 
-## Strategic Positioning For Curyo
+## Strategic Positioning For RateLoop
 
 The natural positioning is:
 
-> Curyo is the public, paid, verified-human evaluation layer for agents and AI
+> RateLoop is the public, paid, verified-human evaluation layer for agents and AI
 > product teams.
 
 That is distinct from the comparison products:
@@ -189,7 +189,7 @@ That is distinct from the comparison products:
 - Label Studio organizes data labeling and human review operations.
 - Humanloop packaged eval-driven development and collaborative prompt/eval
   workflows, but the standalone platform is no longer active.
-- Curyo can provide a portable, public, incentive-aligned human judgment result
+- RateLoop can provide a portable, public, incentive-aligned human judgment result
   that can be called from any of those systems.
 
 The wedge should not be "replace Label Studio" or "replace LangSmith." A better
@@ -207,7 +207,7 @@ wedge is:
 
 ### 1. Add Evaluation Projects
 
-Today, Curyo asks are individual or bundled questions. For the eval use case,
+Today, RateLoop asks are individual or bundled questions. For the eval use case,
 introduce a project-level abstraction:
 
 - `EvalProject`: owner, workspace, visibility, category, default template,
@@ -254,7 +254,7 @@ full versioned schema, interpretation rules, and export mapping.
 ### 3. Build Review Queues
 
 LangSmith and Label Studio both treat queues as core workflow infrastructure.
-Curyo should add:
+RateLoop should add:
 
 - queue creation from an eval project, dataset, or external trace selection,
 - reviewer eligibility and assignment rules,
@@ -267,11 +267,11 @@ Curyo should add:
 - "needs expert" routing for low-consensus, high-stake, or high-risk items.
 
 This does not have to replace the public marketplace. It can be a managed layer
-that creates Curyo asks underneath.
+that creates RateLoop asks underneath.
 
 ### 4. Make Agreement And Dissent First-Class
 
-Curyo has vote distribution and stake mass, which are strong primitives. The
+RateLoop has vote distribution and stake mass, which are strong primitives. The
 eval use case needs more:
 
 - agreement score by rubric dimension,
@@ -285,17 +285,17 @@ eval use case needs more:
 
 Use Label Studio's distinction as inspiration: consensus answers "how much did
 the group converge?" while pairwise agreement asks "how consistently do
-reviewers match each other?" Curyo can expose both where the task structure
+reviewers match each other?" RateLoop can expose both where the task structure
 supports it.
 
 ### 5. Support Trace And Dataset Imports
 
 Add import adapters rather than a blank input form:
 
-- LangSmith trace URL or JSON export -> Curyo eval item.
-- OpenTelemetry span bundle -> Curyo eval item.
-- Label Studio task JSON/JSONL -> Curyo eval project.
-- Humanloop export JSON/JSONL -> Curyo prompt/eval/dataset import, where
+- LangSmith trace URL or JSON export -> RateLoop eval item.
+- OpenTelemetry span bundle -> RateLoop eval item.
+- Label Studio task JSON/JSONL -> RateLoop eval project.
+- Humanloop export JSON/JSONL -> RateLoop prompt/eval/dataset import, where
   customers still have archived exports.
 - Generic CSV/JSONL with columns for `input`, `output`, `source_url`,
   `rubric`, `candidate_id`, `metadata`.
@@ -306,7 +306,7 @@ bundle per row.
 
 ### 6. Export Results As Evaluation Data
 
-Curyo should export more than audit rows. Add a result export format that can
+RateLoop should export more than audit rows. Add a result export format that can
 round-trip into eval systems:
 
 - JSONL per item with input metadata, template ID/version, result spec hash,
@@ -317,13 +317,13 @@ round-trip into eval systems:
 - Label Studio predictions/annotations-style mapping where practical.
 - OpenAPI schema and examples.
 
-Humanloop's sunset makes this especially important. Curyo should make "you can
+Humanloop's sunset makes this especially important. RateLoop should make "you can
 leave with your prompts, rubrics, datasets, asks, results, and audit history" a
 trust feature.
 
-### 7. Add A Curyo Reliability Loop
+### 7. Add A RateLoop Reliability Loop
 
-For Curyo's own product quality, apply the same lessons internally:
+For RateLoop's own product quality, apply the same lessons internally:
 
 1. Trace wallet-sensitive and governance-sensitive flows: connect, vote, submit,
    reveal, claim, keeper settlement, agent operations, asks, and result read.
@@ -334,22 +334,22 @@ For Curyo's own product quality, apply the same lessons internally:
 5. Route high-risk failures to a human review queue.
 6. Feed the resolution back into tests and docs.
 
-This matters because Curyo's own trust story depends on wallet and governance
+This matters because RateLoop's own trust story depends on wallet and governance
 paths working reliably.
 
 ### 8. Make Enterprise Boundaries Explicit
 
-The current Curyo agent model assumes public context URLs and public results.
+The current RateLoop agent model assumes public context URLs and public results.
 That is clean and protocol-aligned, but it limits enterprise eval use cases.
 There are three possible paths:
 
-- Public-only: keep Curyo focused on public auditability and avoid private data.
+- Public-only: keep RateLoop focused on public auditability and avoid private data.
 - Hybrid public/private: store private inputs in customer-owned storage, submit
   hashes, presigned URLs, or redacted views, and publish only result metadata.
 - Enterprise private review: introduce workspace-scoped data visibility while
   still anchoring commitments and payout state publicly.
 
-If Curyo wants Label Studio/Humanloop-style enterprise adoption, it will need at
+If RateLoop wants Label Studio/Humanloop-style enterprise adoption, it will need at
 least workspaces, RBAC, SSO/SCIM, audit logs, retention controls, export
 controls, and a crisp "where customer data lives" story. These should be part
 of the architecture, not only sales copy.
@@ -358,7 +358,7 @@ of the architecture, not only sales copy.
 
 ### Phase 1: Evaluation Packaging Without Contract Changes
 
-- Rename/market the agent path as "Curyo Human Evals" in docs and SDK examples.
+- Rename/market the agent path as "RateLoop Human Evals" in docs and SDK examples.
 - Maintain and extend the eval-specific templates in `packages/agents/src/templates.ts`,
   including feature acceptance tests for public preview flows.
 - Add JSONL result export for settled asks and bundles.
@@ -402,7 +402,7 @@ of the architecture, not only sales copy.
 
 ## Concrete MVP Use Cases
 
-These are strong because they match Curyo's current agent and bounty mechanics:
+These are strong because they match RateLoop's current agent and bounty mechanics:
 
 - Agent go/no-go gate: "Should the agent proceed with this external action?"
 - RAG grounding check: "Is this answer supported by the linked sources?"
@@ -417,10 +417,10 @@ These are strong because they match Curyo's current agent and bounty mechanics:
 ## Risks And Non-Goals
 
 - Do not try to become a full multimodal annotation suite. Label Studio is
-  already excellent at deep data labeling operations. Curyo's sharper wedge is
+  already excellent at deep data labeling operations. RateLoop's sharper wedge is
   paid, verified, public judgment.
 - Do not hide the public-data assumption. Many enterprise eval inputs are
-  private. Curyo should either embrace public-only use cases or design a
+  private. RateLoop should either embrace public-only use cases or design a
   deliberate customer-owned data plane.
 - Do not treat binary voting as enough for every eval. Binary settlement is
   useful, but rubrics, dimensions, and text feedback are what make evaluation

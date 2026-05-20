@@ -303,7 +303,7 @@ contract RaterRegistryTest is Test {
             registry.humanNullifierOwnerByProvider(RaterRegistry.HumanCredentialProvider.WorldId, NULLIFIER_HASH), rater
         );
 
-        // Switch the rater to the Curyo seed provider while keeping the nullifier bytes the same.
+        // Switch the rater to the RateLoop seed provider while keeping the nullifier bytes the same.
         vm.prank(admin);
         registry.seedHumanCredential(rater, uint64(block.timestamp + 30 days), anchorId, EVIDENCE_HASH);
 
@@ -314,7 +314,7 @@ contract RaterRegistryTest is Test {
         );
         assertEq(
             registry.humanNullifierOwnerByProvider(
-                RaterRegistry.HumanCredentialProvider.CuryoSelfVerifiedSeed, anchorId
+                RaterRegistry.HumanCredentialProvider.RateLoopSelfVerifiedSeed, anchorId
             ),
             rater
         );
@@ -345,7 +345,7 @@ contract RaterRegistryTest is Test {
         assertEq(refreshed.identityKey, CURYO_ANCHOR_ID);
     }
 
-    function test_SeedHumanCredentialStoresCuryoSelfVerifiedAccountAsVerifiedHuman() public {
+    function test_SeedHumanCredentialStoresRateLoopSelfVerifiedAccountAsVerifiedHuman() public {
         uint64 expiresAt = uint64(block.timestamp + 180 days);
 
         vm.prank(rater);
@@ -357,14 +357,14 @@ contract RaterRegistryTest is Test {
         RaterRegistry.HumanCredential memory credential = registry.getHumanCredential(rater);
         assertTrue(credential.verified);
         assertFalse(credential.revoked);
-        assertEq(uint256(credential.provider), uint256(RaterRegistry.HumanCredentialProvider.CuryoSelfVerifiedSeed));
+        assertEq(uint256(credential.provider), uint256(RaterRegistry.HumanCredentialProvider.RateLoopSelfVerifiedSeed));
         assertEq(credential.nullifierHash, CURYO_ANCHOR_ID);
         assertEq(credential.scope, registry.CURYO_SELF_VERIFIED_SCOPE());
         assertEq(credential.expiresAt, expiresAt);
         assertEq(credential.evidenceHash, EVIDENCE_HASH);
         assertEq(
             registry.humanNullifierOwnerByProvider(
-                RaterRegistry.HumanCredentialProvider.CuryoSelfVerifiedSeed, CURYO_ANCHOR_ID
+                RaterRegistry.HumanCredentialProvider.RateLoopSelfVerifiedSeed, CURYO_ANCHOR_ID
             ),
             rater
         );

@@ -243,18 +243,34 @@ contract ProfileRegistry is IProfileRegistry, Initializable, AccessControlUpgrad
         view
         returns (address[] memory addresses, uint256 total)
     {
-        total = _registeredAddresses.length;
-        if (offset >= total || limit == 0) {
-            return (new address[](0), total);
+        if (limit == 0) {
+            return (new address[](0), _activeRegisteredAddressCount());
         }
-        uint256 end = offset + limit;
-        if (end > total) {
-            end = total;
+
+        address[] memory page = new address[](limit);
+        uint256 collected;
+        uint256 registeredLength = _registeredAddresses.length;
+        for (uint256 i = 0; i < registeredLength; i++) {
+            address candidate = _registeredAddresses[i];
+            if (_profiles[candidate].createdAt == 0) continue;
+
+            if (total >= offset && collected < limit) {
+                page[collected] = candidate;
+                collected++;
+            }
+            total++;
         }
-        uint256 resultLength = end - offset;
-        addresses = new address[](resultLength);
-        for (uint256 i = 0; i < resultLength; i++) {
-            addresses[i] = _registeredAddresses[offset + i];
+
+        addresses = new address[](collected);
+        for (uint256 i = 0; i < collected; i++) {
+            addresses[i] = page[i];
+        }
+    }
+
+    function _activeRegisteredAddressCount() internal view returns (uint256 total) {
+        uint256 registeredLength = _registeredAddresses.length;
+        for (uint256 i = 0; i < registeredLength; i++) {
+            if (_profiles[_registeredAddresses[i]].createdAt > 0) total++;
         }
     }
 

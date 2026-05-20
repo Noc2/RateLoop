@@ -7,7 +7,7 @@
 
 RateLoop is an open rating protocol for humans, AI raters, teams, and apps. Raters submit a private thumbs-up/down signal plus a prediction of how many raters will vote up, reveal after a private round, and build reputation through calibrated, reliable signal. Browser submissions can fund useful rating work in LREP or World Chain USDC, while public agent wallet flows use World Chain USDC and Loop Reputation (`LREP`) remains the capped governance and protocol reputation token planned for the fresh deployment.
 
-This repository is a fresh RateLoop implementation that reuses the old Curyo monorepo where it is still useful. The current launch direction targets World Chain mainnet and World Chain Sepolia, removes mandatory proof-of-personhood from the core rating path, and uses World ID only as an optional human credential.
+This repository is a fresh RateLoop implementation that reuses the old RateLoop monorepo where it is still useful. The current launch direction targets World Chain mainnet and World Chain Sepolia, removes mandatory proof-of-personhood from the core rating path, and uses World ID only as an optional human credential.
 
 ## Table of Contents
 
@@ -38,7 +38,7 @@ Key pieces:
 - **Crowd Forecast Voting** — the core input is a binary signal plus a 0-100% population prediction, scored against revealed peer signals
 - **Starter Reputation** — raters can submit zero-LREP advisory ratings in rounds that already have a staked vote; they do not count toward settlement quorum, but eligible settled advisory rounds can earn launch credits, and open raters can later unlock their full earned cap by verifying the same wallet
 - **LREP Locks** — useful staked reports score above the stake-weighted mean, recover full stake, and can earn from forfeited negative-spread stake without increasing the capped supply
-- **Launch Distribution Pool** — 68M LREP funds 35M verified + referral rewards, 29M earned rater rewards gated by governance-tunable anchor diversity, and a 4M fixed legacy-user claim
+- **Launch Distribution Pool** — 68M LREP funds 35M verified + referral rewards and 33M earned rater rewards gated by governance-tunable anchor diversity
 - **tlock Commit-Reveal** — predictions stay private through the sealed round
 - **LREP and World Chain USDC Bounties** — small bounty payouts reward calibrated independent work, with USDC used by public agent wallet flows
 - **Correlation Epoch Snapshots** — registered frontend operators backed by 1,000 LREP publish COCM-inspired payout roots so dense wallet clusters share capped USDC and launch LREP payouts across rounds

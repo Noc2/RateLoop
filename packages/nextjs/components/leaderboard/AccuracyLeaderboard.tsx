@@ -9,8 +9,8 @@ import { FollowProfileButton } from "~~/components/shared/FollowProfileButton";
 import { surfaceSectionHeadingClassName } from "~~/components/shared/sectionHeading";
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import { useCategoryRegistry } from "~~/hooks/useCategoryRegistry";
-import { useCuryoConnectModal } from "~~/hooks/useCuryoConnectModal";
 import { useFollowedProfiles } from "~~/hooks/useFollowedProfiles";
+import { useRateLoopConnectModal } from "~~/hooks/useRateLoopConnectModal";
 import { FOLLOWED_CURATOR_TOAST_ID } from "~~/lib/notifications/followedActivity";
 import { PonderAccuracyLeaderboardItem, PonderAccuracyLeaderboardWindow, ponderApi } from "~~/services/ponder/client";
 import { getReputationAvatarUrl } from "~~/utils/profileImage";
@@ -24,7 +24,7 @@ type RaterTypeFilter = "" | "1" | "2" | "3" | "4";
 export function AccuracyLeaderboard() {
   const { address: connectedAddress } = useAccount();
   const { targetNetwork } = useTargetNetwork();
-  const { openConnectModal } = useCuryoConnectModal();
+  const { openConnectModal } = useRateLoopConnectModal();
   const { categories } = useCategoryRegistry();
   const { followedWallets, toggleFollow, isPending: isFollowPending } = useFollowedProfiles(connectedAddress);
 

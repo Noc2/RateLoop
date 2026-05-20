@@ -18,8 +18,8 @@ import type {
   AskHumansRequest,
   AskHumansResponse,
   ConfirmAskTransactionsRequest,
-  CuryoAgentClient,
-  CuryoAgentWalletTransactionCall,
+  RateLoopAgentClient,
+  RateLoopAgentWalletTransactionCall,
   QuestionStatusResponse,
 } from "@rateloop/sdk/agent";
 
@@ -229,7 +229,7 @@ function normalizeOptionalChainId(value: unknown, name: string): number | undefi
 function normalizeZeroNativeValue(value: unknown, name: string): 0n {
   const parsed = normalizeOptionalBigInt(value, name) ?? 0n;
   if (parsed !== 0n) {
-    throw new Error(`${name} must be zero for Curyo agent transaction plans.`);
+    throw new Error(`${name} must be zero for RateLoop agent transaction plans.`);
   }
   return 0n;
 }
@@ -439,7 +439,7 @@ export function loadLocalSignerConfig(options: CliOptions = {}, env: NodeJS.Proc
 
   return {
     chainId: parsePositiveInteger(optionString(options, "chain-id") ?? envString(env, "CURYO_CHAIN_ID"), "CURYO_CHAIN_ID"),
-    chainName: optionString(options, "chain-name") ?? envString(env, "CURYO_CHAIN_NAME") ?? "Curyo local signer chain",
+    chainName: optionString(options, "chain-name") ?? envString(env, "CURYO_CHAIN_NAME") ?? "RateLoop local signer chain",
     keystorePassword,
     keystorePath: optionString(options, "keystore") ?? envString(env, "CURYO_LOCAL_SIGNER_KEYSTORE_PATH"),
     pollingIntervalMs:
@@ -596,7 +596,7 @@ function summarizeReceipt(receipt: TransactionReceipt): LocalTransactionReceiptS
 
 async function executeTransactionPlan(params: {
   account: PrivateKeyAccount;
-  calls: CuryoAgentWalletTransactionCall[];
+  calls: RateLoopAgentWalletTransactionCall[];
   config: LocalSignerConfig;
   onProgress?: (event: LocalAskProgress) => void;
 }): Promise<LocalTransactionExecutionSummary> {
@@ -645,7 +645,7 @@ async function executeTransactionPlan(params: {
 
 export async function askHumansWithLocalSigner(params: {
   account: PrivateKeyAccount;
-  agent: Pick<CuryoAgentClient, "askHumans" | "confirmAskTransactions">;
+  agent: Pick<RateLoopAgentClient, "askHumans" | "confirmAskTransactions">;
   config: LocalSignerConfig;
   onProgress?: (event: LocalAskProgress) => void;
   paymentMode?: AskHumansRequest["paymentMode"];
@@ -688,7 +688,7 @@ export async function askHumansWithLocalSigner(params: {
   }
 
   if (!finalAsk.operationKey) {
-    throw new Error("Curyo returned a transaction plan without an operationKey.");
+    throw new Error("RateLoop returned a transaction plan without an operationKey.");
   }
 
   const transactions = await executeTransactionPlan({

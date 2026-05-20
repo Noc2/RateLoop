@@ -14,7 +14,7 @@ import { useGasBalanceStatus } from "~~/hooks/useGasBalanceStatus";
 import { useThirdwebSponsoredSubmitCalls } from "~~/hooks/useThirdwebSponsoredSubmitCalls";
 import { getGasBalanceErrorMessage } from "~~/lib/transactionErrors";
 
-export interface RaterRegistryProfile {
+interface RaterRegistryProfile {
   raterType: RaterTypeValue;
   raterTypeName: ReturnType<typeof formatRaterTypeName>;
   metadataHash: `0x${string}`;

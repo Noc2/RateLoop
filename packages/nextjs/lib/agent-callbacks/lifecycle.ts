@@ -136,7 +136,8 @@ async function listManagedLifecycleCandidates(params: { after?: ManagedLifecycle
 }
 
 export async function sweepAgentLifecycleCallbacks(params: { limit?: number; now?: Date } = {}) {
-  const pageSize = Math.max(1, Math.min(params.limit ?? 25, 100));
+  const maxCandidates = Math.max(1, Math.min(params.limit ?? 25, 100));
+  const pageSize = Math.min(maxCandidates, 100);
   const now = params.now ?? new Date();
   const nowSeconds = Math.floor(now.getTime() / 1000);
   const dependencies = getLifecycleDependencies();
@@ -148,16 +149,24 @@ export async function sweepAgentLifecycleCallbacks(params: { limit?: number; now
     questionSettling: 0,
   };
   let scanned = 0;
+  let hasMore = false;
   let cursor: ManagedLifecycleCursor | null = null;
 
-  while (true) {
+  while (scanned < maxCandidates) {
+    const remaining = maxCandidates - scanned;
+    const requestedLimit = Math.min(pageSize, remaining);
     const candidates = await dependencies.listCandidates({
       after: cursor,
-      limit: pageSize,
+      limit: requestedLimit,
     });
     if (candidates.length === 0) break;
 
     for (const candidate of candidates) {
+      if (scanned >= maxCandidates) {
+        hasMore = true;
+        break;
+      }
+
       const response = await dependencies.getContentById(candidate.contentId);
       const feedbackContext = buildContentFeedbackRoundContext(
         Array.isArray(response.rounds) ? response.rounds : [],
@@ -246,11 +255,16 @@ export async function sweepAgentLifecycleCallbacks(params: { limit?: number; now
       operationKey: lastCandidate.operationKey,
       sortAt: lastCandidate.sortAt,
     };
-    if (candidates.length < pageSize) break;
+    if (candidates.length < requestedLimit) break;
+    if (scanned >= maxCandidates) {
+      hasMore = true;
+      break;
+    }
   }
 
   return {
     emitted,
+    hasMore,
     scanned,
   };
 }

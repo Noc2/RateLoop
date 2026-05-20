@@ -12,7 +12,7 @@ type UploadedImageAttachmentUrlOptions = {
   allowLocalhostOrigins?: boolean;
 };
 
-export type UploadedImageAttachmentUrl = {
+type UploadedImageAttachmentUrl = {
   attachmentId: string;
   origin: string;
   url: string;
@@ -50,7 +50,7 @@ function shouldAllowLocalhostOrigins(options: UploadedImageAttachmentUrlOptions)
   );
 }
 
-export function getDefaultImageAttachmentAllowedOrigins() {
+function getDefaultImageAttachmentAllowedOrigins() {
   return [
     ...new Set(
       [
@@ -72,7 +72,7 @@ function getAllowedOrigins(options: UploadedImageAttachmentUrlOptions) {
   );
 }
 
-export function parseUploadedImageAttachmentUrl(
+function parseUploadedImageAttachmentUrl(
   value: string,
   options: UploadedImageAttachmentUrlOptions = {},
 ): UploadedImageAttachmentUrl | null {

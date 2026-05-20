@@ -8,7 +8,7 @@ no protocol-enforced cluster discounts, independence multipliers, or identity
 reward multipliers.
 
 This note reframes the new design as RateLoop, a fresh open rating network
-rather than a legacy-compatible Curyo migration. The public story should not
+rather than a legacy-compatible RateLoop migration. The public story should not
 explain the change as a removal from the old product. It should present the new
 advantage directly: humans, AI agents, teams, and frontends can rate
 through different interfaces while sharing one reputation-weighted rating and
@@ -30,7 +30,7 @@ wallet-farming game.
 
 The old human-only frame should be retired across title, hero copy, metadata,
 docs, tool descriptions, and image language. Avoid transitional copy such as
-"Curyo no longer verifies humans" or "formerly human feedback." RateLoop should
+"RateLoop no longer verifies humans" or "formerly human feedback." RateLoop should
 start from the stronger position: open ratings become valuable when the network
 can score credibility, independence, calibration, and correlated behavior across
 mixed participants.
@@ -458,13 +458,13 @@ Possible route/API cleanup:
 ## Migration Narrative
 
 Public marketing should not describe RateLoop as a pivot away from humans or as
-a renamed Curyo. The recommended story is simpler:
+a renamed RateLoop. The recommended story is simpler:
 
 ```text
 RateLoop is the open rating network where useful independent signal earns USDC.
 ```
 
-Internal docs can mention the Curyo source tree when needed for engineering
+Internal docs can mention the RateLoop source tree when needed for engineering
 reuse. Public copy should lead with the new category, not the migration.
 
 ## Decision

@@ -1,5 +1,5 @@
 import type { McpAgentAuth } from "./auth";
-import { __setMcpToolTestOverridesForTests, callCuryoMcpTool, callPublicCuryoMcpTool } from "./tools";
+import { __setMcpToolTestOverridesForTests, callPublicRateLoopMcpTool, callRateLoopMcpTool } from "./tools";
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, mock, test } from "node:test";
 import { __setDatabaseResourcesForTests } from "~~/lib/db";
@@ -139,7 +139,7 @@ test("curyo_ask_humans returns a wallet transaction plan without submitting from
     ...quoteOverrides(),
   });
 
-  const result = await callCuryoMcpTool({
+  const result = await callRateLoopMcpTool({
     agent: AGENT,
     arguments: askArguments(),
     name: "curyo_ask_humans",
@@ -194,7 +194,7 @@ test("curyo_ask_humans can return a native x402 authorization request", async ()
     ...quoteOverrides(),
   });
 
-  const result = await callCuryoMcpTool({
+  const result = await callRateLoopMcpTool({
     agent: AGENT,
     arguments: askArguments({ paymentMode: "x402_authorization" }),
     name: "curyo_ask_humans",
@@ -284,17 +284,17 @@ test("quote and ask flows pass submission identity into image preflight", async 
     }),
   });
 
-  await callCuryoMcpTool({
+  await callRateLoopMcpTool({
     agent: AGENT,
     arguments: askArguments(),
     name: "curyo_quote_question",
   });
-  await callCuryoMcpTool({
+  await callRateLoopMcpTool({
     agent: AGENT,
     arguments: askArguments(),
     name: "curyo_ask_humans",
   });
-  await callPublicCuryoMcpTool({
+  await callPublicRateLoopMcpTool({
     arguments: {
       ...askArguments(),
       walletAddress: AGENT.walletAddress,
@@ -315,7 +315,7 @@ test("quote and ask flows pass submission identity into image preflight", async 
 test("curyo_ask_humans rejects bundle members outside the agent category allowlist", async () => {
   await assert.rejects(
     () =>
-      callCuryoMcpTool({
+      callRateLoopMcpTool({
         agent: RESTRICTED_AGENT,
         arguments: askArguments({
           questions: [
@@ -367,7 +367,7 @@ test("curyo_ask_humans registers webhooks and enqueues the awaiting-signature ca
     },
   });
 
-  const result = await callCuryoMcpTool({
+  const result = await callRateLoopMcpTool({
     agent: AGENT,
     arguments: askArguments({
       webhookEvents: ["question.submitting"],
@@ -430,7 +430,7 @@ test("curyo_ask_humans registers the default lifecycle webhook events", async ()
     },
   });
 
-  await callCuryoMcpTool({
+  await callRateLoopMcpTool({
     agent: AGENT,
     arguments: askArguments({
       webhookSecret: "webhook-secret",
@@ -482,7 +482,7 @@ test("curyo_confirm_ask_transactions marks budget submitted and enqueues submitt
     },
   });
 
-  const result = await callCuryoMcpTool({
+  const result = await callRateLoopMcpTool({
     agent: AGENT,
     arguments: {
       operationKey: OPERATION_KEY,
@@ -534,7 +534,7 @@ test("curyo_ask_humans rejects unsafe webhook URLs before reservation or wallet 
 
   await assert.rejects(
     () =>
-      callCuryoMcpTool({
+      callRateLoopMcpTool({
         agent: AGENT,
         arguments: askArguments({
           webhookSecret: "webhook-secret",

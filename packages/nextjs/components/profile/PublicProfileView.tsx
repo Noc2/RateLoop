@@ -38,7 +38,6 @@ import { ProfileImageLightbox } from "~~/components/shared/ProfileImageLightbox"
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import { SETTINGS_ROUTE, buildRateContentHref } from "~~/constants/routes";
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
-import { useCuryoConnectModal } from "~~/hooks/useCuryoConnectModal";
 import { useFollowedProfiles } from "~~/hooks/useFollowedProfiles";
 import { usePageVisibility } from "~~/hooks/usePageVisibility";
 import { usePonderQuery } from "~~/hooks/usePonderQuery";
@@ -50,6 +49,7 @@ import {
   useSetAvatarAccent,
   useSetProfile,
 } from "~~/hooks/useProfileRegistry";
+import { useRateLoopConnectModal } from "~~/hooks/useRateLoopConnectModal";
 import {
   useRaterRegistryIdentity,
   useRaterRegistryProfile,
@@ -698,7 +698,7 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
   const isPageVisible = usePageVisibility();
   const { targetNetwork } = useTargetNetwork();
   const { address: connectedAddress } = useAccount();
-  const { openConnectModal } = useCuryoConnectModal();
+  const { openConnectModal } = useRateLoopConnectModal();
   const { followedWallets, toggleFollow, isPending: isFollowPending } = useFollowedProfiles(connectedAddress);
   const { stats, categories } = useVoterAccuracy(normalizedAddress);
   const { hasActiveHumanCredential, isLoading: credentialLoading } = useRaterRegistryIdentity(normalizedAddress);

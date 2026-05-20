@@ -6,7 +6,7 @@ import { TimelockController } from "@openzeppelin/contracts/governance/TimelockC
 import { IVotes } from "@openzeppelin/contracts/governance/utils/IVotes.sol";
 
 import { LoopReputation } from "../contracts/LoopReputation.sol";
-import { CuryoGovernor } from "../contracts/governance/CuryoGovernor.sol";
+import { RateLoopGovernor } from "../contracts/governance/RateLoopGovernor.sol";
 
 contract GovernanceGasBudgetTest is Test {
     uint256 internal constant MAX_QUORUM_MAX_EXCLUDED_HOLDERS_GAS = 250_000;
@@ -30,7 +30,7 @@ contract GovernanceGasBudgetTest is Test {
         token.grantRole(token.MINTER_ROLE(), DEPLOYER);
 
         TimelockController timelock = new TimelockController(2 days, new address[](0), new address[](0), DEPLOYER);
-        CuryoGovernor governor = new CuryoGovernor(IVotes(address(token)), timelock);
+        RateLoopGovernor governor = new RateLoopGovernor(IVotes(address(token)), timelock);
 
         uint256 holderCount = governor.MAX_EXCLUDED_HOLDERS();
         address[] memory holders = new address[](holderCount);
@@ -47,7 +47,7 @@ contract GovernanceGasBudgetTest is Test {
         vm.stopPrank();
         vm.roll(block.number + 1);
 
-        uint256 gasUsed = _measureCall(address(governor), abi.encodeCall(CuryoGovernor.quorum, (block.number - 1)));
+        uint256 gasUsed = _measureCall(address(governor), abi.encodeCall(RateLoopGovernor.quorum, (block.number - 1)));
 
         assertLe(
             gasUsed, MAX_QUORUM_MAX_EXCLUDED_HOLDERS_GAS, "quorum worst-case excluded-holder scan gas budget exceeded"

@@ -1,5 +1,5 @@
 /**
- * Curyo Keeper — standalone stateless round settlement service.
+ * RateLoop Keeper — standalone stateless round settlement service.
  *
  * Iterates on-chain content, reveals tlock votes, settles or reveal-fails eligible rounds,
  * cleans up unrevealed terminal-round commits, cancels expired rounds, and sweeps dormant content.

@@ -3,7 +3,7 @@ import { type NormalizedAgentPolicyInput, normalizeAgentPolicyInput } from "~~/l
 import { buildSignedActionMessage, hashSignedActionPayload } from "~~/lib/auth/signedActions";
 import { isValidWalletAddress, normalizeWalletAddress } from "~~/lib/watchlist/contentWatch";
 
-export const AGENT_POLICIES_CHALLENGE_TITLE = "Curyo managed agents";
+export const AGENT_POLICIES_CHALLENGE_TITLE = "RateLoop managed agents";
 export const READ_AGENT_POLICIES_ACTION = "agent_policies:read";
 export const SAVE_AGENT_POLICY_ACTION = "agent_policies:save";
 export const ROTATE_AGENT_POLICY_TOKEN_ACTION = "agent_policies:rotate_token";

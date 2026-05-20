@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { BellAlertIcon, EnvelopeIcon } from "@heroicons/react/24/outline";
-import { useCuryoConnectModal } from "~~/hooks/useCuryoConnectModal";
 import { useEmailNotificationSettings } from "~~/hooks/useEmailNotificationSettings";
 import { type NotificationPreferences, useNotificationPreferences } from "~~/hooks/useNotificationPreferences";
+import { useRateLoopConnectModal } from "~~/hooks/useRateLoopConnectModal";
 import { HUMAN_SIGN_IN_LABEL } from "~~/lib/home/humanSignInRoute";
 import { type EmailNotificationSettingsPayload } from "~~/lib/notifications/emailShared";
 import { notification } from "~~/utils/scaffold-eth";
@@ -78,7 +78,7 @@ export function NotificationSettingsPanel({
   address?: string;
   onStatusChange?: () => void;
 }) {
-  const { openConnectModal, isConnecting } = useCuryoConnectModal();
+  const { openConnectModal, isConnecting } = useRateLoopConnectModal();
   const { preferences, isSaving, isLoading, updatePreference } = useNotificationPreferences(address, {
     autoRead: true,
   });

@@ -59,13 +59,9 @@ contract LaunchDistributionPoolTest is Test {
     }
 
     function test_PoolSplitSumsToLaunchDistribution() public view {
-        assertEq(pool.LEGACY_POOL_AMOUNT(), 4_000_000e6);
-        assertEq(pool.EARNED_RATER_POOL_AMOUNT(), 29_000_000e6);
+        assertEq(pool.EARNED_RATER_POOL_AMOUNT(), 33_000_000e6);
         assertEq(pool.VERIFIED_REFERRAL_POOL_AMOUNT(), 35_000_000e6);
-        assertEq(
-            pool.LEGACY_POOL_AMOUNT() + pool.EARNED_RATER_POOL_AMOUNT() + pool.VERIFIED_REFERRAL_POOL_AMOUNT(),
-            pool.TOTAL_POOL_AMOUNT()
-        );
+        assertEq(pool.EARNED_RATER_POOL_AMOUNT() + pool.VERIFIED_REFERRAL_POOL_AMOUNT(), pool.TOTAL_POOL_AMOUNT());
     }
 
     function test_ConstructorRejectsInvalidRaterRegistryIntegration() public {
@@ -1384,7 +1380,7 @@ contract LaunchDistributionPoolTest is Test {
         pool.claimVerifiedBonus(referrer);
     }
 
-    function test_ClaimVerifiedBonusAcceptsCuryoSeededHumanUnits() public {
+    function test_ClaimVerifiedBonusAcceptsRateLoopSeededHumanUnits() public {
         registry.seedHumanCredential(alice, uint64(block.timestamp + 30 days), bytes32("curyo-alice"), 0);
 
         vm.prank(alice);
@@ -1392,20 +1388,6 @@ contract LaunchDistributionPoolTest is Test {
 
         assertEq(payout, 10e6);
         assertEq(lrep.balanceOf(alice), 10e6);
-    }
-
-    function test_ClaimLegacyUsesMerkleRootAndPreventsDoubleClaim() public {
-        uint256 amount = 123e6;
-        bytes32 leaf = keccak256(abi.encode(alice, amount));
-        pool.setLegacyRoot(leaf);
-
-        vm.prank(alice);
-        assertEq(pool.claimLegacy(amount, new bytes32[](0)), amount);
-        assertEq(lrep.balanceOf(alice), amount);
-
-        vm.prank(alice);
-        vm.expectRevert(LaunchDistributionPool.AlreadyClaimed.selector);
-        pool.claimLegacy(amount, new bytes32[](0));
     }
 
     function _recordLaunchReward(address rater, uint256 roundId, bytes32 anchorId) internal returns (uint256) {

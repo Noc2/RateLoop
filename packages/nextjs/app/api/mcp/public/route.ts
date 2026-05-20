@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { PUBLIC_MCP_TOOLS, callPublicCuryoMcpTool, normalizeToolError } from "~~/lib/mcp/tools";
+import { PUBLIC_MCP_TOOLS, callPublicRateLoopMcpTool, normalizeToolError } from "~~/lib/mcp/tools";
 import { checkRateLimit } from "~~/utils/rateLimit";
 
 export const runtime = "nodejs";
@@ -209,7 +209,7 @@ export async function POST(request: NextRequest) {
 
   if (body.method === "tools/call") {
     const name = typeof body.params?.name === "string" ? body.params.name : "";
-    const result = await callPublicCuryoMcpTool({
+    const result = await callPublicRateLoopMcpTool({
       arguments: body.params?.arguments,
       name,
     }).then(toolResult, toolErrorResult);

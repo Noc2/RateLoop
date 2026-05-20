@@ -48,7 +48,7 @@ export const governorAbi = parseAbi([
 const timelockAbi = parseAbi(["function getMinDelay() view returns (uint256)"]);
 
 type GovernanceManagedContractName =
-  | "CuryoGovernor"
+  | "RateLoopGovernor"
   | "LoopReputation"
   | "ClusterPayoutOracle"
   | "FrontendRegistry"
@@ -189,7 +189,7 @@ export function useGovernanceContracts() {
     const items: GovernanceTargetContract[] = [];
     if (hasGovernorContract && governorAddress) {
       items.push({
-        name: "CuryoGovernor",
+        name: "RateLoopGovernor",
         address: governorAddress,
         abi: governorAbi,
       });

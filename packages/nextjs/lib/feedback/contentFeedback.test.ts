@@ -390,6 +390,47 @@ test("terminal round feedback becomes public", async () => {
   assert.equal(result.items[0]?.isPublic, true);
 });
 
+test("public feedback remains visible behind newer hidden active-round rows", async () => {
+  const initialContext = contentFeedback.buildContentFeedbackRoundContext([{ roundId: "8", state: ROUND_STATE.Open }]);
+  const currentContext = contentFeedback.buildContentFeedbackRoundContext([
+    { roundId: "8", state: ROUND_STATE.Settled },
+    { roundId: "9", state: ROUND_STATE.Open },
+  ]);
+  const publicPayload = contentFeedback.normalizeContentFeedbackInput({
+    address: WALLET,
+    contentId: "21",
+    feedbackType: "evidence",
+    body: "The settled answer includes clear supporting evidence.",
+  });
+  assert.equal(publicPayload.ok, true);
+  if (!publicPayload.ok) return;
+
+  await contentFeedback.addContentFeedback(prepareFeedback(publicPayload.payload, initialContext), initialContext);
+
+  for (let index = 0; index < 100; index++) {
+    const wallet = `0x${(index + 1).toString(16).padStart(40, "0")}` as const;
+    const hiddenPayload = contentFeedback.normalizeContentFeedbackInput({
+      address: wallet,
+      contentId: "21",
+      feedbackType: "concern",
+      body: `Active round private feedback number ${index}.`,
+    });
+    assert.equal(hiddenPayload.ok, true);
+    if (!hiddenPayload.ok) return;
+
+    await contentFeedback.addContentFeedback(prepareFeedback(hiddenPayload.payload, currentContext), currentContext);
+  }
+
+  const result = await contentFeedback.listContentFeedback({
+    contentId: "21",
+    context: currentContext,
+  });
+
+  assert.equal(result.count, 1);
+  assert.equal(result.publicCount, 1);
+  assert.equal(result.items[0]?.body, "The settled answer includes clear supporting evidence.");
+});
+
 test("rejects duplicate feedback from the same author in the same round", async () => {
   const activeContext = contentFeedback.buildContentFeedbackRoundContext([{ roundId: "9", state: ROUND_STATE.Open }]);
   const payload = contentFeedback.normalizeContentFeedbackInput({

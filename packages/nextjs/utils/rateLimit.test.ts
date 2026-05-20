@@ -7,8 +7,8 @@ const originalDatabaseUrl = process.env.DATABASE_URL;
 const originalNodeEnv = process.env.NODE_ENV;
 const originalTrustedHeaders = process.env.RATE_LIMIT_TRUSTED_IP_HEADERS;
 const originalVercel = process.env.VERCEL;
-const originalCuryoE2EProductionBuild = process.env.CURYO_E2E_PRODUCTION_BUILD;
-const originalNextPublicCuryoE2EProductionBuild = process.env.NEXT_PUBLIC_CURYO_E2E_PRODUCTION_BUILD;
+const originalRateLoopE2EProductionBuild = process.env.CURYO_E2E_PRODUCTION_BUILD;
+const originalNextPublicRateLoopE2EProductionBuild = process.env.NEXT_PUBLIC_CURYO_E2E_PRODUCTION_BUILD;
 
 env.DATABASE_URL = "memory:";
 
@@ -86,16 +86,16 @@ after(() => {
     env.VERCEL = originalVercel;
   }
 
-  if (originalCuryoE2EProductionBuild === undefined) {
+  if (originalRateLoopE2EProductionBuild === undefined) {
     delete env.CURYO_E2E_PRODUCTION_BUILD;
   } else {
-    env.CURYO_E2E_PRODUCTION_BUILD = originalCuryoE2EProductionBuild;
+    env.CURYO_E2E_PRODUCTION_BUILD = originalRateLoopE2EProductionBuild;
   }
 
-  if (originalNextPublicCuryoE2EProductionBuild === undefined) {
+  if (originalNextPublicRateLoopE2EProductionBuild === undefined) {
     delete env.NEXT_PUBLIC_CURYO_E2E_PRODUCTION_BUILD;
   } else {
-    env.NEXT_PUBLIC_CURYO_E2E_PRODUCTION_BUILD = originalNextPublicCuryoE2EProductionBuild;
+    env.NEXT_PUBLIC_CURYO_E2E_PRODUCTION_BUILD = originalNextPublicRateLoopE2EProductionBuild;
   }
 });
 

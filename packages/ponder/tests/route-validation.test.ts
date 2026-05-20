@@ -501,6 +501,36 @@ describe("registerContentRoutes", () => {
     });
   });
 
+  it("uses an extra row to detect more non-search content pages", async () => {
+    const { queryBuilder } = mockPonderModules([
+      { id: 1n },
+      { id: 2n },
+      { id: 3n },
+      { id: 4n },
+      { id: 5n },
+      { id: 6n },
+    ]);
+    mockSharedModule();
+    const { registerContentRoutes } = await import(
+      "../src/api/routes/content-routes.js"
+    );
+
+    const app = new Hono();
+    registerContentRoutes(app);
+
+    const response = await app.request("http://localhost/content?limit=5");
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(queryBuilder.limit).toHaveBeenCalledWith(6);
+    expect(body.items).toHaveLength(5);
+    expect(body).toMatchObject({
+      limit: 5,
+      offset: 0,
+      hasMore: true,
+    });
+  });
+
   it("uses full-text search conditions and relevance-first ordering", async () => {
     const { queryBuilder } = mockPonderModules([{ id: 1n }]);
     mockSharedModule();
@@ -1653,6 +1683,59 @@ describe("registerDiscoveryRoutes", () => {
     ).toBe(true);
     expect(
       serializedWhereCalls.every((value) => value.includes("content.tags")),
+    ).toBe(true);
+  });
+
+  it("matches delegated voter identities in discovery queries", async () => {
+    const { queryBuilder } = mockPonderModules([]);
+    const { registerDiscoveryRoutes } = await import(
+      "../src/api/routes/discovery-routes.js"
+    );
+
+    const app = new Hono();
+    registerDiscoveryRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/discover-signals/0x0000000000000000000000000000000000000001?watched=1,2",
+    );
+
+    expect(response.status).toBe(200);
+
+    const serializedWhereCalls = queryBuilder.where.mock.calls.map(([value]) =>
+      serializeExpression(value),
+    );
+    expect(
+      serializedWhereCalls.some(
+        (value) =>
+          value.includes("vote.voter") &&
+          value.includes("vote.identityHolder") &&
+          value.includes("vote.identityVoter"),
+      ),
+    ).toBe(true);
+  });
+
+  it("honors explicit followed addresses in discovery queries", async () => {
+    const { queryBuilder } = mockPonderModules([]);
+    const { registerDiscoveryRoutes } = await import(
+      "../src/api/routes/discovery-routes.js"
+    );
+
+    const app = new Hono();
+    registerDiscoveryRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/discover-signals/0x0000000000000000000000000000000000000001?followed=0x0000000000000000000000000000000000000003",
+    );
+
+    expect(response.status).toBe(200);
+
+    const serializedWhereCalls = queryBuilder.where.mock.calls.map(([value]) =>
+      serializeExpression(value),
+    );
+    expect(
+      serializedWhereCalls.some((value) =>
+        value.includes("0x0000000000000000000000000000000000000003"),
+      ),
     ).toBe(true);
   });
 

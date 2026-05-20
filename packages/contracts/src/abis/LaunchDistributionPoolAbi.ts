@@ -74,19 +74,6 @@ export const LaunchDistributionPoolAbi = [
   },
   {
     "type": "function",
-    "name": "LEGACY_POOL_AMOUNT",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "MAX_DISTINCT_RATERS_PER_VERIFIED_ANCHOR",
     "inputs": [],
     "outputs": [
@@ -298,30 +285,6 @@ export const LaunchDistributionPoolAbi = [
       }
     ],
     "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "claimLegacy",
-    "inputs": [
-      {
-        "name": "amount",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "proof",
-        "type": "bytes32[]",
-        "internalType": "bytes32[]"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "paidAmount",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -746,51 +709,6 @@ export const LaunchDistributionPoolAbi = [
         "name": "requireNoPendingCleanup",
         "type": "bool",
         "internalType": "bool"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "legacyClaimed",
-    "inputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bool",
-        "internalType": "bool"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "legacyDistributed",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "legacyRoot",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
       }
     ],
     "stateMutability": "view"
@@ -1563,19 +1481,6 @@ export const LaunchDistributionPoolAbi = [
   },
   {
     "type": "function",
-    "name": "remainingLegacyPool",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "remainingVerifiedReferralPool",
     "inputs": [],
     "outputs": [
@@ -1779,19 +1684,6 @@ export const LaunchDistributionPoolAbi = [
             "internalType": "bool"
           }
         ]
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "setLegacyRoot",
-    "inputs": [
-      {
-        "name": "newRoot",
-        "type": "bytes32",
-        "internalType": "bytes32"
       }
     ],
     "outputs": [],
@@ -2308,38 +2200,6 @@ export const LaunchDistributionPoolAbi = [
             "internalType": "bool"
           }
         ]
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "LegacyClaimed",
-    "inputs": [
-      {
-        "name": "account",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "amount",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "LegacyRootUpdated",
-    "inputs": [
-      {
-        "name": "legacyRoot",
-        "type": "bytes32",
-        "indexed": false,
-        "internalType": "bytes32"
       }
     ],
     "anonymous": false

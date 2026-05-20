@@ -106,9 +106,7 @@ const SmartContracts: NextPage = () => {
             </tr>
             <tr>
               <td className="font-mono text-primary">LaunchDistributionPool</td>
-              <td>
-                68M LREP launch rewards: 35M verified/referral, 29M anchor-gated earned rater, and 4M legacy users
-              </td>
+              <td>68M LREP launch rewards: 35M verified/referral and 33M anchor-gated earned rater rewards</td>
               <td>No</td>
             </tr>
             <tr>
@@ -127,7 +125,7 @@ const SmartContracts: NextPage = () => {
               <td>Transparent</td>
             </tr>
             <tr>
-              <td className="font-mono text-primary">CuryoGovernor</td>
+              <td className="font-mono text-primary">RateLoopGovernor</td>
               <td>On-chain governance with timelock (proposals, voting, execution)</td>
               <td>No</td>
             </tr>
@@ -160,7 +158,7 @@ const SmartContracts: NextPage = () => {
       <h3>Key Features</h3>
       <ul>
         <li>
-          <strong>Governance voting power:</strong> Delegates can vote on proposals via CuryoGovernor.
+          <strong>Governance voting power:</strong> Delegates can vote on proposals via RateLoopGovernor.
         </li>
         <li>
           <strong>Governance lock:</strong> Tokens become non-transferable for 7 days when proposing or voting on
@@ -637,7 +635,7 @@ const SmartContracts: NextPage = () => {
 
       <hr />
 
-      <h2>CuryoGovernor</h2>
+      <h2>RateLoopGovernor</h2>
       <p>
         OpenZeppelin Governor with timelock control. Uses LREP voting power (ERC20Votes). Tokens are locked for 7 days
         when proposing or casting votes.
@@ -732,8 +730,8 @@ const SmartContracts: NextPage = () => {
           flows use reentrancy guards.
         </li>
         <li>
-          <strong>Snapshot-based governance:</strong> CuryoGovernor uses ERC20Votes snapshots for proposal voting power,
-          and governance participation also applies a 7-day LREP transfer lock.
+          <strong>Snapshot-based governance:</strong> RateLoopGovernor uses ERC20Votes snapshots for proposal voting
+          power, and governance participation also applies a 7-day LREP transfer lock.
         </li>
         <li>
           <strong>Sybil Resistance:</strong> Core rating remains open, while earned launch rewards require qualifying

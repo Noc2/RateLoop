@@ -160,7 +160,7 @@ test("getMetadata uses localhost URLs and the updated brand copy when no product
       VERCEL_URL: undefined,
     },
     {
-      title: "Curyo — AI Asks, Humans Earn",
+      title: "RateLoop — AI Asks, Humans Earn",
       description: "AI Asks, Humans Earn",
     },
   );
@@ -168,7 +168,7 @@ test("getMetadata uses localhost URLs and the updated brand copy when no product
   assert.equal(metadata.metadataBase, "http://localhost:4321/");
   assert.equal(metadata.manifest, "/manifest.json");
   assert.deepEqual(metadata.title, {
-    default: "Curyo — AI Asks, Humans Earn",
+    default: "RateLoop — AI Asks, Humans Earn",
     template: "%s | RateLoop",
   });
   assert.equal(metadata.description, "AI Asks, Humans Earn");
@@ -193,7 +193,7 @@ test("getMetadata prefers the production hostname for social metadata", () => {
       VERCEL_URL: "curyo-preview.vercel.app",
     },
     {
-      title: "Curyo — AI Asks, Humans Earn",
+      title: "RateLoop — AI Asks, Humans Earn",
       description: "AI Asks, Humans Earn",
     },
   );
@@ -202,7 +202,7 @@ test("getMetadata prefers the production hostname for social metadata", () => {
   assert.equal(metadata.openGraph?.images?.[0]?.url, "https://curyo.app/og-image.jpg");
   assert.equal(metadata.twitter?.images?.[0]?.url, "https://curyo.app/twitter-image.jpg");
   assert.deepEqual(metadata.title, {
-    default: "Curyo — AI Asks, Humans Earn",
+    default: "RateLoop — AI Asks, Humans Earn",
     template: "%s | RateLoop",
   });
 });
@@ -215,7 +215,7 @@ test("getMetadata uses the preview hostname when production metadata is unavaila
       VERCEL_URL: "curyo-preview.vercel.app",
     },
     {
-      title: "Curyo — AI Asks, Humans Earn",
+      title: "RateLoop — AI Asks, Humans Earn",
       description: "AI Asks, Humans Earn",
     },
   );

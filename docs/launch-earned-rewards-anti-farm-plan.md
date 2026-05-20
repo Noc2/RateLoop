@@ -76,7 +76,7 @@ start permissive and become stricter if farming pressure appears.
 Negative invariant: AI participation is not a verified-human anchor and does
 not change reward weight. The earned launch pool only counts active human
 credentials from `RaterRegistry` as anchors, including World ID credentials and
-the nine seeded Curyo Self.xyz verified humans.
+the nine seeded RateLoop Self.xyz verified humans.
 
 ## Contract Implementation
 

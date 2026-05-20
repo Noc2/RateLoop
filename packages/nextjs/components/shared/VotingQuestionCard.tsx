@@ -3,8 +3,8 @@
 import { type ReactNode, useEffect, useState } from "react";
 import { ChatBubbleLeftRightIcon, ShareIcon } from "@heroicons/react/24/outline";
 import { FundQuestionModal } from "~~/components/reward-pool/FundQuestionModal";
-import { CuryoVoteButton } from "~~/components/shared/CuryoVoteButton";
 import { MoreToggleButton } from "~~/components/shared/MoreToggleButton";
+import { RateLoopVoteButton } from "~~/components/shared/RateLoopVoteButton";
 import { RatingOrb } from "~~/components/shared/RatingOrb";
 import { RoundProgress } from "~~/components/shared/RoundProgress";
 import { RoundRevealedBreakdown, RoundStats } from "~~/components/shared/RoundStats";
@@ -729,7 +729,7 @@ export function VotingQuestionCard({
                     <div className="grid w-full items-center" style={compactDockControlsGridStyle}>
                       <div className="col-start-2 justify-self-center">{shareDockButton}</div>
                       <div className="col-start-4 justify-self-center">
-                        <CuryoVoteButton
+                        <RateLoopVoteButton
                           direction="up"
                           size="sm"
                           onClick={() => onVote(true)}
@@ -739,7 +739,7 @@ export function VotingQuestionCard({
                         />
                       </div>
                       <div className="col-start-6 justify-self-center">
-                        <CuryoVoteButton
+                        <RateLoopVoteButton
                           direction="down"
                           size="sm"
                           onClick={() => onVote(false)}
@@ -753,7 +753,7 @@ export function VotingQuestionCard({
                   ) : !centerStatusContent ? (
                     <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-end gap-3">
                       <div className="justify-self-start">
-                        <CuryoVoteButton
+                        <RateLoopVoteButton
                           direction="up"
                           size="sm"
                           onClick={() => onVote(true)}
@@ -771,7 +771,7 @@ export function VotingQuestionCard({
                         />
                       </div>
                       <div className="justify-self-end">
-                        <CuryoVoteButton
+                        <RateLoopVoteButton
                           direction="down"
                           size="sm"
                           onClick={() => onVote(false)}
@@ -865,13 +865,13 @@ export function VotingQuestionCard({
             ) : null}
             {!(address && hasMyVote) && !centerStatusContent && isSignalVariant ? (
               <div className="mt-3 flex items-center justify-center gap-3">
-                <CuryoVoteButton
+                <RateLoopVoteButton
                   direction="up"
                   onClick={() => onVote(true)}
                   disabled={voteActionDisabled}
                   attention={isAttentionActive && !voteActionDisabled}
                 />
-                <CuryoVoteButton
+                <RateLoopVoteButton
                   direction="down"
                   onClick={() => onVote(false)}
                   disabled={voteActionDisabled}
@@ -888,13 +888,13 @@ export function VotingQuestionCard({
               {/* Prediction action - centered below the rating stack */}
               {!(address && hasMyVote) && !centerStatusContent && !isSignalVariant && !isDockVariant && (
                 <div className="flex shrink-0 items-center justify-center gap-2 lg:gap-3">
-                  <CuryoVoteButton
+                  <RateLoopVoteButton
                     direction="up"
                     onClick={() => onVote(true)}
                     disabled={voteActionDisabled}
                     attention={isAttentionActive && !voteActionDisabled}
                   />
-                  <CuryoVoteButton
+                  <RateLoopVoteButton
                     direction="down"
                     onClick={() => onVote(false)}
                     disabled={voteActionDisabled}

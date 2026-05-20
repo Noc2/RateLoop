@@ -4,7 +4,7 @@ import { type ButtonHTMLAttributes, type ReactNode, useCallback, useEffect, useS
 import { useRouter } from "next/navigation";
 import { useAccount } from "wagmi";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
-import { useCuryoConnectModal } from "~~/hooks/useCuryoConnectModal";
+import { useRateLoopConnectModal } from "~~/hooks/useRateLoopConnectModal";
 import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
 import { HUMAN_SIGN_IN_LABEL, getHumanSignInRoute } from "~~/lib/home/humanSignInRoute";
 
@@ -15,7 +15,7 @@ type HumanSignInButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "chi
 export function HumanSignInButton({ children, className, disabled, ...props }: HumanSignInButtonProps) {
   const router = useRouter();
   const { address } = useAccount();
-  const { openConnectModal, isConnecting } = useCuryoConnectModal();
+  const { openConnectModal, isConnecting } = useRateLoopConnectModal();
   const [shouldRouteAfterSignIn, setShouldRouteAfterSignIn] = useState(false);
   const { data: lrepBalance } = useScaffoldReadContract({
     contractName: REPUTATION_CONTRACT_NAME,

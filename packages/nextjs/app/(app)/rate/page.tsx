@@ -21,7 +21,7 @@ export async function generateMetadata({ searchParams }: RatePageProps): Promise
       description: shareData.description,
       type: "website",
       url: shareData.shareUrl,
-      siteName: "Curyo",
+      siteName: "RateLoop",
       images: [
         {
           url: shareData.imageUrl,

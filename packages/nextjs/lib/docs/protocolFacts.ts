@@ -82,20 +82,6 @@ export const protocolDocFacts = {
   earlyVoterAdvantageLabel: `${EPOCH_WEIGHT_BPS.blind / EPOCH_WEIGHT_BPS.informed}:1`,
 } as const;
 
-const rewardSplitTableRows: [string, string][] = [
-  ["Positive score-spread reports", "Full stake plus pro-rata share of the 96% voter share"],
-  ["Negative score-spread reports", "Forfeit according to distance below the stake-weighted mean score"],
-  ["Frontend rail", "3% of forfeited stake when an eligible frontend exists, otherwise voter-pool fallback"],
-  ["Treasury rail", "1% of forfeited stake with voter-pool fallback if treasury transfer is unavailable"],
-  ["Unrevealed reports", "No RBTS payout after cleanup eligibility"],
-  ["Revealed-loser rebate", "None for RBTS score-spread settlement"],
-];
-
-export const whitepaperRewardSplitRows: string[][] = rewardSplitTableRows.map(([recipient, share]) => [
-  recipient,
-  share,
-]);
-
 export const whitepaperSettlementConfigRows: string[][] = [
   [
     "epochDuration",

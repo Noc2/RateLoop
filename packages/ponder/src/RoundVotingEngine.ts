@@ -1186,6 +1186,7 @@ ponder.on("RoundVotingEngine:RoundCancelled", async ({ event, context }) => {
   if (existingRound) {
     await context.db.update(round, { id: roundKey }).set((row) => ({
       state: ROUND_STATE.Cancelled,
+      settledAt: event.block.timestamp,
       referenceRatingBps:
         row.referenceRatingBps > 0 ? row.referenceRatingBps : 5000,
       ratingBps: row.ratingBps > 0 ? row.ratingBps : 5000,
@@ -1212,6 +1213,7 @@ ponder.on("RoundVotingEngine:RoundCancelled", async ({ event, context }) => {
       effectiveEvidence: 0n,
       settledRounds: 0,
       lowSince: 0n,
+      settledAt: event.block.timestamp,
     });
   }
 });
@@ -1224,6 +1226,7 @@ ponder.on("RoundVotingEngine:RoundTied", async ({ event, context }) => {
   if (existingRound) {
     await context.db.update(round, { id: roundKey }).set((row) => ({
       state: ROUND_STATE.Tied,
+      settledAt: event.block.timestamp,
       referenceRatingBps:
         row.referenceRatingBps > 0 ? row.referenceRatingBps : 5000,
       ratingBps: row.ratingBps > 0 ? row.ratingBps : 5000,
@@ -1250,6 +1253,7 @@ ponder.on("RoundVotingEngine:RoundTied", async ({ event, context }) => {
       effectiveEvidence: 0n,
       settledRounds: 0,
       lowSince: 0n,
+      settledAt: event.block.timestamp,
     });
   }
 });
@@ -1262,6 +1266,7 @@ ponder.on("RoundVotingEngine:RoundRevealFailed", async ({ event, context }) => {
   if (existingRound) {
     await context.db.update(round, { id: roundKey }).set((row) => ({
       state: ROUND_STATE.RevealFailed,
+      settledAt: event.block.timestamp,
       referenceRatingBps:
         row.referenceRatingBps > 0 ? row.referenceRatingBps : 5000,
       ratingBps: row.ratingBps > 0 ? row.ratingBps : 5000,
@@ -1288,6 +1293,7 @@ ponder.on("RoundVotingEngine:RoundRevealFailed", async ({ event, context }) => {
       effectiveEvidence: 0n,
       settledRounds: 0,
       lowSince: 0n,
+      settledAt: event.block.timestamp,
     });
   }
 });

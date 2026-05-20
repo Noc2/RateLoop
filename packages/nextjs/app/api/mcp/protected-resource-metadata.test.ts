@@ -40,7 +40,7 @@ test("serves root MCP protected-resource metadata for static bearer-token agents
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("cache-control"), "no-store");
   assert.equal(body.resource, "https://curyo.xyz/api/mcp");
-  assert.equal(body.resource_name, "Curyo MCP");
+  assert.equal(body.resource_name, "RateLoop MCP");
   assert.deepEqual(body.bearer_methods_supported, ["header"]);
   assert.deepEqual(body.scopes_supported, ["curyo:quote", "curyo:ask", "curyo:read", "curyo:balance"]);
   assert.equal("authorization_servers" in body, false);

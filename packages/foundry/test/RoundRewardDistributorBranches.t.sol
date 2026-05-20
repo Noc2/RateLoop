@@ -309,19 +309,19 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         raterRegistry.attestHumanCredentialWithProof(1, uint256(nullifier), proof);
     }
 
-    function _seedCuryoHuman(address account, bytes32 anchorId) internal {
-        _seedCuryoHumanFresh(account, anchorId);
+    function _seedRateLoopHuman(address account, bytes32 anchorId) internal {
+        _seedRateLoopHumanFresh(account, anchorId);
         _ageLaunchAnchorCredential();
     }
 
-    function _seedCuryoHumanFresh(address account, bytes32 anchorId) internal {
+    function _seedRateLoopHumanFresh(address account, bytes32 anchorId) internal {
         vm.prank(owner);
         raterRegistry.seedHumanCredential(
             account, uint64(block.timestamp + 365 days), anchorId, keccak256("curyo-seed")
         );
     }
 
-    function _seedCuryoHumanExpiringAfterMinAge(address account, bytes32 anchorId) internal returns (uint64 expiresAt) {
+    function _seedRateLoopHumanExpiringAfterMinAge(address account, bytes32 anchorId) internal returns (uint64 expiresAt) {
         expiresAt = uint64(block.timestamp + launchPool.MIN_ANCHOR_CREDENTIAL_AGE_SECONDS() + 1 minutes);
         vm.prank(owner);
         raterRegistry.seedHumanCredential(account, expiresAt, anchorId, keccak256("curyo-seed-expiring"));
@@ -454,8 +454,8 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         assertEq(launchPool.raterDistinctAnchorRoundCount(voter1), 0);
     }
 
-    function test_ClaimReward_RecordsLaunchCreditWithCuryoSeededHumanAnchor() public {
-        _seedCuryoHuman(voter2, bytes32("curyo-anchor-voter-2"));
+    function test_ClaimReward_RecordsLaunchCreditWithRateLoopSeededHumanAnchor() public {
+        _seedRateLoopHuman(voter2, bytes32("curyo-anchor-voter-2"));
         (uint256 contentId, uint256 roundId) = _setupSettledPredictionRound();
 
         vm.prank(voter1);
@@ -467,7 +467,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
     }
 
     function test_ClaimReward_RecordsLaunchCreditWhenAnchorExpiresAfterRoundStartBeforeClaim() public {
-        uint64 expiresAt = _seedCuryoHumanExpiringAfterMinAge(voter2, bytes32("expiring-curyo-anchor"));
+        uint64 expiresAt = _seedRateLoopHumanExpiringAfterMinAge(voter2, bytes32("expiring-curyo-anchor"));
         (uint256 contentId, uint256 roundId) = _setupSettledPredictionRound();
         RoundLib.Round memory round = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
 
@@ -482,8 +482,8 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         assertEq(launchPool.raterDistinctAnchorRoundCount(voter1), 1);
     }
 
-    function test_ClaimReward_DoesNotRecordLaunchCreditWithFreshCuryoSeededHumanAnchor() public {
-        _seedCuryoHumanFresh(voter2, bytes32("fresh-curyo-anchor-voter-2"));
+    function test_ClaimReward_DoesNotRecordLaunchCreditWithFreshRateLoopSeededHumanAnchor() public {
+        _seedRateLoopHumanFresh(voter2, bytes32("fresh-curyo-anchor-voter-2"));
         (uint256 contentId, uint256 roundId) = _setupSettledPredictionRound();
 
         vm.prank(voter1);

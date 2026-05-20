@@ -43,7 +43,7 @@ type GovernanceActionTemplate = {
   label: string;
   mode: "proposal" | "direct";
   contractName:
-    | "CuryoGovernor"
+    | "RateLoopGovernor"
     | "LoopReputation"
     | "ClusterPayoutOracle"
     | "FrontendRegistry"
@@ -129,7 +129,7 @@ const actionTemplates: readonly GovernanceActionTemplate[] = [
     group: "Governor",
     label: "Set voting delay",
     mode: "proposal",
-    contractName: "CuryoGovernor",
+    contractName: "RateLoopGovernor",
     functionName: "setVotingDelay",
     description: "Create a proposal to update the governor's voting delay in blocks.",
     fields: [{ key: "delay", label: "Voting delay (blocks)", type: "uint", required: true }],
@@ -141,7 +141,7 @@ const actionTemplates: readonly GovernanceActionTemplate[] = [
     group: "Governor",
     label: "Set voting period",
     mode: "proposal",
-    contractName: "CuryoGovernor",
+    contractName: "RateLoopGovernor",
     functionName: "setVotingPeriod",
     description: "Create a proposal to update the governor's voting period in blocks.",
     fields: [{ key: "period", label: "Voting period (blocks)", type: "uint", required: true }],
@@ -153,7 +153,7 @@ const actionTemplates: readonly GovernanceActionTemplate[] = [
     group: "Governor",
     label: "Set proposal threshold",
     mode: "proposal",
-    contractName: "CuryoGovernor",
+    contractName: "RateLoopGovernor",
     functionName: "setProposalThreshold",
     description: "Create a proposal to update the LREP required to create new proposals.",
     fields: [{ key: "threshold", label: "Proposal threshold (LREP)", type: "lrep", required: true }],
@@ -169,7 +169,7 @@ const actionTemplates: readonly GovernanceActionTemplate[] = [
     group: "Governor",
     label: "Update quorum numerator",
     mode: "proposal",
-    contractName: "CuryoGovernor",
+    contractName: "RateLoopGovernor",
     functionName: "updateQuorumNumerator",
     description: "Create a proposal to update the quorum percentage used by the governor.",
     fields: [{ key: "quorum", label: "Quorum numerator (%)", type: "uint", required: true }],
@@ -226,7 +226,7 @@ const actionTemplates: readonly GovernanceActionTemplate[] = [
         label: "Expected impact",
         type: "textarea",
         required: true,
-        helperText: "Describe how this helps grow or improve the Curyo feedback network.",
+        helperText: "Describe how this helps grow or improve the RateLoop feedback network.",
       },
       {
         key: "milestones",

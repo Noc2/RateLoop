@@ -10,9 +10,9 @@ import { FaucetTrigger } from "~~/components/scaffold-eth/Faucet";
 import { ClaimRewardsButton } from "~~/components/shared/ClaimRewardsButton";
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
-import { useCuryoDisconnect } from "~~/hooks/useCuryoDisconnect";
 import { useFreeTransactionAllowance } from "~~/hooks/useFreeTransactionAllowance";
 import { shouldShowFreeTransactionAllowance } from "~~/hooks/useGasBalanceStatus";
+import { useRateLoopDisconnect } from "~~/hooks/useRateLoopDisconnect";
 import { useVoterAccuracy } from "~~/hooks/useVoterAccuracy";
 import { resolveWalletExecutionChainId, useWalletExecutionCapabilities } from "~~/hooks/useWalletExecutionCapabilities";
 import { useWalletSummaryData } from "~~/hooks/useWalletSummaryData";
@@ -189,7 +189,7 @@ export const AddressInfoDropdown = ({
   menuItemsOnly = false,
   compact = false,
 }: AddressInfoDropdownProps) => {
-  const disconnect = useCuryoDisconnect();
+  const disconnect = useRateLoopDisconnect();
   const { chain } = useAccount();
   const { targetNetwork } = useTargetNetwork();
   const checkSumAddress = getAddress(address);

@@ -186,6 +186,65 @@ afterEach(() => {
 });
 
 describe("RoundVotingEngine ponder handlers", () => {
+  it("stores terminal event timestamps for unresolved round outcomes", async () => {
+    const registeredHandlers = await loadHandlers();
+    const cases = [
+      {
+        eventName: "RoundVotingEngine:RoundCancelled",
+        expectedState: 2,
+      },
+      {
+        eventName: "RoundVotingEngine:RoundTied",
+        expectedState: 3,
+      },
+      {
+        eventName: "RoundVotingEngine:RoundRevealFailed",
+        expectedState: 4,
+      },
+    ];
+
+    for (const testCase of cases) {
+      const { db, updateCalls, insertCalls } = createDb({
+        existingRound: { id: "7-2" },
+      });
+
+      await registeredHandlers.get(testCase.eventName)!({
+        event: {
+          args: { contentId: 7n, roundId: 2n },
+          block: { number: 42n, timestamp: 1_234n },
+        },
+        context: { db },
+      });
+
+      expect(updateCalls).toContainEqual({
+        table: "round",
+        key: { id: "7-2" },
+        values: expect.objectContaining({
+          state: testCase.expectedState,
+          settledAt: 1_234n,
+        }),
+      });
+      expect(insertCalls).toEqual([]);
+
+      const missing = createDb();
+      await registeredHandlers.get(testCase.eventName)!({
+        event: {
+          args: { contentId: 7n, roundId: 2n },
+          block: { number: 42n, timestamp: 1_235n },
+        },
+        context: { db: missing.db },
+      });
+
+      expect(missing.insertCalls).toContainEqual({
+        table: "round",
+        values: expect.objectContaining({
+          state: testCase.expectedState,
+          settledAt: 1_235n,
+        }),
+      });
+    }
+  });
+
   it("inserts per-round config snapshots before votes arrive", async () => {
     const { db, insertCalls } = createDb();
     const registeredHandlers = await loadHandlers();

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { parseJsonBody } from "~~/lib/agent/http";
 import {
   AGENT_POLICIES_CHALLENGE_TITLE,
   PAUSE_AGENT_POLICY_ACTION,
@@ -29,16 +30,15 @@ const MANAGEMENT_ACTION_BY_INTENT = {
 } as const;
 
 export async function POST(request: NextRequest) {
-  const body = (await request.json()) as Record<string, unknown>;
-  const limited = await checkRateLimit(request, RATE_LIMIT, {
-    extraKeyParts: [
-      typeof body.address === "string" ? body.address : undefined,
-      typeof body.intent === "string" ? body.intent : typeof body.action === "string" ? body.action : undefined,
-    ],
-  });
+  const limited = await checkRateLimit(request, RATE_LIMIT);
   if (limited) return limited;
 
   try {
+    const body = await parseJsonBody(request);
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+
     if (body.intent === "read") {
       const normalized = normalizeAgentPoliciesReadInput(body);
       if (!normalized.ok) {

@@ -26,7 +26,7 @@ const RAW_DEPLOYMENT_CONTRACTS_TO_SKIP = new Set([
 
 const REQUIRED_NON_LOCAL_DEPLOYMENT_EXPORT_CONTRACTS = [
   "TimelockController",
-  "CuryoGovernor",
+  "RateLoopGovernor",
   "LoopReputation",
   "FrontendRegistry",
   "ProfileRegistry",
@@ -63,7 +63,7 @@ function getFiles(path) {
   });
 }
 
-function parseTransactionAndReceiptRun(filePath) {
+export function parseTransactionAndReceiptRun(filePath) {
   try {
     const content = readFileSync(filePath, "utf8");
     const broadcastData = JSON.parse(content);
@@ -73,7 +73,10 @@ function parseTransactionAndReceiptRun(filePath) {
     };
   } catch (error) {
     console.warn(`Warning: Could not parse ${filePath}:`, error.message);
-    return [];
+    return {
+      transactions: [],
+      receipts: [],
+    };
   }
 }
 
@@ -132,6 +135,28 @@ function getArtifactOfContract(contractName) {
   );
 
   return artifactJson;
+}
+
+function getContractDefinition(artifact, contractName) {
+  return artifact?.ast?.nodes?.find(
+    (node) =>
+      node?.nodeType === "ContractDefinition" && node?.name === contractName
+  );
+}
+
+function isLibraryContract(contractName) {
+  const artifact = getArtifactOfContract(contractName);
+  return (
+    getContractDefinition(artifact, contractName)?.contractKind === "library"
+  );
+}
+
+function shouldExportRawDeploymentContract(contractName) {
+  return (
+    !RAW_DEPLOYMENT_CONTRACTS_TO_SKIP.has(contractName) &&
+    !DEPRECATED_CONTRACTS_TO_PRUNE.has(contractName) &&
+    !isLibraryContract(contractName)
+  );
 }
 
 function getInheritedFromContracts(artifact) {
@@ -211,7 +236,10 @@ function processAllDeployments(broadcastPath) {
           latestBroadcastTimestamps[chainId] = timestamp;
           latestBroadcastDeploymentAddresses[chainId] = new Set();
         }
-        if (timestamp === latestBroadcastTimestamps[chainId]) {
+        if (
+          timestamp === latestBroadcastTimestamps[chainId] &&
+          shouldExportRawDeploymentContract(deployment.contractName)
+        ) {
           latestBroadcastDeploymentAddresses[chainId].add(
             deployment.address.toLowerCase()
           );
@@ -254,8 +282,7 @@ function processAllDeployments(broadcastPath) {
 
   allDeployments.forEach((deployment) => {
     const { chainId, contractName } = deployment;
-    if (RAW_DEPLOYMENT_CONTRACTS_TO_SKIP.has(contractName)) return;
-    if (DEPRECATED_CONTRACTS_TO_PRUNE.has(contractName)) return;
+    if (!shouldExportRawDeploymentContract(contractName)) return;
 
     // Capture deployer address from first CREATE transaction per chain
     if (!deployers[chainId]) {
@@ -316,7 +343,9 @@ function pruneDeprecatedContracts(contracts) {
       chainId,
       Object.fromEntries(
         Object.entries(chainConfig).filter(
-          ([contractName]) => !DEPRECATED_CONTRACTS_TO_PRUNE.has(contractName)
+          ([contractName]) =>
+            !DEPRECATED_CONTRACTS_TO_PRUNE.has(contractName) &&
+            !isLibraryContract(contractName)
         )
       ),
     ])
@@ -612,10 +641,15 @@ function main() {
     Object.entries(chainDeployments).forEach(([address, contractName]) => {
       // Skip metadata entries like "networkName"
       if (!address.startsWith("0x")) return;
-      if (DEPRECATED_CONTRACTS_TO_PRUNE.has(contractName)) return;
 
       const artifact = getArtifactOfContract(contractName);
       if (!artifact) return;
+      if (
+        getContractDefinition(artifact, contractName)?.contractKind ===
+        "library"
+      ) {
+        return;
+      }
 
       if (!allGeneratedContracts[chainId]) {
         allGeneratedContracts[chainId] = {};
@@ -949,7 +983,7 @@ const ABI_TARGETS = [
   { contract: "ClusterPayoutOracle", targets: ["contracts/src/abis"] },
   { contract: "AdvisoryVoteRecorder", targets: ["contracts/src/abis"] },
   { contract: "TimelockController", targets: ["contracts/src/abis"] },
-  { contract: "CuryoGovernor", targets: ["contracts/src/abis"] },
+  { contract: "RateLoopGovernor", targets: ["contracts/src/abis"] },
 ];
 
 function generateAbiFiles() {

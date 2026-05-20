@@ -30,7 +30,7 @@ prove that every useful signal came from a human.
 
 ## Short Answer
 
-Curyo should not use "voted with the majority" as the sole definition of
+RateLoop should not use "voted with the majority" as the sole definition of
 accuracy. That creates a reflexive majority machine: once a coalition controls
 enough voting power, it can define the majority, earn more reputation, and make
 future capture easier.
@@ -86,7 +86,7 @@ predictedCrowdRatingBps: 1000-9900
 stakeAmount: capped reputation at risk
 ```
 
-Do not add a new reasoning field to the vote. Curyo already has separate
+Do not add a new reasoning field to the vote. RateLoop already has separate
 feedback fields for written explanation, and those should remain separate from
 the compact prediction payload.
 
@@ -106,7 +106,7 @@ HREP balances should not migrate into the new reputation system.
 ## Research Findings For A Fresh Design
 
 The relevant research points in one direction: without proof-of-personhood,
-Curyo cannot prove "one human, one account." The redesign should therefore make
+RateLoop cannot prove "one human, one account." The redesign should therefore make
 Sybil farms expensive to mature, easy to cluster, slow to exploit, capped in
 payout, and reversible after detection.
 
@@ -117,16 +117,16 @@ auditability.
 
 ### Consensus Is Useful But Dangerous
 
-Curyo's incentive is already partly "predict the Curyo crowd." Switching from
+RateLoop's incentive is already partly "predict the RateLoop crowd." Switching from
 binary `up/down` to a split opinion/crowd report makes that explicit without
 turning the rater's own opinion into a rewarded beauty-contest target. The
 danger is still real: users can learn to predict the majority rather than
 evaluate content, and a coalition with enough weight can move the final rating,
 score itself as calibrated, and compound influence.
 
-Research on proper scoring rules is a useful contrast. If Curyo were asking
+Research on proper scoring rules is a useful contrast. If RateLoop were asking
 about an objective future event, a capped Brier or log score would be the clean
-way to reward honest probabilistic forecasts. Curyo ratings are often subjective
+way to reward honest probabilistic forecasts. RateLoop ratings are often subjective
 and endogenous, so a pure proper-scoring-rule design does not apply directly.
 Peer prediction and Bayesian Truth Serum are closer conceptually because they
 handle subjective questions, but they come with equilibrium and collusion risks.
@@ -160,7 +160,7 @@ Sources:
 
 ### AI Raters Are First-Class But Need Bias Controls
 
-Curyo does not need to be human-only. Many content, model-output, agent-output,
+RateLoop does not need to be human-only. Many content, model-output, agent-output,
 and data-quality tasks can benefit from AI raters. In those cases, the right
 question is not "is this rater human?" but "has this rater been calibrated on
 similar tasks, and is it independent from the content producer and other
@@ -236,7 +236,7 @@ cash extraction.
 
 Quadratic funding and plural funding research is relevant because it treats
 identity multiplication and collusion as first-order design problems. The lesson
-for Curyo is not to pay each wallet equally. Pay effective independent
+for RateLoop is not to pay each wallet equally. Pay effective independent
 participation, cap clusters, cap epochs, and keep any reputation-based payout
 multiplier small.
 
@@ -267,7 +267,7 @@ Relevant standards and libraries:
 - ERC-5192 minimal soulbound NFTs:
   https://eip.info/eip/5192
 
-Product lesson: keep ERC20Votes-style checkpoints if Curyo wants on-chain
+Product lesson: keep ERC20Votes-style checkpoints if RateLoop wants on-chain
 governance, but replace economic staking transfers with protocol-native locks
 and burns. Use a separate ERC-5192-style identity/profile badge only if wallet
 composability matters.
@@ -429,7 +429,7 @@ reputationDelta =
 
 Do not heavily burn reputation for ordinary disagreement. Burn risk should be
 meaningful for non-reveal, spam, clear manipulation, or extreme misses in
-high-confidence rounds. This protects useful dissent and avoids turning Curyo
+high-confidence rounds. This protects useful dissent and avoids turning RateLoop
 into a pure consensus-following game.
 
 AI agent reputation should be versioned. If an agent changes model, prompt,
@@ -525,7 +525,7 @@ For AI raters, risk and diversity inputs should include:
 These signals should never be treated as proof. They are correlation evidence
 used to cap influence and payouts.
 
-## Current Curyo Baseline
+## Current RateLoop Baseline
 
 The existing protocol already contains many of the pieces needed for the new
 design:
@@ -547,7 +547,7 @@ design:
     fees, and SBT-holder reward routing.
 - `packages/foundry/contracts/ParticipationPool.sol`
   - HREP bootstrap participation rewards with halving tiers.
-- `packages/foundry/contracts/governance/CuryoGovernor.sol`
+- `packages/foundry/contracts/governance/RateLoopGovernor.sol`
   - HREP-based OpenZeppelin Governor, dynamic quorum, self-delegation, and
     governance locks.
 - `packages/ponder/src/RoundVotingEngine.ts`
@@ -565,7 +565,7 @@ The current launch allocation in `packages/foundry/script/Deploy.s.sol` is:
 
 - 32M LREP treasury.
 - 68M LREP Launch Distribution Pool, split into 35M verified + referral
-  rewards, 29M earned rater rewards, and 4M legacy users.
+  rewards and 33M earned rater rewards.
 - No funded Bootstrap Pool allocation; the previous 12M bucket is folded into
   launch distribution.
 
@@ -586,7 +586,7 @@ Reputation with explicit protocol mitigations:
 - Transferable between users except for balances locked by governance and
   protocol staking rules.
 - Still checkpointed for governance with ERC20Votes-style history.
-- Still self-delegated by default, unless Curyo later wants explicit delegation.
+- Still self-delegated by default, unless RateLoop later wants explicit delegation.
 
 This accepts that reputation has a market surface and mitigates it through hard
 floors, bounded stake, leave-one-out scoring, challengeable cluster scoring, and
@@ -617,7 +617,7 @@ Remove or retire:
 - Self-specific nullifier assumptions in comments, events, schemas, docs,
   generated ABIs, test names, deployment verification, and frontend copy.
 
-Important caveat: removing Self means Curyo no longer has a hard uniqueness
+Important caveat: removing Self means RateLoop no longer has a hard uniqueness
 proof at onboarding. Sybil resistance must then come from slow reputation
 earning, graph independence, agent-risk checks, payout caps, calibration rounds, and
 cluster discounts. This redesign should not include any proof-of-personhood
@@ -944,9 +944,10 @@ voting engine. In the new model:
 ### Rework `ParticipationPool.sol`
 
 `ParticipationPool.sol` is no longer a funded launch allocation. The former
-12M bootstrap bucket is folded into the Launch Distribution Pool: 10M LREP moves
-to verified + referral rewards, and 2M LREP moves to legacy users. Earned rater
-rewards now route through `LaunchDistributionPool` and `RoundRewardDistributor`.
+12M bootstrap bucket and former 4M consensus reserve are folded into the Launch
+Distribution Pool: 35M LREP funds verified + referral rewards, and 33M LREP
+funds earned rater rewards. Earned rater rewards now route through
+`LaunchDistributionPool` and `RoundRewardDistributor`.
 
 The strongest follow-on option remains a bounded `ReputationEmissionController`:
 
@@ -957,7 +958,7 @@ newUserCalibrationBudget
 maxMintPerIdentityPerEpoch
 ```
 
-### Update `CuryoGovernor.sol`
+### Update `RateLoopGovernor.sol`
 
 The current Governor can stay structurally similar if the new reputation token
 implements `IVotes`.
@@ -1046,7 +1047,7 @@ This keeps voting thoughtful without punishing useful dissent.
 
 1. No proof-of-personhood.
 
-   Curyo should not integrate Self.xyz, Human Passport, World ID, Semaphore, or
+   RateLoop should not integrate Self.xyz, Human Passport, World ID, Semaphore, or
    any other proof-of-personhood provider in this redesign. Sybil resistance
    comes from slow reputation earning, calibration rounds, graph independence,
    agent-risk signals, cluster payout caps, and epoch/category caps.
@@ -1148,7 +1149,7 @@ Implement fresh contracts with no legacy compatibility requirement:
   unlock/burn logic instead of winner/loser HREP transfers;
 - keep `QuestionRewardPoolEscrow.sol` for USDC, but make eligibility depend on
   calibration, public scoring roots, effective participant units, and caps;
-- update `CuryoGovernor.sol` to use aged non-transferable reputation and keep a
+- update `RateLoopGovernor.sol` to use aged non-transferable reputation and keep a
   bootstrap guardian/timelock;
 - regenerate ABIs, deployments, required deployment guards, and contract SDK
   types.
@@ -1231,7 +1232,7 @@ Launch conservatively:
 Proceed with the idea, but frame it as earned signal quality, not majority
 truth.
 
-The best Curyo-native design is:
+The best RateLoop-native design is:
 
 - no Self faucet;
 - no Self.xyz adapter, hub wiring, or Self-specific identity assumptions;

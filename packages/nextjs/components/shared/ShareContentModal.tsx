@@ -79,8 +79,8 @@ export function ShareContentModal({
   };
 
   const tweetText = shareDetails.ratingLabel
-    ? `Rated ${shareDetails.ratingLabel}/10 on Curyo: "${truncatedTitle}" ${shareUrl}`
-    : `Check out "${truncatedTitle}" on Curyo! ${shareUrl}`;
+    ? `Rated ${shareDetails.ratingLabel}/10 on RateLoop: "${truncatedTitle}" ${shareUrl}`
+    : `Check out "${truncatedTitle}" on RateLoop! ${shareUrl}`;
 
   if (!isMounted) {
     return null;

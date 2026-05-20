@@ -123,7 +123,7 @@ export function lintAgentQuestion(
       findings,
       "warning",
       `${path}.description`,
-      "Curyo asks should not be multiple-choice surveys. Ask one bounded rating question, or use one ranked bundle member per option.",
+      "RateLoop asks should not be multiple-choice surveys. Ask one bounded rating question, or use one ranked bundle member per option.",
     );
   }
   if (templateId && !RANK_BY_RATING_TEMPLATE_IDS.has(templateId) && HIDDEN_CHOICE_TITLE_PATTERN.test(title)) {

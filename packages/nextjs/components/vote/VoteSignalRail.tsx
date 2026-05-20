@@ -6,7 +6,7 @@ import { ContentFeedbackPanel } from "~~/components/feedback/ContentFeedbackPane
 import { VOTING_SURFACE_BACKGROUND, VotingQuestionCard } from "~~/components/shared/VotingQuestionCard";
 import { getVisibleContentRating, isContentItemActive } from "~~/hooks/contentFeed/shared";
 import type { ContentItem } from "~~/hooks/useContentFeed";
-import { useCuryoConnectModal } from "~~/hooks/useCuryoConnectModal";
+import { useRateLoopConnectModal } from "~~/hooks/useRateLoopConnectModal";
 import { shouldShowBountyExpiredStatus } from "~~/lib/vote/discoverFeedFilter";
 
 interface VoteSignalRailProps {
@@ -38,7 +38,7 @@ export function VoteSignalRail({
   onVote,
 }: VoteSignalRailProps) {
   const { address } = useAccount();
-  const { openConnectModal } = useCuryoConnectModal();
+  const { openConnectModal } = useRateLoopConnectModal();
   const bundleQuestionNumber =
     primaryItem?.bundleIndex !== null && primaryItem?.bundleIndex !== undefined ? primaryItem.bundleIndex + 1 : null;
   const bundleQuestionCount = primaryItem?.bundle?.questionCount ?? null;

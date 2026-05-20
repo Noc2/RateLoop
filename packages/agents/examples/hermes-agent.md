@@ -1,11 +1,11 @@
 # Hermes Agent Notes
 
-Hermes-style agents are a strong fit for the Curyo connector because they can keep memory, budgets, schedules, and callback handlers alive between asks.
+Hermes-style agents are a strong fit for the RateLoop connector because they can keep memory, budgets, schedules, and callback handlers alive between asks.
 
 ## Integration Shape
 
 - Use `generic-public-mcp.json` when Hermes controls a funded wallet and enforces its own policy.
-- Add a scoped bearer token with tight daily and per-ask caps when you want managed Curyo policy controls.
+- Add a scoped bearer token with tight daily and per-ask caps when you want managed RateLoop policy controls.
 - Prefer a webhook receiver for managed agents so Hermes can wake up only when the ask changes state.
 
 ## Memory Fields

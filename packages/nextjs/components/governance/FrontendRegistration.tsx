@@ -116,7 +116,7 @@ export function FrontendRegistration() {
   });
 
   // Read LREP balance
-  const { data: lrepBalance, refetch: refetchCuryo } = useScaffoldReadContract({
+  const { data: lrepBalance, refetch: refetchRateLoop } = useScaffoldReadContract({
     contractName: REPUTATION_CONTRACT_NAME,
     functionName: "balanceOf",
     args: [address],
@@ -246,7 +246,7 @@ export function FrontendRegistration() {
       notification.success("Registered.");
 
       refetchFrontendInfo();
-      refetchCuryo();
+      refetchRateLoop();
     } catch (e: any) {
       console.error("Registration failed:", e);
       notifyTransactionError(e, "Failed to register");
@@ -279,7 +279,7 @@ export function FrontendRegistration() {
       refetchFrontendInfo();
       refetchExitAvailableAt();
       refetchFees();
-      refetchCuryo();
+      refetchRateLoop();
     } catch (e: any) {
       console.error("Deregister failed:", e);
       notifyTransactionError(e, "Failed to deregister");
@@ -312,7 +312,7 @@ export function FrontendRegistration() {
       refetchFrontendInfo();
       refetchExitAvailableAt();
       refetchFees();
-      refetchCuryo();
+      refetchRateLoop();
     } catch (e: any) {
       console.error("Complete deregister failed:", e);
       notifyTransactionError(e, "Failed to complete deregistration");
