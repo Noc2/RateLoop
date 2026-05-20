@@ -1,10 +1,14 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, test } from "node:test";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 
 import {
   assertFreshTargetDeployment,
   assertSharedDeploymentArtifactsSynced,
   filterGeneratedContractsForDeployTarget,
+  parseTransactionAndReceiptRun,
 } from "./generateTsAbis.js";
 
 const ORIGINAL_DEPLOY_TARGET_NETWORK = process.env.DEPLOY_TARGET_NETWORK;
@@ -40,6 +44,21 @@ const REQUIRED_WORLD_CHAIN_EXPORT = {
   deploymentComplete: "true",
   networkName: "worldchain",
 };
+
+test("parseTransactionAndReceiptRun skips malformed broadcast JSON with an empty run shape", () => {
+  const tempDir = mkdtempSync(join(tmpdir(), "rateloop-broadcast-"));
+  try {
+    const filePath = join(tempDir, "run-1.json");
+    writeFileSync(filePath, "{");
+
+    assert.deepEqual(parseTransactionAndReceiptRun(filePath), {
+      transactions: [],
+      receipts: [],
+    });
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
 
 describe("assertFreshTargetDeployment", () => {
   test("rejects raw target-chain broadcast data without a deployment export", () => {

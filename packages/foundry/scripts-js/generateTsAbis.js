@@ -63,7 +63,7 @@ function getFiles(path) {
   });
 }
 
-function parseTransactionAndReceiptRun(filePath) {
+export function parseTransactionAndReceiptRun(filePath) {
   try {
     const content = readFileSync(filePath, "utf8");
     const broadcastData = JSON.parse(content);
@@ -73,7 +73,10 @@ function parseTransactionAndReceiptRun(filePath) {
     };
   } catch (error) {
     console.warn(`Warning: Could not parse ${filePath}:`, error.message);
-    return [];
+    return {
+      transactions: [],
+      receipts: [],
+    };
   }
 }
 
