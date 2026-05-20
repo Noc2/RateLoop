@@ -102,6 +102,11 @@ contract LaunchDistributionPoolTest is Test {
         MockLaunchOracleFrontendRegistry frontendRegistry = new MockLaunchOracleFrontendRegistry();
         frontendRegistry.setEligible(address(this), true);
         ClusterPayoutOracle oracle = new ClusterPayoutOracle(address(this), address(frontendRegistry), address(lrep));
+        // M-Oracle-1: setClusterPayoutOracle now requires the new oracle to route
+        // PAYOUT_DOMAIN_LAUNCH_CREDIT back to this pool. Pin first, then swap.
+        vm.expectRevert(LaunchDistributionPool.InvalidAddress.selector);
+        pool.setClusterPayoutOracle(address(oracle));
+        oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_LAUNCH_CREDIT(), address(pool));
         pool.setClusterPayoutOracle(address(oracle));
         assertEq(address(pool.clusterPayoutOracle()), address(oracle));
     }
@@ -390,8 +395,13 @@ contract LaunchDistributionPoolTest is Test {
         frontendRegistry.setEligible(address(this), true);
         ClusterPayoutOracle oracle = new ClusterPayoutOracle(address(this), address(frontendRegistry), address(lrep));
         oracle.setOracleConfig(1, oracle.MIN_CHALLENGE_BOND(), address(this));
-        oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_LAUNCH_CREDIT(), address(this));
+        // M-Oracle-1: `setClusterPayoutOracle` now requires the new oracle to pin the
+        // launch-credit consumer back to this pool. Satisfy that gate first, then re-pin
+        // to `address(this)` to recreate the "different consumer" scenario that the rest
+        // of this test targets.
+        oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_LAUNCH_CREDIT(), address(pool));
         pool.setClusterPayoutOracle(address(oracle));
+        oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_LAUNCH_CREDIT(), address(this));
 
         assertEq(_recordLaunchReward(alice, 1, bytes32("anchor-a")), 0);
 
