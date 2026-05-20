@@ -321,7 +321,10 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         );
     }
 
-    function _seedRateLoopHumanExpiringAfterMinAge(address account, bytes32 anchorId) internal returns (uint64 expiresAt) {
+    function _seedRateLoopHumanExpiringAfterMinAge(address account, bytes32 anchorId)
+        internal
+        returns (uint64 expiresAt)
+    {
         expiresAt = uint64(block.timestamp + launchPool.MIN_ANCHOR_CREDENTIAL_AGE_SECONDS() + 1 minutes);
         vm.prank(owner);
         raterRegistry.seedHumanCredential(account, expiresAt, anchorId, keccak256("curyo-seed-expiring"));

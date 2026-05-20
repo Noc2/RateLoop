@@ -525,7 +525,9 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         bytes32 oldAnchor = bytes32(uint256(uint160(voter1)));
         vm.startPrank(owner);
         raterRegistry.revokeHumanCredential(voter1);
-        raterRegistry.clearRevokedHumanNullifier(RaterRegistry.HumanCredentialProvider.RateLoopSelfVerifiedSeed, oldAnchor);
+        raterRegistry.clearRevokedHumanNullifier(
+            RaterRegistry.HumanCredentialProvider.RateLoopSelfVerifiedSeed, oldAnchor
+        );
         _seedRaterIdentity(raterRegistry, voter1, keccak256("voter1-rotated-anchor"));
         vm.stopPrank();
 

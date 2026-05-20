@@ -436,7 +436,8 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
         if (currentOwner != address(0) && currentOwner != rater) revert NullifierAlreadyAssigned();
         _humanNullifierOwnerByProvider[provider][nullifierHash] = rater;
         if (
-            _canonicalHumanIdentityKey[rater] == bytes32(0) || provider == HumanCredentialProvider.RateLoopSelfVerifiedSeed
+            _canonicalHumanIdentityKey[rater] == bytes32(0)
+                || provider == HumanCredentialProvider.RateLoopSelfVerifiedSeed
         ) {
             _canonicalHumanIdentityKey[rater] = nullifierHash;
         }
