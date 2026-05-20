@@ -13,9 +13,9 @@ const Tokenomics = () => {
 
       <h2>Overview</h2>
       <p>
-        Loop Reputation (LREP) is a capped, transferable reputation and governance token. It has no protocol token sale
-        and no treasury backing; supply is distributed through protocol-controlled pools, earned protocol rewards, and
-        governance-approved programs.
+        Loop Reputation (LREP) is a capped, transferable, non-financial reputation and governance token. It is not
+        intended as an investment, has no protocol token sale and no treasury backing; supply is distributed through
+        protocol-controlled pools, earned protocol rewards, and governance-approved programs.
       </p>
 
       <h2>Token Overview</h2>
@@ -40,7 +40,7 @@ const Tokenomics = () => {
             </tr>
             <tr>
               <td className="font-medium">Type</td>
-              <td>Transferable reputation and governance token</td>
+              <td>Transferable non-financial reputation and governance token</td>
             </tr>
           </tbody>
         </table>

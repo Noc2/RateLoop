@@ -13,9 +13,9 @@ const GovernanceDocs: NextPage = () => {
 
       <h2>What Governance Does</h2>
       <p>
-        LREP is a capped reputation token with no protocol token sale and no treasury backing. Governance power comes
-        from held, self-delegated LREP, and proposals execute through the governor and timelock. The current token
-        auto-delegates voting power to the holder and rejects third-party LREP vote delegation.
+        LREP is a capped, non-financial reputation token with no protocol token sale and no treasury backing. Governance
+        power comes from held, self-delegated LREP, and proposals execute through the governor and timelock. The current
+        token auto-delegates voting power to the holder and rejects third-party LREP vote delegation.
       </p>
       <h2>Proposal Lifecycle</h2>
       <div className="not-prose my-6 overflow-x-auto rounded-lg bg-base-200">
