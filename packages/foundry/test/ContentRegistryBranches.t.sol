@@ -1,21 +1,21 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import { Test, stdStorage, StdStorage } from "forge-std/Test.sol";
-import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import { ContentRegistry } from "../contracts/ContentRegistry.sol";
-import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
-import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
-import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
-import { RaterRegistry } from "../contracts/RaterRegistry.sol";
-import { LoopReputation } from "../contracts/LoopReputation.sol";
-import { ParticipationPool } from "../contracts/ParticipationPool.sol";
-import { RoundLib } from "../contracts/libraries/RoundLib.sol";
-import { RatingLib } from "../contracts/libraries/RatingLib.sol";
-import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
-import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
-import { MockQuestionRewardPoolEscrow } from "./mocks/MockQuestionRewardPoolEscrow.sol";
-import { VotingTestBase } from "./helpers/VotingTestHelpers.sol";
+import {Test, stdStorage, StdStorage} from "forge-std/Test.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {ContentRegistry} from "../contracts/ContentRegistry.sol";
+import {RoundVotingEngine} from "../contracts/RoundVotingEngine.sol";
+import {ProtocolConfig} from "../contracts/ProtocolConfig.sol";
+import {RoundRewardDistributor} from "../contracts/RoundRewardDistributor.sol";
+import {RaterRegistry} from "../contracts/RaterRegistry.sol";
+import {LoopReputation} from "../contracts/LoopReputation.sol";
+import {ParticipationPool} from "../contracts/ParticipationPool.sol";
+import {RoundLib} from "../contracts/libraries/RoundLib.sol";
+import {RatingLib} from "../contracts/libraries/RatingLib.sol";
+import {RoundEngineReadHelpers} from "./helpers/RoundEngineReadHelpers.sol";
+import {MockCategoryRegistry} from "../contracts/mocks/MockCategoryRegistry.sol";
+import {MockQuestionRewardPoolEscrow} from "./mocks/MockQuestionRewardPoolEscrow.sol";
+import {VotingTestBase} from "./helpers/VotingTestHelpers.sol";
 
 // =========================================================================
 // TEST CONTRACT
@@ -279,7 +279,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             bountyEligibility: 0
         });
         reservation.roundConfig =
-            RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 7 days, minVoters: 3, maxVoters: 200 });
+            RoundLib.RoundConfig({epochDuration: 1 hours, maxDuration: 7 days, minVoters: 3, maxVoters: 200});
         return _reserveQuestionSubmission(reservation);
     }
 
@@ -330,11 +330,11 @@ contract ContentRegistryBranchesTest is VotingTestBase {
     }
 
     function _defaultContentRoundConfig() internal pure returns (RoundLib.RoundConfig memory) {
-        return RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 7 days, minVoters: 3, maxVoters: 200 });
+        return RoundLib.RoundConfig({epochDuration: 1 hours, maxDuration: 7 days, minVoters: 3, maxVoters: 200});
     }
 
     function _bundleContentRoundConfig() internal pure returns (RoundLib.RoundConfig memory) {
-        return RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 7 days, minVoters: 3, maxVoters: 100 });
+        return RoundLib.RoundConfig({epochDuration: 1 hours, maxDuration: 7 days, minVoters: 3, maxVoters: 100});
     }
 
     function _submitReservedQuestionBundleForDormancyTest() internal returns (uint256[] memory contentIds) {
@@ -944,7 +944,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             bountyEligibility: 0
         });
         RoundLib.RoundConfig memory roundConfig =
-            RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 2 hours, minVoters: 4, maxVoters: 5 });
+            RoundLib.RoundConfig({epochDuration: 1 hours, maxDuration: 2 hours, minVoters: 4, maxVoters: 5});
 
         vm.startPrank(submitter);
         lrepToken.approve(address(mockQuestionRewardPoolEscrow), rewardTerms.amount);
@@ -1001,7 +1001,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             bountyEligibility: 0
         });
         RoundLib.RoundConfig memory roundConfig =
-            RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 2 hours, minVoters: 3, maxVoters: 4 });
+            RoundLib.RoundConfig({epochDuration: 1 hours, maxDuration: 2 hours, minVoters: 3, maxVoters: 4});
 
         vm.startPrank(submitter);
         lrepToken.approve(address(mockQuestionRewardPoolEscrow), rewardTerms.amount);
@@ -1044,9 +1044,9 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             bountyEligibility: 0
         });
         RoundLib.RoundConfig memory reservedConfig =
-            RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 2 hours, minVoters: 3, maxVoters: 4 });
+            RoundLib.RoundConfig({epochDuration: 1 hours, maxDuration: 2 hours, minVoters: 3, maxVoters: 4});
         RoundLib.RoundConfig memory alteredConfig =
-            RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 3 hours, minVoters: 3, maxVoters: 4 });
+            RoundLib.RoundConfig({epochDuration: 1 hours, maxDuration: 3 hours, minVoters: 3, maxVoters: 4});
 
         vm.startPrank(submitter);
         lrepToken.approve(address(mockQuestionRewardPoolEscrow), rewardTerms.amount);
@@ -1269,7 +1269,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             block.timestamp + 30 days
         );
         RoundLib.RoundConfig memory roundConfig =
-            RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 7 days, minVoters: 3, maxVoters: 101 });
+            RoundLib.RoundConfig({epochDuration: 1 hours, maxDuration: 7 days, minVoters: 3, maxVoters: 101});
 
         vm.startPrank(submitter);
         vm.expectRevert();
@@ -1309,7 +1309,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             block.timestamp + 30 days
         );
         RoundLib.RoundConfig memory roundConfig =
-            RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 7 days, minVoters: 3, maxVoters: 4 });
+            RoundLib.RoundConfig({epochDuration: 1 hours, maxDuration: 7 days, minVoters: 3, maxVoters: 4});
 
         vm.startPrank(submitter);
         vm.expectRevert();
@@ -1480,7 +1480,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.startPrank(noIdSubmitter);
         lrepToken.approve(address(registry), 10e6);
         NoMediaQuestionText memory question =
-            NoMediaQuestionText({ url: "https://example.com/no-id", title: "goal", description: "goal", tags: "tags" });
+            NoMediaQuestionText({url: "https://example.com/no-id", title: "goal", description: "goal", tags: "tags"});
         bytes32 salt = _contentSubmissionSalt(question.url, noIdSubmitter);
         _reserveNoMediaQuestionSubmission(registry, question, 1, salt, noIdSubmitter);
         vm.warp(block.timestamp + 1);
@@ -2179,7 +2179,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         bytes32 anchor = bytes32(uint256(uint160(submitter)));
         vm.startPrank(owner);
         raterRegistry.revokeHumanCredential(submitter);
-        raterRegistry.clearRevokedHumanNullifier(RaterRegistry.HumanCredentialProvider.RateLoopSelfVerifiedSeed, anchor);
+        raterRegistry.clearRevokedHumanNullifier(RaterRegistry.HumanCredentialProvider.SeededHuman, anchor);
         _seedRaterIdentity(raterRegistry, remintedSubmitter, anchor);
         vm.stopPrank();
 
@@ -2954,7 +2954,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         bytes32 anchor = bytes32(uint256(uint160(submitter)));
         vm.startPrank(owner);
         raterRegistry.revokeHumanCredential(submitter);
-        raterRegistry.clearRevokedHumanNullifier(RaterRegistry.HumanCredentialProvider.RateLoopSelfVerifiedSeed, anchor);
+        raterRegistry.clearRevokedHumanNullifier(RaterRegistry.HumanCredentialProvider.SeededHuman, anchor);
         _seedRaterIdentity(raterRegistry, remintedSubmitter, anchor);
         vm.stopPrank();
 

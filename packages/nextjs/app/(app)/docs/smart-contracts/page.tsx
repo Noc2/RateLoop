@@ -218,7 +218,7 @@ const SmartContracts: NextPage = () => {
         </li>
         <li>
           <code>seedHumanCredential(rater, expiresAt, anchorId, evidenceHash)</code> &mdash; Seed an approved human
-          credential during deployment or migration.
+          credential for local development, tests, or governance-admin repair.
         </li>
         <li>
           <code>hasActiveHumanCredential(rater)</code> / <code>getHumanCredential(rater)</code> &mdash; Read credential

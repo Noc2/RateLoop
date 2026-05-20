@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import { Test, stdStorage, StdStorage } from "forge-std/Test.sol";
-import { ClusterPayoutOracle } from "../contracts/ClusterPayoutOracle.sol";
-import { LaunchDistributionPool } from "../contracts/LaunchDistributionPool.sol";
-import { LoopReputation } from "../contracts/LoopReputation.sol";
-import { RaterRegistry } from "../contracts/RaterRegistry.sol";
-import { IClusterPayoutOracle } from "../contracts/interfaces/IClusterPayoutOracle.sol";
-import { ILaunchDistributionPool } from "../contracts/interfaces/ILaunchDistributionPool.sol";
-import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
+import {Test, stdStorage, StdStorage} from "forge-std/Test.sol";
+import {ClusterPayoutOracle} from "../contracts/ClusterPayoutOracle.sol";
+import {LaunchDistributionPool} from "../contracts/LaunchDistributionPool.sol";
+import {LoopReputation} from "../contracts/LoopReputation.sol";
+import {RaterRegistry} from "../contracts/RaterRegistry.sol";
+import {IClusterPayoutOracle} from "../contracts/interfaces/IClusterPayoutOracle.sol";
+import {ILaunchDistributionPool} from "../contracts/interfaces/ILaunchDistributionPool.sol";
+import {MockWorldIDRouter} from "../contracts/mocks/MockWorldIDRouter.sol";
 
 contract LaunchDistributionPoolTest is Test {
     using stdStorage for StdStorage;
@@ -1339,7 +1339,7 @@ contract LaunchDistributionPoolTest is Test {
     }
 
     function test_ClaimVerifiedBonusAcceptsRateLoopSeededHumanUnits() public {
-        registry.seedHumanCredential(alice, uint64(block.timestamp + 30 days), bytes32("curyo-alice"), 0);
+        registry.seedHumanCredential(alice, uint64(block.timestamp + 30 days), bytes32("seeded-alice"), 0);
 
         vm.prank(alice);
         uint256 payout = pool.claimVerifiedBonus(address(0));

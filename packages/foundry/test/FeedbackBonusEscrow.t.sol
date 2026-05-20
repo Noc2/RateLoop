@@ -1,22 +1,22 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import { VotingTestBase } from "./helpers/VotingTestHelpers.sol";
-import { ContentRegistry } from "../contracts/ContentRegistry.sol";
-import { LoopReputation } from "../contracts/LoopReputation.sol";
-import { FeedbackBonusEscrow } from "../contracts/FeedbackBonusEscrow.sol";
-import { FrontendRegistry } from "../contracts/FrontendRegistry.sol";
-import { IFrontendRegistry } from "../contracts/interfaces/IFrontendRegistry.sol";
-import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
-import { MockERC20 } from "../contracts/mocks/MockERC20.sol";
-import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
-import { QuestionRewardPoolEscrow } from "../contracts/QuestionRewardPoolEscrow.sol";
-import { RaterRegistry } from "../contracts/RaterRegistry.sol";
-import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
-import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
-import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
-import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {VotingTestBase} from "./helpers/VotingTestHelpers.sol";
+import {ContentRegistry} from "../contracts/ContentRegistry.sol";
+import {LoopReputation} from "../contracts/LoopReputation.sol";
+import {FeedbackBonusEscrow} from "../contracts/FeedbackBonusEscrow.sol";
+import {FrontendRegistry} from "../contracts/FrontendRegistry.sol";
+import {IFrontendRegistry} from "../contracts/interfaces/IFrontendRegistry.sol";
+import {MockCategoryRegistry} from "../contracts/mocks/MockCategoryRegistry.sol";
+import {MockERC20} from "../contracts/mocks/MockERC20.sol";
+import {ProtocolConfig} from "../contracts/ProtocolConfig.sol";
+import {QuestionRewardPoolEscrow} from "../contracts/QuestionRewardPoolEscrow.sol";
+import {RaterRegistry} from "../contracts/RaterRegistry.sol";
+import {RoundRewardDistributor} from "../contracts/RoundRewardDistributor.sol";
+import {RoundVotingEngine} from "../contracts/RoundVotingEngine.sol";
+import {RoundEngineReadHelpers} from "./helpers/RoundEngineReadHelpers.sol";
+import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 
 contract SlashedFrontendRegistryMock is IFrontendRegistry {
     address public immutable frontend;
@@ -33,7 +33,7 @@ contract SlashedFrontendRegistryMock is IFrontendRegistry {
         return frontend_ == frontend;
     }
 
-    function creditFees(address, uint256) external { }
+    function creditFees(address, uint256) external {}
 
     function getAccumulatedFees(address) external pure returns (uint256 lrepFees) {
         return 0;
@@ -401,7 +401,7 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         bytes32 anchor = bytes32(uint256(uint160(funder)));
         vm.startPrank(owner);
         raterRegistry.revokeHumanCredential(funder);
-        raterRegistry.clearRevokedHumanNullifier(RaterRegistry.HumanCredentialProvider.RateLoopSelfVerifiedSeed, anchor);
+        raterRegistry.clearRevokedHumanNullifier(RaterRegistry.HumanCredentialProvider.SeededHuman, anchor);
         _seedRaterIdentity(raterRegistry, voter1, anchor);
         vm.stopPrank();
 
@@ -419,7 +419,7 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         bytes32 anchor = bytes32(uint256(uint160(submitter)));
         vm.startPrank(owner);
         raterRegistry.revokeHumanCredential(submitter);
-        raterRegistry.clearRevokedHumanNullifier(RaterRegistry.HumanCredentialProvider.RateLoopSelfVerifiedSeed, anchor);
+        raterRegistry.clearRevokedHumanNullifier(RaterRegistry.HumanCredentialProvider.SeededHuman, anchor);
         _seedRaterIdentity(raterRegistry, voter1, anchor);
         vm.stopPrank();
 
@@ -525,7 +525,7 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         bytes32 oldAnchor = bytes32(uint256(uint160(voter1)));
         vm.startPrank(owner);
         raterRegistry.revokeHumanCredential(voter1);
-        raterRegistry.clearRevokedHumanNullifier(RaterRegistry.HumanCredentialProvider.RateLoopSelfVerifiedSeed, oldAnchor);
+        raterRegistry.clearRevokedHumanNullifier(RaterRegistry.HumanCredentialProvider.SeededHuman, oldAnchor);
         _seedRaterIdentity(raterRegistry, voter1, keccak256("voter1-rotated-anchor"));
         vm.stopPrank();
 
@@ -580,7 +580,7 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         bytes32 anchor = bytes32(uint256(uint160(voter1)));
         vm.startPrank(owner);
         raterRegistry.revokeHumanCredential(voter1);
-        raterRegistry.clearRevokedHumanNullifier(RaterRegistry.HumanCredentialProvider.RateLoopSelfVerifiedSeed, anchor);
+        raterRegistry.clearRevokedHumanNullifier(RaterRegistry.HumanCredentialProvider.SeededHuman, anchor);
         _seedRaterIdentity(raterRegistry, voter1, anchor);
         vm.stopPrank();
 

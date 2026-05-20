@@ -1,30 +1,30 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import { ScaffoldETHDeploy } from "./DeployHelpers.s.sol";
-import { console } from "forge-std/console.sol";
-import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
-import { TimelockController } from "@openzeppelin/contracts/governance/TimelockController.sol";
-import { IVotes } from "@openzeppelin/contracts/governance/utils/IVotes.sol";
-import { LoopReputation } from "../contracts/LoopReputation.sol";
-import { AdvisoryVoteRecorder } from "../contracts/AdvisoryVoteRecorder.sol";
-import { ContentRegistry } from "../contracts/ContentRegistry.sol";
-import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
-import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
-import { FrontendRegistry } from "../contracts/FrontendRegistry.sol";
-import { CategoryRegistry } from "../contracts/CategoryRegistry.sol";
-import { FeedbackBonusEscrow } from "../contracts/FeedbackBonusEscrow.sol";
-import { ProfileRegistry } from "../contracts/ProfileRegistry.sol";
-import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
-import { QuestionRewardPoolEscrow } from "../contracts/QuestionRewardPoolEscrow.sol";
-import { RaterRegistry } from "../contracts/RaterRegistry.sol";
-import { X402QuestionSubmitter } from "../contracts/X402QuestionSubmitter.sol";
-import { ParticipationPool } from "../contracts/ParticipationPool.sol";
-import { LaunchDistributionPool } from "../contracts/LaunchDistributionPool.sol";
-import { ClusterPayoutOracle } from "../contracts/ClusterPayoutOracle.sol";
-import { MockERC20 } from "../contracts/mocks/MockERC20.sol";
-import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
-import { RateLoopGovernor } from "../contracts/governance/RateLoopGovernor.sol";
+import {ScaffoldETHDeploy} from "./DeployHelpers.s.sol";
+import {console} from "forge-std/console.sol";
+import {TransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
+import {TimelockController} from "@openzeppelin/contracts/governance/TimelockController.sol";
+import {IVotes} from "@openzeppelin/contracts/governance/utils/IVotes.sol";
+import {LoopReputation} from "../contracts/LoopReputation.sol";
+import {AdvisoryVoteRecorder} from "../contracts/AdvisoryVoteRecorder.sol";
+import {ContentRegistry} from "../contracts/ContentRegistry.sol";
+import {RoundVotingEngine} from "../contracts/RoundVotingEngine.sol";
+import {RoundRewardDistributor} from "../contracts/RoundRewardDistributor.sol";
+import {FrontendRegistry} from "../contracts/FrontendRegistry.sol";
+import {CategoryRegistry} from "../contracts/CategoryRegistry.sol";
+import {FeedbackBonusEscrow} from "../contracts/FeedbackBonusEscrow.sol";
+import {ProfileRegistry} from "../contracts/ProfileRegistry.sol";
+import {ProtocolConfig} from "../contracts/ProtocolConfig.sol";
+import {QuestionRewardPoolEscrow} from "../contracts/QuestionRewardPoolEscrow.sol";
+import {RaterRegistry} from "../contracts/RaterRegistry.sol";
+import {X402QuestionSubmitter} from "../contracts/X402QuestionSubmitter.sol";
+import {ParticipationPool} from "../contracts/ParticipationPool.sol";
+import {LaunchDistributionPool} from "../contracts/LaunchDistributionPool.sol";
+import {ClusterPayoutOracle} from "../contracts/ClusterPayoutOracle.sol";
+import {MockERC20} from "../contracts/mocks/MockERC20.sol";
+import {MockWorldIDRouter} from "../contracts/mocks/MockWorldIDRouter.sol";
+import {RateLoopGovernor} from "../contracts/governance/RateLoopGovernor.sol";
 
 /// @notice Fresh RateLoop deployment script for World Chain.
 /// @dev Rater identity is resolved through RaterRegistry; no separate proof-of-personhood token is deployed.
@@ -46,7 +46,6 @@ contract DeployRateLoop is ScaffoldETHDeploy {
     uint64 internal constant WORLD_ID_CREDENTIAL_TTL_SECONDS = 365 days;
     string internal constant DEFAULT_WORLD_ID_ACTION = "rateloop-human-credential-v1";
     string internal constant LOCAL_WORLD_ID_APP_ID = "app_staging_rateloop_local";
-    bytes32 internal constant CURYO_SELF_VERIFIED_SEED_EVIDENCE = keccak256("rateloop:curyo-self-verified-seed:v1");
 
     function _preBroadcastChecks() internal view override {
         if (block.chainid != 31337 && block.chainid != 480 && block.chainid != 4801) {
@@ -180,8 +179,6 @@ contract DeployRateLoop is ScaffoldETHDeploy {
             worldIdExternalNullifierHash,
             WORLD_ID_CREDENTIAL_TTL_SECONDS
         );
-        _seedRateLoopSelfVerifiedHumans(raterRegistry);
-        console.log("Seeded 9 RateLoop Self.xyz verified humans");
         TransparentUpgradeableProxy questionRewardPoolEscrowProxy = new TransparentUpgradeableProxy(
             address(questionRewardPoolEscrowImpl),
             governance,
@@ -448,26 +445,6 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         return count + 1;
     }
 
-    function _seedRateLoopSelfVerifiedHumans(RaterRegistry raterRegistry) internal {
-        address[9] memory accounts = [
-            0x63cada40E8AcF7A1d47229af5Be35b78b16035fa,
-            0x7c6425827BB8d848808cbb8fe2bd55Fd2f2Fa41A,
-            0xc1CD80C7cD37b5499560C362b164cbA1CfF71b44,
-            0x455eE797cEa79A936bA8E8ed888E0B20ca1A1BA3,
-            0x5A5148e7963C732e4C0991726793A726ce28046A,
-            0x3ea207780415e2ab68b97eB3b02AdDD70020ac4c,
-            0xE6722D1FDcA78552eAE5EA12eA3A8B7D6EeC7AA8,
-            0x74cC77FDA426225470351f93c6ce4382b4b51Aa8,
-            0x4b98406f108D1A19dbbBe22216D432A5b1a5E22b
-        ];
-
-        for (uint256 i = 0; i < accounts.length; i++) {
-            bytes32 anchorId = keccak256(abi.encodePacked("rateloop:curyo-self-verified-v1", accounts[i]));
-            bytes32 evidenceHash = keccak256(abi.encodePacked(CURYO_SELF_VERIFIED_SEED_EVIDENCE, accounts[i]));
-            raterRegistry.seedHumanCredential(accounts[i], type(uint64).max, anchorId, evidenceHash);
-        }
-    }
-
     function _fundLocalDevAccounts(LoopReputation lrepToken, MockERC20 localUsdcToken, RaterRegistry raterRegistry)
         internal
     {
@@ -602,4 +579,4 @@ contract DeployRateLoop is ScaffoldETHDeploy {
 }
 
 /// @notice Main deployment entrypoint used by scaffold-eth/yarn deploy.
-contract DeployScript is DeployRateLoop { }
+contract DeployScript is DeployRateLoop {}
