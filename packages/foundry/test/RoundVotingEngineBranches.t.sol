@@ -1867,6 +1867,29 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         engine.revealVoteByCommitKey(contentId, roundId, commitKey, true, 5_000, salt);
     }
 
+    function test_CommitRevealData_NonExistentCommit_ReturnsEmptyMetadata() public {
+        uint256 contentId = _submitContent();
+        _commit(voter1, contentId, true, STAKE);
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        bytes32 missingCommitKey = keccak256("missing-commit");
+
+        (
+            bytes32 ciphertextHash,
+            uint64 targetRound,
+            bytes32 drandChainHash,
+            uint48 revealableAfter,
+            bool revealed,
+            uint64 stakeAmount
+        ) = engine.commitRevealData(contentId, roundId, missingCommitKey);
+
+        assertEq(ciphertextHash, bytes32(0));
+        assertEq(targetRound, 0);
+        assertEq(drandChainHash, bytes32(0));
+        assertEq(revealableAfter, 0);
+        assertFalse(revealed);
+        assertEq(stakeAmount, 0);
+    }
+
     function test_Reveal_RejectsCommitHashBuiltWithRotatedLiveDrandHash() public {
         uint256 contentId = _submitContent();
         bytes32 snapshotChainHash = _tlockDrandChainHash();

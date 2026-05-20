@@ -231,7 +231,8 @@ library RoundCleanupLib {
         )
     {
         RoundLib.Commit storage c = roundCommits[commitKey];
-        return (c.ciphertextHash, c.targetRound, effectiveDrandChainHash, c.revealableAfter, c.revealed, c.stakeAmount);
+        bytes32 commitDrandChainHash = c.voter == address(0) ? bytes32(0) : effectiveDrandChainHash;
+        return (c.ciphertextHash, c.targetRound, commitDrandChainHash, c.revealableAfter, c.revealed, c.stakeAmount);
     }
 
     function recordCommitIndexes(
