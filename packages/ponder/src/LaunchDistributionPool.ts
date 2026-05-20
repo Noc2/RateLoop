@@ -421,26 +421,3 @@ ponder.on(
     await creditLaunchReward(context, referrer, amount);
   },
 );
-
-ponder.on(
-  "LaunchDistributionPool:LegacyClaimed",
-  async ({ event, context }) => {
-    const { account, amount } = event.args;
-
-    await context.db
-      .insert(rewardClaim)
-      .values({
-        id: `${event.transaction.hash}-${event.log.logIndex}`,
-        contentId: 0n,
-        roundId: 0n,
-        source: "launch",
-        voter: account,
-        stakeReturned: 0n,
-        lrepReward: amount,
-        claimedAt: event.block.timestamp,
-      })
-      .onConflictDoNothing();
-
-    await creditLaunchReward(context, account, amount);
-  },
-);

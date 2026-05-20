@@ -16,7 +16,7 @@ Today, `RoundRewardDistributor` calls `LaunchDistributionPool` after a
 prediction reward claim. The launch pool receives only `(rater, scoreBps)`.
 That means it cannot tell whether the scored prediction came from a public,
 independently anchored round or from a cheap controlled round. A Sybil operator
-can therefore split across wallets and farm the `29M LREP` earned-rater pool if
+can therefore split across wallets and farm the `33M LREP` earned-rater pool if
 round creation and settlement are cheap enough.
 
 ## Target Policy
@@ -42,8 +42,8 @@ settled advisory rating creates a qualifying launch credit only when:
 1. The round is settled.
 2. The round has no pending unrevealed-vote cleanup when configured.
 3. At least `minVotersForEarnedRewards` counted staked raters revealed.
-4. At least `minVerifiedHumansPerRound` active, non-legacy verified humans
-   revealed in the round.
+4. At least `minVerifiedHumansPerRound` active verified humans revealed in the
+   round.
 5. At least one verified anchor is not the claimant and not the content
    submitter identity.
 6. The claimant's prediction score is at least `minQualifyingScoreBps`.
@@ -67,16 +67,15 @@ credits pay the normal per-credit slice once all gates are satisfied.
 
 Earned-rater caps start at `10 LREP` for the first `100,000` eligible raters,
 then step down to `5`, `2.5`, `1.25`, and `0.5 LREP` at the existing count
-thresholds. With the `29M LREP` earned-rater allocation, this supports about
-`20.6M` fully paid earned-rater recipients before the pool exhausts.
+thresholds. With the `33M LREP` earned-rater allocation, this supports about
+`24.6M` fully paid earned-rater recipients before the pool exhausts.
 
 All policy values must be timelock-governance updateable so the network can
 start permissive and become stricter if farming pressure appears.
 
 Negative invariant: AI participation is not a verified-human anchor and does
 not change reward weight. The earned launch pool only counts active human
-credentials from `RaterRegistry` as anchors, including World ID credentials and
-the nine seeded RateLoop Self.xyz verified humans.
+credentials from `RaterRegistry` as anchors.
 
 ## Contract Implementation
 
@@ -196,8 +195,7 @@ Changes:
   stake, but earned launch rewards belong to the rater identity that owns the
   claim.
 - Do not count an anchor when:
-  - the credential is missing, revoked, legacy, expired, or has an empty
-    nullifier hash;
+  - the credential is missing, revoked, expired, or has an empty nullifier hash;
   - the anchor is the reward recipient for the current claim;
   - the anchor is the content submitter identity.
 - Read pending cleanup from the voting engine and pass `noPendingCleanup` to

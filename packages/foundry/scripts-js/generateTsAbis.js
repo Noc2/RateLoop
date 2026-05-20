@@ -5,7 +5,6 @@ import {
   existsSync,
   mkdirSync,
   writeFileSync,
-  unlinkSync,
 } from "fs";
 import { join, dirname, resolve } from "path";
 import { fileURLToPath } from "url";
@@ -44,8 +43,6 @@ const REQUIRED_NON_LOCAL_DEPLOYMENT_EXPORT_CONTRACTS = [
   "LaunchDistributionPool",
   "AdvisoryVoteRecorder",
 ];
-
-const DEPRECATED_CONTRACTS_TO_PRUNE = new Set(["VoterIdNFT"]);
 
 function getDirectories(path) {
   if (!existsSync(path)) {
@@ -154,7 +151,6 @@ function isLibraryContract(contractName) {
 function shouldExportRawDeploymentContract(contractName) {
   return (
     !RAW_DEPLOYMENT_CONTRACTS_TO_SKIP.has(contractName) &&
-    !DEPRECATED_CONTRACTS_TO_PRUNE.has(contractName) &&
     !isLibraryContract(contractName)
   );
 }
@@ -337,15 +333,13 @@ function readExistingDeployedContracts(targetFile) {
   }
 }
 
-function pruneDeprecatedContracts(contracts) {
+function pruneGeneratedOnlyContracts(contracts) {
   return Object.fromEntries(
     Object.entries(contracts).map(([chainId, chainConfig]) => [
       chainId,
       Object.fromEntries(
         Object.entries(chainConfig).filter(
-          ([contractName]) =>
-            !DEPRECATED_CONTRACTS_TO_PRUNE.has(contractName) &&
-            !isLibraryContract(contractName)
+          ([contractName]) => !isLibraryContract(contractName)
         )
       ),
     ])
@@ -436,7 +430,6 @@ export function assertSharedDeploymentArtifactsSynced(
     for (const [address, contractName] of Object.entries(chainDeployments)) {
       if (!isDeploymentAddressKey(address)) continue;
       if (RAW_DEPLOYMENT_CONTRACTS_TO_SKIP.has(contractName)) continue;
-      if (DEPRECATED_CONTRACTS_TO_PRUNE.has(contractName)) continue;
       if (!hasArtifact(contractName)) continue;
 
       const sharedAddress = chainContracts[contractName]?.address;
@@ -688,7 +681,7 @@ function main() {
     deployedContractsTargetFile
   );
   const existingContractsForPublish =
-    pruneDeprecatedContracts(existingContracts);
+    pruneGeneratedOnlyContracts(existingContracts);
   assertFreshTargetDeployment(
     allGeneratedContracts,
     existingContractsForPublish,
@@ -696,7 +689,7 @@ function main() {
     latestBroadcastBlockNumbers,
     latestBroadcastDeploymentAddresses
   );
-  const generatedContractsForPublish = pruneDeprecatedContracts(
+  const generatedContractsForPublish = pruneGeneratedOnlyContracts(
     filterGeneratedContractsForDeployTarget(allGeneratedContracts)
   );
   const mergedContracts = {
@@ -989,18 +982,6 @@ const ABI_TARGETS = [
 function generateAbiFiles() {
   const packagesDir = join(__dirname, "..", "..");
   let totalWritten = 0;
-  const deprecatedAbiDirs = new Set(
-    ABI_TARGETS.flatMap(({ targets }) => targets).concat(["contracts/src/abis"])
-  );
-
-  for (const contract of DEPRECATED_CONTRACTS_TO_PRUNE) {
-    for (const target of deprecatedAbiDirs) {
-      const filePath = join(packagesDir, target, `${contract}Abi.ts`);
-      if (existsSync(filePath)) {
-        unlinkSync(filePath);
-      }
-    }
-  }
 
   for (const { contract, targets } of ABI_TARGETS) {
     const artifact = getArtifactOfContract(contract);
