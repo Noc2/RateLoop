@@ -401,6 +401,12 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
     ///         original `claimReward` call. Reads back the recipient + stake captured at first
     ///         attempt, re-invokes the launch pool's recordEarnedRaterRewardWithSourceReady, and
     ///         clears the pending entry on success. No-op (reverts) when no pending entry exists.
+    /// @dev    CEI ordering: clear the pending mapping entry BEFORE the external call so a
+    ///         reentrant caller (e.g. via a malicious launch pool reach-back) cannot replay the
+    ///         retry against the same slot. The outer `nonReentrant` already blocks reentry
+    ///         into this exact function, but ordering the delete first is the defense-in-depth
+    ///         pattern flagged by Slither. If `_tryRecordLaunchRaterCredit` returns false the
+    ///         whole tx reverts and the delete is rolled back atomically.
     function retryLaunchRaterRewardCredit(uint256 contentId, uint256 roundId, bytes32 commitKey) external nonReentrant {
         PendingLaunchCredit memory pending = pendingLaunchCreditRetry[contentId][roundId][commitKey];
         require(pending.recipient != address(0), "Nothing to retry");
@@ -410,11 +416,12 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         uint16 scoreBps = votingEngine.commitRbtsScoreBps(contentId, roundId, commitKey);
         require(scoreBps != 0, "No launch score");
 
+        delete pendingLaunchCreditRetry[contentId][roundId][commitKey];
+
         bool ok = _tryRecordLaunchRaterCredit(
             config, launchPool, contentId, roundId, commitKey, pending.recipient, scoreBps, pending.stakeAmount
         );
         require(ok, "Retry failed");
-        delete pendingLaunchCreditRetry[contentId][roundId][commitKey];
         emit LaunchRaterRewardCreditRetried(contentId, roundId, commitKey, pending.recipient, launchPool);
     }
 
