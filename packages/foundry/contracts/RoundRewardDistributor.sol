@@ -6,6 +6,7 @@ import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/ac
 import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
 import { RoundVotingEngine } from "./RoundVotingEngine.sol";
 import { ContentRegistry } from "./ContentRegistry.sol";
@@ -24,6 +25,7 @@ import { RewardMath } from "./libraries/RewardMath.sol";
 ///      When RBTS scoring is active, revealed voters receive score-based stake return and rewards.
 contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, ReentrancyGuardTransient {
     using SafeERC20 for IERC20;
+    using SafeCast for uint256;
 
     // --- Custom Errors ---
     error RoundNotSettled();
@@ -336,7 +338,7 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
             // glitch) has cleared. Without this the credit is permanently stranded because
             // rewardCommitClaimed flipped true in the caller.
             pendingLaunchCreditRetry[contentId][roundId][commitKey] =
-                PendingLaunchCredit({ recipient: rewardRecipient, stakeAmount: uint96(stakeAmount) });
+                PendingLaunchCredit({ recipient: rewardRecipient, stakeAmount: stakeAmount.toUint96() });
         }
     }
 
