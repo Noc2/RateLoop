@@ -31,8 +31,16 @@ test("getVoteViewGroups includes activity entries when connected", () => {
     true,
   );
   assert.equal(
-    groups[1]?.options.some(option => option.value === "settling_soon"),
+    groups[1]?.options.some(option => option.value === "zero_lrep_vote"),
     true,
+  );
+  assert.equal(
+    groups[1]?.options.some(option => option.label === "0 LREP Vote"),
+    true,
+  );
+  assert.equal(
+    groups[1]?.options.some(option => option.label === "Your Settling Soon"),
+    false,
   );
 });
 

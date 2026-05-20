@@ -1,6 +1,6 @@
 import { DISCOVER_FEED_MODE_OPTIONS, type DiscoverFeedMode } from "~~/lib/vote/feedModes";
 
-export type ActivityViewOption = "watched" | "my_votes" | "my_submissions" | "settling_soon" | "followed_curators";
+export type ActivityViewOption = "watched" | "my_votes" | "my_submissions" | "zero_lrep_vote" | "followed_curators";
 export type VoteView = DiscoverFeedMode | ActivityViewOption;
 
 interface VoteViewOption {
@@ -18,7 +18,7 @@ const ACTIVITY_VIEW_OPTIONS: VoteViewOption[] = [
   { value: "watched", label: "Watched" },
   { value: "my_votes", label: "My Votes" },
   { value: "my_submissions", label: "My Questions" },
-  { value: "settling_soon", label: "Your Settling Soon" },
+  { value: "zero_lrep_vote", label: "0 LREP Vote" },
   { value: "followed_curators", label: "Curators You Follow" },
 ];
 
@@ -26,7 +26,7 @@ const ACTIVITY_VIEW_VALUES = new Set<ActivityViewOption>([
   "watched",
   "my_votes",
   "my_submissions",
-  "settling_soon",
+  "zero_lrep_vote",
   "followed_curators",
 ]);
 

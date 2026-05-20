@@ -109,7 +109,7 @@ const EXPIRED_BOUNTY_FILTER = DISCOVER_EXPIRED_BOUNTY_FILTER;
 const slugify = (name: string) => name.toLowerCase().replace(/\s+/g, "-");
 type SortOption = "for_you" | "relevance" | "newest" | "oldest" | "highest_rated" | "lowest_rated";
 type SearchSortOption = Exclude<SortOption, "for_you">;
-type ScopeOption = "all" | "watched" | "my_votes" | "my_submissions" | "settling_soon" | "followed_curators";
+type ScopeOption = "all" | "watched" | "my_votes" | "my_submissions" | "zero_lrep_vote" | "followed_curators";
 const SEARCH_SORT_OPTIONS: { value: SearchSortOption; label: string }[] = [
   { value: "relevance", label: "Best Match" },
   { value: "newest", label: "Newest" },
@@ -275,6 +275,7 @@ const HomeInner = () => {
   const mobileDockContainerRef = useRef<HTMLDivElement | null>(null);
   const voteAttentionTimeoutRef = useRef<number | null>(null);
   const voteAttentionTokenRef = useRef(0);
+  const autoZeroLrepViewAddressRef = useRef<string | null>(null);
   const [mobileDockReservedSpace, setMobileDockReservedSpace] = useState<number | null>(null);
   const trimmedSearchQuery = searchQuery.trim();
   const isSearchMode = trimmedSearchQuery.length > 0;
@@ -335,10 +336,11 @@ const HomeInner = () => {
   const viewGroups = useMemo(() => getVoteViewGroups(hasWallet), [hasWallet]);
   const activeScope: ScopeOption = isActivityViewOption(view) ? view : "all";
   const activeFeedMode: DiscoverFeedMode = isActivityViewOption(view) ? "for_you" : view;
+  const isZeroLrepVoteView = activeScope === "zero_lrep_vote";
   const isAlgorithmicForYouFeed =
     !isSearchMode && activeScope === "all" && activeFeedMode === "for_you" && !hasExplicitRequestedContentPin;
   const feedRequestLimit = Math.max(
-    isAlgorithmicForYouFeed
+    isAlgorithmicForYouFeed || isZeroLrepVoteView
       ? FEED_PAGE_SIZE * FOR_YOU_CANDIDATE_PAGE_MULTIPLIER
       : !isSearchMode && activeScope === "all"
         ? FEED_PAGE_SIZE * 4
@@ -369,17 +371,6 @@ const HomeInner = () => {
     return ids;
   }, [votes]);
 
-  const settlingSoonContentOrder = useMemo(() => {
-    const seen = new Set<string>();
-    const ids: bigint[] = [];
-    for (const item of discoverSignals.settlingSoon) {
-      if (seen.has(item.contentId)) continue;
-      seen.add(item.contentId);
-      ids.push(BigInt(item.contentId));
-    }
-    return ids;
-  }, [discoverSignals.settlingSoon]);
-
   const followedCuratorContentOrder = useMemo(() => {
     const seen = new Set<string>();
     const ids: bigint[] = [];
@@ -404,14 +395,12 @@ const HomeInner = () => {
         return watchedContentOrder;
       case "my_votes":
         return votedContentOrder;
-      case "settling_soon":
-        return settlingSoonContentOrder;
       case "followed_curators":
         return followedCuratorContentOrder;
       default:
         return undefined;
     }
-  }, [activeScope, followedCuratorContentOrder, settlingSoonContentOrder, votedContentOrder, watchedContentOrder]);
+  }, [activeScope, followedCuratorContentOrder, votedContentOrder, watchedContentOrder]);
 
   const feedContentIds = useMemo(() => {
     if (!scopedContentIds) return undefined;
@@ -570,16 +559,6 @@ const HomeInner = () => {
     });
     return order;
   }, [votes]);
-  const settlingSoonOrderMap = useMemo(() => {
-    const order = new Map<string, number>();
-    discoverSignals.settlingSoon.forEach((item, index) => {
-      const contentId = item.contentId.toString();
-      if (!order.has(contentId)) {
-        order.set(contentId, index);
-      }
-    });
-    return order;
-  }, [discoverSignals.settlingSoon]);
   const followedCuratorOrderMap = useMemo(() => {
     const order = new Map<string, number>();
     discoverSignals.followedSubmissions.forEach((item, index) => {
@@ -590,19 +569,10 @@ const HomeInner = () => {
     });
     return order;
   }, [discoverSignals.followedSubmissions]);
-  const settlingSoonContentIds = useMemo(
-    () => new Set(discoverSignals.settlingSoon.map(item => item.contentId.toString())),
-    [discoverSignals.settlingSoon],
-  );
   const followedCuratorContentIds = useMemo(
     () => new Set(discoverSignals.followedSubmissions.map(item => item.contentId.toString())),
     [discoverSignals.followedSubmissions],
   );
-  const scopeLoading =
-    (activeScope === "watched" && !!address && watchedLoading) ||
-    (activeScope === "my_votes" && !!address && votesLoading) ||
-    ((activeScope === "settling_soon" || activeScope === "followed_curators") && !!address && discoverSignalsLoading) ||
-    (activeScope === "followed_curators" && !!address && followedProfilesLoading);
   const feedExposureScope = useMemo(
     () =>
       buildFeedExposureScope({
@@ -617,6 +587,29 @@ const HomeInner = () => {
       setView("for_you");
     }
   }, [address, view]);
+
+  useEffect(() => {
+    if (!normalizedAddress) {
+      autoZeroLrepViewAddressRef.current = null;
+      return;
+    }
+
+    if (lrepBalance === undefined || autoZeroLrepViewAddressRef.current === normalizedAddress) {
+      return;
+    }
+
+    autoZeroLrepViewAddressRef.current = normalizedAddress;
+    if (
+      lrepBalance >= MIN_COUNTED_STAKE_MICRO ||
+      view !== "for_you" ||
+      isSearchMode ||
+      hasExplicitRequestedContentPin
+    ) {
+      return;
+    }
+
+    setView("zero_lrep_vote");
+  }, [hasExplicitRequestedContentPin, isSearchMode, lrepBalance, normalizedAddress, view]);
 
   const displayFeedRef = useRef<ContentItem[]>([]);
   const activeViewSessionRef = useRef<ActiveViewSession | null>(null);
@@ -737,9 +730,6 @@ const HomeInner = () => {
       case "my_submissions":
         items = items.filter(item => item.isOwnContent);
         break;
-      case "settling_soon":
-        items = items.filter(item => settlingSoonContentIds.has(item.id.toString()));
-        break;
       case "followed_curators":
         items = items.filter(item => followedCuratorContentIds.has(item.id.toString()));
         break;
@@ -756,7 +746,6 @@ const HomeInner = () => {
     nowSeconds,
     watchedContentIds,
     votedContentIds,
-    settlingSoonContentIds,
     followedCuratorContentIds,
   ]);
   const rankedBaseDisplayFeed = useMemo(() => {
@@ -807,13 +796,6 @@ const HomeInner = () => {
       case "my_submissions":
         items.sort((a, b) => Number(b.id - a.id));
         break;
-      case "settling_soon":
-        items.sort((a, b) => {
-          const indexA = settlingSoonOrderMap.get(a.id.toString()) ?? Number.MAX_SAFE_INTEGER;
-          const indexB = settlingSoonOrderMap.get(b.id.toString()) ?? Number.MAX_SAFE_INTEGER;
-          return indexA - indexB;
-        });
-        break;
       case "followed_curators":
         items.sort((a, b) => {
           const indexA = followedCuratorOrderMap.get(a.id.toString()) ?? Number.MAX_SAFE_INTEGER;
@@ -856,7 +838,6 @@ const HomeInner = () => {
     isSearchMode,
     nowSeconds,
     voteOrderMap,
-    settlingSoonOrderMap,
     votedContentIds,
     watchedContentIds,
     watchedOrderMap,
@@ -865,11 +846,12 @@ const HomeInner = () => {
     feedExposureScope,
   ]);
   const advisoryAvailabilityContentIds = useMemo(
-    () => (isAdvisoryOnlyRater ? rankedBaseDisplayFeed.map(item => item.id) : []),
-    [isAdvisoryOnlyRater, rankedBaseDisplayFeed],
+    () => (isAdvisoryOnlyRater || isZeroLrepVoteView ? rankedBaseDisplayFeed.map(item => item.id) : []),
+    [isAdvisoryOnlyRater, isZeroLrepVoteView, rankedBaseDisplayFeed],
   );
+  const shouldLoadAdvisoryAvailability = isAdvisoryOnlyRater || isZeroLrepVoteView;
   const { availabilityByContentId: advisoryAvailabilityByContentId, isLoading: advisoryAvailabilityLoading } =
-    useAdvisoryVoteAvailabilities(advisoryAvailabilityContentIds, isAdvisoryOnlyRater);
+    useAdvisoryVoteAvailabilities(advisoryAvailabilityContentIds, shouldLoadAdvisoryAvailability);
   const advisoryPriorityKey = useMemo(() => {
     if (!isAdvisoryOnlyRater) return "staked";
     return rankedBaseDisplayFeed
@@ -878,7 +860,7 @@ const HomeInner = () => {
       .join(",");
   }, [advisoryAvailabilityByContentId, isAdvisoryOnlyRater, rankedBaseDisplayFeed]);
   const rankedDisplayFeed = useMemo(() => {
-    const items = !isAdvisoryOnlyRater
+    let items = !isAdvisoryOnlyRater
       ? rankedBaseDisplayFeed
       : [...rankedBaseDisplayFeed].sort((a, b) => {
           const aCanCommit = advisoryAvailabilityByContentId.get(a.id.toString())?.canCommit === true;
@@ -886,6 +868,10 @@ const HomeInner = () => {
           if (aCanCommit === bCanCommit) return 0;
           return aCanCommit ? -1 : 1;
         });
+
+    if (isZeroLrepVoteView) {
+      items = items.filter(item => advisoryAvailabilityByContentId.get(item.id.toString())?.canCommit === true);
+    }
 
     if (!hasExplicitRequestedContentPin || effectiveRequestedActiveId === null) {
       return items;
@@ -900,8 +886,14 @@ const HomeInner = () => {
     effectiveRequestedActiveId,
     hasExplicitRequestedContentPin,
     isAdvisoryOnlyRater,
+    isZeroLrepVoteView,
     rankedBaseDisplayFeed,
   ]);
+  const scopeLoading =
+    (activeScope === "watched" && !!address && watchedLoading) ||
+    (activeScope === "my_votes" && !!address && votesLoading) ||
+    (isZeroLrepVoteView && shouldLoadAdvisoryAvailability && advisoryAvailabilityLoading) ||
+    (activeScope === "followed_curators" && !!address && (discoverSignalsLoading || followedProfilesLoading));
   const feedSessionKey = useMemo(
     () =>
       [
@@ -1805,10 +1797,10 @@ const HomeInner = () => {
       return address ? "You haven't asked any questions yet." : "Sign in to view your questions.";
     }
 
-    if (activeScope === "settling_soon") {
+    if (activeScope === "zero_lrep_vote") {
       return address
-        ? "Nothing you are tracking looks close to settlement right now."
-        : "Sign in to view rounds settling soon.";
+        ? "No 0 LREP votes are available right now. A staked rater needs to open a round first."
+        : "Sign in to view 0 LREP votes.";
     }
 
     if (activeScope === "followed_curators") {
