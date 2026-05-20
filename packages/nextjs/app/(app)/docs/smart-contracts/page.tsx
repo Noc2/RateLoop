@@ -716,49 +716,6 @@ const SmartContracts: NextPage = () => {
         Helpers for round state management: tracks round lifecycle (Open, Settled, Cancelled, Tied, RevealFailed) and
         settlement logic.
       </p>
-
-      <hr />
-
-      <h2>Security</h2>
-      <ul>
-        <li>
-          <strong>Transparent proxies:</strong> Core registries and voting contracts are upgradeable through
-          timelock-owned proxy admins.
-        </li>
-        <li>
-          <strong>Reentrancy protection:</strong> Core registry, voting, reward, frontend, category, and participation
-          flows use reentrancy guards.
-        </li>
-        <li>
-          <strong>Snapshot-based governance:</strong> RateLoopGovernor uses ERC20Votes snapshots for proposal voting
-          power, and governance participation also applies a 7-day LREP transfer lock.
-        </li>
-        <li>
-          <strong>Sybil Resistance:</strong> Core rating remains open, while earned launch rewards require qualifying
-          revealed ratings, verified-human anchored rounds, cross-round anchor diversity, bounded anchor fanout,
-          round-level unverified-credit caps, aged anchor credentials, and finalized correlation payout snapshots before
-          payout. Those roots are proposed by registered frontend operators and remain challengeable before claim paths
-          use them; challengers post a USDC bond rather than native ETH. Open raters can receive a governed partial
-          earned-rater cap and unlock the full snapshotted cap by later verifying the same wallet as a human, but
-          verified humans still pass through the correlation scorer. Per-identity stake caps, question-first submission
-          guardrails, and claim gating apply around the reward surfaces. Question submission is the same for humans and
-          agents.
-        </li>
-        <li>
-          <strong>Governance Lock:</strong> Tokens are transfer-locked for 7 days when proposing or voting on
-          governance. Proposal eligibility is checked from the prior voting-power snapshot, so the threshold is not a
-          per-proposal bond and the same voting power can support multiple concurrent proposals.
-        </li>
-        <li>
-          <strong>Pausable:</strong> ContentRegistry and RoundVotingEngine can be paused. RoundRewardDistributor cannot
-          be paused (users can always withdraw).
-        </li>
-        <li>
-          <strong>Governance-owned access control:</strong> The governor/timelock owns upgrade, config, and treasury
-          roles from launch. The initial 32M treasury allocation also sits there, while the deployer receives only
-          temporary setup roles and renounces them after deployment.
-        </li>
-      </ul>
     </article>
   );
 };
