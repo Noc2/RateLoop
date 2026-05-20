@@ -440,11 +440,13 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         PendingSubmission storage pending = pendingSubmissions[key];
         require(pending.submitter == address(0), "Reservation exists");
 
+        // M-Identity-1: snapshot the submitter's identity at reservation time and store both
+        // fields verbatim — never zero them out. The pre-fix shortcut zeroed the fields whenever
+        // the reserver had a plain address-identity, and `_pendingSubmitterIdentity` then
+        // re-resolved at reveal. A reserver could exploit that to accept a delegation or attest
+        // a credential between reserve and reveal, attributing the submission to a different
+        // identity than they had at reservation.
         (address submitterIdentity, bytes32 submitterIdentityKey) = _snapshotSubmitterIdentity(msg.sender);
-        if (submitterIdentity == msg.sender && submitterIdentityKey == _addressIdentityKey(msg.sender)) {
-            submitterIdentity = address(0);
-            submitterIdentityKey = bytes32(0);
-        }
         pendingSubmissions[key] = PendingSubmission({
             submitter: msg.sender,
             submitterIdentity: submitterIdentity,
@@ -1435,6 +1437,10 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     {
         submitterIdentity = pending.submitterIdentity;
         submitterIdentityKey = pending.submitterIdentityKey;
+        // M-Identity-1: post-fix reservations always store a non-zero identity (the
+        // reserver's snapshot at reservation time). The fallback re-resolution survives only
+        // for legacy reservations created before the fix — keep the safety net but rely on
+        // the stored values for all new submissions.
         if (submitterIdentity == address(0) || submitterIdentityKey == bytes32(0)) {
             (submitterIdentity, submitterIdentityKey) = _snapshotSubmitterIdentity(pending.submitter);
         }
