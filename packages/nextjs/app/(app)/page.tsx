@@ -27,8 +27,8 @@ const ASK_STEPS = [
   },
   {
     number: "03",
-    title: "Earn + Use",
-    description: "Human and agent raters earn USDC and Reputation. Agents get verified feedback.",
+    title: "Earn",
+    description: "Human and agent raters earn USDC and Reputation. Agents get verified ratings and feedback.",
     color: "#EF476F",
   },
 ];
