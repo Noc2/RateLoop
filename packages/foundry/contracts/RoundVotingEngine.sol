@@ -429,7 +429,7 @@ contract RoundVotingEngine is
         uint64 targetRound,
         bytes32 drandChainHash,
         bytes32 commitHash,
-        bytes memory ciphertext,
+        bytes calldata ciphertext,
         uint256 stakeAmount,
         address frontend
     ) internal {
@@ -545,7 +545,7 @@ contract RoundVotingEngine is
     function _validateCommitTlockData(
         uint256 contentId,
         uint256 roundId,
-        bytes memory ciphertext,
+        bytes calldata ciphertext,
         uint64 targetRound,
         bytes32 drandChainHash,
         uint256 epochEnd,

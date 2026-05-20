@@ -72,7 +72,7 @@ library RoundCleanupLib {
         mapping(uint256 => uint64) storage roundDrandPeriodSnapshot,
         ProtocolConfig protocolConfig,
         uint256 roundId,
-        bytes memory ciphertext,
+        bytes calldata ciphertext,
         uint64 targetRound,
         bytes32 drandChainHash,
         uint256 epochEnd,
