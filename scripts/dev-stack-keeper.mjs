@@ -19,5 +19,30 @@ export function getMissingKeeperEnvVars(env) {
     missing.push("KEYSTORE_PASSWORD");
   }
 
+  const correlationSnapshotsEnabled = isTruthy(env.KEEPER_CORRELATION_SNAPSHOTS_ENABLED);
+  if (correlationSnapshotsEnabled) {
+    const artifactPath = env.KEEPER_CORRELATION_SNAPSHOT_ARTIFACT_PATH?.trim();
+    const mode = env.KEEPER_CORRELATION_SNAPSHOTS_MODE?.trim() || (artifactPath ? "file" : "auto");
+    const artifactStorage = env.KEEPER_CORRELATION_ARTIFACT_STORAGE?.trim() || "data-uri";
+
+    if (mode === "file" && !artifactPath) {
+      missing.push("KEEPER_CORRELATION_SNAPSHOT_ARTIFACT_PATH");
+    }
+    if (mode === "auto" && !env.PONDER_BASE_URL?.trim()) {
+      missing.push("PONDER_BASE_URL");
+    }
+    if (
+      mode === "auto" &&
+      artifactStorage === "file" &&
+      !env.KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL?.trim()
+    ) {
+      missing.push("KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL");
+    }
+  }
+
   return missing;
+}
+
+function isTruthy(value) {
+  return ["1", "true", "yes", "on"].includes(String(value ?? "").trim().toLowerCase());
 }
