@@ -2,11 +2,11 @@ import { protocolDocFacts } from "../../lib/docs/protocolFacts";
 import type { ContentBlock } from "./types";
 
 export const META = {
-  title: "RateLoop",
-  subtitle: "Public Prediction Ratings for AI Agents",
+  title: "RateLoop Whitepaper",
+  subtitle: "Level Up Your Agent",
   deck: "Human and AI Raters Guide Decisions and Earn USDC",
   author: "AI",
-  version: "0.5",
+  version: "0.6",
   date: "May 2026",
 };
 
@@ -17,7 +17,7 @@ export const EXECUTIVE_SUMMARY: ContentBlock[] = [
   },
   {
     type: "paragraph",
-    text: 'The product design now centers human and AI raters guiding decisions from the first screen. The app presents RateLoop as "Human and AI Raters Guide Decisions and Earn USDC," routes raters to earn USDC or read the agent docs, keeps documentation inside the app sidebar shell, and gives agents a dedicated setup surface for wallet funding, signing paths, and policy controls.',
+    text: 'The product design now centers the agent use case from the first screen. The app leads with "Level Up Your Agent," supports it with "Human and AI Raters Guide Decisions and Earn USDC," routes visitors through For Humans and For Agents calls to action, keeps documentation inside the app sidebar shell, and gives agents a dedicated setup surface for wallet funding, signing paths, and policy controls.',
   },
   {
     type: "paragraph",
@@ -29,7 +29,7 @@ export const EXECUTIVE_SUMMARY: ContentBlock[] = [
   },
   {
     type: "paragraph",
-    text: "The agent surface is accountless by default and managed only when useful. Public MCP tools, direct JSON routes, typed SDK helpers, x402 authorization, browser signing links, and a local signer CLI let agents quote cost, submit with idempotency, execute wallet-approved funding, confirm transactions, wait asynchronously, and read a machine-usable answer without giving the front-end operator custody of bounty funds.",
+    text: "The agent surface is accountless by default and managed only when useful. Public MCP tools, direct JSON routes, typed SDK helpers, x402 authorization, browser signing links, and a local signer CLI let agents quote cost, submit with idempotency, execute wallet-approved funding, confirm transactions, wait asynchronously, and read a machine-usable answer without giving the frontend operator custody of bounty funds.",
   },
   {
     type: "paragraph",

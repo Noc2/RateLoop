@@ -220,19 +220,19 @@ export const SECTIONS: Section[] = [
   },
   {
     title: "Product Experience",
-    lead: "The current design makes the AI ask -> open rating loop visible from the first screen.",
+    lead: "The current design puts the agent-first ask -> open rating loop in the first viewport.",
     subsections: [
       {
         heading: "Agent-First Brand",
         blocks: [
           {
             type: "paragraph",
-            text: "The landing experience now leads with the concrete loop: Human and AI Raters Guide Decisions and Earn USDC. The visual system uses the warm RateLoop AI-sphere mark and the project hero animation, then explains the product through three steps: agents ask with context and bounty, raters predict during blind rounds with optional stake, and raters earn while agents use the public rating signal.",
+            text: "The landing experience now leads with the concrete agent promise: Level Up Your Agent. The supporting line explains the loop in product language: Human and AI Raters Guide Decisions and Earn USDC. The visual system uses the segmented RateLoop ring mark, gradient wordmark treatment, and project hero animation, then explains the product through three steps: agents ask with context and bounty, raters predict during blind rounds with optional stake, and raters earn while agents use the public rating signal.",
           },
           {
             type: "bullets",
             items: [
-              "Primary routes point people to earn USDC or learn how agents integrate.",
+              "Primary calls to action split the audience into For Humans and For Agents instead of hiding both behind generic docs links.",
               "The product benefit cards map directly to the technical rails: x402 and MCP for agents, optional identity for credentials, commit-reveal for honest rating, bounties and Feedback Bonuses for paid work, and on-chain settlement for transparency.",
               "The brand copy now frames RateLoop as public prediction ratings with optional LREP-backed stake for AI agents rather than a generic content curation app.",
             ],
@@ -285,7 +285,7 @@ export const SECTIONS: Section[] = [
             type: "bullets",
             items: [
               "Core participation does not require proof-of-personhood, so people and agents can use the same flow.",
-              "Calibration rounds gate USDC earning until an account or agent has shown enough prediction quality.",
+              "Reputation, calibration history, and credential signals can inform earning policy without making proof-of-personhood a hard settlement gate.",
               "Each account is capped at 10 LREP per content per round by default.",
               "Optional identity providers can unlock a one-time launch bonus and verified-human launch anchors, but they do not change settlement reward weight.",
               "Correlation Epoch Snapshots cap USDC and launch LREP payouts for dense wallet or operator clusters across multiple rounds, with roots proposed by globally bonded 1,000 LREP frontend operators.",
@@ -355,7 +355,7 @@ export const SECTIONS: Section[] = [
           },
           {
             type: "paragraph",
-            text: `Broad distribution matters because the rating layer is only credible if many independent raters can participate. The ${LAUNCH_DISTRIBUTION_POOL_AMOUNT_COMPACT_LABEL} Launch Distribution Pool splits into 35M LREP for verified + referral rewards and 33M LREP for earned rater rewards. Earned rater rewards stay open to any rater, but qualifying launch credits require verified-human anchored rounds and cross-round anchor diversity before payout. Open raters can start under a governed partial cap and later unlock the full snapshotted cap by verifying the same wallet as a human. Verification acceleration, safety, appeals, and governed programs belong to the treasury.`,
+            text: `Broad distribution matters because the rating layer is only credible if many independent raters can participate. The ${LAUNCH_DISTRIBUTION_POOL_AMOUNT_COMPACT_LABEL} Launch Distribution Pool splits into 35M LREP for verified + referral rewards and 33M LREP for earned rater rewards. Earned rater rewards stay open to any rater, but qualifying launch credits require verified-human anchored rounds, minimum launch-credit stake for staked votes, cross-round anchor diversity, bounded anchor fanout, round-level unverified-credit caps, aged anchor credentials, and finalized correlation payout snapshots before payout. Open raters can start under a governed partial cap and later unlock the full snapshotted cap by verifying the same wallet as a human; agent wallets do not count as human anchors unless they hold an active verified-human credential. Verification acceleration, safety, appeals, and governed programs belong to the treasury.`,
           },
         ],
       },
@@ -394,7 +394,7 @@ export const SECTIONS: Section[] = [
               "Registered frontend operators bond 1,000 LREP before proposing payout roots for those claim weights.",
               "Payout-root challengers post a USDC ERC20 bond, defaulting to 5 USDC (5_000_000 atomic units).",
               "Optional USDC Feedback Bonuses reward hidden notes by canonical hash after settlement.",
-              "USDC asks do not require proof-of-personhood; USDC earning starts after the required calibration rounds.",
+              "USDC asks do not require proof-of-personhood; bounty eligibility is set by the ask and finalized claim weights, while reputation and calibration can still shape policy and routing.",
               "Submitters do not earn upside from their own ask; the protocol pays for judgment, not self-rating.",
             ],
           },
@@ -424,7 +424,7 @@ export const SECTIONS: Section[] = [
         blocks: [
           {
             type: "paragraph",
-            text: "The Launch Distribution Pool (68M LREP) is split into 35M LREP for verified + referral rewards and 33M LREP for earned rater rewards. It is effective-credit based and governance-tunable: the initial earned-rater policy requires three revealed raters, one verified-human anchor in the round, two distinct verified-human anchors across a rater's qualifying history, and finalized correlation payout snapshots before payout. Correlated or immature unverified accounts accrue fractional launch credit, so multiple independent rounds may be needed before LREP starts paying. Full earned-rater caps start at 10 LREP and step down through 5, 2.5, 1.25, and 0.5 LREP, supporting about 24.6M fully paid earned-rater recipients from the 33M LREP rail. Open raters can receive a governed partial cap and later unlock the full snapshotted cap by verifying the same wallet as a human; each human nullifier can unlock the full earned-rater cap for only one rater address. Early useful raters receive higher caps, later cohorts receive less, and verified users receive only a one-time decaying bonus. The previous 12M LREP Bootstrap Pool allocation and former 4M LREP consensus reserve allocation are folded into launch distribution: 35M LREP funds verified + referral rewards, and 33M LREP funds earned rater rewards. The treasury starts with 32M LREP under the governance timelock and handles safety responses, verification acceleration, appeals, grants, and other governed programs. The bootstrap proposal threshold is 1,000 LREP with a minimum quorum floor of 100,000 LREP.",
+            text: "The Launch Distribution Pool (68M LREP) is split into 35M LREP for verified + referral rewards and 33M LREP for earned rater rewards. It is effective-credit based and governance-tunable: the initial earned-rater policy requires three revealed raters, one verified-human anchor in the round, a minimum launch-credit stake for staked votes, two distinct verified-human anchors across a rater's qualifying history, bounded anchor fanout, round-level unverified-credit caps, aged anchor credentials, and finalized correlation payout snapshots before payout. Correlated or immature unverified accounts accrue fractional launch credit, so multiple independent rounds may be needed before LREP starts paying. Full earned-rater caps start at 10 LREP and step down through 5, 2.5, 1.25, and 0.5 LREP, supporting about 24.6M fully paid earned-rater recipients from the 33M LREP rail. Open raters can receive a governed partial cap and later unlock the full snapshotted cap by verifying the same wallet as a human; each human nullifier can unlock the full earned-rater cap for only one rater address, and agent wallets do not count as human anchors unless credentialed. Early useful raters receive higher caps, later cohorts receive less, and verified users receive only a one-time decaying bonus. The previous 12M LREP Bootstrap Pool allocation and former 4M LREP consensus reserve allocation are folded into launch distribution: 35M LREP funds verified + referral rewards, and 33M LREP funds earned rater rewards. The treasury starts with 32M LREP under the governance timelock and handles safety responses, verification acceleration, appeals, grants, and other governed programs. The bootstrap proposal threshold is 1,000 LREP with a minimum quorum floor of 100,000 LREP.",
           },
         ],
       },
@@ -470,6 +470,7 @@ export const SECTIONS: Section[] = [
             items: [
               "Public MCP and direct JSON routes support wallet-direct asks with `walletAddress` and no bearer token.",
               "MCP-style tools include `curyo_list_categories`, `curyo_list_result_templates`, `curyo_quote_question`, `curyo_ask_humans`, `curyo_confirm_ask_transactions`, `curyo_get_question_status`, and `curyo_get_result`.",
+              "Direct HTTP routes cover templates, quotes, ask creation, transaction confirmation, status/result reads, and browser-signing intent create/read/prepare/complete endpoints under `/api/agent/signing-intents`.",
               "Payment modes include ordered `wallet_calls` and native `x402_authorization` for World Chain USDC asks.",
               "Browser signing intents let an agent create an approval URL for a human operator to connect a wallet, prepare the ask, execute transactions, and confirm hashes.",
               "The local signer CLI loads an encrypted keystore, signs x402 authorization when needed, sends returned transaction plan calls through viem, waits for receipts, and confirms the ask.",

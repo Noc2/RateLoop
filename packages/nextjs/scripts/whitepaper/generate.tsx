@@ -6,28 +6,20 @@
 import React from "react";
 import { ContentBlock, EXECUTIVE_SUMMARY, META, SECTIONS, TableData } from "./content";
 import { renderLatex } from "./latex";
-import {
-  Circle,
-  Document,
-  Page,
-  Path,
-  StyleSheet,
-  Svg,
-  Text,
-  View,
-  renderToFile,
-  renderToStream,
-} from "@react-pdf/renderer";
+import { Document, Page, Path, StyleSheet, Svg, Text, View, renderToFile, renderToStream } from "@react-pdf/renderer";
 
 // ── Brand colors ──
-const EMBER = "#359EEE";
-const EMBER_DEEP = "#03CEA4";
+const BLUE = "#359EEE";
+const GREEN = "#03CEA4";
+const PINK = "#EF476F";
+const YELLOW = "#FFC43D";
+const EMBER = BLUE;
 const STEEL = "#7E8996";
 const DARK = "#090A0C";
 const GRAY = STEEL;
 const LIGHT_BG = "#F5F5F5";
 // Per-section accent colors (cycles through the website palette)
-const SECTION_COLORS = [EMBER, STEEL, EMBER_DEEP, EMBER, STEEL, EMBER_DEEP, EMBER];
+const SECTION_COLORS = [BLUE, GREEN, YELLOW, PINK, BLUE, GREEN, YELLOW, PINK, BLUE];
 
 // Module-level map populated during first render pass (for TOC page numbers)
 const sectionPageMap: Record<number, number> = {};
@@ -46,18 +38,24 @@ const s = StyleSheet.create({
   // Cover
   cover: { flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: 60 },
   coverLogoFrame: {
-    width: 280,
-    height: 280,
-    borderRadius: 52,
-    backgroundColor: "#FFFFFF",
+    width: 170,
+    height: 170,
     alignItems: "center",
     justifyContent: "center",
   },
-  coverLogoSvg: { width: 280, height: 280 },
-  coverTitle: { fontSize: 48, fontFamily: "Helvetica-Bold", color: DARK, marginTop: 30 },
-  coverSubtitle: { fontSize: 16, color: GRAY, marginTop: 36, textAlign: "center" },
-  coverDeck: { fontSize: 12, color: GRAY, marginTop: 12, textAlign: "center" },
-  coverMeta: { fontSize: 11, color: GRAY, marginTop: 24, textAlign: "center" },
+  coverLogoSvg: { width: 170, height: 170 },
+  coverProductTitle: {
+    fontSize: 42,
+    lineHeight: 1.05,
+    fontFamily: "Helvetica-Bold",
+    color: DARK,
+    marginTop: 28,
+    marginBottom: 18,
+    textAlign: "center",
+  },
+  coverSubtitle: { fontSize: 17, lineHeight: 1.2, fontFamily: "Helvetica-Bold", color: DARK, textAlign: "center" },
+  coverDeck: { fontSize: 12, lineHeight: 1.3, color: GRAY, marginTop: 12, textAlign: "center" },
+  coverMeta: { fontSize: 10, color: GRAY, marginTop: 28, textAlign: "center" },
   // TOC
   tocTitle: { fontSize: 24, fontFamily: "Helvetica-Bold", color: DARK, marginBottom: 20 },
   tocEntry: {
@@ -110,16 +108,19 @@ const s = StyleSheet.create({
 function CoverLogo() {
   return (
     <View style={s.coverLogoFrame}>
-      <Svg viewBox="0 0 512 512" style={s.coverLogoSvg}>
-        <Path
-          d="M 412.3 104.6 C 328.8 29.2 199.9 36 124.6 119.7 C 49.2 203.2 56 332.1 139.7 407.4 C 217.2 477.3 334.8 477.3 412.3 407.4"
-          fill="none"
-          stroke={DARK}
-          strokeWidth={36.4}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        <Circle cx={276} cy={256} r={124} fill={EMBER} />
+      <Svg viewBox="0 0 128 128" style={s.coverLogoSvg}>
+        <Path d="M64 21 A43 43 0 0 1 85.5 26.761" fill="none" stroke={YELLOW} strokeWidth={10} />
+        <Path d="M85.5 26.761 A43 43 0 0 1 101.239 42.5" fill="none" stroke={YELLOW} strokeWidth={10} />
+        <Path d="M101.239 42.5 A43 43 0 0 1 107 64" fill="none" stroke={YELLOW} strokeWidth={10} />
+        <Path d="M107 64 A43 43 0 0 1 101.239 85.5" fill="none" stroke={PINK} strokeWidth={10} />
+        <Path d="M101.239 85.5 A43 43 0 0 1 85.5 101.239" fill="none" stroke={PINK} strokeWidth={10} />
+        <Path d="M85.5 101.239 A43 43 0 0 1 64 107" fill="none" stroke={PINK} strokeWidth={10} />
+        <Path d="M64 107 A43 43 0 0 1 42.5 101.239" fill="none" stroke={PINK} strokeWidth={10} />
+        <Path d="M42.5 101.239 A43 43 0 0 1 26.761 85.5" fill="none" stroke={BLUE} strokeWidth={10} />
+        <Path d="M26.761 85.5 A43 43 0 0 1 21 64" fill="none" stroke={BLUE} strokeWidth={10} />
+        <Path d="M21 64 A43 43 0 0 1 26.761 42.5" fill="none" stroke={BLUE} strokeWidth={10} />
+        <Path d="M26.761 42.5 A43 43 0 0 1 42.5 26.761" fill="none" stroke={GREEN} strokeWidth={10} />
+        <Path d="M42.5 26.761 A43 43 0 0 1 64 21" fill="none" stroke={GREEN} strokeWidth={10} />
       </Svg>
     </View>
   );
@@ -214,7 +215,7 @@ function WhitepaperDocument({ tocPageNumbers }: { tocPageNumbers?: Record<number
       <Page size="A4" style={[s.page, { paddingTop: 0, paddingBottom: 0 }]}>
         <View style={s.cover}>
           <CoverLogo />
-          <Text style={s.coverTitle}>{META.title}</Text>
+          <Text style={s.coverProductTitle}>RateLoop</Text>
           <Text style={s.coverSubtitle}>{META.subtitle}</Text>
           <Text style={s.coverDeck}>{META.deck}</Text>
           <Text style={s.coverMeta}>

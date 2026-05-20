@@ -41,12 +41,13 @@ function collectWhitepaperText(): string {
 }
 
 test("whitepaper metadata reflects the agent-first brand deck", () => {
-  assert.equal(META.subtitle, "Public Prediction Ratings for AI Agents");
+  assert.equal(META.title, "RateLoop Whitepaper");
+  assert.equal(META.subtitle, "Level Up Your Agent");
   assert.equal(META.deck, "Human and AI Raters Guide Decisions and Earn USDC");
 });
 
 test("whitepaper metadata reflects the May 2026 product and AI revision", () => {
-  assert.equal(META.version, "0.5");
+  assert.equal(META.version, "0.6");
   assert.equal(META.date, "May 2026");
 });
 
@@ -59,7 +60,12 @@ test("whitepaper reflects current launch allocations and governance threshold", 
   assert.match(whitepaperText, /35M LREP for verified \+ referral rewards/i);
   assert.match(whitepaperText, /33M LREP for earned rater rewards/i);
   assert.match(whitepaperText, /one verified-human anchor in the round/i);
+  assert.match(whitepaperText, /minimum launch-credit stake/i);
   assert.match(whitepaperText, /two distinct verified-human anchors/i);
+  assert.match(whitepaperText, /bounded anchor fanout/i);
+  assert.match(whitepaperText, /round-level unverified-credit caps/i);
+  assert.match(whitepaperText, /aged anchor credentials/i);
+  assert.match(whitepaperText, /agent wallets do not count as human anchors unless/i);
 
   assert.doesNotMatch(whitepaperText, /Bootstrap Pool \(12M LREP\)/i);
   assert.doesNotMatch(whitepaperText, /Bootstrap Pool \(24M LREP\)/i);
@@ -72,6 +78,8 @@ test("whitepaper reflects current launch allocations and governance threshold", 
   assert.doesNotMatch(whitepaperText, /treasury starts with 20M LREP/i);
   assert.doesNotMatch(whitepaperText, /10,000 LREP proposal threshold/i);
   assert.doesNotMatch(whitepaperText, /bootstrap proposal threshold is 10,000 LREP/i);
+  assert.doesNotMatch(whitepaperText, /Calibration rounds gate USDC earning/i);
+  assert.doesNotMatch(whitepaperText, /USDC earning starts after the required calibration rounds/i);
 });
 
 test("whitepaper introduction surfaces the updated lead copy", () => {
@@ -104,6 +112,7 @@ test("whitepaper executive summary centers the agent-first thesis", () => {
   const whitepaperText = collectWhitepaperText();
 
   assert.match(whitepaperText, /public, paid prediction-rating layer/i);
+  assert.match(whitepaperText, /Level Up Your Agent/i);
   assert.match(whitepaperText, /Human and AI Raters Guide Decisions and Earn USDC/i);
   assert.match(whitepaperText, /structured result templates/i);
   assert.match(whitepaperText, /all-answer scope/i);
@@ -122,6 +131,7 @@ test("whitepaper surfaces the agent integration path", () => {
   assert.match(whitepaperText, /curyo_quote_question/i);
   assert.match(whitepaperText, /curyo_confirm_ask_transactions/i);
   assert.match(whitepaperText, /curyo_get_result/i);
+  assert.match(whitepaperText, /\/api\/agent\/signing-intents/i);
   assert.match(whitepaperText, /Feedback Bonuses/i);
 });
 
@@ -146,10 +156,11 @@ test("whitepaper reflects the current AI template catalog", () => {
 test("whitepaper reflects the current product design surface", () => {
   const whitepaperText = collectWhitepaperText();
 
-  assert.match(whitepaperText, /AI ask -> open rating loop/i);
+  assert.match(whitepaperText, /agent-first ask -> open rating loop/i);
   assert.match(whitepaperText, /app sidebar shell/i);
   assert.match(whitepaperText, /\/ask\?tab=agent/i);
   assert.match(whitepaperText, /\/agent\/sign\/\{intentId\}/i);
+  assert.match(whitepaperText, /For Humans and For Agents/i);
 });
 
 test("whitepaper removes legacy section framing", () => {
