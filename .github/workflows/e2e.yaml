@@ -116,7 +116,8 @@ jobs:
           LOCALHOST_KEYSTORE_ACCOUNT: scaffold-eth-default
         run: |
           yarn chain &
-          sleep 5
+          timeout 120 bash -c 'until cast block-number --rpc-url http://127.0.0.1:8545 > /dev/null 2>&1; do sleep 2; done'
+          echo "✓ Anvil ready"
           yarn deploy
 
       - name: Start Ponder indexer
@@ -274,7 +275,8 @@ jobs:
           LOCALHOST_KEYSTORE_ACCOUNT: scaffold-eth-default
         run: |
           yarn chain &
-          sleep 5
+          timeout 120 bash -c 'until cast block-number --rpc-url http://127.0.0.1:8545 > /dev/null 2>&1; do sleep 2; done'
+          echo "✓ Anvil ready"
           yarn deploy
 
       - name: Start Ponder indexer
