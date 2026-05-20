@@ -31,7 +31,7 @@
     "./vote": "./src/vote.ts"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && node scripts/fix-esm-extensions.mjs",
     "check-types": "tsc --noEmit",
     "test": "node ../../scripts/run-node-tests.mjs src"
   },
