@@ -638,14 +638,12 @@ contract QuestionRewardPoolEscrow is
         require(newOracle != address(0) && newOracle.code.length != 0, "Invalid oracle");
         require(newOracle != oldOracle, "Oracle unchanged");
         IClusterPayoutOracle oracle = IClusterPayoutOracle(newOracle);
-        try oracle.roundPayoutSnapshotKey(
-            PAYOUT_DOMAIN_QUESTION_REWARD, rewardPoolId, rewardPool.contentId, 0
-        ) returns (
-            bytes32
-        ) { }
-        catch {
-            revert("Invalid oracle");
-        }
+        // ABI shape + consumer-pin probe (L-Oracle-B). `roundPayoutSnapshotProposedAt` is the
+        // canonical view probe; `roundPayoutSnapshotConsumer` then confirms the new oracle
+        // routes the question-reward domain back to this escrow so future claims do not revert
+        // on the `msg.sender != proposal.consumer` check inside `verifyPayoutWeight`. The
+        // redundant pure-selector probe of `roundPayoutSnapshotKey` was dropped to keep
+        // QuestionRewardPoolEscrow under the EIP-170 size limit.
         try oracle.roundPayoutSnapshotProposedAt(
             PAYOUT_DOMAIN_QUESTION_REWARD, rewardPoolId, rewardPool.contentId, 0
         ) returns (
@@ -654,10 +652,6 @@ contract QuestionRewardPoolEscrow is
         catch {
             revert("Invalid oracle");
         }
-        // L-Oracle-B: ensure the new oracle has its consumer pin set back to this escrow before
-        // repointing. Without this, governance fat-finger creates a window where future claims
-        // revert on `verifyPayoutWeight` (msg.sender != proposal.consumer) and no proposal can be
-        // accepted because `_requireSourceReady` cannot resolve through a misconfigured consumer.
         try oracle.roundPayoutSnapshotConsumer(PAYOUT_DOMAIN_QUESTION_REWARD) returns (address consumer) {
             require(consumer == address(this), "Oracle consumer mismatch");
         } catch {
