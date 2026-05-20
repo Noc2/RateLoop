@@ -80,6 +80,13 @@ export function normalizeStakeSelectorPredictedUpPercent(predictedUpPercent: num
   return Math.min(MAX_PREDICTED_UP_PERCENT, Math.max(MIN_PREDICTED_UP_PERCENT, Math.round(predictedUpPercent)));
 }
 
+export function getNextStakeSelectorAmount(currentAmount: number, maxStake: number, hasAdjustedStake: boolean) {
+  if (!Number.isFinite(maxStake) || maxStake < MIN_COUNTED_STAKE_AMOUNT) return 0;
+  if (!hasAdjustedStake) return MIN_COUNTED_STAKE_AMOUNT;
+  if (!Number.isFinite(currentAmount) || currentAmount <= 0) return 0;
+  return Math.min(currentAmount, maxStake);
+}
+
 export function getInitialPredictedUpPercent(initialIsUp?: boolean) {
   if (initialIsUp === true) return 60;
   if (initialIsUp === false) return 40;
@@ -110,6 +117,7 @@ export function StakeSelector({
   const [isUp, setIsUp] = useState(() => initialIsUp ?? true);
   const [predictedUpPercent, setPredictedUpPercent] = useState(() => getInitialPredictedUpPercent(initialIsUp));
   const [hasAdjustedPrediction, setHasAdjustedPrediction] = useState(false);
+  const [hasAdjustedStake, setHasAdjustedStake] = useState(false);
   const { address } = useAccount();
   const { identityKey } = useRaterRegistryIdentity(address);
 
@@ -167,16 +175,25 @@ export function StakeSelector({
 
   useEffect(() => {
     if (!isOpen) return;
-    setAmount(maxStake >= MIN_COUNTED_STAKE_AMOUNT ? MIN_COUNTED_STAKE_AMOUNT : 0);
     setIsUp(initialIsUp ?? true);
     setPredictedUpPercent(getInitialPredictedUpPercent(initialIsUp));
     setHasAdjustedPrediction(false);
+    setHasAdjustedStake(false);
+  }, [contentId, initialIsUp, isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setAmount(currentAmount => getNextStakeSelectorAmount(currentAmount, maxStake, hasAdjustedStake));
+  }, [hasAdjustedStake, isOpen, maxStake]);
+
+  useEffect(() => {
+    if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape" && !isConfirming) onCancel();
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [initialIsUp, isConfirming, isOpen, maxStake, onCancel]);
+  }, [isConfirming, isOpen, onCancel]);
 
   const isCapacityLimited = amount > 0 && maxByCapacity < maxByBalance;
   const cooldownActive = cooldownSecondsRemaining > 0;
@@ -383,7 +400,10 @@ export function StakeSelector({
                 max={sliderMax}
                 step={0.5}
                 value={amount > 0 ? Math.min(amount, sliderMax) : 0}
-                onChange={e => setAmount(normalizeStakeSelectorAmount(Number(e.target.value)))}
+                onChange={e => {
+                  setHasAdjustedStake(true);
+                  setAmount(normalizeStakeSelectorAmount(Number(e.target.value)));
+                }}
                 className={sliderClassName}
                 style={sliderStyle}
                 disabled={formDisabled || maxStake < 1}
