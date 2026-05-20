@@ -79,13 +79,16 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
 
     /// @notice L-Funds-B: per-commit recipient + stake captured on the first failed
     ///         launch-credit record attempt. Non-zero recipient ⇒ retry is permitted via
-    ///         {retryLaunchRaterRewardCredit}. Cleared on success.
+    ///         {retryLaunchRaterRewardCredit}. Cleared on success. Defined here so the
+    ///         struct is in scope for the storage mapping below; the mapping itself is
+    ///         appended to the end of storage (see `pendingLaunchCreditRetry` near `__gap`)
+    ///         to keep upgrade-compatibility with existing TransparentUpgradeableProxy
+    ///         deployments that already populated `frontendFeeClaimed` and the
+    ///         participation-reward maps.
     struct PendingLaunchCredit {
         address recipient;
         uint96 stakeAmount;
     }
-
-    mapping(uint256 => mapping(uint256 => mapping(bytes32 => PendingLaunchCredit))) public pendingLaunchCreditRetry;
 
     // Track frontend fee claims: contentId => roundId => frontend => claimed
     mapping(uint256 => mapping(uint256 => mapping(address => bool))) public frontendFeeClaimed;
@@ -1101,6 +1104,12 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
     mapping(uint256 => mapping(uint256 => uint256)) public roundFrontendFeeDustExpectedTotal;
     mapping(uint256 => mapping(uint256 => address)) public roundFrontendFeeDustLastFrontend;
 
+    /// @notice L-Funds-B retry slot, appended at end of storage so an upgrade from any
+    ///         layout that already populated `frontendFeeClaimed` etc. does not shift
+    ///         existing slots. Reads at the new slot before the upgrade are zero, which
+    ///         is the correct "no pending retry" semantic.
+    mapping(uint256 => mapping(uint256 => mapping(bytes32 => PendingLaunchCredit))) public pendingLaunchCreditRetry;
+
     // --- Storage Gap for Future Upgrades ---
-    uint256[31] private __gap;
+    uint256[30] private __gap;
 }
