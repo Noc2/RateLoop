@@ -55,12 +55,7 @@ const Tokenomics = () => {
       <p>
         The 68M LREP Launch Distribution Pool is the protocol&apos;s onboarding engine. It is not a large airdrop to the
         previous user set. The split is <strong>35M LREP</strong> for verified + referral rewards,{" "}
-        <strong>29M LREP</strong> for earned rater rewards, and <strong>4M LREP</strong> for legacy users.
-      </p>
-      <p>
-        The 4M legacy claim is split across the same nine migrated verified users from the old redeploy manifest.
-        Allocation is proportional to old claimant amount plus old referrer rewards earned, so claimant-side referral
-        bonuses and the recorded referrer bonus are both preserved in the fixed legacy rail.
+        <strong>33M LREP</strong> for earned rater rewards.
       </p>
       <p>
         New users can start with a zero-LREP advisory path in rounds that already have a staked vote. Advisory ratings
@@ -74,7 +69,7 @@ const Tokenomics = () => {
         qualifying history, bounded anchor fanout, round-level unverified-credit caps, aged anchor credentials, and a
         finalized correlation payout snapshot before payouts begin. Correlated accounts accrue fractional effective
         credit, so they may need more rounds before LREP starts paying. Full caps start at <strong>10 LREP</strong> and
-        step down through 5, 2.5, 1.25, and 0.5 LREP so the 29M LREP earned rater rail can support about 20.6M fully
+        step down through 5, 2.5, 1.25, and 0.5 LREP so the 33M LREP earned rater rail can support about 24.6M fully
         paid recipients. Open raters can be given a governed partial cap and later unlock the full snapshotted cap by
         verifying the same wallet as a human. Governance can tighten these thresholds over time. Agent wallets do not
         count as human anchors unless they hold an active verified-human credential.
@@ -108,20 +103,14 @@ const Tokenomics = () => {
               <td className="font-mono">Small bounded bonus</td>
               <td>Designed to reward real onboarding, not passive invite farming</td>
             </tr>
-            <tr>
-              <td>Legacy claim</td>
-              <td>The small set of previous protocol users</td>
-              <td className="font-mono">Fixed allocation</td>
-              <td>Recognizes early history without consuming the launch pool&apos;s growth budget</td>
-            </tr>
           </tbody>
         </table>
       </div>
       <p>
         Verification acceleration, safety responses, appeals, and governance programs are treasury responsibilities.
-        They do not draw from the Launch Distribution Pool. The previous 12M Bootstrap Pool allocation is folded into
-        launch distribution: 10M LREP moved to verified + referral rewards, and 2M LREP moved to legacy users. The
-        former 4M LREP consensus reserve allocation moved into earned rater rewards.
+        They do not draw from the Launch Distribution Pool. The previous 12M Bootstrap Pool allocation and former 4M
+        LREP consensus reserve allocation are folded into launch distribution: 35M LREP funds verified + referral
+        rewards, and 33M LREP funds earned rater rewards.
       </p>
 
       <h2>Treasury</h2>

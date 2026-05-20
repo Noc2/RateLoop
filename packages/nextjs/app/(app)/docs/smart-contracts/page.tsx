@@ -106,9 +106,7 @@ const SmartContracts: NextPage = () => {
             </tr>
             <tr>
               <td className="font-mono text-primary">LaunchDistributionPool</td>
-              <td>
-                68M LREP launch rewards: 35M verified/referral, 29M anchor-gated earned rater, and 4M legacy users
-              </td>
+              <td>68M LREP launch rewards: 35M verified/referral and 33M anchor-gated earned rater rewards</td>
               <td>No</td>
             </tr>
             <tr>

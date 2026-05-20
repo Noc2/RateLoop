@@ -4,7 +4,6 @@ pragma solidity 0.8.28;
 import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import { MerkleProof } from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 import { RaterRegistry } from "./RaterRegistry.sol";
 import { IClusterPayoutOracle } from "./interfaces/IClusterPayoutOracle.sol";
@@ -12,7 +11,7 @@ import { ILaunchDistributionPool } from "./interfaces/ILaunchDistributionPool.so
 import { IRoundPayoutSnapshotConsumer } from "./interfaces/IRoundPayoutSnapshotConsumer.sol";
 
 /// @title LaunchDistributionPool
-/// @notice Holds the 68M LREP launch allocation and releases it through earned, verified, and legacy paths.
+/// @notice Holds the 68M LREP launch allocation and releases it through earned and verified/referral paths.
 contract LaunchDistributionPool is
     ILaunchDistributionPool,
     IRoundPayoutSnapshotConsumer,
@@ -30,11 +29,9 @@ contract LaunchDistributionPool is
     error InvalidPolicy();
     error SnapshotNotFinalized();
 
-    uint256 public constant LEGACY_POOL_AMOUNT = 4_000_000e6;
-    uint256 public constant EARNED_RATER_POOL_AMOUNT = 29_000_000e6;
+    uint256 public constant EARNED_RATER_POOL_AMOUNT = 33_000_000e6;
     uint256 public constant VERIFIED_REFERRAL_POOL_AMOUNT = 35_000_000e6;
-    uint256 public constant TOTAL_POOL_AMOUNT =
-        LEGACY_POOL_AMOUNT + EARNED_RATER_POOL_AMOUNT + VERIFIED_REFERRAL_POOL_AMOUNT;
+    uint256 public constant TOTAL_POOL_AMOUNT = EARNED_RATER_POOL_AMOUNT + VERIFIED_REFERRAL_POOL_AMOUNT;
 
     uint32 public constant ELIGIBILITY_RATING_COUNT = 5;
     uint32 public constant REWARDING_RATING_COUNT = 10;
@@ -67,16 +64,13 @@ contract LaunchDistributionPool is
     IClusterPayoutOracle public clusterPayoutOracle;
     address public governance;
     uint256 public poolBalance;
-    uint256 public legacyDistributed;
     uint256 public earnedRaterDistributed;
     uint256 public verifiedReferralDistributed;
-    bytes32 public legacyRoot;
 
     uint256 public eligibleRaterCount;
     uint256 public verifiedClaimCount;
 
     mapping(address => bool) public authorizedCallers;
-    mapping(address => bool) public legacyClaimed;
     mapping(address => uint32) public qualifyingRatingCount;
     mapping(address => uint256) public qualifyingCreditBps;
     mapping(address => uint32) public rewardedRatingCount;
@@ -110,13 +104,11 @@ contract LaunchDistributionPool is
     event PoolDeposit(uint256 amount);
     event PoolWithdrawal(address indexed to, uint256 amount);
     event SurplusRecovered(address indexed to, uint256 amount);
-    event LegacyRootUpdated(bytes32 legacyRoot);
     event GovernanceUpdated(address indexed governance);
     event RaterRegistryUpdated(address indexed raterRegistry);
     event ClusterPayoutOracleUpdated(address indexed clusterPayoutOracle);
     event AuthorizedCallerUpdated(address indexed caller, bool authorized);
     event LaunchRewardPolicyUpdated(LaunchRewardPolicy policy);
-    event LegacyClaimed(address indexed account, uint256 amount);
     event RaterLaunchCapAssigned(address indexed rater, uint256 cap, uint256 cohortIndex);
     event RaterLaunchCapStatusUpdated(
         address indexed rater, uint256 activeCap, uint256 fullCap, uint16 activeCapBps, bool fullCapUnlocked
@@ -238,11 +230,6 @@ contract LaunchDistributionPool is
         emit AuthorizedCallerUpdated(caller, authorized);
     }
 
-    function setLegacyRoot(bytes32 newRoot) external onlyOwner {
-        legacyRoot = newRoot;
-        emit LegacyRootUpdated(newRoot);
-    }
-
     function setLaunchRewardPolicy(LaunchRewardPolicy calldata policy) external onlyOwner {
         _setLaunchRewardPolicy(policy);
     }
@@ -272,22 +259,6 @@ contract LaunchDistributionPool is
         if (recovered == 0) revert InvalidAmount();
         lrepToken.safeTransfer(to, recovered);
         emit SurplusRecovered(to, recovered);
-    }
-
-    function claimLegacy(uint256 amount, bytes32[] calldata proof) external nonReentrant returns (uint256 paidAmount) {
-        if (amount == 0) revert InvalidAmount();
-        if (legacyClaimed[msg.sender]) revert AlreadyClaimed();
-        bytes32 root = legacyRoot;
-        if (root == bytes32(0)) revert InvalidProof();
-        bytes32 leaf = keccak256(abi.encode(msg.sender, amount));
-        if (!MerkleProof.verifyCalldata(proof, root, leaf)) revert InvalidProof();
-
-        uint256 remaining = _remainingLegacyPool();
-        if (amount > remaining) revert PoolDepleted();
-        legacyClaimed[msg.sender] = true;
-        legacyDistributed += amount;
-        paidAmount = _pay(msg.sender, amount);
-        emit LegacyClaimed(msg.sender, paidAmount);
     }
 
     function claimVerifiedBonus(address referrer) external nonReentrant returns (uint256 paidAmount) {
@@ -755,10 +726,6 @@ contract LaunchDistributionPool is
         return launchRewardPolicy.minAnchorCredentialAgeSeconds;
     }
 
-    function remainingLegacyPool() external view returns (uint256) {
-        return _remainingLegacyPool();
-    }
-
     function remainingEarnedRaterPool() external view returns (uint256) {
         return _remainingEarnedRaterPool();
     }
@@ -1116,10 +1083,6 @@ contract LaunchDistributionPool is
         ) {
             revert InvalidPolicy();
         }
-    }
-
-    function _remainingLegacyPool() internal view returns (uint256) {
-        return LEGACY_POOL_AMOUNT - legacyDistributed;
     }
 
     function _remainingEarnedRaterPool() internal view returns (uint256) {

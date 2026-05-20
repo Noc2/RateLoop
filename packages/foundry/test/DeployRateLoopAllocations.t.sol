@@ -30,8 +30,7 @@ contract DeployRateLoopAllocationsTest is Test {
         assertEq(deployScript.TOTAL_SUPPLY_CAP(), lrepToken.MAX_SUPPLY(), "script cap should match token MAX_SUPPLY");
         assertEq(totalLaunchAllocation, deployScript.TOTAL_SUPPLY_CAP(), "launch allocations should sum to full cap");
         assertEq(deployScript.LAUNCH_DISTRIBUTION_AMOUNT(), 68_000_000 * 1e6, "launch distribution should be 68M");
-        assertEq(launchPool.LEGACY_POOL_AMOUNT(), 4_000_000 * 1e6, "legacy pool should be 4M");
-        assertEq(launchPool.EARNED_RATER_POOL_AMOUNT(), 29_000_000 * 1e6, "earned rater pool should be 29M");
+        assertEq(launchPool.EARNED_RATER_POOL_AMOUNT(), 33_000_000 * 1e6, "earned rater pool should be 33M");
         assertEq(launchPool.VERIFIED_REFERRAL_POOL_AMOUNT(), 35_000_000 * 1e6, "verified/referral pool should be 35M");
         assertEq(
             launchPool.TOTAL_POOL_AMOUNT(),
