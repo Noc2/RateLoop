@@ -386,6 +386,18 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
                 ) returns (
                 uint256
             ) {
+                // M-Retry-1: a non-reverting call does not prove the launch pool actually
+                // advanced its state. `_recordEarnedRaterRewardCredit` returns 0 silently when
+                // the policy gate fails (anchors expired / saturated, stake under floor,
+                // unverified-cap exceeded). Require the pool to flag the commit as recorded
+                // before reporting success; otherwise the retry path would clear the pending
+                // entry against a no-op and strand the credit permanently.
+                if (!ILaunchDistributionPool(launchPool).earnedRewardCreditRecorded(contentId, roundId, commitKey)) {
+                    emit LaunchRaterRewardCreditFailed(
+                        contentId, roundId, commitKey, rewardRecipient, launchPool, bytes("policy-gate")
+                    );
+                    return false;
+                }
                 return true;
             } catch (bytes memory reason) {
                 emit LaunchRaterRewardCreditFailed(contentId, roundId, commitKey, rewardRecipient, launchPool, reason);
