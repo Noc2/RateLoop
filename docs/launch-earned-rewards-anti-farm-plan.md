@@ -109,11 +109,11 @@ struct LaunchRewardPolicy {
   governance ownership.
 - Validate broad safety bounds so governance cannot accidentally set nonsensical
   values.
-- Change `ILaunchDistributionPool.recordEarnedRaterReward` to include round
-  context and anchor context:
+- Change `ILaunchDistributionPool.recordEarnedRaterRewardWithSourceReady` to
+  include round context, anchor context, and the audited source-ready timestamp:
 
 ```solidity
-function recordEarnedRaterReward(
+function recordEarnedRaterRewardWithSourceReady(
     address rater,
     uint256 contentId,
     uint256 roundId,
@@ -121,7 +121,9 @@ function recordEarnedRaterReward(
     uint16 scoreBps,
     uint16 revealedRaterCount,
     bool noPendingCleanup,
-    bytes32[] calldata verifiedAnchorIds
+    uint256 stakeAmount,
+    bytes32[] calldata verifiedAnchorIds,
+    uint64 sourceReadyAt
 ) external returns (uint256 paidAmount);
 ```
 
