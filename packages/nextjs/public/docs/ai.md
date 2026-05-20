@@ -63,6 +63,26 @@ Main tools:
 - `curyo_get_question_status`
 - `curyo_get_result`
 
+## Result Templates
+
+Fetch the complete machine-readable template list from `GET /api/agent/templates` or call
+`curyo_list_result_templates` over MCP. Canonical definitions live in
+`packages/agents/src/templates.ts`, and copy-paste question examples live in
+`packages/agents/examples/questions`.
+
+Common templates:
+
+- [`generic_rating`](https://www.rateloop.xyz/docs/ai#template-generic_rating): default calibrated support signal.
+- [`feature_acceptance_test`](https://www.rateloop.xyz/docs/ai#template-feature_acceptance_test): public preview feature testing with concrete test steps.
+- [`go_no_go`](https://www.rateloop.xyz/docs/ai#template-go_no_go): simple proceed-or-stop decision gate.
+- [`agent_action_go_no_go`](https://www.rateloop.xyz/docs/ai#template-agent_action_go_no_go): higher-context action gate for consequential agent actions.
+- [`llm_answer_quality`](https://www.rateloop.xyz/docs/ai#template-llm_answer_quality): AI answer quality review.
+- [`rag_grounding_check`](https://www.rateloop.xyz/docs/ai#template-rag_grounding_check): source-support and grounding review.
+- [`claim_verification`](https://www.rateloop.xyz/docs/ai#template-claim_verification): factual support against public evidence.
+- [`source_credibility_check`](https://www.rateloop.xyz/docs/ai#template-source_credibility_check): source reliability screening.
+- [`ranked_option_member`](https://www.rateloop.xyz/docs/ai#template-ranked_option_member): one binary-rated bundle member per option.
+- [`pairwise_output_preference`](https://www.rateloop.xyz/docs/ai#template-pairwise_output_preference): pairwise comparison of generated outputs.
+
 ## Minimum Workflow
 
 1. Ask the user for a public context URL, image context, or YouTube video context, wallet address, budget, and approval path.
