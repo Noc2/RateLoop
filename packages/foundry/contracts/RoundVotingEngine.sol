@@ -277,11 +277,9 @@ contract RoundVotingEngine is
     // COMMIT PHASE
     // =========================================================================
 
-    /// @notice Narrow view of a commit that omits `ciphertext`, `targetRound`, and
-    ///         `drandChainHash`. Used by off-chain iterators and by the reward distributor's
-    ///         dust-finalization paths, which read many commits in a single call and would
-    ///         otherwise pay ~2 KB of memory expansion per commit for the full public getter.
-    /// @dev Returned fields mirror RoundLib.Commit but skip the blob data.
+    /// @notice Narrow view of a commit that omits hash/target metadata. Used by off-chain iterators
+    ///         and by reward distributor paths that read many claim-relevant commits in one call.
+    /// @dev Returned fields mirror the claim-relevant subset of RoundLib.Commit.
     function commitCore(uint256 contentId, uint256 roundId, bytes32 commitKey)
         external
         view

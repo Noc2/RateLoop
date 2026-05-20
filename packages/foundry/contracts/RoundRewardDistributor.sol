@@ -815,8 +815,7 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         view
         returns (RoundLib.Commit memory commit)
     {
-        // Use the narrow getter that skips `ciphertext` / `targetRound` / `drandChainHash`,
-        // avoiding ~2 KB of memory expansion per commit during bounds-limit dust finalization.
+        // Use the narrow getter that skips hash/target metadata during bounds-limit dust finalization.
         (
             commit.voter,
             commit.stakeAmount,
