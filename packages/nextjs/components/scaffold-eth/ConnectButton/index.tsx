@@ -3,7 +3,7 @@
 // @refresh reset
 import { AddressInfoDropdown } from "./AddressInfoDropdown";
 import { WrongNetworkDropdown } from "./WrongNetworkDropdown";
-import { useActiveAccount, useActiveWalletChain } from "thirdweb/react";
+import { useActiveWalletChain } from "thirdweb/react";
 import { Address } from "viem";
 import { useAccount } from "wagmi";
 import { HumanSignInButton } from "~~/components/shared/HumanSignInButton";
@@ -19,18 +19,14 @@ export const RateLoopConnectButton = ({
 }) => {
   const { targetNetwork } = useTargetNetwork();
   const { address, chain } = useAccount();
-  const activeThirdwebAccount = useActiveAccount();
   const activeThirdwebChain = useActiveWalletChain();
   const resolvedChain = chain ?? activeThirdwebChain;
-
-  const syncingThirdwebAccount = Boolean(activeThirdwebAccount && (!address || !resolvedChain));
 
   if (!address || !resolvedChain) {
     return (
       <HumanSignInButton
         className="btn btn-sm btn-primary border-none"
         data-testid="auth-connect-button"
-        disabled={syncingThirdwebAccount}
         style={{ fontSize: "16px" }}
       >
         {HUMAN_SIGN_IN_LABEL}
