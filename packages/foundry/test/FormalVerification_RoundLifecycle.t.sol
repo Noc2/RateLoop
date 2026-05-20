@@ -117,25 +117,41 @@ contract FormalVerification_RoundLifecycleTest is VotingTestBase {
         return id;
     }
 
+    struct _VoteCtx {
+        uint16 referenceRatingBps;
+        uint64 targetRound;
+        bytes32 drandChainHash;
+        bytes32 commitHash;
+        bytes ciphertext;
+    }
+
+    function _buildVoteCtx(address voter, uint256 cid, bool up, bytes32 salt)
+        internal
+        view
+        returns (_VoteCtx memory c)
+    {
+        c.referenceRatingBps = _currentRatingReferenceBps(cid);
+        c.targetRound = _tlockCommitTargetRound(engine, cid);
+        c.drandChainHash = _tlockDrandChainHash();
+        c.ciphertext = _testCiphertext(up, salt, cid, c.targetRound, c.drandChainHash);
+        c.commitHash =
+            _commitHash(up, salt, voter, cid, c.referenceRatingBps, c.targetRound, c.drandChainHash, c.ciphertext);
+    }
+
     function _vote(address voter, uint256 cid, bool up, uint256 stake)
         internal
         returns (bytes32 commitKey, bytes32 salt)
     {
         salt = keccak256(abi.encodePacked(voter, block.timestamp, cid));
-        uint16 referenceRatingBps = _currentRatingReferenceBps(cid);
-        uint64 targetRound = _tlockCommitTargetRound(engine, cid);
-        bytes32 drandChainHash = _tlockDrandChainHash();
-        bytes memory ciphertext = _testCiphertext(up, salt, cid, targetRound, drandChainHash);
-        bytes32 commitHash =
-            _commitHash(up, salt, voter, cid, referenceRatingBps, targetRound, drandChainHash, ciphertext);
+        _VoteCtx memory c = _buildVoteCtx(voter, cid, up, salt);
         vm.prank(voter);
         lrepToken.approve(address(engine), stake);
-        uint256 cachedRoundContext1 = _roundContext(engine.previewCommitRoundId(cid), referenceRatingBps);
+        uint256 cachedRoundContext1 = _roundContext(engine.previewCommitRoundId(cid), c.referenceRatingBps);
         vm.prank(voter);
         engine.commitVote(
-            cid, cachedRoundContext1, targetRound, drandChainHash, commitHash, ciphertext, stake, address(0)
+            cid, cachedRoundContext1, c.targetRound, c.drandChainHash, c.commitHash, c.ciphertext, stake, address(0)
         );
-        commitKey = keccak256(abi.encodePacked(voter, commitHash));
+        commitKey = keccak256(abi.encodePacked(voter, c.commitHash));
         _rememberTestReveal(commitKey, up, salt);
     }
 
