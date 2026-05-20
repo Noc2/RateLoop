@@ -178,7 +178,8 @@ export async function waitForFeedLoaded(page: Page, timeout = 15_000): Promise<v
       .or(page.getByText("Your question"))
       .or(page.getByText(/Cooldown/))
       .or(page.getByText("Round full"))
-      .or(page.getByText(FEED_EMPTY_STATE_RE));
+      .or(page.getByText(FEED_EMPTY_STATE_RE))
+      .or(page.getByRole("feed", { name: "Content feed" }).getByRole("article"));
   const connectButton = getVisibleAuthConnectButton(page);
 
   let lastError: unknown;
