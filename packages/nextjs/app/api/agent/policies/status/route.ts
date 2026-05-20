@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { parseJsonBody } from "~~/lib/agent/http";
 import { AgentPolicyLifecycleError, type AgentPolicyStatus, updateAgentPolicyStatus } from "~~/lib/agent/policies";
 import {
   PAUSE_AGENT_POLICY_ACTION,
@@ -20,20 +21,15 @@ const STATUS_BY_ACTION = {
 } as const satisfies Record<string, { signedAction: string; status: AgentPolicyStatus }>;
 
 export async function POST(request: NextRequest) {
-  const body = (await request.json()) as Record<string, unknown> & {
-    action?: string;
-    signature?: `0x${string}`;
-    challengeId?: string;
-  };
-  const limited = await checkRateLimit(request, WRITE_RATE_LIMIT, {
-    extraKeyParts: [
-      typeof body.address === "string" ? body.address : undefined,
-      typeof body.action === "string" ? body.action : undefined,
-    ],
-  });
+  const limited = await checkRateLimit(request, WRITE_RATE_LIMIT);
   if (limited) return limited;
 
   try {
+    const body = await parseJsonBody(request);
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+
     const statusAction =
       typeof body.action === "string" ? STATUS_BY_ACTION[body.action as keyof typeof STATUS_BY_ACTION] : null;
     if (!statusAction) {

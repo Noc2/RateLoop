@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { parseJsonBody } from "~~/lib/agent/http";
 import { AgentPolicyLifecycleError, listAgentPolicies, upsertAgentPolicy } from "~~/lib/agent/policies";
 import {
   READ_AGENT_POLICIES_ACTION,
@@ -54,10 +55,11 @@ export async function POST(request: NextRequest) {
   if (limited) return limited;
 
   try {
-    const body = (await request.json()) as Record<string, unknown> & {
-      signature?: `0x${string}`;
-      challengeId?: string;
-    };
+    const body = await parseJsonBody(request);
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+
     if (!body.signature || !body.challengeId) {
       return NextResponse.json({ error: "Missing or invalid fields" }, { status: 400 });
     }
@@ -101,10 +103,11 @@ export async function PUT(request: NextRequest) {
   if (limited) return limited;
 
   try {
-    const body = (await request.json()) as Record<string, unknown> & {
-      signature?: `0x${string}`;
-      challengeId?: string;
-    };
+    const body = await parseJsonBody(request);
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+
     if (!body.signature || !body.challengeId) {
       return NextResponse.json({ error: "Missing or invalid fields" }, { status: 400 });
     }
