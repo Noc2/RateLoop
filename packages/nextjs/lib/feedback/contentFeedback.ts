@@ -1,6 +1,6 @@
 import deployedContracts from "@rateloop/contracts/deployedContracts";
 import { ROUND_STATE, type RoundState } from "@rateloop/contracts/protocol";
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { type Abi, type Address, createPublicClient, http, zeroHash } from "viem";
 import { db } from "~~/lib/db";
 import { contentFeedback } from "~~/lib/db/schema";
@@ -541,6 +541,20 @@ function isFeedbackPublic(row: Pick<FeedbackRow, "roundId">, context: ContentFee
   return context.terminalRoundIds.has(row.roundId);
 }
 
+function buildPublicFeedbackCondition(context: ContentFeedbackRoundContext) {
+  const publicRoundConditions = [];
+  if (context.settlementComplete) {
+    publicRoundConditions.push(isNull(contentFeedback.roundId));
+  }
+  const terminalRoundIds = Array.from(context.terminalRoundIds);
+  if (terminalRoundIds.length > 0) {
+    publicRoundConditions.push(inArray(contentFeedback.roundId, terminalRoundIds));
+  }
+
+  if (publicRoundConditions.length === 0) return undefined;
+  return publicRoundConditions.length === 1 ? publicRoundConditions[0] : or(...publicRoundConditions);
+}
+
 function mapFeedbackRow(
   row: FeedbackRow,
   params: {
@@ -660,11 +674,32 @@ export async function listContentFeedback(params: {
   viewerAddress?: `0x${string}` | null;
 }): Promise<ContentFeedbackListResult> {
   let rows: FeedbackRow[];
+  let publicCount = 0;
   try {
+    const baseCondition = and(
+      eq(contentFeedback.contentId, params.contentId),
+      eq(contentFeedback.moderationStatus, APPROVED_MODERATION_STATUS),
+      isNull(contentFeedback.deletedAt),
+    );
+    const publicCondition = buildPublicFeedbackCondition(params.context);
+    const visibleCondition = params.viewerAddress
+      ? publicCondition
+        ? or(publicCondition, eq(contentFeedback.authorAddress, params.viewerAddress))
+        : eq(contentFeedback.authorAddress, params.viewerAddress)
+      : publicCondition;
+
+    if (publicCondition) {
+      const [countRow] = await db
+        .select({ value: sql<number>`count(*)` })
+        .from(contentFeedback)
+        .where(and(baseCondition, publicCondition));
+      publicCount = Number(countRow?.value ?? 0);
+    }
+
     rows = await db
       .select()
       .from(contentFeedback)
-      .where(and(eq(contentFeedback.contentId, params.contentId), isNull(contentFeedback.deletedAt)))
+      .where(visibleCondition ? and(baseCondition, visibleCondition) : sql`false`)
       .orderBy(desc(contentFeedback.createdAt), desc(contentFeedback.id))
       .limit(CONTENT_FEEDBACK_LIST_LIMIT);
   } catch (error) {
@@ -682,9 +717,6 @@ export async function listContentFeedback(params: {
     };
   }
 
-  const publicCount = rows.filter(
-    row => row.moderationStatus === APPROVED_MODERATION_STATUS && isFeedbackPublic(row, params.context),
-  ).length;
   const items = rows
     .map(row => mapFeedbackRow(row, { context: params.context, viewerAddress: params.viewerAddress }))
     .filter((item): item is ContentFeedbackItem => item !== null);
