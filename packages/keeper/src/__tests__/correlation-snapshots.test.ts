@@ -73,6 +73,9 @@ async function loadPublisher(options: {
     throw new Error(`unexpected readContract(${functionName})`);
   });
   const writeContract = vi.fn().mockResolvedValue("0xhash");
+  const waitForTransactionReceipt = vi.fn().mockResolvedValue({
+    status: "success",
+  });
   const logger = {
     debug: vi.fn(),
     info: vi.fn(),
@@ -86,13 +89,14 @@ async function loadPublisher(options: {
 
   return {
     publishConfiguredCorrelationSnapshots,
-    publicClient: { readContract },
+    publicClient: { readContract, waitForTransactionReceipt },
     walletClient: { writeContract },
     chain: { id: 31337 },
     account: { address: ACCOUNT },
     logger,
     readContract,
     writeContract,
+    waitForTransactionReceipt,
   };
 }
 
@@ -142,6 +146,10 @@ describe("correlation snapshot publisher", () => {
       2,
       expect.not.objectContaining({ value: expect.anything() }),
     );
+    expect(publisher.waitForTransactionReceipt).toHaveBeenCalledTimes(2);
+    expect(publisher.waitForTransactionReceipt).toHaveBeenCalledWith({
+      hash: "0xhash",
+    });
   });
 
   it("skips proposals when the frontend operator is not eligible", async () => {
