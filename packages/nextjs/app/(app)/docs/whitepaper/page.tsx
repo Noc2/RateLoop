@@ -15,7 +15,7 @@ const WhitepaperPage: NextPage = () => {
         <a
           href="/rateloop-whitepaper.pdf"
           download="RateLoop-Whitepaper.pdf"
-          className="btn btn-lg btn-primary gap-2 border-none no-underline"
+          className="btn btn-lg btn-primary gap-2 border-none !no-underline hover:!no-underline focus:!no-underline active:!no-underline"
         >
           <ArrowDownTrayIcon className="w-5 h-5" />
           Download Whitepaper (PDF)
