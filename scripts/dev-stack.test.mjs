@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { getDbPushPlan, getPonderDataResetPlan } from "./dev-stack.mjs";
+import { getDbPushPlan, getPonderDataResetPlan, getPonderDeploymentFingerprint } from "./dev-stack.mjs";
 
 const localDatabaseConfig = {
   url: "postgresql://postgres:postgres@127.0.0.1:5432/rateloop_app",
@@ -131,4 +131,33 @@ test("does not reset Ponder data for non-local Ponder networks", () => {
       reason: "Ponder is not targeting local hardhat",
     },
   );
+});
+
+test("includes local Ponder address overrides in the deployment fingerprint", () => {
+  const base = getPonderDeploymentFingerprint({
+    deployedContractsContent: "contracts",
+    env: {},
+  });
+  const withOverride = getPonderDeploymentFingerprint({
+    deployedContractsContent: "contracts",
+    env: {
+      PONDER_CONTENT_REGISTRY_ADDRESS: "0x1111111111111111111111111111111111111111",
+    },
+  });
+  const withDifferentOverride = getPonderDeploymentFingerprint({
+    deployedContractsContent: "contracts",
+    env: {
+      PONDER_CONTENT_REGISTRY_ADDRESS: "0x2222222222222222222222222222222222222222",
+    },
+  });
+  const withUnrelatedEnv = getPonderDeploymentFingerprint({
+    deployedContractsContent: "contracts",
+    env: {
+      NEXT_PUBLIC_PONDER_URL: "http://127.0.0.1:42069",
+    },
+  });
+
+  assert.notEqual(base, withOverride);
+  assert.notEqual(withOverride, withDifferentOverride);
+  assert.equal(base, withUnrelatedEnv);
 });

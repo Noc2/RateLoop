@@ -45,6 +45,22 @@ const keeperService = {
 };
 const allowRemoteDbPushFlag = "--allow-remote-db-push";
 const skipDbPushFlag = "--skip-db-push";
+const ponderLocalDeploymentEnvKeys = [
+  "PONDER_ADVISORY_VOTE_RECORDER_ADDRESS",
+  "PONDER_CATEGORY_REGISTRY_ADDRESS",
+  "PONDER_CLUSTER_PAYOUT_ORACLE_ADDRESS",
+  "PONDER_CONTENT_REGISTRY_ADDRESS",
+  "PONDER_FEEDBACK_BONUS_ESCROW_ADDRESS",
+  "PONDER_FRONTEND_REGISTRY_ADDRESS",
+  "PONDER_LAUNCH_DISTRIBUTION_POOL_ADDRESS",
+  "PONDER_LREP_ADDRESS",
+  "PONDER_PARTICIPATION_POOL_ADDRESS",
+  "PONDER_PROFILE_REGISTRY_ADDRESS",
+  "PONDER_QUESTION_REWARD_POOL_ESCROW_ADDRESS",
+  "PONDER_RATER_REGISTRY_ADDRESS",
+  "PONDER_ROUND_REWARD_DISTRIBUTOR_ADDRESS",
+  "PONDER_ROUND_VOTING_ENGINE_ADDRESS",
+];
 const resetColor = "\u001b[0m";
 const managedChildren = [];
 let shuttingDown = false;
@@ -142,10 +158,27 @@ function getPonderRpcUrlFromEnv(env) {
   return env.PONDER_RPC_URL_31337?.trim() || "http://127.0.0.1:8545";
 }
 
-function getDeploymentFingerprint() {
+export function getPonderDeploymentFingerprint({ deployedContractsContent, env = {} } = {}) {
+  if (!deployedContractsContent) return null;
+
+  const hash = createHash("sha256").update(deployedContractsContent);
+  for (const key of ponderLocalDeploymentEnvKeys) {
+    const value = env[key]?.trim();
+    if (value) {
+      hash.update("\0").update(key).update("=").update(value);
+    }
+  }
+
+  return hash.digest("hex");
+}
+
+function getDeploymentFingerprint(env) {
   if (!existsSync(deployedContractsPath)) return null;
 
-  return createHash("sha256").update(readFileSync(deployedContractsPath)).digest("hex");
+  return getPonderDeploymentFingerprint({
+    deployedContractsContent: readFileSync(deployedContractsPath, "utf8"),
+    env,
+  });
 }
 
 export function getPonderDataResetPlan({
@@ -187,7 +220,7 @@ export function getPonderDataResetPlan({
 }
 
 function resetLocalPonderDataIfDeploymentChanged(env) {
-  const currentFingerprint = getDeploymentFingerprint();
+  const currentFingerprint = getDeploymentFingerprint(env);
   const storedFingerprint = existsSync(ponderDeploymentFingerprintPath)
     ? readFileSync(ponderDeploymentFingerprintPath, "utf8").trim()
     : undefined;
