@@ -8,6 +8,7 @@ import {
 } from "./request-identity.js";
 import { RateLimiter } from "./rate-limit.js";
 import { registerContentRoutes } from "./routes/content-routes.js";
+import { registerCorrelationRoutes } from "./routes/correlation-routes.js";
 import { registerDataRoutes } from "./routes/data-routes.js";
 import { registerDiscoveryRoutes } from "./routes/discovery-routes.js";
 import { registerLeaderboardRoutes } from "./routes/leaderboard-routes.js";
@@ -100,6 +101,7 @@ app.use(
 
 // Ponder provides /health and /status natively — no custom health check needed.
 registerContentRoutes(app);
+registerCorrelationRoutes(app);
 registerDiscoveryRoutes(app);
 registerLeaderboardRoutes(app);
 registerDataRoutes(app);

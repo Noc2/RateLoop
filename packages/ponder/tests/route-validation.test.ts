@@ -105,6 +105,10 @@ function mockPonderModules<T>(result: T) {
       url: "contentMedia.url",
       urlHost: "contentMedia.urlHost",
     },
+    correlationEpochSnapshot: {
+      id: "correlationEpochSnapshot.id",
+      updatedAt: "correlationEpochSnapshot.updatedAt",
+    },
     globalStats: {
       id: "globalStats.id",
     },
@@ -206,6 +210,10 @@ function mockPonderModules<T>(result: T) {
       claimedAmount: "questionRewardPool.claimedAmount",
       contentId: "questionRewardPool.contentId",
       createdAt: "questionRewardPool.createdAt",
+      bountyClosesAt: "questionRewardPool.bountyClosesAt",
+      bountyEligibility: "questionRewardPool.bountyEligibility",
+      funder: "questionRewardPool.funder",
+      funderIdentityKey: "questionRewardPool.funderIdentityKey",
       fundedAmount: "questionRewardPool.fundedAmount",
       id: "questionRewardPool.id",
       qualifiedRounds: "questionRewardPool.qualifiedRounds",
@@ -290,6 +298,7 @@ function mockPonderModules<T>(result: T) {
       artifactUri: "roundPayoutSnapshot.artifactUri",
       contentId: "roundPayoutSnapshot.contentId",
       domain: "roundPayoutSnapshot.domain",
+      id: "roundPayoutSnapshot.id",
       rewardPoolId: "roundPayoutSnapshot.rewardPoolId",
       roundId: "roundPayoutSnapshot.roundId",
       status: "roundPayoutSnapshot.status",
@@ -346,12 +355,16 @@ function mockPonderModules<T>(result: T) {
     },
     vote: {
       committedAt: "vote.committedAt",
+      commitBlockNumber: "vote.commitBlockNumber",
+      commitKey: "vote.commitKey",
+      commitLogIndex: "vote.commitLogIndex",
       contentId: "vote.contentId",
       identityHolder: "vote.identityHolder",
       identityKey: "vote.identityKey",
       identityVoter: "vote.identityVoter",
       isUp: "vote.isUp",
       revealed: "vote.revealed",
+      revealedAt: "vote.revealedAt",
       roundId: "vote.roundId",
       stake: "vote.stake",
       rbtsForfeitedStake: "vote.rbtsForfeitedStake",
@@ -1641,6 +1654,115 @@ describe("registerDataRoutes", () => {
         reasonHash: payoutWeight.reasonHash,
       },
       payoutProof: [],
+    });
+  });
+});
+
+describe("registerCorrelationRoutes", () => {
+  it("lists settled USDC reward rounds that still need payout snapshots", async () => {
+    const { queryBuilder } = mockPonderModules([
+      {
+        rewardPoolId: 7n,
+        contentId: 9n,
+        roundId: 2n,
+        requiredVoters: 3,
+        requiredSettledRounds: 1,
+        qualifiedRounds: 0,
+        bountyEligibility: 0,
+        bountyClosesAt: 0n,
+        settledAt: 123n,
+        revealedCount: 3,
+        snapshotStatus: null,
+      },
+    ]);
+    const { registerCorrelationRoutes } = await import(
+      "../src/api/routes/correlation-routes.js"
+    );
+
+    const app = new Hono();
+    registerCorrelationRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/correlation/round-candidates?limit=25",
+    );
+
+    expect(response.status).toBe(200);
+    expect(queryBuilder.innerJoin).toHaveBeenCalled();
+    expect(queryBuilder.leftJoin).toHaveBeenCalled();
+    expect(queryBuilder.limit).toHaveBeenCalledWith(25);
+    const body = await response.json();
+    expect(body.items[0]).toMatchObject({
+      rewardPoolId: "7",
+      contentId: "9",
+      roundId: "2",
+      bountyEligibility: 0,
+    });
+    const whereArg = queryBuilder.where.mock.calls[0]?.[0];
+    const serialized = serializeExpression(whereArg);
+    expect(serialized).toContain("questionRewardPool.asset");
+    expect(serialized).toContain("round.state");
+    expect(serialized).toContain("roundPayoutSnapshot.id");
+  });
+
+  it("returns eligible revealed vote inputs for correlation scoring", async () => {
+    const { queryBuilder } = mockPonderModules([
+      {
+        account: "0x0000000000000000000000000000000000000001",
+        voter: "0x0000000000000000000000000000000000000001",
+        identityKey: `0x${"a".repeat(64)}`,
+        commitKey: `0x${"b".repeat(64)}`,
+        baseWeight: 10000n,
+        verifiedHuman: true,
+        historicalVoteCount: 0,
+        features: "",
+      },
+    ]);
+    const { registerCorrelationRoutes } = await import(
+      "../src/api/routes/correlation-routes.js"
+    );
+
+    const app = new Hono();
+    registerCorrelationRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/correlation/round-votes?rewardPoolId=7&contentId=9&roundId=2",
+    );
+
+    expect(response.status).toBe(200);
+    expect(queryBuilder.innerJoin).toHaveBeenCalled();
+    expect(queryBuilder.leftJoin).toHaveBeenCalled();
+    const body = await response.json();
+    expect(body.items[0]).toMatchObject({
+      account: "0x0000000000000000000000000000000000000001",
+      identityKey: `0x${"a".repeat(64)}`,
+      commitKey: `0x${"b".repeat(64)}`,
+      baseWeight: "10000",
+      verifiedHuman: true,
+      features: [`identity:0x${"a".repeat(64)}`],
+    });
+    const whereArg = queryBuilder.where.mock.calls[0]?.[0];
+    const serialized = serializeExpression(whereArg);
+    expect(serialized).toContain("vote.revealed");
+    expect(serialized).toContain("questionRewardPool.bountyEligibility");
+    expect(serialized).toContain("raterHumanCredential.rater");
+  });
+
+  it("validates correlation round-vote identifiers", async () => {
+    mockPonderModules([]);
+    const { registerCorrelationRoutes } = await import(
+      "../src/api/routes/correlation-routes.js"
+    );
+
+    const app = new Hono();
+    registerCorrelationRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/correlation/round-votes?rewardPoolId=0&contentId=9&roundId=2",
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error: "rewardPoolId, contentId, and roundId must be positive integers",
     });
   });
 });

@@ -10,6 +10,7 @@ async function loadApp(env: Record<string, string | undefined>) {
   };
 
   vi.doMock("../src/api/routes/content-routes.js", () => ({ registerContentRoutes: vi.fn() }));
+  vi.doMock("../src/api/routes/correlation-routes.js", () => ({ registerCorrelationRoutes: vi.fn() }));
   vi.doMock("../src/api/routes/data-routes.js", () => ({ registerDataRoutes: vi.fn() }));
   vi.doMock("../src/api/routes/discovery-routes.js", () => ({ registerDiscoveryRoutes: vi.fn() }));
   vi.doMock("../src/api/routes/leaderboard-routes.js", () => ({ registerLeaderboardRoutes: vi.fn() }));
