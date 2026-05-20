@@ -500,9 +500,7 @@ library RoundCleanupLib {
                 // non-revealers preserves the no-punishment invariant for ties.
                 if (
                     round.state == RoundLib.RoundState.RevealFailed
-                        || (
-                            round.state == RoundLib.RoundState.Settled && commit.revealableAfter <= round.settledAt
-                        )
+                        || (round.state == RoundLib.RoundState.Settled && commit.revealableAfter <= round.settledAt)
                 ) {
                     processedPastEpochCount++;
                     forfeitedToTreasury += amount;

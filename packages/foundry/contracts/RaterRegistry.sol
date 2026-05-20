@@ -91,10 +91,7 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
     ///         identity key. Off-chain consumers MUST re-map any per-identity state keyed off
     ///         the old key (cooldowns, exclusions, profile ownership) when they observe this.
     event CanonicalHumanIdentityKeyRotated(
-        address indexed rater,
-        bytes32 indexed previousKey,
-        bytes32 indexed newKey,
-        HumanCredentialProvider provider
+        address indexed rater, bytes32 indexed previousKey, bytes32 indexed newKey, HumanCredentialProvider provider
     );
     event ProfileFollowed(address indexed follower, address indexed target, uint64 followedAt);
     event ProfileUnfollowed(address indexed follower, address indexed target, uint64 unfollowedAt);

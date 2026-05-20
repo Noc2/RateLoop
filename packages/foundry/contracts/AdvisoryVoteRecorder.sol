@@ -444,10 +444,7 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         if (advisoryCommit.revealedAt == 0) revert AdvisoryRevealedAfterSettlement();
         if (advisoryCommit.revealedAt > settledAt) {
             uint256 grace = protocolConfig.revealGracePeriod();
-            if (
-                settledAt == 0 || grace == 0
-                    || uint256(advisoryCommit.revealedAt) > uint256(settledAt) + grace
-            ) {
+            if (settledAt == 0 || grace == 0 || uint256(advisoryCommit.revealedAt) > uint256(settledAt) + grace) {
                 revert AdvisoryRevealedAfterSettlement();
             }
         }
