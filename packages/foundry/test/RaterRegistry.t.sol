@@ -342,6 +342,48 @@ contract RaterRegistryTest is Test {
         assertEq(refreshed.identityKey, SEEDED_ANCHOR_ID);
     }
 
+    /// @notice RR-1 (2026-05-20 follow-up audit): the M-Identity-2 sticky-canonical fix preserved
+    ///         _canonicalHumanIdentityKey across legitimate credential refreshes, but on revocation
+    ///         the stale canonical survived. A SEEDER could then clearRevokedHumanNullifier and
+    ///         re-seed the same anchor onto a DIFFERENT rater, leaving both raters resolving to
+    ///         the same canonical identityKey. revokeHumanCredential must clear the canonical so
+    ///         the next attestation re-seeds it from the new credential's nullifier.
+    function test_RevokeClearsCanonicalKeyAndPreventsReseedCollision() public {
+        // 1. Seed rater A with anchorId N; canonical = N.
+        vm.prank(admin);
+        registry.seedHumanCredential(rater, uint64(block.timestamp + 365 days), SEEDED_ANCHOR_ID, EVIDENCE_HASH);
+        assertEq(registry.resolveRater(rater).identityKey, SEEDED_ANCHOR_ID);
+
+        // 2. Revoke A. Canonical must be cleared.
+        vm.prank(admin);
+        registry.revokeHumanCredential(rater);
+        IRaterIdentityRegistry.ResolvedRater memory revokedA = registry.resolveRater(rater);
+        assertTrue(revokedA.identityKey != SEEDED_ANCHOR_ID, "canonical not cleared on revoke");
+        // Post-revoke, identityKey falls back to the address-derived key.
+        assertEq(revokedA.identityKey, registry.addressIdentityKey(rater));
+
+        // 3. SEEDER recycles the anchor onto otherRater. otherRater's canonical = N.
+        vm.startPrank(admin);
+        registry.clearRevokedHumanNullifier(RaterRegistry.HumanCredentialProvider.SeededHuman, SEEDED_ANCHOR_ID);
+        registry.seedHumanCredential(otherRater, uint64(block.timestamp + 365 days), SEEDED_ANCHOR_ID, EVIDENCE_HASH);
+        vm.stopPrank();
+        assertEq(registry.resolveRater(otherRater).identityKey, SEEDED_ANCHOR_ID);
+
+        // 4. Re-seed rater A with a DIFFERENT anchor. A's canonical must be the NEW anchor,
+        //    not the recycled N still held by otherRater.
+        bytes32 freshAnchor = keccak256("fresh-anchor-for-A");
+        vm.prank(admin);
+        registry.seedHumanCredential(rater, uint64(block.timestamp + 365 days), freshAnchor, EVIDENCE_HASH);
+        IRaterIdentityRegistry.ResolvedRater memory reseededA = registry.resolveRater(rater);
+        assertEq(reseededA.identityKey, freshAnchor, "A's canonical didn't re-seed to new anchor");
+
+        // 5. The two raters must NOT share an identityKey.
+        assertTrue(
+            registry.resolveRater(rater).identityKey != registry.resolveRater(otherRater).identityKey,
+            "RR-1: distinct raters share canonical identityKey after revoke->clear->reseed"
+        );
+    }
+
     function test_SeedHumanCredentialStoresSeededAccountAsVerifiedHuman() public {
         uint64 expiresAt = uint64(block.timestamp + 180 days);
 

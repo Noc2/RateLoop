@@ -93,6 +93,11 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
     event CanonicalHumanIdentityKeyRotated(
         address indexed rater, bytes32 indexed previousKey, bytes32 indexed newKey, HumanCredentialProvider provider
     );
+    /// @notice RR-1 (2026-05-20 follow-up audit): emitted when a rater's stale canonical key is
+    ///         cleared on revocation. Off-chain consumers MUST detach any per-identity state
+    ///         keyed off the prior canonical (cooldowns, exclusions, profile ownership) — the
+    ///         next attestation will seed a fresh canonical from the new credential's nullifier.
+    event CanonicalHumanIdentityKeyCleared(address indexed rater, bytes32 indexed previousKey);
     event ProfileFollowed(address indexed follower, address indexed target, uint64 followedAt);
     event ProfileUnfollowed(address indexed follower, address indexed target, uint64 unfollowedAt);
     event DelegateRequested(address indexed holder, address indexed delegate);
@@ -320,6 +325,20 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
         ) {
             delete _humanNullifierOwnerByProvider[provider][nullifierHash];
             _revokedHumanNullifierByProvider[provider][nullifierHash] = true;
+        }
+
+        // RR-1 (2026-05-20 follow-up audit): the M-Identity-2 sticky-canonical fix preserved
+        // `_canonicalHumanIdentityKey[rater]` across credential refreshes so legitimate users
+        // keep accumulated per-identity state. But on revocation the rater's identity is
+        // *terminated*; leaving the canonical in place lets `clearRevokedHumanNullifier` +
+        // re-seed of the same nullifier onto a DIFFERENT rater collide canonical keys between
+        // two distinct addresses (profile theft, vote-commit DoS, bonus-award shadowing).
+        // Clear it here so the next attestation for this rater re-seeds canonical from the
+        // new credential's nullifier on first-attestation.
+        bytes32 previousCanonical = _canonicalHumanIdentityKey[rater];
+        if (previousCanonical != bytes32(0)) {
+            delete _canonicalHumanIdentityKey[rater];
+            emit CanonicalHumanIdentityKeyCleared(rater, previousCanonical);
         }
 
         emit HumanCredentialRevoked(rater, nullifierHash, provider);
