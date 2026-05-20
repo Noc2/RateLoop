@@ -253,10 +253,23 @@ contract LaunchDistributionPool is
     /// @dev Keeps the original one-shot credit record intact and only repoints the pending
     ///      proof verifier. Advisory launch credits cannot reliably be re-recorded after their
     ///      advisory claim path is consumed, so deleting the pending ticket would strand them.
-    function rescueStalePendingEarnedRaterCredit(uint256 contentId, uint256 roundId, bytes32 commitKey)
-        external
-        onlyOwner
-    {
+    /// @param contentId Content the pending credit belongs to.
+    /// @param roundId Round the pending credit belongs to.
+    /// @param commitKey Per-rater commit identifier on the pending entry.
+    /// @param newReadyAt Optional override for `pendingEarnedRaterCreditReadyAt`. Pass 0 to keep
+    ///        the existing value, or a non-zero value at or before the new oracle's snapshot
+    ///        propose time to unblock finalize (L-Oracle-C). The legacy
+    ///        `recordEarnedRaterReward` entrypoint writes `sourceReadyAt = block.timestamp`; if
+    ///        that record happened AFTER the new oracle had already snapshotted the round, the
+    ///        original readyAt is greater than the new oracle's proposedAt and finalize is
+    ///        permanently stuck. This override lets governance reset readyAt to a value the
+    ///        new oracle's snapshot post-dates.
+    function rescueStalePendingEarnedRaterCredit(
+        uint256 contentId,
+        uint256 roundId,
+        bytes32 commitKey,
+        uint64 newReadyAt
+    ) external onlyOwner {
         PendingEarnedRaterCredit storage pending = pendingEarnedRaterCredits[contentId][roundId][commitKey];
         if (!pending.pending) revert InvalidAmount();
         if (earnedRewardCreditFinalized[contentId][roundId][commitKey]) revert AlreadyClaimed();
@@ -264,6 +277,13 @@ contract LaunchDistributionPool is
         if (currentOracle == address(0) || pending.oracle == currentOracle) revert InvalidAddress();
         address staleOracle = pending.oracle;
         pending.oracle = currentOracle;
+        if (newReadyAt != 0) {
+            // L-Oracle-C: refuse to advance readyAt into the future relative to current block —
+            // would silently strand the credit. Allow stepping backwards to before the new
+            // oracle's snapshot proposedAt.
+            if (uint256(newReadyAt) > block.timestamp) revert InvalidAmount();
+            pendingEarnedRaterCreditReadyAt[contentId][roundId][commitKey] = newReadyAt;
+        }
         emit StalePendingEarnedRaterCreditRescued(pending.rater, contentId, roundId, commitKey, staleOracle);
     }
 
@@ -384,6 +404,12 @@ contract LaunchDistributionPool is
         uint256 stakeAmount,
         bytes32[] calldata verifiedAnchorIds
     ) external onlyAuthorized nonReentrant returns (uint256 paidAmount) {
+        // L-Oracle-C: when a cluster oracle is configured the legacy "use current block as
+        // sourceReadyAt" semantic creates a permanently-stuck pending credit whenever the new
+        // oracle's snapshot was proposed BEFORE this call. Production callers always use the
+        // WithSourceReady variant; force any other caller onto that path so the readyAt is
+        // anchored to the voting engine's settlement timestamp rather than now.
+        if (address(clusterPayoutOracle) != address(0)) revert InvalidAddress();
         return _recordEarnedRaterRewardCredit(
             rater,
             contentId,
@@ -493,6 +519,9 @@ contract LaunchDistributionPool is
         bool noPendingCleanup,
         bytes32[] calldata verifiedAnchorIds
     ) external onlyAuthorized nonReentrant returns (bool recorded, uint256 paidAmount) {
+        // L-Oracle-C: see recordEarnedRaterReward. The advisory legacy path has the same
+        // sourceReadyAt-stale problem when an oracle is configured.
+        if (address(clusterPayoutOracle) != address(0)) revert InvalidAddress();
         return _recordAdvisoryRaterRewardCredit(
             rater,
             contentId,

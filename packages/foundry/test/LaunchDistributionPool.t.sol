@@ -530,8 +530,23 @@ contract LaunchDistributionPoolTest is Test {
         _configureLaunchOracle(80);
         bytes32 commitKey = _commitKey(80);
 
-        pool.recordEarnedRaterReward(
-            alice, 1, 80, commitKey, 8_000, 3, true, pool.MIN_LAUNCH_CREDIT_STAKE(), _singleAnchor(bytes32("anchor-a"))
+        // L-Oracle-C: the legacy `recordEarnedRaterReward` is blocked once an oracle is set, so
+        // exercise the rescue scenario through the WithSourceReady variant. Pass the current
+        // block timestamp as the sourceReadyAt to recreate the stale-readyAt condition that the
+        // rescue path is designed to repair (the new oracle's snapshot will be proposed AFTER
+        // this readyAt, but at the same block — finalize still requires proposedAt > readyAt).
+        uint64 sourceReadyAt = uint64(block.timestamp);
+        pool.recordEarnedRaterRewardWithSourceReady(
+            alice,
+            1,
+            80,
+            commitKey,
+            8_000,
+            3,
+            true,
+            pool.MIN_LAUNCH_CREDIT_STAKE(),
+            _singleAnchor(bytes32("anchor-a")),
+            sourceReadyAt
         );
         uint64 readyAt = pool.pendingEarnedRaterCreditReadyAt(1, 80, commitKey);
 
@@ -541,7 +556,7 @@ contract LaunchDistributionPoolTest is Test {
         assertEq(pool.verifiedAnchorDistinctRaterCount(bytes32("anchor-a")), 0);
 
         ClusterPayoutOracle currentOracle = _configureLaunchOracle(80);
-        pool.rescueStalePendingEarnedRaterCredit(1, 80, commitKey);
+        pool.rescueStalePendingEarnedRaterCredit(1, 80, commitKey, 0);
 
         assertTrue(pool.earnedRewardCreditRecorded(1, 80, commitKey));
         assertTrue(pool.raterRoundCreditRecorded(alice, 1, 80));
