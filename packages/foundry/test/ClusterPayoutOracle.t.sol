@@ -307,6 +307,39 @@ contract ClusterPayoutOracleTest is Test {
         oracle.rejectCorrelationEpoch(1, keccak256("bad-root"));
         ClusterPayoutOracle.CorrelationEpochSnapshot memory snapshot = oracle.correlationEpochSnapshot(1);
         assertEq(uint8(snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Rejected));
+        // L-Oracle-A: a challenge-then-reject DOES still blacklist the root so identical
+        // re-proposal is blocked. Only pre-challenge (Proposed-state) rejections skip blacklisting.
+        assertTrue(oracle.rejectedCorrelationEpochRoots(1, keccak256("cluster-root")));
+    }
+
+    // L-Oracle-A: the arbiter rejecting a Proposed (pre-challenge) correlation epoch must NOT
+    // blacklist the clusterRoot — otherwise an M-Oracle-1 style slot-squat followed by an arbiter
+    // reject would permanently strand the correct root (the deterministic scorer can't produce a
+    // different root for the same epoch).
+    function test_ProposedCorrelationEpochRejectionDoesNotBlacklistRoot() public {
+        address squatter = address(0xBAD);
+        frontendRegistry.setEligible(squatter, true);
+
+        bytes32 honestRoot = keccak256("honest-cluster-root");
+
+        vm.prank(squatter);
+        oracle.proposeCorrelationEpoch(
+            1, 1, 20, honestRoot, keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+        );
+
+        // Arbiter clears the squatted slot without going through the challenge cycle.
+        oracle.rejectCorrelationEpoch(1, keccak256("squat-cleanup"));
+
+        // The clusterRoot is NOT blacklisted, so an honest proposer can re-submit it.
+        assertFalse(oracle.rejectedCorrelationEpochRoots(1, honestRoot));
+        oracle.proposeCorrelationEpoch(
+            1, 1, 20, honestRoot, keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+        );
+
+        vm.warp(block.timestamp + 1 hours + 2);
+        oracle.finalizeCorrelationEpoch(1);
+        ClusterPayoutOracle.CorrelationEpochSnapshot memory finalSnapshot = oracle.correlationEpochSnapshot(1);
+        assertEq(uint8(finalSnapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Finalized));
     }
 
     function test_ChallengesPullConfiguredUsdcBond() public {

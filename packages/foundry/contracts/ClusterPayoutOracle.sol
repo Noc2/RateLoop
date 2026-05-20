@@ -301,9 +301,16 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         CorrelationEpochSnapshot storage snapshot = correlationEpochSnapshots[epochId];
         if (snapshot.status == SnapshotStatus.None) revert SnapshotNotFound();
         if (snapshot.status == SnapshotStatus.Finalized) revert SnapshotFinalized();
+        bool wasChallenged = snapshot.status == SnapshotStatus.Challenged;
         snapshot.status = SnapshotStatus.Rejected;
-        // L-Oracle-4: blacklist the rejected root so identical re-proposal reverts.
-        rejectedCorrelationEpochRoots[epochId][snapshot.clusterRoot] = true;
+        // L-Oracle-A: only blacklist the clusterRoot when the rejection comes from a `Challenged`
+        // state. Pre-challenge slot-squat proposals (M-Oracle-1 family on the correlation-epoch
+        // path) can be cleared by the arbiter without permanently banning the honest correct
+        // root from re-proposal — the deterministic scorer pipeline cannot produce a different
+        // root for the same epoch, so blacklisting would otherwise strand the epoch.
+        if (wasChallenged) {
+            rejectedCorrelationEpochRoots[epochId][snapshot.clusterRoot] = true;
+        }
         address challenger = snapshot.challenger;
         uint256 bond = snapshot.bond;
         snapshot.bond = 0;
