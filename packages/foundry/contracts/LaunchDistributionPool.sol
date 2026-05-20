@@ -231,7 +231,10 @@ contract LaunchDistributionPool is
     function setRoundClusterReadyAtSource(address newSource) external onlyOwner {
         if (newSource != address(0)) {
             if (newSource.code.length == 0) revert InvalidAddress();
-            // ABI shape probe — calling with (0,0) must not revert on a properly conforming source.
+            // ABI shape probe — calling with (0,0) must not revert on a properly conforming
+            // source. The returned timestamp is intentionally discarded; the probe is purely
+            // a try/catch barrier to confirm the candidate decodes uint48.
+            // slither-disable-next-line unused-return
             try IRoundClusterReadyAtSource(newSource).roundClusterPayoutReadyAt(0, 0) returns (uint48) { }
             catch {
                 revert InvalidAddress();
