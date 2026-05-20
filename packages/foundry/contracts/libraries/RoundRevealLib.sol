@@ -41,6 +41,7 @@ library RoundRevealLib {
         uint16 roundReferenceRatingBps;
         uint16 minVoters;
         uint256 targetRoundRevealableAt;
+        bytes32 drandChainHash;
     }
 
     struct RbtsRoundTotals {
@@ -103,7 +104,7 @@ library RoundRevealLib {
             params.roundId,
             params.roundReferenceRatingBps,
             commit.targetRound,
-            commit.drandChainHash,
+            params.drandChainHash,
             commit.ciphertextHash
         );
         if (params.commitKey != keccak256(abi.encodePacked(commit.voter, expectedHash))) revert HashMismatch();

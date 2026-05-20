@@ -313,7 +313,9 @@ contract RoundVotingEngine is
             uint64 stakeAmount
         )
     {
-        return RoundCleanupLib.commitRevealData(commits[contentId][roundId], commitKey);
+        return RoundCleanupLib.commitRevealData(
+            commits[contentId][roundId], commitKey, _getRoundDrandChainHash(contentId, roundId)
+        );
     }
 
     /// @notice Commit a blind vote on content. Direction is hidden via tlock encryption.
@@ -504,7 +506,6 @@ contract RoundVotingEngine is
             frontend,
             epochEnd,
             targetRound,
-            drandChainHash,
             epochIdx,
             commitHash,
             resolved.identityKey,
@@ -575,7 +576,6 @@ contract RoundVotingEngine is
         address frontend,
         uint256 epochEnd,
         uint64 targetRound,
-        bytes32 drandChainHash,
         uint8 epochIdx,
         bytes32 commitHash,
         bytes32 identityKey,
@@ -591,7 +591,6 @@ contract RoundVotingEngine is
             frontend,
             epochEnd,
             targetRound,
-            drandChainHash,
             epochIdx
         );
         _markFrontendEligibility(contentId, roundId, commitKey, frontend);
@@ -610,7 +609,6 @@ contract RoundVotingEngine is
         address frontend,
         uint256 epochEnd,
         uint64 targetRound,
-        bytes32 drandChainHash,
         uint8 epochIdx
     ) internal {
         commits[contentId][roundId][commitKey] = RoundLib.Commit({
@@ -620,7 +618,6 @@ contract RoundVotingEngine is
             frontend: frontend,
             revealableAfter: epochEnd.toUint48(),
             targetRound: targetRound,
-            drandChainHash: drandChainHash,
             revealed: false,
             isUp: false,
             epochIndex: epochIdx
@@ -1060,6 +1057,13 @@ contract RoundVotingEngine is
         );
     }
 
+    function _getRoundDrandChainHash(uint256 contentId, uint256 roundId) internal view returns (bytes32 chainHash) {
+        chainHash = roundDrandChainHashSnapshot[contentId][roundId];
+        if (chainHash == bytes32(0)) {
+            chainHash = protocolConfig.drandChainHash();
+        }
+    }
+
     function _currentConfig() internal view returns (RoundLib.RoundConfig memory cfg) {
         (cfg.epochDuration, cfg.maxDuration, cfg.minVoters, cfg.maxVoters) = protocolConfig.config();
     }
@@ -1281,7 +1285,8 @@ contract RoundVotingEngine is
                 salt: salt,
                 roundReferenceRatingBps: _getRoundReferenceRatingBps(contentId, roundId),
                 minVoters: _rbtsRevealQuorum(roundCfg.minVoters),
-                targetRoundRevealableAt: targetRoundRevealableAt
+                targetRoundRevealableAt: targetRoundRevealableAt,
+                drandChainHash: _getRoundDrandChainHash(contentId, roundId)
             })
         );
         roundStakeWithEligibleFrontend[contentId][roundId] = eligibleFrontendStake;

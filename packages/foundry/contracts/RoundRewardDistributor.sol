@@ -772,7 +772,7 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
     {
         bytes32 commitKey = _findVoterCommitKey(contentId, roundId, voter);
         if (commitKey == bytes32(0)) {
-            return RoundLib.Commit(address(0), 0, "", 0, bytes32(0), address(0), 0, false, false, 0);
+            return RoundLib.Commit(address(0), 0, bytes32(0), 0, address(0), 0, false, false, 0);
         }
         return _readCommit(contentId, roundId, commitKey);
     }
