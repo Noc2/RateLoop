@@ -17,14 +17,6 @@ const GovernanceDocs: NextPage = () => {
         from held, self-delegated LREP, and proposals execute through the governor and timelock. The current token
         auto-delegates voting power to the holder and rejects third-party LREP vote delegation.
       </p>
-      <ul>
-        <li>Upgrade or configure protocol contracts.</li>
-        <li>Set round defaults and creator bounds.</li>
-        <li>Configure the ClusterPayoutOracle used for challengeable USDC and launch LREP payout roots.</li>
-        <li>Route treasury spending, including ecosystem and partner activation grants.</li>
-        <li>Configure optional identity credentials, calibration, and anti-abuse rules.</li>
-      </ul>
-
       <h2>Proposal Lifecycle</h2>
       <div className="not-prose my-6 overflow-x-auto rounded-lg bg-base-200">
         <table className="table table-zebra [&_th]:bg-base-300 [&_th]:text-base [&_td]:text-base">
