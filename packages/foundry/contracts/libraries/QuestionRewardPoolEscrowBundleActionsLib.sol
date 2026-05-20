@@ -850,7 +850,10 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         bundleRoundSetSnapshots[bundleId][roundSetIndex] = BundleRoundSetSnapshot({
             qualified: true,
             claimedCount: 0,
-            eligibleCompleters: uint32(completerCount),
+            // FE-5 (2026-05-20 follow-up audit): use SafeCast.toUint32 for consistency with the
+            // rest of the codebase. completerCount is currently bounded by uint16 commitCount so
+            // the cast is sound, but raw uint32(x) bypasses the project's safe-cast policy.
+            eligibleCompleters: completerCount.toUint32(),
             allocation: allocation,
             frontendFeeAllocation: frontendFeeAllocation
         });
