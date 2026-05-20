@@ -14,7 +14,6 @@ import {RoundRewardDistributor} from "../contracts/RoundRewardDistributor.sol";
 import {RoundLib} from "../contracts/libraries/RoundLib.sol";
 import {RoundEngineReadHelpers} from "./helpers/RoundEngineReadHelpers.sol";
 import {TlockVoteLib} from "../contracts/libraries/TlockVoteLib.sol";
-import {LoopReputation} from "../contracts/LoopReputation.sol";
 import {MockCategoryRegistry} from "../contracts/mocks/MockCategoryRegistry.sol";
 import {MockWorldIDRouter} from "../contracts/mocks/MockWorldIDRouter.sol";
 
@@ -23,20 +22,6 @@ contract MockRevertingLaunchDistributionPool {
 
     function launchAnchorCredentialAgeSeconds() external pure returns (uint32) {
         return 0;
-    }
-
-    function recordEarnedRaterReward(
-        address,
-        uint256,
-        uint256,
-        bytes32,
-        uint16,
-        uint16,
-        bool,
-        uint256,
-        bytes32[] calldata
-    ) external pure returns (uint256) {
-        revert LaunchCreditRejected();
     }
 
     function recordEarnedRaterRewardWithSourceReady(

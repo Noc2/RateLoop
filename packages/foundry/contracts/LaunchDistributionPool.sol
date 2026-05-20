@@ -309,31 +309,6 @@ contract LaunchDistributionPool is
         emit RaterLaunchCapUnlocked(rater, nullifierHash, previousCap, fullCap, catchUpPaid);
     }
 
-    function recordEarnedRaterReward(
-        address rater,
-        uint256 contentId,
-        uint256 roundId,
-        bytes32 commitKey,
-        uint16 scoreBps,
-        uint16 revealedRaterCount,
-        bool noPendingCleanup,
-        uint256 stakeAmount,
-        bytes32[] calldata verifiedAnchorIds
-    ) external onlyAuthorized nonReentrant returns (uint256 paidAmount) {
-        return _recordEarnedRaterRewardCredit(
-            rater,
-            contentId,
-            roundId,
-            commitKey,
-            scoreBps,
-            revealedRaterCount,
-            noPendingCleanup,
-            stakeAmount,
-            verifiedAnchorIds,
-            uint64(block.timestamp)
-        );
-    }
-
     function recordEarnedRaterRewardWithSourceReady(
         address rater,
         uint256 contentId,
@@ -417,29 +392,6 @@ contract LaunchDistributionPool is
         _recordAnchorRound(rater, contentId, roundId);
         _recordVerifiedAnchors(policy, rater, verifiedAnchorIds);
         return _recordEarnedRaterReward(rater, contentId, roundId, commitKey, scoreBps, policy, BPS_DENOMINATOR);
-    }
-
-    function recordAdvisoryRaterReward(
-        address rater,
-        uint256 contentId,
-        uint256 roundId,
-        bytes32 advisoryCommitKey,
-        uint16 scoreBps,
-        uint16 revealedRaterCount,
-        bool noPendingCleanup,
-        bytes32[] calldata verifiedAnchorIds
-    ) external onlyAuthorized nonReentrant returns (bool recorded, uint256 paidAmount) {
-        return _recordAdvisoryRaterRewardCredit(
-            rater,
-            contentId,
-            roundId,
-            advisoryCommitKey,
-            scoreBps,
-            revealedRaterCount,
-            noPendingCleanup,
-            verifiedAnchorIds,
-            uint64(block.timestamp)
-        );
     }
 
     function recordAdvisoryRaterRewardWithSourceReady(
