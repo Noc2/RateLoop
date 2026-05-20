@@ -1466,6 +1466,13 @@ contract RoundVotingEngine is
     /// @dev For rounds without stale unrevealed votes this equals `settledAt`; otherwise it is
     ///      set when the cleanup queue reaches zero. Oracle consumers reject roots proposed
     ///      before this timestamp so the optimistic challenge window only runs on complete data.
+    ///      I-Crosscutting-A: this slot was swapped in-place from `roundDeferredCleanupBounty`
+    ///      (triple mapping → uint48) when the deferred-cleanup bounty was removed in commit
+    ///      `38dae9e6`. Fresh deployments are unaffected; any future upgrade from a baseline
+    ///      that populated the old surface must run `validateUpgrade` first and treat this slot
+    ///      as freshly initialized. The annotation marks the in-place swap so OZ Upgrades tools
+    ///      do not flag the storage layout change.
+    /// @custom:oz-renamed-from roundDeferredCleanupBounty
     mapping(uint256 contentId => mapping(uint256 roundId => uint48)) public roundClusterPayoutReadyAt;
 
     // --- Storage gap reserved for future upgrades ---
