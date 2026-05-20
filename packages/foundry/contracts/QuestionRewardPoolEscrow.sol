@@ -161,7 +161,6 @@ contract QuestionRewardPoolEscrow is
     );
     event RewardPoolRefunded(uint256 indexed rewardPoolId, address indexed funder, uint256 amount);
     event RewardPoolForfeited(uint256 indexed rewardPoolId, address indexed treasury, uint256 amount);
-    event DefaultFrontendFeeBpsUpdated(uint256 previousFrontendFeeBps, uint256 newFrontendFeeBps);
     event NonAssetTokenRecovered(address indexed token, address indexed to, uint256 amount);
     event RejectedSnapshotRoundRecovered(
         uint256 indexed rewardPoolId, uint256 indexed contentId, uint256 indexed roundId, uint256 allocationReturned
