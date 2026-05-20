@@ -508,8 +508,9 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         // L-Oracle-B: wrap the consumer call in try/catch so a broken / removed consumer cannot
         // trap the arbiter and indefinitely block reject. A reverting consumer is treated as
         // "consumed" (conservative — outside the veto window the rejection still aborts; inside
-        // the veto window the rejection proceeds as before).
-        bool consumed;
+        // the veto window the rejection proceeds as before). Initialize explicitly to `false`
+        // so the local is never read uninitialized.
+        bool consumed = false;
         try IRoundPayoutSnapshotConsumer(consumer)
             .isRoundPayoutSnapshotConsumed(
                 snapshot.domain, snapshot.rewardPoolId, snapshot.contentId, snapshot.roundId
