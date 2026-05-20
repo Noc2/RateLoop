@@ -327,6 +327,15 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
         f.lrepFees = 0;
         f.slashed = true;
 
+        // L-Frontend-3: slashing must reset the unbonding clock. Otherwise a slash → unslash →
+        // immediate-exit pattern lets governance be coerced into shortening the operator's
+        // review window to zero — the timer keeps running while the operator is frozen.
+        if (frontendExitAvailableAt[frontend] != 0) {
+            uint256 newAvailableAt = block.timestamp + UNBONDING_PERIOD;
+            frontendExitAvailableAt[frontend] = newAvailableAt;
+            emit FrontendExitRequested(frontend, newAvailableAt);
+        }
+
         uint256 totalConfiscated = amount + confiscatedFees;
         if (totalConfiscated > 0) {
             lrepToken.safeTransfer(confiscationRecipient, totalConfiscated);
