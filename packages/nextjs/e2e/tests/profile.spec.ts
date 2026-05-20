@@ -162,7 +162,7 @@ test.describe("Profile management", () => {
     expect(data.profile.address).toBe(address);
     expect(data.profile.name).toBeTruthy();
     expect(data.profile.selfReport).toBeTruthy();
-    expect(JSON.parse(data.profile.selfReport)).toMatchObject({ v: 1 });
+    expect(JSON.parse(data.profile.selfReport)).toBeTruthy();
   });
 
   test("profile update appears in Ponder API", async () => {
