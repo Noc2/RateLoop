@@ -648,7 +648,7 @@ const deployedContracts: GenericContractsDeclaration = {
       deployedOnBlock: 5,
     },
     RoundSettlementDistributionLib: {
-      address: "0x63881410af19d9263c27ae1be3ce5f0be9629b5d",
+      address: "0x07f132e9af6d08dd2fe2ce5f38ee6bd70666ed9f",
       abi: [
         {
           type: "event",
@@ -705,7 +705,7 @@ const deployedContracts: GenericContractsDeclaration = {
       deployedOnBlock: 6,
     },
     RoundRevealLib: {
-      address: "0xbb669a9a9ab50dedfe4a48f553dfefb8c6d352c9",
+      address: "0xb1626059d5f299f043dd45b27b13bbbc74986081",
       abi: [
         {
           type: "event",
@@ -884,7 +884,7 @@ const deployedContracts: GenericContractsDeclaration = {
       deployedOnBlock: 8,
     },
     RoundCleanupLib: {
-      address: "0x109a2067e761d8059ac73df9c57ab496b7adc0dc",
+      address: "0x00daf7666112e413393c4bd8f9b23290cf679366",
       abi: [
         {
           type: "event",
@@ -23649,7 +23649,7 @@ const deployedContracts: GenericContractsDeclaration = {
       deployedOnBlock: 47,
     },
     ParticipationPool: {
-      address: "0x4f29f479D3e6c41aD3fC8C7c8D6f423Cb2784b8e",
+      address: "0x83B4e0d6ff93f3183D306Da23EfAE17773e6dFc0",
       abi: [
         {
           type: "constructor",
@@ -24310,10 +24310,10 @@ const deployedContracts: GenericContractsDeclaration = {
         transferOwnership:
           "lib/openzeppelin-contracts/contracts/access/Ownable.sol",
       },
-      deployedOnBlock: 78,
+      deployedOnBlock: 75,
     },
     LaunchDistributionPool: {
-      address: "0x3C4249f1cDf4C5Ee12D480a543a6A42362baAAFf",
+      address: "0x4f29f479D3e6c41aD3fC8C7c8D6f423Cb2784b8e",
       abi: [
         {
           type: "constructor",
@@ -27029,10 +27029,10 @@ const deployedContracts: GenericContractsDeclaration = {
         transferOwnership:
           "lib/openzeppelin-contracts/contracts/access/Ownable.sol",
       },
-      deployedOnBlock: 81,
+      deployedOnBlock: 78,
     },
     AdvisoryVoteRecorder: {
-      address: "0x1Da1e5EE07AD91E402BD4Fc14773f7a4caa6b2ad",
+      address: "0x3Be63776630ac9f282109352C804E650d515C604",
       abi: [
         {
           type: "constructor",
@@ -27923,7 +27923,7 @@ const deployedContracts: GenericContractsDeclaration = {
         transferOwnership:
           "lib/openzeppelin-contracts/contracts/access/Ownable.sol",
       },
-      deployedOnBlock: 85,
+      deployedOnBlock: 82,
     },
   },
 };
