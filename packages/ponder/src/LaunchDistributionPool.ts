@@ -422,25 +422,7 @@ ponder.on(
   },
 );
 
-ponder.on(
-  "LaunchDistributionPool:LegacyClaimed",
-  async ({ event, context }) => {
-    const { account, amount } = event.args;
-
-    await context.db
-      .insert(rewardClaim)
-      .values({
-        id: `${event.transaction.hash}-${event.log.logIndex}`,
-        contentId: 0n,
-        roundId: 0n,
-        source: "launch",
-        voter: account,
-        stakeReturned: 0n,
-        lrepReward: amount,
-        claimedAt: event.block.timestamp,
-      })
-      .onConflictDoNothing();
-
-    await creditLaunchReward(context, account, amount);
-  },
-);
+// `LegacyClaimed` was removed from LaunchDistributionPool on main (commit `Remove launch
+// legacy claim rail`) — the corresponding Ponder handler is dropped here to keep typecheck
+// passing. Historical legacy claims, if any, remain in the indexer's existing rewardClaim
+// rows from prior runs.
