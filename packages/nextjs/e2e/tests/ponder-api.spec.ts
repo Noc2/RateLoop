@@ -29,11 +29,18 @@ test.describe("Ponder API endpoints", () => {
     const data = await getContentById(1);
     expect(data).toHaveProperty("content");
     expect(data).toHaveProperty("rounds");
+    expect(data).toHaveProperty("ratings");
     expect(data.content.id).toBe("1");
     expect(data.content).toHaveProperty("categoryId");
     expect(data.content).toHaveProperty("submitter");
     expect(data.content).toHaveProperty("url");
     expect(Array.isArray(data.rounds)).toBe(true);
+    expect(Array.isArray(data.ratings)).toBe(true);
+    expect(
+      data.rounds.some(round => round.state === 1),
+      "seeded content #1 should include a settled round indexed by Ponder",
+    ).toBe(true);
+    expect(data.ratings.length, "seeded content #1 should include indexed rating history").toBeGreaterThan(0);
   });
 
   test("GET /content with categoryId filter", async () => {
