@@ -82,6 +82,7 @@ test.describe("Settings page", () => {
     await gotoWithRetry(page, "/settings#identity", { ensureWalletConnected: true });
 
     await expect(page.getByRole("heading", { name: "Human credential" })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/self-verified/i)).toHaveCount(0);
 
     const verifyButton = page.getByRole("button", { name: "Verify with World ID" });
     await expect(verifyButton).toBeEnabled({ timeout: 15_000 });

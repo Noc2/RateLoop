@@ -44,6 +44,20 @@ test.describe("Governance page", () => {
     await expect(minVotes.getByRole("option", { name: "Min 5 votes" })).toBeAttached();
   });
 
+  test("zero-LREP onboarding explains launch credit paths", async ({ page }) => {
+    await setupWallet(page, ANVIL_ACCOUNTS.account1.privateKey);
+    await gotoWithRetry(page, "/governance", { ensureWalletConnected: true });
+
+    await expect(page.getByRole("heading", { name: "Start building reputation" })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("heading", { name: "Verify as human" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Earn LREP by voting" })).toBeVisible();
+    await expect(page.getByText("Launch credits", { exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: "eligible settled rounds" })).toHaveAttribute(
+      "href",
+      "/docs/how-it-works#eligible-settled-rounds",
+    );
+  });
+
   test("profile tab stays read-only until edit is clicked", async ({ browser }) => {
     const context = await newE2EContext(browser);
     const page = await context.newPage();

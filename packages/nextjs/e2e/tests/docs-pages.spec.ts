@@ -75,6 +75,18 @@ test.describe("Documentation pages", () => {
     await expect(page.getByRole("heading", { name: /^SDK$/i }).first()).toBeVisible({ timeout: 10_000 });
   });
 
+  test("docs explain advisory launch credits without stale credential wording", async ({ page }) => {
+    await page.goto("/docs/how-it-works#eligible-settled-rounds", { waitUntil: "domcontentloaded" });
+
+    await expect(page.getByRole("heading", { name: "Launch LREP credits" })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(/effective credit = finalized independence weight/i)).toBeVisible();
+    await expect(page.getByText(/self-verified/i)).toHaveCount(0);
+
+    await page.goto("/docs/tokenomics", { waitUntil: "domcontentloaded" });
+    await expect(page.getByText(/eligible settled advisory rounds can qualify for launch credits/i)).toBeVisible();
+    await expect(page.getByText(/self-verified/i)).toHaveCount(0);
+  });
+
   for (const path of legalPages) {
     test(`${path} loads with a heading`, async ({ page }) => {
       await page.goto(path, { waitUntil: "domcontentloaded" });
