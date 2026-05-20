@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { ClusterPayoutOracleAbi, RateLoopGovernorAbi, QuestionRewardPoolEscrowAbi } from "./abis";
+import * as generatedAbis from "./abis";
 import deployedContracts from "./deployedContracts";
 import { getSharedChainStartBlock, getSharedDeploymentAddress, getSharedDeploymentStartBlock } from "./deployments";
 
@@ -10,6 +10,15 @@ type DeploymentChain = Record<string, DeploymentContract>;
 
 const deploymentsByChain = deployedContracts as Record<number, DeploymentChain>;
 const localChain = deploymentsByChain[31337];
+const abiExportsByContractName = new Map<string, readonly unknown[]>(
+  Object.entries(generatedAbis).flatMap(([exportName, abi]) => {
+    if (!exportName.endsWith("Abi") || !Array.isArray(abi)) {
+      return [];
+    }
+
+    return [[exportName.slice(0, -"Abi".length), abi as readonly unknown[]]];
+  }),
+);
 
 function isValidStartBlock(value: number | undefined): value is number {
   return typeof value === "number" && Number.isInteger(value) && value >= 0;
@@ -26,6 +35,10 @@ function getChainWithStartBlocks(): [number, DeploymentChain] {
   const entry = Object.entries(deploymentsByChain).find(([, chain]) => getExpectedChainStartBlock(chain) !== undefined);
   assert.ok(entry, "expected at least one generated deployment chain with start block metadata");
   return [Number(entry[0]), entry[1]];
+}
+
+function isInternalDeploymentOnlyContract(contractName: string): boolean {
+  return contractName.endsWith("Lib") || contractName.startsWith("Mock");
 }
 
 test("shared deployment helpers return local-chain addresses", () => {
@@ -52,37 +65,46 @@ test("shared deployment helpers return undefined for unknown chains", () => {
 });
 
 test("shared ABI exports include governance contracts present in shared deployments", () => {
-  assert.ok(Array.isArray(RateLoopGovernorAbi));
-  assert.ok(RateLoopGovernorAbi.length > 0);
+  assert.ok(Array.isArray(generatedAbis.RateLoopGovernorAbi));
+  assert.ok(generatedAbis.RateLoopGovernorAbi.length > 0);
 });
 
 test("standalone generated ABIs match shared deployment ABIs", () => {
-  for (const [chainId, chain] of Object.entries(deploymentsByChain)) {
-    const clusterPayoutOracle = chain.ClusterPayoutOracle;
-    if (clusterPayoutOracle) {
-      assert.deepEqual(
-        clusterPayoutOracle.abi,
-        ClusterPayoutOracleAbi,
-        `ClusterPayoutOracle ABI mismatch on chain ${chainId}`,
-      );
-    }
+  const comparedContracts = new Set<string>();
+  const missingStandaloneAbiExports = new Set<string>();
 
-    const questionRewardPoolEscrow = chain.QuestionRewardPoolEscrow;
-    if (questionRewardPoolEscrow) {
+  for (const [chainId, chain] of Object.entries(deploymentsByChain)) {
+    for (const [contractName, contract] of Object.entries(chain)) {
+      const standaloneAbi = abiExportsByContractName.get(contractName);
+      if (!standaloneAbi) {
+        if (!isInternalDeploymentOnlyContract(contractName)) {
+          missingStandaloneAbiExports.add(contractName);
+        }
+        continue;
+      }
+
+      comparedContracts.add(contractName);
       assert.deepEqual(
-        questionRewardPoolEscrow.abi,
-        QuestionRewardPoolEscrowAbi,
-        `QuestionRewardPoolEscrow ABI mismatch on chain ${chainId}`,
+        contract.abi,
+        standaloneAbi,
+        `${contractName} ABI mismatch on chain ${chainId}`,
       );
     }
   }
+
+  assert.deepEqual(
+    [...missingStandaloneAbiExports].sort(),
+    [],
+    "expected every non-internal deployed contract to have a standalone ABI export",
+  );
+  assert.ok(comparedContracts.size > 10, "expected ABI parity coverage to include generated deployment contracts");
 });
 
 test("cluster payout oracle ABI exposes round payout rejection functions", () => {
-  const rejectFinalized = ClusterPayoutOracleAbi.find(
+  const rejectFinalized = generatedAbis.ClusterPayoutOracleAbi.find(
     (item) => item.type === "function" && item.name === "rejectFinalizedRoundPayoutSnapshot",
   );
-  const rejectProposed = ClusterPayoutOracleAbi.find(
+  const rejectProposed = generatedAbis.ClusterPayoutOracleAbi.find(
     (item) => item.type === "function" && item.name === "rejectRoundPayoutSnapshot",
   );
 
@@ -97,7 +119,7 @@ test("cluster payout oracle ABI exposes round payout rejection functions", () =>
 });
 
 test("question reward pool escrow ABI exposes snapshot consumer view", () => {
-  const consumerView = QuestionRewardPoolEscrowAbi.find(
+  const consumerView = generatedAbis.QuestionRewardPoolEscrowAbi.find(
     (item) => item.type === "function" && item.name === "isRoundPayoutSnapshotConsumed",
   );
 
