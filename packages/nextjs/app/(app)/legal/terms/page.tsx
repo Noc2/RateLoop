@@ -77,12 +77,20 @@ const TermsPage: NextPage = () => {
         </p>
         <ul>
           <li>LREP tokens are reputation tokens used for content curation and governance within the Protocol</li>
-          <li>LREP tokens have no monetary value and are not intended as an investment</li>
+          <li>
+            LREP tokens have no protocol-backed redemption value, no claim on revenue or assets, and are not intended as
+            an investment
+          </li>
           <li>You may lose tokens through normal Protocol operation (e.g., incorrect curation predictions)</li>
           <li>There is no guarantee of any particular outcomes from your participation</li>
           <li>Historical outcomes do not indicate or guarantee future results</li>
           <li>The Interface operator has no liability for any token losses you incur</li>
         </ul>
+        <p>
+          Nothing in the Service is an offer to buy or sell securities, financial instruments, deposits, e-money, or
+          investment products. LREP does not represent equity, debt, revenue sharing, dividends, redemption rights, or
+          any right to the assets of the Interface operator or the Protocol.
+        </p>
 
         <h2>5. Risk Disclosures</h2>
         <div className="alert alert-info my-4">
@@ -190,18 +198,25 @@ const TermsPage: NextPage = () => {
           <li>A financial product or investment vehicle</li>
         </ul>
         <p>
-          Submission and bounty features are question-first: a submission may be text-only or include one image or one
-          YouTube link, and the submission must attach a non-refundable bounty funded in LREP or USDC on World Chain. A
-          default frontend-operator share may be reserved from qualified claims when the vote was attributed to an
-          eligible frontend. Bounty funds are sent from your connected wallet, smart wallet, or user-authorized agent
-          wallet directly to protocol smart contracts; the Interface operator does not custody those bounty funds. The
-          Interface does not impose a hard bounty cap, but it may apply moderation, duplicate-detection, media-type, and
-          eligibility checks before a submission is accepted or a claim is processed.
+          Submission and bounty features are question-first: a submission may be text-only or include public URL, image,
+          or YouTube video context, and the submission must attach a non-refundable bounty funded in LREP or USDC on
+          World Chain. A default frontend-operator share may be reserved from qualified claims when the vote was
+          attributed to an eligible frontend. Bounty funds are sent from your connected wallet, smart wallet, or
+          user-authorized agent wallet directly to protocol smart contracts; the Interface operator does not custody
+          those bounty funds. The Interface does not impose a hard bounty cap, but it may apply moderation,
+          duplicate-detection, media-type, and eligibility checks before a submission is accepted or a claim is
+          processed.
         </p>
         <p>
           Bounty payouts are equal within each qualified bounty round for eligible revealed voters, and claims remain
           gated by the relevant protocol checks. These guardrails are intended to reduce spam, preserve Sybil
           resistance, and keep the submission surface narrow.
+        </p>
+        <p>
+          USDC bounties, feedback bonuses, and any other reward surfaces are task or participation payments, not
+          investment returns. They may be unavailable, delayed, reduced, rejected, forfeited, or unclaimable because of
+          protocol rules, eligibility checks, fraud or abuse review, sanctions or compliance screening, smart-contract
+          risk, network fees, network failure, stablecoin issuer risk, or tax and reporting obligations.
         </p>
 
         <h2>7. User Responsibilities</h2>
@@ -222,6 +237,9 @@ const TermsPage: NextPage = () => {
         <ul>
           <li>Provide false information regarding your identity or eligibility</li>
           <li>Attempt to manipulate content ratings through coordinated or automated activity</li>
+          <li>
+            Submit fake reviews, undisclosed insider feedback, manipulated feedback, or misleading paid endorsements
+          </li>
           <li>Ask questions with content that violates intellectual property rights</li>
           <li>Ask questions with content that is illegal, harmful, or violates platform guidelines</li>
           <li>Interfere with or disrupt the Service or its infrastructure</li>
@@ -263,12 +281,23 @@ const TermsPage: NextPage = () => {
           validate, transform, moderate, reject, store, cache, display, or remove uploaded media to operate the Service,
           protect users, comply with law, and enforce these Terms.
         </p>
+        <p>
+          Questions, ratings, feedback, and other public submissions may be bounty-funded or otherwise compensated. You
+          must not use the Service to create fake social proof, hide material conflicts of interest, or misrepresent
+          paid or bounty-eligible feedback as independent unpaid endorsement.
+        </p>
 
         <h2>11. Third-Party Content</h2>
         <p>
           The RateLoop Protocol indexes and displays links to third-party content. We do not endorse, verify, or take
           responsibility for the accuracy, legality, quality, or safety of any external content. Accessing external
           links is entirely at your own risk.
+        </p>
+        <p>
+          We may remove, hide, restrict, or refuse to serve questions, media, feedback, links, profiles, or other
+          content that appears illegal, rights-infringing, abusive, deceptive, spammy, unsafe, or inconsistent with
+          these Terms. You can contact us at hawigxyz@proton.me about illegal content notices, moderation decisions, or
+          legal requests.
         </p>
 
         <h2>12. Disclaimer of Warranties</h2>
