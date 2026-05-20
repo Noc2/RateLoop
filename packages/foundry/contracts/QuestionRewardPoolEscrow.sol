@@ -252,6 +252,15 @@ contract QuestionRewardPoolEscrow is
         defaultFrontendFeeBps = DEFAULT_FRONTEND_FEE_BPS.toUint16();
     }
 
+    /// @notice Create a reward pool with the default open-eligibility policy.
+    /// @dev FE-2 (2026-05-20 follow-up audit): the funder's effective refund-eligibility time is
+    ///      `max(bountyClosesAt, lastQualifyingRound.settledAt) + 7 days`, NOT
+    ///      `bountyClosesAt + 7 days`. Each round qualification advances the per-pool
+    ///      `claimDeadline` forward (never backward) so claimants always get a full 7-day grace
+    ///      after the final qualifying round settles. For pools with `requiredSettledRounds > 1`
+    ///      on slow-moving content, the funder's refund window therefore extends past
+    ///      `bountyClosesAt`. The intent is to guarantee a 7-day claim window for the LAST
+    ///      qualifying round, even if the bounty closes earlier on the wall clock.
     function createRewardPool(
         uint256 contentId,
         uint256 amount,
@@ -1265,6 +1274,20 @@ contract QuestionRewardPoolEscrow is
     {
         RewardPool storage rewardPool = _getExistingRewardPool(rewardPoolId);
         return (rewardPool.bountyEligibility, rewardPool.bountyEligibilityDataHash);
+    }
+
+    /// @notice Returns the unix timestamp at which the funder of `rewardPoolId` becomes eligible
+    ///         to call `refundExpiredRewardPool` for the COMPLETE-pool refund path. The funder
+    ///         must wait until `claimDeadline + 7 days`. Returns 0 if the pool is already fully
+    ///         refunded or does not exist.
+    /// @dev FE-2 (2026-05-20 follow-up audit): off-chain helper. `claimDeadline` advances as
+    ///      late rounds qualify, so this value is only meaningful in tandem with
+    ///      `qualifiedRounds == requiredSettledRounds` (i.e., the pool is complete). Until then,
+    ///      future qualifications can push the deadline further out.
+    function rewardPoolRefundEligibleAt(uint256 rewardPoolId) external view returns (uint64) {
+        RewardPool storage rewardPool = rewardPools[rewardPoolId];
+        if (rewardPool.id == 0 || rewardPool.refunded || rewardPool.claimDeadline == 0) return 0;
+        return uint64(uint256(rewardPool.claimDeadline) + BUNDLE_CLAIM_GRACE);
     }
 
     function getQuestionBundleEligibility(uint256 bundleId)
