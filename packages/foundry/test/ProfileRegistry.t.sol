@@ -337,6 +337,11 @@ contract ProfileRegistryTest is Test {
         assertTrue(registry.hasProfile(remintedUser));
         assertEq(registry.getAddressByName("alice"), remintedUser);
 
+        (address[] memory addresses, uint256 total) = registry.getRegisteredAddressesPaginated(0, 10);
+        assertEq(total, 1);
+        assertEq(addresses.length, 1);
+        assertEq(addresses[0], remintedUser);
+
         IProfileRegistry.Profile memory oldProfile = registry.getProfile(user1);
         assertEq(oldProfile.createdAt, 0);
 
