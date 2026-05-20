@@ -723,7 +723,7 @@ async function readCommitTiming(
         { name: "commitKey", type: "bytes32" },
       ],
       outputs: [
-        { name: "ciphertext", type: "bytes" },
+        { name: "ciphertextHash", type: "bytes32" },
         { name: "targetRound", type: "uint64" },
         { name: "drandChainHash", type: "bytes32" },
         { name: "revealableAfter", type: "uint48" },
