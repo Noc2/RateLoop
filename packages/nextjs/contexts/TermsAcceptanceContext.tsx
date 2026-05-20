@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 
 const TERMS_ACCEPTED_KEY = "curyo_terms_accepted";
-const TERMS_VERSION = "3.0";
+const TERMS_VERSION = "4.0";
 
 export type ActionType = "faucet" | "vote" | "submit" | "claim" | "buy" | null;
 

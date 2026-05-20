@@ -23,8 +23,8 @@ const ACTION_TEXT: Record<NonNullable<ActionType>, { title: string; intro: strin
     intro: "To claim your rewards, please review and accept:",
   },
   buy: {
-    title: "Before You Participate",
-    intro: "To participate in the LREP token distribution, please review and accept:",
+    title: "Before You Earn LREP",
+    intro: "To claim or earn launch reputation, please review and accept:",
   },
 };
 

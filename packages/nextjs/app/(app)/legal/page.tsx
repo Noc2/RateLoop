@@ -49,7 +49,7 @@ const LegalPage: NextPage = () => {
 
       <div className="mt-8 p-4 bg-base-200 rounded-lg">
         <p className="text-base text-base-content/70">
-          Last updated: February 2026. These documents may be updated from time to time. Material changes will require
+          Last updated: May 2026. These documents may be updated from time to time. Material changes will require
           re-acceptance through the Terms modal. Continued use of RateLoop constitutes acceptance of any changes.
         </p>
       </div>
