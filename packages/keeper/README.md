@@ -59,7 +59,12 @@ machine-specific local addresses. Only set address vars on unsupported chains or
 | `KEEPER_FRONTEND_FEE_LOOKBACK_ROUNDS`       | `8`                                                                 | Number of recent rounds per content item to prioritize before backfilling older frontend fees        |
 | `KEEPER_FRONTEND_FEE_WITHDRAW`              | `true`                                                              | Withdraw accumulated `FrontendRegistry` fees after claiming round fees                               |
 | `KEEPER_CORRELATION_SNAPSHOTS_ENABLED`      | `false`                                                             | Publish/finalize correlation epoch and round payout snapshot artifacts from a registered operator     |
-| `KEEPER_CORRELATION_SNAPSHOT_ARTIFACT_PATH` | —                                                                   | JSON file containing deterministic correlation epoch and round payout artifacts                      |
+| `KEEPER_CORRELATION_SNAPSHOTS_MODE`         | `auto` without an artifact path, otherwise `file`                   | `auto` builds deterministic artifacts from Ponder; `file` reads a prebuilt artifact                  |
+| `KEEPER_CORRELATION_ARTIFACT_STORAGE`       | `data-uri` on local `31337`, otherwise `file`                       | Storage for auto-generated artifacts. Use `file` with a public base URL in production                |
+| `KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL` | —                                                                 | Public HTTPS base URL for auto-generated artifact files                                              |
+| `KEEPER_CORRELATION_SNAPSHOT_STORAGE_DIR`   | `correlation-artifacts`                                             | Local directory where auto-generated artifact files are written when storage is `file`               |
+| `KEEPER_CORRELATION_SNAPSHOT_MAX_ROUNDS_PER_TICK` | `20`                                                        | Max settled USDC bounty rounds to score per keeper tick                                             |
+| `KEEPER_CORRELATION_SNAPSHOT_ARTIFACT_PATH` | —                                                                   | JSON file containing deterministic correlation epoch and round payout artifacts for `file` mode      |
 
 ## Docker
 
@@ -78,7 +83,9 @@ Key metrics: `keeper_is_running` (gauge), `keeper_wallet_balance_wei` (gauge), `
 
 When `KEEPER_FRONTEND_FEE_ENABLED=true`, the same worker prioritizes recent settled rounds for the configured frontend/operator, then backfills older settled rounds so historical `RoundRewardDistributor.claimFrontendFee(...)` claims do not age out of automation. It can also withdraw accumulated `FrontendRegistry.claimFees()` credits.
 
-When `KEEPER_CORRELATION_SNAPSHOTS_ENABLED=true`, the worker reads a deterministic artifact file, checks that the keeper wallet is an eligible `FrontendRegistry` operator, proposes missing correlation epoch and round payout roots from that registered wallet, and finalizes already-proposed roots after the challenge window. The operator must keep the 1,000 LREP frontend bond active. Anyone can run the same artifact through the same scorer and challenge mismatched roots on-chain; governance can arbitrate challenged roots and slash the frontend if the computation was wrong.
+When `KEEPER_CORRELATION_SNAPSHOTS_ENABLED=true`, the worker checks that the keeper wallet is an eligible `FrontendRegistry` operator, proposes missing correlation epoch and round payout roots from that registered wallet, and finalizes already-proposed roots after the challenge window. In `auto` mode it asks Ponder for settled USDC bounty rounds, builds deterministic payout weights with `@rateloop/node-utils/correlationScoring`, stores the public artifact, then publishes the roots. In `file` mode it reads the same artifact shape from `KEEPER_CORRELATION_SNAPSHOT_ARTIFACT_PATH`.
+
+For `yarn dev:stack` on local `31337`, set `KEEPER_CORRELATION_SNAPSHOTS_ENABLED=true`, `KEEPER_CORRELATION_SNAPSHOTS_MODE=auto`, and `KEEPER_CORRELATION_ARTIFACT_STORAGE=data-uri` in `packages/keeper/.env.local`; keep `PONDER_BASE_URL=http://localhost:42069`. Before starting the stack, run `yarn chain`, `yarn deploy`, and register the keeper wallet as an eligible frontend operator. For production, deploy contracts, Ponder, Next.js, and the keeper; register the production frontend operator; set `KEEPER_CORRELATION_ARTIFACT_STORAGE=file`, `KEEPER_CORRELATION_SNAPSHOT_STORAGE_DIR` to a directory served by your artifact host, and `KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL` to that public HTTPS URL. The operator must keep the 1,000 LREP frontend bond active. Anyone can run the same artifact through the same scorer and challenge mismatched roots on-chain; governance can arbitrate challenged roots and slash the frontend if the computation was wrong.
 
 ## Project Structure
 
@@ -86,6 +93,8 @@ When `KEEPER_CORRELATION_SNAPSHOTS_ENABLED=true`, the worker reads a determinist
 src/
 ├── index.ts      # Main entry point & event loop
 ├── keeper.ts     # Core logic (reveal, settle, RevealFailed, cleanup, dormancy)
+├── correlation-artifact-builder.ts # Ponder-backed automatic ClusterPayoutOracle artifacts
+├── correlation-artifact-storage.ts # Canonical artifact hashing and storage
 ├── correlation-snapshots.ts # Optional ClusterPayoutOracle publication
 ├── frontend-fees.ts # Optional hosted frontend fee sweeps
 ├── config.ts     # Configuration from environment
