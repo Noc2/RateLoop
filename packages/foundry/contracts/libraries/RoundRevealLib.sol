@@ -94,7 +94,7 @@ library RoundRevealLib {
         }
         if (block.timestamp < revealNotBefore) revert EpochNotEnded();
 
-        bytes32 expectedHash = TlockVoteLib.buildExpectedRbtsCommitHash(
+        bytes32 expectedHash = TlockVoteLib.buildExpectedRbtsCommitHashFromCiphertextHash(
             params.isUp,
             params.predictedUpBps,
             params.salt,
@@ -104,7 +104,7 @@ library RoundRevealLib {
             params.roundReferenceRatingBps,
             commit.targetRound,
             commit.drandChainHash,
-            commit.ciphertext
+            commit.ciphertextHash
         );
         if (params.commitKey != keccak256(abi.encodePacked(commit.voter, expectedHash))) revert HashMismatch();
 

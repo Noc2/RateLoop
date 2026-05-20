@@ -76,6 +76,34 @@ library TlockVoteLib {
         );
     }
 
+    function buildExpectedRbtsCommitHashFromCiphertextHash(
+        bool isUp,
+        uint16 predictedUpBps,
+        bytes32 salt,
+        address voter,
+        uint256 contentId,
+        uint256 roundId,
+        uint16 roundReferenceRatingBps,
+        uint64 targetRound,
+        bytes32 drandChainHash,
+        bytes32 ciphertextHash
+    ) external pure returns (bytes32) {
+        return keccak256(
+            abi.encodePacked(
+                isUp,
+                predictedUpBps,
+                salt,
+                voter,
+                contentId,
+                roundId,
+                roundReferenceRatingBps,
+                targetRound,
+                drandChainHash,
+                ciphertextHash
+            )
+        );
+    }
+
     function _validateCiphertext(bytes memory ciphertext) private pure {
         if (ciphertext.length == 0) revert InvalidCiphertext();
         if (ciphertext.length > MAX_CIPHERTEXT_SIZE) revert CiphertextTooLarge();

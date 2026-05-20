@@ -59,7 +59,7 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         uint256 contentId;
         uint256 roundId;
         bytes32 commitHash;
-        bytes ciphertext;
+        bytes32 ciphertextHash;
         uint64 targetRound;
         bytes32 drandChainHash;
         uint48 revealableAfter;
@@ -134,7 +134,9 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         bytes32 commitHash,
         uint16 roundReferenceRatingBps,
         uint64 targetRound,
-        bytes32 drandChainHash
+        bytes32 drandChainHash,
+        bytes32 ciphertextHash,
+        bytes ciphertext
     );
     event AdvisoryVoteRevealed(
         uint256 indexed contentId,
@@ -326,13 +328,14 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         );
         uint256 targetRevealableAt = votingEngine.targetRoundRevealableTimestamp(contentId, roundId, targetRound);
         uint256 effectiveRevealableAfter = targetRevealableAt > epochEnd ? targetRevealableAt : epochEnd;
+        bytes32 ciphertextHash = keccak256(ciphertext);
 
         advisoryCommits[advisoryCommitKey] = AdvisoryCommit({
             voter: msg.sender,
             contentId: contentId,
             roundId: roundId,
             commitHash: commitHash,
-            ciphertext: ciphertext,
+            ciphertextHash: ciphertextHash,
             targetRound: targetRound,
             drandChainHash: drandChainHash,
             revealableAfter: effectiveRevealableAfter.toUint48(),
@@ -367,7 +370,9 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
             commitHash,
             roundReferenceRatingBps,
             targetRound,
-            drandChainHash
+            drandChainHash,
+            ciphertextHash,
+            ciphertext
         );
     }
 
@@ -386,7 +391,7 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         uint256 effectiveRevealableAfter = _effectiveRevealableAfter(advisoryCommit);
         if (block.timestamp < effectiveRevealableAfter) revert EpochNotEnded();
 
-        bytes32 expectedCommitHash = TlockVoteLib.buildExpectedRbtsCommitHash(
+        bytes32 expectedCommitHash = TlockVoteLib.buildExpectedRbtsCommitHashFromCiphertextHash(
             isUp,
             predictedUpBps,
             salt,
@@ -396,7 +401,7 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
             advisoryCommit.roundReferenceRatingBps,
             advisoryCommit.targetRound,
             advisoryCommit.drandChainHash,
-            advisoryCommit.ciphertext
+            advisoryCommit.ciphertextHash
         );
         if (expectedCommitHash != advisoryCommit.commitHash) revert HashMismatch();
 
@@ -585,7 +590,7 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         external
         view
         returns (
-            bytes memory ciphertext,
+            bytes32 ciphertextHash,
             uint64 targetRound,
             bytes32 drandChainHash,
             uint48 revealableAfter,
@@ -595,7 +600,7 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
     {
         AdvisoryCommit storage advisoryCommit = advisoryCommits[advisoryCommitKey];
         return (
-            advisoryCommit.ciphertext,
+            advisoryCommit.ciphertextHash,
             advisoryCommit.targetRound,
             advisoryCommit.drandChainHash,
             advisoryCommit.revealableAfter,

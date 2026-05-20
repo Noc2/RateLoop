@@ -4010,12 +4010,13 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     function test_GetCommit_ReturnsCorrectData() public {
         uint256 contentId = _submitContent();
 
-        (bytes32 commitKey,) = _commit(voter1, contentId, true, STAKE);
+        (bytes32 commitKey, bytes32 salt) = _commit(voter1, contentId, true, STAKE);
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
 
         RoundLib.Commit memory commit = RoundEngineReadHelpers.commit(engine, contentId, roundId, commitKey);
         assertEq(commit.voter, voter1);
         assertEq(commit.stakeAmount, STAKE);
+        assertEq(commit.ciphertextHash, keccak256(_testCiphertext(true, salt, contentId)));
         assertFalse(commit.revealed);
         assertEq(commit.epochIndex, 0); // epoch 1 -> index 0
     }

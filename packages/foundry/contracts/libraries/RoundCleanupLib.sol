@@ -218,7 +218,7 @@ library RoundCleanupLib {
         external
         view
         returns (
-            bytes memory ciphertext,
+            bytes32 ciphertextHash,
             uint64 targetRound,
             bytes32 drandChainHash,
             uint48 revealableAfter,
@@ -227,7 +227,7 @@ library RoundCleanupLib {
         )
     {
         RoundLib.Commit storage c = roundCommits[commitKey];
-        return (c.ciphertext, c.targetRound, c.drandChainHash, c.revealableAfter, c.revealed, c.stakeAmount);
+        return (c.ciphertextHash, c.targetRound, c.drandChainHash, c.revealableAfter, c.revealed, c.stakeAmount);
     }
 
     function recordCommitIndexes(
