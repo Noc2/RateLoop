@@ -224,6 +224,25 @@ export const FrontendRegistryAbi = [
   },
   {
     "type": "function",
+    "name": "feeCreditorForEngine",
+    "inputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "frontendExitAvailableAt",
     "inputs": [
       {

@@ -240,6 +240,7 @@ export function buildCommitHash(
   drandChainHash: VoteDrandChainHash,
   ciphertext: VoteCiphertext,
 ): VoteCommitHash {
+  const ciphertextHash = keccak256(ciphertext);
   return keccak256(
     encodePacked(
       [
@@ -264,7 +265,7 @@ export function buildCommitHash(
         roundReferenceRatingBps,
         targetRound,
         drandChainHash,
-        keccak256(ciphertext),
+        ciphertextHash,
       ],
     ),
   );
@@ -470,6 +471,7 @@ async function createTlockVoteArtifacts(
   runtime: VoteTlockRuntime = {},
 ): Promise<{
   ciphertext: VoteCiphertext;
+  ciphertextHash: `0x${string}`;
   targetRound: bigint;
   drandChainHash: VoteDrandChainHash;
 }> {
@@ -493,8 +495,10 @@ async function createTlockVoteArtifacts(
     Buffer.from(encodeRbtsVotePlaintext(isUp, predictedUpBps, salt)),
     client,
   );
+  const ciphertext = stringToHex(armored) as VoteCiphertext;
   return {
-    ciphertext: stringToHex(armored) as VoteCiphertext,
+    ciphertext,
+    ciphertextHash: keccak256(ciphertext),
     targetRound: BigInt(targetRound),
     drandChainHash: `0x${chainInfo.hash}` as VoteDrandChainHash,
   };
@@ -695,13 +699,14 @@ export async function createTlockVoteCommit(
   runtime: VoteTlockRuntime = {},
 ): Promise<{
   ciphertext: VoteCiphertext;
+  ciphertextHash: `0x${string}`;
   commitHash: `0x${string}`;
   targetRound: bigint;
   drandChainHash: VoteDrandChainHash;
   roundReferenceRatingBps: number;
   commitKey: `0x${string}`;
 }> {
-  const { ciphertext, targetRound, drandChainHash } =
+  const { ciphertext, ciphertextHash, targetRound, drandChainHash } =
     await createTlockVoteArtifacts(
       params.isUp,
       params.predictedUpBps,
@@ -724,6 +729,7 @@ export async function createTlockVoteCommit(
 
   return {
     ciphertext,
+    ciphertextHash,
     commitHash,
     targetRound,
     drandChainHash,
@@ -746,6 +752,7 @@ export async function createTlockRbtsVoteCommit(
   runtime: VoteTlockRuntime = {},
 ): Promise<{
   ciphertext: VoteCiphertext;
+  ciphertextHash: `0x${string}`;
   commitHash: RbtsCommitHash;
   targetRound: bigint;
   drandChainHash: VoteDrandChainHash;
@@ -756,7 +763,7 @@ export async function createTlockRbtsVoteCommit(
   commitKey: `0x${string}`;
 }> {
   const predictedUpBps = normalizePredictedUpBps(params.predictedUpBps);
-  const { ciphertext, targetRound, drandChainHash } =
+  const { ciphertext, ciphertextHash, targetRound, drandChainHash } =
     await createTlockVoteArtifacts(
       params.isUp,
       predictedUpBps,
@@ -779,6 +786,7 @@ export async function createTlockRbtsVoteCommit(
 
   return {
     ciphertext,
+    ciphertextHash,
     commitHash,
     targetRound,
     drandChainHash,

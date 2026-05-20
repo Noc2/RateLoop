@@ -424,9 +424,9 @@ export const RoundVotingEngineAbi = [
     ],
     "outputs": [
       {
-        "name": "ciphertext",
-        "type": "bytes",
-        "internalType": "bytes"
+        "name": "ciphertextHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
       },
       {
         "name": "targetRound",
@@ -2820,6 +2820,18 @@ export const RoundVotingEngineAbi = [
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
+      },
+      {
+        "name": "ciphertextHash",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "ciphertext",
+        "type": "bytes",
+        "indexed": false,
+        "internalType": "bytes"
       }
     ],
     "anonymous": false
