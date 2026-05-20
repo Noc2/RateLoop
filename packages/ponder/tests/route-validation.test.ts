@@ -1714,6 +1714,31 @@ describe("registerDiscoveryRoutes", () => {
     ).toBe(true);
   });
 
+  it("honors explicit followed addresses in discovery queries", async () => {
+    const { queryBuilder } = mockPonderModules([]);
+    const { registerDiscoveryRoutes } = await import(
+      "../src/api/routes/discovery-routes.js"
+    );
+
+    const app = new Hono();
+    registerDiscoveryRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/discover-signals/0x0000000000000000000000000000000000000001?followed=0x0000000000000000000000000000000000000003",
+    );
+
+    expect(response.status).toBe(200);
+
+    const serializedWhereCalls = queryBuilder.where.mock.calls.map(([value]) =>
+      serializeExpression(value),
+    );
+    expect(
+      serializedWhereCalls.some((value) =>
+        value.includes("0x0000000000000000000000000000000000000003"),
+      ),
+    ).toBe(true);
+  });
+
   it("adds moderation predicates to notification event queries", async () => {
     const { queryBuilder } = mockPonderModules([]);
     const { registerDiscoveryRoutes } = await import(
