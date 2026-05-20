@@ -3,27 +3,31 @@ import type { Account, Chain, PublicClient, WalletClient } from "viem";
 import {
   ClusterPayoutOracleAbi,
   FrontendRegistryAbi,
+  QuestionRewardPoolEscrowAbi,
 } from "@rateloop/contracts/abis";
+import type { Address } from "viem";
 import type { Logger } from "./logger.js";
 import { config } from "./config.js";
+import { buildConfiguredCorrelationSnapshotArtifact } from "./correlation-artifact-builder.js";
 import { writeContractAndConfirm } from "./keeper.js";
 import { getRevertReason } from "./revert-utils.js";
 
 const STATUS = {
   None: 0,
   Proposed: 1,
+  Challenged: 2,
   Finalized: 3,
   Rejected: 4,
 } as const;
 
-interface CorrelationSnapshotPublisherResult {
+export interface CorrelationSnapshotPublisherResult {
   epochsProposed: number;
   epochsFinalized: number;
   roundSnapshotsProposed: number;
   roundSnapshotsFinalized: number;
 }
 
-interface CorrelationEpochArtifact {
+export interface CorrelationEpochArtifact {
   epochId: string | number | bigint;
   fromRoundId: string | number | bigint;
   toRoundId: string | number | bigint;
@@ -33,7 +37,7 @@ interface CorrelationEpochArtifact {
   artifactURI: string;
 }
 
-interface RoundPayoutSnapshotArtifact {
+export interface RoundPayoutSnapshotArtifact {
   domain: number;
   rewardPoolId: string | number | bigint;
   contentId: string | number | bigint;
@@ -48,7 +52,7 @@ interface RoundPayoutSnapshotArtifact {
   artifactURI: string;
 }
 
-interface CorrelationSnapshotArtifactFile {
+export interface CorrelationSnapshotArtifactFile {
   correlationEpochs?: CorrelationEpochArtifact[];
   roundPayoutSnapshots?: RoundPayoutSnapshotArtifact[];
 }
@@ -113,6 +117,95 @@ async function readFrontendEligibility(
   }
 }
 
+async function loadConfiguredCorrelationSnapshotArtifact(
+  logger: Logger,
+): Promise<CorrelationSnapshotArtifactFile | null> {
+  if (!config.correlationSnapshots.enabled) {
+    return null;
+  }
+
+  if (config.correlationSnapshots.mode === "auto") {
+    return buildConfiguredCorrelationSnapshotArtifact(logger);
+  }
+
+  if (!config.correlationSnapshots.artifactPath) {
+    return null;
+  }
+
+  return JSON.parse(
+    await readFile(config.correlationSnapshots.artifactPath, "utf8"),
+  ) as CorrelationSnapshotArtifactFile;
+}
+
+async function roundSnapshotSourceReady(
+  publicClient: PublicClient,
+  snapshot: RoundPayoutSnapshotArtifact,
+  logger: Logger,
+): Promise<boolean> {
+  try {
+    const consumer = (await publicClient.readContract({
+      address: config.contracts.clusterPayoutOracle,
+      abi: ClusterPayoutOracleAbi,
+      functionName: "roundPayoutSnapshotConsumer",
+      args: [snapshot.domain],
+    })) as Address;
+    if (consumer === "0x0000000000000000000000000000000000000000") {
+      logger.warn("Skipping round payout snapshot because no consumer is configured", {
+        domain: snapshot.domain,
+        rewardPoolId: snapshot.rewardPoolId.toString(),
+        contentId: snapshot.contentId.toString(),
+        roundId: snapshot.roundId.toString(),
+      });
+      return false;
+    }
+
+    const sourceReadyAt = (await publicClient.readContract({
+      address: consumer,
+      abi: QuestionRewardPoolEscrowAbi,
+      functionName: "roundPayoutSnapshotSourceReadyAt",
+      args: [
+        snapshot.domain,
+        BigInt(snapshot.rewardPoolId),
+        BigInt(snapshot.contentId),
+        BigInt(snapshot.roundId),
+      ],
+    })) as bigint;
+    if (sourceReadyAt === 0n) {
+      logger.debug("Skipping round payout snapshot until source is ready", {
+        domain: snapshot.domain,
+        rewardPoolId: snapshot.rewardPoolId.toString(),
+        contentId: snapshot.contentId.toString(),
+        roundId: snapshot.roundId.toString(),
+      });
+      return false;
+    }
+
+    const block = await publicClient.getBlock();
+    if (sourceReadyAt > block.timestamp) {
+      logger.debug("Skipping round payout snapshot until source timestamp is reached", {
+        domain: snapshot.domain,
+        rewardPoolId: snapshot.rewardPoolId.toString(),
+        contentId: snapshot.contentId.toString(),
+        roundId: snapshot.roundId.toString(),
+        sourceReadyAt: sourceReadyAt.toString(),
+        blockTimestamp: block.timestamp.toString(),
+      });
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    logger.warn("Skipping round payout snapshot because source readiness could not be read", {
+      domain: snapshot.domain,
+      rewardPoolId: snapshot.rewardPoolId.toString(),
+      contentId: snapshot.contentId.toString(),
+      roundId: snapshot.roundId.toString(),
+      error: getRevertReason(error),
+    });
+    return false;
+  }
+}
+
 export async function publishConfiguredCorrelationSnapshots(
   publicClient: PublicClient,
   walletClient: WalletClient,
@@ -120,22 +213,25 @@ export async function publishConfiguredCorrelationSnapshots(
   account: Account,
   logger: Logger,
 ): Promise<CorrelationSnapshotPublisherResult> {
-  if (
-    !config.correlationSnapshots.enabled ||
-    !config.correlationSnapshots.artifactPath
-  ) {
+  const artifact = await loadConfiguredCorrelationSnapshotArtifact(logger);
+  if (!artifact) {
     return emptyResult();
   }
 
-  const artifact = JSON.parse(
-    await readFile(config.correlationSnapshots.artifactPath, "utf8"),
-  ) as CorrelationSnapshotArtifactFile;
   const result = emptyResult();
+  if (
+    (artifact.correlationEpochs ?? []).length === 0 &&
+    (artifact.roundPayoutSnapshots ?? []).length === 0
+  ) {
+    return result;
+  }
+
   const frontendEligible = await readFrontendEligibility(
     publicClient,
     account,
     logger,
   );
+  const finalizedEpochIds = new Set<string>();
 
   for (const epoch of artifact.correlationEpochs ?? []) {
     const epochId = BigInt(epoch.epochId);
@@ -158,26 +254,33 @@ export async function publishConfiguredCorrelationSnapshots(
         continue;
       }
 
-      await writeContractAndConfirm(publicClient, walletClient, {
-        account,
-        chain,
-        address: config.contracts.clusterPayoutOracle,
-        abi: ClusterPayoutOracleAbi,
-        functionName: "proposeCorrelationEpoch",
-        args: [
-          epochId,
-          BigInt(epoch.fromRoundId),
-          BigInt(epoch.toRoundId),
-          epoch.clusterRoot,
-          epoch.parameterHash,
-          epoch.artifactHash,
-          epoch.artifactURI,
-        ],
-      });
-      result.epochsProposed += 1;
-      logger.info("Proposed correlation epoch snapshot", {
-        epochId: epochId.toString(),
-      });
+      try {
+        await writeContractAndConfirm(publicClient, walletClient, {
+          account,
+          chain,
+          address: config.contracts.clusterPayoutOracle,
+          abi: ClusterPayoutOracleAbi,
+          functionName: "proposeCorrelationEpoch",
+          args: [
+            epochId,
+            BigInt(epoch.fromRoundId),
+            BigInt(epoch.toRoundId),
+            epoch.clusterRoot,
+            epoch.parameterHash,
+            epoch.artifactHash,
+            epoch.artifactURI,
+          ],
+        });
+        result.epochsProposed += 1;
+        logger.info("Proposed correlation epoch snapshot", {
+          epochId: epochId.toString(),
+        });
+      } catch (error) {
+        logger.warn("Correlation epoch snapshot proposal failed", {
+          epochId: epochId.toString(),
+          error: getRevertReason(error),
+        });
+      }
     } else if (status === STATUS.Proposed) {
       try {
         await writeContractAndConfirm(publicClient, walletClient, {
@@ -192,16 +295,34 @@ export async function publishConfiguredCorrelationSnapshots(
         logger.info("Finalized correlation epoch snapshot", {
           epochId: epochId.toString(),
         });
+        finalizedEpochIds.add(epochId.toString());
       } catch (error) {
         logger.debug("Correlation epoch snapshot not finalizable yet", {
           epochId: epochId.toString(),
           error: error instanceof Error ? error.message : String(error),
         });
       }
+    } else if (status === STATUS.Finalized) {
+      finalizedEpochIds.add(epochId.toString());
+    } else if (status === STATUS.Challenged) {
+      logger.debug("Skipping challenged correlation epoch snapshot", {
+        epochId: epochId.toString(),
+      });
     }
   }
 
   for (const snapshot of artifact.roundPayoutSnapshots ?? []) {
+    const correlationEpochId = BigInt(snapshot.correlationEpochId);
+    if (!finalizedEpochIds.has(correlationEpochId.toString())) {
+      logger.debug("Skipping round payout snapshot until correlation epoch is finalized", {
+        correlationEpochId: correlationEpochId.toString(),
+        rewardPoolId: snapshot.rewardPoolId.toString(),
+        contentId: snapshot.contentId.toString(),
+        roundId: snapshot.roundId.toString(),
+      });
+      continue;
+    }
+
     const snapshotKey = await publicClient.readContract({
       address: config.contracts.clusterPayoutOracle,
       abi: ClusterPayoutOracleAbi,
@@ -239,31 +360,42 @@ export async function publishConfiguredCorrelationSnapshots(
         continue;
       }
 
-      await writeContractAndConfirm(publicClient, walletClient, {
-        account,
-        chain,
-        address: config.contracts.clusterPayoutOracle,
-        abi: ClusterPayoutOracleAbi,
-        functionName: "proposeRoundPayoutSnapshot",
-        args: [
-          {
-            domain: snapshot.domain,
-            rewardPoolId: BigInt(snapshot.rewardPoolId),
-            contentId: BigInt(snapshot.contentId),
-            roundId: BigInt(snapshot.roundId),
-            correlationEpochId: BigInt(snapshot.correlationEpochId),
-            rawEligibleVoters: snapshot.rawEligibleVoters,
-            effectiveParticipantUnits: snapshot.effectiveParticipantUnits,
-            totalClaimWeight: BigInt(snapshot.totalClaimWeight),
-            weightRoot: snapshot.weightRoot,
-            reasonRoot: snapshot.reasonRoot,
-            artifactHash: snapshot.artifactHash,
-            artifactURI: snapshot.artifactURI,
-          },
-        ],
-      });
-      result.roundSnapshotsProposed += 1;
-      logger.info("Proposed round payout snapshot", { snapshotKey });
+      if (!(await roundSnapshotSourceReady(publicClient, snapshot, logger))) {
+        continue;
+      }
+
+      try {
+        await writeContractAndConfirm(publicClient, walletClient, {
+          account,
+          chain,
+          address: config.contracts.clusterPayoutOracle,
+          abi: ClusterPayoutOracleAbi,
+          functionName: "proposeRoundPayoutSnapshot",
+          args: [
+            {
+              domain: snapshot.domain,
+              rewardPoolId: BigInt(snapshot.rewardPoolId),
+              contentId: BigInt(snapshot.contentId),
+              roundId: BigInt(snapshot.roundId),
+              correlationEpochId,
+              rawEligibleVoters: snapshot.rawEligibleVoters,
+              effectiveParticipantUnits: snapshot.effectiveParticipantUnits,
+              totalClaimWeight: BigInt(snapshot.totalClaimWeight),
+              weightRoot: snapshot.weightRoot,
+              reasonRoot: snapshot.reasonRoot,
+              artifactHash: snapshot.artifactHash,
+              artifactURI: snapshot.artifactURI,
+            },
+          ],
+        });
+        result.roundSnapshotsProposed += 1;
+        logger.info("Proposed round payout snapshot", { snapshotKey });
+      } catch (error) {
+        logger.warn("Round payout snapshot proposal failed", {
+          snapshotKey,
+          error: getRevertReason(error),
+        });
+      }
     } else if (status === STATUS.Proposed) {
       try {
         await writeContractAndConfirm(publicClient, walletClient, {
@@ -282,6 +414,8 @@ export async function publishConfiguredCorrelationSnapshots(
           error: error instanceof Error ? error.message : String(error),
         });
       }
+    } else if (status === STATUS.Challenged) {
+      logger.debug("Skipping challenged round payout snapshot", { snapshotKey });
     }
   }
 

@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const ACCOUNT = "0x1111111111111111111111111111111111111111" as const;
 const ORACLE = "0x2222222222222222222222222222222222222222" as const;
 const FRONTEND_REGISTRY = "0x3333333333333333333333333333333333333333" as const;
+const SNAPSHOT_CONSUMER = "0x4444444444444444444444444444444444444444" as const;
 const SNAPSHOT_KEY = `0x${"a".repeat(64)}` as const;
 
 vi.mock("node:fs/promises", () => ({
@@ -18,8 +19,15 @@ function mockConfig(frontendRegistry: `0x${string}` | undefined = FRONTEND_REGIS
       },
       correlationSnapshots: {
         enabled: true,
+        mode: "file",
         artifactPath: "/tmp/correlation-snapshots.json",
         frontendRegistry,
+        maxRoundsPerTick: 20,
+        artifactStorage: {
+          mode: "data-uri",
+          outputDir: "correlation-artifacts",
+          publicBaseUrl: "",
+        },
       },
     },
   }));
@@ -68,10 +76,13 @@ async function loadPublisher(options: {
   const readContract = vi.fn(async ({ functionName }: { functionName: string }) => {
     if (functionName === "isEligible") return options.frontendEligible ?? true;
     if (functionName === "correlationEpochSnapshot") return { status: options.epochStatus ?? 0 };
+    if (functionName === "roundPayoutSnapshotConsumer") return SNAPSHOT_CONSUMER;
+    if (functionName === "roundPayoutSnapshotSourceReadyAt") return 100n;
     if (functionName === "roundPayoutSnapshotKey") return SNAPSHOT_KEY;
     if (functionName === "roundPayoutProposal") return { snapshot: { status: options.roundStatus ?? 0 } };
     throw new Error(`unexpected readContract(${functionName})`);
   });
+  const getBlock = vi.fn().mockResolvedValue({ timestamp: 200n });
   const writeContract = vi.fn().mockResolvedValue("0xhash");
   const waitForTransactionReceipt = vi.fn().mockResolvedValue({
     status: "success",
@@ -89,12 +100,13 @@ async function loadPublisher(options: {
 
   return {
     publishConfiguredCorrelationSnapshots,
-    publicClient: { readContract, waitForTransactionReceipt },
+    publicClient: { readContract, getBlock, waitForTransactionReceipt },
     walletClient: { writeContract },
     chain: { id: 31337 },
     account: { address: ACCOUNT },
     logger,
     readContract,
+    getBlock,
     writeContract,
     waitForTransactionReceipt,
   };
@@ -106,8 +118,8 @@ afterEach(() => {
 });
 
 describe("correlation snapshot publisher", () => {
-  it("confirms frontend eligibility and proposes snapshots without ETH value", async () => {
-    const publisher = await loadPublisher();
+  it("confirms frontend eligibility and proposes finalized-epoch round snapshots without ETH value", async () => {
+    const publisher = await loadPublisher({ epochStatus: 3 });
 
     const result = await publisher.publishConfiguredCorrelationSnapshots(
       publisher.publicClient as never,
@@ -118,7 +130,7 @@ describe("correlation snapshot publisher", () => {
     );
 
     expect(result).toEqual({
-      epochsProposed: 1,
+      epochsProposed: 0,
       epochsFinalized: 0,
       roundSnapshotsProposed: 1,
       roundSnapshotsFinalized: 0,
@@ -137,19 +149,46 @@ describe("correlation snapshot publisher", () => {
         eligible: true,
       }),
     );
-    expect(publisher.writeContract).toHaveBeenCalledTimes(2);
+    expect(publisher.writeContract).toHaveBeenCalledTimes(1);
     expect(publisher.writeContract).toHaveBeenNthCalledWith(
       1,
       expect.not.objectContaining({ value: expect.anything() }),
     );
-    expect(publisher.writeContract).toHaveBeenNthCalledWith(
-      2,
-      expect.not.objectContaining({ value: expect.anything() }),
-    );
-    expect(publisher.waitForTransactionReceipt).toHaveBeenCalledTimes(2);
+    expect(publisher.waitForTransactionReceipt).toHaveBeenCalledTimes(1);
     expect(publisher.waitForTransactionReceipt).toHaveBeenCalledWith({
       hash: "0xhash",
     });
+  });
+
+  it("does not propose round snapshots in the same tick as a new epoch proposal", async () => {
+    const publisher = await loadPublisher();
+
+    const result = await publisher.publishConfiguredCorrelationSnapshots(
+      publisher.publicClient as never,
+      publisher.walletClient as never,
+      publisher.chain as never,
+      publisher.account as never,
+      publisher.logger,
+    );
+
+    expect(result).toEqual({
+      epochsProposed: 1,
+      epochsFinalized: 0,
+      roundSnapshotsProposed: 0,
+      roundSnapshotsFinalized: 0,
+    });
+    expect(publisher.writeContract).toHaveBeenCalledTimes(1);
+    expect(publisher.writeContract).toHaveBeenCalledWith(
+      expect.objectContaining({
+        functionName: "proposeCorrelationEpoch",
+      }),
+    );
+    expect(publisher.logger.debug).toHaveBeenCalledWith(
+      "Skipping round payout snapshot until correlation epoch is finalized",
+      expect.objectContaining({
+        correlationEpochId: "1",
+      }),
+    );
   });
 
   it("skips proposals when the frontend operator is not eligible", async () => {

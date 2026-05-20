@@ -14,6 +14,9 @@ const CHAIN_NAMES: Record<number, string> = {
 const LOCAL_HARDHAT_CHAIN_ID = 31337;
 const isProduction = process.env.NODE_ENV === "production";
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+const CORRELATION_SNAPSHOT_MODES = ["file", "auto"] as const;
+const CORRELATION_ARTIFACT_STORAGE_MODES = ["file", "data-uri"] as const;
+
 function readEnv(name: string): string | undefined {
   const value = process.env[name]?.trim();
   return value ? value : undefined;
@@ -71,6 +74,20 @@ function readOptionalUrlEnv(name: string, errors: string[]): string | undefined 
   }
 
   return value.replace(/\/+$/, "");
+}
+
+function readEnumEnv<const T extends readonly string[]>(
+  name: string,
+  values: T,
+  fallback: T[number],
+  errors: string[],
+): T[number] {
+  const value = readEnv(name);
+  if (!value) return fallback;
+  if (values.includes(value)) return value;
+
+  errors.push(`${name} must be one of: ${values.join(", ")}`);
+  return fallback;
 }
 
 function requireIntEnv(name: string, errors: string[]): number {
@@ -304,6 +321,22 @@ function loadConfig() {
   const correlationSnapshotArtifactPath = readEnv(
     "KEEPER_CORRELATION_SNAPSHOT_ARTIFACT_PATH",
   );
+  const correlationSnapshotMode = readEnumEnv(
+    "KEEPER_CORRELATION_SNAPSHOTS_MODE",
+    CORRELATION_SNAPSHOT_MODES,
+    correlationSnapshotArtifactPath ? "file" : "auto",
+    errors,
+  );
+  const correlationSnapshotArtifactStorageMode = readEnumEnv(
+    "KEEPER_CORRELATION_ARTIFACT_STORAGE",
+    CORRELATION_ARTIFACT_STORAGE_MODES,
+    chainId === LOCAL_HARDHAT_CHAIN_ID ? "data-uri" : "file",
+    errors,
+  );
+  const correlationSnapshotArtifactPublicBaseUrl = readOptionalUrlEnv(
+    "KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL",
+    errors,
+  );
 
   if (!keystoreAccount && !privateKey) {
     errors.push("KEYSTORE_ACCOUNT or KEEPER_PRIVATE_KEY is required");
@@ -451,15 +484,51 @@ function loadConfig() {
     // Correlation snapshot publication
     correlationSnapshots: {
       enabled: correlationSnapshotsEnabled,
+      mode: correlationSnapshotMode,
       artifactPath: correlationSnapshotArtifactPath,
       frontendRegistry: correlationSnapshotFrontendRegistry,
+      maxRoundsPerTick: readPositiveIntEnv(
+        "KEEPER_CORRELATION_SNAPSHOT_MAX_ROUNDS_PER_TICK",
+        "20",
+        errors,
+      ),
+      artifactStorage: {
+        mode: correlationSnapshotArtifactStorageMode,
+        outputDir:
+          readEnv("KEEPER_CORRELATION_SNAPSHOT_STORAGE_DIR") ||
+          "correlation-artifacts",
+        publicBaseUrl: correlationSnapshotArtifactPublicBaseUrl || "",
+      },
     },
   };
 
   if (correlationSnapshotsEnabled) {
-    if (!correlationSnapshotArtifactPath) {
+    if (correlationSnapshotMode === "file" && !correlationSnapshotArtifactPath) {
       errors.push(
-        "KEEPER_CORRELATION_SNAPSHOT_ARTIFACT_PATH is required when KEEPER_CORRELATION_SNAPSHOTS_ENABLED=true",
+        "KEEPER_CORRELATION_SNAPSHOT_ARTIFACT_PATH is required when KEEPER_CORRELATION_SNAPSHOTS_ENABLED=true and KEEPER_CORRELATION_SNAPSHOTS_MODE=file",
+      );
+    }
+    if (correlationSnapshotMode === "auto" && !loadedConfig.ponderBaseUrl) {
+      errors.push(
+        "PONDER_BASE_URL is required when KEEPER_CORRELATION_SNAPSHOTS_ENABLED=true and KEEPER_CORRELATION_SNAPSHOTS_MODE=auto",
+      );
+    }
+    if (
+      correlationSnapshotMode === "auto" &&
+      correlationSnapshotArtifactStorageMode === "file" &&
+      !correlationSnapshotArtifactPublicBaseUrl
+    ) {
+      errors.push(
+        "KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL is required when auto correlation snapshots use file artifact storage",
+      );
+    }
+    if (
+      correlationSnapshotMode === "auto" &&
+      correlationSnapshotArtifactStorageMode === "data-uri" &&
+      isProduction
+    ) {
+      errors.push(
+        "KEEPER_CORRELATION_ARTIFACT_STORAGE=data-uri must not be used in production",
       );
     }
     if (loadedConfig.contracts.clusterPayoutOracle === ZERO_ADDRESS) {

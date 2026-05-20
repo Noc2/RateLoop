@@ -92,8 +92,15 @@ async function loadKeeperIndex(options: KeeperIndexOptions = {}) {
       },
       correlationSnapshots: {
         enabled: false,
+        mode: "auto",
         artifactPath: undefined,
         frontendRegistry: undefined,
+        maxRoundsPerTick: 20,
+        artifactStorage: {
+          mode: "data-uri",
+          outputDir: "correlation-artifacts",
+          publicBaseUrl: "",
+        },
       },
     },
   }));

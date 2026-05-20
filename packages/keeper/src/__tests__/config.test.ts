@@ -293,4 +293,87 @@ describe("keeper config", () => {
       }),
     ).rejects.toThrow("KEEPER_FRONTEND_ADDRESS must be a valid address");
   });
+
+  it("loads file-based correlation snapshot publication settings", async () => {
+    const { config } = await loadKeeperConfig({
+      KEEPER_CORRELATION_SNAPSHOTS_ENABLED: "true",
+      KEEPER_CORRELATION_SNAPSHOTS_MODE: "file",
+      KEEPER_CORRELATION_SNAPSHOT_ARTIFACT_PATH: "./correlation-snapshots.json",
+      CLUSTER_PAYOUT_ORACLE_ADDRESS: "0x6666666666666666666666666666666666666666",
+    });
+
+    expect(config.correlationSnapshots).toEqual(
+      expect.objectContaining({
+        enabled: true,
+        mode: "file",
+        artifactPath: "./correlation-snapshots.json",
+        maxRoundsPerTick: 20,
+        frontendRegistry: expect.stringMatching(/^0x[0-9a-fA-F]{40}$/),
+        artifactStorage: {
+          mode: "data-uri",
+          outputDir: "correlation-artifacts",
+          publicBaseUrl: "",
+        },
+      }),
+    );
+  });
+
+  it("loads production-capable automatic correlation snapshot settings", async () => {
+    const { config } = await loadKeeperConfig({
+      KEEPER_CORRELATION_SNAPSHOTS_ENABLED: "true",
+      KEEPER_CORRELATION_SNAPSHOTS_MODE: "auto",
+      KEEPER_CORRELATION_ARTIFACT_STORAGE: "file",
+      KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL: "https://artifacts.example.com/rateloop/",
+      KEEPER_CORRELATION_SNAPSHOT_STORAGE_DIR: "/tmp/rateloop-correlation",
+      KEEPER_CORRELATION_SNAPSHOT_MAX_ROUNDS_PER_TICK: "7",
+      PONDER_BASE_URL: "https://ponder.example.com",
+      CLUSTER_PAYOUT_ORACLE_ADDRESS: "0x6666666666666666666666666666666666666666",
+    });
+
+    expect(config.correlationSnapshots).toEqual(
+      expect.objectContaining({
+        enabled: true,
+        mode: "auto",
+        artifactPath: undefined,
+        maxRoundsPerTick: 7,
+        artifactStorage: {
+          mode: "file",
+          outputDir: "/tmp/rateloop-correlation",
+          publicBaseUrl: "https://artifacts.example.com/rateloop",
+        },
+      }),
+    );
+  });
+
+  it("requires Ponder when automatic correlation snapshots are enabled", async () => {
+    await expect(
+      loadKeeperConfig(
+        {
+          KEEPER_CORRELATION_SNAPSHOTS_ENABLED: "true",
+          KEEPER_CORRELATION_SNAPSHOTS_MODE: "auto",
+          CLUSTER_PAYOUT_ORACLE_ADDRESS: "0x6666666666666666666666666666666666666666",
+        },
+        ["PONDER_BASE_URL"],
+      ),
+    ).rejects.toThrow(
+      "PONDER_BASE_URL is required when KEEPER_CORRELATION_SNAPSHOTS_ENABLED=true and KEEPER_CORRELATION_SNAPSHOTS_MODE=auto",
+    );
+  });
+
+  it("requires a public artifact URL for automatic file artifact storage", async () => {
+    await expect(
+      loadKeeperConfig(
+        {
+          KEEPER_CORRELATION_SNAPSHOTS_ENABLED: "true",
+          KEEPER_CORRELATION_SNAPSHOTS_MODE: "auto",
+          KEEPER_CORRELATION_ARTIFACT_STORAGE: "file",
+          PONDER_BASE_URL: "https://ponder.example.com",
+          CLUSTER_PAYOUT_ORACLE_ADDRESS: "0x6666666666666666666666666666666666666666",
+        },
+        ["KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL"],
+      ),
+    ).rejects.toThrow(
+      "KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL is required when auto correlation snapshots use file artifact storage",
+    );
+  });
 });
