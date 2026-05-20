@@ -41,11 +41,7 @@ function MobileProtocolPieces() {
 
 export function ProtocolPiecesDiagram() {
   return (
-    <DocsDiagramFrame
-      eyebrow="Protocol map"
-      title="Pieces and Trust Boundary"
-      description="Wallets control signing and protocol escrows hold bounty funds; the frontend/API never takes custody."
-    >
+    <DocsDiagramFrame title="Protocol map">
       <MobileProtocolPieces />
       <div className="relative hidden min-h-[27rem] overflow-hidden rounded-lg md:block">
         <svg className="absolute inset-0 h-full w-full" viewBox="0 0 1080 432" aria-hidden="true">
