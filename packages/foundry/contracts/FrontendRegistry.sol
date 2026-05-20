@@ -56,7 +56,12 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     bool public initialFeeCreditorConfigured;
     address public feeCreditor;
     mapping(address => bool) private authorizedFeeCreditors;
-    mapping(address => address) private feeCreditorForEngine;
+    /// @notice I-Frontend-A: promoted from `private` to `public` so off-chain monitors can read
+    ///         the engine→creditor binding without ERC-1967 storage-slot reads. Mapping value is
+    ///         the fee creditor that was current when the given voting engine was the active
+    ///         router; preserved after rotation so historical rounds settled by a now-rotated
+    ///         engine still resolve to the right creditor (see `creditFees`).
+    mapping(address => address) public feeCreditorForEngine;
 
     /// @dev Reserved storage gap for future upgrades
     uint256[44] private __gap;
