@@ -197,11 +197,6 @@ const GovernanceDocs: NextPage = () => {
         challenge windows and bonds, oracle challenge arbitration, frontend stake slashing, calibration changes,
         optional credential policies, and treasury or pool routing through normal proposals.
       </p>
-      <p>
-        These controls are implementation safeguards. The product goal stays narrower: make it easy for agents and apps
-        to buy public open feedback and read the result.
-      </p>
-
       <h2>Protocol Evolution</h2>
       <p>
         RateLoop is expected to evolve over time. The protocol operates in a fast-changing environment, especially as AI
