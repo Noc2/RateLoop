@@ -10,6 +10,13 @@ import { IClusterPayoutOracle } from "./interfaces/IClusterPayoutOracle.sol";
 import { ILaunchDistributionPool } from "./interfaces/ILaunchDistributionPool.sol";
 import { IRoundPayoutSnapshotConsumer } from "./interfaces/IRoundPayoutSnapshotConsumer.sol";
 
+/// @dev M-Oracle-1: minimal view shape on RoundVotingEngine that LaunchDistributionPool needs to
+///      authoritatively answer whether a (contentId, roundId) payload is source-ready for a
+///      cluster snapshot proposal. Avoids a heavy import dependency.
+interface IRoundClusterReadyAtSource {
+    function roundClusterPayoutReadyAt(uint256 contentId, uint256 roundId) external view returns (uint48);
+}
+
 /// @title LaunchDistributionPool
 /// @notice Holds the 68M LREP launch allocation and releases it through earned and verified/referral paths.
 contract LaunchDistributionPool is
@@ -62,6 +69,11 @@ contract LaunchDistributionPool is
     IERC20 public immutable lrepToken;
     RaterRegistry public raterRegistry;
     IClusterPayoutOracle public clusterPayoutOracle;
+    /// @notice M-Oracle-1: authoritative source for round source-readiness (queried by
+    ///         {roundPayoutSnapshotSourceReadyAt}). When set, takes precedence over the
+    ///         per-record `launchRoundSourceReadyAt` fallback. Wired to RoundVotingEngine at
+    ///         deploy time.
+    IRoundClusterReadyAtSource public roundClusterReadyAtSource;
     address public governance;
     uint256 public poolBalance;
     uint256 public earnedRaterDistributed;
@@ -99,6 +111,12 @@ contract LaunchDistributionPool is
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => bytes32[]))) internal pendingEarnedRaterCreditAnchorIds;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) public earnedRewardCreditFinalized;
     mapping(uint256 => mapping(uint256 => bool)) public earnedRaterRoundPayoutSnapshotConsumed;
+    /// @notice M-Oracle-1: Earliest sourceReadyAt observed for a given (contentId, roundId).
+    ///         Set on the first pending earned-rater credit recorded for the round and surfaced via
+    ///         {roundPayoutSnapshotSourceReadyAt} so the cluster oracle can reject pre-source
+    ///         slot-squat proposals. Once set the value is monotonic — later credits with later
+    ///         sourceReadyAt do not overwrite it.
+    mapping(uint256 => mapping(uint256 => uint64)) public launchRoundSourceReadyAt;
     LaunchRewardPolicy public launchRewardPolicy;
 
     event PoolDeposit(uint256 amount);
@@ -107,6 +125,7 @@ contract LaunchDistributionPool is
     event GovernanceUpdated(address indexed governance);
     event RaterRegistryUpdated(address indexed raterRegistry);
     event ClusterPayoutOracleUpdated(address indexed clusterPayoutOracle);
+    event RoundClusterReadyAtSourceUpdated(address indexed source);
     event AuthorizedCallerUpdated(address indexed caller, bool authorized);
     event LaunchRewardPolicyUpdated(LaunchRewardPolicy policy);
     event RaterLaunchCapAssigned(address indexed rater, uint256 cap, uint256 cohortIndex);
@@ -206,14 +225,46 @@ contract LaunchDistributionPool is
         emit ClusterPayoutOracleUpdated(newOracle);
     }
 
+    /// @notice M-Oracle-1: configure the authoritative round source-readiness oracle (the
+    ///         RoundVotingEngine). Accepts address(0) to clear, which falls back to per-record
+    ///         tracking only.
+    function setRoundClusterReadyAtSource(address newSource) external onlyOwner {
+        if (newSource != address(0)) {
+            if (newSource.code.length == 0) revert InvalidAddress();
+            // ABI shape probe — calling with (0,0) must not revert on a properly conforming
+            // source. The returned timestamp is intentionally discarded; the probe is purely
+            // a try/catch barrier to confirm the candidate decodes uint48.
+            // slither-disable-next-line unused-return
+            try IRoundClusterReadyAtSource(newSource).roundClusterPayoutReadyAt(0, 0) returns (uint48) { }
+            catch {
+                revert InvalidAddress();
+            }
+        }
+        roundClusterReadyAtSource = IRoundClusterReadyAtSource(newSource);
+        emit RoundClusterReadyAtSourceUpdated(newSource);
+    }
+
     /// @notice Governance rescue for pending earned-rater credits pinned to a now-stale oracle.
     /// @dev Keeps the original one-shot credit record intact and only repoints the pending
     ///      proof verifier. Advisory launch credits cannot reliably be re-recorded after their
     ///      advisory claim path is consumed, so deleting the pending ticket would strand them.
-    function rescueStalePendingEarnedRaterCredit(uint256 contentId, uint256 roundId, bytes32 commitKey)
-        external
-        onlyOwner
-    {
+    /// @param contentId Content the pending credit belongs to.
+    /// @param roundId Round the pending credit belongs to.
+    /// @param commitKey Per-rater commit identifier on the pending entry.
+    /// @param newReadyAt Optional override for `pendingEarnedRaterCreditReadyAt`. Pass 0 to keep
+    ///        the existing value, or a non-zero value at or before the new oracle's snapshot
+    ///        propose time to unblock finalize (L-Oracle-C). The legacy
+    ///        `recordEarnedRaterReward` entrypoint writes `sourceReadyAt = block.timestamp`; if
+    ///        that record happened AFTER the new oracle had already snapshotted the round, the
+    ///        original readyAt is greater than the new oracle's proposedAt and finalize is
+    ///        permanently stuck. This override lets governance reset readyAt to a value the
+    ///        new oracle's snapshot post-dates.
+    function rescueStalePendingEarnedRaterCredit(
+        uint256 contentId,
+        uint256 roundId,
+        bytes32 commitKey,
+        uint64 newReadyAt
+    ) external onlyOwner {
         PendingEarnedRaterCredit storage pending = pendingEarnedRaterCredits[contentId][roundId][commitKey];
         if (!pending.pending) revert InvalidAmount();
         if (earnedRewardCreditFinalized[contentId][roundId][commitKey]) revert AlreadyClaimed();
@@ -221,6 +272,16 @@ contract LaunchDistributionPool is
         if (currentOracle == address(0) || pending.oracle == currentOracle) revert InvalidAddress();
         address staleOracle = pending.oracle;
         pending.oracle = currentOracle;
+        if (newReadyAt != 0) {
+            // L-Oracle-C: refuse to advance readyAt into the future relative to current block —
+            // would silently strand the credit. Allow stepping backwards to before the new
+            // oracle's snapshot proposedAt. Governance-only function; the L2 sequencer's
+            // ~20s timestamp drift is well below the cluster oracle's challenge window
+            // (12 h default) so timestamp dependence is intentional and safe here.
+            // slither-disable-next-line timestamp
+            if (uint256(newReadyAt) > block.timestamp) revert InvalidAmount();
+            pendingEarnedRaterCreditReadyAt[contentId][roundId][commitKey] = newReadyAt;
+        }
         emit StalePendingEarnedRaterCreditRescued(pending.rater, contentId, roundId, commitKey, staleOracle);
     }
 
@@ -640,6 +701,12 @@ contract LaunchDistributionPool is
             rater: rater, oracle: oracle, scoreBps: scoreBps, policy: policy, pending: true
         });
         pendingEarnedRaterCreditReadyAt[contentId][roundId][commitKey] = sourceReadyAt;
+        // M-Oracle-1: record the earliest sourceReadyAt for this round so the cluster oracle can
+        // reject snapshot proposals submitted before any credit has been recorded.
+        uint64 existing = launchRoundSourceReadyAt[contentId][roundId];
+        if (existing == 0 || sourceReadyAt < existing) {
+            launchRoundSourceReadyAt[contentId][roundId] = sourceReadyAt;
+        }
 
         delete pendingEarnedRaterCreditAnchorIds[contentId][roundId][commitKey];
         bytes32[] storage pendingAnchors = pendingEarnedRaterCreditAnchorIds[contentId][roundId][commitKey];
@@ -695,6 +762,27 @@ contract LaunchDistributionPool is
         // Finalizing any launch credit consumes the root because even zero-pay finalizations
         // mutate the rater's future unlock state.
         return earnedRaterRoundPayoutSnapshotConsumed[contentId][roundId];
+    }
+
+    /// @notice M-Oracle-1: source-readiness timestamp for the launch-credit domain. Prefers the
+    ///         configured RoundVotingEngine view (set via {setRoundClusterReadyAtSource}) so a
+    ///         proposer can front-run a snapshot as soon as the round is settled, even before
+    ///         the first rater claim records a pending credit. Falls back to the per-record
+    ///         `launchRoundSourceReadyAt` so existing deployments without the source wired up
+    ///         still get the gate once at least one credit lands.
+    function roundPayoutSnapshotSourceReadyAt(uint8 domain, uint256 rewardPoolId, uint256 contentId, uint256 roundId)
+        external
+        view
+        returns (uint64)
+    {
+        if (domain != PAYOUT_DOMAIN_LAUNCH_CREDIT || rewardPoolId != 0) return 0;
+        IRoundClusterReadyAtSource source = roundClusterReadyAtSource;
+        if (address(source) != address(0)) {
+            try source.roundClusterPayoutReadyAt(contentId, roundId) returns (uint48 readyAt) {
+                if (readyAt != 0) return uint64(readyAt);
+            } catch { }
+        }
+        return launchRoundSourceReadyAt[contentId][roundId];
     }
 
     function _assignLaunchCap(address rater, uint256 fullCap, LaunchRewardPolicy memory policy)

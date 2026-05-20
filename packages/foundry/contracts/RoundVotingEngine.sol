@@ -1278,15 +1278,26 @@ contract RoundVotingEngine is
             RoundRevealLib.captureRbtsSeed(roundRbtsSeedEntropy, contentId, roundId);
         }
         commitPredictedUpBps[contentId][roundId][commitKey] = predictedUpBps;
+        // L-Vote-B: `commitRbtsWeight` is written only when threshold-not-yet-reached at the start
+        // of this reveal. Same-block reveals ordered after the keeper that closes threshold are
+        // intentionally excluded from RBTS reward weight and sampler index — the sampler seed is
+        // frozen at threshold close, so admitting later reveals into the scoring set would let a
+        // sequencer-positioned reveal influence the sampler index without affecting the seed.
+        // Excluding them is the design choice (commit abccc7c8). Same-second commits resolve via
+        // strict ordering, so any keeper-vs-honest race is decided by sequencer ordering of the
+        // settle vs reveal txs and is not protocol-level griefable.
         if (!thresholdAlreadyReached) {
             commitRbtsWeight[contentId][roundId][commitKey] = effectiveStake;
         }
-        unchecked {
-            if (isUp) {
-                roundRatingUpEvidence[contentId][roundId] += ratingEvidenceWeight;
-            } else {
-                roundRatingDownEvidence[contentId][roundId] += ratingEvidenceWeight;
-            }
+        // L-Vote-A: keep evidence accumulation checked so a future governance proposal that
+        // raises `maxVoters` past ~9.2e12 cannot silently truncate the uint64 counter. The
+        // current bound is well below that, but the `unchecked` block was a bytecode-trim
+        // micro-optimization that traded a real (if remote) safety guarantee for a few hundred
+        // gas. Restore the default checked arithmetic here.
+        if (isUp) {
+            roundRatingUpEvidence[contentId][roundId] += ratingEvidenceWeight;
+        } else {
+            roundRatingDownEvidence[contentId][roundId] += ratingEvidenceWeight;
         }
 
         emit VoteRevealed(contentId, roundId, voter, isUp);
@@ -1459,6 +1470,13 @@ contract RoundVotingEngine is
     /// @dev For rounds without stale unrevealed votes this equals `settledAt`; otherwise it is
     ///      set when the cleanup queue reaches zero. Oracle consumers reject roots proposed
     ///      before this timestamp so the optimistic challenge window only runs on complete data.
+    ///      I-Crosscutting-A: this slot was swapped in-place from `roundDeferredCleanupBounty`
+    ///      (triple mapping → uint48) when the deferred-cleanup bounty was removed in commit
+    ///      `38dae9e6`. Fresh deployments are unaffected; any future upgrade from a baseline
+    ///      that populated the old surface must run `validateUpgrade` first and treat this slot
+    ///      as freshly initialized. The annotation marks the in-place swap so OZ Upgrades tools
+    ///      do not flag the storage layout change.
+    /// @custom:oz-renamed-from roundDeferredCleanupBounty
     mapping(uint256 contentId => mapping(uint256 roundId => uint48)) public roundClusterPayoutReadyAt;
 
     // --- Storage gap reserved for future upgrades ---

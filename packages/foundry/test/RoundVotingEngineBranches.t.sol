@@ -3060,6 +3060,12 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         vm.warp(block.timestamp + 60 minutes + 1);
         _settleRoundAfterRbtsSeed(contentId, roundId);
 
+        // I-Vote-A: advisory reveals are allowed during a `revealGracePeriod` window after
+        // settlement, so the immediate post-settle reveal is no longer expected to revert.
+        // Warp past the grace period to assert the reveal is still rejected once the grace
+        // expires.
+        uint256 grace = ProtocolConfig(protocolConfigAddress).revealGracePeriod();
+        vm.warp(block.timestamp + grace + 1);
         vm.expectRevert(AdvisoryVoteRecorder.RoundNotOpen.selector);
         advisoryRecorder.revealAdvisoryVote(advisoryCommitKey, true, 5_000, advisorySalt);
     }
