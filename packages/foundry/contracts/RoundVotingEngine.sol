@@ -83,6 +83,8 @@ contract RoundVotingEngine is
     error IndexOutOfBounds();
     error UnrevealedPastEpochVotes();
     error NothingProcessed();
+    /// @notice M-Vote-2: refreshRbtsSeed has hit the per-round cap.
+    error RbtsSeedRefreshCapped();
 
     // --- Access Control Roles ---
     bytes32 internal constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
@@ -93,6 +95,13 @@ contract RoundVotingEngine is
     uint256 internal constant VOTE_COOLDOWN = 24 hours; // Time-based cooldown per content per voter
     uint256 internal constant MAX_CIPHERTEXT_SIZE = 2_048; // 2 KB max ciphertext to prevent storage bloat
     uint16 internal constant MIN_RBTS_PARTICIPANTS = 3;
+    /// @notice M-Vote-2: maximum number of `refreshRbtsSeed` calls allowed per round. Each
+    ///         refresh re-captures a `blockhash`-derived seed; without a cap, the
+    ///         threshold-closing voter could wait 256 blocks, refresh, simulate, and repeat
+    ///         until the sampler index produced a favorable RBTS score. Three refreshes
+    ///         (≈ 3 * 256 blocks ≈ 25 min on a 2s L2) is more than enough for honest liveness
+    ///         when nobody is monitoring the round; well short of meaningful grinding leverage.
+    uint8 internal constant MAX_RBTS_SEED_REFRESHES = 3;
 
     // --- State ---
     IERC20 internal lrepToken;
@@ -838,11 +847,19 @@ contract RoundVotingEngine is
     /// @notice Refresh an expired pending RBTS settlement seed without using known blockhashes for scoring.
     /// @dev If a captured seed block ages out of `blockhash`, any caller can capture a fresh block and settle
     ///      from the next block onward. This preserves liveness without falling back to caller-chosen entropy.
+    ///      M-Vote-2: capped at `MAX_RBTS_SEED_REFRESHES` per round to bound seed grinding by the
+    ///      threshold-closing voter. Once exhausted, callers must accept the captured entropy or
+    ///      let governance arbitrate via `cancelExpiredRound`.
     function refreshRbtsSeed(uint256 contentId, uint256 roundId) external nonReentrant {
         RoundLib.Round storage round = rounds[contentId][roundId];
         if (round.state != RoundLib.RoundState.Open) revert RoundNotOpen();
         RoundLib.RoundConfig memory roundCfg = _getRoundConfig(contentId, roundId);
         if (round.revealedCount < _rbtsRevealQuorum(roundCfg.minVoters)) revert NotEnoughVotes();
+        uint8 refreshCount = roundRbtsSeedRefreshCount[contentId][roundId];
+        if (refreshCount >= MAX_RBTS_SEED_REFRESHES) revert RbtsSeedRefreshCapped();
+        unchecked {
+            roundRbtsSeedRefreshCount[contentId][roundId] = refreshCount + 1;
+        }
 
         RoundRevealLib.refreshRbtsSeed(roundRbtsSeedEntropy, contentId, roundId);
     }
@@ -1479,6 +1496,12 @@ contract RoundVotingEngine is
     /// @custom:oz-renamed-from roundDeferredCleanupBounty
     mapping(uint256 contentId => mapping(uint256 roundId => uint48)) public roundClusterPayoutReadyAt;
 
+    /// @notice M-Vote-2: number of times `refreshRbtsSeed` has been called for a round. Each
+    ///         refresh swaps the captured `blockhash`-derived entropy for a fresh capture; an
+    ///         unbounded counter would let the threshold-closing voter grind the sampler by
+    ///         waiting 256 blocks and re-rolling. Capped at `MAX_RBTS_SEED_REFRESHES` per round.
+    mapping(uint256 contentId => mapping(uint256 roundId => uint8)) public roundRbtsSeedRefreshCount;
+
     // --- Storage gap reserved for future upgrades ---
-    uint256[23] private __gap;
+    uint256[22] private __gap;
 }
