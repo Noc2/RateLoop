@@ -6,15 +6,18 @@ interface GasBalanceWarningProps {
 
 export function GasBalanceWarning({ nativeTokenSymbol }: GasBalanceWarningProps) {
   return (
-    <div className="surface-card-nested rounded-lg p-4">
-      <p className="mb-2 text-base font-medium text-base-content">Need {nativeTokenSymbol} for gas</p>
-      <p className="text-base text-base-content/70">
+    <div className="rounded-lg bg-error p-4 text-error-content">
+      <p className="mb-2 text-base font-medium">Need {nativeTokenSymbol} for gas</p>
+      <p className="text-base text-error-content/85">
         Add a little {nativeTokenSymbol} in{" "}
-        <Link href="/settings#wallet" className="link link-primary">
+        <Link href="/settings#wallet" className="font-semibold text-error-content underline underline-offset-2">
           Wallet settings
         </Link>
         , then retry.{" "}
-        <Link href="/docs/how-it-works#transaction-costs" className="link link-primary">
+        <Link
+          href="/docs/how-it-works#transaction-costs"
+          className="font-semibold text-error-content underline underline-offset-2"
+        >
           See transaction costs
         </Link>
       </p>
