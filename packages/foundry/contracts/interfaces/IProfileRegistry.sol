@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.34;
 
 /// @title IProfileRegistry
 /// @notice Interface for the ProfileRegistry contract that manages on-chain user profiles

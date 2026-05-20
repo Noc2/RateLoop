@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+pragma solidity ^0.8.34;
 
 import { SD59x18, abs, convert, div, exp, ln, mul, sd, unwrap } from "../../lib/prb-math/src/SD59x18.sol";
 import { RatingLib } from "./RatingLib.sol";

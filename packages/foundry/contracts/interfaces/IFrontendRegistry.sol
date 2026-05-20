@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.34;
 
 /// @title IFrontendRegistry
 /// @notice Interface for the FrontendRegistry contract that manages frontend operator registration and fees

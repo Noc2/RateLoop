@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.34;
 
 /// @title RobustBtsMath
 /// @notice Binary Robust Bayesian Truth Serum scoring helpers using 0-10000 BPS probabilities.

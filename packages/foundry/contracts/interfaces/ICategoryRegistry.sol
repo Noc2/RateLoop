@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.34;
 
 /// @title ICategoryRegistry Interface
 /// @notice Interface for seed-only discovery category metadata.

@@ -4,6 +4,13 @@ out = 'out'
 libs = ['lib', 'node_modules']
 fs_permissions = [{ access = "read-write", path = "./"}]
 evm_version = 'cancun'
+# TC-1 (2026-05-20 follow-up audit): pin to 0.8.34. Solidity 0.8.28-0.8.33 with `via_ir = true`
+# emit a wrong opcode (SSTORE vs TSTORE) when `delete` is applied to both a persistent and a
+# transient state var of the same value type in the same compilation unit. ReentrancyGuardTransient
+# is used in several contracts here so the trigger surface is non-empty even if no concrete
+# instance is reachable today. 0.8.34 ships the upstream fix.
+# https://www.soliditylang.org/blog/2026/02/18/transient-storage-clearing-helper-collision-bug/
+solc = "0.8.34"
 via_ir = true
 optimizer = true
 optimizer_runs = 100

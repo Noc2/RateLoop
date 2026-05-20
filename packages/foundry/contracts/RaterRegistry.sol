@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.34;
 
 import { AccessControl } from "@openzeppelin/contracts/access/AccessControl.sol";
 import { IWorldIDRouter } from "./interfaces/IWorldIDRouter.sol";
