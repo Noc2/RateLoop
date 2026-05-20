@@ -26,11 +26,7 @@ const flowSteps = [
 
 export function OracleChallengeFlowDiagram() {
   return (
-    <DocsDiagramFrame
-      eyebrow="Optimistic payout-root oracle"
-      title="ClusterPayoutOracle Challenge Flow"
-      description="Public rating settlement happens first; this flow only finalizes payout weights for claim paths."
-    >
+    <DocsDiagramFrame title="ClusterPayoutOracle Challenge Flow">
       <div className="space-y-3">
         <div className="grid gap-3 md:grid-cols-4">
           {flowSteps.map(step => (
