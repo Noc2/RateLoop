@@ -384,6 +384,41 @@ contract RaterRegistryTest is Test {
         );
     }
 
+    /// @notice RR-4 (2026-05-20 follow-up audit): governance can cap the SEEDER-seeded credential
+    ///         TTL, mirroring the immutable WorldID TTL cap. cap=0 keeps the legacy behavior.
+    function test_MaxSeededCredentialTtlClampsSeedExpiry() public {
+        // Default: no cap; long-lived seeds accepted (legacy behavior).
+        vm.prank(admin);
+        registry.seedHumanCredential(rater, uint64(block.timestamp + 100 * 365 days), SEEDED_ANCHOR_ID, EVIDENCE_HASH);
+
+        // Governance sets a 30-day cap.
+        vm.prank(governance);
+        registry.setMaxSeededCredentialTtl(uint64(30 days));
+        assertEq(registry.maxSeededCredentialTtl(), uint64(30 days));
+
+        // Seed beyond cap is rejected.
+        vm.prank(admin);
+        vm.expectRevert(RaterRegistry.InvalidCredential.selector);
+        registry.seedHumanCredential(
+            otherRater, uint64(block.timestamp + 60 days), keccak256("rr4-other-anchor"), EVIDENCE_HASH
+        );
+
+        // Seed inside cap is accepted.
+        vm.prank(admin);
+        registry.seedHumanCredential(
+            otherRater, uint64(block.timestamp + 15 days), keccak256("rr4-other-anchor"), EVIDENCE_HASH
+        );
+
+        // cap = 0 disables the clamp again.
+        vm.prank(governance);
+        registry.setMaxSeededCredentialTtl(0);
+        assertEq(registry.maxSeededCredentialTtl(), 0);
+        vm.prank(admin);
+        registry.seedHumanCredential(
+            address(0xBEEF), uint64(block.timestamp + 100 * 365 days), keccak256("rr4-uncapped-anchor"), EVIDENCE_HASH
+        );
+    }
+
     function test_SeedHumanCredentialStoresSeededAccountAsVerifiedHuman() public {
         uint64 expiresAt = uint64(block.timestamp + 180 days);
 

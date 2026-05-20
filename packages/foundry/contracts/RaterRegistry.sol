@@ -75,6 +75,12 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
     bytes32 public immutable worldIdScope;
     uint256 public immutable worldIdExternalNullifierHash;
     uint64 public immutable worldIdCredentialTtl;
+    /// @dev RR-4 (2026-05-20 follow-up audit): governance-tunable upper bound on the TTL
+    ///      SEEDER_ROLE can grant via `seedHumanCredential`. WorldID credentials are already
+    ///      clamped via the immutable `worldIdCredentialTtl`; this is the symmetric clamp for
+    ///      SEEDER-seeded credentials. 0 means "no governance-imposed cap" (i.e., the prior
+    ///      behavior in which SEEDER could pass `type(uint64).max`).
+    uint64 public maxSeededCredentialTtl;
 
     event RaterProfileUpdated(
         address indexed rater, RaterType indexed raterType, bytes32 indexed metadataHash, uint64 updatedAt
@@ -109,6 +115,9 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
     ///         keyed off the prior canonical (cooldowns, exclusions, profile ownership) — the
     ///         next attestation will seed a fresh canonical from the new credential's nullifier.
     event CanonicalHumanIdentityKeyCleared(address indexed rater, bytes32 indexed previousKey);
+    /// @notice RR-4 (2026-05-20 follow-up audit): governance updated the SEEDER-seeded credential
+    ///         TTL cap. `newCap = 0` removes the cap entirely.
+    event MaxSeededCredentialTtlUpdated(uint64 previousCap, uint64 newCap);
     event ProfileFollowed(address indexed follower, address indexed target, uint64 followedAt);
     event ProfileUnfollowed(address indexed follower, address indexed target, uint64 unfollowedAt);
     event DelegateRequested(address indexed holder, address indexed delegate);
@@ -317,9 +326,26 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
         external
         onlyRole(SEEDER_ROLE)
     {
+        // RR-4 (2026-05-20 follow-up audit): clamp SEEDER-seeded TTL to the governance-tunable
+        // upper bound. Mirrors the immutable `worldIdCredentialTtl` clamp on the WorldID path.
+        uint64 cap = maxSeededCredentialTtl;
+        if (cap != 0 && expiresAt > uint256(block.timestamp) + uint256(cap)) {
+            revert InvalidCredential();
+        }
         _attestHumanCredential(
             rater, anchorId, SEEDED_HUMAN_SCOPE, expiresAt, HumanCredentialProvider.SeededHuman, evidenceHash
         );
+    }
+
+    /// @notice Set the upper bound on TTL for SEEDER-seeded credentials. `cap = 0` disables the
+    ///         cap (back-compat). `cap > 0` rejects any future `seedHumanCredential` call where
+    ///         `expiresAt > block.timestamp + cap`.
+    /// @dev RR-4 (2026-05-20 follow-up audit). DEFAULT_ADMIN_ROLE gated because the cap is part
+    ///      of the identity-system governance surface, alongside SEEDER_ROLE assignment itself.
+    function setMaxSeededCredentialTtl(uint64 cap) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        uint64 previousCap = maxSeededCredentialTtl;
+        maxSeededCredentialTtl = cap;
+        emit MaxSeededCredentialTtlUpdated(previousCap, cap);
     }
 
     function revokeHumanCredential(address rater) external onlyRole(SEEDER_ROLE) {
