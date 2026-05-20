@@ -21,7 +21,7 @@ export interface RoundVotingConfig {
 export interface CommitData {
   voter: `0x${string}`;
   stakeAmount: bigint;
-  ciphertext: `0x${string}`;
+  ciphertextHash: `0x${string}`;
   targetRound?: bigint;
   drandChainHash?: `0x${string}`;
   frontend: `0x${string}`;
@@ -114,11 +114,11 @@ function parseRoundData(rawRound: unknown): RoundData {
 
 export function parseCommitData(rawCommit: unknown): CommitData {
   const commit = rawCommit as Record<string, unknown> & unknown[];
-  if (commit?.ciphertext != null) {
+  if (commit?.ciphertextHash != null) {
     return {
       voter: "0x0000000000000000000000000000000000000000",
       stakeAmount: toBigInt(commit.stakeAmount),
-      ciphertext: commit.ciphertext as unknown as `0x${string}`,
+      ciphertextHash: commit.ciphertextHash as unknown as `0x${string}`,
       targetRound: commit.targetRound != null ? toBigInt(commit.targetRound) : undefined,
       drandChainHash: commit.drandChainHash as unknown as `0x${string}` | undefined,
       frontend: "0x0000000000000000000000000000000000000000",
@@ -133,7 +133,7 @@ export function parseCommitData(rawCommit: unknown): CommitData {
     return {
       voter: commit.voter as `0x${string}`,
       stakeAmount: toBigInt(commit.stakeAmount),
-      ciphertext: commit.ciphertext as unknown as `0x${string}`,
+      ciphertextHash: commit.ciphertextHash as unknown as `0x${string}`,
       targetRound: commit.targetRound != null ? toBigInt(commit.targetRound) : undefined,
       drandChainHash: commit.drandChainHash as unknown as `0x${string}` | undefined,
       frontend: commit.frontend as unknown as `0x${string}`,
@@ -149,7 +149,7 @@ export function parseCommitData(rawCommit: unknown): CommitData {
       return {
         voter: commit[0] as `0x${string}`,
         stakeAmount: toBigInt(commit[1]),
-        ciphertext: commit[2] as `0x${string}`,
+        ciphertextHash: commit[2] as `0x${string}`,
         targetRound: toBigInt(commit[3]),
         drandChainHash: commit[4] as `0x${string}`,
         frontend: commit[5] as `0x${string}`,
@@ -164,7 +164,7 @@ export function parseCommitData(rawCommit: unknown): CommitData {
       return {
         voter: "0x0000000000000000000000000000000000000000",
         stakeAmount: toBigInt(commit[5]),
-        ciphertext: commit[0] as `0x${string}`,
+        ciphertextHash: commit[0] as `0x${string}`,
         targetRound: toBigInt(commit[1]),
         drandChainHash: commit[2] as `0x${string}`,
         frontend: "0x0000000000000000000000000000000000000000",

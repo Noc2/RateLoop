@@ -16,7 +16,7 @@
  * Vote ciphertext is tlock-encrypted to a future drand round. After the epoch
  * ends, the drand beacon makes the decryption key available and the keeper can decrypt.
  */
-import type { PublicClient, WalletClient, Chain, Account } from "viem";
+import { keccak256, type PublicClient, type WalletClient, type Chain, type Account } from "viem";
 import { timelockDecrypt, mainnetClient } from "tlock-js";
 import {
   AdvisoryVoteRecorderAbi,
@@ -285,6 +285,7 @@ export async function decryptTlockVoteCiphertext(
 
 function validateCiphertextMetadata(
   commit: CommitData,
+  ciphertext: `0x${string}`,
 ): { ok: true } | { ok: false; reason: string } {
   if (commit.targetRound == null || commit.drandChainHash == null) {
     return {
@@ -293,9 +294,7 @@ function validateCiphertextMetadata(
     };
   }
 
-  const metadata = parseTlockCiphertextMetadata(
-    commit.ciphertext as `0x${string}`,
-  );
+  const metadata = parseTlockCiphertextMetadata(ciphertext);
   if (!metadata) {
     return {
       ok: false,
@@ -314,6 +313,82 @@ function validateCiphertextMetadata(
   }
 
   return { ok: true };
+}
+
+interface IndexedCiphertextRecord {
+  commitKey?: `0x${string}`;
+  ciphertextHash?: `0x${string}`;
+  ciphertext?: `0x${string}`;
+}
+
+async function fetchIndexedCiphertext(params: {
+  kind: "vote" | "advisory";
+  contentId: bigint;
+  roundId: bigint;
+  commitKey: `0x${string}`;
+  expectedCiphertextHash: `0x${string}`;
+  logger: Logger;
+}): Promise<`0x${string}` | null> {
+  if (!config.ponderBaseUrl) {
+    params.logger.warn("PONDER_BASE_URL is not configured; cannot fetch indexed vote ciphertext", {
+      kind: params.kind,
+      contentId: Number(params.contentId),
+      roundId: Number(params.roundId),
+      commitKey: params.commitKey,
+    });
+    return null;
+  }
+
+  const path = params.kind === "vote" ? "/votes" : "/advisory-votes";
+  const url = new URL(path, config.ponderBaseUrl);
+  url.searchParams.set("contentId", params.contentId.toString());
+  url.searchParams.set("roundId", params.roundId.toString());
+  url.searchParams.set("limit", "200");
+
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      params.logger.warn("Failed to fetch indexed vote ciphertext", {
+        kind: params.kind,
+        status: response.status,
+        url: url.toString(),
+      });
+      return null;
+    }
+
+    const body = (await response.json()) as { items?: IndexedCiphertextRecord[] };
+    const record = body.items?.find(
+      item => item.commitKey?.toLowerCase() === params.commitKey.toLowerCase(),
+    );
+    if (!record?.ciphertext || !record.ciphertextHash) {
+      return null;
+    }
+    if (record.ciphertextHash.toLowerCase() !== params.expectedCiphertextHash.toLowerCase()) {
+      params.logger.error("Indexed ciphertext hash does not match on-chain commit hash", {
+        kind: params.kind,
+        commitKey: params.commitKey,
+        indexedCiphertextHash: record.ciphertextHash,
+        expectedCiphertextHash: params.expectedCiphertextHash,
+      });
+      return null;
+    }
+    if (keccak256(record.ciphertext) !== params.expectedCiphertextHash) {
+      params.logger.error("Indexed ciphertext bytes do not hash to on-chain ciphertext hash", {
+        kind: params.kind,
+        commitKey: params.commitKey,
+        expectedCiphertextHash: params.expectedCiphertextHash,
+      });
+      return null;
+    }
+    return record.ciphertext;
+  } catch (err: unknown) {
+    params.logger.warn("Failed to resolve indexed vote ciphertext", {
+      kind: params.kind,
+      commitKey: params.commitKey,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  }
 }
 
 /**
@@ -754,7 +829,17 @@ async function _revealCommits(
       const priorFailures = decryptFailureCount.get(commitKey) ?? 0;
       if (priorFailures >= MAX_DECRYPT_RETRIES) continue;
 
-      const metadataValidation = validateCiphertextMetadata(commit);
+      const ciphertext = await fetchIndexedCiphertext({
+        kind: "vote",
+        contentId,
+        roundId,
+        commitKey,
+        expectedCiphertextHash: commit.ciphertextHash,
+        logger,
+      });
+      if (!ciphertext) continue;
+
+      const metadataValidation = validateCiphertextMetadata(commit, ciphertext);
       if (!metadataValidation.ok) {
         markPermanentDecryptFailure(commitKey);
         incrementCounter("keeper_decrypt_failures_total");
@@ -776,9 +861,7 @@ async function _revealCommits(
         salt: `0x${string}`;
       } | null;
       try {
-        decrypted = await decryptTlockVoteCiphertext(
-          commit.ciphertext as `0x${string}`,
-        );
+        decrypted = await decryptTlockVoteCiphertext(ciphertext);
       } catch (err: unknown) {
         const decryptError = classifyDecryptError(err);
         if (decryptError.retryable) {
@@ -945,7 +1028,17 @@ async function _revealAdvisoryCommits(
       const priorFailures = decryptFailureCount.get(commitKey) ?? 0;
       if (priorFailures >= MAX_DECRYPT_RETRIES) continue;
 
-      const metadataValidation = validateCiphertextMetadata(commit);
+      const ciphertext = await fetchIndexedCiphertext({
+        kind: "advisory",
+        contentId,
+        roundId,
+        commitKey,
+        expectedCiphertextHash: commit.ciphertextHash,
+        logger,
+      });
+      if (!ciphertext) continue;
+
+      const metadataValidation = validateCiphertextMetadata(commit, ciphertext);
       if (!metadataValidation.ok) {
         markPermanentDecryptFailure(commitKey);
         incrementCounter("keeper_decrypt_failures_total");
@@ -966,7 +1059,7 @@ async function _revealAdvisoryCommits(
         salt: `0x${string}`;
       } | null;
       try {
-        decrypted = await decryptTlockVoteCiphertext(commit.ciphertext as `0x${string}`);
+        decrypted = await decryptTlockVoteCiphertext(ciphertext);
       } catch (err: unknown) {
         const decryptError = classifyDecryptError(err);
         if (decryptError.retryable) {

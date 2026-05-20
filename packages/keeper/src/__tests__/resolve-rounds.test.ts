@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { keccak256 } from "viem";
 
 const VOTER = "0x3333333333333333333333333333333333333333" as const;
 const ACCOUNT = "0x4444444444444444444444444444444444444444" as const;
@@ -21,6 +22,7 @@ const { mockConfig, timelockDecrypt } = vi.hoisted(() => ({
       contentRegistry: "0x2222222222222222222222222222222222222222",
       advisoryVoteRecorder: "0x5555555555555555555555555555555555555555",
     },
+    ponderBaseUrl: "https://ponder.example.test",
     dormancyPeriod: 30n * 24n * 60n * 60n,
     cleanupBatchSize: 25,
   },
@@ -52,6 +54,7 @@ interface RoundData {
 interface CommitData {
   voter: `0x${string}`;
   stakeAmount: bigint;
+  ciphertextHash: `0x${string}`;
   ciphertext: `0x${string}`;
   targetRound?: bigint;
   drandChainHash?: `0x${string}`;
@@ -160,15 +163,17 @@ function makeCommit(overrides: Partial<CommitData> = {}): CommitData {
   const salt = `0x${"aa".repeat(32)}` as `0x${string}`;
   const targetRound = 123n;
   const drandChainHash = `0x${"ab".repeat(32)}` as `0x${string}`;
+  const ciphertext = makeTlockCiphertext({
+    isUp: true,
+    salt,
+    targetRound,
+    drandChainHash,
+  });
   return {
     voter: VOTER,
     stakeAmount: 100n,
-    ciphertext: makeTlockCiphertext({
-      isUp: true,
-      salt,
-      targetRound,
-      drandChainHash,
-    }),
+    ciphertextHash: keccak256(ciphertext),
+    ciphertext,
     targetRound,
     drandChainHash,
     frontend: "0x0000000000000000000000000000000000000000",
@@ -201,7 +206,7 @@ function toRoundTuple(round: RoundData) {
 
 function toCommitRevealTuple(commit: CommitData) {
   return [
-    commit.ciphertext,
+    commit.ciphertextHash,
     commit.targetRound ?? 0n,
     commit.drandChainHash ?? `0x${"0".repeat(64)}`,
     commit.revealableAfter,
@@ -275,6 +280,23 @@ function makeHarness(options: {
   const advisoryCommitKeys = options.advisoryCommitKeys ?? [];
   const advisoryCommitCores = options.advisoryCommitCores ?? {};
   const round = options.round;
+
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: string | URL) => {
+      const url = new URL(String(input));
+      const items = Object.entries(commits).map(([commitKey, commit]) => ({
+        commitKey,
+        ciphertextHash: commit.ciphertextHash,
+        ciphertext: commit.ciphertext,
+      }));
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ items }),
+      };
+    }),
+  );
 
   const publicClient = {
     getBlock: vi.fn().mockResolvedValue({ timestamp: now }),
@@ -445,6 +467,7 @@ function makeHarness(options: {
 describe("resolveRounds", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.unstubAllGlobals();
     mockConfig.cleanupBatchSize = 25;
     resetKeeperStateForTests();
   });
@@ -645,6 +668,7 @@ describe("resolveRounds", () => {
     });
     const badCommit = makeCommit({ revealableAfter: 100n });
     badCommit.ciphertext = "0x1234";
+    badCommit.ciphertextHash = keccak256(badCommit.ciphertext);
     const { publicClient, walletClient } = makeHarness({
       activeRoundId: 1n,
       latestRoundId: 1n,
@@ -708,6 +732,7 @@ describe("resolveRounds", () => {
       ].join("\n"),
       "utf8",
     ).toString("hex")}` as `0x${string}`;
+    badCommit.ciphertextHash = keccak256(badCommit.ciphertext);
     const { publicClient, walletClient } = makeHarness({
       activeRoundId: 1n,
       latestRoundId: 1n,
