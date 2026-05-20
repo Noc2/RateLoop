@@ -1,4 +1,4 @@
-.PHONY: build deploy deploy-and-generate-abis generate-abis get-address account chain compile compile-all flatten fork format lint test verify verify-blockscout slither aderyn coverage check-contract-sizes
+.PHONY: build deploy deploy-and-generate-abis generate-abis get-address account chain compile compile-all flatten fork format lint test verify verify-blockscout slither aderyn coverage check-contract-sizes check-storage-layouts snapshot-storage-layouts
 
 TEST_ARGS ?=
 COVERAGE_ARGS ?=
@@ -125,3 +125,12 @@ coverage:
 check-contract-sizes:
 	FOUNDRY_PROFILE=$(DEPLOY_PROFILE) forge build --skip script --skip test
 	bash scripts/check-contract-sizes.sh
+
+# M-Crosscutting-1: snapshot-test the storage layout of every upgradeable contract.
+check-storage-layouts:
+	forge build --skip script --skip test
+	bash scripts/check-storage-layouts.sh
+
+snapshot-storage-layouts:
+	forge build --skip script --skip test
+	bash scripts/snapshot-storage-layouts.sh

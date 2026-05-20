@@ -1,0 +1,62 @@
+[
+  {
+    "slot": 0,
+    "offset": 0,
+    "label": "usdcToken",
+    "type": "t_contract"
+  },
+  {
+    "slot": 1,
+    "offset": 0,
+    "label": "registry",
+    "type": "t_contract"
+  },
+  {
+    "slot": 2,
+    "offset": 0,
+    "label": "votingEngine",
+    "type": "t_contract"
+  },
+  {
+    "slot": 3,
+    "offset": 0,
+    "label": "raterRegistry",
+    "type": "t_contract"
+  },
+  {
+    "slot": 4,
+    "offset": 0,
+    "label": "nextFeedbackBonusPoolId",
+    "type": "t_uint256"
+  },
+  {
+    "slot": 5,
+    "offset": 0,
+    "label": "defaultFrontendFeeBps",
+    "type": "t_uint16"
+  },
+  {
+    "slot": 6,
+    "offset": 0,
+    "label": "feedbackBonusPools",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 7,
+    "offset": 0,
+    "label": "identityKeyAwarded",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 8,
+    "offset": 0,
+    "label": "feedbackHashAwarded",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 9,
+    "offset": 0,
+    "label": "__gap",
+    "type": "t_array"
+  }
+]

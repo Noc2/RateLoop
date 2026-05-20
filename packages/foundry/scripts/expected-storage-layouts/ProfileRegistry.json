@@ -1,0 +1,50 @@
+[
+  {
+    "slot": 0,
+    "offset": 0,
+    "label": "_profiles",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 1,
+    "offset": 0,
+    "label": "_avatarAccents",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 2,
+    "offset": 0,
+    "label": "_nameToAddress",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 3,
+    "offset": 0,
+    "label": "_registeredAddresses",
+    "type": "t_array"
+  },
+  {
+    "slot": 4,
+    "offset": 0,
+    "label": "raterRegistry",
+    "type": "t_contract"
+  },
+  {
+    "slot": 5,
+    "offset": 0,
+    "label": "_profileIdentityKeys",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 6,
+    "offset": 0,
+    "label": "_profileOwnerByIdentityKey",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 7,
+    "offset": 0,
+    "label": "__gap",
+    "type": "t_array"
+  }
+]

@@ -1,0 +1,176 @@
+[
+  {
+    "slot": 0,
+    "offset": 0,
+    "label": "lrepToken",
+    "type": "t_contract"
+  },
+  {
+    "slot": 1,
+    "offset": 0,
+    "label": "votingEngine",
+    "type": "t_contract"
+  },
+  {
+    "slot": 2,
+    "offset": 0,
+    "label": "registry",
+    "type": "t_contract"
+  },
+  {
+    "slot": 3,
+    "offset": 0,
+    "label": "rewardClaimed",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 4,
+    "offset": 0,
+    "label": "rewardCommitClaimed",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 5,
+    "offset": 0,
+    "label": "roundVoterRewardClaimedCount",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 6,
+    "offset": 0,
+    "label": "roundVoterRewardClaimedAmount",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 7,
+    "offset": 0,
+    "label": "roundVoterRewardDustFinalized",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 8,
+    "offset": 0,
+    "label": "frontendFeeClaimed",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 9,
+    "offset": 0,
+    "label": "roundFrontendClaimedCount",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 10,
+    "offset": 0,
+    "label": "roundFrontendClaimedAmount",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 11,
+    "offset": 0,
+    "label": "roundFrontendFeeDustFinalized",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 12,
+    "offset": 0,
+    "label": "participationRewardClaimed",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 13,
+    "offset": 0,
+    "label": "participationRewardPaid",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 14,
+    "offset": 0,
+    "label": "participationRewardCommitClaimed",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 15,
+    "offset": 0,
+    "label": "participationRewardCommitPaid",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 16,
+    "offset": 0,
+    "label": "roundParticipationRewardPool",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 17,
+    "offset": 0,
+    "label": "roundParticipationRewardRateBps",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 18,
+    "offset": 0,
+    "label": "roundParticipationRewardOwed",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 19,
+    "offset": 0,
+    "label": "roundParticipationRewardReserved",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 20,
+    "offset": 0,
+    "label": "roundParticipationRewardPaidTotal",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 21,
+    "offset": 0,
+    "label": "roundParticipationRewardFullyClaimedCount",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 22,
+    "offset": 0,
+    "label": "roundParticipationRewardFinalized",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 23,
+    "offset": 0,
+    "label": "roundParticipationRewardClaimableAt",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 24,
+    "offset": 0,
+    "label": "roundFrontendFeeDustProcessedCount",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 25,
+    "offset": 0,
+    "label": "roundFrontendFeeDustExpectedTotal",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 26,
+    "offset": 0,
+    "label": "roundFrontendFeeDustLastFrontend",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 27,
+    "offset": 0,
+    "label": "pendingLaunchCreditRetry",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 28,
+    "offset": 0,
+    "label": "__gap",
+    "type": "t_array"
+  }
+]

@@ -1,0 +1,380 @@
+[
+  {
+    "slot": 0,
+    "offset": 0,
+    "label": "lrepToken",
+    "type": "t_contract"
+  },
+  {
+    "slot": 1,
+    "offset": 0,
+    "label": "registry",
+    "type": "t_contract"
+  },
+  {
+    "slot": 2,
+    "offset": 0,
+    "label": "protocolConfig",
+    "type": "t_contract"
+  },
+  {
+    "slot": 3,
+    "offset": 0,
+    "label": "rounds",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 4,
+    "offset": 0,
+    "label": "currentRoundId",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 5,
+    "offset": 0,
+    "label": "nextRoundId",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 6,
+    "offset": 0,
+    "label": "commits",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 7,
+    "offset": 0,
+    "label": "roundCommitHashes",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 8,
+    "offset": 0,
+    "label": "lastVoteTimestamp",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 9,
+    "offset": 0,
+    "label": "roundVoterPool",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 10,
+    "offset": 0,
+    "label": "roundWinningStake",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 11,
+    "offset": 0,
+    "label": "roundRbtsScored",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 12,
+    "offset": 0,
+    "label": "roundRbtsRewardWeight",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 13,
+    "offset": 0,
+    "label": "roundRbtsRewardClaimants",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 14,
+    "offset": 0,
+    "label": "roundRbtsParticipationWeight",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 15,
+    "offset": 0,
+    "label": "roundRbtsParticipationClaimants",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 16,
+    "offset": 0,
+    "label": "roundRbtsForfeitedPool",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 17,
+    "offset": 0,
+    "label": "roundRbtsForfeitClaimants",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 18,
+    "offset": 0,
+    "label": "roundRbtsMeanScoreBps",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 19,
+    "offset": 0,
+    "label": "commitPredictedUpBps",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 20,
+    "offset": 0,
+    "label": "commitRbtsWeight",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 21,
+    "offset": 0,
+    "label": "commitRbtsScoreBps",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 22,
+    "offset": 0,
+    "label": "commitRbtsRewardWeight",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 23,
+    "offset": 0,
+    "label": "commitRbtsStakeReturned",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 24,
+    "offset": 0,
+    "label": "commitRbtsForfeitedStake",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 25,
+    "offset": 0,
+    "label": "cancelledRoundRefundClaimed",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 26,
+    "offset": 0,
+    "label": "cancelledRoundRefundCommitClaimed",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 27,
+    "offset": 0,
+    "label": "hasCommits",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 28,
+    "offset": 0,
+    "label": "accountedLrepBalance",
+    "type": "t_uint256"
+  },
+  {
+    "slot": 29,
+    "offset": 0,
+    "label": "roundConfigSnapshot",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 30,
+    "offset": 0,
+    "label": "roundRatingConfigSnapshot",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 31,
+    "offset": 0,
+    "label": "roundReferenceRatingBpsSnapshot",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 32,
+    "offset": 0,
+    "label": "voterCommitHash",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 33,
+    "offset": 0,
+    "label": "identityCommitKey",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 34,
+    "offset": 0,
+    "label": "commitIdentityKey",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 35,
+    "offset": 0,
+    "label": "commitIdentityHolder",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 36,
+    "offset": 0,
+    "label": "holderCommitKey",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 37,
+    "offset": 0,
+    "label": "identityRoundStake",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 38,
+    "offset": 0,
+    "label": "roundStakeWithEligibleFrontend",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 39,
+    "offset": 0,
+    "label": "roundPerFrontendStake",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 40,
+    "offset": 0,
+    "label": "roundFrontendPool",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 41,
+    "offset": 0,
+    "label": "roundEligibleFrontendCount",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 42,
+    "offset": 0,
+    "label": "roundRaterRegistrySnapshot",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 43,
+    "offset": 0,
+    "label": "lastVoteTimestampByIdentity",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 44,
+    "offset": 0,
+    "label": "epochUnrevealedCount",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 45,
+    "offset": 0,
+    "label": "roundRevealGracePeriodSnapshot",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 46,
+    "offset": 0,
+    "label": "roundDrandChainHashSnapshot",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 47,
+    "offset": 0,
+    "label": "roundDrandGenesisTimeSnapshot",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 48,
+    "offset": 0,
+    "label": "roundDrandPeriodSnapshot",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 49,
+    "offset": 0,
+    "label": "lastCommitRevealableAfter",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 50,
+    "offset": 0,
+    "label": "frontendEligibleAtCommit",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 51,
+    "offset": 0,
+    "label": "roundFrontendRegistrySnapshot",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 52,
+    "offset": 0,
+    "label": "roundUnrevealedCleanupRemaining",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 53,
+    "offset": 0,
+    "label": "roundCleanupIncentivePaid",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 54,
+    "offset": 0,
+    "label": "roundRatingUpEvidence",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 55,
+    "offset": 0,
+    "label": "roundRatingDownEvidence",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 56,
+    "offset": 0,
+    "label": "commitCommittedAt",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 57,
+    "offset": 0,
+    "label": "pendingBundleObserverReplay",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 58,
+    "offset": 0,
+    "label": "roundHasHumanVerifiedCommit",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 59,
+    "offset": 0,
+    "label": "roundRbtsSeedEntropy",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 60,
+    "offset": 0,
+    "label": "roundClusterPayoutReadyAt",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 61,
+    "offset": 0,
+    "label": "roundRbtsSeedRefreshCount",
+    "type": "t_mapping"
+  },
+  {
+    "slot": 62,
+    "offset": 0,
+    "label": "__gap",
+    "type": "t_array"
+  }
+]

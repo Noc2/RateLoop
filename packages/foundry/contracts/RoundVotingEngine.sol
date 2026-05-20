@@ -104,6 +104,26 @@ contract RoundVotingEngine is
     uint8 internal constant MAX_RBTS_SEED_REFRESHES = 3;
 
     // --- State ---
+    // M-Crosscutting-1 (audit 2026-05-20): Storage layout history. This contract is
+    // `TransparentUpgradeableProxy`-backed (see `script/Deploy.s.sol`). Slot positions matter
+    // for any future hot-upgrade. The current layout has the following SHIFTS from prior
+    // releases — fresh deployments are unaffected, but any hot-upgrade from a baseline that
+    // populated the old surface MUST run `forge-upgrade` / OZ Upgrades `validateUpgrade` first:
+    //
+    //   * Pre-2026-05-19: `roundDeferredCleanupBounty` (triple mapping → uint256) at the slot
+    //     now occupied by `roundClusterPayoutReadyAt` (triple mapping → uint48). Annotated
+    //     with `@custom:oz-renamed-from roundDeferredCleanupBounty` (I-Crosscutting-A).
+    //   * Pre-2026-05-19: `consensusReserve` (uint256) sat at the end of the layout. Removed
+    //     when the consensus-reserve mechanism was deleted (`bc96d7e5`); all later slots
+    //     shifted up by 1.
+    //   * Post-2026-05-19: `roundRbtsMeanScoreBps` (uint256→uint16) inserted mid-layout at
+    //     line 139; all later slots shifted down by 1.
+    //
+    // CI runbook: any future change to the order or type of state variables in this contract
+    // must run OZ `validateUpgrade` against the previous implementation before any non-31337
+    // deploy. If the deploy is `--upgrade`, the validator catches incompatible shifts and
+    // aborts. If the deploy is fresh (TransparentUpgradeableProxy with a brand-new admin),
+    // the layout is permitted to shift freely.
     IERC20 internal lrepToken;
     ContentRegistry internal registry;
     ProtocolConfig public protocolConfig;
