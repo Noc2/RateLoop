@@ -1281,12 +1281,15 @@ contract RoundVotingEngine is
         if (!thresholdAlreadyReached) {
             commitRbtsWeight[contentId][roundId][commitKey] = effectiveStake;
         }
-        unchecked {
-            if (isUp) {
-                roundRatingUpEvidence[contentId][roundId] += ratingEvidenceWeight;
-            } else {
-                roundRatingDownEvidence[contentId][roundId] += ratingEvidenceWeight;
-            }
+        // L-Vote-A: keep evidence accumulation checked so a future governance proposal that
+        // raises `maxVoters` past ~9.2e12 cannot silently truncate the uint64 counter. The
+        // current bound is well below that, but the `unchecked` block was a bytecode-trim
+        // micro-optimization that traded a real (if remote) safety guarantee for a few hundred
+        // gas. Restore the default checked arithmetic here.
+        if (isUp) {
+            roundRatingUpEvidence[contentId][roundId] += ratingEvidenceWeight;
+        } else {
+            roundRatingDownEvidence[contentId][roundId] += ratingEvidenceWeight;
         }
 
         emit VoteRevealed(contentId, roundId, voter, isUp);
