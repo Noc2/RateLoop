@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { Hash, SendTransactionParameters, TransactionReceipt, WalletClient } from "viem";
+import type { Hash, PublicClient, SendTransactionParameters, TransactionReceipt, WalletClient } from "viem";
 import { Config, useConfig, useWalletClient } from "wagmi";
 import { getPublicClient } from "wagmi/actions";
 import { SendTransactionMutate } from "wagmi/query";
@@ -17,6 +17,59 @@ type TransactionFunc = (
 
 export function assertTransactionReceiptSucceeded(receipt: Pick<TransactionReceipt, "status">) {
   if (receipt.status === "reverted") throw new Error("Transaction reverted");
+}
+
+function attachTransactionRevertContext(
+  error: Error,
+  params: {
+    cause?: unknown;
+    receipt: TransactionReceipt;
+    transactionHash: Hash;
+  },
+) {
+  return Object.assign(error, {
+    cause: params.cause,
+    receipt: params.receipt,
+    transactionHash: params.transactionHash,
+  });
+}
+
+export async function buildTransactionRevertedError({
+  chainId,
+  publicClient,
+  receipt,
+  transactionHash,
+}: {
+  chainId: AllowedChainIds;
+  publicClient: PublicClient;
+  receipt: TransactionReceipt;
+  transactionHash: Hash;
+}) {
+  let replayError: unknown;
+
+  try {
+    const transaction = await publicClient.getTransaction({ hash: transactionHash });
+    await publicClient.call({
+      account: transaction.from,
+      blockNumber: receipt.blockNumber,
+      data: transaction.input,
+      gas: transaction.gas,
+      to: transaction.to ?? undefined,
+      value: transaction.value,
+    });
+  } catch (error) {
+    replayError = error;
+  }
+
+  const parsedReplayError = replayError ? getParsedErrorWithAllAbis(replayError, chainId) : "";
+  const message =
+    parsedReplayError && parsedReplayError !== "An unknown error occurred" ? parsedReplayError : "Transaction reverted";
+
+  return attachTransactionRevertContext(new Error(message), {
+    cause: replayError,
+    receipt,
+    transactionHash,
+  });
 }
 
 /**
@@ -124,7 +177,14 @@ export const useTransactor = (_walletClient?: WalletClient): TransactionFunc => 
         notification.remove(notificationId);
       }
 
-      assertTransactionReceiptSucceeded(transactionReceipt);
+      if (transactionReceipt.status === "reverted") {
+        throw await buildTransactionRevertedError({
+          chainId: chainId as AllowedChainIds,
+          publicClient,
+          receipt: transactionReceipt,
+          transactionHash,
+        });
+      }
 
       if (!options?.suppressSuccessToast) {
         notification.success(

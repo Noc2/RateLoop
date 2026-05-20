@@ -27,6 +27,24 @@ test("normalizeRoundVoteError translates content inactive selectors", () => {
   );
 });
 
+test("normalizeRoundVoteError translates token balance and allowance errors", () => {
+  assert.equal(
+    normalizeRoundVoteError("ERC20InsufficientBalance(address,uint256,uint256)"),
+    "You do not have enough liquid LREP to stake that amount.",
+  );
+  assert.equal(
+    normalizeRoundVoteError("ERC20InsufficientAllowance(address,uint256,uint256)"),
+    "LREP approval was not high enough for this vote. Please submit again.",
+  );
+});
+
+test("normalizeRoundVoteError translates invalid stake errors", () => {
+  assert.equal(
+    normalizeRoundVoteError("InvalidStake"),
+    "Choose a stake between 1 and 10 LREP, or choose 0 for advisory voting.",
+  );
+});
+
 test("normalizeRoundVoteError hides internal drand target derivation errors", () => {
   assert.equal(
     normalizeRoundVoteError("No shared drand target round for commit windows"),

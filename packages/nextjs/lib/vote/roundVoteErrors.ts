@@ -18,6 +18,15 @@ export function normalizeRoundVoteError(message: string) {
   if (message.includes("MaxVotersReached")) {
     return "This round is full. Wait for the next round to vote again.";
   }
+  if (message.includes("ERC20InsufficientBalance") || normalizedMessage.includes("insufficient balance")) {
+    return "You do not have enough liquid LREP to stake that amount.";
+  }
+  if (message.includes("ERC20InsufficientAllowance") || normalizedMessage.includes("insufficient allowance")) {
+    return "LREP approval was not high enough for this vote. Please submit again.";
+  }
+  if (message.includes("InvalidStake")) {
+    return "Choose a stake between 1 and 10 LREP, or choose 0 for advisory voting.";
+  }
   if (message.includes("SelfVote") || normalizedMessage.includes(SELF_VOTE_ERROR_SELECTOR)) {
     return "You cannot vote on your own content.";
   }
