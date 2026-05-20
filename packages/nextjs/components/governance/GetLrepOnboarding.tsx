@@ -162,8 +162,7 @@ export function GetLrepOnboarding({ address }: GetLrepOnboardingProps) {
           </div>
           <h2 className="mt-5 text-2xl font-semibold text-base-content">Earn LREP by voting</h2>
           <p className="mt-3 text-base leading-7 text-base-content/65">
-            Submit private ratings without staking in rounds that already have a staked vote; they do not count toward
-            settlement quorum, but{" "}
+            Submit private ratings without LREP in rounds that already have a staked vote;{" "}
             <Link href={ELIGIBLE_SETTLED_ROUNDS_DOCS_HREF} className="link link-primary">
               eligible settled rounds
             </Link>{" "}
