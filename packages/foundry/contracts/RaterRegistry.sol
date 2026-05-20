@@ -477,6 +477,14 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
         // earlier `previous.nullifierHash != nullifierHash` check alone leaked the old provider's
         // slot, so a later revocation only cleared the new provider and the old provider's
         // namespace stayed assigned to this rater (codex PR #10 review).
+        //
+        // RR-3 (2026-05-20 follow-up audit): note that on provider switch the old provider's
+        // nullifier slot is freed WITHOUT marking the nullifier revoked. This is intentional --
+        // the original holder of the underlying credential (e.g. the WorldID identity for that
+        // nullifier) can still self-attest under the cleared slot, since the underlying proof is
+        // bound to msg.sender. A third party cannot impersonate because they lack the proof.
+        // The asymmetry with revokeHumanCredential (which DOES set the revoke flag) is therefore
+        // by design, not an oversight.
         if (
             previous.nullifierHash != bytes32(0)
                 && (previous.nullifierHash != nullifierHash || previous.provider != provider)
