@@ -419,7 +419,23 @@ contract LaunchDistributionPoolTest is Test {
             _launchPayoutWeight(1, _commitKey(1), alice, 2_500, keccak256("clustered"));
         _proposeAndFinalizeLaunchPayoutSnapshot(oracle, 1, payout, keccak256("early-snapshot"));
 
-        assertEq(_recordLaunchReward(alice, 1, bytes32("anchor-a")), 0);
+        // L-Oracle-C: pass `block.timestamp + 1` as sourceReadyAt so the pending credit is
+        // recorded AFTER the snapshot was proposed — replicating the "snapshot proposed before
+        // pending credit" scenario that the finalize gate is supposed to reject.
+        vm.warp(block.timestamp + 1);
+        uint64 readyAt = uint64(block.timestamp);
+        pool.recordEarnedRaterRewardWithSourceReady(
+            alice,
+            1,
+            1,
+            _commitKey(1),
+            8_000,
+            3,
+            true,
+            pool.MIN_LAUNCH_CREDIT_STAKE(),
+            _singleAnchor(bytes32("anchor-a")),
+            readyAt
+        );
         assertGt(pool.pendingEarnedRaterCreditReadyAt(1, 1, _commitKey(1)), 0);
 
         vm.expectRevert(LaunchDistributionPool.InvalidProof.selector);
@@ -472,8 +488,8 @@ contract LaunchDistributionPoolTest is Test {
         for (uint256 i = 0; i < maxCredits; i++) {
             address rater = address(uint160(0x7000 + i));
             bytes32 commitKey = keccak256(abi.encode("pending", i));
-            pool.recordEarnedRaterReward(
-                rater, 60, 1, commitKey, 8_000, 3, true, pool.MIN_LAUNCH_CREDIT_STAKE(), _singleAnchor(anchorId)
+            pool.recordEarnedRaterRewardWithSourceReady(
+                rater, 60, 1, commitKey, 8_000, 3, true, pool.MIN_LAUNCH_CREDIT_STAKE(), _singleAnchor(anchorId), 1
             );
 
             assertTrue(pool.earnedRewardCreditRecorded(60, 1, commitKey));
@@ -483,7 +499,7 @@ contract LaunchDistributionPoolTest is Test {
         // The (maxCredits + 1)th call must short-circuit (return 0 without writing) because the
         // cap is already saturated.
         bytes32 extraCommitKey = keccak256("pending-extra");
-        pool.recordEarnedRaterReward(
+        pool.recordEarnedRaterRewardWithSourceReady(
             address(0xBEEF),
             60,
             1,
@@ -492,7 +508,8 @@ contract LaunchDistributionPoolTest is Test {
             3,
             true,
             pool.MIN_LAUNCH_CREDIT_STAKE(),
-            _singleAnchor(anchorId)
+            _singleAnchor(anchorId),
+            1
         );
 
         assertFalse(pool.earnedRewardCreditRecorded(60, 1, extraCommitKey));
@@ -581,7 +598,7 @@ contract LaunchDistributionPoolTest is Test {
         bytes32 bobCommitKey = keccak256(abi.encode("bob", uint256(1)));
 
         assertEq(
-            pool.recordEarnedRaterReward(
+            pool.recordEarnedRaterRewardWithSourceReady(
                 alice,
                 1,
                 1,
@@ -590,12 +607,13 @@ contract LaunchDistributionPoolTest is Test {
                 3,
                 true,
                 pool.MIN_LAUNCH_CREDIT_STAKE(),
-                _singleAnchor(bytes32("anchor-a"))
+                _singleAnchor(bytes32("anchor-a")),
+                1
             ),
             0
         );
         assertEq(
-            pool.recordEarnedRaterReward(
+            pool.recordEarnedRaterRewardWithSourceReady(
                 bob,
                 1,
                 1,
@@ -604,7 +622,8 @@ contract LaunchDistributionPoolTest is Test {
                 3,
                 true,
                 pool.MIN_LAUNCH_CREDIT_STAKE(),
-                _singleAnchor(bytes32("anchor-b"))
+                _singleAnchor(bytes32("anchor-b")),
+                1
             ),
             0
         );
@@ -1069,8 +1088,8 @@ contract LaunchDistributionPoolTest is Test {
         ClusterPayoutOracle oracle = _configureLaunchOracle(1);
         bytes32 advisoryCommitKey = bytes32("advisory-pending");
 
-        (bool recorded, uint256 paidBeforeSnapshot) = pool.recordAdvisoryRaterReward(
-            alice, 1, 1, advisoryCommitKey, 8_000, 3, true, _singleAnchor(bytes32("anchor-a"))
+        (bool recorded, uint256 paidBeforeSnapshot) = pool.recordAdvisoryRaterRewardWithSourceReady(
+            alice, 1, 1, advisoryCommitKey, 8_000, 3, true, _singleAnchor(bytes32("anchor-a")), 1
         );
 
         assertTrue(recorded);
@@ -1397,7 +1416,10 @@ contract LaunchDistributionPoolTest is Test {
         internal
         returns (uint256)
     {
-        return pool.recordEarnedRaterReward(
+        // L-Oracle-C: always go through the WithSourceReady variant so the helper works whether
+        // or not an oracle is configured (the legacy entrypoint now reverts when an oracle is
+        // set). sourceReadyAt=1 (epoch-second 1) is safely <= any test block.timestamp.
+        return pool.recordEarnedRaterRewardWithSourceReady(
             rater,
             1,
             roundId,
@@ -1406,7 +1428,8 @@ contract LaunchDistributionPoolTest is Test {
             3,
             true,
             pool.MIN_LAUNCH_CREDIT_STAKE(),
-            _singleAnchor(anchorId)
+            _singleAnchor(anchorId),
+            1
         );
     }
 
@@ -1485,7 +1508,7 @@ contract LaunchDistributionPoolTest is Test {
     ) internal returns (uint256 paidAmount) {
         bytes32 anchorId = roundId % 2 == 0 ? bytes32("anchor-b") : bytes32("anchor-a");
         assertEq(
-            pool.recordEarnedRaterReward(
+            pool.recordEarnedRaterRewardWithSourceReady(
                 rater,
                 1,
                 roundId,
@@ -1494,7 +1517,8 @@ contract LaunchDistributionPoolTest is Test {
                 3,
                 true,
                 pool.MIN_LAUNCH_CREDIT_STAKE(),
-                _singleAnchor(anchorId)
+                _singleAnchor(anchorId),
+                1
             ),
             0
         );
