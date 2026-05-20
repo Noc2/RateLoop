@@ -729,14 +729,21 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
     function _effectiveRevealableAfter(AdvisoryCommit storage advisoryCommit) internal view returns (uint256) {
         (uint48 roundStart, RoundLib.RoundState state,,,,, uint48 settledAt) =
             votingEngine.roundCore(advisoryCommit.contentId, advisoryCommit.roundId);
-        if (roundStart == 0 || state != RoundLib.RoundState.Open) revert RoundNotOpen();
+        if (roundStart == 0) revert RoundNotOpen();
         // I-Vote-A: allow advisory reveals during a brief grace window after settledAt so a
         // fast-settle keeper does not silently close the door on every pending advisory reveal
-        // that already passed its tlock. The grace borrows ProtocolConfig.revealGracePeriod so
-        // it scales with epoch duration. Settled-past-grace still reverts.
-        if (settledAt != 0) {
+        // that already passed its tlock. `settleRound` flips state → Settled/Tied AND writes
+        // `settledAt` in the same tx, so we must accept both states (in addition to Open) when
+        // still inside `ProtocolConfig.revealGracePeriod`. Outside the grace window — and for
+        // any non-open / non-grace state (e.g. Cancelled) — we still revert. The grace scales
+        // with epoch duration via ProtocolConfig.
+        if (state == RoundLib.RoundState.Settled || state == RoundLib.RoundState.Tied) {
             uint256 grace = protocolConfig.revealGracePeriod();
-            if (grace == 0 || block.timestamp > uint256(settledAt) + grace) revert RoundNotOpen();
+            if (settledAt == 0 || grace == 0 || block.timestamp > uint256(settledAt) + grace) {
+                revert RoundNotOpen();
+            }
+        } else if (state != RoundLib.RoundState.Open) {
+            revert RoundNotOpen();
         }
 
         (uint32 epochDuration,,,) = votingEngine.roundConfigSnapshot(advisoryCommit.contentId, advisoryCommit.roundId);
