@@ -90,20 +90,24 @@ const PrivacyPage: NextPage = () => {
             <strong>Security and Abuse-Prevention Data:</strong> Temporary rate-limit and replay-protection records,
             which may be derived from trusted IP headers or fallback request fingerprints plus route metadata.
           </li>
+          <li>
+            <strong>Aggregate Analytics Data:</strong> We use Simple Analytics for privacy-preserving, cookieless,
+            aggregate site usage metrics. Simple Analytics is EU-based and does not use cookies or cross-site tracking.
+          </li>
         </ul>
 
         <h3>2.3 What We Do NOT Collect</h3>
         <p>
-          <strong>This Interface does not use analytics or advertising cookies.</strong> We do use limited,
-          strictly-necessary cookies or similar session tokens for wallet-bound features such as watchlists, follows,
-          and notification settings. These cookies are used for security and feature operation, not for cross-site
-          tracking or advertising.
+          <strong>This Interface does not use advertising analytics, cross-site tracking, or analytics cookies.</strong>{" "}
+          We do use limited, strictly-necessary cookies or similar session tokens for wallet-bound features such as
+          watchlists, follows, and notification settings. These cookies are used for security and feature operation, not
+          for cross-site tracking or advertising.
         </p>
         <p>This Interface also does not collect:</p>
         <ul>
           <li>Name, phone number, postal address, or similar offline contact details</li>
           <li>Passport, government ID, or biometric document data from optional third-party identity providers</li>
-          <li>Analytics, advertising, or cross-site behavioral tracking profiles</li>
+          <li>Advertising or cross-site behavioral tracking profiles</li>
           <li>Biometric data</li>
           <li>Your wallet private keys, seed phrases, or custody of your assets</li>
         </ul>
@@ -147,9 +151,36 @@ const PrivacyPage: NextPage = () => {
           <li>Investigate operational issues and protect the Interface from abuse</li>
         </ul>
 
+        <h3>3.5 Legal Bases</h3>
+        <p>Where GDPR applies, we rely on the following legal bases for Interface-controlled data:</p>
+        <ul>
+          <li>
+            <strong>Contract or steps requested by you:</strong> Processing needed to provide wallet-bound features,
+            prepare and confirm asks, operate agent wallet flows, deliver requested notifications, and remember Terms
+            acceptance.
+          </li>
+          <li>
+            <strong>Legitimate interests:</strong> Security, abuse prevention, rate limiting, debugging, replay
+            protection, aggregate privacy-preserving analytics, service reliability, and legal or operational audit
+            trails.
+          </li>
+          <li>
+            <strong>Consent:</strong> Optional email notifications and other optional features where the Interface asks
+            for separate permission. You can withdraw that consent by disabling the relevant feature or contacting us.
+          </li>
+          <li>
+            <strong>Legal obligations:</strong> Processing needed to respond to lawful requests, sanctions or compliance
+            checks, disputes, accounting, tax, or other obligations that may apply to the Interface operator.
+          </li>
+        </ul>
+
         <h2>4. Third-Party Services</h2>
         <p>The Interface may interact with the following third-party services:</p>
         <ul>
+          <li>
+            <strong>Simple Analytics:</strong> We use Simple Analytics for cookieless, privacy-preserving aggregate site
+            usage metrics. It does not set analytics cookies or build cross-site behavioral profiles.
+          </li>
           <li>
             <strong>Blockchain RPC Providers:</strong> To read and write blockchain data (e.g., Alchemy, Infura, or
             similar). These providers may have their own privacy policies regarding request logging.
@@ -213,6 +244,17 @@ const PrivacyPage: NextPage = () => {
           <li>
             <strong>Signed action challenges:</strong> Typically 5 minutes; used challenge records may be retained for
             up to 24 hours for replay protection
+          </li>
+          <li>
+            <strong>Agent policies and audit records:</strong> Until the policy is removed or no longer needed for
+            security, accounting, abuse-prevention, dispute, or operational audit purposes
+          </li>
+          <li>
+            <strong>
+              x402 submissions, transaction hashes, payment receipts, callback URLs, and ask operation records:
+            </strong>{" "}
+            As long as needed to prepare, confirm, recover, audit, or explain the ask lifecycle, and then according to
+            operational cleanup and legal-retention needs
           </li>
           <li>
             <strong>Email notification subscriptions:</strong> Until you remove or replace the address; verification
@@ -303,6 +345,11 @@ const PrivacyPage: NextPage = () => {
         <p>
           By using the Interface, you consent to such transfers. We note that blockchain data is stored on a globally
           distributed network and is not localized to any single jurisdiction.
+        </p>
+        <p>
+          Where GDPR requires transfer safeguards for service providers outside the European Economic Area, we rely on
+          the provider&apos;s applicable data-processing terms, adequacy decisions, standard contractual clauses, or
+          other lawful transfer mechanisms.
         </p>
 
         <h2>10. Changes to This Notice</h2>
