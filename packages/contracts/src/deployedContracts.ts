@@ -24712,7 +24712,7 @@ const deployedContracts: GenericContractsDeclaration = {
       deployedOnBlock: 69,
     },
     AdvisoryVoteRecorder: {
-      address: "0xEF1707af46b68aA697c427325aEA18f82b6B2629",
+      address: "0x1f9bcC15221EcCc5204EB30B5A156031423700AC",
       abi: [
         {
           type: "constructor",
@@ -25615,7 +25615,7 @@ const deployedContracts: GenericContractsDeclaration = {
         transferOwnership:
           "lib/openzeppelin-contracts/contracts/access/Ownable.sol",
       },
-      deployedOnBlock: 73,
+      deployedOnBlock: 74,
     },
   },
 };
