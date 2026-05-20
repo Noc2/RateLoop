@@ -143,7 +143,8 @@ library QuestionRewardPoolEscrowQualificationLib {
         RewardPool storage rewardPool,
         uint256 rewardPoolId,
         uint256 roundId,
-        uint256 bpsScale
+        uint256 bpsScale,
+        bool reopened
     )
         external
         returns (
@@ -156,7 +157,12 @@ library QuestionRewardPoolEscrowQualificationLib {
     {
         require(roundId >= rewardPool.startRoundId, "Round too early");
         require(!roundSnapshots[rewardPoolId][roundId].qualified, "Round qualified");
-        require(roundId == rewardPool.nextRoundToEvaluate, "Round out of order");
+        // FE-1: admit either the normal sequential cursor OR a recovered-and-reopened round
+        // whose cursor has already advanced past it. The caller (escrow) guarantees the
+        // `reopened` flag was set via the DEFAULT_ADMIN_ROLE-gated `reopenRecoveredSnapshotRound`
+        // path, which itself requires the oracle has a new finalized snapshot with a non-rejected
+        // weight root.
+        require(reopened || roundId == rewardPool.nextRoundToEvaluate, "Round out of order");
 
         (
             bool roundSettled,
@@ -198,7 +204,12 @@ library QuestionRewardPoolEscrowQualificationLib {
         if (claimDeadline > rewardPool.claimDeadline) {
             rewardPool.claimDeadline = claimDeadline.toUint64();
         }
-        rewardPool.nextRoundToEvaluate = (roundId + 1).toUint64();
+        // FE-1: only advance the cursor on the normal sequential path. A reopened round whose
+        // cursor was already advanced past must not roll the cursor backwards over
+        // already-qualified later rounds.
+        if (roundId + 1 > rewardPool.nextRoundToEvaluate) {
+            rewardPool.nextRoundToEvaluate = (roundId + 1).toUint64();
+        }
         rewardPool.unallocatedAmount -= allocation;
 
         roundSnapshots[rewardPoolId][roundId] = RoundSnapshot({
@@ -230,11 +241,16 @@ library QuestionRewardPoolEscrowQualificationLib {
         RewardPool storage rewardPool,
         uint256 rewardPoolId,
         uint256 roundId,
-        uint8 payoutDomain
+        uint8 payoutDomain,
+        bool reopened
     ) external {
         require(roundId >= rewardPool.startRoundId, "Round too early");
         require(!roundSnapshots[rewardPoolId][roundId].qualified, "Round qualified");
-        require(roundId == rewardPool.nextRoundToEvaluate, "Round out of order");
+        // FE-1: admit either the normal sequential cursor OR a recovered-and-reopened round
+        // whose cursor has already advanced past it. The escrow caller sets `reopened` only
+        // when the DEFAULT_ADMIN_ROLE-gated `reopenRecoveredSnapshotRound` ran and verified the
+        // oracle has a new finalized snapshot with a non-rejected weight root.
+        require(reopened || roundId == rewardPool.nextRoundToEvaluate, "Round out of order");
 
         (bool roundSettled,, uint256 baseRawEligibleVoters,,, uint48 settledAt) = previewRoundQualification(
             QualificationContext({
@@ -285,7 +301,12 @@ library QuestionRewardPoolEscrowQualificationLib {
         if (claimDeadline > rewardPool.claimDeadline) {
             rewardPool.claimDeadline = claimDeadline.toUint64();
         }
-        rewardPool.nextRoundToEvaluate = (roundId + 1).toUint64();
+        // FE-1: only advance the cursor on the normal sequential path. A reopened round whose
+        // cursor was already advanced past must not roll the cursor backwards over
+        // already-qualified later rounds.
+        if (roundId + 1 > rewardPool.nextRoundToEvaluate) {
+            rewardPool.nextRoundToEvaluate = (roundId + 1).toUint64();
+        }
         rewardPool.unallocatedAmount -= allocation;
 
         roundSnapshots[rewardPoolId][roundId] = RoundSnapshot({

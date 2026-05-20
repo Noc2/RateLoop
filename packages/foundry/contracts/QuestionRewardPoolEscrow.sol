@@ -89,6 +89,15 @@ contract QuestionRewardPoolEscrow is
     uint16 public defaultFrontendFeeBps;
     mapping(uint256 => address) private rewardPoolClusterPayoutOracle;
     mapping(uint256 => mapping(uint256 => uint256)) private bundleQuestionTerminalSyncCursor;
+    // FE-1 (audit 2026-05-20-followup): track rounds whose finalized snapshot was rejected and
+    // whose allocation was returned via `recoverRejectedSnapshotRound`. Required so the admin
+    // can later reopen the round for requalification once the oracle finalizes a NEW snapshot
+    // with a different `weightRoot`. Without this, honest voters of the rejected round are
+    // permanently locked out because `nextRoundToEvaluate` is advanced past `roundId`.
+    mapping(uint256 => mapping(uint256 => bool)) public rejectedRecoveredRound;
+    /// @notice Tracks recovered rounds the admin reopened for requalification. The
+    ///         qualification path honours this flag to admit `roundId != nextRoundToEvaluate`.
+    mapping(uint256 => mapping(uint256 => bool)) public reopenedRecoveredRound;
 
     event RewardPoolCreated(
         uint256 indexed rewardPoolId,
@@ -156,6 +165,11 @@ contract QuestionRewardPoolEscrow is
     event NonAssetTokenRecovered(address indexed token, address indexed to, uint256 amount);
     event RejectedSnapshotRoundRecovered(
         uint256 indexed rewardPoolId, uint256 indexed contentId, uint256 indexed roundId, uint256 allocationReturned
+    );
+    /// @notice Emitted by `reopenRecoveredSnapshotRound` when an admin authorises a recovered
+    ///         round to be requalified against a NEW finalized oracle snapshot. (FE-1.)
+    event RecoveredSnapshotRoundReopened(
+        uint256 indexed rewardPoolId, uint256 indexed contentId, uint256 indexed roundId, bytes32 newWeightRoot
     );
     event RewardPoolPurposeSet(
         uint256 indexed rewardPoolId, uint8 indexed bountyKind, uint256 indexed challengedRoundId, bytes32 reasonHash
@@ -928,8 +942,77 @@ contract QuestionRewardPoolEscrow is
             rewardPool.qualifiedRounds -= 1;
         }
         delete roundSnapshots[rewardPoolId][roundId];
+        // FE-1 (audit 2026-05-20-followup): mark this round as recovered so the admin can
+        // later reopen it via `reopenRecoveredSnapshotRound` once the oracle finalises a NEW
+        // snapshot whose `weightRoot` is not on the rejected set. `nextRoundToEvaluate`
+        // intentionally remains advanced — that blocks replay of the SAME rejected snapshot.
+        rejectedRecoveredRound[rewardPoolId][roundId] = true;
 
         emit RejectedSnapshotRoundRecovered(rewardPoolId, rewardPool.contentId, roundId, allocationToReturn);
+    }
+
+    /// @notice Reopen a previously recovered round for requalification once the oracle has a
+    ///         NEW finalized snapshot whose `weightRoot` is not on the rejected set.
+    /// @dev FE-1 (audit 2026-05-20-followup). Without this entrypoint, honest voters of a
+    ///      round whose initial snapshot was rejected by the arbiter are permanently locked
+    ///      out of this pool's payout because `recoverRejectedSnapshotRound` advances
+    ///      `nextRoundToEvaluate` past the recovered round to block replay of the same
+    ///      rejected snapshot.
+    ///
+    ///      Gating:
+    ///        * `DEFAULT_ADMIN_ROLE` — same role as `recoverRejectedSnapshotRound`.
+    ///        * The pool MUST be cluster-snapshot-backed (USDC + pinned oracle).
+    ///        * The round MUST have been previously recovered (`rejectedRecoveredRound` flag).
+    ///        * The oracle MUST hold a finalized snapshot whose `weightRoot` is NOT on the
+    ///          per-key rejected set; the oracle's propose path already blocks re-proposing
+    ///          a rejected root, so this is defence-in-depth.
+    ///        * The pool must still be incomplete (not refunded, not fully qualified).
+    function reopenRecoveredSnapshotRound(uint256 rewardPoolId, uint256 roundId)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+        nonReentrant
+    {
+        RewardPool storage rewardPool = _getExistingRewardPool(rewardPoolId);
+        require(_usesClusterPayoutSnapshot(rewardPool), "Not cluster-snapshot pool");
+        require(!rewardPool.refunded && !rewardPool.unallocatedRefunded, "Bounty refunded");
+        require(rewardPool.qualifiedRounds < rewardPool.requiredSettledRounds, "Bounty complete");
+        require(rejectedRecoveredRound[rewardPoolId][roundId], "Round not recovered");
+        require(!roundSnapshots[rewardPoolId][roundId].qualified, "Round already qualified");
+        require(roundId < rewardPool.nextRoundToEvaluate, "Cursor not advanced");
+
+        address oracleAddr = rewardPoolClusterPayoutOracle[rewardPoolId];
+        require(oracleAddr != address(0), "Oracle not pinned");
+        IClusterPayoutOracle oracle = IClusterPayoutOracle(oracleAddr);
+        require(
+            oracle.isRoundPayoutSnapshotFinalized(
+                PAYOUT_DOMAIN_QUESTION_REWARD, rewardPoolId, rewardPool.contentId, roundId
+            ),
+            "Oracle snapshot not finalized"
+        );
+        IClusterPayoutOracle.RoundPayoutSnapshot memory newSnapshot =
+            oracle.getRoundPayoutSnapshot(PAYOUT_DOMAIN_QUESTION_REWARD, rewardPoolId, rewardPool.contentId, roundId);
+        bytes32 snapshotKey =
+            oracle.roundPayoutSnapshotKey(PAYOUT_DOMAIN_QUESTION_REWARD, rewardPoolId, rewardPool.contentId, roundId);
+        require(!oracle.rejectedRoundPayoutSnapshotRoots(snapshotKey, newSnapshot.weightRoot), "Snapshot root rejected");
+
+        // Rewind the cursor when possible (recovered round is the most-recent advance) so the
+        // standard qualification path can serve the round. When the cursor has moved further
+        // (additional recovered rounds since this one), fall back to the reopen flag which the
+        // qualification path honours as an out-of-order exception.
+        if (roundId + 1 == rewardPool.nextRoundToEvaluate) {
+            rewardPool.nextRoundToEvaluate = uint64(roundId);
+            // Clear the recovered marker — the round is no longer "recovered, cursor advanced
+            // past"; it is back at the cursor and will be admitted by the normal path. The
+            // reopen flag is set anyway as defence-in-depth in case `nextRoundToEvaluate` is
+            // advanced again by `advanceQualificationCursor` before requalification.
+        }
+        reopenedRecoveredRound[rewardPoolId][roundId] = true;
+        // Consume the recovered marker — re-recovery of the same round is still possible
+        // because `recoverRejectedSnapshotRound` re-sets the flag if a future requalified
+        // snapshot is itself rejected.
+        rejectedRecoveredRound[rewardPoolId][roundId] = false;
+
+        emit RecoveredSnapshotRoundReopened(rewardPoolId, rewardPool.contentId, roundId, newSnapshot.weightRoot);
     }
 
     function recordBundleQuestionTerminal(uint256 contentId, uint256 roundId, bool settled) external {
@@ -1244,6 +1327,16 @@ contract QuestionRewardPoolEscrow is
     }
 
     function _qualifyRound(uint256 rewardPoolId, RewardPool storage rewardPool, uint256 roundId) internal {
+        // FE-1 (audit 2026-05-20-followup): the cluster-snapshot qualification path admits
+        // either (a) `roundId == nextRoundToEvaluate` (the normal sequential cursor) or
+        // (b) a previously recovered round that the admin has reopened against a NEW oracle
+        // snapshot. Clear the reopen flag eagerly here so the post-qualify state matches the
+        // "single qualification per round" invariant — qualification can revert below, in
+        // which case the flag write reverts with it.
+        bool reopened = reopenedRecoveredRound[rewardPoolId][roundId];
+        if (reopened) {
+            reopenedRecoveredRound[rewardPoolId][roundId] = false;
+        }
         if (_usesClusterPayoutSnapshot(rewardPool)) {
             QuestionRewardPoolEscrowQualificationLib.qualifyRoundWithClusterSnapshot(
                 roundSnapshots,
@@ -1254,7 +1347,8 @@ contract QuestionRewardPoolEscrow is
                 rewardPool,
                 rewardPoolId,
                 roundId,
-                PAYOUT_DOMAIN_QUESTION_REWARD
+                PAYOUT_DOMAIN_QUESTION_REWARD,
+                reopened
             );
             return;
         }
@@ -1273,7 +1367,8 @@ contract QuestionRewardPoolEscrow is
             rewardPool,
             rewardPoolId,
             roundId,
-            BPS_SCALE
+            BPS_SCALE,
+            reopened
         );
 
         emit RewardPoolRoundQualified(
@@ -1382,5 +1477,5 @@ contract QuestionRewardPoolEscrow is
         );
     }
 
-    uint256[50] private __gap;
+    uint256[48] private __gap;
 }
