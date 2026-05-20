@@ -77,6 +77,8 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     event FeesClaimed(address indexed frontend, uint256 lrepAmount);
     event FeesConfiscated(address indexed frontend, uint256 lrepAmount);
     event VotingEngineUpdated(address votingEngine);
+    /// @notice L-Frontend-2: emitted when governance rotates the confiscation recipient.
+    event ConfiscationRecipientUpdated(address indexed previous, address indexed current);
     event FeeCreditorUpdated(address indexed oldCreditor, address indexed newCreditor);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
@@ -367,6 +369,20 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
         }
         votingEngine = IRoundVotingEngine(_votingEngine);
         emit VotingEngineUpdated(_votingEngine);
+    }
+
+    /// @notice L-Frontend-2: governance-rotation setter for the confiscation recipient.
+    ///         `confiscationRecipient` was init-only; if governance later rotated (timelock
+    ///         multisig swap, governance migration), slashed LREP would continue flowing to
+    ///         the OLD address. If the recipient ever reverts on receive, `slashFrontend`
+    ///         reverts and slashing is bricked until governance can fix it — which it can
+    ///         now do via this setter.
+    function setConfiscationRecipient(address newRecipient) external onlyRole(GOVERNANCE_ROLE) {
+        require(newRecipient != address(0), "Invalid recipient");
+        address previous = confiscationRecipient;
+        if (previous == newRecipient) return;
+        confiscationRecipient = newRecipient;
+        emit ConfiscationRecipientUpdated(previous, newRecipient);
     }
 
     /// @notice Grant fee creditor role to the reward distributor for the current voting engine.
