@@ -732,7 +732,15 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
     function _effectiveRevealableAfter(AdvisoryCommit storage advisoryCommit) internal view returns (uint256) {
         (uint48 roundStart, RoundLib.RoundState state,,,,, uint48 settledAt) =
             votingEngine.roundCore(advisoryCommit.contentId, advisoryCommit.roundId);
-        if (roundStart == 0 || state != RoundLib.RoundState.Open || settledAt != 0) revert RoundNotOpen();
+        if (roundStart == 0 || state != RoundLib.RoundState.Open) revert RoundNotOpen();
+        // I-Vote-A: allow advisory reveals during a brief grace window after settledAt so a
+        // fast-settle keeper does not silently close the door on every pending advisory reveal
+        // that already passed its tlock. The grace borrows ProtocolConfig.revealGracePeriod so
+        // it scales with epoch duration. Settled-past-grace still reverts.
+        if (settledAt != 0) {
+            uint256 grace = protocolConfig.revealGracePeriod();
+            if (grace == 0 || block.timestamp > uint256(settledAt) + grace) revert RoundNotOpen();
+        }
 
         (uint32 epochDuration,,,) = votingEngine.roundConfigSnapshot(advisoryCommit.contentId, advisoryCommit.roundId);
         if (epochDuration == 0) {
