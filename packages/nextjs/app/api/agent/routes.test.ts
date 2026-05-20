@@ -527,6 +527,8 @@ test("agent quote route returns a direct authenticated quote response", async ()
   assert.equal(body.clientRequestId, "quote-http");
   assert.equal(body.operationKey, OPERATION_KEY);
   assert.deepEqual(body.resolvedCategoryIds, ["5"]);
+  assert.match(String((body.legalNotice as Record<string, unknown>).termsUrl), /\/legal\/terms$/);
+  assert.match(String((body.legalNotice as Record<string, unknown>).privacyUrl), /\/legal\/privacy$/);
   assert.equal((body.fastLane as Record<string, unknown>).recommendedAction, "start_small");
   assert.equal((body.fastLane as Record<string, unknown>).pricingConfidence, "high");
 });
@@ -599,6 +601,7 @@ test("agent asks route returns a tokenless wallet transaction plan response", as
   assert.equal(body.clientRequestId, "ask-public");
   assert.equal(body.status, "awaiting_wallet_signature");
   assert.equal(body.operationKey, OPERATION_KEY);
+  assert.match(String((body.legalNotice as Record<string, unknown>).notice), /not investment returns/i);
   assert.equal(body.walletPolicyRequired, false);
   assert.equal(body.managedBudget, null);
   assert.equal((body.transactionPlan as { calls: unknown[] }).calls.length, 1);

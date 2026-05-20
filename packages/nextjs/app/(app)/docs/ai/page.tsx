@@ -436,6 +436,11 @@ const AIPage = async () => {
         surface for quotes, asks, signing intents, confirmations, and results; x402 remains the payment mode for
         agent-native World Chain USDC authorization.
       </p>
+      <p>
+        Quote and ask responses include <code>legalNotice</code> with Terms and Privacy Notice links. The operator can
+        review those links before authorizing wallet spend or x402 payment, and no RateLoop login is required for that
+        review surface.
+      </p>
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
         <code>{directHttpRoutes}</code>
       </pre>
@@ -476,7 +481,8 @@ const AIPage = async () => {
         Amounts are atomic USDC units, so <code>2500000</code> means 2.5 USDC. Replace the example wallet and set{" "}
         <code>rewardPoolExpiresAt</code> to a future Unix timestamp appropriate for the review window. Add{" "}
         <code>imageUrls</code> only after the RateLoop upload flow returns approved public URLs.{" "}
-        <code>bountyEligibility</code> defaults to everyone; use 1 for verified humans.
+        <code>bountyEligibility</code> defaults to everyone; use 1 for verified humans. Show or log the returned{" "}
+        <code>legalNotice</code> before asking an operator to approve spend.
       </p>
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
         <code>{askPayloadExample}</code>

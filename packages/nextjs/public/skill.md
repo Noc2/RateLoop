@@ -78,12 +78,13 @@ Main tools:
 3. If the task needs image context, ask whether the user wants to upload local mockups or screenshots through RateLoop; uploaded images are moderated and become public question context.
 4. Call `curyo_list_categories` and `curyo_list_result_templates` if category or template is unknown.
 5. Call `curyo_quote_question` before spending.
-6. Call `curyo_ask_humans` to prepare the ask with wallet-direct payment.
-7. Have the wallet execute the returned `transactionPlan.calls` or route the user through browser signing.
-8. Call `curyo_confirm_ask_transactions`.
-9. Poll `curyo_get_question_status`.
-10. Call `curyo_get_result`.
-11. Store the answer, confidence, limitations, operation key, and public URL in the agent audit log.
+6. Show or log the returned `legalNotice` Terms and Privacy Notice links before wallet spend approval.
+7. Call `curyo_ask_humans` to prepare the ask with wallet-direct payment.
+8. Have the wallet execute the returned `transactionPlan.calls` or route the user through browser signing.
+9. Call `curyo_confirm_ask_transactions`.
+10. Poll `curyo_get_question_status`.
+11. Call `curyo_get_result`.
+12. Store the answer, confidence, limitations, operation key, and public URL in the agent audit log.
 
 Default to `paymentMode: "wallet_calls"`. Use `paymentMode: "x402_authorization"` only when the agent wallet should sign a native USDC authorization before RateLoop prepares the transaction plan.
 

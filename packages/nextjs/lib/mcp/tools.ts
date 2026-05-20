@@ -11,6 +11,7 @@ import {
 import { buildAgentCallbackPayload, callbackEventId, getAgentPublicQuestionUrl } from "~~/lib/agent-callbacks/payload";
 import { assertSafeAgentCallbackUrl } from "~~/lib/agent-callbacks/urlSafety";
 import { buildAgentFastLaneGuidance } from "~~/lib/agent/fastLane";
+import { buildAgentLegalNotice } from "~~/lib/agent/legalNotice";
 import { buildAgentLiveAskGuidance } from "~~/lib/agent/liveAskGuidance";
 import { buildAgentResultPackage, resolveAgentBountyEligibilityScope } from "~~/lib/agent/resultPackage";
 import {
@@ -191,7 +192,8 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       openWorldHint: true,
       readOnlyHint: true,
     },
-    description: "Preflight and price a paid question before reserving spend.",
+    description:
+      "Preflight and price a paid question before reserving spend. Returns Terms and Privacy Notice links for low-friction operator review.",
     inputSchema: agentQuoteInputSchema,
     name: "curyo_quote_question",
     outputSchema: agentQuoteOutputSchema,
@@ -206,7 +208,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       readOnlyHint: false,
     },
     description:
-      "Prepare a paid human-feedback ask and return either wallet transaction calls or a native x402 USDC authorization request. Public wallet-mode asks are not submitted until the wallet signs and the hashes are confirmed.",
+      "Prepare a paid human-feedback ask and return either wallet transaction calls or a native x402 USDC authorization request, plus Terms and Privacy Notice links. Public wallet-mode asks are not submitted until the wallet signs and the hashes are confirmed.",
     inputSchema: agentAskHumansInputSchema,
     name: "curyo_ask_humans",
     outputSchema: agentAskHumansOutputSchema,
@@ -601,6 +603,7 @@ function formatQuoteResult(
       questionCount: payload.questions.length,
       roundConfig: payload.roundConfig,
     }),
+    legalNotice: buildAgentLegalNotice(),
     operationKey: params.operation.operationKey,
     payment: {
       amount: params.paymentAmount.toString(),
@@ -962,6 +965,7 @@ export async function callPublicRateLoopMcpTool(params: { arguments: unknown; na
           questionCount: payload.questions.length,
           roundConfig: payload.roundConfig,
         }),
+        legalNotice: buildAgentLegalNotice(),
         managedBudget: null,
         pollAfterMs: 5_000,
         publicUrl: null,
@@ -1186,6 +1190,7 @@ export async function callRateLoopMcpTool(params: {
         clientRequestId: payload.clientRequestId,
         confirmTool: "curyo_confirm_ask_transactions",
         fastLane,
+        legalNotice: buildAgentLegalNotice(),
         managedBudget,
         pollAfterMs: 5_000,
         publicUrl: null,

@@ -309,12 +309,25 @@ const agentPaymentOutputSchema = {
   type: "object",
 } satisfies JsonSchema;
 
+const agentLegalNoticeOutputSchema = {
+  additionalProperties: false,
+  properties: {
+    acceptance: { type: "string" },
+    notice: { type: "string" },
+    privacyUrl: { type: "string" },
+    termsUrl: { type: "string" },
+  },
+  required: ["acceptance", "notice", "privacyUrl", "termsUrl"],
+  type: "object",
+} satisfies JsonSchema;
+
 export const agentQuoteOutputSchema = {
   additionalProperties: true,
   properties: {
     canSubmit: { type: "boolean" },
     clientRequestId: { type: "string" },
     fastLane: { type: "object" },
+    legalNotice: agentLegalNoticeOutputSchema,
     operationKey: { type: "string" },
     payment: agentPaymentOutputSchema,
     payloadHash: { type: "string" },
@@ -382,6 +395,7 @@ export const agentAskHumansOutputSchema = {
     ...agentQuestionStatusOutputSchema.properties,
     bounty: { type: "object" },
     fastLane: { type: "object" },
+    legalNotice: agentLegalNoticeOutputSchema,
     managedBudget: { type: ["object", "null"] },
     pollAfterMs: { type: "integer" },
     statusTool: { type: "string" },

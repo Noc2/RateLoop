@@ -147,6 +147,7 @@ test("curyo_ask_humans returns a wallet transaction plan without submitting from
 
   const body = result as unknown as {
     confirmTool: string;
+    legalNotice: { privacyUrl: string; termsUrl: string };
     managedBudget: { remainingDailyBudgetAtomic: string };
     status: string;
     transactionPlan: { calls: unknown[] };
@@ -157,6 +158,8 @@ test("curyo_ask_humans returns a wallet transaction plan without submitting from
   assert.equal(body.confirmTool, "curyo_confirm_ask_transactions");
   assert.equal(body.wallet.address, AGENT.walletAddress);
   assert.equal(body.transactionPlan.calls.length, 1);
+  assert.match(body.legalNotice.termsUrl, /\/legal\/terms$/);
+  assert.match(body.legalNotice.privacyUrl, /\/legal\/privacy$/);
   assert.equal(body.managedBudget.remainingDailyBudgetAtomic, "4000000");
   assert.equal(prepared.length, 1);
 });
