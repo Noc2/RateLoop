@@ -24,6 +24,7 @@ const sweepResult = {
     questionSettled: 0,
     questionSettling: 0,
   },
+  hasMore: false,
   scanned: 1,
 };
 
