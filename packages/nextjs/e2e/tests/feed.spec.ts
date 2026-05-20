@@ -1,4 +1,5 @@
 import { expect, test } from "../fixtures/wallet";
+import { getContentById } from "../helpers/ponder-api";
 import { gotoWithRetry, waitForFeedLoaded } from "../helpers/wait-helpers";
 
 test.describe("Content feed", () => {
@@ -33,6 +34,23 @@ test.describe("Content feed", () => {
 
     const filterPill = page.getByRole("button", { name: /^View$/i }).first();
     await expect(filterPill).toBeVisible({ timeout: 10_000 });
+  });
+
+  test("requested content deep links open the requested item", async ({ connectedPage: page }) => {
+    const { content } = await getContentById(1);
+
+    await gotoWithRetry(page, "/rate?content=1", { ensureWalletConnected: true, timeout: 45_000 });
+    await waitForFeedLoaded(page, 30_000);
+
+    const activeCard = page.locator('article[aria-current="true"]').first();
+    await expect(activeCard.getByRole("heading", { name: content.title }).first()).toBeVisible({ timeout: 15_000 });
+  });
+
+  test("unavailable requested content does not fall back to the first feed item", async ({ connectedPage: page }) => {
+    await gotoWithRetry(page, "/rate?content=999999999", { ensureWalletConnected: true, timeout: 45_000 });
+
+    await expect(page.getByText("This content could not be shown.").first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator('article[aria-current="true"]')).toHaveCount(0);
   });
 
   test("clicking an image preview opens the context link externally", async ({ connectedPage: page }) => {
