@@ -70,6 +70,14 @@ contract DeployRateLoop is ScaffoldETHDeploy {
             address[] memory proposers = new address[](1);
             proposers[0] = deployer;
             address[] memory executors = new address[](1);
+            // L-Gov-A: open-executor pattern (`address(0)` in the executors set) lets anyone
+            // call `execute` once the timelock delay elapses. Documented as a deliberate trade-off
+            // against single-point-of-failure executor multisig downtime, but it does mean MEV
+            // bots can race to extract embedded MEV from queued proposals (e.g. parameter-change
+            // vs snapshot-or-claim races, pool migrations). Runbook for governance: every queued
+            // proposal MUST be MEV-safe under arbitrary executor identity. If a proposal is
+            // sequence-sensitive against external state, gate it on the same block via an
+            // off-chain commit-reveal or convert to a multisig-only flow before queuing.
             executors[0] = address(0);
 
             timelock = new TimelockController(TIMELOCK_MIN_DELAY, proposers, executors, deployer);
