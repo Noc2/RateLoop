@@ -52,11 +52,23 @@ for contract in "${CONTRACTS[@]}"; do
   current=$(
     forge inspect "contracts/$contract.sol:$contract" storageLayout --json 2>/dev/null \
       | python3 -c "
-import sys, json
+import sys, json, re
 d = json.loads(sys.stdin.read())
+# Codex P2 (PR #20 review): preserve the full type identifier, not just the prefix before '('.
+# Stripping at the first '(' lost nested mapping/array value-type info, so a layout change
+# that swapped the value type of a mapping (e.g., t_mapping(uint256,uint256) →
+# t_mapping(uint256,bool)) would slip past the snapshot. We instead remove only the
+# compile-specific suffixes — solc-generated contract/struct IDs and the '_storage'
+# location marker — keeping everything else verbatim. Suffix shape examples:
+#   t_contract(IERC20)24457        → t_contract(IERC20)
+#   t_struct(Round)17549_storage   → t_struct(Round)
+#   t_mapping(uint256,uint256)     → unchanged
+TYPE_ID_SUFFIX = re.compile(r'(?:\))(?:\d+)(?:_storage)?')
+def canon_type(t):
+    return re.sub(r'\)(?:\d+)(?:_storage)?', ')', t).replace('_storage', '')
 canonical = sorted(
     [
-        {'slot': int(e['slot']), 'offset': e['offset'], 'label': e['label'], 'type': e['type'].split('(')[0]}
+        {'slot': int(e['slot']), 'offset': e['offset'], 'label': e['label'], 'type': canon_type(e['type'])}
         for e in d['storage']
     ],
     key=lambda r: (r['slot'], r['offset']),

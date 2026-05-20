@@ -3,25 +3,25 @@
     "slot": 0,
     "offset": 0,
     "label": "usdcToken",
-    "type": "t_contract"
+    "type": "t_contract(IERC20)"
   },
   {
     "slot": 1,
     "offset": 0,
     "label": "registry",
-    "type": "t_contract"
+    "type": "t_contract(ContentRegistry)"
   },
   {
     "slot": 2,
     "offset": 0,
     "label": "votingEngine",
-    "type": "t_contract"
+    "type": "t_contract(RoundVotingEngine)"
   },
   {
     "slot": 3,
     "offset": 0,
     "label": "raterRegistry",
-    "type": "t_contract"
+    "type": "t_contract(IRaterIdentityRegistry)"
   },
   {
     "slot": 4,
@@ -39,24 +39,24 @@
     "slot": 6,
     "offset": 0,
     "label": "feedbackBonusPools",
-    "type": "t_mapping"
+    "type": "t_mapping(t_uint256,t_struct(FeedbackBonusPool))"
   },
   {
     "slot": 7,
     "offset": 0,
     "label": "identityKeyAwarded",
-    "type": "t_mapping"
+    "type": "t_mapping(t_uint256,t_mapping(t_bytes32,t_bool))"
   },
   {
     "slot": 8,
     "offset": 0,
     "label": "feedbackHashAwarded",
-    "type": "t_mapping"
+    "type": "t_mapping(t_uint256,t_mapping(t_bytes32,t_bool))"
   },
   {
     "slot": 9,
     "offset": 0,
     "label": "__gap",
-    "type": "t_array"
+    "type": "t_array(t_uint256)"
   }
 ]

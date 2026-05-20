@@ -3,13 +3,13 @@
     "slot": 0,
     "offset": 0,
     "label": "lrepToken",
-    "type": "t_contract"
+    "type": "t_contract(IERC20)"
   },
   {
     "slot": 1,
     "offset": 0,
     "label": "votingEngine",
-    "type": "t_contract"
+    "type": "t_contract(IRoundVotingEngine)"
   },
   {
     "slot": 2,
@@ -21,25 +21,25 @@
     "slot": 3,
     "offset": 0,
     "label": "frontends",
-    "type": "t_mapping"
+    "type": "t_mapping(t_address,t_struct(Frontend))"
   },
   {
     "slot": 4,
     "offset": 0,
     "label": "registeredFrontends",
-    "type": "t_array"
+    "type": "t_array(t_address)dyn"
   },
   {
     "slot": 5,
     "offset": 0,
     "label": "registeredFrontendIndexPlusOne",
-    "type": "t_mapping"
+    "type": "t_mapping(t_address,t_uint256)"
   },
   {
     "slot": 6,
     "offset": 0,
     "label": "frontendExitAvailableAt",
-    "type": "t_mapping"
+    "type": "t_mapping(t_address,t_uint256)"
   },
   {
     "slot": 7,
@@ -57,18 +57,18 @@
     "slot": 8,
     "offset": 0,
     "label": "authorizedFeeCreditors",
-    "type": "t_mapping"
+    "type": "t_mapping(t_address,t_bool)"
   },
   {
     "slot": 9,
     "offset": 0,
     "label": "feeCreditorForEngine",
-    "type": "t_mapping"
+    "type": "t_mapping(t_address,t_address)"
   },
   {
     "slot": 10,
     "offset": 0,
     "label": "__gap",
-    "type": "t_array"
+    "type": "t_array(t_uint256)"
   }
 ]

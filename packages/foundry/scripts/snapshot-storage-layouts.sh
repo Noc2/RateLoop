@@ -26,11 +26,15 @@ for contract in "${CONTRACTS[@]}"; do
   echo "Snapshotting $contract"
   forge inspect "contracts/$contract.sol:$contract" storageLayout --json \
     | python3 -c "
-import sys, json
+import sys, json, re
 d = json.loads(sys.stdin.read())
+# Codex P2 (PR #20 review): keep the full type identifier so nested type changes are
+# caught. Only strip the compile-specific solc IDs and '_storage' location markers.
+def canon_type(t):
+    return re.sub(r'\)(?:\d+)(?:_storage)?', ')', t).replace('_storage', '')
 canonical = sorted(
     [
-        {'slot': int(e['slot']), 'offset': e['offset'], 'label': e['label'], 'type': e['type'].split('(')[0]}
+        {'slot': int(e['slot']), 'offset': e['offset'], 'label': e['label'], 'type': canon_type(e['type'])}
         for e in d['storage']
     ],
     key=lambda r: (r['slot'], r['offset']),

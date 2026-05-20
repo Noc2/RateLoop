@@ -3,48 +3,48 @@
     "slot": 0,
     "offset": 0,
     "label": "_profiles",
-    "type": "t_mapping"
+    "type": "t_mapping(t_address,t_struct(StoredProfile))"
   },
   {
     "slot": 1,
     "offset": 0,
     "label": "_avatarAccents",
-    "type": "t_mapping"
+    "type": "t_mapping(t_address,t_uint32)"
   },
   {
     "slot": 2,
     "offset": 0,
     "label": "_nameToAddress",
-    "type": "t_mapping"
+    "type": "t_mapping(t_bytes32,t_address)"
   },
   {
     "slot": 3,
     "offset": 0,
     "label": "_registeredAddresses",
-    "type": "t_array"
+    "type": "t_array(t_address)dyn"
   },
   {
     "slot": 4,
     "offset": 0,
     "label": "raterRegistry",
-    "type": "t_contract"
+    "type": "t_contract(IRaterIdentityRegistry)"
   },
   {
     "slot": 5,
     "offset": 0,
     "label": "_profileIdentityKeys",
-    "type": "t_mapping"
+    "type": "t_mapping(t_address,t_bytes32)"
   },
   {
     "slot": 6,
     "offset": 0,
     "label": "_profileOwnerByIdentityKey",
-    "type": "t_mapping"
+    "type": "t_mapping(t_bytes32,t_address)"
   },
   {
     "slot": 7,
     "offset": 0,
     "label": "__gap",
-    "type": "t_array"
+    "type": "t_array(t_uint256)"
   }
 ]

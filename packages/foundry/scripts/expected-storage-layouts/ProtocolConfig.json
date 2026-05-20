@@ -27,7 +27,7 @@
     "slot": 4,
     "offset": 0,
     "label": "config",
-    "type": "t_struct"
+    "type": "t_struct(RoundConfig)"
   },
   {
     "slot": 5,
@@ -63,13 +63,13 @@
     "slot": 9,
     "offset": 0,
     "label": "ratingConfig",
-    "type": "t_struct"
+    "type": "t_struct(RatingConfig)"
   },
   {
     "slot": 20,
     "offset": 0,
     "label": "slashConfig",
-    "type": "t_struct"
+    "type": "t_struct(SlashConfig)"
   },
   {
     "slot": 22,
@@ -87,25 +87,25 @@
     "slot": 24,
     "offset": 0,
     "label": "roundConfigBounds",
-    "type": "t_struct"
+    "type": "t_struct(RoundConfigBounds)"
   },
   {
     "slot": 25,
     "offset": 0,
     "label": "rewardDistributorAuthorized",
-    "type": "t_mapping"
+    "type": "t_mapping(t_address,t_bool)"
   },
   {
     "slot": 26,
     "offset": 0,
     "label": "rewardDistributorVotingEngine",
-    "type": "t_mapping"
+    "type": "t_mapping(t_address,t_address)"
   },
   {
     "slot": 27,
     "offset": 0,
     "label": "rewardDistributorForVotingEngine",
-    "type": "t_mapping"
+    "type": "t_mapping(t_address,t_address)"
   },
   {
     "slot": 28,
@@ -135,6 +135,6 @@
     "slot": 32,
     "offset": 0,
     "label": "__gap",
-    "type": "t_array"
+    "type": "t_array(t_uint256)"
   }
 ]
