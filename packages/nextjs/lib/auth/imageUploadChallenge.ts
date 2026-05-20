@@ -3,7 +3,7 @@ import { getMaxImageUploadSizeBytes, isSupportedImageUploadMimeType } from "~~/l
 import { buildSignedActionMessage, hashSignedActionPayload } from "~~/lib/auth/signedActions";
 import { isValidWalletAddress, normalizeWalletAddress } from "~~/lib/watchlist/contentWatch";
 
-export const IMAGE_UPLOAD_CHALLENGE_TITLE = "Curyo image upload";
+export const IMAGE_UPLOAD_CHALLENGE_TITLE = "RateLoop image upload";
 export const UPLOAD_IMAGE_ACTION = "attachments:upload_image";
 
 type ImageUploadChallengePayload = {

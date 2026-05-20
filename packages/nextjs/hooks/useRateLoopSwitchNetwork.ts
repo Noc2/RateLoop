@@ -9,7 +9,7 @@ import { useThirdwebWagmiSync } from "~~/hooks/useThirdwebWagmiSync";
 import { addAndSwitchEthereumChain, isUnknownWalletChainError } from "~~/hooks/useWalletRpcRecovery";
 import { getTargetNetworks } from "~~/utils/scaffold-eth";
 
-export function useCuryoSwitchNetwork() {
+export function useRateLoopSwitchNetwork() {
   const activeWallet = useActiveWallet();
   const switchActiveWalletChain = useSwitchActiveWalletChain();
   const { switchChain, switchChainAsync } = useSwitchChain();

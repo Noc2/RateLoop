@@ -81,7 +81,7 @@ Sources:
 - Self backend integration:
   https://docs.self.xyz/backend-integration/basic-integration
 
-The main benefit for Curyo is not that Self makes Sybils impossible. It does
+The main benefit for RateLoop is not that Self makes Sybils impossible. It does
 not. A verified account can still be rented, sold, delegated, compromised, or
 operated by a voting service. The benefit is that one attacker cannot cheaply
 mint unlimited Self-verified identities under the same verification scope.
@@ -267,7 +267,7 @@ harder to standardize, and easier to disrupt with behavioral checks. On-chain
 transferability would make reputation instantly market-priced and composable
 with lending, leverage, bribery, and governance capture.
 
-For Curyo, reputation is supposed to mean earned calibration and signal quality.
+For RateLoop, reputation is supposed to mean earned calibration and signal quality.
 If it can be freely transferred, it stops meaning that. It becomes a financial
 asset.
 
@@ -285,7 +285,7 @@ Use three separate concepts:
      and waiting through a cooldown.
 
 3. `transferableToken`
-   - Optional separate economic token, if Curyo wants one later.
+   - Optional separate economic token, if RateLoop wants one later.
    - Not used as the core signal-quality score.
 
 Recommended recovery/rebind rules:
@@ -457,7 +457,7 @@ The label should be closer to "verified uniqueness signal" than "trusted human."
 
 ## Recommendation
 
-This hybrid is a strong alternative if Curyo wants the usability of open
+This hybrid is a strong alternative if RateLoop wants the usability of open
 participation and the extra Sybil resistance of optional proof-of-humanity.
 
 Recommended design:

@@ -24,7 +24,7 @@ import { LaunchDistributionPool } from "../contracts/LaunchDistributionPool.sol"
 import { ClusterPayoutOracle } from "../contracts/ClusterPayoutOracle.sol";
 import { MockERC20 } from "../contracts/mocks/MockERC20.sol";
 import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
-import { CuryoGovernor } from "../contracts/governance/CuryoGovernor.sol";
+import { RateLoopGovernor } from "../contracts/governance/RateLoopGovernor.sol";
 
 /// @notice Fresh RateLoop deployment script for World Chain.
 /// @dev Rater identity is resolved through RaterRegistry; no separate proof-of-personhood token is deployed.
@@ -60,7 +60,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         address governance;
         address governorAddr;
         TimelockController timelock;
-        CuryoGovernor governor;
+        RateLoopGovernor governor;
 
         if (isLocalDev) {
             governance = deployer;
@@ -81,9 +81,9 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         console.log("LoopReputation deployed at:", address(lrepToken));
 
         if (!isLocalDev) {
-            governor = new CuryoGovernor(IVotes(address(lrepToken)), TimelockController(payable(governance)));
+            governor = new RateLoopGovernor(IVotes(address(lrepToken)), TimelockController(payable(governance)));
             governorAddr = address(governor);
-            console.log("CuryoGovernor deployed at:", governorAddr);
+            console.log("RateLoopGovernor deployed at:", governorAddr);
 
             TimelockController tc = TimelockController(payable(governance));
             tc.grantRole(tc.PROPOSER_ROLE(), governorAddr);
@@ -180,8 +180,8 @@ contract DeployRateLoop is ScaffoldETHDeploy {
             worldIdExternalNullifierHash,
             WORLD_ID_CREDENTIAL_TTL_SECONDS
         );
-        _seedCuryoSelfVerifiedHumans(raterRegistry);
-        console.log("Seeded 9 Curyo Self.xyz verified humans");
+        _seedRateLoopSelfVerifiedHumans(raterRegistry);
+        console.log("Seeded 9 RateLoop Self.xyz verified humans");
         TransparentUpgradeableProxy questionRewardPoolEscrowProxy = new TransparentUpgradeableProxy(
             address(questionRewardPoolEscrowImpl),
             governance,
@@ -278,7 +278,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
                 address(registry),
                 address(frontendRegistry)
             );
-            CuryoGovernor(payable(governorAddr)).initializePools(excludedHolders);
+            RateLoopGovernor(payable(governorAddr)).initializePools(excludedHolders);
             participationPool.transferOwnership(governance);
             launchDistributionPool.transferOwnership(governance);
         }
@@ -289,7 +289,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
 
         deployments.push(Deployment("LoopReputation", address(lrepToken)));
         if (address(timelock) != address(0)) deployments.push(Deployment("TimelockController", address(timelock)));
-        if (address(governor) != address(0)) deployments.push(Deployment("CuryoGovernor", address(governor)));
+        if (address(governor) != address(0)) deployments.push(Deployment("RateLoopGovernor", address(governor)));
         deployments.push(Deployment("FrontendRegistry", address(frontendRegistryProxy)));
         deployments.push(Deployment("FrontendRegistryProxyAdmin", _proxyAdmin(address(frontendRegistryProxy))));
         deployments.push(Deployment("ProfileRegistry", address(profileRegistryProxy)));
@@ -448,7 +448,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         return count + 1;
     }
 
-    function _seedCuryoSelfVerifiedHumans(RaterRegistry raterRegistry) internal {
+    function _seedRateLoopSelfVerifiedHumans(RaterRegistry raterRegistry) internal {
         address[9] memory accounts = [
             0x63cada40E8AcF7A1d47229af5Be35b78b16035fa,
             0x7c6425827BB8d848808cbb8fe2bd55Fd2f2Fa41A,

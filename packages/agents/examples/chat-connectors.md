@@ -1,16 +1,16 @@
 # Chat Connector Notes
 
-Use these notes when wiring Curyo into chat-hosted agents such as ChatGPT and Claude.
+Use these notes when wiring RateLoop into chat-hosted agents such as ChatGPT and Claude.
 
 ## Shape
 
-- Prefer a remote connector or remote MCP wrapper that exposes the same Curyo actions:
+- Prefer a remote connector or remote MCP wrapper that exposes the same RateLoop actions:
   - quote
   - ask
   - status
   - result
-- Use the public endpoint when the connector can supply a funded `walletAddress`; use a managed token only for Curyo-enforced caps or callbacks.
-- Keep Curyo account creation optional for the user. The accountless flow only needs a funded wallet, a public context URL, image context, or YouTube video context, a budget, and a signing/approval path.
+- Use the public endpoint when the connector can supply a funded `walletAddress`; use a managed token only for RateLoop-enforced caps or callbacks.
+- Keep RateLoop account creation optional for the user. The accountless flow only needs a funded wallet, a public context URL, image context, or YouTube video context, a budget, and a signing/approval path.
 - Show spend confirmation on the quoted amount before the ask is submitted.
 - Keep callbacks optional. Many chat hosts can simply poll status and fetch the final result in the same conversation.
 
@@ -19,7 +19,7 @@ Use these notes when wiring Curyo into chat-hosted agents such as ChatGPT and Cl
 Prompt the host agent to:
 
 1. draft a landing-page pitch
-2. ask Curyo whether the pitch makes people want to learn more
+2. ask RateLoop whether the pitch makes people want to learn more
 3. read the structured result
 4. revise or proceed
 

@@ -1,4 +1,4 @@
-# Commit-Reveal Reliability And Privacy For Curyo
+# Commit-Reveal Reliability And Privacy For RateLoop
 
 Research date: 2026-05-04
 
@@ -8,7 +8,7 @@ This note replaces the earlier zk-centered framing. The goal is simpler:
 2. Find the best practical privacy model while keeping HumanReputation (HREP),
    staking, vote settlement, and reputation outcomes public.
 
-The recommendation is to improve Curyo's current public voting reliability with
+The recommendation is to improve RateLoop's current public voting reliability with
 faster non-reveal cleanup and better commit lifecycle semantics, then add a
 separate encrypted-answer layer for private bounties. ZK remains useful for
 some future checks, but it is not the main answer to either problem.
@@ -43,12 +43,12 @@ Best solution for privacy while keeping HREP/voting public:
 
 The core product split should be:
 
-- Public Curyo: current public question and public HREP voting model.
+- Public RateLoop: current public question and public HREP voting model.
 - Private Answer Collection: encrypted answer intake for the requester.
 - Public Reputation Validation: HREP voters publicly judge a redacted or
   requester-selected artifact derived from the private answers.
 
-## Current Curyo Baseline
+## Current RateLoop Baseline
 
 Current voting is already close to the desired public-voting model:
 
@@ -105,7 +105,7 @@ damage a bad commit can cause.
 
 ### 1. Keep Public Tlock Voting
 
-Curyo should keep its current public voting direction:
+RateLoop should keep its current public voting direction:
 
 - HREP stake remains public.
 - Vote commits remain public.
@@ -115,7 +115,7 @@ Curyo should keep its current public voting direction:
 
 drand/tlock remains a good fit because it hides votes during the blind window
 without adding a coordinator who can read them early. Shutter-style threshold
-encryption is worth evaluating later, especially if Curyo wants event-based or
+encryption is worth evaluating later, especially if RateLoop wants event-based or
 batch decryption, but it should not be a prerequisite for fixing faulty commits.
 
 ### 2. Make Pending, Revealed, And Expired Separate States
@@ -225,7 +225,7 @@ failures.
 ZK can prove knowledge of a valid hidden vote preimage, but it does not solve
 the current hard part: proving that a future tlock ciphertext will decrypt.
 
-Use zk later only if Curyo needs:
+Use zk later only if RateLoop needs:
 
 - anonymous verified-human voting;
 - private one-answer-per-human proofs;
@@ -236,7 +236,7 @@ Do not block the reliability fix on zk.
 
 ## Privacy Goal
 
-The desired privacy model is not "private Curyo voting." The better target is:
+The desired privacy model is not "private RateLoop voting." The better target is:
 
 - raw private answers are visible only to the requester and delegated reviewers;
 - HREP votes remain public;
@@ -245,7 +245,7 @@ The desired privacy model is not "private Curyo voting." The better target is:
 - the protocol stores commitments so private answers can be audited or disputed
   later without publishing them by default.
 
-That preserves Curyo's public human-reputation value while adding a private
+That preserves RateLoop's public human-reputation value while adding a private
 input lane for users who cannot put full context or all answers in public.
 
 ## Recommended Privacy Architecture
@@ -312,7 +312,7 @@ without revealing every answer.
 
 ### 3. Use Public Evaluation Packets For HREP Voting
 
-To keep public voting meaningful, Curyo needs a public artifact for voters:
+To keep public voting meaningful, RateLoop needs a public artifact for voters:
 
 - a redacted question;
 - the requester's selected answer;
@@ -321,7 +321,7 @@ To keep public voting meaningful, Curyo needs a public artifact for voters:
 - a sanitized evidence bundle;
 - a model/eval result derived from private answers.
 
-That artifact becomes normal public Curyo content. HREP voters publicly vote on
+That artifact becomes normal public RateLoop content. HREP voters publicly vote on
 it using the existing round engine.
 
 This means privacy and reputation do different jobs:
@@ -340,7 +340,7 @@ MVP key management:
 - allow key rotation before answers arrive.
 
 Do not rely on deprecated wallet encryption APIs. MetaMask deprecated
-`eth_decrypt` and `eth_getEncryptionPublicKey`; Curyo should treat wallet
+`eth_decrypt` and `eth_getEncryptionPublicKey`; RateLoop should treat wallet
 signing as identity/consent and use application-managed encryption keys for
 payload privacy.
 
@@ -375,7 +375,7 @@ padding, and batching.
 
 | Mode | Raw context/answers | HREP voting | Best use |
 | --- | --- | --- | --- |
-| Public Question | Public | Public | Current Curyo, public agent evaluation |
+| Public Question | Public | Public | Current RateLoop, public agent evaluation |
 | Private Answer Collection | Requester/delegates only | Optional public vote on a derived packet | Private bounties, customer data, confidential evals |
 | Public Validation Packet | Redacted or selected output public | Public | Reputation-backed acceptance of private-work output |
 
@@ -416,14 +416,14 @@ token with invisible voting.
 3. Bind requester viewing keys with EIP-712 signatures.
 4. Store encrypted payloads off-chain and only bounded commitments/digests
    on-chain.
-5. Build public evaluation packets that can be submitted to normal Curyo voting.
+5. Build public evaluation packets that can be submitted to normal RateLoop voting.
 6. Add delegated reviewer keys and recovery before broad production use.
 7. Evaluate TACo/threshold access once the direct-key MVP proves the product
    flow.
 
 ## Open Questions
 
-- What should the reveal grace be for Curyo's current 20-minute epochs?
+- What should the reveal grace be for RateLoop's current 20-minute epochs?
 - Should unrevealed stake always go to treasury, or should some cases route to governance-style protocol recovery?
 - Should repeated non-reveal affect Voter ID eligibility or only UX warnings?
 - Should private answer bounties pay answerers directly, or should HREP voters
@@ -447,7 +447,7 @@ token with invisible voting.
 - IPFS documents that CIDs, DHT/provider metadata, and content are public unless
   additional content-encryption/privacy measures are used:
   https://docs.ipfs.tech/concepts/privacy-and-encryption/
-- MetaMask deprecated `eth_decrypt` and `eth_getEncryptionPublicKey`, so Curyo
+- MetaMask deprecated `eth_decrypt` and `eth_getEncryptionPublicKey`, so RateLoop
   should not base privacy on those wallet APIs:
   https://metamask.io/en-GB/news/metamask-api-method-deprecation/
 - EIP-712 defines typed structured data signing and domain separation, useful

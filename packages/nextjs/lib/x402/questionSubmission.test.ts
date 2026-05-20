@@ -469,7 +469,7 @@ test("confirmAgentWalletQuestionSubmissionRequest rejects only spoofed submissio
         operationKey,
         transactionHashes: [transactionHash],
       }),
-    /Confirmed transactions did not include a Curyo question submission/,
+    /Confirmed transactions did not include a RateLoop question submission/,
   );
 });
 

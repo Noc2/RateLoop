@@ -15,11 +15,11 @@ World ID proof directly to `RaterRegistry.attestHumanCredentialWithProof`, and
 the contract verifies the proof through the World ID Router before recording a
 credential. There is no trusted server issuer in the normal path.
 
-The nine migrated Curyo users that were already verified with Self.xyz are
+The nine migrated RateLoop users that were already verified with Self.xyz are
 seeded by the deploy script through `RaterRegistry.seedHumanCredential`. They
 are treated exactly like verified humans everywhere in the product and indexer:
 same verified-human status, same anchor behavior, same leaderboard/profile
-copy, and no separate "Curyo legacy human" chip.
+copy, and no separate "RateLoop legacy human" chip.
 
 The first deployment does not include AI-specific accountability rules. AI
 raters use the same open participation path as everyone else unless a future
@@ -203,7 +203,7 @@ status route. It returns:
   AI participation do not affect reward weight.
 
 The leaderboard and profile surfaces use the same payload language. They show
-World ID verified humans and seeded Curyo verified humans identically.
+World ID verified humans and seeded RateLoop verified humans identically.
 
 Removed live indexer concepts:
 
@@ -237,7 +237,7 @@ credentials as verified-human units.
 All public docs, whitepaper text, SDK docs, profile UI, settings UI, and
 leaderboards should use the same language:
 
-- "Verified human" for both World ID and seeded Curyo Self.xyz humans.
+- "Verified human" for both World ID and seeded RateLoop Self.xyz humans.
 - "Participation lane" for status ordering.
 - "Reward weight is not changed by human credentials or AI participation."
 - "Verified-human anchors are launch distribution gates, not core protocol

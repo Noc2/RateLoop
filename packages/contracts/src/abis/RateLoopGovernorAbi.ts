@@ -1,4 +1,4 @@
-export const CuryoGovernorAbi = [
+export const RateLoopGovernorAbi = [
   {
     "type": "constructor",
     "inputs": [

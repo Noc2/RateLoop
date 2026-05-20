@@ -490,7 +490,7 @@ export function buildAgentResultPackage(params: {
       ? `Minority down signal: ${Math.round(downShare * 100)}% of revealed stake and ${latestRound?.downCount ?? 0} revealed down votes.`
       : null;
   const limitations = [
-    "Curyo ratings are human judgment signals, not factual proof.",
+    "RateLoop ratings are human judgment signals, not factual proof.",
     "Confidence is derived from revealed participation, stake margin, and settled history.",
   ];
 

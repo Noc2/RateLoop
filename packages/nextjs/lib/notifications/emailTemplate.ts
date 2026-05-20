@@ -1,4 +1,4 @@
-interface CuryoEmailTemplateParams {
+interface RateLoopEmailTemplateParams {
   title: string;
   body: string;
   ctaLabel: string;
@@ -33,14 +33,14 @@ function escapeHtml(value: string) {
     .replace(/'/g, "&#39;");
 }
 
-export function buildCuryoEmailHtml(params: CuryoEmailTemplateParams) {
+export function buildRateLoopEmailHtml(params: RateLoopEmailTemplateParams) {
   const safeTitle = escapeHtml(params.title);
   const safeBody = escapeHtml(params.body);
   const safeCtaLabel = escapeHtml(params.ctaLabel);
   const safeCtaHref = escapeHtml(params.ctaHref);
   const safeEyebrow = escapeHtml(params.eyebrow ?? "CURYO NOTIFICATIONS");
   const safeFooterNote = escapeHtml(
-    params.footerNote ?? "You are receiving this email because you signed up for Curyo email notifications.",
+    params.footerNote ?? "You are receiving this email because you signed up for RateLoop email notifications.",
   );
   const safeFooterLinkLabel = params.footerLinkLabel ? escapeHtml(params.footerLinkLabel) : null;
   const safeFooterLinkHref = params.footerLinkHref ? escapeHtml(params.footerLinkHref) : null;
@@ -64,7 +64,7 @@ export function buildCuryoEmailHtml(params: CuryoEmailTemplateParams) {
                       <td
                         style="padding-left:10px; color:${EMAIL_TEXT}; font-family:Arial, Helvetica, sans-serif; font-size:26px; line-height:1; font-weight:700; letter-spacing:-0.4px;"
                       >
-                        Curyo
+                        RateLoop
                       </td>
                     </tr>
                   </table>

@@ -6,7 +6,7 @@ import {
   handlePublicAgentRoute,
   hasAgentBearerToken,
 } from "~~/lib/agent/http";
-import { callCuryoMcpTool, callPublicCuryoMcpTool } from "~~/lib/mcp/tools";
+import { callPublicRateLoopMcpTool, callRateLoopMcpTool } from "~~/lib/mcp/tools";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,7 +18,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ con
     return handlePublicAgentRoute({
       allowOnStoreUnavailable: true,
       handler: () =>
-        callPublicCuryoMcpTool({
+        callPublicRateLoopMcpTool({
           arguments: { contentId },
           name: "curyo_get_result",
         }),
@@ -30,7 +30,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ con
   return handleAgentRoute({
     allowOnStoreUnavailable: true,
     handler: ({ agent }) =>
-      callCuryoMcpTool({
+      callRateLoopMcpTool({
         agent,
         arguments: { contentId },
         name: "curyo_get_result",

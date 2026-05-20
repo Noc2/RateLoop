@@ -3,7 +3,7 @@ import { buildSignedActionMessage, hashSignedActionPayload } from "~~/lib/auth/s
 import { type EmailNotificationSettingsPayload } from "~~/lib/notifications/emailShared";
 import { isValidWalletAddress, normalizeWalletAddress } from "~~/lib/watchlist/contentWatch";
 
-export const NOTIFICATION_EMAIL_CHALLENGE_TITLE = "Curyo email notification settings";
+export const NOTIFICATION_EMAIL_CHALLENGE_TITLE = "RateLoop email notification settings";
 export const UPDATE_NOTIFICATION_EMAIL_ACTION = "notification_email:update";
 export const READ_NOTIFICATION_EMAIL_ACTION = "notification_email:read";
 

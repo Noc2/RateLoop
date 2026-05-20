@@ -631,7 +631,7 @@ export function resolveX402QuestionConfig(chainId: number): X402QuestionSubmissi
   const questionRewardPoolEscrowAddress = getSharedDeploymentAddress(chainId, "QuestionRewardPoolEscrow");
   const x402QuestionSubmitterAddress = getSharedDeploymentAddress(chainId, "X402QuestionSubmitter");
   if (!contentRegistryAddress || !questionRewardPoolEscrowAddress || !x402QuestionSubmitterAddress) {
-    throw new X402QuestionConfigError("Curyo contracts are not deployed for the requested chain.");
+    throw new X402QuestionConfigError("RateLoop contracts are not deployed for the requested chain.");
   }
 
   const rpcUrl = getRpcUrl(targetNetwork);
@@ -1206,7 +1206,7 @@ async function buildNativeX402QuestionSubmissionPlan(params: {
     ],
   })) as Hex;
   if (inputAuthorization.nonce && inputAuthorization.nonce.toLowerCase() !== computedNonce.toLowerCase()) {
-    throw new X402QuestionConflictError("paymentAuthorization.nonce does not match the Curyo x402 ask payload.");
+    throw new X402QuestionConflictError("paymentAuthorization.nonce does not match the RateLoop x402 ask payload.");
   }
   if (inputAuthorization.from && inputAuthorization.from.toLowerCase() !== params.walletAddress.toLowerCase()) {
     throw new X402QuestionConflictError("paymentAuthorization.from must match the agent wallet address.");
@@ -1215,7 +1215,7 @@ async function buildNativeX402QuestionSubmissionPlan(params: {
     inputAuthorization.to &&
     inputAuthorization.to.toLowerCase() !== params.config.x402QuestionSubmitterAddress.toLowerCase()
   ) {
-    throw new X402QuestionConflictError("paymentAuthorization.to must be the Curyo x402 submitter.");
+    throw new X402QuestionConflictError("paymentAuthorization.to must be the RateLoop x402 submitter.");
   }
   if (inputAuthorization.value && BigInt(inputAuthorization.value) !== params.payload.bounty.amount) {
     throw new X402QuestionConflictError("paymentAuthorization.value must equal the bounty amount.");
@@ -1805,7 +1805,7 @@ function agentWalletQuestionSubmissionPlanBody(params: {
     wallet: {
       address: params.plan.walletAddress,
       fundingMode: "agent_wallet",
-      note: "The wallet signer must execute every call; Curyo does not receive bounty funds.",
+      note: "The wallet signer must execute every call; RateLoop does not receive bounty funds.",
     },
   };
 }
@@ -1847,7 +1847,7 @@ function nativeX402QuestionSubmissionPlanBody(params: {
     wallet: {
       address: params.plan.walletAddress,
       fundingMode: "x402_authorization",
-      note: "Sign the x402 USDC authorization with this wallet; Curyo does not custody funds.",
+      note: "Sign the x402 USDC authorization with this wallet; RateLoop does not custody funds.",
     },
     x402AuthorizationRequest: {
       authorization: params.plan.authorization,
@@ -2085,7 +2085,7 @@ export async function confirmAgentWalletQuestionSubmissionRequest(params: {
   }
 
   if (submittedContents.length === 0) {
-    throw new X402QuestionConflictError("Confirmed transactions did not include a Curyo question submission.");
+    throw new X402QuestionConflictError("Confirmed transactions did not include a RateLoop question submission.");
   }
   if (!submittedContents.some(content => normalizedAddress(content.submitter) === walletAddress)) {
     throw new X402QuestionConflictError("Confirmed submission was not emitted for the planned wallet address.");

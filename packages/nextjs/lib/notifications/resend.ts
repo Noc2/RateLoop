@@ -1,6 +1,6 @@
 import "server-only";
 import { getResendConfig } from "~~/lib/env/server";
-import { buildCuryoEmailHtml } from "~~/lib/notifications/emailTemplate";
+import { buildRateLoopEmailHtml } from "~~/lib/notifications/emailTemplate";
 
 interface ResendEmailParams {
   to: string;
@@ -45,15 +45,15 @@ export async function sendResendEmail(params: ResendEmailParams) {
 export async function sendNotificationVerificationEmail(params: { email: string; verifyUrl: string }) {
   await sendResendEmail({
     to: params.email,
-    subject: "Verify your Curyo notification email",
-    text: `Verify your email for Curyo notifications: ${params.verifyUrl}`,
-    html: buildCuryoEmailHtml({
+    subject: "Verify your RateLoop notification email",
+    text: `Verify your email for RateLoop notifications: ${params.verifyUrl}`,
+    html: buildRateLoopEmailHtml({
       eyebrow: "Email verification",
       title: "Verify your email",
-      body: "Confirm this email address to receive Curyo notification emails for watched rounds and curators you follow.",
+      body: "Confirm this email address to receive RateLoop notification emails for watched rounds and curators you follow.",
       ctaLabel: "Verify email",
       ctaHref: params.verifyUrl,
-      footerNote: "This verification link was requested from Curyo notification settings.",
+      footerNote: "This verification link was requested from RateLoop notification settings.",
     }),
   });
 }

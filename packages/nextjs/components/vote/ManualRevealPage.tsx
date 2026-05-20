@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useAccount } from "wagmi";
 import { ArrowLeftIcon } from "@heroicons/react/24/outline";
-import { CuryoConnectButton } from "~~/components/scaffold-eth";
+import { RateLoopConnectButton } from "~~/components/scaffold-eth";
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import { RATE_ROUTE, buildRateContentHref } from "~~/constants/routes";
 import { formatTimeRemaining } from "~~/hooks/useActiveVotesWithDeadlines";
@@ -63,7 +63,7 @@ export function ManualRevealPage() {
           <p className="text-base-content/75">
             Hidden fallback for manual reveals. Auto-reveal stays the default path.
           </p>
-          <CuryoConnectButton />
+          <RateLoopConnectButton />
         </div>
       </div>
     );

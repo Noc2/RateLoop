@@ -4,7 +4,7 @@ import { RATE_ROUTE } from "~~/constants/routes";
 import { db, dbClient } from "~~/lib/db";
 import { notificationEmailDeliveries, notificationEmailSubscriptions, watchedContent } from "~~/lib/db/schema";
 import { getNotificationDeliverySecret, getOptionalAppUrl } from "~~/lib/env/server";
-import { buildCuryoEmailHtml } from "~~/lib/notifications/emailTemplate";
+import { buildRateLoopEmailHtml } from "~~/lib/notifications/emailTemplate";
 import { buildNotificationEmailUnsubscribeUrl } from "~~/lib/notifications/emailUrls";
 import { isResendConfigured, sendResendEmail } from "~~/lib/notifications/resend";
 import { pickSettlingSoonNotification } from "~~/lib/notifications/settlingSoon";
@@ -220,7 +220,7 @@ function buildCandidates(
         eventKey,
         eventType: "round_resolved",
         contentId: item.contentId,
-        subject: "A tracked round just resolved on Curyo",
+        subject: "A tracked round just resolved on RateLoop",
         body,
         href,
       });
@@ -263,7 +263,7 @@ function buildCandidates(
         eventKey,
         eventType: "followed_submission",
         contentId: item.contentId,
-        subject: `${displayName} asked something new on Curyo`,
+        subject: `${displayName} asked something new on RateLoop`,
         body: `${displayName} just asked "${item.title}".`,
         href: getAbsoluteVoteUrl(item.contentId, appUrl),
       });
@@ -281,7 +281,7 @@ function buildCandidates(
         eventKey,
         eventType: "followed_resolution",
         contentId: item.contentId,
-        subject: `${displayName} ${action} a Curyo call`,
+        subject: `${displayName} ${action} a RateLoop call`,
         body: `${displayName} ${action} a call on "${item.title}".`,
         href: getAbsoluteVoteUrl(item.contentId, appUrl),
       });
@@ -410,14 +410,14 @@ async function sendCandidate(candidate: EmailCandidate, appUrl: string) {
   await sendResendEmail({
     to: candidate.email,
     subject: candidate.subject,
-    text: `${candidate.body}\n\nOpen Curyo: ${candidate.href}\n\nUnsubscribe from these emails: ${unsubscribeUrl}`,
-    html: buildCuryoEmailHtml({
-      eyebrow: "Curyo notification",
+    text: `${candidate.body}\n\nOpen RateLoop: ${candidate.href}\n\nUnsubscribe from these emails: ${unsubscribeUrl}`,
+    html: buildRateLoopEmailHtml({
+      eyebrow: "RateLoop notification",
       title: candidate.subject,
       body: candidate.body,
-      ctaLabel: "Open Curyo",
+      ctaLabel: "Open RateLoop",
       ctaHref: candidate.href,
-      footerNote: "You are receiving this email because this notification type is enabled in your Curyo settings.",
+      footerNote: "You are receiving this email because this notification type is enabled in your RateLoop settings.",
       footerLinkLabel: "Unsubscribe from these emails",
       footerLinkHref: unsubscribeUrl,
     }),

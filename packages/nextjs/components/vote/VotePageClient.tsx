@@ -29,12 +29,12 @@ import { useCategoryPopularity } from "~~/hooks/useCategoryPopularity";
 import { useCategoryRegistry } from "~~/hooks/useCategoryRegistry";
 import type { ContentItem } from "~~/hooks/useContentFeed";
 import { useContentFeed } from "~~/hooks/useContentFeed";
-import { useCuryoConnectModal } from "~~/hooks/useCuryoConnectModal";
 import { useDelegation } from "~~/hooks/useDelegation";
 import { useDiscoverSignals } from "~~/hooks/useDiscoverSignals";
 import { useFollowedProfiles } from "~~/hooks/useFollowedProfiles";
 import { useInterestProfile } from "~~/hooks/useInterestProfile";
 import { useOnboarding } from "~~/hooks/useOnboarding";
+import { useRateLoopConnectModal } from "~~/hooks/useRateLoopConnectModal";
 import { useRaterRegistryIdentity } from "~~/hooks/useRaterRegistryIdentity";
 import { useRoundVote } from "~~/hooks/useRoundVote";
 import { SubmitterProfile, useSubmitterProfiles } from "~~/hooks/useSubmitterProfiles";
@@ -258,7 +258,7 @@ const HomeInner = () => {
   const { isMobileHeaderVisible, mobileHeaderHeight, setIsMobileHeaderVisible, setMobileHeaderVoteControls } =
     useMobileHeaderVisibility();
   const nowSeconds = useUnixTime(60_000);
-  const { openConnectModal } = useCuryoConnectModal();
+  const { openConnectModal } = useRateLoopConnectModal();
   const { isFirstVote, markVoteCompleted } = useOnboarding();
   const [activeCategory, setActiveCategory] = useState<string>(ALL_FILTER);
   const [view, setView] = useState<VoteView>("for_you");
@@ -318,7 +318,7 @@ const HomeInner = () => {
     toggleWatch,
     requestReadAccess: requestWatchReadAccess,
     isPending: isWatchPending,
-  } = useWatchedContent(address, { autoRead: true });
+  } = useWatchedContent(address, { autoRead: false });
   const {
     followedItems,
     followedWallets,

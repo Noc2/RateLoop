@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { ClusterPayoutOracleAbi, CuryoGovernorAbi, QuestionRewardPoolEscrowAbi } from "./abis";
+import { ClusterPayoutOracleAbi, RateLoopGovernorAbi, QuestionRewardPoolEscrowAbi } from "./abis";
 import deployedContracts from "./deployedContracts";
 import { getSharedChainStartBlock, getSharedDeploymentAddress, getSharedDeploymentStartBlock } from "./deployments";
 
@@ -52,8 +52,8 @@ test("shared deployment helpers return undefined for unknown chains", () => {
 });
 
 test("shared ABI exports include governance contracts present in shared deployments", () => {
-  assert.ok(Array.isArray(CuryoGovernorAbi));
-  assert.ok(CuryoGovernorAbi.length > 0);
+  assert.ok(Array.isArray(RateLoopGovernorAbi));
+  assert.ok(RateLoopGovernorAbi.length > 0);
 });
 
 test("standalone generated ABIs match shared deployment ABIs", () => {

@@ -1,5 +1,5 @@
-import { CuryoSdkError } from "./errors";
-import type { CuryoClientConfig, CuryoSdkOptions } from "./types";
+import { RateLoopSdkError } from "./errors";
+import type { RateLoopClientConfig, RateLoopSdkOptions } from "./types";
 
 const DEFAULT_TIMEOUT_MS = 10_000;
 
@@ -10,11 +10,11 @@ function normalizeApiBaseUrl(apiBaseUrl?: string) {
     const normalized = new URL(apiBaseUrl);
     return normalized.toString().replace(/\/+$/, "");
   } catch {
-    throw new CuryoSdkError(`Invalid apiBaseUrl: ${apiBaseUrl}`);
+    throw new RateLoopSdkError(`Invalid apiBaseUrl: ${apiBaseUrl}`);
   }
 }
 
-export function resolveClientConfig(options: CuryoSdkOptions = {}): CuryoClientConfig {
+export function resolveClientConfig(options: RateLoopSdkOptions = {}): RateLoopClientConfig {
   return {
     chainId: options.chainId,
     apiBaseUrl: normalizeApiBaseUrl(options.apiBaseUrl),

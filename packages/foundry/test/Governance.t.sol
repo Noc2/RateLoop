@@ -8,12 +8,12 @@ import { IGovernor } from "@openzeppelin/contracts/governance/IGovernor.sol";
 import { Strings } from "@openzeppelin/contracts/utils/Strings.sol";
 
 import { LoopReputation } from "../contracts/LoopReputation.sol";
-import { CuryoGovernor } from "../contracts/governance/CuryoGovernor.sol";
+import { RateLoopGovernor } from "../contracts/governance/RateLoopGovernor.sol";
 
 contract GovernanceTest is Test {
     LoopReputation public token;
     TimelockController public timelock;
-    CuryoGovernor public governor;
+    RateLoopGovernor public governor;
 
     address public deployer = address(1);
     address public voter1 = address(2);
@@ -47,7 +47,7 @@ contract GovernanceTest is Test {
         + 6_000_000 * 1e6;
 
     /// @dev Binds a description to a proposer using the suffix enforced by
-    ///      CuryoGovernor._isValidDescriptionForProposer (audit N-2: cancel-DoS fix).
+    ///      RateLoopGovernor._isValidDescriptionForProposer (audit N-2: cancel-DoS fix).
     function _boundDescription(string memory description, address proposer) internal pure returns (string memory) {
         return string.concat(description, "#proposer=", Strings.toHexString(uint160(proposer), 20));
     }
@@ -89,7 +89,7 @@ contract GovernanceTest is Test {
         timelock = new TimelockController(2 days, proposers, executors, deployer);
 
         // Deploy Governor with LREP directly (no wrapper needed)
-        governor = new CuryoGovernor(IVotes(address(token)), timelock);
+        governor = new RateLoopGovernor(IVotes(address(token)), timelock);
 
         // Initialize protocol-controlled holders excluded from dynamic quorum
         governor.initializePools(_excludedHolders());
@@ -326,7 +326,7 @@ contract GovernanceTest is Test {
         smallToken.grantRole(smallToken.MINTER_ROLE(), deployer);
 
         TimelockController smallTimelock = new TimelockController(2 days, new address[](0), new address[](0), deployer);
-        CuryoGovernor smallGovernor = new CuryoGovernor(IVotes(address(smallToken)), smallTimelock);
+        RateLoopGovernor smallGovernor = new RateLoopGovernor(IVotes(address(smallToken)), smallTimelock);
 
         address[] memory holders = new address[](3);
         holders[0] = address(100);
@@ -381,7 +381,7 @@ contract GovernanceTest is Test {
 
     function test_GovernorPoolsOnlyInitializer() public {
         vm.startPrank(deployer);
-        CuryoGovernor freshGovernor = new CuryoGovernor(IVotes(address(token)), timelock);
+        RateLoopGovernor freshGovernor = new RateLoopGovernor(IVotes(address(token)), timelock);
         vm.stopPrank();
 
         address[] memory holders = new address[](3);
@@ -400,7 +400,7 @@ contract GovernanceTest is Test {
 
     function test_GovernorPoolsRejectDuplicateAddresses() public {
         vm.startPrank(deployer);
-        CuryoGovernor freshGovernor = new CuryoGovernor(IVotes(address(token)), timelock);
+        RateLoopGovernor freshGovernor = new RateLoopGovernor(IVotes(address(token)), timelock);
         address[] memory holders = new address[](3);
         holders[0] = address(1);
         holders[1] = address(1);
@@ -412,7 +412,7 @@ contract GovernanceTest is Test {
 
     function test_GovernorPoolsRejectEmptyArray() public {
         vm.startPrank(deployer);
-        CuryoGovernor freshGovernor = new CuryoGovernor(IVotes(address(token)), timelock);
+        RateLoopGovernor freshGovernor = new RateLoopGovernor(IVotes(address(token)), timelock);
         address[] memory holders = new address[](0);
         vm.expectRevert("No excluded holders");
         freshGovernor.initializePools(holders);
@@ -421,7 +421,7 @@ contract GovernanceTest is Test {
 
     function test_GovernorPoolsRejectOversizedArray() public {
         vm.startPrank(deployer);
-        CuryoGovernor freshGovernor = new CuryoGovernor(IVotes(address(token)), timelock);
+        RateLoopGovernor freshGovernor = new RateLoopGovernor(IVotes(address(token)), timelock);
         uint256 holderCount = freshGovernor.MAX_EXCLUDED_HOLDERS() + 1;
         address[] memory holders = new address[](holderCount);
         for (uint256 i = 0; i < holderCount; i++) {
@@ -445,7 +445,7 @@ contract GovernanceTest is Test {
 
     function test_GovernorBootstrapCanBeRecoveredViaTimelockProposal() public {
         vm.startPrank(deployer);
-        CuryoGovernor freshGovernor = new CuryoGovernor(IVotes(address(token)), timelock);
+        RateLoopGovernor freshGovernor = new RateLoopGovernor(IVotes(address(token)), timelock);
         token.setGovernor(address(freshGovernor));
         timelock.grantRole(timelock.PROPOSER_ROLE(), address(freshGovernor));
         timelock.grantRole(timelock.CANCELLER_ROLE(), address(freshGovernor));
@@ -463,7 +463,7 @@ contract GovernanceTest is Test {
 
         uint256[] memory values = new uint256[](1);
         bytes[] memory calldatas = new bytes[](1);
-        calldatas[0] = abi.encodeCall(CuryoGovernor.initializePools, (holders));
+        calldatas[0] = abi.encodeCall(RateLoopGovernor.initializePools, (holders));
 
         string memory description = _boundDescription("Recover bootstrap", voter1);
         vm.prank(voter1);
@@ -512,7 +512,7 @@ contract GovernanceTest is Test {
         bytes[] memory calldatas = new bytes[](1);
 
         vm.prank(mockTreasury);
-        vm.expectRevert(abi.encodeWithSelector(CuryoGovernor.ExcludedHolderCannotGovern.selector, mockTreasury));
+        vm.expectRevert(abi.encodeWithSelector(RateLoopGovernor.ExcludedHolderCannotGovern.selector, mockTreasury));
         governor.propose(targets, values, calldatas, _boundDescription("Excluded treasury proposal", mockTreasury));
     }
 
@@ -531,7 +531,7 @@ contract GovernanceTest is Test {
         vm.roll(block.number + governor.votingDelay() + 1);
 
         vm.prank(mockTreasury);
-        vm.expectRevert(abi.encodeWithSelector(CuryoGovernor.ExcludedHolderCannotGovern.selector, mockTreasury));
+        vm.expectRevert(abi.encodeWithSelector(RateLoopGovernor.ExcludedHolderCannotGovern.selector, mockTreasury));
         governor.castVote(proposalId, 1);
     }
 
@@ -699,7 +699,7 @@ contract GovernanceTest is Test {
 
     function test_GovernorAllowsProposalsBeforePoolsInitialization() public {
         vm.startPrank(deployer);
-        CuryoGovernor freshGovernor = new CuryoGovernor(IVotes(address(token)), timelock);
+        RateLoopGovernor freshGovernor = new RateLoopGovernor(IVotes(address(token)), timelock);
         token.setGovernor(address(freshGovernor));
         vm.stopPrank();
 
@@ -743,7 +743,7 @@ contract GovernanceTest is Test {
         bytes[] memory calldatas = new bytes[](1);
         calldatas[0] = callData;
 
-        // Bind description to the voter1 proposer per CuryoGovernor's N-2 cancel-DoS fix.
+        // Bind description to the voter1 proposer per RateLoopGovernor's N-2 cancel-DoS fix.
         description = _boundDescription(description, voter1);
 
         vm.prank(voter1);
@@ -825,7 +825,7 @@ contract GovernanceTest is Test {
 
         uint256 nextBlock = governor.nextProposalBlock(voter1);
         vm.prank(voter1);
-        vm.expectRevert(abi.encodeWithSelector(CuryoGovernor.ProposalCooldownActive.selector, voter1, nextBlock));
+        vm.expectRevert(abi.encodeWithSelector(RateLoopGovernor.ProposalCooldownActive.selector, voter1, nextBlock));
         governor.propose(targets, values, calldatas, _boundDescription("Cooldown proposal #2", voter1));
 
         vm.roll(nextBlock);

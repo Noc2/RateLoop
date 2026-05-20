@@ -51,14 +51,14 @@ function missingBlobGetResult() {
   } as unknown as Awaited<ReturnType<typeof import("@vercel/blob").get>>;
 }
 
-test("builds Curyo upload image URLs with a webp extension", () => {
+test("builds RateLoop upload image URLs with a webp extension", () => {
   assert.equal(
     getAttachmentImageUrl("https://www.curyo.xyz/ask", "att_abcdefghijklmnop"),
     "https://www.curyo.xyz/api/attachments/images/att_abcdefghijklmnop.webp",
   );
 });
 
-test("parses Curyo attachment ids from public upload image URLs", () => {
+test("parses RateLoop attachment ids from public upload image URLs", () => {
   assert.equal(
     parseAttachmentIdFromImageUrl("https://www.curyo.xyz/api/attachments/images/att_abcdefghijklmnop.webp"),
     "att_abcdefghijklmnop",

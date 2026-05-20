@@ -7,7 +7,7 @@ import { worldchain } from "viem/chains";
 import { useAccount, useBalance } from "wagmi";
 import { ArrowsRightLeftIcon, BanknotesIcon, WalletIcon } from "@heroicons/react/24/outline";
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
-import { useCuryoSwitchNetwork } from "~~/hooks/useCuryoSwitchNetwork";
+import { useRateLoopSwitchNetwork } from "~~/hooks/useRateLoopSwitchNetwork";
 import { thirdwebClient } from "~~/services/thirdweb/client";
 
 const WORLD_CHAIN_MAINNET_CHAIN_ID = 480;
@@ -32,7 +32,7 @@ function shortAddress(value: string | undefined) {
 export function WalletSettingsPanel({ address }: { address?: string }) {
   const { chain } = useAccount();
   const { targetNetwork } = useTargetNetwork();
-  const { switchToChain, switchingChainId } = useCuryoSwitchNetwork();
+  const { switchToChain, switchingChainId } = useRateLoopSwitchNetwork();
   const walletAddress = address && isAddress(address) ? (address as `0x${string}`) : undefined;
   const targetIsWorldChain = targetNetwork.id === WORLD_CHAIN_MAINNET_CHAIN_ID;
   const connectedToWorldChain = chain?.id === WORLD_CHAIN_MAINNET_CHAIN_ID;

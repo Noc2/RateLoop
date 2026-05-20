@@ -3,7 +3,7 @@ import test from "node:test";
 import { createHmac } from "node:crypto";
 import {
   buildWebhookVerifier,
-  createCuryoAgentClient,
+  createRateLoopAgentClient,
   parseAgentResult,
   type AskHumansRequest,
   type ListResultTemplatesResponse,
@@ -23,7 +23,7 @@ test("agent MCP helpers call tools/call with protocol and bearer headers", async
   let requestedUrl = "";
   let requestedBody: any;
   let requestedHeaders: Headers | undefined;
-  const agent = createCuryoAgentClient({
+  const agent = createRateLoopAgentClient({
     fetchImpl: async (input: URL | RequestInfo, init?: RequestInit) => {
       requestedUrl = String(input);
       requestedBody = JSON.parse(String(init?.body));
@@ -75,7 +75,7 @@ test("quoteQuestion uses direct authenticated agent HTTP when apiBaseUrl and tok
   let requestedUrl = "";
   let requestedHeaders: Headers | undefined;
   let requestedBody: any;
-  const agent = createCuryoAgentClient({
+  const agent = createRateLoopAgentClient({
     apiBaseUrl: API_BASE_URL,
     fetchImpl: async (input: URL | RequestInfo, init?: RequestInit) => {
       requestedUrl = String(input);
@@ -121,7 +121,7 @@ test("quoteQuestion supports tokenless direct agent HTTP with a wallet address",
   let requestedUrl = "";
   let requestedHeaders: Headers | undefined;
   let requestedBody: any;
-  const agent = createCuryoAgentClient({
+  const agent = createRateLoopAgentClient({
     apiBaseUrl: API_BASE_URL,
     fetchImpl: async (input: URL | RequestInfo, init?: RequestInit) => {
       requestedUrl = String(input);
@@ -163,7 +163,7 @@ test("askHumans supports tokenless direct agent HTTP with a wallet address", asy
   let requestedUrl = "";
   let requestedHeaders: Headers | undefined;
   let requestedBody: any;
-  const agent = createCuryoAgentClient({
+  const agent = createRateLoopAgentClient({
     apiBaseUrl: API_BASE_URL,
     fetchImpl: async (input: URL | RequestInfo, init?: RequestInit) => {
       requestedUrl = String(input);
@@ -206,7 +206,7 @@ test("askHumans supports tokenless direct agent HTTP with a wallet address", asy
 test("signing intent helpers use direct browser-handoff routes", async () => {
   const requestedUrls: string[] = [];
   const requestedBodies: any[] = [];
-  const agent = createCuryoAgentClient({
+  const agent = createRateLoopAgentClient({
     apiBaseUrl: API_BASE_URL,
     fetchImpl: async (input: URL | RequestInfo, init?: RequestInit) => {
       requestedUrls.push(String(input));
@@ -290,7 +290,7 @@ test("askHumans prefers direct authenticated agent HTTP before MCP framing", asy
   let requestedUrl = "";
   let requestedHeaders: Headers | undefined;
   let requestedBody: any;
-  const agent = createCuryoAgentClient({
+  const agent = createRateLoopAgentClient({
     apiBaseUrl: API_BASE_URL,
     fetchImpl: async (input: URL | RequestInfo, init?: RequestInit) => {
       requestedUrl = String(input);
@@ -329,7 +329,7 @@ test("confirmAskTransactions uses direct authenticated agent HTTP", async () => 
   let requestedHeaders: Headers | undefined;
   let requestedBody: any;
   const operationKey = `0x${"77".repeat(32)}`;
-  const agent = createCuryoAgentClient({
+  const agent = createRateLoopAgentClient({
     apiBaseUrl: API_BASE_URL,
     fetchImpl: async (input: URL | RequestInfo, init?: RequestInit) => {
       requestedUrl = String(input);
@@ -358,7 +358,7 @@ test("confirmAskTransactions uses direct authenticated agent HTTP", async () => 
 test("confirmAskTransactions can use MCP framing", async () => {
   let requestedBody: any;
   const operationKey = `0x${"99".repeat(32)}`;
-  const agent = createCuryoAgentClient({
+  const agent = createRateLoopAgentClient({
     mcpApiUrl: "https://curyo.example/api/mcp",
     fetchImpl: async (_input: URL | RequestInfo, init?: RequestInit) => {
       requestedBody = JSON.parse(String(init?.body));
@@ -384,7 +384,7 @@ test("confirmAskTransactions can use MCP framing", async () => {
 
 test("getQuestionStatus supports tokenless direct operation and wallet client lookups", async () => {
   const requestedUrls: string[] = [];
-  const agent = createCuryoAgentClient({
+  const agent = createRateLoopAgentClient({
     apiBaseUrl: API_BASE_URL,
     fetchImpl: async (input: URL | RequestInfo, init?: RequestInit) => {
       requestedUrls.push(String(input));
@@ -418,7 +418,7 @@ test("getQuestionStatus supports tokenless direct operation and wallet client lo
 
 test("authenticated status, result, and templates use direct agent HTTP endpoints", async () => {
   const requestedUrls: string[] = [];
-  const agent = createCuryoAgentClient({
+  const agent = createRateLoopAgentClient({
     apiBaseUrl: API_BASE_URL,
     fetchImpl: async (input: URL | RequestInfo) => {
       requestedUrls.push(String(input));
@@ -496,7 +496,7 @@ test("authenticated status, result, and templates use direct agent HTTP endpoint
 test("getResult uses tokenless public result packages when contentId is known", async () => {
   let requestedUrl = "";
   let requestedHeaders: Headers | undefined;
-  const agent = createCuryoAgentClient({
+  const agent = createRateLoopAgentClient({
     apiBaseUrl: API_BASE_URL,
     fetchImpl: async (input: URL | RequestInfo, init?: RequestInit) => {
       requestedUrl = String(input);
@@ -531,7 +531,7 @@ test("getResult uses tokenless public result packages when contentId is known", 
 test("getResult supports tokenless direct operation lookups", async () => {
   let requestedUrl = "";
   let requestedHeaders: Headers | undefined;
-  const agent = createCuryoAgentClient({
+  const agent = createRateLoopAgentClient({
     apiBaseUrl: API_BASE_URL,
     fetchImpl: async (input: URL | RequestInfo, init?: RequestInit) => {
       requestedUrl = String(input);

@@ -1,4 +1,4 @@
-import { createCuryoAgentClient } from "@rateloop/sdk/agent";
+import { createRateLoopAgentClient } from "@rateloop/sdk/agent";
 import { pathToFileURL } from "node:url";
 
 const apiBaseUrl = process.env.CURYO_API_BASE_URL ?? "https://curyo.example";
@@ -24,7 +24,7 @@ export async function main() {
     throw new Error("Set CURYO_AGENT_WALLET_ADDRESS for wallet-direct asks, or CURYO_MCP_TOKEN for a managed agent.");
   }
 
-  const agent = createCuryoAgentClient({
+  const agent = createRateLoopAgentClient({
     apiBaseUrl,
     mcpAccessToken,
   });

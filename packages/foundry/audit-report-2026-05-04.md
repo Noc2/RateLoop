@@ -29,7 +29,7 @@ This report focuses on **new findings** that were not caught by prior automated 
 After double-checking against the latest commits on the branch, the following issues from the initial audit draft were re-assessed:
 
 ### M-1 → Reclassified as Intentional Behavior (No Fix)
-**`CuryoGovernor.propose()` can revert after passing threshold check**
+**`RateLoopGovernor.propose()` can revert after passing threshold check**
 
 `super.propose()` checks historical voting power (`getVotes(proposer, clock() - 1)`), while the subsequent `lockForGovernance()` checks the proposer’s **current** HREP balance. If a proposer transferred tokens after the snapshot block, the transaction reverts at the lock despite passing the vote threshold.
 
@@ -55,7 +55,7 @@ The `_requireBundleFundingCoversMaxCompleters` function is a secondary defense-i
 ## Informational Findings
 
 ### I-1: Governor Proposal Edge-Case (Intentional)
-**Location:** `contracts/governance/CuryoGovernor.sol:255-274`
+**Location:** `contracts/governance/RateLoopGovernor.sol:255-274`
 
 As described in the M-1 reclassification above, a proposer whose current balance dropped below `proposalThreshold()` after the snapshot block will see their `propose()` revert at `lockForGovernance`. This is expected behavior that preserves the commitment mechanism.
 

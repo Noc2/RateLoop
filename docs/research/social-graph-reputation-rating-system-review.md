@@ -506,7 +506,7 @@ already lays out a hybrid model: Self verification is optional, never
 gates participation, and grants higher caps and a small bounded
 multiplier. The full-rejection path in the main proposal is defensible
 but loses a cheap, high-quality uniqueness signal that does not require
-Curyo to operate the verification. Even a strictly optional, opt-in,
+RateLoop to operate the verification. Even a strictly optional, opt-in,
 capped signal would materially raise the cost of the slow-mature wallet-
 farm attack. Worth re-evaluating before contracts freeze.
 

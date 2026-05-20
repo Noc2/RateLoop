@@ -1,16 +1,16 @@
-export class CuryoSdkError extends Error {
+export class RateLoopSdkError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = "CuryoSdkError";
+    this.name = "RateLoopSdkError";
   }
 }
 
-export class CuryoApiError extends CuryoSdkError {
+export class RateLoopApiError extends RateLoopSdkError {
   readonly status: number;
 
   constructor(message: string, status: number) {
     super(message);
-    this.name = "CuryoApiError";
+    this.name = "RateLoopApiError";
     this.status = status;
   }
 }

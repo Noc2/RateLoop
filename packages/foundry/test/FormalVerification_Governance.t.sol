@@ -7,7 +7,7 @@ import { IVotes } from "@openzeppelin/contracts/governance/utils/IVotes.sol";
 import { IGovernor } from "@openzeppelin/contracts/governance/IGovernor.sol";
 import { Strings } from "@openzeppelin/contracts/utils/Strings.sol";
 import { LoopReputation } from "../contracts/LoopReputation.sol";
-import { CuryoGovernor } from "../contracts/governance/CuryoGovernor.sol";
+import { RateLoopGovernor } from "../contracts/governance/RateLoopGovernor.sol";
 
 /// @title Formal Verification: Governance Parameter Audit
 /// @notice 10 scenarios verifying early capture resistance, quorum scaling,
@@ -15,7 +15,7 @@ import { CuryoGovernor } from "../contracts/governance/CuryoGovernor.sol";
 contract FormalVerification_GovernanceTest is Test {
     LoopReputation token;
     TimelockController timelock;
-    CuryoGovernor governor;
+    RateLoopGovernor governor;
 
     address deployer = address(1);
 
@@ -37,7 +37,7 @@ contract FormalVerification_GovernanceTest is Test {
         address[] memory empty = new address[](0);
         timelock = new TimelockController(2 days, empty, empty, deployer);
 
-        governor = new CuryoGovernor(IVotes(address(token)), timelock);
+        governor = new RateLoopGovernor(IVotes(address(token)), timelock);
         address[] memory holders = new address[](2);
         holders[0] = mockLaunchDistribution;
         holders[1] = mockTreasury;
@@ -62,7 +62,7 @@ contract FormalVerification_GovernanceTest is Test {
     }
 
     /// @dev Binds a description to a proposer using the suffix enforced by
-    ///      CuryoGovernor._isValidDescriptionForProposer (audit N-2: cancel-DoS fix).
+    ///      RateLoopGovernor._isValidDescriptionForProposer (audit N-2: cancel-DoS fix).
     function _boundDescription(string memory description, address proposer) internal pure returns (string memory) {
         return string.concat(description, "#proposer=", Strings.toHexString(uint160(proposer), 20));
     }

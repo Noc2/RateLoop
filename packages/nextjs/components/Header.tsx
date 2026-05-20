@@ -15,8 +15,8 @@ import {
   PlusCircleIcon,
   XMarkIcon,
 } from "@heroicons/react/24/outline";
-import { CuryoLogo } from "~~/components/CuryoLogo";
-import { CuryoConnectButton } from "~~/components/scaffold-eth";
+import { RateLoopLogo } from "~~/components/RateLoopLogo";
+import { RateLoopConnectButton } from "~~/components/scaffold-eth";
 import { AddressInfoDropdown } from "~~/components/scaffold-eth/ConnectButton/AddressInfoDropdown";
 import { DOCS_NAV } from "~~/constants/docsNav";
 import { ASK_ROUTE, RATE_ROUTE } from "~~/constants/routes";
@@ -200,7 +200,7 @@ const HeaderBrand = ({
   compact?: boolean;
 }) => (
   <Link href={EXPLICIT_LANDING_HREF} className={`flex min-w-0 items-center gap-2 ${className ?? ""}`}>
-    <CuryoLogo className={compact ? "h-8 w-8 shrink-0" : "h-9 w-9 shrink-0"} idPrefix={brandIdPrefix} />
+    <RateLoopLogo className={compact ? "h-8 w-8 shrink-0" : "h-9 w-9 shrink-0"} idPrefix={brandIdPrefix} />
     <div className={`flex min-w-0 flex-col gap-0.5 ${compact ? "" : "items-start"}`}>
       <span
         className={`font-display whitespace-nowrap leading-none tracking-normal text-base-content ${
@@ -821,7 +821,7 @@ export const Header = () => {
                   <Suspense>
                     <HeaderSearchBar />
                   </Suspense>
-                  <CuryoConnectButton compact />
+                  <RateLoopConnectButton compact />
                 </div>
               </>
             )}
@@ -860,7 +860,7 @@ export const Header = () => {
           className={`mt-auto flex w-full shrink-0 flex-col items-stretch gap-2 border-t px-2.5 pt-4 ${headerChromeBorderClassName}`}
         >
           <div className="w-full flex justify-stretch">
-            <CuryoConnectButton inlineMenu />
+            <RateLoopConnectButton inlineMenu />
           </div>
         </div>
       </aside>

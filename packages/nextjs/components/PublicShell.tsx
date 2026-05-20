@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { CuryoLogo } from "~~/components/CuryoLogo";
 import { FooterLinks } from "~~/components/FooterLinks";
+import { RateLoopLogo } from "~~/components/RateLoopLogo";
 import { ReferralAttributionCapture } from "~~/components/referrals/ReferralAttributionCapture";
 import { ASK_ROUTE, GOVERNANCE_ROUTE, RATE_ROUTE } from "~~/constants/routes";
 import { HUMAN_SIGN_IN_FAUCET_ROUTE, HUMAN_SIGN_IN_LABEL } from "~~/lib/home/humanSignInRoute";
@@ -18,7 +18,7 @@ function PublicHeader() {
     <header className="sticky top-0 z-20 border-b border-white/10 bg-black/95 px-4 py-3 backdrop-blur-xl sm:px-6">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
         <Link href="/?landing=1" className="flex min-w-0 items-center gap-2">
-          <CuryoLogo className="h-9 w-9 shrink-0" idPrefix="rateloop-public-header-logo" />
+          <RateLoopLogo className="h-9 w-9 shrink-0" idPrefix="rateloop-public-header-logo" />
           <div className="flex min-w-0 flex-col gap-0.5">
             <span className="font-display whitespace-nowrap text-[1.2rem] leading-none tracking-normal text-base-content">
               RateLoop

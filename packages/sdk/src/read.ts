@@ -1,11 +1,11 @@
-import { CuryoApiError, CuryoSdkError } from "./errors";
-import type { CuryoClientConfig } from "./types";
+import { RateLoopApiError, RateLoopSdkError } from "./errors";
+import type { RateLoopClientConfig } from "./types";
 
 type QueryScalar = string | number | boolean | bigint;
 type QueryValue = QueryScalar | readonly QueryScalar[] | undefined;
 type JsonRecord = Record<string, unknown>;
 
-export interface CuryoOpenRoundSummary {
+export interface RateLoopOpenRoundSummary {
   roundId: string;
   voteCount: number;
   revealedCount: number;
@@ -26,7 +26,7 @@ export interface CuryoOpenRoundSummary {
   [key: string]: unknown;
 }
 
-export interface CuryoContentItem {
+export interface RateLoopContentItem {
   id: string;
   submitter: `0x${string}`;
   contentHash: string;
@@ -47,11 +47,11 @@ export interface CuryoContentItem {
   lastActivityAt: string;
   totalVotes: number;
   totalRounds: number;
-  openRound: CuryoOpenRoundSummary | null;
+  openRound: RateLoopOpenRoundSummary | null;
   [key: string]: unknown;
 }
 
-export interface CuryoProfileSubmissionItem {
+export interface RateLoopProfileSubmissionItem {
   id: string;
   submitter: `0x${string}`;
   url: string;
@@ -73,7 +73,7 @@ export interface CuryoProfileSubmissionItem {
   [key: string]: unknown;
 }
 
-export interface CuryoRoundItem {
+export interface RateLoopRoundItem {
   id: string;
   contentId: string;
   roundId: string;
@@ -104,7 +104,7 @@ export interface CuryoRoundItem {
   [key: string]: unknown;
 }
 
-export interface CuryoVoteItem {
+export interface RateLoopVoteItem {
   id: string;
   contentId: string;
   roundId: string;
@@ -134,7 +134,7 @@ export interface CuryoVoteItem {
   [key: string]: unknown;
 }
 
-export interface CuryoFrontendItem {
+export interface RateLoopFrontendItem {
   address: `0x${string}`;
   operator: `0x${string}`;
   stakedAmount: string;
@@ -147,7 +147,7 @@ export interface CuryoFrontendItem {
   [key: string]: unknown;
 }
 
-export interface CuryoCategoryItem {
+export interface RateLoopCategoryItem {
   id: string;
   name: string;
   slug: string;
@@ -157,21 +157,21 @@ export interface CuryoCategoryItem {
   [key: string]: unknown;
 }
 
-export interface CuryoSelfReportedAudienceBucket {
+export interface RateLoopSelfReportedAudienceBucket {
   down: number;
   total: number;
   up: number;
   value: string;
 }
 
-export interface CuryoSelfReportedAudienceContext {
+export interface RateLoopSelfReportedAudienceContext {
   fields: {
-    ageGroup: CuryoSelfReportedAudienceBucket[];
-    expertise: CuryoSelfReportedAudienceBucket[];
-    languages: CuryoSelfReportedAudienceBucket[];
-    nationalities: CuryoSelfReportedAudienceBucket[];
-    residenceCountry: CuryoSelfReportedAudienceBucket[];
-    roles: CuryoSelfReportedAudienceBucket[];
+    ageGroup: RateLoopSelfReportedAudienceBucket[];
+    expertise: RateLoopSelfReportedAudienceBucket[];
+    languages: RateLoopSelfReportedAudienceBucket[];
+    nationalities: RateLoopSelfReportedAudienceBucket[];
+    residenceCountry: RateLoopSelfReportedAudienceBucket[];
+    roles: RateLoopSelfReportedAudienceBucket[];
   };
   missingSelfReportCount: number;
   note: string;
@@ -182,7 +182,7 @@ export interface CuryoSelfReportedAudienceContext {
   verified: false;
 }
 
-export interface CuryoProfileItem {
+export interface RateLoopProfileItem {
   address: `0x${string}`;
   name?: string | null;
   selfReport?: string | null;
@@ -197,12 +197,12 @@ export interface CuryoProfileItem {
   [key: string]: unknown;
 }
 
-export interface CuryoProfileSocialCounts {
+export interface RateLoopProfileSocialCounts {
   followerCount: number;
   followingCount: number;
 }
 
-export interface CuryoGlobalStats {
+export interface RateLoopGlobalStats {
   totalContent?: number;
   totalVotes?: number;
   totalRoundsSettled?: number;
@@ -216,25 +216,25 @@ export interface CuryoGlobalStats {
   [key: string]: unknown;
 }
 
-export type CuryoRaterTypeName = "Unknown" | "Human" | "AI" | "Team" | "Hybrid";
-export type CuryoHumanCredentialStatus =
+export type RateLoopRaterTypeName = "Unknown" | "Human" | "AI" | "Team" | "Hybrid";
+export type RateLoopHumanCredentialStatus =
   | "missing"
   | "verified"
   | "expired"
   | "revoked";
-export type CuryoParticipationLane = "verified_human" | "open";
+export type RateLoopParticipationLane = "verified_human" | "open";
 
-export interface CuryoAccuracyLeaderboardReputation {
+export interface RateLoopAccuracyLeaderboardReputation {
   raterType: number;
-  raterTypeName: CuryoRaterTypeName;
-  humanCredentialStatus: CuryoHumanCredentialStatus;
-  participationLane: CuryoParticipationLane;
+  raterTypeName: RateLoopRaterTypeName;
+  humanCredentialStatus: RateLoopHumanCredentialStatus;
+  participationLane: RateLoopParticipationLane;
   followerCount: number;
   followingCount: number;
   [key: string]: unknown;
 }
 
-export interface CuryoAccuracyLeaderboardItem {
+export interface RateLoopAccuracyLeaderboardItem {
   voter: `0x${string}`;
   totalSettledVotes: number;
   totalWins: number;
@@ -247,27 +247,27 @@ export interface CuryoAccuracyLeaderboardItem {
   currentStreak?: number;
   bestWinStreak?: number;
   profileName: string | null;
-  reputation?: CuryoAccuracyLeaderboardReputation;
+  reputation?: RateLoopAccuracyLeaderboardReputation;
   winRate: number;
   [key: string]: unknown;
 }
 
-export type CuryoAccuracyLeaderboardWindow =
+export type RateLoopAccuracyLeaderboardWindow =
   | "all"
   | "7d"
   | "30d"
   | "365d"
   | "season";
 
-export interface CuryoAccuracyLeaderboardResponse {
-  items: CuryoAccuracyLeaderboardItem[];
+export interface RateLoopAccuracyLeaderboardResponse {
+  items: RateLoopAccuracyLeaderboardItem[];
   categoryId?: string;
-  window: CuryoAccuracyLeaderboardWindow;
+  window: RateLoopAccuracyLeaderboardWindow;
   startsAt: string | null;
   endsAt: string | null;
 }
 
-export interface CuryoRaterParticipationStatusResponse {
+export interface RateLoopRaterParticipationStatusResponse {
   asOf: {
     chainTimestamp: string;
     wallTimestamp: string;
@@ -275,12 +275,12 @@ export interface CuryoRaterParticipationStatusResponse {
   };
   rater: `0x${string}`;
   raterType: number;
-  raterTypeName: CuryoRaterTypeName;
-  participationLane: CuryoParticipationLane;
+  raterTypeName: RateLoopRaterTypeName;
+  participationLane: RateLoopParticipationLane;
   humanCredential: {
     verified: boolean;
     revoked: boolean;
-    status: CuryoHumanCredentialStatus;
+    status: RateLoopHumanCredentialStatus;
     verifiedAt: string | null;
     expiresAt: string | null;
     evidenceHash: string | null;
@@ -314,7 +314,7 @@ export interface CuryoRaterParticipationStatusResponse {
   [key: string]: unknown;
 }
 
-export interface CuryoPaginatedResponse<T> {
+export interface RateLoopPaginatedResponse<T> {
   items: T[];
   total?: number | null;
   settledTotal?: number;
@@ -323,35 +323,35 @@ export interface CuryoPaginatedResponse<T> {
   hasMore?: boolean;
 }
 
-export interface CuryoContentDetailsResponse {
-  audienceContext: CuryoSelfReportedAudienceContext;
-  content: CuryoContentItem;
-  rounds: CuryoRoundItem[];
+export interface RateLoopContentDetailsResponse {
+  audienceContext: RateLoopSelfReportedAudienceContext;
+  content: RateLoopContentItem;
+  rounds: RateLoopRoundItem[];
   ratings: JsonRecord[];
   matchCount?: number;
 }
 
-export interface CuryoProfileResponse {
-  profile: CuryoProfileItem | null;
+export interface RateLoopProfileResponse {
+  profile: RateLoopProfileItem | null;
   summary: {
     totalVotes: number;
     totalContent: number;
     totalRewardsClaimed: string | number;
   };
-  social: CuryoProfileSocialCounts;
-  recentVotes: CuryoVoteItem[];
+  social: RateLoopProfileSocialCounts;
+  recentVotes: RateLoopVoteItem[];
   recentRewards: JsonRecord[];
-  recentSubmissions: CuryoProfileSubmissionItem[];
+  recentSubmissions: RateLoopProfileSubmissionItem[];
 }
 
-export interface CuryoFollowItem {
+export interface RateLoopFollowItem {
   walletAddress: `0x${string}`;
   createdAt: string;
   [key: string]: unknown;
 }
 
-export interface CuryoFollowResponse extends CuryoProfileSocialCounts {
-  items: CuryoFollowItem[];
+export interface RateLoopFollowResponse extends RateLoopProfileSocialCounts {
+  items: RateLoopFollowItem[];
   count: number;
   limit: number;
   offset: number;
@@ -418,7 +418,7 @@ export interface GetFollowsParams {
 export interface GetAccuracyLeaderboardParams {
   categoryId?: string;
   sortBy?: string;
-  window?: CuryoAccuracyLeaderboardWindow;
+  window?: RateLoopAccuracyLeaderboardWindow;
   minVotes?: number;
   minSignalVotes?: number;
   includeReputation?: boolean;
@@ -426,73 +426,73 @@ export interface GetAccuracyLeaderboardParams {
   offset?: number;
 }
 
-export interface CuryoReadClient {
+export interface RateLoopReadClient {
   searchContent(
     params?: SearchContentParams,
-  ): Promise<CuryoPaginatedResponse<CuryoContentItem>>;
-  getContent(contentId: string | bigint): Promise<CuryoContentDetailsResponse>;
-  getContentByUrl(url: string): Promise<CuryoContentDetailsResponse>;
+  ): Promise<RateLoopPaginatedResponse<RateLoopContentItem>>;
+  getContent(contentId: string | bigint): Promise<RateLoopContentDetailsResponse>;
+  getContentByUrl(url: string): Promise<RateLoopContentDetailsResponse>;
   getCategories(
     params?: ListCategoriesParams,
-  ): Promise<{ items: CuryoCategoryItem[] }>;
-  getProfile(address: string): Promise<CuryoProfileResponse>;
-  getProfiles(addresses: string[]): Promise<Record<string, CuryoProfileItem>>;
+  ): Promise<{ items: RateLoopCategoryItem[] }>;
+  getProfile(address: string): Promise<RateLoopProfileResponse>;
+  getProfiles(addresses: string[]): Promise<Record<string, RateLoopProfileItem>>;
   getFollows(
     address: string,
     params?: GetFollowsParams,
-  ): Promise<CuryoFollowResponse>;
+  ): Promise<RateLoopFollowResponse>;
   getFollowers(
     address: string,
     params?: GetFollowsParams,
-  ): Promise<CuryoFollowResponse>;
+  ): Promise<RateLoopFollowResponse>;
   getAccuracyLeaderboard(
     params?: GetAccuracyLeaderboardParams,
-  ): Promise<CuryoAccuracyLeaderboardResponse>;
+  ): Promise<RateLoopAccuracyLeaderboardResponse>;
   getVoterAccuracy(address: string): Promise<JsonRecord>;
   getRaterParticipationStatus(
     address: string,
-  ): Promise<CuryoRaterParticipationStatusResponse>;
-  getStats(): Promise<CuryoGlobalStats>;
+  ): Promise<RateLoopRaterParticipationStatusResponse>;
+  getStats(): Promise<RateLoopGlobalStats>;
   searchVotes(
     params?: SearchVotesParams,
-  ): Promise<CuryoPaginatedResponse<CuryoVoteItem>>;
+  ): Promise<RateLoopPaginatedResponse<RateLoopVoteItem>>;
   searchRounds(
     params?: SearchRoundsParams,
-  ): Promise<CuryoPaginatedResponse<CuryoRoundItem>>;
+  ): Promise<RateLoopPaginatedResponse<RateLoopRoundItem>>;
   listFrontends(
     params?: ListFrontendsParams,
-  ): Promise<{ items: CuryoFrontendItem[] }>;
-  getFrontend(address: string): Promise<{ frontend: CuryoFrontendItem }>;
+  ): Promise<{ items: RateLoopFrontendItem[] }>;
+  getFrontend(address: string): Promise<{ frontend: RateLoopFrontendItem }>;
 }
 
-export function createCuryoReadClient(
-  config: Pick<CuryoClientConfig, "apiBaseUrl" | "fetchImpl" | "timeoutMs">,
-): CuryoReadClient {
+export function createRateLoopReadClient(
+  config: Pick<RateLoopClientConfig, "apiBaseUrl" | "fetchImpl" | "timeoutMs">,
+): RateLoopReadClient {
   return {
     searchContent: (params) =>
-      request<CuryoPaginatedResponse<CuryoContentItem>>(
+      request<RateLoopPaginatedResponse<RateLoopContentItem>>(
         config,
         "/content",
         params,
       ),
     getContent: (contentId) =>
-      request<CuryoContentDetailsResponse>(config, `/content/${contentId}`),
+      request<RateLoopContentDetailsResponse>(config, `/content/${contentId}`),
     getContentByUrl: (url) =>
-      request<CuryoContentDetailsResponse>(config, "/content/by-url", { url }),
+      request<RateLoopContentDetailsResponse>(config, "/content/by-url", { url }),
     getCategories: (params) =>
-      request<{ items: CuryoCategoryItem[] }>(config, "/categories", params),
+      request<{ items: RateLoopCategoryItem[] }>(config, "/categories", params),
     getProfile: (address) =>
-      request<CuryoProfileResponse>(config, `/profile/${address}`),
+      request<RateLoopProfileResponse>(config, `/profile/${address}`),
     getProfiles: (addresses) =>
-      request<Record<string, CuryoProfileItem>>(config, "/profiles", {
+      request<Record<string, RateLoopProfileItem>>(config, "/profiles", {
         addresses: addresses.join(","),
       }),
     getFollows: (address, params) =>
-      request<CuryoFollowResponse>(config, `/follows/${address}`, params),
+      request<RateLoopFollowResponse>(config, `/follows/${address}`, params),
     getFollowers: (address, params) =>
-      request<CuryoFollowResponse>(config, `/followers/${address}`, params),
+      request<RateLoopFollowResponse>(config, `/followers/${address}`, params),
     getAccuracyLeaderboard: (params) =>
-      request<CuryoAccuracyLeaderboardResponse>(
+      request<RateLoopAccuracyLeaderboardResponse>(
         config,
         "/accuracy-leaderboard",
         params,
@@ -500,34 +500,34 @@ export function createCuryoReadClient(
     getVoterAccuracy: (address) =>
       request<JsonRecord>(config, `/voter-accuracy/${address}`),
     getRaterParticipationStatus: (address) =>
-      request<CuryoRaterParticipationStatusResponse>(
+      request<RateLoopRaterParticipationStatusResponse>(
         config,
         `/rater-participation-status/${address}`,
       ),
-    getStats: () => request<CuryoGlobalStats>(config, "/stats"),
+    getStats: () => request<RateLoopGlobalStats>(config, "/stats"),
     searchVotes: (params) =>
-      request<CuryoPaginatedResponse<CuryoVoteItem>>(config, "/votes", params),
+      request<RateLoopPaginatedResponse<RateLoopVoteItem>>(config, "/votes", params),
     searchRounds: (params) =>
-      request<CuryoPaginatedResponse<CuryoRoundItem>>(
+      request<RateLoopPaginatedResponse<RateLoopRoundItem>>(
         config,
         "/rounds",
         params,
       ),
     listFrontends: (params) =>
-      request<{ items: CuryoFrontendItem[] }>(config, "/frontends", params),
+      request<{ items: RateLoopFrontendItem[] }>(config, "/frontends", params),
     getFrontend: (address) =>
-      request<{ frontend: CuryoFrontendItem }>(config, `/frontend/${address}`),
+      request<{ frontend: RateLoopFrontendItem }>(config, `/frontend/${address}`),
   };
 }
 
 async function request<T>(
-  config: Pick<CuryoClientConfig, "apiBaseUrl" | "fetchImpl" | "timeoutMs">,
+  config: Pick<RateLoopClientConfig, "apiBaseUrl" | "fetchImpl" | "timeoutMs">,
   path: string,
   params?: object,
 ): Promise<T> {
   const baseUrl = config.apiBaseUrl;
   if (!baseUrl) {
-    throw new CuryoSdkError("apiBaseUrl is required for read operations");
+    throw new RateLoopSdkError("apiBaseUrl is required for read operations");
   }
 
   const url = new URL(path, `${baseUrl}/`);
@@ -554,15 +554,15 @@ async function request<T>(
     });
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
-      throw new CuryoApiError(
-        `Curyo request timed out after ${config.timeoutMs}ms`,
+      throw new RateLoopApiError(
+        `RateLoop request timed out after ${config.timeoutMs}ms`,
         504,
       );
     }
 
     const message =
       error instanceof Error ? error.message : "Unknown fetch error";
-    throw new CuryoApiError(`Curyo request failed: ${message}`, 502);
+    throw new RateLoopApiError(`RateLoop request failed: ${message}`, 502);
   } finally {
     clearTimeout(timeoutHandle);
   }
@@ -574,8 +574,8 @@ async function request<T>(
     const message =
       isJsonRecord(parsed) && typeof parsed.error === "string"
         ? parsed.error
-        : `Curyo request failed with status ${response.status}`;
-    throw new CuryoApiError(message, response.status);
+        : `RateLoop request failed with status ${response.status}`;
+    throw new RateLoopApiError(message, response.status);
   }
 
   return parsed as T;
@@ -594,7 +594,7 @@ function parseJson(body: string): unknown {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unknown parse error";
-    throw new CuryoApiError(`Curyo returned invalid JSON: ${message}`, 502);
+    throw new RateLoopApiError(`RateLoop returned invalid JSON: ${message}`, 502);
   }
 }
 

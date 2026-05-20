@@ -1,7 +1,7 @@
 import { useAccount } from "wagmi";
 import { ArrowsRightLeftIcon } from "@heroicons/react/24/solid";
 import { getNetworkColor } from "~~/hooks/scaffold-eth";
-import { useCuryoSwitchNetwork } from "~~/hooks/useCuryoSwitchNetwork";
+import { useRateLoopSwitchNetwork } from "~~/hooks/useRateLoopSwitchNetwork";
 import { getTargetNetworks } from "~~/utils/scaffold-eth";
 
 const allowedNetworks = getTargetNetworks();
@@ -12,7 +12,7 @@ type NetworkOptionsProps = {
 
 export const NetworkOptions = ({ hidden = false }: NetworkOptionsProps) => {
   const { chain } = useAccount();
-  const { switchToChain, switchingChainId } = useCuryoSwitchNetwork();
+  const { switchToChain, switchingChainId } = useRateLoopSwitchNetwork();
 
   return (
     <>

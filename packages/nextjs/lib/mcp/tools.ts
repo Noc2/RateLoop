@@ -158,7 +158,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       openWorldHint: true,
       readOnlyHint: true,
     },
-    description: "List Curyo categories that paid asks can target.",
+    description: "List RateLoop categories that paid asks can target.",
     inputSchema: {
       additionalProperties: false,
       properties: {},
@@ -166,7 +166,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     },
     name: "curyo_list_categories",
     requiredScope: MCP_SCOPES.read,
-    title: "List Curyo Categories",
+    title: "List RateLoop Categories",
   },
   {
     annotations: {
@@ -174,7 +174,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       openWorldHint: false,
       readOnlyHint: true,
     },
-    description: "List off-chain result interpretation templates used by Curyo agent asks.",
+    description: "List off-chain result interpretation templates used by RateLoop agent asks.",
     inputSchema: {
       additionalProperties: false,
       properties: {},
@@ -220,7 +220,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       openWorldHint: true,
       readOnlyHint: false,
     },
-    description: "Confirm wallet-executed Curyo ask transactions and attach the submitted content ids to the ask.",
+    description: "Confirm wallet-executed RateLoop ask transactions and attach the submitted content ids to the ask.",
     inputSchema: agentConfirmAskTransactionsInputSchema,
     name: "curyo_confirm_ask_transactions",
     outputSchema: agentQuestionStatusOutputSchema,
@@ -252,8 +252,8 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       properties: {
         chainId: { description: "Chain id used with clientRequestId lookup.", type: "integer" },
         clientRequestId: { description: "Client idempotency key returned by curyo_ask_humans.", type: "string" },
-        contentId: { description: "Curyo content id.", type: "string" },
-        operationKey: { description: "Curyo operation key returned by quote or ask.", type: "string" },
+        contentId: { description: "RateLoop content id.", type: "string" },
+        operationKey: { description: "RateLoop operation key returned by quote or ask.", type: "string" },
         walletAddress: {
           description:
             "Required for public wallet-mode lookup by chainId and clientRequestId. Not needed when operationKey is provided.",
@@ -652,7 +652,7 @@ async function quotePublicQuestion(args: JsonObject) {
     wallet: {
       address: walletAddress,
       fundingMode: "permissionless_wallet",
-      note: "The wallet signer controls whether to execute the returned plan; Curyo does not enforce a managed policy.",
+      note: "The wallet signer controls whether to execute the returned plan; RateLoop does not enforce a managed policy.",
     },
   };
 }
@@ -740,7 +740,7 @@ function buildPendingQuestionResultPackage(params: { failed: boolean; operation:
       sourceUrlCount: 0,
     },
     liveAskGuidance: null,
-    limitations: ["The question has not reached a public Curyo result page yet."],
+    limitations: ["The question has not reached a public RateLoop result page yet."],
     majorObjections: [],
     methodology: {
       ratingSystem: template.ratingSystem,
@@ -763,7 +763,7 @@ function buildPendingQuestionResultPackage(params: { failed: boolean; operation:
     },
     recommendedNextAction: params.failed ? "manual_review" : "wait_for_settlement",
     rationaleSummary: params.failed
-      ? "The submission failed before a public Curyo result was available."
+      ? "The submission failed before a public RateLoop result was available."
       : "The human result is not ready yet.",
     sourceUrls: [],
     stakeMass: {
@@ -889,7 +889,7 @@ async function buildPublicQuestionResult(args: JsonObject) {
   );
 }
 
-export async function callPublicCuryoMcpTool(params: { arguments: unknown; name: string }): Promise<unknown> {
+export async function callPublicRateLoopMcpTool(params: { arguments: unknown; name: string }): Promise<unknown> {
   if (!PUBLIC_MCP_TOOL_NAMES.has(params.name)) {
     throw new McpToolError(`Tool requires managed MCP authentication: ${params.name}`, 401);
   }
@@ -1030,7 +1030,7 @@ export async function callPublicCuryoMcpTool(params: { arguments: unknown; name:
   }
 }
 
-export async function callCuryoMcpTool(params: {
+export async function callRateLoopMcpTool(params: {
   agent: McpAgentAuth;
   arguments: unknown;
   name: string;

@@ -5,7 +5,7 @@ import {
   signX402AuthorizationRequest,
   withLocalSignerWallet,
 } from "../localSigner.js";
-import type { AskHumansRequest, AskHumansResponse, CuryoAgentClient } from "@rateloop/sdk/agent";
+import type { AskHumansRequest, AskHumansResponse, RateLoopAgentClient } from "@rateloop/sdk/agent";
 
 const PRIVATE_KEY = "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d" as const;
 const account = privateKeyToAccount(PRIVATE_KEY);
@@ -113,7 +113,7 @@ describe("local signer", () => {
       confirmAskTransactions: async () => {
         throw new Error("confirmAskTransactions should not run without transaction hashes.");
       },
-    } satisfies Pick<CuryoAgentClient, "askHumans" | "confirmAskTransactions">;
+    } satisfies Pick<RateLoopAgentClient, "askHumans" | "confirmAskTransactions">;
 
     const result = await askHumansWithLocalSigner({
       account,
@@ -147,7 +147,7 @@ describe("local signer", () => {
       confirmAskTransactions: async () => {
         throw new Error("confirmAskTransactions should not run for a chain mismatch.");
       },
-    } satisfies Pick<CuryoAgentClient, "askHumans" | "confirmAskTransactions">;
+    } satisfies Pick<RateLoopAgentClient, "askHumans" | "confirmAskTransactions">;
 
     await expect(
       askHumansWithLocalSigner({

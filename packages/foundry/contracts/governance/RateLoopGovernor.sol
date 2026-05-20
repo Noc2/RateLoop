@@ -17,7 +17,7 @@ interface IGovernanceLockableVotes is IVotes {
     function lockForGovernance(address account, uint256 amount) external;
 }
 
-/// @title CuryoGovernor
+/// @title RateLoopGovernor
 /// @notice On-chain governance for the RateLoop protocol using LREP voting power.
 /// @dev Implements OpenZeppelin Governor with:
 ///      - Simple counting (For/Against/Abstain)
@@ -26,7 +26,7 @@ interface IGovernanceLockableVotes is IVotes {
 ///      - Bootstrap quorum floor of 100K LREP to prevent early capture while circulation is thin
 ///      - Timelock execution for security
 ///      - 7-day token lock when voting or proposing
-contract CuryoGovernor is
+contract RateLoopGovernor is
     Governor,
     GovernorSettings,
     GovernorCountingSimple,
@@ -85,7 +85,7 @@ contract CuryoGovernor is
     /// @param _reputationToken The LREP voting token address
     /// @param _timelock The timelock controller address
     constructor(IVotes _reputationToken, TimelockController _timelock)
-        Governor("CuryoGovernor")
+        Governor("RateLoopGovernor")
         GovernorSettings(
             86_400, // Voting delay: ~1 day on World Chain blocks
             604_800, // Voting period: ~1 week on World Chain blocks

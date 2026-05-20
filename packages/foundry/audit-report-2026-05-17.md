@@ -1,4 +1,4 @@
-# Curyo / RateLoop Smart Contract Security Audit — 2026-05-17
+# RateLoop / RateLoop Smart Contract Security Audit — 2026-05-17
 
 > Status note, 2026-05-18: this is a point-in-time engineering audit artifact. The Medium findings
 > called out below have follow-up remediation code and tests in later commits; check the current
@@ -232,6 +232,6 @@ All paths relative to `packages/foundry/contracts/`:
 
 **Voting:** `RoundVotingEngine.sol`, `AdvisoryVoteRecorder.sol`, `libraries/RoundLib.sol`, `libraries/VotePreflightLib.sol`, `libraries/TlockVoteLib.sol`, `libraries/RoundRevealLib.sol`, `libraries/RoundCleanupLib.sol`, `libraries/RatingLib.sol`, `libraries/RatingMath.sol`, `libraries/RobustBtsMath.sol`.
 
-**Identity / Governance:** `governance/CuryoGovernor.sol`, `LoopReputation.sol`, `RaterRegistry.sol`, `ProfileRegistry.sol`, `FrontendRegistry.sol`, `ContentRegistry.sol`, `CategoryRegistry.sol`, `ProtocolConfig.sol`, plus interfaces.
+**Identity / Governance:** `governance/RateLoopGovernor.sol`, `LoopReputation.sol`, `RaterRegistry.sol`, `ProfileRegistry.sol`, `FrontendRegistry.sol`, `ContentRegistry.sol`, `CategoryRegistry.sol`, `ProtocolConfig.sol`, plus interfaces.
 
 **Integrations:** `X402QuestionSubmitter.sol`, `ClusterPayoutOracle.sol`, `SubmissionMediaValidator.sol`, plus interfaces.

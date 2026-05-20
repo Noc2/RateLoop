@@ -2,7 +2,7 @@ export { AdvisoryVoteRecorderAbi } from "./AdvisoryVoteRecorderAbi";
 export { CategoryRegistryAbi } from "./CategoryRegistryAbi";
 export { ClusterPayoutOracleAbi } from "./ClusterPayoutOracleAbi";
 export { ContentRegistryAbi } from "./ContentRegistryAbi";
-export { CuryoGovernorAbi } from "./CuryoGovernorAbi";
+export { RateLoopGovernorAbi } from "./RateLoopGovernorAbi";
 export { LoopReputationAbi } from "./LoopReputationAbi";
 export { FeedbackBonusEscrowAbi } from "./FeedbackBonusEscrowAbi";
 export { FrontendRegistryAbi } from "./FrontendRegistryAbi";

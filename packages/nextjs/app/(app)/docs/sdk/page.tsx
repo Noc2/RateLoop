@@ -47,19 +47,19 @@ const SdkPage: NextPage = () => {
         if you want to inspect the current implementation or track new helpers as they land.
       </p>
       <p>
-        The exported TypeScript helpers currently retain the <code>Curyo</code> namespace for compatibility while the
+        The exported TypeScript helpers currently retain the <code>RateLoop</code> namespace for compatibility while the
         package, docs, and public protocol are RateLoop.
       </p>
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
         <code>{`import { packVoteRoundContext } from "@rateloop/contracts";
-import { createCuryoClient } from "@rateloop/sdk";
+import { createRateLoopClient } from "@rateloop/sdk";
 import { buildCommitVoteParams } from "@rateloop/sdk/vote";`}</code>
       </pre>
 
       <h2>Quickstart</h2>
       <p>Create a client once, then use its hosted read surface wherever your app needs indexed protocol data.</p>
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
-        <code>{`const curyo = createCuryoClient({
+        <code>{`const curyo = createRateLoopClient({
   apiBaseUrl: "https://api.rateloop.xyz",
   frontendCode: "0x1234567890123456789012345678901234567890",
 });

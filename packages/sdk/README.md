@@ -11,18 +11,18 @@ Framework-agnostic frontend SDK foundations for integrating RateLoop into existi
 
 ## Planned Surface
 
-- `createCuryoClient(...)` for shared configuration
+- `createRateLoopClient(...)` for shared configuration
 - typed read helpers for indexed/hosted data
 - rating vote/frontend helpers for building transaction parameters, including the redeployed tlock metadata bindings
 - small, wallet-agnostic write helpers
 
-The exported helper names currently retain the Curyo namespace for compatibility while the package, docs, and public protocol are RateLoop.
+The exported helper names use the RateLoop namespace.
 
 Framework-specific hooks and UI components should live in a follow-up package rather than this core SDK.
 
 ## Available Today
 
-- client config normalization via `createCuryoClient(...)`
+- client config normalization via `createRateLoopClient(...)`
 - typed read client for hosted/indexed HTTP routes
 - `read.getRaterParticipationStatus(address)` for participation lane, human credential state, active/full launch cap progress, and the explicit reward policy flags
 - vote/frontend helpers in `@rateloop/sdk/vote`
@@ -32,10 +32,10 @@ Framework-specific hooks and UI components should live in a follow-up package ra
 
 ```ts
 import { packVoteRoundContext } from "@rateloop/contracts";
-import { createCuryoClient } from "@rateloop/sdk";
+import { createRateLoopClient } from "@rateloop/sdk";
 import { buildCommitVoteParams } from "@rateloop/sdk/vote";
 
-const curyo = createCuryoClient({
+const curyo = createRateLoopClient({
   apiBaseUrl: "https://api.rateloop.xyz",
   frontendCode: "0x1234567890123456789012345678901234567890",
 });
@@ -76,11 +76,11 @@ The SDK stays wallet-agnostic on purpose. Host apps approve `stakeWei` of LREP t
 
 ```ts
 import {
-  createCuryoAgentClient,
+  createRateLoopAgentClient,
   buildWebhookVerifier,
 } from "@rateloop/sdk/agent";
 
-const agent = createCuryoAgentClient({
+const agent = createRateLoopAgentClient({
   apiBaseUrl: "https://curyo.example",
   // Optional. Add only when using a saved managed policy.
   mcpAccessToken: process.env.CURYO_MCP_TOKEN,

@@ -1,4 +1,4 @@
-# Curyo / RateLoop Smart Contract Security Audit — 2026-05-16
+# RateLoop / RateLoop Smart Contract Security Audit — 2026-05-16
 
 **Scope:** ~17.2k lines of Solidity across 56 production files in `packages/foundry/contracts/`
 **Method:** 4 parallel domain-focused review agents (funds-flow, voting/game-theory, identity/governance, integrations/oracles)
@@ -86,7 +86,7 @@ Combines well with the M-Vote-1 fix: mixing `block.prevrandao` of the last commi
 
 ### M-Identity-2 — Governor `excludedHolders` permanently saturates at 16
 
-**File:** `governance/CuryoGovernor.sol:58, 115-126`
+**File:** `governance/RateLoopGovernor.sol:58, 115-126`
 
 `replaceExcludedHolder` only appends. With ~5–8 initial entries (participation, launch, treasury, governor pools), only ~8–11 lifetime rotations remain. Once exhausted, future protocol-pool migrations cannot be quorum-excluded — circulating supply inflates and quorum becomes unmeetable.
 
@@ -223,6 +223,6 @@ All paths relative to `packages/foundry/contracts/`:
 
 **Voting:** `RoundVotingEngine.sol`, `AdvisoryVoteRecorder.sol`, `libraries/RoundLib.sol`, `libraries/VotePreflightLib.sol`, `libraries/TlockVoteLib.sol`, `libraries/RoundRevealLib.sol`, `libraries/RoundCleanupLib.sol`, `libraries/RatingLib.sol`, `libraries/RatingMath.sol`, `libraries/RobustBtsMath.sol`.
 
-**Identity / Governance:** `governance/CuryoGovernor.sol`, `HumanReputation.sol`, `LoopReputation.sol`, `RaterRegistry.sol`, `ProfileRegistry.sol`, `FrontendRegistry.sol`, `ContentRegistry.sol`, `CategoryRegistry.sol`, `ProtocolConfig.sol`, `interfaces/IFrontendRegistry.sol`, `interfaces/IRaterRegistryStatus.sol`, `interfaces/IProfileRegistry.sol`, `interfaces/IWorldIDRouter.sol`.
+**Identity / Governance:** `governance/RateLoopGovernor.sol`, `HumanReputation.sol`, `LoopReputation.sol`, `RaterRegistry.sol`, `ProfileRegistry.sol`, `FrontendRegistry.sol`, `ContentRegistry.sol`, `CategoryRegistry.sol`, `ProtocolConfig.sol`, `interfaces/IFrontendRegistry.sol`, `interfaces/IRaterRegistryStatus.sol`, `interfaces/IProfileRegistry.sol`, `interfaces/IWorldIDRouter.sol`.
 
 **Integrations:** `X402QuestionSubmitter.sol`, `ClusterPayoutOracle.sol`, `SubmissionMediaValidator.sol`, `interfaces/IClusterPayoutOracle.sol`, `interfaces/IRoundVotingEngine.sol`, `interfaces/IAdvisoryVoteRecorder.sol`, `interfaces/IRoundRewardDistributor.sol`.

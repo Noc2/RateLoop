@@ -16,6 +16,22 @@ import {
 } from "../shared.js";
 import { isValidAddress, safeLimit } from "../utils.js";
 
+function voteMatchesVoter(address: `0x${string}`) {
+  return or(
+    eq(vote.voter, address),
+    eq(vote.identityHolder, address),
+    eq(vote.identityVoter, address),
+  );
+}
+
+function voteMatchesAnyVoter(addresses: `0x${string}`[]) {
+  return or(
+    inArray(vote.voter, addresses),
+    inArray(vote.identityHolder, addresses),
+    inArray(vote.identityVoter, addresses),
+  );
+}
+
 export function registerDiscoveryRoutes(app: ApiApp) {
   const allowedContentCondition = buildAllowedContentCondition({
     canonicalUrl: content.canonicalUrl,
@@ -61,7 +77,7 @@ export function registerDiscoveryRoutes(app: ApiApp) {
       .where(
         and(
           allowedContentCondition,
-          eq(vote.voter, address),
+          voteMatchesVoter(address),
           eq(round.state, ROUND_STATE.Open),
           gte(round.voteCount, round.minVoters),
         ),
@@ -224,7 +240,7 @@ export function registerDiscoveryRoutes(app: ApiApp) {
             .where(
               and(
                 allowedContentCondition,
-                inArray(vote.voter, followedAddresses),
+                voteMatchesAnyVoter(followedAddresses),
                 eq(vote.revealed, true),
                 or(
                   eq(round.state, ROUND_STATE.Settled),
@@ -291,7 +307,7 @@ export function registerDiscoveryRoutes(app: ApiApp) {
       .where(
         and(
           allowedContentCondition,
-          eq(vote.voter, address),
+          voteMatchesVoter(address),
           eq(round.state, ROUND_STATE.Open),
           gte(round.voteCount, round.minVoters),
         ),
@@ -425,7 +441,7 @@ export function registerDiscoveryRoutes(app: ApiApp) {
             .where(
               and(
                 allowedContentCondition,
-                inArray(vote.voter, followedAddresses),
+                voteMatchesAnyVoter(followedAddresses),
                 eq(vote.revealed, true),
                 gte(round.settledAt, recentCutoff),
                 or(
@@ -469,7 +485,7 @@ export function registerDiscoveryRoutes(app: ApiApp) {
       .where(
         and(
           allowedContentCondition,
-          eq(vote.voter, address),
+          voteMatchesVoter(address),
           gte(round.settledAt, recentCutoff),
           or(
             eq(round.state, ROUND_STATE.Settled),

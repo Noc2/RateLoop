@@ -7,7 +7,7 @@ import {
   hasAgentBearerToken,
   parseJsonBody,
 } from "~~/lib/agent/http";
-import { callCuryoMcpTool, callPublicCuryoMcpTool } from "~~/lib/mcp/tools";
+import { callPublicRateLoopMcpTool, callRateLoopMcpTool } from "~~/lib/mcp/tools";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
   if (!hasAgentBearerToken(request)) {
     return handlePublicAgentRoute({
       handler: () =>
-        callPublicCuryoMcpTool({
+        callPublicRateLoopMcpTool({
           arguments: body,
           name: "curyo_ask_humans",
         }),
@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
 
   return handleAgentRoute({
     handler: ({ agent, scheduleBackgroundTask }) =>
-      callCuryoMcpTool({
+      callRateLoopMcpTool({
         agent,
         arguments: body,
         name: "curyo_ask_humans",

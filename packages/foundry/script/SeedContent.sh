@@ -165,8 +165,8 @@ KEYS=(
   "0x2a871d0798f97d79848a013d4936a73bf4cc922c825d33c1cf7073dff6d409c6"  # Account 9 (reused)
 )
 
-# Example Curyo 2 questions always include a context URL. Preview media is optional.
-# Curyo 2 default categoryIds:
+# Example RateLoop 2 questions always include a context URL. Preview media is optional.
+# RateLoop 2 default categoryIds:
 # 1=Products, 2=Places & Travel, 3=Software, 4=Media, 5=Design,
 # 6=AI Answers, 7=Text, 8=General
 CONTEXT_URLS=(

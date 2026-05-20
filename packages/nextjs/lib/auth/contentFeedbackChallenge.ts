@@ -6,7 +6,7 @@ import type {
 
 export const CREATE_CONTENT_FEEDBACK_ACTION = "content-feedback:create";
 export const READ_CONTENT_FEEDBACK_ACTION = "content-feedback:read";
-export const CONTENT_FEEDBACK_CHALLENGE_TITLE = "Curyo feedback authorization";
+export const CONTENT_FEEDBACK_CHALLENGE_TITLE = "RateLoop feedback authorization";
 
 export function hashContentFeedbackPayload(payload: ContentFeedbackChallengePayload): string {
   return hashSignedActionPayload([

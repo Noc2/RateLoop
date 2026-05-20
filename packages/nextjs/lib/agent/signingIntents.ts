@@ -2,7 +2,7 @@ import { createHash, randomBytes } from "crypto";
 import "server-only";
 import { type Address, type Hex, isAddress } from "viem";
 import { dbClient } from "~~/lib/db";
-import { McpToolError, callPublicCuryoMcpTool } from "~~/lib/mcp/tools";
+import { McpToolError, callPublicRateLoopMcpTool } from "~~/lib/mcp/tools";
 import { parseX402QuestionRequest } from "~~/lib/x402/questionPayload";
 
 type JsonObject = Record<string, unknown>;
@@ -296,7 +296,7 @@ export async function prepareAgentSigningIntent(params: {
   }
 
   try {
-    const body = (await callPublicCuryoMcpTool({
+    const body = (await callPublicRateLoopMcpTool({
       arguments: {
         ...intent.requestBody,
         paymentAuthorization: params.paymentAuthorization,
@@ -363,7 +363,7 @@ export async function completeAgentSigningIntent(params: {
   const transactionHashes = parseTransactionHashes(params.transactionHashes);
 
   try {
-    const body = (await callPublicCuryoMcpTool({
+    const body = (await callPublicRateLoopMcpTool({
       arguments: {
         operationKey: intent.operationKey,
         transactionHashes,

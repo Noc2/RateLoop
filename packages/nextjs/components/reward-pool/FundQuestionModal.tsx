@@ -110,7 +110,7 @@ export function FundQuestionModal({ contentId, title, onClose, onCreated }: Fund
       return;
     }
     if (!contentRegistryAddress) {
-      notification.error("Curyo registry is not deployed on this network yet.");
+      notification.error("RateLoop registry is not deployed on this network yet.");
       return;
     }
     if (!parsedAmount) {

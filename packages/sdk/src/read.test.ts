@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createCuryoClient } from "./client";
-import { CuryoApiError, CuryoSdkError } from "./errors";
-import { createCuryoReadClient } from "./read";
+import { createRateLoopClient } from "./client";
+import { RateLoopApiError, RateLoopSdkError } from "./errors";
+import { createRateLoopReadClient } from "./read";
 
-test("createCuryoClient exposes a read client with normalized base URL", () => {
-  const client = createCuryoClient({
+test("createRateLoopClient exposes a read client with normalized base URL", () => {
+  const client = createRateLoopClient({
     apiBaseUrl: "https://api.curyo.xyz///",
   });
 
@@ -15,7 +15,7 @@ test("createCuryoClient exposes a read client with normalized base URL", () => {
 
 test("searchContent forwards query params to the hosted API", async () => {
   let requestedUrl = "";
-  const read = createCuryoReadClient({
+  const read = createRateLoopReadClient({
     apiBaseUrl: "https://api.curyo.xyz",
     fetchImpl: async (input: URL | RequestInfo) => {
       requestedUrl = String(input);
@@ -57,7 +57,7 @@ test("searchContent forwards query params to the hosted API", async () => {
 
 test("searchContent forwards relevance sorting", async () => {
   let requestedUrl = "";
-  const read = createCuryoReadClient({
+  const read = createRateLoopReadClient({
     apiBaseUrl: "https://api.curyo.xyz",
     fetchImpl: async (input: URL | RequestInfo) => {
       requestedUrl = String(input);
@@ -80,7 +80,7 @@ test("searchContent forwards relevance sorting", async () => {
 
 test("getProfiles joins addresses into the expected batch query", async () => {
   let requestedUrl = "";
-  const read = createCuryoReadClient({
+  const read = createRateLoopReadClient({
     apiBaseUrl: "https://api.curyo.xyz",
     fetchImpl: async (input: URL | RequestInfo) => {
       requestedUrl = String(input);
@@ -105,7 +105,7 @@ test("getProfiles joins addresses into the expected batch query", async () => {
 
 test("getFollows and getFollowers request the public follow routes", async () => {
   const requestedUrls: string[] = [];
-  const read = createCuryoReadClient({
+  const read = createRateLoopReadClient({
     apiBaseUrl: "https://api.curyo.xyz",
     fetchImpl: async (input: URL | RequestInfo) => {
       requestedUrls.push(String(input));
@@ -149,7 +149,7 @@ test("getFollows and getFollowers request the public follow routes", async () =>
 });
 
 test("getCategories exposes current category fields", async () => {
-  const read = createCuryoReadClient({
+  const read = createRateLoopReadClient({
     apiBaseUrl: "https://api.curyo.xyz",
     fetchImpl: async () =>
       new Response(
@@ -180,7 +180,7 @@ test("getCategories exposes current category fields", async () => {
 });
 
 test("listFrontends exposes current frontend fields", async () => {
-  const read = createCuryoReadClient({
+  const read = createRateLoopReadClient({
     apiBaseUrl: "https://api.curyo.xyz",
     fetchImpl: async () =>
       new Response(
@@ -216,7 +216,7 @@ test("listFrontends exposes current frontend fields", async () => {
 
 test("getAccuracyLeaderboard can include reputation blocks", async () => {
   let requestedUrl = "";
-  const read = createCuryoReadClient({
+  const read = createRateLoopReadClient({
     apiBaseUrl: "https://api.curyo.xyz",
     fetchImpl: async (input: URL | RequestInfo) => {
       requestedUrl = String(input);
@@ -267,7 +267,7 @@ test("getAccuracyLeaderboard can include reputation blocks", async () => {
 });
 
 test("getProfile exposes social counts from profile detail", async () => {
-  const read = createCuryoReadClient({
+  const read = createRateLoopReadClient({
     apiBaseUrl: "https://api.curyo.xyz",
     fetchImpl: async () =>
       new Response(
@@ -306,7 +306,7 @@ test("getProfile exposes social counts from profile detail", async () => {
 
 test("getRaterParticipationStatus requests the typed participation-status route", async () => {
   let requestedUrl = "";
-  const read = createCuryoReadClient({
+  const read = createRateLoopReadClient({
     apiBaseUrl: "https://api.curyo.xyz",
     fetchImpl: async (input: URL | RequestInfo) => {
       requestedUrl = String(input);
@@ -382,7 +382,7 @@ test("getRaterParticipationStatus requests the typed participation-status route"
 });
 
 test("read client surfaces API errors with status codes", async () => {
-  const read = createCuryoReadClient({
+  const read = createRateLoopReadClient({
     apiBaseUrl: "https://api.curyo.xyz",
     fetchImpl: async () =>
       new Response(JSON.stringify({ error: "Frontend not found" }), {
@@ -395,7 +395,7 @@ test("read client surfaces API errors with status codes", async () => {
   await assert.rejects(
     () => read.getFrontend("0x3333333333333333333333333333333333333333"),
     (error: unknown) => {
-      assert.ok(error instanceof CuryoApiError);
+      assert.ok(error instanceof RateLoopApiError);
       assert.equal(error.status, 404);
       assert.equal(error.message, "Frontend not found");
       return true;
@@ -404,7 +404,7 @@ test("read client surfaces API errors with status codes", async () => {
 });
 
 test("read client requires an apiBaseUrl", async () => {
-  const read = createCuryoReadClient({
+  const read = createRateLoopReadClient({
     apiBaseUrl: undefined,
     fetchImpl: fetch,
     timeoutMs: 5_000,
@@ -413,7 +413,7 @@ test("read client requires an apiBaseUrl", async () => {
   await assert.rejects(
     () => read.getStats(),
     (error: unknown) => {
-      assert.ok(error instanceof CuryoSdkError);
+      assert.ok(error instanceof RateLoopSdkError);
       assert.equal(error.message, "apiBaseUrl is required for read operations");
       return true;
     },

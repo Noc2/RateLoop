@@ -4,7 +4,7 @@ import { Suspense, useCallback, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useAccount } from "wagmi";
-import { CuryoConnectButton } from "~~/components/scaffold-eth";
+import { RateLoopConnectButton } from "~~/components/scaffold-eth";
 import { NotificationSettingsPanel } from "~~/components/settings/NotificationSettingsPanel";
 import { AppPageShell } from "~~/components/shared/AppPageShell";
 import { SETTINGS_FRONTEND_HASH, SETTINGS_ROUTE } from "~~/constants/routes";
@@ -107,7 +107,7 @@ function SettingsPageInner() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] px-4">
         <p className="text-base-content/60 mb-6 text-center">Sign in to manage your settings</p>
-        <CuryoConnectButton />
+        <RateLoopConnectButton />
       </div>
     );
   }

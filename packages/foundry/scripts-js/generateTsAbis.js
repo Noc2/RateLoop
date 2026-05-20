@@ -26,7 +26,7 @@ const RAW_DEPLOYMENT_CONTRACTS_TO_SKIP = new Set([
 
 const REQUIRED_NON_LOCAL_DEPLOYMENT_EXPORT_CONTRACTS = [
   "TimelockController",
-  "CuryoGovernor",
+  "RateLoopGovernor",
   "LoopReputation",
   "FrontendRegistry",
   "ProfileRegistry",
@@ -949,7 +949,7 @@ const ABI_TARGETS = [
   { contract: "ClusterPayoutOracle", targets: ["contracts/src/abis"] },
   { contract: "AdvisoryVoteRecorder", targets: ["contracts/src/abis"] },
   { contract: "TimelockController", targets: ["contracts/src/abis"] },
-  { contract: "CuryoGovernor", targets: ["contracts/src/abis"] },
+  { contract: "RateLoopGovernor", targets: ["contracts/src/abis"] },
 ];
 
 function generateAbiFiles() {

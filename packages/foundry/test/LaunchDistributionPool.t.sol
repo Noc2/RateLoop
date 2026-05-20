@@ -1342,7 +1342,7 @@ contract LaunchDistributionPoolTest is Test {
         pool.claimVerifiedBonus(referrer);
     }
 
-    function test_ClaimVerifiedBonusAcceptsCuryoSeededHumanUnits() public {
+    function test_ClaimVerifiedBonusAcceptsRateLoopSeededHumanUnits() public {
         registry.seedHumanCredential(alice, uint64(block.timestamp + 30 days), bytes32("curyo-alice"), 0);
 
         vm.prank(alice);

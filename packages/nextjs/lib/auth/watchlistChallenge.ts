@@ -4,7 +4,7 @@ import { isValidWalletAddress, normalizeContentId, normalizeWalletAddress } from
 export const WATCH_CONTENT_ACTION = "watch-content";
 export const UNWATCH_CONTENT_ACTION = "unwatch-content";
 export const READ_WATCHLIST_ACTION = "watchlist:read";
-export const WATCHLIST_CHALLENGE_TITLE = "Curyo watchlist authorization";
+export const WATCHLIST_CHALLENGE_TITLE = "RateLoop watchlist authorization";
 
 interface WatchlistChallengeInput {
   address?: string;
