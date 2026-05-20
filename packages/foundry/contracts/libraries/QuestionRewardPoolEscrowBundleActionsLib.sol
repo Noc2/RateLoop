@@ -33,7 +33,13 @@ library QuestionRewardPoolEscrowBundleActionsLib {
     uint256 internal constant BPS_SCALE = 10_000;
     uint256 internal constant BUNDLE_CLAIM_GRACE = 7 days;
     uint256 internal constant BUNDLE_REFUND_GRACE = 98 days;
-    uint256 internal constant BUNDLE_REFUND_SYNC_ROUND_LIMIT = 64;
+    /// @dev L-Funds-A: maximum terminal-round positions advanced inside a single
+    ///      `refundQuestionBundleReward` call. Raised from 64 → 512 so funders can single-tx
+    ///      refund a bundle with up to ~5x the prior cap without needing a separate caller to
+    ///      advance the cursor first. Bundles whose unprocessed terminal-round set exceeds this
+    ///      cap can still drain the cursor incrementally via the existing
+    ///      `syncQuestionBundleTerminals` external entrypoint.
+    uint256 internal constant BUNDLE_REFUND_SYNC_ROUND_LIMIT = 512;
     uint8 internal constant REWARD_ASSET_LREP = 0;
     uint8 internal constant REWARD_ASSET_USDC = 1;
 
