@@ -36,13 +36,23 @@ library RoundCreationLib {
         RoundLib.RoundConfig memory roundCfg = registry.getContentRoundConfig(contentId);
         roundConfigSnapshot[contentId][roundId] = roundCfg;
         roundRatingConfigSnapshot[contentId][roundId] = protocolConfig.getRatingConfig();
-        roundReferenceRatingBpsSnapshot[contentId][roundId] = registry.getRating(contentId);
+        // FV-1 (2026-05-20 follow-up audit): reject snapshots of a zero-rating content so the
+        // engine's per-round reference is always authoritative. Without this guard a zero
+        // snapshot would have forced the engine to fall back to the live `registry.getRating`
+        // value, which could shift between commit and reveal and silently invalidate every
+        // commit hash in the round (voters cannot reveal, stakes forfeited to treasury).
+        // `getRating` already floors at MIN_RATING_BPS = 100 for any rated content; this assert
+        // surfaces the invariant on-chain so a future ContentRegistry change that produces a
+        // zero rating breaks loudly at round-open rather than silently at reveal.
+        uint16 referenceRatingBps = registry.getRating(contentId);
+        require(referenceRatingBps != 0, "Zero rating snapshot");
+        roundReferenceRatingBpsSnapshot[contentId][roundId] = referenceRatingBps;
         roundRevealGracePeriodSnapshot[contentId][roundId] = protocolConfig.revealGracePeriod();
 
         emit RoundConfigSnapshotted(
             contentId, roundId, roundCfg.epochDuration, roundCfg.maxDuration, roundCfg.minVoters, roundCfg.maxVoters
         );
-        emit RoundReferenceSnapshotted(contentId, roundId, roundReferenceRatingBpsSnapshot[contentId][roundId]);
+        emit RoundReferenceSnapshotted(contentId, roundId, referenceRatingBps);
     }
 
     function snapshotRoundExternalConfig(
