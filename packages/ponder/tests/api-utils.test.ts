@@ -174,7 +174,7 @@ describe("isLikelyUrlSearchQuery", () => {
 
 describe("normalizeContentSearchQuery", () => {
   it("normalizes valid free-text searches", () => {
-    expect(normalizeContentSearchQuery("  RateLoop Search  ")).toBe("curyo search");
+    expect(normalizeContentSearchQuery("  RateLoop Search  ")).toBe("rateloop search");
   });
 
   it("rejects short free-text searches", () => {
