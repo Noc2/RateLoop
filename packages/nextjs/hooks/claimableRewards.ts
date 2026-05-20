@@ -17,7 +17,7 @@ interface ClaimLookupBaseParams {
   commitKey?: string | null;
 }
 
-export interface ClaimStateLookup {
+interface ClaimStateLookup {
   contract: "distributor" | "engine";
   functionName:
     | "rewardCommitClaimed"
