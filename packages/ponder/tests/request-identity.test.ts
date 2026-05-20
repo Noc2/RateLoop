@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { isLoopbackRateLimitIdentifier, resolveRateLimitIdentifier } from "../src/api/request-identity.js";
+import {
+  isLoopbackRateLimitIdentifier,
+  isLoopbackRequestUrl,
+  resolveRateLimitIdentifier,
+} from "../src/api/request-identity.js";
 
 function makeHeaderGetter(headers: Record<string, string>) {
   const normalized = Object.fromEntries(Object.entries(headers).map(([key, value]) => [key.toLowerCase(), value]));
@@ -62,5 +66,18 @@ describe("isLoopbackRateLimitIdentifier", () => {
 
   it("does not treat fingerprint fallbacks as loopback", () => {
     expect(isLoopbackRateLimitIdentifier("fingerprint:abc")).toBe(false);
+  });
+});
+
+describe("isLoopbackRequestUrl", () => {
+  it("recognizes local development request URLs even when the identifier is fingerprinted", () => {
+    expect(isLoopbackRequestUrl("http://localhost:42069/content")).toBe(true);
+    expect(isLoopbackRequestUrl("http://127.0.0.1:42069/content")).toBe(true);
+    expect(isLoopbackRequestUrl("http://[::1]:42069/content")).toBe(true);
+  });
+
+  it("does not treat remote request URLs as loopback", () => {
+    expect(isLoopbackRequestUrl("https://ponder.example/content")).toBe(false);
+    expect(isLoopbackRequestUrl("not a url")).toBe(false);
   });
 });

@@ -3,6 +3,7 @@ import { cors } from "hono/cors";
 import {
   hasTrustedRateLimitHeadersConfigured,
   isLoopbackRateLimitIdentifier,
+  isLoopbackRequestUrl,
   resolveRateLimitIdentifier,
 } from "./request-identity.js";
 import { RateLimiter } from "./rate-limit.js";
@@ -49,15 +50,7 @@ app.use("/*", async (c, next) => {
 
   const isLoopbackRequest =
     process.env.NODE_ENV !== "production"
-    && isLoopbackRateLimitIdentifier(identifier)
-    && (() => {
-      try {
-        const hostname = new URL(c.req.url).hostname;
-        return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
-      } catch {
-        return false;
-      }
-    })();
+    && (isLoopbackRateLimitIdentifier(identifier) || isLoopbackRequestUrl(c.req.url));
 
   if (isLoopbackRequest) {
     await next();

@@ -84,3 +84,14 @@ export function isLoopbackRateLimitIdentifier(identifier: string): boolean {
     || identifier === "ip:[::1]"
   );
 }
+
+export function isLoopbackRequestUrl(requestUrl: string | undefined): boolean {
+  if (!requestUrl) return false;
+
+  try {
+    const hostname = new URL(requestUrl).hostname;
+    return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname === "[::1]";
+  } catch {
+    return false;
+  }
+}
