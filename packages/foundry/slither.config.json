@@ -5,5 +5,7 @@
     "@openzeppelin/contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts",
     "@prb/math/=lib/prb-math/src/"
   ],
-  "exclude_informational": true
+  "exclude_informational": true,
+  "exclude_low": true,
+  "exclude_medium": true
 }
