@@ -400,6 +400,20 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
         return _humanCredentials[rater];
     }
 
+    /// @notice Returns the verification scope of `rater`'s current human credential, or
+    ///         `bytes32(0)` if no verified credential exists.
+    /// @dev RR-5 (2026-05-20 follow-up audit): convenience accessor for cross-protocol consumers.
+    ///      Today the only valid scopes are `SEEDED_HUMAN_SCOPE` (for SEEDER-seeded credentials)
+    ///      and the immutable `worldIdScope` (for self-attested WorldID credentials). If this
+    ///      registry is ever shared with a sibling protocol, that protocol's consumers MUST
+    ///      verify the returned scope against their own expected value before honoring the
+    ///      identity -- a credential issued for one scope must not silently authorize another.
+    function credentialScope(address rater) external view returns (bytes32) {
+        HumanCredential storage credential = _humanCredentials[rater];
+        if (!credential.verified || credential.revoked) return bytes32(0);
+        return credential.scope;
+    }
+
     /// @notice Returns the address that owns a nullifier hash within a specific provider's namespace.
     /// @dev Replaces the previous global `humanNullifierOwner(bytes32)` view. Ownership is per-provider
     ///      so a value seeded under `SeededHuman` does not collide with a WorldID nullifier of
