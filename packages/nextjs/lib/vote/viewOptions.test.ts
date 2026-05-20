@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { getVoteViewGroups, isActivityViewOption } from "~~/lib/vote/viewOptions";
+import { getVoteViewGroups, isScopedVoteViewOption } from "~~/lib/vote/viewOptions";
 
 test("getVoteViewGroups hides wallet-only entries when disconnected", () => {
   const groups = getVoteViewGroups(false);
@@ -17,6 +17,10 @@ test("getVoteViewGroups hides wallet-only entries when disconnected", () => {
     groups[0]?.options.some(option => option.value === "contested"),
     false,
   );
+  assert.equal(
+    groups[0]?.options.some(option => option.value === "zero_lrep_vote"),
+    false,
+  );
 });
 
 test("getVoteViewGroups includes activity entries when connected", () => {
@@ -31,11 +35,15 @@ test("getVoteViewGroups includes activity entries when connected", () => {
     true,
   );
   assert.equal(
-    groups[1]?.options.some(option => option.value === "zero_lrep_vote"),
+    groups[0]?.options.some(option => option.value === "zero_lrep_vote"),
     true,
   );
   assert.equal(
-    groups[1]?.options.some(option => option.label === "0 LREP Vote"),
+    groups[1]?.options.some(option => option.value === "zero_lrep_vote"),
+    false,
+  );
+  assert.equal(
+    groups[0]?.options.some(option => option.label === "0 LREP Vote"),
     true,
   );
   assert.equal(
@@ -44,7 +52,8 @@ test("getVoteViewGroups includes activity entries when connected", () => {
   );
 });
 
-test("isActivityViewOption identifies personal views only", () => {
-  assert.equal(isActivityViewOption("trending"), false);
-  assert.equal(isActivityViewOption("my_submissions"), true);
+test("isScopedVoteViewOption identifies non-discover scoped views", () => {
+  assert.equal(isScopedVoteViewOption("trending"), false);
+  assert.equal(isScopedVoteViewOption("my_submissions"), true);
+  assert.equal(isScopedVoteViewOption("zero_lrep_vote"), true);
 });

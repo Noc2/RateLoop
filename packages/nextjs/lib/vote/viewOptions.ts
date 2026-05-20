@@ -1,7 +1,7 @@
 import { DISCOVER_FEED_MODE_OPTIONS, type DiscoverFeedMode } from "~~/lib/vote/feedModes";
 
-export type ActivityViewOption = "watched" | "my_votes" | "my_submissions" | "zero_lrep_vote" | "followed_curators";
-export type VoteView = DiscoverFeedMode | ActivityViewOption;
+export type ScopedVoteViewOption = "watched" | "my_votes" | "my_submissions" | "zero_lrep_vote" | "followed_curators";
+export type VoteView = DiscoverFeedMode | ScopedVoteViewOption;
 
 interface VoteViewOption {
   value: VoteView;
@@ -18,11 +18,12 @@ const ACTIVITY_VIEW_OPTIONS: VoteViewOption[] = [
   { value: "watched", label: "Watched" },
   { value: "my_votes", label: "My Votes" },
   { value: "my_submissions", label: "My Questions" },
-  { value: "zero_lrep_vote", label: "0 LREP Vote" },
   { value: "followed_curators", label: "Curators You Follow" },
 ];
 
-const ACTIVITY_VIEW_VALUES = new Set<ActivityViewOption>([
+const ZERO_LREP_RATE_OPTION: VoteViewOption = { value: "zero_lrep_vote", label: "0 LREP Vote" };
+
+const SCOPED_VIEW_VALUES = new Set<ScopedVoteViewOption>([
   "watched",
   "my_votes",
   "my_submissions",
@@ -30,19 +31,26 @@ const ACTIVITY_VIEW_VALUES = new Set<ActivityViewOption>([
   "followed_curators",
 ]);
 
-export function isActivityViewOption(value: VoteView): value is ActivityViewOption {
-  return ACTIVITY_VIEW_VALUES.has(value as ActivityViewOption);
+export function isScopedVoteViewOption(value: VoteView): value is ScopedVoteViewOption {
+  return SCOPED_VIEW_VALUES.has(value as ScopedVoteViewOption);
 }
 
 export function getVoteViewGroups(hasWallet: boolean): VoteViewGroup[] {
+  const rateOptions: VoteViewOption[] = DISCOVER_FEED_MODE_OPTIONS.filter(option => option.value !== "contested").map(
+    option => ({
+      value: option.value,
+      label: option.label,
+      description: option.description,
+    }),
+  );
+  if (hasWallet) {
+    rateOptions.push(ZERO_LREP_RATE_OPTION);
+  }
+
   const groups: VoteViewGroup[] = [
     {
       label: "Rate",
-      options: DISCOVER_FEED_MODE_OPTIONS.filter(option => option.value !== "contested").map(option => ({
-        value: option.value,
-        label: option.label,
-        description: option.description,
-      })),
+      options: rateOptions,
     },
   ];
 

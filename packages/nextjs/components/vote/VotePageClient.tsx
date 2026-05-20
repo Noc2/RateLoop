@@ -72,7 +72,7 @@ import { getLocalVoteCooldownsByContentId } from "~~/lib/vote/localCooldown";
 import { buildVoteContentPinKey, buildVoteContentPinKeyFromUrl, buildVoteLocation } from "~~/lib/vote/location";
 import { mergeRequestedContentIntoFeed } from "~~/lib/vote/requestedContent";
 import { resolveStableSessionFeedOrder } from "~~/lib/vote/stableFeedOrder";
-import { type VoteView, getVoteViewGroups, isActivityViewOption } from "~~/lib/vote/viewOptions";
+import { type VoteView, getVoteViewGroups, isScopedVoteViewOption } from "~~/lib/vote/viewOptions";
 import { buildRecommendationSignalContext, trackRecommendationSignal } from "~~/utils/recommendationTracker";
 import { notification } from "~~/utils/scaffold-eth";
 import { contracts } from "~~/utils/scaffold-eth/contract";
@@ -334,8 +334,8 @@ const HomeInner = () => {
   const hasWallet = Boolean(address);
   const isAdvisoryOnlyRater = hasWallet && lrepBalance !== undefined && lrepBalance < MIN_COUNTED_STAKE_MICRO;
   const viewGroups = useMemo(() => getVoteViewGroups(hasWallet), [hasWallet]);
-  const activeScope: ScopeOption = isActivityViewOption(view) ? view : "all";
-  const activeFeedMode: DiscoverFeedMode = isActivityViewOption(view) ? "for_you" : view;
+  const activeScope: ScopeOption = isScopedVoteViewOption(view) ? view : "all";
+  const activeFeedMode: DiscoverFeedMode = isScopedVoteViewOption(view) ? "for_you" : view;
   const isZeroLrepVoteView = activeScope === "zero_lrep_vote";
   const isAlgorithmicForYouFeed =
     !isSearchMode && activeScope === "all" && activeFeedMode === "for_you" && !hasExplicitRequestedContentPin;
@@ -583,7 +583,7 @@ const HomeInner = () => {
   );
 
   useEffect(() => {
-    if (!address && isActivityViewOption(view)) {
+    if (!address && isScopedVoteViewOption(view)) {
       setView("for_you");
     }
   }, [address, view]);
