@@ -494,10 +494,23 @@ library RoundCleanupLib {
                 uint256 amount = commit.stakeAmount;
                 commit.stakeAmount = 0;
 
-                if (round.state == RoundLib.RoundState.RevealFailed || commit.revealableAfter <= round.settledAt) {
+                // L-Vote-1: only forfeit past-epoch unrevealed stakes when the round Actually
+                // produced a winner (Settled) or definitively failed reveal (RevealFailed).
+                // In a Tied round there's no winner by symmetry; refunding past-epoch
+                // non-revealers preserves the no-punishment invariant for ties.
+                if (
+                    round.state == RoundLib.RoundState.RevealFailed
+                        || (
+                            round.state == RoundLib.RoundState.Settled && commit.revealableAfter <= round.settledAt
+                        )
+                ) {
                     processedPastEpochCount++;
                     forfeitedToTreasury += amount;
                 } else {
+                    if (commit.revealableAfter <= round.settledAt && round.state == RoundLib.RoundState.Tied) {
+                        // Past-epoch in a Tied round counts toward the cleanup queue but is refunded.
+                        processedPastEpochCount++;
+                    }
                     try TokenTransferLib.safeTransfer(lrepToken, commit.voter, amount) {
                         refundedLrep += amount;
                     } catch {
