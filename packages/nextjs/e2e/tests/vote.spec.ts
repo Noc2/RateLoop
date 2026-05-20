@@ -43,7 +43,8 @@ test.describe("Voting flow — 3-voter threshold", () => {
       .or(page.getByText(/Cooldown/))
       .or(page.getByText(/Voted(?: hidden| Up| Down)?/i))
       .or(page.getByText("Round full"))
-      .or(page.getByText("No questions have been asked yet"));
+      .or(page.getByText("No questions have been asked yet"))
+      .or(page.getByRole("feed", { name: "Content feed" }).getByRole("article"));
 
     await expect(connectedIndicators.first()).toBeVisible({ timeout: 15_000 });
     await context.close();

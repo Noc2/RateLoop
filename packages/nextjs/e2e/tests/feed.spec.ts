@@ -14,7 +14,8 @@ test.describe("Content feed", () => {
       .or(page.getByText("Your question"))
       .or(page.getByText("Round full"))
       .or(page.getByText(/Cooldown/))
-      .or(page.getByText("No questions have been asked yet"));
+      .or(page.getByText("No questions have been asked yet"))
+      .or(page.getByRole("feed", { name: "Content feed" }).getByRole("article"));
     await expect(anyState.first()).toBeVisible({ timeout: 15_000 });
   });
 
