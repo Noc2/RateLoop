@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Seed script: submits example question-first content from different accounts.
-# Uses foundry's default anvil/hardhat accounts (indices 2-10 for content, 9-10 also for voting).
+# Uses foundry's default anvil/hardhat accounts (indices 2-10 for content, 8-10 also for voting).
 # Only runs on localhost (chain 31337).
 
 set -euo pipefail
@@ -24,6 +24,10 @@ SUBMISSION_ROUND_EPOCH_DURATION="1200"
 SUBMISSION_ROUND_MAX_DURATION="1200"
 SUBMISSION_ROUND_MIN_VOTERS="3"
 SUBMISSION_ROUND_MAX_VOTERS="200"
+CONTENT_ONE_ROUND_EPOCH_DURATION="120"
+CONTENT_ONE_ROUND_MAX_DURATION="120"
+CONTENT_ONE_ROUND_MIN_VOTERS="3"
+CONTENT_ONE_ROUND_MAX_VOTERS="3"
 SUBMISSION_BUNDLE_ROUND_MAX_VOTERS="100"
 DEFAULT_QUESTION_METADATA_HASH="0xed39b36e9ce5c1bfc657909c2f687347be2de998bc871eb8d33df17fdfa0d8cd"
 DEFAULT_RESULT_SPEC_HASH="0x8e5f27bc3269c62c92754f76279bd83838462060fc6cd77411b7407027cfa11f"
@@ -473,6 +477,16 @@ for ((i = 0; i < TOTAL_ITEMS; i++)); do
   BOUNTY_AMOUNT="${SUBMISSION_BOUNTY_AMOUNTS[$i]}"
   CATEGORY_ID="${CATEGORY_IDS[$i]}"
   CATEGORY_SLUG="${CATEGORY_SLUGS[$i]}"
+  ROUND_EPOCH_DURATION="$SUBMISSION_ROUND_EPOCH_DURATION"
+  ROUND_MAX_DURATION="$SUBMISSION_ROUND_MAX_DURATION"
+  ROUND_MIN_VOTERS="$SUBMISSION_ROUND_MIN_VOTERS"
+  ROUND_MAX_VOTERS="$SUBMISSION_ROUND_MAX_VOTERS"
+  if [ "$i" -eq 0 ]; then
+    ROUND_EPOCH_DURATION="$CONTENT_ONE_ROUND_EPOCH_DURATION"
+    ROUND_MAX_DURATION="$CONTENT_ONE_ROUND_MAX_DURATION"
+    ROUND_MIN_VOTERS="$CONTENT_ONE_ROUND_MIN_VOTERS"
+    ROUND_MAX_VOTERS="$CONTENT_ONE_ROUND_MAX_VOTERS"
+  fi
   MEDIA_KIND="context-only"
   if [ "$IMAGE_URLS_ARG" != "[]" ]; then
     MEDIA_KIND="preview-images"
@@ -499,7 +513,7 @@ for ((i = 0; i < TOTAL_ITEMS; i++)); do
   REVEAL_COMMITMENT=$(node "$SCRIPT_DIR/../scripts-js/buildSubmissionReservation.js" \
     "$RPC" "$REGISTRY" "$ADDR" "$CONTEXT_URL" "$IMAGE_URLS_ARG" "$VIDEO_URL_ARG" "$TITLE" "$DESCRIPTION" "$TAG" "$CATEGORY_ID" "0x$SALT" \
     "0" "$BOUNTY_AMOUNT" "$SUBMISSION_BOUNTY_REQUIRED_VOTERS" "$SUBMISSION_BOUNTY_REQUIRED_SETTLED_ROUNDS" "$SUBMISSION_BOUNTY_EXPIRES_AT" \
-    "$SUBMISSION_ROUND_EPOCH_DURATION" "$SUBMISSION_ROUND_MAX_DURATION" "$SUBMISSION_ROUND_MIN_VOTERS" "$SUBMISSION_ROUND_MAX_VOTERS")
+    "$ROUND_EPOCH_DURATION" "$ROUND_MAX_DURATION" "$ROUND_MIN_VOTERS" "$ROUND_MAX_VOTERS")
   echo "  Reserving submission..."
   cast send "$REGISTRY" "reserveSubmission(bytes32)" "$REVEAL_COMMITMENT" \
     --private-key "$KEY" --rpc-url "$RPC" > /dev/null
@@ -508,11 +522,11 @@ for ((i = 0; i < TOTAL_ITEMS; i++)); do
   sleep 1
 
   # 3. Reveal the submission with the same deterministic salt used for the reservation
-  echo "  Submitting question: $TITLE ($MEDIA_KIND, bounty: $BOUNTY_AMOUNT, context: $CONTEXT_URL, category: $CATEGORY_SLUG -> $CATEGORY_ID)"
+  echo "  Submitting question: $TITLE ($MEDIA_KIND, bounty: $BOUNTY_AMOUNT, round: ${ROUND_EPOCH_DURATION}s/${ROUND_MIN_VOTERS} voters, context: $CONTEXT_URL, category: $CATEGORY_SLUG -> $CATEGORY_ID)"
   cast send "$REGISTRY" "submitQuestionWithRewardAndRoundConfig(string,string[],string,string,string,string,uint256,bytes32,(uint8,uint256,uint256,uint256,uint256,uint256,uint8),(uint32,uint32,uint16,uint16),(bytes32,bytes32))" \
     "$CONTEXT_URL" "$IMAGE_URLS_ARG" "$VIDEO_URL_ARG" "$TITLE" "$DESCRIPTION" "$TAG" "$CATEGORY_ID" "0x$SALT" \
     "(0,$BOUNTY_AMOUNT,$SUBMISSION_BOUNTY_REQUIRED_VOTERS,$SUBMISSION_BOUNTY_REQUIRED_SETTLED_ROUNDS,$SUBMISSION_BOUNTY_EXPIRES_AT,$SUBMISSION_BOUNTY_EXPIRES_AT,$SUBMISSION_BOUNTY_ELIGIBILITY)" \
-    "($SUBMISSION_ROUND_EPOCH_DURATION,$SUBMISSION_ROUND_MAX_DURATION,$SUBMISSION_ROUND_MIN_VOTERS,$SUBMISSION_ROUND_MAX_VOTERS)" \
+    "($ROUND_EPOCH_DURATION,$ROUND_MAX_DURATION,$ROUND_MIN_VOTERS,$ROUND_MAX_VOTERS)" \
     "($DEFAULT_QUESTION_METADATA_HASH,$DEFAULT_RESULT_SPEC_HASH)" \
     --private-key "$KEY" --rpc-url "$RPC" > /dev/null
   echo "  Done!"
@@ -629,7 +643,7 @@ fi
 
 ZERO_ADDR="0x0000000000000000000000000000000000000000"
 
-echo "=== Adding votes from two accounts ==="
+echo "=== Adding votes from three accounts ==="
 echo ""
 
 PROTOCOL_CONFIG=$(cast call "$VOTING_ENGINE" "protocolConfig()(address)" --rpc-url "$RPC" 2>/dev/null || true)
@@ -642,17 +656,20 @@ if [ -n "$PROTOCOL_CONFIG" ]; then
   DRAND_PERIOD="${DRAND_PERIOD%% *}"
 fi
 
-# Voter accounts (indices 7 and 8 in KEYS array = accounts 9 and 10)
+# Voter accounts (indices 6, 7, and 8 in KEYS array = accounts 8, 9, and 10)
+VOTER3_KEY="${KEYS[6]}"
 VOTER1_KEY="${KEYS[7]}"
 VOTER2_KEY="${KEYS[8]}"
+VOTER3_ADDR=$(cast wallet address "$VOTER3_KEY")
 VOTER1_ADDR=$(cast wallet address "$VOTER1_KEY")
 VOTER2_ADDR=$(cast wallet address "$VOTER2_KEY")
 
 echo "Voter 1: $VOTER1_ADDR"
 echo "Voter 2: $VOTER2_ADDR"
+echo "Voter 3: $VOTER3_ADDR"
 
 # Ensure voter accounts have ETH for gas
-for VADDR in "$VOTER1_ADDR" "$VOTER2_ADDR"; do
+for VADDR in "$VOTER1_ADDR" "$VOTER2_ADDR" "$VOTER3_ADDR"; do
   ETH_BAL=$(cast balance "$VADDR" --rpc-url "$RPC" 2>/dev/null || echo "0")
   if [ "$ETH_BAL" = "0" ]; then
     echo "  Funding $VADDR with ETH..."
@@ -674,10 +691,12 @@ done
 #
 # Voter 1 (account #9) votes UP on content 1 and 2
 # Voter 2 (account #10) votes DOWN on content 1, UP on content 3
+# Voter 3 (account #8) votes UP on content 1 so content 1 settles during deploy
 
 # Helper: generate tlock ciphertext and submit commitVote
-# Usage: seed_commit <contentId> <isUp:true|false> <salt_hex> <private_key> [predictedUpBps]
+# Usage: seed_commit <contentId> <isUp:true|false> <salt_hex> <private_key> [predictedUpBps] [epochDuration]
 schedule_commit_block_timestamp() {
+  local epochDuration="${1:-$SUBMISSION_ROUND_EPOCH_DURATION}"
   local latestTs
   local pendingTs
   local commitTs
@@ -694,7 +713,7 @@ schedule_commit_block_timestamp() {
   fi
 
   if [[ "$DRAND_GENESIS_TIME" =~ ^[0-9]+$ ]] && [[ "$DRAND_PERIOD" =~ ^[0-9]+$ ]] && [ "$DRAND_PERIOD" -gt 0 ]; then
-    revealTs=$((commitTs + SUBMISSION_ROUND_EPOCH_DURATION))
+    revealTs=$((commitTs + epochDuration))
     remainder=$(((revealTs - DRAND_GENESIS_TIME) % DRAND_PERIOD))
     if [ "$remainder" -lt 0 ]; then
       remainder=$((remainder + DRAND_PERIOD))
@@ -714,6 +733,7 @@ seed_commit() {
   local salt="$3"
   local privKey="$4"
   local predictedUpBps="${5:-5000}"
+  local epochDuration="${6:-$SUBMISSION_ROUND_EPOCH_DURATION}"
   local commitHash
   local ciphertext
   local targetRound
@@ -729,7 +749,7 @@ seed_commit() {
     --private-key "$privKey" --rpc-url "$RPC" > /dev/null
 
   voterAddr=$(cast wallet address "$privKey")
-  commitTimestamp=$(schedule_commit_block_timestamp)
+  commitTimestamp=$(schedule_commit_block_timestamp "$epochDuration")
   artifacts=$(node "$SCRIPT_DIR/../scripts-js/generateTlockCommit.js" \
     "$RPC" "$VOTING_ENGINE" "$REGISTRY" "$contentId" "$isUp" "0x${salt}" "$voterAddr" "$predictedUpBps" "$commitTimestamp") || {
     echo "  (Failed to build tlock ciphertext)"
@@ -750,22 +770,103 @@ seed_commit() {
     --gas-limit "$VOTE_COMMIT_GAS_LIMIT" --private-key "$privKey" --rpc-url "$RPC" > /dev/null || { echo "  (Commit may have failed)"; return 1; }
 }
 
+resolve_commit_key() {
+  local contentId="$1"
+  local roundId="$2"
+  local voterAddr="$3"
+  local output
+
+  output=$(cast call "$VOTING_ENGINE" "resolveClaimCommit(uint256,uint256,address)(bytes32,address)" \
+    "$contentId" "$roundId" "$voterAddr" --rpc-url "$RPC")
+  printf '%s\n' "$output" | sed -n 's/.*\(0x[0-9a-fA-F]\{64\}\).*/\1/p' | sed -n '1p'
+}
+
+advance_to_round_reveal_window() {
+  local contentId="$1"
+  local roundId="$2"
+  local revealableAfter
+  local latestTs
+  local nextTs
+
+  revealableAfter=$(cast call "$VOTING_ENGINE" "lastCommitRevealableAfter(uint256,uint256)(uint256)" \
+    "$contentId" "$roundId" --rpc-url "$RPC")
+  revealableAfter="${revealableAfter%% *}"
+  latestTs=$(cast block latest --field timestamp --rpc-url "$RPC")
+  latestTs="${latestTs%% *}"
+
+  if [[ "$revealableAfter" =~ ^[0-9]+$ ]] && [[ "$latestTs" =~ ^[0-9]+$ ]] && [ "$revealableAfter" -ge "$latestTs" ]; then
+    nextTs=$((revealableAfter + 1))
+    cast rpc evm_setNextBlockTimestamp "$nextTs" --rpc-url "$RPC" > /dev/null 2>&1 || true
+  fi
+}
+
+seed_reveal() {
+  local contentId="$1"
+  local roundId="$2"
+  local isUp="$3"
+  local salt="$4"
+  local privKey="$5"
+  local predictedUpBps="${6:-5000}"
+  local voterAddr
+  local commitKey
+
+  voterAddr=$(cast wallet address "$privKey")
+  commitKey=$(resolve_commit_key "$contentId" "$roundId" "$voterAddr")
+  if [ -z "$commitKey" ]; then
+    echo "  (Could not resolve commit key for $voterAddr on content $contentId round $roundId)"
+    return 1
+  fi
+
+  cast send "$VOTING_ENGINE" "revealVoteByCommitKey(uint256,uint256,bytes32,bool,uint16,bytes32)" \
+    "$contentId" "$roundId" "$commitKey" "$isUp" "$predictedUpBps" "0x${salt}" \
+    --private-key "$privKey" --rpc-url "$RPC" > /dev/null
+}
+
+settle_seeded_content_one_round() {
+  local roundId="1"
+  local ratingBps
+
+  echo "Advancing local chain to content 1 reveal window..."
+  advance_to_round_reveal_window 1 "$roundId"
+
+  echo "Revealing content 1 votes..."
+  seed_reveal 1 "$roundId" true "$SALT1A" "$VOTER1_KEY"
+  seed_reveal 1 "$roundId" false "$SALT2A" "$VOTER2_KEY"
+  seed_reveal 1 "$roundId" true "$SALT3A" "$VOTER3_KEY"
+
+  echo "Settling content 1 round $roundId..."
+  cast send "$VOTING_ENGINE" "settleRound(uint256,uint256)" 1 "$roundId" \
+    --private-key "$VOTER1_KEY" --rpc-url "$RPC" > /dev/null
+
+  ratingBps=$(cast call "$REGISTRY" "getRating(uint256)(uint16)" 1 --rpc-url "$RPC")
+  ratingBps="${ratingBps%% *}"
+  echo "  Content 1 settled rating: $ratingBps bps"
+}
+
 # Use deterministic salts for reproducibility
 SALT1A="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 SALT1B="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 SALT2A="cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
 SALT2B="dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+SALT3A="eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
 
 echo "Voter 1 committing UP on content 1..."
-seed_commit 1 true "$SALT1A" "$VOTER1_KEY"
-echo "  Done!"
-
-echo "Voter 1 committing UP on content 2..."
-seed_commit 2 true "$SALT1B" "$VOTER1_KEY"
+seed_commit 1 true "$SALT1A" "$VOTER1_KEY" 5000 "$CONTENT_ONE_ROUND_EPOCH_DURATION"
 echo "  Done!"
 
 echo "Voter 2 committing DOWN on content 1..."
-seed_commit 1 false "$SALT2A" "$VOTER2_KEY"
+seed_commit 1 false "$SALT2A" "$VOTER2_KEY" 5000 "$CONTENT_ONE_ROUND_EPOCH_DURATION"
+echo "  Done!"
+
+echo "Voter 3 committing UP on content 1..."
+seed_commit 1 true "$SALT3A" "$VOTER3_KEY" 5000 "$CONTENT_ONE_ROUND_EPOCH_DURATION"
+echo "  Done!"
+
+settle_seeded_content_one_round
+echo ""
+
+echo "Voter 1 committing UP on content 2..."
+seed_commit 2 true "$SALT1B" "$VOTER1_KEY"
 echo "  Done!"
 
 echo "Voter 2 committing UP on content 3..."
@@ -773,7 +874,7 @@ seed_commit 3 true "$SALT2B" "$VOTER2_KEY"
 echo "  Done!"
 
 echo ""
-echo "=== Voting complete: 4 commit-reveal votes submitted ==="
-echo "  Content 1: 2 commits (1 up, 1 down)"
+echo "=== Voting complete: 5 commit-reveal votes submitted ==="
+echo "  Content 1: 3 commits (2 up, 1 down), revealed and settled"
 echo "  Content 2: 1 commit (1 up)"
 echo "  Content 3: 1 commit (1 up)"
