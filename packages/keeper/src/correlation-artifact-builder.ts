@@ -3,7 +3,6 @@ import {
   correlationParameterHash,
   defaultCorrelationScoringParams,
   merkleProof,
-  merkleRoot,
   scoreRoundPayoutWeights,
   type CorrelationVoteInput,
 } from "@rateloop/node-utils/correlationScoring";
@@ -72,6 +71,8 @@ interface PublicPayoutWeight {
   reasons: readonly string[];
 }
 
+const VOTE_PAGE_SIZE = 1_000;
+
 export async function buildConfiguredCorrelationSnapshotArtifact(
   logger: Logger,
 ): Promise<CorrelationSnapshotArtifactFile> {
@@ -88,18 +89,9 @@ export async function buildConfiguredCorrelationSnapshotArtifact(
   }
 
   const publicRounds: PublicRoundPayoutSnapshot[] = [];
-  const skipped: Array<Record<string, string>> = [];
 
   for (const candidate of candidates) {
     const votes = await fetchRoundVotes(config.ponderBaseUrl, candidate);
-    if (votes.length === 0) {
-      skipped.push({
-        rewardPoolId: candidate.rewardPoolId.toString(),
-        contentId: candidate.contentId.toString(),
-        roundId: candidate.roundId.toString(),
-      });
-      continue;
-    }
 
     const scored = scoreRoundPayoutWeights({
       chainId: BigInt(config.chainId),
@@ -144,11 +136,6 @@ export async function buildConfiguredCorrelationSnapshotArtifact(
     });
   }
 
-  if (skipped.length > 0) {
-    logger.warn("Skipped correlation snapshot candidates without eligible voters", {
-      skipped,
-    });
-  }
   if (publicRounds.length === 0) {
     return {};
   }
@@ -215,10 +202,7 @@ function buildPublicEpochs(
       epochId,
       fromRoundId: epochId,
       toRoundId: epochId,
-      clusterRoot: merkleRoot(epochRounds.map((round) => round.weightRoot)),
-      parameterHash,
-      roundSnapshotCount: epochRounds.length,
-      roundRootsHash: hashJson(
+      clusterRoot: hashJson(
         epochRounds.map((round) => ({
           rewardPoolId: round.rewardPoolId,
           contentId: round.contentId,
@@ -227,6 +211,8 @@ function buildPublicEpochs(
           reasonRoot: round.reasonRoot,
         })),
       ),
+      parameterHash,
+      roundSnapshotCount: epochRounds.length,
     }));
 }
 
@@ -244,13 +230,21 @@ async function fetchRoundVotes(
   ponderBaseUrl: string,
   candidate: CorrelationRoundCandidate,
 ): Promise<CorrelationVoteInput[]> {
-  const url = new URL("/correlation/round-votes", ponderBaseUrl);
-  url.searchParams.set("rewardPoolId", candidate.rewardPoolId.toString());
-  url.searchParams.set("contentId", candidate.contentId.toString());
-  url.searchParams.set("roundId", candidate.roundId.toString());
-  url.searchParams.set("limit", "1000");
-  const response = await fetchJson<VoteResponse>(url);
-  return (response.items ?? []).map(parseVote);
+  const votes: CorrelationVoteInput[] = [];
+  for (let offset = 0; ; offset += VOTE_PAGE_SIZE) {
+    const url = new URL("/correlation/round-votes", ponderBaseUrl);
+    url.searchParams.set("rewardPoolId", candidate.rewardPoolId.toString());
+    url.searchParams.set("contentId", candidate.contentId.toString());
+    url.searchParams.set("roundId", candidate.roundId.toString());
+    url.searchParams.set("limit", String(VOTE_PAGE_SIZE));
+    url.searchParams.set("offset", String(offset));
+    const response = await fetchJson<VoteResponse>(url);
+    const items = response.items ?? [];
+    votes.push(...items.map(parseVote));
+    if (items.length < VOTE_PAGE_SIZE) {
+      return votes;
+    }
+  }
 }
 
 async function fetchJson<T>(url: URL): Promise<T> {

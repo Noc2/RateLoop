@@ -1671,7 +1671,7 @@ describe("registerCorrelationRoutes", () => {
         bountyEligibility: 0,
         bountyClosesAt: 0n,
         settledAt: 123n,
-        revealedCount: 3,
+        revealedCount: 1,
         snapshotStatus: null,
       },
     ]);
@@ -1702,6 +1702,7 @@ describe("registerCorrelationRoutes", () => {
     expect(serialized).toContain("questionRewardPool.asset");
     expect(serialized).toContain("round.state");
     expect(serialized).toContain("roundPayoutSnapshot.id");
+    expect(serialized).not.toContain("round.revealedCount");
   });
 
   it("returns eligible revealed vote inputs for correlation scoring", async () => {

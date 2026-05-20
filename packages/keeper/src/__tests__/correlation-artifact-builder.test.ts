@@ -134,4 +134,53 @@ describe("automatic correlation artifact builder", () => {
       }),
     );
   });
+
+  it("emits empty round snapshots for settled rounds with no eligible voters", async () => {
+    mockConfig();
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(input.toString());
+      if (url.pathname === "/correlation/round-candidates") {
+        return jsonResponse({
+          items: [
+            {
+              rewardPoolId: "8",
+              contentId: "10",
+              roundId: "3",
+            },
+          ],
+        });
+      }
+      if (url.pathname === "/correlation/round-votes") {
+        return jsonResponse({ items: [] });
+      }
+      return new Response("not found", { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { buildConfiguredCorrelationSnapshotArtifact } = await import(
+      "../correlation-artifact-builder.js"
+    );
+    const logger = {
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    };
+
+    const artifact = await buildConfiguredCorrelationSnapshotArtifact(logger);
+
+    expect(artifact.roundPayoutSnapshots?.[0]).toMatchObject({
+      rewardPoolId: "8",
+      contentId: "10",
+      roundId: "3",
+      rawEligibleVoters: 0,
+      effectiveParticipantUnits: 0,
+      totalClaimWeight: "0",
+      weightRoot: `0x${"0".repeat(64)}`,
+    });
+    expect(artifact.correlationEpochs?.[0]?.clusterRoot).toMatch(/^0x[0-9a-f]{64}$/);
+    expect(artifact.correlationEpochs?.[0]?.clusterRoot).not.toBe(
+      `0x${"0".repeat(64)}`,
+    );
+  });
 });

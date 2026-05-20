@@ -17,6 +17,7 @@ import { safeBigInt, safeLimit, safeOffset } from "../utils.js";
 
 const REWARD_ASSET_USDC = 1;
 const PAYOUT_DOMAIN_QUESTION_REWARD = 1;
+const SNAPSHOT_STATUS_PROPOSED = 1;
 const SNAPSHOT_STATUS_REJECTED = 4;
 const ZERO_HASH = `0x${"0".repeat(64)}` as const;
 
@@ -71,10 +72,9 @@ export function registerCorrelationRoutes(app: ApiApp) {
           sql`${questionRewardPool.qualifiedRounds} < ${questionRewardPool.requiredSettledRounds}`,
           eq(round.state, ROUND_STATE.Settled),
           sql`${round.roundId} >= ${questionRewardPool.startRoundId}`,
-          sql`${round.revealedCount} >= ${questionRewardPool.requiredVoters}`,
-          sql`(${questionRewardPool.bountyClosesAt} = 0 or ${round.settledAt} <= ${questionRewardPool.bountyClosesAt})`,
           or(
             sql`${roundPayoutSnapshot.id} is null`,
+            eq(roundPayoutSnapshot.status, SNAPSHOT_STATUS_PROPOSED),
             eq(roundPayoutSnapshot.status, SNAPSHOT_STATUS_REJECTED),
           ),
         ),
@@ -91,10 +91,12 @@ export function registerCorrelationRoutes(app: ApiApp) {
     const contentId = validPositiveBigIntParam(c.req.query("contentId"));
     const roundId = validPositiveBigIntParam(c.req.query("roundId"));
     const limit = safeLimit(c.req.query("limit"), 500, 1000);
+    const offset = safeOffset(c.req.query("offset"));
 
     if (rewardPoolId === null || contentId === null || roundId === null) {
       return c.json({ error: "rewardPoolId, contentId, and roundId must be positive integers" }, 400);
     }
+    if (Number.isNaN(offset)) return c.json({ error: "Invalid offset" }, 400);
 
     const rows = await db
       .select({
@@ -159,7 +161,8 @@ export function registerCorrelationRoutes(app: ApiApp) {
         ),
       )
       .orderBy(asc(vote.commitBlockNumber), asc(vote.commitLogIndex), asc(vote.id))
-      .limit(limit);
+      .limit(limit)
+      .offset(offset);
 
     return jsonBig(c, {
       items: rows.map((row) => ({
