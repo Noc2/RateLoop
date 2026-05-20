@@ -83,6 +83,8 @@ contract RoundVotingEngine is
     error IndexOutOfBounds();
     error UnrevealedPastEpochVotes();
     error NothingProcessed();
+    /// @notice M-Vote-2: refreshRbtsSeed has hit the per-round cap.
+    error RbtsSeedRefreshCapped();
 
     // --- Access Control Roles ---
     bytes32 internal constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
@@ -93,8 +95,35 @@ contract RoundVotingEngine is
     uint256 internal constant VOTE_COOLDOWN = 24 hours; // Time-based cooldown per content per voter
     uint256 internal constant MAX_CIPHERTEXT_SIZE = 2_048; // 2 KB max ciphertext to prevent storage bloat
     uint16 internal constant MIN_RBTS_PARTICIPANTS = 3;
+    /// @notice M-Vote-2: maximum number of `refreshRbtsSeed` calls allowed per round. Each
+    ///         refresh re-captures a `blockhash`-derived seed; without a cap, the
+    ///         threshold-closing voter could wait 256 blocks, refresh, simulate, and repeat
+    ///         until the sampler index produced a favorable RBTS score. Three refreshes
+    ///         (≈ 3 * 256 blocks ≈ 25 min on a 2s L2) is more than enough for honest liveness
+    ///         when nobody is monitoring the round; well short of meaningful grinding leverage.
+    uint8 internal constant MAX_RBTS_SEED_REFRESHES = 3;
 
     // --- State ---
+    // M-Crosscutting-1 (audit 2026-05-20): Storage layout history. This contract is
+    // `TransparentUpgradeableProxy`-backed (see `script/Deploy.s.sol`). Slot positions matter
+    // for any future hot-upgrade. The current layout has the following SHIFTS from prior
+    // releases — fresh deployments are unaffected, but any hot-upgrade from a baseline that
+    // populated the old surface MUST run `forge-upgrade` / OZ Upgrades `validateUpgrade` first:
+    //
+    //   * Pre-2026-05-19: `roundDeferredCleanupBounty` (triple mapping → uint256) at the slot
+    //     now occupied by `roundClusterPayoutReadyAt` (triple mapping → uint48). Annotated
+    //     with `@custom:oz-renamed-from roundDeferredCleanupBounty` (I-Crosscutting-A).
+    //   * Pre-2026-05-19: `consensusReserve` (uint256) sat at the end of the layout. Removed
+    //     when the consensus-reserve mechanism was deleted (`bc96d7e5`); all later slots
+    //     shifted up by 1.
+    //   * Post-2026-05-19: `roundRbtsMeanScoreBps` (uint256→uint16) inserted mid-layout at
+    //     line 139; all later slots shifted down by 1.
+    //
+    // CI runbook: any future change to the order or type of state variables in this contract
+    // must run OZ `validateUpgrade` against the previous implementation before any non-31337
+    // deploy. If the deploy is `--upgrade`, the validator catches incompatible shifts and
+    // aborts. If the deploy is fresh (TransparentUpgradeableProxy with a brand-new admin),
+    // the layout is permitted to shift freely.
     IERC20 internal lrepToken;
     ContentRegistry internal registry;
     ProtocolConfig public protocolConfig;
@@ -213,6 +242,9 @@ contract RoundVotingEngine is
     event RoundCancelled(uint256 indexed contentId, uint256 indexed roundId);
     event RoundTied(uint256 indexed contentId, uint256 indexed roundId);
     event RoundRevealFailed(uint256 indexed contentId, uint256 indexed roundId);
+    /// @notice L-Cleanup-1: emitted when accumulated treasury-rejected forfeits are
+    ///         successfully flushed to treasury via `flushPendingTreasuryForfeit`.
+    event PendingTreasuryForfeitFlushed(address indexed treasury, uint256 amount);
     /// @notice Emitted when `_notifyBundleRoundTerminal` invocation of
     ///         `recordBundleQuestionTerminal` on the bundle escrow reverts. The terminal signal
     ///         is captured in `pendingBundleObserverReplay` so an admin can call
@@ -845,11 +877,19 @@ contract RoundVotingEngine is
     /// @notice Refresh an expired pending RBTS settlement seed without using known blockhashes for scoring.
     /// @dev If a captured seed block ages out of `blockhash`, any caller can capture a fresh block and settle
     ///      from the next block onward. This preserves liveness without falling back to caller-chosen entropy.
+    ///      M-Vote-2: capped at `MAX_RBTS_SEED_REFRESHES` per round to bound seed grinding by the
+    ///      threshold-closing voter. Once exhausted, callers must accept the captured entropy or
+    ///      let governance arbitrate via `cancelExpiredRound`.
     function refreshRbtsSeed(uint256 contentId, uint256 roundId) external nonReentrant {
         RoundLib.Round storage round = rounds[contentId][roundId];
         if (round.state != RoundLib.RoundState.Open) revert RoundNotOpen();
         RoundLib.RoundConfig memory roundCfg = _getRoundConfig(contentId, roundId);
         if (round.revealedCount < _rbtsRevealQuorum(roundCfg.minVoters)) revert NotEnoughVotes();
+        uint8 refreshCount = _roundRbtsSeedRefreshCount[contentId][roundId];
+        if (refreshCount >= MAX_RBTS_SEED_REFRESHES) revert RbtsSeedRefreshCapped();
+        unchecked {
+            _roundRbtsSeedRefreshCount[contentId][roundId] = refreshCount + 1;
+        }
 
         RoundRevealLib.refreshRbtsSeed(roundRbtsSeedEntropy, contentId, roundId);
     }
@@ -1008,7 +1048,7 @@ contract RoundVotingEngine is
         nonReentrant
     {
         RoundLib.Round storage round = rounds[contentId][roundId];
-        accountedLrepBalance = RoundCleanupLib.processUnrevealedVotesForEngine(
+        (uint256 newAccountedBalance, uint256 pendingDelta) = RoundCleanupLib.processUnrevealedVotesForEngine(
             round,
             roundCommitHashes[contentId][roundId],
             commits[contentId][roundId],
@@ -1023,12 +1063,36 @@ contract RoundVotingEngine is
             startIndex,
             count
         );
+        accountedLrepBalance = newAccountedBalance;
+        // L-Cleanup-1: accumulate any treasury-rejected forfeit into the pending bucket so a
+        // later `flushPendingTreasuryForfeit` (permissionless) can retry the transfer. Without
+        // this, the unpaid LREP would stay in the engine but be inaccessible: commits are
+        // zeroed and `recoverSurplusLrep` can't touch funds still on the accounted side.
+        if (pendingDelta > 0) {
+            _pendingTreasuryForfeitLrep += pendingDelta;
+        }
         if (
             round.state == RoundLib.RoundState.Settled && roundUnrevealedCleanupRemaining[contentId][roundId] == 0
                 && roundClusterPayoutReadyAt[contentId][roundId] == 0
         ) {
             roundClusterPayoutReadyAt[contentId][roundId] = block.timestamp.toUint48();
         }
+    }
+
+    /// @notice L-Cleanup-1: permissionless retry of pending treasury forfeits accumulated by
+    ///         `processUnrevealedVotes` when treasury was unset or the transfer reverted.
+    ///         Decrements `accountedLrepBalance` only on successful transfer; the bucket
+    ///         survives failed flushes so callers can retry once treasury is healthy.
+    function flushPendingTreasuryForfeit() external nonReentrant returns (uint256 paid) {
+        uint256 amount = _pendingTreasuryForfeitLrep;
+        if (amount == 0) revert NothingProcessed();
+        address treasuryAddress = protocolConfig.treasury();
+        if (treasuryAddress == address(0)) revert InvalidAddress();
+        _pendingTreasuryForfeitLrep = 0;
+        lrepToken.safeTransfer(treasuryAddress, amount);
+        accountedLrepBalance -= amount;
+        emit PendingTreasuryForfeitFlushed(treasuryAddress, amount);
+        return amount;
     }
     // =========================================================================
     // INTERNAL HELPERS
@@ -1494,6 +1558,18 @@ contract RoundVotingEngine is
     /// @custom:oz-renamed-from roundDeferredCleanupBounty
     mapping(uint256 contentId => mapping(uint256 roundId => uint48)) public roundClusterPayoutReadyAt;
 
+    /// @notice M-Vote-2: number of times `refreshRbtsSeed` has been called for a round. Each
+    ///         refresh swaps the captured `blockhash`-derived entropy for a fresh capture; an
+    ///         unbounded counter would let the threshold-closing voter grind the sampler by
+    ///         waiting 256 blocks and re-rolling. Capped at `MAX_RBTS_SEED_REFRESHES` per round.
+    mapping(uint256 contentId => mapping(uint256 roundId => uint8)) internal _roundRbtsSeedRefreshCount;
+
+    /// @notice L-Cleanup-1: accumulated LREP that `processUnrevealedVotes` tried to send to
+    ///         treasury but couldn't (treasury unset or transfer reverted). Permissionless
+    ///         `flushPendingTreasuryForfeit` retries the transfer; until then the amount stays
+    ///         in `accountedLrepBalance` so it isn't classified as recoverable surplus.
+    uint256 internal _pendingTreasuryForfeitLrep;
+
     // --- Storage gap reserved for future upgrades ---
-    uint256[23] private __gap;
+    uint256[21] private __gap;
 }

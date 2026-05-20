@@ -87,6 +87,12 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
         address indexed rater, bytes32 indexed nullifierHash, HumanCredentialProvider indexed provider
     );
     event HumanNullifierRevocationCleared(bytes32 indexed nullifierHash, HumanCredentialProvider indexed provider);
+    /// @notice M-Identity-2: emitted when SEEDER_ROLE explicitly re-binds a rater's canonical
+    ///         identity key. Off-chain consumers MUST re-map any per-identity state keyed off
+    ///         the old key (cooldowns, exclusions, profile ownership) when they observe this.
+    event CanonicalHumanIdentityKeyRotated(
+        address indexed rater, bytes32 indexed previousKey, bytes32 indexed newKey, HumanCredentialProvider provider
+    );
     event ProfileFollowed(address indexed follower, address indexed target, uint64 followedAt);
     event ProfileUnfollowed(address indexed follower, address indexed target, uint64 unfollowedAt);
     event DelegateRequested(address indexed holder, address indexed delegate);
@@ -329,6 +335,31 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
         emit HumanNullifierRevocationCleared(nullifierHash, provider);
     }
 
+    /// @notice M-Identity-2: explicit governance action to re-bind a rater's canonical identity
+    ///         key. Replaces the prior silent override that fired on every `SeededHuman`
+    ///         attestation. The rater must currently hold the credential whose nullifierHash
+    ///         matches `newKey` (we re-use the credential's nullifierHash so the key is bound
+    ///         to a verified attestation, not an arbitrary input). Emits
+    ///         `CanonicalHumanIdentityKeyRotated` so off-chain consumers can re-map
+    ///         per-identity state from the old key.
+    /// @dev SEEDER-gated. Intended for legitimate corrective actions after a credential
+    ///      revocation / re-attestation cycle; off-chain runbook should pause downstream
+    ///      indexers, run the rotation, then re-publish indexer state under the new key.
+    function rotateCanonicalIdentityKey(address rater) external onlyRole(SEEDER_ROLE) {
+        if (rater == address(0)) revert InvalidAddress();
+        HumanCredential memory credential = _humanCredentials[rater];
+        if (
+            credential.nullifierHash == bytes32(0) || !credential.verified || credential.revoked
+                || credential.expiresAt <= block.timestamp
+        ) {
+            revert InvalidCredential();
+        }
+        bytes32 previousKey = _canonicalHumanIdentityKey[rater];
+        if (previousKey == credential.nullifierHash) return;
+        _canonicalHumanIdentityKey[rater] = credential.nullifierHash;
+        emit CanonicalHumanIdentityKeyRotated(rater, previousKey, credential.nullifierHash, credential.provider);
+    }
+
     function getProfile(address rater) external view returns (RaterProfile memory) {
         return _profiles[rater];
     }
@@ -430,7 +461,14 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
         address currentOwner = _humanNullifierOwnerByProvider[provider][nullifierHash];
         if (currentOwner != address(0) && currentOwner != rater) revert NullifierAlreadyAssigned();
         _humanNullifierOwnerByProvider[provider][nullifierHash] = rater;
-        if (_canonicalHumanIdentityKey[rater] == bytes32(0) || provider == HumanCredentialProvider.SeededHuman) {
+        // M-Identity-2: only seed the canonical identity key on first attestation. The earlier
+        // unconditional `provider == SeededHuman` override let SEEDER silently rotate the
+        // canonical key of a user who already had a WorldID-bound identity, severing
+        // accumulated per-identity cooldowns / exclusions / profile ownership held against
+        // the old key. Re-binding the canonical key after first set now requires an explicit
+        // `rotateCanonicalIdentityKey` governance call that emits a migration event so
+        // downstream consumers can re-map.
+        if (_canonicalHumanIdentityKey[rater] == bytes32(0)) {
             _canonicalHumanIdentityKey[rater] = nullifierHash;
         }
         _clearInboundDelegation(rater);

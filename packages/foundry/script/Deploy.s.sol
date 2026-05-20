@@ -256,14 +256,21 @@ contract DeployRateLoop is ScaffoldETHDeploy {
 
         LaunchDistributionPool launchDistributionPool =
             new LaunchDistributionPool(address(lrepToken), address(raterRegistry), governance);
+        // M-Oracle-1 (PR #20): the launch-credit consumer pin on the oracle MUST be set BEFORE
+        // `setClusterPayoutOracle` because `_validateClusterPayoutOracle` now verifies the new
+        // oracle routes the launch-credit domain back to this pool. Bootstrap order:
+        //   1. deploy launch pool (above)
+        //   2. set oracle's consumer pin → launch pool
+        //   3. setClusterPayoutOracle on the launch pool
+        //   4. setRoundClusterReadyAtSource on the launch pool
+        clusterPayoutOracle.setRoundPayoutSnapshotConsumer(
+            clusterPayoutOracle.PAYOUT_DOMAIN_LAUNCH_CREDIT(), address(launchDistributionPool)
+        );
         launchDistributionPool.setClusterPayoutOracle(address(clusterPayoutOracle));
         // M-Oracle-1: wire the launch pool to the voting engine so its
         // `roundPayoutSnapshotSourceReadyAt` view can authoritatively reject pre-source proposals
         // even before the first earned-rater credit has been pending-recorded.
         launchDistributionPool.setRoundClusterReadyAtSource(address(votingEngine));
-        clusterPayoutOracle.setRoundPayoutSnapshotConsumer(
-            clusterPayoutOracle.PAYOUT_DOMAIN_LAUNCH_CREDIT(), address(launchDistributionPool)
-        );
         launchDistributionPool.setAuthorizedCaller(address(rewardDistributor), true);
         AdvisoryVoteRecorder advisoryVoteRecorder =
             new AdvisoryVoteRecorder(address(votingEngine), address(registry), governance);

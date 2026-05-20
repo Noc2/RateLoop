@@ -223,8 +223,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
             if (!c.revealed && c.stakeAmount > 0) {
                 (bool isUp, bytes32 salt, bool exists) = _testRevealPayload(keys[i]);
                 if (exists) {
-                    try votingEngine.revealVoteByCommitKey(contentId, roundId, keys[i], isUp, 5_000, salt) { }
-                        catch { }
+                    try votingEngine.revealVoteByCommitKey(contentId, roundId, keys[i], isUp, 5_000, salt) { } catch { }
                 }
             }
         }

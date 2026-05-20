@@ -1,0 +1,140 @@
+[
+  {
+    "slot": 0,
+    "offset": 0,
+    "label": "lrepToken",
+    "type": "t_contract(IERC20)"
+  },
+  {
+    "slot": 1,
+    "offset": 0,
+    "label": "usdcToken",
+    "type": "t_contract(IERC20)"
+  },
+  {
+    "slot": 2,
+    "offset": 0,
+    "label": "registry",
+    "type": "t_contract(ContentRegistry)"
+  },
+  {
+    "slot": 3,
+    "offset": 0,
+    "label": "votingEngine",
+    "type": "t_contract(RoundVotingEngine)"
+  },
+  {
+    "slot": 4,
+    "offset": 0,
+    "label": "raterRegistry",
+    "type": "t_contract(IRaterIdentityRegistry)"
+  },
+  {
+    "slot": 5,
+    "offset": 0,
+    "label": "nextRewardPoolId",
+    "type": "t_uint256"
+  },
+  {
+    "slot": 6,
+    "offset": 0,
+    "label": "rewardPools",
+    "type": "t_mapping(t_uint256,t_struct(RewardPool))"
+  },
+  {
+    "slot": 7,
+    "offset": 0,
+    "label": "roundSnapshots",
+    "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_struct(RoundSnapshot)))"
+  },
+  {
+    "slot": 8,
+    "offset": 0,
+    "label": "rewardClaimed",
+    "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_bytes32,t_bool)))"
+  },
+  {
+    "slot": 9,
+    "offset": 0,
+    "label": "bundleRewards",
+    "type": "t_mapping(t_uint256,t_struct(BundleReward))"
+  },
+  {
+    "slot": 10,
+    "offset": 0,
+    "label": "bundleQuestions",
+    "type": "t_mapping(t_uint256,t_array(t_struct(BundleQuestion))dyn)"
+  },
+  {
+    "slot": 11,
+    "offset": 0,
+    "label": "bundleQuestionRecordedRounds",
+    "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_uint32))"
+  },
+  {
+    "slot": 12,
+    "offset": 0,
+    "label": "bundleRoundIds",
+    "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_uint256,t_uint64)))"
+  },
+  {
+    "slot": 13,
+    "offset": 0,
+    "label": "bundleRoundSetSnapshots",
+    "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_struct(BundleRoundSetSnapshot)))"
+  },
+  {
+    "slot": 14,
+    "offset": 0,
+    "label": "bundleRoundSetRewardClaimed",
+    "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_bytes32,t_bool)))"
+  },
+  {
+    "slot": 15,
+    "offset": 0,
+    "label": "rewardPoolPayerIdentity",
+    "type": "t_mapping(t_uint256,t_address)"
+  },
+  {
+    "slot": 16,
+    "offset": 0,
+    "label": "rewardPoolPayerIdentityKey",
+    "type": "t_mapping(t_uint256,t_bytes32)"
+  },
+  {
+    "slot": 17,
+    "offset": 0,
+    "label": "contentBundleId",
+    "type": "t_mapping(t_uint256,t_uint256)"
+  },
+  {
+    "slot": 18,
+    "offset": 0,
+    "label": "contentBundleIndex",
+    "type": "t_mapping(t_uint256,t_uint256)"
+  },
+  {
+    "slot": 19,
+    "offset": 0,
+    "label": "defaultFrontendFeeBps",
+    "type": "t_uint16"
+  },
+  {
+    "slot": 20,
+    "offset": 0,
+    "label": "rewardPoolClusterPayoutOracle",
+    "type": "t_mapping(t_uint256,t_address)"
+  },
+  {
+    "slot": 21,
+    "offset": 0,
+    "label": "bundleQuestionTerminalSyncCursor",
+    "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_uint256))"
+  },
+  {
+    "slot": 22,
+    "offset": 0,
+    "label": "__gap",
+    "type": "t_array(t_uint256)"
+  }
+]

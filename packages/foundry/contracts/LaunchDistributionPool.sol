@@ -1055,6 +1055,19 @@ contract LaunchDistributionPool is
         catch {
             revert InvalidAddress();
         }
+        // M-Oracle-1: confirm the new oracle routes the launch-credit domain back to this
+        // pool before pointing the pool at it. Sibling check to L-Oracle-B on the question
+        // reward escrow. Without this, a governance fat-finger (new oracle deployed but its
+        // `setRoundPayoutSnapshotConsumer` never called) strands every in-flight launch
+        // credit: `verifyPayoutWeight` rejects `msg.sender != proposal.consumer`, and fresh
+        // proposes revert because `roundPayoutSnapshotConsumer[domain] == address(0)`.
+        try IClusterPayoutOracle(newOracle).roundPayoutSnapshotConsumer(PAYOUT_DOMAIN_LAUNCH_CREDIT) returns (
+            address consumer
+        ) {
+            if (consumer != address(this)) revert InvalidAddress();
+        } catch {
+            revert InvalidAddress();
+        }
     }
 
     function _isDuplicateAnchor(bytes32[] calldata verifiedAnchorIds, uint256 index) internal pure returns (bool) {

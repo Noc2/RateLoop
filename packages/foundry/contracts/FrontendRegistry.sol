@@ -77,6 +77,8 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     event FeesClaimed(address indexed frontend, uint256 lrepAmount);
     event FeesConfiscated(address indexed frontend, uint256 lrepAmount);
     event VotingEngineUpdated(address votingEngine);
+    /// @notice L-Frontend-2: emitted when governance rotates the confiscation recipient.
+    event ConfiscationRecipientUpdated(address indexed previous, address indexed current);
     event FeeCreditorUpdated(address indexed oldCreditor, address indexed newCreditor);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
@@ -325,6 +327,15 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
         f.lrepFees = 0;
         f.slashed = true;
 
+        // L-Frontend-3: slashing must reset the unbonding clock. Otherwise a slash → unslash →
+        // immediate-exit pattern lets governance be coerced into shortening the operator's
+        // review window to zero — the timer keeps running while the operator is frozen.
+        if (frontendExitAvailableAt[frontend] != 0) {
+            uint256 newAvailableAt = block.timestamp + UNBONDING_PERIOD;
+            frontendExitAvailableAt[frontend] = newAvailableAt;
+            emit FrontendExitRequested(frontend, newAvailableAt);
+        }
+
         uint256 totalConfiscated = amount + confiscatedFees;
         if (totalConfiscated > 0) {
             lrepToken.safeTransfer(confiscationRecipient, totalConfiscated);
@@ -367,6 +378,20 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
         }
         votingEngine = IRoundVotingEngine(_votingEngine);
         emit VotingEngineUpdated(_votingEngine);
+    }
+
+    /// @notice L-Frontend-2: governance-rotation setter for the confiscation recipient.
+    ///         `confiscationRecipient` was init-only; if governance later rotated (timelock
+    ///         multisig swap, governance migration), slashed LREP would continue flowing to
+    ///         the OLD address. If the recipient ever reverts on receive, `slashFrontend`
+    ///         reverts and slashing is bricked until governance can fix it — which it can
+    ///         now do via this setter.
+    function setConfiscationRecipient(address newRecipient) external onlyRole(GOVERNANCE_ROLE) {
+        require(newRecipient != address(0), "Invalid recipient");
+        address previous = confiscationRecipient;
+        if (previous == newRecipient) return;
+        confiscationRecipient = newRecipient;
+        emit ConfiscationRecipientUpdated(previous, newRecipient);
     }
 
     /// @notice Grant fee creditor role to the reward distributor for the current voting engine.

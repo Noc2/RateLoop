@@ -403,6 +403,10 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         raterRegistry.revokeHumanCredential(funder);
         raterRegistry.clearRevokedHumanNullifier(RaterRegistry.HumanCredentialProvider.SeededHuman, anchor);
         _seedRaterIdentity(raterRegistry, voter1, anchor);
+        // M-Identity-2: re-seeding no longer silently rotates the canonical identity key.
+        // Governance must explicitly rotate voter1 onto the new anchor for the funder/voter1
+        // identity collision to materialize on-chain.
+        raterRegistry.rotateCanonicalIdentityKey(voter1);
         vm.stopPrank();
 
         _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
@@ -421,6 +425,10 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         raterRegistry.revokeHumanCredential(submitter);
         raterRegistry.clearRevokedHumanNullifier(RaterRegistry.HumanCredentialProvider.SeededHuman, anchor);
         _seedRaterIdentity(raterRegistry, voter1, anchor);
+        // M-Identity-2: re-seeding no longer silently rotates the canonical identity key.
+        // Governance must explicitly rotate voter1 onto the new anchor for the submitter/voter1
+        // identity collision to materialize on-chain.
+        raterRegistry.rotateCanonicalIdentityKey(voter1);
         vm.stopPrank();
 
         _expectSelfVoteCommitRevert(voter1, contentId, keccak256("feedback-reminted-submitter"));

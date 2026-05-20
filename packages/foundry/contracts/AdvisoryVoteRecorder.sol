@@ -442,8 +442,16 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         totalStake;
         thresholdReachedAt;
         if (state != RoundLib.RoundState.Settled) revert RoundNotSettled();
-        if (advisoryCommit.revealedAt == 0 || advisoryCommit.revealedAt > settledAt) {
-            revert AdvisoryRevealedAfterSettlement();
+        // M-Vote-1: mirror the reveal-time grace window allowed by `_effectiveRevealableAfter`
+        // (I-Vote-A fix). Without this, advisory reveals that landed inside
+        // `ProtocolConfig.revealGracePeriod` past `settledAt` would still revert at claim time
+        // — losing the launch credit the grace fix was meant to preserve.
+        if (advisoryCommit.revealedAt == 0) revert AdvisoryRevealedAfterSettlement();
+        if (advisoryCommit.revealedAt > settledAt) {
+            uint256 grace = protocolConfig.revealGracePeriod();
+            if (settledAt == 0 || grace == 0 || uint256(advisoryCommit.revealedAt) > uint256(settledAt) + grace) {
+                revert AdvisoryRevealedAfterSettlement();
+            }
         }
         if (!votingEngine.roundRbtsScored(advisoryCommit.contentId, advisoryCommit.roundId)) revert RoundNotSettled();
         if (revealedCount < 3) revert NotEnoughVotes();

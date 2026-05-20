@@ -25,6 +25,9 @@ jobs:
       - name: Enforce EIP-170 contract size limit
         working-directory: packages/foundry
         run: make check-contract-sizes DEPLOY_PROFILE=deploy
+      - name: Enforce storage layout pinning
+        working-directory: packages/foundry
+        run: make check-storage-layouts
 
   foundry:
     runs-on: ubuntu-latest

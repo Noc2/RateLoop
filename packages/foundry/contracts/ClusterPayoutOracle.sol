@@ -505,12 +505,14 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         if (consumer == address(0)) revert InvalidAddress();
 
         bool withinVetoWindow = block.timestamp <= uint256(snapshot.finalizedAt) + uint256(FINALIZATION_VETO_WINDOW);
-        // L-Oracle-B: wrap the consumer call in try/catch so a broken / removed consumer cannot
-        // trap the arbiter and indefinitely block reject. A reverting consumer is treated as
-        // "consumed" (conservative — outside the veto window the rejection still aborts; inside
-        // the veto window the rejection proceeds as before). Initialize explicitly to `false`
-        // so the local is never read uninitialized.
+        // L-Oracle-B + L-Oracle-2: wrap the consumer call in try/catch so a broken / removed
+        // consumer cannot trap the arbiter. Track `consumed` AND `consumedKnown` separately.
+        // The catch path defaults to `consumed = true` to block out-of-veto rejection of
+        // potentially-paid snapshots, but `consumedKnown = false` keeps us from permanently
+        // killing the (key, weightRoot) slot via `rejectedRoundPayoutSnapshotConsumed` when we
+        // don't actually know the consumer's state.
         bool consumed = false;
+        bool consumedKnown = false;
         try IRoundPayoutSnapshotConsumer(consumer)
             .isRoundPayoutSnapshotConsumed(
                 snapshot.domain, snapshot.rewardPoolId, snapshot.contentId, snapshot.roundId
@@ -518,6 +520,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
             bool isConsumed
         ) {
             consumed = isConsumed;
+            consumedKnown = true;
         } catch {
             consumed = true;
         }
@@ -531,7 +534,10 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
 
         proposal.snapshot.status = SnapshotStatus.Rejected;
         rejectedRoundPayoutSnapshotRoots[snapshotKey][snapshot.weightRoot] = true;
-        if (consumed) {
+        // L-Oracle-2: only mark the slot as permanently consumed-rejected when the consumer
+        // call SUCCEEDED and returned true. The catch path's defensive default must not flag
+        // the slot as dead.
+        if (consumed && consumedKnown) {
             rejectedRoundPayoutSnapshotConsumed[snapshotKey] = true;
         }
         // L-Integrations-1: attempt to claw back the proposer's bond. Today proposerBond is always

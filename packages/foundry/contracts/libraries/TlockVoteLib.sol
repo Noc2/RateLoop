@@ -47,6 +47,13 @@ library TlockVoteLib {
         return uint256(genesisTime) + (uint256(targetRound) - 1) * uint256(period);
     }
 
+    /// @dev `buildExpectedRbtsCommitHash(bytes memory ciphertext)` — kept for off-chain /
+    ///      test callers that have the raw ciphertext in scope. Body delegates to the
+    ///      `*FromCiphertextHash` variant after computing the hash, so production paths
+    ///      that already have `ciphertextHash` skip the second keccak. Splitting the body
+    ///      this way also keeps Yul IR locals below the optimizer's stack budget at
+    ///      `optimizer_runs=100` (PR #20 review: `var_salt_1` + memory `ciphertext` + 10-arg
+    ///      encodePacked pushed past the limit).
     function buildExpectedRbtsCommitHash(
         bool isUp,
         uint16 predictedUpBps,
@@ -59,20 +66,17 @@ library TlockVoteLib {
         bytes32 drandChainHash,
         bytes memory ciphertext
     ) external pure returns (bytes32) {
-        bytes32 ciphertextHash = keccak256(ciphertext);
-        return keccak256(
-            abi.encodePacked(
-                isUp,
-                predictedUpBps,
-                salt,
-                voter,
-                contentId,
-                roundId,
-                roundReferenceRatingBps,
-                targetRound,
-                drandChainHash,
-                ciphertextHash
-            )
+        return _commitHashFromCiphertextHash(
+            isUp,
+            predictedUpBps,
+            salt,
+            voter,
+            contentId,
+            roundId,
+            roundReferenceRatingBps,
+            targetRound,
+            drandChainHash,
+            keccak256(ciphertext)
         );
     }
 
@@ -88,6 +92,37 @@ library TlockVoteLib {
         bytes32 drandChainHash,
         bytes32 ciphertextHash
     ) external pure returns (bytes32) {
+        return _commitHashFromCiphertextHash(
+            isUp,
+            predictedUpBps,
+            salt,
+            voter,
+            contentId,
+            roundId,
+            roundReferenceRatingBps,
+            targetRound,
+            drandChainHash,
+            ciphertextHash
+        );
+    }
+
+    /// @dev Pure helper shared by both public variants. Centralizing the encodePacked here
+    ///      ensures Yul IR sees only one copy with `bytes32 ciphertextHash` in scope, which
+    ///      keeps locals below the optimizer's stack budget at `optimizer_runs=100`. The
+    ///      `bytes memory ciphertext` parameter on the public variant is hashed at entry and
+    ///      released before this helper runs.
+    function _commitHashFromCiphertextHash(
+        bool isUp,
+        uint16 predictedUpBps,
+        bytes32 salt,
+        address voter,
+        uint256 contentId,
+        uint256 roundId,
+        uint16 roundReferenceRatingBps,
+        uint64 targetRound,
+        bytes32 drandChainHash,
+        bytes32 ciphertextHash
+    ) private pure returns (bytes32) {
         return keccak256(
             abi.encodePacked(
                 isUp,

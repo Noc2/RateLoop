@@ -1,0 +1,140 @@
+[
+  {
+    "slot": 0,
+    "offset": 0,
+    "label": "rewardDistributor",
+    "type": "t_address"
+  },
+  {
+    "slot": 1,
+    "offset": 0,
+    "label": "categoryRegistry",
+    "type": "t_address"
+  },
+  {
+    "slot": 2,
+    "offset": 0,
+    "label": "frontendRegistry",
+    "type": "t_address"
+  },
+  {
+    "slot": 3,
+    "offset": 0,
+    "label": "treasury",
+    "type": "t_address"
+  },
+  {
+    "slot": 4,
+    "offset": 0,
+    "label": "config",
+    "type": "t_struct(RoundConfig)"
+  },
+  {
+    "slot": 5,
+    "offset": 0,
+    "label": "participationPool",
+    "type": "t_address"
+  },
+  {
+    "slot": 6,
+    "offset": 0,
+    "label": "revealGracePeriod",
+    "type": "t_uint256"
+  },
+  {
+    "slot": 7,
+    "offset": 0,
+    "label": "drandChainHash",
+    "type": "t_bytes32"
+  },
+  {
+    "slot": 8,
+    "offset": 0,
+    "label": "drandGenesisTime",
+    "type": "t_uint64"
+  },
+  {
+    "slot": 8,
+    "offset": 8,
+    "label": "drandPeriod",
+    "type": "t_uint64"
+  },
+  {
+    "slot": 9,
+    "offset": 0,
+    "label": "ratingConfig",
+    "type": "t_struct(RatingConfig)"
+  },
+  {
+    "slot": 20,
+    "offset": 0,
+    "label": "slashConfig",
+    "type": "t_struct(SlashConfig)"
+  },
+  {
+    "slot": 22,
+    "offset": 0,
+    "label": "minSubmissionLrepPool",
+    "type": "t_uint256"
+  },
+  {
+    "slot": 23,
+    "offset": 0,
+    "label": "minSubmissionUsdcPool",
+    "type": "t_uint256"
+  },
+  {
+    "slot": 24,
+    "offset": 0,
+    "label": "roundConfigBounds",
+    "type": "t_struct(RoundConfigBounds)"
+  },
+  {
+    "slot": 25,
+    "offset": 0,
+    "label": "rewardDistributorAuthorized",
+    "type": "t_mapping(t_address,t_bool)"
+  },
+  {
+    "slot": 26,
+    "offset": 0,
+    "label": "rewardDistributorVotingEngine",
+    "type": "t_mapping(t_address,t_address)"
+  },
+  {
+    "slot": 27,
+    "offset": 0,
+    "label": "rewardDistributorForVotingEngine",
+    "type": "t_mapping(t_address,t_address)"
+  },
+  {
+    "slot": 28,
+    "offset": 0,
+    "label": "raterRegistry",
+    "type": "t_address"
+  },
+  {
+    "slot": 29,
+    "offset": 0,
+    "label": "launchDistributionPool",
+    "type": "t_address"
+  },
+  {
+    "slot": 30,
+    "offset": 0,
+    "label": "clusterPayoutOracle",
+    "type": "t_address"
+  },
+  {
+    "slot": 31,
+    "offset": 0,
+    "label": "advisoryVoteRecorder",
+    "type": "t_address"
+  },
+  {
+    "slot": 32,
+    "offset": 0,
+    "label": "__gap",
+    "type": "t_array(t_uint256)"
+  }
+]

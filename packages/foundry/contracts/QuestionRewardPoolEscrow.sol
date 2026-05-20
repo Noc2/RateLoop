@@ -1160,6 +1160,15 @@ contract QuestionRewardPoolEscrow is
         RewardPool storage rewardPool = rewardPools[rewardPoolId];
         if (rewardPool.id == 0 || rewardPool.refunded || rewardPool.contentId != contentId) return 0;
         if (!_usesClusterPayoutSnapshot(rewardPool)) return 0;
+        // L-Oracle-4: reject snapshot proposals for rounds before the pool's `startRoundId`
+        // (the qualifier wouldn't accept them anyway). The post-completion gate was removed
+        // because it broke the legitimate post-rejection re-propose flow: after
+        // `rejectFinalizedRoundPayoutSnapshot` the pool's `qualifiedRounds` counter stays
+        // "stale-high" until `recoverRejectedSnapshotRound` decrements it, so a replacement
+        // snapshot must still be propose-able during that window. Storage griefing past
+        // completion is a low-impact concern and is anyway gated by the frontend operator's
+        // global LREP bond at FrontendRegistry.
+        if (roundId < rewardPool.startRoundId) return 0;
         return votingEngine.roundClusterPayoutReadyAt(contentId, roundId);
     }
 
