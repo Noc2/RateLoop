@@ -89,7 +89,7 @@ export function deriveAcceptedTlockTargetRound(params: {
     );
   }
 
-  return minAcceptedTargetRound;
+  return maxAcceptedTargetRound;
 }
 
 function buildDefaultCandidateTimestampOffsetsSeconds(drandPeriodSeconds: bigint | number): number[] {

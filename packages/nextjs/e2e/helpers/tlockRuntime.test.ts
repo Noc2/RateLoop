@@ -13,7 +13,7 @@ test("deriveAcceptedTlockTargetRound defaults to the full drand-period drift win
     drandPeriodSeconds: DRAND_PERIOD_SECONDS,
   });
 
-  assert.equal(targetRound, 402n);
+  assert.equal(targetRound, 403n);
 });
 
 test("deriveAcceptedTlockTargetRound shares a target across the formerly bad drift window", () => {

@@ -626,7 +626,7 @@ function deriveAcceptedTlockTargetRound(
     throw new Error("No shared drand target round for commit windows");
   }
 
-  return minAcceptedTargetRound;
+  return maxAcceptedTargetRound;
 }
 
 function buildDefaultCandidateTimestampOffsetsSeconds(

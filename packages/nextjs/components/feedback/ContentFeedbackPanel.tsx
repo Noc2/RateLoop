@@ -105,7 +105,9 @@ export function ContentFeedbackPanel({
     ? FEATURE_ACCEPTANCE_PLACEHOLDER
     : "Evidence, ambiguity, missing context, source issues...";
   const bodyLength = body.trim().length;
-  const openRoundId = item?.openRound?.roundId ?? 0n;
+  const itemOpenRoundId = item?.openRound?.roundId ?? 0n;
+  const feedbackOpenRoundId = feedback.openRoundId ? BigInt(feedback.openRoundId) : 0n;
+  const openRoundId = itemOpenRoundId > 0n ? itemOpenRoundId : feedbackOpenRoundId;
   const { data: myCommitHash } = useScaffoldReadContract({
     contractName: "RoundVotingEngine" as any,
     functionName: "voterCommitHash" as any,
@@ -122,7 +124,7 @@ export function ContentFeedbackPanel({
   } as any);
   const hasCurrentRoundVote =
     hasOptimisticCurrentRoundVote || hasNonZeroCommit(myCommitHash) || hasNonZeroCommit(myAdvisoryCommitKey);
-  const isFeedbackOpen = isLoading ? Boolean(item?.openRound?.roundId) : Boolean(feedback.openRoundId);
+  const isFeedbackOpen = openRoundId > 0n;
   const canSubmitDraft = Boolean(item && bodyLength >= 4 && bodyLength <= CONTENT_FEEDBACK_BODY_MAX_LENGTH);
   const isOwnContent = Boolean(item?.isOwnContent);
   const submitDisabled = !canSubmitDraft || isSubmitting || !isFeedbackOpen || !hasCurrentRoundVote || isOwnContent;

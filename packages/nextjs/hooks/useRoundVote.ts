@@ -3,7 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 import { LoopReputationAbi, packVoteRoundContext } from "@rateloop/contracts";
 import { AdvisoryVoteRecorderAbi, ContentRegistryAbi } from "@rateloop/contracts/abis";
-import { buildCommitVoteParams } from "@rateloop/sdk/vote";
+import { buildCommitVoteParams, buildStakeAmountWei } from "@rateloop/sdk/vote";
 import { useQueryClient } from "@tanstack/react-query";
 import { type Address, parseSignature } from "viem";
 import { useAccount, usePublicClient, useSignTypedData, useWriteContract } from "wagmi";
@@ -274,57 +274,75 @@ export function useRoundVote() {
         return false;
       }
 
-      const commitParams = await buildCommitVoteParams({
-        voter: address as `0x${string}`,
-        contentId,
-        isUp,
-        predictedUpPercent,
-        stakeAmount,
-        epochDuration: runtime.epochDuration,
-        roundId: runtime.roundId,
-        roundReferenceRatingBps: runtime.roundReferenceRatingBps,
-        frontendCode,
-        defaultFrontendCode: scaffoldConfig.frontendCode,
-        runtime,
-      });
-      const { ciphertext, commitHash, roundReferenceRatingBps, targetRound, drandChainHash, frontend, stakeWei } =
-        commitParams;
-
-      const roundContext = packVoteRoundContext(runtime.roundId, roundReferenceRatingBps);
-      if (stakeAmount > 0 && stakeWei < COUNTED_VOTE_MIN_STAKE_WEI) {
+      const requestedStakeWei = buildStakeAmountWei(stakeAmount);
+      if (stakeAmount > 0 && requestedStakeWei < COUNTED_VOTE_MIN_STAKE_WEI) {
         setError("Stake at least 1 LREP or choose 0 for advisory voting.");
         return false;
       }
-      const isZeroStakeVote = stakeWei === 0n;
+      const isZeroStakeVote = requestedStakeWei === 0n;
       if (isZeroStakeVote && isAdvisoryVoteRecorderLoading) {
         setError("Preparing vote. Try again in a moment.");
         return false;
       }
       const lrepAddress = lrepInfo.address as `0x${string}`;
       const votingEngineAddress = votingEngineInfo.address as `0x${string}`;
-      const currentAllowance = isZeroStakeVote
-        ? 0n
-        : ((await publicClient.readContract({
-            address: lrepAddress,
-            abi: LoopReputationAbi,
-            functionName: "allowance",
-            args: [address as Address, votingEngineAddress],
-          })) as bigint);
-      const plan = buildRoundVoteTransactionPlan({
-        advisoryVoteRecorderAddress,
-        ciphertext,
-        commitHash,
-        contentId,
-        currentAllowance,
-        drandChainHash,
-        frontend,
-        lrepAddress,
-        roundContext,
-        stakeWei,
-        targetRound,
-        votingEngineAddress,
-      });
-      const { isAdvisoryVote, needsApproval } = plan;
+      const readCurrentAllowance = async () =>
+        isZeroStakeVote
+          ? 0n
+          : ((await publicClient.readContract({
+              address: lrepAddress,
+              abi: LoopReputationAbi,
+              functionName: "allowance",
+              args: [address as Address, votingEngineAddress],
+            })) as bigint);
+      let currentAllowance = await readCurrentAllowance();
+      const buildFreshRoundVotePlan = async (allowanceForPlan: bigint) => {
+        let freshRuntime = runtime;
+        if (!isRequestedAdvisoryVote) {
+          freshRuntime = await resolveRoundVoteRuntime({
+            publicClient,
+            votingEngineAddress,
+            contentId,
+            fallbackEpochDuration: roundConfig?.epochDuration ?? DEFAULT_VOTING_CONFIG.epochDuration,
+          });
+        }
+        if (!freshRuntime) {
+          throw new Error("Preparing vote. Try again in a moment.");
+        }
+
+        const commitParams = await buildCommitVoteParams({
+          voter: address as `0x${string}`,
+          contentId,
+          isUp,
+          predictedUpPercent,
+          stakeAmount,
+          epochDuration: freshRuntime.epochDuration,
+          roundId: freshRuntime.roundId,
+          roundReferenceRatingBps: freshRuntime.roundReferenceRatingBps,
+          frontendCode,
+          defaultFrontendCode: scaffoldConfig.frontendCode,
+          runtime: freshRuntime,
+        });
+        const { ciphertext, commitHash, roundReferenceRatingBps, targetRound, drandChainHash, frontend, stakeWei } =
+          commitParams;
+        const roundContext = packVoteRoundContext(freshRuntime.roundId, roundReferenceRatingBps);
+        const plan = buildRoundVoteTransactionPlan({
+          advisoryVoteRecorderAddress,
+          ciphertext,
+          commitHash,
+          contentId,
+          currentAllowance: allowanceForPlan,
+          drandChainHash,
+          frontend,
+          lrepAddress,
+          roundContext,
+          stakeWei,
+          targetRound,
+          votingEngineAddress,
+        });
+        return { plan, runtime: freshRuntime, stakeWei };
+      };
+      let submittedVote: Awaited<ReturnType<typeof buildFreshRoundVotePlan>> | null = null;
 
       const writePlannedCall = async (call: RoundVoteContractCall, action: string) => {
         const request: any = {
@@ -353,22 +371,28 @@ export function useRoundVote() {
       };
 
       if (canUseSponsoredBatchCalls) {
-        await executeContractCallBatch(plan.calls, {
+        const freshVote = await buildFreshRoundVotePlan(currentAllowance);
+        await executeContractCallBatch(freshVote.plan.calls, {
           action: "vote",
           atomicRequired: true,
           sponsorshipMode: "sponsored",
         });
+        submittedVote = freshVote;
       } else if (canUseSelfFundedBatchCalls) {
-        await executeContractCallBatch(plan.calls, {
+        const freshVote = await buildFreshRoundVotePlan(currentAllowance);
+        await executeContractCallBatch(freshVote.plan.calls, {
           action: "vote",
           atomicRequired: true,
           sponsorshipMode: "self-funded",
         });
+        submittedVote = freshVote;
       } else {
         let submittedWithPermit = false;
+        const needsApproval = !isZeroStakeVote && currentAllowance < requestedStakeWei;
 
-        if (needsApproval && !isAdvisoryVote) {
+        if (needsApproval) {
           let permitCall: RoundVoteContractCall | null = null;
+          let permitVote: Awaited<ReturnType<typeof buildFreshRoundVotePlan>> | null = null;
 
           try {
             const nonce = (await publicClient.readContract({
@@ -402,7 +426,7 @@ export function useRoundVote() {
                 nonce,
                 owner: address as Address,
                 spender: votingEngineAddress,
-                value: stakeWei,
+                value: requestedStakeWei,
               },
               primaryType: "Permit",
               types: {
@@ -416,7 +440,8 @@ export function useRoundVote() {
               },
             });
             const parsedSignature = parseSignature(signature);
-            permitCall = buildCommitVoteWithPermitCall(plan, {
+            permitVote = await buildFreshRoundVotePlan(requestedStakeWei);
+            permitCall = buildCommitVoteWithPermitCall(permitVote.plan, {
               deadline,
               r: parsedSignature.r,
               s: parsedSignature.s,
@@ -440,24 +465,46 @@ export function useRoundVote() {
               return false;
             }
             submittedWithPermit = true;
+            submittedVote = permitVote;
           }
         }
 
         if (!submittedWithPermit) {
-          for (const call of plan.calls) {
+          if (needsApproval) {
+            const approvalPlan = await buildFreshRoundVotePlan(0n);
+            const approvalCall = approvalPlan.plan.calls.find(call => call.kind === "approve");
+            if (!approvalCall) {
+              throw new Error("Preparing approval. Try again in a moment.");
+            }
+            const transactionHash = await writePlannedCall(approvalCall, "approve");
+            if (!transactionHash) {
+              return false;
+            }
+            currentAllowance = requestedStakeWei;
+          }
+
+          const freshVote = await buildFreshRoundVotePlan(currentAllowance);
+          for (const call of freshVote.plan.calls) {
             const transactionHash = await writePlannedCall(call, call.kind === "approve" ? "approve" : "vote");
             if (!transactionHash) {
               return false;
             }
           }
+          submittedVote = freshVote;
         }
       }
 
-      if (!isAdvisoryVote) {
-        addOptimisticVote(contentId, stakeWei, {
-          baseTotalStake: runtime.baseTotalStake,
-          baseVoteCount: runtime.baseVoteCount,
-          roundId: runtime.roundId,
+      if (!submittedVote) {
+        throw new Error("Vote submission did not complete.");
+      }
+
+      const { plan: submittedPlan, runtime: submittedRuntime, stakeWei: submittedStakeWei } = submittedVote;
+
+      if (!submittedPlan.isAdvisoryVote) {
+        addOptimisticVote(contentId, submittedStakeWei, {
+          baseTotalStake: submittedRuntime.baseTotalStake,
+          baseVoteCount: submittedRuntime.baseVoteCount,
+          roundId: submittedRuntime.roundId,
         });
       }
       recordLocalVoteCooldown({
@@ -469,16 +516,16 @@ export function useRoundVote() {
       });
       void queryClient.invalidateQueries({ queryKey: FREE_TRANSACTION_ALLOWANCE_QUERY_KEY });
 
-      if (!isAdvisoryVote) {
+      if (!submittedPlan.isAdvisoryVote) {
         queryClient.setQueryData<WalletDisplaySummary | undefined>(
           getWalletDisplaySummaryQueryKey(address.toLowerCase(), targetNetwork.id),
           current => {
-            if (!current || current.liquidMicro < stakeWei) return current;
+            if (!current || current.liquidMicro < submittedStakeWei) return current;
             const nextSnapshot: WalletDisplaySummary = {
               ...current,
-              liquidMicro: current.liquidMicro - stakeWei,
-              votingStakedMicro: current.votingStakedMicro + stakeWei,
-              totalStakedMicro: current.totalStakedMicro + stakeWei,
+              liquidMicro: current.liquidMicro - submittedStakeWei,
+              votingStakedMicro: current.votingStakedMicro + submittedStakeWei,
+              totalStakedMicro: current.totalStakedMicro + submittedStakeWei,
               totalMicro: current.totalMicro,
               updatedAt: Date.now(),
             };
@@ -492,7 +539,7 @@ export function useRoundVote() {
           source: string;
         }>(getVotingStakesQueryKey(address, targetNetwork.id), old => {
           if (!old?.data) return old;
-          const added = Number(stakeWei) / 1e6;
+          const added = Number(submittedStakeWei) / 1e6;
           return {
             ...old,
             data: {
