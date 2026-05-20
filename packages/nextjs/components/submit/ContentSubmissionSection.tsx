@@ -2465,40 +2465,40 @@ export function ContentSubmissionSection() {
 
   const bountyInsightsCard = (
     <div className="space-y-4">
-      <div className="surface-card rounded-2xl p-4 space-y-4">
-        <div>
-          <p className="flex items-center gap-1.5 text-base font-medium uppercase tracking-wider text-base-content/60">
-            Bounty estimate
-            <InfoTooltip text={bountyEstimateTooltipText} />
-          </p>
-        </div>
+      <div className="surface-card-nested rounded-lg p-4">
+        <p className="mb-4 flex items-center gap-1.5 text-base font-medium text-primary">
+          Bounty estimate
+          <InfoTooltip text={bountyEstimateTooltipText} />
+        </p>
 
-        <div className="surface-card-nested rounded-lg p-3">
-          <p className="flex items-center gap-1.5 text-sm font-medium uppercase text-primary/90">
-            {minimumClaimEstimateLabel}
-            <InfoTooltip text={perPaidCompleterTooltipText} />
-          </p>
-          <p className="mt-1 text-xl font-semibold text-base-content">
-            {formatSubmissionRewardAmount(estimatedMinimumVoterReward, rewardAsset)}
-          </p>
-        </div>
+        <div className="space-y-4">
+          <div>
+            <p className="flex items-center gap-1.5 text-base text-base-content/70">
+              {minimumClaimEstimateLabel}
+              <InfoTooltip text={perPaidCompleterTooltipText} />
+            </p>
+            <p className="mt-1 text-base font-medium text-base-content">
+              {formatSubmissionRewardAmount(estimatedMinimumVoterReward, rewardAsset)}
+            </p>
+          </div>
 
-        <div className="surface-card-nested rounded-lg p-3">
-          <p className="flex items-center gap-1.5 text-sm font-medium uppercase text-base-content/60">
-            {voterCapEstimateLabel}
-            <InfoTooltip text={voterCapEstimateTooltipText} />
-          </p>
-          <p className="mt-1 text-lg font-semibold text-base-content">
-            {formatSubmissionRewardAmount(estimatedVoterCapReward, rewardAsset)}
-          </p>
-        </div>
+          <div>
+            <p className="flex items-center gap-1.5 text-base text-base-content/70">
+              {voterCapEstimateLabel}
+              <InfoTooltip text={voterCapEstimateTooltipText} />
+            </p>
+            <p className="mt-1 text-base font-medium text-base-content">
+              {formatSubmissionRewardAmount(estimatedVoterCapReward, rewardAsset)}
+            </p>
+          </div>
 
-        <div className="surface-card-nested rounded-lg p-3">
-          <p className="flex items-center gap-1.5 text-sm font-medium uppercase text-base-content/60">
-            Bounty expires
-            <InfoTooltip text="Estimated from the selected bounty window and current time. The final timestamp is set when you submit." />
-          </p>
-          <p className="mt-1 text-lg font-semibold text-base-content">{estimatedBountyExpiresAtLabel}</p>
+          <div>
+            <p className="flex items-center gap-1.5 text-base text-base-content/70">
+              Bounty expires
+              <InfoTooltip text="Estimated from the selected bounty window and current time. The final timestamp is set when you submit." />
+            </p>
+            <p className="mt-1 text-base font-medium text-base-content">{estimatedBountyExpiresAtLabel}</p>
+          </div>
         </div>
       </div>
 
