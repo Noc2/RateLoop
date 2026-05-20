@@ -1144,6 +1144,24 @@ contract QuestionRewardPoolEscrow is
         return _snapshotHasPaidClaim(roundSnapshots[rewardPoolId][roundId]);
     }
 
+    /// @notice M-Oracle-1: report the timestamp at which a payout snapshot is acceptable for the
+    ///         given (rewardPoolId, contentId, roundId). Returns 0 when the round is not yet
+    ///         settled, the reward pool does not exist or has been refunded, or the domain /
+    ///         rewardPool / content do not match. The oracle uses this to reject slot-squat
+    ///         proposals that would otherwise censor honest payouts during the challenge window.
+    function roundPayoutSnapshotSourceReadyAt(
+        uint8 domain,
+        uint256 rewardPoolId,
+        uint256 contentId,
+        uint256 roundId
+    ) external view returns (uint64) {
+        if (domain != PAYOUT_DOMAIN_QUESTION_REWARD) return 0;
+        RewardPool storage rewardPool = rewardPools[rewardPoolId];
+        if (rewardPool.id == 0 || rewardPool.refunded || rewardPool.contentId != contentId) return 0;
+        if (!_usesClusterPayoutSnapshot(rewardPool)) return 0;
+        return votingEngine.roundClusterPayoutReadyAt(contentId, roundId);
+    }
+
     function _snapshotHasPaidClaim(RoundSnapshot storage snapshot) private view returns (bool) {
         return snapshot.firstClaimPaid || snapshot.claimedCount != 0 || snapshot.claimedAmount != 0;
     }

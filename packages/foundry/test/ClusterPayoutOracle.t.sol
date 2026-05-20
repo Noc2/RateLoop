@@ -104,6 +104,34 @@ contract ClusterPayoutOracleTest is Test {
         oracle.setRoundPayoutSnapshotConsumer(questionRewardDomain, address(0xBEEF));
     }
 
+    // M-Oracle-1: snapshot proposals must wait until the consumer signals the round source is
+    // ready. Without this gate one eligible frontend could squat the slot at gas cost only and
+    // censor honest payouts for the full challenge window. Verifies both the not-yet-ready
+    // (sourceReadyAt == 0) and future-readyAt branches, plus the happy-path once ready.
+    function test_RoundPayoutSnapshotProposalRequiresSourceReady() public {
+        oracle.proposeCorrelationEpoch(
+            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+        );
+        vm.warp(1 hours + 2);
+        oracle.finalizeCorrelationEpoch(1);
+
+        IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
+
+        // sourceReadyAt == 0 → not ready
+        questionConsumer.setSourceReadyAt(0);
+        vm.expectRevert(ClusterPayoutOracle.SourceNotReady.selector);
+        oracle.proposeRoundPayoutSnapshot(input);
+
+        // sourceReadyAt in the future → not ready
+        questionConsumer.setSourceReadyAt(uint64(block.timestamp + 1 hours));
+        vm.expectRevert(ClusterPayoutOracle.SourceNotReady.selector);
+        oracle.proposeRoundPayoutSnapshot(input);
+
+        // sourceReadyAt at or before now → accepted
+        questionConsumer.setSourceReadyAt(uint64(block.timestamp));
+        oracle.proposeRoundPayoutSnapshot(input);
+    }
+
     function test_OptimisticEpochAndRoundSnapshotFinalizeAndVerifyLeaf() public {
         oracle.proposeCorrelationEpoch(
             1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
@@ -867,13 +895,22 @@ contract MockFrontendRegistry {
 
 contract MockRoundPayoutSnapshotConsumer {
     bool internal consumed;
+    uint64 internal sourceReadyAt = 1; // default to "ready since unix-epoch second 1" so tests opt-in
 
     function setConsumed(bool value) external {
         consumed = value;
     }
 
+    function setSourceReadyAt(uint64 value) external {
+        sourceReadyAt = value;
+    }
+
     function isRoundPayoutSnapshotConsumed(uint8, uint256, uint256, uint256) external view returns (bool) {
         return consumed;
+    }
+
+    function roundPayoutSnapshotSourceReadyAt(uint8, uint256, uint256, uint256) external view returns (uint64) {
+        return sourceReadyAt;
     }
 }
 

@@ -66,6 +66,13 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
     mapping(uint256 => mapping(uint256 => uint256)) internal mockedRoundCommitCount;
 
+    /// @dev M-Oracle-1: stub so the test contract can act as a question-reward consumer in the
+    ///      "different consumer" test paths. Returns 1 (always-ready) to advance past the oracle's
+    ///      source-readiness gate, letting downstream qualify/cluster-mismatch defenses run.
+    function roundPayoutSnapshotSourceReadyAt(uint8, uint256, uint256, uint256) external pure returns (uint64) {
+        return 1;
+    }
+
     event RewardPoolCreated(
         uint256 indexed rewardPoolId,
         uint256 indexed contentId,
@@ -2681,7 +2688,20 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         uint256 roundId = _settleRoundWithOneUnrevealed(contentId);
         assertEq(votingEngine.roundClusterPayoutReadyAt(contentId, roundId), 0);
 
+        // M-Oracle-1: the layer-1 oracle gate now also rejects pre-source proposals via
+        // `roundPayoutSnapshotSourceReadyAt`. Bypass that gate for this test by mocking the
+        // consumer view so the layer-2 defense at qualifyRound (`Cluster source stale`) is still
+        // exercised end-to-end. This guards against future regressions if the layer-1 gate is
+        // weakened or bypassed by a misconfigured consumer.
+        vm.mockCall(
+            address(rewardPoolEscrow),
+            abi.encodeWithSelector(
+                rewardPoolEscrow.roundPayoutSnapshotSourceReadyAt.selector, uint8(1), rewardPoolId, contentId, roundId
+            ),
+            abi.encode(uint64(1))
+        );
         _finalizeClusterPayoutSnapshot(oracle, rewardPoolId, contentId, roundId, 3, 30_000, 10_000);
+        vm.clearMockedCalls();
         votingEngine.processUnrevealedVotes(contentId, roundId, 0, 0);
         assertGt(votingEngine.roundClusterPayoutReadyAt(contentId, roundId), 0);
 
@@ -2701,7 +2721,17 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         uint256 roundId = _settleRoundWithOneUnrevealed(contentId);
         assertEq(votingEngine.roundClusterPayoutReadyAt(contentId, roundId), 0);
 
+        // M-Oracle-1: bypass the new layer-1 gate so the layer-2 defense at qualify time can be
+        // verified independently. See sibling test for rationale.
+        vm.mockCall(
+            address(rewardPoolEscrow),
+            abi.encodeWithSelector(
+                rewardPoolEscrow.roundPayoutSnapshotSourceReadyAt.selector, uint8(1), rewardPoolId, contentId, roundId
+            ),
+            abi.encode(uint64(1))
+        );
         _finalizeClusterPayoutSnapshot(oracle, rewardPoolId, contentId, roundId, 3, 20_000, 1);
+        vm.clearMockedCalls();
         votingEngine.processUnrevealedVotes(contentId, roundId, 0, 0);
 
         (uint256 skipped, uint256 nextRoundToEvaluate) = rewardPoolEscrow.advanceQualificationCursor(rewardPoolId, 1);

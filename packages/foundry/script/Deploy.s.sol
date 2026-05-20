@@ -252,6 +252,10 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         LaunchDistributionPool launchDistributionPool =
             new LaunchDistributionPool(address(lrepToken), address(raterRegistry), governance);
         launchDistributionPool.setClusterPayoutOracle(address(clusterPayoutOracle));
+        // M-Oracle-1: wire the launch pool to the voting engine so its
+        // `roundPayoutSnapshotSourceReadyAt` view can authoritatively reject pre-source proposals
+        // even before the first earned-rater credit has been pending-recorded.
+        launchDistributionPool.setRoundClusterReadyAtSource(address(votingEngine));
         clusterPayoutOracle.setRoundPayoutSnapshotConsumer(
             clusterPayoutOracle.PAYOUT_DOMAIN_LAUNCH_CREDIT(), address(launchDistributionPool)
         );

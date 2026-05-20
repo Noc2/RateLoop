@@ -11,6 +11,13 @@ import { IClusterPayoutOracle } from "./interfaces/IClusterPayoutOracle.sol";
 import { ILaunchDistributionPool } from "./interfaces/ILaunchDistributionPool.sol";
 import { IRoundPayoutSnapshotConsumer } from "./interfaces/IRoundPayoutSnapshotConsumer.sol";
 
+/// @dev M-Oracle-1: minimal view shape on RoundVotingEngine that LaunchDistributionPool needs to
+///      authoritatively answer whether a (contentId, roundId) payload is source-ready for a
+///      cluster snapshot proposal. Avoids a heavy import dependency.
+interface IRoundClusterReadyAtSource {
+    function roundClusterPayoutReadyAt(uint256 contentId, uint256 roundId) external view returns (uint48);
+}
+
 /// @title LaunchDistributionPool
 /// @notice Holds the 68M LREP launch allocation and releases it through earned, verified, and legacy paths.
 contract LaunchDistributionPool is
@@ -65,6 +72,11 @@ contract LaunchDistributionPool is
     IERC20 public immutable lrepToken;
     RaterRegistry public raterRegistry;
     IClusterPayoutOracle public clusterPayoutOracle;
+    /// @notice M-Oracle-1: authoritative source for round source-readiness (queried by
+    ///         {roundPayoutSnapshotSourceReadyAt}). When set, takes precedence over the
+    ///         per-record `launchRoundSourceReadyAt` fallback. Wired to RoundVotingEngine at
+    ///         deploy time.
+    IRoundClusterReadyAtSource public roundClusterReadyAtSource;
     address public governance;
     uint256 public poolBalance;
     uint256 public legacyDistributed;
@@ -105,6 +117,12 @@ contract LaunchDistributionPool is
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => bytes32[]))) internal pendingEarnedRaterCreditAnchorIds;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) public earnedRewardCreditFinalized;
     mapping(uint256 => mapping(uint256 => bool)) public earnedRaterRoundPayoutSnapshotConsumed;
+    /// @notice M-Oracle-1: Earliest sourceReadyAt observed for a given (contentId, roundId).
+    ///         Set on the first pending earned-rater credit recorded for the round and surfaced via
+    ///         {roundPayoutSnapshotSourceReadyAt} so the cluster oracle can reject pre-source
+    ///         slot-squat proposals. Once set the value is monotonic — later credits with later
+    ///         sourceReadyAt do not overwrite it.
+    mapping(uint256 => mapping(uint256 => uint64)) public launchRoundSourceReadyAt;
     LaunchRewardPolicy public launchRewardPolicy;
 
     event PoolDeposit(uint256 amount);
@@ -114,6 +132,7 @@ contract LaunchDistributionPool is
     event GovernanceUpdated(address indexed governance);
     event RaterRegistryUpdated(address indexed raterRegistry);
     event ClusterPayoutOracleUpdated(address indexed clusterPayoutOracle);
+    event RoundClusterReadyAtSourceUpdated(address indexed source);
     event AuthorizedCallerUpdated(address indexed caller, bool authorized);
     event LaunchRewardPolicyUpdated(LaunchRewardPolicy policy);
     event LegacyClaimed(address indexed account, uint256 amount);
@@ -212,6 +231,22 @@ contract LaunchDistributionPool is
         _validateClusterPayoutOracle(newOracle);
         clusterPayoutOracle = IClusterPayoutOracle(newOracle);
         emit ClusterPayoutOracleUpdated(newOracle);
+    }
+
+    /// @notice M-Oracle-1: configure the authoritative round source-readiness oracle (the
+    ///         RoundVotingEngine). Accepts address(0) to clear, which falls back to per-record
+    ///         tracking only.
+    function setRoundClusterReadyAtSource(address newSource) external onlyOwner {
+        if (newSource != address(0)) {
+            if (newSource.code.length == 0) revert InvalidAddress();
+            // ABI shape probe — calling with (0,0) must not revert on a properly conforming source.
+            try IRoundClusterReadyAtSource(newSource).roundClusterPayoutReadyAt(0, 0) returns (uint48) { }
+            catch {
+                revert InvalidAddress();
+            }
+        }
+        roundClusterReadyAtSource = IRoundClusterReadyAtSource(newSource);
+        emit RoundClusterReadyAtSourceUpdated(newSource);
     }
 
     /// @notice Governance rescue for pending earned-rater credits pinned to a now-stale oracle.
@@ -717,6 +752,12 @@ contract LaunchDistributionPool is
             rater: rater, oracle: oracle, scoreBps: scoreBps, policy: policy, pending: true
         });
         pendingEarnedRaterCreditReadyAt[contentId][roundId][commitKey] = sourceReadyAt;
+        // M-Oracle-1: record the earliest sourceReadyAt for this round so the cluster oracle can
+        // reject snapshot proposals submitted before any credit has been recorded.
+        uint64 existing = launchRoundSourceReadyAt[contentId][roundId];
+        if (existing == 0 || sourceReadyAt < existing) {
+            launchRoundSourceReadyAt[contentId][roundId] = sourceReadyAt;
+        }
 
         delete pendingEarnedRaterCreditAnchorIds[contentId][roundId][commitKey];
         bytes32[] storage pendingAnchors = pendingEarnedRaterCreditAnchorIds[contentId][roundId][commitKey];
@@ -776,6 +817,28 @@ contract LaunchDistributionPool is
         // Finalizing any launch credit consumes the root because even zero-pay finalizations
         // mutate the rater's future unlock state.
         return earnedRaterRoundPayoutSnapshotConsumed[contentId][roundId];
+    }
+
+    /// @notice M-Oracle-1: source-readiness timestamp for the launch-credit domain. Prefers the
+    ///         configured RoundVotingEngine view (set via {setRoundClusterReadyAtSource}) so a
+    ///         proposer can front-run a snapshot as soon as the round is settled, even before
+    ///         the first rater claim records a pending credit. Falls back to the per-record
+    ///         `launchRoundSourceReadyAt` so existing deployments without the source wired up
+    ///         still get the gate once at least one credit lands.
+    function roundPayoutSnapshotSourceReadyAt(
+        uint8 domain,
+        uint256 rewardPoolId,
+        uint256 contentId,
+        uint256 roundId
+    ) external view returns (uint64) {
+        if (domain != PAYOUT_DOMAIN_LAUNCH_CREDIT || rewardPoolId != 0) return 0;
+        IRoundClusterReadyAtSource source = roundClusterReadyAtSource;
+        if (address(source) != address(0)) {
+            try source.roundClusterPayoutReadyAt(contentId, roundId) returns (uint48 readyAt) {
+                if (readyAt != 0) return uint64(readyAt);
+            } catch { }
+        }
+        return launchRoundSourceReadyAt[contentId][roundId];
     }
 
     function _assignLaunchCap(address rater, uint256 fullCap, LaunchRewardPolicy memory policy)

@@ -55,6 +55,10 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
     error SnapshotFinalized();
     error SnapshotConsumed();
     error InvalidProof();
+    /// @notice M-Oracle-1: the registered consumer has not yet signalled that the round is
+    ///         source-ready (settled and/or has at least one credit pending). Blocks gas-only
+    ///         slot-squat proposals that would otherwise censor honest payouts.
+    error SourceNotReady();
 
     struct CorrelationEpochSnapshot {
         uint64 epochId;
@@ -326,6 +330,19 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         }
         address consumer = roundPayoutSnapshotConsumer[input.domain];
         if (consumer == address(0)) revert InvalidAddress();
+
+        // M-Oracle-1: require the consumer to signal source readiness before accepting the
+        // proposal. Without this gate any eligible frontend can squat the snapshot slot for a
+        // future round at gas cost only and stall payouts for the duration of the challenge
+        // window plus arbiter response time. A reverting / non-conforming consumer view is
+        // treated as not-ready so a misconfigured consumer cannot itself become a DoS vector.
+        try IRoundPayoutSnapshotConsumer(consumer).roundPayoutSnapshotSourceReadyAt(
+            input.domain, input.rewardPoolId, input.contentId, input.roundId
+        ) returns (uint64 sourceReadyAt) {
+            if (sourceReadyAt == 0 || uint256(sourceReadyAt) > block.timestamp) revert SourceNotReady();
+        } catch {
+            revert SourceNotReady();
+        }
 
         roundPayoutProposals[snapshotKey] = RoundPayoutProposal({
             snapshot: RoundPayoutSnapshot({

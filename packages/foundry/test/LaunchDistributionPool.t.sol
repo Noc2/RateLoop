@@ -50,6 +50,14 @@ contract LaunchDistributionPoolTest is Test {
         pool.depositPool(pool.TOTAL_POOL_AMOUNT());
     }
 
+    /// @dev M-Oracle-1: stub so the test contract can act as a launch-credit consumer in the
+    ///      "different consumer" test paths. Returns 1 (always-ready) to advance past the
+    ///      source-readiness gate; the downstream finalize then exercises the consumer-mismatch
+    ///      path that those tests target.
+    function roundPayoutSnapshotSourceReadyAt(uint8, uint256, uint256, uint256) external pure returns (uint64) {
+        return 1;
+    }
+
     function test_PoolSplitSumsToLaunchDistribution() public view {
         assertEq(pool.LEGACY_POOL_AMOUNT(), 4_000_000e6);
         assertEq(pool.EARNED_RATER_POOL_AMOUNT(), 29_000_000e6);
@@ -1442,6 +1450,9 @@ contract LaunchDistributionPoolTest is Test {
         oracle.setOracleConfig(1, oracle.MIN_CHALLENGE_BOND(), address(this));
         oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_LAUNCH_CREDIT(), address(pool));
         pool.setClusterPayoutOracle(address(oracle));
+        // M-Oracle-1: wire an always-ready cluster source so proposals can land before the first
+        // pending credit record (the legitimate front-run case exercised by these tests).
+        pool.setRoundClusterReadyAtSource(address(new MockAlwaysReadyClusterSource()));
 
         oracle.proposeCorrelationEpoch(
             1, 1, toRoundId, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
@@ -1557,5 +1568,13 @@ contract MockLaunchOracleFrontendRegistry {
 
     function isEligible(address frontend) external view returns (bool) {
         return eligible[frontend];
+    }
+}
+
+/// @dev Test source for M-Oracle-1 readiness checks. Always returns 1 (epoch-second 1) so that
+///      any positive block.timestamp counts as ready.
+contract MockAlwaysReadyClusterSource {
+    function roundClusterPayoutReadyAt(uint256, uint256) external pure returns (uint48) {
+        return 1;
     }
 }
