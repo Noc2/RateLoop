@@ -570,7 +570,7 @@ export function registerContentRoutes(app: ApiApp) {
     }
 
     const where = conditions.length > 0 ? and(...conditions) : undefined;
-    const queryLimit = search ? limit + 1 : limit;
+    const queryLimit = limit + 1;
     const orderByExprs = searchExpressions
       ? getSearchOrderBy(searchExpressions.rank, sortBy)
       : getContentOrderBy(sortBy);

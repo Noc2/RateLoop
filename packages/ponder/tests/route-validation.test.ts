@@ -501,6 +501,36 @@ describe("registerContentRoutes", () => {
     });
   });
 
+  it("uses an extra row to detect more non-search content pages", async () => {
+    const { queryBuilder } = mockPonderModules([
+      { id: 1n },
+      { id: 2n },
+      { id: 3n },
+      { id: 4n },
+      { id: 5n },
+      { id: 6n },
+    ]);
+    mockSharedModule();
+    const { registerContentRoutes } = await import(
+      "../src/api/routes/content-routes.js"
+    );
+
+    const app = new Hono();
+    registerContentRoutes(app);
+
+    const response = await app.request("http://localhost/content?limit=5");
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(queryBuilder.limit).toHaveBeenCalledWith(6);
+    expect(body.items).toHaveLength(5);
+    expect(body).toMatchObject({
+      limit: 5,
+      offset: 0,
+      hasMore: true,
+    });
+  });
+
   it("uses full-text search conditions and relevance-first ordering", async () => {
     const { queryBuilder } = mockPonderModules([{ id: 1n }]);
     mockSharedModule();
