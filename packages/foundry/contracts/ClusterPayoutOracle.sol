@@ -55,6 +55,10 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
     error SnapshotFinalized();
     error SnapshotConsumed();
     error InvalidProof();
+    /// @notice M-Oracle-1: the registered consumer has not yet signalled that the round is
+    ///         source-ready (settled and/or has at least one credit pending). Blocks gas-only
+    ///         slot-squat proposals that would otherwise censor honest payouts.
+    error SourceNotReady();
 
     struct CorrelationEpochSnapshot {
         uint64 epochId;
@@ -297,9 +301,16 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         CorrelationEpochSnapshot storage snapshot = correlationEpochSnapshots[epochId];
         if (snapshot.status == SnapshotStatus.None) revert SnapshotNotFound();
         if (snapshot.status == SnapshotStatus.Finalized) revert SnapshotFinalized();
+        bool wasChallenged = snapshot.status == SnapshotStatus.Challenged;
         snapshot.status = SnapshotStatus.Rejected;
-        // L-Oracle-4: blacklist the rejected root so identical re-proposal reverts.
-        rejectedCorrelationEpochRoots[epochId][snapshot.clusterRoot] = true;
+        // L-Oracle-A: only blacklist the clusterRoot when the rejection comes from a `Challenged`
+        // state. Pre-challenge slot-squat proposals (M-Oracle-1 family on the correlation-epoch
+        // path) can be cleared by the arbiter without permanently banning the honest correct
+        // root from re-proposal — the deterministic scorer pipeline cannot produce a different
+        // root for the same epoch, so blacklisting would otherwise strand the epoch.
+        if (wasChallenged) {
+            rejectedCorrelationEpochRoots[epochId][snapshot.clusterRoot] = true;
+        }
         address challenger = snapshot.challenger;
         uint256 bond = snapshot.bond;
         snapshot.bond = 0;
@@ -326,6 +337,22 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         }
         address consumer = roundPayoutSnapshotConsumer[input.domain];
         if (consumer == address(0)) revert InvalidAddress();
+
+        // M-Oracle-1: require the consumer to signal source readiness before accepting the
+        // proposal. Without this gate any eligible frontend can squat the snapshot slot for a
+        // future round at gas cost only and stall payouts for the duration of the challenge
+        // window plus arbiter response time. A reverting / non-conforming consumer view is
+        // treated as not-ready so a misconfigured consumer cannot itself become a DoS vector.
+        try IRoundPayoutSnapshotConsumer(consumer)
+            .roundPayoutSnapshotSourceReadyAt(
+                input.domain, input.rewardPoolId, input.contentId, input.roundId
+            ) returns (
+            uint64 sourceReadyAt
+        ) {
+            if (sourceReadyAt == 0 || uint256(sourceReadyAt) > block.timestamp) revert SourceNotReady();
+        } catch {
+            revert SourceNotReady();
+        }
 
         roundPayoutProposals[snapshotKey] = RoundPayoutProposal({
             snapshot: RoundPayoutSnapshot({
@@ -478,8 +505,22 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         if (consumer == address(0)) revert InvalidAddress();
 
         bool withinVetoWindow = block.timestamp <= uint256(snapshot.finalizedAt) + uint256(FINALIZATION_VETO_WINDOW);
-        bool consumed = IRoundPayoutSnapshotConsumer(consumer)
-            .isRoundPayoutSnapshotConsumed(snapshot.domain, snapshot.rewardPoolId, snapshot.contentId, snapshot.roundId);
+        // L-Oracle-B: wrap the consumer call in try/catch so a broken / removed consumer cannot
+        // trap the arbiter and indefinitely block reject. A reverting consumer is treated as
+        // "consumed" (conservative — outside the veto window the rejection still aborts; inside
+        // the veto window the rejection proceeds as before). Initialize explicitly to `false`
+        // so the local is never read uninitialized.
+        bool consumed = false;
+        try IRoundPayoutSnapshotConsumer(consumer)
+            .isRoundPayoutSnapshotConsumed(
+                snapshot.domain, snapshot.rewardPoolId, snapshot.contentId, snapshot.roundId
+            ) returns (
+            bool isConsumed
+        ) {
+            consumed = isConsumed;
+        } catch {
+            consumed = true;
+        }
         if (!withinVetoWindow) {
             // Outside the veto window the rejection is only safe if the consumer has not yet paid
             // any claim against this snapshot's merkle root.

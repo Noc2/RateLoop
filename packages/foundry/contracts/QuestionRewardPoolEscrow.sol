@@ -638,20 +638,23 @@ contract QuestionRewardPoolEscrow is
         require(newOracle != address(0) && newOracle.code.length != 0, "Invalid oracle");
         require(newOracle != oldOracle, "Oracle unchanged");
         IClusterPayoutOracle oracle = IClusterPayoutOracle(newOracle);
-        try oracle.roundPayoutSnapshotKey(
-            PAYOUT_DOMAIN_QUESTION_REWARD, rewardPoolId, rewardPool.contentId, 0
-        ) returns (
-            bytes32
-        ) { }
-        catch {
-            revert("Invalid oracle");
-        }
+        // ABI shape + consumer-pin probe (L-Oracle-B). `roundPayoutSnapshotProposedAt` is the
+        // canonical view probe; `roundPayoutSnapshotConsumer` then confirms the new oracle
+        // routes the question-reward domain back to this escrow so future claims do not revert
+        // on the `msg.sender != proposal.consumer` check inside `verifyPayoutWeight`. The
+        // redundant pure-selector probe of `roundPayoutSnapshotKey` was dropped to keep
+        // QuestionRewardPoolEscrow under the EIP-170 size limit.
         try oracle.roundPayoutSnapshotProposedAt(
             PAYOUT_DOMAIN_QUESTION_REWARD, rewardPoolId, rewardPool.contentId, 0
         ) returns (
             uint64
         ) { }
         catch {
+            revert("Invalid oracle");
+        }
+        try oracle.roundPayoutSnapshotConsumer(PAYOUT_DOMAIN_QUESTION_REWARD) returns (address consumer) {
+            require(consumer == address(this), "Oracle consumer mismatch");
+        } catch {
             revert("Invalid oracle");
         }
         rewardPoolClusterPayoutOracle[rewardPoolId] = newOracle;
@@ -1141,6 +1144,23 @@ contract QuestionRewardPoolEscrow is
         // snapshot has actually moved funds, matching the launch consumer's "first paid wei"
         // semantics.
         return _snapshotHasPaidClaim(roundSnapshots[rewardPoolId][roundId]);
+    }
+
+    /// @notice M-Oracle-1: report the timestamp at which a payout snapshot is acceptable for the
+    ///         given (rewardPoolId, contentId, roundId). Returns 0 when the round is not yet
+    ///         settled, the reward pool does not exist or has been refunded, or the domain /
+    ///         rewardPool / content do not match. The oracle uses this to reject slot-squat
+    ///         proposals that would otherwise censor honest payouts during the challenge window.
+    function roundPayoutSnapshotSourceReadyAt(uint8 domain, uint256 rewardPoolId, uint256 contentId, uint256 roundId)
+        external
+        view
+        returns (uint64)
+    {
+        if (domain != PAYOUT_DOMAIN_QUESTION_REWARD) return 0;
+        RewardPool storage rewardPool = rewardPools[rewardPoolId];
+        if (rewardPool.id == 0 || rewardPool.refunded || rewardPool.contentId != contentId) return 0;
+        if (!_usesClusterPayoutSnapshot(rewardPool)) return 0;
+        return votingEngine.roundClusterPayoutReadyAt(contentId, roundId);
     }
 
     function _snapshotHasPaidClaim(RoundSnapshot storage snapshot) private view returns (bool) {

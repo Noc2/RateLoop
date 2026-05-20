@@ -12,7 +12,7 @@ export function roundAtOrAfter(timestamp, genesisTime, period) {
 export function computeCommitRevealableAfter(
   timestamp,
   activeRoundStartTime,
-  epochDuration,
+  epochDuration
 ) {
   const roundStartTime = activeRoundStartTime ?? timestamp;
   const elapsed = timestamp > roundStartTime ? timestamp - roundStartTime : 0n;
@@ -37,23 +37,23 @@ export function deriveTlockCommitTargetRound({
   const revealableAfter = computeCommitRevealableAfter(
     commitTimestamp,
     activeRoundStartTime,
-    epochDuration,
+    epochDuration
   );
   if (revealableAfter < drandGenesisTime) {
     throw new Error(
-      `Revealable timestamp ${revealableAfter} is before drand genesis ${drandGenesisTime}`,
+      `Revealable timestamp ${revealableAfter} is before drand genesis ${drandGenesisTime}`
     );
   }
 
   const minTargetRound = roundAtOrAfter(
     revealableAfter,
     drandGenesisTime,
-    drandPeriod,
+    drandPeriod
   );
   const maxTargetRound = roundAt(
     revealableAfter + 2n * drandPeriod,
     drandGenesisTime,
-    drandPeriod,
+    drandPeriod
   );
 
   if (
@@ -62,7 +62,7 @@ export function deriveTlockCommitTargetRound({
     minTargetRound > maxTargetRound
   ) {
     throw new Error(
-      `No valid drand target round for revealableAfter=${revealableAfter}, genesis=${drandGenesisTime}, period=${drandPeriod}`,
+      `No valid drand target round for revealableAfter=${revealableAfter}, genesis=${drandGenesisTime}, period=${drandPeriod}`
     );
   }
 

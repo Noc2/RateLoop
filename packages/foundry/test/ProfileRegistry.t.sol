@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {Test, console} from "forge-std/Test.sol";
-import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import {ProfileRegistry} from "../contracts/ProfileRegistry.sol";
-import {RaterRegistry} from "../contracts/RaterRegistry.sol";
-import {IProfileRegistry} from "../contracts/interfaces/IProfileRegistry.sol";
-import {MockWorldIDRouter} from "../contracts/mocks/MockWorldIDRouter.sol";
+import { Test, console } from "forge-std/Test.sol";
+import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import { ProfileRegistry } from "../contracts/ProfileRegistry.sol";
+import { RaterRegistry } from "../contracts/RaterRegistry.sol";
+import { IProfileRegistry } from "../contracts/interfaces/IProfileRegistry.sol";
+import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
 
 /// @title ProfileRegistry Test Suite
 contract ProfileRegistryTest is Test {

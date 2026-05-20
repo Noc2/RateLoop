@@ -1,21 +1,21 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {VotingTestBase} from "./helpers/VotingTestHelpers.sol";
-import {stdStorage, StdStorage} from "forge-std/Test.sol";
-import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import {ContentRegistry} from "../contracts/ContentRegistry.sol";
-import {LaunchDistributionPool} from "../contracts/LaunchDistributionPool.sol";
-import {LoopReputation} from "../contracts/LoopReputation.sol";
-import {RoundVotingEngine} from "../contracts/RoundVotingEngine.sol";
-import {ProtocolConfig} from "../contracts/ProtocolConfig.sol";
-import {RaterRegistry} from "../contracts/RaterRegistry.sol";
-import {RoundRewardDistributor} from "../contracts/RoundRewardDistributor.sol";
-import {RoundLib} from "../contracts/libraries/RoundLib.sol";
-import {RoundEngineReadHelpers} from "./helpers/RoundEngineReadHelpers.sol";
-import {TlockVoteLib} from "../contracts/libraries/TlockVoteLib.sol";
-import {MockCategoryRegistry} from "../contracts/mocks/MockCategoryRegistry.sol";
-import {MockWorldIDRouter} from "../contracts/mocks/MockWorldIDRouter.sol";
+import { VotingTestBase } from "./helpers/VotingTestHelpers.sol";
+import { stdStorage, StdStorage } from "forge-std/Test.sol";
+import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import { ContentRegistry } from "../contracts/ContentRegistry.sol";
+import { LaunchDistributionPool } from "../contracts/LaunchDistributionPool.sol";
+import { LoopReputation } from "../contracts/LoopReputation.sol";
+import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
+import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
+import { RaterRegistry } from "../contracts/RaterRegistry.sol";
+import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
+import { RoundLib } from "../contracts/libraries/RoundLib.sol";
+import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
+import { TlockVoteLib } from "../contracts/libraries/TlockVoteLib.sol";
+import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
+import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
 
 contract MockRevertingLaunchDistributionPool {
     error LaunchCreditRejected();
@@ -220,7 +220,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
             RoundLib.Commit memory c = RoundEngineReadHelpers.commit(votingEngine, contentId, roundId, keys[i]);
             if (!c.revealed && c.stakeAmount > 0) {
                 (bool isUp, bytes32 salt) = _decodeTestCiphertext(c.ciphertext);
-                try votingEngine.revealVoteByCommitKey(contentId, roundId, keys[i], isUp, 5_000, salt) {} catch {}
+                try votingEngine.revealVoteByCommitKey(contentId, roundId, keys[i], isUp, 5_000, salt) { } catch { }
             }
         }
     }
@@ -236,7 +236,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         RoundLib.Round memory r2 = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
         if (r2.thresholdReachedAt > 0) {
             vm.roll(block.number + 1);
-            try votingEngine.settleRound(contentId, roundId) {} catch {}
+            try votingEngine.settleRound(contentId, roundId) { } catch { }
         }
     }
 

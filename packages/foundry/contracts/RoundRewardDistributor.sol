@@ -6,6 +6,7 @@ import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/ac
 import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
 import { RoundVotingEngine } from "./RoundVotingEngine.sol";
 import { ContentRegistry } from "./ContentRegistry.sol";
@@ -24,6 +25,7 @@ import { RewardMath } from "./libraries/RewardMath.sol";
 ///      When RBTS scoring is active, revealed voters receive score-based stake return and rewards.
 contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, ReentrancyGuardTransient {
     using SafeERC20 for IERC20;
+    using SafeCast for uint256;
 
     // --- Custom Errors ---
     error RoundNotSettled();
@@ -75,6 +77,19 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
     mapping(uint256 => mapping(uint256 => uint256)) public roundVoterRewardClaimedAmount;
     mapping(uint256 => mapping(uint256 => bool)) public roundVoterRewardDustFinalized;
 
+    /// @notice L-Funds-B: per-commit recipient + stake captured on the first failed
+    ///         launch-credit record attempt. Non-zero recipient ⇒ retry is permitted via
+    ///         {retryLaunchRaterRewardCredit}. Cleared on success. Defined here so the
+    ///         struct is in scope for the storage mapping below; the mapping itself is
+    ///         appended to the end of storage (see `pendingLaunchCreditRetry` near `__gap`)
+    ///         to keep upgrade-compatibility with existing TransparentUpgradeableProxy
+    ///         deployments that already populated `frontendFeeClaimed` and the
+    ///         participation-reward maps.
+    struct PendingLaunchCredit {
+        address recipient;
+        uint96 stakeAmount;
+    }
+
     // Track frontend fee claims: contentId => roundId => frontend => claimed
     mapping(uint256 => mapping(uint256 => mapping(address => bool))) public frontendFeeClaimed;
 
@@ -118,6 +133,16 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         address rater,
         address launchPool,
         bytes reason
+    );
+    /// @notice L-Funds-B: emitted when a previously-failed launch credit is successfully
+    ///         recorded via `retryLaunchRaterRewardCredit`. `recipient` mirrors the original
+    ///         `LaunchRaterRewardCreditFailed.rater`.
+    event LaunchRaterRewardCreditRetried(
+        uint256 indexed contentId,
+        uint256 indexed roundId,
+        bytes32 indexed commitKey,
+        address recipient,
+        address launchPool
     );
     event FrontendFeeClaimed(
         uint256 indexed contentId, uint256 indexed roundId, address indexed frontend, uint256 amount
@@ -307,6 +332,29 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         if (launchPool == address(0)) return;
         uint16 scoreBps = votingEngine.commitRbtsScoreBps(contentId, roundId, commitKey);
         if (scoreBps == 0) return;
+        bool ok = _tryRecordLaunchRaterCredit(
+            config, launchPool, contentId, roundId, commitKey, rewardRecipient, scoreBps, stakeAmount
+        );
+        if (!ok) {
+            // L-Funds-B: persist the recipient + stake so a permissionless retry can re-attempt
+            // once the failure cause (oracle rotation race, transient gas spike, anchor lookup
+            // glitch) has cleared. Without this the credit is permanently stranded because
+            // rewardCommitClaimed flipped true in the caller.
+            pendingLaunchCreditRetry[contentId][roundId][commitKey] =
+                PendingLaunchCredit({ recipient: rewardRecipient, stakeAmount: stakeAmount.toUint96() });
+        }
+    }
+
+    function _tryRecordLaunchRaterCredit(
+        ProtocolConfig config,
+        address launchPool,
+        uint256 contentId,
+        uint256 roundId,
+        bytes32 commitKey,
+        address rewardRecipient,
+        uint16 scoreBps,
+        uint256 stakeAmount
+    ) internal returns (bool ok) {
         RoundLib.Round memory round = _readRound(contentId, roundId);
         uint32 minAnchorCredentialAgeSeconds = _launchAnchorCredentialAgeSeconds(launchPool);
 
@@ -337,13 +385,44 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
                     votingEngine.roundClusterPayoutReadyAt(contentId, roundId)
                 ) returns (
                 uint256
-            ) { }
-            catch (bytes memory reason) {
+            ) {
+                return true;
+            } catch (bytes memory reason) {
                 emit LaunchRaterRewardCreditFailed(contentId, roundId, commitKey, rewardRecipient, launchPool, reason);
+                return false;
             }
         } catch (bytes memory reason) {
             emit LaunchRaterRewardCreditFailed(contentId, roundId, commitKey, rewardRecipient, launchPool, reason);
+            return false;
         }
+    }
+
+    /// @notice L-Funds-B: permissionless retry for a launch-credit record that failed on the
+    ///         original `claimReward` call. Reads back the recipient + stake captured at first
+    ///         attempt, re-invokes the launch pool's recordEarnedRaterRewardWithSourceReady, and
+    ///         clears the pending entry on success. No-op (reverts) when no pending entry exists.
+    /// @dev    CEI ordering: clear the pending mapping entry BEFORE the external call so a
+    ///         reentrant caller (e.g. via a malicious launch pool reach-back) cannot replay the
+    ///         retry against the same slot. The outer `nonReentrant` already blocks reentry
+    ///         into this exact function, but ordering the delete first is the defense-in-depth
+    ///         pattern flagged by Slither. If `_tryRecordLaunchRaterCredit` returns false the
+    ///         whole tx reverts and the delete is rolled back atomically.
+    function retryLaunchRaterRewardCredit(uint256 contentId, uint256 roundId, bytes32 commitKey) external nonReentrant {
+        PendingLaunchCredit memory pending = pendingLaunchCreditRetry[contentId][roundId][commitKey];
+        require(pending.recipient != address(0), "Nothing to retry");
+        ProtocolConfig config = ProtocolConfig(votingEngine.protocolConfig());
+        address launchPool = config.launchDistributionPool();
+        require(launchPool != address(0), "Launch pool unset");
+        uint16 scoreBps = votingEngine.commitRbtsScoreBps(contentId, roundId, commitKey);
+        require(scoreBps != 0, "No launch score");
+
+        delete pendingLaunchCreditRetry[contentId][roundId][commitKey];
+
+        bool ok = _tryRecordLaunchRaterCredit(
+            config, launchPool, contentId, roundId, commitKey, pending.recipient, scoreBps, pending.stakeAmount
+        );
+        require(ok, "Retry failed");
+        emit LaunchRaterRewardCreditRetried(contentId, roundId, commitKey, pending.recipient, launchPool);
     }
 
     function _launchAnchorCredentialAgeSeconds(address launchPool) internal view returns (uint32) {
@@ -1032,6 +1111,12 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
     mapping(uint256 => mapping(uint256 => uint256)) public roundFrontendFeeDustExpectedTotal;
     mapping(uint256 => mapping(uint256 => address)) public roundFrontendFeeDustLastFrontend;
 
+    /// @notice L-Funds-B retry slot, appended at end of storage so an upgrade from any
+    ///         layout that already populated `frontendFeeClaimed` etc. does not shift
+    ///         existing slots. Reads at the new slot before the upgrade are zero, which
+    ///         is the correct "no pending retry" semantic.
+    mapping(uint256 => mapping(uint256 => mapping(bytes32 => PendingLaunchCredit))) public pendingLaunchCreditRetry;
+
     // --- Storage Gap for Future Upgrades ---
-    uint256[31] private __gap;
+    uint256[30] private __gap;
 }

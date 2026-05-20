@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
-import {IWorldIDRouter} from "./interfaces/IWorldIDRouter.sol";
-import {IRaterIdentityRegistry} from "./interfaces/IRaterIdentityRegistry.sol";
+import { AccessControl } from "@openzeppelin/contracts/access/AccessControl.sol";
+import { IWorldIDRouter } from "./interfaces/IWorldIDRouter.sol";
+import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol";
 
 /// @title RaterRegistry
 /// @notice Optional rater metadata, human credentials, public follows, and delegation for RateLoop.
@@ -143,7 +143,7 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
         }
 
         _profiles[msg.sender] =
-            RaterProfile({raterType: raterType, metadataHash: metadataHash, updatedAt: uint64(block.timestamp)});
+            RaterProfile({ raterType: raterType, metadataHash: metadataHash, updatedAt: uint64(block.timestamp) });
 
         emit RaterProfileUpdated(msg.sender, raterType, metadataHash, uint64(block.timestamp));
     }
