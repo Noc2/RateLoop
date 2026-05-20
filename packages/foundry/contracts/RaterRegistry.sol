@@ -14,7 +14,7 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
     bytes32 public constant SEEDER_ROLE = keccak256("SEEDER_ROLE");
 
     uint256 public constant WORLD_ID_GROUP_ID = 1;
-    bytes32 public constant CURYO_SELF_VERIFIED_SCOPE = keccak256("rateloop-curyo-self-verified-v1");
+    bytes32 public constant SEEDED_HUMAN_SCOPE = keccak256("rateloop-seeded-human-v1");
 
     enum RaterType {
         Unknown,
@@ -33,7 +33,7 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
     enum HumanCredentialProvider {
         None,
         WorldId,
-        RateLoopSelfVerifiedSeed
+        SeededHuman
     }
 
     struct HumanCredential {
@@ -289,19 +289,14 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
         );
     }
 
-    /// @notice Seed a previous RateLoop Self.xyz verified account as the same verified-human unit used by World ID.
+    /// @notice Seed an approved human credential as the same verified-human unit used by World ID.
     /// @dev Provider provenance is internal metadata; consumers should show this as a generic verified human.
     function seedHumanCredential(address rater, uint64 expiresAt, bytes32 anchorId, bytes32 evidenceHash)
         external
         onlyRole(SEEDER_ROLE)
     {
         _attestHumanCredential(
-            rater,
-            anchorId,
-            CURYO_SELF_VERIFIED_SCOPE,
-            expiresAt,
-            HumanCredentialProvider.RateLoopSelfVerifiedSeed,
-            evidenceHash
+            rater, anchorId, SEEDED_HUMAN_SCOPE, expiresAt, HumanCredentialProvider.SeededHuman, evidenceHash
         );
     }
 
@@ -344,7 +339,7 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
 
     /// @notice Returns the address that owns a nullifier hash within a specific provider's namespace.
     /// @dev Replaces the previous global `humanNullifierOwner(bytes32)` view. Ownership is per-provider
-    ///      so a value seeded under `RateLoopSelfVerifiedSeed` does not collide with a WorldID nullifier of
+    ///      so a value seeded under `SeededHuman` does not collide with a WorldID nullifier of
     ///      the same 32 bytes (L-Identity-1).
     function humanNullifierOwnerByProvider(HumanCredentialProvider provider, bytes32 nullifierHash)
         external
@@ -435,10 +430,7 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
         address currentOwner = _humanNullifierOwnerByProvider[provider][nullifierHash];
         if (currentOwner != address(0) && currentOwner != rater) revert NullifierAlreadyAssigned();
         _humanNullifierOwnerByProvider[provider][nullifierHash] = rater;
-        if (
-            _canonicalHumanIdentityKey[rater] == bytes32(0)
-                || provider == HumanCredentialProvider.RateLoopSelfVerifiedSeed
-        ) {
+        if (_canonicalHumanIdentityKey[rater] == bytes32(0) || provider == HumanCredentialProvider.SeededHuman) {
             _canonicalHumanIdentityKey[rater] = nullifierHash;
         }
         _clearInboundDelegation(rater);

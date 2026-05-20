@@ -46,9 +46,8 @@ struct RoundSnapshot {
     uint256 claimedWeight;
     uint256 claimedAmount;
     uint256 frontendFeeClaimedAmount;
-    // M-Oracle-2-Followup (audit 2026-05-17): appended to preserve the pre-upgrade packed
-    // storage layout of the existing snapshot fields. Tracks whether at least one claim against
-    // this round has moved real funds.
+    // M-Oracle-2-Followup (audit 2026-05-17): tracks whether at least one claim
+    // against this round has moved real funds.
     bool firstClaimPaid;
     // M-Oracle-3 (audit 2026-05-17): cluster-qualified snapshots bind to the finalized payout
     // root used at qualification time so later replacement roots cannot satisfy old snapshots.

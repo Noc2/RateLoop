@@ -50,7 +50,7 @@ export const RaterRegistryAbi = [
   },
   {
     "type": "function",
-    "name": "CURYO_SELF_VERIFIED_SCOPE",
+    "name": "DEFAULT_ADMIN_ROLE",
     "inputs": [],
     "outputs": [
       {
@@ -63,7 +63,7 @@ export const RaterRegistryAbi = [
   },
   {
     "type": "function",
-    "name": "DEFAULT_ADMIN_ROLE",
+    "name": "SEEDED_HUMAN_SCOPE",
     "inputs": [],
     "outputs": [
       {

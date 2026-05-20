@@ -421,8 +421,3 @@ ponder.on(
     await creditLaunchReward(context, referrer, amount);
   },
 );
-
-// `LegacyClaimed` was removed from LaunchDistributionPool on main (commit `Remove launch
-// legacy claim rail`) — the corresponding Ponder handler is dropped here to keep typecheck
-// passing. Historical legacy claims, if any, remain in the indexer's existing rewardClaim
-// rows from prior runs.

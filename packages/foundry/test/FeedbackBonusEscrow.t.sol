@@ -401,7 +401,7 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         bytes32 anchor = bytes32(uint256(uint160(funder)));
         vm.startPrank(owner);
         raterRegistry.revokeHumanCredential(funder);
-        raterRegistry.clearRevokedHumanNullifier(RaterRegistry.HumanCredentialProvider.RateLoopSelfVerifiedSeed, anchor);
+        raterRegistry.clearRevokedHumanNullifier(RaterRegistry.HumanCredentialProvider.SeededHuman, anchor);
         _seedRaterIdentity(raterRegistry, voter1, anchor);
         vm.stopPrank();
 
@@ -419,7 +419,7 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         bytes32 anchor = bytes32(uint256(uint160(submitter)));
         vm.startPrank(owner);
         raterRegistry.revokeHumanCredential(submitter);
-        raterRegistry.clearRevokedHumanNullifier(RaterRegistry.HumanCredentialProvider.RateLoopSelfVerifiedSeed, anchor);
+        raterRegistry.clearRevokedHumanNullifier(RaterRegistry.HumanCredentialProvider.SeededHuman, anchor);
         _seedRaterIdentity(raterRegistry, voter1, anchor);
         vm.stopPrank();
 
@@ -525,9 +525,7 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         bytes32 oldAnchor = bytes32(uint256(uint160(voter1)));
         vm.startPrank(owner);
         raterRegistry.revokeHumanCredential(voter1);
-        raterRegistry.clearRevokedHumanNullifier(
-            RaterRegistry.HumanCredentialProvider.RateLoopSelfVerifiedSeed, oldAnchor
-        );
+        raterRegistry.clearRevokedHumanNullifier(RaterRegistry.HumanCredentialProvider.SeededHuman, oldAnchor);
         _seedRaterIdentity(raterRegistry, voter1, keccak256("voter1-rotated-anchor"));
         vm.stopPrank();
 
@@ -582,7 +580,7 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         bytes32 anchor = bytes32(uint256(uint160(voter1)));
         vm.startPrank(owner);
         raterRegistry.revokeHumanCredential(voter1);
-        raterRegistry.clearRevokedHumanNullifier(RaterRegistry.HumanCredentialProvider.RateLoopSelfVerifiedSeed, anchor);
+        raterRegistry.clearRevokedHumanNullifier(RaterRegistry.HumanCredentialProvider.SeededHuman, anchor);
         _seedRaterIdentity(raterRegistry, voter1, anchor);
         vm.stopPrank();
 

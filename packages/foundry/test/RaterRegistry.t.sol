@@ -20,7 +20,7 @@ contract RaterRegistryTest is Test {
     bytes32 internal constant NULLIFIER_HASH = keccak256("self-nullifier");
     bytes32 internal constant HUMAN_SCOPE = keccak256("rateloop-human-v1");
     bytes32 internal constant EVIDENCE_HASH = keccak256("evidence");
-    bytes32 internal constant CURYO_ANCHOR_ID = keccak256("curyo-self-verified-anchor");
+    bytes32 internal constant SEEDED_ANCHOR_ID = keccak256("seeded-human-anchor");
     uint256 internal constant WORLD_ID_EXTERNAL_NULLIFIER_HASH = 12_345;
     uint64 internal constant WORLD_ID_CREDENTIAL_TTL = 365 days;
 
@@ -313,10 +313,7 @@ contract RaterRegistryTest is Test {
             address(0)
         );
         assertEq(
-            registry.humanNullifierOwnerByProvider(
-                RaterRegistry.HumanCredentialProvider.RateLoopSelfVerifiedSeed, anchorId
-            ),
-            rater
+            registry.humanNullifierOwnerByProvider(RaterRegistry.HumanCredentialProvider.SeededHuman, anchorId), rater
         );
 
         // A different rater can now claim the nullifier under the old provider.
@@ -330,10 +327,10 @@ contract RaterRegistryTest is Test {
 
     function test_CredentialRefreshKeepsCanonicalIdentityKey() public {
         vm.prank(admin);
-        registry.seedHumanCredential(rater, uint64(block.timestamp + 1), CURYO_ANCHOR_ID, EVIDENCE_HASH);
+        registry.seedHumanCredential(rater, uint64(block.timestamp + 1), SEEDED_ANCHOR_ID, EVIDENCE_HASH);
 
         IRaterIdentityRegistry.ResolvedRater memory first = registry.resolveRater(rater);
-        assertEq(first.identityKey, CURYO_ANCHOR_ID);
+        assertEq(first.identityKey, SEEDED_ANCHOR_ID);
 
         vm.warp(block.timestamp + 2);
         uint256[8] memory proof;
@@ -342,30 +339,28 @@ contract RaterRegistryTest is Test {
 
         IRaterIdentityRegistry.ResolvedRater memory refreshed = registry.resolveRater(rater);
         assertEq(refreshed.humanNullifier, NULLIFIER_HASH);
-        assertEq(refreshed.identityKey, CURYO_ANCHOR_ID);
+        assertEq(refreshed.identityKey, SEEDED_ANCHOR_ID);
     }
 
-    function test_SeedHumanCredentialStoresRateLoopSelfVerifiedAccountAsVerifiedHuman() public {
+    function test_SeedHumanCredentialStoresSeededAccountAsVerifiedHuman() public {
         uint64 expiresAt = uint64(block.timestamp + 180 days);
 
         vm.prank(rater);
         registry.setProfile(RaterRegistry.RaterType.Team, METADATA_HASH);
 
         vm.prank(admin);
-        registry.seedHumanCredential(rater, expiresAt, CURYO_ANCHOR_ID, EVIDENCE_HASH);
+        registry.seedHumanCredential(rater, expiresAt, SEEDED_ANCHOR_ID, EVIDENCE_HASH);
 
         RaterRegistry.HumanCredential memory credential = registry.getHumanCredential(rater);
         assertTrue(credential.verified);
         assertFalse(credential.revoked);
-        assertEq(uint256(credential.provider), uint256(RaterRegistry.HumanCredentialProvider.RateLoopSelfVerifiedSeed));
-        assertEq(credential.nullifierHash, CURYO_ANCHOR_ID);
-        assertEq(credential.scope, registry.CURYO_SELF_VERIFIED_SCOPE());
+        assertEq(uint256(credential.provider), uint256(RaterRegistry.HumanCredentialProvider.SeededHuman));
+        assertEq(credential.nullifierHash, SEEDED_ANCHOR_ID);
+        assertEq(credential.scope, registry.SEEDED_HUMAN_SCOPE());
         assertEq(credential.expiresAt, expiresAt);
         assertEq(credential.evidenceHash, EVIDENCE_HASH);
         assertEq(
-            registry.humanNullifierOwnerByProvider(
-                RaterRegistry.HumanCredentialProvider.RateLoopSelfVerifiedSeed, CURYO_ANCHOR_ID
-            ),
+            registry.humanNullifierOwnerByProvider(RaterRegistry.HumanCredentialProvider.SeededHuman, SEEDED_ANCHOR_ID),
             rater
         );
         assertTrue(registry.hasActiveHumanCredential(rater));
@@ -379,7 +374,7 @@ contract RaterRegistryTest is Test {
         uint64 expiresAt = uint64(block.timestamp + 7 days);
 
         vm.prank(admin);
-        registry.seedHumanCredential(rater, expiresAt, CURYO_ANCHOR_ID, EVIDENCE_HASH);
+        registry.seedHumanCredential(rater, expiresAt, SEEDED_ANCHOR_ID, EVIDENCE_HASH);
 
         vm.warp(expiresAt + 1);
 
@@ -387,8 +382,8 @@ contract RaterRegistryTest is Test {
 
         IRaterIdentityRegistry.ResolvedRater memory resolved = registry.resolveRater(rater);
         assertEq(resolved.holder, rater);
-        assertEq(resolved.identityKey, CURYO_ANCHOR_ID);
-        assertEq(resolved.humanNullifier, CURYO_ANCHOR_ID);
+        assertEq(resolved.identityKey, SEEDED_ANCHOR_ID);
+        assertEq(resolved.humanNullifier, SEEDED_ANCHOR_ID);
         assertFalse(resolved.hasActiveHumanCredential);
         assertFalse(resolved.delegated);
     }
@@ -405,13 +400,13 @@ contract RaterRegistryTest is Test {
 
     function test_ResolveRaterUsesHumanNullifierIdentityWhenCredentialed() public {
         vm.prank(admin);
-        registry.seedHumanCredential(rater, uint64(block.timestamp + 7 days), CURYO_ANCHOR_ID, EVIDENCE_HASH);
+        registry.seedHumanCredential(rater, uint64(block.timestamp + 7 days), SEEDED_ANCHOR_ID, EVIDENCE_HASH);
 
         IRaterIdentityRegistry.ResolvedRater memory resolved = registry.resolveRater(rater);
 
         assertEq(resolved.holder, rater);
-        assertEq(resolved.identityKey, CURYO_ANCHOR_ID);
-        assertEq(resolved.humanNullifier, CURYO_ANCHOR_ID);
+        assertEq(resolved.identityKey, SEEDED_ANCHOR_ID);
+        assertEq(resolved.humanNullifier, SEEDED_ANCHOR_ID);
         assertTrue(resolved.hasActiveHumanCredential);
         assertFalse(resolved.delegated);
     }
@@ -445,7 +440,7 @@ contract RaterRegistryTest is Test {
         registry.setDelegate(subject);
 
         vm.prank(admin);
-        registry.seedHumanCredential(subject, uint64(block.timestamp + 7 days), CURYO_ANCHOR_ID, EVIDENCE_HASH);
+        registry.seedHumanCredential(subject, uint64(block.timestamp + 7 days), SEEDED_ANCHOR_ID, EVIDENCE_HASH);
 
         vm.prank(rater);
         vm.expectRevert(RaterRegistry.DelegateIsHolder.selector);
@@ -477,14 +472,14 @@ contract RaterRegistryTest is Test {
         registry.acceptDelegate();
 
         vm.prank(admin);
-        registry.seedHumanCredential(otherRater, uint64(block.timestamp + 7 days), CURYO_ANCHOR_ID, EVIDENCE_HASH);
+        registry.seedHumanCredential(otherRater, uint64(block.timestamp + 7 days), SEEDED_ANCHOR_ID, EVIDENCE_HASH);
 
         assertEq(registry.delegateTo(rater), address(0));
         assertEq(registry.delegateOf(otherRater), address(0));
 
         IRaterIdentityRegistry.ResolvedRater memory resolved = registry.resolveRater(otherRater);
         assertEq(resolved.holder, otherRater);
-        assertEq(resolved.identityKey, CURYO_ANCHOR_ID);
+        assertEq(resolved.identityKey, SEEDED_ANCHOR_ID);
         assertFalse(resolved.delegated);
     }
 }

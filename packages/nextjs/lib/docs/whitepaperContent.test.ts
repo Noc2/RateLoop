@@ -57,8 +57,7 @@ test("whitepaper reflects current launch allocations and governance threshold", 
   assert.match(whitepaperText, /treasury starts with 32M LREP/i);
   assert.match(whitepaperText, /bootstrap proposal threshold is 1,000 LREP/i);
   assert.match(whitepaperText, /35M LREP for verified \+ referral rewards/i);
-  assert.match(whitepaperText, /29M LREP for earned rater rewards/i);
-  assert.match(whitepaperText, /4M LREP for legacy users/i);
+  assert.match(whitepaperText, /33M LREP for earned rater rewards/i);
   assert.match(whitepaperText, /one verified-human anchor in the round/i);
   assert.match(whitepaperText, /two distinct verified-human anchors/i);
 
@@ -66,7 +65,9 @@ test("whitepaper reflects current launch allocations and governance threshold", 
   assert.doesNotMatch(whitepaperText, /Bootstrap Pool \(24M LREP\)/i);
   assert.doesNotMatch(whitepaperText, /pool is funded with 24M LREP/i);
   assert.doesNotMatch(whitepaperText, /Launch Distribution Pool \(64M LREP\)/i);
+  assert.doesNotMatch(whitepaperText, /29M LREP for earned rater rewards/i);
   assert.doesNotMatch(whitepaperText, /25M LREP for earned rater rewards/i);
+  assert.doesNotMatch(whitepaperText, /4M LREP for legacy users/i);
   assert.doesNotMatch(whitepaperText, /consensus subsidy reserve/i);
   assert.doesNotMatch(whitepaperText, /treasury starts with 20M LREP/i);
   assert.doesNotMatch(whitepaperText, /10,000 LREP proposal threshold/i);

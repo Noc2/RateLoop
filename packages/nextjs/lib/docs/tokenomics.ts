@@ -18,7 +18,7 @@ const tokenDistributionEntries: readonly TokenDistributionEntry[] = [
     label: "Launch Distribution Pool",
     amount: 68_000_000,
     purpose:
-      "Protocol-funded launch rewards: verified-human anchored earned rater rewards, one-time decaying human verification bonuses, referrals, and fixed legacy-user claims",
+      "Protocol-funded launch rewards: verified-human anchored earned rater rewards, one-time decaying human verification bonuses, and referrals",
   },
   {
     label: "Treasury",
@@ -41,14 +41,9 @@ const launchDistributionBreakdownEntries: readonly TokenDistributionEntry[] = [
   },
   {
     label: "Earned rater rewards",
-    amount: 29_000_000,
+    amount: 33_000_000,
     purpose:
       "Count-based rewards for useful revealed ratings in verified-human anchored rounds, with full caps unlockable by later human verification",
-  },
-  {
-    label: "Legacy users",
-    amount: 4_000_000,
-    purpose: "Fixed allocation for the previous-user set",
   },
 ] as const;
 

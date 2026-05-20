@@ -1456,10 +1456,6 @@ contract RoundVotingEngine is
     ///      Indexed by (contentId, roundId).
     mapping(uint256 contentId => mapping(uint256 roundId => bool)) public pendingBundleObserverReplay;
 
-    // Deprecated compatibility slot. RBTS scoring now mixes threshold-captured entropy instead
-    // of a value overwritten by the final committer.
-    mapping(uint256 => mapping(uint256 => bytes32)) internal roundLastCommitPrevrandao;
-
     // True if at least one commit in this round originated from an address with an active human
     // credential. `cancelExpiredRound` requires this flag before the min-RBTS-quorum cancel-lockout
     // engages -- attacker-only rounds (all non-HRC sybils) remain refund-cancellable so they
@@ -1484,5 +1480,5 @@ contract RoundVotingEngine is
     mapping(uint256 contentId => mapping(uint256 roundId => uint48)) public roundClusterPayoutReadyAt;
 
     // --- Storage gap reserved for future upgrades ---
-    uint256[22] private __gap;
+    uint256[23] private __gap;
 }

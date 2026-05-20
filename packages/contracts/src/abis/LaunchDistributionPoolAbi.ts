@@ -1179,65 +1179,6 @@ export const LaunchDistributionPoolAbi = [
   },
   {
     "type": "function",
-    "name": "recordAdvisoryRaterReward",
-    "inputs": [
-      {
-        "name": "rater",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "contentId",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "roundId",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "advisoryCommitKey",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      },
-      {
-        "name": "scoreBps",
-        "type": "uint16",
-        "internalType": "uint16"
-      },
-      {
-        "name": "revealedRaterCount",
-        "type": "uint16",
-        "internalType": "uint16"
-      },
-      {
-        "name": "noPendingCleanup",
-        "type": "bool",
-        "internalType": "bool"
-      },
-      {
-        "name": "verifiedAnchorIds",
-        "type": "bytes32[]",
-        "internalType": "bytes32[]"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "recorded",
-        "type": "bool",
-        "internalType": "bool"
-      },
-      {
-        "name": "paidAmount",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
     "name": "recordAdvisoryRaterRewardWithSourceReady",
     "inputs": [
       {
@@ -1292,65 +1233,6 @@ export const LaunchDistributionPoolAbi = [
         "type": "bool",
         "internalType": "bool"
       },
-      {
-        "name": "paidAmount",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "recordEarnedRaterReward",
-    "inputs": [
-      {
-        "name": "rater",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "contentId",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "roundId",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "commitKey",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      },
-      {
-        "name": "scoreBps",
-        "type": "uint16",
-        "internalType": "uint16"
-      },
-      {
-        "name": "revealedRaterCount",
-        "type": "uint16",
-        "internalType": "uint16"
-      },
-      {
-        "name": "noPendingCleanup",
-        "type": "bool",
-        "internalType": "bool"
-      },
-      {
-        "name": "stakeAmount",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "verifiedAnchorIds",
-        "type": "bytes32[]",
-        "internalType": "bytes32[]"
-      }
-    ],
-    "outputs": [
       {
         "name": "paidAmount",
         "type": "uint256",

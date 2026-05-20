@@ -46,7 +46,6 @@ contract DeployRateLoop is ScaffoldETHDeploy {
     uint64 internal constant WORLD_ID_CREDENTIAL_TTL_SECONDS = 365 days;
     string internal constant DEFAULT_WORLD_ID_ACTION = "rateloop-human-credential-v1";
     string internal constant LOCAL_WORLD_ID_APP_ID = "app_staging_rateloop_local";
-    bytes32 internal constant CURYO_SELF_VERIFIED_SEED_EVIDENCE = keccak256("rateloop:curyo-self-verified-seed:v1");
 
     function _preBroadcastChecks() internal view override {
         if (block.chainid != 31337 && block.chainid != 480 && block.chainid != 4801) {
@@ -188,8 +187,6 @@ contract DeployRateLoop is ScaffoldETHDeploy {
             worldIdExternalNullifierHash,
             WORLD_ID_CREDENTIAL_TTL_SECONDS
         );
-        _seedRateLoopSelfVerifiedHumans(raterRegistry);
-        console.log("Seeded 9 RateLoop Self.xyz verified humans");
         TransparentUpgradeableProxy questionRewardPoolEscrowProxy = new TransparentUpgradeableProxy(
             address(questionRewardPoolEscrowImpl),
             governance,
@@ -458,26 +455,6 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         }
         holders[count] = candidate;
         return count + 1;
-    }
-
-    function _seedRateLoopSelfVerifiedHumans(RaterRegistry raterRegistry) internal {
-        address[9] memory accounts = [
-            0x63cada40E8AcF7A1d47229af5Be35b78b16035fa,
-            0x7c6425827BB8d848808cbb8fe2bd55Fd2f2Fa41A,
-            0xc1CD80C7cD37b5499560C362b164cbA1CfF71b44,
-            0x455eE797cEa79A936bA8E8ed888E0B20ca1A1BA3,
-            0x5A5148e7963C732e4C0991726793A726ce28046A,
-            0x3ea207780415e2ab68b97eB3b02AdDD70020ac4c,
-            0xE6722D1FDcA78552eAE5EA12eA3A8B7D6EeC7AA8,
-            0x74cC77FDA426225470351f93c6ce4382b4b51Aa8,
-            0x4b98406f108D1A19dbbBe22216D432A5b1a5E22b
-        ];
-
-        for (uint256 i = 0; i < accounts.length; i++) {
-            bytes32 anchorId = keccak256(abi.encodePacked("rateloop:curyo-self-verified-v1", accounts[i]));
-            bytes32 evidenceHash = keccak256(abi.encodePacked(CURYO_SELF_VERIFIED_SEED_EVIDENCE, accounts[i]));
-            raterRegistry.seedHumanCredential(accounts[i], type(uint64).max, anchorId, evidenceHash);
-        }
     }
 
     function _fundLocalDevAccounts(LoopReputation lrepToken, MockERC20 localUsdcToken, RaterRegistry raterRegistry)

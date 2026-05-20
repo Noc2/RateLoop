@@ -364,37 +364,6 @@ contract LaunchDistributionPool is
         emit RaterLaunchCapUnlocked(rater, nullifierHash, previousCap, fullCap, catchUpPaid);
     }
 
-    function recordEarnedRaterReward(
-        address rater,
-        uint256 contentId,
-        uint256 roundId,
-        bytes32 commitKey,
-        uint16 scoreBps,
-        uint16 revealedRaterCount,
-        bool noPendingCleanup,
-        uint256 stakeAmount,
-        bytes32[] calldata verifiedAnchorIds
-    ) external onlyAuthorized nonReentrant returns (uint256 paidAmount) {
-        // L-Oracle-C: when a cluster oracle is configured the legacy "use current block as
-        // sourceReadyAt" semantic creates a permanently-stuck pending credit whenever the new
-        // oracle's snapshot was proposed BEFORE this call. Production callers always use the
-        // WithSourceReady variant; force any other caller onto that path so the readyAt is
-        // anchored to the voting engine's settlement timestamp rather than now.
-        if (address(clusterPayoutOracle) != address(0)) revert InvalidAddress();
-        return _recordEarnedRaterRewardCredit(
-            rater,
-            contentId,
-            roundId,
-            commitKey,
-            scoreBps,
-            revealedRaterCount,
-            noPendingCleanup,
-            stakeAmount,
-            verifiedAnchorIds,
-            uint64(block.timestamp)
-        );
-    }
-
     function recordEarnedRaterRewardWithSourceReady(
         address rater,
         uint256 contentId,
@@ -478,32 +447,6 @@ contract LaunchDistributionPool is
         _recordAnchorRound(rater, contentId, roundId);
         _recordVerifiedAnchors(policy, rater, verifiedAnchorIds);
         return _recordEarnedRaterReward(rater, contentId, roundId, commitKey, scoreBps, policy, BPS_DENOMINATOR);
-    }
-
-    function recordAdvisoryRaterReward(
-        address rater,
-        uint256 contentId,
-        uint256 roundId,
-        bytes32 advisoryCommitKey,
-        uint16 scoreBps,
-        uint16 revealedRaterCount,
-        bool noPendingCleanup,
-        bytes32[] calldata verifiedAnchorIds
-    ) external onlyAuthorized nonReentrant returns (bool recorded, uint256 paidAmount) {
-        // L-Oracle-C: see recordEarnedRaterReward. The advisory legacy path has the same
-        // sourceReadyAt-stale problem when an oracle is configured.
-        if (address(clusterPayoutOracle) != address(0)) revert InvalidAddress();
-        return _recordAdvisoryRaterRewardCredit(
-            rater,
-            contentId,
-            roundId,
-            advisoryCommitKey,
-            scoreBps,
-            revealedRaterCount,
-            noPendingCleanup,
-            verifiedAnchorIds,
-            uint64(block.timestamp)
-        );
     }
 
     function recordAdvisoryRaterRewardWithSourceReady(
