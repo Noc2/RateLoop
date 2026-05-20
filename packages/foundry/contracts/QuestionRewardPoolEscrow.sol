@@ -1160,6 +1160,12 @@ contract QuestionRewardPoolEscrow is
         RewardPool storage rewardPool = rewardPools[rewardPoolId];
         if (rewardPool.id == 0 || rewardPool.refunded || rewardPool.contentId != contentId) return 0;
         if (!_usesClusterPayoutSnapshot(rewardPool)) return 0;
+        // L-Oracle-4: reject snapshot proposals for rounds outside the pool's qualifying
+        // window — both pre-start rounds and rounds past the required-settled cap. The pool
+        // qualifier ignores such proposals anyway, but accepting them lets eligible frontends
+        // grief storage with no funds-at-risk angle; the gate also documents the boundary.
+        if (roundId < rewardPool.startRoundId) return 0;
+        if (rewardPool.qualifiedRounds >= rewardPool.requiredSettledRounds) return 0;
         return votingEngine.roundClusterPayoutReadyAt(contentId, roundId);
     }
 

@@ -878,10 +878,10 @@ contract RoundVotingEngine is
         if (round.state != RoundLib.RoundState.Open) revert RoundNotOpen();
         RoundLib.RoundConfig memory roundCfg = _getRoundConfig(contentId, roundId);
         if (round.revealedCount < _rbtsRevealQuorum(roundCfg.minVoters)) revert NotEnoughVotes();
-        uint8 refreshCount = roundRbtsSeedRefreshCount[contentId][roundId];
+        uint8 refreshCount = _roundRbtsSeedRefreshCount[contentId][roundId];
         if (refreshCount >= MAX_RBTS_SEED_REFRESHES) revert RbtsSeedRefreshCapped();
         unchecked {
-            roundRbtsSeedRefreshCount[contentId][roundId] = refreshCount + 1;
+            _roundRbtsSeedRefreshCount[contentId][roundId] = refreshCount + 1;
         }
 
         RoundRevealLib.refreshRbtsSeed(roundRbtsSeedEntropy, contentId, roundId);
@@ -1062,7 +1062,7 @@ contract RoundVotingEngine is
         // this, the unpaid LREP would stay in the engine but be inaccessible: commits are
         // zeroed and `recoverSurplusLrep` can't touch funds still on the accounted side.
         if (pendingDelta > 0) {
-            pendingTreasuryForfeitLrep += pendingDelta;
+            _pendingTreasuryForfeitLrep += pendingDelta;
         }
         if (
             round.state == RoundLib.RoundState.Settled && roundUnrevealedCleanupRemaining[contentId][roundId] == 0
@@ -1077,11 +1077,11 @@ contract RoundVotingEngine is
     ///         Decrements `accountedLrepBalance` only on successful transfer; the bucket
     ///         survives failed flushes so callers can retry once treasury is healthy.
     function flushPendingTreasuryForfeit() external nonReentrant returns (uint256 paid) {
-        uint256 amount = pendingTreasuryForfeitLrep;
+        uint256 amount = _pendingTreasuryForfeitLrep;
         if (amount == 0) revert NothingProcessed();
         address treasuryAddress = protocolConfig.treasury();
         if (treasuryAddress == address(0)) revert InvalidAddress();
-        pendingTreasuryForfeitLrep = 0;
+        _pendingTreasuryForfeitLrep = 0;
         lrepToken.safeTransfer(treasuryAddress, amount);
         accountedLrepBalance -= amount;
         emit PendingTreasuryForfeitFlushed(treasuryAddress, amount);
@@ -1547,13 +1547,13 @@ contract RoundVotingEngine is
     ///         refresh swaps the captured `blockhash`-derived entropy for a fresh capture; an
     ///         unbounded counter would let the threshold-closing voter grind the sampler by
     ///         waiting 256 blocks and re-rolling. Capped at `MAX_RBTS_SEED_REFRESHES` per round.
-    mapping(uint256 contentId => mapping(uint256 roundId => uint8)) public roundRbtsSeedRefreshCount;
+    mapping(uint256 contentId => mapping(uint256 roundId => uint8)) internal _roundRbtsSeedRefreshCount;
 
     /// @notice L-Cleanup-1: accumulated LREP that `processUnrevealedVotes` tried to send to
     ///         treasury but couldn't (treasury unset or transfer reverted). Permissionless
     ///         `flushPendingTreasuryForfeit` retries the transfer; until then the amount stays
     ///         in `accountedLrepBalance` so it isn't classified as recoverable surplus.
-    uint256 public pendingTreasuryForfeitLrep;
+    uint256 internal _pendingTreasuryForfeitLrep;
 
     // --- Storage gap reserved for future upgrades ---
     uint256[21] private __gap;

@@ -368,13 +368,13 @@
   {
     "slot": 61,
     "offset": 0,
-    "label": "roundRbtsSeedRefreshCount",
+    "label": "_roundRbtsSeedRefreshCount",
     "type": "t_mapping"
   },
   {
     "slot": 62,
     "offset": 0,
-    "label": "pendingTreasuryForfeitLrep",
+    "label": "_pendingTreasuryForfeitLrep",
     "type": "t_uint256"
   },
   {
