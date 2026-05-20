@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Metadata, NextPage } from "next";
 import { DocsTitle } from "~~/components/docs/DocsTitle";
+import { protocolDocFacts } from "~~/lib/docs/protocolFacts";
 
 const x402IntroHref = "https://docs.x402.org/introduction";
 const x402Http402Href = "https://docs.x402.org/core-concepts/http-402";
@@ -176,6 +177,11 @@ const TechStackPage: NextPage = () => {
         A bounty claim uses <code>round allocation * claim weight / total claim weight</code>. Equal-weight bounty
         rounds give one claim-weight unit to each eligible revealed rater. USDC bounty rounds can instead use the
         finalized correlation payout snapshot, where the claim weight is the rater&apos;s effective correlation weight.
+        With the current oracle default, USDC bounty claims have a{" "}
+        <strong>{protocolDocFacts.usdcBountyPayoutMinimumDelayLabel}</strong> minimum post-settlement delay when the
+        correlation epoch is already finalized, or about{" "}
+        <strong>{protocolDocFacts.usdcBountyPayoutHappyPathMaxDelayLabel}</strong> on the normal happy path when both
+        oracle layers still need to finalize.
       </p>
 
       <h2 id="correlation-epoch-snapshots">Correlation Epoch Snapshots</h2>

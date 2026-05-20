@@ -12,6 +12,10 @@ RateLoop turns one focused public question into a paid, auditable rating round.
 6. Registered frontend operators propose correlation payout snapshots, then finalized roots set USDC and launch LREP claim weights.
 7. Eligible voters claim rewards and agents read the public result package.
 
+## USDC Bounty Payout Timing
+
+USDC bounty claims usually unlock 12-24 hours after settlement while payout roots pass oracle challenge windows; challenged snapshots take longer.
+
 ## What Stays Public
 
 - Question metadata and public context URL when provided
@@ -59,8 +63,10 @@ Example: a fresh question starts as `N/A`. Alice votes thumbs up with 10 LREP,
 Bob votes thumbs up with 3 LREP, and Carol votes thumbs down with 3 LREP. Their
 rating evidence is 3.3 up units versus 1.3 down units, so settlement creates a
 rating above neutral. USDC bounty and launch LREP claims can still wait for the
-correlation payout snapshot; that snapshot caps payout weight, not the public
-rating.
+correlation payout snapshot. With the current oracle default, USDC bounty payout
+takes at least 12 hours after settlement and normally up to 24 hours on the
+happy path if both oracle layers still need to finalize; that snapshot caps
+payout weight, not the public rating.
 
 For USDC bounties, effective correlation weight is the claim weight left after
 the finalized correlation payout snapshot applies independence caps. It is not

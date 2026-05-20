@@ -17,6 +17,7 @@ import {
   parseBountyWindowAmount,
   resolveBountyReferenceNowSeconds,
 } from "~~/lib/bountyWindows";
+import { protocolDocFacts } from "~~/lib/docs/protocolFacts";
 import {
   DEFAULT_REWARD_POOL_FRONTEND_FEE_BPS,
   ERC20_APPROVAL_ABI,
@@ -42,10 +43,8 @@ type FundQuestionModalProps = {
 const FRONTEND_FEE_PERCENT = DEFAULT_REWARD_POOL_FRONTEND_FEE_BPS / 100;
 const REQUIRED_VOTERS_TOOLTIP =
   "How many eligible revealed voters a round needs before that round can count toward this bounty. This cannot exceed the question's selected voter cap.";
-const SETTLED_ROUNDS_TOOLTIP =
-  "How many qualifying settled rounds must complete before the bounty is filled and funds can be paid out.";
-const BOUNTY_WINDOW_TOOLTIP =
-  "Bounty and paid feedback are active only inside this window. The question remains visible after the bounty closes.";
+const SETTLED_ROUNDS_TOOLTIP = `How many qualifying settled rounds must complete before the bounty is filled. USDC payouts then wait on finalized payout roots: ${protocolDocFacts.usdcBountyPayoutMinimumDelayLabel} minimum, normally up to ${protocolDocFacts.usdcBountyPayoutHappyPathMaxDelayLabel} on the happy path.`;
+const BOUNTY_WINDOW_TOOLTIP = `Bounty and paid feedback are active only inside this window. The question remains visible after the bounty closes. ${protocolDocFacts.usdcBountyPayoutTimingTooltip}`;
 
 function BountyFieldLabel({ htmlFor, children, tooltip }: { htmlFor: string; children: ReactNode; tooltip?: string }) {
   return (
@@ -211,7 +210,12 @@ export function FundQuestionModal({ contentId, title, onClose, onCreated }: Fund
         <h3 className="mt-1 line-clamp-2 text-xl font-semibold text-base-content">{title}</h3>
         <p className="mt-2 text-base text-base-content/70">
           Paid in USDC on World Chain. Qualified claims reserve {FRONTEND_FEE_PERCENT}% for the eligible frontend
-          operator; the rest goes to eligible revealed voters.
+          operator; the rest goes to eligible revealed voters after payout roots finalize.
+        </p>
+        <p className="mt-3 rounded-lg bg-warning/10 p-3 text-sm text-base-content/75">
+          USDC claims take at least {protocolDocFacts.usdcBountyPayoutMinimumDelayLabel} after settlement, or normally
+          up to {protocolDocFacts.usdcBountyPayoutHappyPathMaxDelayLabel} when both oracle layers still need to
+          finalize.
         </p>
 
         <div className="mt-5 grid gap-4">

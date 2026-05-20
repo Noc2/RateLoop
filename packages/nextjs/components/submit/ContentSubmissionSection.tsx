@@ -48,6 +48,7 @@ import {
 } from "~~/lib/contentMedia";
 import { MAX_QUESTION_LENGTH } from "~~/lib/contentTitle";
 import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
+import { protocolDocFacts } from "~~/lib/docs/protocolFacts";
 import {
   findBlockedContentTags,
   getContentDescriptionValidationError,
@@ -1948,8 +1949,7 @@ export function ContentSubmissionSection() {
     </div>
   );
 
-  const bountyAmountTooltipText =
-    "Every question needs a funded bounty. It discourages low-quality asks and rewards eligible voters.";
+  const bountyAmountTooltipText = `Every question needs a funded bounty. It discourages low-quality asks and rewards eligible voters. ${protocolDocFacts.usdcBountyPayoutTimingTooltip}`;
   const requiredVotersTooltipText =
     questionCount === 1
       ? `Minimum eligible revealed voters required in a round before that round can receive the bounty payout. Counts do not roll over across rounds. Current min: ${MIN_REWARD_POOL_REQUIRED_VOTERS}.`
@@ -1987,12 +1987,11 @@ export function ContentSubmissionSection() {
           `Current min: ${roundMaxVoterBounds.min.toLocaleString()}.`,
           `Current max: ${roundMaxVoterBounds.max.toLocaleString()}.`,
         ].join(" ");
-  const bountyExpiryTooltipText =
-    "Bounty and paid feedback match the blind response window by default. Override this if rewards should close at a different time.";
+  const bountyExpiryTooltipText = `Bounty and paid feedback match the blind response window by default. Override this if rewards should close at a different time. ${protocolDocFacts.usdcBountyPayoutTimingTooltip}`;
   const bountyEstimateTooltipText =
     selectedRewardAmount === null
-      ? `Using the current minimum until the bounty amount is valid. ${formatFrontendFeePercent(frontendFeeBps)} may be reserved for an eligible frontend operator.`
-      : `${formatFrontendFeePercent(frontendFeeBps)} may be reserved for an eligible frontend operator.`;
+      ? `Using the current minimum until the bounty amount is valid. ${formatFrontendFeePercent(frontendFeeBps)} may be reserved for an eligible frontend operator. ${protocolDocFacts.usdcBountyPayoutTimingTooltip}`
+      : `${formatFrontendFeePercent(frontendFeeBps)} may be reserved for an eligible frontend operator. ${protocolDocFacts.usdcBountyPayoutTimingTooltip}`;
   const minimumClaimEstimateLabel = questionCount === 1 ? "Per voter claim" : "Per completer claim";
   const voterCapEstimateLabel =
     questionCount === 1 ? "If each round reaches voter max" : "If every question reaches voter max";
@@ -2007,7 +2006,10 @@ export function ContentSubmissionSection() {
 
   const bountyDetailsCard = (
     <div className="space-y-5">
-      <p className="flex items-center gap-1.5 text-base font-medium text-base-content">Bounty</p>
+      <p className="flex items-center gap-1.5 text-base font-medium text-base-content">
+        Bounty
+        <InfoTooltip text={protocolDocFacts.usdcBountyPayoutTimingTooltip} />
+      </p>
 
       <div className="grid grid-cols-2 gap-2">
         <button
