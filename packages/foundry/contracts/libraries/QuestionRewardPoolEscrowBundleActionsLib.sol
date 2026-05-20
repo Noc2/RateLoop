@@ -67,6 +67,19 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         uint256 bundleIndex,
         uint256 roundSetIndex
     );
+
+    /// @notice FE-6 (2026-05-20 follow-up audit): emitted when `_recordBundleQuestionTerminal`
+    ///         skips a terminal event without recording it. Off-chain monitors can subscribe to
+    ///         detect stuck bundle progression caused by ordering / refund / cursor mismatch
+    ///         rather than inferring the skip from the absence of `QuestionBundleRoundRecorded`.
+    /// @param reasonCode 1 = bundle refunded, 2 = roundSet beyond required, 3 = roundSet behind
+    ///                   completed cursor, 4 = roundId not strictly greater than the current
+    ///                   set's recorded round, 5 = roundId not strictly greater than the prior
+    ///                   set's recorded round, 6 = round terminal was non-settled (rejected /
+    ///                   cancelled). reasonCode = 0 reserved.
+    event QuestionBundleTerminalSkipped(
+        uint256 indexed bundleId, uint256 indexed contentId, uint256 indexed roundId, uint8 reasonCode
+    );
     event QuestionBundleRoundSetQualified(
         uint256 indexed bundleId, uint256 indexed roundSetIndex, uint256 allocation, uint256 frontendFeeAllocation
     );
@@ -623,22 +636,40 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         if (bundleId == 0) return;
 
         BundleReward storage bundle = _getExistingBundleReward(bundleRewards, bundleId);
-        if (bundle.refunded) return;
+        if (bundle.refunded) {
+            emit QuestionBundleTerminalSkipped(bundleId, contentId, roundId, 1);
+            return;
+        }
 
         uint256 bundleIndex = contentBundleIndex[contentId];
         _advanceBundleQuestionTerminalSyncCursor(bundleQuestionTerminalSyncCursor, bundleId, bundleIndex, roundId);
 
         uint256 roundSetIndex = bundleQuestionRecordedRounds[bundleId][bundleIndex];
-        if (roundSetIndex >= bundle.requiredSettledRounds) return;
-        if (roundSetIndex < bundle.completedRoundSets) return;
-        if (roundId <= bundleRoundIds[bundleId][bundleIndex][roundSetIndex]) return;
+        if (roundSetIndex >= bundle.requiredSettledRounds) {
+            emit QuestionBundleTerminalSkipped(bundleId, contentId, roundId, 2);
+            return;
+        }
+        if (roundSetIndex < bundle.completedRoundSets) {
+            emit QuestionBundleTerminalSkipped(bundleId, contentId, roundId, 3);
+            return;
+        }
+        if (roundId <= bundleRoundIds[bundleId][bundleIndex][roundSetIndex]) {
+            emit QuestionBundleTerminalSkipped(bundleId, contentId, roundId, 4);
+            return;
+        }
         if (roundSetIndex != 0) {
             unchecked {
-                if (roundId <= bundleRoundIds[bundleId][bundleIndex][roundSetIndex - 1]) return;
+                if (roundId <= bundleRoundIds[bundleId][bundleIndex][roundSetIndex - 1]) {
+                    emit QuestionBundleTerminalSkipped(bundleId, contentId, roundId, 5);
+                    return;
+                }
             }
         }
 
-        if (!settled) return;
+        if (!settled) {
+            emit QuestionBundleTerminalSkipped(bundleId, contentId, roundId, 6);
+            return;
+        }
 
         bundleRoundIds[bundleId][bundleIndex][roundSetIndex] = uint64(roundId);
         bundleQuestionRecordedRounds[bundleId][bundleIndex] = uint32(roundSetIndex + 1);
