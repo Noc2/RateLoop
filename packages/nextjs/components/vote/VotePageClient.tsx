@@ -464,7 +464,7 @@ const HomeInner = () => {
     keepPrevious: false,
     limit: 1,
     ownSubmitterAddresses,
-    voteable: true,
+    status: "all",
   });
   const requestedContentFeed = useMemo(
     () =>
@@ -761,7 +761,12 @@ const HomeInner = () => {
   ]);
   const rankedBaseDisplayFeed = useMemo(() => {
     const withRequestedItem = (items: ContentItem[]) =>
-      effectiveRequestedActiveId !== null ? mergeRequestedContentIntoFeed(items, requestedContentItem) : items;
+      effectiveRequestedActiveId !== null
+        ? mergeRequestedContentIntoFeed(items, requestedContentItem, {
+            promoteExisting: hasExplicitRequestedContentPin,
+            requestedId: effectiveRequestedActiveId,
+          })
+        : items;
     const items = [...baseFilteredFeed];
 
     if (isSearchMode) {
@@ -845,6 +850,7 @@ const HomeInner = () => {
     effectiveSearchSortBy,
     followedCuratorOrderMap,
     followedWallets,
+    hasExplicitRequestedContentPin,
     interestProfile,
     isAlgorithmicForYouFeed,
     isSearchMode,
@@ -872,14 +878,30 @@ const HomeInner = () => {
       .join(",");
   }, [advisoryAvailabilityByContentId, isAdvisoryOnlyRater, rankedBaseDisplayFeed]);
   const rankedDisplayFeed = useMemo(() => {
-    if (!isAdvisoryOnlyRater) return rankedBaseDisplayFeed;
-    return [...rankedBaseDisplayFeed].sort((a, b) => {
-      const aCanCommit = advisoryAvailabilityByContentId.get(a.id.toString())?.canCommit === true;
-      const bCanCommit = advisoryAvailabilityByContentId.get(b.id.toString())?.canCommit === true;
-      if (aCanCommit === bCanCommit) return 0;
-      return aCanCommit ? -1 : 1;
+    const items = !isAdvisoryOnlyRater
+      ? rankedBaseDisplayFeed
+      : [...rankedBaseDisplayFeed].sort((a, b) => {
+          const aCanCommit = advisoryAvailabilityByContentId.get(a.id.toString())?.canCommit === true;
+          const bCanCommit = advisoryAvailabilityByContentId.get(b.id.toString())?.canCommit === true;
+          if (aCanCommit === bCanCommit) return 0;
+          return aCanCommit ? -1 : 1;
+        });
+
+    if (!hasExplicitRequestedContentPin || effectiveRequestedActiveId === null) {
+      return items;
+    }
+
+    return mergeRequestedContentIntoFeed(items, null, {
+      promoteExisting: true,
+      requestedId: effectiveRequestedActiveId,
     });
-  }, [advisoryAvailabilityByContentId, isAdvisoryOnlyRater, rankedBaseDisplayFeed]);
+  }, [
+    advisoryAvailabilityByContentId,
+    effectiveRequestedActiveId,
+    hasExplicitRequestedContentPin,
+    isAdvisoryOnlyRater,
+    rankedBaseDisplayFeed,
+  ]);
   const feedSessionKey = useMemo(
     () =>
       [
@@ -889,12 +911,17 @@ const HomeInner = () => {
         activeCategory,
         view,
         advisoryPriorityKey,
+        hasExplicitRequestedContentPin && effectiveRequestedActiveId !== null
+          ? `explicit-content:${effectiveRequestedActiveId.toString()}`
+          : "content:auto",
         isSearchMode ? `search:${trimmedSearchQuery}:${effectiveSearchSortBy}` : `sort:${sortBy}`,
       ].join("|"),
     [
       activeCategory,
       advisoryPriorityKey,
+      effectiveRequestedActiveId,
       effectiveSearchSortBy,
+      hasExplicitRequestedContentPin,
       isSearchMode,
       normalizedAddress,
       sortBy,

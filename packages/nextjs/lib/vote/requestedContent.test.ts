@@ -49,6 +49,20 @@ test("mergeRequestedContentIntoFeed preserves ranked order when the requested it
   );
 });
 
+test("mergeRequestedContentIntoFeed promotes an explicitly pinned requested item that is already loaded", () => {
+  const first = buildItem(1n);
+  const second = buildItem(2n);
+  const third = buildItem(3n);
+
+  assert.deepEqual(
+    mergeRequestedContentIntoFeed([first, second, third], null, {
+      promoteExisting: true,
+      requestedId: 2n,
+    }).map(item => item.id),
+    [2n, 1n, 3n],
+  );
+});
+
 test("mergeRequestedContentIntoFeed prepends a requested item that is missing from the ranked feed", () => {
   const first = buildItem(1n);
   const second = buildItem(2n);
