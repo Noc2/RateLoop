@@ -1139,13 +1139,12 @@ contract QuestionRewardPoolEscrow is
         }
         // M-Oracle-2-Followup (audit 2026-05-17): tracks whether any claim against this
         // snapshot has actually moved funds, matching the launch consumer's "first paid wei"
-        // semantics. Legacy pre-upgrade snapshots have no appended flag, so existing claim
-        // accounting also counts as paid.
+        // semantics.
         return _snapshotHasPaidClaim(roundSnapshots[rewardPoolId][roundId]);
     }
 
     function _snapshotHasPaidClaim(RoundSnapshot storage snapshot) private view returns (bool) {
-        return snapshot.firstClaimPaid || snapshot.claimedCount != 0 || snapshot.claimedAmount != 0;
+        return snapshot.firstClaimPaid;
     }
 
     function getRewardPoolEligibility(uint256 rewardPoolId)
