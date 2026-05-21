@@ -24,6 +24,7 @@ import {
 } from "./libraries/QuestionRewardPoolEscrowClaimLib.sol";
 import { QuestionRewardPoolEscrowEligibilityLib } from "./libraries/QuestionRewardPoolEscrowEligibilityLib.sol";
 import { QuestionRewardPoolEscrowQualificationLib } from "./libraries/QuestionRewardPoolEscrowQualificationLib.sol";
+import { QuestionRewardPoolEscrowRecoveryLib } from "./libraries/QuestionRewardPoolEscrowRecoveryLib.sol";
 import { QuestionRewardPoolEscrowPoolActionsLib } from "./libraries/QuestionRewardPoolEscrowPoolActionsLib.sol";
 import { QuestionRewardPoolEscrowTransferLib } from "./libraries/QuestionRewardPoolEscrowTransferLib.sol";
 import {
@@ -922,41 +923,15 @@ contract QuestionRewardPoolEscrow is
         onlyRole(DEFAULT_ADMIN_ROLE)
         nonReentrant
     {
-        RewardPool storage rewardPool = _getExistingRewardPool(rewardPoolId);
-        require(_usesClusterPayoutSnapshot(rewardPool), "Not cluster-snapshot pool");
-
-        RoundSnapshot storage snapshot = roundSnapshots[rewardPoolId][roundId];
-        require(snapshot.qualified, "Round not qualified");
-        require(!_snapshotHasPaidClaim(snapshot), "Claims already paid");
-
-        address oracleAddr = rewardPoolClusterPayoutOracle[rewardPoolId];
-        require(oracleAddr != address(0), "Oracle not pinned");
-        IClusterPayoutOracle oracle = IClusterPayoutOracle(oracleAddr);
-        IClusterPayoutOracle.RoundPayoutSnapshot memory oracleSnapshot =
-            oracle.getRoundPayoutSnapshot(PAYOUT_DOMAIN_QUESTION_REWARD, rewardPoolId, rewardPool.contentId, roundId);
-        bytes32 snapshotKey =
-            oracle.roundPayoutSnapshotKey(PAYOUT_DOMAIN_QUESTION_REWARD, rewardPoolId, rewardPool.contentId, roundId);
-        bool cachedRootRejected = oracleSnapshot.status == IClusterPayoutOracle.SnapshotStatus.Rejected
-            && oracleSnapshot.weightRoot == snapshot.clusterWeightRoot;
-        if (!cachedRootRejected) {
-            cachedRootRejected = oracle.rejectedRoundPayoutSnapshotRoots(snapshotKey, snapshot.clusterWeightRoot);
-        }
-        require(cachedRootRejected, "Snapshot not rejected");
-
-        uint256 allocationToReturn = snapshot.allocation;
-        rewardPool.unallocatedAmount += allocationToReturn;
-        require(rewardPool.qualifiedRounds > 0, "No qualified rounds");
-        unchecked {
-            rewardPool.qualifiedRounds -= 1;
-        }
-        delete roundSnapshots[rewardPoolId][roundId];
-        // FE-1 (audit 2026-05-20-followup): mark this round as recovered so the admin can
-        // later reopen it via `reopenRecoveredSnapshotRound` once the oracle finalises a NEW
-        // snapshot whose `weightRoot` is not on the rejected set. `nextRoundToEvaluate`
-        // intentionally remains advanced — that blocks replay of the SAME rejected snapshot.
-        rejectedRecoveredRound[rewardPoolId][roundId] = true;
-
-        emit RejectedSnapshotRoundRecovered(rewardPoolId, rewardPool.contentId, roundId, allocationToReturn);
+        QuestionRewardPoolEscrowRecoveryLib.recoverRejectedSnapshotRound(
+            rewardPools,
+            roundSnapshots,
+            rewardPoolClusterPayoutOracle,
+            rejectedRecoveredRound,
+            rewardPoolId,
+            roundId,
+            PAYOUT_DOMAIN_QUESTION_REWARD
+        );
     }
 
     /// @notice Reopen a previously recovered round for requalification once the oracle has a
@@ -980,47 +955,16 @@ contract QuestionRewardPoolEscrow is
         onlyRole(DEFAULT_ADMIN_ROLE)
         nonReentrant
     {
-        RewardPool storage rewardPool = _getExistingRewardPool(rewardPoolId);
-        require(_usesClusterPayoutSnapshot(rewardPool), "Not cluster-snapshot pool");
-        require(!rewardPool.refunded && !rewardPool.unallocatedRefunded, "Bounty refunded");
-        require(rewardPool.qualifiedRounds < rewardPool.requiredSettledRounds, "Bounty complete");
-        require(rejectedRecoveredRound[rewardPoolId][roundId], "Round not recovered");
-        require(!roundSnapshots[rewardPoolId][roundId].qualified, "Round already qualified");
-        require(roundId < rewardPool.nextRoundToEvaluate, "Cursor not advanced");
-
-        address oracleAddr = rewardPoolClusterPayoutOracle[rewardPoolId];
-        require(oracleAddr != address(0), "Oracle not pinned");
-        IClusterPayoutOracle oracle = IClusterPayoutOracle(oracleAddr);
-        require(
-            oracle.isRoundPayoutSnapshotFinalized(
-                PAYOUT_DOMAIN_QUESTION_REWARD, rewardPoolId, rewardPool.contentId, roundId
-            ),
-            "Oracle snapshot not finalized"
+        QuestionRewardPoolEscrowRecoveryLib.reopenRecoveredSnapshotRound(
+            rewardPools,
+            roundSnapshots,
+            rewardPoolClusterPayoutOracle,
+            rejectedRecoveredRound,
+            reopenedRecoveredRound,
+            rewardPoolId,
+            roundId,
+            PAYOUT_DOMAIN_QUESTION_REWARD
         );
-        IClusterPayoutOracle.RoundPayoutSnapshot memory newSnapshot =
-            oracle.getRoundPayoutSnapshot(PAYOUT_DOMAIN_QUESTION_REWARD, rewardPoolId, rewardPool.contentId, roundId);
-        bytes32 snapshotKey =
-            oracle.roundPayoutSnapshotKey(PAYOUT_DOMAIN_QUESTION_REWARD, rewardPoolId, rewardPool.contentId, roundId);
-        require(!oracle.rejectedRoundPayoutSnapshotRoots(snapshotKey, newSnapshot.weightRoot), "Snapshot root rejected");
-
-        // Rewind the cursor when possible (recovered round is the most-recent advance) so the
-        // standard qualification path can serve the round. When the cursor has moved further
-        // (additional recovered rounds since this one), fall back to the reopen flag which the
-        // qualification path honours as an out-of-order exception.
-        if (roundId + 1 == rewardPool.nextRoundToEvaluate) {
-            rewardPool.nextRoundToEvaluate = uint64(roundId);
-            // Clear the recovered marker — the round is no longer "recovered, cursor advanced
-            // past"; it is back at the cursor and will be admitted by the normal path. The
-            // reopen flag is set anyway as defence-in-depth in case `nextRoundToEvaluate` is
-            // advanced again by `advanceQualificationCursor` before requalification.
-        }
-        reopenedRecoveredRound[rewardPoolId][roundId] = true;
-        // Consume the recovered marker — re-recovery of the same round is still possible
-        // because `recoverRejectedSnapshotRound` re-sets the flag if a future requalified
-        // snapshot is itself rejected.
-        rejectedRecoveredRound[rewardPoolId][roundId] = false;
-
-        emit RecoveredSnapshotRoundReopened(rewardPoolId, rewardPool.contentId, roundId, newSnapshot.weightRoot);
     }
 
     function recordBundleQuestionTerminal(uint256 contentId, uint256 roundId, bool settled) external {
