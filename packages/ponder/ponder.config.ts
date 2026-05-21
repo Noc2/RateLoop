@@ -11,7 +11,6 @@ import {
   FeedbackBonusEscrowAbi,
   FrontendRegistryAbi,
   LaunchDistributionPoolAbi,
-  ParticipationPoolAbi,
   ProfileRegistryAbi,
   QuestionRewardPoolEscrowAbi,
   RaterRegistryAbi,
@@ -290,10 +289,6 @@ const addresses = {
     "FrontendRegistry",
   ),
   loopReputation: resolveAddress("PONDER_LREP_ADDRESS", "LoopReputation"),
-  participationPool: resolveAddress(
-    "PONDER_PARTICIPATION_POOL_ADDRESS",
-    "ParticipationPool",
-  ),
   launchDistributionPool: resolveAddress(
     "PONDER_LAUNCH_DISTRIBUTION_POOL_ADDRESS",
     "LaunchDistributionPool",
@@ -348,10 +343,6 @@ const startBlocks = {
   loopReputation: resolveStartBlock(
     "PONDER_LREP_START_BLOCK",
     "LoopReputation",
-  ),
-  participationPool: resolveStartBlock(
-    "PONDER_PARTICIPATION_POOL_START_BLOCK",
-    "ParticipationPool",
   ),
   launchDistributionPool: resolveStartBlock(
     "PONDER_LAUNCH_DISTRIBUTION_POOL_START_BLOCK",
@@ -445,13 +436,6 @@ export default createConfig({
       network: contractOnActiveNetwork(
         addresses.loopReputation,
         startBlocks.loopReputation,
-      ),
-    },
-    ParticipationPool: {
-      abi: ParticipationPoolAbi,
-      network: contractOnActiveNetwork(
-        addresses.participationPool,
-        startBlocks.participationPool,
       ),
     },
     LaunchDistributionPool: {

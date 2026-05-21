@@ -15,7 +15,6 @@ const REQUIRED_PONDER_CONTRACTS = [
   "ProfileRegistry",
   "FrontendRegistry",
   "LoopReputation",
-  "ParticipationPool",
   "LaunchDistributionPool",
   "AdvisoryVoteRecorder",
   "QuestionRewardPoolEscrow",
@@ -68,8 +67,6 @@ const VALID_ENV = {
   PONDER_FRONTEND_REGISTRY_ADDRESS:
     chain4801?.FrontendRegistry?.address ?? "0x6666666666666666666666666666666666666666",
   PONDER_LREP_ADDRESS: chain4801?.LoopReputation?.address ?? "0x8888888888888888888888888888888888888888",
-  PONDER_PARTICIPATION_POOL_ADDRESS:
-    chain4801?.ParticipationPool?.address ?? "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   PONDER_LAUNCH_DISTRIBUTION_POOL_ADDRESS:
     chain4801?.LaunchDistributionPool?.address ?? "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
   PONDER_ADVISORY_VOTE_RECORDER_ADDRESS:
@@ -117,7 +114,6 @@ describe("ponder config", () => {
         "PONDER_PROFILE_REGISTRY_ADDRESS",
         "PONDER_FRONTEND_REGISTRY_ADDRESS",
         "PONDER_LREP_ADDRESS",
-        "PONDER_PARTICIPATION_POOL_ADDRESS",
         "PONDER_LAUNCH_DISTRIBUTION_POOL_ADDRESS",
         "PONDER_ADVISORY_VOTE_RECORDER_ADDRESS",
         "PONDER_QUESTION_REWARD_POOL_ESCROW_ADDRESS",
@@ -159,7 +155,6 @@ describe("ponder config", () => {
         "PONDER_PROFILE_REGISTRY_ADDRESS",
         "PONDER_FRONTEND_REGISTRY_ADDRESS",
         "PONDER_LREP_ADDRESS",
-        "PONDER_PARTICIPATION_POOL_ADDRESS",
         "PONDER_LAUNCH_DISTRIBUTION_POOL_ADDRESS",
         "PONDER_ADVISORY_VOTE_RECORDER_ADDRESS",
         "PONDER_QUESTION_REWARD_POOL_ESCROW_ADDRESS",
@@ -236,7 +231,6 @@ describe("ponder config", () => {
         "PONDER_PROFILE_REGISTRY_ADDRESS",
         "PONDER_FRONTEND_REGISTRY_ADDRESS",
         "PONDER_LREP_ADDRESS",
-        "PONDER_PARTICIPATION_POOL_ADDRESS",
         "PONDER_LAUNCH_DISTRIBUTION_POOL_ADDRESS",
         "PONDER_ADVISORY_VOTE_RECORDER_ADDRESS",
         "PONDER_QUESTION_REWARD_POOL_ESCROW_ADDRESS",
