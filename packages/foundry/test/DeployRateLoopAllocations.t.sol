@@ -28,15 +28,16 @@ contract DeployRateLoopAllocationsTest is Test {
 
         assertEq(deployScript.TOTAL_SUPPLY_CAP(), lrepToken.MAX_SUPPLY(), "script cap should match token MAX_SUPPLY");
         assertEq(totalLaunchAllocation, deployScript.TOTAL_SUPPLY_CAP(), "launch allocations should sum to full cap");
-        assertEq(deployScript.LAUNCH_DISTRIBUTION_AMOUNT(), 68_000_000 * 1e6, "launch distribution should be 68M");
-        assertEq(launchPool.EARNED_RATER_POOL_AMOUNT(), 33_000_000 * 1e6, "earned rater pool should be 33M");
-        assertEq(launchPool.VERIFIED_REFERRAL_POOL_AMOUNT(), 35_000_000 * 1e6, "verified/referral pool should be 35M");
+        assertEq(deployScript.LAUNCH_DISTRIBUTION_AMOUNT(), 75_000_000 * 1e6, "launch distribution should be 75M");
+        assertEq(launchPool.VERIFIED_REFERRAL_POOL_AMOUNT(), 42_000_000 * 1e6, "verified/referral pool should be 42M");
+        assertEq(launchPool.EARNED_RATER_POOL_AMOUNT(), 24_000_000 * 1e6, "earned rater pool should be 24M");
+        assertEq(launchPool.LEGACY_CONTRIBUTOR_POOL_AMOUNT(), 9_000_000 * 1e6, "legacy pool should be 9M");
         assertEq(
             launchPool.TOTAL_POOL_AMOUNT(),
             deployScript.LAUNCH_DISTRIBUTION_AMOUNT(),
-            "launch pool split should equal 68M"
+            "launch pool split should equal 75M"
         );
-        assertEq(deployScript.TREASURY_AMOUNT(), 32_000_000 * 1e6, "treasury should be 32M");
+        assertEq(deployScript.TREASURY_AMOUNT(), 25_000_000 * 1e6, "treasury should be 25M");
     }
 
     function test_WorldIdExternalNullifierHashMatchesLocalConfigVector() public {

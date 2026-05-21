@@ -27,6 +27,8 @@ contract LaunchDistributionPoolTest is Test {
     event RaterLaunchCapUnlocked(
         address indexed rater, bytes32 indexed nullifierHash, uint256 previousCap, uint256 fullCap, uint256 catchUpPaid
     );
+    event LegacyContributorRootUpdated(bytes32 indexed root, uint256 allocationTotal, uint64 vestingStart);
+    event LegacyContributorClaimed(address indexed account, uint256 amount, uint256 allocation, uint256 totalClaimed);
 
     LoopReputation internal lrep;
     RaterRegistry internal registry;
@@ -59,9 +61,14 @@ contract LaunchDistributionPoolTest is Test {
     }
 
     function test_PoolSplitSumsToLaunchDistribution() public view {
-        assertEq(pool.EARNED_RATER_POOL_AMOUNT(), 33_000_000e6);
-        assertEq(pool.VERIFIED_REFERRAL_POOL_AMOUNT(), 35_000_000e6);
-        assertEq(pool.EARNED_RATER_POOL_AMOUNT() + pool.VERIFIED_REFERRAL_POOL_AMOUNT(), pool.TOTAL_POOL_AMOUNT());
+        assertEq(pool.VERIFIED_REFERRAL_POOL_AMOUNT(), 42_000_000e6);
+        assertEq(pool.EARNED_RATER_POOL_AMOUNT(), 24_000_000e6);
+        assertEq(pool.LEGACY_CONTRIBUTOR_POOL_AMOUNT(), 9_000_000e6);
+        assertEq(
+            pool.VERIFIED_REFERRAL_POOL_AMOUNT() + pool.EARNED_RATER_POOL_AMOUNT()
+                + pool.LEGACY_CONTRIBUTOR_POOL_AMOUNT(),
+            pool.TOTAL_POOL_AMOUNT()
+        );
     }
 
     function test_ConstructorRejectsInvalidRaterRegistryIntegration() public {
@@ -168,6 +175,115 @@ contract LaunchDistributionPoolTest is Test {
         lrep.mint(address(pool), 1);
         vm.expectRevert(LaunchDistributionPool.InvalidAddress.selector);
         pool.recoverSurplus(address(0), 1);
+    }
+
+    function test_SetLegacyContributorRootValidatesAndEmits() public {
+        uint256 allocation = 1_000e6;
+        bytes32 root = pool.legacyContributorLeaf(alice, allocation);
+
+        vm.expectRevert(LaunchDistributionPool.InvalidProof.selector);
+        pool.setLegacyContributorRoot(bytes32(0), allocation);
+
+        vm.expectRevert(LaunchDistributionPool.InvalidAmount.selector);
+        pool.setLegacyContributorRoot(root, 0);
+
+        uint256 tooLargeTotal = pool.LEGACY_CONTRIBUTOR_POOL_AMOUNT() + 1;
+        vm.expectRevert(LaunchDistributionPool.InvalidAmount.selector);
+        pool.setLegacyContributorRoot(root, tooLargeTotal);
+
+        vm.expectEmit(true, false, false, true);
+        emit LegacyContributorRootUpdated(root, allocation, uint64(block.timestamp));
+        pool.setLegacyContributorRoot(root, allocation);
+
+        assertEq(pool.legacyContributorRoot(), root);
+        assertEq(pool.legacyContributorAllocationTotal(), allocation);
+        assertEq(pool.legacyContributorVestingStart(), uint64(block.timestamp));
+    }
+
+    function test_ClaimLegacyContributorAllocationPaysImmediateAndLinearDeltas() public {
+        uint256 allocation = 1_000e6;
+        bytes32 root = pool.legacyContributorLeaf(alice, allocation);
+        pool.setLegacyContributorRoot(root, allocation);
+        bytes32[] memory proof = new bytes32[](0);
+
+        uint256 immediate = (allocation * pool.LEGACY_IMMEDIATE_BPS()) / pool.BPS_DENOMINATOR();
+        assertEq(pool.claimableLegacyContributorAllocation(alice, allocation, proof), immediate);
+
+        vm.prank(alice);
+        vm.expectEmit(true, false, false, true);
+        emit LegacyContributorClaimed(alice, immediate, allocation, immediate);
+        assertEq(pool.claimLegacyContributorAllocation(allocation, proof), immediate);
+        assertEq(lrep.balanceOf(alice), immediate);
+        assertEq(pool.legacyContributorClaimed(alice), immediate);
+        assertEq(pool.legacyContributorDistributed(), immediate);
+
+        vm.prank(alice);
+        vm.expectRevert(LaunchDistributionPool.AlreadyClaimed.selector);
+        pool.claimLegacyContributorAllocation(allocation, proof);
+
+        vm.warp(block.timestamp + (pool.LEGACY_VESTING_DURATION() / 2));
+        uint256 halfVested = pool.vestedLegacyContributorAllocation(alice, allocation, proof);
+        uint256 halfDelta = halfVested - immediate;
+
+        vm.prank(alice);
+        assertEq(pool.claimLegacyContributorAllocation(allocation, proof), halfDelta);
+        assertEq(lrep.balanceOf(alice), halfVested);
+        assertEq(pool.legacyContributorClaimed(alice), halfVested);
+
+        vm.warp(block.timestamp + pool.LEGACY_VESTING_DURATION());
+        uint256 finalDelta = allocation - halfVested;
+
+        vm.prank(alice);
+        assertEq(pool.claimLegacyContributorAllocation(allocation, proof), finalDelta);
+        assertEq(lrep.balanceOf(alice), allocation);
+        assertEq(pool.legacyContributorClaimed(alice), allocation);
+        assertEq(pool.legacyContributorDistributed(), allocation);
+        assertEq(pool.remainingLegacyContributorPool(), pool.LEGACY_CONTRIBUTOR_POOL_AMOUNT() - allocation);
+    }
+
+    function test_ClaimLegacyContributorAllocationRejectsInvalidProofsAndInconsistentAllocations() public {
+        uint256 allocation = 1_000e6;
+        bytes32 root = pool.legacyContributorLeaf(alice, allocation);
+        pool.setLegacyContributorRoot(root, allocation);
+        bytes32[] memory proof = new bytes32[](0);
+
+        vm.prank(bob);
+        vm.expectRevert(LaunchDistributionPool.InvalidProof.selector);
+        pool.claimLegacyContributorAllocation(allocation, proof);
+
+        vm.prank(alice);
+        vm.expectRevert(LaunchDistributionPool.InvalidAmount.selector);
+        pool.claimLegacyContributorAllocation(0, proof);
+
+        vm.prank(alice);
+        vm.expectRevert(LaunchDistributionPool.InvalidAmount.selector);
+        pool.claimLegacyContributorAllocation(allocation + 1, proof);
+    }
+
+    function test_ClaimLegacyContributorAllocationCannotExceedConfiguredTotal() public {
+        uint256 allocation = 2_000e6;
+        uint256 configuredTotal = 1_000e6;
+        bytes32 root = pool.legacyContributorLeaf(alice, allocation);
+        pool.setLegacyContributorRoot(root, configuredTotal);
+        bytes32[] memory proof = new bytes32[](0);
+
+        vm.prank(alice);
+        vm.expectRevert(LaunchDistributionPool.InvalidAmount.selector);
+        pool.claimLegacyContributorAllocation(allocation, proof);
+    }
+
+    function test_SetLegacyContributorRootCannotChangeAfterClaimsStart() public {
+        uint256 allocation = 1_000e6;
+        bytes32 root = pool.legacyContributorLeaf(alice, allocation);
+        pool.setLegacyContributorRoot(root, allocation);
+        bytes32[] memory proof = new bytes32[](0);
+
+        vm.prank(alice);
+        pool.claimLegacyContributorAllocation(allocation, proof);
+
+        bytes32 replacementRoot = pool.legacyContributorLeaf(bob, allocation);
+        vm.expectRevert(LaunchDistributionPool.AlreadyClaimed.selector);
+        pool.setLegacyContributorRoot(replacementRoot, allocation);
     }
 
     function test_SetLaunchRewardPolicyUpdatesRewardMath() public {
