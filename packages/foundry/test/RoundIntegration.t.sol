@@ -519,6 +519,102 @@ contract RoundIntegrationTest is VotingTestBase {
     // 1. FULL ROUND LIFECYCLE — commit → reveal → settleRound → claim reward
     // =========================================================================
 
+    function test_OpenRound_PreparesEmptyRoundWithoutCommit() public {
+        uint256 contentId = _submitContentWithoutOpeningRound();
+
+        vm.prank(voter1);
+        (
+            uint256 roundId,
+            uint48 startTime,
+            uint32 epochDuration,
+            uint32 maxDuration,
+            uint16 maxVoters,
+            uint16 roundReferenceRatingBps,
+            bytes32 drandChainHash,
+            uint64 drandGenesisTime,
+            uint64 drandPeriod
+        ) = votingEngine.openRound(contentId);
+
+        assertEq(roundId, 1, "round id");
+        assertEq(startTime, block.timestamp, "start time");
+        assertEq(epochDuration, EPOCH_DURATION, "epoch duration");
+        assertEq(maxDuration, 7 days, "max duration");
+        assertEq(maxVoters, 200, "max voters");
+        assertEq(roundReferenceRatingBps, _defaultRatingReferenceBps(), "reference rating");
+        assertEq(drandChainHash, _tlockDrandChainHash(), "drand hash");
+        assertEq(drandGenesisTime, _tlockDrandGenesisTime(), "drand genesis");
+        assertEq(drandPeriod, _tlockDrandPeriod(), "drand period");
+        assertFalse(votingEngine.hasCommits(contentId), "open round is not a commit");
+
+        RoundLib.Round memory round = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
+        assertEq(uint256(round.state), uint256(RoundLib.RoundState.Open), "state");
+        assertEq(round.voteCount, 0, "vote count");
+        assertEq(round.totalStake, 0, "stake");
+    }
+
+    function test_OpenRound_IsIdempotentForOpenRound() public {
+        uint256 contentId = _submitContentWithoutOpeningRound();
+
+        vm.prank(voter1);
+        (uint256 firstRoundId, uint48 firstStartTime,,,,,,,) = votingEngine.openRound(contentId);
+        vm.warp(block.timestamp + 1 minutes);
+        vm.prank(voter2);
+        (uint256 secondRoundId, uint48 secondStartTime,,,,,,,) = votingEngine.openRound(contentId);
+
+        assertEq(secondRoundId, firstRoundId, "same round");
+        assertEq(secondStartTime, firstStartTime, "same start");
+        assertEq(RoundEngineReadHelpers.activeRoundId(votingEngine, contentId), firstRoundId, "active round");
+    }
+
+    function test_OpenRound_CancelsExpiredEmptyRoundBeforeOpeningNext() public {
+        uint256 contentId = _submitContentWithoutOpeningRound();
+
+        vm.prank(voter1);
+        votingEngine.openRound(contentId);
+        vm.warp(block.timestamp + 8 days);
+        vm.prank(voter2);
+        (uint256 nextRoundId,,,,,,,,) = votingEngine.openRound(contentId);
+
+        assertEq(nextRoundId, 2, "next round");
+        assertEq(
+            uint256(RoundEngineReadHelpers.round(votingEngine, contentId, 1).state),
+            uint256(RoundLib.RoundState.Cancelled),
+            "empty first round cancelled"
+        );
+        assertFalse(votingEngine.hasCommits(contentId), "empty cancellation records no commits");
+    }
+
+    function test_OpenRound_SubmitterCannotOpenOwnContent() public {
+        uint256 contentId = _submitContentWithoutOpeningRound();
+
+        vm.prank(submitter);
+        vm.expectRevert(RoundVotingEngine.SelfVote.selector);
+        votingEngine.openRound(contentId);
+    }
+
+    function test_CommitVote_RequiresPreparedRound() public {
+        uint256 contentId = _submitContentWithoutOpeningRound();
+        bytes32 salt = keccak256(abi.encodePacked(voter1, contentId, true, uint256(0)));
+        bytes32 ch = _commitHash(true, salt, voter1, contentId);
+
+        vm.startPrank(voter1);
+        lrepToken.approve(address(votingEngine), STAKE);
+        uint256 cachedRoundContext =
+            _roundContext(votingEngine.previewCommitRoundId(contentId), _currentRatingReferenceBps(contentId));
+        vm.expectRevert(RoundVotingEngine.RoundNotOpen.selector);
+        votingEngine.commitVote(
+            contentId,
+            cachedRoundContext,
+            _tlockCommitTargetRound(),
+            _tlockDrandChainHash(),
+            ch,
+            _testCiphertext(true, salt, contentId),
+            STAKE,
+            address(0)
+        );
+        vm.stopPrank();
+    }
+
     function test_FullRoundLifecycle_UpWins() public {
         uint256 contentId = _submitContent();
 
