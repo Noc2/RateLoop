@@ -96,6 +96,45 @@ export function resetKeeperStateForTests(): void {
 const decryptFailureCount = new Map<string, number>();
 const MAX_DECRYPT_RETRIES = 10;
 const MAX_DECRYPT_FAILURE_ENTRIES = 10_000;
+
+// KEEPER-1 (2026-05-21 repo audit): cache the last RPC-observed block timestamp so that an RPC
+// outage does not force the keeper onto a raw `Date.now()` fallback. The system clock is
+// vulnerable to NTP spoofing and drift; using it during an RPC outage can put the keeper out of
+// sync with chain time and cause reveal submissions to revert. Pair the cached `block.timestamp`
+// with the wall-clock time we observed it, so on RPC failure we can advance the cache by the
+// elapsed wall-clock seconds — bounded to MAX_BLOCK_TIME_CACHE_AGE_S so a stuck cache cannot
+// silently power the keeper forever.
+let lastBlockTimestampS: bigint | null = null;
+let lastBlockObservedAtMs: number | null = null;
+const MAX_BLOCK_TIME_CACHE_AGE_S = 120; // 2 minutes; longer than any sane mainnet block cadence.
+
+async function resolveOnChainNowSeconds(publicClient: PublicClient): Promise<bigint> {
+  try {
+    const block = await publicClient.getBlock({ blockTag: "latest" });
+    lastBlockTimestampS = block.timestamp;
+    lastBlockObservedAtMs = Date.now();
+    return block.timestamp;
+  } catch (rpcError) {
+    if (lastBlockTimestampS === null || lastBlockObservedAtMs === null) {
+      // No cache to extrapolate from — fail loud rather than guessing with a wall clock.
+      throw new Error("RPC block fetch failed and no cached block timestamp is available");
+    }
+    const elapsedS = Math.max(0, Math.floor((Date.now() - lastBlockObservedAtMs) / 1000));
+    if (elapsedS > MAX_BLOCK_TIME_CACHE_AGE_S) {
+      throw new Error(`RPC block fetch failed and cached block timestamp is stale (${elapsedS}s old)`);
+    }
+    console.warn(
+      `[Keeper] RPC block fetch failed; extrapolating cached block.timestamp by ${elapsedS}s ` +
+        `(rpc error: ${rpcError instanceof Error ? rpcError.message : String(rpcError)})`,
+    );
+    return lastBlockTimestampS + BigInt(elapsedS);
+  }
+}
+
+export function resetBlockTimestampCacheForTests(): void {
+  lastBlockTimestampS = null;
+  lastBlockObservedAtMs = null;
+}
 const TOO_EARLY_TLOCK_ERROR_FRAGMENT = "too early to decrypt the ciphertext";
 const DECRYPTABLE_AT_ROUND_PATTERN = /decryptable at round (\d+)/i;
 
@@ -407,13 +446,16 @@ export async function resolveRounds(
   const advisoryAddr = config.contracts.advisoryVoteRecorder;
 
   // Use on-chain block.timestamp — this is what the contract uses for checks.
+  // KEEPER-1 (2026-05-21 repo audit): on RPC failure, `resolveOnChainNowSeconds` extrapolates
+  // from the last successful block timestamp (bounded). It throws if there's no cached value or
+  // the cache is too stale, so the keeper short-circuits this iteration loudly rather than
+  // continuing on a possibly-skewed system clock.
   let now: bigint;
   try {
-    const block = await publicClient.getBlock({ blockTag: "latest" });
-    now = block.timestamp;
-  } catch {
-    console.warn("[Keeper] RPC block fetch failed, using local clock fallback");
-    now = BigInt(Math.floor(Date.now() / 1000)) - 30n;
+    now = await resolveOnChainNowSeconds(publicClient);
+  } catch (err) {
+    logger.error(`[Keeper] Cannot resolve current block time: ${err instanceof Error ? err.message : String(err)}`);
+    return emptyResult();
   }
 
   const result: KeeperResult = emptyResult();
