@@ -1,7 +1,12 @@
 import { DocsTitle } from "~~/components/docs/DocsTitle";
 import { TokenAllocationChart } from "~~/components/docs/TokenAllocationChart";
 import { protocolDocFacts } from "~~/lib/docs/protocolFacts";
-import { LREP_MAX_SUPPLY_LABEL } from "~~/lib/docs/tokenomics";
+import {
+  LREP_MAX_SUPPLY_LABEL,
+  earnedRaterRewardScheduleRows,
+  launchRewardOverviewRows,
+  verifiedReferralRewardScheduleRows,
+} from "~~/lib/docs/tokenomics";
 
 const Tokenomics = () => {
   return (
@@ -64,45 +69,119 @@ const Tokenomics = () => {
         Staking LREP remains available for raters who want normal winner/loser settlement upside and downside.
       </p>
       <p>
-        Earned rater rewards are open to any rater, including agents, but the launch pool only counts ratings from
-        verified-human anchored rounds. The initial policy requires three revealed raters, one verified human in the
-        round, a minimum launch-credit stake for staked votes, two distinct verified-human anchors across a rater&apos;s
-        qualifying history, bounded anchor fanout, round-level unverified-credit caps, aged anchor credentials, and a
-        finalized correlation payout snapshot before payouts begin. Correlated accounts accrue fractional effective
-        credit, so they may need more rounds before LREP starts paying. Full caps start at <strong>10 LREP</strong> and
-        step down through 5, 2.5, 1.25, and 0.5 LREP so the 33M LREP earned rater rail can support about 24.6M fully
-        paid recipients. Open raters can be given a governed partial cap and later unlock the full snapshotted cap by
-        verifying the same wallet as a human. Governance can tighten these thresholds over time. Agent wallets do not
-        count as human anchors unless they hold an active verified-human credential.
+        Launch rewards are deliberately front-loaded. Verified humans can claim once, verified referrers can earn when a
+        referred user verifies, and useful raters can earn from qualifying verified-human anchored rounds. Amounts below
+        are maximums; cluster-capped effective credit, pool balance, and governance updates can reduce or pause payouts.
       </p>
       <div className="not-prose overflow-x-auto my-6 rounded-xl bg-base-200">
         <table className="table table-zebra [&_th]:text-base [&_td]:text-base [&_.badge]:text-base [&_th]:bg-base-300">
           <thead>
             <tr>
-              <th>Rail</th>
-              <th>Eligibility</th>
-              <th>Distribution</th>
-              <th>Notes</th>
+              <th>Reward</th>
+              <th>How to earn</th>
+              <th>Starting maximum</th>
+              <th>How it reduces</th>
+            </tr>
+          </thead>
+          <tbody>
+            {launchRewardOverviewRows.map(row => (
+              <tr key={row.reward}>
+                <td className="font-medium">{row.reward}</td>
+                <td>{row.howToEarn}</td>
+                <td className="font-mono">{row.startingMax}</td>
+                <td>{row.decay}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="not-prose my-6 grid gap-4 2xl:grid-cols-2">
+        <div className="overflow-x-auto rounded-xl bg-base-200">
+          <table className="table table-zebra [&_th]:bg-base-300">
+            <caption className="caption-top px-4 py-3 text-left text-sm font-semibold text-base-content">
+              Verified + referral reward schedule
+            </caption>
+            <thead>
+              <tr>
+                <th>Verified claim order</th>
+                <th>Verified user</th>
+                <th>Referrer</th>
+              </tr>
+            </thead>
+            <tbody>
+              {verifiedReferralRewardScheduleRows.map(([claimOrder, verifiedBonus, referralBonus]) => (
+                <tr key={claimOrder}>
+                  <td className="font-mono">{claimOrder}</td>
+                  <td className="font-mono">{verifiedBonus}</td>
+                  <td className="font-mono">{referralBonus}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="overflow-x-auto rounded-xl bg-base-200">
+          <table className="table table-zebra [&_th]:bg-base-300">
+            <caption className="caption-top px-4 py-3 text-left text-sm font-semibold text-base-content">
+              Earned rater reward cap schedule
+            </caption>
+            <thead>
+              <tr>
+                <th>Eligible rater order</th>
+                <th>Full cap</th>
+                <th>Unverified cap</th>
+                <th>Per slot</th>
+              </tr>
+            </thead>
+            <tbody>
+              {earnedRaterRewardScheduleRows.map(([raterOrder, fullCap, unverifiedCap, perSlot]) => (
+                <tr key={raterOrder}>
+                  <td className="font-mono">{raterOrder}</td>
+                  <td className="font-mono">{fullCap}</td>
+                  <td className="font-mono">{unverifiedCap}</td>
+                  <td className="font-mono">{perSlot}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <p>
+        Earned-rater rewards use up to 10 payout slots after the first 5 qualifying launch credits. The default
+        unverified cap is 25% of the full cap; verifying the same wallet later can unlock the full snapshotted cap and
+        any eligible catch-up payment. Agent wallets can earn as raters, but they do not count as human anchors unless
+        they hold an active verified-human credential.
+      </p>
+      <div className="not-prose overflow-x-auto my-6 rounded-xl bg-base-200">
+        <table className="table table-zebra [&_th]:text-base [&_td]:text-base [&_.badge]:text-base [&_th]:bg-base-300">
+          <thead>
+            <tr>
+              <th>Earned-rater launch credit requirements</th>
+              <th>Initial policy</th>
             </tr>
           </thead>
           <tbody>
             <tr>
-              <td>Earned rater rewards</td>
-              <td>Accounts that complete qualifying revealed ratings in verified-human anchored rounds</td>
-              <td className="font-mono">Count-based, decaying cohorts</td>
-              <td>Starts with one verified human per round and two distinct anchors before payout</td>
+              <td>Minimum qualifying score</td>
+              <td className="font-mono">70%</td>
             </tr>
             <tr>
-              <td>Verified bonus</td>
-              <td>One optional uniqueness credential per person</td>
-              <td className="font-mono">One-time decaying bonus</td>
-              <td>Human uniqueness only; AI participation does not change reward weight</td>
+              <td>Revealed raters in the round</td>
+              <td className="font-mono">3+</td>
             </tr>
             <tr>
-              <td>Referrals</td>
-              <td>Valid referrer and referred rater activity</td>
-              <td className="font-mono">Small bounded bonus</td>
-              <td>Designed to reward real onboarding, not passive invite farming</td>
+              <td>Verified-human anchors</td>
+              <td>1 in the round, plus 2 distinct anchors across qualifying history</td>
+            </tr>
+            <tr>
+              <td>Minimum staked-vote launch-credit stake</td>
+              <td className="font-mono">1 LREP</td>
+            </tr>
+            <tr>
+              <td>Snapshot gate</td>
+              <td>Finalized correlation payout snapshot before payout</td>
             </tr>
           </tbody>
         </table>

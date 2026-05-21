@@ -1,4 +1,6 @@
-const lrepAmountFormatter = new Intl.NumberFormat("en-US");
+const lrepAmountFormatter = new Intl.NumberFormat("en-US", {
+  maximumFractionDigits: 4,
+});
 const lrepCompactFormatter = new Intl.NumberFormat("en-US", {
   notation: "compact",
   maximumFractionDigits: 1,
@@ -87,6 +89,42 @@ export const launchDistributionBreakdownRows = launchDistributionBreakdownEntrie
   formatLrepAmount(entry.amount),
   entry.purpose,
 ]);
+
+export const launchRewardOverviewRows = [
+  {
+    reward: "Verified human bonus",
+    howToEarn: "Verify one active human credential and claim once from that wallet.",
+    startingMax: formatLrepAmount(10),
+    decay: "Drops as verified claims pass 50K, 200K, and 1M.",
+  },
+  {
+    reward: "Referral bonus",
+    howToEarn: "Refer a user who verifies, while the referrer also holds an active human credential.",
+    startingMax: `${formatLrepAmount(5)} per verified referral`,
+    decay: `Always 50% of the referee's verified bonus, capped at ${formatLrepAmount(10_000)} per referrer.`,
+  },
+  {
+    reward: "Earned rater reward",
+    howToEarn: "Complete qualifying ratings in verified-human anchored rounds; payout starts after 5 launch credits.",
+    startingMax: `${formatLrepAmount(10)} full cap`,
+    decay: "Full caps step down by eligible-rater cohort and fill over up to 10 reward slots.",
+  },
+] as const;
+
+export const verifiedReferralRewardScheduleRows = [
+  ["1-50,000", formatLrepAmount(10), formatLrepAmount(5)],
+  ["50,001-200,000", formatLrepAmount(5), formatLrepAmount(2.5)],
+  ["200,001-1,000,000", formatLrepAmount(2.5), formatLrepAmount(1.25)],
+  ["1,000,001+", formatLrepAmount(1), formatLrepAmount(0.5)],
+] as const;
+
+export const earnedRaterRewardScheduleRows = [
+  ["1-100,000", formatLrepAmount(10), formatLrepAmount(2.5), formatLrepAmount(1)],
+  ["100,001-1,000,000", formatLrepAmount(5), formatLrepAmount(1.25), formatLrepAmount(0.5)],
+  ["1,000,001-5,000,000", formatLrepAmount(2.5), formatLrepAmount(0.625), formatLrepAmount(0.25)],
+  ["5,000,001-15,000,000", formatLrepAmount(1.25), formatLrepAmount(0.3125), formatLrepAmount(0.125)],
+  ["15,000,001+", formatLrepAmount(0.5), formatLrepAmount(0.125), formatLrepAmount(0.05)],
+] as const;
 
 export const tokenDistributionWhitepaperRows = tokenDistributionEntries.map(entry => [
   entry.label,
