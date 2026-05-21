@@ -13,7 +13,7 @@ const STEPS = [
     label: HUMAN_SIGN_IN_LABEL,
     desc: "connect a wallet and start building calibration history",
   },
-  { label: "Vote", desc: "submit a private thumbs-up/down signal and crowd forecast" },
+  { label: "Rate", desc: "submit a private thumbs-up/down signal and crowd forecast" },
   { label: "Lock", desc: "optionally back your signal with reputation once you are eligible" },
   {
     label: "Reveal & Resolve",
