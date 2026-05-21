@@ -20,6 +20,12 @@ if (process.env.VERCEL_ENV === "preview" && !process.env.NEXT_PUBLIC_TARGET_NETW
 
 const isDev = process.env.NODE_ENV === "development";
 const isVercelDeployment = process.env.VERCEL === "1" || Boolean(process.env.VERCEL_ENV);
+// WS-5 (2026-05-21 repo audit): Vercel Live is a preview-deployment debugging feature; it
+// should not load on production. The CSP previously allowed `https://vercel.live` and
+// `wss://*.pusher.com` for every Vercel deployment (incl. production) which widened the
+// trusted-script and connect-src surface for production users. Narrow the gate to
+// preview / development only.
+const isVercelLiveEnabled = process.env.VERCEL_ENV === "preview" || process.env.VERCEL_ENV === "development";
 const allowLocalE2EProductionBuild = isLocalE2EProductionBuildEnabled();
 const targetNetworksFallback = isDev || allowLocalE2EProductionBuild ? DEFAULT_DEV_TARGET_NETWORKS : undefined;
 const rpcOverrides = mergeRpcOverrides(
@@ -58,13 +64,13 @@ const rpcOrigins = rpcUrls
 // Build CSP directives. Production Ponder URL comes from env at build time.
 const ponderUrl =
   resolvePonderUrlValue(process.env.NEXT_PUBLIC_PONDER_URL, !isDev, allowLocalE2EProductionBuild).url ?? "";
-const vercelLiveScriptSources = isVercelDeployment ? ["https://vercel.live"] : [];
-const vercelLiveStyleSources = isVercelDeployment ? ["https://vercel.live"] : [];
-const vercelLiveFontSources = isVercelDeployment ? ["https://vercel.live", "https://assets.vercel.com"] : [];
-const vercelLiveConnectSources = isVercelDeployment
+const vercelLiveScriptSources = isVercelLiveEnabled ? ["https://vercel.live"] : [];
+const vercelLiveStyleSources = isVercelLiveEnabled ? ["https://vercel.live"] : [];
+const vercelLiveFontSources = isVercelLiveEnabled ? ["https://vercel.live", "https://assets.vercel.com"] : [];
+const vercelLiveConnectSources = isVercelLiveEnabled
   ? ["https://vercel.live", "https://*.pusher.com", "wss://*.pusher.com"]
   : [];
-const vercelLiveFrameSources = isVercelDeployment ? ["https://vercel.live"] : [];
+const vercelLiveFrameSources = isVercelLiveEnabled ? ["https://vercel.live"] : [];
 const cspDirectives = [
   "default-src 'self'",
   // Static CSP headers need inline bootstrap scripts for Next's production app shell.
