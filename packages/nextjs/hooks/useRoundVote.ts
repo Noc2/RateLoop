@@ -2,7 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { LoopReputationAbi, packVoteRoundContext } from "@rateloop/contracts";
-import { AdvisoryVoteRecorderAbi, ContentRegistryAbi } from "@rateloop/contracts/abis";
+import { AdvisoryVoteRecorderAbi, ContentRegistryAbi, RoundVotingEngineAbi } from "@rateloop/contracts/abis";
 import { buildCommitVoteParams, buildStakeAmountWei } from "@rateloop/sdk/vote";
 import { useQueryClient } from "@tanstack/react-query";
 import { type Address, parseSignature } from "viem";
@@ -229,6 +229,7 @@ export function useRoundVote() {
             baseVoteCount: 0n,
             epochDuration: roundConfig?.epochDuration ?? DEFAULT_VOTING_CONFIG.epochDuration,
             now: () => Number(availability.epochEnd) * 1000,
+            requiresOpenRound: false,
             roundId: availability.roundId,
             roundReferenceRatingBps: availability.roundReferenceRatingBps,
             roundStartTimeSeconds: null,
@@ -296,16 +297,84 @@ export function useRoundVote() {
               args: [address as Address, votingEngineAddress],
             })) as bigint);
       let currentAllowance = await readCurrentAllowance();
-      const buildFreshRoundVotePlan = async (allowanceForPlan: bigint) => {
-        let freshRuntime = runtime;
-        if (!isRequestedAdvisoryVote) {
-          freshRuntime = await resolveRoundVoteRuntime({
-            publicClient,
-            votingEngineAddress,
-            contentId,
-            fallbackEpochDuration: roundConfig?.epochDuration ?? DEFAULT_VOTING_CONFIG.epochDuration,
+      const writePlannedCall = async (call: RoundVoteContractCall, action: string) => {
+        const request: any = {
+          abi: call.abi,
+          address: call.address,
+          args: call.args,
+          chainId: targetNetwork.id,
+          functionName: call.functionName,
+          ...(typeof call.value !== "undefined" ? { value: call.value } : {}),
+        };
+        const estimatedGas = await publicClient.estimateContractGas({
+          account: address as Address,
+          address: call.address,
+          abi: call.abi,
+          args: call.args as never,
+          functionName: call.functionName as never,
+          ...(typeof call.value !== "undefined" ? { value: call.value } : {}),
+        } as any);
+        request.gas = (estimatedGas * 120n) / 100n;
+
+        wagmiTokenWrite.reset();
+        return writeTx(() => wagmiTokenWrite.writeContractAsync(request), {
+          action,
+          suppressSuccessToast: true,
+        });
+      };
+
+      const resolveFreshStakedRuntime = () =>
+        resolveRoundVoteRuntime({
+          publicClient,
+          votingEngineAddress,
+          contentId,
+          fallbackEpochDuration: roundConfig?.epochDuration ?? DEFAULT_VOTING_CONFIG.epochDuration,
+        });
+
+      const submitOpenRound = async () => {
+        const openRoundCall: RoundVoteContractCall = {
+          abi: RoundVotingEngineAbi as any,
+          address: votingEngineAddress,
+          args: [contentId] as const,
+          functionName: "openRound",
+          kind: "openRound",
+        };
+        if (canUseSponsoredBatchCalls) {
+          await executeContractCallBatch([openRoundCall], {
+            action: "open round",
+            atomicRequired: true,
+            sponsorshipMode: "sponsored",
           });
+          return;
         }
+        if (canUseSelfFundedBatchCalls) {
+          await executeContractCallBatch([openRoundCall], {
+            action: "open round",
+            atomicRequired: true,
+            sponsorshipMode: "self-funded",
+          });
+          return;
+        }
+        const transactionHash = await writePlannedCall(openRoundCall, "open round");
+        if (!transactionHash) {
+          throw new Error("Preparing vote. Try again in a moment.");
+        }
+      };
+
+      const ensureOpenStakedRuntime = async () => {
+        let freshRuntime = await resolveFreshStakedRuntime();
+        if (freshRuntime.requiresOpenRound) {
+          await submitOpenRound();
+          freshRuntime = await resolveFreshStakedRuntime();
+          if (freshRuntime.requiresOpenRound) {
+            throw new Error("Preparing vote. Try again in a moment.");
+          }
+        }
+        return freshRuntime;
+      };
+
+      const buildFreshRoundVotePlan = async (allowanceForPlan: bigint) => {
+        const freshRuntime = isRequestedAdvisoryVote ? runtime : await ensureOpenStakedRuntime();
         if (!freshRuntime) {
           throw new Error("Preparing vote. Try again in a moment.");
         }
@@ -344,32 +413,6 @@ export function useRoundVote() {
       };
       let submittedVote: Awaited<ReturnType<typeof buildFreshRoundVotePlan>> | null = null;
 
-      const writePlannedCall = async (call: RoundVoteContractCall, action: string) => {
-        const request: any = {
-          abi: call.abi,
-          address: call.address,
-          args: call.args,
-          chainId: targetNetwork.id,
-          functionName: call.functionName,
-          ...(typeof call.value !== "undefined" ? { value: call.value } : {}),
-        };
-        const estimatedGas = await publicClient.estimateContractGas({
-          account: address as Address,
-          address: call.address,
-          abi: call.abi,
-          args: call.args as never,
-          functionName: call.functionName as never,
-          ...(typeof call.value !== "undefined" ? { value: call.value } : {}),
-        } as any);
-        request.gas = (estimatedGas * 120n) / 100n;
-
-        wagmiTokenWrite.reset();
-        return writeTx(() => wagmiTokenWrite.writeContractAsync(request), {
-          action,
-          suppressSuccessToast: true,
-        });
-      };
-
       if (canUseSponsoredBatchCalls) {
         const freshVote = await buildFreshRoundVotePlan(currentAllowance);
         await executeContractCallBatch(freshVote.plan.calls, {
@@ -395,6 +438,7 @@ export function useRoundVote() {
           let permitVote: Awaited<ReturnType<typeof buildFreshRoundVotePlan>> | null = null;
 
           try {
+            permitVote = await buildFreshRoundVotePlan(requestedStakeWei);
             const nonce = (await publicClient.readContract({
               address: lrepAddress,
               abi: LoopReputationAbi,
@@ -440,7 +484,6 @@ export function useRoundVote() {
               },
             });
             const parsedSignature = parseSignature(signature);
-            permitVote = await buildFreshRoundVotePlan(requestedStakeWei);
             permitCall = buildCommitVoteWithPermitCall(permitVote.plan, {
               deadline,
               r: parsedSignature.r,

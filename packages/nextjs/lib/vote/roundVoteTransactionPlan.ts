@@ -4,7 +4,7 @@ import type { Abi, Hex } from "viem";
 
 type EvmAddress = `0x${string}`;
 
-export type RoundVoteCallKind = "approve" | "commitVote" | "commitVoteWithPermit" | "recordAdvisoryVote";
+export type RoundVoteCallKind = "approve" | "commitVote" | "commitVoteWithPermit" | "openRound" | "recordAdvisoryVote";
 
 export type RoundVoteContractCall = {
   abi: Abi;

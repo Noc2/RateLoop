@@ -111,6 +111,7 @@ export async function resolveRoundVoteRuntime(params: {
     baseTotalStake,
     baseVoteCount,
     now: () => runtimeNowMs,
+    requiresOpenRound: roundStartTimeSeconds == null,
     roundStartTimeSeconds,
     roundId,
     roundReferenceRatingBps: roundReferenceRatingBps as number,

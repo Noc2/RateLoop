@@ -57,6 +57,7 @@ test("resolveRoundVoteRuntime anchors tlock timing to the pending block timestam
   }
   assert.equal(runtime.now(), 1_101_000);
   assert.equal(runtime.epochDuration, 100);
+  assert.equal(runtime.requiresOpenRound, false);
   assert.equal(runtime.roundStartTimeSeconds, 900);
   assert.equal(runtime.roundId, 2n);
   assert.equal(runtime.roundReferenceRatingBps, 5_000);
@@ -100,6 +101,7 @@ test("resolveRoundVoteRuntime keeps new-round targets fresh when latest is stale
 
   assert.equal(runtime.now(), 4_001_000);
   assert.equal(runtime.epochDuration, 1200);
+  assert.equal(runtime.requiresOpenRound, true);
   assert.equal(runtime.roundStartTimeSeconds, null);
   assert.equal(runtime.roundId, 3n);
 });
