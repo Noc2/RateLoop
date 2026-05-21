@@ -119,7 +119,7 @@ export function GetLrepOnboarding({ address }: GetLrepOnboardingProps) {
       <section className="surface-card rounded-3xl p-6 sm:p-8">
         <h1 className="text-3xl font-semibold text-base-content sm:text-4xl">Start building reputation</h1>
         <p className="mt-4 max-w-2xl text-base leading-7 text-base-content/65">
-          Earn launch credits from eligible settled rounds and for the verification.
+          Earn launch credits from eligible settled rounds and for human verification.
         </p>
       </section>
 
