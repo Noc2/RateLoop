@@ -13,6 +13,7 @@ import { Footer } from "~~/components/Footer";
 import { Header } from "~~/components/Header";
 import { NavigationProgressDiagnostics } from "~~/components/NavigationProgressDiagnostics";
 import { RouteScopedNotifiers } from "~~/components/RouteScopedNotifiers";
+import { TestnetNoticeBanner } from "~~/components/TestnetNoticeBanner";
 import { ReferralAttributionCapture } from "~~/components/referrals/ReferralAttributionCapture";
 import { FaucetModal, FaucetTrigger } from "~~/components/scaffold-eth";
 import { LocalTestWalletBridge } from "~~/components/thirdweb/LocalTestWalletBridge";
@@ -39,6 +40,9 @@ const ScaffoldEthApp = ({ children }: { children: React.ReactNode }) => {
   return (
     <MobileHeaderVisibilityProvider>
       <div className={`flex min-h-screen flex-col ${isVoteFeedRoute ? "xl:h-screen xl:overflow-hidden" : ""}`.trim()}>
+        <div className="xl:pl-52">
+          <TestnetNoticeBanner />
+        </div>
         <Header />
         {/* Main content: offset by left sidebar on desktop (208px at xl) */}
         <div className="flex flex-1 min-h-0 flex-col xl:pl-52">

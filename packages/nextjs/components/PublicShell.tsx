@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { FooterLinks } from "~~/components/FooterLinks";
 import { RateLoopLogo } from "~~/components/RateLoopLogo";
+import { TestnetNoticeBanner } from "~~/components/TestnetNoticeBanner";
 import { ReferralAttributionCapture } from "~~/components/referrals/ReferralAttributionCapture";
 import { ASK_ROUTE, GOVERNANCE_ROUTE, RATE_ROUTE } from "~~/constants/routes";
 import { HUMAN_SIGN_IN_FAUCET_ROUTE, HUMAN_SIGN_IN_LABEL } from "~~/lib/home/humanSignInRoute";
@@ -51,6 +52,7 @@ function PublicHeader() {
 export function PublicShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen flex-col bg-base-100 text-base-content">
+      <TestnetNoticeBanner />
       <PublicHeader />
       <main id="main-content" className="relative flex min-h-0 flex-1 flex-col overflow-x-hidden">
         {children}
