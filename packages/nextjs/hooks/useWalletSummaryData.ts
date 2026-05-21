@@ -1,6 +1,7 @@
 "use client";
 
-import { Address } from "viem";
+import { Address, erc20Abi } from "viem";
+import { useReadContract } from "wagmi";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import { useActiveVotesWithDeadlines } from "~~/hooks/useActiveVotesWithDeadlines";
@@ -9,6 +10,7 @@ import { useSubmissionStakes } from "~~/hooks/useSubmissionStakes";
 import { useVotingStakes } from "~~/hooks/useVotingStakes";
 import { getWalletDisplayLiquidMicro, useWalletDisplaySummary } from "~~/hooks/useWalletDisplaySummary";
 import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
+import { getDefaultUsdcAddress } from "~~/lib/questionRewardPools";
 
 function toMicroUnits(value: number) {
   return BigInt(Math.round(value * 1e6));
@@ -21,6 +23,7 @@ export function useWalletSummaryData(address?: Address) {
   const { totalSubmissionStake } = useSubmissionStakes(address);
   const { activeStaked: votingStaked } = useVotingStakes(address);
   const { votes: activeVotes, earliestReveal, hasPendingReveals } = useActiveVotesWithDeadlines(address);
+  const usdcAddress = getDefaultUsdcAddress(targetNetwork.id);
 
   const { data: lrepBalance } = useScaffoldReadContract({
     contractName: REPUTATION_CONTRACT_NAME,
@@ -29,6 +32,18 @@ export function useWalletSummaryData(address?: Address) {
     watch: false,
     query: {
       enabled: !!address,
+      staleTime: isLocalNetwork ? 0 : 60_000,
+      refetchInterval: isPageVisible ? (isLocalNetwork ? 2_000 : 60_000) : false,
+    },
+  });
+
+  const { data: usdcBalance } = useReadContract({
+    address: usdcAddress,
+    abi: erc20Abi,
+    functionName: "balanceOf",
+    args: address ? [address] : undefined,
+    query: {
+      enabled: Boolean(address && usdcAddress),
       staleTime: isLocalNetwork ? 0 : 60_000,
       refetchInterval: isPageVisible ? (isLocalNetwork ? 2_000 : 60_000) : false,
     },
@@ -71,5 +86,6 @@ export function useWalletSummaryData(address?: Address) {
     hasPendingReveals,
     liquidBalance: getWalletDisplayLiquidMicro(summary, lrepBalance),
     summary,
+    usdcBalance,
   };
 }

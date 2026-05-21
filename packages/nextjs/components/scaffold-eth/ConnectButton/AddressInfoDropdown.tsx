@@ -41,6 +41,11 @@ function formatLrepAmount(value: bigint | null | undefined) {
   return (Number(value) / 1e6).toLocaleString(undefined, { maximumFractionDigits: 0 });
 }
 
+function formatUsdcAmount(value: bigint | null | undefined) {
+  if (value == null) return "—";
+  return (Number(value) / 1e6).toLocaleString(undefined, { maximumFractionDigits: 6 });
+}
+
 function formatWinRate(value: number) {
   const percent = Number((value * 100).toFixed(1));
   return `${Number.isInteger(percent) ? percent.toFixed(0) : percent.toFixed(1)}%`;
@@ -99,7 +104,8 @@ function WalletSummaryDetails({
   stakeClassName: string;
   winRateClassName: string;
 }) {
-  const { activeVotes, earliestReveal, hasPendingReveals, liquidBalance, summary } = useWalletSummaryData(address);
+  const { activeVotes, earliestReveal, hasPendingReveals, liquidBalance, summary, usdcBalance } =
+    useWalletSummaryData(address);
   const totalStakedMicro = summary?.totalStakedMicro ?? 0n;
   const showStaked = totalStakedMicro > 0n || activeVotes.length > 0;
   const submissionStakedMicro = summary?.submissionStakedMicro ?? 0n;
@@ -129,6 +135,10 @@ function WalletSummaryDetails({
       <div className={balanceClassName}>
         <span className="tabular-nums">{formatLrepAmount(liquidBalance)}</span>{" "}
         <span className="text-base-content/52">LREP</span>
+      </div>
+      <div className={balanceClassName}>
+        <span className="tabular-nums">{formatUsdcAmount(usdcBalance)}</span>{" "}
+        <span className="text-base-content/52">USDC</span>
       </div>
       {showStaked ? (
         <div className={stakeClassName}>
