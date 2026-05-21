@@ -5,6 +5,7 @@ import {
   LREP_MAX_SUPPLY_LABEL,
   earnedRaterRewardScheduleRows,
   launchRewardOverviewRows,
+  legacyContributorVestingRows,
   verifiedReferralRewardScheduleRows,
 } from "~~/lib/docs/tokenomics";
 
@@ -58,9 +59,9 @@ const Tokenomics = () => {
 
       <h2>Launch Distribution Pool</h2>
       <p>
-        The 68M LREP Launch Distribution Pool is the protocol&apos;s onboarding engine. It is not a large airdrop to the
-        previous user set. The split is <strong>35M LREP</strong> for verified + referral rewards,{" "}
-        <strong>33M LREP</strong> for earned rater rewards.
+        The 75M LREP Launch Distribution Pool is the protocol&apos;s onboarding and contributor-distribution engine. The
+        split is <strong>42M LREP</strong> for human verified + referral rewards, <strong>24M LREP</strong> for earned
+        rater rewards, and <strong>9M LREP</strong> for legacy contributors.
       </p>
       <TokenAllocationChart />
       <p>
@@ -70,8 +71,9 @@ const Tokenomics = () => {
       </p>
       <p>
         Launch rewards are deliberately front-loaded. Verified humans can claim once, verified referrers can earn when a
-        referred user verifies, and useful raters can earn from qualifying verified-human anchored rounds. Amounts below
-        are maximums; cluster-capped effective credit, pool balance, and governance updates can reduce or pause payouts.
+        referred user verifies, useful raters can earn from qualifying verified-human anchored rounds, and eligible
+        legacy contributors can claim a prior-allocation-based grant. Amounts below are maximums; cluster-capped
+        effective credit, vesting state, pool balance, and governance updates can reduce or pause payouts.
       </p>
       <div className="not-prose overflow-x-auto my-6 rounded-xl bg-base-200">
         <table className="table table-zebra [&_th]:text-base [&_td]:text-base [&_.badge]:text-base [&_th]:bg-base-300">
@@ -144,6 +146,30 @@ const Tokenomics = () => {
         </div>
       </div>
 
+      <div className="not-prose overflow-x-auto my-6 rounded-xl bg-base-200">
+        <table className="table table-zebra [&_th]:bg-base-300">
+          <caption className="caption-top px-4 py-3 text-left text-sm font-semibold text-base-content">
+            Legacy contributor vesting
+          </caption>
+          <thead>
+            <tr>
+              <th>When</th>
+              <th>Vested amount</th>
+              <th>Claim behavior</th>
+            </tr>
+          </thead>
+          <tbody>
+            {legacyContributorVestingRows.map(([when, vestedAmount, claimBehavior]) => (
+              <tr key={when}>
+                <td>{when}</td>
+                <td className="font-mono">{vestedAmount}</td>
+                <td>{claimBehavior}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
       <p>
         Earned-rater rewards use up to 10 payout slots after the first 5 qualifying launch credits. The default
         unverified cap is 25% of the full cap; verifying the same wallet later can unlock the full snapshotted cap and
@@ -189,7 +215,7 @@ const Tokenomics = () => {
 
       <h2>Treasury</h2>
       <p>
-        The protocol treasury starts with <strong>32M LREP</strong> on the governor/timelock from launch. It grows over
+        The protocol treasury starts with <strong>25M LREP</strong> on the governor/timelock from launch. It grows over
         time through governance-routed settlement remainder, cancellation fees from voluntary content withdrawals, and
         forfeited unrevealed past-epoch reports swept during settlement cleanup. Treasury spending follows the same
         governance proposal path as upgrades and other governed config changes.

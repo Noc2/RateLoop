@@ -561,11 +561,11 @@ design:
 
 The current launch allocation in `packages/foundry/script/Deploy.s.sol` is:
 
-- 32M LREP treasury.
-- 68M LREP Launch Distribution Pool, split into 35M verified + referral
-  rewards and 33M earned rater rewards.
-- No funded Bootstrap Pool allocation; the previous 12M bucket is folded into
-  launch distribution.
+- 25M LREP treasury.
+- 75M LREP Launch Distribution Pool, split into 42M verified + referral
+  rewards, 24M earned rater rewards, and 9M legacy contributor vesting.
+- No funded Bootstrap Pool allocation; legacy contributors receive a dedicated
+  prior-allocation-based vesting rail.
 
 The redeploy removes the faucet and fixed bootstrap allocations and reshapes the
 token economy around earned reputation rather than early identity claims.
@@ -941,10 +941,11 @@ voting engine. In the new model:
 
 ### Consolidate Launch Rewards
 
-The former bootstrap bucket and former consensus reserve are folded into the
-Launch Distribution Pool: 35M LREP funds verified + referral rewards, and 33M
-LREP funds earned rater rewards. Earned rater rewards now route through
-`LaunchDistributionPool` and `RoundRewardDistributor`.
+The former bootstrap bucket and former consensus reserve are replaced by a
+dedicated launch distribution: 42M LREP funds verified + referral rewards, 24M
+LREP funds earned rater rewards, and 9M LREP funds legacy contributor vesting.
+Earned rater rewards now route through `LaunchDistributionPool` and
+`RoundRewardDistributor`.
 
 The strongest follow-on option remains a bounded `ReputationEmissionController`:
 

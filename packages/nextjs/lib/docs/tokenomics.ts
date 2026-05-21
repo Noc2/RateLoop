@@ -18,15 +18,28 @@ type TokenDistributionEntry = {
 
 const tokenDistributionEntries: readonly TokenDistributionEntry[] = [
   {
-    label: "Launch Distribution Pool",
-    amount: 68_000_000,
+    label: "Human verified + referral rewards",
+    amount: 42_000_000,
+    purpose: "One-time decaying human verification bonuses plus bounded referral rewards",
+    color: "var(--rateloop-green)",
+  },
+  {
+    label: "Earned rater rewards",
+    amount: 24_000_000,
     purpose:
-      "Protocol-funded launch rewards: verified-human anchored earned rater rewards, one-time decaying human verification bonuses, and referrals",
+      "Count-based rewards for useful revealed ratings in verified-human anchored rounds, with full caps unlockable by later human verification",
+    color: "var(--rateloop-yellow)",
+  },
+  {
+    label: "Legacy contributors",
+    amount: 9_000_000,
+    purpose:
+      "Prior-allocation-based contributor claims with 1% immediately claimable and 99% linearly unlocked over 24 months",
     color: "var(--rateloop-blue)",
   },
   {
     label: "Treasury",
-    amount: 32_000_000,
+    amount: 25_000_000,
     purpose:
       "Governance-controlled LREP for safety responses, verification acceleration, ecosystem grants, partner activation, and protocol development",
     color: "var(--rateloop-pink)",
@@ -35,26 +48,13 @@ const tokenDistributionEntries: readonly TokenDistributionEntry[] = [
 
 const LREP_INITIAL_MINTED_SUPPLY = tokenDistributionEntries.reduce((sum, entry) => sum + entry.amount, 0);
 export const LREP_INITIAL_MINTED_SUPPLY_COMPACT_LABEL = lrepCompactFormatter.format(LREP_INITIAL_MINTED_SUPPLY);
-const LAUNCH_DISTRIBUTION_POOL_AMOUNT = tokenDistributionEntries[0].amount;
+const LAUNCH_DISTRIBUTION_POOL_AMOUNT =
+  tokenDistributionEntries[0].amount + tokenDistributionEntries[1].amount + tokenDistributionEntries[2].amount;
 export const LAUNCH_DISTRIBUTION_POOL_AMOUNT_COMPACT_LABEL = lrepCompactFormatter.format(
   LAUNCH_DISTRIBUTION_POOL_AMOUNT,
 );
 
-const launchDistributionBreakdownEntries: readonly TokenDistributionEntry[] = [
-  {
-    label: "Human verified + referral rewards",
-    amount: 35_000_000,
-    purpose: "One-time decaying human verification bonuses plus bounded referrals",
-    color: "var(--rateloop-green)",
-  },
-  {
-    label: "Earned rater rewards",
-    amount: 33_000_000,
-    purpose:
-      "Count-based rewards for useful revealed ratings in verified-human anchored rounds, with full caps unlockable by later human verification",
-    color: "var(--rateloop-yellow)",
-  },
-] as const;
+const launchDistributionBreakdownEntries = tokenDistributionEntries.slice(0, 3);
 
 function formatLrepAmount(amount: number): string {
   return `${lrepAmountFormatter.format(amount)} LREP`;
@@ -67,15 +67,13 @@ function formatAllocationPercent(amount: number, total: number): string {
   return `${percent.toFixed(1)}%`;
 }
 
-export const tokenAllocationChartSlices = [...launchDistributionBreakdownEntries, tokenDistributionEntries[1]].map(
-  (entry, index) => ({
-    ...entry,
-    index,
-    amountLabel: formatLrepAmount(entry.amount),
-    percentLabel: formatAllocationPercent(entry.amount, LREP_MAX_SUPPLY),
-    value: (entry.amount / LREP_MAX_SUPPLY) * 100,
-  }),
-);
+export const tokenAllocationChartSlices = tokenDistributionEntries.map((entry, index) => ({
+  ...entry,
+  index,
+  amountLabel: formatLrepAmount(entry.amount),
+  percentLabel: formatAllocationPercent(entry.amount, LREP_MAX_SUPPLY),
+  value: (entry.amount / LREP_MAX_SUPPLY) * 100,
+}));
 
 export const launchDistributionChartSlices = launchDistributionBreakdownEntries.map((entry, index) => ({
   ...entry,
@@ -105,6 +103,17 @@ export const launchRewardOverviewRows = [
     reward: "Earned rater reward",
     howToEarn: "Complete qualifying ratings in verified-human anchored rounds; payout starts after 5 launch credits.",
   },
+  {
+    reward: "Legacy contributor allocation",
+    howToEarn:
+      "Eligible legacy contributors claim from the prior-allocation snapshot; 1% is immediate and 99% unlocks over 24 months.",
+  },
+] as const;
+
+export const legacyContributorVestingRows = [
+  ["Root activation", "1% of allocation", "Claimable immediately"],
+  ["Months 0-24", "99% of allocation", "Unlocks linearly over 730 days"],
+  ["Month 24+", "100% of allocation", "Any unclaimed vested balance remains claimable"],
 ] as const;
 
 export const verifiedReferralRewardScheduleRows = [

@@ -39,10 +39,13 @@ export function TokenAllocationChart() {
     currentAngle = endAngle;
     return { ...slice, startAngle, endAngle };
   });
+  const allocationAriaLabel = `LREP allocation chart: ${tokenAllocationChartSlices
+    .map(slice => `${slice.percentLabel} ${slice.label.toLowerCase()}`)
+    .join(", ")}`;
 
   return (
     <figure className="not-prose my-6 rounded-lg bg-base-200 p-4 text-base-content">
-      <h3 className="mb-4 text-xl font-semibold leading-tight text-base-content">Launch Distribution Map</h3>
+      <h3 className="mb-4 text-xl font-semibold leading-tight text-base-content">LREP Distribution</h3>
 
       <div className="grid gap-4 rounded-lg bg-base-100 p-3 sm:p-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.35fr)]">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center lg:flex-col lg:items-start">
@@ -50,7 +53,7 @@ export function TokenAllocationChart() {
             viewBox={`0 0 ${SIZE} ${SIZE}`}
             className="h-[160px] w-[160px] shrink-0"
             role="img"
-            aria-label="LREP allocation chart: 35 percent human verified and referral rewards, 33 percent earned rater rewards, and 32 percent treasury"
+            aria-label={allocationAriaLabel}
           >
             {arcs.map(arc => (
               <path
