@@ -139,6 +139,9 @@ export function ContentFeedbackPanel({
     feedback.ownHiddenCount > 0
       ? `${feedback.ownHiddenCount} hidden note${feedback.ownHiddenCount === 1 ? "" : "s"} from you`
       : null;
+  const panelClassName = isSheet
+    ? "flex min-h-0 flex-col overflow-visible"
+    : "surface-card flex min-h-0 max-h-[clamp(24rem,46vh,34rem)] flex-col overflow-hidden rounded-lg p-3.5";
 
   useEffect(() => {
     setFeedbackType(defaultFeedbackType);
@@ -179,12 +182,7 @@ export function ContentFeedbackPanel({
   };
 
   return (
-    <section
-      className={`surface-card flex min-h-0 flex-col overflow-hidden rounded-lg ${
-        isSheet ? "max-h-[82svh] p-4" : "max-h-[clamp(24rem,46vh,34rem)] p-3.5"
-      }`}
-      aria-label="Question feedback"
-    >
+    <section className={panelClassName} aria-label="Question feedback">
       <div className="flex min-w-0 items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="text-base font-semibold leading-tight text-base-content">

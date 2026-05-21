@@ -2008,42 +2008,35 @@ const HomeInner = () => {
 
       {feedbackSheetItem ? (
         <div
-          className="fixed inset-0 z-50 bg-black/60 px-3 pb-3 pt-16"
+          className="fixed inset-0 z-50 flex items-end justify-center sm:items-center"
           role="dialog"
           aria-modal="true"
-          aria-label="Feedback"
+          aria-label={`Feedback for ${feedbackSheetItem.question?.trim() || feedbackSheetItem.title}`}
         >
           <button
             type="button"
             aria-label="Close feedback"
-            className="absolute inset-0 h-full w-full cursor-default"
+            className="absolute inset-0 h-full w-full cursor-default bg-black/40 backdrop-blur-sm"
             onClick={() => setFeedbackSheetItem(null)}
           />
-          <div className="relative ml-auto mr-auto flex max-h-[86svh] max-w-lg flex-col overflow-hidden rounded-t-lg bg-base-100 shadow-2xl ring-1 ring-base-content/10">
-            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-base-content/10 px-4 py-3">
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-base-content">Feedback</p>
-                <p className="truncate text-xs text-base-content/50">
-                  {feedbackSheetItem.question || feedbackSheetItem.title}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setFeedbackSheetItem(null)}
-                className="btn btn-ghost btn-sm btn-circle shrink-0 text-base-content/70 hover:text-base-content"
-                aria-label="Close feedback"
-              >
-                <XMarkIcon className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="min-h-0 overflow-y-auto p-3">
-              <ContentFeedbackPanel
-                item={feedbackSheetItem}
-                hasOptimisticCurrentRoundVote={feedbackSheetHasOptimisticCurrentRoundVote}
-                variant="sheet"
-                onRequestConnect={openConnectModal}
-              />
-            </div>
+          <div className="relative max-h-[calc(100svh-1rem)] w-full max-w-md overflow-y-auto rounded-t-2xl bg-base-200 p-6 shadow-2xl sm:rounded-2xl">
+            <button
+              type="button"
+              onClick={() => setFeedbackSheetItem(null)}
+              className="btn btn-ghost btn-sm btn-circle absolute right-3 top-3 text-base-content/70 hover:text-base-content"
+              aria-label="Close feedback"
+            >
+              <XMarkIcon className="h-5 w-5" />
+            </button>
+            <h3 className="mb-3 px-9 text-balance break-words text-center text-lg font-semibold leading-tight">
+              {feedbackSheetItem.question?.trim() || feedbackSheetItem.title}
+            </h3>
+            <ContentFeedbackPanel
+              item={feedbackSheetItem}
+              hasOptimisticCurrentRoundVote={feedbackSheetHasOptimisticCurrentRoundVote}
+              variant="sheet"
+              onRequestConnect={openConnectModal}
+            />
           </div>
         </div>
       ) : null}
