@@ -208,7 +208,6 @@ contract RoundVotingEngine is
         bytes32 ciphertextHash,
         bytes ciphertext
     );
-    event RoundOpened(uint256 indexed contentId, uint256 indexed roundId, uint48 startTime);
     event RoundReferenceSnapshotted(uint256 indexed contentId, uint256 indexed roundId, uint16 roundReferenceRatingBps);
     event RoundConfigSnapshotted(
         uint256 indexed contentId,
@@ -351,32 +350,16 @@ contract RoundVotingEngine is
     /// @notice Open the current rating round before preparing a blind vote.
     /// @dev Commits no vote and records no stake; it only fixes the round start/config/drand
     ///      snapshots so the caller can encrypt against deterministic commit timing.
-    function openRound(uint256 contentId)
-        external
-        nonReentrant
-        whenNotPaused
-        returns (
-            uint256 roundId,
-            uint48 startTime,
-            uint32 epochDuration,
-            uint32 maxDuration,
-            uint16 maxVoters,
-            uint16 roundReferenceRatingBps,
-            bytes32 drandChainHash,
-            uint64 drandGenesisTime,
-            uint64 drandPeriod
-        )
-    {
+    function openRound(uint256 contentId) external whenNotPaused {
         VotePreflightLib.validateRoundOpener(
             IRaterIdentityRegistry(protocolConfig.raterRegistry()), registry, msg.sender, contentId
         );
-        bool opened;
-        (roundId, opened) = _getOrCreateRound(contentId);
+        uint256 roundId;
+        (roundId,) = _getOrCreateRound(contentId);
         RoundLib.Round storage round = rounds[contentId][roundId];
         RoundLib.RoundConfig memory roundCfg = _getRoundConfig(contentId, roundId);
-        if (!RoundLib.acceptsVotes(round, roundCfg.maxDuration) || round.thresholdReachedAt != 0) revert RoundNotOpen();
-        if (opened) emit RoundOpened(contentId, roundId, round.startTime);
-        return _roundOpenData(contentId, roundId, round, roundCfg);
+        if (!RoundLib.acceptsVotes(round, roundCfg.maxDuration)) revert RoundNotOpen();
+        if (round.thresholdReachedAt != 0) revert ThresholdReached();
     }
 
     /// @notice Commit a blind vote on content. Direction is hidden via tlock encryption.
@@ -444,30 +427,15 @@ contract RoundVotingEngine is
     }
 
     /// @notice Bind an advisory commit to the current staked open round.
-    /// @dev Only the configured AdvisoryVoteRecorder may call this. It intentionally does not
-    ///      record vote/stake accounting; zero-stake advisory commits cannot open or roll rounds.
-    function prepareAdvisoryRound(uint256 contentId, uint256 roundContext)
-        external
-        nonReentrant
-        whenNotPaused
-        returns (
-            uint256 roundId,
-            uint48 startTime,
-            uint32 epochDuration,
-            uint32 maxDuration,
-            uint16 maxVoters,
-            uint16 roundReferenceRatingBps
-        )
-    {
-        if (msg.sender != protocolConfig.advisoryVoteRecorder()) revert Unauthorized();
-
-        roundId = currentRoundId[contentId];
+    /// @dev Records no vote/stake accounting; zero-stake advisory commits cannot open or roll rounds.
+    function prepareAdvisoryRound(uint256 contentId, uint256 roundContext) external view {
+        uint256 roundId = currentRoundId[contentId];
         if (roundId == 0) revert RoundNotOpen();
         if (roundId != roundContext >> 16) revert InvalidCommitHash();
 
         RoundLib.Round storage round = rounds[contentId][roundId];
         RoundLib.RoundConfig memory roundCfg = _getRoundConfig(contentId, roundId);
-        roundReferenceRatingBps = uint16(roundContext);
+        uint16 roundReferenceRatingBps = uint16(roundContext);
         if (roundReferenceRatingBps != _getRoundReferenceRatingBps(contentId, roundId)) {
             revert InvalidCommitHash();
         }
@@ -478,11 +446,6 @@ contract RoundVotingEngine is
         }
         if (round.voteCount == 0 || round.totalStake == 0) revert RoundNotOpen();
         if (round.thresholdReachedAt != 0) revert ThresholdReached();
-
-        startTime = round.startTime;
-        epochDuration = roundCfg.epochDuration;
-        maxDuration = roundCfg.maxDuration;
-        maxVoters = roundCfg.maxVoters;
     }
 
     function _commitVote(
@@ -801,39 +764,6 @@ contract RoundVotingEngine is
             roundId
         );
         return (roundId, true);
-    }
-
-    function _roundOpenData(
-        uint256 contentId,
-        uint256 roundId,
-        RoundLib.Round storage round,
-        RoundLib.RoundConfig memory roundCfg
-    )
-        internal
-        view
-        returns (
-            uint256,
-            uint48,
-            uint32,
-            uint32,
-            uint16,
-            uint16,
-            bytes32,
-            uint64,
-            uint64
-        )
-    {
-        return (
-            roundId,
-            round.startTime,
-            roundCfg.epochDuration,
-            roundCfg.maxDuration,
-            roundCfg.maxVoters,
-            _getRoundReferenceRatingBps(contentId, roundId),
-            _getRoundDrandChainHash(contentId, roundId),
-            roundDrandGenesisTimeSnapshot[contentId][roundId],
-            roundDrandPeriodSnapshot[contentId][roundId]
-        );
     }
 
     function _markRoundRevealFailed(uint256 contentId, uint256 roundId, RoundLib.Round storage round) internal {

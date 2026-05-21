@@ -84,12 +84,9 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
     }
 
     struct PreparedAdvisoryRound {
-        uint256 roundId;
         uint48 startTime;
         uint32 epochDuration;
-        uint32 maxDuration;
         uint16 maxVoters;
-        uint16 roundReferenceRatingBps;
     }
 
     enum AdvisoryCommitAvailabilityStatus {
@@ -267,7 +264,7 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         bytes32 commitHash,
         bytes calldata ciphertext
     ) external nonReentrant returns (bytes32 advisoryCommitKey) {
-        if (paused) revert Paused();
+        if (paused || votingEngine.paused()) revert Paused();
         if (commitHash == bytes32(0)) revert InvalidCommitHash();
 
         uint256 roundId = roundContext >> 16;
@@ -301,21 +298,11 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         }
 
         PreparedAdvisoryRound memory preparedRound;
-        (
-            preparedRound.roundId,
-            preparedRound.startTime,
-            preparedRound.epochDuration,
-            preparedRound.maxDuration,
-            preparedRound.maxVoters,
-            preparedRound.roundReferenceRatingBps
-        ) = votingEngine.prepareAdvisoryRound(contentId, roundContext);
-        if (preparedRound.roundId != roundId) revert InvalidRound();
-        if (preparedRound.roundReferenceRatingBps != roundReferenceRatingBps || roundReferenceRatingBps == 0) {
-            revert InvalidCommitHash();
-        }
-        if (preparedRound.maxDuration == 0 || preparedRound.epochDuration == 0 || preparedRound.maxVoters == 0) {
-            revert InvalidRound();
-        }
+        votingEngine.prepareAdvisoryRound(contentId, roundContext);
+        if (roundReferenceRatingBps == 0) revert InvalidCommitHash();
+        (preparedRound.startTime,,,,,,,,,,,,,) = votingEngine.rounds(contentId, roundId);
+        (preparedRound.epochDuration,,, preparedRound.maxVoters) = votingEngine.roundConfigSnapshot(contentId, roundId);
+        if (preparedRound.epochDuration == 0 || preparedRound.maxVoters == 0) revert InvalidRound();
         if (roundAdvisoryCommitKeys[contentId][roundId].length >= preparedRound.maxVoters) {
             revert MaxAdvisoryVotersReached();
         }

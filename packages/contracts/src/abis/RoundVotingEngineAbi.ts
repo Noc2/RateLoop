@@ -933,53 +933,7 @@ export const RoundVotingEngineAbi = [
         "internalType": "uint256"
       }
     ],
-    "outputs": [
-      {
-        "name": "roundId",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "startTime",
-        "type": "uint48",
-        "internalType": "uint48"
-      },
-      {
-        "name": "epochDuration",
-        "type": "uint32",
-        "internalType": "uint32"
-      },
-      {
-        "name": "maxDuration",
-        "type": "uint32",
-        "internalType": "uint32"
-      },
-      {
-        "name": "maxVoters",
-        "type": "uint16",
-        "internalType": "uint16"
-      },
-      {
-        "name": "roundReferenceRatingBps",
-        "type": "uint16",
-        "internalType": "uint16"
-      },
-      {
-        "name": "drandChainHash",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      },
-      {
-        "name": "drandGenesisTime",
-        "type": "uint64",
-        "internalType": "uint64"
-      },
-      {
-        "name": "drandPeriod",
-        "type": "uint64",
-        "internalType": "uint64"
-      }
-    ],
+    "outputs": [],
     "stateMutability": "nonpayable"
   },
   {
@@ -1041,39 +995,8 @@ export const RoundVotingEngineAbi = [
         "internalType": "uint256"
       }
     ],
-    "outputs": [
-      {
-        "name": "roundId",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "startTime",
-        "type": "uint48",
-        "internalType": "uint48"
-      },
-      {
-        "name": "epochDuration",
-        "type": "uint32",
-        "internalType": "uint32"
-      },
-      {
-        "name": "maxDuration",
-        "type": "uint32",
-        "internalType": "uint32"
-      },
-      {
-        "name": "maxVoters",
-        "type": "uint16",
-        "internalType": "uint16"
-      },
-      {
-        "name": "roundReferenceRatingBps",
-        "type": "uint16",
-        "internalType": "uint16"
-      }
-    ],
-    "stateMutability": "nonpayable"
+    "outputs": [],
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -2724,31 +2647,6 @@ export const RoundVotingEngineAbi = [
         "type": "uint16",
         "indexed": false,
         "internalType": "uint16"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "RoundOpened",
-    "inputs": [
-      {
-        "name": "contentId",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
-      },
-      {
-        "name": "roundId",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
-      },
-      {
-        "name": "startTime",
-        "type": "uint48",
-        "indexed": false,
-        "internalType": "uint48"
       }
     ],
     "anonymous": false
