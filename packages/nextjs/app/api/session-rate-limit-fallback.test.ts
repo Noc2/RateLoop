@@ -173,7 +173,13 @@ test("free transaction session route keeps serving its fallback when the rate li
   assert.equal(body.raterIdentityKey, null);
 });
 
-test("feedback challenge route continues past rate limit store outages", async () => {
+test("feedback challenge route fails closed when rate limit store is unavailable (WS-6)", async () => {
+  // WS-6 (2026-05-21 repo audit): the feedback challenge route now sets
+  // `allowOnStoreUnavailable: false`. When the rate-limit store (DB) is down, the route
+  // surfaces a 503 instead of proceeding to input validation. The downstream
+  // `issueSignedActionChallenge` would write to the same store anyway, so silently letting
+  // unbounded challenge-creation traffic through during the outage masked a real outage
+  // without any operational benefit.
   const response = await feedbackChallengeRoute.POST(
     new NextRequest("https://curyo.xyz/api/feedback/challenge", {
       method: "POST",
@@ -185,7 +191,7 @@ test("feedback challenge route continues past rate limit store outages", async (
     }),
   );
 
-  assert.equal(response.status, 400);
+  assert.equal(response.status, 503);
 });
 
 test("feedback submit route continues past rate limit store outages", async () => {
