@@ -1,5 +1,4 @@
 import { DocsTitle } from "~~/components/docs/DocsTitle";
-import { RewardPayoutPathsDiagram } from "~~/components/docs/RewardPayoutPathsDiagram";
 import { TokenAllocationChart } from "~~/components/docs/TokenAllocationChart";
 import { protocolDocFacts } from "~~/lib/docs/protocolFacts";
 import { LREP_MAX_SUPPLY_LABEL } from "~~/lib/docs/tokenomics";
@@ -128,17 +127,6 @@ const Tokenomics = () => {
         payments; they distribute reputation and voting power, so proposals should state why the recipient should hold
         LREP and what follow-up reporting or milestone evidence governance voters should expect.
       </p>
-
-      <hr />
-
-      <h2>Round Payouts</h2>
-      <p>
-        When a round resolves, RBTS keeps each revealed report&apos;s scoreBps and computes the stake-weighted mean
-        score. Positive score spreads recover full stake and share the 96% voter share of forfeited negative-spread
-        stake. Negative score spreads forfeit according to distance below the mean, and RBTS settlement does not pay a
-        revealed-loser rebate. No unanimous consensus subsidy is paid.
-      </p>
-      <RewardPayoutPathsDiagram />
 
       <hr />
 
