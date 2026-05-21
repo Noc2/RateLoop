@@ -614,6 +614,51 @@ async function readRoundAtBlock(
   });
 }
 
+async function isDirectCommitRoundOpen(
+  contractAddress: string,
+  contentId: bigint,
+  blockTag: `0x${string}`,
+): Promise<boolean> {
+  const roundId = await readPreviewCommitRoundId(contractAddress, contentId, blockTag);
+  if (roundId === 0n) {
+    return false;
+  }
+
+  const round = await readRoundAtBlock(contractAddress, contentId, roundId, blockTag);
+  const parsedRound = parseRound(round);
+  return parsedRound?.state === 0 && parsedRound.startTime > 0n;
+}
+
+async function ensureDirectCommitRoundOpen(
+  contractAddress: string,
+  contentId: bigint,
+  fromAddress: string,
+): Promise<void> {
+  const latestBlock = await readLatestBlockSnapshot();
+  if (await isDirectCommitRoundOpen(contractAddress, contentId, latestBlock.blockTag)) {
+    return;
+  }
+
+  const { encodeFunctionData } = await import("viem");
+  const data = encodeFunctionData({
+    abi: [
+      {
+        name: "openRound",
+        type: "function",
+        inputs: [{ name: "contentId", type: "uint256" }],
+        outputs: [],
+        stateMutability: "nonpayable",
+      },
+    ] as const,
+    functionName: "openRound",
+    args: [contentId],
+  });
+  const opened = await sendTx(fromAddress, contractAddress, data);
+  if (!opened) {
+    console.warn(`[commitVoteDirect] Unable to open round for content ${contentId.toString()} before direct commit`);
+  }
+}
+
 async function readRoundDrandConfig(
   contractAddress: string,
   contentId: bigint,
@@ -1486,6 +1531,7 @@ export async function commitVoteDirect(
     epochDurationSeconds,
   );
   const contentIdBigInt = BigInt(contentId);
+  await ensureDirectCommitRoundOpen(contractAddress, contentIdBigInt, fromAddress);
 
   return runCommitAttempts({
     attempts: DIRECT_VOTE_COMMIT_ATTEMPTS,
