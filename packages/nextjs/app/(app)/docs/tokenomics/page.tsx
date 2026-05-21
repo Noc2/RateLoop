@@ -1,5 +1,6 @@
 import { DocsTitle } from "~~/components/docs/DocsTitle";
 import { RewardPayoutPathsDiagram } from "~~/components/docs/RewardPayoutPathsDiagram";
+import { TokenAllocationChart } from "~~/components/docs/TokenAllocationChart";
 import { protocolDocFacts } from "~~/lib/docs/protocolFacts";
 import { LREP_MAX_SUPPLY_LABEL } from "~~/lib/docs/tokenomics";
 
@@ -57,6 +58,7 @@ const Tokenomics = () => {
         previous user set. The split is <strong>35M LREP</strong> for verified + referral rewards,{" "}
         <strong>33M LREP</strong> for earned rater rewards.
       </p>
+      <TokenAllocationChart />
       <p>
         New users can start with a zero-LREP advisory path in rounds that already have a staked vote. Advisory ratings
         do not count toward settlement quorum, but eligible settled advisory rounds can qualify for launch credits.
