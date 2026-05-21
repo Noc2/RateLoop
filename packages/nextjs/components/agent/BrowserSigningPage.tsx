@@ -160,6 +160,16 @@ export function BrowserSigningPage({ intentId }: { intentId: string }) {
   const { signTypedDataAsync, isPending: isSigningTypedData } = useSignTypedData();
   const { switchToChain, switchingChainId } = useRateLoopSwitchNetwork();
   const token = useMemo(() => readToken(searchParams), [searchParams]);
+  // WS-1 (2026-05-21 repo audit): the `token` is the bearer credential for this signing intent.
+  // Leaving it in the URL leaks it through browser history, the Referer header on any
+  // cross-origin navigation, server access logs, and any analytics script allowed by CSP.
+  // Strip the query string after the first read; the React state keeps the token in memory.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!window.location.search.includes("token=")) return;
+    const cleanedUrl = `${window.location.pathname}${window.location.hash}`;
+    window.history.replaceState(null, "", cleanedUrl);
+  }, []);
   const [intent, setIntent] = useState<SigningIntent | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isPreparing, setIsPreparing] = useState(false);
