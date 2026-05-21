@@ -24,8 +24,8 @@ contract FormalVerification_GovernanceTest is Test {
     address mockTreasury = address(13);
 
     // Realistic launch balances excluded from dynamic quorum.
-    uint256 constant LAUNCH_DISTRIBUTION_BAL = 68_000_000e6;
-    uint256 constant TREASURY_BAL = 32_000_000e6;
+    uint256 constant LAUNCH_DISTRIBUTION_BAL = 75_000_000e6;
+    uint256 constant TREASURY_BAL = 25_000_000e6;
     // Total excluded at launch = 100M
 
     function setUp() public {
@@ -139,13 +139,13 @@ contract FormalVerification_GovernanceTest is Test {
     /// @notice At maturity: launch distribution drained 42M.
     ///         Circulating = total - remaining_pools. Quorum scales with circulating.
     function test_QuorumGrows_MatureProtocol() public {
-        // Simulate launch distribution draining 42M to users (launch pool had 64M, now has 22M)
+        // Simulate launch distribution draining 42M to users from the 75M launch pool.
         vm.prank(mockLaunchDistribution);
         token.transfer(address(100), 42_000_000e6);
 
         vm.roll(block.number + 1);
 
-        // Excluded holders now hold: launch=22M, consensus=4M, treasury=32M = 58M locked
+        // Excluded holders now hold: remaining launch + treasury = 58M locked
         // Total supply = 100M
         // Circulating = 100M - 58M = 42M
         // Quorum = 4% of 42M = 1.68M
