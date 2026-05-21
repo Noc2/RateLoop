@@ -454,9 +454,44 @@ function normalizeQuestion(
   };
 }
 
+/**
+ * WS-4 (2026-05-21 repo audit): every legitimate top-level field accepted by
+ * `parseX402QuestionRequest` AND the downstream signing-intents pipeline. The pipeline
+ * persists the *entire* requestBody verbatim and later spreads it into the MCP tool call
+ * (`signingIntents.ts:299-307`); reading only known fields here while persisting unknown ones
+ * is a mass-assignment hazard for any field the MCP tool implementation reads. Adding new
+ * top-level fields requires extending this set.
+ */
+const X402_QUESTION_TOP_LEVEL_FIELDS = new Set<string>([
+  // Used by parseX402QuestionRequest itself
+  "clientRequestId",
+  "questions",
+  "question",
+  "roundConfig",
+  "bounty",
+  "templateId",
+  "templateInputs",
+  "templateVersion",
+  "chainId",
+  // Used by signingIntents.ts when persisting the same requestBody
+  "maxPaymentAmount",
+  "paymentMode",
+  "fundingMode",
+  "walletAddress",
+  "agentWalletAddress",
+]);
+
 export function parseX402QuestionRequest(value: unknown, fallbackChainId?: number): X402QuestionPayload {
   if (!isObject(value)) {
     throw new X402QuestionInputError("Request body must be a JSON object.");
+  }
+
+  // WS-4: strict allowlist on top-level fields — reject anything we don't recognize so it
+  // cannot smuggle through to the MCP tool call after intent preparation.
+  for (const key of Object.keys(value)) {
+    if (!X402_QUESTION_TOP_LEVEL_FIELDS.has(key)) {
+      throw new X402QuestionInputError(`Unknown top-level field: ${key}`);
+    }
   }
 
   const clientRequestId = readString(value.clientRequestId, "clientRequestId");
