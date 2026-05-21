@@ -3294,5 +3294,4 @@ contract RoundIntegrationTest is VotingTestBase {
         );
         vm.stopPrank();
     }
-
 }
