@@ -74,6 +74,32 @@ export const LaunchDistributionPoolAbi = [
   },
   {
     "type": "function",
+    "name": "LEGACY_CLAIM_DURATION",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "LEGACY_CLAIM_GRACE_PERIOD",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "LEGACY_CONTRIBUTOR_POOL_AMOUNT",
     "inputs": [],
     "outputs": [
@@ -907,6 +933,19 @@ export const LaunchDistributionPoolAbi = [
         "name": "",
         "type": "bytes32",
         "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "legacyContributorTreasuryRecovered",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -1893,6 +1932,19 @@ export const LaunchDistributionPoolAbi = [
   },
   {
     "type": "function",
+    "name": "sweepExpiredLegacyContributorAllocationToTreasury",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "sweptAmount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "transferOwnership",
     "inputs": [
       {
@@ -2480,6 +2532,25 @@ export const LaunchDistributionPoolAbi = [
   },
   {
     "type": "event",
+    "name": "LegacyContributorUnclaimedSwept",
+    "inputs": [
+      {
+        "name": "treasury",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "OwnershipTransferred",
     "inputs": [
       {
@@ -2783,6 +2854,16 @@ export const LaunchDistributionPoolAbi = [
   {
     "type": "error",
     "name": "InvalidProof",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "LegacyClaimWindowClosed",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "LegacyClaimWindowOpen",
     "inputs": []
   },
   {

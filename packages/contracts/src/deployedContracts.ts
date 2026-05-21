@@ -21104,7 +21104,7 @@ const deployedContracts: GenericContractsDeclaration = {
       deployedOnBlock: 39,
     },
     LaunchDistributionPool: {
-      address: "0xa7328DEAa1B585a494f055Fc9Bd99ea56d52CD3d",
+      address: "0x270fBc6A0f1007eB41863237Eefb773795fd1F9C",
       abi: [
         {
           type: "constructor",
@@ -21175,6 +21175,32 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "uint32",
               internalType: "uint32",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "LEGACY_CLAIM_DURATION",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint64",
+              internalType: "uint64",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "LEGACY_CLAIM_GRACE_PERIOD",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint64",
+              internalType: "uint64",
             },
           ],
           stateMutability: "view",
@@ -22014,6 +22040,19 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "bytes32",
               internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "legacyContributorTreasuryRecovered",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
             },
           ],
           stateMutability: "view",
@@ -23000,6 +23039,19 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "sweepExpiredLegacyContributorAllocationToTreasury",
+          inputs: [],
+          outputs: [
+            {
+              name: "sweptAmount",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "transferOwnership",
           inputs: [
             {
@@ -23587,6 +23639,25 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "event",
+          name: "LegacyContributorUnclaimedSwept",
+          inputs: [
+            {
+              name: "treasury",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "amount",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
           name: "OwnershipTransferred",
           inputs: [
             {
@@ -23894,6 +23965,16 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "error",
+          name: "LegacyClaimWindowClosed",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "LegacyClaimWindowOpen",
+          inputs: [],
+        },
+        {
+          type: "error",
           name: "NotVerified",
           inputs: [],
         },
@@ -23961,6 +24042,8 @@ const deployedContracts: GenericContractsDeclaration = {
           "contracts/interfaces/ILaunchDistributionPool.sol",
         recordEarnedRaterRewardWithSourceReady:
           "contracts/interfaces/ILaunchDistributionPool.sol",
+        sweepExpiredLegacyContributorAllocationToTreasury:
+          "contracts/interfaces/ILaunchDistributionPool.sol",
         vestedLegacyContributorAllocation:
           "contracts/interfaces/ILaunchDistributionPool.sol",
         isRoundPayoutSnapshotConsumed:
@@ -23973,10 +24056,10 @@ const deployedContracts: GenericContractsDeclaration = {
         transferOwnership:
           "lib/openzeppelin-contracts/contracts/access/Ownable.sol",
       },
-      deployedOnBlock: 70,
+      deployedOnBlock: 67,
     },
     AdvisoryVoteRecorder: {
-      address: "0x83B4e0d6ff93f3183D306Da23EfAE17773e6dFc0",
+      address: "0x2f634917cc00A9897621cd3490327721198Fa369",
       abi: [
         {
           type: "constructor",
@@ -24879,7 +24962,7 @@ const deployedContracts: GenericContractsDeclaration = {
         transferOwnership:
           "lib/openzeppelin-contracts/contracts/access/Ownable.sol",
       },
-      deployedOnBlock: 75,
+      deployedOnBlock: 72,
     },
   },
 };
