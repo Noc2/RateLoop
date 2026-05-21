@@ -94,20 +94,14 @@ export const launchRewardOverviewRows = [
   {
     reward: "Verified human bonus",
     howToEarn: "Verify one active human credential and claim once from that wallet.",
-    startingMax: formatLrepAmount(10),
-    decay: "Drops as verified claims pass 50K, 200K, and 1M.",
   },
   {
     reward: "Referral bonus",
     howToEarn: "Refer a user who verifies, while the referrer also holds an active human credential.",
-    startingMax: `${formatLrepAmount(5)} per verified referral`,
-    decay: `Always 50% of the referee's verified bonus, capped at ${formatLrepAmount(10_000)} per referrer.`,
   },
   {
     reward: "Earned rater reward",
     howToEarn: "Complete qualifying ratings in verified-human anchored rounds; payout starts after 5 launch credits.",
-    startingMax: `${formatLrepAmount(10)} full cap`,
-    decay: "Full caps step down by eligible-rater cohort and fill over up to 10 reward slots.",
   },
 ] as const;
 

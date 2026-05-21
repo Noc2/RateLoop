@@ -79,8 +79,6 @@ const Tokenomics = () => {
             <tr>
               <th>Reward</th>
               <th>How to earn</th>
-              <th>Starting maximum</th>
-              <th>How it reduces</th>
             </tr>
           </thead>
           <tbody>
@@ -88,8 +86,6 @@ const Tokenomics = () => {
               <tr key={row.reward}>
                 <td className="font-medium">{row.reward}</td>
                 <td>{row.howToEarn}</td>
-                <td className="font-mono">{row.startingMax}</td>
-                <td>{row.decay}</td>
               </tr>
             ))}
           </tbody>
