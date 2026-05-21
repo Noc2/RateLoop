@@ -2,10 +2,19 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { ExclamationTriangleIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { useTargetNetwork } from "~~/hooks/scaffold-eth";
 
 const TESTNET_NOTICE_DISMISSED_STORAGE_KEY = "rateloop:testnet-notice-dismissed";
 
+// MAINNET-1 (2026-05-21 testnet-readiness audit): the banner copy says "deployed on World
+// Chain Sepolia testnet only", which contradicts reality once mainnet (chainId 480) ships.
+// Gate the banner so it never renders on the mainnet target. Local dev (31337) and testnet
+// (4801) keep showing the notice.
+const NON_MAINNET_TARGET_CHAIN_IDS = new Set<number>([31337, 4801]);
+
 export function TestnetNoticeBanner() {
+  const { targetNetwork } = useTargetNetwork();
+  const isMainnetTarget = !NON_MAINNET_TARGET_CHAIN_IDS.has(targetNetwork.id);
   const [isVisible, setIsVisible] = useState(true);
 
   useEffect(() => {
@@ -26,7 +35,7 @@ export function TestnetNoticeBanner() {
     }
   }, []);
 
-  if (!isVisible) {
+  if (isMainnetTarget || !isVisible) {
     return null;
   }
 
