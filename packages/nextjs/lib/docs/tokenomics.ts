@@ -103,11 +103,6 @@ export const launchRewardOverviewRows = [
     reward: "Earned rater reward",
     howToEarn: "Complete qualifying ratings in verified-human anchored rounds; payout starts after 5 launch credits.",
   },
-  {
-    reward: "Legacy contributor allocation",
-    howToEarn:
-      "Eligible legacy contributors claim from the prior-allocation snapshot; 1% is immediate, 99% unlocks over 24 months, and unclaimed balances expire after 27 months.",
-  },
 ] as const;
 
 export const legacyContributorVestingRows = [

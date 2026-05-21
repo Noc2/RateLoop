@@ -147,6 +147,11 @@ const Tokenomics = () => {
         </div>
       </div>
 
+      <p>
+        Eligible legacy contributors claim from the prior-allocation snapshot; 1% is immediate, 99% unlocks over 24
+        months, and unclaimed balances expire after 27 months.
+      </p>
+
       <div className="not-prose overflow-x-auto my-6 rounded-xl bg-base-200">
         <table className="table table-zebra [&_th]:bg-base-300">
           <caption className="caption-top px-4 py-3 text-left text-sm font-semibold text-base-content">
