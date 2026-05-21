@@ -26,7 +26,11 @@ export type LegacyClaimLookupResult =
     };
 
 export function normalizeLegacyClaimAddress(address: string): `0x${string}` | null {
-  return isAddress(address) ? (getAddress(address) as `0x${string}`) : null;
+  // CLAIM-1 follow-up: `isAddress(value)` defaults to `strict: true`, which rejects all-uppercase
+  // input (and other non-EIP-55 casings). Users pasting their address from a wallet UI that
+  // emits uppercase shouldn't be rejected; `getAddress` will canonicalize. Use `strict: false`
+  // so any 40-hex casing is accepted, then re-checksum to the canonical form.
+  return isAddress(address, { strict: false }) ? (getAddress(address) as `0x${string}`) : null;
 }
 
 export function lookupLegacyClaim(address: string): LegacyClaimLookupResult | null {
