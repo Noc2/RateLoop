@@ -745,6 +745,9 @@ seed_commit() {
   local voterAddr
   local commitTimestamp
 
+  cast send "$VOTING_ENGINE" "openRound(uint256)" "$contentId" \
+    --private-key "$privKey" --rpc-url "$RPC" > /dev/null
+
   cast send "$TOKEN" "approve(address,uint256)" "$VOTING_ENGINE" "$VOTE_STAKE" \
     --private-key "$privKey" --rpc-url "$RPC" > /dev/null
 
