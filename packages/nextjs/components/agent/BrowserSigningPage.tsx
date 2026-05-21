@@ -476,9 +476,7 @@ export function BrowserSigningPage({ intentId }: { intentId: string }) {
                         <p className="font-mono text-xs text-base-content/55">
                           selector: <span className="text-base-content/75">{call.data.slice(0, 10)}</span>
                         </p>
-                        <p className="break-all font-mono text-[10px] text-base-content/40">
-                          data: {call.data}
-                        </p>
+                        <p className="break-all font-mono text-[10px] text-base-content/40">data: {call.data}</p>
                       </div>
                     ) : null}
                     {steps[index]?.hash ? (
