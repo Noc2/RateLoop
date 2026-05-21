@@ -1,4 +1,8 @@
-FROM node:24-alpine
+# INFO-3 (2026-05-21 repo audit): pin the base image by digest so builds are reproducible and
+# a future image push under the `24-alpine` tag cannot silently alter what we ship. Digest is
+# the multi-arch (amd64/arm64) manifest as of 2026-04-16. Bump alongside the digest in
+# Renovate / Dependabot config.
+FROM node:24-alpine@sha256:d1b3b4da11eefd5941e7f0b9cf17783fc99d9c6fc34884a665f40a06dbdfc94f
 
 WORKDIR /app
 
