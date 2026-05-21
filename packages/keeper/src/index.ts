@@ -63,6 +63,7 @@ async function main() {
     metricsServer = startMetricsServer(
       config.metricsPort,
       config.metricsBindAddress,
+      config.metricsAuthToken,
     );
     logger.info("Metrics server started", {
       port: config.metricsPort,
