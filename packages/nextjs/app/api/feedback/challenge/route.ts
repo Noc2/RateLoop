@@ -31,8 +31,12 @@ export async function POST(request: NextRequest) {
       sourceUrl?: unknown;
       intent?: "read";
     };
+    // WS-6 (2026-05-21 repo audit): fail-closed when the rate-limit store is unavailable.
+    // The downstream `issueSignedActionChallenge` writes to the same store anyway, so an
+    // outage isn't recoverable here — surfacing the 503 loudly is preferable to silently
+    // letting unbounded challenge-creation traffic through during the outage.
     const limited = await checkRateLimit(request, RATE_LIMIT, {
-      allowOnStoreUnavailable: true,
+      allowOnStoreUnavailable: false,
       extraKeyParts: [typeof body.address === "string" ? body.address : undefined, body.intent ?? "create"],
     });
     if (limited) return limited;

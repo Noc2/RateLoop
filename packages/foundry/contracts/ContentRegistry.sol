@@ -1117,7 +1117,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     /// @dev Vote commits refresh UI-facing activity without extending the dormancy window.
     ///      Stamps the per-content generation so any pre-existing older-engine grants are
     ///      shut out from this content even before `revokeVotingEngine` is called.
-    function updateActivity(uint256 contentId) external {
+    function updateActivity(uint256 contentId) external nonReentrant {
         uint256 callerGeneration = _authorizeEngineCallback(contentId);
 
         address trackedEngine = contentRoundTrackingEngine[contentId];
@@ -1133,7 +1133,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     }
 
     /// @notice Called by VotingEngine when content reaches milestone 0 through a settled round.
-    function recordMeaningfulActivity(uint256 contentId) external {
+    function recordMeaningfulActivity(uint256 contentId) external nonReentrant {
         uint256 callerGeneration = _authorizeEngineCallback(contentId);
         contents[contentId].lastActivityAt = uint48(block.timestamp);
         dormancyAnchorAt[contentId] = block.timestamp;
@@ -1147,7 +1147,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         uint256 roundId,
         uint16 referenceRatingBps,
         RatingLib.RatingState calldata nextState
-    ) external {
+    ) external nonReentrant {
         uint256 callerGeneration = _authorizeEngineCallback(contentId);
 
         Content storage c = contents[contentId];

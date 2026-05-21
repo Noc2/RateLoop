@@ -452,6 +452,9 @@ function loadConfig() {
     // Monitoring
     metricsPort: readPositiveIntEnv("METRICS_PORT", "9090", errors),
     metricsBindAddress: readEnv("METRICS_BIND_ADDRESS") || "127.0.0.1",
+    // KEEPER-2 (2026-05-21 repo audit): required when METRICS_BIND_ADDRESS is non-loopback.
+    // Bearer-checked on every /metrics and /health request.
+    metricsAuthToken: readEnv("METRICS_AUTH_TOKEN") || null,
     metricsEnabled: parseBooleanEnv(
       readEnv("METRICS_ENABLED"),
       true,

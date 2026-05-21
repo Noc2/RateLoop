@@ -454,9 +454,61 @@ function normalizeQuestion(
   };
 }
 
+/**
+ * WS-4 (2026-05-21 repo audit): every legitimate top-level field accepted by
+ * `parseX402QuestionRequest` AND its known direct callers — `lib/agent/signingIntents.ts`
+ * (which persists the requestBody verbatim and spreads it into the MCP tool call) and the
+ * MCP tool flows in `lib/mcp/tools.ts` (`curyo_quote_question`, `curyo_ask_humans`, both
+ * managed and public variants). Reading only known fields here while persisting / forwarding
+ * unknown ones is a mass-assignment hazard for any field a downstream consumer reads.
+ *
+ * Adding a new top-level field requires extending this set explicitly.
+ */
+const X402_QUESTION_TOP_LEVEL_FIELDS = new Set<string>([
+  // Used by parseX402QuestionRequest itself
+  "clientRequestId",
+  "questions",
+  "question",
+  "roundConfig",
+  "bounty",
+  "templateId",
+  "templateInputs",
+  "templateVersion",
+  "chainId",
+  // Used by signingIntents.ts when persisting the same requestBody
+  "maxPaymentAmount",
+  "paymentMode",
+  "fundingMode",
+  "walletAddress",
+  "agentWalletAddress",
+  // Used by lib/mcp/tools.ts when the same args object is also handed to
+  // parseAskHumansMode / parseWebhookOptions / x402-authorization orchestration. Each of
+  // these has its own dedicated validator that runs after parseX402QuestionRequest; we keep
+  // them in the allowlist so the strict gate does not pre-empt those error messages.
+  "mode",
+  "webhookUrl",
+  "webhookSecret",
+  "webhookEvents",
+  "paymentAuthorization",
+  // Used by the public SDK's `AskHumansRequest` type (packages/sdk/src/agent.ts). The Next.js
+  // signing-intents POST persists the request body as-is, and these fields are part of the
+  // public contract — `signatureMode` selects browser-handoff vs agent_signs, `transport`
+  // selects http vs mcp.
+  "signatureMode",
+  "transport",
+]);
+
 export function parseX402QuestionRequest(value: unknown, fallbackChainId?: number): X402QuestionPayload {
   if (!isObject(value)) {
     throw new X402QuestionInputError("Request body must be a JSON object.");
+  }
+
+  // WS-4: strict allowlist on top-level fields — reject anything we don't recognize so it
+  // cannot smuggle through to the MCP tool call after intent preparation.
+  for (const key of Object.keys(value)) {
+    if (!X402_QUESTION_TOP_LEVEL_FIELDS.has(key)) {
+      throw new X402QuestionInputError(`Unknown top-level field: ${key}`);
+    }
   }
 
   const clientRequestId = readString(value.clientRequestId, "clientRequestId");

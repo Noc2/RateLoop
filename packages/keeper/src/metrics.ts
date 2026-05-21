@@ -148,22 +148,61 @@ export function getHealthSnapshot(): { status: number; body: string } {
 }
 
 // --- HTTP server ---
-function handler(req: IncomingMessage, res: ServerResponse) {
-  if (req.url === "/metrics" && req.method === "GET") {
-    res.writeHead(200, { "Content-Type": "text/plain; version=0.0.4; charset=utf-8" });
-    res.end(renderMetrics());
-  } else if (req.url === "/health" && req.method === "GET") {
-    const { status, body } = renderHealth();
-    res.writeHead(status, { "Content-Type": "application/json" });
-    res.end(body);
-  } else {
-    res.writeHead(404);
-    res.end("Not Found\n");
-  }
+
+/**
+ * KEEPER-2 (2026-05-21 repo audit): the metrics server exposes the wallet balance gauge and
+ * operational counters. Default bind is `127.0.0.1`, which is safe — but operators sometimes
+ * set `METRICS_BIND_ADDRESS=0.0.0.0` to let a sibling Prometheus container scrape, which
+ * exposes the wallet balance to anyone on the network. Refuse to start on a non-loopback bind
+ * unless an explicit `METRICS_AUTH_TOKEN` is set, and bearer-check it on every request.
+ */
+const LOOPBACK_BIND_ADDRESSES = new Set(["127.0.0.1", "::1", "localhost"]);
+function isLoopbackBind(addr: string): boolean {
+  return LOOPBACK_BIND_ADDRESSES.has(addr) || addr.startsWith("127.");
 }
 
-export function startMetricsServer(port: number, bindAddress = "127.0.0.1"): Server {
-  const server = createServer(handler);
+function timingSafeBearerMatch(header: string | undefined, expected: string): boolean {
+  if (!header) return false;
+  const prefix = "Bearer ";
+  if (!header.startsWith(prefix)) return false;
+  const presented = header.slice(prefix.length).trim();
+  if (presented.length !== expected.length) return false;
+  // Constant-time compare without pulling in node:crypto's timingSafeEqual on every request
+  // (presented and expected are equal-length ASCII strings here).
+  let diff = 0;
+  for (let i = 0; i < presented.length; i++) diff |= presented.charCodeAt(i) ^ expected.charCodeAt(i);
+  return diff === 0;
+}
+
+function makeHandler(authToken: string | null) {
+  return function handler(req: IncomingMessage, res: ServerResponse) {
+    if (authToken !== null && !timingSafeBearerMatch(req.headers.authorization, authToken)) {
+      res.writeHead(401, { "Content-Type": "text/plain" });
+      res.end("Unauthorized\n");
+      return;
+    }
+    if (req.url === "/metrics" && req.method === "GET") {
+      res.writeHead(200, { "Content-Type": "text/plain; version=0.0.4; charset=utf-8" });
+      res.end(renderMetrics());
+    } else if (req.url === "/health" && req.method === "GET") {
+      const { status, body } = renderHealth();
+      res.writeHead(status, { "Content-Type": "application/json" });
+      res.end(body);
+    } else {
+      res.writeHead(404);
+      res.end("Not Found\n");
+    }
+  };
+}
+
+export function startMetricsServer(port: number, bindAddress = "127.0.0.1", authToken: string | null = null): Server {
+  if (!isLoopbackBind(bindAddress) && (authToken === null || authToken.length < 16)) {
+    throw new Error(
+      `Refusing to start metrics server on non-loopback bind '${bindAddress}' without a ` +
+        `METRICS_AUTH_TOKEN (>= 16 chars). Either bind to 127.0.0.1 / ::1 or set the env var.`,
+    );
+  }
+  const server = createServer(makeHandler(authToken));
   server.listen(port, bindAddress);
   return server;
 }

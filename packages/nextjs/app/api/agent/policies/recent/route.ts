@@ -35,7 +35,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Signed read required" }, { status: 401 });
     }
 
-    const limit = Number(request.nextUrl.searchParams.get("limit") ?? 10);
+    // WS-7 (2026-05-21 repo audit): bound and validate the `limit` query parameter so that
+    // `?limit=Infinity`, `?limit=NaN`, or `?limit=-1` don't reach the data layer. Matches the
+    // parseInt + clamp pattern used by sibling routes (frontend/claimable-fees, leaderboard,
+    // agent-callbacks/{deliver,sweep}, etc.).
+    const rawLimit = Number.parseInt(request.nextUrl.searchParams.get("limit") ?? "10", 10);
+    const limit = Math.min(Math.max(Number.isFinite(rawLimit) && rawLimit > 0 ? rawLimit : 10, 1), 100);
     const items = await listAgentAskSummaries({
       ownerWalletAddress: normalized.payload.normalizedAddress,
       policyId,

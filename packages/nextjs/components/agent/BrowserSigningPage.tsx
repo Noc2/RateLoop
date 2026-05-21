@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { type Address, type Hex, isAddress } from "viem";
@@ -159,7 +159,22 @@ export function BrowserSigningPage({ intentId }: { intentId: string }) {
   const { address, chain } = useAccount();
   const { signTypedDataAsync, isPending: isSigningTypedData } = useSignTypedData();
   const { switchToChain, switchingChainId } = useRateLoopSwitchNetwork();
-  const token = useMemo(() => readToken(searchParams), [searchParams]);
+  // WS-1 (2026-05-21 repo audit): the `token` is the bearer credential for this signing intent.
+  // Leaving it in the URL leaks it through browser history, the Referer header on any
+  // cross-origin navigation, server access logs, and any analytics script allowed by CSP.
+  //
+  // Capture the token into stable component state on the first render *before* mutating the
+  // URL, so subsequent re-renders that would re-read `useSearchParams()` (which in App Router
+  // can resolve to the post-strip empty value) don't reset the in-memory copy that the
+  // prepare/complete API calls depend on. `useState(initialFn)` runs `initialFn` exactly once
+  // on mount and ignores future `searchParams` changes.
+  const [token] = useState(() => readToken(searchParams));
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!window.location.search.includes("token=")) return;
+    const cleanedUrl = `${window.location.pathname}${window.location.hash}`;
+    window.history.replaceState(null, "", cleanedUrl);
+  }, []);
   const [intent, setIntent] = useState<SigningIntent | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isPreparing, setIsPreparing] = useState(false);
@@ -448,9 +463,29 @@ export function BrowserSigningPage({ intentId }: { intentId: string }) {
                         {steps[index]?.status ?? "ready"}
                       </span>
                     </div>
-                    <p className="mt-1 break-all font-mono text-xs text-base-content/55">{call.to}</p>
+                    <p className="mt-1 break-all font-mono text-xs text-base-content/55">to: {call.to}</p>
+                    {call.value && call.value !== "0" && call.value !== "0x0" ? (
+                      <p className="mt-1 break-all font-mono text-xs text-base-content/55">value: {call.value}</p>
+                    ) : null}
+                    {/*
+                     * WS-2 (2026-05-21 repo audit): show the function selector and full calldata
+                     * so the user can verify what the wallet is about to be asked to sign. Without
+                     * this, the user trusted only the server-supplied `description` — a poisoned
+                     * MCP tool, a compromised server, or a stale plan could display "Approve USDC"
+                     * while the calldata actually called `transfer(victim, max)`. The wallet
+                     * software does show the raw calldata before broadcasting, but most users
+                     * don't read it; surfacing it here gives a second chance before sign-off.
+                     */}
+                    {call.data ? (
+                      <div className="mt-1 space-y-1">
+                        <p className="font-mono text-xs text-base-content/55">
+                          selector: <span className="text-base-content/75">{call.data.slice(0, 10)}</span>
+                        </p>
+                        <p className="break-all font-mono text-[10px] text-base-content/40">data: {call.data}</p>
+                      </div>
+                    ) : null}
                     {steps[index]?.hash ? (
-                      <p className="mt-1 break-all font-mono text-xs text-base-content/55">{steps[index].hash}</p>
+                      <p className="mt-1 break-all font-mono text-xs text-base-content/55">tx: {steps[index].hash}</p>
                     ) : null}
                   </div>
                 ))}
