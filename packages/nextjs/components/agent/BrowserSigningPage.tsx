@@ -458,9 +458,31 @@ export function BrowserSigningPage({ intentId }: { intentId: string }) {
                         {steps[index]?.status ?? "ready"}
                       </span>
                     </div>
-                    <p className="mt-1 break-all font-mono text-xs text-base-content/55">{call.to}</p>
+                    <p className="mt-1 break-all font-mono text-xs text-base-content/55">to: {call.to}</p>
+                    {call.value && call.value !== "0" && call.value !== "0x0" ? (
+                      <p className="mt-1 break-all font-mono text-xs text-base-content/55">value: {call.value}</p>
+                    ) : null}
+                    {/*
+                     * WS-2 (2026-05-21 repo audit): show the function selector and full calldata
+                     * so the user can verify what the wallet is about to be asked to sign. Without
+                     * this, the user trusted only the server-supplied `description` — a poisoned
+                     * MCP tool, a compromised server, or a stale plan could display "Approve USDC"
+                     * while the calldata actually called `transfer(victim, max)`. The wallet
+                     * software does show the raw calldata before broadcasting, but most users
+                     * don't read it; surfacing it here gives a second chance before sign-off.
+                     */}
+                    {call.data ? (
+                      <div className="mt-1 space-y-1">
+                        <p className="font-mono text-xs text-base-content/55">
+                          selector: <span className="text-base-content/75">{call.data.slice(0, 10)}</span>
+                        </p>
+                        <p className="break-all font-mono text-[10px] text-base-content/40">
+                          data: {call.data}
+                        </p>
+                      </div>
+                    ) : null}
                     {steps[index]?.hash ? (
-                      <p className="mt-1 break-all font-mono text-xs text-base-content/55">{steps[index].hash}</p>
+                      <p className="mt-1 break-all font-mono text-xs text-base-content/55">tx: {steps[index].hash}</p>
                     ) : null}
                   </div>
                 ))}
