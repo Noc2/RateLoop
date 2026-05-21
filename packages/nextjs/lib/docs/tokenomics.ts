@@ -34,7 +34,7 @@ const tokenDistributionEntries: readonly TokenDistributionEntry[] = [
     label: "Legacy contributors",
     amount: 9_000_000,
     purpose:
-      "Prior-allocation-based contributor claims with 1% immediately claimable and 99% linearly unlocked over 24 months",
+      "Prior-allocation-based contributor claims with 1% immediately claimable, 99% linearly unlocked over 24 months, and unclaimed balances recoverable to treasury after 27 months",
     color: "var(--rateloop-blue)",
   },
   {
@@ -106,14 +106,15 @@ export const launchRewardOverviewRows = [
   {
     reward: "Legacy contributor allocation",
     howToEarn:
-      "Eligible legacy contributors claim from the prior-allocation snapshot; 1% is immediate and 99% unlocks over 24 months.",
+      "Eligible legacy contributors claim from the prior-allocation snapshot; 1% is immediate, 99% unlocks over 24 months, and unclaimed balances expire after 27 months.",
   },
 ] as const;
 
 export const legacyContributorVestingRows = [
   ["Root activation", "1% of allocation", "Claimable immediately"],
   ["Months 0-24", "99% of allocation", "Unlocks linearly over 730 days"],
-  ["Month 24+", "100% of allocation", "Any unclaimed vested balance remains claimable"],
+  ["Months 24-27", "100% of allocation", "Fully vested balance remains claimable during the 91-day grace period"],
+  ["Month 27+", "Expired unclaimed balance", "Governance can sweep unclaimed allocation to the treasury"],
 ] as const;
 
 export const verifiedReferralRewardScheduleRows = [

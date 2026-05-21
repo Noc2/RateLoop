@@ -68,6 +68,12 @@ export function useLegacyClaim() {
     query: { enabled: claimQuery.data?.status === "eligible" },
   } as any);
 
+  const { data: claimDurationRaw } = useScaffoldReadContract({
+    contractName: "LaunchDistributionPool",
+    functionName: "LEGACY_CLAIM_DURATION",
+    query: { enabled: claimQuery.data?.status === "eligible" },
+  } as any);
+
   const { writeContractAsync, isMining } = useScaffoldWriteContract({
     contractName: "LaunchDistributionPool",
   } as any);
@@ -95,6 +101,7 @@ export function useLegacyClaim() {
   return {
     allocation,
     claim,
+    claimDuration: (claimDurationRaw as bigint | undefined) ?? 0n,
     claimed: (claimedRaw as bigint | undefined) ?? 0n,
     claimable: (claimableRaw as bigint | undefined) ?? 0n,
     claimData: claimQuery.data,

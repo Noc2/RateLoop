@@ -30,4 +30,9 @@ test("launch distribution rows include legacy contributor vesting", () => {
   );
 
   assert.deepEqual(legacyContributorVestingRows[0], ["Root activation", "1% of allocation", "Claimable immediately"]);
+  assert.deepEqual(legacyContributorVestingRows[3], [
+    "Month 27+",
+    "Expired unclaimed balance",
+    "Governance can sweep unclaimed allocation to the treasury",
+  ]);
 });

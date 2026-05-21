@@ -60,7 +60,9 @@ test("whitepaper reflects current launch allocations and governance threshold", 
   assert.match(whitepaperText, /42M LREP for verified \+ referral rewards/i);
   assert.match(whitepaperText, /24M LREP for earned rater rewards/i);
   assert.match(whitepaperText, /9M LREP for legacy contributor vesting/i);
-  assert.match(whitepaperText, /1% immediately claimable and 99% linearly unlocked over 24 months/i);
+  assert.match(whitepaperText, /1% immediately claimable, 99% linearly unlocked over 24 months/i);
+  assert.match(whitepaperText, /27-month claim window/i);
+  assert.match(whitepaperText, /unclaimed balances become treasury-recoverable/i);
   assert.match(whitepaperText, /one verified-human anchor in the round/i);
   assert.match(whitepaperText, /minimum launch-credit stake/i);
   assert.match(whitepaperText, /two distinct verified-human anchors/i);

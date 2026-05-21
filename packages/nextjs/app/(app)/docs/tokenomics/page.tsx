@@ -72,8 +72,9 @@ const Tokenomics = () => {
       <p>
         Launch rewards are deliberately front-loaded. Verified humans can claim once, verified referrers can earn when a
         referred user verifies, useful raters can earn from qualifying verified-human anchored rounds, and eligible
-        legacy contributors can claim a prior-allocation-based grant. Amounts below are maximums; cluster-capped
-        effective credit, vesting state, pool balance, and governance updates can reduce or pause payouts.
+        legacy contributors can claim a prior-allocation-based grant until the 27-month deadline. Amounts below are
+        maximums; cluster-capped effective credit, vesting state, pool balance, claim expiry, and governance updates can
+        reduce or pause payouts.
       </p>
       <div className="not-prose overflow-x-auto my-6 rounded-xl bg-base-200">
         <table className="table table-zebra [&_th]:text-base [&_td]:text-base [&_.badge]:text-base [&_th]:bg-base-300">
@@ -208,11 +209,6 @@ const Tokenomics = () => {
           </tbody>
         </table>
       </div>
-      <p>
-        Verification acceleration, safety responses, appeals, and governance programs are treasury responsibilities.
-        They do not draw from the Launch Distribution Pool.
-      </p>
-
       <h2>Treasury</h2>
       <p>
         The protocol treasury starts with <strong>25M LREP</strong> on the governor/timelock from launch. It grows over

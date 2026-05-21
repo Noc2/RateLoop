@@ -563,7 +563,8 @@ The current launch allocation in `packages/foundry/script/Deploy.s.sol` is:
 
 - 25M LREP treasury.
 - 75M LREP Launch Distribution Pool, split into 42M verified + referral
-  rewards, 24M earned rater rewards, and 9M legacy contributor vesting.
+  rewards, 24M earned rater rewards, and 9M legacy contributor vesting with
+  unclaimed balances recoverable to treasury after 27 months.
 - No funded Bootstrap Pool allocation; legacy contributors receive a dedicated
   prior-allocation-based vesting rail.
 
@@ -943,7 +944,8 @@ voting engine. In the new model:
 
 The former bootstrap bucket and former consensus reserve are replaced by a
 dedicated launch distribution: 42M LREP funds verified + referral rewards, 24M
-LREP funds earned rater rewards, and 9M LREP funds legacy contributor vesting.
+LREP funds earned rater rewards, and 9M LREP funds legacy contributor vesting
+with unclaimed balances recoverable to treasury after 27 months.
 Earned rater rewards now route through `LaunchDistributionPool` and
 `RoundRewardDistributor`.
 

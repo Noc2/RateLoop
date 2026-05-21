@@ -17,9 +17,9 @@ function formatPercent(numerator: bigint, denominator: bigint | undefined) {
   return `${(Number(basisPoints) / 100).toFixed(1)}%`;
 }
 
-function formatVestingDate(vestingStart: bigint | undefined, vestingDuration: bigint) {
-  if (vestingStart === undefined || vestingDuration === 0n) return "Pending root activation";
-  const endSeconds = vestingStart + vestingDuration;
+function formatScheduleDate(vestingStart: bigint | undefined, offset: bigint, pendingLabel: string) {
+  if (vestingStart === undefined || offset === 0n) return pendingLabel;
+  const endSeconds = vestingStart + offset;
   return new Date(Number(endSeconds) * 1000).toLocaleDateString(undefined, {
     day: "numeric",
     month: "short",
@@ -40,6 +40,7 @@ export function LegacyClaimPage() {
   const {
     allocation,
     claim,
+    claimDuration,
     claimed,
     claimable,
     claimData,
@@ -67,6 +68,7 @@ export function LegacyClaimPage() {
           <p className="mt-3 max-w-2xl text-base leading-7 text-base-content/65">
             The 9M LREP legacy rail recognizes early contributors from the prior allocation snapshot. Eligible wallets
             can claim 1% immediately after root activation, then the remaining 99% unlocks linearly over 24 months.
+            Unclaimed balances expire after 27 months and can be swept to the treasury.
           </p>
         </div>
         <div className="shrink-0">
@@ -139,7 +141,8 @@ export function LegacyClaimPage() {
                 <div className="h-full rounded-full bg-primary" style={{ width: progressWidth }} />
               </div>
               <p className="mt-3 text-sm text-base-content/55">
-                Fully vested on {formatVestingDate(vestingStart, vestingDuration)}.
+                Fully vested on {formatScheduleDate(vestingStart, vestingDuration, "Pending root activation")}. Claim
+                window closes on {formatScheduleDate(vestingStart, claimDuration, "Pending root activation")}.
               </p>
             </div>
 

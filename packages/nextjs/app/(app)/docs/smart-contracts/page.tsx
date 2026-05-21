@@ -103,7 +103,7 @@ const SmartContracts: NextPage = () => {
               <td className="font-mono text-primary">LaunchDistributionPool</td>
               <td>
                 75M LREP launch distribution: 42M verified/referral, 24M anchor-gated earned rater rewards, and 9M
-                legacy contributor vesting
+                legacy contributor vesting with 27-month claim expiry
               </td>
               <td>No</td>
             </tr>
