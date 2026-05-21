@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { type Address, type Hex, isAddress } from "viem";
@@ -159,11 +159,16 @@ export function BrowserSigningPage({ intentId }: { intentId: string }) {
   const { address, chain } = useAccount();
   const { signTypedDataAsync, isPending: isSigningTypedData } = useSignTypedData();
   const { switchToChain, switchingChainId } = useRateLoopSwitchNetwork();
-  const token = useMemo(() => readToken(searchParams), [searchParams]);
   // WS-1 (2026-05-21 repo audit): the `token` is the bearer credential for this signing intent.
   // Leaving it in the URL leaks it through browser history, the Referer header on any
   // cross-origin navigation, server access logs, and any analytics script allowed by CSP.
-  // Strip the query string after the first read; the React state keeps the token in memory.
+  //
+  // Capture the token into stable component state on the first render *before* mutating the
+  // URL, so subsequent re-renders that would re-read `useSearchParams()` (which in App Router
+  // can resolve to the post-strip empty value) don't reset the in-memory copy that the
+  // prepare/complete API calls depend on. `useState(initialFn)` runs `initialFn` exactly once
+  // on mount and ignores future `searchParams` changes.
+  const [token] = useState(() => readToken(searchParams));
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (!window.location.search.includes("token=")) return;
