@@ -43,7 +43,7 @@ test.describe("Smoke tests", () => {
     await waitForWalletConnected(page);
     await waitForFeedLoaded(page, 30_000);
 
-    await page.locator('a[href="/?landing=1"]').first().click();
+    await page.locator('a[href="/?landing=1"]:visible').first().click();
 
     await expect(page.getByRole("heading", { name: /Level Up Your Agent/i }).first()).toBeVisible({
       timeout: 15_000,
