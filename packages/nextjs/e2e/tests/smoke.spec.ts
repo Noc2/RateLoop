@@ -10,6 +10,20 @@ import { setupWallet } from "../helpers/wallet-session";
 import { expect, test } from "@playwright/test";
 
 test.describe("Smoke tests", () => {
+  // E2E-1 (2026-05-21 testnet-readiness audit): pre-dismiss the TestnetNoticeBanner so it
+  // doesn't render above the landing-page heading. The banner reads localStorage; setting the
+  // dismissed flag before any page navigation removes the possibility that the banner masks the
+  // "Level Up Your Agent" heading on the navigate-back-to-landing test below.
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      try {
+        window.localStorage.setItem("rateloop:testnet-notice-dismissed", "true");
+      } catch {
+        // localStorage may be unavailable in some test contexts; the test still runs.
+      }
+    });
+  });
+
   test("landing page loads without wallet", async ({ page }) => {
     await page.goto("/");
     await expect(page).toHaveTitle(/RateLoop/i);

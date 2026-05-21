@@ -45,6 +45,22 @@ contract DeployRateLoop is ScaffoldETHDeploy {
     string internal constant DEFAULT_WORLD_ID_ACTION = "rateloop-human-credential-v1";
     string internal constant LOCAL_WORLD_ID_APP_ID = "app_staging_rateloop_local";
 
+    // DRAND-1 (2026-05-21 testnet-readiness audit): per-chain drand `(chainHash, genesisTime,
+    // period)` triples. `quicknet` (mainnet) and `quicknet-t` (testnet) are independent drand
+    // chains with different BLS G1 public keys — encrypting with one and validating against the
+    // other silently fails, so every chain must commit to its own values at deploy time.
+    // Mainnet values mirror `ProtocolConfig.MAINNET_DRAND_*` constants; duplicated here because
+    // they're referenced at deploy time before the contract is constructed. Source:
+    // https://docs.drand.love/blog/2023/10/16/quicknet-is-live/
+    bytes32 internal constant MAINNET_DRAND_CHAIN_HASH =
+        0x52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971;
+    uint64 internal constant MAINNET_DRAND_GENESIS_TIME = 1_692_803_367;
+    uint64 internal constant MAINNET_DRAND_PERIOD = 3;
+    bytes32 internal constant TESTNET_DRAND_CHAIN_HASH =
+        0xf3827d772c155f95a9fda8901ddd59591a082df5ac6efe3a479ddb1f5eeb202c;
+    uint64 internal constant TESTNET_DRAND_GENESIS_TIME = 1_689_232_296;
+    uint64 internal constant TESTNET_DRAND_PERIOD = 3;
+
     function _preBroadcastChecks() internal view override {
         if (block.chainid != 31337 && block.chainid != 480 && block.chainid != 4801) {
             revert UnsupportedWorldChain(block.chainid);
@@ -127,8 +143,19 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         );
         ContentRegistry registry = ContentRegistry(address(registryProxy));
 
+        // DRAND-1 (2026-05-21 testnet-readiness audit): use the drand-aware initializer so the
+        // testnet path (chainId 4801) explicitly commits to `quicknet-t` instead of silently
+        // inheriting the mainnet `quicknet` defaults. Mainnet (480) keeps the mainnet defaults.
+        // Local dev (31337) also uses mainnet defaults — the local Anvil chain doesn't actually
+        // validate drand signatures end-to-end, so the value is cosmetic there.
+        (bytes32 chainDrandHash, uint64 chainDrandGenesis, uint64 chainDrandPeriod) = _resolveDrandConfig();
         TransparentUpgradeableProxy protocolConfigProxy = new TransparentUpgradeableProxy(
-            address(protocolConfigImpl), governance, abi.encodeCall(ProtocolConfig.initialize, (deployer, governance))
+            address(protocolConfigImpl),
+            governance,
+            abi.encodeCall(
+                ProtocolConfig.initializeWithDrandConfig,
+                (deployer, governance, governance, chainDrandHash, chainDrandGenesis, chainDrandPeriod)
+            )
         );
         ProtocolConfig protocolConfig = ProtocolConfig(address(protocolConfigProxy));
 
@@ -158,6 +185,14 @@ contract DeployRateLoop is ScaffoldETHDeploy {
             localWorldIdRouter = new MockWorldIDRouter();
             worldIdRouterAddress = address(localWorldIdRouter);
             console.log("MockWorldIDRouter deployed at:", worldIdRouterAddress);
+        } else {
+            // WORLDID-1 (2026-05-21 testnet-readiness audit): assert the per-chain WorldID router
+            // constant is a real deployed contract. Catches the case where the address in
+            // `WORLD_CHAIN_MAINNET_WORLD_ID_ROUTER` / `_SEPOLIA_WORLD_ID_ROUTER` was typo'd, was
+            // wiped from the chain, or has not yet been deployed on a fresh testnet. The actual
+            // address values must still be verified against the live Address Book at
+            // https://docs.world.org/world-id/reference/address-book before each deploy.
+            require(worldIdRouterAddress.code.length > 0, "WorldID router has no code on this chain");
         }
         string memory worldIdAction = _resolveWorldIdAction();
         uint256 worldIdExternalNullifierHash = _resolveWorldIdExternalNullifierHash(isLocalDev, worldIdAction);
@@ -390,6 +425,17 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         if (block.chainid == 480) return WORLD_CHAIN_MAINNET_WORLD_ID_ROUTER;
         if (block.chainid == 4801) return WORLD_CHAIN_SEPOLIA_WORLD_ID_ROUTER;
         revert UnsupportedWorldChain(block.chainid);
+    }
+
+    /// @notice Per-chain drand `(chainHash, genesisTime, period)` resolver. Mainnet (480) and local dev
+    ///         (31337) use the mainnet `quicknet` defaults from ProtocolConfig; testnet (4801) commits to
+    ///         `quicknet-t`.
+    function _resolveDrandConfig() internal view returns (bytes32 chainHash, uint64 genesisTime, uint64 period) {
+        if (block.chainid == 4801) {
+            return (TESTNET_DRAND_CHAIN_HASH, TESTNET_DRAND_GENESIS_TIME, TESTNET_DRAND_PERIOD);
+        }
+        // chainId 480 (mainnet) and 31337 (local dev) use the same mainnet `quicknet` chain hash.
+        return (MAINNET_DRAND_CHAIN_HASH, MAINNET_DRAND_GENESIS_TIME, MAINNET_DRAND_PERIOD);
     }
 
     function _resolveWorldIdAction() internal view returns (string memory) {

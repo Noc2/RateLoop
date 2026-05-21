@@ -22,6 +22,15 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     uint256 public constant MIN_SUBMISSION_LREP_POOL_FLOOR = 1e6;
     uint256 public constant MIN_SUBMISSION_USDC_POOL_FLOOR = 1e6;
 
+    /// @notice drand `quicknet` (mainnet) chain hash. Used by the legacy `initialize` / `initializeWithTreasury`
+    ///         paths for back-compat with existing tests and mainnet (chainId 480) deployments.
+    /// @dev Testnet (e.g. World Chain Sepolia, chainId 4801) MUST use `initializeWithDrandConfig` with the
+    ///      testnet `quicknet-t` values; otherwise every tlock reveal validates against the wrong public key.
+    bytes32 public constant MAINNET_DRAND_CHAIN_HASH =
+        0x52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971;
+    uint64 public constant MAINNET_DRAND_GENESIS_TIME = 1_692_803_367;
+    uint64 public constant MAINNET_DRAND_PERIOD = 3;
+
     error InvalidAddress();
     error InvalidConfig();
 
@@ -108,15 +117,49 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         _disableInitializers();
     }
 
+    /// @notice Legacy initializer. Defaults drand config to mainnet `quicknet`. Suitable for the mainnet
+    ///         deploy (chainId 480) and for unit tests where the drand chain choice doesn't matter.
+    /// @dev Testnet / non-mainnet deploys MUST use `initializeWithDrandConfig` to provide testnet drand values,
+    ///      otherwise every reveal will fail signature validation against the wrong drand public key.
     function initialize(address admin, address governance) external initializer {
-        _initialize(admin, governance, governance);
+        _initialize(
+            admin, governance, governance, MAINNET_DRAND_CHAIN_HASH, MAINNET_DRAND_GENESIS_TIME, MAINNET_DRAND_PERIOD
+        );
     }
 
+    /// @notice Legacy initializer with explicit treasury. Same mainnet drand defaults as `initialize`.
     function initializeWithTreasury(address admin, address governance, address treasuryAuthority) external initializer {
-        _initialize(admin, governance, treasuryAuthority);
+        _initialize(
+            admin,
+            governance,
+            treasuryAuthority,
+            MAINNET_DRAND_CHAIN_HASH,
+            MAINNET_DRAND_GENESIS_TIME,
+            MAINNET_DRAND_PERIOD
+        );
     }
 
-    function _initialize(address admin, address governance, address treasuryAuthority) internal {
+    /// @notice Production-grade initializer: caller MUST pass per-chain drand config. Required for testnet
+    ///         (World Chain Sepolia uses drand `quicknet-t` with a different G1 public key and chain hash).
+    function initializeWithDrandConfig(
+        address admin,
+        address governance,
+        address treasuryAuthority,
+        bytes32 drandChainHash_,
+        uint64 drandGenesisTime_,
+        uint64 drandPeriod_
+    ) external initializer {
+        _initialize(admin, governance, treasuryAuthority, drandChainHash_, drandGenesisTime_, drandPeriod_);
+    }
+
+    function _initialize(
+        address admin,
+        address governance,
+        address treasuryAuthority,
+        bytes32 drandChainHash_,
+        uint64 drandGenesisTime_,
+        uint64 drandPeriod_
+    ) internal {
         if (admin == address(0)) revert InvalidAddress();
         if (governance == address(0)) revert InvalidAddress();
         if (treasuryAuthority == address(0)) revert InvalidAddress();
@@ -151,9 +194,19 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
             maxVoterCap: uint16(1_000)
         });
         revealGracePeriod = 60 minutes;
-        drandChainHash = 0x52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971;
-        drandGenesisTime = 1_692_803_367;
-        drandPeriod = 3;
+        // DRAND-1 (2026-05-21 testnet-readiness audit): drand config is now an explicit init
+        // parameter so testnet deploys MUST commit to the `quicknet-t` chain hash rather than
+        // silently falling back to mainnet `quicknet`. We reject zero values to catch a
+        // missing-argument mistake; the stricter `genesisTime > block.timestamp` and
+        // `period > minEpochDuration` checks live on `setDrandConfig` (post-init) so they fire
+        // against a real wall-clock and a populated `roundConfigBounds`, not against the
+        // unwarped foundry-test `block.timestamp = 1`.
+        if (drandChainHash_ == bytes32(0)) revert InvalidConfig();
+        if (drandGenesisTime_ == 0) revert InvalidConfig();
+        if (drandPeriod_ == 0) revert InvalidConfig();
+        drandChainHash = drandChainHash_;
+        drandGenesisTime = drandGenesisTime_;
+        drandPeriod = drandPeriod_;
         ratingConfig = RatingLib.RatingConfig({
             smoothingAlpha: 10e6,
             smoothingBeta: 10e6,

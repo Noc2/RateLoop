@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAccount } from "wagmi";
-import { useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
+import { useScaffoldReadContract, useScaffoldWriteContract, useTargetNetwork } from "~~/hooks/scaffold-eth";
 import type { LegacyClaimLookupResult } from "~~/lib/legacy-claim/lookup";
 
 async function fetchLegacyClaim(address: `0x${string}`): Promise<LegacyClaimLookupResult> {
@@ -15,13 +15,24 @@ async function fetchLegacyClaim(address: `0x${string}`): Promise<LegacyClaimLook
 }
 
 export function useLegacyClaim() {
-  const { address, isConnected } = useAccount();
+  const { address, chain, isConnected } = useAccount();
   const connectedAddress = address as `0x${string}` | undefined;
+  // CLAIM-3 (2026-05-21 testnet-readiness audit): if the wallet is on the wrong chain, the
+  // scaffold-eth read calls below return undefined silently and the UI stalls on "Loading…"
+  // with no actionable error. Detect the mismatch up-front and surface it as a typed flag so
+  // `LegacyClaimPage` can render a "switch network" prompt instead of an indefinite spinner.
+  const { targetNetwork } = useTargetNetwork();
+  const connectedChainId = chain?.id;
+  const isWrongChain = isConnected && connectedChainId !== undefined && connectedChainId !== targetNetwork.id;
 
   const claimQuery = useQuery({
     queryKey: ["legacy-claim", connectedAddress],
     queryFn: () => fetchLegacyClaim(connectedAddress as `0x${string}`),
-    enabled: !!connectedAddress,
+    // Don't fetch the manifest entry until the wallet is on the right network — the proof is
+    // chain-agnostic but the subsequent on-chain reads (`vested…`, `claimable…`) would silently
+    // return undefined and we'd commit to a spinner loop. Easier to surface the chain mismatch
+    // and re-enable the query once the user switches.
+    enabled: !!connectedAddress && !isWrongChain,
     staleTime: 30_000,
   });
 
@@ -109,6 +120,10 @@ export function useLegacyClaim() {
     isClaiming: isMining,
     isConnected,
     isLoading: claimQuery.isLoading,
+    // CLAIM-3: callers can render a "switch network" prompt when this is true.
+    isWrongChain,
+    expectedChainId: targetNetwork.id,
+    expectedChainName: targetNetwork.name,
     refetch: async () => {
       await claimQuery.refetch();
       await refetchOnChainState();

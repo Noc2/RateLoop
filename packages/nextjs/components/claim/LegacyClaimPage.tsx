@@ -45,9 +45,11 @@ export function LegacyClaimPage() {
     claimable,
     claimData,
     error,
+    expectedChainName,
     isClaiming,
     isConnected,
     isLoading,
+    isWrongChain,
     vested,
     vestingDuration,
     vestingStart,
@@ -88,7 +90,16 @@ export function LegacyClaimPage() {
         </section>
       )}
 
-      {isConnected && isLoading && (
+      {isConnected && isWrongChain && (
+        <section className="rounded-lg border border-warning/30 bg-warning/10 p-6">
+          <h2 className="text-xl font-semibold text-base-content">Switch network</h2>
+          <p className="mt-2 text-base leading-7 text-base-content/65">
+            Legacy claims are issued on {expectedChainName}. Switch your wallet to that network to see your allocation.
+          </p>
+        </section>
+      )}
+
+      {isConnected && !isWrongChain && isLoading && (
         <section className="rounded-lg border border-base-content/10 bg-base-200 p-6">
           <span className="loading loading-spinner loading-md" />
         </section>
