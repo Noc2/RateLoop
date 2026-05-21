@@ -129,6 +129,11 @@ jobs:
       - name: Generate Aderyn SARIF
         working-directory: packages/foundry
         run: aderyn . -o report.sarif
+      - name: Filter Aderyn note findings from SARIF
+        working-directory: packages/foundry
+        run: |
+          jq '(.runs[].results) |= map(select(.level != "note"))' report.sarif > report.filtered.sarif
+          mv report.filtered.sarif report.sarif
       - uses: github/codeql-action/upload-sarif@0d579ffd059c29b07949a3cce3983f0780820c98 # v4
         continue-on-error: true
         if: ${{ hashFiles('packages/foundry/report.sarif') != '' }}
