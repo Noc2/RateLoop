@@ -16,6 +16,13 @@ test("rejects invalid legacy claim addresses", () => {
   assert.equal(lookupLegacyClaim("not-an-address"), null);
 });
 
+test("rejects checksum-invalid mixed-case legacy claim addresses", () => {
+  const checksumInvalidAddress = "0x63Cada40E8AcF7A1d47229af5Be35b78b16035fa";
+
+  assert.equal(normalizeLegacyClaimAddress(checksumInvalidAddress), null);
+  assert.equal(lookupLegacyClaim(checksumInvalidAddress), null);
+});
+
 test("returns not_eligible for a syntactically-valid address absent from the manifest", () => {
   // Manifest is populated; the all-zero-but-beef address is not in it.
   const result = lookupLegacyClaim("0x000000000000000000000000000000000000bEEF");

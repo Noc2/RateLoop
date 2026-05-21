@@ -20,6 +20,16 @@ test("legacy claim route rejects invalid addresses", async () => {
   assert.deepEqual(await response.json(), { error: "Invalid address" });
 });
 
+test("legacy claim route rejects checksum-invalid mixed-case addresses", async () => {
+  const checksumInvalidAddress = "0x63Cada40E8AcF7A1d47229af5Be35b78b16035fa";
+  const response = await GET(makeRequest(`/api/legacy-claim/${checksumInvalidAddress}`), {
+    params: Promise.resolve({ address: checksumInvalidAddress }),
+  });
+
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), { error: "Invalid address" });
+});
+
 test("legacy claim route returns not_eligible for an address not in the manifest", async () => {
   // The all-zero-but-beef address is not in the populated manifest.
   const response = await GET(makeRequest("/api/legacy-claim/0x000000000000000000000000000000000000bEEF"), {
