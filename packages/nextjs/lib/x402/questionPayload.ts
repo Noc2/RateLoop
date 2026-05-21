@@ -456,11 +456,13 @@ function normalizeQuestion(
 
 /**
  * WS-4 (2026-05-21 repo audit): every legitimate top-level field accepted by
- * `parseX402QuestionRequest` AND the downstream signing-intents pipeline. The pipeline
- * persists the *entire* requestBody verbatim and later spreads it into the MCP tool call
- * (`signingIntents.ts:299-307`); reading only known fields here while persisting unknown ones
- * is a mass-assignment hazard for any field the MCP tool implementation reads. Adding new
- * top-level fields requires extending this set.
+ * `parseX402QuestionRequest` AND its known direct callers — `lib/agent/signingIntents.ts`
+ * (which persists the requestBody verbatim and spreads it into the MCP tool call) and the
+ * MCP tool flows in `lib/mcp/tools.ts` (`curyo_quote_question`, `curyo_ask_humans`, both
+ * managed and public variants). Reading only known fields here while persisting / forwarding
+ * unknown ones is a mass-assignment hazard for any field a downstream consumer reads.
+ *
+ * Adding a new top-level field requires extending this set explicitly.
  */
 const X402_QUESTION_TOP_LEVEL_FIELDS = new Set<string>([
   // Used by parseX402QuestionRequest itself
@@ -479,6 +481,15 @@ const X402_QUESTION_TOP_LEVEL_FIELDS = new Set<string>([
   "fundingMode",
   "walletAddress",
   "agentWalletAddress",
+  // Used by lib/mcp/tools.ts when the same args object is also handed to
+  // parseAskHumansMode / parseWebhookOptions / x402-authorization orchestration. Each of
+  // these has its own dedicated validator that runs after parseX402QuestionRequest; we keep
+  // them in the allowlist so the strict gate does not pre-empt those error messages.
+  "mode",
+  "webhookUrl",
+  "webhookSecret",
+  "webhookEvents",
+  "paymentAuthorization",
 ]);
 
 export function parseX402QuestionRequest(value: unknown, fallbackChainId?: number): X402QuestionPayload {
