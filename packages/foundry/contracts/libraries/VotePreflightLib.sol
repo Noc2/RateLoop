@@ -39,9 +39,27 @@ library VotePreflightLib {
         uint256 contentId
     ) external view returns (IRaterIdentityRegistry.ResolvedRater memory resolved) {
         resolved = resolveRater(identityRegistry, voter);
+        _validateContentAndNotSubmitter(registry, voter, contentId, resolved);
+    }
 
+    function validateRoundOpener(
+        IRaterIdentityRegistry identityRegistry,
+        ContentRegistry registry,
+        address opener,
+        uint256 contentId
+    ) external view {
+        IRaterIdentityRegistry.ResolvedRater memory resolved = resolveRater(identityRegistry, opener);
+        _validateContentAndNotSubmitter(registry, opener, contentId, resolved);
+    }
+
+    function _validateContentAndNotSubmitter(
+        ContentRegistry registry,
+        address actor,
+        uint256 contentId,
+        IRaterIdentityRegistry.ResolvedRater memory resolved
+    ) private view {
         (,, address rawSubmitter,,,,,,,) = registry.contents(contentId);
-        if (voter == rawSubmitter) revert SelfVote();
+        if (actor == rawSubmitter) revert SelfVote();
 
         if (resolved.holder == registry.getSubmitterIdentity(contentId)) revert SelfVote();
         bytes32 submitterIdentityKey = registry.contentSubmitterIdentityKey(contentId);

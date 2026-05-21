@@ -752,6 +752,8 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
     }
 
     function _commitTestVote(DirectTestCommitRequest memory request) internal returns (bytes32 commitKey) {
+        vm.prank(request.voter);
+        request.engine.openRound(request.contentId);
         TestCommitArtifacts memory artifacts = _buildTestCommitArtifacts(
             address(request.engine), request.voter, request.isUp, request.salt, request.contentId
         );
@@ -983,7 +985,7 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
         return _defaultTestCommitRoundId(contentId);
     }
 
-    function _defaultTestCommitRoundId(uint256) internal pure returns (uint256) {
+    function _defaultTestCommitRoundId(uint256) internal view virtual returns (uint256) {
         return 1;
     }
 

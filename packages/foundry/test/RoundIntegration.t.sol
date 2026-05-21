@@ -116,6 +116,11 @@ contract RoundIntegrationTest is VotingTestBase {
         );
     }
 
+    function _defaultTestCommitRoundId(uint256 contentId) internal view override returns (uint256) {
+        if (address(votingEngine) == address(0)) return 1;
+        return votingEngine.previewCommitRoundId(contentId);
+    }
+
     function setUp() public {
         // Set a predictable start time
         vm.warp(1000);
@@ -202,6 +207,12 @@ contract RoundIntegrationTest is VotingTestBase {
     // =========================================================================
 
     function _submitContent() internal returns (uint256 contentId) {
+        contentId = _submitContentWithoutOpeningRound();
+        vm.prank(voter1);
+        votingEngine.openRound(contentId);
+    }
+
+    function _submitContentWithoutOpeningRound() internal returns (uint256 contentId) {
         vm.startPrank(submitter);
         lrepToken.approve(address(registry), 10e6);
         _submitContentWithReservation(registry, "https://example.com/1", "test goal", "test goal", "test", 0);
@@ -217,11 +228,12 @@ contract RoundIntegrationTest is VotingTestBase {
         _submitContentWithReservation(registry, url, "test goal", "test goal", "test", 0);
         vm.stopPrank();
         contentId = n;
+        vm.prank(voter1);
+        votingEngine.openRound(contentId);
     }
 
     function _buildCommitPayload(bool isUp, bytes32 salt, address voter, uint256 contentId)
         internal
-        view
         returns (bytes32 ch, bytes memory ct, uint64 targetRound, bytes32 drandChainHash)
     {
         return _buildCommitPayloadWithPrediction(isUp, 5_000, salt, voter, contentId);
@@ -233,7 +245,9 @@ contract RoundIntegrationTest is VotingTestBase {
         bytes32 salt,
         address voter,
         uint256 contentId
-    ) internal view returns (bytes32 ch, bytes memory ct, uint64 targetRound, bytes32 drandChainHash) {
+    ) internal returns (bytes32 ch, bytes memory ct, uint64 targetRound, bytes32 drandChainHash) {
+        vm.prank(voter);
+        votingEngine.openRound(contentId);
         targetRound = _tlockCommitTargetRound(votingEngine, contentId);
         drandChainHash = _tlockDrandChainHash();
         ct = _testCiphertext(isUp, salt, contentId, targetRound, drandChainHash);
@@ -243,7 +257,7 @@ contract RoundIntegrationTest is VotingTestBase {
             salt,
             voter,
             contentId,
-            _defaultTestCommitRoundId(contentId),
+            votingEngine.previewCommitRoundId(contentId),
             _currentRatingReferenceBps(contentId),
             targetRound,
             drandChainHash,
@@ -589,7 +603,7 @@ contract RoundIntegrationTest is VotingTestBase {
     // =========================================================================
 
     function test_MultipleVoters_DownWins() public {
-        uint256 contentId = _submitContent();
+        uint256 contentId = _submitContentWithoutOpeningRound();
 
         address[] memory voters = new address[](3);
         voters[0] = voter1;
@@ -1209,23 +1223,7 @@ contract RoundIntegrationTest is VotingTestBase {
         // New commit after cooldown creates round 2
         vm.warp(block.timestamp + 25 hours);
         bytes32 salt2 = keccak256(abi.encodePacked(voter2, contentId, false, uint256(1)));
-        bytes32 ch2 = _commitHash(false, salt2, voter2, contentId);
-
-        vm.startPrank(voter2);
-        lrepToken.approve(address(votingEngine), STAKE);
-        uint256 cachedRoundContext26 =
-            _roundContext(votingEngine.previewCommitRoundId(contentId), _currentRatingReferenceBps(contentId));
-        votingEngine.commitVote(
-            contentId,
-            cachedRoundContext26,
-            _tlockCommitTargetRound(),
-            _tlockDrandChainHash(),
-            ch2,
-            _testCiphertext(false, salt2, contentId),
-            STAKE,
-            address(0)
-        );
-        vm.stopPrank();
+        _commitWithSalt(voter2, contentId, false, STAKE, salt2);
 
         assertEq(RoundEngineReadHelpers.activeRoundId(votingEngine, contentId), 2, "New round should be created");
     }
@@ -1620,23 +1618,7 @@ contract RoundIntegrationTest is VotingTestBase {
         // New commit after cooldown creates round 2
         vm.warp(block.timestamp + 25 hours);
         bytes32 salt = keccak256(abi.encodePacked(voter3, contentId, true, uint256(99)));
-        bytes32 ch = _commitHash(true, salt, voter3, contentId);
-
-        vm.startPrank(voter3);
-        lrepToken.approve(address(votingEngine), STAKE);
-        uint256 cachedRoundContext27 =
-            _roundContext(votingEngine.previewCommitRoundId(contentId), _currentRatingReferenceBps(contentId));
-        votingEngine.commitVote(
-            contentId,
-            cachedRoundContext27,
-            _tlockCommitTargetRound(),
-            _tlockDrandChainHash(),
-            ch,
-            _testCiphertext(true, salt, contentId),
-            STAKE,
-            address(0)
-        );
-        vm.stopPrank();
+        _commitWithSalt(voter3, contentId, true, STAKE, salt);
 
         assertEq(RoundEngineReadHelpers.activeRoundId(votingEngine, contentId), 2, "Round 2 should be created");
     }
@@ -1833,23 +1815,7 @@ contract RoundIntegrationTest is VotingTestBase {
         // New commit after cooldown creates round 2
         vm.warp(block.timestamp + 25 hours);
         bytes32 salt = keccak256(abi.encodePacked(voter4, contentId, false, uint256(99)));
-        bytes32 ch = _commitHash(false, salt, voter4, contentId);
-
-        vm.startPrank(voter4);
-        lrepToken.approve(address(votingEngine), STAKE);
-        uint256 cachedRoundContext32 =
-            _roundContext(votingEngine.previewCommitRoundId(contentId), _currentRatingReferenceBps(contentId));
-        votingEngine.commitVote(
-            contentId,
-            cachedRoundContext32,
-            _tlockCommitTargetRound(),
-            _tlockDrandChainHash(),
-            ch,
-            _testCiphertext(false, salt, contentId),
-            STAKE,
-            address(0)
-        );
-        vm.stopPrank();
+        _commitWithSalt(voter4, contentId, false, STAKE, salt);
 
         assertEq(RoundEngineReadHelpers.activeRoundId(votingEngine, contentId), 2, "Round 2 should be created");
     }
@@ -1916,7 +1882,8 @@ contract RoundIntegrationTest is VotingTestBase {
 
         // Try immediately — cooldown active (voter1 last voted < 24h ago)
         bytes32 salt = keccak256(abi.encodePacked(voter1, contentId, true, uint256(99)));
-        bytes32 ch = _commitHash(true, salt, voter1, contentId);
+        (bytes32 ch, bytes memory ct, uint64 targetRound, bytes32 drandChainHash) =
+            _buildCommitPayload(true, salt, voter1, contentId);
         uint16 referenceRatingBps = _currentRatingReferenceBps(contentId);
 
         vm.startPrank(voter1);
@@ -1926,10 +1893,10 @@ contract RoundIntegrationTest is VotingTestBase {
         votingEngine.commitVote(
             contentId,
             cachedRoundContext35,
-            _tlockCommitTargetRound(),
-            _tlockDrandChainHash(),
+            targetRound,
+            drandChainHash,
             ch,
-            _testCiphertext(true, salt, contentId),
+            ct,
             STAKE,
             address(0)
         );
@@ -1937,6 +1904,7 @@ contract RoundIntegrationTest is VotingTestBase {
 
         // After 25 hours — succeeds
         vm.warp(block.timestamp + 25 hours);
+        (ch, ct, targetRound, drandChainHash) = _buildCommitPayload(true, salt, voter1, contentId);
         vm.startPrank(voter1);
         lrepToken.approve(address(votingEngine), STAKE);
         uint256 cachedRoundContext36 =
@@ -1944,10 +1912,10 @@ contract RoundIntegrationTest is VotingTestBase {
         votingEngine.commitVote(
             contentId,
             cachedRoundContext36,
-            _tlockCommitTargetRound(),
-            _tlockDrandChainHash(),
+            targetRound,
+            drandChainHash,
             ch,
-            _testCiphertext(true, salt, contentId),
+            ct,
             STAKE,
             address(0)
         );
@@ -2054,7 +2022,7 @@ contract RoundIntegrationTest is VotingTestBase {
         protocolConfig.setSlashConfig(4_000, 1, 2 days, 1e6);
         vm.stopPrank();
 
-        uint256 contentId = _submitContent();
+        uint256 contentId = _submitContentWithoutOpeningRound();
         uint256 submitterBalanceBefore = lrepToken.balanceOf(submitter);
         uint256 treasuryBalanceBefore = lrepToken.balanceOf(treasury);
         RatingLib.SlashConfig memory slashConfig = registry.getSlashConfigForContent(contentId);

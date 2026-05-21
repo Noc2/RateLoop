@@ -208,6 +208,7 @@ contract RoundVotingEngine is
         bytes32 ciphertextHash,
         bytes ciphertext
     );
+    event RoundOpened(uint256 indexed contentId, uint256 indexed roundId, uint48 startTime);
     event RoundReferenceSnapshotted(uint256 indexed contentId, uint256 indexed roundId, uint16 roundReferenceRatingBps);
     event RoundConfigSnapshotted(
         uint256 indexed contentId,
@@ -347,6 +348,37 @@ contract RoundVotingEngine is
         );
     }
 
+    /// @notice Open the current rating round before preparing a blind vote.
+    /// @dev Commits no vote and records no stake; it only fixes the round start/config/drand
+    ///      snapshots so the caller can encrypt against deterministic commit timing.
+    function openRound(uint256 contentId)
+        external
+        nonReentrant
+        whenNotPaused
+        returns (
+            uint256 roundId,
+            uint48 startTime,
+            uint32 epochDuration,
+            uint32 maxDuration,
+            uint16 maxVoters,
+            uint16 roundReferenceRatingBps,
+            bytes32 drandChainHash,
+            uint64 drandGenesisTime,
+            uint64 drandPeriod
+        )
+    {
+        VotePreflightLib.validateRoundOpener(
+            IRaterIdentityRegistry(protocolConfig.raterRegistry()), registry, msg.sender, contentId
+        );
+        bool opened;
+        (roundId, opened) = _getOrCreateRound(contentId);
+        RoundLib.Round storage round = rounds[contentId][roundId];
+        RoundLib.RoundConfig memory roundCfg = _getRoundConfig(contentId, roundId);
+        if (!RoundLib.acceptsVotes(round, roundCfg.maxDuration) || round.thresholdReachedAt != 0) revert RoundNotOpen();
+        if (opened) emit RoundOpened(contentId, roundId, round.startTime);
+        return _roundOpenData(contentId, roundId, round, roundCfg);
+    }
+
     /// @notice Commit a blind vote on content. Direction is hidden via tlock encryption.
     /// @param contentId The content being voted on.
     /// @param roundContext Packed expected round ID and reference score: `(roundId << 16) | ratingBps`.
@@ -469,7 +501,8 @@ contract RoundVotingEngine is
 
         uint64 stakeAmount64 = stakeAmount.toUint64();
 
-        uint256 roundId = _getOrCreateRound(contentId);
+        uint256 roundId = currentRoundId[contentId];
+        if (roundId == 0) revert RoundNotOpen();
         uint256 expectedRoundId = roundContext >> 16;
         if (roundId != expectedRoundId) revert InvalidCommitHash();
         RoundLib.Round storage round = rounds[contentId][roundId];
@@ -732,8 +765,8 @@ contract RoundVotingEngine is
     }
 
     /// @dev Get or create the active round for a content item.
-    function _getOrCreateRound(uint256 contentId) internal returns (uint256) {
-        uint256 roundId = currentRoundId[contentId];
+    function _getOrCreateRound(uint256 contentId) internal returns (uint256 roundId, bool opened) {
+        roundId = currentRoundId[contentId];
         if (roundId > 0 && !RoundLib.isTerminal(rounds[contentId][roundId])) {
             RoundLib.Round storage round = rounds[contentId][roundId];
             RoundLib.RoundConfig memory roundCfg = _getRoundConfig(contentId, roundId);
@@ -742,7 +775,7 @@ contract RoundVotingEngine is
             } else if (_canFinalizeRevealFailedRound(contentId, roundId, round)) {
                 _markRoundRevealFailed(contentId, roundId, round);
             } else {
-                return roundId;
+                return (roundId, false);
             }
         }
 
@@ -767,7 +800,40 @@ contract RoundVotingEngine is
             contentId,
             roundId
         );
-        return roundId;
+        return (roundId, true);
+    }
+
+    function _roundOpenData(
+        uint256 contentId,
+        uint256 roundId,
+        RoundLib.Round storage round,
+        RoundLib.RoundConfig memory roundCfg
+    )
+        internal
+        view
+        returns (
+            uint256,
+            uint48,
+            uint32,
+            uint32,
+            uint16,
+            uint16,
+            bytes32,
+            uint64,
+            uint64
+        )
+    {
+        return (
+            roundId,
+            round.startTime,
+            roundCfg.epochDuration,
+            roundCfg.maxDuration,
+            roundCfg.maxVoters,
+            _getRoundReferenceRatingBps(contentId, roundId),
+            _getRoundDrandChainHash(contentId, roundId),
+            roundDrandGenesisTimeSnapshot[contentId][roundId],
+            roundDrandPeriodSnapshot[contentId][roundId]
+        );
     }
 
     function _markRoundRevealFailed(uint256 contentId, uint256 roundId, RoundLib.Round storage round) internal {
