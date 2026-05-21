@@ -1879,6 +1879,31 @@ export const RoundRewardDistributorAbi = [
   },
   {
     "type": "event",
+    "name": "RoundParticipationRewardOwed",
+    "inputs": [
+      {
+        "name": "contentId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "roundId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "owedAmount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "StrandedLrepSwept",
     "inputs": [
       {

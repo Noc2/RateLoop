@@ -169,6 +169,25 @@ export const RaterRegistryAbi = [
   },
   {
     "type": "function",
+    "name": "credentialScope",
+    "inputs": [
+      {
+        "name": "rater",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "delegateOf",
     "inputs": [
       {
@@ -502,6 +521,19 @@ export const RaterRegistryAbi = [
   },
   {
     "type": "function",
+    "name": "maxSeededCredentialTtl",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "pendingDelegateOf",
     "inputs": [
       {
@@ -666,6 +698,19 @@ export const RaterRegistryAbi = [
   },
   {
     "type": "function",
+    "name": "rotateCanonicalIdentityKey",
+    "inputs": [
+      {
+        "name": "rater",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "seedHumanCredential",
     "inputs": [
       {
@@ -700,6 +745,19 @@ export const RaterRegistryAbi = [
         "name": "delegate",
         "type": "address",
         "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setMaxSeededCredentialTtl",
+    "inputs": [
+      {
+        "name": "cap",
+        "type": "uint64",
+        "internalType": "uint64"
       }
     ],
     "outputs": [],
@@ -825,6 +883,56 @@ export const RaterRegistryAbi = [
       }
     ],
     "stateMutability": "pure"
+  },
+  {
+    "type": "event",
+    "name": "CanonicalHumanIdentityKeyCleared",
+    "inputs": [
+      {
+        "name": "rater",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "previousKey",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "CanonicalHumanIdentityKeyRotated",
+    "inputs": [
+      {
+        "name": "rater",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "previousKey",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "newKey",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "provider",
+        "type": "uint8",
+        "indexed": false,
+        "internalType": "enum RaterRegistry.HumanCredentialProvider"
+      }
+    ],
+    "anonymous": false
   },
   {
     "type": "event",
@@ -972,6 +1080,31 @@ export const RaterRegistryAbi = [
         "type": "uint8",
         "indexed": true,
         "internalType": "enum RaterRegistry.HumanCredentialProvider"
+      },
+      {
+        "name": "prevOwner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "MaxSeededCredentialTtlUpdated",
+    "inputs": [
+      {
+        "name": "previousCap",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
+      },
+      {
+        "name": "newCap",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
       }
     ],
     "anonymous": false

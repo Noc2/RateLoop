@@ -611,6 +611,19 @@ export const RoundVotingEngineAbi = [
   },
   {
     "type": "function",
+    "name": "flushPendingTreasuryForfeit",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "paid",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "frontendEligibleAtCommit",
     "inputs": [
       {
@@ -2379,6 +2392,25 @@ export const RoundVotingEngineAbi = [
   },
   {
     "type": "event",
+    "name": "PendingTreasuryForfeitFlushed",
+    "inputs": [
+      {
+        "name": "treasury",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "RbtsRewardsScored",
     "inputs": [
       {
@@ -3011,6 +3043,11 @@ export const RoundVotingEngineAbi = [
   {
     "type": "error",
     "name": "NothingProcessed",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "RbtsSeedRefreshCapped",
     "inputs": []
   },
   {

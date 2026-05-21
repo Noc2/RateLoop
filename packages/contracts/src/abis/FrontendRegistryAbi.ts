@@ -607,6 +607,19 @@ export const FrontendRegistryAbi = [
   },
   {
     "type": "function",
+    "name": "setConfiscationRecipient",
+    "inputs": [
+      {
+        "name": "newRecipient",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "setVotingEngine",
     "inputs": [
       {
@@ -698,6 +711,25 @@ export const FrontendRegistryAbi = [
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "event",
+    "name": "ConfiscationRecipientUpdated",
+    "inputs": [
+      {
+        "name": "previous",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "current",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
   },
   {
     "type": "event",
