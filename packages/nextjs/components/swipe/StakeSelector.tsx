@@ -43,7 +43,7 @@ const YOUR_VOTE_TOOLTIP =
 const EXPECTED_CROWD_TOOLTIP =
   "Your forecast of what share of revealed raters will choose thumbs up this round. This forecast helps determine rewards; it is separate from your own thumbs up/down vote.";
 const ACCURACY_BASED_REWARDS_TOOLTIP =
-  "Calculated after reveal and settlement. Accurate revealed votes can qualify for available launch rewards, USDC bounties, or feedback bonuses.";
+  "Calculated after reveal and settlement. Early eligible raters can qualify for up to 2.5 LREP unverified or 10 LREP verified; later cohorts step down. Final payout depends on accuracy, launch-credit eligibility, and finalized snapshots.";
 const OPEN_PHASE_REWARDS_TOOLTIP =
   "After the private epoch, estimates use the currently revealed stake pools. Final returns may change as more voters reveal or unrevealed votes are cleaned up.";
 const metricLabelClassName =
@@ -51,10 +51,15 @@ const metricLabelClassName =
 const metricValueClassName = "mt-1 text-2xl font-bold tabular-nums text-base-content";
 const metricUnitClassName = "ml-1 text-sm font-semibold text-base-content/55";
 
-function AccuracyBasedRewardLabel() {
+export function getLaunchRewardEstimateLabel(stakeAmount: number, symbol = "LREP") {
+  if (!Number.isFinite(stakeAmount) || stakeAmount < MIN_COUNTED_STAKE_AMOUNT) return "Accuracy based";
+  return `Est. cap 2.5-10 ${symbol}`;
+}
+
+function AccuracyBasedRewardLabel({ estimateLabel }: { estimateLabel: string }) {
   return (
     <span className="inline-flex items-center justify-end gap-1.5 text-right font-semibold tabular-nums">
-      <span>Accuracy based</span>
+      <span>{estimateLabel}</span>
       <InfoTooltip text={ACCURACY_BASED_REWARDS_TOOLTIP} position="top" className="[&>svg]:h-3.5 [&>svg]:w-3.5" />
     </span>
   );
@@ -212,6 +217,7 @@ export function StakeSelector({
   const weightPercent = Math.round(
     (effectiveIsBlind ? EPOCH_WEIGHT_BPS.blind : EPOCH_WEIGHT_BPS.informed) / 100,
   ).toLocaleString();
+  const launchRewardEstimateLabel = getLaunchRewardEstimateLabel(amount, symbol);
   const openPhaseGrossReturnMicro = voteEstimate.estimatedGrossReturnMicro;
   const openPhaseBelowMeanFloorMicro = voteEstimate.belowMeanFloorMicro;
 
@@ -403,13 +409,13 @@ export function StakeSelector({
                   amount === 0 ? (
                     <div className="flex items-center justify-between gap-3">
                       <span>Starter rewards</span>
-                      <AccuracyBasedRewardLabel />
+                      <AccuracyBasedRewardLabel estimateLabel={launchRewardEstimateLabel} />
                     </div>
                   ) : (
                     <>
                       <div className="flex items-center justify-between gap-3">
                         <span>Launch rewards</span>
-                        <AccuracyBasedRewardLabel />
+                        <AccuracyBasedRewardLabel estimateLabel={launchRewardEstimateLabel} />
                       </div>
                       <div className="flex items-center justify-between gap-3">
                         <span>Reward weight</span>
