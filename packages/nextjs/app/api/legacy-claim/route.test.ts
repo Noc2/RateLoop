@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
-import { GET } from "./[address]/route";
 import { legacyClaimManifest } from "../../../lib/legacy-claim/manifest";
+import { GET } from "./[address]/route";
 import assert from "node:assert/strict";
 import test from "node:test";
 

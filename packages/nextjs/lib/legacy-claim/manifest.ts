@@ -31,88 +31,88 @@ export const legacyClaimManifest: LegacyClaimManifest = {
   allocationTotal: "9000000000000",
   generatedAt: "2026-05-21T11:38:29.123Z",
   entries: [
-  {
-    address: "0x63cada40E8AcF7A1d47229af5Be35b78b16035fa",
-    allocation: "2250000000000",
-    proof: [
-      "0x17074ffb2b9fc8435fad25ac59317bf679e5dbbb4538d33a86abab00ebd6383a",
-      "0xcda10c17963ad495281ae46b28014b3b0eccf4232a73fa632c13a65c38a5e183",
-      "0x80c7ff3284628641d8348aa57c08f5315d0ea86f962830300434ae2cb97bf078",
-      "0xc2091c9a424462aecb222ca9b04f08263f91ea06164ca88d9cdf0c1058b3eb48",
-    ],
-  },
-  {
-    address: "0x7c6425827BB8d848808cbb8fe2bd55Fd2f2Fa41A",
-    allocation: "964285714286",
-    proof: [
-      "0x3cdca4b6dc9542c7b41a056470616d6a19e424bc4394da63a6fa263d005e1372",
-      "0x5c322548fd75beda3c65e552fb772a584db4fc913464368870e29583955add7e",
-      "0xf14411e532c3473d59c3db4d2d36c1f17df230c09ee4fedf8e553634da3c6a2c",
-    ],
-  },
-  {
-    address: "0xc1CD80C7cD37b5499560C362b164cbA1CfF71b44",
-    allocation: "964285714286",
-    proof: [
-      "0x3527533416546e30d121aa334475ce9ba5b86276983ef5ae1415c56dd267f38d",
-      "0x0a5b0a9eb24645ac6e0d3b4414ffa835c216b35ea723f7ea361eae0146209bcd",
-      "0xf14411e532c3473d59c3db4d2d36c1f17df230c09ee4fedf8e553634da3c6a2c",
-    ],
-  },
-  {
-    address: "0x455eE797cEa79A936bA8E8ed888E0B20ca1A1BA3",
-    allocation: "642857142857",
-    proof: [
-      "0x8161a547e4c6d33664fa6fba98df98fe1a47c51bd6951b60322b1a3f29eddf2b",
-      "0x1b3a0e3e623bdfc6df12e0d0c499245d5d5f3fa9022f9a78133f1bb836b859bc",
-      "0xc2091c9a424462aecb222ca9b04f08263f91ea06164ca88d9cdf0c1058b3eb48",
-    ],
-  },
-  {
-    address: "0x5A5148e7963C732e4C0991726793A726ce28046A",
-    allocation: "964285714286",
-    proof: [
-      "0x08656098beb8814c688a3b4dbfdbdb4c1763a4ed72d248b45a39b893e7b9c780",
-      "0xcda10c17963ad495281ae46b28014b3b0eccf4232a73fa632c13a65c38a5e183",
-      "0x80c7ff3284628641d8348aa57c08f5315d0ea86f962830300434ae2cb97bf078",
-      "0xc2091c9a424462aecb222ca9b04f08263f91ea06164ca88d9cdf0c1058b3eb48",
-    ],
-  },
-  {
-    address: "0x3ea207780415e2ab68b97eB3b02AdDD70020ac4c",
-    allocation: "642857142857",
-    proof: [
-      "0x2f238014fef7e584be00a80336017814c9eb65a42a8a090bf059fb104e00bf2f",
-      "0x0a5b0a9eb24645ac6e0d3b4414ffa835c216b35ea723f7ea361eae0146209bcd",
-      "0xf14411e532c3473d59c3db4d2d36c1f17df230c09ee4fedf8e553634da3c6a2c",
-    ],
-  },
-  {
-    address: "0xE6722D1FDcA78552eAE5EA12eA3A8B7D6EeC7AA8",
-    allocation: "964285714286",
-    proof: [
-      "0xc786c058f8b276c1f40f0e51276589eee58c23c3f0598863b01bd79d55a57e2b",
-      "0x1b3a0e3e623bdfc6df12e0d0c499245d5d5f3fa9022f9a78133f1bb836b859bc",
-      "0xc2091c9a424462aecb222ca9b04f08263f91ea06164ca88d9cdf0c1058b3eb48",
-    ],
-  },
-  {
-    address: "0x74cC77FDA426225470351f93c6ce4382b4b51Aa8",
-    allocation: "964285714285",
-    proof: [
-      "0xcd8c1b1ac65fdf8c91ec3bcdd02bd0f713ac5663053adfcaafa48afd2361f5b8",
-      "0x80c7ff3284628641d8348aa57c08f5315d0ea86f962830300434ae2cb97bf078",
-      "0xc2091c9a424462aecb222ca9b04f08263f91ea06164ca88d9cdf0c1058b3eb48",
-    ],
-  },
-  {
-    address: "0x4b98406f108D1A19dbbBe22216D432A5b1a5E22b",
-    allocation: "642857142857",
-    proof: [
-      "0x4be07822085519597ca43c96f84cbd962cd250015d1b17becf878b6ed9672cc8",
-      "0x5c322548fd75beda3c65e552fb772a584db4fc913464368870e29583955add7e",
-      "0xf14411e532c3473d59c3db4d2d36c1f17df230c09ee4fedf8e553634da3c6a2c",
-    ],
-  },
+    {
+      address: "0x63cada40E8AcF7A1d47229af5Be35b78b16035fa",
+      allocation: "2250000000000",
+      proof: [
+        "0x17074ffb2b9fc8435fad25ac59317bf679e5dbbb4538d33a86abab00ebd6383a",
+        "0xcda10c17963ad495281ae46b28014b3b0eccf4232a73fa632c13a65c38a5e183",
+        "0x80c7ff3284628641d8348aa57c08f5315d0ea86f962830300434ae2cb97bf078",
+        "0xc2091c9a424462aecb222ca9b04f08263f91ea06164ca88d9cdf0c1058b3eb48",
+      ],
+    },
+    {
+      address: "0x7c6425827BB8d848808cbb8fe2bd55Fd2f2Fa41A",
+      allocation: "964285714286",
+      proof: [
+        "0x3cdca4b6dc9542c7b41a056470616d6a19e424bc4394da63a6fa263d005e1372",
+        "0x5c322548fd75beda3c65e552fb772a584db4fc913464368870e29583955add7e",
+        "0xf14411e532c3473d59c3db4d2d36c1f17df230c09ee4fedf8e553634da3c6a2c",
+      ],
+    },
+    {
+      address: "0xc1CD80C7cD37b5499560C362b164cbA1CfF71b44",
+      allocation: "964285714286",
+      proof: [
+        "0x3527533416546e30d121aa334475ce9ba5b86276983ef5ae1415c56dd267f38d",
+        "0x0a5b0a9eb24645ac6e0d3b4414ffa835c216b35ea723f7ea361eae0146209bcd",
+        "0xf14411e532c3473d59c3db4d2d36c1f17df230c09ee4fedf8e553634da3c6a2c",
+      ],
+    },
+    {
+      address: "0x455eE797cEa79A936bA8E8ed888E0B20ca1A1BA3",
+      allocation: "642857142857",
+      proof: [
+        "0x8161a547e4c6d33664fa6fba98df98fe1a47c51bd6951b60322b1a3f29eddf2b",
+        "0x1b3a0e3e623bdfc6df12e0d0c499245d5d5f3fa9022f9a78133f1bb836b859bc",
+        "0xc2091c9a424462aecb222ca9b04f08263f91ea06164ca88d9cdf0c1058b3eb48",
+      ],
+    },
+    {
+      address: "0x5A5148e7963C732e4C0991726793A726ce28046A",
+      allocation: "964285714286",
+      proof: [
+        "0x08656098beb8814c688a3b4dbfdbdb4c1763a4ed72d248b45a39b893e7b9c780",
+        "0xcda10c17963ad495281ae46b28014b3b0eccf4232a73fa632c13a65c38a5e183",
+        "0x80c7ff3284628641d8348aa57c08f5315d0ea86f962830300434ae2cb97bf078",
+        "0xc2091c9a424462aecb222ca9b04f08263f91ea06164ca88d9cdf0c1058b3eb48",
+      ],
+    },
+    {
+      address: "0x3ea207780415e2ab68b97eB3b02AdDD70020ac4c",
+      allocation: "642857142857",
+      proof: [
+        "0x2f238014fef7e584be00a80336017814c9eb65a42a8a090bf059fb104e00bf2f",
+        "0x0a5b0a9eb24645ac6e0d3b4414ffa835c216b35ea723f7ea361eae0146209bcd",
+        "0xf14411e532c3473d59c3db4d2d36c1f17df230c09ee4fedf8e553634da3c6a2c",
+      ],
+    },
+    {
+      address: "0xE6722D1FDcA78552eAE5EA12eA3A8B7D6EeC7AA8",
+      allocation: "964285714286",
+      proof: [
+        "0xc786c058f8b276c1f40f0e51276589eee58c23c3f0598863b01bd79d55a57e2b",
+        "0x1b3a0e3e623bdfc6df12e0d0c499245d5d5f3fa9022f9a78133f1bb836b859bc",
+        "0xc2091c9a424462aecb222ca9b04f08263f91ea06164ca88d9cdf0c1058b3eb48",
+      ],
+    },
+    {
+      address: "0x74cC77FDA426225470351f93c6ce4382b4b51Aa8",
+      allocation: "964285714285",
+      proof: [
+        "0xcd8c1b1ac65fdf8c91ec3bcdd02bd0f713ac5663053adfcaafa48afd2361f5b8",
+        "0x80c7ff3284628641d8348aa57c08f5315d0ea86f962830300434ae2cb97bf078",
+        "0xc2091c9a424462aecb222ca9b04f08263f91ea06164ca88d9cdf0c1058b3eb48",
+      ],
+    },
+    {
+      address: "0x4b98406f108D1A19dbbBe22216D432A5b1a5E22b",
+      allocation: "642857142857",
+      proof: [
+        "0x4be07822085519597ca43c96f84cbd962cd250015d1b17becf878b6ed9672cc8",
+        "0x5c322548fd75beda3c65e552fb772a584db4fc913464368870e29583955add7e",
+        "0xf14411e532c3473d59c3db4d2d36c1f17df230c09ee4fedf8e553634da3c6a2c",
+      ],
+    },
   ],
 };

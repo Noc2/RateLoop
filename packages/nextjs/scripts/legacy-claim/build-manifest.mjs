@@ -27,11 +27,10 @@
 //
 // The output is deterministic given a fixed snapshot input. Commit both the snapshot and the
 // generated manifest so reviewers can re-derive the merkle root.
-
 import { readFileSync, writeFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
-import { encodeAbiParameters, getAddress, keccak256, concat } from "viem";
+import { fileURLToPath } from "node:url";
+import { concat, encodeAbiParameters, getAddress, keccak256 } from "viem";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SNAPSHOT_PATH = resolve(__dirname, "snapshot.json");
@@ -84,13 +83,7 @@ function allocate(pool, totalWeight, claims) {
 /** Matches `LaunchDistributionPool._legacyContributorLeaf`. */
 function leafHash(account, allocation) {
   const inner = keccak256(
-    encodeAbiParameters(
-      [
-        { type: "address" },
-        { type: "uint256" },
-      ],
-      [getAddress(account), allocation],
-    ),
+    encodeAbiParameters([{ type: "address" }, { type: "uint256" }], [getAddress(account), allocation]),
   );
   return keccak256(inner);
 }

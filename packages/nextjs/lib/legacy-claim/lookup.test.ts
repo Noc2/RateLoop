@@ -1,8 +1,8 @@
 import { lookupLegacyClaim, normalizeLegacyClaimAddress } from "./lookup";
 import { legacyClaimManifest } from "./manifest";
-import { concat, encodeAbiParameters, getAddress, keccak256 } from "viem";
 import assert from "node:assert/strict";
 import test from "node:test";
+import { concat, encodeAbiParameters, getAddress, keccak256 } from "viem";
 
 test("normalizes valid legacy claim addresses", () => {
   assert.equal(
@@ -63,10 +63,10 @@ test("every manifest entry's leaf hashes back to the merkle root via its proof",
 
   for (const entry of legacyClaimManifest.entries) {
     const inner = keccak256(
-      encodeAbiParameters([{ type: "address" }, { type: "uint256" }], [
-        getAddress(entry.address),
-        BigInt(entry.allocation),
-      ]),
+      encodeAbiParameters(
+        [{ type: "address" }, { type: "uint256" }],
+        [getAddress(entry.address), BigInt(entry.allocation)],
+      ),
     );
     let cursor: `0x${string}` = keccak256(inner);
     for (const sibling of entry.proof) {
