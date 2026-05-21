@@ -33,7 +33,7 @@ export function TestnetNoticeBanner() {
   return (
     <div className="border-b border-white/10 bg-black px-4 py-2.5 text-base-content shadow-[0_12px_32px_rgba(0,0,0,0.22)] sm:px-6">
       <div className="mx-auto flex max-w-6xl items-start gap-3 xl:max-w-none">
-        <ExclamationTriangleIcon className="mt-0.5 h-5 w-5 shrink-0 text-base-content/80" aria-hidden="true" />
+        <ExclamationTriangleIcon className="mt-0.5 h-5 w-5 shrink-0 text-red-500" aria-hidden="true" />
         <p className="min-w-0 flex-1 text-sm font-medium leading-5 text-base-content">
           RateLoop smart contracts are deployed on World Chain Sepolia testnet only. RateLoop is not live yet and under
           active development. Feel free to contribute:{" "}
