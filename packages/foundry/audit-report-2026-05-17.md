@@ -228,7 +228,7 @@ Patterns flagged as **tangentially applicable** were also reviewed; none surface
 
 All paths relative to `packages/foundry/contracts/`:
 
-**Funds flow:** `QuestionRewardPoolEscrow.sol`, `FeedbackBonusEscrow.sol`, `ParticipationPool.sol`, `LaunchDistributionPool.sol`, `RoundRewardDistributor.sol`, `libraries/QuestionRewardPoolEscrow*Lib.sol` (8 files), `libraries/RoundSettlement*Lib.sol`, `libraries/TokenTransferLib.sol`, `libraries/FrontendFee*Lib.sol`, `libraries/RewardMath.sol`, `libraries/LaunchRaterRewardLib.sol`.
+**Funds flow:** `QuestionRewardPoolEscrow.sol`, `FeedbackBonusEscrow.sol`, `LaunchDistributionPool.sol`, `RoundRewardDistributor.sol`, `libraries/QuestionRewardPoolEscrow*Lib.sol` (8 files), `libraries/RoundSettlement*Lib.sol`, `libraries/TokenTransferLib.sol`, `libraries/FrontendFee*Lib.sol`, `libraries/RewardMath.sol`, `libraries/LaunchRaterRewardLib.sol`.
 
 **Voting:** `RoundVotingEngine.sol`, `AdvisoryVoteRecorder.sol`, `libraries/RoundLib.sol`, `libraries/VotePreflightLib.sol`, `libraries/TlockVoteLib.sol`, `libraries/RoundRevealLib.sol`, `libraries/RoundCleanupLib.sol`, `libraries/RatingLib.sol`, `libraries/RatingMath.sol`, `libraries/RobustBtsMath.sol`.
 

@@ -106,7 +106,7 @@ Snapshot accounting writes `reservedFrontendFee` *before* the transfer. When `tr
 
 ### Funds flow
 
-- **L-Funds-1** — No surplus-rescue on `QuestionRewardPoolEscrow` / `FeedbackBonusEscrow`. Direct ERC-20 donations are stranded forever. Add `recoverSurplus*` matching the patterns already in `RoundVotingEngine`, `RoundRewardDistributor`, `ParticipationPool`, `LaunchDistributionPool`.
+- **L-Funds-1** — No surplus-rescue on `QuestionRewardPoolEscrow` / `FeedbackBonusEscrow`. Direct ERC-20 donations are stranded forever. Add `recoverSurplus*` matching the patterns already in `RoundVotingEngine`, `RoundRewardDistributor`, and `LaunchDistributionPool`.
 - **L-Funds-2** — `FeedbackBonusEscrow.forfeitExpiredFeedbackBonus` reverts hard when `treasury == address(0)` with no funder fallback. Defense-in-depth gap; treasury is operationally always set.
 - **L-Funds-3** — `bundleQuestionRecordedRounds` slot not cleared on `resetRoundSet`; the `&lt;= prev` predicate in `_recordBundleQuestionTerminal` makes the invariant fragile under future refactors.
 
@@ -147,7 +147,6 @@ Snapshot accounting writes `reservedFrontendFee` *before* the transfer. When `tr
 - **I-Funds-1** — USDC blocklist of a single voter forfeits their reward to the funder via the refund path; no per-claimant redirect mechanism (same on bundle path).
 - **I-Funds-2** — Bundle `_qualifyBundleRoundSet` reset path is currently dead code, but assumes `contentRoundConfig.maxVoters` is immutable. A future `setMaxVoters` would create a permanent stuck state.
 - **I-Funds-3** — `LaunchDistributionPool` pending credits pin to the oracle address at record time. Oracle replacement permanently locks the credit; idempotency flags prevent re-record.
-- **I-Funds-4** — `claimParticipationReward` accumulates against the distributor's global `reservedRewards` bucket in `ParticipationPool` — invariant holds today but is implicit.
 - **I-Funds-5** — Bundle `_isBundleExcludedVoter` mixes snapshot-time and current-time submitter identity; a content-owner change between qualification and claim can shrink the eligible-claimant set.
 
 ### Voting
@@ -219,7 +218,7 @@ A non-exhaustive list of areas the agents specifically validated and found no is
 
 All paths relative to `packages/foundry/contracts/`:
 
-**Funds flow:** `QuestionRewardPoolEscrow.sol`, `FeedbackBonusEscrow.sol`, `ParticipationPool.sol`, `LaunchDistributionPool.sol`, `RoundRewardDistributor.sol`, `libraries/QuestionRewardPoolEscrow*Lib.sol` (8 files), `libraries/RoundSettlement*Lib.sol` (2 files), `libraries/TokenTransferLib.sol`, `libraries/FrontendFee*Lib.sol` (2 files), `libraries/RewardMath.sol`, `libraries/LaunchRaterRewardLib.sol`.
+**Funds flow:** `QuestionRewardPoolEscrow.sol`, `FeedbackBonusEscrow.sol`, `LaunchDistributionPool.sol`, `RoundRewardDistributor.sol`, `libraries/QuestionRewardPoolEscrow*Lib.sol` (8 files), `libraries/RoundSettlement*Lib.sol` (2 files), `libraries/TokenTransferLib.sol`, `libraries/FrontendFee*Lib.sol` (2 files), `libraries/RewardMath.sol`, `libraries/LaunchRaterRewardLib.sol`.
 
 **Voting:** `RoundVotingEngine.sol`, `AdvisoryVoteRecorder.sol`, `libraries/RoundLib.sol`, `libraries/VotePreflightLib.sol`, `libraries/TlockVoteLib.sol`, `libraries/RoundRevealLib.sol`, `libraries/RoundCleanupLib.sol`, `libraries/RatingLib.sol`, `libraries/RatingMath.sol`, `libraries/RobustBtsMath.sol`.
 

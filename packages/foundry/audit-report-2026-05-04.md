@@ -18,7 +18,7 @@ This report focuses on **new findings** that were not caught by prior automated 
 | High | 0 | — |
 | Medium | 0 | — |
 | Low | 0 | — |
-| Informational | 3 | I-1: Governor proposal edge-case (intentional); I-2: Slither reentrancy false positives; I-3: Negligible rounding in participation reward math |
+| Informational | 3 | I-1: Governor proposal edge-case (intentional); I-2: Slither reentrancy false positives; I-3: Negligible rounding in legacy reward math |
 
 **Fix applied:** `recoverSurplusHrep()` now carries `nonReentrant` for consistency with the rest of the engine surface.
 
@@ -60,7 +60,7 @@ The `_requireBundleFundingCoversMaxCompleters` function is a secondary defense-i
 As described in the M-1 reclassification above, a proposer whose current balance dropped below `proposalThreshold()` after the snapshot block will see their `propose()` revert at `lockForGovernance`. This is expected behavior that preserves the commitment mechanism.
 
 ### I-2: Slither Reentrancy Findings Are False Positives
-**Location:** Slither output: `RoundRewardDistributor.claimParticipationReward`, `finalizeParticipationRewards`, `_syncParticipationRewardSnapshot`; `HumanFaucet.customVerificationHook`; `RoundVotingEngine._getOrCreateRound`, `_commitVote`.
+**Location:** Slither output: legacy reward-claim helpers; `HumanFaucet.customVerificationHook`; `RoundVotingEngine._getOrCreateRound`, `_commitVote`.
 
 In all flagged cases:
 - The external-entry functions carry `nonReentrant` (via OpenZeppelin `ReentrancyGuardTransient`).

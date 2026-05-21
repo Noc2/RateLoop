@@ -63,7 +63,6 @@ contracts/
 ├── FrontendRegistry.sol         # Frontend operator fee tracking
 ├── RaterRegistry.sol            # Rater profiles, delegation, and human identity resolution
 ├── LoopReputation.sol           # LREP token (governance and reputation)
-├── ParticipationPool.sol        # Optional governance-funded participation rewards
 ├── LaunchDistributionPool.sol   # Anchor-gated earned rater rewards with verified full-cap unlocks, plus verification, referral, and legacy rewards
 ├── ClusterPayoutOracle.sol      # Governance-managed challengeable roots proposed by bonded frontend operators
 ├── QuestionRewardPoolEscrow.sol     # Bounty custody and claims

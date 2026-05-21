@@ -543,10 +543,8 @@ design:
   - tlock commit-reveal, HREP staking, voter ID gating, cooldowns, epoch
     weighting, binary settlement, and reward accounting.
 - `packages/foundry/contracts/RoundRewardDistributor.sol`
-  - Winner reward claims, loser rebates, participation reward claims, frontend
-    fees, and SBT-holder reward routing.
-- `packages/foundry/contracts/ParticipationPool.sol`
-  - HREP bootstrap participation rewards with halving tiers.
+  - Winner reward claims, loser rebates, frontend fees, and SBT-holder reward
+    routing.
 - `packages/foundry/contracts/governance/RateLoopGovernor.sol`
   - HREP-based OpenZeppelin Governor, dynamic quorum, self-delegation, and
     governance locks.
@@ -941,12 +939,11 @@ voting engine. In the new model:
 - "loser rebate" becomes "prediction-error burn rate" or "stake unlock rate";
 - non-reveal penalties can burn more and/or apply cooldown.
 
-### Rework `ParticipationPool.sol`
+### Consolidate Launch Rewards
 
-`ParticipationPool.sol` is no longer a funded launch allocation. The former
-12M bootstrap bucket and former 4M consensus reserve are folded into the Launch
-Distribution Pool: 35M LREP funds verified + referral rewards, and 33M LREP
-funds earned rater rewards. Earned rater rewards now route through
+The former bootstrap bucket and former consensus reserve are folded into the
+Launch Distribution Pool: 35M LREP funds verified + referral rewards, and 33M
+LREP funds earned rater rewards. Earned rater rewards now route through
 `LaunchDistributionPool` and `RoundRewardDistributor`.
 
 The strongest follow-on option remains a bounded `ReputationEmissionController`:

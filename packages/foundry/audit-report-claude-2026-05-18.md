@@ -193,7 +193,7 @@ A non-exhaustive list of areas re-verified on this pass. Findings already covere
 - L-Oracle-1 `recoverRejectedSnapshotRound` (`:857-892`) — guards `!_snapshotHasPaidClaim`, requires root in `rejectedRoundPayoutSnapshotRoots`, returns allocation, decrements `qualifiedRounds`, deletes slot.
 - `_settleClaimPayout` frontend-redirect: when frontend transfer fails or `frontendFee = 0`, amount absorbed into voter share; `redirectedFrontendFee` is reported back; caller decrements both `frontendFeeClaimedAmount` and `frontendFeeAllocation` in lockstep. Solvency invariant holds.
 - `_nextWeightedShare` final-claimant terminal branch returns `totalAmount - claimedAmount` exactly. No precision-loss leakage.
-- `ParticipationPool` reserved/withdrawable separation: `withdrawRemaining` cannot touch `reservedBalance`; `recoverSurplus` only sweeps beyond `poolBalance + reservedBalance`.
+- Launch-distribution reserved/withdrawable separation: `withdrawRemaining` cannot touch `reservedBalance`; `recoverSurplus` only sweeps beyond `poolBalance + reservedBalance`.
 - `RoundRewardDistributor` dust finalization sorted-input invariant `voter <= previous` prevents double-counting; dust routed to treasury or back into consensus reserve.
 - `_pay` underflow safety on `LaunchDistributionPool.sol:861-866`.
 - `FeedbackBonusEscrow._pullUsdc` balance-delta enforcement matches `pullExactToken`.
