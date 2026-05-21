@@ -578,7 +578,6 @@ test("supported sponsored operation families are allowlisted", async () => {
     [encodeCall(raterRegistryContract, "setProfile", [2, `0x${"0".repeat(64)}`])],
     [encodeCall(votingEngineContract, "claimCancelledRoundRefund", [1n, 1n])],
     [encodeCall(rewardDistributorContract, "claimFrontendFee", [1n, 1n, WALLET])],
-    [encodeCall(rewardDistributorContract, "claimParticipationReward", [1n, 1n])],
     [encodeCall(rewardDistributorContract, "claimReward", [1n, 1n])],
     [encodeCall(rewardEscrowContract, "claimQuestionReward", [1n, 1n])],
     [encodeCall(rewardEscrowContract, "claimQuestionReward", [1n, 1n, payoutWeight, []])],

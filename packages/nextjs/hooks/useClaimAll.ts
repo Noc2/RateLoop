@@ -37,8 +37,6 @@ type SponsoredClaimCall = {
 
 function getClaimableRewardLabel(item: ClaimableRewardItem) {
   switch (item.claimType) {
-    case "participation_reward":
-      return `participation reward for content #${item.contentId} round ${item.roundId}`;
     case "question_reward":
       return `bounty for content #${item.contentId} round ${item.roundId}`;
     case "question_bundle_reward":
@@ -139,15 +137,6 @@ export function useClaimAll() {
     }
 
     if (!distributorInfo) throw new Error("Round reward distributor is unavailable right now.");
-    if (item.claimType === "participation_reward") {
-      return {
-        abi: distributorInfo.abi as Abi,
-        address: distributorInfo.address as `0x${string}`,
-        args: [item.contentId, item.roundId],
-        functionName: "claimParticipationReward",
-      };
-    }
-
     if (item.claimType === "frontend_round_fee") {
       return {
         abi: distributorInfo.abi as Abi,
@@ -226,14 +215,6 @@ export function useClaimAll() {
             await (writeVotingEngine as any)(
               {
                 functionName: "claimCancelledRoundRefund",
-                args: [item.contentId, item.roundId],
-              },
-              { getErrorMessage: getTransactionErrorMessage },
-            );
-          } else if (item.claimType === "participation_reward") {
-            await (writeDistributor as any)(
-              {
-                functionName: "claimParticipationReward",
                 args: [item.contentId, item.roundId],
               },
               { getErrorMessage: getTransactionErrorMessage },

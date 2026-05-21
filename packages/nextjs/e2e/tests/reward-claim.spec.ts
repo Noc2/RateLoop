@@ -1,13 +1,11 @@
 import {
   approveLREP,
-  claimParticipationReward,
   claimVoterReward,
   commitVoteDirect,
   evmIncreaseTime,
   getActiveRoundId,
   processUnrevealedVotes,
   readTokenBalance,
-  readUint256,
   revealVoteDirect,
   setTestConfig,
   settleRoundDirect,
@@ -259,57 +257,6 @@ test.describe("Reward claim lifecycle", () => {
     expect(stakeReturned).toBeGreaterThanOrEqual(0n);
     expect(stakeReturned).toBeLessThanOrEqual(STAKE);
     expect(lrepReward).toBeGreaterThanOrEqual(0n);
-  });
-
-  test("winning voter claims participation reward, double claim reverts", async () => {
-    test.skip(!settledContentId || roundId === 0n, "No settled content from previous test");
-    test.setTimeout(60_000);
-
-    const rewardRateBps = await readUint256("roundParticipationRewardRateBps", REWARD_DISTRIBUTOR, [
-      BigInt(settledContentId!),
-      roundId,
-    ]);
-    const rewardOwed = await readUint256("roundParticipationRewardOwed", REWARD_DISTRIBUTOR, [
-      BigInt(settledContentId!),
-      roundId,
-    ]);
-    if (rewardRateBps === 0n || rewardOwed === 0n) {
-      test.skip(true, "No participation reward snapshot configured for this deploy");
-      return;
-    }
-
-    // Account #3 voted UP (winning side) — claim participation reward
-    const voter = ANVIL_ACCOUNTS.account3;
-    const success = await claimParticipationReward(
-      BigInt(settledContentId!),
-      roundId,
-      voter.address,
-      REWARD_DISTRIBUTOR,
-    );
-    expect(success, "Participation reward claim should succeed").toBe(true);
-
-    // Double claim should revert (AlreadyClaimed)
-    const doubleClaim = await claimParticipationReward(
-      BigInt(settledContentId!),
-      roundId,
-      voter.address,
-      REWARD_DISTRIBUTOR,
-    );
-    expect(doubleClaim, "Double participation reward claim should revert").toBe(false);
-  });
-
-  test("revealed scored voter can claim participation reward even below the public winning side", async () => {
-    test.skip(!settledContentId || roundId === 0n, "No settled content from previous test");
-    test.setTimeout(60_000);
-
-    const loser = ANVIL_ACCOUNTS.account7;
-    const result = await claimParticipationReward(
-      BigInt(settledContentId!),
-      roundId,
-      loser.address,
-      REWARD_DISTRIBUTOR,
-    );
-    test.skip(!result, "No claimable scored-voter participation reward for this settlement state.");
   });
 
   test("processUnrevealedVotes reverts when nothing to process (NothingProcessed)", async () => {

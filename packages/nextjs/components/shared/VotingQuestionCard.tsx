@@ -11,7 +11,6 @@ import { RoundRevealedBreakdown, RoundStats } from "~~/components/shared/RoundSt
 import { HoverTooltip, InfoTooltip, TooltipAnchor } from "~~/components/ui/InfoTooltip";
 import type { ContentOpenRoundSummary, RewardPoolCurrency } from "~~/hooks/contentFeed/shared";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
-import { useParticipationRate } from "~~/hooks/useParticipationRate";
 import { useRoundSnapshot } from "~~/hooks/useRoundSnapshot";
 import {
   COMMIT_AVAILABILITY_STATUS,
@@ -111,13 +110,8 @@ function LiveRoundActivity({
   compact: boolean;
   condensed?: boolean;
 }) {
-  const { ratePercent, calculateBonus } = useParticipationRate();
-  const progress = getRoundProgressMessaging(snapshot, ratePercent);
-  const exampleBonus = calculateBonus(5);
-  const hasParticipationBonus = exampleBonus != null;
-  const blindDetail = hasParticipationBonus
-    ? `+${exampleBonus.toLocaleString(undefined, { maximumFractionDigits: 1 })} LREP bonus on 5 LREP`
-    : "Full blind reward weight";
+  const progress = getRoundProgressMessaging(snapshot);
+  const blindDetail = "Full blind reward weight";
   const detailCopy =
     snapshot.phase !== "voting"
       ? snapshot.hasRound
@@ -126,9 +120,7 @@ function LiveRoundActivity({
       : snapshot.isEpoch1
         ? condensed
           ? blindDetail
-          : hasParticipationBonus
-            ? `Example bonus: ${blindDetail}.`
-            : "Blind signals keep full reward weight."
+          : "Blind signals keep full reward weight."
         : condensed
           ? (progress?.detailLabel ?? `${formatLrepAmount(snapshot.totalStake)} LREP active`)
           : describeOpenRoundActivity(snapshot);
@@ -381,8 +373,7 @@ export function VotingQuestionContextDetails({
     active ? (roundConfig ?? undefined) : undefined,
   );
   const showInlineVotingSummary = roundSnapshot.phase === "voting" || roundSnapshot.round.revealedCount > 0;
-  const { ratePercent } = useParticipationRate();
-  const progressMessaging = getRoundProgressMessaging(roundSnapshot, ratePercent);
+  const progressMessaging = getRoundProgressMessaging(roundSnapshot);
   const showInlineProgress = showInlineVotingSummary && Boolean(progressMessaging);
   const showInlineRevealedBreakdown = showInlineVotingSummary && roundSnapshot.round.revealedCount > 0;
 

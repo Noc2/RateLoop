@@ -100,11 +100,6 @@ const SmartContracts: NextPage = () => {
               <td>No</td>
             </tr>
             <tr>
-              <td className="font-mono text-primary">ParticipationPool</td>
-              <td>Optional governance-funded participation rewards used by voter reward claims</td>
-              <td>No</td>
-            </tr>
-            <tr>
               <td className="font-mono text-primary">LaunchDistributionPool</td>
               <td>68M LREP launch rewards: 35M verified/referral and 33M anchor-gated earned rater rewards</td>
               <td>No</td>
@@ -484,10 +479,6 @@ const SmartContracts: NextPage = () => {
           Bonus USDC to treasury.
         </li>
         <li>
-          <code>RoundRewardDistributor.claimParticipationReward(contentId, roundId)</code> &mdash; Voters claim optional
-          participation rewards (rate snapshotted at settlement time for fairness). Pull-based.
-        </li>
-        <li>
           <code>cancelExpiredRound(contentId, roundId)</code> &mdash; Cancel a round that exceeded maxDuration (
           {protocolDocFacts.maxRoundDurationLabel}) without reaching commit quorum (<code>minVoters</code> total
           commits). Refundable to participants.
@@ -526,10 +517,9 @@ const SmartContracts: NextPage = () => {
         </li>
         <li>
           <code>setRewardDistributor(...)</code>, <code>setFrontendRegistry(...)</code>,{" "}
-          <code>setCategoryRegistry(...)</code>, <code>setRaterRegistry(...)</code>,{" "}
-          <code>setParticipationPool(...)</code>, and <code>setTreasury(...)</code> &mdash; Maintain the engine&apos;s
-          governance-controlled address book, including the rater identity registry used by delegation and launch-anchor
-          policy.
+          <code>setCategoryRegistry(...)</code>, <code>setRaterRegistry(...)</code>, and <code>setTreasury(...)</code>{" "}
+          &mdash; Maintain the engine&apos;s governance-controlled address book, including the rater identity registry
+          used by delegation and launch-anchor policy.
         </li>
       </ul>
 
@@ -546,10 +536,6 @@ const SmartContracts: NextPage = () => {
           <code>claimReward(contentId, roundId)</code> &mdash; Claim settled-round voter payouts. Positive RBTS score
           spreads receive full stake plus their share of the 96% voter share of forfeited stake; negative spreads
           forfeit without a revealed-loser rebate.
-        </li>
-        <li>
-          <code>claimParticipationReward(contentId, roundId)</code> &mdash; Claim the optional LREP participation reward
-          for eligible scored economic voters, using the rate snapshotted at settlement.
         </li>
         <li>
           <code>sweepStrandedLrepToTreasury()</code> &mdash; Governance-only recovery path for any LREP mistakenly sent
@@ -676,20 +662,6 @@ const SmartContracts: NextPage = () => {
           </tbody>
         </table>
       </div>
-
-      <hr />
-
-      <h2>ParticipationPool</h2>
-      <p>
-        Implements optional participation rewards for voters when governance funds and configures a participation
-        program. Voter rewards are claimed after round settlement using the rate snapshotted at settlement time. The
-        launch deployment does not allocate LREP to this pool; the previous 12M LREP Bootstrap Pool allocation is folded
-        into the LaunchDistributionPool.
-      </p>
-      <p>
-        Privileged sweeps of accounted participation rewards are disabled; only reward accounting and surplus recovery
-        move funds.
-      </p>
 
       <hr />
 

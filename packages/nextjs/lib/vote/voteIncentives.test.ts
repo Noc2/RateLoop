@@ -12,29 +12,26 @@ test("formatLrepAmount preserves half-LREP stake precision", () => {
   assert.equal(formatLrepAmount(6_000_000n), "6");
 });
 
-test("getRoundProgressMessaging makes blind rounds sell bonus and urgency", () => {
-  const message = getRoundProgressMessaging(
-    {
-      phase: "voting",
-      isEpoch1: true,
-      epoch1Remaining: 11 * 60,
-      readyToSettle: false,
-      thresholdReachedAt: 0,
-      voteCount: 1,
-      revealedCount: 0,
-      minVoters: 3,
-      upPool: 0n,
-      downPool: 0n,
-      weightedUpPool: 0n,
-      weightedDownPool: 0n,
-    },
-    90,
-  );
+test("getRoundProgressMessaging shows blind urgency", () => {
+  const message = getRoundProgressMessaging({
+    phase: "voting",
+    isEpoch1: true,
+    epoch1Remaining: 11 * 60,
+    readyToSettle: false,
+    thresholdReachedAt: 0,
+    voteCount: 1,
+    revealedCount: 0,
+    minVoters: 3,
+    upPool: 0n,
+    downPool: 0n,
+    weightedUpPool: 0n,
+    weightedDownPool: 0n,
+  });
 
   assert.deepEqual(message, {
     badgeLabel: "Blind",
     badgeTone: "primary",
-    detailLabel: "+90% bonus · 11:00 left",
+    detailLabel: "11:00 left",
     detailTone: "warning",
     tooltip:
       "Blind signals stay hidden and earn full reward weight. Open-phase signals use 25% informed weight, so early raters keep the 4x advantage.",

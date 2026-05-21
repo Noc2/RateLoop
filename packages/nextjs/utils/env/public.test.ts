@@ -47,7 +47,6 @@ test("default required deployment list fails closed for core app contracts", () 
       ContentRegistry: {},
       FrontendRegistry: {},
       LaunchDistributionPool: {},
-      ParticipationPool: {},
       ProfileRegistry: {},
       ProtocolConfig: {},
       RaterRegistry: {},

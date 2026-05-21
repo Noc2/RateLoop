@@ -1,7 +1,6 @@
 "use client";
 
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
-import { useParticipationRate } from "~~/hooks/useParticipationRate";
 import type { RoundSnapshot } from "~~/hooks/useRoundSnapshot";
 import { getRoundProgressMessaging } from "~~/lib/vote/voteIncentives";
 
@@ -19,9 +18,8 @@ interface RoundProgressProps {
  * Terminal states: Resolved / Cancelled / Tied / Reveal failed
  */
 export function RoundProgress({ snapshot }: RoundProgressProps) {
-  const { ratePercent } = useParticipationRate();
   const { phase, hasRound, isReady, readyToSettle, thresholdReachedAt, voteCount, minVoters } = snapshot;
-  const progressMessaging = getRoundProgressMessaging(snapshot, ratePercent);
+  const progressMessaging = getRoundProgressMessaging(snapshot);
 
   if (!isReady && !hasRound) {
     return (

@@ -955,11 +955,7 @@ async function validateSponsoredCalls(
         }
         return { ok: false, debugCode: "unsupported_operation" };
       case "RoundRewardDistributor":
-        if (
-          functionName === "claimFrontendFee" ||
-          functionName === "claimParticipationReward" ||
-          functionName === "claimReward"
-        ) {
+        if (functionName === "claimFrontendFee" || functionName === "claimReward") {
           continue;
         }
         return { ok: false, debugCode: "unsupported_operation" };

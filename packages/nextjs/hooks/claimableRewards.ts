@@ -4,7 +4,7 @@ export interface RoundClaimableRewardItem {
   contentId: bigint;
   roundId: bigint;
   reward: bigint;
-  claimType: "reward" | "refund" | "participation_reward";
+  claimType: "reward" | "refund";
 }
 
 type ClaimHex = `0x${string}`;
@@ -19,14 +19,7 @@ interface ClaimLookupBaseParams {
 
 interface ClaimStateLookup {
   contract: "distributor" | "engine";
-  functionName:
-    | "rewardCommitClaimed"
-    | "rewardClaimed"
-    | "cancelledRoundRefundClaimed"
-    | "participationRewardCommitClaimed"
-    | "participationRewardClaimed"
-    | "participationRewardCommitPaid"
-    | "participationRewardPaid";
+  functionName: "rewardCommitClaimed" | "rewardClaimed" | "cancelledRoundRefundClaimed";
   args: readonly [bigint, bigint, ClaimHex];
 }
 
@@ -86,18 +79,6 @@ export type ClaimableRewardItem =
   | QuestionRewardPoolClaimableRewardItem
   | QuestionBundleRewardClaimableRewardItem;
 
-interface VoterParticipationRewardClaimCandidate {
-  contentId: bigint;
-  roundId: bigint;
-  stake: bigint;
-  rateBps: bigint;
-  totalReward: bigint;
-  alreadyPaid: bigint;
-  reservedReward: bigint;
-  rewardPool: `0x${string}` | null;
-  alreadyClaimed: boolean;
-}
-
 interface LastClaimAwarePoolShareParams {
   claimantWeight: bigint;
   totalWeight: bigint;
@@ -143,38 +124,6 @@ export function buildRoundClaimStateLookup(params: ClaimLookupBaseParams & { set
   };
 }
 
-export function buildParticipationClaimStateLookups(params: ClaimLookupBaseParams) {
-  const commitKey = normalizeCommitKey(params.commitKey);
-  if (commitKey) {
-    return {
-      claimed: {
-        contract: "distributor" as const,
-        functionName: "participationRewardCommitClaimed" as const,
-        args: [params.contentId, params.roundId, commitKey] as const,
-      },
-      paid: {
-        contract: "distributor" as const,
-        functionName: "participationRewardCommitPaid" as const,
-        args: [params.contentId, params.roundId, commitKey] as const,
-      },
-    };
-  }
-
-  const account = claimAccount(params);
-  return {
-    claimed: {
-      contract: "distributor" as const,
-      functionName: "participationRewardClaimed" as const,
-      args: [params.contentId, params.roundId, account] as const,
-    },
-    paid: {
-      contract: "distributor" as const,
-      functionName: "participationRewardPaid" as const,
-      args: [params.contentId, params.roundId, account] as const,
-    },
-  };
-}
-
 export function calculateLastClaimAwarePoolShare({
   claimantWeight,
   totalWeight,
@@ -197,37 +146,6 @@ export function calculateLastClaimAwarePoolShare({
   return claimedCount + 1n === totalClaimants ? pool - claimedAmount : (claimantWeight * pool) / totalWeight;
 }
 
-export function buildVoterParticipationClaimableRewards(candidates: readonly VoterParticipationRewardClaimCandidate[]) {
-  return candidates.flatMap(candidate => {
-    const { contentId, roundId, stake, rateBps, totalReward, alreadyPaid, reservedReward, rewardPool, alreadyClaimed } =
-      candidate;
-
-    if (alreadyClaimed || !rewardPool || stake <= 0n || rateBps <= 0n || totalReward <= 0n) {
-      return [];
-    }
-
-    const fullReward = (stake * rateBps) / 10000n;
-    if (fullReward <= 0n) {
-      return [];
-    }
-
-    const currentlyClaimable = reservedReward < totalReward ? (fullReward * reservedReward) / totalReward : fullReward;
-    const claimableReward = currentlyClaimable > alreadyPaid ? currentlyClaimable - alreadyPaid : 0n;
-    if (claimableReward <= 0n) {
-      return [];
-    }
-
-    return [
-      {
-        contentId,
-        roundId,
-        reward: claimableReward,
-        claimType: "participation_reward" as const,
-      } satisfies ClaimableRewardItem,
-    ];
-  });
-}
-
 export function getClaimableRoundKey(item: ClaimableRewardItem) {
   if (item.claimType === "question_reward") {
     return `question-reward:${item.rewardPoolId.toString()}-${item.roundId.toString()}`;
@@ -244,16 +162,14 @@ function claimExecutionPriority(item: ClaimableRewardItem) {
       return 0;
     case "reward":
       return 1;
-    case "participation_reward":
-      return 2;
     case "question_reward":
-      return 3;
+      return 2;
     case "question_bundle_reward":
-      return 4;
+      return 3;
     case "frontend_round_fee":
-      return 5;
+      return 4;
     case "frontend_registry_fee":
-      return 6;
+      return 5;
   }
 }
 

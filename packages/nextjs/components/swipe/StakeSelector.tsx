@@ -8,7 +8,6 @@ import { HandThumbDownIcon, HandThumbUpIcon, XMarkIcon } from "@heroicons/react/
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 import { useContentLabel } from "~~/hooks/useCategoryRegistry";
-import { useParticipationRate } from "~~/hooks/useParticipationRate";
 import { useRaterIdentityStake, useRaterRegistryIdentity } from "~~/hooks/useRaterRegistryIdentity";
 import { useRoundSnapshot } from "~~/hooks/useRoundSnapshot";
 import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
@@ -44,7 +43,9 @@ const YOUR_VOTE_TOOLTIP =
 const EXPECTED_CROWD_TOOLTIP =
   "Your forecast of what share of revealed raters will choose thumbs up this round. This forecast helps determine rewards; it is separate from your own thumbs up/down vote.";
 const ACCURACY_BASED_REWARDS_TOOLTIP =
-  "Calculated after reveal and settlement. If your private vote matches the final outcome, it can earn starter or launch rewards; the exact amount is not known yet.";
+  "Calculated after reveal and settlement. Accurate revealed votes can qualify for available launch rewards, USDC bounties, or feedback bonuses.";
+const OPEN_PHASE_REWARDS_TOOLTIP =
+  "After the private epoch, estimates use the currently revealed stake pools. Final returns may change as more voters reveal or unrevealed votes are cleaned up.";
 const metricLabelClassName =
   "inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-base-content/55";
 const metricValueClassName = "mt-1 text-2xl font-bold tabular-nums text-base-content";
@@ -151,8 +152,6 @@ export function StakeSelector({
   });
 
   const symbol = tokenSymbol ?? "LREP";
-  const { calculateBonus, hasActiveParticipationRewards } = useParticipationRate();
-  const voteBonus = calculateBonus(amount);
   const normalizedCurrentRating = normalizeStakeSelectorRating(currentRating);
   const voteEstimate = estimateVoteReturn(estimateSnapshot, isUp, amount);
   const signalTone = isUp ? "Thumbs up" : "Thumbs down";
@@ -213,13 +212,8 @@ export function StakeSelector({
   const weightPercent = Math.round(
     (effectiveIsBlind ? EPOCH_WEIGHT_BPS.blind : EPOCH_WEIGHT_BPS.informed) / 100,
   ).toLocaleString();
-  const participationBonusMicro = voteBonus !== undefined ? BigInt(Math.round(voteBonus * 1e6)) : 0n;
-  const openPhaseGrossReturnMicro = voteEstimate.estimatedGrossReturnMicro + participationBonusMicro;
-  const openPhaseBelowMeanFloorMicro = voteEstimate.belowMeanFloorMicro + participationBonusMicro;
-  const openPhaseParticipationTooltip =
-    voteBonus !== undefined
-      ? `Includes the current participation bonus of +${voteBonus.toLocaleString(undefined, { maximumFractionDigits: 1 })} ${symbol}.`
-      : "No participation bonus is funded for this deployment.";
+  const openPhaseGrossReturnMicro = voteEstimate.estimatedGrossReturnMicro;
+  const openPhaseBelowMeanFloorMicro = voteEstimate.belowMeanFloorMicro;
 
   return (
     <AnimatePresence>
@@ -402,7 +396,7 @@ export function StakeSelector({
             <div className="mb-4 border-t border-base-content/10 pt-4">
               <div className="flex items-center gap-1.5">
                 <p className={`text-sm font-semibold ${phaseHeadlineClassName}`}>{phaseHeadline}</p>
-                {!effectiveIsBlind && <InfoTooltip text={openPhaseParticipationTooltip} position="bottom" />}
+                {!effectiveIsBlind && <InfoTooltip text={OPEN_PHASE_REWARDS_TOOLTIP} position="bottom" />}
               </div>
               <div className="mt-3 grid grid-cols-1 gap-2 text-sm text-base-content/80">
                 {effectiveIsBlind ? (
@@ -413,21 +407,10 @@ export function StakeSelector({
                     </div>
                   ) : (
                     <>
-                      {hasActiveParticipationRewards ? (
-                        <div className="flex items-center justify-between gap-3">
-                          <span>Participation bonus</span>
-                          <span className="font-semibold tabular-nums">
-                            {voteBonus !== undefined
-                              ? `+${voteBonus.toLocaleString(undefined, { maximumFractionDigits: 1 })} ${symbol}`
-                              : "Loading"}
-                          </span>
-                        </div>
-                      ) : (
-                        <div className="flex items-center justify-between gap-3">
-                          <span>Launch rewards</span>
-                          <AccuracyBasedRewardLabel />
-                        </div>
-                      )}
+                      <div className="flex items-center justify-between gap-3">
+                        <span>Launch rewards</span>
+                        <AccuracyBasedRewardLabel />
+                      </div>
                       <div className="flex items-center justify-between gap-3">
                         <span>Reward weight</span>
                         <span className="font-semibold tabular-nums">{weightPercent}% (4x vs open)</span>

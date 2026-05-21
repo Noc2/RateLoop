@@ -36,11 +36,6 @@ interface VoteReturnEstimate {
   belowMeanFloorMicro: bigint;
 }
 
-function formatPercent(value: number): string {
-  const maximumFractionDigits = value >= 10 ? 0 : 1;
-  return `${value.toLocaleString(undefined, { maximumFractionDigits })}%`;
-}
-
 function formatPreciseDuration(seconds: number): string {
   if (seconds <= 0) return "00:00";
 
@@ -76,28 +71,19 @@ export function describeOpenRoundActivity(
   return `${formatLrepAmount(snapshot.totalStake)} LREP active · Settlement threshold is in reach.`;
 }
 
-function getBlindParticipationLabel(ratePercent?: number): string | null {
-  if (ratePercent === undefined) return null;
-  return `+${formatPercent(ratePercent)} bonus`;
-}
-
-export function getRoundProgressMessaging(
-  snapshot: IncentiveSnapshot,
-  ratePercent?: number,
-): RoundProgressMessaging | null {
+export function getRoundProgressMessaging(snapshot: IncentiveSnapshot): RoundProgressMessaging | null {
   if (snapshot.phase !== "voting") {
     return null;
   }
 
   if (snapshot.isEpoch1) {
-    const bonusLabel = getBlindParticipationLabel(ratePercent);
     const urgencyLabel =
       snapshot.epoch1Remaining > 0 ? `${formatPreciseDuration(snapshot.epoch1Remaining)} left` : "Predict early";
 
     return {
       badgeLabel: "Blind",
       badgeTone: "primary",
-      detailLabel: bonusLabel ? `${bonusLabel} · ${urgencyLabel}` : urgencyLabel,
+      detailLabel: urgencyLabel,
       detailTone: snapshot.epoch1Remaining <= 15 * 60 ? "warning" : "primary",
       tooltip:
         "Blind signals stay hidden and earn full reward weight. Open-phase signals use 25% informed weight, so early raters keep the 4x advantage.",

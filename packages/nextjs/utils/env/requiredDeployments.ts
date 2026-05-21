@@ -9,7 +9,6 @@ const REQUIRED_TARGET_CONTRACTS = [
   "ProtocolConfig",
   "RoundRewardDistributor",
   "CategoryRegistry",
-  "ParticipationPool",
   "LaunchDistributionPool",
   "AdvisoryVoteRecorder",
 ] as const;

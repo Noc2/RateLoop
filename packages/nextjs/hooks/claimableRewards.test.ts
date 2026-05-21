@@ -1,67 +1,11 @@
 import {
-  buildParticipationClaimStateLookups,
   buildRoundClaimStateLookup,
-  buildVoterParticipationClaimableRewards,
   calculateLastClaimAwarePoolShare,
   getQuestionRewardClaimArgs,
   sortClaimableRewardItems,
 } from "./claimableRewards";
 import assert from "node:assert/strict";
 import test from "node:test";
-
-test("buildVoterParticipationClaimableRewards surfaces partially reserved winning-voter rewards", () => {
-  const items = buildVoterParticipationClaimableRewards([
-    {
-      contentId: 4n,
-      roundId: 2n,
-      stake: 10_000_000n,
-      rateBps: 9000n,
-      totalReward: 18_000_000n,
-      reservedReward: 9_000_000n,
-      alreadyPaid: 2_000_000n,
-      rewardPool: "0x4000000000000000000000000000000000000000",
-      alreadyClaimed: false,
-    },
-  ]);
-
-  assert.deepEqual(items, [
-    {
-      contentId: 4n,
-      roundId: 2n,
-      reward: 2_500_000n,
-      claimType: "participation_reward",
-    },
-  ]);
-});
-
-test("buildVoterParticipationClaimableRewards skips already claimed or unbacked rewards", () => {
-  const items = buildVoterParticipationClaimableRewards([
-    {
-      contentId: 4n,
-      roundId: 2n,
-      stake: 10_000_000n,
-      rateBps: 9000n,
-      totalReward: 18_000_000n,
-      reservedReward: 18_000_000n,
-      alreadyPaid: 0n,
-      rewardPool: "0x4000000000000000000000000000000000000000",
-      alreadyClaimed: true,
-    },
-    {
-      contentId: 5n,
-      roundId: 2n,
-      stake: 10_000_000n,
-      rateBps: 9000n,
-      totalReward: 18_000_000n,
-      reservedReward: 0n,
-      alreadyPaid: 0n,
-      rewardPool: "0x4000000000000000000000000000000000000000",
-      alreadyClaimed: false,
-    },
-  ]);
-
-  assert.deepEqual(items, []);
-});
 
 test("calculateLastClaimAwarePoolShare returns final claimant dust remainder", () => {
   assert.equal(
@@ -123,29 +67,6 @@ test("buildRoundClaimStateLookup falls back to raw voter address when no commit 
   });
 });
 
-test("buildParticipationClaimStateLookups uses commit-key claim accounting", () => {
-  const lookups = buildParticipationClaimStateLookups({
-    contentId: 4n,
-    roundId: 2n,
-    connectedAddress: "0x2000000000000000000000000000000000000000",
-    voter: "0x1000000000000000000000000000000000000000",
-    commitKey: `0x${"b".repeat(64)}`,
-  });
-
-  assert.deepEqual(lookups, {
-    claimed: {
-      contract: "distributor",
-      functionName: "participationRewardCommitClaimed",
-      args: [4n, 2n, `0x${"b".repeat(64)}`],
-    },
-    paid: {
-      contract: "distributor",
-      functionName: "participationRewardCommitPaid",
-      args: [4n, 2n, `0x${"b".repeat(64)}`],
-    },
-  });
-});
-
 test("sortClaimableRewardItems keeps frontend round credits ahead of the final frontend withdrawal", () => {
   const items = sortClaimableRewardItems([
     {
@@ -175,12 +96,6 @@ test("sortClaimableRewardItems keeps frontend round credits ahead of the final f
       reward: 4n,
       claimType: "reward",
     },
-    {
-      contentId: 2n,
-      roundId: 1n,
-      reward: 1n,
-      claimType: "participation_reward",
-    },
   ]);
 
   assert.deepEqual(items, [
@@ -189,12 +104,6 @@ test("sortClaimableRewardItems keeps frontend round credits ahead of the final f
       roundId: 1n,
       reward: 4n,
       claimType: "reward",
-    },
-    {
-      contentId: 2n,
-      roundId: 1n,
-      reward: 1n,
-      claimType: "participation_reward",
     },
     {
       rewardPoolId: 9n,
