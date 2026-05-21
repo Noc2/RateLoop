@@ -109,9 +109,7 @@ const Tokenomics = () => {
       </div>
       <p>
         Verification acceleration, safety responses, appeals, and governance programs are treasury responsibilities.
-        They do not draw from the Launch Distribution Pool. The previous 12M Bootstrap Pool allocation and former 4M
-        LREP consensus reserve allocation are folded into launch distribution: 35M LREP funds verified + referral
-        rewards, and 33M LREP funds earned rater rewards.
+        They do not draw from the Launch Distribution Pool.
       </p>
 
       <h2>Treasury</h2>
