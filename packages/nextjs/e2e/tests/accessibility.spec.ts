@@ -125,7 +125,7 @@ test.describe("Accessibility basics", () => {
       return;
     }
 
-    const dialog = page.getByRole("dialog", { name: "Select stake amount" });
+    const dialog = page.getByRole("dialog").first();
     try {
       await expect(async () => {
         await voteUpBtn.click({ timeout: 5_000 });

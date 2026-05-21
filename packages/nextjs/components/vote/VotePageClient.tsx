@@ -702,6 +702,7 @@ const HomeInner = () => {
     isOpen: boolean;
     initialIsUp: boolean;
     contentId: bigint;
+    questionTitle: string;
     categoryId: bigint;
     currentRating: number | null;
     roundConfig?: ContentItem["roundConfig"] | null;
@@ -710,6 +711,7 @@ const HomeInner = () => {
     isOpen: false,
     initialIsUp: true,
     contentId: 0n,
+    questionTitle: "",
     categoryId: 0n,
     currentRating: null,
     roundConfig: null,
@@ -1250,6 +1252,7 @@ const HomeInner = () => {
         isOpen: true,
         initialIsUp: isUp,
         contentId: item.id,
+        questionTitle: item.question?.trim() || item.title,
         categoryId: item.categoryId,
         currentRating: getStakeModalCurrentRating(item),
         roundConfig: item.roundConfig,
@@ -2071,6 +2074,7 @@ const HomeInner = () => {
         <StakeSelector
           isOpen={stakeModal.isOpen}
           contentId={stakeModal.contentId}
+          questionTitle={stakeModal.questionTitle}
           categoryId={stakeModal.categoryId}
           currentRating={stakeModal.currentRating}
           initialIsUp={stakeModal.initialIsUp}

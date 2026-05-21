@@ -23,6 +23,7 @@ import { estimateVoteReturn, formatLrepAmount } from "~~/lib/vote/voteIncentives
 interface StakeSelectorProps {
   isOpen: boolean;
   contentId: bigint;
+  questionTitle?: string;
   categoryId?: bigint;
   currentRating?: number | null;
   initialIsUp?: boolean;
@@ -99,6 +100,7 @@ export function getInitialPredictedUpPercent(initialIsUp?: boolean) {
 export function StakeSelector({
   isOpen,
   contentId,
+  questionTitle,
   categoryId,
   currentRating,
   initialIsUp,
@@ -110,6 +112,7 @@ export function StakeSelector({
   onConfirm,
   onCancel,
 }: StakeSelectorProps) {
+  const dialogTitleId = useId();
   const stakeAmountInputId = useId();
   const crowdPredictionInputId = useId();
   const contentLabel = useContentLabel(categoryId);
@@ -158,6 +161,7 @@ export function StakeSelector({
     currentRating === null || currentRating === undefined || !Number.isFinite(currentRating)
       ? "N/A"
       : normalizedCurrentRating.toFixed(1);
+  const dialogTitle = questionTitle?.trim() || "Vote on this question";
 
   const handleSignalChange = (nextIsUp: boolean) => {
     setIsUp(nextIsUp);
@@ -223,7 +227,7 @@ export function StakeSelector({
         <motion.div
           role="dialog"
           aria-modal="true"
-          aria-label="Select reputation lock and private vote"
+          aria-labelledby={dialogTitleId}
           aria-busy={isConfirming}
           className="fixed inset-0 z-50 flex items-end justify-center sm:items-center"
           initial={{ opacity: 0 }}
@@ -236,7 +240,7 @@ export function StakeSelector({
           />
 
           <motion.div
-            className="relative w-full max-w-md rounded-t-2xl bg-base-200 p-6 shadow-2xl sm:rounded-2xl"
+            className="relative max-h-[calc(100svh-1rem)] w-full max-w-md overflow-y-auto rounded-t-2xl bg-base-200 p-6 shadow-2xl sm:rounded-2xl"
             initial={{ y: 100, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 100, opacity: 0 }}
@@ -252,31 +256,11 @@ export function StakeSelector({
               <XMarkIcon className="h-5 w-5" />
             </button>
 
-            <h3 className="mb-3 px-9 text-center text-lg font-semibold">
-              Submit private vote
-              <span
-                className="tooltip tooltip-bottom ml-1.5 inline-block cursor-help align-middle"
-                data-tip="You can only submit one private report per content per round. Choose your stake carefully!"
-                role="img"
-                aria-label="You can only submit one private report per content per round. Choose your stake carefully!"
-              >
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="opacity-50"
-                  aria-hidden="true"
-                >
-                  <circle cx="12" cy="12" r="10" />
-                  <path d="M12 16v-4" />
-                  <path d="M12 8h.01" />
-                </svg>
-              </span>
+            <h3
+              id={dialogTitleId}
+              className="mb-3 px-9 text-balance break-words text-center text-lg font-semibold leading-tight"
+            >
+              {dialogTitle}
             </h3>
 
             <div className="mb-5 px-1 pt-1">
