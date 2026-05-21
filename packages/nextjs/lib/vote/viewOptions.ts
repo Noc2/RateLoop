@@ -35,7 +35,7 @@ export function isScopedVoteViewOption(value: VoteView): value is ScopedVoteView
   return SCOPED_VIEW_VALUES.has(value as ScopedVoteViewOption);
 }
 
-export function getVoteViewGroups(hasWallet: boolean): VoteViewGroup[] {
+export function getVoteViewGroups(hasWallet: boolean, canUseZeroLrepVote = hasWallet): VoteViewGroup[] {
   const rateOptions: VoteViewOption[] = DISCOVER_FEED_MODE_OPTIONS.filter(option => option.value !== "contested").map(
     option => ({
       value: option.value,
@@ -43,7 +43,7 @@ export function getVoteViewGroups(hasWallet: boolean): VoteViewGroup[] {
       description: option.description,
     }),
   );
-  if (hasWallet) {
+  if (hasWallet && canUseZeroLrepVote) {
     rateOptions.push(ZERO_LREP_RATE_OPTION);
   }
 

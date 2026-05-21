@@ -24,7 +24,7 @@ test("getVoteViewGroups hides wallet-only entries when disconnected", () => {
 });
 
 test("getVoteViewGroups includes activity entries when connected", () => {
-  const groups = getVoteViewGroups(true);
+  const groups = getVoteViewGroups(true, true);
 
   assert.deepEqual(
     groups.map(group => group.label),
@@ -49,6 +49,23 @@ test("getVoteViewGroups includes activity entries when connected", () => {
   assert.equal(
     groups[1]?.options.some(option => option.label === "Your Settling Soon"),
     false,
+  );
+});
+
+test("getVoteViewGroups hides zero LREP vote when connected wallet has LREP", () => {
+  const groups = getVoteViewGroups(true, false);
+
+  assert.deepEqual(
+    groups.map(group => group.label),
+    ["Rate", "Your Activity"],
+  );
+  assert.equal(
+    groups[0]?.options.some(option => option.value === "zero_lrep_vote"),
+    false,
+  );
+  assert.equal(
+    groups[1]?.options.some(option => option.value === "my_votes"),
+    true,
   );
 });
 

@@ -332,8 +332,11 @@ const HomeInner = () => {
     followedItems,
   });
   const hasWallet = Boolean(address);
+  const hasResolvedLrepBalance = hasWallet && lrepBalance !== undefined;
+  const hasZeroLrepBalance = hasResolvedLrepBalance && lrepBalance === 0n;
+  const hasPositiveLrepBalance = hasResolvedLrepBalance && lrepBalance > 0n;
   const isAdvisoryOnlyRater = hasWallet && lrepBalance !== undefined && lrepBalance < MIN_COUNTED_STAKE_MICRO;
-  const viewGroups = useMemo(() => getVoteViewGroups(hasWallet), [hasWallet]);
+  const viewGroups = useMemo(() => getVoteViewGroups(hasWallet, hasZeroLrepBalance), [hasWallet, hasZeroLrepBalance]);
   const activeScope: ScopeOption = isScopedVoteViewOption(view) ? view : "all";
   const activeFeedMode: DiscoverFeedMode = isScopedVoteViewOption(view) ? "for_you" : view;
   const isZeroLrepVoteView = activeScope === "zero_lrep_vote";
@@ -594,22 +597,37 @@ const HomeInner = () => {
       return;
     }
 
-    if (lrepBalance === undefined || autoZeroLrepViewAddressRef.current === normalizedAddress) {
+    if (lrepBalance === undefined) {
+      return;
+    }
+
+    if (hasPositiveLrepBalance) {
+      autoZeroLrepViewAddressRef.current = null;
+      if (view === "zero_lrep_vote") {
+        setView("for_you");
+      }
+      return;
+    }
+
+    if (autoZeroLrepViewAddressRef.current === normalizedAddress) {
       return;
     }
 
     autoZeroLrepViewAddressRef.current = normalizedAddress;
-    if (
-      lrepBalance >= MIN_COUNTED_STAKE_MICRO ||
-      view !== "for_you" ||
-      isSearchMode ||
-      hasExplicitRequestedContentPin
-    ) {
+    if (!hasZeroLrepBalance || view !== "for_you" || isSearchMode || hasExplicitRequestedContentPin) {
       return;
     }
 
     setView("zero_lrep_vote");
-  }, [hasExplicitRequestedContentPin, isSearchMode, lrepBalance, normalizedAddress, view]);
+  }, [
+    hasExplicitRequestedContentPin,
+    hasPositiveLrepBalance,
+    hasZeroLrepBalance,
+    isSearchMode,
+    lrepBalance,
+    normalizedAddress,
+    view,
+  ]);
 
   const displayFeedRef = useRef<ContentItem[]>([]);
   const activeViewSessionRef = useRef<ActiveViewSession | null>(null);
