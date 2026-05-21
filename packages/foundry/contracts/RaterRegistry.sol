@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.34;
 
 import { AccessControl } from "@openzeppelin/contracts/access/AccessControl.sol";
 import { IWorldIDRouter } from "./interfaces/IWorldIDRouter.sol";
@@ -58,6 +58,11 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
     /// @dev Provider-namespaced revocation flag. Namespaced for the same
     ///      cross-provider collision reason as `_humanNullifierOwnerByProvider`.
     mapping(HumanCredentialProvider => mapping(bytes32 => bool)) private _revokedHumanNullifierByProvider;
+    /// @dev RR-6 (2026-05-20 follow-up audit): records the rater whose credential was last
+    ///      revoked against this (provider, nullifierHash). Exposed via the indexed `prevOwner`
+    ///      field of `HumanNullifierRevocationCleared` so off-chain alerts can fire on a single
+    ///      log when a SEEDER recycles a previously-bound nullifier onto a new address.
+    mapping(HumanCredentialProvider => mapping(bytes32 => address)) private _lastRevokedOwnerByProvider;
     mapping(address => mapping(address => bool)) public isFollowing;
     mapping(address => uint256) public followingCount;
     mapping(address => uint256) public followerCount;
@@ -70,6 +75,12 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
     bytes32 public immutable worldIdScope;
     uint256 public immutable worldIdExternalNullifierHash;
     uint64 public immutable worldIdCredentialTtl;
+    /// @dev RR-4 (2026-05-20 follow-up audit): governance-tunable upper bound on the TTL
+    ///      SEEDER_ROLE can grant via `seedHumanCredential`. WorldID credentials are already
+    ///      clamped via the immutable `worldIdCredentialTtl`; this is the symmetric clamp for
+    ///      SEEDER-seeded credentials. 0 means "no governance-imposed cap" (i.e., the prior
+    ///      behavior in which SEEDER could pass `type(uint64).max`).
+    uint64 public maxSeededCredentialTtl;
 
     event RaterProfileUpdated(
         address indexed rater, RaterType indexed raterType, bytes32 indexed metadataHash, uint64 updatedAt
@@ -86,13 +97,27 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
     event HumanCredentialRevoked(
         address indexed rater, bytes32 indexed nullifierHash, HumanCredentialProvider indexed provider
     );
-    event HumanNullifierRevocationCleared(bytes32 indexed nullifierHash, HumanCredentialProvider indexed provider);
+    /// @notice RR-6 (2026-05-20 follow-up audit): `prevOwner` identifies the rater whose
+    ///         credential was last revoked against this (provider, nullifierHash). Off-chain
+    ///         alerting can fire on the single log instead of joining against a prior
+    ///         `HumanCredentialRevoked` event.
+    event HumanNullifierRevocationCleared(
+        bytes32 indexed nullifierHash, HumanCredentialProvider indexed provider, address indexed prevOwner
+    );
     /// @notice M-Identity-2: emitted when SEEDER_ROLE explicitly re-binds a rater's canonical
     ///         identity key. Off-chain consumers MUST re-map any per-identity state keyed off
     ///         the old key (cooldowns, exclusions, profile ownership) when they observe this.
     event CanonicalHumanIdentityKeyRotated(
         address indexed rater, bytes32 indexed previousKey, bytes32 indexed newKey, HumanCredentialProvider provider
     );
+    /// @notice RR-1 (2026-05-20 follow-up audit): emitted when a rater's stale canonical key is
+    ///         cleared on revocation. Off-chain consumers MUST detach any per-identity state
+    ///         keyed off the prior canonical (cooldowns, exclusions, profile ownership) — the
+    ///         next attestation will seed a fresh canonical from the new credential's nullifier.
+    event CanonicalHumanIdentityKeyCleared(address indexed rater, bytes32 indexed previousKey);
+    /// @notice RR-4 (2026-05-20 follow-up audit): governance updated the SEEDER-seeded credential
+    ///         TTL cap. `newCap = 0` removes the cap entirely.
+    event MaxSeededCredentialTtlUpdated(uint64 previousCap, uint64 newCap);
     event ProfileFollowed(address indexed follower, address indexed target, uint64 followedAt);
     event ProfileUnfollowed(address indexed follower, address indexed target, uint64 unfollowedAt);
     event DelegateRequested(address indexed holder, address indexed delegate);
@@ -301,9 +326,26 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
         external
         onlyRole(SEEDER_ROLE)
     {
+        // RR-4 (2026-05-20 follow-up audit): clamp SEEDER-seeded TTL to the governance-tunable
+        // upper bound. Mirrors the immutable `worldIdCredentialTtl` clamp on the WorldID path.
+        uint64 cap = maxSeededCredentialTtl;
+        if (cap != 0 && expiresAt > uint256(block.timestamp) + uint256(cap)) {
+            revert InvalidCredential();
+        }
         _attestHumanCredential(
             rater, anchorId, SEEDED_HUMAN_SCOPE, expiresAt, HumanCredentialProvider.SeededHuman, evidenceHash
         );
+    }
+
+    /// @notice Set the upper bound on TTL for SEEDER-seeded credentials. `cap = 0` disables the
+    ///         cap (back-compat). `cap > 0` rejects any future `seedHumanCredential` call where
+    ///         `expiresAt > block.timestamp + cap`.
+    /// @dev RR-4 (2026-05-20 follow-up audit). DEFAULT_ADMIN_ROLE gated because the cap is part
+    ///      of the identity-system governance surface, alongside SEEDER_ROLE assignment itself.
+    function setMaxSeededCredentialTtl(uint64 cap) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        uint64 previousCap = maxSeededCredentialTtl;
+        maxSeededCredentialTtl = cap;
+        emit MaxSeededCredentialTtlUpdated(previousCap, cap);
     }
 
     function revokeHumanCredential(address rater) external onlyRole(SEEDER_ROLE) {
@@ -320,6 +362,21 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
         ) {
             delete _humanNullifierOwnerByProvider[provider][nullifierHash];
             _revokedHumanNullifierByProvider[provider][nullifierHash] = true;
+            _lastRevokedOwnerByProvider[provider][nullifierHash] = rater;
+        }
+
+        // RR-1 (2026-05-20 follow-up audit): the M-Identity-2 sticky-canonical fix preserved
+        // `_canonicalHumanIdentityKey[rater]` across credential refreshes so legitimate users
+        // keep accumulated per-identity state. But on revocation the rater's identity is
+        // *terminated*; leaving the canonical in place lets `clearRevokedHumanNullifier` +
+        // re-seed of the same nullifier onto a DIFFERENT rater collide canonical keys between
+        // two distinct addresses (profile theft, vote-commit DoS, bonus-award shadowing).
+        // Clear it here so the next attestation for this rater re-seeds canonical from the
+        // new credential's nullifier on first-attestation.
+        bytes32 previousCanonical = _canonicalHumanIdentityKey[rater];
+        if (previousCanonical != bytes32(0)) {
+            delete _canonicalHumanIdentityKey[rater];
+            emit CanonicalHumanIdentityKeyCleared(rater, previousCanonical);
         }
 
         emit HumanCredentialRevoked(rater, nullifierHash, provider);
@@ -332,7 +389,8 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
         if (nullifierHash == bytes32(0)) revert InvalidCredential();
         if (provider == HumanCredentialProvider.None) revert InvalidCredential();
         _revokedHumanNullifierByProvider[provider][nullifierHash] = false;
-        emit HumanNullifierRevocationCleared(nullifierHash, provider);
+        address prevOwner = _lastRevokedOwnerByProvider[provider][nullifierHash];
+        emit HumanNullifierRevocationCleared(nullifierHash, provider, prevOwner);
     }
 
     /// @notice M-Identity-2: explicit governance action to re-bind a rater's canonical identity
@@ -366,6 +424,20 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
 
     function getHumanCredential(address rater) external view returns (HumanCredential memory) {
         return _humanCredentials[rater];
+    }
+
+    /// @notice Returns the verification scope of `rater`'s current human credential, or
+    ///         `bytes32(0)` if no verified credential exists.
+    /// @dev RR-5 (2026-05-20 follow-up audit): convenience accessor for cross-protocol consumers.
+    ///      Today the only valid scopes are `SEEDED_HUMAN_SCOPE` (for SEEDER-seeded credentials)
+    ///      and the immutable `worldIdScope` (for self-attested WorldID credentials). If this
+    ///      registry is ever shared with a sibling protocol, that protocol's consumers MUST
+    ///      verify the returned scope against their own expected value before honoring the
+    ///      identity -- a credential issued for one scope must not silently authorize another.
+    function credentialScope(address rater) external view returns (bytes32) {
+        HumanCredential storage credential = _humanCredentials[rater];
+        if (!credential.verified || credential.revoked) return bytes32(0);
+        return credential.scope;
     }
 
     /// @notice Returns the address that owns a nullifier hash within a specific provider's namespace.
@@ -445,6 +517,14 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
         // earlier `previous.nullifierHash != nullifierHash` check alone leaked the old provider's
         // slot, so a later revocation only cleared the new provider and the old provider's
         // namespace stayed assigned to this rater (codex PR #10 review).
+        //
+        // RR-3 (2026-05-20 follow-up audit): note that on provider switch the old provider's
+        // nullifier slot is freed WITHOUT marking the nullifier revoked. This is intentional --
+        // the original holder of the underlying credential (e.g. the WorldID identity for that
+        // nullifier) can still self-attest under the cleared slot, since the underlying proof is
+        // bound to msg.sender. A third party cannot impersonate because they lack the proof.
+        // The asymmetry with revokeHumanCredential (which DOES set the revoke flag) is therefore
+        // by design, not an oversight.
         if (
             previous.nullifierHash != bytes32(0)
                 && (previous.nullifierHash != nullifierHash || previous.provider != provider)

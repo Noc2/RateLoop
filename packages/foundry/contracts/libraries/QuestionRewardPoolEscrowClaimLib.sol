@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+pragma solidity ^0.8.34;
 
 import { IFrontendRegistry } from "../interfaces/IFrontendRegistry.sol";
 import { IClusterPayoutOracle } from "../interfaces/IClusterPayoutOracle.sol";

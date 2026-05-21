@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+pragma solidity ^0.8.34;
 
 import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
@@ -1146,11 +1146,16 @@ contract RoundVotingEngine is
     }
 
     function _getRoundReferenceRatingBps(uint256 contentId, uint256 roundId) internal view returns (uint16) {
-        uint16 referenceRatingBps = roundReferenceRatingBpsSnapshot[contentId][roundId];
-        if (referenceRatingBps == 0) {
-            return registry.getRating(contentId);
-        }
-        return referenceRatingBps;
+        // FV-1 (2026-05-20 follow-up audit): trust the per-round snapshot unconditionally. The
+        // companion change in RoundCreationLib.snapshotRoundVotingConfig now refuses to open a
+        // round on a zero-rating content, so the snapshot is always non-zero for any (contentId,
+        // roundId) that has been used in commit / reveal. A zero return here means the round
+        // never existed -- callers that bind to it (commit / reveal validators) will revert on
+        // the InvalidCommitHash check, which is the desired failure mode. The previous live
+        // fallback could silently switch the reference value mid-round and invalidate every
+        // already-submitted commit hash if `_ratingState.ratingBps` transitioned 0 -> non-zero
+        // between commit and reveal.
+        return roundReferenceRatingBpsSnapshot[contentId][roundId];
     }
 
     function previewCommitReferenceRatingBps(uint256 contentId) public view returns (uint16) {

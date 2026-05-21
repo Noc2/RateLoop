@@ -134,6 +134,18 @@
   {
     "slot": 22,
     "offset": 0,
+    "label": "rejectedRecoveredRound",
+    "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_bool))"
+  },
+  {
+    "slot": 23,
+    "offset": 0,
+    "label": "reopenedRecoveredRound",
+    "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_bool))"
+  },
+  {
+    "slot": 24,
+    "offset": 0,
     "label": "__gap",
     "type": "t_array(t_uint256)"
   }

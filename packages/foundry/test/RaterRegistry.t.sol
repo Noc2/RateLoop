@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.34;
 
 import { Test } from "forge-std/Test.sol";
 import { RaterRegistry } from "../contracts/RaterRegistry.sol";
@@ -386,6 +386,83 @@ contract RaterRegistryTest is Test {
         IRaterIdentityRegistry.ResolvedRater memory refreshed = registry.resolveRater(rater);
         assertEq(refreshed.humanNullifier, NULLIFIER_HASH);
         assertEq(refreshed.identityKey, SEEDED_ANCHOR_ID);
+    }
+
+    /// @notice RR-1 (2026-05-20 follow-up audit): the M-Identity-2 sticky-canonical fix preserved
+    ///         _canonicalHumanIdentityKey across legitimate credential refreshes, but on revocation
+    ///         the stale canonical survived. A SEEDER could then clearRevokedHumanNullifier and
+    ///         re-seed the same anchor onto a DIFFERENT rater, leaving both raters resolving to
+    ///         the same canonical identityKey. revokeHumanCredential must clear the canonical so
+    ///         the next attestation re-seeds it from the new credential's nullifier.
+    function test_RevokeClearsCanonicalKeyAndPreventsReseedCollision() public {
+        // 1. Seed rater A with anchorId N; canonical = N.
+        vm.prank(admin);
+        registry.seedHumanCredential(rater, uint64(block.timestamp + 365 days), SEEDED_ANCHOR_ID, EVIDENCE_HASH);
+        assertEq(registry.resolveRater(rater).identityKey, SEEDED_ANCHOR_ID);
+
+        // 2. Revoke A. Canonical must be cleared.
+        vm.prank(admin);
+        registry.revokeHumanCredential(rater);
+        IRaterIdentityRegistry.ResolvedRater memory revokedA = registry.resolveRater(rater);
+        assertTrue(revokedA.identityKey != SEEDED_ANCHOR_ID, "canonical not cleared on revoke");
+        // Post-revoke, identityKey falls back to the address-derived key.
+        assertEq(revokedA.identityKey, registry.addressIdentityKey(rater));
+
+        // 3. SEEDER recycles the anchor onto otherRater. otherRater's canonical = N.
+        vm.startPrank(admin);
+        registry.clearRevokedHumanNullifier(RaterRegistry.HumanCredentialProvider.SeededHuman, SEEDED_ANCHOR_ID);
+        registry.seedHumanCredential(otherRater, uint64(block.timestamp + 365 days), SEEDED_ANCHOR_ID, EVIDENCE_HASH);
+        vm.stopPrank();
+        assertEq(registry.resolveRater(otherRater).identityKey, SEEDED_ANCHOR_ID);
+
+        // 4. Re-seed rater A with a DIFFERENT anchor. A's canonical must be the NEW anchor,
+        //    not the recycled N still held by otherRater.
+        bytes32 freshAnchor = keccak256("fresh-anchor-for-A");
+        vm.prank(admin);
+        registry.seedHumanCredential(rater, uint64(block.timestamp + 365 days), freshAnchor, EVIDENCE_HASH);
+        IRaterIdentityRegistry.ResolvedRater memory reseededA = registry.resolveRater(rater);
+        assertEq(reseededA.identityKey, freshAnchor, "A's canonical didn't re-seed to new anchor");
+
+        // 5. The two raters must NOT share an identityKey.
+        assertTrue(
+            registry.resolveRater(rater).identityKey != registry.resolveRater(otherRater).identityKey,
+            "RR-1: distinct raters share canonical identityKey after revoke->clear->reseed"
+        );
+    }
+
+    /// @notice RR-4 (2026-05-20 follow-up audit): governance can cap the SEEDER-seeded credential
+    ///         TTL, mirroring the immutable WorldID TTL cap. cap=0 keeps the legacy behavior.
+    function test_MaxSeededCredentialTtlClampsSeedExpiry() public {
+        // Default: no cap; long-lived seeds accepted (legacy behavior).
+        vm.prank(admin);
+        registry.seedHumanCredential(rater, uint64(block.timestamp + 100 * 365 days), SEEDED_ANCHOR_ID, EVIDENCE_HASH);
+
+        // Governance sets a 30-day cap.
+        vm.prank(governance);
+        registry.setMaxSeededCredentialTtl(uint64(30 days));
+        assertEq(registry.maxSeededCredentialTtl(), uint64(30 days));
+
+        // Seed beyond cap is rejected.
+        vm.prank(admin);
+        vm.expectRevert(RaterRegistry.InvalidCredential.selector);
+        registry.seedHumanCredential(
+            otherRater, uint64(block.timestamp + 60 days), keccak256("rr4-other-anchor"), EVIDENCE_HASH
+        );
+
+        // Seed inside cap is accepted.
+        vm.prank(admin);
+        registry.seedHumanCredential(
+            otherRater, uint64(block.timestamp + 15 days), keccak256("rr4-other-anchor"), EVIDENCE_HASH
+        );
+
+        // cap = 0 disables the clamp again.
+        vm.prank(governance);
+        registry.setMaxSeededCredentialTtl(0);
+        assertEq(registry.maxSeededCredentialTtl(), 0);
+        vm.prank(admin);
+        registry.seedHumanCredential(
+            address(0xBEEF), uint64(block.timestamp + 100 * 365 days), keccak256("rr4-uncapped-anchor"), EVIDENCE_HASH
+        );
     }
 
     function test_SeedHumanCredentialStoresSeededAccountAsVerifiedHuman() public {

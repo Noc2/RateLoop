@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.34;
 
 import { VotingTestBase } from "./helpers/VotingTestHelpers.sol";
 import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
@@ -3497,23 +3497,33 @@ contract RoundIntegrationTest is VotingTestBase {
         dirs[2] = false;
 
         uint256 roundId = _settleRoundWith(voters, contentId, dirs, STAKE);
-        assertEq(
+        // LP-1 fix: underfunded settlement now PERSISTS the owed obligation (with
+        // reservation rolled back to zero) so a later backfill can complete the reservation.
+        // Pre-fix this branch lost the owed amount entirely, silently forfeiting winners.
+        assertGt(
             rewardDistributor.roundParticipationRewardOwed(contentId, roundId),
             0,
-            "underfunded settlement should not snapshot a partially funded obligation"
+            "underfunded settlement should persist the owed obligation for deferred backfill"
         );
         assertEq(
             rewardDistributor.roundParticipationRewardReserved(contentId, roundId),
             0,
-            "underfunded settlement should not leave a partial reservation behind"
+            "underfunded settlement should leave reserved=0 after rolling back the partial reservation"
+        );
+        assertEq(
+            rewardDistributor.roundParticipationRewardPool(contentId, roundId),
+            address(pool),
+            "underfunded settlement should persist the pool pointer for deferred backfill"
         );
 
+        // With pool persisted but reservation incomplete, claim reverts with PoolDepleted —
+        // not NoPool — until governance backfills.
         vm.prank(voter1);
-        vm.expectRevert(RoundRewardDistributor.NoPool.selector);
+        vm.expectRevert(RoundRewardDistributor.PoolDepleted.selector);
         rewardDistributor.claimParticipationReward(contentId, roundId);
 
         vm.prank(voter2);
-        vm.expectRevert(RoundRewardDistributor.NoPool.selector);
+        vm.expectRevert(RoundRewardDistributor.PoolDepleted.selector);
         rewardDistributor.claimParticipationReward(contentId, roundId);
 
         vm.startPrank(owner);
@@ -3657,11 +3667,13 @@ contract RoundIntegrationTest is VotingTestBase {
         assertEq(
             rewardDistributor.roundParticipationRewardReserved(contentId, roundId),
             0,
-            "underfunded settlement should not leave a partial reservation behind"
+            "underfunded settlement should leave reserved=0 after rolling back the partial reservation"
         );
 
+        // LP-1 fix: claim reverts with PoolDepleted (reservation incomplete, pool persisted),
+        // not NoPool (which was the pre-fix permanent-bricking failure mode).
         vm.prank(voter1);
-        vm.expectRevert(RoundRewardDistributor.NoPool.selector);
+        vm.expectRevert(RoundRewardDistributor.PoolDepleted.selector);
         rewardDistributor.claimParticipationReward(contentId, roundId);
 
         vm.expectRevert(RoundRewardDistributor.ParticipationRewardsOutstanding.selector);
@@ -3867,8 +3879,21 @@ contract RoundIntegrationTest is VotingTestBase {
         uint256 roundId = _settleRoundWith(voters, contentId, dirs, STAKE);
 
         assertEq(tinyPool.reservedRewards(address(rewardDistributor)), 0, "partial reservations should be rolled back");
+        // LP-1 fix: the round metadata (pool, rate, owed) IS now persisted on a zero/partial
+        // reservation, so claimParticipationReward no longer reverts with NoPool — it reverts
+        // with PoolDepleted because the reservation is still incomplete pending a backfill.
+        assertEq(
+            rewardDistributor.roundParticipationRewardPool(contentId, roundId),
+            address(tinyPool),
+            "pool address should be persisted for deferred backfill"
+        );
+        assertGt(
+            rewardDistributor.roundParticipationRewardOwed(contentId, roundId),
+            0,
+            "owed amount should be persisted for deferred backfill"
+        );
         vm.prank(voter1);
-        vm.expectRevert(RoundRewardDistributor.NoPool.selector);
+        vm.expectRevert(RoundRewardDistributor.PoolDepleted.selector);
         rewardDistributor.claimParticipationReward(contentId, roundId);
 
         vm.startPrank(owner);
@@ -4030,6 +4055,140 @@ contract RoundIntegrationTest is VotingTestBase {
             balAfter - balBefore,
             _expectedParticipationReward(contentId, roundId, voter1),
             "backfill should repair rate snapshot failures"
+        );
+    }
+
+    /// @notice LP-1 regression: when the participation pool is empty at settlement time, the
+    ///         round's pool address, owed amount, and rate-bps MUST be persisted so a later
+    ///         {backfillParticipationRewards} can complete the reservation. Pre-fix this
+    ///         scenario hit the non-`requireFullReservation` early-return BEFORE the storage
+    ///         assignments, leaving roundParticipationRewardPool == address(0) and silently
+    ///         forfeiting every winning voter's reward.
+    function testParticipationPoolEmptyAtSettlement_PersistsOwedAmount() public {
+        // Deposit a small amount, then reserve it away so the pool's poolBalance == 0 at
+        // settlement-time reserveReward call but the pool address is still wired in config.
+        ParticipationPool emptyPool = new ParticipationPool(address(lrepToken), owner);
+        emptyPool.setAuthorizedCaller(address(rewardDistributor), true);
+
+        vm.startPrank(owner);
+        ProtocolConfig(address(votingEngine.protocolConfig())).setParticipationPool(address(emptyPool));
+        vm.stopPrank();
+
+        // Pool has zero balance — reserveReward will return 0 → snapshot path hits the
+        // non-requireFullReservation early-return.
+        assertEq(emptyPool.poolBalance(), 0, "fixture: pool must start empty");
+
+        uint256 contentId = _submitContent();
+        address[] memory voters = new address[](3);
+        voters[0] = voter1;
+        voters[1] = voter2;
+        voters[2] = voter3;
+        bool[] memory dirs = new bool[](3);
+        dirs[0] = true;
+        dirs[1] = true;
+        dirs[2] = false;
+        uint256 roundId = _settleRoundWith(voters, contentId, dirs, STAKE);
+
+        // Post-fix: pool address, rate, and owed amount must be persisted even though no
+        // reservation could be made against the empty pool.
+        assertEq(
+            rewardDistributor.roundParticipationRewardPool(contentId, roundId),
+            address(emptyPool),
+            "pool address should be persisted on zero-reservation snapshot"
+        );
+        assertEq(
+            rewardDistributor.roundParticipationRewardReserved(contentId, roundId),
+            0,
+            "reservation should remain zero when pool was empty"
+        );
+        assertGt(
+            rewardDistributor.roundParticipationRewardOwed(contentId, roundId),
+            0,
+            "owed amount should be persisted on zero-reservation snapshot"
+        );
+        assertGt(
+            rewardDistributor.roundParticipationRewardRateBps(contentId, roundId),
+            0,
+            "rate bps should be persisted on zero-reservation snapshot"
+        );
+
+        // Claim now reverts with PoolDepleted (reservation incomplete) — NOT NoPool (which
+        // would be the pre-fix permanent-bricking failure mode).
+        vm.prank(voter1);
+        vm.expectRevert(RoundRewardDistributor.PoolDepleted.selector);
+        rewardDistributor.claimParticipationReward(contentId, roundId);
+    }
+
+    /// @notice LP-1 regression: governance can recover the round by refilling the
+    ///         participation pool and calling {backfillParticipationRewards}, after which
+    ///         every winning voter can claim their full participation reward.
+    function testParticipationPoolEmptyAtSettlement_BackfillRecoversReward() public {
+        ParticipationPool recoveryPool = new ParticipationPool(address(lrepToken), owner);
+        recoveryPool.setAuthorizedCaller(address(rewardDistributor), true);
+
+        vm.startPrank(owner);
+        ProtocolConfig(address(votingEngine.protocolConfig())).setParticipationPool(address(recoveryPool));
+        vm.stopPrank();
+
+        assertEq(recoveryPool.poolBalance(), 0, "fixture: pool must start empty");
+
+        uint256 contentId = _submitContent();
+        address[] memory voters = new address[](3);
+        voters[0] = voter1;
+        voters[1] = voter2;
+        voters[2] = voter3;
+        bool[] memory dirs = new bool[](3);
+        dirs[0] = true;
+        dirs[1] = true;
+        dirs[2] = false;
+        uint256 roundId = _settleRoundWith(voters, contentId, dirs, STAKE);
+
+        // Sanity: claim is blocked by PoolDepleted until backfill runs.
+        vm.prank(voter1);
+        vm.expectRevert(RoundRewardDistributor.PoolDepleted.selector);
+        rewardDistributor.claimParticipationReward(contentId, roundId);
+
+        // Governance refills the participation pool and runs backfill against the SAME pool
+        // address that was persisted at settlement.
+        vm.startPrank(owner);
+        lrepToken.mint(owner, 1_000_000e6);
+        lrepToken.approve(address(recoveryPool), 1_000_000e6);
+        recoveryPool.depositPool(1_000_000e6);
+        rewardDistributor.backfillParticipationRewards(contentId, roundId, address(recoveryPool), 9000);
+        vm.stopPrank();
+
+        assertEq(
+            rewardDistributor.roundParticipationRewardReserved(contentId, roundId),
+            rewardDistributor.roundParticipationRewardOwed(contentId, roundId),
+            "backfill should fully reserve the owed amount once the pool is refilled"
+        );
+
+        // Every winning voter can now claim and receive their participation bonus.
+        uint256 voter1BalBefore = lrepToken.balanceOf(voter1);
+        vm.prank(voter1);
+        rewardDistributor.claimParticipationReward(contentId, roundId);
+        uint256 voter1Received = lrepToken.balanceOf(voter1) - voter1BalBefore;
+        assertEq(
+            voter1Received,
+            _expectedParticipationReward(contentId, roundId, voter1),
+            "voter1 should receive the full participation reward owed at settlement"
+        );
+
+        uint256 voter2BalBefore = lrepToken.balanceOf(voter2);
+        vm.prank(voter2);
+        rewardDistributor.claimParticipationReward(contentId, roundId);
+        uint256 voter2Received = lrepToken.balanceOf(voter2) - voter2BalBefore;
+        assertEq(
+            voter2Received,
+            _expectedParticipationReward(contentId, roundId, voter2),
+            "voter2 should receive the full participation reward owed at settlement"
+        );
+
+        // Total paid-out matches owed.
+        assertEq(
+            rewardDistributor.roundParticipationRewardPaidTotal(contentId, roundId),
+            voter1Received + voter2Received,
+            "paidTotal should track every successful claim"
         );
     }
 

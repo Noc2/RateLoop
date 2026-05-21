@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+pragma solidity ^0.8.34;
 
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
@@ -66,6 +66,19 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         uint256 indexed roundId,
         uint256 bundleIndex,
         uint256 roundSetIndex
+    );
+
+    /// @notice FE-6 (2026-05-20 follow-up audit): emitted when `_recordBundleQuestionTerminal`
+    ///         skips a terminal event without recording it. Off-chain monitors can subscribe to
+    ///         detect stuck bundle progression caused by ordering / refund / cursor mismatch
+    ///         rather than inferring the skip from the absence of `QuestionBundleRoundRecorded`.
+    /// @param reasonCode 1 = bundle refunded, 2 = roundSet beyond required, 3 = roundSet behind
+    ///                   completed cursor, 4 = roundId not strictly greater than the current
+    ///                   set's recorded round, 5 = roundId not strictly greater than the prior
+    ///                   set's recorded round, 6 = round terminal was non-settled (rejected /
+    ///                   cancelled). reasonCode = 0 reserved.
+    event QuestionBundleTerminalSkipped(
+        uint256 indexed bundleId, uint256 indexed contentId, uint256 indexed roundId, uint8 reasonCode
     );
     event QuestionBundleRoundSetQualified(
         uint256 indexed bundleId, uint256 indexed roundSetIndex, uint256 allocation, uint256 frontendFeeAllocation
@@ -623,22 +636,40 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         if (bundleId == 0) return;
 
         BundleReward storage bundle = _getExistingBundleReward(bundleRewards, bundleId);
-        if (bundle.refunded) return;
+        if (bundle.refunded) {
+            emit QuestionBundleTerminalSkipped(bundleId, contentId, roundId, 1);
+            return;
+        }
 
         uint256 bundleIndex = contentBundleIndex[contentId];
         _advanceBundleQuestionTerminalSyncCursor(bundleQuestionTerminalSyncCursor, bundleId, bundleIndex, roundId);
 
         uint256 roundSetIndex = bundleQuestionRecordedRounds[bundleId][bundleIndex];
-        if (roundSetIndex >= bundle.requiredSettledRounds) return;
-        if (roundSetIndex < bundle.completedRoundSets) return;
-        if (roundId <= bundleRoundIds[bundleId][bundleIndex][roundSetIndex]) return;
+        if (roundSetIndex >= bundle.requiredSettledRounds) {
+            emit QuestionBundleTerminalSkipped(bundleId, contentId, roundId, 2);
+            return;
+        }
+        if (roundSetIndex < bundle.completedRoundSets) {
+            emit QuestionBundleTerminalSkipped(bundleId, contentId, roundId, 3);
+            return;
+        }
+        if (roundId <= bundleRoundIds[bundleId][bundleIndex][roundSetIndex]) {
+            emit QuestionBundleTerminalSkipped(bundleId, contentId, roundId, 4);
+            return;
+        }
         if (roundSetIndex != 0) {
             unchecked {
-                if (roundId <= bundleRoundIds[bundleId][bundleIndex][roundSetIndex - 1]) return;
+                if (roundId <= bundleRoundIds[bundleId][bundleIndex][roundSetIndex - 1]) {
+                    emit QuestionBundleTerminalSkipped(bundleId, contentId, roundId, 5);
+                    return;
+                }
             }
         }
 
-        if (!settled) return;
+        if (!settled) {
+            emit QuestionBundleTerminalSkipped(bundleId, contentId, roundId, 6);
+            return;
+        }
 
         bundleRoundIds[bundleId][bundleIndex][roundSetIndex] = uint64(roundId);
         bundleQuestionRecordedRounds[bundleId][bundleIndex] = uint32(roundSetIndex + 1);
@@ -850,7 +881,10 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         bundleRoundSetSnapshots[bundleId][roundSetIndex] = BundleRoundSetSnapshot({
             qualified: true,
             claimedCount: 0,
-            eligibleCompleters: uint32(completerCount),
+            // FE-5 (2026-05-20 follow-up audit): use SafeCast.toUint32 for consistency with the
+            // rest of the codebase. completerCount is currently bounded by uint16 commitCount so
+            // the cast is sound, but raw uint32(x) bypasses the project's safe-cast policy.
+            eligibleCompleters: completerCount.toUint32(),
             allocation: allocation,
             frontendFeeAllocation: frontendFeeAllocation
         });

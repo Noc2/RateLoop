@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.34;
 
 contract MockQuestionRewardPoolEscrow {
     /// @dev I-Identity-A: ContentRegistry.setQuestionRewardPoolEscrow now probes this

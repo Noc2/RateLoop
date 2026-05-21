@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+pragma solidity ^0.8.34;
 
 import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
@@ -196,6 +196,13 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         uint256 rewardRateBps,
         uint256 totalReward
     );
+    /// @notice LP-1: emitted whenever a settled round's participation reward owed amount has been
+    ///         persisted but not fully reserved against the participation pool. Off-chain monitors
+    ///         can subscribe to this to detect deferred-reservation state and queue an admin
+    ///         {backfillParticipationRewards} once governance refills the pool. Emitted from both
+    ///         the settlement-time snapshot path (partial or zero reservation) and the admin
+    ///         backfill path while the reservation is still incomplete.
+    event RoundParticipationRewardOwed(uint256 indexed contentId, uint256 indexed roundId, uint256 owedAmount);
     event StrandedLrepSwept(address indexed treasury, uint256 amount);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
@@ -1072,25 +1079,40 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
 
         reservedReward = roundParticipationRewardReserved[contentId][roundId];
         uint256 previousReservedReward = reservedReward;
+        bool reservationShortfall = false;
         if (reservedReward < totalReward) {
             uint256 additionalReserved =
                 IParticipationPool(rewardPool).reserveReward(address(this), totalReward - reservedReward);
             if (additionalReserved > 0) {
                 uint256 nextReservedReward = reservedReward + additionalReserved;
                 if (nextReservedReward < totalReward) {
+                    // LP-1 fix: roll back partial reservation so the pool retains the freed balance
+                    // for other rounds, but still persist the round metadata below so a later
+                    // {backfillParticipationRewards} can complete the reservation once governance
+                    // refills the pool. Without persistence the round's owed amount and pool
+                    // pointer would be lost and every winner would silently forfeit.
                     uint256 releasedReserved = IParticipationPool(rewardPool).releaseReservedReward(additionalReserved);
                     if (releasedReserved != additionalReserved) revert InvalidParticipationSnapshot();
                     if (requireFullReservation) revert PoolDepleted();
-                    return (totalReward, reservedReward, false);
+                    reservationShortfall = true;
+                } else {
+                    reservedReward = nextReservedReward;
                 }
-                reservedReward = nextReservedReward;
             } else if (requireFullReservation) {
                 revert PoolDepleted();
             } else if (totalReward > 0) {
-                return (totalReward, reservedReward, false);
+                // LP-1 fix: pool returned zero (empty / capped to zero). Persist the metadata
+                // so backfill can later reserve the owed amount.
+                reservationShortfall = true;
             }
         }
 
+        // LP-1 fix: persist pool address, rate, and owed amount UNCONDITIONALLY (even on
+        // zero/partial reservation) so that a later {backfillParticipationRewards} call can
+        // complete the reservation against a refilled pool. Prior to this change, the early
+        // returns above bypassed the assignments below and left
+        // roundParticipationRewardPool == address(0), which permanently bricked
+        // claimParticipationReward (NoPool) and even the admin backfill path (PoolDepleted).
         roundParticipationRewardPool[contentId][roundId] = rewardPool;
         roundParticipationRewardRateBps[contentId][roundId] = rewardRateBps;
         if (roundParticipationRewardOwed[contentId][roundId] == 0) {
@@ -1099,6 +1121,11 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         roundParticipationRewardReserved[contentId][roundId] = reservedReward;
         if (roundParticipationRewardClaimableAt[contentId][roundId] == 0 || reservedReward > previousReservedReward) {
             roundParticipationRewardClaimableAt[contentId][roundId] = uint48(block.timestamp);
+        }
+
+        if (reservationShortfall) {
+            emit RoundParticipationRewardOwed(contentId, roundId, totalReward);
+            return (totalReward, reservedReward, false);
         }
         fullyReserved = true;
     }

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+pragma solidity ^0.8.34;
 
 import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
@@ -24,6 +24,7 @@ import {
 } from "./libraries/QuestionRewardPoolEscrowClaimLib.sol";
 import { QuestionRewardPoolEscrowEligibilityLib } from "./libraries/QuestionRewardPoolEscrowEligibilityLib.sol";
 import { QuestionRewardPoolEscrowQualificationLib } from "./libraries/QuestionRewardPoolEscrowQualificationLib.sol";
+import { QuestionRewardPoolEscrowRecoveryLib } from "./libraries/QuestionRewardPoolEscrowRecoveryLib.sol";
 import { QuestionRewardPoolEscrowPoolActionsLib } from "./libraries/QuestionRewardPoolEscrowPoolActionsLib.sol";
 import { QuestionRewardPoolEscrowTransferLib } from "./libraries/QuestionRewardPoolEscrowTransferLib.sol";
 import {
@@ -89,6 +90,15 @@ contract QuestionRewardPoolEscrow is
     uint16 public defaultFrontendFeeBps;
     mapping(uint256 => address) private rewardPoolClusterPayoutOracle;
     mapping(uint256 => mapping(uint256 => uint256)) private bundleQuestionTerminalSyncCursor;
+    // FE-1 (audit 2026-05-20-followup): track rounds whose finalized snapshot was rejected and
+    // whose allocation was returned via `recoverRejectedSnapshotRound`. Required so the admin
+    // can later reopen the round for requalification once the oracle finalizes a NEW snapshot
+    // with a different `weightRoot`. Without this, honest voters of the rejected round are
+    // permanently locked out because `nextRoundToEvaluate` is advanced past `roundId`.
+    mapping(uint256 => mapping(uint256 => bool)) public rejectedRecoveredRound;
+    /// @notice Tracks recovered rounds the admin reopened for requalification. The
+    ///         qualification path honours this flag to admit `roundId != nextRoundToEvaluate`.
+    mapping(uint256 => mapping(uint256 => bool)) public reopenedRecoveredRound;
 
     event RewardPoolCreated(
         uint256 indexed rewardPoolId,
@@ -152,10 +162,14 @@ contract QuestionRewardPoolEscrow is
     );
     event RewardPoolRefunded(uint256 indexed rewardPoolId, address indexed funder, uint256 amount);
     event RewardPoolForfeited(uint256 indexed rewardPoolId, address indexed treasury, uint256 amount);
-    event DefaultFrontendFeeBpsUpdated(uint256 previousFrontendFeeBps, uint256 newFrontendFeeBps);
     event NonAssetTokenRecovered(address indexed token, address indexed to, uint256 amount);
     event RejectedSnapshotRoundRecovered(
         uint256 indexed rewardPoolId, uint256 indexed contentId, uint256 indexed roundId, uint256 allocationReturned
+    );
+    /// @notice Emitted by `reopenRecoveredSnapshotRound` when an admin authorises a recovered
+    ///         round to be requalified against a NEW finalized oracle snapshot. (FE-1.)
+    event RecoveredSnapshotRoundReopened(
+        uint256 indexed rewardPoolId, uint256 indexed contentId, uint256 indexed roundId, bytes32 newWeightRoot
     );
     event RewardPoolPurposeSet(
         uint256 indexed rewardPoolId, uint8 indexed bountyKind, uint256 indexed challengedRoundId, bytes32 reasonHash
@@ -239,6 +253,15 @@ contract QuestionRewardPoolEscrow is
         defaultFrontendFeeBps = DEFAULT_FRONTEND_FEE_BPS.toUint16();
     }
 
+    /// @notice Create a reward pool with the default open-eligibility policy.
+    /// @dev FE-2 (2026-05-20 follow-up audit): the funder's effective refund-eligibility time is
+    ///      `max(bountyClosesAt, lastQualifyingRound.settledAt) + 7 days`, NOT
+    ///      `bountyClosesAt + 7 days`. Each round qualification advances the per-pool
+    ///      `claimDeadline` forward (never backward) so claimants always get a full 7-day grace
+    ///      after the final qualifying round settles. For pools with `requiredSettledRounds > 1`
+    ///      on slow-moving content, the funder's refund window therefore extends past
+    ///      `bountyClosesAt`. The intent is to guarantee a 7-day claim window for the LAST
+    ///      qualifying round, even if the bounty closes earlier on the wall clock.
     function createRewardPool(
         uint256 contentId,
         uint256 amount,
@@ -900,36 +923,48 @@ contract QuestionRewardPoolEscrow is
         onlyRole(DEFAULT_ADMIN_ROLE)
         nonReentrant
     {
-        RewardPool storage rewardPool = _getExistingRewardPool(rewardPoolId);
-        require(_usesClusterPayoutSnapshot(rewardPool), "Not cluster-snapshot pool");
+        QuestionRewardPoolEscrowRecoveryLib.recoverRejectedSnapshotRound(
+            rewardPools,
+            roundSnapshots,
+            rewardPoolClusterPayoutOracle,
+            rejectedRecoveredRound,
+            rewardPoolId,
+            roundId,
+            PAYOUT_DOMAIN_QUESTION_REWARD
+        );
+    }
 
-        RoundSnapshot storage snapshot = roundSnapshots[rewardPoolId][roundId];
-        require(snapshot.qualified, "Round not qualified");
-        require(!_snapshotHasPaidClaim(snapshot), "Claims already paid");
-
-        address oracleAddr = rewardPoolClusterPayoutOracle[rewardPoolId];
-        require(oracleAddr != address(0), "Oracle not pinned");
-        IClusterPayoutOracle oracle = IClusterPayoutOracle(oracleAddr);
-        IClusterPayoutOracle.RoundPayoutSnapshot memory oracleSnapshot =
-            oracle.getRoundPayoutSnapshot(PAYOUT_DOMAIN_QUESTION_REWARD, rewardPoolId, rewardPool.contentId, roundId);
-        bytes32 snapshotKey =
-            oracle.roundPayoutSnapshotKey(PAYOUT_DOMAIN_QUESTION_REWARD, rewardPoolId, rewardPool.contentId, roundId);
-        bool cachedRootRejected = oracleSnapshot.status == IClusterPayoutOracle.SnapshotStatus.Rejected
-            && oracleSnapshot.weightRoot == snapshot.clusterWeightRoot;
-        if (!cachedRootRejected) {
-            cachedRootRejected = oracle.rejectedRoundPayoutSnapshotRoots(snapshotKey, snapshot.clusterWeightRoot);
-        }
-        require(cachedRootRejected, "Snapshot not rejected");
-
-        uint256 allocationToReturn = snapshot.allocation;
-        rewardPool.unallocatedAmount += allocationToReturn;
-        require(rewardPool.qualifiedRounds > 0, "No qualified rounds");
-        unchecked {
-            rewardPool.qualifiedRounds -= 1;
-        }
-        delete roundSnapshots[rewardPoolId][roundId];
-
-        emit RejectedSnapshotRoundRecovered(rewardPoolId, rewardPool.contentId, roundId, allocationToReturn);
+    /// @notice Reopen a previously recovered round for requalification once the oracle has a
+    ///         NEW finalized snapshot whose `weightRoot` is not on the rejected set.
+    /// @dev FE-1 (audit 2026-05-20-followup). Without this entrypoint, honest voters of a
+    ///      round whose initial snapshot was rejected by the arbiter are permanently locked
+    ///      out of this pool's payout because `recoverRejectedSnapshotRound` advances
+    ///      `nextRoundToEvaluate` past the recovered round to block replay of the same
+    ///      rejected snapshot.
+    ///
+    ///      Gating:
+    ///        * `DEFAULT_ADMIN_ROLE` — same role as `recoverRejectedSnapshotRound`.
+    ///        * The pool MUST be cluster-snapshot-backed (USDC + pinned oracle).
+    ///        * The round MUST have been previously recovered (`rejectedRecoveredRound` flag).
+    ///        * The oracle MUST hold a finalized snapshot whose `weightRoot` is NOT on the
+    ///          per-key rejected set; the oracle's propose path already blocks re-proposing
+    ///          a rejected root, so this is defence-in-depth.
+    ///        * The pool must still be incomplete (not refunded, not fully qualified).
+    function reopenRecoveredSnapshotRound(uint256 rewardPoolId, uint256 roundId)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+        nonReentrant
+    {
+        QuestionRewardPoolEscrowRecoveryLib.reopenRecoveredSnapshotRound(
+            rewardPools,
+            roundSnapshots,
+            rewardPoolClusterPayoutOracle,
+            rejectedRecoveredRound,
+            reopenedRecoveredRound,
+            rewardPoolId,
+            roundId,
+            PAYOUT_DOMAIN_QUESTION_REWARD
+        );
     }
 
     function recordBundleQuestionTerminal(uint256 contentId, uint256 roundId, bool settled) external {
@@ -1185,6 +1220,20 @@ contract QuestionRewardPoolEscrow is
         return (rewardPool.bountyEligibility, rewardPool.bountyEligibilityDataHash);
     }
 
+    /// @notice Returns the unix timestamp at which the funder of `rewardPoolId` becomes eligible
+    ///         to call `refundExpiredRewardPool` for the COMPLETE-pool refund path. The funder
+    ///         must wait until `claimDeadline + 7 days`. Returns 0 if the pool is already fully
+    ///         refunded or does not exist.
+    /// @dev FE-2 (2026-05-20 follow-up audit): off-chain helper. `claimDeadline` advances as
+    ///      late rounds qualify, so this value is only meaningful in tandem with
+    ///      `qualifiedRounds == requiredSettledRounds` (i.e., the pool is complete). Until then,
+    ///      future qualifications can push the deadline further out.
+    function rewardPoolRefundEligibleAt(uint256 rewardPoolId) external view returns (uint64) {
+        RewardPool storage rewardPool = rewardPools[rewardPoolId];
+        if (rewardPool.id == 0 || rewardPool.refunded || rewardPool.claimDeadline == 0) return 0;
+        return uint64(uint256(rewardPool.claimDeadline) + BUNDLE_CLAIM_GRACE);
+    }
+
     function getQuestionBundleEligibility(uint256 bundleId)
         external
         view
@@ -1244,6 +1293,16 @@ contract QuestionRewardPoolEscrow is
     }
 
     function _qualifyRound(uint256 rewardPoolId, RewardPool storage rewardPool, uint256 roundId) internal {
+        // FE-1 (audit 2026-05-20-followup): the cluster-snapshot qualification path admits
+        // either (a) `roundId == nextRoundToEvaluate` (the normal sequential cursor) or
+        // (b) a previously recovered round that the admin has reopened against a NEW oracle
+        // snapshot. Clear the reopen flag eagerly here so the post-qualify state matches the
+        // "single qualification per round" invariant — qualification can revert below, in
+        // which case the flag write reverts with it.
+        bool reopened = reopenedRecoveredRound[rewardPoolId][roundId];
+        if (reopened) {
+            reopenedRecoveredRound[rewardPoolId][roundId] = false;
+        }
         if (_usesClusterPayoutSnapshot(rewardPool)) {
             QuestionRewardPoolEscrowQualificationLib.qualifyRoundWithClusterSnapshot(
                 roundSnapshots,
@@ -1254,7 +1313,8 @@ contract QuestionRewardPoolEscrow is
                 rewardPool,
                 rewardPoolId,
                 roundId,
-                PAYOUT_DOMAIN_QUESTION_REWARD
+                PAYOUT_DOMAIN_QUESTION_REWARD,
+                reopened
             );
             return;
         }
@@ -1273,7 +1333,8 @@ contract QuestionRewardPoolEscrow is
             rewardPool,
             rewardPoolId,
             roundId,
-            BPS_SCALE
+            BPS_SCALE,
+            reopened
         );
 
         emit RewardPoolRoundQualified(
@@ -1382,5 +1443,5 @@ contract QuestionRewardPoolEscrow is
         );
     }
 
-    uint256[50] private __gap;
+    uint256[48] private __gap;
 }

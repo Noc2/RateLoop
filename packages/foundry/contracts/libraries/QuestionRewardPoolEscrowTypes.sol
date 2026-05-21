@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+pragma solidity ^0.8.34;
 
 uint8 constant BOUNTY_ELIGIBILITY_OPEN = 0;
 uint8 constant BOUNTY_ELIGIBILITY_VERIFIED_HUMAN = 1;

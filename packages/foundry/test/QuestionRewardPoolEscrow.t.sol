@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.34;
 
 import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import { VotingTestBase } from "./helpers/VotingTestHelpers.sol";
@@ -2911,6 +2911,112 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         RoundSnapshot memory recovered = rewardPoolEscrow.getRoundSnapshot(rewardPoolId, roundId);
         assertFalse(recovered.qualified);
     }
+
+    // FE-1 (audit 2026-05-20-followup): regression test. Confirms that after a
+    // rejected-and-recovered snapshot, an admin can reopen the round once the oracle has a NEW
+    // finalized snapshot with a different weightRoot, and honest voters can then claim.
+    function testReopenRecoveredSnapshotRound_AllowsHonestRequalification() public {
+        ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
+        uint256 contentId = _submitQuestion("");
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+
+        uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+        IClusterPayoutOracle.PayoutWeight memory payoutWeight =
+            _clusterPayoutWeight(rewardPoolId, contentId, roundId, 0);
+
+        // 1) Finalize an initial (later-to-be-rejected) snapshot, qualify, then reject it.
+        bytes32 originalRoot = oracle.payoutWeightLeaf(payoutWeight);
+        _finalizeClusterPayoutSnapshotWithRoot(
+            oracle, rewardPoolId, contentId, roundId, 3, 30_000, payoutWeight.effectiveWeight, originalRoot
+        );
+        rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
+
+        bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(1, rewardPoolId, contentId, roundId);
+        oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("reject-original"));
+
+        // 2) Admin recovers the rejected-snapshot allocation. Cursor advances past `roundId`.
+        vm.prank(owner);
+        rewardPoolEscrow.recoverRejectedSnapshotRound(rewardPoolId, roundId);
+        assertTrue(rewardPoolEscrow.rejectedRecoveredRound(rewardPoolId, roundId));
+
+        // Before the fix this revert was permanent: qualifyRound complains "Round out of order".
+        vm.expectRevert("Round not recovered");
+        vm.prank(owner);
+        rewardPoolEscrow.reopenRecoveredSnapshotRound(rewardPoolId, roundId + 1);
+
+        // 3) Oracle finalizes a NEW snapshot for the SAME roundId with a DIFFERENT weightRoot.
+        IClusterPayoutOracle.PayoutWeight memory honestWeight = payoutWeight;
+        honestWeight.reasonHash = keccak256("honest-replacement");
+        bytes32 honestRoot = oracle.payoutWeightLeaf(honestWeight);
+        _finalizeClusterRoundPayoutSnapshotWithRoot(
+            oracle,
+            rewardPoolId,
+            contentId,
+            roundId,
+            uint64(roundId),
+            3,
+            30_000,
+            honestWeight.effectiveWeight,
+            honestRoot
+        );
+
+        // 4) Admin reopens the recovered round; the flag flips and the cursor rewinds (only
+        //    one advancement happened so the cursor goes from roundId+1 back to roundId).
+        vm.expectEmit(true, true, true, true);
+        emit RecoveredSnapshotRoundReopened(rewardPoolId, contentId, roundId, honestRoot);
+        vm.prank(owner);
+        rewardPoolEscrow.reopenRecoveredSnapshotRound(rewardPoolId, roundId);
+        assertTrue(rewardPoolEscrow.reopenedRecoveredRound(rewardPoolId, roundId));
+        assertFalse(rewardPoolEscrow.rejectedRecoveredRound(rewardPoolId, roundId));
+
+        // 5) Honest voter can now claim. The reopen flag is consumed during qualification.
+        bytes32[] memory proof = new bytes32[](0);
+        vm.prank(voter1);
+        uint256 paid = rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId, honestWeight, proof);
+        assertGt(paid, 0);
+        assertFalse(rewardPoolEscrow.reopenedRecoveredRound(rewardPoolId, roundId));
+
+        RoundSnapshot memory finalSnapshot = rewardPoolEscrow.getRoundSnapshot(rewardPoolId, roundId);
+        assertTrue(finalSnapshot.qualified);
+        assertEq(finalSnapshot.clusterWeightRoot, honestRoot);
+    }
+
+    // FE-1 negative test: the admin entrypoint refuses to reopen a recovered round unless the
+    // oracle has a new finalized snapshot for that round.
+    function testReopenRecoveredSnapshotRound_RevertsWithoutNewOracleSnapshot() public {
+        ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
+        uint256 contentId = _submitQuestion("");
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+
+        uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+        IClusterPayoutOracle.PayoutWeight memory payoutWeight =
+            _clusterPayoutWeight(rewardPoolId, contentId, roundId, 0);
+        bytes32 originalRoot = oracle.payoutWeightLeaf(payoutWeight);
+        _finalizeClusterPayoutSnapshotWithRoot(
+            oracle, rewardPoolId, contentId, roundId, 3, 30_000, payoutWeight.effectiveWeight, originalRoot
+        );
+        rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
+
+        bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(1, rewardPoolId, contentId, roundId);
+        oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("reject-original"));
+
+        vm.prank(owner);
+        rewardPoolEscrow.recoverRejectedSnapshotRound(rewardPoolId, roundId);
+
+        // Oracle still has the rejected snapshot only; no new finalized snapshot.
+        vm.prank(owner);
+        vm.expectRevert("Oracle snapshot not finalized");
+        rewardPoolEscrow.reopenRecoveredSnapshotRound(rewardPoolId, roundId);
+
+        // Non-admin caller is rejected regardless of oracle state.
+        vm.prank(voter1);
+        vm.expectRevert();
+        rewardPoolEscrow.reopenRecoveredSnapshotRound(rewardPoolId, roundId);
+    }
+
+    event RecoveredSnapshotRoundReopened(
+        uint256 indexed rewardPoolId, uint256 indexed contentId, uint256 indexed roundId, bytes32 newWeightRoot
+    );
 
     function testRoundSnapshotStorageLayoutAppendsFirstClaimPaidAndClusterRoot() public {
         uint256 contentId = _submitQuestion("");
