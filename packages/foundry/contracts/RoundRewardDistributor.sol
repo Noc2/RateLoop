@@ -12,7 +12,6 @@ import { RoundVotingEngine } from "./RoundVotingEngine.sol";
 import { ContentRegistry } from "./ContentRegistry.sol";
 import { ProtocolConfig } from "./ProtocolConfig.sol";
 import { IFrontendRegistry } from "./interfaces/IFrontendRegistry.sol";
-import { IParticipationPool } from "./interfaces/IParticipationPool.sol";
 import { ILaunchDistributionPool } from "./interfaces/ILaunchDistributionPool.sol";
 import { FrontendFeeDustLib } from "./libraries/FrontendFeeDustLib.sol";
 import { LaunchRaterRewardLib } from "./libraries/LaunchRaterRewardLib.sol";
@@ -35,19 +34,12 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
     error NoEligibleStake();
     error PoolExhausted();
     error PoolDepleted();
-    error VoteNotRevealed();
-    error NotWinningSide();
-    error NoParticipationRate();
-    error NoCommit();
     error NoStrandedLrep();
     error TreasuryNotSet();
-    error InvalidParticipationSnapshot();
     error UnauthorizedCaller();
     error UnauthorizedFrontendFeeCaller();
     error FrontendFeeNotClaimable();
     error FrontendFeeNotConfiscatable();
-    error ParticipationRewardsOutstanding();
-    error ParticipationRewardsAlreadyFinalized();
     error UnrevealedCleanupPending();
     error RewardFinalizationTooEarly();
     error InvalidFinalizationInput();
@@ -83,8 +75,7 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
     ///         struct is in scope for the storage mapping below; the mapping itself is
     ///         appended to the end of storage (see `pendingLaunchCreditRetry` near `__gap`)
     ///         to keep upgrade-compatibility with existing TransparentUpgradeableProxy
-    ///         deployments that already populated `frontendFeeClaimed` and the
-    ///         participation-reward maps.
+    ///         deployments that already populated `frontendFeeClaimed`.
     struct PendingLaunchCredit {
         address recipient;
         uint96 stakeAmount;
@@ -97,20 +88,6 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
     mapping(uint256 => mapping(uint256 => uint256)) public roundFrontendClaimedCount;
     mapping(uint256 => mapping(uint256 => uint256)) public roundFrontendClaimedAmount;
     mapping(uint256 => mapping(uint256 => bool)) public roundFrontendFeeDustFinalized;
-
-    // Track participation reward claims: contentId => roundId => voter => claimed/paid
-    mapping(uint256 => mapping(uint256 => mapping(address => bool))) public participationRewardClaimed;
-    mapping(uint256 => mapping(uint256 => mapping(address => uint256))) public participationRewardPaid;
-    mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) public participationRewardCommitClaimed;
-    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint256))) public participationRewardCommitPaid;
-    mapping(uint256 => mapping(uint256 => address)) public roundParticipationRewardPool;
-    mapping(uint256 => mapping(uint256 => uint256)) public roundParticipationRewardRateBps;
-    mapping(uint256 => mapping(uint256 => uint256)) public roundParticipationRewardOwed;
-    mapping(uint256 => mapping(uint256 => uint256)) public roundParticipationRewardReserved;
-    mapping(uint256 => mapping(uint256 => uint256)) public roundParticipationRewardPaidTotal;
-    mapping(uint256 => mapping(uint256 => uint256)) public roundParticipationRewardFullyClaimedCount;
-    mapping(uint256 => mapping(uint256 => bool)) public roundParticipationRewardFinalized;
-    mapping(uint256 => mapping(uint256 => uint48)) public roundParticipationRewardClaimableAt;
 
     // --- Events ---
     /// @notice Emitted when a settled-round claim pays out.
@@ -160,28 +137,6 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         address frontendRegistry,
         uint256 amount
     );
-    event ParticipationRewardClaimed(
-        uint256 indexed contentId, uint256 indexed roundId, address indexed voter, uint256 amount
-    );
-    event ParticipationRewardSnapshotted(
-        uint256 indexed contentId,
-        uint256 indexed roundId,
-        address indexed rewardPool,
-        uint256 rewardRateBps,
-        uint256 totalReward,
-        uint256 reservedReward
-    );
-    event ParticipationRewardBackfilled(
-        uint256 indexed contentId,
-        uint256 indexed roundId,
-        address indexed rewardPool,
-        uint256 rewardRateBps,
-        uint256 totalReward,
-        uint256 reservedReward
-    );
-    event ParticipationRewardFinalized(
-        uint256 indexed contentId, uint256 indexed roundId, address indexed rewardPool, uint256 releasedDust
-    );
     event VotingEngineUpdated(address votingEngine);
     event VoterRewardDustFinalized(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
     event FrontendFeeDustFinalized(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
@@ -189,20 +144,6 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         uint256 indexed contentId, uint256 indexed roundId, uint256 processedCount, uint256 expectedTotal
     );
     event FrontendFeeDustBatchReset(uint256 indexed contentId, uint256 indexed roundId);
-    event ParticipationRewardSnapshotFailed(
-        uint256 indexed contentId,
-        uint256 indexed roundId,
-        address indexed rewardPool,
-        uint256 rewardRateBps,
-        uint256 totalReward
-    );
-    /// @notice LP-1: emitted whenever a settled round's participation reward owed amount has been
-    ///         persisted but not fully reserved against the participation pool. Off-chain monitors
-    ///         can subscribe to this to detect deferred-reservation state and queue an admin
-    ///         {backfillParticipationRewards} once governance refills the pool. Emitted from both
-    ///         the settlement-time snapshot path (partial or zero reservation) and the admin
-    ///         backfill path while the reservation is still incomplete.
-    event RoundParticipationRewardOwed(uint256 indexed contentId, uint256 indexed roundId, uint256 owedAmount);
     event StrandedLrepSwept(address indexed treasury, uint256 amount);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
@@ -611,176 +552,6 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         (disposition, operator,,) = _resolveFrontendFeeDisposition(contentId, roundId, frontend, roundSettledAt);
     }
 
-    /// @notice Snapshot and reserve voter participation rewards for a settled round.
-    /// @dev Called by the voting engine during settlement so claims no longer depend on the pool's
-    ///      future authorization state or on unrelated rounds consuming the same balance first.
-    function snapshotParticipationRewards(
-        uint256 contentId,
-        uint256 roundId,
-        address rewardPool,
-        uint256 rewardRateBps,
-        uint256 weightedParticipationStake
-    ) external nonReentrant {
-        if (msg.sender != address(votingEngine)) revert UnauthorizedCaller();
-
-        (uint256 totalReward, uint256 reservedReward, bool fullyReserved) = _syncParticipationRewardSnapshot(
-            contentId, roundId, rewardPool, rewardRateBps, weightedParticipationStake, false
-        );
-        if (!fullyReserved) {
-            emit ParticipationRewardSnapshotFailed(contentId, roundId, rewardPool, rewardRateBps, totalReward);
-            return;
-        }
-
-        emit ParticipationRewardSnapshotted(contentId, roundId, rewardPool, rewardRateBps, totalReward, reservedReward);
-    }
-
-    /// @notice Backfill or top up participation reward reservations for a settled round.
-    /// @dev Governance can repair settlements where the snapshot side effect failed or top up reservations.
-    function backfillParticipationRewards(uint256 contentId, uint256 roundId, address rewardPool, uint256 rewardRateBps)
-        external
-        onlyRole(DEFAULT_ADMIN_ROLE)
-        nonReentrant
-        returns (uint256 reservedReward)
-    {
-        RoundLib.Round memory round = _readRound(contentId, roundId);
-        if (round.state != RoundLib.RoundState.Settled) revert RoundNotSettled();
-        _requireNoPendingUnrevealedCleanup(contentId, roundId);
-
-        uint256 participationStake = votingEngine.roundRbtsScored(contentId, roundId)
-            ? votingEngine.roundRbtsParticipationWeight(contentId, roundId)
-            : votingEngine.roundWinningStake(contentId, roundId);
-        uint256 totalReward;
-        bool fullyReserved;
-        (totalReward, reservedReward, fullyReserved) =
-            _syncParticipationRewardSnapshot(contentId, roundId, rewardPool, rewardRateBps, participationStake, true);
-        if (!fullyReserved) revert PoolDepleted();
-
-        emit ParticipationRewardBackfilled(contentId, roundId, rewardPool, rewardRateBps, totalReward, reservedReward);
-    }
-
-    /// @notice Claim a participation reward for the caller on a settled round.
-    /// @dev The participation reward is a pure bonus — there is no stake-refund component — so
-    ///      the entire payout routes to the current SBT holder resolved by `_resolveClaimCommit`.
-    ///      This prevents a rotated/removed delegate from capturing accumulated participation
-    ///      bonuses tied to the holder's identity.
-    function claimParticipationReward(uint256 contentId, uint256 roundId)
-        external
-        nonReentrant
-        returns (uint256 paidReward)
-    {
-        if (roundParticipationRewardFinalized[contentId][roundId]) {
-            revert ParticipationRewardsAlreadyFinalized();
-        }
-
-        RoundLib.Round memory round = _readRound(contentId, roundId);
-        if (round.state != RoundLib.RoundState.Settled) revert RoundNotSettled();
-        _requireNoPendingUnrevealedCleanup(contentId, roundId);
-
-        address rewardPoolAddress = roundParticipationRewardPool[contentId][roundId];
-        uint256 rateBps = roundParticipationRewardRateBps[contentId][roundId];
-        uint256 totalReward = roundParticipationRewardOwed[contentId][roundId];
-        uint256 reservedReward = roundParticipationRewardReserved[contentId][roundId];
-        if (rewardPoolAddress == address(0)) revert NoPool();
-
-        (bytes32 commitKey, address rewardRecipient) = _resolveClaimCommit(contentId, roundId, msg.sender);
-        if (commitKey == bytes32(0)) revert NoCommit();
-        RoundLib.Commit memory commit = _readCommit(contentId, roundId, commitKey);
-        if (commit.voter == address(0)) revert NoCommit();
-        if (
-            participationRewardCommitClaimed[contentId][roundId][commitKey]
-                || participationRewardClaimed[contentId][roundId][commit.voter]
-        ) {
-            revert AlreadyClaimed();
-        }
-        if (!commit.revealed) revert VoteNotRevealed();
-        if (commit.stakeAmount == 0) revert NoStake();
-
-        if (rateBps == 0) revert NoParticipationRate();
-
-        bool rbtsRewardRound = votingEngine.roundRbtsScored(contentId, roundId);
-        uint256 effectiveStake;
-        if (rbtsRewardRound) {
-            effectiveStake = votingEngine.commitRbtsScoringWeight(contentId, roundId, commitKey);
-        } else {
-            effectiveStake = (commit.stakeAmount * RoundLib.epochWeightBps(commit.epochIndex)) / 10000;
-        }
-        if (effectiveStake == 0 || (!rbtsRewardRound && commit.isUp != round.upWins)) revert NotWinningSide();
-        uint256 reward = effectiveStake * rateBps / 10000;
-        if (reward == 0) {
-            participationRewardCommitClaimed[contentId][roundId][commitKey] = true;
-            participationRewardClaimed[contentId][roundId][commit.voter] = true;
-            roundParticipationRewardFullyClaimedCount[contentId][roundId] += 1;
-            return 0;
-        }
-
-        uint256 currentlyClaimable = reward;
-        if (reservedReward < totalReward) {
-            currentlyClaimable = (reward * reservedReward) / totalReward;
-        }
-        if (currentlyClaimable == 0) revert PoolDepleted();
-
-        uint256 alreadyPaid = participationRewardCommitPaid[contentId][roundId][commitKey];
-        if (alreadyPaid >= currentlyClaimable) revert AlreadyClaimed();
-
-        uint256 remainingReward = currentlyClaimable - alreadyPaid;
-        paidReward = IParticipationPool(rewardPoolAddress).withdrawReservedReward(rewardRecipient, remainingReward);
-        if (paidReward == 0) revert PoolDepleted();
-
-        uint256 totalPaid = alreadyPaid + paidReward;
-        participationRewardCommitPaid[contentId][roundId][commitKey] = totalPaid;
-        participationRewardPaid[contentId][roundId][commit.voter] = totalPaid;
-        roundParticipationRewardPaidTotal[contentId][roundId] += paidReward;
-        if (totalPaid == reward) {
-            participationRewardCommitClaimed[contentId][roundId][commitKey] = true;
-            participationRewardClaimed[contentId][roundId][commit.voter] = true;
-            roundParticipationRewardFullyClaimedCount[contentId][roundId] += 1;
-        }
-
-        emit ParticipationRewardClaimed(contentId, roundId, rewardRecipient, paidReward);
-    }
-
-    /// @notice Release participation-reward dust, or stale unclaimed reservations after the finalization delay.
-    /// @dev Permissionless when every winner has fully claimed (only mathematical dust remains).
-    ///      Admin-only when finalizing via the stale-time branch with unclaimed winners — otherwise
-    ///      a griefer could trigger the cliff on every settled round to maximize forfeitures, since
-    ///      claimParticipationReward reverts once `roundParticipationRewardFinalized` is set.
-    function finalizeParticipationRewards(uint256 contentId, uint256 roundId)
-        external
-        nonReentrant
-        returns (uint256 releasedDust)
-    {
-        if (roundParticipationRewardFinalized[contentId][roundId]) {
-            revert ParticipationRewardsAlreadyFinalized();
-        }
-
-        RoundLib.Round memory round = _readRound(contentId, roundId);
-        if (round.state != RoundLib.RoundState.Settled) revert RoundNotSettled();
-        _requireNoPendingUnrevealedCleanup(contentId, roundId);
-
-        uint256 winnerCount = votingEngine.roundRbtsScored(contentId, roundId)
-            ? votingEngine.roundRbtsParticipationClaimants(contentId, roundId)
-            : (round.upWins ? round.upCount : round.downCount);
-        bool fullyClaimed = roundParticipationRewardFullyClaimedCount[contentId][roundId] == winnerCount;
-        bool stale = _participationRewardsStale(contentId, roundId, round);
-        if (!fullyClaimed && !stale) revert ParticipationRewardsOutstanding();
-        if (!fullyClaimed && !hasRole(DEFAULT_ADMIN_ROLE, msg.sender)) revert UnauthorizedCaller();
-
-        address rewardPoolAddress = roundParticipationRewardPool[contentId][roundId];
-        if (rewardPoolAddress == address(0)) revert NoPool();
-
-        uint256 reservedReward = roundParticipationRewardReserved[contentId][roundId];
-        uint256 paidTotal = roundParticipationRewardPaidTotal[contentId][roundId];
-        releasedDust = reservedReward > paidTotal ? reservedReward - paidTotal : 0;
-
-        roundParticipationRewardFinalized[contentId][roundId] = true;
-        if (releasedDust > 0) {
-            releasedDust = IParticipationPool(rewardPoolAddress).releaseReservedReward(releasedDust);
-            roundParticipationRewardReserved[contentId][roundId] = reservedReward - releasedDust;
-        }
-
-        emit ParticipationRewardFinalized(contentId, roundId, rewardPoolAddress, releasedDust);
-    }
-
     // --- Internal ---
 
     /// @dev Find a voter's commit using the O(1) voter-to-commitHash mapping.
@@ -1050,94 +821,6 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         uint256 alreadyClaimedDust = claimedAmount > expectedTotal ? claimedAmount - expectedTotal : 0;
         if (alreadyClaimedDust >= totalDust) return 0;
         return totalDust - alreadyClaimedDust;
-    }
-
-    function _syncParticipationRewardSnapshot(
-        uint256 contentId,
-        uint256 roundId,
-        address rewardPool,
-        uint256 rewardRateBps,
-        uint256 participationStake,
-        bool requireFullReservation
-    ) internal returns (uint256 totalReward, uint256 reservedReward, bool fullyReserved) {
-        if (rewardPool == address(0)) revert NoPool();
-        if (rewardRateBps == 0) revert NoParticipationRate();
-        if (roundParticipationRewardFinalized[contentId][roundId]) revert InvalidParticipationSnapshot();
-
-        address existingRewardPool = roundParticipationRewardPool[contentId][roundId];
-        if (existingRewardPool != address(0) && existingRewardPool != rewardPool) {
-            revert InvalidParticipationSnapshot();
-        }
-
-        uint256 existingRateBps = roundParticipationRewardRateBps[contentId][roundId];
-        if (existingRateBps != 0 && existingRateBps != rewardRateBps) revert InvalidParticipationSnapshot();
-
-        totalReward = roundParticipationRewardOwed[contentId][roundId];
-        if (totalReward == 0) {
-            totalReward = participationStake * rewardRateBps / 10000;
-        }
-
-        reservedReward = roundParticipationRewardReserved[contentId][roundId];
-        uint256 previousReservedReward = reservedReward;
-        bool reservationShortfall = false;
-        if (reservedReward < totalReward) {
-            uint256 additionalReserved =
-                IParticipationPool(rewardPool).reserveReward(address(this), totalReward - reservedReward);
-            if (additionalReserved > 0) {
-                uint256 nextReservedReward = reservedReward + additionalReserved;
-                if (nextReservedReward < totalReward) {
-                    // LP-1 fix: roll back partial reservation so the pool retains the freed balance
-                    // for other rounds, but still persist the round metadata below so a later
-                    // {backfillParticipationRewards} can complete the reservation once governance
-                    // refills the pool. Without persistence the round's owed amount and pool
-                    // pointer would be lost and every winner would silently forfeit.
-                    uint256 releasedReserved = IParticipationPool(rewardPool).releaseReservedReward(additionalReserved);
-                    if (releasedReserved != additionalReserved) revert InvalidParticipationSnapshot();
-                    if (requireFullReservation) revert PoolDepleted();
-                    reservationShortfall = true;
-                } else {
-                    reservedReward = nextReservedReward;
-                }
-            } else if (requireFullReservation) {
-                revert PoolDepleted();
-            } else if (totalReward > 0) {
-                // LP-1 fix: pool returned zero (empty / capped to zero). Persist the metadata
-                // so backfill can later reserve the owed amount.
-                reservationShortfall = true;
-            }
-        }
-
-        // LP-1 fix: persist pool address, rate, and owed amount UNCONDITIONALLY (even on
-        // zero/partial reservation) so that a later {backfillParticipationRewards} call can
-        // complete the reservation against a refilled pool. Prior to this change, the early
-        // returns above bypassed the assignments below and left
-        // roundParticipationRewardPool == address(0), which permanently bricked
-        // claimParticipationReward (NoPool) and even the admin backfill path (PoolDepleted).
-        roundParticipationRewardPool[contentId][roundId] = rewardPool;
-        roundParticipationRewardRateBps[contentId][roundId] = rewardRateBps;
-        if (roundParticipationRewardOwed[contentId][roundId] == 0) {
-            roundParticipationRewardOwed[contentId][roundId] = totalReward;
-        }
-        roundParticipationRewardReserved[contentId][roundId] = reservedReward;
-        if (roundParticipationRewardClaimableAt[contentId][roundId] == 0 || reservedReward > previousReservedReward) {
-            roundParticipationRewardClaimableAt[contentId][roundId] = uint48(block.timestamp);
-        }
-
-        if (reservationShortfall) {
-            emit RoundParticipationRewardOwed(contentId, roundId, totalReward);
-            return (totalReward, reservedReward, false);
-        }
-        fullyReserved = true;
-    }
-
-    function _participationRewardsStale(uint256 contentId, uint256 roundId, RoundLib.Round memory round)
-        internal
-        view
-        returns (bool)
-    {
-        uint256 claimableAt = roundParticipationRewardClaimableAt[contentId][roundId];
-        if (claimableAt == 0) claimableAt = round.settledAt;
-        return claimableAt != 0 && block.timestamp >= claimableAt + STALE_REWARD_FINALIZATION_DELAY;
     }
 
     function _protocolTreasury() internal view returns (address) {

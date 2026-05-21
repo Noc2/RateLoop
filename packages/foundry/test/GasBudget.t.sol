@@ -24,7 +24,6 @@ contract GasBudgetTest is RoundIntegrationTest {
     uint256 internal constant MAX_PROCESS_UNREVEALED_GAS = 250_000;
     uint256 internal constant MAX_CANCEL_EXPIRED_ROUND_GAS = 60_000;
     uint256 internal constant MAX_CLAIM_REWARD_GAS = 270_000;
-    uint256 internal constant MAX_CLAIM_PARTICIPATION_REWARD_GAS = 240_000;
     uint256 internal constant MAX_CLAIM_FRONTEND_FEE_GAS = 250_000;
 
     function _measureCall(address target, bytes memory callData) internal returns (uint256 gasUsed) {
@@ -304,19 +303,6 @@ contract GasBudgetTest is RoundIntegrationTest {
         );
 
         assertLe(gasUsed, MAX_CLAIM_REWARD_GAS, "claimReward gas budget exceeded");
-    }
-
-    function testGas_claimParticipationReward_underBudget() public {
-        vm.pauseGasMetering();
-        (uint256 contentId, uint256 roundId) = _settleRoundWithParticipation();
-
-        uint256 gasUsed = _measureCallAs(
-            voter1,
-            address(rewardDistributor),
-            abi.encodeCall(RoundRewardDistributor.claimParticipationReward, (contentId, roundId))
-        );
-
-        assertLe(gasUsed, MAX_CLAIM_PARTICIPATION_REWARD_GAS, "claimParticipationReward gas budget exceeded");
     }
 
     function testGas_claimFrontendFee_underBudget() public {

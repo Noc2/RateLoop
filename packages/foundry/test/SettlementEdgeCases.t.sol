@@ -11,7 +11,6 @@ import { RewardMath } from "../contracts/libraries/RewardMath.sol";
 import { RoundLib } from "../contracts/libraries/RoundLib.sol";
 import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
 import { LoopReputation } from "../contracts/LoopReputation.sol";
-import { ParticipationPool } from "../contracts/ParticipationPool.sol";
 import { FrontendRegistry } from "../contracts/FrontendRegistry.sol";
 import { VotingTestBase } from "./helpers/VotingTestHelpers.sol";
 import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
@@ -30,7 +29,6 @@ contract SettlementEdgeCasesTest is VotingTestBase {
     ContentRegistry public registry;
     RoundVotingEngine public engine;
     RoundRewardDistributor public rewardDistributor;
-    ParticipationPool public participationPool;
     FrontendRegistry public frontendRegistry;
     MockRaterIdentityRegistry public raterRegistry;
 
@@ -122,14 +120,7 @@ contract SettlementEdgeCasesTest is VotingTestBase {
         raterRegistry = new MockRaterIdentityRegistry();
         ProtocolConfig(address(engine.protocolConfig())).setRaterRegistry(address(raterRegistry));
 
-        participationPool = new ParticipationPool(address(lrepToken), owner);
-        participationPool.setAuthorizedCaller(address(rewardDistributor), true);
-        participationPool.setAuthorizedCaller(address(registry), true);
-        ProtocolConfig(address(engine.protocolConfig())).setParticipationPool(address(participationPool));
-
         lrepToken.mint(owner, 2_000_000e6);
-        lrepToken.approve(address(participationPool), 500_000e6);
-        participationPool.depositPool(500_000e6);
         lrepToken.approve(address(engine), 500_000e6);
 
         address[8] memory users = [submitter, voter1, voter2, voter3, voter4, voter5, voter6, frontend1];

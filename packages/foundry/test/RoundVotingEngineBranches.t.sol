@@ -16,7 +16,6 @@ import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
 import { TlockVoteLib } from "../contracts/libraries/TlockVoteLib.sol";
 import { VotePreflightLib } from "../contracts/libraries/VotePreflightLib.sol";
 import { LoopReputation } from "../contracts/LoopReputation.sol";
-import { ParticipationPool } from "../contracts/ParticipationPool.sol";
 import { FrontendRegistry } from "../contracts/FrontendRegistry.sol";
 import { RaterRegistry } from "../contracts/RaterRegistry.sol";
 import { MockRaterIdentityRegistry } from "./mocks/MockRaterIdentityRegistry.sol";
@@ -34,7 +33,6 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     RoundVotingEngine public engine;
     RoundRewardDistributor public rewardDistributor;
     MockRaterIdentityRegistry public mockRaterIdentityRegistry;
-    ParticipationPool public participationPool;
     FrontendRegistry public frontendRegistry;
     address internal protocolConfigAddress;
 
@@ -160,14 +158,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         ProtocolConfig(protocolConfigAddress).setFrontendRegistry(address(frontendRegistry));
         ProtocolConfig(protocolConfigAddress).setRaterRegistry(address(mockRaterIdentityRegistry));
 
-        participationPool = new ParticipationPool(address(lrepToken), owner);
-        participationPool.setAuthorizedCaller(address(rewardDistributor), true);
-        participationPool.setAuthorizedCaller(address(registry), true);
-        ProtocolConfig(protocolConfigAddress).setParticipationPool(address(participationPool));
-
         lrepToken.mint(owner, 2_000_000e6);
-        lrepToken.approve(address(participationPool), 500_000e6);
-        participationPool.depositPool(500_000e6);
         lrepToken.approve(address(engine), 500_000e6);
 
         address[9] memory users = [submitter, voter1, voter2, voter3, voter4, voter5, voter6, frontend1, delegate1];
@@ -2372,10 +2363,6 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         rewardDistributor.claimReward(contentId, roundId);
 
         vm.expectRevert(RoundRewardDistributor.UnrevealedCleanupPending.selector);
-        vm.prank(voter2);
-        rewardDistributor.claimParticipationReward(contentId, roundId);
-
-        vm.expectRevert(RoundRewardDistributor.UnrevealedCleanupPending.selector);
         vm.prank(frontend1);
         rewardDistributor.claimFrontendFee(contentId, roundId, frontend1);
 
@@ -2393,9 +2380,6 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
             STAKE - (STAKE / 100),
             "settled unrevealed stake less incentive routes to treasury"
         );
-
-        vm.prank(voter2);
-        assertGt(rewardDistributor.claimParticipationReward(contentId, roundId), 0);
 
         uint256 feesBefore = frontendRegistry.getAccumulatedFees(frontend1);
         vm.prank(frontend1);

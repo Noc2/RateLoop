@@ -9,7 +9,6 @@ import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
 import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
 import { RaterRegistry } from "../contracts/RaterRegistry.sol";
 import { LoopReputation } from "../contracts/LoopReputation.sol";
-import { ParticipationPool } from "../contracts/ParticipationPool.sol";
 import { RoundLib } from "../contracts/libraries/RoundLib.sol";
 import { RatingLib } from "../contracts/libraries/RatingLib.sol";
 import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
@@ -31,7 +30,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
     RaterRegistry public raterRegistry;
     MockCategoryRegistry public mockCategoryRegistry;
     MockQuestionRewardPoolEscrow public mockQuestionRewardPoolEscrow;
-    ParticipationPool public participationPool;
 
     address public owner = address(1);
     address public submitter = address(2);
@@ -122,13 +120,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         ProtocolConfig(address(votingEngine.protocolConfig())).setCategoryRegistry(address(mockCategoryRegistry));
         ProtocolConfig(address(votingEngine.protocolConfig())).setRaterRegistry(address(raterRegistry));
 
-        participationPool = new ParticipationPool(address(lrepToken), owner);
-        participationPool.setAuthorizedCaller(address(registry), true);
-        participationPool.setAuthorizedCaller(address(rewardDistributor), true);
-
         lrepToken.mint(owner, 2_000_000e6);
-        lrepToken.approve(address(participationPool), 500_000e6);
-        participationPool.depositPool(500_000e6);
         lrepToken.approve(address(votingEngine), 500_000e6);
 
         address[9] memory users = [submitter, voter1, voter2, voter3, voter4, voter5, voter6, keeper, delegate];
@@ -479,20 +471,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         votingEngine.revealVoteByCommitKey(contentId, roundId, ck2, true, 5_000, salt2);
         votingEngine.revealVoteByCommitKey(contentId, roundId, ck3, false, 5_000, salt3);
         _settleAfterRbtsSeed(votingEngine, contentId, roundId);
-    }
-
-    function _configureParticipationPoolSnapshots() internal {
-        vm.startPrank(owner);
-        ProtocolConfig(address(votingEngine.protocolConfig())).setParticipationPool(address(participationPool));
-        vm.stopPrank();
-    }
-
-    function _mockParticipationRateUnavailable() internal {
-        vm.mockCallRevert(
-            address(participationPool),
-            abi.encodeWithSelector(ParticipationPool.getCurrentRateBps.selector),
-            abi.encodeWithSignature("Error(string)", "rate unavailable")
-        );
     }
 
     // =========================================================================
@@ -2353,62 +2331,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
         vm.warp(T0 + 30 days + 30 minutes);
         assertTrue(registry.isDormancyEligible(1), "stale settlement must not refresh dormancy anchor");
-    }
-
-    function test_SetVotingEngine_OldEngineSettlementUsesEngineSpecificDistributor() public {
-        vm.startPrank(submitter);
-        lrepToken.approve(address(registry), 10e6);
-        _submitContentWithReservation(
-            registry, "https://example.com/old-engine-participation", "goal", "goal", "tags", 0
-        );
-        vm.stopPrank();
-
-        (bytes32 ck1, bytes32 salt1) = _commit(voter1, 1, true);
-        (bytes32 ck2, bytes32 salt2) = _commit(voter2, 1, true);
-        (bytes32 ck3, bytes32 salt3) = _commit(voter3, 1, false);
-        uint256 roundId = RoundEngineReadHelpers.activeRoundId(votingEngine, 1);
-        ProtocolConfig config = ProtocolConfig(address(votingEngine.protocolConfig()));
-
-        vm.startPrank(owner);
-        RoundVotingEngine replacementEngine = RoundVotingEngine(
-            address(
-                new ERC1967Proxy(
-                    address(new RoundVotingEngine()),
-                    abi.encodeCall(
-                        RoundVotingEngine.initialize, (owner, address(lrepToken), address(registry), address(config))
-                    )
-                )
-            )
-        );
-        RoundRewardDistributor replacementDistributor = RoundRewardDistributor(
-            address(
-                new ERC1967Proxy(
-                    address(new RoundRewardDistributor()),
-                    abi.encodeCall(
-                        RoundRewardDistributor.initialize,
-                        (owner, address(lrepToken), address(replacementEngine), address(registry))
-                    )
-                )
-            )
-        );
-        config.setRewardDistributor(address(replacementDistributor));
-        config.setParticipationPool(address(participationPool));
-        registry.pause();
-        registry.setVotingEngine(address(replacementEngine));
-        registry.unpause();
-        vm.stopPrank();
-
-        _warpPastTlockRevealTime(block.timestamp + 1 hours);
-        votingEngine.revealVoteByCommitKey(1, roundId, ck1, true, 5_000, salt1);
-        votingEngine.revealVoteByCommitKey(1, roundId, ck2, true, 5_000, salt2);
-        votingEngine.revealVoteByCommitKey(1, roundId, ck3, false, 5_000, salt3);
-        _settleAfterRbtsSeed(votingEngine, 1, roundId);
-
-        assertEq(rewardDistributor.roundParticipationRewardPool(1, roundId), address(participationPool));
-        assertEq(replacementDistributor.roundParticipationRewardPool(1, roundId), address(0));
-
-        vm.prank(voter1);
-        assertGt(rewardDistributor.claimParticipationReward(1, roundId), 0);
     }
 
     function test_CancelContent_VotingEngineNotSet_AllowsCancel() public {

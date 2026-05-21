@@ -631,12 +631,6 @@ contract SecurityAccessControlTest is Test {
         ProtocolConfig(protocolConfigAddress).setRaterRegistry(attacker);
     }
 
-    function test_ACL_Engine_setParticipationPool_Unauthorized() public {
-        vm.prank(attacker);
-        _expectUnauthorized(attacker, CONFIG_ROLE_ENGINE);
-        ProtocolConfig(protocolConfigAddress).setParticipationPool(attacker);
-    }
-
     // ── RoundVotingEngine — PAUSER_ROLE (2 tests) ──
 
     function test_ACL_Engine_pause_Unauthorized() public {

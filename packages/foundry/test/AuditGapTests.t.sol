@@ -11,14 +11,13 @@ import { RoundLib } from "../contracts/libraries/RoundLib.sol";
 import { RewardMath } from "../contracts/libraries/RewardMath.sol";
 import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
 import { LoopReputation } from "../contracts/LoopReputation.sol";
-import { ParticipationPool } from "../contracts/ParticipationPool.sol";
 import { FrontendRegistry } from "../contracts/FrontendRegistry.sol";
 import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
 
 /// @title Audit Gap Tests — Priority-1 test coverage for gaps identified during security audit.
 /// @dev Covers:
 ///   1. Paused state enforcement — new commitments stop, existing-round exits continue
-///   2. Claim paths in a single settled round (voter + loser refund + participation + frontend fee)
+///   2. Claim paths in a single settled round (voter + loser refund + frontend fee)
 ///   3. processUnrevealedVotes batch boundary edge cases
 ///   4. Tied + RevealFailed refund path precedence
 ///   5. Exact cooldown boundary timing
@@ -27,7 +26,6 @@ contract AuditGapTests is VotingTestBase {
     ContentRegistry public registry;
     RoundVotingEngine public votingEngine;
     RoundRewardDistributor public rewardDistributor;
-    ParticipationPool public participationPool;
     FrontendRegistry public frontendRegistry;
 
     address public owner = address(1);
@@ -87,13 +85,6 @@ contract AuditGapTests is VotingTestBase {
             )
         );
 
-        // ParticipationPool
-        participationPool = new ParticipationPool(address(lrepToken), owner);
-        participationPool.setAuthorizedCaller(address(rewardDistributor), true);
-        lrepToken.mint(owner, 1_000_000e6);
-        lrepToken.approve(address(participationPool), 1_000_000e6);
-        participationPool.depositPool(1_000_000e6);
-
         // FrontendRegistry
         FrontendRegistry frImpl = new FrontendRegistry();
         frontendRegistry = FrontendRegistry(
@@ -115,7 +106,6 @@ contract AuditGapTests is VotingTestBase {
         ProtocolConfig(address(votingEngine.protocolConfig())).setCategoryRegistry(address(mockCategoryRegistry));
         ProtocolConfig(address(votingEngine.protocolConfig())).setTreasury(treasury);
         ProtocolConfig(address(votingEngine.protocolConfig())).setFrontendRegistry(address(frontendRegistry));
-        ProtocolConfig(address(votingEngine.protocolConfig())).setParticipationPool(address(participationPool));
         _setTlockRoundConfig(ProtocolConfig(address(votingEngine.protocolConfig())), EPOCH_DURATION, 7 days, 3, 200);
 
         // Mint LREP to test users
@@ -341,7 +331,7 @@ contract AuditGapTests is VotingTestBase {
     // =========================================================================
 
     /// @notice Complete roundtrip: settle a round then claim voter reward,
-    ///         loser refund, participation reward, and frontend fee in one round
+    ///         loser refund, and frontend fee in one round
     ///         without double-counting.
     function test_ClaimPaths_SingleRound() public {
         uint256 contentId = _submitContent("https://full-claim-test.com");
@@ -407,21 +397,10 @@ contract AuditGapTests is VotingTestBase {
         uint256 feAfter = lrepToken.balanceOf(frontend);
         assertTrue(feAfter > feBefore, "Frontend should receive fee via claimFees");
 
-        // 5. Participation reward (voter1 = winner)
-        uint256 v1PartBefore = lrepToken.balanceOf(voter1);
-        vm.prank(voter1);
-        rewardDistributor.claimParticipationReward(contentId, 1);
-        uint256 v1PartAfter = lrepToken.balanceOf(voter1);
-        assertTrue(v1PartAfter > v1PartBefore, "Winner should get participation reward");
-
         // Verify: no double claims
         vm.prank(voter1);
         vm.expectRevert();
         rewardDistributor.claimReward(contentId, 1);
-
-        vm.prank(voter1);
-        vm.expectRevert();
-        rewardDistributor.claimParticipationReward(contentId, 1);
     }
 
     // =========================================================================

@@ -74,101 +74,29 @@
   {
     "slot": 12,
     "offset": 0,
-    "label": "participationRewardClaimed",
-    "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_address,t_bool)))"
-  },
-  {
-    "slot": 13,
-    "offset": 0,
-    "label": "participationRewardPaid",
-    "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_address,t_uint256)))"
-  },
-  {
-    "slot": 14,
-    "offset": 0,
-    "label": "participationRewardCommitClaimed",
-    "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_bytes32,t_bool)))"
-  },
-  {
-    "slot": 15,
-    "offset": 0,
-    "label": "participationRewardCommitPaid",
-    "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_bytes32,t_uint256)))"
-  },
-  {
-    "slot": 16,
-    "offset": 0,
-    "label": "roundParticipationRewardPool",
-    "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_address))"
-  },
-  {
-    "slot": 17,
-    "offset": 0,
-    "label": "roundParticipationRewardRateBps",
-    "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_uint256))"
-  },
-  {
-    "slot": 18,
-    "offset": 0,
-    "label": "roundParticipationRewardOwed",
-    "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_uint256))"
-  },
-  {
-    "slot": 19,
-    "offset": 0,
-    "label": "roundParticipationRewardReserved",
-    "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_uint256))"
-  },
-  {
-    "slot": 20,
-    "offset": 0,
-    "label": "roundParticipationRewardPaidTotal",
-    "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_uint256))"
-  },
-  {
-    "slot": 21,
-    "offset": 0,
-    "label": "roundParticipationRewardFullyClaimedCount",
-    "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_uint256))"
-  },
-  {
-    "slot": 22,
-    "offset": 0,
-    "label": "roundParticipationRewardFinalized",
-    "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_bool))"
-  },
-  {
-    "slot": 23,
-    "offset": 0,
-    "label": "roundParticipationRewardClaimableAt",
-    "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_uint48))"
-  },
-  {
-    "slot": 24,
-    "offset": 0,
     "label": "roundFrontendFeeDustProcessedCount",
     "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_uint256))"
   },
   {
-    "slot": 25,
+    "slot": 13,
     "offset": 0,
     "label": "roundFrontendFeeDustExpectedTotal",
     "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_uint256))"
   },
   {
-    "slot": 26,
+    "slot": 14,
     "offset": 0,
     "label": "roundFrontendFeeDustLastFrontend",
     "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_address))"
   },
   {
-    "slot": 27,
+    "slot": 15,
     "offset": 0,
     "label": "pendingLaunchCreditRetry",
     "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_bytes32,t_struct(PendingLaunchCredit))))"
   },
   {
-    "slot": 28,
+    "slot": 16,
     "offset": 0,
     "label": "__gap",
     "type": "t_array(t_uint256)"

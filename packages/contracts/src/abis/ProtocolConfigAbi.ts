@@ -583,19 +583,6 @@ export const ProtocolConfigAbi = [
   },
   {
     "type": "function",
-    "name": "participationPool",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "raterRegistry",
     "inputs": [],
     "outputs": [
@@ -947,19 +934,6 @@ export const ProtocolConfigAbi = [
   {
     "type": "function",
     "name": "setLaunchDistributionPool",
-    "inputs": [
-      {
-        "name": "value",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "setParticipationPool",
     "inputs": [
       {
         "name": "value",
@@ -1432,19 +1406,6 @@ export const ProtocolConfigAbi = [
     "inputs": [
       {
         "name": "launchDistributionPool",
-        "type": "address",
-        "indexed": false,
-        "internalType": "address"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "ParticipationPoolUpdated",
-    "inputs": [
-      {
-        "name": "participationPool",
         "type": "address",
         "indexed": false,
         "internalType": "address"

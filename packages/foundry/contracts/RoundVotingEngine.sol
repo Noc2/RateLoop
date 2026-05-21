@@ -23,7 +23,6 @@ import { IFrontendRegistry } from "./interfaces/IFrontendRegistry.sol";
 import { ICategoryRegistry } from "./interfaces/ICategoryRegistry.sol";
 import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol";
 import { IRoundVotingEngine } from "./interfaces/IRoundVotingEngine.sol";
-import { IParticipationPool } from "./interfaces/IParticipationPool.sol";
 
 /// @title RoundVotingEngine
 /// @notice Per-content round-based parimutuel voting with keeper-assisted/self-reveal and epoch-weighted rewards.
@@ -977,17 +976,12 @@ contract RoundVotingEngine is
             accountedLrepBalance -= treasuryPaid;
         }
 
-        IParticipationPool currentParticipationPool = _getParticipationPool();
-        address currentRewardDistributor = protocolConfig.rewardDistributorForVotingEngine(address(this));
         RoundSettlementSideEffectsLib.recordSettlement(
             registry,
             _getRoundRatingConfig(contentId, roundId),
-            currentParticipationPool,
-            currentRewardDistributor,
             contentId,
             roundId,
             _getRoundReferenceRatingBps(contentId, roundId),
-            roundRbtsParticipationWeight[contentId][roundId],
             roundRatingUpEvidence[contentId][roundId],
             roundRatingDownEvidence[contentId][roundId]
         );
@@ -1197,10 +1191,6 @@ contract RoundVotingEngine is
             snapshot = protocolConfig.raterRegistry();
         }
         return IRaterIdentityRegistry(snapshot);
-    }
-
-    function _getParticipationPool() internal view returns (IParticipationPool) {
-        return IParticipationPool(protocolConfig.participationPool());
     }
 
     function _resolveClaimCommit(uint256 contentId, uint256 roundId, address account)

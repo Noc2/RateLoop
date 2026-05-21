@@ -19,7 +19,6 @@ import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
 import { QuestionRewardPoolEscrow } from "../contracts/QuestionRewardPoolEscrow.sol";
 import { RaterRegistry } from "../contracts/RaterRegistry.sol";
 import { X402QuestionSubmitter } from "../contracts/X402QuestionSubmitter.sol";
-import { ParticipationPool } from "../contracts/ParticipationPool.sol";
 import { LaunchDistributionPool } from "../contracts/LaunchDistributionPool.sol";
 import { ClusterPayoutOracle } from "../contracts/ClusterPayoutOracle.sol";
 import { MockERC20 } from "../contracts/mocks/MockERC20.sol";
@@ -35,7 +34,6 @@ contract DeployRateLoop is ScaffoldETHDeploy {
 
     uint256 public constant TOTAL_SUPPLY_CAP = 100_000_000 * 1e6;
     uint256 public constant TREASURY_AMOUNT = 32_000_000 * 1e6;
-    uint256 public constant PARTICIPATION_POOL_AMOUNT = 0;
     uint256 public constant LAUNCH_DISTRIBUTION_AMOUNT = TOTAL_SUPPLY_CAP - TREASURY_AMOUNT;
     bytes32 internal constant ERC1967_ADMIN_SLOT = bytes32(uint256(keccak256("eip1967.proxy.admin")) - 1);
 
@@ -249,11 +247,6 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         lrepToken.mint(governance, TREASURY_AMOUNT);
         console.log("Minted 32M LREP to governance treasury");
 
-        ParticipationPool participationPool = new ParticipationPool(address(lrepToken), governance);
-        participationPool.setAuthorizedCaller(address(rewardDistributor), true);
-        protocolConfig.setParticipationPool(address(participationPool));
-        console.log("ParticipationPool deployed without launch funding");
-
         LaunchDistributionPool launchDistributionPool =
             new LaunchDistributionPool(address(lrepToken), address(raterRegistry), governance);
         // M-Oracle-1 (PR #20): the launch-credit consumer pin on the oracle MUST be set BEFORE
@@ -287,7 +280,6 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         if (!isLocalDev) {
             address[] memory excludedHolders = _buildQuorumExcludedHolders(
                 address(launchDistributionPool),
-                address(participationPool),
                 address(rewardDistributor),
                 address(votingEngine),
                 governance,
@@ -295,7 +287,6 @@ contract DeployRateLoop is ScaffoldETHDeploy {
                 address(frontendRegistry)
             );
             RateLoopGovernor(payable(governorAddr)).initializePools(excludedHolders);
-            participationPool.transferOwnership(governance);
             launchDistributionPool.transferOwnership(governance);
         }
 
@@ -329,7 +320,6 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         deployments.push(Deployment("ClusterPayoutOracle", address(clusterPayoutOracle)));
         deployments.push(Deployment("RaterRegistry", address(raterRegistry)));
         if (isLocalDev) deployments.push(Deployment("MockWorldIDRouter", address(localWorldIdRouter)));
-        deployments.push(Deployment("ParticipationPool", address(participationPool)));
         deployments.push(Deployment("LaunchDistributionPool", address(launchDistributionPool)));
         deployments.push(Deployment("AdvisoryVoteRecorder", address(advisoryVoteRecorder)));
         if (isLocalDev) deployments.push(Deployment("MockERC20", usdcTokenAddress));
@@ -380,7 +370,6 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         console.log("RaterRegistry:", address(raterRegistry));
         console.log("World ID Router:", worldIdRouterAddress);
         console.log("World ID External Nullifier Hash:", worldIdExternalNullifierHash);
-        console.log("ParticipationPool:", address(participationPool));
         console.log("LaunchDistributionPool:", address(launchDistributionPool));
         console.log("AdvisoryVoteRecorder:", address(advisoryVoteRecorder));
         console.log("Governance:", governance);
@@ -432,17 +421,15 @@ contract DeployRateLoop is ScaffoldETHDeploy {
 
     function _buildQuorumExcludedHolders(
         address launchDistribution,
-        address participationPool,
         address rewardDistributor,
         address votingEngine,
         address treasury,
         address contentRegistry,
         address frontendRegistry
     ) internal pure returns (address[] memory holders) {
-        address[] memory temp = new address[](7);
+        address[] memory temp = new address[](6);
         uint256 count;
         count = _appendUnique(temp, count, launchDistribution);
-        count = _appendUnique(temp, count, participationPool);
         count = _appendUnique(temp, count, rewardDistributor);
         count = _appendUnique(temp, count, votingEngine);
         count = _appendUnique(temp, count, treasury);

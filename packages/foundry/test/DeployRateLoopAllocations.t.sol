@@ -24,8 +24,7 @@ contract DeployRateLoopAllocationsTest is Test {
         LaunchDistributionPool launchPool =
             new LaunchDistributionPool(address(lrepToken), address(raterRegistry), address(this));
 
-        uint256 totalLaunchAllocation = deployScript.TREASURY_AMOUNT() + deployScript.PARTICIPATION_POOL_AMOUNT()
-            + deployScript.LAUNCH_DISTRIBUTION_AMOUNT();
+        uint256 totalLaunchAllocation = deployScript.TREASURY_AMOUNT() + deployScript.LAUNCH_DISTRIBUTION_AMOUNT();
 
         assertEq(deployScript.TOTAL_SUPPLY_CAP(), lrepToken.MAX_SUPPLY(), "script cap should match token MAX_SUPPLY");
         assertEq(totalLaunchAllocation, deployScript.TOTAL_SUPPLY_CAP(), "launch allocations should sum to full cap");
@@ -37,7 +36,6 @@ contract DeployRateLoopAllocationsTest is Test {
             deployScript.LAUNCH_DISTRIBUTION_AMOUNT(),
             "launch pool split should equal 68M"
         );
-        assertEq(deployScript.PARTICIPATION_POOL_AMOUNT(), 0, "participation pool should have no launch allocation");
         assertEq(deployScript.TREASURY_AMOUNT(), 32_000_000 * 1e6, "treasury should be 32M");
     }
 

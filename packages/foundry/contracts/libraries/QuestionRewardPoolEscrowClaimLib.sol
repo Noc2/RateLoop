@@ -44,7 +44,7 @@ struct WeightedShareInputs {
 }
 
 library QuestionRewardPoolEscrowClaimLib {
-    uint256 private constant BASE_PARTICIPATION_WEIGHT_BPS = 10_000;
+    uint256 private constant BASE_CLAIM_WEIGHT_BPS = 10_000;
 
     function nextEqualShare(uint256 totalAmount, uint256 eligibleVoters, uint256 claimedCount)
         external
@@ -545,7 +545,7 @@ library QuestionRewardPoolEscrowClaimLib {
     }
 
     function _roundClaimWeight(RoundVotingEngine, uint256, uint256, bytes32) private pure returns (uint256) {
-        return BASE_PARTICIPATION_WEIGHT_BPS;
+        return BASE_CLAIM_WEIGHT_BPS;
     }
 
     function _effectiveClusterQuestionClaimWeight(

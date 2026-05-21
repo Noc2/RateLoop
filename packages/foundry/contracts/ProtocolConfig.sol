@@ -30,7 +30,6 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     address public frontendRegistry;
     address public treasury;
     RoundLib.RoundConfig public config;
-    address public participationPool;
     uint256 public revealGracePeriod;
     bytes32 public drandChainHash;
     uint64 public drandGenesisTime;
@@ -68,7 +67,6 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     event CategoryRegistryUpdated(address categoryRegistry);
     event TreasuryUpdated(address treasury);
     event RevealGracePeriodUpdated(uint256 revealGracePeriod);
-    event ParticipationPoolUpdated(address participationPool);
     event RaterRegistryUpdated(address raterRegistry);
     event LaunchDistributionPoolUpdated(address launchDistributionPool);
     event ClusterPayoutOracleUpdated(address clusterPayoutOracle);
@@ -208,10 +206,6 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
 
     function setRevealGracePeriod(uint256 value) external onlyRole(CONFIG_ROLE) {
         _setRevealGracePeriod(value);
-    }
-
-    function setParticipationPool(address value) external onlyRole(CONFIG_ROLE) {
-        _setParticipationPool(value);
     }
 
     function setRaterRegistry(address value) external onlyRole(CONFIG_ROLE) {
@@ -415,12 +409,6 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         if (value > maxRevealGrace) revert InvalidConfig();
         revealGracePeriod = value;
         emit RevealGracePeriodUpdated(value);
-    }
-
-    function _setParticipationPool(address value) internal {
-        if (value == address(0)) revert InvalidAddress();
-        participationPool = value;
-        emit ParticipationPoolUpdated(value);
     }
 
     function _validateRaterRegistry(address value) internal view {

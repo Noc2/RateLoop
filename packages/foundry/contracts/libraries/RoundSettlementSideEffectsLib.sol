@@ -4,15 +4,11 @@ pragma solidity ^0.8.34;
 import { ContentRegistry } from "../ContentRegistry.sol";
 import { RatingLib } from "./RatingLib.sol";
 import { RatingMath } from "./RatingMath.sol";
-import { IParticipationPool } from "../interfaces/IParticipationPool.sol";
-import { IRoundRewardDistributor } from "../interfaces/IRoundRewardDistributor.sol";
 
 /// @title RoundSettlementSideEffectsLib
 /// @notice Moves best-effort post-settlement external calls out of RoundVotingEngine runtime bytecode.
 library RoundSettlementSideEffectsLib {
     enum SideEffectFailureStage {
-        ParticipationRateQuery,
-        VoterParticipationRewardsSnapshot,
         RatingStateUpdate,
         MeaningfulActivityRecord
     }
@@ -24,12 +20,9 @@ library RoundSettlementSideEffectsLib {
     function recordSettlement(
         ContentRegistry registry,
         RatingLib.RatingConfig memory ratingConfig,
-        IParticipationPool participationPool,
-        address rewardDistributor,
         uint256 contentId,
         uint256 roundId,
         uint16 referenceRatingBps,
-        uint256 weightedWinningStake,
         uint64 weightedUpPool,
         uint64 weightedDownPool
     ) external {
@@ -58,21 +51,6 @@ library RoundSettlementSideEffectsLib {
             );
         }
 
-        address participationPoolAddress = address(participationPool);
-        uint256 participationRateBps = 0;
-        bool hasParticipationRate = false;
-
-        if (participationPoolAddress != address(0)) {
-            try participationPool.getCurrentRateBps() returns (uint256 rate) {
-                participationRateBps = rate;
-                hasParticipationRate = true;
-            } catch {
-                emit SettlementSideEffectFailed(
-                    contentId, roundId, participationPoolAddress, SideEffectFailureStage.ParticipationRateQuery
-                );
-            }
-        }
-
         if (ratingUpdatePossible) {
             RatingLib.RatingState memory nextState = _applyBinarySettlement(
                 referenceRatingBps, weightedUpPool, weightedDownPool, previousState, ratingConfig, slashConfig
@@ -90,20 +68,6 @@ library RoundSettlementSideEffectsLib {
             emit SettlementSideEffectFailed(
                 contentId, roundId, address(registry), SideEffectFailureStage.MeaningfulActivityRecord
             );
-        }
-
-        if (participationPoolAddress != address(0) && hasParticipationRate) {
-            if (rewardDistributor != address(0)) {
-                try IRoundRewardDistributor(rewardDistributor)
-                    .snapshotParticipationRewards(
-                        contentId, roundId, participationPoolAddress, participationRateBps, weightedWinningStake
-                    ) { }
-                catch {
-                    emit SettlementSideEffectFailed(
-                        contentId, roundId, rewardDistributor, SideEffectFailureStage.VoterParticipationRewardsSnapshot
-                    );
-                }
-            }
         }
     }
 

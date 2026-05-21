@@ -22,7 +22,6 @@ contract GovernanceTest is Test {
 
     // Mock protocol-controlled holders whose balances should not count toward quorum
     address public mockFaucet = address(10);
-    address public mockParticipationPool = address(11);
     address public mockRewardDistributor = address(12);
     address public mockVotingEngine = address(13);
     address public mockTreasury = address(14);
@@ -32,7 +31,6 @@ contract GovernanceTest is Test {
 
     // Protocol-controlled balances excluded from quorum
     uint256 public constant FAUCET_BALANCE = 30_000_000 * 1e6;
-    uint256 public constant PARTICIPATION_BALANCE = 20_000_000 * 1e6;
     uint256 public constant REWARD_BALANCE = 14_000_000 * 1e6;
     uint256 public constant ENGINE_BALANCE = 4_100_000 * 1e6;
     uint256 public constant TREASURY_BALANCE = 10_000_000 * 1e6;
@@ -42,9 +40,8 @@ contract GovernanceTest is Test {
 
     // Voter balances plus user-funded reward escrow are circulating supply for quorum.
     uint256 public constant VOTER_BALANCE = 2_000_000 * 1e6; // 2M tokens each
-    uint256 public constant TOTAL_MINTED = FAUCET_BALANCE + PARTICIPATION_BALANCE + REWARD_BALANCE + ENGINE_BALANCE
-        + TREASURY_BALANCE + CONTENT_REGISTRY_BALANCE + FRONTEND_REGISTRY_BALANCE + QUESTION_REWARD_ESCROW_BALANCE
-        + 6_000_000 * 1e6;
+    uint256 public constant TOTAL_MINTED = FAUCET_BALANCE + REWARD_BALANCE + ENGINE_BALANCE + TREASURY_BALANCE
+        + CONTENT_REGISTRY_BALANCE + FRONTEND_REGISTRY_BALANCE + QUESTION_REWARD_ESCROW_BALANCE + 6_000_000 * 1e6;
 
     /// @dev Binds a description to a proposer using the suffix enforced by
     ///      RateLoopGovernor._isValidDescriptionForProposer (audit N-2: cancel-DoS fix).
@@ -103,7 +100,6 @@ contract GovernanceTest is Test {
 
         // Mint tokens to pool contracts (simulating locked supply)
         token.mint(mockFaucet, FAUCET_BALANCE);
-        token.mint(mockParticipationPool, PARTICIPATION_BALANCE);
         token.mint(mockRewardDistributor, REWARD_BALANCE);
         token.mint(mockVotingEngine, ENGINE_BALANCE);
         token.mint(mockTreasury, TREASURY_BALANCE);
@@ -288,8 +284,8 @@ contract GovernanceTest is Test {
         // Quorum is 4% of circulating supply after excluding only protocol-controlled holders.
         vm.roll(block.number + 1);
 
-        uint256 circulatingSupply = TOTAL_MINTED - FAUCET_BALANCE - PARTICIPATION_BALANCE - REWARD_BALANCE
-            - ENGINE_BALANCE - TREASURY_BALANCE - CONTENT_REGISTRY_BALANCE - FRONTEND_REGISTRY_BALANCE;
+        uint256 circulatingSupply = TOTAL_MINTED - FAUCET_BALANCE - REWARD_BALANCE - ENGINE_BALANCE - TREASURY_BALANCE
+            - CONTENT_REGISTRY_BALANCE - FRONTEND_REGISTRY_BALANCE;
         uint256 expectedDynamicQuorum = (circulatingSupply * 4) / 100; // 4% of 7M = 280K
         assertEq(expectedDynamicQuorum, 280_000 * 1e6);
         assertEq(governor.quorum(block.number - 1), expectedDynamicQuorum);
@@ -492,14 +488,13 @@ contract GovernanceTest is Test {
 
     function test_GovernorGetExcludedHolders() public view {
         address[] memory holders = governor.getExcludedHolders();
-        assertEq(holders.length, 7);
+        assertEq(holders.length, 6);
         assertEq(holders[0], mockFaucet);
-        assertEq(holders[1], mockParticipationPool);
-        assertEq(holders[2], mockRewardDistributor);
-        assertEq(holders[3], mockVotingEngine);
-        assertEq(holders[4], mockTreasury);
-        assertEq(holders[5], mockContentRegistry);
-        assertEq(holders[6], mockFrontendRegistry);
+        assertEq(holders[1], mockRewardDistributor);
+        assertEq(holders[2], mockVotingEngine);
+        assertEq(holders[3], mockTreasury);
+        assertEq(holders[4], mockContentRegistry);
+        assertEq(holders[5], mockFrontendRegistry);
     }
 
     function test_GovernorExcludedHolderCannotPropose() public {
@@ -552,8 +547,8 @@ contract GovernanceTest is Test {
         address[] memory holders = governor.getExcludedHolders();
         assertTrue(governor.isExcludedHolder(mockFrontendRegistry));
         assertTrue(governor.isExcludedHolder(replacement));
-        assertEq(holders[6], mockFrontendRegistry);
-        assertEq(holders[7], replacement);
+        assertEq(holders[5], mockFrontendRegistry);
+        assertEq(holders[6], replacement);
         assertEq(governor.excludedHolderEffectiveBlock(mockFrontendRegistry), 0);
         assertEq(governor.excludedHolderEffectiveBlock(replacement), vm.getBlockNumber());
 
@@ -716,14 +711,13 @@ contract GovernanceTest is Test {
     }
 
     function _excludedHolders() internal view returns (address[] memory holders) {
-        holders = new address[](7);
+        holders = new address[](6);
         holders[0] = mockFaucet;
-        holders[1] = mockParticipationPool;
-        holders[2] = mockRewardDistributor;
-        holders[3] = mockVotingEngine;
-        holders[4] = mockTreasury;
-        holders[5] = mockContentRegistry;
-        holders[6] = mockFrontendRegistry;
+        holders[1] = mockRewardDistributor;
+        holders[2] = mockVotingEngine;
+        holders[3] = mockTreasury;
+        holders[4] = mockContentRegistry;
+        holders[5] = mockFrontendRegistry;
     }
 
     function _executeSingleCallProposal(
