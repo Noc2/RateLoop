@@ -1,12 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import {
-  LAUNCH_DISTRIBUTION_POOL_AMOUNT_COMPACT_LABEL,
-  LREP_INITIAL_MINTED_SUPPLY_COMPACT_LABEL,
-  launchDistributionChartSlices,
-  tokenAllocationChartSlices,
-} from "~~/lib/docs/tokenomics";
+import { LREP_INITIAL_MINTED_SUPPLY_COMPACT_LABEL, tokenAllocationChartSlices } from "~~/lib/docs/tokenomics";
 
 const SIZE = 200;
 const CENTER = SIZE / 2;
@@ -47,17 +42,7 @@ export function TokenAllocationChart() {
 
   return (
     <figure className="not-prose my-6 rounded-lg bg-base-200 p-4 text-base-content">
-      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
-        <div className="min-w-0">
-          <p className="font-mono text-xs font-semibold uppercase tracking-wider text-base-content/45">
-            Initial minted supply
-          </p>
-          <h3 className="mt-1 text-xl font-semibold leading-tight text-base-content">Launch Distribution Map</h3>
-        </div>
-        <figcaption className="max-w-xl text-sm leading-6 text-base-content/62 sm:text-right">
-          The full supply is split into the launch pool and governance treasury, with the launch pool expanded below.
-        </figcaption>
-      </div>
+      <h3 className="mb-4 text-xl font-semibold leading-tight text-base-content">Launch Distribution Map</h3>
 
       <div className="grid gap-4 rounded-lg bg-base-100 p-3 sm:p-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.35fr)]">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center lg:flex-col lg:items-start">
@@ -65,7 +50,7 @@ export function TokenAllocationChart() {
             viewBox={`0 0 ${SIZE} ${SIZE}`}
             className="h-[160px] w-[160px] shrink-0"
             role="img"
-            aria-label="LREP allocation chart: 68 percent launch distribution pool and 32 percent treasury"
+            aria-label="LREP allocation chart: 35 percent human verified and referral rewards, 33 percent earned rater rewards, and 32 percent treasury"
           >
             {arcs.map(arc => (
               <path
@@ -124,66 +109,28 @@ export function TokenAllocationChart() {
         </div>
 
         <div className="grid gap-3">
-          <section
-            className={`rounded-lg border border-base-content/10 bg-base-content/[0.05] p-3 transition-opacity duration-150 ${
-              hovered === 1 ? "opacity-45" : ""
-            }`}
-            onMouseEnter={() => setHovered(0)}
-            onMouseLeave={() => setHovered(null)}
-          >
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <h4 className="text-sm font-semibold leading-snug text-base-content">Launch Distribution Pool</h4>
-              <p className="font-mono text-xs text-base-content/55">
-                {LAUNCH_DISTRIBUTION_POOL_AMOUNT_COMPACT_LABEL} LREP
-              </p>
-            </div>
-            <div className="mt-3 flex h-3 overflow-hidden rounded-full bg-base-content/10">
-              {launchDistributionChartSlices.map(slice => (
-                <span
-                  key={slice.index}
-                  className="h-full"
-                  style={{ width: `${slice.value}%`, backgroundColor: slice.color }}
-                />
-              ))}
-            </div>
-            <div className="mt-3 grid gap-2">
-              {launchDistributionChartSlices.map(slice => (
-                <div
-                  key={slice.index}
-                  className="grid gap-1 rounded-md bg-base-content/[0.04] p-2 sm:grid-cols-[1fr_auto]"
-                >
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: slice.color }} />
-                      <p className="text-sm font-semibold leading-snug text-base-content">{slice.label}</p>
-                    </div>
-                    <p className="mt-1 text-xs leading-5 text-base-content/58">{slice.purpose}</p>
-                  </div>
-                  <div className="font-mono text-xs leading-5 text-base-content/62 sm:text-right">
-                    <p>{slice.amountLabel}</p>
-                    <p>{slice.launchShareLabel} of launch pool</p>
-                  </div>
+          {tokenAllocationChartSlices.map(slice => (
+            <section
+              key={slice.index}
+              className={`rounded-lg border border-base-content/10 bg-base-content/[0.05] p-3 transition-opacity duration-150 ${
+                hovered !== null && hovered !== slice.index ? "opacity-45" : ""
+              }`}
+              onMouseEnter={() => setHovered(slice.index)}
+              onMouseLeave={() => setHovered(null)}
+            >
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: slice.color }} />
+                  <h4 className="text-sm font-semibold leading-snug text-base-content">{slice.label}</h4>
                 </div>
-              ))}
-            </div>
-          </section>
-
-          <section
-            className={`rounded-lg border border-base-content/10 bg-base-content/[0.05] p-3 transition-opacity duration-150 ${
-              hovered === 0 ? "opacity-45" : ""
-            }`}
-            onMouseEnter={() => setHovered(1)}
-            onMouseLeave={() => setHovered(null)}
-          >
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <h4 className="text-sm font-semibold leading-snug text-base-content">Treasury</h4>
-              <p className="font-mono text-xs text-base-content/55">32M LREP</p>
-            </div>
-            <p className="mt-2 text-xs leading-5 text-base-content/58">
-              Governance-controlled LREP for safety responses, verification acceleration, grants, partner activation,
-              and protocol development.
-            </p>
-          </section>
+                <div className="font-mono text-xs leading-5 text-base-content/62 sm:text-right">
+                  <p>{slice.amountLabel}</p>
+                  <p>{slice.percentLabel} of supply</p>
+                </div>
+              </div>
+              <p className="mt-2 text-xs leading-5 text-base-content/58">{slice.purpose}</p>
+            </section>
+          ))}
         </div>
       </div>
     </figure>

@@ -67,13 +67,15 @@ function formatAllocationPercent(amount: number, total: number): string {
   return `${percent.toFixed(1)}%`;
 }
 
-export const tokenAllocationChartSlices = tokenDistributionEntries.map((entry, index) => ({
-  ...entry,
-  index,
-  amountLabel: formatLrepAmount(entry.amount),
-  percentLabel: formatAllocationPercent(entry.amount, LREP_MAX_SUPPLY),
-  value: (entry.amount / LREP_MAX_SUPPLY) * 100,
-}));
+export const tokenAllocationChartSlices = [...launchDistributionBreakdownEntries, tokenDistributionEntries[1]].map(
+  (entry, index) => ({
+    ...entry,
+    index,
+    amountLabel: formatLrepAmount(entry.amount),
+    percentLabel: formatAllocationPercent(entry.amount, LREP_MAX_SUPPLY),
+    value: (entry.amount / LREP_MAX_SUPPLY) * 100,
+  }),
+);
 
 export const launchDistributionChartSlices = launchDistributionBreakdownEntries.map((entry, index) => ({
   ...entry,
