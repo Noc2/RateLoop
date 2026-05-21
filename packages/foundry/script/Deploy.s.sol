@@ -185,6 +185,14 @@ contract DeployRateLoop is ScaffoldETHDeploy {
             localWorldIdRouter = new MockWorldIDRouter();
             worldIdRouterAddress = address(localWorldIdRouter);
             console.log("MockWorldIDRouter deployed at:", worldIdRouterAddress);
+        } else {
+            // WORLDID-1 (2026-05-21 testnet-readiness audit): assert the per-chain WorldID router
+            // constant is a real deployed contract. Catches the case where the address in
+            // `WORLD_CHAIN_MAINNET_WORLD_ID_ROUTER` / `_SEPOLIA_WORLD_ID_ROUTER` was typo'd, was
+            // wiped from the chain, or has not yet been deployed on a fresh testnet. The actual
+            // address values must still be verified against the live Address Book at
+            // https://docs.world.org/world-id/reference/address-book before each deploy.
+            require(worldIdRouterAddress.code.length > 0, "WorldID router has no code on this chain");
         }
         string memory worldIdAction = _resolveWorldIdAction();
         uint256 worldIdExternalNullifierHash = _resolveWorldIdExternalNullifierHash(isLocalDev, worldIdAction);
