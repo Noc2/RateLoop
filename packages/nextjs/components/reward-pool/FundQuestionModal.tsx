@@ -1,6 +1,7 @@
 "use client";
 
-import { type ReactNode, useId, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useId, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { useAccount, useConfig, useWriteContract } from "wagmi";
 import { getPublicClient, readContract, waitForTransactionReceipt } from "wagmi/actions";
 import { XMarkIcon } from "@heroicons/react/24/outline";
@@ -61,6 +62,7 @@ export function FundQuestionModal({ contentId, title, onClose, onCreated }: Fund
   const wagmiConfig = useConfig();
   const { address, chain } = useAccount();
   const { writeContractAsync } = useWriteContract();
+  const [isMounted, setIsMounted] = useState(false);
   const amountInputId = useId();
   const requiredVotersInputId = useId();
   const requiredRoundsInputId = useId();
@@ -98,6 +100,17 @@ export function FundQuestionModal({ contentId, title, onClose, onCreated }: Fund
       settledRounds >= MIN_REWARD_POOL_SETTLED_ROUNDS &&
       hasValidBountyWindow,
   );
+
+  useEffect(() => {
+    setIsMounted(true);
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
 
   const handleFundQuestion = async () => {
     if (!address) {
@@ -194,21 +207,38 @@ export function FundQuestionModal({ contentId, title, onClose, onCreated }: Fund
     }
   };
 
-  return (
-    <div className="modal modal-open" role="dialog" aria-modal="true" aria-label="Fund a bounty">
-      <div className="modal-box w-[calc(100vw-2rem)] max-w-lg overflow-x-hidden bg-base-200 px-5 py-6 shadow-2xl sm:px-6">
+  if (!isMounted) {
+    return null;
+  }
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[1000] flex items-end justify-center sm:items-center"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Fund a bounty"
+    >
+      <button
+        type="button"
+        className="absolute inset-0 cursor-default bg-black/40 backdrop-blur-sm"
+        aria-label="Close fund bounty dialog"
+        onClick={onClose}
+      />
+      <div className="relative z-10 max-h-[calc(100svh-1rem)] w-full max-w-md overflow-y-auto rounded-t-2xl bg-base-200 p-6 shadow-2xl sm:max-w-lg sm:rounded-2xl">
         <button
           type="button"
           onClick={onClose}
-          className="btn btn-sm btn-circle btn-ghost absolute right-2 top-2"
+          className="btn btn-sm btn-circle btn-ghost absolute right-3 top-3 text-base-content/70 hover:text-base-content"
           aria-label="Close"
         >
           <XMarkIcon className="h-5 w-5" />
         </button>
 
-        <p className="text-sm font-semibold uppercase text-base-content/50">Fund a bounty for</p>
-        <h3 className="mt-1 line-clamp-2 text-xl font-semibold text-base-content">{title}</h3>
-        <p className="mt-2 text-base text-base-content/70">
+        <h3 className="mb-3 px-9 text-balance break-words text-center text-lg font-semibold leading-tight">{title}</h3>
+        <p className="text-center text-sm font-semibold uppercase tracking-[0.16em] text-base-content/55">
+          Fund bounty
+        </p>
+        <p className="mt-3 text-center text-sm text-base-content/70">
           Paid in USDC on World Chain. Qualified claims reserve {FRONTEND_FEE_PERCENT}% for the eligible frontend
           operator; the rest goes to eligible revealed voters after payout roots finalize.
         </p>
@@ -341,7 +371,7 @@ export function FundQuestionModal({ contentId, title, onClose, onCreated }: Fund
           </button>
         </div>
       </div>
-      <div className="modal-backdrop bg-black/60 backdrop-blur-sm" aria-hidden="true" />
-    </div>
+    </div>,
+    document.body,
   );
 }

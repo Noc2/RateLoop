@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { createPortal } from "react-dom";
 import { CheckIcon, ClipboardIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { buildRateContentHref } from "~~/constants/routes";
 import { useCopyToClipboard } from "~~/hooks/scaffold-eth";
@@ -34,8 +35,11 @@ export function ShareModal({
   onClose,
 }: ShareModalProps) {
   const { copyToClipboard, isCopiedToClipboard: copied } = useCopyToClipboard({ successDurationMs: 2000 });
+  const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
+    setIsMounted(true);
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
@@ -73,27 +77,49 @@ export function ShareModal({
     await copyToClipboard(shareUrl);
   };
 
-  return (
-    <div className="modal modal-open" role="dialog" aria-modal="true" aria-label="Question submitted">
-      <div className="modal-box w-[calc(100vw-2rem)] max-w-md overflow-x-hidden bg-base-200 px-5 py-6 shadow-2xl sm:px-6">
-        {/* Close button */}
-        <button onClick={onClose} className="btn btn-sm btn-circle btn-ghost absolute right-2 top-2" aria-label="Close">
-          <XMarkIcon className="w-5 h-5" />
+  if (!isMounted) {
+    return null;
+  }
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[1000] flex items-end justify-center sm:items-center"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Question submitted"
+    >
+      <button
+        type="button"
+        className="absolute inset-0 cursor-default bg-black/40 backdrop-blur-sm"
+        aria-label="Close share dialog"
+        onClick={onClose}
+      />
+      <div className="relative z-10 max-h-[calc(100svh-1rem)] w-full max-w-md overflow-y-auto rounded-t-2xl bg-base-200 p-6 shadow-2xl sm:rounded-2xl">
+        <button
+          onClick={onClose}
+          className="btn btn-sm btn-circle btn-ghost absolute right-3 top-3 text-base-content/70 hover:text-base-content"
+          aria-label="Close"
+        >
+          <XMarkIcon className="h-5 w-5" />
         </button>
 
         {/* Success icon */}
-        <div className="flex justify-center mb-4">
-          <div className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center">
-            <CheckIcon className="w-8 h-8 text-primary" />
+        <div className="mb-4 flex justify-center">
+          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/20">
+            <CheckIcon className="h-8 w-8 text-primary" />
           </div>
         </div>
 
-        <h3 className="text-xl font-semibold text-center mb-2">Question Submitted!</h3>
-        <p className="mb-2 text-center text-lg font-medium text-base-content line-clamp-2">{title}</p>
-        {description ? <p className="text-base text-base-content/60 text-center mb-6">{description}</p> : null}
+        <p className="mb-2 text-center text-sm font-semibold uppercase tracking-[0.16em] text-base-content/55">
+          Question submitted
+        </p>
+        <h3 className="mb-2 px-9 text-balance break-words text-center text-lg font-semibold leading-tight">{title}</h3>
+        {description ? (
+          <p className="mb-6 text-center text-sm text-base-content/70 line-clamp-2">{description}</p>
+        ) : null}
 
         {/* Share buttons */}
-        <div className="space-y-3">
+        <div className="space-y-2.5">
           {/* Twitter/X share */}
           <a
             href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`}
@@ -101,7 +127,7 @@ export function ShareModal({
             rel="noopener noreferrer"
             className="btn btn-primary w-full gap-2"
           >
-            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
             </svg>
             Share on X
@@ -111,12 +137,12 @@ export function ShareModal({
           <button onClick={handleCopyLink} className="btn btn-outline w-full gap-2">
             {copied ? (
               <>
-                <CheckIcon className="w-5 h-5 text-success" />
+                <CheckIcon className="h-5 w-5 text-success" />
                 Copied!
               </>
             ) : (
               <>
-                <ClipboardIcon className="w-5 h-5" />
+                <ClipboardIcon className="h-5 w-5" />
                 Copy Link
               </>
             )}
@@ -132,11 +158,11 @@ export function ShareModal({
         <div className="divider my-4">or</div>
 
         {/* Submit another - 16px minimum */}
-        <button onClick={onClose} className="btn btn-ghost w-full text-base-content/60 text-base">
+        <button onClick={onClose} className="btn btn-ghost w-full text-base text-base-content/60">
           Submit Another
         </button>
       </div>
-      <div className="modal-backdrop bg-black/60 backdrop-blur-sm" aria-hidden="true" />
-    </div>
+    </div>,
+    document.body,
   );
 }
