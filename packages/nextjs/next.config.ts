@@ -19,7 +19,6 @@ if (process.env.VERCEL_ENV === "preview" && !process.env.NEXT_PUBLIC_TARGET_NETW
 }
 
 const isDev = process.env.NODE_ENV === "development";
-const isVercelDeployment = process.env.VERCEL === "1" || Boolean(process.env.VERCEL_ENV);
 // WS-5 (2026-05-21 repo audit): Vercel Live is a preview-deployment debugging feature; it
 // should not load on production. The CSP previously allowed `https://vercel.live` and
 // `wss://*.pusher.com` for every Vercel deployment (incl. production) which widened the
