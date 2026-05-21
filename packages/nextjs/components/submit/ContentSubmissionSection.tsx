@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useQuery } from "@tanstack/react-query";
-import { decodeEventLog, toHex } from "viem";
+import { decodeEventLog, encodeFunctionData, toHex } from "viem";
 import { useAccount, useConfig } from "wagmi";
 import { getPublicClient, readContract, waitForTransactionReceipt, writeContract } from "wagmi/actions";
 import { ChevronDownIcon, MagnifyingGlassIcon, XMarkIcon } from "@heroicons/react/24/outline";
@@ -303,6 +303,71 @@ function isReservationNotFoundError(error: unknown): boolean {
     (error as { shortMessage?: string; message?: string } | undefined)?.message ??
     "";
   return message.includes("Reservation not found");
+}
+
+function getSubmissionErrorMessage(error: unknown): string {
+  return (
+    (error as { shortMessage?: string; message?: string } | undefined)?.shortMessage ??
+    (error as { shortMessage?: string; message?: string } | undefined)?.message ??
+    ""
+  );
+}
+
+function isUnknownEmptyRevertError(error: unknown): boolean {
+  const message = getSubmissionErrorMessage(error);
+  return (
+    message.includes("Execution reverted for an unknown reason") ||
+    message.includes("execution reverted for an unknown reason") ||
+    message.includes('data: "0x"') ||
+    message.includes("data: 0x") ||
+    message.includes("EvmError: Revert")
+  );
+}
+
+async function assertQuestionBundleSubmissionSelector(
+  publicClient:
+    | {
+        call: (args: { to: `0x${string}`; data: `0x${string}` }) => Promise<unknown>;
+      }
+    | undefined,
+  registryAddress: `0x${string}`,
+) {
+  if (!publicClient) return;
+
+  const data = encodeFunctionData({
+    abi: QUESTION_SUBMISSION_ABI,
+    functionName: "submitQuestionBundleWithRewardAndRoundConfig",
+    args: [
+      [],
+      {
+        asset: SUBMISSION_REWARD_ASSET_LREP,
+        amount: 0n,
+        requiredVoters: 0n,
+        requiredSettledRounds: 0n,
+        bountyClosesAt: 0n,
+        feedbackClosesAt: 0n,
+        bountyEligibility: 0,
+      },
+      {
+        epochDuration: 60,
+        maxDuration: 60,
+        minVoters: 3,
+        maxVoters: 3,
+      },
+    ],
+  });
+
+  try {
+    await publicClient.call({ to: registryAddress, data });
+  } catch (error) {
+    const message = getSubmissionErrorMessage(error);
+    if (message.includes("No questions")) return;
+    if (isUnknownEmptyRevertError(error)) {
+      throw new Error(
+        "This ContentRegistry deployment does not support question bundles. Restart the local chain and redeploy contracts, then try again.",
+      );
+    }
+  }
 }
 
 function CategoryIcon({ name, className }: { name: string; className?: string }) {
@@ -1552,6 +1617,9 @@ export function ContentSubmissionSection() {
       const primaryQuestion = bundleQuestions[0];
       if (!primaryQuestion) {
         throw new Error("Question is missing.");
+      }
+      if (isBundleSubmission) {
+        await assertQuestionBundleSubmissionSelector(publicClient, registryAddress);
       }
       const revealCommitment = isBundleSubmission
         ? buildQuestionBundleSubmissionRevealCommitment({
